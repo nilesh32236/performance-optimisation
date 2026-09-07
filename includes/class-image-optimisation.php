@@ -951,8 +951,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 				$http_accept = isset( $_SERVER['HTTP_ACCEPT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_ACCEPT'] ) ) : '';
 
-				$supports_avif = strpos( $http_accept, 'image/avif' ) !== false;
-				$supports_webp = strpos( $http_accept, 'image/webp' ) !== false;
+				$supports_avif = false !== strpos( $http_accept, 'image/avif' );
+				$supports_webp = false !== strpos( $http_accept, 'image/webp' );
 
 				if ( ! $supports_avif && ! $supports_webp ) {
 					return $buffer;
@@ -1294,7 +1294,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return bool `true` if the URL is a valid URL string, `false` otherwise.
 		 */
 		private function is_valid_url( $url ) {
-			return filter_var( $url, FILTER_VALIDATE_URL ) !== false;
+			return false !== filter_var( $url, FILTER_VALIDATE_URL );
 		}
 
 		/**
@@ -1307,7 +1307,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The normalized absolute URL, or the original value for empty/data URLs.
 		 */
 		private function normalize_url( string $url ): string {
-			if ( empty( $url ) || strpos( $url, 'data:' ) === 0 ) {
+			if ( empty( $url ) || 0 === strpos( $url, 'data:' ) ) {
 				return $url;
 			}
 
@@ -1315,7 +1315,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$home_base = Util::cached_home_url();
 
 			// Protocol-relative URLs (e.g., //example.com/image.jpg).
-			if ( strpos( $url, '//' ) === 0 ) {
+			if ( 0 === strpos( $url, '//' ) ) {
 				static $scheme = array();
 				$blog_id       = get_current_blog_id();
 
@@ -1329,12 +1329,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 
 			// Root-relative paths (e.g., /wp-content/uploads/image.jpg).
-			if ( strpos( $url, '/' ) === 0 ) {
+			if ( 0 === strpos( $url, '/' ) ) {
 				return $home_base . '/' . ltrim( $url, '/' );
 			}
 
 			// True relative paths (e.g., images/photo.jpg or ../uploads/img.jpg).
-			if ( strpos( $url, 'http' ) !== 0 ) {
+			if ( 0 !== strpos( $url, 'http' ) ) {
 				// Get the current URL path to resolve relative paths like ../.
 				static $current_url_path = array();
 				$blog_id                 = get_current_blog_id();
@@ -1365,11 +1365,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The resolved absolute path beginning with '/'.
 		 */
 		private function resolve_relative_path( string $base_path, string $relative_path ): string {
-			if ( strpos( $relative_path, '/' ) === 0 ) {
+			if ( 0 === strpos( $relative_path, '/' ) ) {
 				return $relative_path;
 			}
 
-			$has_trailing_slash = substr( $base_path, -1 ) === '/';
+			$has_trailing_slash = '/' === substr( $base_path, -1 );
 			$base_parts         = array_filter(
 				explode( '/', $base_path ),
 				function ( $val ): bool {
@@ -1379,7 +1379,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$relative_parts     = explode( '/', $relative_path );
 
 			// If the base path is a file (no trailing slash), remove the filename.
-			if ( ! $has_trailing_slash && ! empty( $base_parts ) && strpos( end( $base_parts ), '.' ) !== false ) {
+			if ( ! $has_trailing_slash && ! empty( $base_parts ) && false !== strpos( end( $base_parts ), '.' ) ) {
 				array_pop( $base_parts );
 			}
 
@@ -2079,7 +2079,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 									$img_tag = preg_replace( '#<img\b([^>]*?)#i', '<img $1 fetchpriority="' . esc_attr( $loading_attrs['fetchpriority'] ) . '"', $img_tag );
 								}
 							} else {
-								if ( strpos( $img_tag, 'decoding' ) === false ) {
+								if ( false === strpos( $img_tag, 'decoding' ) ) {
 									$img_tag = preg_replace( '#<img\b([^>]*?)#i', '<img $1 decoding="sync"', $img_tag );
 								}
 
@@ -2096,7 +2096,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$use_native_lazy = ! empty( $this->options['image_optimisation']['lazyLoadNative'] );
 
 				// If the image does not have 'data-src', replace 'src' with 'data-src'.
-				if ( strpos( $img_tag, 'data-src' ) === false ) {
+				if ( false === strpos( $img_tag, 'data-src' ) ) {
 					$original_src_decoded = htmlspecialchars_decode( $original_src, ENT_QUOTES );
 
 					// Skip base64 images to avoid rewriting them.

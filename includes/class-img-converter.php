@@ -1035,12 +1035,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		public static function get_img_path( string $source_image, string $format = 'webp' ): string {
 			$normalized_source = wp_normalize_path( $source_image );
 			$is_already_local  = path_is_absolute( $normalized_source ) && (
-			strpos( $normalized_source, wp_normalize_path( ABSPATH ) ) === 0 ||
-			strpos( $normalized_source, wp_normalize_path( WP_CONTENT_DIR ) ) === 0
+			0 === strpos( $normalized_source, wp_normalize_path( ABSPATH ) ) ||
+			0 === strpos( $normalized_source, wp_normalize_path( WP_CONTENT_DIR ) )
 			);
 
 			if ( $is_already_local ) {
-				if ( strpos( $normalized_source, '..' ) !== false ) {
+				if ( false !== strpos( $normalized_source, '..' ) ) {
 					return '';
 				}
 				$local_path = $normalized_source;
@@ -1071,17 +1071,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 					$local_base = wp_normalize_path( ABSPATH );
 
-					if ( strpos( $source_image, $content_url_base ) === 0 ) {
+					if ( 0 === strpos( $source_image, $content_url_base ) ) {
 						$relative_path = substr( $source_image, strlen( $content_url_base ) );
 						$local_base    = wp_normalize_path( WP_CONTENT_DIR );
-					} elseif ( strpos( $source_image, $home_url ) === 0 ) {
+					} elseif ( 0 === strpos( $source_image, $home_url ) ) {
 						$relative_path = substr( $source_image, strlen( $home_url ) );
 					} else {
 						$relative_path = $source_image;
 					}
 
 					// Security: Block directory traversal.
-					if ( strpos( rawurldecode( $relative_path ), '..' ) !== false ) {
+					if ( false !== strpos( rawurldecode( $relative_path ), '..' ) ) {
 						return $source_image;
 					}
 
@@ -1090,7 +1090,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					// Ensure it's still within the WP directory or WP_CONTENT_DIR for safety.
 					$norm_abspath = wp_normalize_path( ABSPATH );
 					$norm_content = wp_normalize_path( WP_CONTENT_DIR );
-					if ( strpos( $local_path, $norm_abspath ) !== 0 && strpos( $local_path, $norm_content ) !== 0 ) {
+					if ( 0 !== strpos( $local_path, $norm_abspath ) && 0 !== strpos( $local_path, $norm_content ) ) {
 						return $source_image;
 					}
 				}
@@ -1103,7 +1103,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 			// Adjust for the wppo directory inside wp-content.
 			$wp_content_path = wp_normalize_path( WP_CONTENT_DIR );
-			if ( strpos( $local_path, $wp_content_path ) === 0 ) {
+			if ( 0 === strpos( $local_path, $wp_content_path ) ) {
 				$local_path = str_replace(
 					$wp_content_path,
 					wp_normalize_path( WP_CONTENT_DIR . '/wppo' ),
@@ -1551,8 +1551,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			$http_accept = sanitize_text_field( wp_unslash( $_SERVER['HTTP_ACCEPT'] ) );
 
 			// Check if the browser supports WebP.
-			$supports_avif = strpos( $http_accept, 'image/avif' ) !== false;
-			$supports_webp = strpos( $http_accept, 'image/webp' ) !== false;
+			$supports_avif = false !== strpos( $http_accept, 'image/avif' );
+			$supports_webp = false !== strpos( $http_accept, 'image/webp' );
 
 			$img_path = Util::get_local_path( $image[0] );
 
@@ -1885,7 +1885,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			}
 
 			// Only queue images that live inside wp-content/uploads.
-			if ( strpos( $normalized, $upload_dir[ $blog_id ] ) !== 0 ) {
+			if ( 0 !== strpos( $normalized, $upload_dir[ $blog_id ] ) ) {
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 					error_log( 'WPPO: add_img_into_queue rejected path — not inside uploads directory.' );

@@ -271,15 +271,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				}
 			}
 
-			// Fallback JS excludes from file_optimisation settings when no postmeta.
-			if ( empty( $exclude_js ) ) {
-				$settings = Util::get_settings();
-				$assets   = array();
-				// Try to suggest from existing disabled styles/scripts frequency alternative:
-				// Use non-critical handles that appear in unused-javascript diagnostics indirectly.
-				// For MVP, leave empty — suggestions will trigger only when data exists.
-			}
-
 			// Eagerness heuristic: conservative by default, moderate if avg LCP > 2500 or high TTFB.
 			$eagerness   = 'conservative';
 			$avg_lcp_all = 0;

@@ -2,10 +2,14 @@
 /**
  * CDN cache purger (Cloudflare / Varnish).
  *
- * @package PerformanceOptimise
+ * @package PerformanceOptimise\Inc
  */
 
 namespace PerformanceOptimise\Inc;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit; // Exit if accessed directly.
+}
 
 if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 
