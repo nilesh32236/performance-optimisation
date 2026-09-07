@@ -444,9 +444,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Checks if the user has permission to access the route.
 		 *
-		 * @param \WP_REST_Request|null $request The REST request object.
 		 * @since 1.0.0
 		 * @since NEXT Added $request parameter for header canonicalization.
+		 * @param \WP_REST_Request|null $request The REST request object.
 		 * @return bool True if the user has permission, false otherwise.
 		 */
 		public function permission_callback( ?\WP_REST_Request $request = null ): bool {
