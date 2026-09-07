@@ -78,14 +78,78 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 	 * Test that permission_callback allows authorized users.
 	 */
 	public function test_permission_callback_checks_capability(): void {
-		$_SERVER['HTTP_X_WP_NONCE'] = 'test_nonce';
+		$request = \Mockery::mock( \WP_REST_Request::class );
+		$request->shouldReceive( 'get_header' )->with( 'X-WP-Nonce' )->andReturn( 'test_nonce' );
 
-		Functions\when( 'wp_verify_nonce' )->justReturn( true );
+		Functions\when( 'wp_verify_nonce' )->alias( static fn( $nonce ): bool => 'test_nonce' === $nonce );
 		Functions\when( 'sanitize_text_field' )->returnArg();
 		Functions\when( 'wp_unslash' )->returnArg();
 		Functions\when( 'current_user_can' )->justReturn( true );
 
-		$result = $this->rest->permission_callback();
+		$result = $this->rest->permission_callback( $request );
+		$this->assertTrue( $result );
+	}
+
+	/**
+	 * Test that permission_callback falls back to the raw $_SERVER nonce only
+	 * for legacy callers that supply no request object (BC path).
+	 *
+	 * $_SERVER state is isolated in try/finally and torn down afterwards so
+	 * later tests cannot inherit the header value.
+	 */
+	public function test_permission_callback_fallback_to_server(): void {
+		$_SERVER['HTTP_X_WP_NONCE'] = 'test_nonce_fallback';
+
+		Functions\when( 'wp_verify_nonce' )->alias( static fn( $nonce ): bool => 'test_nonce_fallback' === $nonce );
+		Functions\when( 'sanitize_text_field' )->returnArg();
+		Functions\when( 'wp_unslash' )->returnArg();
+		Functions\when( 'current_user_can' )->justReturn( true );
+
+		try {
+			$result_fallback = $this->rest->permission_callback();
+			$this->assertTrue( $result_fallback );
+		} finally {
+			unset( $_SERVER['HTTP_X_WP_NONCE'] );
+		}
+	}
+
+	/**
+	 * Test that permission_callback ignores the $_SERVER fallback if a request is
+	 * provided but the header is missing, preventing bypass.
+	 */
+	public function test_permission_callback_ignores_fallback_if_request_provided(): void {
+		$request = \Mockery::mock( \WP_REST_Request::class );
+		$request->shouldReceive( 'get_header' )->with( 'X-WP-Nonce' )->andReturn( null );
+
+		$_SERVER['HTTP_X_WP_NONCE'] = 'test_nonce_fallback';
+
+		Functions\when( 'wp_verify_nonce' )->justReturn( false ); // Expect fail.
+		Functions\when( 'sanitize_text_field' )->returnArg();
+		Functions\when( 'wp_unslash' )->returnArg();
+		Functions\when( 'current_user_can' )->justReturn( true );
+
+		try {
+			$result = $this->rest->permission_callback( $request );
+			$this->assertFalse( $result );
+		} finally {
+			unset( $_SERVER['HTTP_X_WP_NONCE'] );
+		}
+	}
+
+	/**
+	 * Test that permission_callback handles array returns from get_header by picking
+	 * the first element.
+	 */
+	public function test_permission_callback_handles_array_header(): void {
+		$request = \Mockery::mock( \WP_REST_Request::class );
+		$request->shouldReceive( 'get_header' )->with( 'X-WP-Nonce' )->andReturn( array( 'test_nonce', 'ignored_nonce' ) );
+
+		Functions\when( 'wp_verify_nonce' )->alias( static fn( $nonce ): bool => 'test_nonce' === $nonce );
+		Functions\when( 'sanitize_text_field' )->returnArg();
+		Functions\when( 'wp_unslash' )->returnArg();
+		Functions\when( 'current_user_can' )->justReturn( true );
+
+		$result = $this->rest->permission_callback( $request );
 		$this->assertTrue( $result );
 	}
 
@@ -93,14 +157,50 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 	 * Test that permission_callback rejects unauthorized users.
 	 */
 	public function test_permission_callback_rejects_unauthorized(): void {
-		$_SERVER['HTTP_X_WP_NONCE'] = 'test_nonce';
+		$request = \Mockery::mock( \WP_REST_Request::class );
+		$request->shouldReceive( 'get_header' )->with( 'X-WP-Nonce' )->andReturn( 'test_nonce' );
 
 		Functions\when( 'wp_verify_nonce' )->justReturn( true );
 		Functions\when( 'sanitize_text_field' )->returnArg();
 		Functions\when( 'wp_unslash' )->returnArg();
 		Functions\when( 'current_user_can' )->justReturn( false );
 
-		$result = $this->rest->permission_callback();
+		$result = $this->rest->permission_callback( $request );
+		$this->assertFalse( $result );
+	}
+
+	/**
+	 * Test that permission_callback rejects fallback requests with an invalid nonce.
+	 */
+	public function test_permission_callback_fallback_rejects_invalid_nonce(): void {
+		$_SERVER['HTTP_X_WP_NONCE'] = 'invalid_nonce_fallback';
+
+		Functions\when( 'wp_verify_nonce' )->justReturn( false );
+		Functions\when( 'sanitize_text_field' )->returnArg();
+		Functions\when( 'wp_unslash' )->returnArg();
+		Functions\when( 'current_user_can' )->justReturn( true );
+
+		try {
+			$result = $this->rest->permission_callback();
+			$this->assertFalse( $result );
+		} finally {
+			unset( $_SERVER['HTTP_X_WP_NONCE'] );
+		}
+	}
+
+	/**
+	 * Test that permission_callback rejects requests with an invalid nonce.
+	 */
+	public function test_permission_callback_rejects_invalid_nonce(): void {
+		$request = \Mockery::mock( \WP_REST_Request::class );
+		$request->shouldReceive( 'get_header' )->with( 'X-WP-Nonce' )->andReturn( 'invalid_nonce' );
+
+		Functions\when( 'wp_verify_nonce' )->justReturn( false );
+		Functions\when( 'sanitize_text_field' )->returnArg();
+		Functions\when( 'wp_unslash' )->returnArg();
+		Functions\when( 'current_user_can' )->justReturn( true );
+
+		$result = $this->rest->permission_callback( $request );
 		$this->assertFalse( $result );
 	}
 

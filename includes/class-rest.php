@@ -437,13 +437,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * Checks if the user has permission to access the route.
 		 *
 		 * @since 1.0.0
+		 * @since NEXT Added $request parameter for header canonicalization.
+		 * @param \WP_REST_Request|null $request The REST request object.
 		 * @return bool True if the user has permission, false otherwise.
 		 */
-		public function permission_callback() {
-			$nonce       = isset( $_SERVER['HTTP_X_WP_NONCE'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_WP_NONCE'] ) ) : '';
-			$nonce_valid = wp_verify_nonce( $nonce, 'wp_rest' );
+		public function permission_callback( ?\WP_REST_Request $request = null ): bool {
+			if ( ! current_user_can( 'manage_options' ) ) {
+				return false;
+			}
 
-			return current_user_can( 'manage_options' ) && $nonce_valid;
+			$nonce = '';
+			if ( $request instanceof \WP_REST_Request ) {
+				$header = $request->get_header( 'X-WP-Nonce' );
+				$nonce  = is_array( $header ) ? (string) reset( $header ) : (string) $header;
+			}
+			if ( null === $request && isset( $_SERVER['HTTP_X_WP_NONCE'] ) ) {
+				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+				$nonce = (string) wp_unslash( $_SERVER['HTTP_X_WP_NONCE'] );
+			}
+
+			$nonce = sanitize_text_field( $nonce );
+
+			return (bool) wp_verify_nonce( $nonce, 'wp_rest' );
 		}
 
 		/**
