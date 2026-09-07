@@ -331,29 +331,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response Response.
 		 */
 		public function get_crawler_status( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
-			$status = array(
-				'concurrency' => 2,
-				'load_limit'  => 4.0,
-				'overloaded'  => false,
-				'queue_depth' => 0,
-			);
-			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
-				$status                = LiteSpeed_Crawler::get_status();
-				$status['queue_depth'] = 0;
-				if ( function_exists( 'as_get_scheduled_actions' ) ) {
-					try {
-						$actions               = as_get_scheduled_actions(
-							array(
-								'hook'   => 'wppo_crawler_warm',
-								'status' => \ActionScheduler_Store::STATUS_PENDING,
-								'group'  => 'performance_optimisation',
-							),
-							'ARRAY_A'
-						);
-						$status['queue_depth'] = is_array( $actions ) ? count( $actions ) : 0;
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
+			if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
+				// Crawler class unavailable (should not happen in a normal
+				// install) — serve minimal fallback defaults.
+				return $this->send_response(
+					array(
+						'concurrency' => 2,
+						'load_limit'  => 4.0,
+						'overloaded'  => false,
+						'queue_depth' => 0,
+					)
+				);
+			}
+
+			// Real crawler status is authoritative; only queue_depth is
+			// enriched here because the crawler class does not know about
+			// the Action Scheduler queue.
+			$status                = LiteSpeed_Crawler::get_status();
+			$status['queue_depth'] = 0;
+			if ( function_exists( 'as_get_scheduled_actions' ) ) {
+				try {
+					$actions               = as_get_scheduled_actions(
+						array(
+							'hook'   => 'wppo_crawler_warm',
+							'status' => \ActionScheduler_Store::STATUS_PENDING,
+							'group'  => 'performance_optimisation',
+						),
+						'ARRAY_A'
+					);
+					$status['queue_depth'] = is_array( $actions ) ? count( $actions ) : 0;
+				} catch ( \Throwable $e ) {
+					unset( $e );
 				}
 			}
 			return $this->send_response( $status );

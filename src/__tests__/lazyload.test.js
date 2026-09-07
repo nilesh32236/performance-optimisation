@@ -183,14 +183,14 @@ describe( 'Lazy Load (lazyload.js)', () => {
 		it( 'handles inline scripts by replacing them', async () => {
 			const script = document.createElement( 'script' );
 			script.setAttribute( 'type', 'wppo/javascript' );
-			script.text = 'console.log("test");';
+			script.text = '/* inline test payload */';
 			document.body.appendChild( script );
 
 			await loadScriptImpl( script );
 
 			const inlineScript = Array.from(
 				document.querySelectorAll( 'script' )
-			).find( ( s ) => s.text === 'console.log("test");' );
+			).find( ( s ) => s.text === '/* inline test payload */' );
 			expect( inlineScript ).toBeInTheDocument();
 		} );
 
