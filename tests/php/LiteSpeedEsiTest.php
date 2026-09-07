@@ -198,6 +198,74 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 		unset( $_GET['block'] );
 	}
 
+	public function test_ajax_handler_invalid_nonce_fails_authorization() {
+		global $headers;
+		$headers = array();
+		Functions\when( 'headers_sent' )->justReturn( false );
+		Functions\when( 'header' )->alias(
+			static function ( $header ) use ( &$headers ) {
+				$headers[] = $header;
+			}
+		);
+		Functions\when( 'sanitize_text_field' )->returnArg();
+		Functions\when( 'wp_unslash' )->returnArg();
+		Functions\when( 'is_user_logged_in' )->justReturn( true );
+		Functions\when( 'wp_json_encode' )->alias( 'json_encode' );
+
+		$captured_error = null;
+		$captured_code  = null;
+		Functions\when( 'wp_send_json_error' )->alias(
+			static function ( $data, $code ) use ( &$captured_error, &$captured_code ) {
+				$captured_error = $data;
+				$captured_code  = $code;
+			}
+		);
+
+		Functions\when( 'wp_verify_nonce' )->justReturn( false );
+		$_GET['block'] = 'adminbar';
+
+		LiteSpeed_ESI::handle_ajax_fragment();
+
+		$this->assertSame( 403, $captured_code );
+		$this->assertSame( 'Unauthorized', $captured_error['message'] );
+
+		unset( $_GET['block'] );
+	}
+
+	public function test_ajax_handler_valid_nonce_succeeds() {
+		global $headers;
+		$headers = array();
+		Functions\when( 'headers_sent' )->justReturn( false );
+		Functions\when( 'header' )->alias(
+			static function ( $header ) use ( &$headers ) {
+				$headers[] = $header;
+			}
+		);
+		Functions\when( 'sanitize_text_field' )->returnArg();
+		Functions\when( 'wp_unslash' )->returnArg();
+		Functions\when( 'is_user_logged_in' )->justReturn( true );
+		Functions\when( 'esc_url' )->returnArg();
+		Functions\when( 'wp_json_encode' )->alias( 'json_encode' );
+
+		$captured = null;
+		Functions\when( 'wp_send_json_success' )->alias(
+			static function ( $data ) use ( &$captured ) {
+				$captured = $data;
+			}
+		);
+
+		Functions\when( 'wp_verify_nonce' )->justReturn( 1 );
+		$_GET['block'] = 'adminbar';
+
+		LiteSpeed_ESI::handle_ajax_fragment();
+
+		$this->assertIsArray( $captured );
+		$this->assertArrayHasKey( 'html', $captured );
+		$this->assertStringContainsString( 'adminbar', $captured['html'] );
+
+		unset( $_GET['block'] );
+	}
+
 	public function test_handle_send_headers_private_no_vary_on_cart(): void {
 		$this->set_litespeed( true );
 		$headers = array();

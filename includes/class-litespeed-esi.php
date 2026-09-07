@@ -368,7 +368,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			}
 			$nonce_valid = function_exists( 'wp_verify_nonce' ) ? wp_verify_nonce( $nonce, 'wppo_esi' ) : false;
 
-			if ( ! $nonce_valid && 'cart' !== $block ) {
+			if ( ! $nonce_valid && 'cart' !== $block && 'nonce' !== $block ) {
 				if ( ! headers_sent() ) {
 					header( 'Cache-Control: private,no-cache' );
 					header( 'X-LiteSpeed-Cache-Control: private,no-vary' );
