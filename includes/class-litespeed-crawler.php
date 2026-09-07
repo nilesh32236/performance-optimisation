@@ -542,14 +542,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 						)
 					);
 					if ( is_array( $posts ) ) {
-						// Mirror the $wpdb branch: prime before the permalink loop
-						// . get_posts() may return IDs or
-						// WP_Post objects depending on fields handling.
+						// Mirror the $wpdb branch: prime before the permalink loop.
+						// get_posts() may return IDs or WP_Post objects depending on
+						// fields handling; guard the property access.
 						if ( function_exists( '_prime_post_caches' ) ) {
-							_prime_post_caches( array_map( static fn( $p ) => (int) ( is_object( $p ) ? $p->ID : $p ), $posts ), false, false );
+							_prime_post_caches(
+								array_map(
+									static fn ( $p ) => (int) ( is_object( $p ) && isset( $p->ID ) ? $p->ID : ( is_object( $p ) ? 0 : $p ) ),
+									$posts
+								),
+								false,
+								false
+							);
 						}
 						foreach ( $posts as $pid ) {
-							$permalink = Util::memoized_permalink( (int) ( is_object( $pid ) && isset( $pid->ID ) ? $pid->ID : ( is_object( $pid ) ? 0 : $pid ) ) );
+							$post_id = (int) ( is_object( $pid ) && isset( $pid->ID ) ? $pid->ID : ( is_object( $pid ) ? 0 : $pid ) );
+							if ( $post_id < 1 ) {
+								continue;
+							}
+							$permalink = Util::memoized_permalink( $post_id );
 							if ( '' !== $permalink ) {
 								$post_urls[] = $permalink;
 							}

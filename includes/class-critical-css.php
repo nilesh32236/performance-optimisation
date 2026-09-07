@@ -229,6 +229,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
+		 * Invalidate the per-request CCSS memos for a single template hash.
+		 *
+		 * Unlike reset_ccss_memo() this keeps entries for other templates so a
+		 * single-template write inside a multi-template loop (get_status_all →
+		 * bulk regeneration) does not evict unrelated memo entries.
+		 *
+		 * @since NEXT
+		 * @param string $template_hash The template hash.
+		 * @return void
+		 */
+		private static function invalidate_ccss_memo( string $template_hash ): void {
+			unset( self::$ccss_exists_cache[ $template_hash ] );
+			foreach ( array_keys( self::$ccss_content_cache ) as $key ) {
+				// Content keys are "{hash}:{mtime}:{size}" — drop every
+				// versioned entry belonging to this hash.
+				if ( 0 === strpos( $key, $template_hash . ':' ) ) {
+					unset( self::$ccss_content_cache[ $key ] );
+				}
+			}
+		}
+
+		/**
 		 * Check if CCSS exists for a template hash.
 		 *
 		 * @param string $template_hash The template hash.
@@ -993,8 +1015,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			}
 
 			// The memo must reflect the fresh file within this request too;
-			// clear PHP's stat cache so file_exists/mtime are not stale.
-			self::reset_ccss_memo();
+			// clear PHP's stat cache so file_exists/mtime are not stale. Only
+			// this template's memo entries are invalidated — a bulk loop keeps
+			// the other templates' memo entries.
+			self::invalidate_ccss_memo( $template_hash );
 			clearstatcache( true, self::get_ccss_file( $template_hash ) );
 
 			if ( self::ccss_exists( $template_hash ) ) {
@@ -1261,10 +1285,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			}
 
 			// Files are gone — the per-request existence memo must not keep
-			// reporting them (audit #874 finding 7); clear PHP's stat cache so
-			// file_exists does not return stale results for deleted paths.
+			// reporting them (audit #874 finding 7); a plain clearstatcache()
+			// drops all per-path stat entries so file_exists cannot serve stale
+			// results for individual deleted hash files (admin-only path).
 			self::reset_ccss_memo();
-			clearstatcache( true, $dir );
+			clearstatcache();
 
 			// Also clear status transients.
 			$templates = self::get_templates();

@@ -59,6 +59,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			delete_transient( Util::transient_key( 'wppo_cache_size' ) );
 			delete_transient( Util::transient_key( 'wppo_cache_count' ) );
 			delete_transient( Util::transient_key( 'wppo_total_js_css' ) );
+
+			// The salted object-cache layer (WP 6.9+ drop-in) derives entry
+			// validity from `wppo_cache_last_cleared`; bump it wherever the
+			// stats are bumped so the salted wppo_cache_size /
+			// wppo_total_js_css entries stay consistent outside clear_cache()
+			// (smart purge, combine_css) too.
+			if ( function_exists( 'wp_cache_get_salted' ) ) {
+				$salt = (int) get_option( 'wppo_cache_last_cleared', 0 ) + 1;
+				update_option( 'wppo_cache_last_cleared', $salt, false );
+			}
 		}
 
 		/**
@@ -2409,10 +2419,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			if ( $result ) {
-				if ( function_exists( 'wp_cache_get_salted' ) ) {
-					$salt = (int) get_option( 'wppo_cache_last_cleared', 0 ) + 1;
-					update_option( 'wppo_cache_last_cleared', $salt, false );
-				}
+				// bump_stats_cache() also bumps the salted object-cache salt
+				// (wppo_cache_last_cleared) when the drop-in is active.
 				self::bump_stats_cache();
 				update_option( 'wppo_cache_last_cleared_time', current_time( 'mysql' ), false );
 				do_action( 'wppo_after_cache_clear', $type, $url_path );
