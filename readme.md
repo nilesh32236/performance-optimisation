@@ -173,9 +173,9 @@ This plugin leverages modern development practices, utilizing Composer for PHP d
     }
   ],
   "require": {
-    "voku/html-min": "^5.0",
+    "voku/html-min": "^4.5",
     "matthiasmullie/minify": "^1.3",
-    "woocommerce/action-scheduler": "^4.1"
+    "woocommerce/action-scheduler": "^3.8"
   },
   "extra": {
     "cleanup": {
@@ -193,7 +193,7 @@ Current version and scripts are defined in the repo; for example:
 ```json
 {
   "name": "performance-optimisation",
-  "version": "1.9.0",
+  "version": "1.8.0",
   "scripts": {
     "build": "wp-scripts build src/index.js src/lazyload.js src/main.js",
     "start": "wp-scripts start"

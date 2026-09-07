@@ -7,8 +7,6 @@
 **Comparison target:** LiteSpeed Cache (LSCWP) 7.9 · 7M+ installs · WordPress.org `litespeed-cache`
 
 > This document is the research foundation for LiteSpeed/OpenLiteSpeed integration. It is reviewable and editable — propose changes via PR or direct edits. The companion plan is `docs/litespeed-integration-plan.md`.
->
-> **Correction (2026-09-01):** The LiteSpeed Cache plugin (LSCWP) **v7.9 IS present on disk** at `wp-content/plugins/litespeed-cache` but is **inactive** (`wp plugin list: litespeed-cache inactive`). Earlier drafts of this research implied the plugin was absent from the environment; per `docs/litespeed-compatibility-audit-2026-09-01.md` it is installed-but-inactive, and its source tree was used for the compatibility audit. This resolves the cross-document contradiction between this research doc and the audit.
 
 ---
 

@@ -331,37 +331,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response Response.
 		 */
 		public function get_crawler_status( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
-			if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
-				// Crawler class unavailable (should not happen in a normal
-				// install) — serve minimal fallback defaults.
-				return $this->send_response(
-					array(
-						'concurrency' => 2,
-						'load_limit'  => 4.0,
-						'overloaded'  => false,
-						'queue_depth' => 0,
-					)
-				);
-			}
-
-			// Real crawler status is authoritative; only queue_depth is
-			// enriched here because the crawler class does not know about
-			// the Action Scheduler queue.
-			$status                = LiteSpeed_Crawler::get_status();
-			$status['queue_depth'] = 0;
-			if ( function_exists( 'as_get_scheduled_actions' ) ) {
-				try {
-					$actions               = as_get_scheduled_actions(
-						array(
-							'hook'   => 'wppo_crawler_warm',
-							'status' => \ActionScheduler_Store::STATUS_PENDING,
-							'group'  => 'performance_optimisation',
-						),
-						'ARRAY_A'
-					);
-					$status['queue_depth'] = is_array( $actions ) ? count( $actions ) : 0;
-				} catch ( \Throwable $e ) {
-					unset( $e );
+			$status = array(
+				'concurrency' => 2,
+				'load_limit'  => 4.0,
+				'overloaded'  => false,
+				'queue_depth' => 0,
+			);
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
+				$status                = LiteSpeed_Crawler::get_status();
+				$status['queue_depth'] = 0;
+				if ( function_exists( 'as_get_scheduled_actions' ) ) {
+					try {
+						$actions               = as_get_scheduled_actions(
+							array(
+								'hook'   => 'wppo_crawler_warm',
+								'status' => \ActionScheduler_Store::STATUS_PENDING,
+								'group'  => 'performance_optimisation',
+							),
+							'ARRAY_A'
+						);
+						$status['queue_depth'] = is_array( $actions ) ? count( $actions ) : 0;
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
 				}
 			}
 			return $this->send_response( $status );
@@ -456,17 +448,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			$nonce = '';
 			if ( $request instanceof \WP_REST_Request ) {
-				// get_header() values are not slashed by WP, so no wp_unslash() is
-				// needed here. A repeated header makes get_header() return an
-				// array; use the first value instead of casting the whole array.
 				$header = $request->get_header( 'X-WP-Nonce' );
 				$nonce  = is_array( $header ) ? (string) reset( $header ) : (string) $header;
 			}
-			// BC-only fallback for legacy callers without a request object: when a
-			// request was supplied, WP's header canonicalization is authoritative and
-			// the raw $_SERVER value must not override it. wp_unslash() is needed
-			// only on this raw superglobal path.
-			if ( null === $request && isset( $_SERVER['HTTP_X_WP_NONCE'] ) ) {
+			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			if ( '' === $nonce && isset( $_SERVER['HTTP_X_WP_NONCE'] ) ) {
 				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 				$nonce = (string) wp_unslash( $_SERVER['HTTP_X_WP_NONCE'] );
 			}

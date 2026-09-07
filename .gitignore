@@ -15,14 +15,3 @@ review-output.jsonl
 take_screenshot*.js
 take_wizard_390.js
 test-lab/
-
-# Local diagnostic / audit scratch scripts (not part of the plugin).
-# Root-anchored so same-named files elsewhere (e.g. tests/stubs/) stay visible.
-/.playwright-mcp/
-/audit-capture.js
-/check-stats.js
-/diag390flex.js
-/diag390tabs.js
-/diagnose-overflow.js
-/diagnose2.js
-/stubs/

@@ -133,7 +133,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				return null;
 			}
 			try {
-				$client = wp_ai_client();
+				$client = wp_ai_client(); // @phpstan-ignore-line
 				if ( ! is_object( $client ) || ! method_exists( $client, 'prompt' ) ) {
 					return null;
 				}

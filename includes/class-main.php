@@ -122,7 +122,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Filesystem instance for file operations.
 		 *
-		 * @var   object|null
+		 * @var   object
 		 * @since 1.0.0
 		 */
 		private $filesystem;

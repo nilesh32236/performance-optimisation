@@ -1,7 +1,7 @@
 # LiteSpeed / OpenLiteSpeed Integration Plan
 
 **Date:** 2026-08-27  
-**Status:** Shipped — Phases 0–4 implemented and verified (see `docs/litespeed-compatibility-audit-2026-09-01.md` and the ✅ ticks in `docs/litespeed-roadmap.md`). Phase 5 (enterprise/QUIC options) remains deferred.  
+**Status:** Draft — Review Required
 **Companion:** `docs/litespeed-research.md` (deep research)  
 **Principles:** Zero breakage on non-LS hosts — every LiteSpeed path is an additive, opt-in or auto-detected path with fallback. No invention of version numbers — new symbols get `@since NEXT`.
 
