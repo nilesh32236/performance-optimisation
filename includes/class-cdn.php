@@ -514,11 +514,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		 *
 		 * @since NEXT
 		 *
-		 * @param string               $buffer         HTML buffer.
-		 * @param array                $mappings       CDN mappings.
-		 * @param string               $site_url       Site URL.
-		 * @param string               $site_url_regex Regex matching a site-relative URL start.
-		 * @param array<string|string> $allowed_tags  Tag names whose attributes may be rewritten.
+		 * @param string   $buffer         HTML buffer.
+		 * @param array    $mappings       CDN mappings.
+		 * @param string   $site_url       Site URL.
+		 * @param string   $site_url_regex Regex matching a site-relative URL start.
+		 * @param string[] $allowed_tags  Tag names whose attributes may be rewritten.
 		 * @return string|null Rewritten buffer, or null on failure (fallback).
 		 */
 		private static function rewrite_buffer_with_processor( string $buffer, array $mappings, string $site_url, string $site_url_regex, array $allowed_tags ): ?string {
@@ -559,7 +559,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		 * @param array                  $mappings       CDN mappings.
 		 * @param string                 $site_url       Site URL.
 		 * @param string                 $site_url_regex Regex matching a site-relative URL start.
-		 * @param array<string|string>   $allowed_tags   Tag names whose attributes may be rewritten.
+		 * @param string[]               $allowed_tags   Tag names whose attributes may be rewritten.
 		 * @return void
 		 */
 		private static function rewrite_tag_assets( \WP_HTML_Tag_Processor $tags, array $mappings, string $site_url, string $site_url_regex, array $allowed_tags ): void {

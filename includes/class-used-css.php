@@ -1158,7 +1158,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if (
 					'#tag' === $processor->get_token_type()
 					&& ! $processor->is_tag_closer()
-					&& 'LINK' === $processor->get_tag()
+					&& 'link' === strtolower( (string) $processor->get_tag() )
 				) {
 					self::collect_css_asset_from_tag( $processor, $assets );
 				}

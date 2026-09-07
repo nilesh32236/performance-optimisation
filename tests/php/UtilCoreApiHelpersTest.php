@@ -28,6 +28,12 @@ class UtilCoreApiHelpersTest extends \PHPUnit\Framework\TestCase {
 		parent::setUp();
 		\Brain\Monkey\setUp();
 		$this->register_common_function_stubs();
+		// Replicate the trait's per-test cache resets for isolation (issue
+		// #882 review), then re-probe the HTML processor availability with the
+		// stubs loaded.
+		Util::reset_cached_home_urls();
+		Util::clear_settings_cache();
+		Util::reset_html_processor_memo();
 		// Minimal functional WP_HTML_* stand-ins (same pattern as
 		// ImageOptimisationTest) so the processor helpers can be exercised.
 		require_once __DIR__ . '/stubs/wp-html-api.php';
@@ -37,7 +43,11 @@ class UtilCoreApiHelpersTest extends \PHPUnit\Framework\TestCase {
 	 * Tear down Brain Monkey.
 	 */
 	protected function tearDown(): void { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid
+		Util::reset_html_processor_memo();
 		\Brain\Monkey\tearDown();
+		if ( class_exists( \PerformanceOptimise\Inc\Main::class ) ) {
+			\PerformanceOptimise\Inc\Main::reset_instance();
+		}
 		parent::tearDown();
 	}
 
@@ -58,22 +68,60 @@ class UtilCoreApiHelpersTest extends \PHPUnit\Framework\TestCase {
 
 	/**
 	 * Test that cache_salt is array-safe (never triggers an Array-to-string
-	 * conversion when a test/consumer stub returns an array).
+	 * conversion when a test/consumer stub returns an array) and maps
+	 * non-stringable values to the '0' sentinel.
 	 */
 	public function test_cache_salt_is_array_safe(): void {
 		Functions\when( 'get_option' )->justReturn( array( 'not' => 'a salt' ) );
-
 		$this->assertSame( '0', Util::cache_salt( 'wppo_salt_array' ) );
+
+		// An unset option (false) maps to the sentinel, never ''.
+		Functions\when( 'get_option' )->justReturn( false );
+		$this->assertSame( '0', Util::cache_salt( 'wppo_salt_bool' ) );
 	}
 
 	/**
 	 * Test that the HTML processor availability check is true with the test
-	 * stubs (public serialize_token) and memoized.
+	 * stubs (public serialize_token) and that the memo sticks until reset.
 	 */
-	public function test_should_use_html_processor_is_memoized_true_with_public_serializer(): void {
+	public function test_should_use_html_processor_true_with_public_serializer(): void {
 		$this->assertTrue( Util::should_use_html_processor() );
-		// Second call hits the memo — same answer.
-		$this->assertTrue( Util::should_use_html_processor() );
+
+		// The memoized value is stored on the class static and survives until
+		// reset (the reflection probe is not repeated on every call).
+		$prop = new \ReflectionProperty( Util::class, 'html_processor_available' );
+		$prop->setAccessible( true );
+		$this->assertTrue( $prop->getValue() );
+
+		Util::reset_html_processor_memo();
+		$this->assertNull( $prop->getValue() );
+	}
+
+	/**
+	 * Test the negative path: when the probe has decided the processor is
+	 * unavailable, create_html_processor() returns null so callers fall back
+	 * to their byte-identical Tag Processor / regex paths.
+	 */
+	public function test_create_html_processor_returns_null_when_unavailable(): void {
+		$prop = new \ReflectionProperty( Util::class, 'html_processor_available' );
+		$prop->setAccessible( true );
+		$prop->setValue( null, false );
+
+		$this->assertFalse( Util::should_use_html_processor() );
+		$this->assertNull( Util::create_html_processor( '<p>x</p>' ) );
+	}
+
+	/**
+	 * Test that the full-parser factory is available (the helper prefers it).
+	 *
+	 * Note: the test stubs implement create_full_parser() and
+	 * create_fragment() identically, so this suite is a smoke test; the
+	 * full-vs-fragment fidelity was additionally validated manually against
+	 * real WP 7.1 core (a fragment parser drops <!DOCTYPE>/<html>/<head> on
+	 * full documents — see the create_html_processor() docblock).
+	 */
+	public function test_full_parser_factory_is_available(): void {
+		$this->assertTrue( method_exists( 'WP_HTML_Processor', 'create_full_parser' ) );
 	}
 
 	/**

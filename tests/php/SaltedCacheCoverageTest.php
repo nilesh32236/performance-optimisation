@@ -34,6 +34,20 @@ class SaltedCacheCoverageTest extends \PHPUnit\Framework\TestCase {
 	private array $options_store = array();
 
 	/**
+	 * Transients written via the set_transient alias.
+	 *
+	 * @var array<string,mixed>
+	 */
+	private array $transients_store = array();
+
+	/**
+	 * Transient keys captured by the delete_transient alias.
+	 *
+	 * @var string[]
+	 */
+	private array $deleted_transients = array();
+
+	/**
 	 * Set up Brain Monkey, common stubs and an in-memory object cache that
 	 * actually stores values so the real salted helpers can be exercised.
 	 */
@@ -55,9 +69,27 @@ class SaltedCacheCoverageTest extends \PHPUnit\Framework\TestCase {
 			}
 		);
 		Functions\when( 'get_transient' )->justReturn( false );
-		Functions\when( 'set_transient' )->justReturn( true );
-		Functions\when( 'delete_transient' )->justReturn( true );
+		Functions\when( 'set_transient' )->alias(
+			function ( $key, $value, $expiration = 0 ) {
+				$this->transients_store[ (string) $key ] = $value;
+				return true;
+			}
+		);
+		$this->deleted_transients = array();
+		Functions\when( 'delete_transient' )->alias(
+			function ( $key ) {
+				$this->deleted_transients[] = (string) $key;
+				return true;
+			}
+		);
 		Functions\when( 'size_format' )->justReturn( '1 KB' );
+
+		// Replicate the trait's per-test cache resets for isolation (issue
+		// #882 review).
+		Util::reset_cached_home_urls();
+		Util::clear_settings_cache();
+		Util::reset_html_processor_memo();
+		Critical_CSS::reset_ccss_memo();
 
 		// In-memory object cache: stores the salted wrapper arrays the drop-in
 		// writes, so wp_cache_get_salted() can validate salts for real.
@@ -68,10 +100,10 @@ class SaltedCacheCoverageTest extends \PHPUnit\Framework\TestCase {
 	 * Tear down Brain Monkey and restore the bootstrap cache stub.
 	 */
 	protected function tearDown(): void { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid
-		// Restore a fresh miss-on-read cache (the bootstrap default cannot be
-		// reconstructed); later tests in the same process rely on a usable
-		// $GLOBALS['wp_object_cache'].
-		$GLOBALS['wp_object_cache'] = new WPPO_Salted_Cache_Harness();
+		// Restore the bootstrap miss-on-read semantics (the bootstrap default
+		// cannot be reconstructed); a storing harness would change later
+		// suites to read-your-writes semantics (issue #882 review).
+		$GLOBALS['wp_object_cache'] = new WPPO_Miss_On_Read_Cache_Harness();
 		unset( $GLOBALS['wp_filesystem'] );
 		\Brain\Monkey\tearDown();
 		parent::tearDown();
@@ -146,6 +178,8 @@ class SaltedCacheCoverageTest extends \PHPUnit\Framework\TestCase {
 		System_Info::flush_dropin_cache();
 
 		$this->assertArrayHasKey( 'wppo_sysinfo_salt', $this->options_store );
+		// The drop-in-check transient must be cleared alongside the salt.
+		$this->assertContains( Util::transient_key( 'wppo_sysinfo_dropin_check' ), $this->deleted_transients );
 	}
 
 	/**
@@ -157,21 +191,31 @@ class SaltedCacheCoverageTest extends \PHPUnit\Framework\TestCase {
 		$ref->setAccessible( true );
 
 		$this->options_store['wppo_cache_last_cleared'] = '7';
+		$stats_key                                      = Util::transient_key( 'wppo_cache_stats' );
 		$ref->invoke(
 			null,
 			array(
 				'size'  => '1 KB',
 				'count' => 3,
 			),
-			Util::transient_key( 'wppo_cache_stats' )
+			$stats_key
 		);
 
+		// Salted entry validates against the current salt VALUE.
 		$this->assertSame(
 			array(
 				'size'  => '1 KB',
 				'count' => 3,
 			),
-			wp_cache_get_salted( 'wppo_cache_stats', 'wppo', '7' )
+			wp_cache_get_salted( 'wppo_cache_stats', 'wppo', Util::cache_salt( 'wppo_cache_last_cleared' ) )
+		);
+		// Transient fallback write is verified too.
+		$this->assertSame(
+			array(
+				'size'  => '1 KB',
+				'count' => 3,
+			),
+			$this->transients_store[ $stats_key ]
 		);
 	}
 
@@ -294,6 +338,71 @@ class WPPO_Salted_Filesystem_Harness {
 	 * @return bool
 	 */
 	public function delete( $path, $recursive = false ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		return true;
+	}
+}
+
+/**
+ * Miss-on-read object-cache harness mirroring the bootstrap default.
+ *
+ * @package PerformanceOptimise\Tests
+ */
+class WPPO_Miss_On_Read_Cache_Harness {
+
+	/**
+	 * Always a cache miss.
+	 *
+	 * @param int|string $key   Cache key.
+	 * @param string     $group Cache group.
+	 * @param bool       $force Whether to force.
+	 * @param bool|null  $found Whether the value was found.
+	 * @return false
+	 */
+	public function get( $key, $group = 'default', $force = false, &$found = null ) {
+		$found = false;
+		return false;
+	}
+
+	/**
+	 * Accept any write (no storage).
+	 *
+	 * @param int|string $key    Cache key.
+	 * @param mixed      $data   Cache data.
+	 * @param string     $group  Cache group.
+	 * @param int        $expire Expiration in seconds.
+	 * @return true
+	 */
+	public function set( $key, $data, $group = 'default', $expire = 0 ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		return true;
+	}
+
+	/**
+	 * Accept any delete.
+	 *
+	 * @param int|string $key   Cache key.
+	 * @param string     $group Cache group.
+	 * @return true
+	 */
+	public function delete( $key, $group = 'default' ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+		return true;
+	}
+
+	/**
+	 * No-op flush.
+	 *
+	 * @return true
+	 */
+	public function flush() {
+		return true;
+	}
+
+	/**
+	 * No-op salt registration.
+	 *
+	 * @param string $salt Salt value.
+	 * @return true
+	 */
+	public function add_salt( $salt ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 		return true;
 	}
 }

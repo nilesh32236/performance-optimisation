@@ -151,6 +151,9 @@ class DatabaseCleanupGuardTest extends \PHPUnit\Framework\TestCase {
 		$GLOBALS['wpdb']->last_error = '';
 
 		$this->updated_options = array();
+		// Salted-cache gate + monotonic bump reads (issue #882).
+		Functions\when( 'wp_using_ext_object_cache' )->justReturn( true );
+		Functions\when( 'get_option' )->justReturn( 0 );
 		Functions\when( 'update_option' )->alias(
 			function ( $name, $value, $autoload = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 				$this->updated_options[] = $name;

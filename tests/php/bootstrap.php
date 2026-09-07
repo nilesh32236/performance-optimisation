@@ -40,6 +40,7 @@ if ( ! function_exists( 'wp_cache_set' ) ) {
 	require_once __DIR__ . '/../../templates/object-cache.php';
 }
 
+
 // Provide a default in-memory object cache so the real salted cache helpers
 // (which read $GLOBALS['wp_object_cache']) do not fatal when tests touch the
 // plugin's cache-backed code paths. ObjectCacheTest replaces this with its own
@@ -264,6 +265,9 @@ trait WPPO_Test_Bootstrap {
 		);
 		\Brain\Monkey\Functions\when( 'home_url' )->justReturn( 'http://example.com' );
 		\Brain\Monkey\Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		// Salted-cache gates (issue #882): default to a persistent object cache
+		// so the salted paths engage; per-test stubs can override to false.
+		\Brain\Monkey\Functions\when( 'wp_using_ext_object_cache' )->justReturn( true );
 		\Brain\Monkey\Functions\when( 'WP_Filesystem' )->justReturn( false );
 		\Brain\Monkey\Functions\when( 'sanitize_text_field' )->returnArg();
 		\Brain\Monkey\Functions\when( 'wp_unslash' )->returnArg();

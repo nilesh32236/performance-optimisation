@@ -361,14 +361,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			$dropin_transient_key = Util::transient_key( 'wppo_sysinfo_dropin_check' );
 			// Salted object-cache layer (WP 6.9+, issue #882) with the
 			// transient fallback; the salt is bumped by flush_dropin_cache().
-			if ( function_exists( 'wp_cache_get_salted' ) ) {
+			// Salted layer requires a persistent object cache; the transient
+			// fallback keeps the verdicts across requests otherwise (issue #882 review).
+			if ( function_exists( 'wp_cache_get_salted' ) && wp_using_ext_object_cache() ) {
 				$dropin = wp_cache_get_salted( 'wppo_sysinfo_dropin_check', 'wppo', Util::cache_salt( self::DROPIN_SALT_KEY ) );
 			} else {
 				$dropin = get_transient( $dropin_transient_key );
 			}
 			if ( ! is_array( $dropin ) || ! isset( $dropin['advanced_cache'], $dropin['object_cache'] ) ) {
 				$dropin = self::detect_dropin_ownership();
-				if ( function_exists( 'wp_cache_get_salted' ) ) {
+				if ( function_exists( 'wp_cache_get_salted' ) && wp_using_ext_object_cache() ) {
 					wp_cache_set_salted( 'wppo_sysinfo_dropin_check', $dropin, 'wppo', Util::cache_salt( self::DROPIN_SALT_KEY ), 15 * MINUTE_IN_SECONDS );
 				}
 				set_transient( $dropin_transient_key, $dropin, 15 * MINUTE_IN_SECONDS );
@@ -475,8 +477,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			self::$litespeed_request_cache = null;
 			// Bump the salted-cache salt so WP 6.9+ salted entries invalidate
 			// immediately alongside the transient (issue #882).
-			if ( function_exists( 'wp_cache_get_salted' ) ) {
-				update_option( self::DROPIN_SALT_KEY, time(), false );
+			if ( function_exists( 'wp_cache_get_salted' ) && wp_using_ext_object_cache() ) {
+				// Monotonic increment: same-second mutations must produce
+				// distinct salts (issue #882 review).
+				update_option( self::DROPIN_SALT_KEY, (int) get_option( self::DROPIN_SALT_KEY, 0 ) + 1, false );
 			}
 			delete_transient( Util::transient_key( 'wppo_sysinfo_dropin_check' ) );
 		}

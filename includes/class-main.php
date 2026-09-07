@@ -1770,7 +1770,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// Cache::bump_stats_cache()), not the option key — passing the key
 			// made every bump a no-op. Transient fallback keeps multisite
 			// key isolation via Util::transient_key().
-			if ( function_exists( 'wp_cache_get_salted' ) ) {
+			if ( function_exists( 'wp_cache_get_salted' ) && wp_using_ext_object_cache() ) {
 				$cache_salt = Util::cache_salt( 'wppo_cache_last_cleared' );
 				$cache_size = wp_cache_get_salted( 'wppo_cache_size', 'wppo', $cache_salt );
 				if ( false === $cache_size ) {
@@ -1785,7 +1785,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 			}
 
-			if ( function_exists( 'wp_cache_get_salted' ) ) {
+			if ( function_exists( 'wp_cache_get_salted' ) && wp_using_ext_object_cache() ) {
 				$cache_salt   = Util::cache_salt( 'wppo_cache_last_cleared' );
 				$total_js_css = wp_cache_get_salted( 'wppo_total_js_css', 'wppo', $cache_salt );
 				if ( false === $total_js_css ) {

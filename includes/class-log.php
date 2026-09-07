@@ -42,6 +42,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 		private function __construct() {}
 
 		/**
+		 * Whether the salted object-cache layer is usable for persistence.
+		 *
+		 * Requires both the WP 6.9+ salted family and an external (persistent)
+		 * object cache: without one, wp_cache_get_salted() is per-request
+		 * memory and salted entries would lose persistence between requests
+		 * (issue #882 review).
+		 *
+		 * @since NEXT
+		 * @return bool
+		 */
+		private static function salted_cache_active(): bool {
+			return function_exists( 'wp_cache_get_salted' ) && wp_using_ext_object_cache();
+		}
+
+		/**
 		 * Add a new activity log entry.
 		 *
 		 * @param string $activity The activity description to log.
@@ -67,8 +82,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 			/* phpcs:enable */
 
 			if ( $result ) {
-				if ( function_exists( 'wp_cache_get_salted' ) ) {
-					update_option( self::SALT_KEY, time(), false );
+				if ( self::salted_cache_active() ) {
+					// Monotonic increment so two mutations within the same
+					// second always produce distinct salts (issue #882 review).
+					update_option( self::SALT_KEY, (int) get_option( self::SALT_KEY, 0 ) + 1, false );
 				} else {
 					update_option( 'wppo_activity_cache_version', (int) get_option( 'wppo_activity_cache_version', 0 ) + 1, false );
 				}
@@ -93,8 +110,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 			// Calculate offset for pagination.
 			$offset = ( $page - 1 ) * $per_page;
 
-			// Cache key with salt-based invalidation (WP 6.9+) or versioned fallback.
-			$has_salted = function_exists( 'wp_cache_get_salted' );
+			// Cache key with salt-based invalidation (WP 6.9+, persistent
+			// object cache only — without one the salted layer is per-request
+			// memory and would lose persistence; issue #882 review) or
+			// versioned fallback.
+			$has_salted = self::salted_cache_active();
 
 			if ( $has_salted ) {
 				$cache_key = "wppo_activity_logs_{$page}_{$per_page}";

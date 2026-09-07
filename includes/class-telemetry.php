@@ -66,8 +66,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * @return array|\WP_Error   Associative array of metrics, or WP_Error on failure.
 		 */
 		public static function scan( string $url, string $scan_type = 'manual', bool $force = false ): array|\WP_Error {
-			$cache_key  = Util::transient_key( 'wppo_audit_' . md5( $url ) );
-			$has_salted = function_exists( 'wp_cache_get_salted' );
+			$cache_key = Util::transient_key( 'wppo_audit_' . md5( $url ) );
+			// Salted layer is only useful with a persistent object cache;
+			// otherwise the transient fallback keeps results across requests
+			// (issue #882 review).
+			$has_salted = function_exists( 'wp_cache_get_salted' ) && wp_using_ext_object_cache();
 
 			if ( $has_salted ) {
 				$cached = wp_cache_get_salted( $cache_key, 'wppo', Util::cache_salt( self::AUDIT_SALT_KEY ) );
@@ -947,8 +950,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * @return void
 		 */
 		public static function invalidate_audit_cache(): void {
-			if ( function_exists( 'wp_cache_get_salted' ) ) {
-				update_option( self::AUDIT_SALT_KEY, time(), false );
+			if ( function_exists( 'wp_cache_get_salted' ) && wp_using_ext_object_cache() ) {
+				// Monotonic increment: two bumps within the same second must
+				// produce distinct salts (issue #882 review).
+				update_option( self::AUDIT_SALT_KEY, (int) get_option( self::AUDIT_SALT_KEY, 0 ) + 1, false );
 			}
 		}
 

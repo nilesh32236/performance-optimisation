@@ -28,6 +28,7 @@ class LogTest extends \PHPUnit\Framework\TestCase {
 			array(
 				'wp_kses_post',
 				'update_option',
+				'get_option',
 			)
 		);
 		Functions\when( 'wp_kses_post' )->returnArg();
@@ -35,6 +36,12 @@ class LogTest extends \PHPUnit\Framework\TestCase {
 			static function ( $option, $value, $autoload = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 				$GLOBALS['wppo_test_options'][ $option ] = $value;
 				return true;
+			}
+		);
+		Functions\when( 'get_option' )->alias(
+			static function ( $option, $fallback = false ) {
+				// Scoped: only the salt keys are stubbed (issue #882 review).
+				return str_starts_with( (string) $option, 'wppo_activity' ) ? 0 : $fallback;
 			}
 		);
 		unset( $GLOBALS['wppo_test_options'] );
@@ -58,6 +65,7 @@ class LogTest extends \PHPUnit\Framework\TestCase {
 			array(
 				'wp_kses_post',
 				'update_option',
+				'get_option',
 			)
 		);
 		Functions\when( 'wp_kses_post' )->returnArg();
@@ -65,6 +73,11 @@ class LogTest extends \PHPUnit\Framework\TestCase {
 			static function () {
 				$GLOBALS['wppo_test_options'][] = 'unexpected';
 				return true;
+			}
+		);
+		Functions\when( 'get_option' )->alias(
+			static function ( $option, $fallback = false ) {
+				return str_starts_with( (string) $option, 'wppo_activity' ) ? 0 : $fallback;
 			}
 		);
 		unset( $GLOBALS['wppo_test_options'] );
@@ -82,8 +95,13 @@ class LogTest extends \PHPUnit\Framework\TestCase {
 		$wpdb            = new WPPO_Log_DB_Mock();
 		$GLOBALS['wpdb'] = $wpdb;
 
-		// The salted read now resolves the salt value via get_option (issue #882).
-		Functions\when( 'get_option' )->justReturn( '0' );
+		// The salted read resolves the salt value via get_option (issue #882);
+		// scope the stub to the salt key so other reads keep their default.
+		Functions\when( 'get_option' )->alias(
+			static function ( $option, $fallback = false ) {
+				return 'wppo_activity_log_salt' === $option ? '0' : $fallback;
+			}
+		);
 
 		$wpdb->count = 25;
 		$wpdb->rows  = array(
@@ -122,7 +140,11 @@ class LogTest extends \PHPUnit\Framework\TestCase {
 		$wpdb            = new WPPO_Log_DB_Mock();
 		$GLOBALS['wpdb'] = $wpdb;
 
-		Functions\when( 'get_option' )->justReturn( '0' );
+		Functions\when( 'get_option' )->alias(
+			static function ( $option, $fallback = false ) {
+				return 'wppo_activity_log_salt' === $option ? '0' : $fallback;
+			}
+		);
 
 		$wpdb->count = 0;
 		$wpdb->rows  = array();
@@ -179,7 +201,11 @@ class LogTest extends \PHPUnit\Framework\TestCase {
 	public function test_get_recent_activities_clamps_bounds(): void {
 		$GLOBALS['wpdb'] = new WPPO_Log_DB_Mock();
 
-		Functions\when( 'get_option' )->justReturn( '0' );
+		Functions\when( 'get_option' )->alias(
+			static function ( $option, $fallback = false ) {
+				return 'wppo_activity_log_salt' === $option ? '0' : $fallback;
+			}
+		);
 
 		$data = Log::get_recent_activities(
 			array(

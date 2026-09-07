@@ -65,7 +65,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// stats are bumped so the salted wppo_cache_size /
 			// wppo_total_js_css entries stay consistent outside clear_cache()
 			// (smart purge, combine_css) too.
-			if ( function_exists( 'wp_cache_get_salted' ) ) {
+			if ( function_exists( 'wp_cache_get_salted' ) && wp_using_ext_object_cache() ) {
 				$salt = (int) get_option( 'wppo_cache_last_cleared', 0 ) + 1;
 				update_option( 'wppo_cache_last_cleared', $salt, false );
 			}
@@ -2744,7 +2744,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// with the transient (issue #894 follow-up: pass the value, not the
 			// key, or the bump never reaches the comparison).
 			$stats_key = Util::transient_key( 'wppo_cache_stats' );
-			if ( function_exists( 'wp_cache_get_salted' ) ) {
+			// Salted layer requires a persistent object cache; the transient
+			// fallback keeps the stats across requests otherwise (issue #882 review).
+			if ( function_exists( 'wp_cache_get_salted' ) && wp_using_ext_object_cache() ) {
 				$cached_stats = wp_cache_get_salted( 'wppo_cache_stats', 'wppo', Util::cache_salt( 'wppo_cache_last_cleared' ) );
 			} else {
 				$cached_stats = get_transient( $stats_key );
@@ -2808,7 +2810,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return void
 		 */
 		private static function store_cache_stats( array $unified, string $stats_key ): void {
-			if ( function_exists( 'wp_cache_get_salted' ) ) {
+			if ( function_exists( 'wp_cache_get_salted' ) && wp_using_ext_object_cache() ) {
 				wp_cache_set_salted( 'wppo_cache_stats', $unified, 'wppo', Util::cache_salt( 'wppo_cache_last_cleared' ), 15 * MINUTE_IN_SECONDS );
 			}
 			set_transient( $stats_key, $unified, 15 * MINUTE_IN_SECONDS );

@@ -1513,8 +1513,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 */
 		public static function cache_salt( string $option ): string {
 			$value = get_option( $option, '0' );
-			return is_scalar( $value ) ? (string) $value : '0';
+			// false (unset option) maps to the '0' sentinel, never ''.
+			if ( ! is_scalar( $value ) || false === $value ) {
+				return '0';
+			}
+			return (string) $value;
 		}
+
+		/**
+		 * Memoized availability of the WP 6.9+ HTML API token serializer.
+		 *
+		 * Reset per request via {@see reset_html_processor_memo()} (used by the
+		 * test suite to isolate the reflection probe).
+		 *
+		 * @since NEXT
+		 * @var bool|null
+		 */
+		private static ?bool $html_processor_available = null;
 
 		/**
 		 * Whether the WP 6.9+ HTML API token serializer is available.
@@ -1530,22 +1545,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @return bool True when `WP_HTML_Processor::serialize_token()` is public.
 		 */
 		public static function should_use_html_processor(): bool {
-			static $cached = null;
-			if ( null !== $cached ) {
-				return $cached;
+			if ( null !== self::$html_processor_available ) {
+				return self::$html_processor_available;
 			}
 			if ( ! class_exists( 'WP_HTML_Processor' ) || ! method_exists( 'WP_HTML_Processor', 'serialize_token' ) ) {
-				$cached = false;
-				return $cached;
+				self::$html_processor_available = false;
+				return false;
 			}
 			try {
-				$method = new \ReflectionMethod( 'WP_HTML_Processor', 'serialize_token' );
-				$cached = $method->isPublic();
-				return $cached;
+				$method                         = new \ReflectionMethod( 'WP_HTML_Processor', 'serialize_token' );
+				self::$html_processor_available = $method->isPublic();
 			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
-				$cached = false;
-				return $cached;
+				self::$html_processor_available = false;
 			}
+			return self::$html_processor_available;
+		}
+
+		/**
+		 * Reset the memoized HTML-processor availability probe.
+		 *
+		 * Same reset pattern as reset_cached_home_urls()/clear_settings_cache();
+		 * used by the test suite so the reflection probe can be re-evaluated
+		 * after HTML API class fixtures change.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_html_processor_memo(): void {
+			self::$html_processor_available = null;
 		}
 
 		/**
