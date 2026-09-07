@@ -70,7 +70,7 @@ class SaltedCacheCoverageTest extends \PHPUnit\Framework\TestCase {
 		);
 		Functions\when( 'get_transient' )->justReturn( false );
 		Functions\when( 'set_transient' )->alias(
-			function ( $key, $value, $expiration = 0 ) {
+			function ( $key, $value, $expiration = 0 ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 				$this->transients_store[ (string) $key ] = $value;
 				return true;
 			}
@@ -358,7 +358,7 @@ class WPPO_Miss_On_Read_Cache_Harness {
 	 * @param bool|null  $found Whether the value was found.
 	 * @return false
 	 */
-	public function get( $key, $group = 'default', $force = false, &$found = null ) {
+	public function get( $key, $group = 'default', $force = false, &$found = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 		$found = false;
 		return false;
 	}
@@ -372,7 +372,7 @@ class WPPO_Miss_On_Read_Cache_Harness {
 	 * @param int        $expire Expiration in seconds.
 	 * @return true
 	 */
-	public function set( $key, $data, $group = 'default', $expire = 0 ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+	public function set( $key, $data, $group = 'default', $expire = 0 ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
 		return true;
 	}
 
@@ -383,7 +383,7 @@ class WPPO_Miss_On_Read_Cache_Harness {
 	 * @param string     $group Cache group.
 	 * @return true
 	 */
-	public function delete( $key, $group = 'default' ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+	public function delete( $key, $group = 'default' ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
 		return true;
 	}
 
