@@ -28,15 +28,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 		/**
 		 * Initialize the deactivation process.
 		 *
-		 * Cleans up resources by removing cron jobs, static files,
+		 * Cleans up resources by removing runtime hooks, cron jobs, static files,
 		 * .htaccess modifications, and WP_CACHE constant.
 		 *
 		 * @since 1.0.0
 		 * @return void
 		 */
 		public static function init(): void {
+			// Remove plugin-owned runtime hooks first so teardown steps below
+			// (option writes, cache clears) cannot re-trigger plugin behaviour
+			// such as drop-in re-creation or CDN purge fan-out (audit #888 finding 1).
+			self::unregister_runtime_hooks();
+
+			// Unschedule every WP-Cron event the plugin may have scheduled, using
+			// the canonical list in Cron::SCHEDULED_HOOKS (audit #888 findings 1+9).
 			self::unschedule_crons();
-			self::unschedule_database_cleanup_cron();
+			self::unschedule_action_scheduler_jobs();
+
 			delete_option( 'wppo_preload_cron_offset' );
 
 			Advanced_Cache_Handler::remove();
@@ -68,49 +76,99 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 		}
 
 		/**
-		 * Unschedule cron jobs.
+		 * Remove plugin-owned runtime hooks for the remainder of this request.
 		 *
-		 * Removes any scheduled cron jobs created by the plugin.
+		 * Scope (audit #888 finding 1):
+		 * - plugin-owned `wppo_*` action/filter callbacks that could fire during
+		 *   the deactivation request itself (settings writes, cache-clear side
+		 *   effects);
+		 * - structural-change hooks that would clear/purge caches after the
+		 *   plugin's own teardown already did.
 		 *
-		 * @since 1.0.0
+		 * Intentionally left in place:
+		 * - core hook registrations (admin_menu, wp_head, template_redirect, …)
+		 *   — WordPress clears all hooks at end of request and the plugin simply
+		 *   does not load again after deactivation, so removing them is a no-op;
+		 * - no output buffers are open during this admin-context request (they
+		 *   only open on template_redirect), so there is nothing to unwind.
+		 *
+		 * Instance-method callbacks are removed via {@see Main::get_instance()}
+		 * (null when the Main constructor never ran, e.g. in tests).
+		 *
+		 * @since NEXT
 		 * @return void
 		 */
-		private static function unschedule_crons(): void {
-			// Unschedule the 'wppo_page_cron_hook' event if it is scheduled.
-			$timestamp = wp_next_scheduled( 'wppo_page_cron_hook' );
-			if ( $timestamp ) {
-				wp_unschedule_event( $timestamp, 'wppo_page_cron_hook' );
+		public static function unregister_runtime_hooks(): void {
+			$main = Main::get_instance();
+
+			// Settings writes must not re-create the advanced-cache drop-in or
+			// update .htaccess while the plugin is tearing itself down.
+			remove_action( 'update_option_wppo_settings', array( Main::class, 'on_settings_update' ), 10 );
+
+			// Cache-clear fan-out on structural changes is redundant after
+			// Deactivate::init() has cleared the cache itself.
+			remove_action( 'update_option_permalink_structure', array( Main::class, 'clear_all_cache' ) );
+			remove_action( 'switch_theme', array( Main::class, 'clear_all_cache' ) );
+			remove_action( 'activated_plugin', array( Main::class, 'clear_all_cache' ) );
+			remove_action( 'deactivated_plugin', array( Main::class, 'clear_all_cache' ) );
+
+			if ( $main instanceof Main ) {
+				remove_action( 'save_post', array( $main, 'on_save_post_invalidate_cache' ), 10 );
+				remove_action( 'save_post', array( $main, 'on_save_post_queue_used_css' ), 10 );
 			}
 
-			$timestamp = wp_next_scheduled( 'wppo_page_cron_batch' );
-			if ( $timestamp ) {
-				wp_unschedule_event( $timestamp, 'wppo_page_cron_batch' );
-			}
+			// DB-cleanup counts invalidation is pointless once the plugin is gone.
+			remove_action( 'save_post', array( 'PerformanceOptimise\Inc\Database_Cleanup', 'on_post_change' ), 10 );
+			remove_action( 'deleted_post', array( 'PerformanceOptimise\Inc\Database_Cleanup', 'on_post_change' ), 10 );
 
-			// Unschedule image conversion cron events (old + new hook name for backward compat).
-			foreach ( array( 'wppo_img_conversation', 'wppo_img_conversion' ) as $hook ) {
-				$timestamp = wp_next_scheduled( $hook );
-				if ( $timestamp ) {
-					wp_unschedule_event( $timestamp, $hook );
-				}
-			}
-
-			$timestamp = wp_next_scheduled( 'wppo_generate_static_page' );
-			if ( $timestamp ) {
-				wp_unschedule_event( $timestamp, 'wppo_generate_static_page' );
-			}
+			// Deliberately NOT removed: the wppo_after_cache_clear listeners.
+			// Cache::clear_cache() below fires that action once more, and its
+			// listeners are both safe and desirable during teardown:
+			// - CDN_Purger/Edge_Purger purge_all() sends the final edge purge so
+			// stale Cloudflare/Bunny/Varnish copies do not outlive the plugin
+			// (both purgers no-op when their integration is not configured);
+			// - Image_Optimisation::clear_runtime_caches() is a cheap local
+			// stat-cache reset with no external side effects.
 		}
 
 		/**
-		 * Unschedule the database cleanup cron job.
+		 * Unschedule cron jobs.
 		 *
-		 * @since 1.6.0
+		 * Removes every WP-Cron event created by the plugin, derived from the
+		 * canonical {@see Cron::SCHEDULED_HOOKS} list (plus the legacy
+		 * `wppo_img_conversation` misspelling, cleared inside
+		 * Cron::clear_cron_jobs()). Uses wp_unschedule_hook() which removes all
+		 * events for a hook, recurring and single (audit #888 findings 1 + 9).
+		 *
+		 * @since 1.0.0
+		 * @since NEXT Delegates to the canonical Cron::SCHEDULED_HOOKS list.
 		 * @return void
 		 */
-		private static function unschedule_database_cleanup_cron(): void {
-			$timestamp = wp_next_scheduled( 'wppo_database_cleanup_cron' );
-			if ( $timestamp ) {
-				wp_unschedule_event( $timestamp, 'wppo_database_cleanup_cron' );
+		private static function unschedule_crons(): void {
+			Cron::clear_cron_jobs();
+		}
+
+		/**
+		 * Unschedule plugin-owned Action Scheduler pending jobs.
+		 *
+		 * Action Scheduler keeps its own queue in custom tables, so WP-Cron
+		 * unscheduling does not touch it. Pending background jobs (image
+		 * conversion, PageSpeed scans, used-CSS generation, critical CSS,
+		 * crawler batches) are cancelled on deactivation (audit #888 finding 1).
+		 * The hook list is the canonical {@see Cron::AS_HOOKS} const (single
+		 * source of truth shared with the scheduling sites); the dual-scheduled
+		 * crawler hooks are cleaned in both paths.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private static function unschedule_action_scheduler_jobs(): void {
+			if ( ! function_exists( 'as_unschedule_all_actions' ) ) {
+				return;
+			}
+
+			foreach ( Cron::AS_HOOKS as $hook ) {
+				as_unschedule_all_actions( $hook );
 			}
 		}
 

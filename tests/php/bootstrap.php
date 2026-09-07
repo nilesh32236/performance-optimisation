@@ -215,7 +215,7 @@ trait WPPO_Test_Bootstrap {
 		\PerformanceOptimise\Inc\Util::reset_cached_home_urls();
 		\PerformanceOptimise\Inc\Util::clear_settings_cache();
 		if ( class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
-			\PerformanceOptimise\Inc\Image_Optimisation::clear_file_exists_cache();
+			\PerformanceOptimise\Inc\Image_Optimisation::clear_runtime_caches();
 		}
 
 		// Pre-register frequently used WP functions to avoid "Cannot redeclare"
@@ -263,6 +263,9 @@ trait WPPO_Test_Bootstrap {
 	 */
 	protected function tearDown(): void { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid
 		\Brain\Monkey\tearDown();
+		if ( class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
+			\PerformanceOptimise\Inc\Main::reset_instance();
+		}
 		parent::tearDown();
 	}
 }

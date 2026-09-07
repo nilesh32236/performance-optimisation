@@ -160,6 +160,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private float $server_timing_template_start = 0.0;
 
 		/**
+		 * The most recently constructed Main instance.
+		 *
+		 * The plugin bootstraps a single Main per request (`new Main()` in the
+		 * plugin entry file); the reference lets the deactivation routine remove
+		 * instance-method hooks symmetrically (see
+		 * {@see Deactivate::unregister_runtime_hooks()}).
+		 *
+		 * @var   Main|null
+		 * @since NEXT
+		 */
+		private static ?Main $instance = null;
+
+		/**
+		 * Get the current Main instance (null before construction / in tests).
+		 *
+		 * @since NEXT
+		 * @return Main|null
+		 */
+		public static function get_instance(): ?Main {
+			return self::$instance;
+		}
+
+		/**
+		 * Clear the tracked Main instance (test isolation).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_instance(): void {
+			self::$instance = null;
+		}
+
+		/**
 		 * Constructor.
 		 *
 		 * Initializes the class by including necessary files and setting up hooks.
@@ -167,6 +200,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 1.0.0
 		 */
 		public function __construct() {
+			// Track the instance so {@see Deactivate::unregister_runtime_hooks()} can
+			// perform symmetric remove_action() calls for instance-method callbacks
+			// during deactivation (audit #888 finding 1).
+			self::$instance = $this;
+
+			// Register the wppo_settings memo invalidation hooks eagerly at plugin
+			// boot so cache invalidation is deterministic for the whole request
+			// regardless of when get_settings() is first called (audit #888
+			// finding 4). get_settings() keeps a lazy backstop registration.
+			Util::register_settings_cache_hooks();
+
 			$defaults      = array(
 				'cache_settings'        => array(
 					'enableCache'         => false,
@@ -633,6 +677,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				add_action( 'save_post', array( 'PerformanceOptimise\Inc\Database_Cleanup', 'on_post_change' ), 10, 2 );
 				add_action( 'deleted_post', array( 'PerformanceOptimise\Inc\Database_Cleanup', 'on_post_change' ), 10, 2 );
 			}
+
+			// Flush Image_Optimisation per-request stat caches (file_exists + image
+			// sizes) on blog switches and after cache clears so paths from another
+			// site or pre-clear state are re-verified (audit #888 finding 7).
+			add_action( 'switch_blog', array( 'PerformanceOptimise\Inc\Image_Optimisation', 'clear_runtime_caches' ) );
+			add_action( 'wppo_after_cache_clear', array( 'PerformanceOptimise\Inc\Image_Optimisation', 'clear_runtime_caches' ) );
 			if ( ! empty( $this->options['file_optimisation']['combineCSS'] ) ) {
 				// TODO(#624): when WP 7.2 removes concatenation in favour of preloads,
 				// reassess whether combine_css() should defer to core preload emission
@@ -1180,7 +1230,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					add_action(
 						'admin_notices',
 						function () {
-							echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Performance Optimisation: Failed to update .htaccess rules. Please check file permissions.', 'performance-optimisation' ) . '</p></div>';
+							// role="alert" + aria-live="assertive" so screen readers announce
+							// the failure immediately, matching the React NoticeBanner ARIA
+							// contract used across the SPA.
+							echo '<div class="notice notice-error is-dismissible" role="alert" aria-live="assertive"><p>' . esc_html__( 'Performance Optimisation: Failed to update .htaccess rules. Please check file permissions.', 'performance-optimisation' ) . '</p></div>';
 						}
 					);
 				}
@@ -1480,6 +1533,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Capture and process buffer for used-CSS.
 		 *
+		 * Wrapped in try/catch so an unexpected failure inside the used-CSS or
+		 * Google Fonts pipeline can never throw out of the output-buffer
+		 * callback: the callback must always return a string or the buffered
+		 * page output would be lost/corrupted when the buffer is closed
+		 * (audit #888 finding 12 — balanced buffer lifecycle).
+		 *
 		 * @param string $buffer The output buffer content.
 		 * @return string The processed buffer.
 		 * @since 1.9.0
@@ -1489,12 +1548,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return $buffer;
 			}
 
-			if ( ! empty( $this->options['file_optimisation']['hostGoogleFontsLocally'] ?? false ) ) {
-				$buffer = $this->google_fonts->process_buffer( $buffer );
-			}
+			// Fail open returns the PRISTINE input — stash it before mutation.
+			$original = $buffer;
+			try {
+				if ( ! empty( $this->options['file_optimisation']['hostGoogleFontsLocally'] ?? false ) ) {
+					$buffer = $this->google_fonts->process_buffer( $buffer );
+				}
 
-			$used_css = new \PerformanceOptimise\Inc\Used_CSS( $this->options );
-			return $used_css->process_buffer( $buffer );
+				$used_css = new \PerformanceOptimise\Inc\Used_CSS( $this->options );
+				return $used_css->process_buffer( $buffer );
+			} catch ( \Throwable $e ) {
+				// Fail open: return the unprocessed buffer rather than dropping
+				// the page content. Mirrors the wppo_debug_log convention used by
+				// the HTML minifier and Cloudflare purger.
+				do_action( 'wppo_debug_log', 'WPPO used-CSS buffer processing failed: ' . $e->getMessage(), array( 'exception' => $e ) );
+				return $original;
+			}
 		}
 
 		/**

@@ -367,6 +367,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Register the settings-cache invalidation hooks eagerly.
+		 *
+		 * The invalidation hooks only need to exist before the first
+		 * update/add/delete of `wppo_settings` in the request, and before any
+		 * switch_to_blog() re-keying. Registering them at plugin boot (in
+		 * {@see Main::__construct()}) makes invalidation deterministic instead
+		 * of relying on the lazy first-call registration inside get_settings();
+		 * the lazy path remains as a backstop for entry points that bypass Main.
+		 * Safe to call multiple times — a static guard makes the registration
+		 * idempotent.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function register_settings_cache_hooks(): void {
+			self::ensure_settings_cache_hook();
+		}
+
+		/**
 		 * Ensure the invalidation hooks for wppo_settings are registered once per request.
 		 *
 		 * @since NEXT
@@ -601,6 +620,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Generates a preload link tag for resources.
 		 *
+		 * Echoes only in front-end HTML contexts (wp_head / template rendering);
+		 * during REST, JSON, AJAX, CLI, or admin requests the tag is built and
+		 * returned without echo so HTML can never leak into non-HTML payloads.
+		 * Callers that assemble headers/buffers should use
+		 * {@see get_preload_link()} directly.
+		 *
 		 * Preconnect and dns-prefetch links now flow through core's
 		 * `wp_resource_hints()` (see Main::add_resource_hints()); this helper
 		 * remains for `rel="preload"` links that need `as`/`type`/`media`
@@ -614,8 +639,49 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string $media The media attribute (optional).
 		 * @param string $fetchpriority The fetchpriority attribute (optional).
 		 * @since 1.0.0
+		 * @since NEXT Echoes only in front-end HTML contexts; returns the tag and delegates building to get_preload_link().
 		 */
 		public static function generate_preload_link( $href, $rel, $resource_type = '', $crossorigin = false, $type = '', $media = '', $fetchpriority = '' ) {
+			$link_tag = self::get_preload_link( $href, $rel, $resource_type, $crossorigin, $type, $media, $fetchpriority );
+
+			// Only echo in front-end HTML contexts (wp_head / template rendering).
+			// Echoing during REST, AJAX, cron, CLI, or admin contexts can inject
+			// HTML into JSON/CLI output; callers that need the markup there should
+			// use get_preload_link() and handle the string themselves.
+			// wp_is_json_request() also covers early-boot JSON responses that
+			// precede REST_REQUEST.
+			if ( ( function_exists( 'is_admin' ) && is_admin() )
+				|| ( function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() )
+				|| ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() )
+				|| ( function_exists( 'wp_is_json_request' ) && wp_is_json_request() )
+				|| ( defined( 'REST_REQUEST' ) && REST_REQUEST )
+				|| ( defined( 'WP_CLI' ) && WP_CLI ) ) {
+				return $link_tag;
+			}
+
+			// Output the sanitized link tag.
+			echo $link_tag . PHP_EOL; // phpcs:ignore WordPress.Security.EscapeOutput -- wp_kses() applied in get_preload_link().
+			return $link_tag;
+		}
+
+		/**
+		 * Build a sanitized preload <link> tag and return it.
+		 *
+		 * Pure string builder used by {@see generate_preload_link()}; also lets
+		 * callers that assemble headers or buffers (e.g. cache generation) obtain
+		 * the tag without any side effects.
+		 *
+		 * @param string $href The resource URL.
+		 * @param string $rel The relationship attribute.
+		 * @param string $resource_type The type of the resource (optional).
+		 * @param bool   $crossorigin If the resource should be crossorigin (optional).
+		 * @param string $type The type attribute (optional).
+		 * @param string $media The media attribute (optional).
+		 * @param string $fetchpriority The fetchpriority attribute (optional).
+		 * @since NEXT
+		 * @return string The sanitized `<link ...>` tag.
+		 */
+		public static function get_preload_link( $href, $rel, $resource_type = '', $crossorigin = false, $type = '', $media = '', $fetchpriority = '' ): string {
 			$attributes = array(
 				'rel'  => esc_attr( $rel ),
 				'href' => esc_url( $href ),
@@ -651,8 +717,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				),
 			);
 
-			// Output the sanitized link tag.
-			echo wp_kses( $link_tag, $allowed_html ) . PHP_EOL;
+			// Return the sanitized link tag.
+			return (string) wp_kses( $link_tag, $allowed_html );
 		}
 
 		/**

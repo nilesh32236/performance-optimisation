@@ -163,6 +163,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private $filesystem;
 
 		/**
+		 * Output-buffer level occupied by the legacy cache buffer (WP < 6.9).
+		 *
+		 * Set in {@see start_output_buffer()} after ob_start(); used by
+		 * {@see maybe_end_output_buffer()} to close the buffer exactly once on
+		 * shutdown. Null while no cache buffer is open.
+		 *
+		 * @var int|null
+		 * @since NEXT
+		 */
+		private ?int $cache_ob_level = null;
+
+		/**
 		 * Whether the filesystem has been initialized.
 		 *
 		 * @var bool
@@ -1286,6 +1298,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * Creates a static HTML version of the page if not logged in and not a 404 page.
 		 *
+		 * Buffer lifecycle guarantees (audit #888 finding 6):
+		 * - the ob callback is Throwable-safe and always returns a string (the
+		 *   original buffer on failure), so the page can never lose output and
+		 *   the buffer can always be closed;
+		 * - the opened level is tracked and a shutdown safety net (priority 0,
+		 *   before core's wp_ob_end_flush_all() at priority 1) flushes the
+		 *   buffer exactly once if nothing else closed it. When a third party
+		 *   opened a deeper buffer the net stays out of the way — their close
+		 *   cascades into ours.
+		 *
+		 * This hook only fires on template_redirect (front-end HTML), never in
+		 * REST/AJAX/admin contexts, so buffered REST/JSON responses are not a
+		 * concern by construction.
+		 *
 		 * @return void
 		 *
 		 * @since 1.0.0
@@ -1296,16 +1322,69 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return;
 			}
 
+			// Exactly-once start: a second invocation in the same request (should
+			// not happen — the hook is registered once) would stack a duplicate
+			// buffer and re-register the shutdown net.
+			if ( null !== $this->cache_ob_level ) {
+				return;
+			}
+
 			$role_hash = $this->get_logged_in_role_hash();
 			$file_path = $this->get_cache_file_path( 'html', $role_hash );
 
-			ob_start(
-				function ( $buffer ) use ( $file_path ) {
+			$ob_callback = function ( $buffer ) use ( $file_path ) {
+				try {
 					$buffer = $this->process_buffer_only( $buffer );
 					$this->save_processed_buffer( $buffer, $file_path );
 					return $buffer;
+				} catch ( \Throwable $e ) {
+					// Fail open: serve the page unprocessed instead of
+					// throwing out of the buffer callback (which would
+					// discard the response and leave the buffer dangling).
+					do_action( 'wppo_debug_log', 'WPPO page cache buffer processing failed: ' . $e->getMessage(), array( 'exception' => $e ) );
+					return $buffer;
 				}
-			);
+			};
+
+			// Only track the level and register the shutdown net when a buffer
+			// was actually opened — otherwise the net could flush a foreign
+			// buffer occupying that level.
+			if ( ! ob_start( $ob_callback ) ) {
+				do_action( 'wppo_debug_log', 'WPPO page cache could not open output buffer' );
+				return;
+			}
+
+			// Track the level our buffer occupies for the shutdown safety net.
+			$this->cache_ob_level = ob_get_level();
+			if ( false === has_action( 'shutdown', array( $this, 'maybe_end_output_buffer' ) ) ) {
+				add_action( 'shutdown', array( $this, 'maybe_end_output_buffer' ), 0 );
+			}
+		}
+
+		/**
+		 * Shutdown safety net: close the cache output buffer exactly once.
+		 *
+		 * Runs at shutdown priority 0, before core's wp_ob_end_flush_all()
+		 * (priority 1). Acts only while the tracked buffer is still the
+		 * topmost-open level: when a third party opened a deeper buffer, their
+		 * close (or core's shutdown flush) cascades into ours and this method
+		 * is a no-op. Also serves the "is_not_cacheable flipped mid-request"
+		 * case: the save decision is made inside the callback, the (processed)
+		 * buffer is always flushed to the client.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public function maybe_end_output_buffer(): void {
+			if ( null === $this->cache_ob_level ) {
+				return;
+			}
+			// One-shot: never attempt to close the same buffer twice.
+			$level                = $this->cache_ob_level;
+			$this->cache_ob_level = null;
+			if ( ob_get_level() === $level ) {
+				ob_end_flush();
+			}
 		}
 
 		/**

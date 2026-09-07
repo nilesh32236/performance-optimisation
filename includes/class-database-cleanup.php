@@ -974,12 +974,44 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Call a static cleanup method by name and convert a `false` result into a `WP_Error`.
 		 *
+		 * Guarded against invalid `$method` values (audit #888 finding 11): the
+		 * name must be a whitelisted cleanup method (METHOD_TO_TYPE keys) and
+		 * callable, otherwise a WP_Error is returned instead of triggering a
+		 * fatal error that would crash the REST database_cleanup endpoint.
+		 * The method name is passed through raw into the WP_Error payload;
+		 * escaping happens at display time.
+		 *
 		 * @since 1.4.0
-		 * @param string $method The static method name to invoke.
-		 * @param mixed  ...$args Arguments forwarded to the method.
-		 * @return mixed The invoked method's return value, or a `WP_Error` if the method returned `false`.
+		 * @since NEXT Added method whitelist + is_callable guard returning WP_Error.
+		 * @param mixed $method The static method name to invoke (string; other types are guarded).
+		 * @param mixed ...$args Arguments forwarded to the method.
+		 * @return mixed The invoked method's return value, or a `WP_Error` if the method returned `false` or is not callable.
 		 */
 		public static function invoke_cleanup_method( $method, ...$args ) {
+			// Whitelist against the canonical CLEANUP_METHOD_MAP values (single
+			// source of truth). The legacy public clean_revisions() remains
+			// callable directly (WP-CLI) but is intentionally excluded here —
+			// it is superseded by clean_revisions_advanced().
+			if ( ! is_string( $method )
+				|| ! in_array( $method, array_values( self::CLEANUP_METHOD_MAP ), true )
+				|| ! is_callable( array( self::class, $method ) ) ) {
+				// wp_json_encode() can return false (invalid UTF-8, recursion);
+				// fall back to a type label so the diagnostic payload is never empty.
+				if ( is_string( $method ) ) {
+					$method_label = $method;
+				} else {
+					$encoded      = wp_json_encode( $method );
+					$method_label = is_string( $encoded ) && '' !== $encoded ? $encoded : gettype( $method );
+				}
+				return new WP_Error(
+					'wppo_invalid_cleanup_method',
+					sprintf(
+						/* translators: %s: cleanup method name. */
+						__( 'Invalid database cleanup method: %s', 'performance-optimisation' ),
+						$method_label
+					)
+				);
+			}
 			$res = self::$method( ...$args );
 			if ( false === $res ) {
 				return new WP_Error( 'db_cleanup_failed', __( 'Database cleanup failed.', 'performance-optimisation' ) );
