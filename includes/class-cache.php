@@ -40,6 +40,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private const CACHE_DIR = '/cache/wppo';
 
 		/**
+		 * Invalidate the cached cache-size/page-count stats transients.
+		 *
+		 * The dashboard stats (wppo_cache_stats + legacy
+		 * wppo_cache_size/wppo_cache_count/wppo_total_js_css) carry a 15-minute
+		 * TTL; per-page mutations (smart purge via
+		 * invalidate_dynamic_static_html(), fresh combine_css generation)
+		 * previously left the stats frozen until the TTL ran out (audit #874
+		 * finding 6). Mutators call this so the next stats read recomputes.
+		 * Deliberately NOT called from save_cache_files(): frontend cache
+		 * misses are the normal write path and would defeat the TTL entirely.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function bump_stats_cache(): void {
+			delete_transient( Util::transient_key( 'wppo_cache_stats' ) );
+			delete_transient( Util::transient_key( 'wppo_cache_size' ) );
+			delete_transient( Util::transient_key( 'wppo_cache_count' ) );
+			delete_transient( Util::transient_key( 'wppo_total_js_css' ) );
+		}
+
+		/**
 		 * Whether the depth-guard warning has been logged this request.
 		 *
 		 * Rate-limits WP_DEBUG logging for depth cap hits to once per request
@@ -602,6 +624,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 				$this->prepare_cache_dir();
 				$this->save_cache_files( $combined_css, $css_file_path, 'css' );
+
+				// Fresh combined CSS changes the total-asset stats — do not let
+				// the dashboard show stale numbers until the TTL expires (audit
+				// #874 finding 6).
+				self::bump_stats_cache();
 
 				$css_url = $this->get_cache_file_url( 'css', $css_variant );
 
@@ -2229,6 +2256,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				}
 				LiteSpeed_Integration::queue_purge_tags( array_unique( $tags ), $scope );
 			}
+
+			// The smart purge removed pages/files — dashboard stats must not
+			// stay frozen until the 15-min TTL (audit #874 finding 6).
+			self::bump_stats_cache();
 		}
 
 		/**
@@ -2382,10 +2413,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					$salt = (int) get_option( 'wppo_cache_last_cleared', 0 ) + 1;
 					update_option( 'wppo_cache_last_cleared', $salt, false );
 				}
-				delete_transient( Util::transient_key( 'wppo_cache_stats' ) );
-				delete_transient( Util::transient_key( 'wppo_cache_size' ) );
-				delete_transient( Util::transient_key( 'wppo_cache_count' ) );
-				delete_transient( Util::transient_key( 'wppo_total_js_css' ) );
+				self::bump_stats_cache();
 				update_option( 'wppo_cache_last_cleared_time', current_time( 'mysql' ), false );
 				do_action( 'wppo_after_cache_clear', $type, $url_path );
 

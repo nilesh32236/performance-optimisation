@@ -441,8 +441,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					$this->schedule_sitemap_url_jobs( $exclude_urls );
 				}
 
+				// Prime object-cache entries for the whole batch so the
+				// per-ID get_permalink() calls below resolve from memory
+				// instead of issuing one DB/cache round-trip each (audit
+				// #874 finding 1). _prime_post_caches() is WP 6.1+; the
+				// static memo in Util covers older cores and repeat lookups.
+				if ( function_exists( '_prime_post_caches' ) ) {
+					_prime_post_caches( array_map( 'intval', $query_batch_posts ), false, false );
+				}
+
 				foreach ( $query_batch_posts as $page_id ) {
-					$page_url = get_permalink( $page_id );
+					$page_url = Util::memoized_permalink( (int) $page_id );
 
 					if ( Util::is_url_excluded( $page_url, $exclude_urls ) ) {
 						continue;

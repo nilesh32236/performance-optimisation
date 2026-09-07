@@ -68,9 +68,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 			if ( '' === $pattern ) {
 				return '';
 			}
+
+			// Per-request memo (audit #874 finding 5): rewrite_buffer() invokes
+			// find_cdn_match() per attribute per asset, and each call re-derives
+			// the same ori_dir / include_dirs regexes per mapping — a 40-asset
+			// page with 3 mappings recompiled the same patterns ~120x. Pure
+			// function of $pattern, so no invalidation is needed. Mirrors the
+			// static $cache pattern of Util::is_url_excluded().
+			static $cache = array();
+			$cache_key    = md5( $pattern );
+			if ( isset( $cache[ $cache_key ] ) ) {
+				return $cache[ $cache_key ];
+			}
+
 			// Escape then unescape * to .*.
 			$escaped = preg_quote( $pattern, '#' );
 			$escaped = str_replace( '\*', '.*', $escaped );
+
+			$cache[ $cache_key ] = $escaped;
+
 			return $escaped;
 		}
 

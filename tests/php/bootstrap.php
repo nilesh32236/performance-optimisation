@@ -214,6 +214,7 @@ trait WPPO_Test_Bootstrap {
 		\Brain\Monkey\setUp();
 		\PerformanceOptimise\Inc\Util::reset_cached_home_urls();
 		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		\PerformanceOptimise\Inc\Util::clear_permalink_cache();
 		if ( class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			\PerformanceOptimise\Inc\Image_Optimisation::clear_runtime_caches();
 		}

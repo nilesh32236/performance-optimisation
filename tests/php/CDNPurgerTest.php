@@ -6,6 +6,7 @@
  */
 
 use PerformanceOptimise\Inc\CDN_Purger;
+use PerformanceOptimise\Inc\Util;
 use Brain\Monkey\Functions;
 
 /**
@@ -82,6 +83,9 @@ class CDNPurgerTest extends \PHPUnit\Framework\TestCase {
 		$this->options['wppo_settings'] = array(
 			'cache_settings' => $cache_settings,
 		);
+		// Production reads go through Util::get_settings()'s per-request memo
+		// (audit #874 finding 4); mid-test setting changes must drop it.
+		Util::clear_settings_cache();
 	}
 
 	/**

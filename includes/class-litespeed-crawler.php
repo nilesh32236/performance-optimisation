@@ -89,7 +89,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		 * @return int
 		 */
 		public static function get_concurrency(): int {
-			$options     = get_option( 'wppo_settings', array() );
+			$options     = Util::get_settings();
 			$concurrency = isset( $options['litespeed_integration']['crawler']['concurrency'] ) ? (int) $options['litespeed_integration']['crawler']['concurrency'] : self::DEFAULT_CONCURRENCY;
 			$concurrency = max( 1, min( 4, $concurrency ) );
 			/**
@@ -122,7 +122,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		 * @return int
 		 */
 		public static function get_blacklist_threshold(): int {
-			$options   = get_option( 'wppo_settings', array() );
+			$options   = Util::get_settings();
 			$threshold = isset( $options['litespeed_integration']['crawler']['blacklistThreshold'] ) ? (int) $options['litespeed_integration']['crawler']['blacklistThreshold'] : self::BLACKLIST_THRESHOLD;
 			$threshold = max( 1, $threshold );
 			/**
@@ -145,7 +145,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		 * @return float
 		 */
 		public static function get_load_limit(): float {
-			$options    = get_option( 'wppo_settings', array() );
+			$options    = Util::get_settings();
 			$configured = isset( $options['litespeed_integration']['crawler']['loadLimit'] ) ? (float) $options['litespeed_integration']['crawler']['loadLimit'] : 0;
 			$limit      = 4.0;
 			if ( $configured > 0 ) {
@@ -360,7 +360,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 				return self::build_variant_matrix( $url );
 			}
 
-			$options        = get_option( 'wppo_settings', array() );
+			$options        = Util::get_settings();
 			$groups         = $options['litespeed_integration']['varyGroups'] ?? array();
 			$cache_settings = $options['cache_settings'] ?? array();
 
@@ -508,12 +508,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 							);
 							// phpcs:enable
 							if ( is_array( $post_ids ) ) {
+								// Prime object-cache entries for the whole batch so the
+								// per-ID permalink lookups resolve from memory instead of
+								// one DB/cache round-trip each (audit #874 finding 2);
+								// Util::memoized_permalink() dedupes repeat IDs per request.
+								if ( function_exists( '_prime_post_caches' ) ) {
+									_prime_post_caches( array_map( 'intval', $post_ids ), false, false );
+								}
 								foreach ( $post_ids as $pid ) {
 									if ( microtime( true ) >= $deadline ) {
 										break;
 									}
-									$permalink = get_permalink( (int) $pid );
-									if ( is_string( $permalink ) && '' !== $permalink ) {
+									$permalink = Util::memoized_permalink( (int) $pid );
+									if ( '' !== $permalink ) {
 										$post_urls[] = $permalink;
 									}
 								}
@@ -536,8 +543,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 					);
 					if ( is_array( $posts ) ) {
 						foreach ( $posts as $pid ) {
-							$permalink = get_permalink( (int) $pid );
-							if ( is_string( $permalink ) && '' !== $permalink ) {
+							$permalink = Util::memoized_permalink( (int) $pid );
+							if ( '' !== $permalink ) {
 								$post_urls[] = $permalink;
 							}
 						}
