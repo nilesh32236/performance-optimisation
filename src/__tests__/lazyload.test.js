@@ -221,6 +221,18 @@ describe( 'Lazy Load (lazyload.js)', () => {
 			);
 		} );
 
+		it( 'rejects plain-http cross-origin srcs (mixed active content)', async () => {
+			document.body.innerHTML =
+				'<script type="wppo/javascript" wppo-src="http://www.googletagmanager.com/gtm.js"></script>';
+			await bootLazyload();
+
+			expect(
+				document.querySelector(
+					'script[src="http://www.googletagmanager.com/gtm.js"]'
+				)
+			).toBeNull();
+		} );
+
 		it( 'honours the runtime host allowlist extension point', async () => {
 			global.wppoAllowedScriptHosts = [ 'custom-cdn.example.org' ];
 			document.body.innerHTML =

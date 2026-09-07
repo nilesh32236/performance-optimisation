@@ -88,11 +88,12 @@ export const sanitizeEsiFragment = ( html ) => {
 
 			// Strip dangerous URL schemes from URL-bearing attributes.
 			if ( ESI_URL_ATTRS.has( name ) ) {
-				// Browsers ignore control characters/whitespace when parsing
-				// schemes ("java\tscript:"), so normalise before matching.
+				// Browsers ignore ASCII whitespace/control characters when parsing
+				// schemes ("java\tscript:", "  javascript:"), so normalise before
+				// matching (0x00-0x20 covers C0 controls and space).
 				const value = String( attr.value || '' )
 					.toLowerCase()
-					.replace( /[\u0000-\u001f]/g, '' );
+					.replace( /[\u0000-\u0020]/g, '' );
 				if ( /^(javascript|vbscript|data|blob):/.test( value ) ) {
 					node.removeAttribute( attr.name );
 				}
@@ -183,8 +184,10 @@ export const hydrateElement = async ( el ) => {
 			// client-side pass is defense-in-depth before DOM insertion.
 			el.replaceChildren( sanitizeEsiFragment( html ) );
 			el.removeAttribute( 'data-wppo-esi' );
-			// Keep nonce for debugging but remove to avoid re-hydration.
-			// el.removeAttribute( 'data-nonce' );
+			// Do not leave the spent nonce in the markup: it is no longer
+			// needed and prevents re-hydration with a stale value.
+			el.removeAttribute( 'data-nonce' );
+			el.removeAttribute( 'data-wppo-nonce' );
 		}
 	} catch ( err ) {
 		console.warn( 'WPPO ESI hydrate failed', err );

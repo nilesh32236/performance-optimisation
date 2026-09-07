@@ -68,6 +68,9 @@ describe( 'ESI placeholder hydration (esi.js)', () => {
 		expect( request.url ).toBeUndefined();
 		expect( el.innerHTML ).toBe( '<span>cart(3)</span>' );
 		expect( el.hasAttribute( 'data-wppo-esi' ) ).toBe( false );
+		// The spent nonce does not linger in the markup.
+		expect( el.hasAttribute( 'data-nonce' ) ).toBe( false );
+		expect( el.hasAttribute( 'data-wppo-nonce' ) ).toBe( false );
 	} );
 
 	it( 'buildEsiUrl returns the bare ajax URL with no nonce in the query', () => {
@@ -179,7 +182,7 @@ describe( 'sanitizeEsiFragment (defense-in-depth DOM sanitizer)', () => {
 
 	it( 'strips javascript:/vbscript:/data:/blob: URLs from URL attributes', () => {
 		const frag = sanitizeEsiFragment(
-			'<a href="javascript:alert(1)">x</a><a href="JaVa\tscript:alert(2)">y</a><a href="vbscript:msgbox(1)">z</a><img src="data:text/html,<script>alert(3)</script>"><img src="blob:https://example.com/abc"><a href="https://example.com/ok">safe</a>'
+			'<a href="javascript:alert(1)">x</a><a href="JaVa\tscript:alert(2)">y</a><a href="vbscript:msgbox(1)">z</a><a href=" javascript:alert(4)">w</a><img src="data:text/html,<script>alert(3)</script>"><img src="blob:https://example.com/abc"><a href="https://example.com/ok">safe</a>'
 		);
 		const wrap = document.createElement( 'div' );
 		wrap.appendChild( frag );
@@ -188,10 +191,12 @@ describe( 'sanitizeEsiFragment (defense-in-depth DOM sanitizer)', () => {
 		// Control characters used to obfuscate the scheme are normalised first.
 		expect( links[ 1 ].hasAttribute( 'href' ) ).toBe( false );
 		expect( links[ 2 ].hasAttribute( 'href' ) ).toBe( false );
+		// Leading whitespace is stripped too (WHATWG scheme parsing ignores it).
+		expect( links[ 3 ].hasAttribute( 'href' ) ).toBe( false );
 		const imgs = wrap.querySelectorAll( 'img' );
 		expect( imgs[ 0 ].hasAttribute( 'src' ) ).toBe( false );
 		expect( imgs[ 1 ].hasAttribute( 'src' ) ).toBe( false );
-		expect( links[ 3 ].getAttribute( 'href' ) ).toBe(
+		expect( links[ 4 ].getAttribute( 'href' ) ).toBe(
 			'https://example.com/ok'
 		);
 	} );

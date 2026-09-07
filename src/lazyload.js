@@ -228,6 +228,28 @@ const VIDEO_EMBED_HOST_ALLOWLIST = [
 ];
 
 /**
+ * Allowlist of iframe attributes restored from the PHP-provided
+ * data-wppo-iframe-attrs payload. Mirrors the attributes PHP stores (id,
+ * class, sandbox, referrerpolicy, title, name, frameborder, allow,
+ * allowfullscreen); src/width/height/style are owned by this code and on*
+ * handlers are never restorable.
+ *
+ * @since NEXT
+ * @type {Set<string>}
+ */
+const IFRAME_ATTR_ALLOWLIST = new Set( [
+	'id',
+	'class',
+	'sandbox',
+	'referrerpolicy',
+	'title',
+	'name',
+	'frameborder',
+	'allow',
+	'allowfullscreen',
+] );
+
+/**
  * Whether a host matches the allowlist (exact or subdomain, case-insensitive).
  *
  * @since NEXT
@@ -283,7 +305,9 @@ const isSafeScriptSrc = ( src ) => {
 	} catch {
 		return false;
 	}
-	if ( 'https:' !== url.protocol && 'http:' !== url.protocol ) {
+	// Cross-origin scripts must be https (no mixed active content); http is
+	// tolerated only for same-origin URLs (http dev/staging origins).
+	if ( url.origin !== window.location.origin && 'https:' !== url.protocol ) {
 		return false;
 	}
 	if ( url.origin === window.location.origin ) {
@@ -1247,21 +1271,19 @@ const initVideoPlaceholders = () => {
 			iframe.style.cssText =
 				'position:absolute;inset:0;width:100%;height:100%;border:0;';
 
-			// Restore original iframe attributes (sandbox, referrerpolicy, id, etc.)
-			// Defense-in-depth: never copy event-handler attributes even if a
-			// tampered attrs payload slips past the PHP allowlist.
+			// Restore original iframe attributes from the PHP-stored payload
+			// (Image_Optimisation::generate_video_placeholder()). Allowlist
+			// only — src/width/height/style are set by this code, and a
+			// tampered payload must not be able to escalate iframe
+			// capabilities (e.g. overwrite allow/sandbox/referrerpolicy) or
+			// smuggle event handlers.
 			const attrsJson = el.getAttribute( 'data-wppo-iframe-attrs' );
 			if ( attrsJson ) {
 				try {
 					const attrs = JSON.parse( attrsJson );
 					Object.entries( attrs ).forEach( ( [ k, v ] ) => {
 						const name = String( k ).toLowerCase();
-						if (
-							! [ 'src', 'width', 'height', 'style' ].includes(
-								name
-							) &&
-							! /^on/i.test( name )
-						) {
+						if ( IFRAME_ATTR_ALLOWLIST.has( name ) ) {
 							iframe.setAttribute( k, v );
 						}
 					} );
