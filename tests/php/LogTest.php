@@ -82,6 +82,9 @@ class LogTest extends \PHPUnit\Framework\TestCase {
 		$wpdb            = new WPPO_Log_DB_Mock();
 		$GLOBALS['wpdb'] = $wpdb;
 
+		// The salted read now resolves the salt value via get_option (issue #882).
+		Functions\when( 'get_option' )->justReturn( '0' );
+
 		$wpdb->count = 25;
 		$wpdb->rows  = array(
 			array(
@@ -118,6 +121,8 @@ class LogTest extends \PHPUnit\Framework\TestCase {
 	public function test_get_recent_activities_orders_by_id_desc_secondary(): void {
 		$wpdb            = new WPPO_Log_DB_Mock();
 		$GLOBALS['wpdb'] = $wpdb;
+
+		Functions\when( 'get_option' )->justReturn( '0' );
 
 		$wpdb->count = 0;
 		$wpdb->rows  = array();
@@ -173,6 +178,8 @@ class LogTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_get_recent_activities_clamps_bounds(): void {
 		$GLOBALS['wpdb'] = new WPPO_Log_DB_Mock();
+
+		Functions\when( 'get_option' )->justReturn( '0' );
 
 		$data = Log::get_recent_activities(
 			array(

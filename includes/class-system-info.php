@@ -37,6 +37,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		private static $litespeed_request_cache = null;
 
 		/**
+		 * Option key of the drop-in arbitration cache salt (WP 6.9+ salted
+		 * object cache; issue #882). Bumped by flush_dropin_cache() so a
+		 * mutator (object-cache enable/disable, advanced-cache create/remove)
+		 * invalidates the salted entry immediately.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		private const DROPIN_SALT_KEY = 'wppo_sysinfo_salt';
+
+		/**
 		 * Known cache plugin slugs used to detect active cache plugins.
 		 * Does NOT include 'performance-optimisation' — this plugin is never
 		 * reported as the active cache plugin for third-party detection purposes.
@@ -348,9 +359,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			// (Object_Cache::enable()/disable(), Advanced_Cache_Handler
 			// create/remove) flush it via flush_dropin_cache().
 			$dropin_transient_key = Util::transient_key( 'wppo_sysinfo_dropin_check' );
-			$dropin               = get_transient( $dropin_transient_key );
+			// Salted object-cache layer (WP 6.9+, issue #882) with the
+			// transient fallback; the salt is bumped by flush_dropin_cache().
+			if ( function_exists( 'wp_cache_get_salted' ) ) {
+				$dropin = wp_cache_get_salted( 'wppo_sysinfo_dropin_check', 'wppo', Util::cache_salt( self::DROPIN_SALT_KEY ) );
+			} else {
+				$dropin = get_transient( $dropin_transient_key );
+			}
 			if ( ! is_array( $dropin ) || ! isset( $dropin['advanced_cache'], $dropin['object_cache'] ) ) {
 				$dropin = self::detect_dropin_ownership();
+				if ( function_exists( 'wp_cache_get_salted' ) ) {
+					wp_cache_set_salted( 'wppo_sysinfo_dropin_check', $dropin, 'wppo', Util::cache_salt( self::DROPIN_SALT_KEY ), 15 * MINUTE_IN_SECONDS );
+				}
 				set_transient( $dropin_transient_key, $dropin, 15 * MINUTE_IN_SECONDS );
 			}
 
@@ -453,6 +473,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 */
 		public static function flush_dropin_cache(): void {
 			self::$litespeed_request_cache = null;
+			// Bump the salted-cache salt so WP 6.9+ salted entries invalidate
+			// immediately alongside the transient (issue #882).
+			if ( function_exists( 'wp_cache_get_salted' ) ) {
+				update_option( self::DROPIN_SALT_KEY, time(), false );
+			}
 			delete_transient( Util::transient_key( 'wppo_sysinfo_dropin_check' ) );
 		}
 

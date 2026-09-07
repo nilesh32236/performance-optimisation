@@ -98,7 +98,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 
 			if ( $has_salted ) {
 				$cache_key = "wppo_activity_logs_{$page}_{$per_page}";
-				$data      = wp_cache_get_salted( $cache_key, 'wppo', self::SALT_KEY );
+				// The salt is the current option VALUE (Util::cache_salt), not
+				// the option key — passing the key made Log::add()'s bump a
+				// no-op (issue #882).
+				$data = wp_cache_get_salted( $cache_key, 'wppo', Util::cache_salt( self::SALT_KEY ) );
 			} else {
 				$cache_key = 'wppo_activity_logs_v' . (int) get_option( 'wppo_activity_cache_version', 0 ) . '_page_' . $page . '_per_page_' . $per_page;
 				$data      = wp_cache_get( $cache_key, 'wppo_activity_logs' );
@@ -140,7 +143,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 
 				// Store data in cache.
 				if ( $has_salted ) {
-					wp_cache_set_salted( $cache_key, $data, 'wppo', self::SALT_KEY, HOUR_IN_SECONDS );
+					wp_cache_set_salted( $cache_key, $data, 'wppo', Util::cache_salt( self::SALT_KEY ), HOUR_IN_SECONDS );
 				} else {
 					wp_cache_set( $cache_key, $data, 'wppo_activity_logs', HOUR_IN_SECONDS );
 				}

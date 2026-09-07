@@ -384,9 +384,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string|null Processed buffer or null on failure (triggers regex fallback).
 		 */
 		private function post_process_placeholders_with_processor( string $buffer ): ?string {
-			$create    = method_exists( 'WP_HTML_Processor', 'create_fragment' ) ? 'create_fragment' : 'create_full_parser';
-			$processor = \WP_HTML_Processor::$create( $buffer ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound
-			if ( null === $processor || is_wp_error( $processor ) || ! ( $processor instanceof \WP_HTML_Processor ) ) {
+			$processor = Util::create_html_processor( $buffer );
+			if ( null === $processor ) {
 				return null;
 			}
 
@@ -494,9 +493,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string|null Processed buffer or null on failure.
 		 */
 		private function post_process_img_dimensions_with_processor( string $buffer ): ?string {
-			$create    = method_exists( 'WP_HTML_Processor', 'create_fragment' ) ? 'create_fragment' : 'create_full_parser';
-			$processor = \WP_HTML_Processor::$create( $buffer ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound
-			if ( null === $processor || is_wp_error( $processor ) || ! ( $processor instanceof \WP_HTML_Processor ) ) {
+			$processor = Util::create_html_processor( $buffer );
+			if ( null === $processor ) {
 				return null;
 			}
 
@@ -623,9 +621,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string|null Processed buffer or null on failure.
 		 */
 		private function post_process_auto_sizes_with_processor( string $buffer ): ?string {
-			$create    = method_exists( 'WP_HTML_Processor', 'create_fragment' ) ? 'create_fragment' : 'create_full_parser';
-			$processor = \WP_HTML_Processor::$create( $buffer ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound
-			if ( null === $processor || is_wp_error( $processor ) || ! ( $processor instanceof \WP_HTML_Processor ) ) {
+			$processor = Util::create_html_processor( $buffer );
+			if ( null === $processor ) {
 				return null;
 			}
 
@@ -694,30 +691,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Whether the WP 6.9+ HTML API picture parser is available.
 		 *
-		 * Checks for the public `WP_HTML_Processor::serialize_token()` introduced
-		 * in WP 6.9 (private in 6.7). Uses reflection to guard the 6.7 private
-		 * visibility so the fallback remains byte-identical on WP <6.9.
+		 * Delegates to {@see Util::should_use_html_processor()} so every
+		 * processor-based rewrite shares one reflection guard for the public
+		 * `WP_HTML_Processor::serialize_token()` (WP 6.9).
 		 *
 		 * @since NEXT
 		 * @return bool
 		 */
 		private function should_use_html_processor(): bool {
-			static $cached = null;
-			if ( null !== $cached ) {
-				return $cached;
-			}
-			if ( ! class_exists( 'WP_HTML_Processor' ) || ! method_exists( 'WP_HTML_Processor', 'serialize_token' ) ) {
-				$cached = false;
-				return $cached;
-			}
-			try {
-				$method = new \ReflectionMethod( 'WP_HTML_Processor', 'serialize_token' );
-				$cached = $method->isPublic();
-				return $cached;
-			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
-				$cached = false;
-				return $cached;
-			}
+			return Util::should_use_html_processor();
 		}
 
 		/**
@@ -802,8 +784,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return $this->process_picture_blocks_regex( $buffer, $img_counter, $exclude_img_count, $exclude_imgs );
 			}
 
-			$create    = method_exists( 'WP_HTML_Processor', 'create_fragment' ) ? 'create_fragment' : 'create_full_parser';
-			$processor = \WP_HTML_Processor::$create( $buffer );
+			$processor = Util::create_html_processor( $buffer );
 			if ( null === $processor ) {
 				return $this->process_picture_blocks_regex( $buffer, $img_counter, $exclude_img_count, $exclude_imgs );
 			}

@@ -441,82 +441,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 			$site_url       = Util::cached_home_url();
 			$site_url_regex = '#^' . preg_quote( $site_url, '#' ) . '(/|$)#';
 
-			// Tag processor pass if available.
-			if ( class_exists( '\WP_HTML_Tag_Processor' ) ) {
+			// Expanded tag list parity: add audio,track,embed,object,iframe,picture,meta.
+			$allowed_tags = array( 'img', 'script', 'link', 'source', 'video', 'audio', 'track', 'embed', 'object', 'iframe', 'picture', 'meta' );
+
+			// WP 6.9+ HTML API path (issue #883): full-document parse with
+			// depth awareness via WP_HTML_Processor::serialize_token(). Correct
+			// on malformed markup (SVG, nested tables, missing closers) where
+			// the tag-at-a-time Tag Processor can mis-attribute tokens. Falls
+			// back to the Tag Processor loop below when the serializer is
+			// unavailable (WP <6.9) or the parse fails.
+			$processed = null;
+			if ( Util::should_use_html_processor() ) {
+				$processed = self::rewrite_buffer_with_processor( $buffer, $mappings, $site_url, $site_url_regex, $allowed_tags );
+			}
+
+			if ( null !== $processed ) {
+				$buffer = $processed;
+			} elseif ( class_exists( '\WP_HTML_Tag_Processor' ) ) {
 				$tags = new \WP_HTML_Tag_Processor( $buffer );
-				// Expanded tag list parity: add audio,track,embed,object,iframe,picture,meta.
-				$allowed_tags = array( 'img', 'script', 'link', 'source', 'video', 'audio', 'track', 'embed', 'object', 'iframe', 'picture', 'meta' );
 				while ( $tags->next_tag() ) {
-					$tag_name = strtolower( $tags->get_tag() );
-					if ( ! in_array( $tag_name, $allowed_tags, true ) ) {
-						continue;
-					}
-					// Per-mapping cdn_attr filtering (audit #888 finding 21): each
-					// URL is rewritten only when ITS OWN mapping's cdn_attr allows
-					// the attribute — a global union across mappings would weaken
-					// per-mapping intent (e.g. one mapping restricted to 'src'
-					// must not enable 'href' rewriting for another mapping's urls).
-					// A mapping with an empty cdn_attr allows the default set.
-					$attrs = array( 'src', 'href', 'data-src', 'content', 'poster' );
-					foreach ( $attrs as $attr ) {
-						$val = $tags->get_attribute( $attr );
-						if ( $val && preg_match( $site_url_regex, $val ) ) {
-							$match = self::find_cdn_match( $val, $mappings );
-							if ( null !== $match && self::mapping_allows_attr( $match['mapping'], $attr ) ) {
-								$origin = $match['mapping']['ori'] ?? '';
-								if ( '' === $origin ) {
-									$origin = $site_url;
-								}
-								$tags->set_attribute( $attr, $match['cdn'] . substr( $val, strlen( $origin ) ) );
-							}
-						}
-					}
-					// srcset handling.
-					$srcset_attrs = array( 'srcset', 'data-srcset' );
-					foreach ( $srcset_attrs as $attr ) {
-						$srcset_attr = $tags->get_attribute( $attr );
-						if ( $srcset_attr ) {
-							$candidates = explode( ',', $srcset_attr );
-							$new_srcset = array();
-							foreach ( $candidates as $candidate ) {
-								$candidate = trim( $candidate );
-								$parts     = preg_split( '/\s+/', $candidate, 2 );
-								$url       = $parts[0];
-								$suffix    = isset( $parts[1] ) ? ' ' . $parts[1] : '';
-								if ( preg_match( $site_url_regex, $url ) ) {
-									$match = self::find_cdn_match( $url, $mappings );
-									if ( null !== $match && self::mapping_allows_attr( $match['mapping'], $attr ) ) {
-										$origin = $match['mapping']['ori'] ?? '';
-										if ( '' === $origin ) {
-											$origin = $site_url;
-										}
-										$url = $match['cdn'] . substr( $url, strlen( $origin ) );
-									}
-								}
-								$new_srcset[] = $url . $suffix;
-							}
-							$tags->set_attribute( $attr, implode( ', ', $new_srcset ) );
-						}
-					}
-					// style attribute url() handling inline.
-					$style_val = $tags->get_attribute( 'style' );
-					if ( $style_val && false !== strpos( $style_val, 'url(' ) ) {
-						$new_style = preg_replace_callback(
-							'#url\s*\(\s*(["\']?)' . preg_quote( $site_url, '#' ) . '([^"\')\s]*)\1\s*\)#i',
-							function ( $m2 ) use ( $mappings, $site_url ) {
-								$full_url = $site_url . $m2[2];
-								$match    = self::find_cdn_match( $full_url, $mappings );
-								if ( null !== $match && self::mapping_allows_attr( $match['mapping'], 'style' ) ) {
-									return 'url(' . $m2[1] . $match['cdn'] . $m2[2] . $m2[1] . ')';
-								}
-								return $m2[0];
-							},
-							$style_val
-						);
-						if ( null !== $new_style && $new_style !== $style_val ) {
-							$tags->set_attribute( 'style', $new_style );
-						}
-					}
+					self::rewrite_tag_assets( $tags, $mappings, $site_url, $site_url_regex, $allowed_tags );
 				}
 				$buffer = $tags->get_updated_html();
 			}
@@ -552,6 +496,146 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 			$buffer = (string) apply_filters( 'wppo_cdn_buffer', $buffer );
 
 			return $buffer;
+		}
+
+		/**
+		 * Rewrite the buffer's asset URLs via the WP 6.9+ HTML processor.
+		 *
+		 * Full-document transform using `WP_HTML_Processor` +
+		 * `serialize_token()` token streaming (issue #883): handles malformed
+		 * markup (SVG/MathML, nested tables, missing closers) with real HTML5
+		 * tree knowledge instead of the tag-at-a-time Tag Processor. Attribute
+		 * rewriting itself is shared with the Tag Processor fallback through
+		 * {@see rewrite_tag_assets()} (WP_HTML_Processor extends
+		 * WP_HTML_Tag_Processor), so both paths stay behaviorally identical.
+		 *
+		 * Returns null to trigger the Tag Processor fallback when the parser
+		 * cannot be created or the token stream ended with a parse error.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string               $buffer         HTML buffer.
+		 * @param array                $mappings       CDN mappings.
+		 * @param string               $site_url       Site URL.
+		 * @param string               $site_url_regex Regex matching a site-relative URL start.
+		 * @param array<string|string> $allowed_tags  Tag names whose attributes may be rewritten.
+		 * @return string|null Rewritten buffer, or null on failure (fallback).
+		 */
+		private static function rewrite_buffer_with_processor( string $buffer, array $mappings, string $site_url, string $site_url_regex, array $allowed_tags ): ?string {
+			$processor = Util::create_html_processor( $buffer );
+			if ( null === $processor ) {
+				return null;
+			}
+
+			$out = '';
+			while ( $processor->next_token() ) {
+				if ( '#tag' === $processor->get_token_type() && ! $processor->is_tag_closer() ) {
+					self::rewrite_tag_assets( $processor, $mappings, $site_url, $site_url_regex, $allowed_tags );
+				}
+				$out .= $processor->serialize_token();
+			}
+
+			if ( null !== $processor->get_last_error() ) {
+				return null;
+			}
+
+			return $out;
+		}
+
+		/**
+		 * Rewrite asset URLs on the current tag of a HTML processor instance.
+		 *
+		 * Shared body of the CDN buffer rewrite, operating on whichever
+		 * processor is walking the document — `WP_HTML_Tag_Processor` (WP <6.9
+		 * fallback) or `WP_HTML_Processor` (WP 6.9+ full parser), which extends
+		 * it. Rewrites `src`, `href`, `data-src`, `content`, `poster`, `srcset`,
+		 * `data-srcset` and inline `style="...url(...)"` values that start with
+		 * the site URL, honouring each URL's own mapping `cdn_attr` allowance
+		 * (audit #888 finding 21).
+		 *
+		 * @since NEXT
+		 *
+		 * @param \WP_HTML_Tag_Processor $tags           Processor positioned on the current tag.
+		 * @param array                  $mappings       CDN mappings.
+		 * @param string                 $site_url       Site URL.
+		 * @param string                 $site_url_regex Regex matching a site-relative URL start.
+		 * @param array<string|string>   $allowed_tags   Tag names whose attributes may be rewritten.
+		 * @return void
+		 */
+		private static function rewrite_tag_assets( \WP_HTML_Tag_Processor $tags, array $mappings, string $site_url, string $site_url_regex, array $allowed_tags ): void {
+			$tag_name = strtolower( (string) $tags->get_tag() );
+			if ( ! in_array( $tag_name, $allowed_tags, true ) ) {
+				return;
+			}
+
+			// Per-mapping cdn_attr filtering (audit #888 finding 21): each
+			// URL is rewritten only when ITS OWN mapping's cdn_attr allows
+			// the attribute — a global union across mappings would weaken
+			// per-mapping intent (e.g. one mapping restricted to 'src'
+			// must not enable 'href' rewriting for another mapping's urls).
+			// A mapping with an empty cdn_attr allows the default set.
+			$attrs = array( 'src', 'href', 'data-src', 'content', 'poster' );
+			foreach ( $attrs as $attr ) {
+				$val = $tags->get_attribute( $attr );
+				if ( $val && preg_match( $site_url_regex, $val ) ) {
+					$match = self::find_cdn_match( $val, $mappings );
+					if ( null !== $match && self::mapping_allows_attr( $match['mapping'], $attr ) ) {
+						$origin = $match['mapping']['ori'] ?? '';
+						if ( '' === $origin ) {
+							$origin = $site_url;
+						}
+						$tags->set_attribute( $attr, $match['cdn'] . substr( $val, strlen( $origin ) ) );
+					}
+				}
+			}
+
+			// srcset handling.
+			$srcset_attrs = array( 'srcset', 'data-srcset' );
+			foreach ( $srcset_attrs as $attr ) {
+				$srcset_attr = $tags->get_attribute( $attr );
+				if ( $srcset_attr ) {
+					$candidates = explode( ',', $srcset_attr );
+					$new_srcset = array();
+					foreach ( $candidates as $candidate ) {
+						$candidate = trim( $candidate );
+						$parts     = preg_split( '/\s+/', $candidate, 2 );
+						$url       = $parts[0];
+						$suffix    = isset( $parts[1] ) ? ' ' . $parts[1] : '';
+						if ( preg_match( $site_url_regex, $url ) ) {
+							$match = self::find_cdn_match( $url, $mappings );
+							if ( null !== $match && self::mapping_allows_attr( $match['mapping'], $attr ) ) {
+								$origin = $match['mapping']['ori'] ?? '';
+								if ( '' === $origin ) {
+									$origin = $site_url;
+								}
+								$url = $match['cdn'] . substr( $url, strlen( $origin ) );
+							}
+						}
+						$new_srcset[] = $url . $suffix;
+					}
+					$tags->set_attribute( $attr, implode( ', ', $new_srcset ) );
+				}
+			}
+
+			// style attribute url() handling inline.
+			$style_val = $tags->get_attribute( 'style' );
+			if ( $style_val && false !== strpos( $style_val, 'url(' ) ) {
+				$new_style = preg_replace_callback(
+					'#url\s*\(\s*(["\']?)' . preg_quote( $site_url, '#' ) . '([^"\')\s]*)\1\s*\)#i',
+					function ( $m2 ) use ( $mappings, $site_url ) {
+						$full_url = $site_url . $m2[2];
+						$match    = self::find_cdn_match( $full_url, $mappings );
+						if ( null !== $match && self::mapping_allows_attr( $match['mapping'], 'style' ) ) {
+							return 'url(' . $m2[1] . $match['cdn'] . $m2[2] . $m2[1] . ')';
+						}
+						return $m2[0];
+					},
+					$style_val
+				);
+				if ( null !== $new_style && $new_style !== $style_val ) {
+					$tags->set_attribute( 'style', $new_style );
+				}
+			}
 		}
 
 		/**

@@ -887,7 +887,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			$has_salted = function_exists( 'wp_cache_get_salted' );
 
 			if ( $has_salted ) {
-				$cached = wp_cache_get_salted( 'wppo_db_cleanup_counts', 'wppo', self::SALT_KEY );
+				$cached = wp_cache_get_salted( 'wppo_db_cleanup_counts', 'wppo', Util::cache_salt( self::SALT_KEY ) );
 				if ( false !== $cached ) {
 					return $cached;
 				}
@@ -961,7 +961,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			// phpcs:enable
 
 			if ( $has_salted ) {
-				wp_cache_set_salted( 'wppo_db_cleanup_counts', $counts, 'wppo', self::SALT_KEY );
+				wp_cache_set_salted( 'wppo_db_cleanup_counts', $counts, 'wppo', Util::cache_salt( self::SALT_KEY ) );
 			} else {
 				set_transient( Util::transient_key( 'wppo_db_cleanup_counts' ), $counts, 5 * MINUTE_IN_SECONDS );
 			}

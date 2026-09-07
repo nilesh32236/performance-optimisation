@@ -70,7 +70,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 			$has_salted = function_exists( 'wp_cache_get_salted' );
 
 			if ( $has_salted ) {
-				$cached = wp_cache_get_salted( $cache_key, 'wppo', self::AUDIT_SALT_KEY );
+				$cached = wp_cache_get_salted( $cache_key, 'wppo', Util::cache_salt( self::AUDIT_SALT_KEY ) );
 			} else {
 				$cached = get_transient( $cache_key );
 			}
@@ -174,7 +174,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 			);
 
 			if ( $has_salted ) {
-				wp_cache_set_salted( $cache_key, $result, 'wppo', self::AUDIT_SALT_KEY, HOUR_IN_SECONDS );
+				wp_cache_set_salted( $cache_key, $result, 'wppo', Util::cache_salt( self::AUDIT_SALT_KEY ), HOUR_IN_SECONDS );
 			} else {
 				set_transient( $cache_key, $result, HOUR_IN_SECONDS );
 				self::register_transient_key( $cache_key );

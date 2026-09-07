@@ -1927,7 +1927,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			$has_salted = function_exists( 'wp_cache_get_salted' );
 
 			if ( $has_salted ) {
-				$cached = wp_cache_get_salted( 'wppo_img_info', 'wppo', self::SALT_KEY );
+				$cached = wp_cache_get_salted( 'wppo_img_info', 'wppo', Util::cache_salt( self::SALT_KEY ) );
 				if ( false !== $cached ) {
 					self::$deferred_img_info = $cached;
 					return self::$deferred_img_info;
@@ -1937,7 +1937,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			self::$deferred_img_info = get_option( 'wppo_img_info', array() );
 
 			if ( $has_salted ) {
-				wp_cache_set_salted( 'wppo_img_info', self::$deferred_img_info, 'wppo', self::SALT_KEY );
+				wp_cache_set_salted( 'wppo_img_info', self::$deferred_img_info, 'wppo', Util::cache_salt( self::SALT_KEY ) );
 			}
 
 			return self::$deferred_img_info;

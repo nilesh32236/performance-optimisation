@@ -30,6 +30,10 @@ class AdvancedCacheHandlerTest extends \PHPUnit\Framework\TestCase {
 				'get_transient',
 				'set_transient',
 				'delete_transient',
+				// Drop-in mutators bump the System_Info salted-cache salt
+				// (issue #882) when the salted family is available.
+				'get_option',
+				'update_option',
 			)
 		);
 	}
