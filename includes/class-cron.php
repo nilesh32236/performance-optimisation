@@ -737,32 +737,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * @return void
 		 */
 		public function litespeed_crawler_batch( $arg ): void {
-			$urls = self::resolve_crawler_batch_arg( $arg );
+			$urls = self::peek_crawler_batch_arg( $arg );
 			if ( empty( $urls ) ) {
+				// Unknown/missing batch ID — clean up any stale payload.
+				if ( is_string( $arg ) && '' !== $arg ) {
+					delete_transient( Util::transient_key( 'wppo_crawler_batch_' . $arg ) );
+				}
 				return;
 			}
 			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 				LiteSpeed_Crawler::crawl_batch( $urls );
 			}
+
+			// Delete only after the crawl ran so an error mid-crawl can be
+			// retried by re-scheduling; the payload TTL remains the orphan
+			// backstop (Part 2 review round 2).
+			if ( is_string( $arg ) && '' !== $arg ) {
+				delete_transient( Util::transient_key( 'wppo_crawler_batch_' . $arg ) );
+			}
 		}
 
 		/**
-		 * Resolve a deferred crawler batch argument into its URL list.
+		 * Resolve a deferred crawler batch argument into its URL list without
+		 * deleting the payload.
 		 *
 		 * Batch-ID arguments are looked up in the blog-prefixed
-		 * `wppo_crawler_batch_{id}` transient; the transient is deleted after
-		 * the read so the payload is cleaned up on completion. URL-array
-		 * arguments (legacy/fallback events) pass through unchanged.
+		 * `wppo_crawler_batch_{id}` transient. URL-array arguments (legacy/
+		 * fallback events) pass through unchanged. Deletion is the caller's
+		 * responsibility (after a successful crawl).
 		 *
 		 * @param mixed $arg Batch ID or URL list.
 		 * @return string[] URLs to crawl.
 		 * @since NEXT
 		 */
-		private static function resolve_crawler_batch_arg( $arg ): array {
+		private static function peek_crawler_batch_arg( $arg ): array {
 			if ( is_string( $arg ) && '' !== $arg ) {
-				$key  = Util::transient_key( 'wppo_crawler_batch_' . $arg );
-				$urls = get_transient( $key );
-				delete_transient( $key );
+				$urls = get_transient( Util::transient_key( 'wppo_crawler_batch_' . $arg ) );
 				return is_array( $urls ) ? array_values( array_filter( array_map( 'strval', $urls ) ) ) : array();
 			}
 

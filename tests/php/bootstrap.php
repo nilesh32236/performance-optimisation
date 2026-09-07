@@ -235,6 +235,7 @@ trait WPPO_Test_Bootstrap {
 	 * Lives outside setUp() so test classes that need their own setUp()
 	 * (shadowing the trait method) can still register the same common stubs.
 	 *
+	 * @since NEXT
 	 * @return void
 	 */
 	protected function register_common_function_stubs(): void {

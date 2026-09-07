@@ -57,7 +57,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 			// Deactivation can change drop-in ownership (WPPO drop-ins removed
 			// above, foreign ones may appear/disappear) — drop System Info's
 			// cached verdicts immediately instead of waiting out the TTL.
-			if ( class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
+			if ( is_callable( array( 'PerformanceOptimise\Inc\System_Info', 'flush_dropin_cache' ) ) ) {
 				System_Info::flush_dropin_cache();
 			}
 

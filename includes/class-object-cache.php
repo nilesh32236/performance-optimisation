@@ -393,8 +393,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			}
 
 			// The drop-in changed — System Info's cached ownership verdict is
-			// stale (audit #888 finding 25).
-			if ( class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
+			// stale (audit #888 finding 25). is_callable also covers a partially
+			// loaded class (Part 2 review round 2).
+			if ( is_callable( array( 'PerformanceOptimise\Inc\System_Info', 'flush_dropin_cache' ) ) ) {
 				System_Info::flush_dropin_cache();
 			}
 
@@ -434,8 +435,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			}
 
 			// The drop-in changed — System Info's cached ownership verdict is
-			// stale (audit #888 finding 25).
-			if ( class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
+			// stale (audit #888 finding 25). is_callable also covers a partially
+			// loaded class (Part 2 review round 2).
+			if ( is_callable( array( 'PerformanceOptimise\Inc\System_Info', 'flush_dropin_cache' ) ) ) {
 				System_Info::flush_dropin_cache();
 			}
 

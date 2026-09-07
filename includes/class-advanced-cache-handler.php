@@ -341,7 +341,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 
 			// The drop-in changed — System Info's cached ownership verdict is
 			// stale (audit #888 finding 25).
-			if ( $written && class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
+			if ( $written && is_callable( array( 'PerformanceOptimise\Inc\System_Info', 'flush_dropin_cache' ) ) ) {
 				System_Info::flush_dropin_cache();
 			}
 
