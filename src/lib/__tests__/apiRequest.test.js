@@ -705,5 +705,38 @@ describe( 'API Request library', () => {
 				mockError
 			);
 		} );
+
+		it( 'sanitises the page number to a finite positive integer', async () => {
+			const mockData = { activities: [] };
+			global.fetch.mockResolvedValue( {
+				json: jest.fn().mockResolvedValue( mockData ),
+			} );
+
+			const cases = [
+				[ 5, '5' ],
+				[ 0, '1' ],
+				[ -3, '1' ],
+				[ 'abc', '1' ],
+				[ NaN, '1' ],
+				[ Number.POSITIVE_INFINITY, '1' ],
+				// Parameter-pollution attempts collapse to the leading integer.
+				[ '2&foo=bar', '2' ],
+				[ '7#fragment', '7' ],
+			];
+
+			for ( const [ input, expected ] of cases ) {
+				global.fetch.mockClear();
+				await fetchRecentActivities( input );
+				expect( global.fetch ).toHaveBeenCalledWith(
+					`http://test.com/wp-json/wppo/v1/recent_activities?page=${ expected }`,
+					{
+						method: 'GET',
+						headers: {
+							'X-WP-Nonce': 'testnonce',
+						},
+					}
+				);
+			}
+		} );
 	} );
 } );

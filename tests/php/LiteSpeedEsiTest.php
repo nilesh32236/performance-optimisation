@@ -169,6 +169,8 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 		);
 		Functions\when( 'esc_url' )->returnArg();
 		Functions\when( 'wp_json_encode' )->alias( 'json_encode' );
+		// Fragments in these tests are already allowlisted HTML; wp_kses acts as identity.
+		Functions\when( 'wp_kses' )->returnArg( 1 );
 
 		$captured = null;
 		Functions\when( 'wp_send_json_success' )->alias(
@@ -246,6 +248,7 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'is_user_logged_in' )->justReturn( true );
 		Functions\when( 'esc_url' )->returnArg();
 		Functions\when( 'wp_json_encode' )->alias( 'json_encode' );
+		Functions\when( 'wp_kses' )->returnArg( 1 );
 
 		$captured = null;
 		Functions\when( 'wp_send_json_success' )->alias(

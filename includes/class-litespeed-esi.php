@@ -340,10 +340,159 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		}
 
 		/**
+		 * Allowlist of HTML tags/attributes permitted in ESI fragment HTML.
+		 *
+		 * This is the authoritative server-side sanitization contract: every
+		 * fragment returned by handle_ajax_fragment() is inserted into the DOM
+		 * client-side (src/esi.js), so it MUST pass through wp_kses() with this
+		 * allowlist before being echoed. Script-capable tags are deliberately
+		 * excluded; `data-*` and `aria-*` wildcards cover widget metadata.
+		 * Third parties can extend (never loosen) it via the
+		 * `wppo_esi_allowed_html` filter.
+		 *
+		 * @since NEXT
+		 * @return array Allowed tags => attributes map, in wp_kses() shape.
+		 */
+		public static function get_allowed_fragment_html(): array {
+			$global_attrs = array(
+				'class'  => true,
+				'id'     => true,
+				'style'  => true,
+				'title'  => true,
+				'dir'    => true,
+				'lang'   => true,
+				'role'   => true,
+				'aria-*' => true,
+				'data-*' => true,
+			);
+
+			$tags = array(
+				'a'          => array(
+					'href'   => true,
+					'rel'    => true,
+					'target' => true,
+				),
+				'b'          => $global_attrs,
+				'blockquote' => array( 'cite' => true ) + $global_attrs,
+				'br'         => array(),
+				'button'     => array(
+					'type'     => true,
+					'name'     => true,
+					'value'    => true,
+					'disabled' => true,
+				) + $global_attrs,
+				'div'        => $global_attrs,
+				'em'         => $global_attrs,
+				'form'       => array(
+					'action'     => true,
+					'method'     => true,
+					'enctype'    => true,
+					'novalidate' => true,
+				) + $global_attrs,
+				'h1'         => $global_attrs,
+				'h2'         => $global_attrs,
+				'h3'         => $global_attrs,
+				'h4'         => $global_attrs,
+				'h5'         => $global_attrs,
+				'h6'         => $global_attrs,
+				'hr'         => array(),
+				'i'          => $global_attrs,
+				'img'        => array(
+					'src'      => true,
+					'srcset'   => true,
+					'sizes'    => true,
+					'alt'      => true,
+					'width'    => true,
+					'height'   => true,
+					'loading'  => true,
+					'decoding' => true,
+				) + $global_attrs,
+				'input'      => array(
+					'type'        => true,
+					'name'        => true,
+					'value'       => true,
+					'placeholder' => true,
+					'required'    => true,
+					'readonly'    => true,
+					'disabled'    => true,
+					'min'         => true,
+					'max'         => true,
+					'step'        => true,
+					'checked'     => true,
+				) + $global_attrs,
+				'label'      => array( 'for' => true ) + $global_attrs,
+				'li'         => $global_attrs,
+				'nav'        => $global_attrs,
+				'ol'         => array( 'start' => true ) + $global_attrs,
+				'option'     => array(
+					'value'    => true,
+					'selected' => true,
+					'disabled' => true,
+				) + $global_attrs,
+				'p'          => $global_attrs,
+				'picture'    => $global_attrs,
+				'select'     => array(
+					'name'     => true,
+					'multiple' => true,
+					'disabled' => true,
+				) + $global_attrs,
+				'small'      => $global_attrs,
+				'source'     => array(
+					'src'    => true,
+					'srcset' => true,
+					'sizes'  => true,
+					'media'  => true,
+					'type'   => true,
+				) + $global_attrs,
+				'span'       => $global_attrs,
+				'strong'     => $global_attrs,
+				'section'    => $global_attrs,
+				'table'      => $global_attrs,
+				'tbody'      => $global_attrs,
+				'td'         => array(
+					'colspan' => true,
+					'rowspan' => true,
+				) + $global_attrs,
+				'th'         => array(
+					'colspan' => true,
+					'rowspan' => true,
+					'scope'   => true,
+				) + $global_attrs,
+				'thead'      => $global_attrs,
+				'time'       => array( 'datetime' => true ) + $global_attrs,
+				'tr'         => $global_attrs,
+				'ul'         => $global_attrs,
+			);
+
+			/**
+			 * Filter the wp_kses allowlist applied to ESI fragment HTML.
+			 *
+			 * The fragment HTML returned by the wppo_esi_fragment AJAX endpoint
+			 * is inserted into the page DOM by src/esi.js, so the allowlist is
+			 * the server-side sanitization contract. Extend it for custom
+			 * widget markup; never add script-capable tags.
+			 *
+			 * @since NEXT
+			 * @param array $tags Allowed tags => attributes map (kses shape).
+			 */
+			return (array) apply_filters( 'wppo_esi_allowed_html', $tags );
+		}
+
+		/**
 		 * Handle AJAX fragment request.
 		 *
 		 * Emits Cache-Control: private,no-cache + X-LiteSpeed-Cache-Control: private,no-vary
 		 * and returns JSON success with html.
+		 *
+		 * ## Sanitization contract
+		 *
+		 * The `html` payload is inserted into the DOM client-side by
+		 * src/esi.js (which applies an additional defense-in-depth pass), so
+		 * the fragment — including any HTML supplied via the
+		 * `wppo_esi_fragment_html` / `wppo_litespeed_esi_fragment_html`
+		 * filters — is sanitized through wp_kses() with the allowlist from
+		 * get_allowed_fragment_html() before it is echoed. Never return raw
+		 * untrusted markup from this endpoint.
 		 *
 		 * @since NEXT
 		 * @return void
@@ -421,6 +570,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			 */
 			$fragment = (string) apply_filters( 'wppo_esi_fragment_html', $fragment, $block );
 			$fragment = (string) apply_filters( 'wppo_litespeed_esi_fragment_html', $fragment, $block );
+
+			// Sanitization contract (see docblock): the fragment is inserted
+			// into the DOM client-side (src/esi.js), so it must pass through
+			// the wp_kses allowlist — including markup supplied via filters —
+			// before it is echoed. Plain-text fragments (e.g. the nonce block)
+			// pass through unchanged.
+			$fragment = wp_kses(
+				$fragment,
+				self::get_allowed_fragment_html(),
+				array( 'http', 'https', 'mailto', 'tel', 'relative' )
+			);
 
 			if ( ! headers_sent() ) {
 				header( 'Cache-Control: private,no-cache' );

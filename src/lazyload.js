@@ -95,12 +95,275 @@ const getLazySelector = () => {
 };
 
 /**
+ * Allowlist of attributes copied from a deferred placeholder script to its
+ * live replacement. Everything not on this list — notably `on*` event
+ * handlers and the CSP `nonce` attribute — is dropped, so an attacker-
+ * controlled placeholder cannot propagate executable attributes.
+ *
+ * `fetchpriority` is included because PHP stamps `fetchpriority="low"` on
+ * every delayed script (Main::add_defer_attribute()) and dropping it would
+ * change loading behaviour; `wppo-type` is the delayed original `type`.
+ *
+ * @since NEXT
+ * @type {Set<string>}
+ */
+const SCRIPT_ATTR_ALLOWLIST = new Set( [
+	'src',
+	'type',
+	'wppo-src',
+	'wppo-type',
+	'async',
+	'defer',
+	'crossorigin',
+	'integrity',
+	'id',
+	'class',
+	'fetchpriority',
+	'nomodule',
+	'referrerpolicy',
+] );
+
+/**
+ * Attribute name prefixes that are safe to copy (data-* metadata and aria-*
+ * accessibility attributes carry no execution semantics).
+ *
+ * @since NEXT
+ * @type {string[]}
+ */
+const SCRIPT_ATTR_PREFIX_ALLOWLIST = [ 'data-', 'aria-' ];
+
+/**
+ * Base allowlist of remote hosts permitted for deferred external scripts, in
+ * addition to same-origin. Covers common analytics/marketing/utility CDNs so
+ * default delay-JS behaviour is preserved; anything else must be allowlisted
+ * explicitly. Extend without touching this bundle via the PHP
+ * `wppo_delay_js_allowed_hosts` filter (mirrored into
+ * `wppoDelayConfig.allowedScriptHosts`) or at runtime via
+ * `window.wppoAllowedScriptHosts`. Set `window.wppoAllowedScriptHosts` to
+ * `['*']` to allow any host (not recommended).
+ *
+ * @since NEXT
+ * @type {string[]}
+ */
+const SCRIPT_SRC_HOST_ALLOWLIST = [
+	'googletagmanager.com',
+	'google-analytics.com',
+	'googlesyndication.com',
+	'googletagservices.com',
+	'googleadservices.com',
+	'doubleclick.net',
+	'google.com',
+	'gstatic.com',
+	'youtube.com',
+	'ytimg.com',
+	'player.vimeo.com',
+	'fast.wistia.com',
+	'fast.wistia.net',
+	'js.stripe.com',
+	'js.braintreegateway.com',
+	'paypalobjects.com',
+	'connect.facebook.net',
+	'analytics.tiktok.com',
+	'static.ads-twitter.com',
+	'platform.twitter.com',
+	'platform.linkedin.com',
+	'snap.licdn.com',
+	'assets.pinterest.com',
+	'static.hotjar.com',
+	'script.hotjar.com',
+	'clarity.ms',
+	'bat.bing.com',
+	'cdn.onesignal.com',
+	'challenges.cloudflare.com',
+	'static.cloudflareinsights.com',
+	'cdnjs.cloudflare.com',
+	'code.jquery.com',
+	'cdn.jsdelivr.net',
+	'unpkg.com',
+	'ajax.googleapis.com',
+	'use.fontawesome.com',
+	'kit.fontawesome.com',
+	'widget.intercom.io',
+	'js.intercomcdn.com',
+	'embed.tawk.to',
+	'client.crisp.chat',
+	'js.hs-scripts.com',
+	'js.usemessages.com',
+	'js.hsadspixel.net',
+	'static.klaviyo.com',
+	'a.klaviyo.com',
+	'chimpstatic.com',
+	'static.zdassets.com',
+	'assets.zendesk.com',
+	'cdn.livechatinc.com',
+	'cdn.segment.com',
+	'cdn.mxpnl.com',
+	'browser.sentry-cdn.com',
+	'js-agent.newrelic.com',
+	'nr-data.net',
+	'sb.scorecardresearch.com',
+	'secure.quantserve.com',
+	'staticw2.yotpo.com',
+	'cdn.yotpo.com',
+	'cdn.judge.me',
+];
+
+/**
+ * Host allowlist for `<iframe>` video embeds restored from
+ * `.wppo-video-placeholder[data-wppo-video-src]` placeholders. Mirrors the
+ * PHP-side validation in Image_Optimisation::generate_video_placeholder(),
+ * which only replaces matching embeds (YouTube today; the extra hosts below
+ * keep the client strict-but-extensible for embeds filtered in via
+ * `wppo_video_placeholder_html`). Same-origin embeds are also permitted.
+ *
+ * @since NEXT
+ * @type {string[]}
+ */
+const VIDEO_EMBED_HOST_ALLOWLIST = [
+	'youtube.com',
+	'youtube-nocookie.com',
+	'youtu.be',
+	'vimeo.com',
+	'dailymotion.com',
+];
+
+/**
+ * Whether a host matches the allowlist (exact or subdomain, case-insensitive).
+ *
+ * @since NEXT
+ * @param {string}   hostname URL hostname (lower-cased by the caller).
+ * @param {string[]} hosts    Allowlisted base hosts.
+ * @return {boolean} True when the host is allowlisted.
+ */
+const hostInAllowlist = ( hostname, hosts ) =>
+	hosts.some(
+		( host ) => hostname === host || hostname.endsWith( `.${ host }` )
+	);
+
+/**
+ * Collect the effective script-src host allowlist: the bundle constant plus
+ * any runtime extension provided via window.wppoAllowedScriptHosts or the
+ * PHP-provided wppoDelayConfig.allowedScriptHosts (see
+ * `wppo_delay_js_allowed_hosts` filter). A `'*'` entry allows all hosts.
+ *
+ * @since NEXT
+ * @return {string[]|'*'} Allowlist entries, or '*' to allow everything.
+ */
+const getScriptSrcHosts = () => {
+	const runtimeHosts =
+		( typeof window !== 'undefined' && window.wppoAllowedScriptHosts ) ||
+		( delayConfig && delayConfig.allowedScriptHosts ) ||
+		[];
+	const hosts = Array.from(
+		new Set( [ ...SCRIPT_SRC_HOST_ALLOWLIST, ...runtimeHosts ] )
+	);
+	if ( hosts.includes( '*' ) ) {
+		return '*';
+	}
+	return hosts;
+};
+
+/**
+ * Validate a deferred script's src before it is assigned to a live script
+ * element: the URL must parse, use http(s), and point at the same origin or
+ * an allowlisted host. Rejects javascript:/data:/blob: and arbitrary origins
+ * so attacker-controlled placeholder attributes cannot execute.
+ *
+ * @since NEXT
+ * @param {string} src Raw src attribute value.
+ * @return {boolean} True when the src is safe to load.
+ */
+const isSafeScriptSrc = ( src ) => {
+	if ( ! src || typeof src !== 'string' ) {
+		return false;
+	}
+	let url;
+	try {
+		url = new URL( src, window.location.origin );
+	} catch {
+		return false;
+	}
+	if ( 'https:' !== url.protocol && 'http:' !== url.protocol ) {
+		return false;
+	}
+	if ( url.origin === window.location.origin ) {
+		return true;
+	}
+	const hosts = getScriptSrcHosts();
+	if ( '*' === hosts ) {
+		return true;
+	}
+	return hostInAllowlist( url.hostname.toLowerCase(), hosts );
+};
+
+/**
+ * Validate an iframe video embed URL from a data-wppo-video-src attribute.
+ * Cross-origin embeds must be absolute https: URLs on a known embed host;
+ * same-origin URLs are trusted (http dev origins included). Rejects
+ * javascript:/data:/blob: and protocol-relative shenanigans outright.
+ *
+ * @since NEXT
+ * @param {string} src Raw data-wppo-video-src attribute value.
+ * @return {boolean} True when the embed URL is safe to load in an iframe.
+ */
+const isSafeVideoEmbedUrl = ( src ) => {
+	if ( ! src || typeof src !== 'string' ) {
+		return false;
+	}
+	let url;
+	try {
+		url = new URL( src, window.location.origin );
+	} catch {
+		return false;
+	}
+	if ( url.origin === window.location.origin ) {
+		return true;
+	}
+	if ( 'https:' !== url.protocol ) {
+		return false;
+	}
+	return hostInAllowlist(
+		url.hostname.toLowerCase(),
+		VIDEO_EMBED_HOST_ALLOWLIST
+	);
+};
+
+/**
+ * Copy allowlisted attributes from the placeholder script to the replacement.
+ * Event-handler (`on*`) attributes are never copied — the allowlist is the
+ * only path from placeholder to live element.
+ *
+ * @since NEXT
+ * @param {HTMLScriptElement} from        Placeholder script element.
+ * @param {HTMLScriptElement} replacement Fresh script element.
+ * @return {void}
+ */
+const copyAllowedScriptAttrs = ( from, replacement ) => {
+	Array.from( from.attributes ).forEach( ( attr ) => {
+		const name = ( attr.name || '' ).toLowerCase();
+		if ( SCRIPT_ATTR_ALLOWLIST.has( name ) ) {
+			replacement.setAttribute( attr.name, attr.value );
+			return;
+		}
+		if (
+			SCRIPT_ATTR_PREFIX_ALLOWLIST.some( ( prefix ) =>
+				name.startsWith( prefix )
+			)
+		) {
+			replacement.setAttribute( attr.name, attr.value );
+		}
+		// Everything else (on* handlers, nonce, style, …) is dropped.
+	} );
+};
+
+/**
  * Load a single deferred script element.
  *
  * Restores the original `src` and `type` attributes, then resolves
  * once the script has loaded or errors.
  *
  * @since 1.0.0
+ * @since NEXT Placeholder attributes are allowlisted and wppo-src is validated (scheme + same-origin/host allowlist) before a replacement script is created.
  * @param {HTMLScriptElement} script The script element to load.
  * @return {Promise<void>}
  */
@@ -119,13 +382,23 @@ const loadScript = ( script ) => {
 		const src = script.getAttribute( 'wppo-src' );
 
 		if ( src ) {
-			// External deferred script: create a replacement script node, copy original attributes,
-			// assign the deferred src, and swap it into the DOM.
+			if ( ! isSafeScriptSrc( src ) ) {
+				// Leave the placeholder untouched and keep it out of the
+				// replacement set — the script is never executed.
+				console.warn(
+					'WPPO: blocked deferred script src (scheme/origin not allowed):',
+					src
+				);
+				resolve();
+				return;
+			}
+
+			// External deferred script: create a replacement script node, copy
+			// allowlisted original attributes, assign the deferred src, and
+			// swap it into the DOM.
 			const replacement = document.createElement( 'script' );
 
-			Array.from( script.attributes ).forEach( ( attr ) => {
-				replacement.setAttribute( attr.name, attr.value );
-			} );
+			copyAllowedScriptAttrs( script, replacement );
 
 			replacement.removeAttribute( 'wppo-src' );
 			replacement.setAttribute( 'src', src );
@@ -151,14 +424,12 @@ const loadScript = ( script ) => {
 		} else if ( script.text ) {
 			// Inline script: browsers execute a script element only once after insertion.
 			// Mutating the already-inserted node does nothing, so we must replace it with
-			// a fresh element. Copy all attributes and content to the new node, swap it
-			// into the DOM, and resolve once it has been processed.
+			// a fresh element. Copy allowlisted attributes and content to the new node,
+			// swap it into the DOM, and resolve once it has been processed.
 			const replacement = document.createElement( 'script' );
 
-			// Copy attributes from the original node to the replacement.
-			Array.from( script.attributes ).forEach( ( attr ) => {
-				replacement.setAttribute( attr.name, attr.value );
-			} );
+			// Copy allowlisted attributes from the original node to the replacement.
+			copyAllowedScriptAttrs( script, replacement );
 
 			replacement.text = script.text;
 
@@ -941,6 +1212,22 @@ const initVideoPlaceholders = () => {
 			if ( ! src || el.dataset.wppoLoaded ) {
 				return;
 			}
+
+			// Validate before touching state: the src comes from a data
+			// attribute that may exist in untrusted markup. PHP only emits
+			// placeholders for embeds it recognises (see
+			// Image_Optimisation::generate_video_placeholder()); this
+			// client-side check rejects javascript:/data:/blob:, non-HTTPS
+			// and non-allowlisted origins outright. Invalid URLs bail out
+			// silently and leave the placeholder in place.
+			if ( ! isSafeVideoEmbedUrl( src ) ) {
+				console.warn(
+					'WPPO: blocked video placeholder src (must be a same-origin or allowlisted https embed URL):',
+					src
+				);
+				return;
+			}
+
 			el.dataset.wppoLoaded = '1';
 
 			// Hide play button, show loading state
@@ -961,15 +1248,19 @@ const initVideoPlaceholders = () => {
 				'position:absolute;inset:0;width:100%;height:100%;border:0;';
 
 			// Restore original iframe attributes (sandbox, referrerpolicy, id, etc.)
+			// Defense-in-depth: never copy event-handler attributes even if a
+			// tampered attrs payload slips past the PHP allowlist.
 			const attrsJson = el.getAttribute( 'data-wppo-iframe-attrs' );
 			if ( attrsJson ) {
 				try {
 					const attrs = JSON.parse( attrsJson );
 					Object.entries( attrs ).forEach( ( [ k, v ] ) => {
+						const name = String( k ).toLowerCase();
 						if (
 							! [ 'src', 'width', 'height', 'style' ].includes(
-								k
-							)
+								name
+							) &&
+							! /^on/i.test( name )
 						) {
 							iframe.setAttribute( k, v );
 						}

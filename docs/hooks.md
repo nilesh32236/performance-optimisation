@@ -131,6 +131,38 @@ add_filter( 'wppo_exclude_delay_js', function( $exclusions ) {
 
 ---
 
+### `wppo_delay_js_allowed_hosts`
+Filters the allowlist of additional remote hosts the lazyload bundle may load deferred external scripts from. Delay-JS hydration only executes a deferred script when its `wppo-src` URL uses http(s) and points at the same origin or an allowlisted host (a built-in list of common analytics/marketing/utility CDNs ships in `src/lazyload.js`). Hosts added here are mirrored to the client as `wppoDelayConfig.allowedScriptHosts`. @since NEXT.
+
+**Parameters:**
+- `$hosts` *(string[])* — Array of hostnames (base domains include subdomains, e.g. `googletagmanager.com`).
+
+**Example:**
+```php
+add_filter( 'wppo_delay_js_allowed_hosts', function( array $hosts ): array {
+    $hosts[] = 'cdn.my-portal.example';
+    return $hosts;
+} );
+```
+
+---
+
+### `wppo_esi_allowed_html`
+Filters the wp_kses allowlist applied to ESI fragment HTML returned by the `wppo_esi_fragment` admin-ajax endpoint (`LiteSpeed_ESI::handle_ajax_fragment()`). The fragment is inserted into the page DOM by `src/esi.js`, so this allowlist is the server-side sanitization contract: every tag/attribute a custom ESI widget needs must be present here. Script-capable tags must never be added. @since NEXT.
+
+**Parameters:**
+- `$tags` *(array)* — Allowed tags => attributes map in `wp_kses()` shape.
+
+**Example:**
+```php
+add_filter( 'wppo_esi_allowed_html', function( array $tags ): array {
+    $tags['mark'] = array( 'class' => true, 'id' => true, 'data-*' => true );
+    return $tags;
+} );
+```
+
+---
+
 ### `wppo_exclude_defer_js`
 Filters the list of script handles or URL substrings excluded from JavaScript deferral.
 

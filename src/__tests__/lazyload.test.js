@@ -1,4 +1,4 @@
-/* global HTMLImageElement, HTMLIFrameElement */
+/* global HTMLImageElement, HTMLIFrameElement, HTMLScriptElement */
 
 describe( 'Lazy Load (lazyload.js)', () => {
 	let consoleWarnSpy;
@@ -30,70 +30,21 @@ describe( 'Lazy Load (lazyload.js)', () => {
 		return { observe, unobserve, disconnect };
 	};
 
-	const loadScriptImpl = ( script ) => {
-		return new Promise( ( resolve, reject ) => {
-			if ( 'wppo/javascript' === script.getAttribute( 'type' ) ) {
-				script.removeAttribute( 'type' );
-			}
-
-			const wppoType = script.getAttribute( 'wppo-type' );
-			if ( wppoType ) {
-				script.removeAttribute( 'wppo-type' );
-				script.setAttribute( 'type', wppoType );
-			}
-
-			const src = script.getAttribute( 'wppo-src' );
-
-			if ( src ) {
-				const replacement = document.createElement( 'script' );
-				Array.from( script.attributes ).forEach( ( attr ) => {
-					replacement.setAttribute( attr.name, attr.value );
-				} );
-				replacement.removeAttribute( 'wppo-src' );
-				replacement.setAttribute( 'src', src );
-
-				replacement.onload = () => {
-					if ( typeof script.onload === 'function' ) {
-						script.onload();
-					}
-					resolve();
-				};
-				replacement.onerror = ( err ) => {
-					if ( typeof script.onerror === 'function' ) {
-						script.onerror( err );
-					}
-					reject( err );
-				};
-
-				if ( script.parentNode ) {
-					script.parentNode.replaceChild( replacement, script );
-				} else {
-					document.head.appendChild( replacement );
-				}
-
-				if ( typeof replacement.onload === 'function' ) {
-					replacement.onload();
-				}
-			} else if ( script.text ) {
-				const replacement = document.createElement( 'script' );
-				Array.from( script.attributes ).forEach( ( attr ) => {
-					replacement.setAttribute( attr.name, attr.value );
-				} );
-				replacement.text = script.text;
-
-				if ( script.parentNode ) {
-					script.parentNode.replaceChild( replacement, script );
-				} else {
-					document.head.appendChild( replacement );
-				}
-				resolve();
-			} else {
-				if ( ! script.text ) {
-					console.warn( 'WPPO: empty inline script found', script );
-				}
-				resolve();
-			}
+	/**
+	 * Load the real lazyload bundle against the current DOM and trigger
+	 * deferred-script hydration via the interaction event path.
+	 *
+	 * The module captures `delayedScripts` and registers its interaction
+	 * listeners at evaluation time, so the DOM must be prepared first.
+	 * jsdom never executes/fetches scripts, but the replacement element is
+	 * swapped into the DOM synchronously, which is what these tests assert.
+	 */
+	const bootLazyload = () => {
+		jest.isolateModules( () => {
+			require( '../lazyload' );
 		} );
+		document.dispatchEvent( new Event( 'mouseover' ) );
+		return Promise.resolve();
 	};
 
 	beforeEach( () => {
@@ -161,17 +112,27 @@ describe( 'Lazy Load (lazyload.js)', () => {
 		delete global.wppoLazyLoadFallback;
 	} );
 
-	describe( 'loadScript()', () => {
-		it( 'replaces wppo/javascript type scripts', async () => {
-			const script = document.createElement( 'script' );
-			script.setAttribute( 'type', 'wppo/javascript' );
-			script.setAttribute( 'wppo-src', 'https://example.com/script.js' );
-			document.body.appendChild( script );
+	describe( 'loadScript() — real bundle hydration', () => {
+		// The bundle must take the no-IntersectionObserver path at import
+		// (the outer beforeEach sets it to `undefined`, which still satisfies
+		// `'IntersectionObserver' in window` and would crash observer setup).
+		beforeEach( () => {
+			delete global.IntersectionObserver;
+		} );
 
-			await loadScriptImpl( script );
+		afterEach( () => {
+			// The bundle registers document-level listeners per import.
+			delete global.wppoAllowedScriptHosts;
+			delete global.IntersectionObserver;
+		} );
+
+		it( 'replaces wppo/javascript type scripts (same-origin src)', async () => {
+			document.body.innerHTML =
+				'<script type="wppo/javascript" wppo-src="/local-script.js"></script>';
+			await bootLazyload();
 
 			const replacement = document.querySelector(
-				'script[src="https://example.com/script.js"]'
+				'script[src="/local-script.js"]'
 			);
 			expect( replacement ).toBeInTheDocument();
 			expect( replacement ).not.toHaveAttribute(
@@ -180,31 +141,256 @@ describe( 'Lazy Load (lazyload.js)', () => {
 			);
 		} );
 
-		it( 'handles inline scripts by replacing them', async () => {
-			const script = document.createElement( 'script' );
-			script.setAttribute( 'type', 'wppo/javascript' );
-			script.text = '/* inline test payload */';
-			document.body.appendChild( script );
+		it( 'copies only allowlisted attributes to the replacement (allowlist hardening)', async () => {
+			document.body.innerHTML =
+				'<script type="wppo/javascript" wppo-src="https://www.googletagmanager.com/gtm.js?id=GTM-X" ' +
+				'fetchpriority="low" data-wppo-delay-strategy="interaction" data-config="keep-me" ' +
+				'aria-label="keep" onload="alert(1)" onerror="alert(2)" nonce="csp-nonce" ' +
+				'style="color:red" integrity="sha384-abc" crossorigin="anonymous"></script>';
+			await bootLazyload();
 
-			await loadScriptImpl( script );
+			const replacement = document.querySelector(
+				'script[src*="googletagmanager.com"]'
+			);
+			expect( replacement ).toBeInTheDocument();
+			// Allowlisted attributes survive (incl. PHP's fetchpriority="low").
+			expect( replacement.getAttribute( 'fetchpriority' ) ).toBe( 'low' );
+			expect( replacement.getAttribute( 'data-config' ) ).toBe(
+				'keep-me'
+			);
+			expect( replacement.getAttribute( 'aria-label' ) ).toBe( 'keep' );
+			expect( replacement.getAttribute( 'integrity' ) ).toBe(
+				'sha384-abc'
+			);
+			expect( replacement.getAttribute( 'crossorigin' ) ).toBe(
+				'anonymous'
+			);
+			// Event handlers, CSP nonces and styles never propagate.
+			expect( replacement.hasAttribute( 'onload' ) ).toBe( false );
+			expect( replacement.hasAttribute( 'onerror' ) ).toBe( false );
+			expect( replacement.hasAttribute( 'nonce' ) ).toBe( false );
+			expect( replacement.hasAttribute( 'style' ) ).toBe( false );
+			expect( replacement.hasAttribute( 'wppo-src' ) ).toBe( false );
+		} );
+
+		it( 'does not hydrate a script whose src uses a dangerous scheme', async () => {
+			document.body.innerHTML =
+				'<script type="wppo/javascript" wppo-src="javascript:alert(1)" data-x="1"></script>';
+			await bootLazyload();
+
+			// No live script element was created — the placeholder is left
+			// untouched (it never receives a src attribute).
+			expect( document.querySelectorAll( 'script[src]' ).length ).toBe(
+				0
+			);
+			expect(
+				document.querySelector(
+					'script[wppo-src="javascript:alert(1)"]'
+				)
+			).toBeInTheDocument();
+			expect( consoleWarnSpy ).toHaveBeenCalledWith(
+				expect.stringContaining( 'blocked deferred script src' ),
+				'javascript:alert(1)'
+			);
+		} );
+
+		it( 'does not hydrate a script with a data: or blob: src', async () => {
+			document.body.innerHTML =
+				'<script type="wppo/javascript" wppo-src="data:text/javascript,alert(1)"></script>' +
+				'<script type="wppo/javascript" wppo-src="blob:https://localhost/abc"></script>';
+			await bootLazyload();
+
+			expect(
+				document.querySelectorAll( 'script[wppo-src]' ).length
+			).toBe( 2 );
+		} );
+
+		it( 'rejects cross-origin srcs that are not on the host allowlist', async () => {
+			document.body.innerHTML =
+				'<script type="wppo/javascript" wppo-src="https://untrusted.example.net/tracker.js"></script>';
+			await bootLazyload();
+
+			expect(
+				document.querySelector(
+					'script[src="https://untrusted.example.net/tracker.js"]'
+				)
+			).toBeNull();
+			expect( consoleWarnSpy ).toHaveBeenCalledWith(
+				expect.stringContaining( 'blocked deferred script src' ),
+				'https://untrusted.example.net/tracker.js'
+			);
+		} );
+
+		it( 'honours the runtime host allowlist extension point', async () => {
+			global.wppoAllowedScriptHosts = [ 'custom-cdn.example.org' ];
+			document.body.innerHTML =
+				'<script type="wppo/javascript" wppo-src="https://custom-cdn.example.org/app.js"></script>';
+			await bootLazyload();
+
+			expect(
+				document.querySelector(
+					'script[src="https://custom-cdn.example.org/app.js"]'
+				)
+			).toBeInTheDocument();
+		} );
+
+		it( 'allows a "*" wildcard runtime allowlist entry', async () => {
+			global.wppoAllowedScriptHosts = [ '*' ];
+			document.body.innerHTML =
+				'<script type="wppo/javascript" wppo-src="https://anything.example.dev/x.js"></script>';
+			await bootLazyload();
+
+			expect(
+				document.querySelector(
+					'script[src="https://anything.example.dev/x.js"]'
+				)
+			).toBeInTheDocument();
+		} );
+
+		it( 'copies only allowlisted attributes on inline script replacement', async () => {
+			document.body.innerHTML =
+				'<script type="wppo/javascript" data-wppo-keep="1" onload="alert(1)" nonce="abc">window.__wppoInline=1;</script>';
+			await bootLazyload();
 
 			const inlineScript = Array.from(
 				document.querySelectorAll( 'script' )
-			).find( ( s ) => s.text === '/* inline test payload */' );
+			).find( ( s ) => s.text === 'window.__wppoInline=1;' );
 			expect( inlineScript ).toBeInTheDocument();
+			expect( inlineScript.getAttribute( 'data-wppo-keep' ) ).toBe( '1' );
+			expect( inlineScript.hasAttribute( 'onload' ) ).toBe( false );
+			expect( inlineScript.hasAttribute( 'nonce' ) ).toBe( false );
 		} );
 
 		it( 'warns on empty inline script', async () => {
-			const script = document.createElement( 'script' );
-			script.setAttribute( 'type', 'wppo/javascript' );
-			document.body.appendChild( script );
-
-			await loadScriptImpl( script );
+			document.body.innerHTML =
+				'<script type="wppo/javascript"></script>';
+			await bootLazyload();
 
 			expect( consoleWarnSpy ).toHaveBeenCalledWith(
 				'WPPO: empty inline script found',
-				script
+				expect.any( HTMLScriptElement )
 			);
+		} );
+	} );
+
+	describe( 'initVideoPlaceholders() — real bundle URL validation', () => {
+		beforeEach( () => {
+			delete global.IntersectionObserver;
+		} );
+
+		afterEach( () => {
+			delete global.IntersectionObserver;
+		} );
+
+		const makePlaceholder = ( src ) => {
+			const placeholder = document.createElement( 'div' );
+			placeholder.className = 'wppo-video-placeholder';
+			placeholder.setAttribute( 'data-wppo-video-src', src );
+			const playBtn = document.createElement( 'button' );
+			playBtn.className = 'wppo-video-play-btn';
+			placeholder.appendChild( playBtn );
+			document.body.appendChild( placeholder );
+			return placeholder;
+		};
+
+		it( 'loads an allowlisted https embed on click', async () => {
+			const placeholder = makePlaceholder(
+				'https://www.youtube.com/embed/test'
+			);
+			jest.isolateModules( () => {
+				require( '../lazyload' );
+			} );
+
+			placeholder.click();
+			await Promise.resolve();
+
+			const iframe = placeholder.querySelector( 'iframe' );
+			expect( iframe ).toBeInTheDocument();
+			expect( iframe.getAttribute( 'src' ) ).toBe(
+				'https://www.youtube.com/embed/test?autoplay=1&enablejsapi=1'
+			);
+		} );
+
+		it( 'refuses javascript: URLs and leaves the placeholder intact', async () => {
+			const placeholder = makePlaceholder( 'javascript:alert(1)' );
+			jest.isolateModules( () => {
+				require( '../lazyload' );
+			} );
+
+			placeholder.click();
+			await Promise.resolve();
+
+			expect( placeholder.querySelector( 'iframe' ) ).toBeNull();
+			expect( placeholder.dataset.wppoLoaded ).toBeUndefined();
+			expect( consoleWarnSpy ).toHaveBeenCalledWith(
+				expect.stringContaining( 'blocked video placeholder src' ),
+				'javascript:alert(1)'
+			);
+		} );
+
+		it( 'refuses data: URLs and non-https schemes', async () => {
+			const dataPh = makePlaceholder( 'data:text/html,<b>x</b>' );
+			const httpPh = makePlaceholder( 'http://www.youtube.com/embed/x' );
+			jest.isolateModules( () => {
+				require( '../lazyload' );
+			} );
+
+			dataPh.click();
+			httpPh.click();
+			await Promise.resolve();
+
+			expect( dataPh.querySelector( 'iframe' ) ).toBeNull();
+			expect( httpPh.querySelector( 'iframe' ) ).toBeNull();
+		} );
+
+		it( 'refuses https embeds from hosts outside the allowlist', async () => {
+			const placeholder = makePlaceholder( 'https://evil.example.com/v' );
+			jest.isolateModules( () => {
+				require( '../lazyload' );
+			} );
+
+			placeholder.click();
+			await Promise.resolve();
+
+			expect( placeholder.querySelector( 'iframe' ) ).toBeNull();
+		} );
+
+		it( 'allows same-origin embed URLs', async () => {
+			const placeholder = makePlaceholder( '/self-hosted.html' );
+			jest.isolateModules( () => {
+				require( '../lazyload' );
+			} );
+
+			placeholder.click();
+			await Promise.resolve();
+
+			expect( placeholder.querySelector( 'iframe' ) ).toBeInTheDocument();
+		} );
+
+		it( 'never copies on* attributes from the iframe attrs payload', async () => {
+			const placeholder = makePlaceholder(
+				'https://www.youtube.com/embed/test'
+			);
+			placeholder.setAttribute(
+				'data-wppo-iframe-attrs',
+				JSON.stringify( {
+					id: 'myvideo',
+					onload: 'alert(1)',
+					sandbox: 'allow-scripts',
+				} )
+			);
+			jest.isolateModules( () => {
+				require( '../lazyload' );
+			} );
+
+			placeholder.click();
+			await Promise.resolve();
+
+			const iframe = placeholder.querySelector( 'iframe' );
+			expect( iframe ).toBeInTheDocument();
+			expect( iframe.getAttribute( 'id' ) ).toBe( 'myvideo' );
+			expect( iframe.getAttribute( 'sandbox' ) ).toBe( 'allow-scripts' );
+			expect( iframe.hasAttribute( 'onload' ) ).toBe( false );
 		} );
 	} );
 

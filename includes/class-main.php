@@ -1795,6 +1795,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 							'idleTimeout'     => $idle_timeout,
 							'defaultStrategy' => $default_strategy,
 						);
+
+						// The lazyload bundle validates deferred script src URLs
+						// (scheme + same-origin/host allowlist). Additional hosts
+						// can be allowlisted via this filter and are mirrored to
+						// the client as delayConfig.allowedScriptHosts.
+						$allowed_script_hosts = apply_filters( 'wppo_delay_js_allowed_hosts', array() );
+						if ( ! empty( $allowed_script_hosts ) ) {
+							$lazy_config['delayConfig']['allowedScriptHosts'] = array_values(
+								array_map( 'sanitize_text_field', (array) $allowed_script_hosts )
+							);
+						}
 					}
 
 					// WP 6.9+ uses native fetchpriority/in_footer via Script Loader / Script Modules.

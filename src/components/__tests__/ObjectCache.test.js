@@ -1,4 +1,10 @@
-import { render, screen, act, fireEvent } from '@testing-library/react';
+import {
+	render,
+	screen,
+	act,
+	fireEvent,
+	waitFor,
+} from '@testing-library/react';
 import '@testing-library/jest-dom';
 // eslint-disable-next-line import/no-extraneous-dependencies -- React is required for JSX rendering in tests
 import React from 'react';
@@ -118,5 +124,100 @@ describe( 'ObjectCache Component', () => {
 		expect( screen.getByText( 'Action failed.' ) ).toBeInTheDocument();
 
 		errorSpy.mockRestore();
+	} );
+
+	it( 'sends the password only for credential actions and clears it after success', async () => {
+		const statusResponse = {
+			success: true,
+			data: {
+				enabled: false,
+				redis_missing: false,
+				foreign_dropin: false,
+				redis_reachable: true,
+				supported_compressors: { none: true },
+			},
+		};
+		apiCall.mockImplementation( async ( action, payload = {} ) => {
+			if ( 'object_cache' === action && 'status' === payload.action ) {
+				return statusResponse;
+			}
+			return {
+				success: true,
+				message: 'Object Cache enabled successfully.',
+			};
+		} );
+
+		await act( async () => {
+			render( <ObjectCache options={ { password: 's3cret' } } /> );
+		} );
+
+		const passwordInput = screen.getByLabelText( /Auth Password/i );
+		expect( passwordInput.value ).toBe( 's3cret' );
+
+		const enableBtn = screen.getByRole( 'button', {
+			name: /Enable Object Cache/i,
+		} );
+		await act( async () => {
+			fireEvent.click( enableBtn );
+		} );
+
+		// Enable is a credential action — settings (incl. password) were sent…
+		const enablePayload = apiCall.mock.calls.find(
+			( [ action, payload ] ) =>
+				'object_cache' === action && 'enable' === payload?.action
+		);
+		expect( enablePayload[ 1 ].password ).toBe( 's3cret' );
+
+		// …but the password no longer lingers in state afterwards.
+		await waitFor( () =>
+			expect( screen.getByLabelText( /Auth Password/i ).value ).toBe( '' )
+		);
+	} );
+
+	it( 'never includes the password in payloads for non-credential actions', async () => {
+		const statusResponse = {
+			success: true,
+			data: {
+				enabled: true,
+				redis_missing: false,
+				foreign_dropin: false,
+				redis_reachable: true,
+				supported_compressors: { none: true },
+				telemetry: {
+					keyspace_hits: 1,
+					keyspace_misses: 1,
+				},
+			},
+		};
+		apiCall.mockImplementation( async ( action, payload = {} ) => {
+			if ( 'object_cache' === action && 'status' === payload.action ) {
+				return statusResponse;
+			}
+			return { success: true, message: 'Object Cache flushed.' };
+		} );
+
+		await act( async () => {
+			render( <ObjectCache options={ { password: 's3cret' } } /> );
+		} );
+
+		const flushBtn = screen.getByRole( 'button', {
+			name: /Flush Cache/i,
+		} );
+		await act( async () => {
+			fireEvent.click( flushBtn );
+		} );
+
+		const flushPayload = apiCall.mock.calls.find(
+			( [ action, payload ] ) =>
+				'object_cache' === action && 'flush' === payload?.action
+		);
+		expect( flushPayload ).toBeDefined();
+		expect( flushPayload[ 1 ].password ).toBeUndefined();
+		expect( flushPayload[ 1 ].mode ).toBe( 'standalone' );
+
+		// The password is untouched for actions that never used it.
+		expect( screen.getByLabelText( /Auth Password/i ).value ).toBe(
+			's3cret'
+		);
 	} );
 } );
