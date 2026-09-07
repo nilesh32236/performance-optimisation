@@ -456,14 +456,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			$nonce = '';
 			if ( $request instanceof \WP_REST_Request ) {
-				// get_header() values are not slashed by WP, so no wp_unslash() is needed here.
-				$nonce = (string) $request->get_header( 'X-WP-Nonce' );
+				$header = $request->get_header( 'X-WP-Nonce' );
+				$nonce  = is_array( $header ) ? (string) reset( $header ) : (string) $header;
 			}
-			// BC-only fallback for legacy callers without a request object: when a
-			// request was supplied, WP's header canonicalization is authoritative and
-			// the raw $_SERVER value must not override it. wp_unslash() is needed
-			// only on this raw superglobal path.
-			if ( null === $request && isset( $_SERVER['HTTP_X_WP_NONCE'] ) ) {
+			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			if ( '' === $nonce && isset( $_SERVER['HTTP_X_WP_NONCE'] ) ) {
 				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 				$nonce = (string) wp_unslash( $_SERVER['HTTP_X_WP_NONCE'] );
 			}

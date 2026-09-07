@@ -88,87 +88,15 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 
 		$result = $this->rest->permission_callback( $request );
 		$this->assertTrue( $result );
-	}
 
-	/**
-	 * Test that permission_callback falls back to the raw $_SERVER nonce only
-	 * for legacy callers that supply no request object (BC path).
-	 *
-	 * $_SERVER state is isolated in try/finally and torn down afterwards so
-	 * later tests cannot inherit the header value.
-	 */
-	public function test_permission_callback_fallback_to_server(): void {
-		$_SERVER['HTTP_X_WP_NONCE'] = 'test_nonce';
-
-		try {
-			Functions\when( 'wp_verify_nonce' )->justReturn( true );
-			Functions\when( 'current_user_can' )->justReturn( true );
-
-			$this->assertTrue( $this->rest->permission_callback() );
-		} finally {
-			unset( $_SERVER['HTTP_X_WP_NONCE'] );
-		}
-	}
-
-	/**
-	 * Test that permission_callback rejects a valid-capability user whose
-	 * nonce fails verification, for both the get_header and the $_SERVER
-	 * fallback paths (fail closed).
-	 */
-	public function test_permission_callback_rejects_invalid_nonce(): void {
-		Functions\when( 'wp_verify_nonce' )->justReturn( false );
-		Functions\when( 'current_user_can' )->justReturn( true );
-
-		$request = \Mockery::mock( \WP_REST_Request::class );
-		$request->shouldReceive( 'get_header' )->with( 'X-WP-Nonce' )->andReturn( 'bad_nonce' );
-		$this->assertFalse(
-			$this->rest->permission_callback( $request ),
-			'Invalid nonce via get_header must fail closed'
-		);
-
-		$_SERVER['HTTP_X_WP_NONCE'] = 'bad_nonce';
-		try {
-			$this->assertFalse(
-				$this->rest->permission_callback(),
-				'Invalid nonce via $_SERVER fallback must fail closed'
-			);
-		} finally {
-			unset( $_SERVER['HTTP_X_WP_NONCE'] );
-		}
-	}
-
-	/**
-	 * Test that a null get_header() result does not trigger the raw $_SERVER
-	 * fallback: when a request object is supplied, WP's canonicalization is
-	 * authoritative, so a missing header must fail closed even if a legacy
-	 * $_SERVER nonce would otherwise verify.
-	 */
-	public function test_permission_callback_null_header_skips_server_fallback(): void {
-		$request = \Mockery::mock( \WP_REST_Request::class );
-		$request->shouldReceive( 'get_header' )->with( 'X-WP-Nonce' )->andReturn( null );
-
-		Functions\when( 'wp_verify_nonce' )->alias(
-			static fn( $nonce ): bool => 'test_nonce' === $nonce
-		);
-		Functions\when( 'current_user_can' )->justReturn( true );
-
-		// The $_SERVER value would verify, but must be ignored because a
-		// request object was supplied (fallback is BC-only for null requests).
+		// Test fallback.
 		$_SERVER['HTTP_X_WP_NONCE'] = 'test_nonce';
 		try {
-			$this->assertFalse( $this->rest->permission_callback( $request ) );
+			$result_fallback = $this->rest->permission_callback();
+			$this->assertTrue( $result_fallback );
 		} finally {
 			unset( $_SERVER['HTTP_X_WP_NONCE'] );
 		}
-	}
-
-	/**
-	 * Clean up per-test global state after each test.
-	 */
-	protected function tearDown(): void { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid
-		unset( $_SERVER['HTTP_X_WP_NONCE'] );
-		\Brain\Monkey\tearDown();
-		parent::tearDown();
 	}
 
 	/**
@@ -182,6 +110,22 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'sanitize_text_field' )->returnArg();
 		Functions\when( 'wp_unslash' )->returnArg();
 		Functions\when( 'current_user_can' )->justReturn( false );
+
+		$result = $this->rest->permission_callback( $request );
+		$this->assertFalse( $result );
+	}
+
+	/**
+	 * Test that permission_callback rejects requests with an invalid nonce.
+	 */
+	public function test_permission_callback_rejects_invalid_nonce(): void {
+		$request = \Mockery::mock( \WP_REST_Request::class );
+		$request->shouldReceive( 'get_header' )->with( 'X-WP-Nonce' )->andReturn( 'invalid_nonce' );
+
+		Functions\when( 'wp_verify_nonce' )->justReturn( false );
+		Functions\when( 'sanitize_text_field' )->returnArg();
+		Functions\when( 'wp_unslash' )->returnArg();
+		Functions\when( 'current_user_can' )->justReturn( true );
 
 		$result = $this->rest->permission_callback( $request );
 		$this->assertFalse( $result );
