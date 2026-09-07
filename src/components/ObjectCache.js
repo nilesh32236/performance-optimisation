@@ -32,6 +32,21 @@ import ConfirmDialog from './common/ConfirmDialog';
 
 import { __ } from '@wordpress/i18n';
 
+/**
+ * Object-cache REST actions that authenticate against Redis and therefore may
+ * carry connection settings (including the password) in the request body.
+ * 'status', 'flush' and 'disable' only need the deployment mode, so the
+ * password is never sent for them.
+ *
+ * @type {string[]}
+ */
+const CREDENTIALS_REQUIRED_ACTIONS = [
+	'enable',
+	'ping',
+	'authenticate',
+	'test-connection',
+];
+
 const getCompressionLabel = ( statusLoaded, supported, key ) => {
 	if ( ! statusLoaded ) {
 		return '';
@@ -195,15 +210,9 @@ const ObjectCache = ( { options = {} } ) => {
 		setActiveAction( action );
 		dismiss();
 		try {
-			const credentialsRequired = [
-				'enable',
-				'ping',
-				'authenticate',
-				'test-connection',
-			];
 			const payload = {
 				action,
-				...( credentialsRequired.includes( action )
+				...( CREDENTIALS_REQUIRED_ACTIONS.includes( action )
 					? settings
 					: { mode: settings.mode } ),
 			};
@@ -218,6 +227,17 @@ const ObjectCache = ( { options = {} } ) => {
 					durationMs: 5000,
 				} );
 				return;
+			}
+
+			// Minimise secret exposure: once the action that needed the
+			// password has succeeded, drop it from state (and the dirty-state
+			// baseline) so it does not linger in the JS heap or get re-sent
+			// with unrelated requests. The input stays available for a new
+			// password; stored settings never contain it (the server keeps a
+			// `password_set` flag instead).
+			if ( CREDENTIALS_REQUIRED_ACTIONS.includes( action ) ) {
+				setSettings( ( prev ) => ( { ...prev, password: '' } ) );
+				setBaseline( ( prev ) => ( { ...prev, password: '' } ) );
 			}
 
 			if ( [ 'enable', 'disable', 'ping' ].includes( action ) ) {

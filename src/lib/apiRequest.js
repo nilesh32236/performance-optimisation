@@ -133,13 +133,24 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 /**
  * Fetch paginated recent activity log entries.
  *
+ * The page number is coerced to a finite positive integer and URL-encoded so
+ * caller-supplied values cannot inject additional query parameters (e.g. `&`
+ * or `#` from user-controlled input).
+ *
  * @since 1.0.0
+ * @since NEXT Page is validated as a positive integer and URL-encoded.
  * @param {number}      page     Page number (defaults to 1).
  * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
  * @return {Promise<Object>} Resolved activities data.
  */
 export const fetchRecentActivities = ( page = 1, signal ) => {
-	return apiCall( `recent_activities?page=${ page }`, {}, 'GET', signal );
+	const safePage = Math.max( 1, Number.parseInt( page, 10 ) || 1 );
+	return apiCall(
+		`recent_activities?page=${ encodeURIComponent( safePage ) }`,
+		{},
+		'GET',
+		signal
+	);
 };
 
 /**
