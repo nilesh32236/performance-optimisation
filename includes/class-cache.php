@@ -1322,6 +1322,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return;
 			}
 
+			// Exactly-once start: a second invocation in the same request (should
+			// not happen — the hook is registered once) would stack a duplicate
+			// buffer and re-register the shutdown net.
+			if ( null !== $this->cache_ob_level ) {
+				return;
+			}
+
 			$role_hash = $this->get_logged_in_role_hash();
 			$file_path = $this->get_cache_file_path( 'html', $role_hash );
 
@@ -1343,7 +1350,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			// Track the level our buffer occupies for the shutdown safety net.
 			$this->cache_ob_level = ob_get_level();
-			add_action( 'shutdown', array( $this, 'maybe_end_output_buffer' ), 0 );
+			if ( false === has_action( 'shutdown', array( $this, 'maybe_end_output_buffer' ) ) ) {
+				add_action( 'shutdown', array( $this, 'maybe_end_output_buffer' ), 0 );
+			}
 		}
 
 		/**

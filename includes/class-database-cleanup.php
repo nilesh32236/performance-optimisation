@@ -978,11 +978,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * name must be a whitelisted cleanup method (METHOD_TO_TYPE keys) and
 		 * callable, otherwise a WP_Error is returned instead of triggering a
 		 * fatal error that would crash the REST database_cleanup endpoint.
+		 * The method name is passed through raw into the WP_Error payload;
+		 * escaping happens at display time.
 		 *
 		 * @since 1.4.0
 		 * @since NEXT Added method whitelist + is_callable guard returning WP_Error.
-		 * @param string $method The static method name to invoke.
-		 * @param mixed  ...$args Arguments forwarded to the method.
+		 * @param mixed $method The static method name to invoke (string; other types are guarded).
+		 * @param mixed ...$args Arguments forwarded to the method.
 		 * @return mixed The invoked method's return value, or a `WP_Error` if the method returned `false` or is not callable.
 		 */
 		public static function invoke_cleanup_method( $method, ...$args ) {
@@ -994,7 +996,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					sprintf(
 						/* translators: %s: cleanup method name. */
 						__( 'Invalid database cleanup method: %s', 'performance-optimisation' ),
-						is_string( $method ) ? $method : esc_html( wp_json_encode( $method ) )
+						is_string( $method ) ? $method : (string) wp_json_encode( $method )
 					)
 				);
 			}

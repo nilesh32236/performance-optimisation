@@ -117,18 +117,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 				remove_action( 'save_post', array( $main, 'on_save_post_queue_used_css' ), 10 );
 			}
 
-			// wppo_after_cache_clear fires during Cache::clear_cache() below; the
-			// plugin already dropped its edge integrations, so drop the purge
-			// fan-out with them (CDN_Purger is always loaded; Edge_Purger is
-			// conditional in Main::setup_hooks()).
-			remove_action( 'wppo_after_cache_clear', array( 'PerformanceOptimise\Inc\CDN_Purger', 'purge_all' ) );
-			if ( class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
-				remove_action( 'wppo_after_cache_clear', array( 'PerformanceOptimise\Inc\Edge_Purger', 'purge_all' ), 20 );
-			}
-
 			// DB-cleanup counts invalidation is pointless once the plugin is gone.
 			remove_action( 'save_post', array( 'PerformanceOptimise\Inc\Database_Cleanup', 'on_post_change' ), 10 );
 			remove_action( 'deleted_post', array( 'PerformanceOptimise\Inc\Database_Cleanup', 'on_post_change' ), 10 );
+
+			// Deliberately NOT removed: the wppo_after_cache_clear listeners.
+			// Cache::clear_cache() below fires that action once more, and its
+			// listeners are both safe and desirable during teardown:
+			// - CDN_Purger/Edge_Purger purge_all() sends the final edge purge so
+			//   stale Cloudflare/Bunny/Varnish copies do not outlive the plugin
+			//   (both purgers no-op when their integration is not configured);
+			// - Image_Optimisation::clear_runtime_caches() is a cheap local
+			//   stat-cache reset with no external side effects.
 		}
 
 		/**
@@ -136,9 +136,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 		 *
 		 * Removes every WP-Cron event created by the plugin, derived from the
 		 * canonical {@see Cron::SCHEDULED_HOOKS} list (plus the legacy
-		 * `wppo_img_conversation` misspelling). Uses wp_unschedule_hook() which
-		 * removes all events for a hook, recurring and single (audit #888
-		 * findings 1 + 9).
+		 * `wppo_img_conversation` misspelling, cleared inside
+		 * Cron::clear_cron_jobs()). Uses wp_unschedule_hook() which removes all
+		 * events for a hook, recurring and single (audit #888 findings 1 + 9).
 		 *
 		 * @since 1.0.0
 		 * @since NEXT Delegates to the canonical Cron::SCHEDULED_HOOKS list.
@@ -146,11 +146,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 		 */
 		private static function unschedule_crons(): void {
 			Cron::clear_cron_jobs();
-
-			// Legacy misspelled hook (kept for backward compat with installs
-			// scheduled by older plugin versions). Also covered here in case an
-			// older plugin build is being deactivated by a newer build's files.
-			wp_unschedule_hook( 'wppo_img_conversation' );
 		}
 
 		/**
@@ -158,8 +153,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 		 *
 		 * Action Scheduler keeps its own queue in custom tables, so WP-Cron
 		 * unscheduling does not touch it. Pending background jobs (image
-		 * conversion, PageSpeed scans, used-CSS generation, crawler batches)
-		 * are cancelled on deactivation (audit #888 finding 1).
+		 * conversion, PageSpeed scans, used-CSS generation, critical CSS,
+		 * crawler batches) are cancelled on deactivation (audit #888 finding 1).
+		 * Note: wppo_litespeed_crawler_batch / wppo_crawler_warm are dual-scheduled
+		 * (WP-Cron + AS) and are cleaned in both paths; wppo_generate_ccss is
+		 * AS-only and therefore lives here, not in Cron::SCHEDULED_HOOKS.
 		 *
 		 * @since NEXT
 		 * @return void
@@ -173,6 +171,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 				'wppo_convert_image_background',
 				'wppo_pagespeed_scan',
 				'wppo_used_css_generate',
+				'wppo_generate_ccss',
 				'wppo_litespeed_crawler_batch',
 				'wppo_crawler_warm',
 			);

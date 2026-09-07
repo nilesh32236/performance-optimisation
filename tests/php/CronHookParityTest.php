@@ -214,7 +214,6 @@ class CronHookParityTest extends \PHPUnit\Framework\TestCase {
 			'switch_theme',
 			'activated_plugin',
 			'deactivated_plugin',
-			'wppo_after_cache_clear',
 			'save_post',
 			'deleted_post',
 		);
@@ -226,5 +225,9 @@ class CronHookParityTest extends \PHPUnit\Framework\TestCase {
 				sprintf( 'Deactivate::unregister_runtime_hooks() did not remove hook "%s".', $hook )
 			);
 		}
+
+		// The wppo_after_cache_clear listeners are deliberately kept registered
+		// (final edge purge + cheap stat-cache flush are desired during teardown).
+		$this->assertNotContains( 'wppo_after_cache_clear', $removed );
 	}
 }

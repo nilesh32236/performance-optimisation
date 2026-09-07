@@ -967,11 +967,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * @return void
 		 */
 		public static function register_transient_key( string $key ): void {
-			$now     = time();
-			$expiry  = $now + HOUR_IN_SECONDS;
 			$retries = 2;
 
 			for ( $attempt = 0; $attempt <= $retries; $attempt++ ) {
+				// Refresh timestamps per attempt so pruning and the final
+				// verification use a current clock even after retries.
+				$now    = time();
+				$expiry = $now + HOUR_IN_SECONDS;
+
 				$index = self::read_transient_index();
 
 				// Add/update this key with its absolute expiry timestamp.
@@ -996,10 +999,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 
 				// Verify our key survived the write — a concurrent writer that
 				// raced between the merge-read and the write could have
-				// overwritten the option. Retrying converges because every
-				// writer merges before writing.
+				// overwritten the option. Checks presence with a non-expired
+				// value rather than exact equality so a concurrent writer that
+				// refreshed our key seconds later is not treated as a torn
+				// write. Retrying converges because every writer merges before
+				// writing.
 				$verify = self::read_transient_index();
-				if ( ( $verify[ $key ] ?? null ) === $expiry ) {
+				if ( isset( $verify[ $key ] ) && is_int( $verify[ $key ] ) && $verify[ $key ] >= $now ) {
 					return;
 				}
 			}

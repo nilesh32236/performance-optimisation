@@ -183,6 +183,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Clear the tracked Main instance (test isolation).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_instance(): void {
+			self::$instance = null;
+		}
+
+		/**
 		 * Constructor.
 		 *
 		 * Initializes the class by including necessary files and setting up hooks.
@@ -671,8 +681,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// Flush Image_Optimisation per-request stat caches (file_exists + image
 			// sizes) on blog switches and after cache clears so paths from another
 			// site or pre-clear state are re-verified (audit #888 finding 7).
-			add_action( 'switch_blog', array( 'PerformanceOptimise\Inc\Image_Optimisation', 'clear_runtime_caches' ), 10, 2 );
-			add_action( 'wppo_after_cache_clear', array( 'PerformanceOptimise\Inc\Image_Optimisation', 'clear_runtime_caches' ), 10, 2 );
+			add_action( 'switch_blog', array( 'PerformanceOptimise\Inc\Image_Optimisation', 'clear_runtime_caches' ) );
+			add_action( 'wppo_after_cache_clear', array( 'PerformanceOptimise\Inc\Image_Optimisation', 'clear_runtime_caches' ) );
 			if ( ! empty( $this->options['file_optimisation']['combineCSS'] ) ) {
 				// TODO(#624): when WP 7.2 removes concatenation in favour of preloads,
 				// reassess whether combine_css() should defer to core preload emission

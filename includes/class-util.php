@@ -620,6 +620,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Generates a preload link tag for resources.
 		 *
+		 * Echoes only in front-end HTML contexts (wp_head / template rendering);
+		 * during REST, JSON, AJAX, CLI, or admin requests the tag is built and
+		 * returned without echo so HTML can never leak into non-HTML payloads.
+		 * Callers that assemble headers/buffers should use
+		 * {@see get_preload_link()} directly.
+		 *
 		 * Preconnect and dns-prefetch links now flow through core's
 		 * `wp_resource_hints()` (see Main::add_resource_hints()); this helper
 		 * remains for `rel="preload"` links that need `as`/`type`/`media`
@@ -633,6 +639,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string $media The media attribute (optional).
 		 * @param string $fetchpriority The fetchpriority attribute (optional).
 		 * @since 1.0.0
+		 * @since NEXT Echoes only in front-end HTML contexts; returns the tag and delegates building to get_preload_link().
 		 */
 		public static function generate_preload_link( $href, $rel, $resource_type = '', $crossorigin = false, $type = '', $media = '', $fetchpriority = '' ) {
 			$link_tag = self::get_preload_link( $href, $rel, $resource_type, $crossorigin, $type, $media, $fetchpriority );
@@ -640,9 +647,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			// Only echo in front-end HTML contexts (wp_head / template rendering).
 			// Echoing during REST, AJAX, CLI, or admin contexts can inject HTML
 			// into JSON/CLI output; callers that need the markup there should use
-			// get_preload_link() and handle the string themselves.
+			// get_preload_link() and handle the string themselves. wp_is_json_request()
+			// also covers early-boot JSON responses that precede REST_REQUEST.
 			if ( ( function_exists( 'is_admin' ) && is_admin() )
 				|| ( function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() )
+				|| ( function_exists( 'wp_is_json_request' ) && wp_is_json_request() )
 				|| ( defined( 'REST_REQUEST' ) && REST_REQUEST )
 				|| ( defined( 'WP_CLI' ) && WP_CLI ) ) {
 				return $link_tag;

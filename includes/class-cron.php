@@ -55,11 +55,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * {@see schedule_cron_jobs()} and the single-event schedulers may only
 		 * schedule hooks from this list, and {@see clear_cron_jobs()} /
 		 * {@see Deactivate::unschedule_crons()} unschedule exactly this list (plus
-		 * the legacy `wppo_img_conversation` misspelling kept for BC). Action
-		 * Scheduler jobs (wppo_convert_image_background, wppo_pagespeed_scan,
-		 * wppo_used_css_generate, wppo_litespeed_crawler_batch, wppo_crawler_warm)
-		 * live in the AS store, not WP-Cron, and are unscheduled separately via
-		 * as_unschedule_all_actions() on deactivation.
+		 * the legacy `wppo_img_conversation` misspelling kept for BC).
+		 *
+		 * Store ownership notes: `wppo_litespeed_crawler_batch` and
+		 * `wppo_crawler_warm` are dual-scheduled (WP-Cron single events here AND
+		 * Action Scheduler in the crawler bridge), so they are cleaned in both
+		 * paths — here and in Deactivate::unschedule_action_scheduler_jobs().
+		 * `wppo_generate_ccss` is Action Scheduler-only (as_enqueue_async_action
+		 * in Critical_CSS) and must NOT be listed here; wp_unschedule_hook()
+		 * cannot clear AS-store rows.
 		 *
 		 * @since NEXT
 		 * @var string[]
@@ -75,11 +79,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			'wppo_llms_txt_daily',       // Daily llms.txt regeneration.
 			'wppo_used_css_cron',        // Recurring used-CSS regeneration (every_5_hours).
 			'wppo_ccss_regeneration',    // Daily critical-CSS regeneration.
-			'wppo_generate_ccss',        // Single-event per-template critical CSS.
 			'wppo_rum_flush',            // Single-event RUM queue flush (scheduled by RUM::queue()).
 			'wppo_run_upgrades',         // Single-event upgrade routine (scheduled by Activate).
-			'wppo_litespeed_crawler_batch', // Single-event crawler batch deferral (LiteSpeed_Crawler).
-			'wppo_crawler_warm',         // Single-event per-URL crawler warm-up (LiteSpeed_Crawler).
+			'wppo_litespeed_crawler_batch', // Dual-scheduled: WP-Cron here + AS in the crawler bridge.
+			'wppo_crawler_warm',         // Dual-scheduled: WP-Cron here + AS in the crawler bridge.
 		);
 
 		/**
