@@ -2515,28 +2515,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		public static function get_cache_size(): string {
 			$stats = self::get_cache_stats();
-			// Preserve error strings from get_cache_stats() when filesystem is unavailable.
-			if ( isset( $stats['size'] ) && is_string( $stats['size'] ) ) {
-				// When cache_dir is empty (filesystem unavailable) the stats size is 'N/A' — fall back to legacy error handling.
-				if ( '' === $stats['cache_dir'] ) {
-					$instance = new self();
-					if ( ! $instance->get_filesystem() ) {
-						return __( 'Unable to initialize filesystem.', 'performance-optimisation' );
-					}
-					if ( ! $instance->filesystem->is_dir( $stats['cache_dir'] ) ) {
-						return __( 'Cache directory does not exist.', 'performance-optimisation' );
-					}
-					return __( 'N/A', 'performance-optimisation' );
-				}
-				// Detect dir-existence error: get_cache_stats returns N/A size when dir missing but filesystem ok.
-				// Re-check dir existence to return the historical error string for BC.
-				$instance = new self();
-				if ( $instance->get_filesystem() && ! $instance->filesystem->is_dir( $stats['cache_dir'] ) ) {
-					return __( 'Cache directory does not exist.', 'performance-optimisation' );
-				}
-				return $stats['size'];
+
+			if ( ! isset( $stats['size'] ) || ! is_string( $stats['size'] ) ) {
+				return (string) ( $stats['size'] ?? '' );
 			}
-			return (string) $stats['size'];
+
+			$cache_dir = $stats['cache_dir'] ?? '';
+			$instance  = new self();
+
+			if ( ! $instance->get_filesystem() ) {
+				return '' === $cache_dir ? __( 'Unable to initialize filesystem.', 'performance-optimisation' ) : $stats['size'];
+			}
+
+			if ( '' === $cache_dir || ! $instance->filesystem->is_dir( $cache_dir ) ) {
+				return __( 'Cache directory does not exist.', 'performance-optimisation' );
+			}
+
+			return $stats['size'];
 		}
 
 		/**
