@@ -912,7 +912,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * Returns a locale-independent boolean so frontend comparisons work on
 		 * non-English installs.
 		 *
+		 * WCAG 2.x heuristic: a missing alt attribute AND an empty alt=""
+		 * both fail. alt="" is only valid for purely decorative images, which
+		 * this heuristic cannot distinguish, so empty alt text is reported as
+		 * a warning alongside genuinely missing alt text (audit #888
+		 * finding 18).
+		 *
 		 * @since  1.5.0
+		 * @since NEXT Empty-string alt also fails the check.
 		 * @param  array $images Array of image data from parse_resources().
 		 * @return bool True if all images have alt text, false otherwise.
 		 */
@@ -922,7 +929,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 			}
 
 			foreach ( $images as $img ) {
-				if ( null === $img['alt'] ) {
+				if ( null === $img['alt'] || '' === trim( (string) $img['alt'] ) ) {
 					return false;
 				}
 			}

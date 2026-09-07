@@ -33,6 +33,9 @@ class SystemInfoTest extends \PHPUnit\Framework\TestCase {
 				'wp_get_environment_type',
 				'is_ssl',
 				'is_multisite',
+				'get_transient',
+				'set_transient',
+				'delete_transient',
 			)
 		);
 		Functions\when( 'get_option' )->justReturn( array() );
@@ -45,6 +48,10 @@ class SystemInfoTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'wp_get_environment_type' )->justReturn( 'production' );
 		Functions\when( 'is_ssl' )->justReturn( false );
 		Functions\when( 'is_multisite' )->justReturn( false );
+		// Drop-in ownership verdicts are transient-cached (audit #888 finding 25).
+		Functions\when( 'get_transient' )->justReturn( false );
+		Functions\when( 'set_transient' )->justReturn( true );
+		Functions\when( 'delete_transient' )->justReturn( true );
 
 		$info = System_Info::get_all();
 
@@ -125,8 +132,8 @@ class SystemInfoTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( '6.8', $wp['version'] );
 		$this->assertSame( 'production', $wp['environment_type'] );
 		$this->assertSame( '/%postname%/', $wp['permalink_structure'] );
-		$this->assertSame( 'No', $wp['using_https'] );
-		$this->assertSame( 'No', $wp['multisite'] );
+		$this->assertFalse( $wp['using_https'] );
+		$this->assertFalse( $wp['multisite'] );
 	}
 
 	/**
@@ -191,7 +198,7 @@ class SystemInfoTest extends \PHPUnit\Framework\TestCase {
 
 		$cache = System_Info::get_cache();
 
-		$this->assertSame( 'Disabled', $cache['object_cache_status'] );
+		$this->assertFalse( $cache['object_cache_status'] );
 		$this->assertIsString( $cache['peak_memory_usage'] );
 		$this->assertIsString( $cache['current_memory_usage'] );
 	}

@@ -43,6 +43,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		const MAX_PATHS_PER_DAY = 200;
 
 		/**
+		 * Maximum path buckets retained across all days (hard option bound).
+		 *
+		 * Without this, MAX_DAYS × MAX_PATHS_PER_DAY buckets can push the
+		 * aggregate option past 1MB on high-traffic sites (audit #888
+		 * finding 10). Oldest days are dropped first on write.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		const MAX_TOTAL_PATHS = 600;
+
+		/**
+		 * Serialized-size budget (bytes) for the aggregate option.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		const MAX_OPTION_BYTES = 491520;
+
+		/**
 		 * Maximum beacons accepted per IP per hour.
 		 *
 		 * @var int
@@ -202,8 +222,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				'path'   => $path,
 			);
 
-			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Primary XSS defense: wp_json_encode hex-escapes tags and quotes.
-			echo '<script id="wppo-rum-config">window.wppoRum=' . wp_json_encode( $config ) . ';</script>' . "\n";
+			// JSON_HEX_* flags escape <, >, ', " and & so a crafted REQUEST_URI
+			// path can never split out of the <script> element (audit #888
+			// finding 9). wp_print_inline_script_tag() handles the surrounding
+			// markup + attribute escaping.
+			$javascript = 'window.wppoRum=' . wp_json_encode(
+				$config,
+				JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP
+			) . ';';
+
+			wp_print_inline_script_tag( $javascript, array( 'id' => 'wppo-rum-config' ) );
 		}
 
 		/**
@@ -420,6 +448,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					if ( $day_key < $cutoff ) {
 						unset( $all[ $day_key ] );
 					}
+				}
+
+				// Hard cap the option size (audit #888 finding 10): 14 days ×
+				// 200 paths × 5 metrics can exceed 1MB on high-traffic sites.
+				// Oldest days (and, within the current day, oldest paths) are
+				// dropped until both the bucket count and the serialized size
+				// stay under budget, regardless of traffic volume.
+				while ( ! empty( $all ) ) {
+					$encoded_size = strlen( (string) wp_json_encode( $all ) );
+					$total_paths  = 0;
+					foreach ( $all as $day_bucket ) {
+						$total_paths += count( is_array( $day_bucket ) ? $day_bucket : array() );
+					}
+					if ( $total_paths <= self::MAX_TOTAL_PATHS && $encoded_size <= self::MAX_OPTION_BYTES ) {
+						break;
+					}
+
+					$oldest_day_key = array_key_first( $all );
+					if ( null === $oldest_day_key ) {
+						break;
+					}
+
+					$oldest_day = $all[ $oldest_day_key ];
+					if ( 1 === count( $all ) && is_array( $oldest_day ) && count( $oldest_day ) > self::MAX_PATHS_PER_DAY ) {
+						// Single day still over budget — trim its oldest paths.
+						$oldest_day_count = count( $oldest_day );
+						while ( $oldest_day_count > max( 1, (int) ( self::MAX_TOTAL_PATHS / 2 ) ) ) {
+							array_shift( $oldest_day );
+							--$oldest_day_count;
+						}
+						$all[ $oldest_day_key ] = $oldest_day;
+						break;
+					}
+
+					unset( $all[ $oldest_day_key ] );
 				}
 
 				update_option( self::OPTION, $all, false );

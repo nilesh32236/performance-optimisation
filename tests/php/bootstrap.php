@@ -226,6 +226,18 @@ trait WPPO_Test_Bootstrap {
 		// setUp() we guarantee the stub is created by the Brain Monkey session
 		// that owns this test, so any subsequent when() call in the test body
 		// just *reconfigures* the existing stub rather than re-declaring it.
+		self::register_common_function_stubs();
+	}
+
+	/**
+	 * Pre-register frequently used WP function stubs.
+	 *
+	 * Lives outside setUp() so test classes that need their own setUp()
+	 * (shadowing the trait method) can still register the same common stubs.
+	 *
+	 * @return void
+	 */
+	protected function register_common_function_stubs(): void {
 		// phpcs:disable WordPress.WP.AlternativeFunctions.parse_url_parse_url
 		\Brain\Monkey\Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
 		// phpcs:enable WordPress.WP.AlternativeFunctions.parse_url_parse_url

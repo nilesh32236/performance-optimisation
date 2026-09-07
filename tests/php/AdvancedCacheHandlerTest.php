@@ -17,6 +17,24 @@ class AdvancedCacheHandlerTest extends \PHPUnit\Framework\TestCase {
 	use WPPO_Test_Bootstrap;
 
 	/**
+	 * Install shared stubs: drop-in create/remove flush the System_Info
+	 * drop-in-check transient (audit #888 finding 25). The common function
+	 * stubs are re-registered because this setUp shadows the trait's.
+	 */
+	protected function setUp(): void {
+		parent::setUp();
+		\Brain\Monkey\setUp();
+		$this->register_common_function_stubs();
+		Functions\stubs(
+			array(
+				'get_transient',
+				'set_transient',
+				'delete_transient',
+			)
+		);
+	}
+
+	/**
 	 * Test that get_dropin_path returns the WP_CONTENT_DIR path.
 	 */
 	public function test_get_dropin_path_returns_content_path(): void {

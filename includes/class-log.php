@@ -116,10 +116,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 				// Calculate total pages.
 				$total_pages = ceil( $total_items / $per_page );
 
-				// Fetch paginated results.
+				// Fetch paginated results. The `id DESC` secondary sort keeps
+				// pagination deterministic when rows share a timestamp (audit
+				// #888 finding 24).
 				$results = $wpdb->get_results(
 					$wpdb->prepare(
-						"SELECT * FROM {$wpdb->prefix}wppo_activity_logs ORDER BY created_at DESC LIMIT %d OFFSET %d",
+						"SELECT * FROM {$wpdb->prefix}wppo_activity_logs ORDER BY created_at DESC, id DESC LIMIT %d OFFSET %d",
 						$per_page,
 						$offset
 					),

@@ -188,6 +188,13 @@ export const hydrateElement = async ( el ) => {
 			// needed and prevents re-hydration with a stale value.
 			el.removeAttribute( 'data-nonce' );
 			el.removeAttribute( 'data-wppo-nonce' );
+			// The placeholder announced itself as a busy live region while the
+			// fragment loaded (audit #888 finding 7); the hydrated fragment
+			// carries its own semantics, so drop the loading-state ARIA attrs.
+			el.removeAttribute( 'role' );
+			el.removeAttribute( 'aria-live' );
+			el.removeAttribute( 'aria-busy' );
+			el.removeAttribute( 'aria-label' );
 		}
 	} catch ( err ) {
 		console.warn( 'WPPO ESI hydrate failed', err );

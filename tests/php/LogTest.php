@@ -111,6 +111,31 @@ class LogTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that the activity log query uses a deterministic secondary sort
+	 * (created_at DESC, id DESC) so rows sharing a timestamp paginate
+	 * stably (audit #888 finding 24).
+	 */
+	public function test_get_recent_activities_orders_by_id_desc_secondary(): void {
+		$wpdb            = new WPPO_Log_DB_Mock();
+		$GLOBALS['wpdb'] = $wpdb;
+
+		$wpdb->count = 0;
+		$wpdb->rows  = array();
+
+		Log::get_recent_activities(
+			array(
+				'page'     => 1,
+				'per_page' => 10,
+			)
+		);
+
+		$this->assertStringContainsString(
+			'ORDER BY created_at DESC, id DESC',
+			(string) $wpdb->last_query
+		);
+	}
+
+	/**
 	 * Test that get_recent_activities returns cached data when present.
 	 */
 	public function test_get_recent_activities_returns_cached_data(): void {
@@ -263,12 +288,20 @@ class WPPO_Log_DB_Mock {
 	}
 
 	/**
+	 * Last SQL string seen by get_results().
+	 *
+	 * @var string
+	 */
+	public $last_query = '';
+
+	/**
 	 * Return the configured rows.
 	 *
 	 * @param string $query SQL query (unused).
 	 * @return array<int, array<string, mixed>>
 	 */
 	public function get_results( $query = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+		$this->last_query = (string) $query;
 		return $this->rows;
 	}
 

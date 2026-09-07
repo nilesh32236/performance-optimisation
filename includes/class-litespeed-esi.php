@@ -314,7 +314,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 				return $html;
 			}
 
-			$html = sprintf( '<div data-wppo-esi="%s" data-nonce="%s"%s></div>', esc_attr( $block ), esc_attr( $nonce ), $attrs_str );
+			// Accessible loading semantics for the OLS fallback hole (audit
+			// #888 finding 7): assistive tech must know content is pending.
+			// Caller-provided attributes are respected — duplicated HTML
+			// attributes make browsers honour the first occurrence, so defaults
+			// are only added for keys absent from $attrs.
+			$aria_defaults = self::get_esi_placeholder_aria( $block );
+			$aria_str      = '';
+			foreach ( $aria_defaults as $attr => $value ) {
+				if ( null === $value || array_key_exists( (string) $attr, $attrs ) ) {
+					continue;
+				}
+				$aria_str .= sprintf( ' %s="%s"', esc_attr( (string) $attr ), esc_attr( (string) $value ) );
+			}
+
+			$html = sprintf( '<div data-wppo-esi="%s" data-nonce="%s"%s%s></div>', esc_attr( $block ), esc_attr( $nonce ), $aria_str, $attrs_str );
 			/**
 			 * Filter ESI placeholder HTML (OLS fallback).
 			 *
@@ -326,6 +340,55 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			$html = (string) apply_filters( 'wppo_esi_placeholder', $html, $block, $attrs );
 			$html = (string) apply_filters( 'wppo_litespeed_esi_placeholder', $html, $block );
 			return $html;
+		}
+
+		/**
+		 * ARIA attributes for the OLS ESI placeholder.
+		 *
+		 * The placeholder is an empty hole-punch while the fragment is fetched,
+		 * so it announces itself as a busy live region. The invisible `nonce`
+		 * marker is hidden from assistive tech instead. Values are defaults
+		 * only: callers can override any attribute via $attrs.
+		 *
+		 * @since NEXT
+		 * @param string $block Block name.
+		 * @return array<string,?string> Attribute => value map (null skips the attribute).
+		 */
+		private static function get_esi_placeholder_aria( string $block ): array {
+			$canonical = strtolower( str_replace( array( '_', ' ' ), '-', $block ) );
+
+			if ( 'nonce' === $canonical ) {
+				return array( 'aria-hidden' => 'true' );
+			}
+
+			$labels = array(
+				'cart'     => __( 'Loading shopping cart…', 'performance-optimisation' ),
+				'checkout' => __( 'Loading checkout…', 'performance-optimisation' ),
+				'account'  => __( 'Loading account menu…', 'performance-optimisation' ),
+				'adminbar' => __( 'Loading admin bar…', 'performance-optimisation' ),
+			);
+
+			$default = sprintf(
+				/* translators: %s: ESI block name. */
+				__( 'Loading %s…', 'performance-optimisation' ),
+				$block
+			);
+
+			/**
+			 * Filters the accessible loading label for an ESI placeholder.
+			 *
+			 * @since NEXT
+			 * @param string $label Loading label.
+			 * @param string $block Block name.
+			 */
+			$label = (string) apply_filters( 'wppo_esi_block_label', $labels[ $canonical ] ?? $default, $block );
+
+			return array(
+				'role'       => 'status',
+				'aria-live'  => 'polite',
+				'aria-busy'  => 'true',
+				'aria-label' => $label,
+			);
 		}
 
 		/**

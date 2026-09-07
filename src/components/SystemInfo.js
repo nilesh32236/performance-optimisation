@@ -66,6 +66,27 @@ const InfoTable = ( { title, data, labels = {} } ) => {
 	);
 };
 
+/**
+ * Translate a machine boolean from the system_info REST payload into a
+ * display label. Falls back to the raw value for legacy string payloads
+ * (audit #888 finding 20: booleans are locale-independent; translations
+ * belong to the display layer).
+ *
+ * @param {boolean|string} value      Machine boolean (or legacy translated string).
+ * @param {string}         trueLabel  Label for true.
+ * @param {string}         falseLabel Label for false.
+ * @return {string} Display label.
+ */
+const boolLabel = ( value, trueLabel, falseLabel ) => {
+	if ( value === true ) {
+		return trueLabel;
+	}
+	if ( value === false ) {
+		return falseLabel;
+	}
+	return value;
+};
+
 const SystemInfo = () => {
 	const [ info, setInfo ] = useState( null );
 	const [ loading, setLoading ] = useState( false );
@@ -215,7 +236,35 @@ const SystemInfo = () => {
 					/>
 					<InfoTable
 						title={ __( 'WordPress', 'performance-optimisation' ) }
-						data={ info.wordpress }
+						data={
+							info.wordpress
+								? {
+										...info.wordpress,
+										using_https: boolLabel(
+											info.wordpress.using_https,
+											__(
+												'Yes',
+												'performance-optimisation'
+											),
+											__(
+												'No',
+												'performance-optimisation'
+											)
+										),
+										multisite: boolLabel(
+											info.wordpress.multisite,
+											__(
+												'Yes',
+												'performance-optimisation'
+											),
+											__(
+												'No',
+												'performance-optimisation'
+											)
+										),
+								  }
+								: info.wordpress
+						}
 						labels={ {
 							version: __(
 								'WP Version',
@@ -260,8 +309,11 @@ const SystemInfo = () => {
 					<InfoTable
 						title={ __( 'Cache', 'performance-optimisation' ) }
 						data={ {
-							object_cache_status:
+							object_cache_status: boolLabel(
 								info.cache?.object_cache_status,
+								__( 'Enabled', 'performance-optimisation' ),
+								__( 'Disabled', 'performance-optimisation' )
+							),
 							active_cache_plugin:
 								info.cache?.active_cache_plugin,
 							peak_memory_usage: info.cache?.peak_memory_usage,

@@ -64,6 +64,40 @@ describe( 'SystemInfo Component', () => {
 		} );
 	} );
 
+	it( 'renders machine booleans as translated labels (audit #888 finding 20)', async () => {
+		fetchSystemInfo.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				wordpress: {
+					version: '6.8',
+					environment_type: 'production',
+					permalink_structure: '/%postname%/',
+					using_https: true,
+					multisite: false,
+				},
+				cache: {
+					object_cache_status: true,
+					active_cache_plugin: 'None',
+					peak_memory_usage: '10 MB',
+					current_memory_usage: '5 MB',
+				},
+			},
+		} );
+		render( <SystemInfo /> );
+
+		const loadButton = screen.getByRole( 'button', {
+			name: /load system info/i,
+		} );
+		fireEvent.click( loadButton );
+
+		await waitFor( () => {
+			expect( screen.getByText( 'HTTPS' ) ).toBeInTheDocument();
+		} );
+		expect( screen.getByText( 'Yes' ) ).toBeInTheDocument();
+		expect( screen.getByText( 'No' ) ).toBeInTheDocument();
+		expect( screen.getByText( 'Enabled' ) ).toBeInTheDocument();
+	} );
+
 	it( 'renders OPCache table when opcache data is present', async () => {
 		fetchSystemInfo.mockResolvedValueOnce( {
 			success: true,

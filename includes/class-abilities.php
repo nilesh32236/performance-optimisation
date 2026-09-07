@@ -1111,6 +1111,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 				// is only reached on the alias hook and is guarded by
 				// method_exists to avoid forward-compat breakage if the
 				// registry API changes.
+				//
+				// Safety (audit #888 finding 8): direct registry registration
+				// skips the registration-time argument validation that
+				// `wp_register_ability()` performs, but NOT execution-time
+				// authorisation — `WP_Abilities_Registry` enforces the
+				// ability's `permission_callback` when the ability is
+				// executed (REST/MCP), not at registration. To guarantee
+				// that contract the unvalidated path refuses any definition
+				// lacking a callable permission_callback.
+				$permission_callback = $ability['args']['permission_callback'] ?? null;
+				if ( empty( $permission_callback ) || ! is_callable( $permission_callback ) ) {
+					continue;
+				}
 				if ( null === $result && ! wp_has_ability( $ability['id'] ) && class_exists( 'WP_Abilities_Registry' ) ) {
 					$registry = \WP_Abilities_Registry::get_instance();
 					if ( null !== $registry && method_exists( $registry, 'register' ) ) {

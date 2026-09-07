@@ -29,6 +29,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 	class System_Info {
 
 		/**
+		 * Per-request memo for get_litespeed() (audit #888 finding 25).
+		 *
+		 * @since NEXT
+		 * @var array|null
+		 */
+		private static $litespeed_request_cache = null;
+
+		/**
 		 * Known cache plugin slugs used to detect active cache plugins.
 		 * Does NOT include 'performance-optimisation' — this plugin is never
 		 * reported as the active cache plugin for third-party detection purposes.
@@ -147,13 +155,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		/**
 		 * Get WordPress installation details.
 		 *
+		 * Machine values: `using_https` and `multisite` are locale-independent
+		 * booleans; the SPA translates them at display time so strict checks
+		 * and translated labels cannot disagree (audit #888 finding 20).
+		 *
 		 * @since  1.5.0
+		 * @since NEXT `using_https`/`multisite` return booleans instead of translated strings.
 		 * @return array {
 		 *     @type string $version              WordPress version.
 		 *     @type string $environment_type     WP_ENVIRONMENT_TYPE constant value.
 		 *     @type string $permalink_structure  Current permalink structure.
-		 *     @type string $using_https          'Yes' or 'No'.
-		 *     @type string $multisite            'Yes' or 'No'.
+		 *     @type bool   $using_https          Whether the request is served over HTTPS.
+		 *     @type bool   $multisite            Whether this is a multisite install.
 		 * }
 		 */
 		public static function get_wordpress(): array {
@@ -169,8 +182,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 				'version'             => get_bloginfo( 'version' ),
 				'environment_type'    => wp_get_environment_type(),
 				'permalink_structure' => get_option( 'permalink_structure' ) ? get_option( 'permalink_structure' ) : __( 'Default', 'performance-optimisation' ),
-				'using_https'         => is_ssl() ? __( 'Yes', 'performance-optimisation' ) : __( 'No', 'performance-optimisation' ),
-				'multisite'           => $multisite ? __( 'Yes', 'performance-optimisation' ) : __( 'No', 'performance-optimisation' ),
+				'using_https'         => (bool) is_ssl(),
+				'multisite'           => (bool) $multisite,
 			);
 		}
 
@@ -225,20 +238,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		/**
 		 * Get cache environment details.
 		 *
+		 * Machine values: `object_cache_status` is a locale-independent
+		 * boolean; the SPA translates it at display time (audit #888
+		 * finding 20).
+		 *
 		 * @since  1.5.0
+		 * @since NEXT `object_cache_status` returns a boolean instead of a translated string.
 		 * @return array {
-		 *     @type string          $object_cache_status  'Enabled' or 'Disabled'.
-		 *     @type string          $active_cache_plugin  Slug of active cache plugin or 'None'.
-		 *     @type string          $peak_memory_usage    Human-readable peak memory usage.
-		 *     @type string          $current_memory_usage Human-readable current memory usage.
-		 *     @type string[]|null   $woocommerce_presets  WooCommerce high-value URL presets, or null.
+		 *     @type bool             $object_cache_status  Whether an external object cache is in use.
+		 *     @type string           $active_cache_plugin  Slug of active cache plugin or 'None'.
+		 *     @type string           $peak_memory_usage    Human-readable peak memory usage.
+		 *     @type string           $current_memory_usage Human-readable current memory usage.
+		 *     @type string[]|null    $woocommerce_presets  WooCommerce high-value URL presets, or null.
 		 * }
 		 */
 		public static function get_cache(): array {
 			return array(
-				'object_cache_status'  => wp_using_ext_object_cache()
-					? esc_html__( 'Enabled', 'performance-optimisation' )
-					: esc_html__( 'Disabled', 'performance-optimisation' ),
+				'object_cache_status'  => (bool) wp_using_ext_object_cache(),
 				'active_cache_plugin'  => self::get_active_cache_plugin(),
 				'peak_memory_usage'    => size_format( memory_get_peak_usage( true ) ),
 				'current_memory_usage' => size_format( memory_get_usage() ),
@@ -267,6 +283,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 * }
 		 */
 		public static function get_litespeed(): array {
+			// Per-request memo (audit #888 finding 25): LiteSpeed_Integration
+			// statics are internally cached, but the drop-in arbitration below
+			// reads files and instantiates Object_Cache on every call.
+			if ( null !== self::$litespeed_request_cache && is_array( self::$litespeed_request_cache ) ) {
+				return self::$litespeed_request_cache;
+			}
+
 			$info = array(
 				'detected'           => false,
 				'server_type'        => 'other',
@@ -319,6 +342,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 				$info['detected']    = 'litespeed' === $type;
 			}
 
+			// Drop-in arbitration is the expensive part (WP_Filesystem reads +
+			// an Object_Cache instantiation with possible Redis pings), so it is
+			// cached in a short transient (audit #888 finding 25). Mutators
+			// (Object_Cache::enable()/disable(), Advanced_Cache_Handler
+			// create/remove) flush it via flush_dropin_cache().
+			$dropin_transient_key = Util::transient_key( 'wppo_sysinfo_dropin_check' );
+			$dropin               = get_transient( $dropin_transient_key );
+			if ( ! is_array( $dropin ) || ! isset( $dropin['advanced_cache'], $dropin['object_cache'] ) ) {
+				$dropin = self::detect_dropin_ownership();
+				set_transient( $dropin_transient_key, $dropin, 15 * MINUTE_IN_SECONDS );
+			}
+
+			$info['dropin']['advanced_cache'] = (string) $dropin['advanced_cache'];
+			$info['dropin']['object_cache']   = (string) $dropin['object_cache'];
+
+			self::$litespeed_request_cache = $info;
+
+			return $info;
+		}
+
+		/**
+		 * Detect drop-in ownership for advanced-cache.php and object-cache.php.
+		 *
+		 * Cached by get_litespeed() in a transient; kept separate so the
+		 * detection logic stays testable.
+		 *
+		 * @since NEXT
+		 * @return array{advanced_cache:string,object_cache:string}
+		 */
+		private static function detect_dropin_ownership(): array {
+			$dropin = array(
+				'advanced_cache' => 'none',
+				'object_cache'   => 'none',
+			);
+
 			// Drop-in arbitration: advanced-cache.php.
 			$adv = 'none';
 			if ( class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
@@ -345,7 +403,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 					$adv = 'none';
 				}
 			}
-			$info['dropin']['advanced_cache'] = $adv;
+			$dropin['advanced_cache'] = $adv;
 
 			// Drop-in arbitration: object-cache.php.
 			$obj = 'none';
@@ -375,9 +433,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 					$obj = 'none';
 				}
 			}
-			$info['dropin']['object_cache'] = $obj;
+			$dropin['object_cache'] = $obj;
 
-			return $info;
+			return $dropin;
+		}
+
+		/**
+		 * Flush the cached drop-in ownership verdicts and the request memo.
+		 *
+		 * Called when a mutator changes a drop-in (object-cache enable/disable,
+		 * advanced-cache create/remove) so System Info reflects reality without
+		 * waiting out the 15-minute TTL.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function flush_dropin_cache(): void {
+			self::$litespeed_request_cache = null;
+			delete_transient( Util::transient_key( 'wppo_sysinfo_dropin_check' ) );
 		}
 
 		/**

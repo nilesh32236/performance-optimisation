@@ -786,7 +786,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				Log::add(
 					sprintf(
 						/* translators: %d: Number of image jobs queued */
-						__( 'Scheduled %d image optimization jobs for background processing on ', 'performance-optimisation' ),
+						__( 'Scheduled %d image optimization jobs for background processing.', 'performance-optimisation' ),
 						$jobs_queued
 					)
 				);
@@ -1519,7 +1519,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$results = Pagespeed::get_results( $url, $strategy );
 
 			if ( false === $results ) {
-				return $this->send_response( array( 'status' => 'not_ready' ), true, 202 );
+				$response = $this->send_response( array( 'status' => 'not_ready' ), true, 202 );
+
+				// Backoff hint for the SPA poller and a no-store instruction
+				// so intermediaries never cache the pending state (audit #888
+				// finding 27).
+				$response->header( 'Retry-After', '5' );
+				$response->header( 'Cache-Control', 'no-store' );
+
+				return $response;
 			}
 
 			// Detect failure sentinel stored by Pagespeed::store_failure().

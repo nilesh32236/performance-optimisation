@@ -141,6 +141,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			$buffer = preg_replace_callback(
 				'#<link\b[^>]*\bhref\s*=\s*["\']([^"\']*fonts\.googleapis\.com[^"\']*)["\'][^>]*>#is',
 				function ( $matches ) {
+					// Exact-host validation mirrors process_style_tag() so a
+					// lookalike URL (evil.com?fonts.googleapis.com) is never
+					// treated as a Google Fonts stylesheet (audit #888
+					// finding 14); download_and_rewrite() re-validates too.
+					if ( ! $this->is_google_fonts_url( $matches[1] ) ) {
+						return $matches[0];
+					}
 					$local_url = $this->download_and_rewrite( $matches[1] );
 					if ( '' !== $local_url ) {
 						return str_replace( $matches[1], $local_url, $matches[0] );
@@ -154,6 +161,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			$buffer = preg_replace_callback(
 				'#@import\s+(?:url\(\s*["\']?|["\'])([^"\';)]*fonts\.googleapis\.com[^"\';)]*)(?:["\']?\)\s*|["\'])\s*;#is',
 				function ( $matches ) {
+					if ( ! $this->is_google_fonts_url( $matches[1] ) ) {
+						return $matches[0];
+					}
 					$local_url = $this->download_and_rewrite( $matches[1] );
 					if ( '' !== $local_url ) {
 						return str_replace( $matches[1], $local_url, $matches[0] );
@@ -164,6 +174,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			);
 
 			return $buffer;
+		}
+
+		/**
+		 * Whether a URL points at the Google Fonts CSS host (exact host match).
+		 *
+		 * Substring matches alone would let lookalike URLs such as
+		 * `https://evil.com/?fonts.googleapis.com` enter the local-font
+		 * pipeline. Mirrors the allowlist used by process_style_tag().
+		 *
+		 * @since NEXT
+		 * @param string $url Candidate URL.
+		 * @return bool True when the host is exactly fonts.googleapis.com.
+		 */
+		private function is_google_fonts_url( string $url ): bool {
+			return 'fonts.googleapis.com' === wp_parse_url( $url, PHP_URL_HOST );
 		}
 
 		/**

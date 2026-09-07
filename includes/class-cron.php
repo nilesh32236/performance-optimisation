@@ -61,9 +61,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * `wppo_crawler_warm` are dual-scheduled (WP-Cron single events here AND
 		 * Action Scheduler in the crawler bridge), so they are cleaned in both
 		 * paths — here and in Deactivate::unschedule_action_scheduler_jobs().
-		 * `wppo_generate_ccss` is Action Scheduler-only (as_enqueue_async_action
-		 * in Critical_CSS) and must NOT be listed here; wp_unschedule_hook()
-		 * cannot clear AS-store rows.
+		 * `wppo_generate_ccss` is Action Scheduler-first (as_enqueue_async_action
+		 * in Critical_CSS) with a WP-Cron single-event fallback when the AS
+		 * enqueue fails, so it is listed here too and cleaned in both paths.
 		 *
 		 * @since NEXT
 		 * @var string[]
@@ -83,6 +83,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			'wppo_run_upgrades',         // Single-event upgrade routine (scheduled by Activate).
 			'wppo_litespeed_crawler_batch', // Dual-scheduled: WP-Cron here + AS in the crawler bridge.
 			'wppo_crawler_warm',         // Dual-scheduled: WP-Cron here + AS in the crawler bridge.
+			'wppo_generate_ccss',        // Dual-scheduled: AS-first + WP-Cron fallback single event.
 		);
 
 		/**
@@ -727,17 +728,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		/**
 		 * Crawl batch via curl_multi variant matrix (P4).
 		 *
-		 * @since NEXT
-		 * @param array $urls URLs.
+		 * The event argument is either a batch ID string — the deferral stores
+		 * the URL list in a transient so WP-Cron args stay small (audit #888
+		 * finding 6) — or, for legacy/fallback events, the URL array itself.
+		 *
+		 * @since NEXT Accepts batch-ID arguments and cleans up the transient.
+		 * @param string|string[] $arg Batch ID or URL list.
 		 * @return void
 		 */
-		public function litespeed_crawler_batch( $urls ): void {
-			if ( ! is_array( $urls ) || empty( $urls ) ) {
+		public function litespeed_crawler_batch( $arg ): void {
+			$urls = self::resolve_crawler_batch_arg( $arg );
+			if ( empty( $urls ) ) {
 				return;
 			}
 			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 				LiteSpeed_Crawler::crawl_batch( $urls );
 			}
+		}
+
+		/**
+		 * Resolve a deferred crawler batch argument into its URL list.
+		 *
+		 * Batch-ID arguments are looked up in the blog-prefixed
+		 * `wppo_crawler_batch_{id}` transient; the transient is deleted after
+		 * the read so the payload is cleaned up on completion. URL-array
+		 * arguments (legacy/fallback events) pass through unchanged.
+		 *
+		 * @param mixed $arg Batch ID or URL list.
+		 * @return string[] URLs to crawl.
+		 * @since NEXT
+		 */
+		private static function resolve_crawler_batch_arg( $arg ): array {
+			if ( is_string( $arg ) && '' !== $arg ) {
+				$key  = Util::transient_key( 'wppo_crawler_batch_' . $arg );
+				$urls = get_transient( $key );
+				delete_transient( $key );
+				return is_array( $urls ) ? array_values( array_filter( array_map( 'strval', $urls ) ) ) : array();
+			}
+
+			return is_array( $arg ) ? array_values( array_filter( array_map( 'strval', $arg ) ) ) : array();
 		}
 
 		/**

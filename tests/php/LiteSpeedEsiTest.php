@@ -339,6 +339,14 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 		$html = LiteSpeed_ESI::render_esi_placeholder( 'cart', array() );
 		$this->assertStringContainsString( 'data-wppo-esi="cart"', $html );
 		$this->assertStringContainsString( 'data-nonce', $html );
+		// Accessible loading semantics on the OLS fallback (audit #888 finding 7).
+		$this->assertStringContainsString( 'role="status"', $html );
+		$this->assertStringContainsString( 'aria-live="polite"', $html );
+		$this->assertStringContainsString( 'aria-busy="true"', $html );
+		$this->assertStringContainsString( 'aria-label=', $html );
+		// The nonce hole is hidden from assistive tech instead.
+		$nonce_html = LiteSpeed_ESI::render_esi_placeholder( 'nonce', array() );
+		$this->assertStringContainsString( 'aria-hidden="true"', $nonce_html );
 		$this->assertStringNotContainsString( 'esi:include', $html );
 	}
 

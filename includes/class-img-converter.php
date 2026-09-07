@@ -1731,12 +1731,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 *
 		 * Runs inside the hourly cron so images uploaded before activation (or
 		 * while conversion was disabled) enter the queue instead of relying on
-		 * lazy frontend discovery. Bounded per run; newest attachments first.
+		 * lazy frontend discovery. Bounded per run. Scans use a rotating ID
+		 * cursor (the `wppo_img_scan_cursor` option): each run continues below
+		 * the oldest ID of the previous batch, and once the oldest attachment
+		 * is reached the cursor rewinds so the scan restarts from the newest.
+		 * Without the cursor only the newest `limit` attachments would ever be
+		 * inspected (audit #888 finding 4).
 		 *
 		 * @param string[] $formats Conversion formats to ensure ('webp', 'avif').
 		 * @param int      $limit   Maximum attachments inspected per run.
 		 * @return int Number of files newly queued.
-		 * @since NEXT
+		 * @since NEXT Cursor pagination via wppo_img_scan_cursor.
 		 */
 		public static function queue_unconverted_library_images( array $formats, int $limit = 50 ): int {
 			global $wpdb;
@@ -1747,16 +1752,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 			$mime_types   = array( 'image/jpeg', 'image/png', 'image/webp' );
 			$placeholders = implode( ',', array_fill( 0, count( $mime_types ), '%s' ) );
+			$cursor       = (int) get_option( 'wppo_img_scan_cursor', 0 );
 
-			// phpcs:ignore WordPress.WP.PreparedSQL.NotPrepared -- Placeholder list built from a fixed internal constant set; only LIMIT is bound.
-			$sql = 'SELECT ID FROM ' . $wpdb->posts . " WHERE post_type = 'attachment' AND post_mime_type IN ( " . $placeholders . ' ) ORDER BY ID DESC LIMIT %d';
+			if ( $cursor > 0 ) {
+				// phpcs:ignore WordPress.WP.PreparedSQL.NotPrepared -- Placeholder list built from a fixed internal constant set; only cursor and LIMIT are bound.
+				$sql  = 'SELECT ID FROM ' . $wpdb->posts . " WHERE post_type = 'attachment' AND post_mime_type IN ( " . $placeholders . ' ) AND ID < %d ORDER BY ID DESC LIMIT %d';
+				$args = array_merge( $mime_types, array( $cursor, $limit ) );
+			} else {
+				// phpcs:ignore WordPress.WP.PreparedSQL.NotPrepared -- Placeholder list built from a fixed internal constant set; only LIMIT is bound.
+				$sql  = 'SELECT ID FROM ' . $wpdb->posts . " WHERE post_type = 'attachment' AND post_mime_type IN ( " . $placeholders . ' ) ORDER BY ID DESC LIMIT %d';
+				$args = array_merge( $mime_types, array( $limit ) );
+			}
 
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared -- Bounded indexed lookup; placeholder list built from fixed internal constants, only LIMIT is bound.
-			$attachment_ids = $wpdb->get_col( $wpdb->prepare( $sql, array_merge( $mime_types, array( $limit ) ) ) );
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared -- Bounded indexed lookup; placeholder list built from fixed internal constants, only cursor and LIMIT are bound.
+			$attachment_ids = $wpdb->get_col( $wpdb->prepare( $sql, $args ) );
 
 			if ( empty( $attachment_ids ) || ! is_array( $attachment_ids ) ) {
+				// Reached the oldest attachment below the cursor — rewind so the
+				// next run starts over from the newest.
+				if ( 0 !== $cursor ) {
+					update_option( 'wppo_img_scan_cursor', 0, false );
+				}
 				return 0;
 			}
+
+			// Advance the cursor below the oldest ID of this batch so the next
+			// run continues the rotation and older media eventually get reached.
+			update_option( 'wppo_img_scan_cursor', min( array_map( 'intval', $attachment_ids ) ), false );
 
 			// Same eligibility list as the queue gate itself.
 			$convertible = (array) apply_filters(

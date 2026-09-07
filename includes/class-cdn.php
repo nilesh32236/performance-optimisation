@@ -175,14 +175,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		}
 
 		/**
-		 * Find CDN host for URL.
+		 * Resolve the CDN URL for an asset (first matching mapping).
+		 *
+		 * Thin wrapper over {@see find_cdn_match()} kept for backwards
+		 * compatibility with existing callers and the
+		 * `wppo_cdn_url_for_asset` filter contract.
 		 *
 		 * @since NEXT
-		 * @param string $url Asset URL.
-		 * @param array  $mappings Mappings.
-		 * @return string|null
+		 * @param string $url      Asset URL.
+		 * @param array  $mappings Normalized mappings from get_mappings().
+		 * @return string|null CDN URL or null when no mapping matches.
 		 */
 		public static function find_cdn_for_url( string $url, array $mappings ): ?string {
+			$match = self::find_cdn_match( $url, $mappings );
+			return null === $match ? null : $match['cdn'];
+		}
+
+		/**
+		 * Resolve the first matching CDN mapping for an asset URL.
+		 *
+		 * Returns both the CDN URL and the mapping that matched so callers can
+		 * honour per-mapping settings such as `cdn_attr` (audit #888
+		 * finding 21) instead of a global union of all mappings' restrictions.
+		 *
+		 * @since NEXT
+		 * @param string $url      Asset URL.
+		 * @param array  $mappings Normalized mappings from get_mappings().
+		 * @return array{cdn:string,mapping:array}|null Match info or null when no mapping matches.
+		 */
+		public static function find_cdn_match( string $url, array $mappings ): ?array {
 			$site_url = Util::cached_home_url();
 			foreach ( $mappings as $m ) {
 				$cdn_url  = $m['cdn_url'] ?? '';
@@ -265,9 +286,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 				 * @param array  $m Mapping entry.
 				 */
 				$cdn = (string) apply_filters( 'wppo_cdn_url_for_asset', $cdn, $url, $m );
-				return rtrim( $cdn, '/' );
+				return array(
+					'cdn'     => rtrim( $cdn, '/' ),
+					'mapping' => $m,
+				);
 			}
 			return null;
+		}
+
+		/**
+		 * Whether a mapping's `cdn_attr` restriction permits an attribute.
+		 *
+		 * Per-mapping semantics: each mapping declares which HTML attributes
+		 * URLs served by IT may be rewritten from. A mapping with an empty
+		 * `cdn_attr` allows the default attribute set. A URL is rewritten in
+		 * a given attribute only when ITS OWN mapping allows that attribute —
+		 * not the union across mappings (audit #888 finding 21). CSS url()
+		 * rewriting in <style> blocks is unaffected: it has no attribute
+		 * context and keeps its unrestricted behaviour.
+		 *
+		 * @since NEXT
+		 * @param array  $mapping Mapping entry.
+		 * @param string $attr    Attribute name (lowercase, e.g. 'src', 'srcset').
+		 * @return bool
+		 */
+		private static function mapping_allows_attr( array $mapping, string $attr ): bool {
+			$cdn_attr = trim( (string) ( $mapping['cdn_attr'] ?? '' ) );
+			if ( '' === $cdn_attr ) {
+				return true;
+			}
+			$allowed = array_filter( array_map( 'trim', explode( ',', strtolower( $cdn_attr ) ) ) );
+			return in_array( strtolower( $attr ), $allowed, true );
 		}
 
 		/**
@@ -376,56 +425,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 					if ( ! in_array( $tag_name, $allowed_tags, true ) ) {
 						continue;
 					}
-					// cdn_attr filtering per mapping — for simplicity, respect global attr set if any mapping defines cdn_attr.
-					// If none defines, use default attrs.
+					// Per-mapping cdn_attr filtering (audit #888 finding 21): each
+					// URL is rewritten only when ITS OWN mapping's cdn_attr allows
+					// the attribute — a global union across mappings would weaken
+					// per-mapping intent (e.g. one mapping restricted to 'src'
+					// must not enable 'href' rewriting for another mapping's urls).
+					// A mapping with an empty cdn_attr allows the default set.
 					$attrs = array( 'src', 'href', 'data-src', 'content', 'poster' );
-					// Check if tag has cdn_attr restriction: if any mapping defines cdn_attr, intersect.
-					$has_restriction = false;
-					$allowed_attrs   = array();
-					foreach ( $mappings as $mm ) {
-						if ( ! empty( $mm['cdn_attr'] ) ) {
-							$has_restriction = true;
-							$parts           = array_map( 'trim', explode( ',', strtolower( $mm['cdn_attr'] ) ) );
-							$allowed_attrs   = array_merge( $allowed_attrs, $parts );
-						}
-					}
-					if ( $has_restriction ) {
-						$allowed_attrs = array_unique( array_filter( $allowed_attrs ) );
-						$attrs         = array_intersect( $attrs, $allowed_attrs );
-						// Also allow srcset attrs if cdn_attr includes srcset.
-						if ( in_array( 'srcset', $allowed_attrs, true ) ) {
-							$attrs[] = 'srcset';
-						}
-						if ( in_array( 'data-srcset', $allowed_attrs, true ) ) {
-							$attrs[] = 'data-srcset';
-						}
-						if ( in_array( 'style', $allowed_attrs, true ) ) {
-							$attrs[] = 'style';
-						}
-					}
 					foreach ( $attrs as $attr ) {
 						$val = $tags->get_attribute( $attr );
 						if ( $val && preg_match( $site_url_regex, $val ) ) {
-							$cdn = self::find_cdn_for_url( $val, $mappings );
-							if ( null !== $cdn ) {
-								// Determine origin for this url.
-								$ori = '';
-								foreach ( $mappings as $mm ) {
-									if ( ! empty( $mm['ori'] ) && 0 === strpos( $val, $mm['ori'] ) ) {
-										$ori = $mm['ori'];
-										break;
-									}
+							$match = self::find_cdn_match( $val, $mappings );
+							if ( null !== $match && self::mapping_allows_attr( $match['mapping'], $attr ) ) {
+								$origin = $match['mapping']['ori'] ?? '';
+								if ( '' === $origin ) {
+									$origin = $site_url;
 								}
-								$origin = '' !== $ori ? $ori : $site_url;
-								$tags->set_attribute( $attr, $cdn . substr( $val, strlen( $origin ) ) );
+								$tags->set_attribute( $attr, $match['cdn'] . substr( $val, strlen( $origin ) ) );
 							}
 						}
 					}
 					// srcset handling.
 					$srcset_attrs = array( 'srcset', 'data-srcset' );
-					if ( $has_restriction ) {
-						$srcset_attrs = array_intersect( $srcset_attrs, $allowed_attrs );
-					}
 					foreach ( $srcset_attrs as $attr ) {
 						$srcset_attr = $tags->get_attribute( $attr );
 						if ( $srcset_attr ) {
@@ -437,17 +458,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 								$url       = $parts[0];
 								$suffix    = isset( $parts[1] ) ? ' ' . $parts[1] : '';
 								if ( preg_match( $site_url_regex, $url ) ) {
-									$cdn = self::find_cdn_for_url( $url, $mappings );
-									if ( null !== $cdn ) {
-										$ori = '';
-										foreach ( $mappings as $mm ) {
-											if ( ! empty( $mm['ori'] ) && 0 === strpos( $url, $mm['ori'] ) ) {
-												$ori = $mm['ori'];
-												break;
-											}
+									$match = self::find_cdn_match( $url, $mappings );
+									if ( null !== $match && self::mapping_allows_attr( $match['mapping'], $attr ) ) {
+										$origin = $match['mapping']['ori'] ?? '';
+										if ( '' === $origin ) {
+											$origin = $site_url;
 										}
-										$origin = '' !== $ori ? $ori : $site_url;
-										$url    = $cdn . substr( $url, strlen( $origin ) );
+										$url = $match['cdn'] . substr( $url, strlen( $origin ) );
 									}
 								}
 								$new_srcset[] = $url . $suffix;
@@ -462,9 +479,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 							'#url\s*\(\s*(["\']?)' . preg_quote( $site_url, '#' ) . '([^"\')\s]*)\1\s*\)#i',
 							function ( $m2 ) use ( $mappings, $site_url ) {
 								$full_url = $site_url . $m2[2];
-								$cdn      = self::find_cdn_for_url( $full_url, $mappings );
-								if ( null !== $cdn ) {
-									return 'url(' . $m2[1] . $cdn . $m2[2] . $m2[1] . ')';
+								$match    = self::find_cdn_match( $full_url, $mappings );
+								if ( null !== $match && self::mapping_allows_attr( $match['mapping'], 'style' ) ) {
+									return 'url(' . $m2[1] . $match['cdn'] . $m2[2] . $m2[1] . ')';
 								}
 								return $m2[0];
 							},
