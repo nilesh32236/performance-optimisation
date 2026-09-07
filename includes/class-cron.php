@@ -49,6 +49,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		private const TO_FETCH_LIMIT = 50;
 
 		/**
+		 * Canonical list of WP-Cron hooks this plugin schedules.
+		 *
+		 * Single source of truth for deactivation cleanup (audit #888 finding 9):
+		 * {@see schedule_cron_jobs()} and the single-event schedulers may only
+		 * schedule hooks from this list, and {@see clear_cron_jobs()} /
+		 * {@see Deactivate::unschedule_crons()} unschedule exactly this list (plus
+		 * the legacy `wppo_img_conversation` misspelling kept for BC). Action
+		 * Scheduler jobs (wppo_convert_image_background, wppo_pagespeed_scan,
+		 * wppo_used_css_generate, wppo_litespeed_crawler_batch, wppo_crawler_warm)
+		 * live in the AS store, not WP-Cron, and are unscheduled separately via
+		 * as_unschedule_all_actions() on deactivation.
+		 *
+		 * @since NEXT
+		 * @var string[]
+		 */
+		public const SCHEDULED_HOOKS = array(
+			'wppo_page_cron_hook',       // Recurring preload dispatcher (every_5_hours).
+			'wppo_page_cron_batch',      // Single-event batch continuation.
+			'wppo_generate_static_page', // Single-event per-post preload.
+			'wppo_generate_static_url',  // Single-event per-URL preload (sitemap).
+			'wppo_img_conversion',       // Hourly image conversion dispatcher.
+			'wppo_database_cleanup_cron', // Daily DB cleanup.
+			'wppo_web_vitals_rescan',    // Daily Web Vitals auto-rescan.
+			'wppo_llms_txt_daily',       // Daily llms.txt regeneration.
+			'wppo_used_css_cron',        // Recurring used-CSS regeneration (every_5_hours).
+			'wppo_ccss_regeneration',    // Daily critical-CSS regeneration.
+			'wppo_generate_ccss',        // Single-event per-template critical CSS.
+			'wppo_rum_flush',            // Single-event RUM queue flush (scheduled by RUM::queue()).
+			'wppo_run_upgrades',         // Single-event upgrade routine (scheduled by Activate).
+			'wppo_litespeed_crawler_batch', // Single-event crawler batch deferral (LiteSpeed_Crawler).
+			'wppo_crawler_warm',         // Single-event per-URL crawler warm-up (LiteSpeed_Crawler).
+		);
+
+		/**
 		 * Constructor.
 		 *
 		 * @since 1.0.0
@@ -462,25 +496,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		/**
 		 * Clear all scheduled cron jobs.
 		 *
+		 * Derives the unschedule list from {@see SCHEDULED_HOOKS} (single source
+		 * of truth shared with schedule_cron_jobs()) so no plugin cron leaks on
+		 * deactivate (audit #888 finding 9). `wp_unschedule_hook()` removes every
+		 * event for a hook (recurring + single), unlike the single-event
+		 * wp_unschedule_event() used previously in Deactivate.
+		 *
 		 * @return void
 		 * @since 1.0.0
+		 * @since NEXT Derived from Cron::SCHEDULED_HOOKS; added wppo_img_conversion and wppo_database_cleanup_cron.
 		 */
 		public static function clear_cron_jobs(): void {
-			wp_unschedule_hook( 'wppo_generate_static_page' );
-			wp_unschedule_hook( 'wppo_generate_static_url' );
-			wp_clear_scheduled_hook( 'wppo_page_cron_hook' );
-			wp_clear_scheduled_hook( 'wppo_page_cron_batch' );
+			// Canonical plugin hooks (recurring + single events).
+			foreach ( self::SCHEDULED_HOOKS as $hook ) {
+				wp_unschedule_hook( $hook );
+			}
+
+			// Legacy misspelled image-conversion hook kept for BC with older installs.
+			wp_unschedule_hook( 'wppo_img_conversation' );
+
+			// Preload bookkeeping options + locks.
 			delete_option( 'wppo_preload_cron_offset' );
 			delete_option( 'wppo_preload_cron_last_id' );
 			delete_option( 'wppo_preload_cron_migrated' );
 			delete_transient( Util::transient_key( 'wppo_preload_cron_lock' ) );
-			wp_clear_scheduled_hook( 'wppo_used_css_cron' );
 			delete_transient( Util::transient_key( 'wppo_used_css_lock' ) );
-			wp_clear_scheduled_hook( 'wppo_ccss_regeneration' );
-			wp_clear_scheduled_hook( 'wppo_generate_ccss' );
-			wp_clear_scheduled_hook( 'wppo_web_vitals_rescan' );
-			wp_clear_scheduled_hook( 'wppo_llms_txt_daily' );
-			wp_clear_scheduled_hook( 'wppo_rum_flush' );
 		}
 
 		/**

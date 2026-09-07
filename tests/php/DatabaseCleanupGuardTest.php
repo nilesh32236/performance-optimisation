@@ -1,0 +1,211 @@
+<?php
+/**
+ * Tests for Database_Cleanup::invoke_cleanup_method() callable guard
+ * (audit #888 finding 11).
+ *
+ * @package PerformanceOptimise\Tests
+ */
+
+use PerformanceOptimise\Inc\Database_Cleanup;
+use Brain\Monkey\Functions;
+
+// phpcs:disable Generic.Files.OneObjectStructurePerFile -- Minimal WP_Error stand-in is co-located by convention.
+// phpcs:disable WordPress.Files.FileName -- Declares a guarded WP_Error stand-in for error-path assertions.
+
+if ( ! class_exists( 'WP_Error' ) ) {
+	/**
+	 * Minimal WP_Error stand-in for tests that exercise plugin error paths.
+	 *
+	 * Mirrors the stand-in declared in TelemetryTest.php (guarded by
+	 * class_exists so whichever test loads first wins).
+	 *
+	 * @package PerformanceOptimise\Tests
+	 */
+	class WP_Error {
+
+		/**
+		 * Error codes mapped to messages.
+		 *
+		 * @var array<string, string>
+		 */
+		public array $errors = array();
+
+		/**
+		 * Error code => arbitrary data map.
+		 *
+		 * @var array<string, mixed>
+		 */
+		public array $error_data = array();
+
+		/**
+		 * Constructor.
+		 *
+		 * @param string|int $code    Error code.
+		 * @param string     $message Error message.
+		 * @param mixed      $data    Optional error data.
+		 */
+		public function __construct( $code = '', $message = '', $data = null ) { // phpcs:ignore WordPress.NamingConventions.ValidVariableName.VariableNotSnakeCase
+			if ( '' !== $code ) {
+				$this->errors[ (string) $code ] = $message;
+			}
+			if ( null !== $data ) {
+				$this->error_data[ (string) $code ] = $data;
+			}
+		}
+
+		/**
+		 * First error code, or empty string.
+		 *
+		 * @return string|int
+		 */
+		public function get_error_code() { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid
+			return '' === key( $this->errors ) ? '' : (string) key( $this->errors );
+		}
+
+		/**
+		 * First error message, or empty string.
+		 *
+		 * @return string
+		 */
+		public function get_error_message() { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid
+			return (string) reset( $this->errors );
+		}
+	}
+}
+
+/**
+ * Cleanup-method dispatch guard tests.
+ *
+ * @package PerformanceOptimise\Tests
+ */
+class DatabaseCleanupGuardTest extends \PHPUnit\Framework\TestCase {
+	use WPPO_Test_Bootstrap;
+
+	/**
+	 * Tracks counts-cache invalidation.
+	 *
+	 * @var bool
+	 */
+	private bool $invalidated = false;
+
+	/**
+	 * Test that invalid method names return a WP_Error instead of fatals.
+	 */
+	public function test_invalid_method_returns_wp_error(): void {
+		$res = Database_Cleanup::invoke_cleanup_method( 'does_not_exist' );
+
+		$this->assertInstanceOf( WP_Error::class, $res );
+		$this->assertSame( 'wppo_invalid_cleanup_method', $res->get_error_code() );
+	}
+
+	/**
+	 * Test that empty/scalar method names are rejected.
+	 */
+	public function test_empty_method_returns_wp_error(): void {
+		$res = Database_Cleanup::invoke_cleanup_method( '' );
+
+		$this->assertInstanceOf( WP_Error::class, $res );
+		$this->assertSame( 'wppo_invalid_cleanup_method', $res->get_error_code() );
+	}
+
+	/**
+	 * Test that non-string method names are rejected.
+	 */
+	public function test_non_string_method_returns_wp_error(): void {
+		$res = Database_Cleanup::invoke_cleanup_method( null );
+
+		$this->assertInstanceOf( WP_Error::class, $res );
+		$this->assertSame( 'wppo_invalid_cleanup_method', $res->get_error_code() );
+	}
+
+	/**
+	 * Whitelisting must be stricter than is_callable(): real, callable static
+	 * methods that are not cleanup methods must be rejected too.
+	 */
+	public function test_non_whitelisted_callable_is_rejected(): void {
+		$res = Database_Cleanup::invoke_cleanup_method( 'get_revision_defaults', array() );
+
+		$this->assertInstanceOf( WP_Error::class, $res );
+		$this->assertSame( 'wppo_invalid_cleanup_method', $res->get_error_code() );
+	}
+
+	/**
+	 * A whitelisted method dispatches and converts a `false` DB result into
+	 * the db_cleanup_failed WP_Error.
+	 *
+	 * Note: wp_cache_get_salted() is declared by the test bootstrap's
+	 * object-cache template and cannot be redefined (Patchwork
+	 * DefinedTooEarly); invalidate_counts_cache() therefore takes the
+	 * salted-cache path and bumps the salt option.
+	 */
+	public function test_whitelisted_method_dispatches_and_converts_false(): void {
+		// wpdb stub whose DELETE fails (query() → false) so delete_in_batches()
+		// returns false and the dispatcher converts it into db_cleanup_failed.
+		$GLOBALS['wpdb'] = new class() extends WPPO_DB_Mock {
+			/**
+			 * Return one row so the delete path is entered.
+			 *
+			 * @param string $query SQL query (unused).
+			 * @return array<int, int>
+			 */
+			public function get_col( $query = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+				return array( 1 );
+			}
+
+			/**
+			 * Simulate a failing DELETE.
+			 *
+			 * @param string $query SQL query (unused).
+			 * @return false
+			 */
+			public function query( $query = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+				return false;
+			}
+		};
+
+		$this->updated_options = array();
+		Functions\when( 'update_option' )->alias(
+			function ( $name, $value, $autoload = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+				$this->updated_options[] = $name;
+				return true;
+			}
+		);
+		Functions\when( 'is_multisite' )->justReturn( false );
+
+		$res = Database_Cleanup::invoke_cleanup_method( 'clean_auto_drafts' );
+
+		$this->assertInstanceOf( WP_Error::class, $res );
+		$this->assertSame( 'db_cleanup_failed', $res->get_error_code() );
+	}
+
+	/**
+	 * A successful whitelisted method result must pass through unchanged and
+	 * invalidate the counts cache (salted-cache path).
+	 */
+	public function test_whitelisted_method_result_passes_through(): void {
+		$GLOBALS['wpdb']             = new WPPO_DB_Mock();
+		$GLOBALS['wpdb']->last_error = '';
+
+		$this->updated_options = array();
+		Functions\when( 'update_option' )->alias(
+			function ( $name, $value, $autoload = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+				$this->updated_options[] = $name;
+				return true;
+			}
+		);
+		Functions\when( 'is_multisite' )->justReturn( false );
+
+		// WPPO_DB_Mock returns no rows → 0 deletions → not false → passes through.
+		$res = Database_Cleanup::invoke_cleanup_method( 'clean_auto_drafts' );
+
+		$this->assertSame( 0, $res );
+		$this->assertContains( 'wppo_db_cleanup_salt', $this->updated_options, 'Counts cache must be invalidated on successful cleanup.' );
+	}
+
+	/**
+	 * Option names recorded by the update_option stub.
+	 *
+	 * @var string[]
+	 */
+	private array $updated_options = array();
+}

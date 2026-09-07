@@ -974,12 +974,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Call a static cleanup method by name and convert a `false` result into a `WP_Error`.
 		 *
+		 * Guarded against invalid `$method` values (audit #888 finding 11): the
+		 * name must be a whitelisted cleanup method (METHOD_TO_TYPE keys) and
+		 * callable, otherwise a WP_Error is returned instead of triggering a
+		 * fatal error that would crash the REST database_cleanup endpoint.
+		 *
 		 * @since 1.4.0
+		 * @since NEXT Added method whitelist + is_callable guard returning WP_Error.
 		 * @param string $method The static method name to invoke.
 		 * @param mixed  ...$args Arguments forwarded to the method.
-		 * @return mixed The invoked method's return value, or a `WP_Error` if the method returned `false`.
+		 * @return mixed The invoked method's return value, or a `WP_Error` if the method returned `false` or is not callable.
 		 */
 		public static function invoke_cleanup_method( $method, ...$args ) {
+			if ( ! is_string( $method )
+				|| ! isset( self::METHOD_TO_TYPE[ $method ] )
+				|| ! is_callable( array( self::class, $method ) ) ) {
+				return new WP_Error(
+					'wppo_invalid_cleanup_method',
+					sprintf(
+						/* translators: %s: cleanup method name. */
+						__( 'Invalid database cleanup method: %s', 'performance-optimisation' ),
+						is_string( $method ) ? $method : esc_html( wp_json_encode( $method ) )
+					)
+				);
+			}
 			$res = self::$method( ...$args );
 			if ( false === $res ) {
 				return new WP_Error( 'db_cleanup_failed', __( 'Database cleanup failed.', 'performance-optimisation' ) );

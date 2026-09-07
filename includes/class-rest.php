@@ -1305,6 +1305,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Refreshes the REST API nonce via AJAX to bypass stale X-WP-Nonce issues.
 		 *
+		 * Two-path nonce-refresh contract (audit #888 finding 2 — intentionally
+		 * two consumers, one endpoint):
+		 *
+		 * 1. SPA bundle  (src/index.js → src/lib/apiRequest.js) — reads
+		 *    `wppoSettings.nonce_refresh` and `{success, data.nonce}` from this
+		 *    endpoint when a REST request returns a `rest_forbidden` /
+		 *    `rest_cookie_invalid_nonce` body, then retries once with the fresh
+		 *    X-WP-Nonce.
+		 * 2. Admin-bar bundle (src/main.js — intentionally standalone, separate
+		 *    `wppoObject` contract, see the sync comment at the top of that
+		 *    file) — reads `wppoObject.nonce_refresh` and the same
+		 *    `{success, data.nonce}` shape when an admin-bar fetch gets a 403.
+		 *
+		 * Both paths MUST keep the same auth checks (capability + this dedicated
+		 * `wppo_nonce_refresh` nonce — not the `wp_rest` nonce, which is the very
+		 * thing being refreshed) and the same `{success, data.nonce}` response
+		 * shape produced by wp_send_json_success() below.
+		 *
 		 * @since 1.4.0
 		 * @return void
 		 */

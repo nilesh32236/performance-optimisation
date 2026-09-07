@@ -142,6 +142,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private const FILE_EXISTS_CACHE_LIMIT = 500;
 
 		/**
+		 * In-request LRU map for getimagesize results (see
+		 * {@see get_cached_image_size()}).
+		 *
+		 * Keyed by absolute path. Promoted from a method-level static so
+		 * {@see clear_runtime_caches()} can reset it on switch_blog and after
+		 * cache clears (audit #888 finding 7). Bounded by IMG_SIZE_CACHE_LIMIT.
+		 *
+		 * @var array<string,array|false>
+		 * @since NEXT
+		 */
+		private static array $img_size_cache = array();
+
+		/**
+		 * Clear the per-request runtime caches (file_exists + image sizes).
+		 *
+		 * Called on switch_blog (absolute paths from another site must not be
+		 * reused) and after cache-clear operations so stale next-gen paths are
+		 * re-verified. Bounded by FILE_EXISTS_CACHE_LIMIT / IMG_SIZE_CACHE_LIMIT
+		 * eviction per request, so this is a correctness flush, not the growth
+		 * bound.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function clear_runtime_caches(): void {
+			self::$file_exists_cache = array();
+			self::$img_size_cache    = array();
+		}
+
+		/**
 		 * Constructor.
 		 *
 		 * @since 1.0.0
@@ -1171,20 +1201,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return array|false Image size array or false on failure.
 		 */
 		private function get_cached_image_size( string $local_path ): array|false {
-			static $img_size_cache = array();
-
-			if ( isset( $img_size_cache[ $local_path ] ) ) {
-				$size = $img_size_cache[ $local_path ];
-				unset( $img_size_cache[ $local_path ] );
-				$img_size_cache[ $local_path ] = $size;
+			if ( isset( self::$img_size_cache[ $local_path ] ) ) {
+				$size = self::$img_size_cache[ $local_path ];
+				unset( self::$img_size_cache[ $local_path ] );
+				self::$img_size_cache[ $local_path ] = $size;
 				return $size;
 			}
 
-			if ( count( $img_size_cache ) >= self::IMG_SIZE_CACHE_LIMIT ) {
-				array_shift( $img_size_cache );
+			if ( count( self::$img_size_cache ) >= self::IMG_SIZE_CACHE_LIMIT ) {
+				array_shift( self::$img_size_cache );
 			}
-			$size                          = getimagesize( $local_path );
-			$img_size_cache[ $local_path ] = $size;
+			$size                                = getimagesize( $local_path );
+			self::$img_size_cache[ $local_path ] = $size;
 			return $size;
 		}
 
@@ -2701,13 +2729,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return $filtered_output;
 			}
 
-			// Pass A: un-lazy-load the first N above-the-fold images.
-			$buffer = $this->unlazyload_first_images( $filtered_output, $image_optimisation );
+			// Throwable-safe: this method runs as an output-buffer callback (legacy
+			// path) and as the wp_template_enhancement_output_buffer filter (WP 6.9+).
+			// It must always return a string or the page output would be lost/corrupted
+			// (audit #888 finding 12 — balanced buffer lifecycle).
+			try {
+				// Pass A: un-lazy-load the first N above-the-fold images.
+				$buffer = $this->unlazyload_first_images( $filtered_output, $image_optimisation );
 
-			// Pass B: stamp fetchpriority="high" on the detected LCP image.
-			$buffer = $this->prioritize_lcp_image( $buffer );
+				// Pass B: stamp fetchpriority="high" on the detected LCP image.
+				$buffer = $this->prioritize_lcp_image( $buffer );
 
-			return $buffer;
+				return $buffer;
+			} catch ( \Throwable $e ) {
+				do_action( 'wppo_debug_log', 'WPPO LCP prioritization failed: ' . $e->getMessage(), array( 'exception' => $e ) );
+				return $filtered_output;
+			}
 		}
 
 		/**
