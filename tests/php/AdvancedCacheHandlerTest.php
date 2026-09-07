@@ -35,6 +35,17 @@ class AdvancedCacheHandlerTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Reset Brain Monkey and the per-test filesystem mock so the
+	 * $GLOBALS['wp_filesystem'] assignment does not leak into later tests in
+	 * the same process (Part 2 review round 3).
+	 */
+	protected function tearDown(): void {
+		unset( $GLOBALS['wp_filesystem'] );
+		\Brain\Monkey\tearDown();
+		parent::tearDown();
+	}
+
+	/**
 	 * Test that get_dropin_path returns the WP_CONTENT_DIR path.
 	 */
 	public function test_get_dropin_path_returns_content_path(): void {
