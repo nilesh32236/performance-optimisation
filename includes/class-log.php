@@ -53,7 +53,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 		 * @return bool
 		 */
 		private static function salted_cache_active(): bool {
-			return function_exists( 'wp_cache_get_salted' ) && wp_using_ext_object_cache();
+			return function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache();
 		}
 
 		/**

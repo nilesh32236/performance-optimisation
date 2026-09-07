@@ -886,7 +886,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		public static function get_counts() {
 			// Salted layer requires a persistent object cache; the transient
 			// fallback keeps counts across requests otherwise (issue #882 review).
-			$has_salted = function_exists( 'wp_cache_get_salted' ) && wp_using_ext_object_cache();
+			$has_salted = function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache();
 
 			if ( $has_salted ) {
 				$cached = wp_cache_get_salted( 'wppo_db_cleanup_counts', 'wppo', Util::cache_salt( self::SALT_KEY ) );
@@ -1026,7 +1026,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * @return void
 		 */
 		public static function invalidate_counts_cache(): void {
-			if ( function_exists( 'wp_cache_get_salted' ) && wp_using_ext_object_cache() ) {
+			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
 				// Monotonic increment: same-second mutations must produce
 				// distinct salts (issue #882 review).
 				update_option( self::SALT_KEY, (int) get_option( self::SALT_KEY, 0 ) + 1, false );

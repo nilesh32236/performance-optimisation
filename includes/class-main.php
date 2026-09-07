@@ -1770,12 +1770,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// Cache::bump_stats_cache()), not the option key — passing the key
 			// made every bump a no-op. Transient fallback keeps multisite
 			// key isolation via Util::transient_key().
-			if ( function_exists( 'wp_cache_get_salted' ) && wp_using_ext_object_cache() ) {
-				$cache_salt = Util::cache_salt( 'wppo_cache_last_cleared' );
+			// One salt read for both dashboard stats (issue #882 review).
+			$cache_salt = Util::cache_salt( 'wppo_cache_last_cleared' );
+			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
 				$cache_size = wp_cache_get_salted( 'wppo_cache_size', 'wppo', $cache_salt );
 				if ( false === $cache_size ) {
 					$cache_size = Cache::get_cache_size();
-					wp_cache_set_salted( 'wppo_cache_size', $cache_size, 'wppo', $cache_salt );
+					wp_cache_set_salted( 'wppo_cache_size', $cache_size, 'wppo', $cache_salt, 15 * MINUTE_IN_SECONDS );
 				}
 			} else {
 				$cache_size = get_transient( Util::transient_key( 'wppo_cache_size' ) );
@@ -1785,12 +1786,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 			}
 
-			if ( function_exists( 'wp_cache_get_salted' ) && wp_using_ext_object_cache() ) {
-				$cache_salt   = Util::cache_salt( 'wppo_cache_last_cleared' );
+			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
 				$total_js_css = wp_cache_get_salted( 'wppo_total_js_css', 'wppo', $cache_salt );
 				if ( false === $total_js_css ) {
 					$total_js_css = Util::get_js_css_minified_file();
-					wp_cache_set_salted( 'wppo_total_js_css', $total_js_css, 'wppo', $cache_salt );
+					wp_cache_set_salted( 'wppo_total_js_css', $total_js_css, 'wppo', $cache_salt, 15 * MINUTE_IN_SECONDS );
 				}
 			} else {
 				$total_js_css = get_transient( Util::transient_key( 'wppo_total_js_css' ) );

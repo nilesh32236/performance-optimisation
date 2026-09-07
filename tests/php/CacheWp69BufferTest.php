@@ -29,6 +29,12 @@ class CacheWp69BufferTest extends \PHPUnit\Framework\TestCase {
 		parent::setUp();
 		\Brain\Monkey\setUp();
 		$this->register_common_function_stubs();
+		// Mirror the trait's per-test cache resets (issue #882 review).
+		\PerformanceOptimise\Inc\Util::reset_cached_home_urls();
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		\PerformanceOptimise\Inc\Util::clear_permalink_cache();
+		\PerformanceOptimise\Inc\Util::reset_html_processor_memo();
+		\PerformanceOptimise\Inc\CDN::reset_cache();
 		Functions\when( 'get_transient' )->justReturn( false );
 		Functions\when( 'set_transient' )->justReturn( true );
 		Functions\when( 'delete_transient' )->justReturn( true );
@@ -304,7 +310,7 @@ class CacheWp69BufferTest extends \PHPUnit\Framework\TestCase {
 
 		$prop = new \ReflectionProperty( Cache::class, 'buffer_enhanced' );
 		$prop->setAccessible( true );
-		$prop->setValue( $cache, true );
+		$prop->setValue( null, true );
 
 		// When already enhanced this request, the input passes through untouched
 		// (the image-optimisation pipeline is never even constructed).

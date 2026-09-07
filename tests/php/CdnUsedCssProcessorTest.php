@@ -48,8 +48,10 @@ class CdnUsedCssProcessorTest extends \PHPUnit\Framework\TestCase {
 		\PerformanceOptimise\Inc\Util::clear_settings_cache();
 		$this->register_common_function_stubs();
 		// Minimal functional WP_HTML_* stand-ins (same pattern as
-		// ImageOptimisationTest) so the processor path engages.
+		// ImageOptimisationTest) so the processor path engages, then re-probe
+		// the memo so this suite is order-independent (issue #883 review).
 		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Util::reset_html_processor_memo();
 		Functions\when( 'has_filter' )->justReturn( false );
 		Functions\when( 'untrailingslashit' )->alias(
 			static function ( $value ) {

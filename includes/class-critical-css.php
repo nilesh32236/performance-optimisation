@@ -1309,7 +1309,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				$hash = self::get_template_hash( $template );
 				delete_transient( Util::transient_key( 'wppo_ccss_status_' . $hash ) );
 			}
-			if ( function_exists( 'wp_cache_get_salted' ) && wp_using_ext_object_cache() ) {
+			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
 				// Monotonic increment: same-second mutations must produce
 				// distinct salts (issue #882 review).
 				update_option( self::SALT_KEY, (int) get_option( self::SALT_KEY, 0 ) + 1, false );
@@ -1333,8 +1333,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// Salted layer requires a persistent object cache; the transient
 			// fallback keeps the status across requests otherwise (issue #882
 			// review). clear_all() deletes the transients when it bumps.
-			if ( function_exists( 'wp_cache_get_salted' ) && wp_using_ext_object_cache() ) {
-				return wp_cache_get_salted( $key, 'wppo', Util::cache_salt( self::SALT_KEY ) );
+			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
+				// Salted eviction (TTL) without a bump: the transient written
+				// by set_status_cache() is still fresh — reuse it instead of
+				// reporting 'none' (issue #882 review). clear_all() deletes
+				// the transients when it bumps the salt, so a post-bump read
+				// cannot resurrect stale status.
+				$cached = wp_cache_get_salted( $key, 'wppo', Util::cache_salt( self::SALT_KEY ) );
+				return false !== $cached ? $cached : get_transient( Util::transient_key( $key ) );
 			}
 			return get_transient( Util::transient_key( $key ) );
 		}
@@ -1352,7 +1358,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 */
 		private static function set_status_cache( string $hash, string $status, int $ttl ): void {
 			$key = 'wppo_ccss_status_' . $hash;
-			if ( function_exists( 'wp_cache_get_salted' ) && wp_using_ext_object_cache() ) {
+			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
 				wp_cache_set_salted( $key, $status, 'wppo', Util::cache_salt( self::SALT_KEY ), $ttl );
 			}
 			// Always write the transient too: it is the persistence fallback on

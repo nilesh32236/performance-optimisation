@@ -527,12 +527,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 				return null;
 			}
 
-			$out = '';
-			while ( $processor->next_token() ) {
-				if ( '#tag' === $processor->get_token_type() && ! $processor->is_tag_closer() ) {
-					self::rewrite_tag_assets( $processor, $mappings, $site_url, $site_url_regex, $allowed_tags );
+			try {
+				$out = '';
+				while ( $processor->next_token() ) {
+					if ( '#tag' === $processor->get_token_type() && ! $processor->is_tag_closer() ) {
+						self::rewrite_tag_assets( $processor, $mappings, $site_url, $site_url_regex, $allowed_tags );
+					}
+					$out .= $processor->serialize_token();
 				}
-				$out .= $processor->serialize_token();
+			} catch ( \Throwable $e ) {
+				// A partial/throwing HTML API surface must not fatal inside the
+				// output path — fall back to the byte-identical Tag Processor
+				// pass (issue #883 review).
+				return null;
 			}
 
 			if ( null !== $processor->get_last_error() ) {

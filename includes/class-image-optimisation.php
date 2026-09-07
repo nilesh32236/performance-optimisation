@@ -2670,6 +2670,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Whether LCP prioritization already ran on this instance's buffer.
+		 *
+		 * One-shot per instance (issue #881 review): the 6.9+ enhancement
+		 * filter and the legacy fallback buffer share this instance via Main;
+		 * a mid-request flip of the enhancement check could otherwise run LCP
+		 * prioritization twice. The attribute set is idempotent, the scan is
+		 * not — the second pass is skipped.
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private bool $lcp_priority_applied = false;
+
+		/**
 		 * Post-render LCP image prioritization (optional enhancement).
 		 *
 		 * When the "prioritizeLCPImages" toggle is enabled, this filter callback
@@ -2694,6 +2708,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The processed buffer.
 		 */
 		public function prioritize_lcp_in_buffer( $filtered_output, $output = '' ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+			// One-shot per instance (issue #881 review): the 6.9+ enhancement
+			// filter and the legacy fallback buffer both call this method on
+			// the shared Main instance; a mid-request flip of the enhancement
+			// check could otherwise run LCP prioritization twice.
+			if ( $this->lcp_priority_applied ) {
+				return $filtered_output;
+			}
+			$this->lcp_priority_applied = true;
+
 			$image_optimisation = $this->options['image_optimisation'] ?? array();
 			if ( empty( $image_optimisation['prioritizeLCPImages'] ) ) {
 				return $filtered_output;

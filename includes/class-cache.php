@@ -65,7 +65,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// stats are bumped so the salted wppo_cache_size /
 			// wppo_total_js_css entries stay consistent outside clear_cache()
 			// (smart purge, combine_css) too.
-			if ( function_exists( 'wp_cache_get_salted' ) && wp_using_ext_object_cache() ) {
+			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
 				$salt = (int) get_option( 'wppo_cache_last_cleared', 0 ) + 1;
 				update_option( 'wppo_cache_last_cleared', $salt, false );
 			}
@@ -140,7 +140,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @var bool
 		 * @since NEXT
 		 */
-		private bool $buffer_enhanced = false;
+		private static bool $buffer_enhanced = false;
 
 		/**
 		 * Whether the budget-drift notice has been logged this PHP process.
@@ -1274,7 +1274,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			// A configured CDN serves the combined file — never redundant.
-			if ( ! empty( $this->options['file_optimisation']['cdnURL'] ) ) {
+			// Covers both the legacy cdnURL field and the per-mapping
+			// cdnMapping config (plus wppo_cdn_mapping filters) resolved by
+			// the CDN class (issue #880 review).
+			if ( ! empty( $this->options['file_optimisation']['cdnURL'] ) || ! empty( $this->get_cdn_mappings() ) ) {
 				return false;
 			}
 
@@ -1485,10 +1488,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// site filter may flip between template_redirect and
 			// wp_before_include_template). Enhance exactly once per request so a
 			// mid-request flip can never double-minify or double-rewrite.
-			if ( $this->buffer_enhanced ) {
+			if ( self::$buffer_enhanced ) {
 				return $buffer;
 			}
-			$this->buffer_enhanced = true;
+			self::$buffer_enhanced = true;
 
 			$image_optimisation = $this->image_optimisation ? $this->image_optimisation : new Image_Optimisation( $this->options );
 
@@ -2746,8 +2749,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$stats_key = Util::transient_key( 'wppo_cache_stats' );
 			// Salted layer requires a persistent object cache; the transient
 			// fallback keeps the stats across requests otherwise (issue #882 review).
-			if ( function_exists( 'wp_cache_get_salted' ) && wp_using_ext_object_cache() ) {
+			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
 				$cached_stats = wp_cache_get_salted( 'wppo_cache_stats', 'wppo', Util::cache_salt( 'wppo_cache_last_cleared' ) );
+				// Salted eviction (TTL) without a bump: the unified transient
+				// written by store_cache_stats() is still fresh — reuse it
+				// instead of rescanning the directory (issue #882 review).
+				if ( false === $cached_stats ) {
+					$cached_stats = get_transient( $stats_key );
+				}
 			} else {
 				$cached_stats = get_transient( $stats_key );
 			}
@@ -2810,7 +2819,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return void
 		 */
 		private static function store_cache_stats( array $unified, string $stats_key ): void {
-			if ( function_exists( 'wp_cache_get_salted' ) && wp_using_ext_object_cache() ) {
+			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
 				wp_cache_set_salted( 'wppo_cache_stats', $unified, 'wppo', Util::cache_salt( 'wppo_cache_last_cleared' ), 15 * MINUTE_IN_SECONDS );
 			}
 			set_transient( $stats_key, $unified, 15 * MINUTE_IN_SECONDS );

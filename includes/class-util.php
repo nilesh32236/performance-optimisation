@@ -1599,8 +1599,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				return null;
 			}
 
-			$create    = method_exists( 'WP_HTML_Processor', 'create_full_parser' ) ? 'create_full_parser' : 'create_fragment';
-			$processor = \WP_HTML_Processor::$create( $html ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound
+			if ( method_exists( 'WP_HTML_Processor', 'create_full_parser' ) ) {
+				$processor = \WP_HTML_Processor::create_full_parser( $html );
+			} elseif ( method_exists( 'WP_HTML_Processor', 'create_fragment' ) ) {
+				$processor = \WP_HTML_Processor::create_fragment( $html );
+			} else {
+				return null;
+			}
 			if ( null === $processor || is_wp_error( $processor ) || ! ( $processor instanceof \WP_HTML_Processor ) ) {
 				return null;
 			}
