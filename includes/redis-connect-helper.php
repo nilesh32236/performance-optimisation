@@ -79,6 +79,10 @@ if ( ! function_exists( 'wppo_redis_connect' ) ) {
 			return wppo_redis_connect_standalone( $config );
 		} catch ( \Throwable $e ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				// error_log (not Log::add()) is intentional here: this helper is also
+				// included by the object-cache.php drop-in, which runs before WordPress
+				// is loaded, so Log::add()/WP functions are unavailable. Never include
+				// credentials or host details in these messages.
 				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 				error_log( 'WPPO Redis connection failed' );
 			}
@@ -127,6 +131,8 @@ if ( ! function_exists( 'wppo_redis_connect_cluster' ) ) {
 			return $cluster;
 		} catch ( \Throwable $e ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				// Same constraint as above: the drop-in context has no WP functions,
+				// so this must stay on error_log, strictly WP_DEBUG-gated.
 				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 				error_log( 'WPPO Redis cluster connection failed' );
 			}
@@ -215,6 +221,10 @@ if ( ! function_exists( 'wppo_redis_connect_sentinel' ) ) {
 				}
 			} catch ( \Throwable $e ) {
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					// Same constraint as above: the drop-in context has no WP functions,
+					// so this must stay on error_log, strictly WP_DEBUG-gated. The raw
+					// extension exception text is used because $errors[] below carries
+					// the translated, detail-free message.
 					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 					error_log( 'WPPO Sentinel node connection failed: ' . $e->getMessage() );
 				}

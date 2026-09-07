@@ -148,9 +148,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			$host = explode( ':', $domain, 2 )[0];
 
 			$valid_domain = ! (
-				strpos( $host, '..' ) !== false ||
-				strpos( $host, '/' ) !== false ||
-				strpos( $host, '\\' ) !== false ||
+				false !== strpos( $host, '..' ) ||
+				false !== strpos( $host, '/' ) ||
+				false !== strpos( $host, '\\' ) ||
 				! preg_match( '/^[a-z0-9\.\-]+$/i', $host )
 			);
 
@@ -470,10 +470,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			}
 
 			foreach ( $this->safelist as $safe ) {
-				if ( substr( $safe, -1 ) === '-' && 0 === strpos( $selector, $safe ) ) {
+				if ( '-' === substr( $safe, -1 ) && 0 === strpos( $selector, $safe ) ) {
 					return true;
 				}
-				if ( substr( $safe, -1 ) === '*' && 0 === strpos( $selector, substr( $safe, 0, -1 ) ) ) {
+				if ( '*' === substr( $safe, -1 ) && 0 === strpos( $selector, substr( $safe, 0, -1 ) ) ) {
 					return true;
 				}
 			}
@@ -793,7 +793,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				$url_path = wp_normalize_path( trim( rawurldecode( (string) wp_parse_url( $url, PHP_URL_PATH ) ), '/' ) );
 			}
 
-			if ( strpos( $url_path, '..' ) !== false ) {
+			if ( false !== strpos( $url_path, '..' ) ) {
 				$url_path = '';
 			}
 

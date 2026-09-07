@@ -176,9 +176,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Perf_Translations' ) ) {
 					if ( function_exists( 'wp_mkdir_p' ) ) {
 						wp_mkdir_p( $dir );
 					} else {
+						// The @ is intentional (audit #870 finding 20): this fallback only
+						// runs in ultra-early translation-loading contexts where neither
+						// WP_Filesystem nor wp_mkdir_p() is available. Concurrent requests
+						// can race to create the same directory; a suppressed "already
+						// exists" warning is the desired outcome. Failure is tolerated:
+						// the following file_put_contents() fails and the loader falls
+						// back to the original .mo file below.
 						@mkdir( $dir, 0775, true ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir,WordPress.PHP.NoSilencedErrors.Discouraged
 					}
 				}
+				// Direct file_put_contents is the deliberate last-resort fallback;
+				// WP_Filesystem->put_contents() is attempted first above and its
+				// success/failure drives the return value.
 				$written = false !== file_put_contents( $cache_file, $contents ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 			}
 
@@ -186,6 +196,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Perf_Translations' ) ) {
 				if ( function_exists( 'wp_opcache_invalidate' ) ) {
 					wp_opcache_invalidate( $cache_file, true );
 				} elseif ( function_exists( 'opcache_invalidate' ) ) {
+					// The @ is best-effort by contract: opcache_invalidate() only fails
+					// when the file is not (yet) in the opcode cache or the API is
+					// restricted — both benign for a freshly written translation file.
 					@opcache_invalidate( $cache_file, true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 				}
 				/**
@@ -214,6 +227,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Perf_Translations' ) ) {
 			if ( function_exists( 'wp_opcache_invalidate' ) ) {
 				wp_opcache_invalidate( $file, true );
 			} elseif ( function_exists( 'opcache_invalidate' ) ) {
+				// The @ is best-effort by contract (audit #870 finding 20): failure
+				// means the file simply is not in the opcode cache — nothing to
+				// invalidate, no fallback action possible.
 				@opcache_invalidate( $file, true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 			}
 		}
@@ -267,6 +283,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Perf_Translations' ) ) {
 				$files = glob( trailingslashit( $dir ) . '*.php' );
 				if ( is_array( $files ) ) {
 					foreach ( $files as $f ) {
+						// The @ is race tolerance (audit #870 finding 20): a concurrent
+						// request may already have deleted the file; failure only means
+						// a stale compiled file survives one extra request and is
+						// regenerated on the next translation update.
 						@unlink( $f ); // phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink,WordPress.PHP.NoSilencedErrors.Discouraged
 					}
 				}

@@ -360,7 +360,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 
 			if ( count( $queue ) >= self::FLUSH_THRESHOLD ) {
 				self::flush_queue();
-			} elseif ( wp_rand( 1, 10 ) === 1 ) {
+			} elseif ( 1 === wp_rand( 1, 10 ) ) {
 				self::flush_queue();
 			} elseif ( function_exists( 'wp_next_scheduled' ) && function_exists( 'wp_schedule_single_event' ) ) {
 				// Ensure a cron will eventually flush the queue even on low traffic.

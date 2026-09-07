@@ -117,15 +117,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @var   Cache|null
 		 * @since NEXT
 		 */
-		private $cache;
+		private ?Cache $cache = null;
 
 		/**
 		 * Filesystem instance for file operations.
 		 *
-		 * @var   object|null
+		 * Set to false transiently by Util::init_filesystem() before the
+		 * constructor normalizes a failed init to null.
+		 *
+		 * @var   WP_Filesystem_Base|false|null
 		 * @since 1.0.0
 		 */
-		private $filesystem;
+		private WP_Filesystem_Base|false|null $filesystem = null;
 
 		/**
 		 * Image Optimisation instance for handling image optimization.
@@ -149,7 +152,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @var   array
 		 * @since 1.0.0
 		 */
-		private $options;
+		private array $options = array();
 
 		/**
 		 * Timestamp (microtime) when the front-end template render started.
@@ -498,13 +501,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Include required files.
 		 *
-		 * Loads the autoloader and includes other class files needed for the plugin.
+		 * The Composer autoloader is already loaded by the plugin entry file
+		 * (performance-optimisation.php) before Main is instantiated, so only
+		 * the plugin class files are included here.
 		 *
 		 * @return void
 		 * @since  1.0.0
 		 */
 		private function includes(): void {
-			require_once WPPO_PLUGIN_PATH . 'vendor/autoload.php';
 			if ( file_exists( WPPO_PLUGIN_PATH . 'vendor/woocommerce/action-scheduler/action-scheduler.php' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'vendor/woocommerce/action-scheduler/action-scheduler.php';
 			}

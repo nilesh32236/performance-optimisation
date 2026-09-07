@@ -758,7 +758,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				do_action( 'litespeed_purge', $tags );
 			}
 			if ( ! headers_sent() ) {
-				header( 'X-LiteSpeed-Purge: tag=' . $tag_str, false );
+				header( 'X-LiteSpeed-Purge: tag=' . self::strip_crlf( $tag_str ), false );
 			} else {
 				// Fallback: re-queue to DB for next request if headers already sent and lock not set.
 				// Already cleared above; if we couldn't send header, persist stale tag with next flush.
@@ -1058,7 +1058,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				$context_ttl = 0;
 			}
 			if ( null === $context_ttl && isset( $_SERVER['REQUEST_URI'] ) ) {
-				$rq = is_string( $_SERVER['REQUEST_URI'] ) ? wp_unslash( $_SERVER['REQUEST_URI'] ) : ''; // phpcs:ignore
+				$rq = is_string( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotValidated
 				if ( false !== strpos( $rq, '/wp-json/' ) || false !== strpos( $rq, 'rest_route' ) ) {
 					$context_ttl = 0;
 				}
@@ -1342,7 +1342,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				return false;
 			}
 			foreach ( $_COOKIE as $key => $value ) {
-				if ( is_string( $key ) && 0 === strpos( $key, 'comment_author_' ) ) {
+				$cookie_name = is_string( $key ) ? sanitize_text_field( $key ) : '';
+				if ( '' !== $cookie_name && 0 === strpos( $cookie_name, 'comment_author_' ) ) {
 					return '' !== $value;
 				}
 			}
@@ -1370,7 +1371,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				$hash = md5( wp_parse_url( home_url(), PHP_URL_HOST ) ?? '' );
 			}
 			foreach ( $_COOKIE as $key => $value ) {
-				if ( is_string( $key ) && 0 === strpos( $key, 'wp-postpass_' . $hash ) ) {
+				$cookie_name = is_string( $key ) ? sanitize_text_field( $key ) : '';
+				if ( '' !== $cookie_name && 0 === strpos( $cookie_name, 'wp-postpass_' . $hash ) ) {
 					return '' !== $value;
 				}
 			}
@@ -1481,6 +1483,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			if ( isset( $_COOKIE['_lscache_vary'] ) ) {
 				setcookie( '_lscache_vary', '', time() - YEAR_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), true );
 			}
+		}
+
+		/**
+		 * Strip CR/LF (and NUL) bytes from a value before it is passed to header().
+		 *
+		 * PHP itself rejects multi-line header() values, but this keeps every
+		 * dynamic LiteSpeed header emission safe against filter-injected control
+		 * characters instead of relying on PHP's failure mode.
+		 *
+		 * @since NEXT
+		 * @param string $value Header value to clean.
+		 * @return string Value without header-breaking control characters.
+		 */
+		private static function strip_crlf( string $value ): string {
+			return str_replace( array( "\r", "\n", "\0" ), '', $value );
 		}
 
 		/**
@@ -1629,7 +1646,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 					}
 					$vary_header = self::build_vary_header();
 					if ( '' !== $vary_header ) {
-						header( 'X-LiteSpeed-Vary: ' . $vary_header, false );
+						header( 'X-LiteSpeed-Vary: ' . self::strip_crlf( $vary_header ), false );
 					}
 					/**
 					 * Filter the fallback vary header value when litespeed_vary not present.
@@ -1639,7 +1656,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 					 */
 					$fallback = (string) apply_filters( 'wppo_litespeed_vary_fallback', $vary_header );
 					if ( '' !== $fallback && $vary_header !== $fallback ) {
-						header( 'X-LiteSpeed-Vary: ' . $fallback, false );
+						header( 'X-LiteSpeed-Vary: ' . self::strip_crlf( $fallback ), false );
 					}
 				}
 			}
@@ -1684,7 +1701,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 
 			// Always emit raw header as fallback for OLS without LSCWP (OLS honors raw header).
 			if ( ! headers_sent() ) {
-				header( $header );
+				header( self::strip_crlf( $header ) );
 			}
 		}
 
@@ -1721,7 +1738,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				 * @param string $reason Reason.
 				 */
 				$header = (string) apply_filters( 'wppo_litespeed_nocache_header', $header, $reason );
-				header( $header );
+				header( self::strip_crlf( $header ) );
 			}
 		}
 
@@ -1881,7 +1898,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			}
 			if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
 				$tags[] = 'REST';
-			} elseif ( isset( $_SERVER['REQUEST_URI'] ) && false !== strpos( (string) wp_unslash( $_SERVER['REQUEST_URI'] ), '/wp-json/' ) ) { // phpcs:ignore
+			} elseif ( isset( $_SERVER['REQUEST_URI'] ) && false !== strpos( sanitize_text_field( (string) wp_unslash( $_SERVER['REQUEST_URI'] ) ), '/wp-json/' ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotValidated
 				$tags[] = 'REST';
 			}
 			if ( function_exists( 'is_404' ) ) {
@@ -1947,7 +1964,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 					do_action( 'litespeed_tag', $tag );
 				}
 				if ( ! $headers_sent ) {
-					header( 'X-LiteSpeed-Tag: ' . $tag, false );
+					header( 'X-LiteSpeed-Tag: ' . self::strip_crlf( $tag ), false );
 				}
 			}
 			// Singular post tag via litespeed_tag_post for parity (already includes Po.* above, but keep hook).

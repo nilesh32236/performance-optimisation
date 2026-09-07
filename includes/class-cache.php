@@ -2708,6 +2708,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( $depth > 20 ) {
 				if ( ! self::$depth_warning_logged && defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 					self::$depth_warning_logged = true;
+					// error_log (not Log::add()) is intentional: this runs during size
+					// stats computation where DB writes are undesirable, and filesystem
+					// anomalies (symlink loops) are server-ops signal. Fires once per
+					// request, strictly WP_DEBUG-gated.
 					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 					error_log( 'WPPO: calculate_directory_size depth cap (20) hit at ' . $directory . ' — stats may be under-reported due to deep nesting or symlink loop.' );
 				}
@@ -2749,6 +2753,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( $depth > 20 ) {
 				if ( ! self::$depth_warning_logged && defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 					self::$depth_warning_logged = true;
+					// error_log (not Log::add()) is intentional: same rationale as in
+					// calculate_directory_size() — stats-time DB writes are undesirable.
+					// Fires once per request, strictly WP_DEBUG-gated.
 					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 					error_log( 'WPPO: count_cached_pages depth cap (20) hit at ' . $directory . ' — stats may be under-reported due to deep nesting or symlink loop.' );
 				}

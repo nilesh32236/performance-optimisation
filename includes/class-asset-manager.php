@@ -34,15 +34,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 		 */
 		const TRANSIENT_PREFIX = 'wppo_page_assets_';
 
-
-
 		/**
 		 * Core WordPress script handles that should never be deregistered.
 		 *
 		 * @var   array
 		 * @since 1.1.0
 		 */
-		private static $protected_scripts = array(
+		private static array $protected_scripts = array(
 			'jquery',
 			'jquery-core',
 			'jquery-migrate',
@@ -61,7 +59,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 		 * @var   array
 		 * @since 1.1.0
 		 */
-		private static $protected_styles = array(
+		private static array $protected_styles = array(
 			'admin-bar',
 			'dashicons',
 			'wp-block-library',
