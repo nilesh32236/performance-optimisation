@@ -86,6 +86,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		);
 
 		/**
+		 * Action Scheduler hooks this plugin schedules via as_enqueue_async_action().
+		 *
+		 * Companion to SCHEDULED_HOOKS for store ownership: these live in the AS
+		 * custom tables, not WP-Cron, so deactivation cleanup must use
+		 * as_unschedule_all_actions() (see Deactivate::unschedule_action_scheduler_jobs()).
+		 * Any future as_enqueue_async_action() site must be added here.
+		 *
+		 * @since NEXT
+		 * @var string[]
+		 */
+		public const AS_HOOKS = array(
+			'wppo_convert_image_background', // Image conversion (Img_Converter / REST).
+			'wppo_pagespeed_scan',           // PageSpeed scans (Pagespeed).
+			'wppo_used_css_generate',        // Used-CSS generation (Main / Used_CSS).
+			'wppo_generate_ccss',            // Critical CSS generation (Critical_CSS — AS-only).
+			'wppo_litespeed_crawler_batch',  // Dual-scheduled with SCHEDULED_HOOKS.
+			'wppo_crawler_warm',             // Dual-scheduled with SCHEDULED_HOOKS.
+		);
+
+		/**
 		 * Constructor.
 		 *
 		 * @since 1.0.0

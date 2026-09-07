@@ -995,12 +995,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			if ( ! is_string( $method )
 				|| ! in_array( $method, array_values( self::CLEANUP_METHOD_MAP ), true )
 				|| ! is_callable( array( self::class, $method ) ) ) {
+				// wp_json_encode() can return false (invalid UTF-8, recursion);
+				// fall back to a type label so the diagnostic payload is never empty.
+				if ( is_string( $method ) ) {
+					$method_label = $method;
+				} else {
+					$encoded      = wp_json_encode( $method );
+					$method_label = is_string( $encoded ) && '' !== $encoded ? $encoded : gettype( $method );
+				}
 				return new WP_Error(
 					'wppo_invalid_cleanup_method',
 					sprintf(
 						/* translators: %s: cleanup method name. */
 						__( 'Invalid database cleanup method: %s', 'performance-optimisation' ),
-						is_string( $method ) ? $method : (string) wp_json_encode( $method )
+						$method_label
 					)
 				);
 			}

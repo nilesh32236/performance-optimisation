@@ -1332,21 +1332,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$role_hash = $this->get_logged_in_role_hash();
 			$file_path = $this->get_cache_file_path( 'html', $role_hash );
 
-			ob_start(
-				function ( $buffer ) use ( $file_path ) {
-					try {
-						$buffer = $this->process_buffer_only( $buffer );
-						$this->save_processed_buffer( $buffer, $file_path );
-						return $buffer;
-					} catch ( \Throwable $e ) {
-						// Fail open: serve the page unprocessed instead of
-						// throwing out of the buffer callback (which would
-						// discard the response and leave the buffer dangling).
-						do_action( 'wppo_debug_log', 'WPPO page cache buffer processing failed: ' . $e->getMessage(), array( 'exception' => $e ) );
-						return $buffer;
-					}
+			$ob_callback = function ( $buffer ) use ( $file_path ) {
+				try {
+					$buffer = $this->process_buffer_only( $buffer );
+					$this->save_processed_buffer( $buffer, $file_path );
+					return $buffer;
+				} catch ( \Throwable $e ) {
+					// Fail open: serve the page unprocessed instead of
+					// throwing out of the buffer callback (which would
+					// discard the response and leave the buffer dangling).
+					do_action( 'wppo_debug_log', 'WPPO page cache buffer processing failed: ' . $e->getMessage(), array( 'exception' => $e ) );
+					return $buffer;
 				}
-			);
+			};
+
+			// Only track the level and register the shutdown net when a buffer
+			// was actually opened — otherwise the net could flush a foreign
+			// buffer occupying that level.
+			if ( ! ob_start( $ob_callback ) ) {
+				do_action( 'wppo_debug_log', 'WPPO page cache could not open output buffer' );
+				return;
+			}
 
 			// Track the level our buffer occupies for the shutdown safety net.
 			$this->cache_ob_level = ob_get_level();

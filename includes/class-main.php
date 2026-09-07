@@ -1548,6 +1548,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return $buffer;
 			}
 
+			// Fail open returns the PRISTINE input — stash it before mutation.
+			$original = $buffer;
 			try {
 				if ( ! empty( $this->options['file_optimisation']['hostGoogleFontsLocally'] ?? false ) ) {
 					$buffer = $this->google_fonts->process_buffer( $buffer );
@@ -1556,11 +1558,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$used_css = new \PerformanceOptimise\Inc\Used_CSS( $this->options );
 				return $used_css->process_buffer( $buffer );
 			} catch ( \Throwable $e ) {
-				// Fail open: return the buffer unprocessed rather than dropping
+				// Fail open: return the unprocessed buffer rather than dropping
 				// the page content. Mirrors the wppo_debug_log convention used by
 				// the HTML minifier and Cloudflare purger.
 				do_action( 'wppo_debug_log', 'WPPO used-CSS buffer processing failed: ' . $e->getMessage(), array( 'exception' => $e ) );
-				return $buffer;
+				return $original;
 			}
 		}
 

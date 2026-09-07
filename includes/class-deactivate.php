@@ -155,9 +155,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 		 * unscheduling does not touch it. Pending background jobs (image
 		 * conversion, PageSpeed scans, used-CSS generation, critical CSS,
 		 * crawler batches) are cancelled on deactivation (audit #888 finding 1).
-		 * Note: wppo_litespeed_crawler_batch / wppo_crawler_warm are dual-scheduled
-		 * (WP-Cron + AS) and are cleaned in both paths; wppo_generate_ccss is
-		 * AS-only and therefore lives here, not in Cron::SCHEDULED_HOOKS.
+		 * The hook list is the canonical {@see Cron::AS_HOOKS} const (single
+		 * source of truth shared with the scheduling sites); the dual-scheduled
+		 * crawler hooks are cleaned in both paths.
 		 *
 		 * @since NEXT
 		 * @return void
@@ -167,16 +167,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 				return;
 			}
 
-			$as_hooks = array(
-				'wppo_convert_image_background',
-				'wppo_pagespeed_scan',
-				'wppo_used_css_generate',
-				'wppo_generate_ccss',
-				'wppo_litespeed_crawler_batch',
-				'wppo_crawler_warm',
-			);
-
-			foreach ( $as_hooks as $hook ) {
+			foreach ( Cron::AS_HOOKS as $hook ) {
 				as_unschedule_all_actions( $hook );
 			}
 		}
