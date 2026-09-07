@@ -71,21 +71,52 @@ const WelcomePanel = () => {
 		setActivatingStep( step.key );
 		dismiss();
 		try {
+			// Dismissal is gated on the settings update succeeding: the two
+			// calls are not independent. Firing dismiss_welcome while
+			// update_settings fails or rejects would hide the onboarding
+			// panel server-side even though the feature was never enabled,
+			// leaving the user no way to retry from the panel.
 			const updateRes = await apiCall( 'update_settings', {
 				tab: step.settings.tab,
 				settings: step.settings.payload,
 			} );
-			const dismissRes = await apiCall( 'dismiss_welcome' );
-			if ( updateRes.success && dismissRes.success ) {
-				setVisible( false );
-			} else {
+
+			if ( ! updateRes.success ) {
 				notify( {
 					type: 'error',
 					message:
-						( ! updateRes.success && updateRes.message ) ||
-						( ! dismissRes.success && dismissRes.message ) ||
+						updateRes.message ||
 						__(
 							'Failed to enable the feature.',
+							'performance-optimisation'
+						),
+					durationMs: 5000,
+				} );
+				return;
+			}
+
+			const dismissRes = await apiCall( 'dismiss_welcome' ).catch(
+				( dismissError ) => {
+					// The feature is enabled; a thrown dismiss request must
+					// not masquerade as an enable failure. Surface the
+					// dismiss-specific error and keep the panel visible.
+					console.error( 'Welcome dismiss failed:', dismissError );
+					return { success: false };
+				}
+			);
+			if ( dismissRes.success ) {
+				setVisible( false );
+			} else {
+				// Partial success: the feature is enabled, but the panel
+				// could not be dismissed server-side. Keep it visible and
+				// surface the error — retrying re-issues an idempotent
+				// update_settings, so recovery from the panel is safe.
+				notify( {
+					type: 'error',
+					message:
+						dismissRes.message ||
+						__(
+							'Failed to dismiss the welcome panel.',
 							'performance-optimisation'
 						),
 					durationMs: 5000,
