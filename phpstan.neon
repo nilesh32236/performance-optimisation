@@ -4,9 +4,10 @@ parameters:
     bootstrapFiles:
         # Static-analysis-only stubs for WP-CLI / Action Scheduler /
         # WooCommerce / WP 6.9 salted-cache symbols that are conditionally
-        # loaded at runtime. Loaded via bootstrapFiles because stubFiles is
-        # not honoured by the vendored phpstan phar (2.2.9) in this setup.
-        - stubs/stubs.php
+        # loaded at runtime live in the UNTRACKED local stubs/ directory
+        # (kept out of the repo on purpose). When present locally, add
+        # `- stubs/stubs.php` here; on clean checkouts this config must
+        # stay valid without it.
         - performance-optimisation.php
     level: 5
     paths:

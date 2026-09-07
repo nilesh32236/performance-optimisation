@@ -3164,6 +3164,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 								return $this->process_iframe_tag( $matches[0], $matches[4], $exclude_imgs );
 							}
 
+							if ( ! isset( $matches[2] ) ) {
+								// <picture> alternative: the regex has no capture
+								// groups here, so $matches[2] does not exist and
+								// reading it directly would warn. Derive the src
+								// from the inner <img> instead —
+								// process_picture_tag() re-derives it the same way.
+								$inner_src = '';
+								if ( preg_match( '#<img\b[^>]*?src=["\']([^"\']+)["\']#i', $matches[0], $inner_matches ) ) {
+									$inner_src = $inner_matches[1];
+								}
+
+								++$img_counter;
+								if ( '' !== $inner_src && $exclude_img_count >= $img_counter ) {
+									$exclude_imgs[] = $inner_src;
+								}
+
+								return $this->process_picture_tag( $matches, $matches[0], $inner_src, $exclude_imgs );
+							}
+
 							++$img_counter;
 
 							if ( $exclude_img_count >= $img_counter ) {

@@ -831,6 +831,7 @@ Debug logging sink fired with diagnostic messages (cache domain validation, CDN 
 
 **Parameters:**
 - `$message` *(string)* — Diagnostic message.
+- `$context` *(array, optional)* — Structured detail for the event (for example `array( 'exception' => Throwable )` in the HTML minifier). Listeners should accept it as an optional second argument.
 
 ---
 

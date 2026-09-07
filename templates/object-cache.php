@@ -245,9 +245,12 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 			$flag_file = WP_CONTENT_DIR . '/wppo-redis-down.flag';
 			$now       = time();
 			$last      = @filemtime( $flag_file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-			@touch( $flag_file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.file_system_operations_touch
 			if ( false === $last || ( $now - $last ) >= 300 ) {
 				$logged_this_request = true;
+				// Touch only when logging: refreshing the mtime on every
+				// request would keep ( $now - $last ) below the threshold and
+				// silence all but the first outage log line.
+				@touch( $flag_file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.file_system_operations_touch
 				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 				error_log( $message );
 			}
@@ -356,6 +359,10 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				// in-memory store and log once so outages are diagnosable
 				// without flooding the log.
 				$this->redis_connected = false;
+				// Drop the replica handle too: get()/get_multiple() prefer it
+				// over the primary, so a stale connected flag plus a dead
+				// replica could route reads to a broken connection.
+				$this->redis_replica = null;
 				$this->log_redis_failure_once( 'WPPO Redis object cache: write failed — ' . $e->getMessage() . ' Dropping to memory until next boot.' );
 				$this->cache[ $formatted_key ] = $data;
 				return true;

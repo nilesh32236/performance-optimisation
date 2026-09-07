@@ -349,7 +349,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Lazily initializes and returns the WP_Filesystem object.
 		 *
-		 * @return object|null The filesystem object or null on failure.
+		 * @return object|false|null The filesystem object, false when
+		 *                           Util::init_filesystem() fails, or null
+		 *                           before the first initialization attempt.
 		 * @since 1.6.0
 		 */
 		private function get_filesystem() {
