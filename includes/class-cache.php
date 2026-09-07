@@ -349,7 +349,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Lazily initializes and returns the WP_Filesystem object.
 		 *
-		 * @return object|false The filesystem object or false on failure.
+		 * @return object|null The filesystem object or null on failure.
 		 * @since 1.6.0
 		 */
 		private function get_filesystem() {
@@ -2118,8 +2118,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				}
 				// C. comment tag placeholder (purge comment-related cache).
 				$tags[] = 'C.' . (int) $page_id;
-				// W. widget.
-				$tags[] = 'W.';
+				// W. widget tags (W.{hash}) are only emitted by the ESI bridge —
+				// a bare 'W.' tag has an empty value and is intentionally skipped.
 				// REST.
 				$tags[] = 'REST';
 				// MIN.

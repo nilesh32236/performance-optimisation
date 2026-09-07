@@ -360,7 +360,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 			} else {
 				add_action(
 					'wp_footer',
-					static function () use ( $js, $cookie_name, $token ) {
+					static function () use ( $js ) {
 						echo '<script id="wppo-bfcache-invalidation">' . $js . '</script>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 					},
 					20

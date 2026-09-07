@@ -832,7 +832,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		/**
 		 * Execute callback: Get Database Cleanup Counts (operational).
 		 *
-		 * Delegates to Database_Cleanup::get_cleanup_counts().
+		 * Delegates to Database_Cleanup::get_counts().
 		 *
 		 * @since NEXT
 		 *
@@ -840,7 +840,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * @return array Cleanup counts by type.
 		 */
 		public static function execute_get_database_cleanup_counts( array $input = array() ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
-			return Database_Cleanup::get_cleanup_counts();
+			return Database_Cleanup::get_counts();
 		}
 
 		/**

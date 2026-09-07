@@ -3170,17 +3170,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 								$exclude_imgs[] = $matches[2];
 							}
 
-							if ( isset( $matches[0] ) ) {
-								if ( preg_match( '#<picture\b[^>]*>.*?</picture>#is', $matches[0] ) ) {
-									return $this->process_picture_tag( $matches, $matches[0], $matches[2], $exclude_imgs );
-								} else {
-									$img_tag      = $matches[0];
-									$original_src = $matches[2];
-									return $this->process_picture_tag( $matches, $img_tag, $original_src, $exclude_imgs );
-								}
-							}
-
-							return $matches[0];
+							return $this->process_picture_tag( $matches, $matches[0], $matches[2], $exclude_imgs );
 						},
 						$buffer
 					);

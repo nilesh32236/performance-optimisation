@@ -46,6 +46,15 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 		delete_option( 'wppo_img_info_salt' );
 		delete_option( 'wppo_review_dismissed' );
 		delete_option( 'wppo_review_snoozed_until' );
+		delete_option( 'wppo_web_vitals_rum' );
+		delete_option( 'wppo_ai_model' );
+		delete_option( 'wppo_web_vitals_trends' );
+		delete_option( 'wppo_web_vitals_trends_lock' );
+		delete_option( 'wppo_web_vitals_last_rescan' );
+		delete_option( 'wppo_preload_cron_last_id' );
+		delete_option( 'wppo_preload_cron_migrated' );
+		delete_option( 'wppo_litespeed_purge_queue' );
+		delete_option( 'wppo_lscache_tag_queue' );
 
 		// Delete post meta using the meta API to respect hooks.
 		delete_post_meta_by_key( '_wppo_preload_image_url' );
@@ -96,6 +105,16 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 		delete_transient( $transient_prefix . 'wppo_cache_size' );
 		delete_transient( $transient_prefix . 'wppo_total_js_css' );
 		delete_transient( $transient_prefix . 'wppo_wp_cache_fix_checked' );
+		delete_transient( $transient_prefix . 'wppo_crawler_server_ip' );
+
+		// Bulk-delete remaining plugin transients (per-URL crawler blacklist
+		// entries, rate-limit counters, CCSS statuses, ESI nonces, audit
+		// results, lock keys, and their timeout rows). Deleting transients is
+		// always safe — they are regenerable caches.
+		$like_transient = $wpdb->esc_like( '_transient_' ) . '%';
+		$like_site      = $wpdb->esc_like( '_site_transient_' ) . '%';
+		$like_wppo      = '%' . $wpdb->esc_like( 'wppo_' ) . '%';
+		$wpdb->query( "DELETE FROM {$wpdb->options} WHERE ( option_name LIKE '{$like_transient}' OR option_name LIKE '{$like_site}' ) AND option_name LIKE '{$like_wppo}'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 	}
 }
 

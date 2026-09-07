@@ -746,3 +746,401 @@ WordPress 6.9 filter for the template-enhancement buffer. @since NEXT.
 - `$output` *(string)* — Raw output buffer content.
 
 Used by `Cache::process_buffer_for_cache()` at priority 10 to process (image optimisation, minification, CDN rewrite) without saving; persistence is via `Cache::stash_cache()` on the finalized action above. See also `Main::process_used_css_only` (priority 20) and `Image_Optimisation::prioritize_lcp_in_buffer` (priority 30) on the same filter.
+
+---
+
+## Additional filters & actions (shipped, not yet in the main list)
+
+### `wppo_inline_combined_css`
+Filters whether the combined/minified CSS is inlined via core `wp_maybe_inline_styles()`. Return falsy to disable inlining (e.g. when serving the combined file from a CDN). @since NEXT.
+
+**Parameters:**
+- `$enabled` *(bool)* — Default `true`.
+
+---
+
+### `wppo_exclude_delay_js`
+Filters the resolved delay-JS exclusion list after preset merging. @since NEXT.
+
+**Parameters:**
+- `$preset` *(string[])* — Exclusion patterns.
+
+---
+
+### `wppo_exclude_defer_js`
+Filters the resolved defer-JS exclusion list after preset merging. @since NEXT.
+
+**Parameters:**
+- `$preset` *(string[])* — Exclusion patterns.
+
+---
+
+### `wppo_delay_js_exclusions`
+Filters the delay-JS exclusion preset list itself. @since NEXT.
+
+**Parameters:**
+- `$preset` *(string[])* — Preset exclusion patterns (`Main::get_delay_js_exclusions`).
+
+---
+
+### `wppo_htaccess_cache_vary_rules`
+Filters the `.htaccess` cache-vary rules block before writing. @since NEXT.
+
+**Parameters:**
+- `$rules` *(string[])* — Rule lines.
+- `$cache_vary` *(bool)* — Whether vary rules are enabled.
+
+---
+
+### `wppo_object_cache_dropin_path`
+Filters the object-cache drop-in path (`WP_CONTENT_DIR . '/object-cache.php'` by default). @since NEXT.
+
+**Parameters:**
+- `$path` *(string)* — Drop-in file path.
+
+---
+
+### `wppo_redis_allow_request_password`
+Filters whether a Redis password supplied via the REST request body may be used for `object_cache` operations. Default `false` — passwords must come from `WPPO_REDIS_PASSWORD` or the config file. @since NEXT.
+
+**Parameters:**
+- `$allowed` *(bool)* — Default `false`.
+
+---
+
+### `wppo_telemetry_verify_ssl`
+Filters whether the local telemetry cURL scan verifies TLS certificates. @since NEXT.
+
+**Parameters:**
+- `$verify_ssl` *(bool)* — Default `true`.
+- `$url` *(string)* — URL being scanned.
+
+---
+
+### `wppo_telemetry_allow_remote_head`
+Filters whether HEAD requests are allowed to non-local (remote) telemetry targets. Default `false` (localhost only). @since NEXT.
+
+**Parameters:**
+- `$allowed` *(bool)* — Default `false`.
+- `$url` *(string)* — Target URL.
+
+---
+
+### `wppo_debug_log` (action)
+Debug logging sink fired with diagnostic messages (cache domain validation, CDN purge failures). No-op unless listeners are attached. @since NEXT.
+
+**Parameters:**
+- `$message` *(string)* — Diagnostic message.
+
+---
+
+### `wppo_varnish_purge_max_urls`
+Filters the max URLs per Varnish purge batch (min 1). Default `20`. @since NEXT.
+
+**Parameters:**
+- `$max_urls` *(int)* — Batch size cap.
+
+---
+
+### `wppo_cron_discovery_limit`
+Filters the per-run discovery cap for preload URL discovery. Default `50`. @since NEXT.
+
+**Parameters:**
+- `$limit` *(int)* — Discovered items per cron run.
+
+---
+
+### `wppo_filesize_limit_bytes`
+Filters the max source image size accepted for conversion. Default `20 * 1024 * 1024`. @since NEXT.
+
+**Parameters:**
+- `$max_bytes` *(int)* — Byte limit.
+
+---
+
+### `wppo_convert_gain_map_images`
+Filters whether gain-map (HDR) images are converted. Return truthy to allow; default `false` skips them. @since NEXT.
+
+**Parameters:**
+- `$allow` *(bool)* — Default `false`.
+
+---
+
+### `wppo_font_metric_fallback_css`
+Filters the generated size-adjust fallback CSS for a font family. @since NEXT.
+
+**Parameters:**
+- `$css` *(string)* — Fallback `@font-face` CSS.
+- `$family` *(string)* — Font family name.
+
+---
+
+### `wppo_skip_combine_on_small_block_theme`
+Filters whether combining styles is skipped for small block themes under the handle limit. Return falsy to always combine. @since NEXT.
+
+**Parameters:**
+- `$skip` *(bool)* — Default `true`.
+- `$eligible_handles` *(string[])* — Handles considered.
+- `$limit` *(int)* — Handle-count threshold.
+
+---
+
+### `wppo_ccss_allowed_stylesheet_host`
+Filters whether an external stylesheet host is allowed during Critical CSS generation. Default `false` (self-hosted only). @since NEXT.
+
+**Parameters:**
+- `$allowed` *(bool)* — Default `false`.
+- `$host` *(string)* — Stylesheet host.
+
+---
+
+### `wppo_ccss_sanitize_inline`
+Filters sanitized inline Critical CSS before it is written/inlined. @since NEXT.
+
+**Parameters:**
+- `$css` *(string)* — Sanitized CSS.
+
+---
+
+### `wppo_crawler_use_nproc`
+Filters whether `nproc` may be probed (via `shell_exec`) as a fallback for CPU-count detection. Default `false`. @since NEXT.
+
+**Parameters:**
+- `$use_nproc` *(bool)* — Default `false`.
+
+---
+
+### `wppo_crawler_load_limit`
+Filters the server-load ceiling above which the crawler idles. @since NEXT.
+
+**Parameters:**
+- `$limit` *(float)* — Default derived from CPU count (min `0.1`).
+
+---
+
+### `wppo_crawler_is_overloaded`
+Filters the final overloaded verdict for the crawler. @since NEXT.
+
+**Parameters:**
+- `$overloaded` *(bool)* — Whether load exceeds the limit.
+- `$load` *(float)* — Current 1-minute load average.
+- `$limit` *(float)* — Configured load limit.
+
+---
+
+### `wppo_crawler_disable_curl`
+Filters whether curl_multi parallel fetching is disabled (falling back to `wp_remote_get`). @since NEXT.
+
+**Parameters:**
+- `$disable` *(bool)* — Default `false`.
+
+---
+
+### `wppo_crawler_full_matrix`
+Filters whether the crawler walks the full variant matrix per URL (Accept webp/avif × mobile/desktop × guest/role). @since NEXT.
+
+**Parameters:**
+- `$full` *(bool)* — Default `false` (core URLs only).
+
+---
+
+### `wppo_crawler_urls`
+Filters the resolved list of URLs the crawler will warm. @since NEXT.
+
+**Parameters:**
+- `$urls` *(string[])* — URL list.
+
+---
+
+### `wppo_crawler_sitemap_urls`
+Filters sitemap-discovered URLs before the crawler cap is enforced. @since NEXT.
+
+**Parameters:**
+- `$sitemap_urls` *(string[])* — Discovered URLs.
+- `$cap` *(int)* — Discovery cap.
+
+---
+
+### `wppo_litespeed_purge_sync`
+Filters whether LiteSpeed purges run synchronously instead of queueing. @since NEXT.
+
+**Parameters:**
+- `$purge_sync` *(bool)* — Resolved setting.
+
+---
+
+### `wppo_litespeed_effective_mode`
+Filters the effective LiteSpeed coexistence mode after detection. @since NEXT.
+
+**Parameters:**
+- `$mode` *(string)* — Effective mode string.
+- `$requested` *(string)* — Requested mode from settings.
+
+---
+
+### `wppo_litespeed_should_disable_optimizer`
+Filters whether the LiteSpeed built-in optimizer should be disabled while WPPO owns caching. @since NEXT.
+
+**Parameters:**
+- `$disable` *(bool)* — Default derived from effective mode.
+- `$mode` *(string)* — Effective mode.
+
+---
+
+### `wppo_litespeed_is_lscache_active`
+Filters whether the LSCache engine is detected as active for the current request. @since NEXT.
+
+**Parameters:**
+- `$active` *(bool)* — Detection result.
+
+---
+
+### `wppo_litespeed_lscache_vary_value`
+Filters the `_lscache_vary` cookie value (12-char hash). @since NEXT.
+
+**Parameters:**
+- `$value` *(string)* — Hash.
+- `$payload` *(array)* — Active vary payload used to build it.
+
+---
+
+### `wppo_litespeed_vary_fallback`
+Filters the vary cookie fallback header used when the vary bridge cannot seed a cookie. @since NEXT.
+
+**Parameters:**
+- `$fallback` *(string)* — Fallback header value.
+
+---
+
+### `wppo_litespeed_tag_post_id`
+Filters the post ID used for `Po.{id}` LiteSpeed tag fan-out. Return `0` to skip the post tag. @since NEXT.
+
+**Parameters:**
+- `$post_id` *(int)* — Queried object ID.
+
+---
+
+### `wppo_litespeed_nocache_reason`
+Filters the human-readable reason emitted with LiteSpeed no-cache headers. @since NEXT.
+
+**Parameters:**
+- `$reason` *(string)* — Reason slug.
+
+---
+
+### `wppo_litespeed_nocache_header`
+Filters the final `X-LiteSpeed-Cache-Control: no-cache` header line. @since NEXT.
+
+**Parameters:**
+- `$header` *(string)* — Header value.
+- `$reason` *(string)* — Reason slug.
+
+---
+
+### `wppo_litespeed_cache_control_header`
+Filters the LiteSpeed `Cache-Control` header value for the resolved TTL. @since NEXT.
+
+**Parameters:**
+- `$header` *(string)* — Header value.
+- `$ttl` *(int)* — Resolved TTL in seconds.
+
+---
+
+### `wppo_litespeed_esi_available`
+Filters whether LiteSpeed ESI is considered available (gates the whole ESI bridge). Default `false`. @since NEXT.
+
+**Parameters:**
+- `$available` *(bool)* — Default `false`.
+
+---
+
+### `wppo_esi_should_punch_hole`
+Filters whether an ESI block should punch a hole. Return `null` to defer to default detection. @since NEXT.
+
+**Parameters:**
+- `$punch` *(bool|null)* — Default `null` (auto).
+- `$context` *(string)* — Block context.
+
+---
+
+### `wppo_esi_block`
+Filters the ESI block name before the `<esi:include>` is assembled. @since NEXT.
+
+**Parameters:**
+- `$block` *(string)* — Block name.
+- `$attrs` *(array)* — Block attributes.
+
+---
+
+### `wppo_esi_placeholder`
+Filters the ESI placeholder HTML rendered when ESI is unavailable. @since NEXT.
+
+**Parameters:**
+- `$html` *(string)* — Placeholder markup.
+- `$block` *(string)* — Block name.
+- `$attrs` *(array)* — Block attributes.
+
+---
+
+### `wppo_esi_fragment_html`
+Filters the rendered ESI fragment HTML before output. @since NEXT.
+
+**Parameters:**
+- `$fragment` *(string)* — Fragment markup.
+- `$block` *(string)* — Block name.
+
+---
+
+### `wppo_esi_nonce_content`
+Filters the content rendered inside a nonce ESI fragment. @since NEXT.
+
+**Parameters:**
+- `$content` *(string)* — Fragment content.
+- `$nonce` *(string)* — Nonce value.
+
+---
+
+### `wppo_esi_private_headers_sent` (action)
+Fires when private/no-cache headers were sent in the ESI path (used by the DB queue fallback to know headers are gone). @since NEXT.
+
+**Parameters:**
+- `$scope` *(string)* — `'private'` or `'no-cache'`.
+
+---
+
+### `wppo_litespeed_esi_nonces`
+Filters the nonce allowlist map used by the LiteSpeed ESI bridge. @since NEXT.
+
+**Parameters:**
+- `$nonces` *(array)* — Nonce names → values.
+
+---
+
+### `wppo_video_placeholder_allowed`
+Filters whether a video iframe may be replaced by a click-to-play placeholder. @since NEXT.
+
+**Parameters:**
+- `$allowed` *(bool)* — Default `true`.
+- `$original_src` *(string)* — Iframe source URL.
+- `$iframe_tag` *(string)* — Full iframe tag.
+
+---
+
+### `wppo_video_play_button_html`
+Filters the play-button markup in the video placeholder. @since NEXT.
+
+**Parameters:**
+- `$play_button` *(string)* — Button HTML.
+- `$video_id` *(string)* — Video ID.
+- `$video_type` *(string)* — `youtube`|`vimeo`.
+
+---
+
+### `wppo_video_placeholder_html`
+Filters the final click-to-play placeholder markup. @since NEXT.
+
+**Parameters:**
+- `$placeholder_html` *(string)* — Placeholder HTML.
+- `$video_id` *(string)* — Video ID.
+- `$video_type` *(string)* — `youtube`|`vimeo`.
+- `$thumbnail_url` *(string)* — Poster image URL.

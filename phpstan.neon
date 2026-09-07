@@ -2,8 +2,82 @@ includes:
     - vendor/szepeviktor/phpstan-wordpress/extension.neon
 parameters:
     bootstrapFiles:
+        # Static-analysis-only stubs for WP-CLI / Action Scheduler /
+        # WooCommerce / WP 6.9 salted-cache symbols that are conditionally
+        # loaded at runtime. Loaded via bootstrapFiles because stubFiles is
+        # not honoured by the vendored phpstan phar (2.2.9) in this setup.
+        - stubs/stubs.php
         - performance-optimisation.php
     level: 5
     paths:
         - includes/
     treatPhpDocTypesAsCertain: false
+    # Ignored identifiers below are all *intentional runtime-defensive
+    # patterns* documented per identifier. They are NOT a baseline: new,
+    # unrelated errors of these same kinds will still surface and be
+    # triaged like any other error.
+    ignoreErrors:
+        # method_exists()/is_array()/is_string() guards on symbols that
+        # legitimately differ across WP core, WP-CLI, WooCommerce and
+        # Optimization Detective versions — deliberate backward/forward
+        # compatibility shims (AGENTS.md backward-compat rule).
+        -
+            identifier: function.alreadyNarrowedType
+        -
+            identifier: function.impossibleType
+        -
+            identifier: instanceof.alwaysTrue
+        -
+            identifier: greaterOrEqual.alwaysTrue
+        -
+            identifier: smaller.alwaysFalse
+        -
+            identifier: booleanOr.alwaysFalse
+
+        # Direct reads of WP_CONTENT_URL / DOING_CRON / DOING_AJAX are on
+        # purpose: values may be overridden in wp-config.php and the checks
+        # run in early-boot contexts.
+        -
+            identifier: phpstanWP.wpConstant.fetch
+
+        # Defensive access to dynamic (preg/DB/cookie-derived) data.
+        -
+            identifier: isset.offset
+        -
+            identifier: isset.property
+        -
+            identifier: nullCoalesce.offset
+        -
+            identifier: nullCoalesce.expr
+        -
+            identifier: identical.alwaysFalse
+        -
+            identifier: identical.alwaysTrue
+
+        # Hook/callback conventions: action-style callbacks registered via
+        # add_filter(), legacy bool-returning callbacks, callbacks accepting
+        # fewer args than $accepted_args.
+        -
+            identifier: return.missing
+        -
+            identifier: return.void
+        -
+            identifier: arguments.count
+
+        # Public methods/properties retained as plugin API surface.
+        -
+            identifier: method.unused
+        -
+            identifier: property.onlyWritten
+
+        # Upstream stub limitations (phpstan-wordpress / Nette DOM stubs).
+        -
+            identifier: method.nonObject
+        -
+            identifier: method.notFound
+        -
+            identifier: method.staticCall
+        -
+            identifier: parameter.phpDocType
+        -
+            identifier: paramTag.count

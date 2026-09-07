@@ -1200,7 +1200,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * wppo_litespeed_vary_groups.
 		 *
 		 * @since NEXT
-		 * @return array{role:bool,guest:bool,mobile:bool,webp:bool}
+		 * @return array{role:bool,guest:bool,mobile:bool,webp:bool,commenter:bool,postpass:bool}
 		 */
 		public static function get_vary_groups(): array {
 			$options = get_option( 'wppo_settings', array() );
@@ -1631,7 +1631,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 *
 		 * Mirrors LSCWP Tag taxonomy: WPPO, F (front), H (home/blog), PGS (paged),
 		 * Po.{id}, PT.{postType}, T.{termId}, A.{authorId}, D.{Ymd}, B.{blogId},
-		 * FD (feed), REST, HTTP.404, MIN (combined css), W. (widget) + stale/private scope.
+		 * FD (feed), REST, HTTP.404, MIN (combined css) + stale/private scope.
+		 * W.{hash} widget tags are emitted only by the ESI bridge.
 		 * Filterable via wppo_litespeed_tag (single) and wppo_litespeed_purge_tags (array).
 		 *
 		 * @since NEXT
@@ -1796,8 +1797,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 
 			// MIN: combined/minified assets.
 			$tags[] = 'MIN';
-			// W.: widget flag.
-			$tags[] = 'W.';
+			// W. widget tags (W.{hash}) are only emitted by the ESI bridge — a
+			// bare 'W.' tag has an empty value and would be a no-op/malformed
+			// entry in X-LiteSpeed-Tag, so it is intentionally not added here.
 
 			$tags = array_values( array_unique( $tags ) );
 
@@ -1806,6 +1808,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			 *
 			 * @since NEXT
 			 * @param string[] $tags Tag list.
+			 * @param string   $scope Cache scope ('public'|'private'|'stale').
 			 */
 			$tags = (array) apply_filters( 'wppo_litespeed_purge_tags', $tags, 'public' );
 

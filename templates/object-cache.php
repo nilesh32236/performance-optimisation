@@ -128,6 +128,21 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				 */
 				$plugins_dir = defined( 'WP_PLUGIN_DIR' ) ? WP_PLUGIN_DIR : ( ( defined( 'WP_CONTENT_DIR' ) ? rtrim( WP_CONTENT_DIR, '/\\' ) : '' ) . '/plugins' );
 				$helper_file = $plugins_dir . '/performance-optimisation/includes/redis-connect-helper.php';
+				if ( ! file_exists( $helper_file ) ) {
+					// Fallback: the plugin directory may have been renamed
+					// (e.g. mu-plugins installs or custom slugs). Glob every
+					// plugin's helper and prefer a directory matching the
+					// performance-optimisation slug fragment.
+					$candidates = glob( $plugins_dir . '/*/includes/redis-connect-helper.php' );
+					if ( is_array( $candidates ) ) {
+						foreach ( $candidates as $candidate ) {
+							if ( false !== strpos( $candidate, 'performance-optimisation' ) ) {
+								$helper_file = $candidate;
+								break;
+							}
+						}
+					}
+				}
 				if ( file_exists( $helper_file ) ) {
 					require_once $helper_file;
 				}
@@ -145,11 +160,14 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 
 				if ( is_wp_error( $connection ) ) {
 					$this->redis_connected = false;
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					$this->log_redis_failure_once( 'WPPO Redis object cache: connection failed — ' . $connection->get_error_message() . ' Serving from memory.' );
 					return;
 				}
 
 				$this->redis           = $connection;
 				$this->redis_connected = true;
+				$this->log_redis_recovery();
 
 				// Standalone replica support.
 				if ( 'standalone' === ( $config['mode'] ?? 'standalone' )
@@ -195,6 +213,61 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 			} catch ( \Throwable $e ) {
 				$this->redis_connected = false;
 				$this->redis_replica   = null;
+				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+				$this->log_redis_failure_once( 'WPPO Redis object cache: boot connection error — ' . $e->getMessage() . ' Serving from memory.' );
+			}
+		}
+
+		/**
+		 * Log a Redis failure at most once per 5 minutes (and once per request).
+		 *
+		 * Object-cache drop-ins boot on every request, so raw error_log() would
+		 * flood the log during an outage. A flag file in WP_CONTENT_DIR stores
+		 * the last-log time because the (failing) cache itself cannot be used
+		 * for throttling.
+		 *
+		 * @param string $message Failure description.
+		 * @return void
+		 */
+		private function log_redis_failure_once( string $message ): void {
+			static $logged_this_request = false;
+			if ( $logged_this_request ) {
+				return;
+			}
+
+			if ( ! defined( 'WP_CONTENT_DIR' ) ) {
+				$logged_this_request = true;
+				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+				error_log( $message );
+				return;
+			}
+
+			$flag_file = WP_CONTENT_DIR . '/wppo-redis-down.flag';
+			$now       = time();
+			$last      = @filemtime( $flag_file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			@touch( $flag_file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.file_system_operations_touch
+			if ( false === $last || ( $now - $last ) >= 300 ) {
+				$logged_this_request = true;
+				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+				error_log( $message );
+			}
+		}
+
+		/**
+		 * Log Redis recovery when a previously failed connection succeeds again.
+		 *
+		 * @return void
+		 */
+		private function log_redis_recovery(): void {
+			if ( ! defined( 'WP_CONTENT_DIR' ) ) {
+				return;
+			}
+
+			$flag_file = WP_CONTENT_DIR . '/wppo-redis-down.flag';
+			if ( @file_exists( $flag_file ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+				@unlink( $flag_file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.unlink_unlink
+				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+				error_log( 'WPPO Redis object cache: connection recovered.' );
 			}
 		}
 
@@ -272,11 +345,21 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 
 			$formatted_key = $this->get_key( $key, $group );
 
-			if ( $expire > 0 ) {
-				return $this->redis->setex( $formatted_key, $expire, $data );
-			}
+			try {
+				if ( $expire > 0 ) {
+					return $this->redis->setex( $formatted_key, $expire, $data );
+				}
 
-			return $this->redis->set( $formatted_key, $data );
+				return $this->redis->set( $formatted_key, $data );
+			} catch ( \Throwable $e ) {
+				// First failed write after a healthy connection: degrade to the
+				// in-memory store and log once so outages are diagnosable
+				// without flooding the log.
+				$this->redis_connected = false;
+				$this->log_redis_failure_once( 'WPPO Redis object cache: write failed — ' . $e->getMessage() . ' Dropping to memory until next boot.' );
+				$this->cache[ $formatted_key ] = $data;
+				return true;
+			}
 		}
 
 		/**
@@ -698,9 +781,15 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		/**
 		 * Non-persistent groups.
 		 *
+		 * Core keeps these groups in the DB as the source of truth (options,
+		 * the cron array among them); persisting them to Redis causes stale
+		 * reads after a Redis outage/restart (e.g. "Cron reschedule event
+		 * error: could_not_set" floods). They fall back to the per-request
+		 * in-memory store, matching core's no-object-cache behaviour.
+		 *
 		 * @var array
 		 */
-		private $no_mc_groups = array();
+		private $no_mc_groups = array( 'options', 'alloptions', 'network_options' );
 
 		/**
 		 * Global groups.
