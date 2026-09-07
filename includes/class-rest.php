@@ -448,7 +448,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @since 1.0.0
 		 * @return bool True if the user has permission, false otherwise.
 		 */
-		public function permission_callback( \WP_REST_Request $request = null ) {
+		public function permission_callback( ?\WP_REST_Request $request = null ): bool {
 			if ( ! current_user_can( 'manage_options' ) ) {
 				return false;
 			}
