@@ -606,6 +606,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		private const TAG_QUEUE_MAX = 100;
 
 		/**
+		 * Max tags kept in the DB_QUEUE fallback option (drop-oldest beyond this).
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const DB_QUEUE_MAX = 200;
+
+		/**
+		 * Age (seconds) after which an unconsumed DB_QUEUE fallback is discarded.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const DB_QUEUE_TTL = HOUR_IN_SECONDS;
+
+		/**
 		 * Whether shutdown flush is hooked.
 		 *
 		 * @since NEXT
@@ -712,10 +728,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			$key     = Util::transient_key( self::TAG_QUEUE );
 			$tags    = get_transient( $key );
 			$db_key  = Util::transient_key( self::DB_QUEUE );
-			$db_tags = get_option( $db_key, array() );
-			if ( ! is_array( $db_tags ) ) {
-				$db_tags = array();
-			}
+			$db_tags = self::read_db_queue( $db_key );
 			if ( is_array( $tags ) && ! empty( $tags ) ) {
 				delete_transient( $key );
 			} else {
@@ -749,9 +762,95 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			} else {
 				// Fallback: re-queue to DB for next request if headers already sent and lock not set.
 				// Already cleared above; if we couldn't send header, persist stale tag with next flush.
-				$remaining_key = Util::transient_key( self::DB_QUEUE );
-				update_option( $remaining_key, $tags, false );
+				// Capped to the newest DB_QUEUE_MAX tags and stamped so an
+				// unconsumed queue expires instead of accumulating forever
+				// (audit #888 finding 5).
+				self::write_db_queue( $db_key, $tags );
 			}
+		}
+
+		/**
+		 * Read the DB_QUEUE fallback option.
+		 *
+		 * Accepts the legacy plain string-list shape and the newer
+		 * `['tags' => ..., 'queued_at' => ...]` envelope. Expired envelopes are
+		 * deleted and treated as empty so a never-consumed queue cannot persist
+		 * forever (audit #888 finding 5). Tags are re-sanitized with the same
+		 * allowlist as queue_purge_tags() — values read back from the option
+		 * are interpolated into the X-LiteSpeed-Purge header and must never be
+		 * trusted as-is (Part 2 review: CR/LF header-injection guard).
+		 *
+		 * @param string $db_key Option key (blog-prefixed).
+		 * @return string[] Valid queued tags.
+		 * @since NEXT
+		 */
+		private static function read_db_queue( string $db_key ): array {
+			$stored = get_option( $db_key, array() );
+
+			if ( is_array( $stored ) && isset( $stored['tags'], $stored['queued_at'] ) ) {
+				$queued_at = (int) $stored['queued_at'];
+				if ( $queued_at <= 0 || ( time() - $queued_at ) > self::DB_QUEUE_TTL ) {
+					delete_option( $db_key );
+					return array();
+				}
+				$stored = $stored['tags'];
+			}
+
+			if ( ! is_array( $stored ) ) {
+				return array();
+			}
+
+			return array_values(
+				array_unique(
+					array_filter(
+						array_map(
+							static fn( $tag ) => preg_replace( '/[^A-Za-z0-9_\.\-]/', '', (string) $tag ),
+							$stored
+						),
+						static fn( $tag ) => '' !== $tag
+					)
+				)
+			);
+		}
+
+		/**
+		 * Persist purge tags to the DB_QUEUE fallback option.
+		 *
+		 * Caps the queue to the newest {@see DB_QUEUE_MAX} tags (drop-oldest) so
+		 * the option cannot grow unbounded when headers are already sent on
+		 * every request (cron, early flush) (audit #888 finding 5).
+		 *
+		 * @param string   $db_key Option key (blog-prefixed).
+		 * @param string[] $tags Tags to persist.
+		 * @return void
+		 * @since NEXT
+		 */
+		private static function write_db_queue( string $db_key, array $tags ): void {
+			$tags = array_values(
+				array_unique(
+					array_filter(
+						array_map( 'strval', $tags ),
+						static fn( $tag ) => '' !== $tag
+					)
+				)
+			);
+
+			if ( count( $tags ) > self::DB_QUEUE_MAX ) {
+				$tags = array_slice( $tags, -self::DB_QUEUE_MAX );
+			}
+
+			if ( empty( $tags ) ) {
+				return;
+			}
+
+			update_option(
+				$db_key,
+				array(
+					'tags'      => $tags,
+					'queued_at' => time(),
+				),
+				false
+			);
 		}
 
 		/**

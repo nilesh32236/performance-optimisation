@@ -386,6 +386,22 @@ Legacy alias for `wppo_litespeed_brotli`. @since NEXT.
 
 ---
 
+### `wppo_pagespeed_request_timeout`
+Filters the PageSpeed Insights API request timeout in seconds (default `60`, clamped 5–300). Long values risk wedging the Action Scheduler worker; short values risk false timeouts (audit #888 finding 19). @since NEXT.
+
+**Parameters:**
+- `$timeout` *(int)* — Timeout in seconds.
+
+---
+
+### `wppo_pagespeed_retry_delay`
+Filters the backoff delay in seconds before the single PageSpeed API retry on transport errors (default `2`, clamped 1–10). @since NEXT.
+
+**Parameters:**
+- `$retry_after` *(int)* — Delay in seconds.
+
+---
+
 ### `wppo_litespeed_can_cdn`
 Filters whether WPPO CDN rewriting is allowed. When `false`, `maybe_apply_cdn()` is skipped to avoid double CDN mapping when `litespeed_can_cdn` (LSCWP) is active. Respects `litespeed_can_cdn` ecosystem filter. @since NEXT.
 
@@ -1102,6 +1118,15 @@ Filters the ESI block name before the `<esi:include>` is assembled. @since NEXT.
 **Parameters:**
 - `$block` *(string)* — Block name.
 - `$attrs` *(array)* — Block attributes.
+
+---
+
+### `wppo_esi_block_label`
+Filters the accessible loading label announced on the OLS ESI placeholder (`role="status"` region) while the fragment is being fetched. The `nonce` block is hidden from assistive tech instead (audit #888 finding 7). @since NEXT.
+
+**Parameters:**
+- `$label` *(string)* — Loading label (default: localized per block name).
+- `$block` *(string)* — Block name.
 
 ---
 

@@ -35,10 +35,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		/**
 		 * Instance of the HtmlMin class used for minifying HTML content.
 		 *
+		 * Lazily instantiated on first use (audit #888 finding 26): building
+		 * and configuring HtmlMin runs parser setup even when minifyHTML is
+		 * disabled, so it is deferred until HTML minification actually runs.
+		 *
 		 * @since 1.0.0
-		 * @var HtmlMin $html_min
+		 * @since NEXT Lazy-instantiated via get_html_min().
+		 * @var HtmlMin|null $html_min
 		 */
-		private HtmlMin $html_min;
+		private ?HtmlMin $html_min = null;
+
+		/**
+		 * Base URL used for the same-domain-links-relative HtmlMin option.
+		 *
+		 * Computed during initialize_minification_settings() and consumed by
+		 * get_html_min() when the minifier is first built.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		private string $html_min_base_url = '';
 
 		/**
 		 * The resulting minified HTML content after processing.
@@ -165,7 +181,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 * @since 1.0.0
 		 */
 		private function initialize_minification_settings(): void {
-			$this->html_min = new HtmlMin();
+			// HtmlMin is lazy-instantiated by get_html_min() (audit #888
+			// finding 26) so disabled HTML minification pays no setup cost.
+
 			// Get the home URL (e.g., http://localhost/awm).
 			$home_url = Util::cached_home_url();
 
@@ -186,9 +204,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				}
 			}
 
+			$this->html_min_base_url = $base_url;
+		}
+
+		/**
+		 * Get (and lazily configure) the HtmlMin instance.
+		 *
+		 * @since NEXT
+		 * @return HtmlMin
+		 */
+		private function get_html_min(): HtmlMin {
+			if ( null !== $this->html_min ) {
+				return $this->html_min;
+			}
+
+			$html_min = new HtmlMin();
+
 			$remove_comments = ! empty( $this->options['file_optimisation']['removeHTMLComments'] );
 
-			$this->html_min
+			$html_min
 			->doOptimizeViaHtmlDomParser( true )
 			->doRemoveComments( $remove_comments )
 			->doSumUpWhitespace( true )
@@ -206,7 +240,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			->doRemoveSpacesBetweenTags( true )
 			->doRemoveOmittedQuotes( false )
 			->doRemoveOmittedHtmlTags( true )
-			->doMakeSameDomainsLinksRelative( array( $base_url ) );
+			->doMakeSameDomainsLinksRelative( array( $this->html_min_base_url ) );
+
+			$this->html_min = $html_min;
+
+			return $this->html_min;
 		}
 
 		/**
@@ -233,7 +271,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 
 			if ( ! empty( $this->options['file_optimisation']['minifyHTML'] ) ) {
 				try {
-					$html = $this->html_min->minify( $html );
+					$html = $this->get_html_min()->minify( $html );
 				} catch ( \Exception $e ) {
 					do_action( 'wppo_debug_log', 'WPPO HTML minify failed: ' . $e->getMessage(), array( 'exception' => $e ) );
 				}

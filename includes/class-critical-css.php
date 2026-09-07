@@ -346,10 +346,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return false;
 			}
 
-			libxml_use_internal_errors( true );
-			$dom = new \DOMDocument();
-			$dom->loadHTML( '<?xml encoding="UTF-8">' . $html );
-			libxml_clear_errors();
+			// Suppress libxml noise while parsing, but always restore the
+			// previous global state afterwards (audit #888 finding 1).
+			$prev_libxml = libxml_use_internal_errors( true );
+
+			try {
+				$dom = new \DOMDocument();
+				$dom->loadHTML( '<?xml encoding="UTF-8">' . $html );
+			} finally {
+				libxml_clear_errors();
+				libxml_use_internal_errors( $prev_libxml );
+			}
 
 			$xpath = new \DOMXPath( $dom );
 
@@ -949,58 +956,56 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					// Empty CCSS file — fallback to async loader.
 					echo '<script>!function(e){"use strict";var n=function(n,t,o){var r=e.document.createElement("link"),a=t||e.document.getElementsByTagName("script")[0];r.rel="stylesheet",r.href=n,r.media="only x",a.parentNode.insertBefore(r,a),setTimeout(function(){r.media=o||"all"}),r.onload=function(){r.media=o||"all"}};e.wppoLoadCSS=n}(window);</script>' . "\n";
 				}
-			} elseif ( function_exists( 'as_enqueue_async_action' ) ) {
-				$hook = 'wppo_generate_ccss';
-				if ( as_next_scheduled_action( $hook, array( 'template_hash' => $template_hash ), 'performance_optimisation' ) ) {
-					return;
+			} else {
+				// No CCSS file yet — queue async generation and never block the
+				// response. generate() fetches the page with a 30s timeout, so
+				// it must never run synchronously inside wp_head (audit #888
+				// finding 2). The payload is wrapped in a single-element array
+				// because Action Scheduler and WP-Cron both unpack stored args
+				// positionally — background_generate( array $args ) must receive
+				// the assoc array as its one argument.
+				$hook_args = array( array( 'template_hash' => $template_hash ) );
+				$queued    = false;
+				if ( function_exists( 'as_enqueue_async_action' ) ) {
+					$hook = 'wppo_generate_ccss';
+					if ( as_next_scheduled_action( $hook, $hook_args, 'performance_optimisation' ) ) {
+						$queued = true;
+					} else {
+						$queued = (bool) as_enqueue_async_action(
+							$hook,
+							$hook_args,
+							'performance_optimisation'
+						);
+					}
 				}
-				$action_id = as_enqueue_async_action(
-					$hook,
-					array( 'template_hash' => $template_hash ),
-					'performance_optimisation'
-				);
-				if ( $action_id ) {
+
+				if ( ! $queued ) {
+					// Action Scheduler unavailable or enqueue failed — schedule
+					// the same hook via WP-Cron as a fallback. Rendering is
+					// never delayed: the async loader below keeps stylesheets
+					// loading while the critical CSS is generated in background.
+					if ( ! wp_next_scheduled( 'wppo_generate_ccss', $hook_args ) ) {
+						$queued = (bool) wp_schedule_single_event(
+							time() + MINUTE_IN_SECONDS,
+							'wppo_generate_ccss',
+							$hook_args
+						);
+					} else {
+						$queued = true;
+					}
+				}
+
+				if ( $queued ) {
 					set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'pending', HOUR_IN_SECONDS );
-					return;
-				}
-				// Synchronous fallback only when async enqueue failed and we are on
-				// a local/dev host where cron is known to be broken.
-				$home_url = home_url( '/' );
-				$is_local = ( false !== strpos( $home_url, 'localhost' ) || false !== strpos( $home_url, '127.0.0.1' ) || 'local' === wp_get_environment_type() );
-				if ( ! $is_local ) {
-					return;
-				}
-				$url = self::get_sample_url( $template_slug );
-				if ( ! $url ) {
+				} else {
+					// Nothing could be scheduled (e.g. cron disabled) — surface
+					// the failure instead of reporting an hour of fake pending.
 					set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'failed', DAY_IN_SECONDS );
-					return;
 				}
-				$css = self::generate( $url );
-				if ( false === $css || '' === trim( (string) $css ) || preg_match( '/<\/style|<script/i', (string) $css ) ) {
-					set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'failed', DAY_IN_SECONDS );
-					return;
-				}
-				$dir = self::get_ccss_dir();
-				if ( '' === $dir ) {
-					set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'failed', DAY_IN_SECONDS );
-					return;
-				}
-				$fs = Util::init_filesystem();
-				if ( ! $fs ) {
-					set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'failed', DAY_IN_SECONDS );
-					return;
-				}
-				if ( ! $fs->is_dir( $dir ) && ! $fs->mkdir( $dir, FS_CHMOD_DIR ) ) {
-					set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'failed', DAY_IN_SECONDS );
-					return;
-				}
-				$file_tmp = self::get_ccss_file( $template_hash );
-				if ( ! $fs->put_contents( $file_tmp, $css, FS_CHMOD_FILE ) ) {
-					set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'failed', DAY_IN_SECONDS );
-					return;
-				}
-				set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'ready', WEEK_IN_SECONDS );
-				echo '<style id="wppo-critical-css">' . PHP_EOL . self::sanitize_inline_css( $css ) . PHP_EOL . '</style>' . PHP_EOL; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- CSS sanitized by sanitize_inline_css().
+
+				// Non-blocking fallback: expose the async loader while the
+				// critical CSS is generated in the background.
+				echo '<script>!function(e){"use strict";var n=function(n,t,o){var r=e.document.createElement("link"),a=t||e.document.getElementsByTagName("script")[0];r.rel="stylesheet",r.href=n,r.media="only x",a.parentNode.insertBefore(r,a),setTimeout(function(){r.media=o||"all"}),r.onload=function(){r.media=o||"all"}};e.wppoLoadCSS=n}(window);</script>' . "\n";
 			}
 		}
 
@@ -1127,10 +1132,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				$hash = self::get_template_hash( $template );
 				if ( function_exists( 'as_enqueue_async_action' ) ) {
 					$hook = 'wppo_generate_ccss';
-					if ( ! as_next_scheduled_action( $hook, array( 'template_hash' => $hash ), 'performance_optimisation' ) ) {
+					// Wrapped payload: AS unpacks args positionally, so the
+					// callback must receive the assoc array as one argument.
+					$hook_args = array( array( 'template_hash' => $hash ) );
+					if ( ! as_next_scheduled_action( $hook, $hook_args, 'performance_optimisation' ) ) {
 						as_enqueue_async_action(
 							$hook,
-							array( 'template_hash' => $hash ),
+							$hook_args,
 							'performance_optimisation'
 						);
 						++$queued;

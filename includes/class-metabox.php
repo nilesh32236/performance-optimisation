@@ -187,6 +187,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 												type="checkbox"
 												name="wppo_disabled_scripts[]"
 												value="<?php echo esc_attr( $script['handle'] ); ?>"
+												aria-label="<?php echo esc_attr( sprintf( /* translators: %s: script handle */ __( 'Disable script %s', 'performance-optimisation' ), $script['handle'] ) ); ?>"
 												<?php checked( $is_disabled ); ?>
 												<?php disabled( $is_protected ); ?>
 											/>
@@ -203,6 +204,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 										<td>
 											<select
 												name="wppo_delay_strategies[<?php echo esc_attr( $script['handle'] ); ?>]"
+												aria-label="<?php echo esc_attr( sprintf( /* translators: %s: script handle */ __( 'Delay strategy for %s', 'performance-optimisation' ), $script['handle'] ) ); ?>"
 												style="width: 100%;"
 												<?php disabled( $is_protected ); ?>
 											>
@@ -223,6 +225,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 										<td>
 											<select
 												name="wppo_delay_priorities[<?php echo esc_attr( $script['handle'] ); ?>]"
+												aria-label="<?php echo esc_attr( sprintf( /* translators: %s: script handle */ __( 'Delay priority for %s', 'performance-optimisation' ), $script['handle'] ) ); ?>"
 												style="width: 100%;"
 												<?php disabled( $is_protected ); ?>
 											>
@@ -268,6 +271,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 												type="checkbox"
 												name="wppo_disabled_styles[]"
 												value="<?php echo esc_attr( $style['handle'] ); ?>"
+												aria-label="<?php echo esc_attr( sprintf( /* translators: %s: style handle */ __( 'Disable style %s', 'performance-optimisation' ), $style['handle'] ) ); ?>"
 												<?php checked( $is_disabled ); ?>
 												<?php disabled( $is_protected ); ?>
 											/>

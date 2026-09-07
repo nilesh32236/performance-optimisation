@@ -74,11 +74,46 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * Constructor function.
 		 *
 		 * @since 1.4.0
+		 * @since NEXT Filtered drop-in paths are validated for wp-content containment.
 		 */
 		public function __construct() {
-			$this->dropin_path   = apply_filters( 'wppo_object_cache_dropin_path', WP_CONTENT_DIR . '/object-cache.php' );
+			$default_dropin = wp_normalize_path( WP_CONTENT_DIR . '/object-cache.php' );
+			$filtered       = apply_filters( 'wppo_object_cache_dropin_path', WP_CONTENT_DIR . '/object-cache.php' );
+
+			// Non-string filter returns (arrays/objects) are rejected outright —
+			// casting would raise an Array-to-string conversion warning in PHP 8.
+			$dropin_path = is_string( $filtered ) ? wp_normalize_path( $filtered ) : $default_dropin;
+
+			// Path containment (audit #888 finding 22): the filter must never
+			// point reads/writes/deletes outside wp-content. Reject empty paths,
+			// traversal segments, and anything outside WP_CONTENT_DIR, falling
+			// back to the canonical drop-in location.
+			$content_dir = wp_normalize_path( WP_CONTENT_DIR );
+			if (
+				'' === $dropin_path
+				|| false !== strpos( $dropin_path, '..' )
+				|| 0 !== strpos( $dropin_path, $content_dir . '/' )
+			) {
+				$dropin_path = $default_dropin;
+			}
+
+			$this->dropin_path   = $dropin_path;
 			$this->config_path   = WP_CONTENT_DIR . '/wppo-redis-config.php';
 			$this->template_path = WPPO_PLUGIN_PATH . 'templates/object-cache.php';
+		}
+
+		/**
+		 * Active drop-in path (containment-validated).
+		 *
+		 * Consumers (e.g. System_Info::detect_dropin_ownership()) must use this
+		 * instead of assuming the canonical WP_CONTENT_DIR location, so a
+		 * relocated drop-in is still reported correctly.
+		 *
+		 * @since NEXT
+		 * @return string
+		 */
+		public function get_dropin_path(): string {
+			return $this->dropin_path;
 		}
 
 		/**
@@ -357,6 +392,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				return new \WP_Error( 'write_error', __( 'Cannot copy object-cache.php drop-in.', 'performance-optimisation' ) );
 			}
 
+			// The drop-in changed — System Info's cached ownership verdict is
+			// stale (audit #888 finding 25). is_callable also covers a partially
+			// loaded class (Part 2 review round 2).
+			if ( is_callable( array( 'PerformanceOptimise\Inc\System_Info', 'flush_dropin_cache' ) ) ) {
+				System_Info::flush_dropin_cache();
+			}
+
 			// Optionally, ping cache flush if enabled just to clear old cruft.
 			wp_cache_flush();
 
@@ -390,6 +432,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 
 			if ( file_exists( $this->config_path ) ) {
 				$wp_filesystem->delete( $this->config_path );
+			}
+
+			// The drop-in changed — System Info's cached ownership verdict is
+			// stale (audit #888 finding 25). is_callable also covers a partially
+			// loaded class (Part 2 review round 2).
+			if ( is_callable( array( 'PerformanceOptimise\Inc\System_Info', 'flush_dropin_cache' ) ) ) {
+				System_Info::flush_dropin_cache();
 			}
 
 			return true;

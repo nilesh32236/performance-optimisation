@@ -64,6 +64,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		private const SERVER_IP_KEY = 'wppo_crawler_server_ip';
 
 		/**
+		 * Maximum URLs carried by a single deferred crawler batch event.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const DEFERRED_BATCH_MAX_URLS = 50;
+
+		/**
+		 * Transient TTL (seconds) for deferred crawler batch payloads.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const DEFERRED_BATCH_TTL = 2 * HOUR_IN_SECONDS;
+
+		/**
 		 * Get concurrency (2-4) filtered via wppo_crawler_concurrency.
 		 *
 		 * Adaptive by load: when overloaded, caller should defer; when load is
@@ -594,15 +610,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 				if ( class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 					Log::add( 'LiteSpeed crawler deferred: high load' );
 				}
-				if ( function_exists( 'wp_schedule_single_event' ) && function_exists( 'wp_next_scheduled' ) ) {
-					$delay = (int) ( self::get_load_limit() * 2 );
-					if ( $delay < 60 ) {
-						$delay = 60;
-					}
-					if ( ! wp_next_scheduled( 'wppo_litespeed_crawler_batch', array( $urls ) ) ) {
-						wp_schedule_single_event( time() + $delay, 'wppo_litespeed_crawler_batch', array( $urls ) );
-					}
-				}
+				self::defer_crawl_batch( $urls );
 				return array(
 					'success' => 0,
 					'failed'  => 0,
@@ -775,6 +783,60 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 				'failed'  => $failed,
 				'skipped' => $skipped_blacklist,
 			);
+		}
+
+		/**
+		 * Defer a crawler batch when the server is overloaded.
+		 *
+		 * The full URL list (up to 500 entries, 50-200KB serialized) is never
+		 * passed as WP-Cron event args — single-event args are persisted into
+		 * wp_options and bloat it (audit #888 finding 6). Instead the batch is
+		 * chunked into ≤ {@see DEFERRED_BATCH_MAX_URLS} groups, each stored in a
+		 * blog-prefixed transient, and one single-event is scheduled per chunk
+		 * with only the batch ID as argument. The transient is deleted on
+		 * consumption (Cron::litespeed_crawler_batch()) and expires after
+		 * {@see DEFERRED_BATCH_TTL} even when never consumed; deactivation also
+		 * clears the events via Cron::SCHEDULED_HOOKS. Orphaned payloads
+		 * (transients whose event was cleared) therefore live at most two hours.
+		 *
+		 * @param string[] $urls URLs to defer.
+		 * @return void
+		 * @since NEXT
+		 */
+		private static function defer_crawl_batch( array $urls ): void {
+			if ( ! function_exists( 'wp_schedule_single_event' ) || ! function_exists( 'wp_next_scheduled' ) ) {
+				return;
+			}
+
+			$delay = (int) ( self::get_load_limit() * 2 );
+			if ( $delay < 60 ) {
+				$delay = 60;
+			}
+
+			$chunks = array_chunk( $urls, self::DEFERRED_BATCH_MAX_URLS );
+
+			foreach ( $chunks as $chunk ) {
+				$chunk = array_values( $chunk );
+				// uniqid('', true) adds entropy so two chunks generated within the
+				// same second (or with identical content) cannot collide.
+				$batch_id      = md5( uniqid( '', true ) . implode( "\n", $chunk ) );
+				$transient_key = Util::transient_key( 'wppo_crawler_batch_' . $batch_id );
+
+				if ( set_transient( $transient_key, $chunk, self::DEFERRED_BATCH_TTL ) ) {
+					// WP-Cron unpacks stored args positionally: the callback must
+					// receive the batch ID string as its single argument, so the
+					// args array is exactly array( $batch_id ).
+					$args = array( $batch_id );
+				} else {
+					// Transient storage unavailable — fall back to bounded
+					// URL-array args (≤ DEFERRED_BATCH_MAX_URLS per event).
+					$args = array( $chunk );
+				}
+
+				if ( ! wp_next_scheduled( 'wppo_litespeed_crawler_batch', $args ) ) {
+					wp_schedule_single_event( time() + $delay, 'wppo_litespeed_crawler_batch', $args );
+				}
+			}
 		}
 
 		/**

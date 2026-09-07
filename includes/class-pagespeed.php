@@ -215,13 +215,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			/* translators: %s is the PageSpeed API request URL (API key redacted). */
 			Log::add( sprintf( __( 'PageSpeed API request: %s', 'performance-optimisation' ), esc_url( $redacted_url ) ) );
 
-			$response = wp_remote_get(
-				$query_url,
-				array(
-					'timeout'   => 120,
-					'sslverify' => true,
-				)
-			);
+			/**
+			 * Filters the PageSpeed API request timeout in seconds.
+			 *
+			 * Defaults to 60s (the API commonly takes 30-90s). Long values
+			 * risk wedging the AS worker; short values risk false timeouts.
+			 *
+			 * @since NEXT
+			 * @param int $timeout Timeout in seconds.
+			 */
+			$timeout = (int) apply_filters( 'wppo_pagespeed_request_timeout', 60 );
+			$timeout = max( 5, min( 300, $timeout ) );
+
+			$response = self::request_pagespeed_api( $query_url, $timeout );
 
 			if ( is_wp_error( $response ) ) {
 				$clean_error = sanitize_text_field( str_replace( ABSPATH, '', $response->get_error_message() ) );
@@ -306,6 +312,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * @param  string $url      The scanned URL.
 		 * @param  string $strategy Either 'mobile' or 'desktop'.
 		 * @param  string $message  Human-readable error message.
+		 * @return void
+		 */
+		/**
+		 * Perform the PageSpeed API request with a single retry on transport error.
+		 *
+		 * One retry with a short backoff covers transient transport failures
+		 * (timeout, DNS). HTTP-level and API-level errors are handled by the
+		 * caller and are not retried (audit #888 finding 19).
+		 *
+		 * @since NEXT
+		 * @param string $query_url Fully built API URL.
+		 * @param int    $timeout   Request timeout in seconds.
+		 * @return array|WP_Error Response array or error object.
+		 */
+		private static function request_pagespeed_api( string $query_url, int $timeout ) {
+			$args = array(
+				'timeout'   => $timeout,
+				'sslverify' => true,
+			);
+
+			$response = wp_remote_get( $query_url, $args );
+
+			if ( is_wp_error( $response ) ) {
+				/**
+				 * Filters the backoff delay (seconds) before the single PageSpeed retry.
+				 *
+				 * @since NEXT
+				 * @param int $retry_after Delay in seconds.
+				 */
+				$retry_after = (int) apply_filters( 'wppo_pagespeed_retry_delay', 2 );
+				$retry_after = max( 1, min( 10, $retry_after ) );
+				sleep( $retry_after );
+				$response = wp_remote_get( $query_url, $args );
+			}
+
+			return $response;
+		}
+
+		/**
+		 * Persist a scan failure for later surfacing in the admin UI.
+		 *
+		 * @since NEXT
+		 * @param string $url      Scanned URL.
+		 * @param string $strategy Strategy slug.
+		 * @param string $message  Failure message.
 		 * @return void
 		 */
 		private static function store_failure( string $url, string $strategy, string $message ): void {

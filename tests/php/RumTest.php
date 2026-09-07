@@ -82,6 +82,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'wp_next_scheduled' )->justReturn( false );
 		Functions\when( 'wp_schedule_single_event' )->justReturn( true );
 		Functions\when( 'wp_rand' )->justReturn( 2 );
+		Functions\when( 'wp_json_encode' )->alias( 'json_encode' );
 		// Deterministic token derivation so tests can predict the valid token.
 		Functions\when( 'wp_hash' )->alias(
 			static function ( $data ) {
@@ -366,5 +367,88 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertFalse( $result['ok'] );
 		$this->assertSame( 429, $result['status'] );
+	}
+
+	/**
+	 * Test that print_config() emits the beacon config through
+	 * wp_print_inline_script_tag() with tag-safe JSON — a crafted REQUEST_URI
+	 * path must never split out of the <script> element (audit #888 finding 9).
+	 */
+	public function test_print_config_escapes_script_breakout(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		Functions\when( 'rest_url' )->justReturn( 'http://example.com/wp-json/performance-optimisation/v1/rum_collect' );
+
+		$printed = array();
+		Functions\when( 'wp_print_inline_script_tag' )->alias(
+			static function ( $javascript, $attributes = array() ) use ( &$printed ) {
+				$printed[] = array( $javascript, $attributes );
+			}
+		);
+
+		$_SERVER['REQUEST_URI'] = '/a</script><script>alert(1)</script>b';
+
+		RUM::print_config();
+
+		$this->assertCount( 1, $printed );
+		[ $javascript, $attributes ] = $printed[0];
+		$this->assertStringStartsWith( 'window.wppoRum=', $javascript );
+		// Tag characters must be hex-escaped so the JSON cannot terminate the
+		// inline <script> element.
+		$this->assertStringNotContainsString( '</', $javascript );
+		$this->assertStringNotContainsString( '<script', $javascript );
+		$this->assertStringContainsString( '\u003C', $javascript );
+		$this->assertSame( array( 'id' => 'wppo-rum-config' ), $attributes );
+	}
+
+	/**
+	 * Test that the aggregate option is hard-capped on write: preloaded days
+	 * beyond the total-bucket budget are dropped oldest-first (audit #888
+	 * finding 10).
+	 */
+	public function test_flush_caps_total_path_buckets(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		$_SERVER['REMOTE_ADDR']         = '203.0.113.7';
+
+		$metric    = array(
+			'n'   => 1,
+			'sum' => 100.0,
+			'min' => 100.0,
+			'max' => 100.0,
+		);
+		$preloaded = array();
+		for ( $day_offset = 13; $day_offset >= 1; $day_offset-- ) {
+			$date               = gmdate( 'Y-m-d', time() - ( $day_offset * DAY_IN_SECONDS ) );
+			$preloaded[ $date ] = array();
+			for ( $p = 0; $p < 52; $p++ ) {
+				$preloaded[ $date ][ "/old-{$day_offset}-{$p}/" ] = array( 'lcp' => $metric );
+			}
+		}
+		$this->options[ RUM::OPTION ] = $preloaded;
+
+		RUM::collect(
+			array(
+				'token' => $this->valid_token( '/trigger/' ),
+				'path'  => '/trigger/',
+				'lcp'   => 1200,
+			)
+		);
+
+		$data = RUM::get_data();
+
+		$total_paths = 0;
+		foreach ( $data as $day_bucket ) {
+			$total_paths += count( $day_bucket );
+		}
+		$this->assertLessThanOrEqual( RUM::MAX_TOTAL_PATHS, $total_paths );
+		// The newest preloaded day must survive; the oldest day is dropped.
+		$newest = gmdate( 'Y-m-d', time() - DAY_IN_SECONDS );
+		$this->assertArrayHasKey( $newest, $data );
+		$this->assertArrayNotHasKey( gmdate( 'Y-m-d', time() - ( 13 * DAY_IN_SECONDS ) ), $data );
 	}
 }

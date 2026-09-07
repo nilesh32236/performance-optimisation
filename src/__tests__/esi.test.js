@@ -73,6 +73,31 @@ describe( 'ESI placeholder hydration (esi.js)', () => {
 		expect( el.hasAttribute( 'data-wppo-nonce' ) ).toBe( false );
 	} );
 
+	it( 'clears loading-state ARIA attributes after hydration', async () => {
+		// The PHP placeholder renders role=status + aria-live/aria-busy while
+		// the fragment loads (audit #888 finding 7); hydration must drop them
+		// so the hydrated widget provides its own semantics.
+		document.body.innerHTML =
+			'<div data-wppo-esi="cart" data-nonce="abc" role="status" aria-live="polite" aria-busy="true" aria-label="Loading shopping cart…"></div>';
+		const el = document.querySelector( '[data-wppo-esi="cart"]' );
+
+		global.fetch.mockResolvedValueOnce( {
+			ok: true,
+			json: async () => ( {
+				success: true,
+				data: { html: '<span>cart(1)</span>' },
+			} ),
+		} );
+
+		await hydrateElement( el );
+
+		expect( el.hasAttribute( 'role' ) ).toBe( false );
+		expect( el.hasAttribute( 'aria-live' ) ).toBe( false );
+		expect( el.hasAttribute( 'aria-busy' ) ).toBe( false );
+		expect( el.hasAttribute( 'aria-label' ) ).toBe( false );
+		expect( el.innerHTML ).toBe( '<span>cart(1)</span>' );
+	} );
+
 	it( 'buildEsiUrl returns the bare ajax URL with no nonce in the query', () => {
 		global.wppoSettings = { ajaxUrl: '/custom-ajax.php' };
 		expect( buildEsiUrl() ).toBe( '/custom-ajax.php' );

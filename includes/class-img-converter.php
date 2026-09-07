@@ -1731,12 +1731,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 *
 		 * Runs inside the hourly cron so images uploaded before activation (or
 		 * while conversion was disabled) enter the queue instead of relying on
-		 * lazy frontend discovery. Bounded per run; newest attachments first.
+		 * lazy frontend discovery. Bounded per run. Two rotating windows are
+		 * scanned (audit #888 finding 4):
+		 *
+		 * - a "head" window: attachments newer than the highest ID seen so far
+		 *   (`wppo_img_scan_cursor_max`) — new uploads are covered immediately
+		 *   without waiting for the rotation;
+		 * - a "tail" window: attachments below the cursor
+		 *   (`wppo_img_scan_cursor`) — each run continues the rotation downward
+		 *   and rewinds once the oldest attachment is reached, so older media
+		 *   are eventually inspected. Without the cursor only the newest
+		 *   `limit` attachments would ever be revisited.
 		 *
 		 * @param string[] $formats Conversion formats to ensure ('webp', 'avif').
-		 * @param int      $limit   Maximum attachments inspected per run.
+		 * @param int      $limit   Maximum attachments inspected per window.
 		 * @return int Number of files newly queued.
-		 * @since NEXT
+		 * @since NEXT Cursor pagination via wppo_img_scan_cursor.
 		 */
 		public static function queue_unconverted_library_images( array $formats, int $limit = 50 ): int {
 			global $wpdb;
@@ -1747,15 +1757,50 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 			$mime_types   = array( 'image/jpeg', 'image/png', 'image/webp' );
 			$placeholders = implode( ',', array_fill( 0, count( $mime_types ), '%s' ) );
+			$base_where   = " WHERE post_type = 'attachment' AND post_mime_type IN ( " . $placeholders . ' )';
+			$cursor       = (int) get_option( 'wppo_img_scan_cursor', 0 );
+			$cursor_max   = (int) get_option( 'wppo_img_scan_cursor_max', 0 );
 
-			// phpcs:ignore WordPress.WP.PreparedSQL.NotPrepared -- Placeholder list built from a fixed internal constant set; only LIMIT is bound.
-			$sql = 'SELECT ID FROM ' . $wpdb->posts . " WHERE post_type = 'attachment' AND post_mime_type IN ( " . $placeholders . ' ) ORDER BY ID DESC LIMIT %d';
+			// Head window: IDs above the highest-seen ID (new uploads only).
+			$head_args  = $cursor_max > 0 ? array_merge( $mime_types, array( $cursor_max, $limit ) ) : array_merge( $mime_types, array( $limit ) );
+			$head_where = $cursor_max > 0 ? ' AND ID > %d' : '';
+			// phpcs:ignore WordPress.WP.PreparedSQL.NotPrepared -- Placeholder list built from a fixed internal constant set; only the cursor bound and LIMIT are bound.
+			$head_sql = 'SELECT ID FROM ' . $wpdb->posts . $base_where . $head_where . ' ORDER BY ID DESC LIMIT %d';
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared -- Bounded indexed lookups; placeholder list built from fixed internal constants.
+			$head_ids = $wpdb->get_col( $wpdb->prepare( $head_sql, $head_args ) );
 
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared -- Bounded indexed lookup; placeholder list built from fixed internal constants, only LIMIT is bound.
-			$attachment_ids = $wpdb->get_col( $wpdb->prepare( $sql, array_merge( $mime_types, array( $limit ) ) ) );
+			// Tail window: continue the descending rotation below the cursor.
+			$tail_ids = array();
+			if ( $cursor > 0 ) {
+				// phpcs:ignore WordPress.WP.PreparedSQL.NotPrepared -- Placeholder list built from a fixed internal constant set; only cursor and LIMIT are bound.
+				$tail_sql = 'SELECT ID FROM ' . $wpdb->posts . $base_where . ' AND ID < %d ORDER BY ID DESC LIMIT %d';
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared -- Bounded indexed lookup; placeholder list built from fixed internal constants.
+				$tail_ids = $wpdb->get_col( $wpdb->prepare( $tail_sql, array_merge( $mime_types, array( $cursor, $limit ) ) ) );
+			} else {
+				// First run: the head window IS the newest-$limit scan.
+				$tail_ids = $head_ids;
+				$head_ids = array();
+			}
 
-			if ( empty( $attachment_ids ) || ! is_array( $attachment_ids ) ) {
+			if ( ( empty( $tail_ids ) || ! is_array( $tail_ids ) ) && ( empty( $head_ids ) || ! is_array( $head_ids ) ) ) {
+				// Tail exhausted — rewind so the next run starts over from the
+				// newest non-cursor-max attachments.
+				if ( 0 !== $cursor ) {
+					update_option( 'wppo_img_scan_cursor', 0, false );
+				}
 				return 0;
+			}
+
+			// Advance the tail cursor below the oldest ID of this batch so the
+			// next run continues the rotation, and remember the highest ID seen
+			// so the head window only covers genuinely new uploads.
+			if ( ! empty( $tail_ids ) && is_array( $tail_ids ) ) {
+				update_option( 'wppo_img_scan_cursor', min( array_map( 'intval', $tail_ids ) ), false );
+			}
+			$all_ids = array_merge( is_array( $head_ids ) ? $head_ids : array(), is_array( $tail_ids ) ? $tail_ids : array() );
+			$new_max = max( array_map( 'intval', $all_ids ) );
+			if ( $new_max > $cursor_max ) {
+				update_option( 'wppo_img_scan_cursor_max', $new_max, false );
 			}
 
 			// Same eligibility list as the queue gate itself.
@@ -1766,7 +1811,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 			$queued = 0;
 
-			foreach ( $attachment_ids as $attachment_id ) {
+			foreach ( $all_ids as $attachment_id ) {
 				$file = get_attached_file( (int) $attachment_id );
 
 				if ( empty( $file ) || ! file_exists( $file ) ) {

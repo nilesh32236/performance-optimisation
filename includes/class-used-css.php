@@ -711,9 +711,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		/**
 		 * Generate used CSS for a given HTML content and CSS assets.
 		 *
+		 * Degraded path: when the WP_HTML_Tag_Processor class is unavailable
+		 * (WordPress < 6.2) the used-selector set cannot be extracted, so
+		 * purging is skipped entirely and the unprocessed (combined) CSS is
+		 * returned instead of over-purging every rule and breaking styles
+		 * (audit #888 finding 3).
+		 *
 		 * @param string $html       The page HTML.
 		 * @param array  $css_assets Array of CSS content strings (keyed by handle).
-		 * @return string Purged CSS content.
+		 * @return string Purged CSS content, or the unprocessed combined CSS when purging is unavailable.
 		 * @since 1.9.0
 		 */
 		public function generate_used_css( string $html, array $css_assets ): string {
@@ -721,12 +727,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				return '';
 			}
 
-			$used_selectors = $this->extract_selectors( $html );
-
 			$combined_css = '';
 			foreach ( $css_assets as $css_content ) {
 				$combined_css .= $css_content . "\n";
 			}
+
+			if ( ! class_exists( '\WP_HTML_Tag_Processor' ) ) {
+				// This runs per page view (and per post in bulk regen) — log
+				// the degraded mode at most once per request (Part 2 review).
+				static $logged_skip = false;
+				if ( ! $logged_skip ) {
+					$logged_skip = true;
+					Log::add(
+						__( 'Used-CSS purging skipped: WP_HTML_Tag_Processor is unavailable (requires WordPress 6.2+). Serving unprocessed CSS instead.', 'performance-optimisation' )
+					);
+				}
+				return $combined_css;
+			}
+
+			$used_selectors = $this->extract_selectors( $html );
 
 			$parsed = $this->parse_css( $combined_css );
 

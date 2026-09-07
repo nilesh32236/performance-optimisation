@@ -342,11 +342,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 
 			$cookie_name = self::get_cookie_name();
 			// Inline script: privacy-safe invalidation.
+			//
+			// Contract (audit #888 finding 15): the script never interpolates
+			// raw user input — the cookie name is `wordpress_bfcache_session_`
+			// + a site hash and the token is derived from the WP session token
+			// (server-side state), both embedded as tag-safe JSON (JSON_HEX_*
+			// flags so neither value can break out of the <script> element).
+			// The token's only job is to let the client detect a stale session
+			// (logout / user switch) from the cached copy and force a reload.
+			// The cookie is read via an exact `name=` prefix split (no RegExp),
+			// so even a future cookie-name change with regex metacharacters
+			// cannot break parsing.
+			// Sites running a CSP that requires nonces can add the nonce
+			// attribute via the core `wp_inline_script_attributes` filter —
+			// the plugin cannot know a site's nonce value, so it deliberately
+			// does not emit one itself.
+			//
 			// Use wp_print_inline_script_tag if available (WP 6.0+), else echo.
-			$js = sprintf(
-				'(function(){var c=%s,t=%s,q="wppo_bfcache_reloaded";function g(){var r=new RegExp("(?:^|;\\s*)"+c+"=([^;]+)");var m=document.cookie.match(r);return m?decodeURIComponent(m[1]):null}function i(){var u=new URL(window.location.href);if(u.searchParams.has(q))return;document.documentElement.style.opacity="0";try{document.documentElement.innerHTML=""}catch(e){}u.searchParams.set(q,String(Math.random()));history.replaceState({},\"\",u.href);window.location.reload()}function h(e){if(e.persisted&&t!==g()){i();return}var u=new URL(window.location.href);if(u.searchParams.has(q)){u.searchParams.delete(q);history.replaceState({},\"\",u.href)}}if(t!==g()){i()}else{window.addEventListener("pageshow",h)}})();',
-				wp_json_encode( $cookie_name ),
-				wp_json_encode( $token )
+			$json_flags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
+			$js         = sprintf(
+				'(function(){var c=%1$s,t=%2$s,q="wppo_bfcache_reloaded";function g(){var p=c+"=",a=document.cookie.split(/; */);for(var i=0;i<a.length;i++){var kv=a[i];if(kv.indexOf(p)===0){return decodeURIComponent(kv.substring(p.length))}}return null}function i(){var u=new URL(window.location.href);if(u.searchParams.has(q))return;document.documentElement.style.opacity="0";try{document.documentElement.innerHTML=""}catch(e){}u.searchParams.set(q,String(Math.random()));history.replaceState({},\"\",u.href);window.location.reload()}function h(e){if(e.persisted&&t!==g()){i();return}var u=new URL(window.location.href);if(u.searchParams.has(q)){u.searchParams.delete(q);history.replaceState({},\"\",u.href)}}if(t!==g()){i()}else{window.addEventListener("pageshow",h)}})();',
+				wp_json_encode( $cookie_name, $json_flags ),
+				wp_json_encode( $token, $json_flags )
 			);
 
 			if ( function_exists( 'wp_print_inline_script_tag' ) ) {

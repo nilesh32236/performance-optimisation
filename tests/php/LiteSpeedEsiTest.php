@@ -339,6 +339,24 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 		$html = LiteSpeed_ESI::render_esi_placeholder( 'cart', array() );
 		$this->assertStringContainsString( 'data-wppo-esi="cart"', $html );
 		$this->assertStringContainsString( 'data-nonce', $html );
+		// Accessible loading semantics on the OLS fallback (audit #888 finding 7).
+		$this->assertStringContainsString( 'role="status"', $html );
+		$this->assertStringContainsString( 'aria-live="polite"', $html );
+		$this->assertStringContainsString( 'aria-busy="true"', $html );
+		$this->assertStringContainsString( 'aria-label=', $html );
+		// The nonce hole is hidden from assistive tech instead — no loading
+		// region semantics (Part 2 review).
+		$nonce_html = LiteSpeed_ESI::render_esi_placeholder( 'nonce', array() );
+		$this->assertStringContainsString( 'aria-hidden="true"', $nonce_html );
+		$this->assertStringNotContainsString( 'role="status"', $nonce_html );
+		$this->assertStringNotContainsString( 'aria-live', $nonce_html );
+		$this->assertStringNotContainsString( 'aria-busy', $nonce_html );
+		// Caller-provided overrides win (case-insensitively) over defaults: the
+		// custom aria-label replaces the default one, other defaults remain.
+		$override = LiteSpeed_ESI::render_esi_placeholder( 'cart', array( 'ARIA-LABEL' => 'Custom cart label' ) );
+		$this->assertStringContainsString( 'ARIA-LABEL="Custom cart label"', $override );
+		$this->assertStringNotContainsString( 'aria-label="Loading shopping cart', $override );
+		$this->assertStringContainsString( 'role="status"', $override );
 		$this->assertStringNotContainsString( 'esi:include', $html );
 	}
 

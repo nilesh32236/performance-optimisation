@@ -66,6 +66,28 @@ const InfoTable = ( { title, data, labels = {} } ) => {
 	);
 };
 
+/**
+ * Translate a machine boolean from the system_info REST payload into a
+ * display label. Numeric/string booleans (1/0/'1'/'0') and legacy translated
+ * string payloads are handled too; anything else falls through unchanged
+ * (audit #888 finding 20: booleans are locale-independent; translations
+ * belong to the display layer).
+ *
+ * @param {boolean|number|string|null|undefined} value      Machine boolean (or legacy translated string).
+ * @param {string}                               trueLabel  Label for true.
+ * @param {string}                               falseLabel Label for false.
+ * @return {string} Display label.
+ */
+const boolLabel = ( value, trueLabel, falseLabel ) => {
+	if ( value === true || value === 1 || value === '1' ) {
+		return trueLabel;
+	}
+	if ( value === false || value === 0 || value === '0' ) {
+		return falseLabel;
+	}
+	return value;
+};
+
 const SystemInfo = () => {
 	const [ info, setInfo ] = useState( null );
 	const [ loading, setLoading ] = useState( false );
@@ -215,7 +237,35 @@ const SystemInfo = () => {
 					/>
 					<InfoTable
 						title={ __( 'WordPress', 'performance-optimisation' ) }
-						data={ info.wordpress }
+						data={
+							info.wordpress
+								? {
+										...info.wordpress,
+										using_https: boolLabel(
+											info.wordpress.using_https,
+											__(
+												'Yes',
+												'performance-optimisation'
+											),
+											__(
+												'No',
+												'performance-optimisation'
+											)
+										),
+										multisite: boolLabel(
+											info.wordpress.multisite,
+											__(
+												'Yes',
+												'performance-optimisation'
+											),
+											__(
+												'No',
+												'performance-optimisation'
+											)
+										),
+								  }
+								: info.wordpress
+						}
 						labels={ {
 							version: __(
 								'WP Version',
@@ -260,8 +310,11 @@ const SystemInfo = () => {
 					<InfoTable
 						title={ __( 'Cache', 'performance-optimisation' ) }
 						data={ {
-							object_cache_status:
+							object_cache_status: boolLabel(
 								info.cache?.object_cache_status,
+								__( 'Enabled', 'performance-optimisation' ),
+								__( 'Disabled', 'performance-optimisation' )
+							),
 							active_cache_plugin:
 								info.cache?.active_cache_plugin,
 							peak_memory_usage: info.cache?.peak_memory_usage,

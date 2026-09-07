@@ -163,9 +163,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 			$etag = '"' . md5_file( $path ) . '"';
 
 			if ( headers_sent() ) {
-				// Still output content if headers already sent (tests).
-				readfile( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_readfile
-				exit;
+				// Headers are gone: streaming the file now would append raw
+				// markdown to already-flushed output with no Content-Type and
+				// no ETag/304 contract. Bail and let the normal render
+				// continue instead of readfile()+exit (audit #888 finding 16).
+				Log::add( __( 'llms.txt could not be served: response headers already sent.', 'performance-optimisation' ) );
+				return;
+			}
+
+			// End any open output buffers (page cache / minify) so the file
+			// body is emitted raw alongside the correct headers.
+			while ( ob_get_level() > 0 ) {
+				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- ob_end_clean() raises a notice when a buffer refuses to close; breaking the loop guards against that.
+				if ( ! @ob_end_clean() ) {
+					break;
+				}
 			}
 
 			$if_none_match = isset( $_SERVER['HTTP_IF_NONE_MATCH'] ) ? trim( (string) wp_unslash( $_SERVER['HTTP_IF_NONE_MATCH'] ) ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized

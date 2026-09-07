@@ -146,7 +146,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				'_wpnonce'
 			);
 
-			echo '<div class="notice notice-warning"><p><strong>' . esc_html__( 'Performance Optimisation', 'performance-optimisation' ) . '</strong></p><ul style="list-style:disc;padding-left:1.25em;">';
+			// role="alert" + aria-live="assertive" so screen readers announce the
+			// activation problems immediately (mirrors the Main notice fix, audit
+			// #888 Part 1 / finding 12).
+			echo '<div class="notice notice-warning" role="alert" aria-live="assertive"><p><strong>' . esc_html__( 'Performance Optimisation', 'performance-optimisation' ) . '</strong></p><ul style="list-style:disc;padding-left:1.25em;">';
 			foreach ( array_unique( $messages ) as $html ) {
 				echo '<li>' . wp_kses_post( $html ) . '</li>';
 			}
@@ -192,7 +195,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				'_wpnonce'
 			);
 
-			echo '<div class="notice notice-warning is-dismissible"><p><strong>' . esc_html__( 'Performance Optimisation — LiteSpeed detected', 'performance-optimisation' ) . '</strong> — ';
+			echo '<div class="notice notice-warning is-dismissible" role="status" aria-live="polite"><p><strong>' . esc_html__( 'Performance Optimisation — LiteSpeed detected', 'performance-optimisation' ) . '</strong> — ';
 			echo esc_html__( 'Both Performance Optimisation and LiteSpeed Cache are active. In Auto mode, file cache & minify/combine/defer are paused to avoid double processing.', 'performance-optimisation' ) . ' ';
 			echo esc_html__( 'Choose the cache owner in Performance → File Optimisation → Network → LiteSpeed.', 'performance-optimisation' );
 			echo ' <a href="' . esc_url( admin_url( 'admin.php?page=performance-optimisation' ) ) . '">' . esc_html__( 'Open settings', 'performance-optimisation' ) . '</a>';
@@ -225,7 +228,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 
 			$names = implode( ', ', array_map( 'esc_html', $found ) );
 
-			echo '<div class="notice notice-info is-dismissible"><p>';
+			echo '<div class="notice notice-info is-dismissible" role="status" aria-live="polite"><p>';
 			echo esc_html__( 'You have another page caching plugin active:', 'performance-optimisation' ) . ' ' . esc_html( $names ) . '. ';
 			echo esc_html__( 'Running multiple full-page cache solutions can cause conflicts. Consider using only one.', 'performance-optimisation' );
 			echo '</p></div>';
@@ -274,7 +277,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				'_wpnonce'
 			);
 
-			echo '<div class="notice notice-info is-dismissible wppo-review-notice"><p><strong>';
+			echo '<div class="notice notice-info is-dismissible wppo-review-notice" role="status" aria-live="polite"><p><strong>';
 			echo esc_html__( 'Enjoying Performance Optimisation?', 'performance-optimisation' );
 			echo '</strong> ';
 			echo esc_html__( 'A quick review helps other WordPress users discover it.', 'performance-optimisation' );
