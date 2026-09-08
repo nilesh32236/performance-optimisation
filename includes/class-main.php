@@ -1478,7 +1478,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *   template_include (before the template renders) and only carries
 		 *   `wp-before-template`; the `wp-template` name stays unclaimed, so only
 		 *   the template render duration is emitted as a distinct appended entry —
-		 *   the duplicate `wp-before-template` is dropped.
+		 *   the duplicate `wp-before-template` is dropped. When the buffering-state
+		 *   helper (`perflab_server_timing_use_output_buffer()`) is absent the
+		 *   buffering mode is unknown and the emission is suppressed instead.
 		 *
 		 * When Performance Lab is inactive nothing changes: both
 		 * `wp-before-template` and `wp-template` are emitted as before.
@@ -1506,7 +1508,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * @param string $output The finalized output buffer content (final HTML string, alias $final).
 		 * @return void
-		 * @since NEXT
 		 * @since NEXT Performance Lab Server-Timing interop: defer to the
 		 *             Performance Lab-owned header (no duplicate/conflicting
 		 *             metric names); {@see is_pl_server_timing_active()}.
@@ -1551,11 +1552,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// output buffering its defaults already carry wp-before-template,
 				// wp-template and wp-total measured from the same underlying
 				// timestamps — suppress our duplicate emission entirely.
+				// When the buffering-state helper itself is absent the buffering
+				// mode is unknown, so defer to Performance Lab as well rather
+				// than risking a duplicate emission.
 				// Without output buffering Performance Lab already sent its header
 				// (wp-before-template only) at template_include; emitting only the
 				// unclaimed wp-template render duration keeps a single source per
 				// metric name (no duplicate/conflicting entries).
-				if ( function_exists( 'perflab_server_timing_use_output_buffer' ) && perflab_server_timing_use_output_buffer() ) {
+				if ( ! function_exists( 'perflab_server_timing_use_output_buffer' ) || perflab_server_timing_use_output_buffer() ) {
 					return;
 				}
 				if ( '' === $template_duration ) {
@@ -2237,12 +2241,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * args via the Script Loader API (Trac #61734 / #63486) so core renders
 		 * them with dependency bumping; the regex fallback
 		 * add_fetchpriority_to_deferred() stays disabled on 6.9+ via setup_hooks().
+		 * The footer move uses the 'group' data key (core maps the in_footer
+		 * enqueue arg to group=1; the 'in_footer' data key itself is never read
+		 * for classic scripts) and can be disabled per handle via the
+		 * `wppo_deferred_in_footer` filter.
 		 *
 		 * @since NEXT
-		 * @since NEXT Fix in_footer data key: classic scripts move to the footer
-		 *             via the 'group' data key (core maps the in_footer enqueue
-		 *             arg to group=1; the 'in_footer' data key itself is never
-		 *             read for classic scripts).
 		 *
 		 * @return void
 		 */
@@ -2303,9 +2307,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						// placement — wp_enqueue_script()'s args handler
 						// (_wp_scripts_add_args_data()) maps in_footer to group=1,
 						// and 'in_footer' itself is never read for classic scripts,
-						// so set 'group' directly (issue #879 review).
-						// @since NEXT.
-						wp_script_add_data( $handle, 'group', 1 );
+						// so set 'group' directly (issue #879 review). Skipped when
+						// the handle is already footer-bound and opt-out per handle.
+						/**
+						 * Filters whether deferred classic scripts are moved to the footer.
+						 *
+						 * Default true on WP 6.9+ (native in_footer for deferred
+						 * scripts). Return false for a handle that must stay in
+						 * the head (e.g. document.write dependencies).
+						 *
+						 * @since NEXT
+						 *
+						 * @param bool   $in_footer Whether to set the footer group.
+						 * @param string $handle    Script handle.
+						 */
+						$in_footer = apply_filters( 'wppo_deferred_in_footer', true, $handle );
+						if ( $in_footer && 1 !== (int) $wp_scripts->get_data( $handle, 'group' ) ) {
+							wp_script_add_data( $handle, 'group', 1 );
+						}
 					}
 				}
 			}

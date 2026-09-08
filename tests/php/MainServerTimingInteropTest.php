@@ -10,11 +10,23 @@
  * same durations, so the plugin's emission is suppressed; without output
  * buffering Performance Lab only sends `wp-before-template` at
  * template_include, so the plugin emits only the unclaimed `wp-template`
- * render duration. With Performance Lab absent both metrics are emitted.
+ * render duration; when the buffering-state helper is absent the mode is
+ * unknown and the emission is suppressed. With Performance Lab absent both
+ * metrics are emitted.
  *
- * Note on ordering: Brain Monkey eval-declared functions persist for the
- * whole test process, so the Performance Lab-absent tests are declared before
- * the tests that define the Performance Lab API stubs.
+ * Note on ordering (IMPORTANT): Brain Monkey eval-declared functions persist
+ * for the whole test process even after tearDown(), and `function_exists` is
+ * not redefinable, so the declared order of the test methods IS the required
+ * execution order:
+ *
+ * 1. The Performance Lab-absent tests (is_pl_server_timing_active false, both
+ *    metrics emitted) must run BEFORE any test stubs a `perflab_*` function —
+ *    once defined, `function_exists()` would report the module as active.
+ * 2. The buffering-API-absent suppression test only stubs
+ *    `perflab_server_timing_register_metric` and must run BEFORE the tests
+ *    that define `perflab_server_timing_use_output_buffer`.
+ * 3. The output-buffering tests define/re-configure
+ *    `perflab_server_timing_use_output_buffer` and must run last.
  *
  * @package PerformanceOptimise\Tests
  */
@@ -149,6 +161,24 @@ class MainServerTimingInteropTest extends \PHPUnit\Framework\TestCase {
 		$main = $this->build_main();
 
 		$this->assertTrue( $main->is_pl_server_timing_active() );
+	}
+
+	/**
+	 * Test that when Performance Lab is active but the buffering-state helper
+	 * is absent the plugin suppresses its emission — an unknown buffering mode
+	 * must defer to Performance Lab rather than risk a duplicate emission
+	 * (issue #885 review).
+	 *
+	 * Must run before any test defines perflab_server_timing_use_output_buffer.
+	 */
+	public function test_emit_suppressed_when_pl_buffering_api_absent(): void {
+		$this->stub_environment();
+		Functions\when( 'perflab_server_timing_register_metric' )->justReturn( null );
+
+		$main = $this->build_main();
+		$main->emit_server_timing_header();
+
+		$this->assertSame( array(), $this->sent_headers, 'Unknown Performance Lab buffering mode must defer to Performance Lab (no emission).' );
 	}
 
 	/**

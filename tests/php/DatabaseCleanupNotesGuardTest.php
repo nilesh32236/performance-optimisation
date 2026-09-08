@@ -148,7 +148,7 @@ class DatabaseCleanupNotesGuardTest extends \PHPUnit\Framework\TestCase {
 		$this->assertNotEmpty( $selects, 'clean_spam_comments() must run a comment_ID SELECT.' );
 		foreach ( $selects as $select ) {
 			$this->assertStringContainsString( "comment_approved = 'spam'", $select );
-			$this->assertStringContainsString( "comment_type != 'note'", $select, 'Spam cleanup must exclude WP 6.9+ Notes (issue #884).' );
+			$this->assertStringContainsString( "COALESCE( comment_type, '' ) != 'note'", $select, 'Spam cleanup must exclude WP 6.9+ Notes (issue #884).' );
 		}
 	}
 
@@ -166,7 +166,7 @@ class DatabaseCleanupNotesGuardTest extends \PHPUnit\Framework\TestCase {
 		$this->assertNotEmpty( $selects, 'clean_trashed_comments() must run a comment_ID SELECT.' );
 		foreach ( $selects as $select ) {
 			$this->assertStringContainsString( "comment_approved = 'trash'", $select );
-			$this->assertStringContainsString( "comment_type != 'note'", $select, 'Trash cleanup must exclude WP 6.9+ Notes (issue #884).' );
+			$this->assertStringContainsString( "COALESCE( comment_type, '' ) != 'note'", $select, 'Trash cleanup must exclude WP 6.9+ Notes (issue #884).' );
 		}
 	}
 
@@ -210,7 +210,7 @@ class DatabaseCleanupNotesGuardTest extends \PHPUnit\Framework\TestCase {
 		);
 		$this->assertCount( 2, $count_queries, 'Exactly one spam and one trash comment count query expected.' );
 		foreach ( $count_queries as $count_query ) {
-			$this->assertStringContainsString( "comment_type != 'note'", $count_query, 'Comment counts must exclude WP 6.9+ Notes with the same predicate as cleanup (issue #884).' );
+			$this->assertStringContainsString( "COALESCE( comment_type, '' ) != 'note'", $count_query, 'Comment counts must exclude WP 6.9+ Notes with the same predicate as cleanup (issue #884).' );
 		}
 	}
 }

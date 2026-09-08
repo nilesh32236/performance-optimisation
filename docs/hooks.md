@@ -725,6 +725,7 @@ When `true`, the plugin registers `wp_finalized_template_enhancement_output_buff
 
 - Performance Lab **with output buffering enabled**: the plugin's emission is suppressed entirely — Performance Lab's defaults already measure before-template + template + total from the same underlying timestamps and send a single header.
 - Performance Lab **without output buffering**: Performance Lab sends its header at `template_include` (before the template renders) with `wp-before-template` only. The plugin emits only the render duration (`wp-template` — unclaimed by Performance Lab in this mode) as an appended, distinct entry; the duplicate `wp-before-template` is dropped.
+- Performance Lab **with unknown buffering mode** (`perflab_server_timing_use_output_buffer()` absent): the plugin defers to Performance Lab and suppresses its emission entirely.
 - Performance Lab **inactive**: unchanged — both `wp-before-template` and `wp-template` are emitted.
 
 No metric slugs are registered through the Performance Lab API by this plugin; the header value is coexistence-managed only. i18n note: metric names are protocol literals (never translated).
@@ -797,6 +798,22 @@ Filters fetchpriority for each deferred script handle. Default `low` deprioritis
 ```php
 add_filter( 'wppo_deferred_fetchpriority', function( $prio, $handle ) {
     return 'jquery-core' === $handle ? 'high' : $prio;
+}, 10, 2 );
+```
+
+---
+
+### `wppo_deferred_in_footer`
+Filters whether deferred classic scripts are moved to the footer on WP 6.9+ (native `in_footer` migration, Trac #63486). Default `true`; the plugin sets the `'group'` data key (core reads `'group'` for footer placement — the `'in_footer'` data key itself is never read for classic scripts) unless already footer-bound. Return `false` per handle to keep a script in the head (e.g. `document.write` dependencies). @since NEXT.
+
+**Parameters:**
+- `$in_footer` *(bool)* — Whether to set the footer group.
+- `$handle` *(string)* — Script handle.
+
+**Example:**
+```php
+add_filter( 'wppo_deferred_in_footer', function( $in_footer, $handle ) {
+    return 'legacy-ad-slot' === $handle ? false : $in_footer;
 }, 10, 2 );
 ```
 

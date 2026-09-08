@@ -507,7 +507,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 
 		// Fake WP_Scripts registry with one queued classic handle (mirrors core
 		// state at wp_enqueue_scripts:1000). Extends the WP_Scripts stand-in
-		// declared at the top of this file so the instanceof guard passes.
+		// declared at the bottom of this file so the instanceof guard passes.
 		$GLOBALS['wp_scripts'] = new class() extends WP_Scripts {
 			/**
 			 * Queued handles (mirrors WP_Scripts::$queue).
@@ -522,14 +522,38 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 			 * @var array<string, array<string, mixed>>
 			 */
 			public $data = array();
+
+			/**
+			 * Record data keys via wp_script_add_data so get_data() mirrors core.
+			 *
+			 * @param string $handle Script handle.
+			 * @param string $key    Data key.
+			 * @param mixed  $value  Data value.
+			 * @return bool
+			 */
+			public function add_data( $handle, $key, $value ) {
+				$this->data[ $handle ][ $key ] = $value;
+				return true;
+			}
+
+			/**
+			 * Read a recorded data key (mirrors WP_Dependencies::get_data()).
+			 *
+			 * @param string $handle Script handle.
+			 * @param string $key    Data key.
+			 * @return mixed
+			 */
+			public function get_data( $handle, $key ) {
+				return $this->data[ $handle ][ $key ] ?? false;
+			}
 		};
 		$fake_scripts          = $GLOBALS['wp_scripts'];
 
 		$recorded = array();
 		Functions\when( 'wp_script_add_data' )->alias(
 			static function ( $handle, $key, $value ) use ( &$recorded, $fake_scripts ) {
-				$recorded[]                            = array( $handle, $key, $value );
-				$fake_scripts->data[ $handle ][ $key ] = $value;
+				$recorded[] = array( $handle, $key, $value );
+				$fake_scripts->add_data( $handle, $key, $value );
 				return true;
 			}
 		);
@@ -575,6 +599,104 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 			$this->assertNotSame( 'in_footer', $key, "'in_footer' is not a read data key for classic scripts — use 'group'." );
 			$this->assertSame( 'third-party-analytics', $handle );
 		}
+	}
+
+	/**
+	 * Test that the wppo_deferred_in_footer filter can keep a deferred handle
+	 * in the head (opt-out escape hatch, issue #879 review).
+	 */
+	public function test_add_defer_strategy_respects_in_footer_filter_opt_out(): void {
+		$this->stub_main_construction(
+			array(
+				'deferJS'        => true,
+				'delayJS'        => false,
+				'excludeDeferJS' => '',
+			)
+		);
+		$GLOBALS['wp_version'] = '6.9';
+		Functions\when( 'get_bloginfo' )->justReturn( '6.9' );
+
+		$main = $this->make_main(
+			array(
+				'file_optimisation' => array(
+					'deferJS'        => true,
+					'excludeDeferJS' => '',
+				),
+			)
+		);
+
+		$exclude_prop = new \ReflectionProperty( Main::class, 'exclude_defer_js' );
+		$exclude_prop->setAccessible( true );
+		$exclude_prop->setValue( $main, array() );
+
+		$GLOBALS['wp_scripts'] = new class() extends WP_Scripts {
+			/**
+			 * Queued handles (mirrors WP_Scripts::$queue).
+			 *
+			 * @var string[]
+			 */
+			public $queue = array( 'third-party-analytics' );
+
+			/**
+			 * Recorded data keys per handle (mirrors wp_script_add_data).
+			 *
+			 * @var array<string, array<string, mixed>>
+			 */
+			public $data = array();
+
+			/**
+			 * Record data keys so get_data() mirrors core.
+			 *
+			 * @param string $handle Script handle.
+			 * @param string $key    Data key.
+			 * @param mixed  $value  Data value.
+			 * @return bool
+			 */
+			public function add_data( $handle, $key, $value ) {
+				$this->data[ $handle ][ $key ] = $value;
+				return true;
+			}
+
+			/**
+			 * Read a recorded data key (mirrors WP_Dependencies::get_data()).
+			 *
+			 * @param string $handle Script handle.
+			 * @param string $key    Data key.
+			 * @return mixed
+			 */
+			public function get_data( $handle, $key ) {
+				return $this->data[ $handle ][ $key ] ?? false;
+			}
+		};
+		$fake_scripts          = $GLOBALS['wp_scripts'];
+
+		Functions\when( 'wp_script_add_data' )->alias(
+			static function ( $handle, $key, $value ) use ( $fake_scripts ) {
+				$fake_scripts->add_data( $handle, $key, $value );
+				return true;
+			}
+		);
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook, $value, ...$args ) {
+				if ( 'wppo_litespeed_should_disable_optimizer' === $hook ) {
+					return false;
+				}
+				if ( 'wppo_deferred_in_footer' === $hook && isset( $args[0] ) && 'third-party-analytics' === $args[0] ) {
+					return false;
+				}
+				return $value;
+			}
+		);
+		Functions\when( 'has_filter' )->justReturn( false );
+		if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'reset_cache' ) ) {
+			\PerformanceOptimise\Inc\LiteSpeed_Integration::reset_cache();
+		}
+
+		$main->add_defer_strategy();
+
+		$this->assertArrayNotHasKey( 'group', $fake_scripts->data['third-party-analytics'] ?? array(), 'The wppo_deferred_in_footer opt-out must keep the handle out of the footer group.' );
+		// The defer strategy itself still applies.
+		$this->assertSame( 'defer', $fake_scripts->data['third-party-analytics']['strategy'] ?? null );
 	}
 }
 
