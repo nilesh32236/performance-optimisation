@@ -111,6 +111,7 @@ After activation, you can manage the following from the settings tabs:
 == Changelog ==
 
 = NEXT (unreleased) =
+* Deprecated: `file_optimisation.removeQueryStrings` ("Remove Query Strings From Static Resources"). `?ver=` is the cache-busting mechanism (fingerprinting) and the htaccess Expires handler already sets long immutable TTLs — stripping it risks stale assets. The toggle moved to a "Legacy Options" section with warning copy; default stays off. Planned hard removal two minor releases after this release (#904).
 * Removed: orphaned `performance-optimisation/v1/crawler` and `crawler_status` REST routes (no SPA/CLI consumers; cache warming remains driven by WP-Cron/Action Scheduler via `LiteSpeed_Crawler`).
 * Deprecated: `performance-optimisation/v1/get_page_assets` REST route (kept one release; migrate to the Abilities API `performance-optimisation/get-page-assets` or `Asset_Manager::get_page_assets()`).
 

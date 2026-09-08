@@ -1247,3 +1247,17 @@ jobs / WP-CLI and edited via `wp wppo settings` (or `import_settings`).
 |-----|----------------|-------------|
 | `image_optimisation.excludeWebPImages` | string (newline-separated URLs/handles), default `''` | `Img_Converter::__construct()` (`includes/class-img-converter.php`) — images matching these URLs/handles are skipped during WebP/AVIF conversion. |
 | `image_optimisation.batch` | int, default `50` | `Cron` image-conversion worker (`includes/class-cron.php`) and `wp wppo image convert` (`includes/class-wppo-cli-command.php`) — number of images processed per batch. |
+
+---
+
+## ⚠️ Deprecated Features
+
+### `file_optimisation.removeQueryStrings` (deprecated NEXT, removal tracked in #904)
+Strips `?ver=` from enqueued CSS/JS URLs. Obsolete per the 2026
+cache-busting consensus: `?ver=` **is** the cache-busting mechanism
+(fingerprinting), and WPPO's htaccess Expires handler already sets long
+immutable TTLs — stripping `ver` risks stale assets with no measurable
+gain (see `docs/research/competitor-research-2026-09-08.md` §5). The SPA
+toggle now lives in a "Legacy Options" section with warning copy;
+default stays off. Planned hard removal two minor releases after the
+NEXT release (`Main::strip_static_query_strings()` + setting + filters).
