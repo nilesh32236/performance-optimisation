@@ -804,7 +804,14 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_get_commerce_exclude_paths_derives_woo_urls(): void {
 		$this->install_stubs();
-		Functions\when( 'wc_get_checkout_url' )->justReturn( 'http://example.com/checkout/' );
+		// Mimic core trailingslashit (bootstrap stubs it as identity) so the
+		// slash-adding branch is verified with a slash-less Woo URL.
+		Functions\when( 'trailingslashit' )->alias(
+			static function ( $value ) {
+				return rtrim( (string) $value, '/' ) . '/';
+			}
+		);
+		Functions\when( 'wc_get_checkout_url' )->justReturn( 'http://example.com/checkout' );
 		Functions\when( 'wc_get_cart_url' )->justReturn( 'http://example.com/cart/' );
 		Functions\when( 'wc_get_page_permalink' )->justReturn( 'http://example.com/my-account/' );
 
