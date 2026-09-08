@@ -352,7 +352,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Test the AI-client path caps eager at moderate in commerce context.
+	 * Test the AI-client path caps eager in commerce context and sanitizes output.
 	 *
 	 * @return void
 	 */
@@ -365,7 +365,8 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 			$this->fake_ai_client(
 				array(
 					'eagerness'     => 'eager',
-					'prefetch_urls' => array( 'http://example.com/x/' ),
+					'prefetch_urls' => array( 'http://example.com/x/', 'http://example.com/y/', 'http://example.com/z/', array( 'not-a-string' ) ),
+					'exclude_js'    => array( 'handle-a', 'handle-b', 'handle-c', 'handle-d' ),
 				)
 			)
 		);
@@ -375,6 +376,10 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$model = AI_Adaptive::learn();
 		$this->assertSame( 'ai_client', $model['source'] );
 		$this->assertSame( 'moderate', $model['eagerness'] );
+		// Untrusted LLM output is sanitized at persist: URLs sliced to top-2
+		// with non-strings dropped, handles sliced to 3.
+		$this->assertSame( array( 'http://example.com/x/', 'http://example.com/y/' ), $model['prefetch_urls'] );
+		$this->assertSame( array( 'handle-a', 'handle-b', 'handle-c' ), $model['exclude_js'] );
 		$this->assertSame( 'moderate', $this->options[ AI_Adaptive::OPTION ]['eagerness'] );
 	}
 
@@ -397,6 +402,29 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 
 		$model = AI_Adaptive::learn();
 		$this->assertSame( 'ai_client', $model['source'] );
+		$this->assertSame( 'conservative', $model['eagerness'] );
+	}
+
+	/**
+	 * Test the AI-client path defaults a missing eagerness key to conservative.
+	 *
+	 * @return void
+	 */
+	public function test_learn_via_ai_client_defaults_missing_eagerness(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		Util::clear_settings_cache();
+		Functions\when( 'wp_json_encode' )->alias( 'json_encode' );
+		Functions\when( 'wp_ai_client' )->justReturn(
+			$this->fake_ai_client( array( 'prefetch_urls' => array( 'http://example.com/x/' ) ) )
+		);
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$model = AI_Adaptive::learn();
+		$this->assertSame( 'ai_client', $model['source'] );
+		$this->assertArrayHasKey( 'eagerness', $model );
 		$this->assertSame( 'conservative', $model['eagerness'] );
 	}
 
@@ -721,6 +749,9 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 *
 	 * Runs last: stubbing the WooCommerce helpers defines them process-wide
 	 * (bare function_exists probe), so no commerce-off assertion may follow.
+	 * Suite order note: keep Woo-stubbing tests last in this file; the full
+	 * suite is green with these stubs (later files either stub the helpers
+	 * themselves or stub function_exists directly).
 	 *
 	 * @return void
 	 */
@@ -734,6 +765,22 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 			array( '/checkout/*', '/cart/*', '/my-account/*' ),
 			AI_Adaptive::get_commerce_exclude_paths()
 		);
+	}
+
+	/**
+	 * Test an active WooCommerce install signals a commerce context site-wide.
+	 *
+	 * Runs last (see test_get_commerce_exclude_paths_derives_woo_urls).
+	 *
+	 * @return void
+	 */
+	public function test_woo_active_signals_commerce_context(): void {
+		$this->install_stubs();
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+		Functions\when( 'wc_get_checkout_url' )->justReturn( 'http://example.com/checkout/' );
+
 		$this->assertTrue( AI_Adaptive::is_commerce_or_auth_context() );
 	}
 }

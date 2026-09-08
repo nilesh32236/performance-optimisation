@@ -361,11 +361,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				if ( is_array( $ai_model ) && ! empty( $ai_model ) ) {
 					$ai_model['source']     = 'ai_client';
 					$ai_model['updated_at'] = time();
-					// Guardrail (#908): allowlist-validate (LLM output is untrusted)
-					// and cap `eager` at `moderate` in commerce/auth contexts.
-					if ( isset( $ai_model['eagerness'] ) ) {
-						$ai_model['eagerness'] = self::normalize_eagerness( $ai_model['eagerness'] );
+					// Guardrail (#908): the LLM payload is untrusted. Sanitize
+					// fields at persist time mirroring the heuristic path, and
+					// allowlist/cap eagerness (missing key defaults to
+					// conservative so every stored model has a valid value).
+					if ( isset( $ai_model['prefetch_urls'] ) ) {
+						$urls                      = is_array( $ai_model['prefetch_urls'] ) ? array_filter( $ai_model['prefetch_urls'], 'is_string' ) : array();
+						$ai_model['prefetch_urls'] = array_slice( array_values( array_filter( array_map( 'esc_url_raw', $urls ) ) ), 0, 2 );
 					}
+					foreach ( array( 'exclude_js', 'exclude_css' ) as $exclude_key ) {
+						if ( isset( $ai_model[ $exclude_key ] ) ) {
+							$handles                  = is_array( $ai_model[ $exclude_key ] ) ? array_filter( $ai_model[ $exclude_key ], 'is_string' ) : array();
+							$ai_model[ $exclude_key ] = array_slice( array_values( array_filter( array_map( 'sanitize_text_field', $handles ) ) ), 0, 3 );
+						}
+					}
+					$ai_model['eagerness'] = self::normalize_eagerness( $ai_model['eagerness'] ?? 'conservative' );
 					self::update_model( $ai_model );
 					return $ai_model;
 				}
