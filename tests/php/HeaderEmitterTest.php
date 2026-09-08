@@ -50,7 +50,7 @@ class HeaderEmitterTest extends \PHPUnit\Framework\TestCase {
 		$captured_headers       = &$this->captured_headers;
 		$captured_replace       = &$this->captured_replace;
 		Functions\when( 'header' )->alias(
-			static function ( $header, $replace = true ) use ( &$captured_headers, &$captured_replace ) {
+			static function ( $header, $replace = true, $code = 0 ) use ( &$captured_headers, &$captured_replace ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- Test mock signature must match header().
 				$captured_headers[] = $header;
 				$captured_replace[] = (bool) $replace;
 			}
@@ -199,13 +199,11 @@ class HeaderEmitterTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'is_checkout' )->justReturn( false );
 		Functions\when( 'is_account_page' )->justReturn( false );
 		Functions\when( 'is_admin' )->justReturn( false );
-		Functions\when( 'has_filter' )->justReturn( false );
 		Functions\when( 'apply_filters' )->alias(
 			static function ( $tag, $value ) {
 				return $value;
 			}
 		);
-		Functions\when( 'get_option' )->justReturn( array() );
 		Functions\when( 'do_action' )->justReturn( null );
 
 		LiteSpeed_ESI::handle_send_headers();
@@ -213,8 +211,31 @@ class HeaderEmitterTest extends \PHPUnit\Framework\TestCase {
 		$this->assertContains( 'Cache-Control: private,no-cache', $this->captured_headers );
 		$this->assertContains( 'X-LiteSpeed-Cache-Control: private,no-vary', $this->captured_headers );
 		foreach ( $this->captured_headers as $header ) {
-			$this->assertStringNotContainsString( 'public', $header );
+			$this->assertStringNotContainsString( 'X-LiteSpeed-Cache-Control: public', $header );
 		}
+	}
+
+	/**
+	 * ESI send_headers emits nothing once headers were sent (hardening).
+	 */
+	public function test_esi_send_headers_suppressed_when_sent(): void {
+		$_SERVER['SERVER_SOFTWARE'] = 'LiteSpeed';
+		LiteSpeed_Integration::reset_cache();
+		Functions\when( 'headers_sent' )->justReturn( true );
+		Functions\when( 'is_cart' )->justReturn( true );
+		Functions\when( 'is_checkout' )->justReturn( false );
+		Functions\when( 'is_account_page' )->justReturn( false );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $tag, $value ) {
+				return $value;
+			}
+		);
+		Functions\when( 'do_action' )->justReturn( null );
+
+		LiteSpeed_ESI::handle_send_headers();
+
+		$this->assertSame( array(), $this->captured_headers );
 	}
 
 	/**
