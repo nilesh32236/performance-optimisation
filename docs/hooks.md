@@ -728,6 +728,14 @@ Filters AI-learned speculation eagerness. @since NEXT.
 
 ---
 
+### `wppo_ai_adaptive_commerce_context`
+Filters whether the current request is a commerce/auth context for AI speculation guardrails. @since NEXT. When true, AI-learned speculation eagerness is capped at `moderate` and commerce paths are suggested as speculation excludes (manual user settings stay authoritative).
+
+**Parameters:**
+- `$is_commerce` *(bool)* — Whether a commerce/auth context was detected (WooCommerce active, cart/checkout/account page, logged-in user, or active cart cookies).
+
+---
+
 ### `wppo_ai_adaptive_speculation_rules`
 Filters AI-injected speculation rules. @since NEXT.
 

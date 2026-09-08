@@ -83,6 +83,163 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		}
 
 		/**
+		 * Whether the current request runs in a commerce or authenticated context.
+		 *
+		 * Conservative gate for AI speculation guardrails (issue #908): when true,
+		 * AI-learned speculation eagerness is capped at `moderate` and commerce
+		 * paths are suggested as speculation excludes. Mirrors the WooCommerce /
+		 * auth detection precedents in Cache cart/checkout/account guards
+		 * (class-cache.php) and LiteSpeed_ESI::should_punch_hole().
+		 *
+		 * Manual user settings are never touched — the AI only tightens, never
+		 * loosens past moderate.
+		 *
+		 * @return bool True when a commerce/auth context is detected.
+		 * @since NEXT
+		 */
+		public static function is_commerce_or_auth_context(): bool {
+			$is_commerce = false;
+
+			// WooCommerce active (plugin present, even outside shop pages — conservative cap).
+			try {
+				if ( class_exists( 'WooCommerce' ) || function_exists( 'WC' ) || function_exists( 'wc_get_checkout_url' ) ) {
+					$is_commerce = true;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
+			if ( ! $is_commerce && function_exists( 'is_cart' ) ) {
+				try {
+					$is_commerce = (bool) is_cart();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			if ( ! $is_commerce && function_exists( 'is_checkout' ) ) {
+				try {
+					$is_commerce = (bool) is_checkout();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			if ( ! $is_commerce && function_exists( 'is_account_page' ) ) {
+				try {
+					$is_commerce = (bool) is_account_page();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			if ( ! $is_commerce && function_exists( 'is_user_logged_in' ) ) {
+				try {
+					$is_commerce = (bool) is_user_logged_in();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			// Active cart session on any page (read-only heuristic, no nonce needed).
+			if ( ! $is_commerce && ( ! empty( $_COOKIE['woocommerce_items_in_cart'] ) || ! empty( $_COOKIE['woocommerce_cart_hash'] ) ) ) {
+				$is_commerce = true;
+			}
+
+			/**
+			 * Filters whether the current request is a commerce/auth context for AI speculation guardrails.
+			 *
+			 * Allows hosts/tests to force the context deterministically.
+			 *
+			 * @since NEXT
+			 * @param bool $is_commerce Whether a commerce/auth context was detected.
+			 */
+			return (bool) apply_filters( 'wppo_ai_adaptive_commerce_context', $is_commerce );
+		}
+
+		/**
+		 * Commerce/auth URL exclusion patterns for speculation suggestions.
+		 *
+		 * Derives cart/checkout/myaccount paths via wc_get_checkout_url() /
+		 * wc_get_cart_url() / wc_get_page_permalink('myaccount') (exact precedent
+		 * Main::add_speculation_rules()), falling back to /cart/*, /checkout/*,
+		 * /my-account/* patterns when WooCommerce helpers are absent but a
+		 * commerce/auth context (cookie/logged-in) was detected.
+		 *
+		 * @return string[]
+		 * @since NEXT
+		 */
+		public static function get_commerce_exclude_paths(): array {
+			$paths = array();
+
+			if ( function_exists( 'wc_get_checkout_url' ) ) {
+				try {
+					$checkout_url = wc_get_checkout_url();
+					if ( $checkout_url ) {
+						$path = wp_parse_url( $checkout_url, PHP_URL_PATH );
+						if ( $path && '/' !== $path ) {
+							$paths[] = trailingslashit( $path ) . '*';
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			if ( function_exists( 'wc_get_cart_url' ) ) {
+				try {
+					$cart_url = wc_get_cart_url();
+					if ( $cart_url ) {
+						$path = wp_parse_url( $cart_url, PHP_URL_PATH );
+						if ( $path && '/' !== $path ) {
+							$paths[] = trailingslashit( $path ) . '*';
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			if ( function_exists( 'wc_get_page_permalink' ) ) {
+				try {
+					$myaccount_url = wc_get_page_permalink( 'myaccount' );
+					if ( $myaccount_url ) {
+						$path = wp_parse_url( $myaccount_url, PHP_URL_PATH );
+						if ( $path && '/' !== $path ) {
+							$paths[] = trailingslashit( $path ) . '*';
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			if ( empty( $paths ) ) {
+				$paths = array( '/cart/*', '/checkout/*', '/my-account/*' );
+			}
+
+			return array_values( array_unique( $paths ) );
+		}
+
+		/**
+		 * Cap an AI-learned eagerness value at `moderate` in commerce/auth contexts.
+		 *
+		 * The AI only tightens, never loosens: `eager` becomes `moderate`, every
+		 * other value passes through untouched. Manual user settings
+		 * (wppo_settings[preload_settings][speculationEagerness]) are never touched.
+		 *
+		 * @param string $eagerness Learned eagerness value.
+		 * @return string Capped eagerness value.
+		 * @since NEXT
+		 */
+		public static function maybe_cap_eagerness( string $eagerness ): string {
+			if ( 'eager' === $eagerness && self::is_commerce_or_auth_context() ) {
+				return 'moderate';
+			}
+			return $eagerness;
+		}
+
+		/**
 		 * Learn from RUM + trends + disabled-script frequency.
 		 *
 		 * When WP 7.0 AI Client is available (function_exists('wp_ai_client')),
@@ -110,6 +267,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				if ( is_array( $ai_model ) && ! empty( $ai_model ) ) {
 					$ai_model['source']     = 'ai_client';
 					$ai_model['updated_at'] = time();
+					// Guardrail (#908): an LLM-returned `eager` is capped at
+					// `moderate` in commerce/auth contexts before persisting.
+					if ( isset( $ai_model['eagerness'] ) ) {
+						$ai_model['eagerness'] = self::maybe_cap_eagerness( (string) $ai_model['eagerness'] );
+					}
 					self::update_model( $ai_model );
 					return $ai_model;
 				}
@@ -307,6 +469,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			if ( ! in_array( $eagerness, array( 'conservative', 'moderate', 'eager' ), true ) ) {
 				$eagerness = 'conservative';
 			}
+			// Guardrail (#908): cap at `moderate` in commerce/auth contexts AFTER
+			// the filter, so a third-party filter returning `eager` is still tightened.
+			$eagerness = self::maybe_cap_eagerness( $eagerness );
 
 			return array(
 				'version'       => 1,
@@ -382,6 +547,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			}
 
 			$eagerness = $model['eagerness'] ?? 'conservative';
+			// Guardrail (#908): never propose `eager` in commerce/auth contexts
+			// (covers models persisted before the learn() cap).
+			$eagerness = self::maybe_cap_eagerness( (string) $eagerness );
 			if ( 'conservative' !== $eagerness ) {
 				$suggestions[] = array(
 					'metric'      => 'ai_speculation_eagerness',
@@ -413,6 +581,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				);
 			}
 
+			// Guardrail (#908): in commerce/auth contexts suggest excluding
+			// transactional/authenticated URLs from speculation. Suggestions only —
+			// never auto-applied (see method docblock).
+			if ( self::is_commerce_or_auth_context() ) {
+				$commerce_paths = self::get_commerce_exclude_paths();
+				if ( ! empty( $commerce_paths ) ) {
+					$suggestions[] = array(
+						'metric'      => 'ai_speculation_excludes',
+						'value'       => implode( ', ', $commerce_paths ),
+						'unit'        => 'list',
+						'status'      => 'needs_improvement',
+						'description' => __( 'AI: Exclude commerce/auth URLs from speculation', 'performance-optimisation' ),
+						'fix_action'  => 'open_preload_tab',
+						'ai_payload'  => array(
+							'tab'      => 'preload_settings',
+							'settings' => array( 'speculationExcludeUrls' => implode( "\n", $commerce_paths ) ),
+						),
+					);
+				}
+			}
+
 			// Ensure fix_action is valid per Suggestion_Engine guard (already valid).
 			return $suggestions;
 		}
@@ -441,10 +630,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			}
 			// Append AI prefetch rule (prefetch top-2). Structure mirrors WP core:
 			// rules = [ { source: 'list', urls: [...] , eagerness: 'conservative' } ].
-			$rules[] = array(
+			// Guardrail (#908): downgrade a stale persisted `eager` to `moderate`
+			// in commerce/auth contexts before injecting.
+			$eagerness = self::maybe_cap_eagerness( (string) ( self::get_model()['eagerness'] ?? 'conservative' ) );
+			$rules[]   = array(
 				'source'    => 'list',
 				'urls'      => $urls,
-				'eagerness' => self::get_model()['eagerness'] ?? 'conservative',
+				'eagerness' => $eagerness,
 			);
 			/**
 			 * Filters AI-injected speculation rules.
