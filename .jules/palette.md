@@ -48,4 +48,4 @@
 **Action:** Always link inputs to accompanying helper text by giving the text an ID and using `aria-describedby` on the input element.
 ## 2024-06-03 - Replacing Hardcoded Text Colors Properly
 **Learning:** When replacing hardcoded text colors like `#fff` in SCSS to ensure compatibility with WordPress themes (especially potential dark modes), using a background variable like `--wppo-bg-card` for a text `color` property is semantically incorrect and creates accessibility contrast failures.
-**Action:** Always map text colors to semantically correct text variables (e.g., `var(--wp-admin-theme-color-text, #fff)`) and never mix background variables with text colors.
+**Action:** Always map white-on-brand text to var(--wppo-text-sidebar-active, #fff) and never use background tokens (e.g. --wppo-bg-card) for the `color` property.
