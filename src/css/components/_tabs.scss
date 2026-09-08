@@ -84,7 +84,7 @@
 	&:hover {
 		background: var(--wppo-bg-card, #fff);
 		border-color: var(--wppo-border, #e2e8f0);
-		color: var(--wppo-text-main);
+		color: var(--wppo-text-main, #0f172a);
 	}
 
 	&:focus-visible {
@@ -94,7 +94,7 @@
 
 	&--active {
 		background: var(--wppo-primary);
-		color: var(--wppo-text-sidebar-active);
+		color: var(--wppo-text-sidebar-active, #fff);
 		border-color: var(--wppo-primary);
 		box-shadow: 0 2px 8px color-mix(in srgb, var(--wppo-primary) 30%, transparent);
 
