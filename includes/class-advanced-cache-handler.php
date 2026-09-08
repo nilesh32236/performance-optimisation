@@ -221,6 +221,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
 
+			'// WooCommerce AJAX endpoints are dynamic JSON and must never be served from the static cache (issue #907).' . PHP_EOL .
+			'// The pretty-permalink /wc-ajax/... form maps to a cacheable-looking path, while the ?wc-ajax=... form' . PHP_EOL .
+			'// is covered both here and by the empty-QUERY_STRING gate before wppo_serve_cache_file() below.' . PHP_EOL .
+			'if ( false !== strpos( $request_uri, \'wc-ajax\' ) || isset( $_GET[\'wc-ajax\'] ) ) {' . PHP_EOL .
+			'	return;' . PHP_EOL .
+			'}' . PHP_EOL . PHP_EOL .
+
 			'if ( preg_match( \'#^/(?:cart|checkout|my-account)(?:/|$)#i\', $request_uri ) || preg_match( \'/(?:sitemap[^\/]*\.xml|wp-sitemap[^\/]*\.xml|\.xml)$/i\', $request_uri ) ) {' . PHP_EOL .
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .

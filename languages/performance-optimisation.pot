@@ -9,17 +9,18 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-09-08T05:21:51+00:00\n"
+"POT-Creation-Date: 2026-09-08T08:38:41+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 
 #. Plugin Name of the plugin
 #: performance-optimisation.php
 #: includes/class-abilities.php:55
-#: includes/class-admin-notices.php:152
-#: includes/class-main.php:1696
-#: includes/class-main.php:1697
-#: includes/class-main.php:2200
+#: includes/class-admin-notices.php:170
+#: includes/class-admin-notices.php:348
+#: includes/class-main.php:1599
+#: includes/class-main.php:1600
+#: includes/class-main.php:2101
 #: build/index.js:1
 #: src/App.js:470
 #: src/App.js:479
@@ -269,7 +270,7 @@ msgstr ""
 
 #: includes/class-abilities.php:1014
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:680
+#: src/components/FileOptimization.js:660
 msgid "Regenerate Used CSS"
 msgstr ""
 
@@ -318,7 +319,6 @@ msgid "No valid URLs to crawl."
 msgstr ""
 
 #: includes/class-abilities.php:1263
-#: includes/class-rest.php:323
 msgid "Crawler not available."
 msgstr ""
 
@@ -326,59 +326,68 @@ msgstr ""
 msgid "Failed to update .htaccess rules during activation."
 msgstr ""
 
-#: includes/class-activate.php:238
+#: includes/class-activate.php:164
 msgid "Plugin upgrade: cache flush failed; will retry later."
 msgstr ""
 
-#: includes/class-activate.php:243
+#: includes/class-activate.php:169
 msgid "Plugin upgraded — legacy cache keys flushed."
 msgstr ""
 
-#: includes/class-activate.php:308
+#: includes/class-activate.php:234
 msgid "Failed to replace WP_CACHE in wp-config.php"
 msgstr ""
 
-#: includes/class-activate.php:364
+#: includes/class-activate.php:290
 msgid "Plugin activated"
 msgstr ""
 
-#: includes/class-admin-notices.php:121
+#: includes/class-admin-notices.php:139
 msgid "Another plugin or your host already manages <code>wp-content/advanced-cache.php</code>. Performance Optimisation did not replace that file. Page-cache drop-ins from two sources can conflict — use only one full-page cache solution."
 msgstr ""
 
-#: includes/class-admin-notices.php:124
+#: includes/class-admin-notices.php:142
 msgid "<code>WP_CACHE</code> is set to <code>false</code> in your configuration. The plugin did not change it. Set <code>WP_CACHE</code> to <code>true</code> in wp-config.php if you want WordPress to load advanced-cache drop-ins."
 msgstr ""
 
-#: includes/class-admin-notices.php:129
+#: includes/class-admin-notices.php:147
 msgid "Could not update wp-config.php (filesystem access or permissions). If you need <code>WP_CACHE</code>, add it manually or fix file permissions."
 msgstr ""
 
-#: includes/class-admin-notices.php:132
+#: includes/class-admin-notices.php:150
 msgid "Failed to write wp-config.php. Please check file permissions."
 msgstr ""
 
-#: includes/class-admin-notices.php:156
+#: includes/class-admin-notices.php:174
 msgid "Dismiss this notice"
 msgstr ""
 
-#: includes/class-admin-notices.php:198
-msgid "Performance Optimisation — LiteSpeed detected"
+#: includes/class-admin-notices.php:220
+#: includes/class-object-cache.php:429
+msgid "Repeated Redis connection failures."
 msgstr ""
 
-#: includes/class-admin-notices.php:199
-msgid "Both Performance Optimisation and LiteSpeed Cache are active. In Auto mode, file cache & minify/combine/defer are paused to avoid double processing."
+#. translators: %s: date/time the circuit breaker tripped
+#: includes/class-admin-notices.php:224
+#, php-format
+msgid "Tripped on %s."
 msgstr ""
 
-#: includes/class-admin-notices.php:200
-msgid "Choose the cache owner in Performance → File Optimisation → Network → LiteSpeed."
+#: includes/class-admin-notices.php:227
+msgid "Performance Optimisation — Object cache auto-disabled"
 msgstr ""
 
-#: includes/class-admin-notices.php:201
+#: includes/class-admin-notices.php:229
+msgid "Redis will be re-checked automatically, or re-enable it manually once Redis recovers."
+msgstr ""
+
+#: includes/class-admin-notices.php:230
+#: includes/class-admin-notices.php:277
 msgid "Open settings"
 msgstr ""
 
-#: includes/class-admin-notices.php:202
+#: includes/class-admin-notices.php:231
+#: includes/class-admin-notices.php:278
 #: build/tab-dashboard.js:6
 #: build/tab-database-cleanup.js:5
 #: build/tab-file-optimization.js:1
@@ -390,31 +399,49 @@ msgstr ""
 msgid "Dismiss"
 msgstr ""
 
-#: includes/class-admin-notices.php:232
+#: includes/class-admin-notices.php:274
+msgid "Performance Optimisation — LiteSpeed detected"
+msgstr ""
+
+#: includes/class-admin-notices.php:275
+msgid "Both Performance Optimisation and LiteSpeed Cache are active. In Auto mode, file cache & minify/combine/defer are paused to avoid double processing."
+msgstr ""
+
+#: includes/class-admin-notices.php:276
+msgid "Choose the cache owner in Performance → File Optimisation → Network → LiteSpeed."
+msgstr ""
+
+#: includes/class-admin-notices.php:308
 msgid "You have another page caching plugin active:"
 msgstr ""
 
-#: includes/class-admin-notices.php:233
+#: includes/class-admin-notices.php:309
 msgid "Running multiple full-page cache solutions can cause conflicts. Consider using only one."
 msgstr ""
 
-#: includes/class-admin-notices.php:281
+#. translators: %s: comma-separated builder names
+#: includes/class-admin-notices.php:351
+#, php-format
+msgid "Builder update detected (%s). Page cache and builder CSS were purged."
+msgstr ""
+
+#: includes/class-admin-notices.php:401
 msgid "Enjoying Performance Optimisation?"
 msgstr ""
 
-#: includes/class-admin-notices.php:283
+#: includes/class-admin-notices.php:403
 msgid "A quick review helps other WordPress users discover it."
 msgstr ""
 
-#: includes/class-admin-notices.php:285
+#: includes/class-admin-notices.php:405
 msgid "Leave a Review"
 msgstr ""
 
-#: includes/class-admin-notices.php:286
+#: includes/class-admin-notices.php:406
 msgid "Already did"
 msgstr ""
 
-#: includes/class-admin-notices.php:287
+#: includes/class-admin-notices.php:407
 msgid "Not now"
 msgstr ""
 
@@ -452,27 +479,34 @@ msgstr ""
 msgid "AI: Prefetch predicted next URLs"
 msgstr ""
 
+#. translators: %s: comma-separated builder names
+#: includes/class-builder-purge-watcher.php:454
+#, php-format
+msgid "Builder update detected (%s): builder CSS, page cache, used-CSS and critical-CSS purged."
+msgstr ""
+
 #. translators: %1$s: style handle, %2$d: inline size limit in bytes.
-#: includes/class-cache.php:1077
+#: includes/class-cache.php:1046
 #, php-format
 msgid "Inline-CSS budget prediction drifted from core for %1$s (limit %2$d); degraded to safe fallback."
 msgstr ""
 
-#: includes/class-cache.php:2704
-#: includes/class-object-cache.php:382
-#: includes/class-object-cache.php:424
-#: includes/class-rest.php:851
+#: includes/class-cache.php:2662
+#: includes/class-object-cache.php:433
+#: includes/class-object-cache.php:821
+#: includes/class-object-cache.php:868
+#: includes/class-rest.php:761
 #: includes/class-wppo-cli-command.php:599
 msgid "Unable to initialize filesystem."
 msgstr ""
 
-#: includes/class-cache.php:2708
+#: includes/class-cache.php:2666
 msgid "Cache directory does not exist."
 msgstr ""
 
-#: includes/class-cache.php:2727
+#: includes/class-cache.php:2685
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:522
+#: src/components/ObjectCache.js:584
 msgid "N/A"
 msgstr ""
 
@@ -498,27 +532,31 @@ msgid "Archive"
 msgstr ""
 
 #. translators: %s: Template hash
-#: includes/class-critical-css.php:1224
+#: includes/class-critical-css.php:1223
 #, php-format
 msgid "Critical CSS generated for template: %s"
 msgstr ""
 
 #. translators: %s: Template hash
-#: includes/class-critical-css.php:1232
+#: includes/class-critical-css.php:1231
 #, php-format
 msgid "Critical CSS generation failed for template: %s"
 msgstr ""
 
 #. translators: %d: Number of jobs queued
 #. translators: %d: Number of regeneration jobs queued
-#: includes/class-critical-css.php:1273
-#: includes/class-rest.php:1726
+#: includes/class-critical-css.php:1272
+#: includes/class-rest.php:1692
 #, php-format
 msgid "Critical CSS regeneration: %d jobs queued."
 msgstr ""
 
-#: includes/class-cron.php:162
+#: includes/class-cron.php:164
 msgid "Every 5 Hours"
+msgstr ""
+
+#: includes/class-cron.php:176
+msgid "Object Cache Recovery Probe"
 msgstr ""
 
 #: includes/class-database-cleanup.php:864
@@ -584,7 +622,7 @@ msgid "Invalid database cleanup method: %s"
 msgstr ""
 
 #: includes/class-database-cleanup.php:1040
-#: includes/class-rest.php:1023
+#: includes/class-rest.php:933
 msgid "Database cleanup failed."
 msgstr ""
 
@@ -614,11 +652,11 @@ msgstr ""
 msgid "Plugin deactivated"
 msgstr ""
 
-#: includes/class-image-optimisation.php:2288
+#: includes/class-image-optimisation.php:2256
 msgid "Play video"
 msgstr ""
 
-#: includes/class-image-optimisation.php:2316
+#: includes/class-image-optimisation.php:2284
 msgid "Video thumbnail"
 msgstr ""
 
@@ -630,25 +668,25 @@ msgstr ""
 msgid "Image conversion failed."
 msgstr ""
 
-#: includes/class-litespeed-esi.php:371
+#: includes/class-litespeed-esi.php:451
 msgid "Loading shopping cart…"
 msgstr ""
 
-#: includes/class-litespeed-esi.php:372
+#: includes/class-litespeed-esi.php:452
 msgid "Loading checkout…"
 msgstr ""
 
-#: includes/class-litespeed-esi.php:373
-#: includes/class-litespeed-esi.php:374
+#: includes/class-litespeed-esi.php:453
+#: includes/class-litespeed-esi.php:454
 msgid "Loading account menu…"
 msgstr ""
 
-#: includes/class-litespeed-esi.php:375
+#: includes/class-litespeed-esi.php:455
 msgid "Loading admin bar…"
 msgstr ""
 
 #. translators: %s: ESI block name.
-#: includes/class-litespeed-esi.php:380
+#: includes/class-litespeed-esi.php:460
 #, php-format
 msgid "Loading %s…"
 msgstr ""
@@ -657,32 +695,32 @@ msgstr ""
 msgid "llms.txt could not be served: response headers already sent."
 msgstr ""
 
-#: includes/class-main.php:1043
+#: includes/class-main.php:946
 msgid "Enabled on-demand block asset loading to match the WordPress 6.9 default."
 msgstr ""
 
-#: includes/class-main.php:1240
-#: includes/class-main.php:1266
+#: includes/class-main.php:1143
+#: includes/class-main.php:1169
 msgid "Server rules updated on LiteSpeed — restart OpenLiteSpeed if changes do not appear immediately."
 msgstr ""
 
-#: includes/class-main.php:1258
+#: includes/class-main.php:1161
 msgid "Performance Optimisation: Failed to update .htaccess rules. Please check file permissions."
 msgstr ""
 
-#: includes/class-main.php:2204
+#: includes/class-main.php:2105
 msgid "Go to Performance Optimisation Setting"
 msgstr ""
 
-#: includes/class-main.php:2214
+#: includes/class-main.php:2115
 msgid "Clear All Cache"
 msgstr ""
 
-#: includes/class-main.php:2226
+#: includes/class-main.php:2127
 msgid "Clear This Page Cache"
 msgstr ""
 
-#: includes/class-main.php:2229
+#: includes/class-main.php:2130
 msgid "Clear cache for this specific page or post"
 msgstr ""
 
@@ -721,7 +759,7 @@ msgstr ""
 #: includes/class-metabox.php:169
 #: includes/class-metabox.php:257
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:962
+#: src/components/ObjectCache.js:1024
 msgid "Disable"
 msgstr ""
 
@@ -809,56 +847,73 @@ msgstr ""
 msgid "Disable style %s"
 msgstr ""
 
-#: includes/class-object-cache.php:171
-#: includes/class-object-cache.php:221
+#: includes/class-object-cache.php:250
+#: includes/class-object-cache.php:300
 msgid "Redis connection error."
 msgstr ""
 
-#: includes/class-object-cache.php:213
+#: includes/class-object-cache.php:292
 msgid "Redis telemetry error."
 msgstr ""
 
-#: includes/class-object-cache.php:279
-#: includes/class-object-cache.php:334
+#: includes/class-object-cache.php:419
+#: includes/class-object-cache.php:439
+msgid "A foreign drop-in exists. We will not park it for safety."
+msgstr ""
+
+#: includes/class-object-cache.php:442
+msgid "Cannot park object-cache.php drop-in."
+msgstr ""
+
+#: includes/class-object-cache.php:488
+msgid "Object Cache circuit breaker tripped — drop-in auto-disabled after repeated Redis failures."
+msgstr ""
+
+#: includes/class-object-cache.php:537
+msgid "Object Cache circuit breaker recovered — drop-in re-enabled after successful Redis probe."
+msgstr ""
+
+#: includes/class-object-cache.php:718
+#: includes/class-object-cache.php:773
 msgid "The PhpRedis extension is not installed."
 msgstr ""
 
-#: includes/class-object-cache.php:304
+#: includes/class-object-cache.php:743
 msgid "Ping returned false"
 msgstr ""
 
-#: includes/class-object-cache.php:313
-#: includes/class-rest.php:1179
-#: includes/class-rest.php:1191
+#: includes/class-object-cache.php:752
+#: includes/class-rest.php:1093
+#: includes/class-rest.php:1105
 #: includes/redis-connect-helper.php:89
 msgid "Redis connection failed."
 msgstr ""
 
-#: includes/class-object-cache.php:318
+#: includes/class-object-cache.php:757
 msgid "Connection does not support ping"
 msgstr ""
 
-#: includes/class-object-cache.php:342
+#: includes/class-object-cache.php:781
 msgid "Another Object Cache drop-in is already present. Please disable it before enabling this one."
 msgstr ""
 
-#: includes/class-object-cache.php:348
+#: includes/class-object-cache.php:787
 msgid "Cannot connect to Redis with provided settings."
 msgstr ""
 
-#: includes/class-object-cache.php:386
+#: includes/class-object-cache.php:825
 msgid "Cannot write Redis configuration file."
 msgstr ""
 
-#: includes/class-object-cache.php:392
+#: includes/class-object-cache.php:831
 msgid "Cannot copy object-cache.php drop-in."
 msgstr ""
 
-#: includes/class-object-cache.php:418
+#: includes/class-object-cache.php:862
 msgid "A foreign drop-in exists. We will not delete it for safety."
 msgstr ""
 
-#: includes/class-object-cache.php:429
+#: includes/class-object-cache.php:873
 msgid "Cannot delete object-cache.php drop-in."
 msgstr ""
 
@@ -903,267 +958,275 @@ msgstr ""
 msgid "PageSpeed scan completed for %1$s (%2$s). Performance score: %3$d."
 msgstr ""
 
-#: includes/class-rest.php:309
-msgid "No URLs to crawl."
-msgstr ""
-
-#: includes/class-rest.php:315
-msgid "Rate limit exceeded. Try again later."
-msgstr ""
-
-#: includes/class-rest.php:422
+#: includes/class-rest.php:332
 msgid "Whether the request was successful."
 msgstr ""
 
-#: includes/class-rest.php:428
+#: includes/class-rest.php:338
 msgid "Response data payload."
 msgstr ""
 
-#: includes/class-rest.php:434
+#: includes/class-rest.php:344
 msgid "Response message."
 msgstr ""
 
 #. translators: %s: The cache group name
-#: includes/class-rest.php:501
+#: includes/class-rest.php:411
 #, php-format
 msgid "Object cache does not support flush_group for %s — no action taken"
 msgstr ""
 
-#: includes/class-rest.php:505
+#: includes/class-rest.php:415
 msgid "Object cache does not support flush_group — no action taken"
 msgstr ""
 
 #. translators: %s: The cache group name
-#: includes/class-rest.php:511
+#: includes/class-rest.php:421
 #, php-format
 msgid "Failed to flush cache group: %s"
 msgstr ""
 
-#: includes/class-rest.php:515
+#: includes/class-rest.php:425
 msgid "Failed to flush cache group."
 msgstr ""
 
 #. translators: %s: The cache group name
-#: includes/class-rest.php:521
+#: includes/class-rest.php:431
 #, php-format
 msgid "Flushed cache group: %s"
 msgstr ""
 
-#: includes/class-rest.php:547
-#: includes/class-rest.php:557
+#: includes/class-rest.php:457
+#: includes/class-rest.php:467
 msgid "Invalid path provided."
 msgstr ""
 
-#: includes/class-rest.php:565
+#: includes/class-rest.php:475
 msgid "Failed to clear cache: Invalid path."
 msgstr ""
 
 #. translators: %s: The URL of the page
-#: includes/class-rest.php:571
+#: includes/class-rest.php:481
 #, php-format
 msgid "Clear cache of <a href=\"%1$s\">%2$s</a>"
 msgstr ""
 
-#: includes/class-rest.php:578
+#: includes/class-rest.php:488
 msgid "Clear all cache"
 msgstr ""
 
-#: includes/class-rest.php:598
+#: includes/class-rest.php:508
 msgid "Invalid settings tab."
 msgstr ""
 
-#: includes/class-rest.php:685
+#: includes/class-rest.php:595
 msgid "Activities fetched successfully."
 msgstr ""
 
-#: includes/class-rest.php:715
-#: includes/class-rest.php:719
+#: includes/class-rest.php:625
+#: includes/class-rest.php:629
 msgid "No pending images to optimize."
 msgstr ""
 
-#: includes/class-rest.php:733
+#: includes/class-rest.php:643
 msgid "Invalid image path provided."
 msgstr ""
 
 #. translators: %d: Number of image jobs queued
-#: includes/class-rest.php:789
+#: includes/class-rest.php:699
 #, php-format
 msgid "Scheduled %d image optimization jobs for background processing."
 msgstr ""
 
 #. translators: %d: Number of jobs
-#: includes/class-rest.php:800
+#: includes/class-rest.php:710
 #, php-format
 msgid "%d images queued for background optimization."
 msgstr ""
 
-#: includes/class-rest.php:839
+#: includes/class-rest.php:749
 #: build/tab-dashboard.js:6
 #: src/components/Dashboard.js:441
 msgid "Images optimized successfully."
 msgstr ""
 
-#: includes/class-rest.php:857
+#: includes/class-rest.php:767
 msgid "Optimized images folder does not exist."
 msgstr ""
 
-#: includes/class-rest.php:861
+#: includes/class-rest.php:771
 msgid "Failed to delete the optimized images folder."
 msgstr ""
 
-#: includes/class-rest.php:867
+#: includes/class-rest.php:777
 msgid "Optimized images folder deleted successfully."
 msgstr ""
 
-#: includes/class-rest.php:881
+#: includes/class-rest.php:791
 msgid "Invalid payload."
 msgstr ""
 
-#: includes/class-rest.php:885
-#: includes/class-rest.php:1219
+#: includes/class-rest.php:795
+#: includes/class-rest.php:1157
 msgid "Invalid action."
 msgstr ""
 
-#: includes/class-rest.php:889
+#: includes/class-rest.php:799
 msgid "Settings are missing or invalid."
 msgstr ""
 
-#: includes/class-rest.php:897
+#: includes/class-rest.php:807
 msgid "Invalid setting key detected."
 msgstr ""
 
-#: includes/class-rest.php:922
+#: includes/class-rest.php:832
 msgid "No changes detected, settings are already up-to-date"
 msgstr ""
 
-#: includes/class-rest.php:926
+#: includes/class-rest.php:836
 msgid "Failed to update settings"
 msgstr ""
 
-#: includes/class-rest.php:932
+#: includes/class-rest.php:842
 msgid "Settings updated successfully"
 msgstr ""
 
-#: includes/class-rest.php:959
-#: includes/class-rest.php:1012
+#: includes/class-rest.php:869
+#: includes/class-rest.php:922
 msgid "Invalid cleanup type."
 msgstr ""
 
 #. translators: %s: Cleanup type
-#: includes/class-rest.php:971
+#: includes/class-rest.php:881
 #, php-format
 msgid "Failed to clean %s."
 msgstr ""
 
 #. translators: %d: Number of items cleaned
-#: includes/class-rest.php:982
+#: includes/class-rest.php:892
 #, php-format
 msgid "Database cleanup (all): %d items removed on "
 msgstr ""
 
-#: includes/class-rest.php:995
+#: includes/class-rest.php:905
 msgid "Partial or total failure during database cleanup."
 msgstr ""
 
 #. translators: %1$s: Cleanup type, %2$d: Number of items
-#: includes/class-rest.php:1029
+#: includes/class-rest.php:939
 #, php-format
 msgid "Database cleanup (%1$s): %2$d items removed on "
 msgstr ""
 
-#: includes/class-rest.php:1075
+#: includes/class-rest.php:989
 msgid "Post ID is required."
 msgstr ""
 
-#: includes/class-rest.php:1088
+#: includes/class-rest.php:1002
 msgid "No assets captured yet. Visit the page on the frontend first."
 msgstr ""
 
-#: includes/class-rest.php:1178
+#: includes/class-rest.php:1092
 msgid "Redis connection ping failed."
 msgstr ""
 
-#: includes/class-rest.php:1190
+#: includes/class-rest.php:1104
 msgid "Redis connection enable failed."
 msgstr ""
 
-#: includes/class-rest.php:1194
+#: includes/class-rest.php:1108
 msgid "Object Cache enabled."
 msgstr ""
 
-#: includes/class-rest.php:1195
+#: includes/class-rest.php:1109
 msgid "Object Cache enabled successfully."
 msgstr ""
 
-#: includes/class-rest.php:1202
+#: includes/class-rest.php:1116
 msgid "Redis connection disable failed."
 msgstr ""
 
-#: includes/class-rest.php:1203
+#: includes/class-rest.php:1117
 msgid "Failed to disable object cache."
 msgstr ""
 
-#: includes/class-rest.php:1206
-#: includes/class-rest.php:1207
+#: includes/class-rest.php:1120
+#: includes/class-rest.php:1121
 msgid "Object Cache disabled."
 msgstr ""
 
-#: includes/class-rest.php:1213
-#: includes/class-rest.php:1214
+#: includes/class-rest.php:1134
+msgid "Object Cache circuit recovery failed — Redis still unreachable."
+msgstr ""
+
+#: includes/class-rest.php:1135
+msgid "Redis is still unreachable. The circuit breaker stays open."
+msgstr ""
+
+#: includes/class-rest.php:1144
+msgid "Object Cache circuit breaker recovered — drop-in re-enabled manually."
+msgstr ""
+
+#: includes/class-rest.php:1145
+msgid "Object Cache recovered successfully."
+msgstr ""
+
+#: includes/class-rest.php:1151
+#: includes/class-rest.php:1152
 msgid "Object Cache flushed."
 msgstr ""
 
-#: includes/class-rest.php:1216
+#: includes/class-rest.php:1154
 msgid "Failed to flush object cache."
 msgstr ""
 
-#: includes/class-rest.php:1331
+#: includes/class-rest.php:1297
 msgid "Unauthorized."
 msgstr ""
 
-#: includes/class-rest.php:1335
+#: includes/class-rest.php:1301
 msgid "Nonce verification failed."
 msgstr ""
 
-#: includes/class-rest.php:1371
-#: includes/class-rest.php:1420
+#: includes/class-rest.php:1337
+#: includes/class-rest.php:1386
 msgid "A valid URL is required."
 msgstr ""
 
-#: includes/class-rest.php:1377
-#: includes/class-rest.php:1384
-#: includes/class-rest.php:1427
+#: includes/class-rest.php:1343
+#: includes/class-rest.php:1350
+#: includes/class-rest.php:1393
 msgid "A valid, allowed URL is required."
 msgstr ""
 
-#: includes/class-rest.php:1390
-#: includes/class-rest.php:1433
+#: includes/class-rest.php:1356
+#: includes/class-rest.php:1399
 #: includes/class-telemetry.php:99
 msgid "You can only scan URLs belonging to this website."
 msgstr ""
 
-#: includes/class-rest.php:1397
+#: includes/class-rest.php:1363
 msgid "Performance scan failed."
 msgstr ""
 
-#: includes/class-rest.php:1438
+#: includes/class-rest.php:1404
 msgid "PageSpeed cannot scan local or non-public URLs."
 msgstr ""
 
-#: includes/class-rest.php:1447
-#: includes/class-rest.php:1651
+#: includes/class-rest.php:1413
+#: includes/class-rest.php:1617
 msgid "Action Scheduler is not available."
 msgstr ""
 
-#: includes/class-rest.php:1539
+#: includes/class-rest.php:1505
 msgid "PageSpeed scan failed. Please check your API key and try again."
 msgstr ""
 
-#: includes/class-rest.php:1623
+#: includes/class-rest.php:1589
 msgid "No cached scan found for this URL. Run a scan first."
 msgstr ""
 
-#: includes/class-rest.php:1667
+#: includes/class-rest.php:1633
 #: build/tab-file-optimization.js:1
 #: src/components/FileOptimization.js:287
 msgid "Used CSS regeneration queued."
@@ -1171,7 +1234,7 @@ msgstr ""
 
 #. translators: %d: Number of queued jobs
 #. translators: %d: Number of jobs
-#: includes/class-rest.php:1683
+#: includes/class-rest.php:1649
 #: includes/class-used-css.php:1046
 #, php-format
 msgid "Queued %d used-CSS regeneration jobs."
@@ -1720,7 +1783,7 @@ msgstr ""
 #: build/tab-dashboard.js:3
 #: build/tab-object-cache.js:1
 #: src/App.js:133
-#: src/components/ObjectCache.js:306
+#: src/components/ObjectCache.js:331
 #: src/components/SystemInfo.js:325
 msgid "Object Cache"
 msgstr ""
@@ -2520,7 +2583,7 @@ msgstr ""
 
 #: build/tab-dashboard.js:3
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:416
+#: src/components/ObjectCache.js:478
 #: src/components/SystemInfo.js:348
 msgid "Memory Usage"
 msgstr ""
@@ -3158,7 +3221,7 @@ msgstr ""
 #: build/tab-dashboard.js:6
 #: build/tab-file-optimization.js:1
 #: src/components/Dashboard.js:796
-#: src/components/FileOptimization.js:1473
+#: src/components/FileOptimization.js:1497
 msgid "Effective:"
 msgstr ""
 
@@ -3574,7 +3637,7 @@ msgstr ""
 #: build/tab-object-cache.js:1
 #: src/components/DatabaseCleanup.js:232
 #: src/components/ImageOptimization.js:246
-#: src/components/ObjectCache.js:178
+#: src/components/ObjectCache.js:183
 msgid "Settings saved successfully."
 msgstr ""
 
@@ -3584,8 +3647,8 @@ msgstr ""
 #: src/components/DatabaseCleanup.js:241
 #: src/components/ImageOptimization.js:257
 #: src/components/ImageOptimization.js:269
-#: src/components/ObjectCache.js:188
-#: src/components/ObjectCache.js:197
+#: src/components/ObjectCache.js:193
+#: src/components/ObjectCache.js:202
 msgid "Error saving settings."
 msgstr ""
 
@@ -3909,42 +3972,32 @@ msgid "One handle or partial URL per line. Fix FOUC by excluding problematic fil
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:600
-msgid "Remove Query Strings From Static Resources"
-msgstr ""
-
-#: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:604
-msgid "Strip ?ver= query strings from CSS and JavaScript URLs so proxies and CDNs can cache them more effectively."
-msgstr ""
-
-#: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:618
+#: src/components/FileOptimization.js:598
 msgid "Removes CSS rules not used on the current page, similar to PurgeCSS. Reduces page weight significantly."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:625
+#: src/components/FileOptimization.js:605
 msgid "Remove Unused CSS"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:629
+#: src/components/FileOptimization.js:609
 msgid "Scan pages and remove CSS rules that are not used. Reduces file size by 30–80% and helps pass PageSpeed audits."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:645
+#: src/components/FileOptimization.js:625
 msgid "Safelist Selectors"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:655
+#: src/components/FileOptimization.js:635
 msgid "e.g. .my-dynamic-class"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:669
+#: src/components/FileOptimization.js:649
 msgid "One selector per line — kept even if unused. Use to fix missing styles."
 msgstr ""
 
@@ -3955,41 +4008,41 @@ msgid "Failed to regenerate used CSS."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:693
+#: src/components/FileOptimization.js:673
 msgid "Exclude CSS from Minification"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:703
+#: src/components/FileOptimization.js:683
 msgid "e.g. handle-name or /wp-content/…/critical.css"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:717
-#: src/components/FileOptimization.js:996
-#: src/components/FileOptimization.js:1061
+#: src/components/FileOptimization.js:697
+#: src/components/FileOptimization.js:1020
+#: src/components/FileOptimization.js:1085
 msgid "One handle or partial URL per line."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:730
+#: src/components/FileOptimization.js:710
 msgid "Critical CSS"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:734
+#: src/components/FileOptimization.js:714
 msgid "Generate and inline above-the-fold CSS, then defer full stylesheets. Improves FCP and LCP by eliminating render-blocking CSS."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:749
+#: src/components/FileOptimization.js:729
 msgid "Unable to load Critical CSS status."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
 #: build/tab-plugin-setting.js:2
-#: src/components/FileOptimization.js:759
-#: src/components/FileOptimization.js:1652
+#: src/components/FileOptimization.js:739
+#: src/components/FileOptimization.js:1676
 #: src/components/PluginSetting.js:605
 msgid "Retry"
 msgstr ""
@@ -4005,342 +4058,362 @@ msgid "Failed to regenerate critical CSS."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:779
+#: src/components/FileOptimization.js:759
 msgid "Host Google Fonts Locally"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:783
+#: src/components/FileOptimization.js:763
 msgid "Automatically detect Google Fonts and serve them from your own server. Eliminates external DNS lookups, improves GDPR compliance, and applies font-display: swap."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:801
+#: src/components/FileOptimization.js:781
 msgid "Font Metric Fallback"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:805
+#: src/components/FileOptimization.js:785
 msgid "Inject metric-matched system fallback (size-adjust/ascent-override) to reduce CLS when Google Fonts load."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:819
+#: src/components/FileOptimization.js:799
 msgid "HTML Optimisation"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:832
+#: src/components/FileOptimization.js:812
 msgid "Minify HTML"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:836
+#: src/components/FileOptimization.js:816
 msgid "Compress the HTML output of your website by removing unnecessary whitespace and comments."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:847
+#: src/components/FileOptimization.js:827
 msgid "Remove HTML Comments"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:851
+#: src/components/FileOptimization.js:831
 msgid "Strip HTML comments from the output (except IE conditional comments)."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:865
+#: src/components/FileOptimization.js:845
 msgid "Minify Inline CSS"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:869
+#: src/components/FileOptimization.js:849
 msgid "Minify CSS within <style> tags using the PHP minifier."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:885
+#: src/components/FileOptimization.js:865
 msgid "Minify Inline JavaScript"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:889
+#: src/components/FileOptimization.js:869
 msgid "Minify JavaScript within <script> tags using the PHP minifier."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:912
-msgid "JavaScript Loading"
+#: src/components/FileOptimization.js:883
+msgid "Legacy Options (Deprecated)"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:923
-msgid "Optimisation paused — LiteSpeed Cache owns JS optimisation (change in Network → LiteSpeed)."
+#: src/components/FileOptimization.js:897
+msgid "These options are deprecated and will be removed in a future release. They are kept for backward compatibility only — leave them off on new sites."
+msgstr ""
+
+#: build/tab-file-optimization.js:1
+#: src/components/FileOptimization.js:909
+msgid "Remove Query Strings From Static Resources (Legacy)"
+msgstr ""
+
+#: build/tab-file-optimization.js:1
+#: src/components/FileOptimization.js:913
+msgid "Deprecated: ?ver= query strings ARE the cache-busting mechanism — stripping them risks serving stale CSS/JS after updates. Modern caching relies on fingerprinting with long immutable TTLs (already set by Enable Server Rules). Only enable for a proxy/CDN that cannot cache URLs with query strings."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
 #: src/components/FileOptimization.js:936
-msgid "Minify JavaScript"
+msgid "JavaScript Loading"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:940
-msgid "Compress JS files by removing whitespace and comments to reduce execution time."
-msgstr ""
-
-#: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:956
-msgid "Defer JavaScript"
+#: src/components/FileOptimization.js:947
+msgid "Optimisation paused — LiteSpeed Cache owns JS optimisation (change in Network → LiteSpeed)."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
 #: src/components/FileOptimization.js:960
+msgid "Minify JavaScript"
+msgstr ""
+
+#: build/tab-file-optimization.js:1
+#: src/components/FileOptimization.js:964
+msgid "Compress JS files by removing whitespace and comments to reduce execution time."
+msgstr ""
+
+#: build/tab-file-optimization.js:1
+#: src/components/FileOptimization.js:980
+msgid "Defer JavaScript"
+msgstr ""
+
+#: build/tab-file-optimization.js:1
+#: src/components/FileOptimization.js:984
 msgid "Load scripts after the page renders to prevent render-blocking and improve page speed."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:976
+#: src/components/FileOptimization.js:1000
 msgid "Exclude from Deferring"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:986
+#: src/components/FileOptimization.js:1010
 msgid "e.g. jquery or /wp-includes/…/script.js"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1009
+#: src/components/FileOptimization.js:1033
 msgid "Delay JavaScript Execution"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1013
+#: src/components/FileOptimization.js:1037
 msgid "Delay all scripts until the user interacts (keyboard/mouse) or load during idle/viewport. Reduces initial CPU usage but may break immediate functionality — test carefully."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1028
+#: src/components/FileOptimization.js:1052
 msgid "Script Rules"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1041
+#: src/components/FileOptimization.js:1065
 msgid "Exclude from Minification"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1051
+#: src/components/FileOptimization.js:1075
 msgid "e.g. handle-name or /wp-content/…/critical.js"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1075
+#: src/components/FileOptimization.js:1099
 msgid "Scripts to Delay"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1085
+#: src/components/FileOptimization.js:1109
 msgid "e.g. googletagmanager.com/gtag"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1097
+#: src/components/FileOptimization.js:1121
 msgid "One per line — partial URL or keyword (e.g. gtag)."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1109
+#: src/components/FileOptimization.js:1133
 msgid "Default Load Strategy"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1126
+#: src/components/FileOptimization.js:1150
 msgid "Interaction (load on user interaction)"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1132
+#: src/components/FileOptimization.js:1156
 msgid "Idle (load during browser idle)"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1138
+#: src/components/FileOptimization.js:1162
 msgid "Viewport (load when near viewport)"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1145
+#: src/components/FileOptimization.js:1169
 msgid "Default strategy for delayed scripts that are not in a specific list below."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1160
+#: src/components/FileOptimization.js:1184
 msgid "Idle Timeout (ms)"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1186
+#: src/components/FileOptimization.js:1210
 msgid "Maximum time (ms) to wait before loading idle scripts (default: 3000)."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1199
+#: src/components/FileOptimization.js:1223
 msgid "Scripts to Load When Idle"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1209
+#: src/components/FileOptimization.js:1233
 msgid "e.g. analytics.js"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1221
+#: src/components/FileOptimization.js:1245
 msgid "One per line — loads via requestIdleCallback during browser idle."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1233
+#: src/components/FileOptimization.js:1257
 msgid "Scripts to Load in Viewport"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1243
+#: src/components/FileOptimization.js:1267
 msgid "e.g. chat-widget.js"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1255
+#: src/components/FileOptimization.js:1279
 msgid "One per line — loads when near viewport."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1267
+#: src/components/FileOptimization.js:1291
 msgid "Script Priority"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1277
+#: src/components/FileOptimization.js:1301
 msgid "e.g. critical:high"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1289
+#: src/components/FileOptimization.js:1313
 msgid "One per line — handle:priority (high, normal, low). High loads first."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1303
+#: src/components/FileOptimization.js:1327
 msgid "Delaying scripts can break immediate functionality. Test carefully."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1325
+#: src/components/FileOptimization.js:1349
 msgid "WooCommerce Core"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1333
+#: src/components/FileOptimization.js:1357
 msgid "Optimize WooCommerce Assets"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1337
+#: src/components/FileOptimization.js:1361
 msgid "Disable WooCommerce scripts and styles on non-ecommerce pages (e.g. blog, about). This reduces page weight but may break cart widgets on custom pages — verify your checkout flow after enabling."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1353
+#: src/components/FileOptimization.js:1377
 msgid "This may break carts on custom pages. Verify your checkout flow."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1364
+#: src/components/FileOptimization.js:1388
 msgid "Keep Assets on These URLs"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1374
+#: src/components/FileOptimization.js:1398
 msgid "e.g. shop/.* (regex supported)"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1386
+#: src/components/FileOptimization.js:1410
 msgid "One pattern per line — regex supported."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1397
+#: src/components/FileOptimization.js:1421
 msgid "Remove Specific CSS/JS Handles"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1407
+#: src/components/FileOptimization.js:1431
 msgid "e.g. woocommerce-smallscreen"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1419
+#: src/components/FileOptimization.js:1443
 msgid "One handle per line."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1441
+#: src/components/FileOptimization.js:1465
 msgid "LiteSpeed Integration"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1455
+#: src/components/FileOptimization.js:1479
 msgid "LSCache Active"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1459
+#: src/components/FileOptimization.js:1483
 msgid "LSCache Inactive"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1465
+#: src/components/FileOptimization.js:1489
 msgid "Detected: LiteSpeed"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1484
+#: src/components/FileOptimization.js:1508
 msgid "LiteSpeed Cache owns page cache & optimisation in the current mode — WPPO combiners/minifiers are paused to prevent double processing."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1496
+#: src/components/FileOptimization.js:1520
 msgid "Both plugins are active in Auto mode. Choose the cache owner below."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1508
+#: src/components/FileOptimization.js:1532
 msgid "Cache Owner"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1524
+#: src/components/FileOptimization.js:1548
 msgid "Auto — Detect (recommended)"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1530
+#: src/components/FileOptimization.js:1554
 msgid "WPPO owns cache"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1536
+#: src/components/FileOptimization.js:1560
 msgid "LiteSpeed owns cache"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1542
+#: src/components/FileOptimization.js:1566
 msgid "Standalone — Ignore LiteSpeed"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1549
+#: src/components/FileOptimization.js:1573
 msgid "In Auto, WPPO owns cache when LiteSpeed Cache is not active; otherwise LiteSpeed owns it."
 msgstr ""
 
@@ -4355,447 +4428,447 @@ msgid "Failed to save LiteSpeed settings."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1559
+#: src/components/FileOptimization.js:1583
 msgid "Save LiteSpeed Mode"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1568
+#: src/components/FileOptimization.js:1592
 msgid "Drop-in status:"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1573
+#: src/components/FileOptimization.js:1597
 msgid "Page cache:"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1583
+#: src/components/FileOptimization.js:1607
 msgid "Object cache:"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1610
+#: src/components/FileOptimization.js:1634
 msgid "Only one object-cache.php / advanced-cache.php can exist. Choose the handler in Tools → Object Cache."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1620
+#: src/components/FileOptimization.js:1644
 msgid "Page cache drop-in is owned by LiteSpeed — WPPO file cache is bypassed in this mode."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1632
+#: src/components/FileOptimization.js:1656
 msgid "Server Rules"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1642
+#: src/components/FileOptimization.js:1666
 msgid "Unable to load server configuration. Check your server setup."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1667
+#: src/components/FileOptimization.js:1691
 msgid "Loading server configuration…"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1682
+#: src/components/FileOptimization.js:1706
 msgid "Server rules require Apache or LiteSpeed."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1690
+#: src/components/FileOptimization.js:1714
 msgid "Enable Server Rules (.htaccess)"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1697
+#: src/components/FileOptimization.js:1721
 msgid "Write performance rules (browser caching, GZIP compression, etc.) directly to your .htaccess file for server-level optimisation. LiteSpeed is Apache-compatible — restart OpenLiteSpeed after changes. Ensure you have FTP access for recovery if something goes wrong."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1701
+#: src/components/FileOptimization.js:1725
 msgid "Write performance rules (browser caching, GZIP compression, etc.) directly to your .htaccess file for server-level optimisation. Requires Apache. Ensure you have FTP access for recovery if something goes wrong."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1740
+#: src/components/FileOptimization.js:1764
 msgid "This modifies your .htaccess. LiteSpeed is Apache-compatible — restart OpenLiteSpeed after changes. Ensure you have FTP access for recovery."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1744
+#: src/components/FileOptimization.js:1768
 msgid "This modifies your .htaccess. Ensure you have FTP access for recovery."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1760
+#: src/components/FileOptimization.js:1784
 msgid "LiteSpeed Detected:"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1765
+#: src/components/FileOptimization.js:1789
 msgid "LiteSpeed is Apache-compatible. Server rules use the same .htaccess as Apache — restart OpenLiteSpeed after changes."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1782
+#: src/components/FileOptimization.js:1806
 msgid "Nginx Detected:"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1787
+#: src/components/FileOptimization.js:1811
 msgid "Server rules cannot be applied automatically on Nginx. Please copy the rules below into your server configuration."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1794
+#: src/components/FileOptimization.js:1818
 msgid "Nginx Configuration"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1805
+#: src/components/FileOptimization.js:1829
 msgid "Add these rules inside your"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1813
+#: src/components/FileOptimization.js:1837
 msgid "block, then restart Nginx."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1830
+#: src/components/FileOptimization.js:1854
 msgid "Unrecognised server software. Automatic rules are only available for Apache (.htaccess)."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1843
+#: src/components/FileOptimization.js:1867
 msgid "CDN Settings"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1854
+#: src/components/FileOptimization.js:1878
 msgid "CDN Hostname"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1873
+#: src/components/FileOptimization.js:1897
 msgid "Enter your CDN hostname. All static asset URLs (JS, CSS, images) will be rewritten to load from this domain, reducing latency for global visitors."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1882
+#: src/components/FileOptimization.js:1906
 msgid "Migrated to mapping #0 — cdnURL kept for backward compatibility."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1892
+#: src/components/FileOptimization.js:1916
 msgid "CDN Mapping (parity with LSCWP)"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1898
+#: src/components/FileOptimization.js:1922
 msgid "One-to-many mapping by origin/dir/filetype. Up to 5 entries. Use * wildcard in Origin Dir (e.g. wp-content/*)."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1912
+#: src/components/FileOptimization.js:1936
 msgid "CDN URL"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1950
+#: src/components/FileOptimization.js:1974
 msgid "Origin URL (ori)"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1986
+#: src/components/FileOptimization.js:2010
 msgid "Origin Dir (ori_dir) — wildcard * allowed, pipe-separated"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2024
+#: src/components/FileOptimization.js:2048
 msgid "Include Dirs"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2063
+#: src/components/FileOptimization.js:2087
 msgid "Include Filetypes (comma-separated)"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2103
+#: src/components/FileOptimization.js:2127
 msgid "CDN Attr allowlist (cdn_attr) — e.g. src,href,srcset"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2155
+#: src/components/FileOptimization.js:2179
 msgid "Remove"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2189
+#: src/components/FileOptimization.js:2213
 msgid "Add Mapping"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2208
+#: src/components/FileOptimization.js:2232
 msgid "Cleanup Core Bloat"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2216
+#: src/components/FileOptimization.js:2240
 msgid "Disable Emojis"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2220
+#: src/components/FileOptimization.js:2244
 msgid "Remove the WordPress emoji script and stylesheet. Saves ~10 KB per page if you don't use emojis in your content."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2229
+#: src/components/FileOptimization.js:2253
 msgid "Disable Embeds"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2233
+#: src/components/FileOptimization.js:2257
 msgid "Remove the oEmbed script that allows embedding external content. Saves ~1 HTTP request if you do not embed tweets, YouTube videos, etc."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2242
+#: src/components/FileOptimization.js:2266
 msgid "Disable Dashicons (Frontend)"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2246
+#: src/components/FileOptimization.js:2270
 msgid "Prevent the WordPress admin icon font from loading on the frontend for logged-out users. Only disable if your theme does not use Dashicons."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2255
+#: src/components/FileOptimization.js:2279
 msgid "Disable XML-RPC"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2259
+#: src/components/FileOptimization.js:2283
 msgid "Block the XML-RPC endpoint (xmlrpc.php). Reduces attack surface and server load. Only disable if you do not use Jetpack, mobile apps, or remote publishing."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2268
+#: src/components/FileOptimization.js:2292
 msgid "Remove REST API Links"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2272
+#: src/components/FileOptimization.js:2296
 msgid "Remove the REST API discovery link and oEmbed links from the front end. The REST API itself stays active."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2281
+#: src/components/FileOptimization.js:2305
 msgid "Disable RSS Feeds"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2285
+#: src/components/FileOptimization.js:2309
 msgid "Redirect all feed requests to the home page and remove feed discovery links. Only for sites that do not use feeds."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2294
+#: src/components/FileOptimization.js:2318
 msgid "Remove Shortlinks"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2298
+#: src/components/FileOptimization.js:2322
 msgid "Remove the rel=shortlink tag from page output."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2307
+#: src/components/FileOptimization.js:2331
 msgid "Remove Generator Meta Tag"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2311
+#: src/components/FileOptimization.js:2335
 msgid "Hide the WordPress version meta generator tag."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2320
+#: src/components/FileOptimization.js:2344
 msgid "Remove jQuery Migrate"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2324
+#: src/components/FileOptimization.js:2348
 msgid "Drop the jquery-migrate dependency to save a request. Only disable if your theme/plugins do not rely on deprecated jQuery APIs."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2333
+#: src/components/FileOptimization.js:2357
 msgid "Remove Password Strength Meter"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2337
+#: src/components/FileOptimization.js:2361
 msgid "Prevent the password strength meter script from loading on the front end."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2346
+#: src/components/FileOptimization.js:2370
 msgid "Disable Self-pingbacks"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2350
+#: src/components/FileOptimization.js:2374
 msgid "Stop posts from pinging themselves when linking to their own site."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2359
+#: src/components/FileOptimization.js:2383
 msgid "Disable RSD Link"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2363
+#: src/components/FileOptimization.js:2387
 msgid "Remove the EditURI (RSD) link used by remote clients."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2372
+#: src/components/FileOptimization.js:2396
 msgid "Disable WLW Manifest"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2376
+#: src/components/FileOptimization.js:2400
 msgid "Remove the Windows Live Writer manifest link."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2385
+#: src/components/FileOptimization.js:2409
 msgid "Disable Global Styles"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2389
+#: src/components/FileOptimization.js:2413
 msgid "Remove WordPress global styles and SVG filters."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2398
+#: src/components/FileOptimization.js:2422
 msgid "Disable Classic Theme Styles"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2402
+#: src/components/FileOptimization.js:2426
 msgid "Remove classic theme stylesheet."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2413
+#: src/components/FileOptimization.js:2437
 msgid "Disable Woo Cart Fragments"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2417
+#: src/components/FileOptimization.js:2441
 msgid "Prevent WooCommerce cart fragments AJAX polling."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2426
+#: src/components/FileOptimization.js:2450
 msgid "Disable Recent Comments Style"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2430
+#: src/components/FileOptimization.js:2454
 msgid "Remove recent comments widget inline CSS."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2441
+#: src/components/FileOptimization.js:2465
 msgid "Disable Comment Reply JS"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2445
+#: src/components/FileOptimization.js:2469
 msgid "Remove comment-reply script."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2454
+#: src/components/FileOptimization.js:2478
 msgid "Disable oEmbed Discovery"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2458
+#: src/components/FileOptimization.js:2482
 msgid "Remove oEmbed discovery links from head."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2467
+#: src/components/FileOptimization.js:2491
 msgid "Disable Block Widgets"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2471
+#: src/components/FileOptimization.js:2495
 msgid "Disable block-based widgets editor."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2480
+#: src/components/FileOptimization.js:2504
 msgid "Load Block Assets On Demand"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2484
+#: src/components/FileOptimization.js:2508
 msgid "Only load block CSS and JavaScript when blocks are actually used on the page. On WordPress 6.8 you must enable this toggle; on WordPress 6.9 and later classic themes load block assets on demand by default."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2493
+#: src/components/FileOptimization.js:2517
 msgid "Load Combined Core Block Styles"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2497
+#: src/components/FileOptimization.js:2521
 msgid "Load the combined core block stylesheet (wp-block-library) for compatibility with shortcodes or widgets that enqueue styles while content renders. Overrides on-demand block assets. Requires WordPress 6.9+."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2509
+#: src/components/FileOptimization.js:2533
 msgid "Heartbeat Control"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2520
+#: src/components/FileOptimization.js:2544
 msgid "API Frequency"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2534
+#: src/components/FileOptimization.js:2558
 msgid "Default Mode"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2540
+#: src/components/FileOptimization.js:2564
 msgid "Reduce Frequency (60s)"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2546
+#: src/components/FileOptimization.js:2570
 msgid "Disable on Frontend"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2552
+#: src/components/FileOptimization.js:2576
 msgid "Disable Everywhere"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:2562
+#: src/components/FileOptimization.js:2586
 msgid "Restricting the Heartbeat API reduces server CPU usage by limiting polling."
 msgstr ""
 
@@ -5146,240 +5219,260 @@ msgid "Partial URLs, one per line. Matching images will not be preloaded."
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:148
+#: src/components/ObjectCache.js:153
 msgid "Failed to check cache status."
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:226
-#: src/components/ObjectCache.js:257
+#: src/components/ObjectCache.js:231
+#: src/components/ObjectCache.js:264
 msgid "Action failed."
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:250
+#: src/components/ObjectCache.js:257
 msgid "Action successful."
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:294
+#: src/components/ObjectCache.js:301
 msgid "Connected"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:299
+#: src/components/ObjectCache.js:306
 msgid "Unreachable"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:288
+#: src/components/ObjectCache.js:295
 msgid "Disconnected"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:307
+#: src/components/ObjectCache.js:319
+msgid "failures"
+msgstr ""
+
+#: build/tab-object-cache.js:1
+#: src/components/ObjectCache.js:332
 msgid "Enterprise-grade Redis object caching with Sentinel and Cluster support."
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:323
+#: src/components/ObjectCache.js:348
 msgid "Flush Cache"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:347
+#: src/components/ObjectCache.js:372
 msgid "Enable Object Cache"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:373
+#: src/components/ObjectCache.js:398
 msgid "Extension Missing"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:379
+#: src/components/ObjectCache.js:404
 msgid "The PhpRedis extension is not installed. Native performance will be limited."
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:392
+#: src/components/ObjectCache.js:417
 msgid "Conflict Detected"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:398
+#: src/components/ObjectCache.js:423
 msgid "Another object cache plugin is currently active. Please disable it to avoid site crashes."
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:422
-msgid "Peak:"
+#: src/components/ObjectCache.js:440
+msgid "Object Cache Auto-Disabled"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:436
-msgid "Hit Ratio"
+#: src/components/ObjectCache.js:446
+msgid "The circuit breaker disabled the object cache after repeated Redis failures."
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:458
-msgid "Cache hits vs total requests"
-msgstr ""
-
-#: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:464
-msgid "hits"
-msgstr ""
-
-#: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:475
-msgid "total"
+#: src/components/ObjectCache.js:459
+msgid "Re-enable Object Cache"
 msgstr ""
 
 #: build/tab-object-cache.js:1
 #: src/components/ObjectCache.js:484
+msgid "Peak:"
+msgstr ""
+
+#: build/tab-object-cache.js:1
+#: src/components/ObjectCache.js:498
+msgid "Hit Ratio"
+msgstr ""
+
+#: build/tab-object-cache.js:1
+#: src/components/ObjectCache.js:520
+msgid "Cache hits vs total requests"
+msgstr ""
+
+#: build/tab-object-cache.js:1
+#: src/components/ObjectCache.js:526
+msgid "hits"
+msgstr ""
+
+#: build/tab-object-cache.js:1
+#: src/components/ObjectCache.js:537
+msgid "total"
+msgstr ""
+
+#: build/tab-object-cache.js:1
+#: src/components/ObjectCache.js:546
 msgid "Active Clients"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:494
+#: src/components/ObjectCache.js:556
 msgid "Cumulative connections handled since Redis started"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:499
+#: src/components/ObjectCache.js:561
 msgid "Total Connections:"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:515
+#: src/components/ObjectCache.js:577
 msgid "Redis Version"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:525
+#: src/components/ObjectCache.js:587
 msgid "Uptime:"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:540
+#: src/components/ObjectCache.js:602
 msgid "Connection Settings"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:558
+#: src/components/ObjectCache.js:620
 msgid "Deployment Mode"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:572
+#: src/components/ObjectCache.js:634
 msgid "Standalone (Single Node)"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:578
+#: src/components/ObjectCache.js:640
 msgid "Redis Sentinel (HA)"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:584
+#: src/components/ObjectCache.js:646
 msgid "Redis Cluster"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:594
+#: src/components/ObjectCache.js:656
 msgid "Choose the Redis topology that matches your infrastructure."
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:608
+#: src/components/ObjectCache.js:670
 msgid "Host"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:627
+#: src/components/ObjectCache.js:689
 msgid "Port"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:649
+#: src/components/ObjectCache.js:711
 msgid "Server Nodes"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:659
+#: src/components/ObjectCache.js:721
 msgid "host:port (one per line)"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:667
+#: src/components/ObjectCache.js:729
 msgid "One host:port per line. Example: 10.0.0.1:6379"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:681
+#: src/components/ObjectCache.js:743
 msgid "Sentinel Master Name"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:699
+#: src/components/ObjectCache.js:761
 msgid "Name of the Redis master as configured in sentinel.conf."
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:713
+#: src/components/ObjectCache.js:775
 msgid "Auth Password"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:723
+#: src/components/ObjectCache.js:785
 msgid "Optional"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:736
+#: src/components/ObjectCache.js:798
 msgid "Database ID"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:765
+#: src/components/ObjectCache.js:827
 msgid "Test Connection"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:776
+#: src/components/ObjectCache.js:838
 msgid "Save Changes"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:786
+#: src/components/ObjectCache.js:848
 msgid "Enterprise Performance"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:798
+#: src/components/ObjectCache.js:860
 msgid "Memory Compression"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:812
+#: src/components/ObjectCache.js:874
 msgid "None (Fastest)"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:824
+#: src/components/ObjectCache.js:886
 msgid "LZF"
 msgstr ""
 
 #: build/tab-object-cache.js:1
 #: src/components/ObjectCache.js:55
-#: src/components/ObjectCache.js:827
-#: src/components/ObjectCache.js:858
+#: src/components/ObjectCache.js:889
+#: src/components/ObjectCache.js:920
 msgid "(Disabled)"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:841
+#: src/components/ObjectCache.js:903
 msgid "ZSTD"
 msgstr ""
 
@@ -5389,57 +5482,57 @@ msgid "(Recommended)"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:855
+#: src/components/ObjectCache.js:917
 msgid "LZ4"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:869
+#: src/components/ObjectCache.js:931
 msgid "Reduces memory footprint for enterprise caches."
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:877
+#: src/components/ObjectCache.js:939
 msgid "Persistent Connections"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:881
+#: src/components/ObjectCache.js:943
 msgid "Keep connections alive between PHP requests."
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:891
+#: src/components/ObjectCache.js:953
 msgid "TLS / SSL Encryption"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:895
+#: src/components/ObjectCache.js:957
 msgid "Encrypt traffic between WordPress and Redis."
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:915
+#: src/components/ObjectCache.js:977
 msgid "Danger Zone"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:920
+#: src/components/ObjectCache.js:982
 msgid "Disabling the object cache will remove the drop-in and flush all cached objects. This cannot be undone."
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:936
+#: src/components/ObjectCache.js:998
 msgid "Disable Object Cache"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:954
+#: src/components/ObjectCache.js:1016
 msgid "Disable Object Cache?"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:958
+#: src/components/ObjectCache.js:1020
 msgid "This will remove the object-cache drop-in and clear all cached data. Are you sure?"
 msgstr ""
 

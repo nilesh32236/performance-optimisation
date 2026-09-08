@@ -1752,6 +1752,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return true;
 			}
 
+			// Note: currency-switcher cookies (WOOCS, wmc-current-currency,
+			// Aelia, ...) intentionally do NOT bypass the cache — only the
+			// cart-content cookies above imply dynamic cart fragments.
+			// Per-currency segmentation is a future enhancement, not new vary
+			// logic in this change (see docs/hooks.md, wppo_should_cache_request).
+
+			// Exclude WooCommerce AJAX endpoints (issue #907): wc-ajax XHRs
+			// (?wc-ajax=get_refreshed_fragments, /wc-ajax/...) are dynamic JSON
+			// and must never be buffered or stored (@since NEXT).
+			if ( false !== strpos( $this->request_uri, 'wc-ajax' ) ) {
+				return true;
+			}
+			if ( isset( $_GET['wc-ajax'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
+				return true;
+			}
+			if ( ! empty( $_SERVER['QUERY_STRING'] ) &&
+				preg_match( '/(?:^|&)(wc-ajax)(?:=|&|$)/', sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) ) )
+			) {
+				return true;
+			}
+
 			// ESI punch-holing: when hole active, treat as not cacheable via DONOTCACHEPAGE.
 			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 				$needs_hole = false;
@@ -2033,8 +2054,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return false;
 			}
 
+			// Refuse storage for search/version query strings and WooCommerce
+			// AJAX endpoints (issue #907 defense-in-depth: storage still refuses
+			// wc-ajax XHRs even if is_not_cacheable() is bypassed via the
+			// wppo_should_cache_request filter).
+			//
+			// @since NEXT wc-ajax added to the query-string guard.
 			if ( ! empty( $_SERVER['QUERY_STRING'] ) &&
-				preg_match( '/(?:^|&)(s|ver|v)(?:=|&|$)/', sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) ) )
+				preg_match( '/(?:^|&)(s|ver|v|wc-ajax)(?:=|&|$)/', sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) ) )
 			) {
 				return false;
 			}
