@@ -471,6 +471,97 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Build a fake WP_Scripts registry with one queued classic handle.
+	 *
+	 * Mirrors core state at wp_enqueue_scripts:1000 and records
+	 * wp_script_add_data() writes so tests can assert the applied data keys.
+	 *
+	 * @return object Anonymous instance extending the WP_Scripts stand-in.
+	 */
+	private function make_fake_wp_scripts(): object {
+		return new class() extends WP_Scripts {
+			/**
+			 * Queued handles (mirrors WP_Scripts::$queue).
+			 *
+			 * @var string[]
+			 */
+			public $queue = array( 'third-party-analytics' );
+
+			/**
+			 * Recorded data keys per handle (mirrors wp_script_add_data).
+			 *
+			 * @var array<string, array<string, mixed>>
+			 */
+			public $data = array();
+
+			/**
+			 * Record data keys so get_data() mirrors core.
+			 *
+			 * @param string $handle Script handle.
+			 * @param string $key    Data key.
+			 * @param mixed  $value  Data value.
+			 * @return bool
+			 */
+			public function add_data( $handle, $key, $value ) {
+				$this->data[ $handle ][ $key ] = $value;
+				return true;
+			}
+
+			/**
+			 * Read a recorded data key (mirrors WP_Dependencies::get_data()).
+			 *
+			 * @param string $handle Script handle.
+			 * @param string $key    Data key.
+			 * @return mixed
+			 */
+			public function get_data( $handle, $key ) {
+				return $this->data[ $handle ][ $key ] ?? false;
+			}
+		};
+	}
+
+	/**
+	 * Install the shared stubs add_defer_strategy() tests need: a recording
+	 * wp_script_add_data(), a passthrough apply_filters() with the LiteSpeed
+	 * disable-decision filter pinned false, and a reset LiteSpeed cache.
+	 *
+	 * Other suites in the same process may define LSCWP_V (a process-persistent
+	 * constant), which makes LiteSpeed_Integration treat LSCache as active and
+	 * disable the optimizer guard; the filter pin keeps the guard false here.
+	 *
+	 * @param array $recorded Recorded wp_script_add_data() calls (by reference).
+	 * @return void
+	 */
+	private function stub_defer_strategy_env( array &$recorded ): void {
+		$fake_scripts = $GLOBALS['wp_scripts'];
+		Functions\when( 'wp_script_add_data' )->alias(
+			static function ( $handle, $key, $value ) use ( &$recorded, $fake_scripts ) {
+				$recorded[] = array( $handle, $key, $value );
+				$fake_scripts->add_data( $handle, $key, $value );
+				return true;
+			}
+		);
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook, $value ) {
+				if ( 'wppo_litespeed_should_disable_optimizer' === $hook ) {
+					return false;
+				}
+				return $value;
+			}
+		);
+		// The LiteSpeed guard checks has_filter('litespeed_can_optm') — keep it absent.
+		// should_disable_wppo_optimizer() early-bails on is_lscache_active() (no
+		// LSCWP_V constant / LiteSpeed classes in the unit environment), so the
+		// LiteSpeed_Integration class itself needs no stubbing. When the class was
+		// already loaded by another suite in the same process, its cached statics
+		// must be reset so the guard re-evaluates on its real branch.
+		Functions\when( 'has_filter' )->justReturn( false );
+		if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'reset_cache' ) ) {
+			\PerformanceOptimise\Inc\LiteSpeed_Integration::reset_cache();
+		}
+	}
+
+	/**
 	 * Test that add_defer_strategy() moves deferred classic scripts to the
 	 * footer via the 'group' data key on WP 6.9+ (issue #879).
 	 *
@@ -505,80 +596,10 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		$exclude_prop->setAccessible( true );
 		$exclude_prop->setValue( $main, array() );
 
-		// Fake WP_Scripts registry with one queued classic handle (mirrors core
-		// state at wp_enqueue_scripts:1000). Extends the WP_Scripts stand-in
-		// declared at the bottom of this file so the instanceof guard passes.
-		$GLOBALS['wp_scripts'] = new class() extends WP_Scripts {
-			/**
-			 * Queued handles (mirrors WP_Scripts::$queue).
-			 *
-			 * @var string[]
-			 */
-			public $queue = array( 'third-party-analytics' );
-
-			/**
-			 * Recorded data keys per handle (mirrors wp_script_add_data).
-			 *
-			 * @var array<string, array<string, mixed>>
-			 */
-			public $data = array();
-
-			/**
-			 * Record data keys via wp_script_add_data so get_data() mirrors core.
-			 *
-			 * @param string $handle Script handle.
-			 * @param string $key    Data key.
-			 * @param mixed  $value  Data value.
-			 * @return bool
-			 */
-			public function add_data( $handle, $key, $value ) {
-				$this->data[ $handle ][ $key ] = $value;
-				return true;
-			}
-
-			/**
-			 * Read a recorded data key (mirrors WP_Dependencies::get_data()).
-			 *
-			 * @param string $handle Script handle.
-			 * @param string $key    Data key.
-			 * @return mixed
-			 */
-			public function get_data( $handle, $key ) {
-				return $this->data[ $handle ][ $key ] ?? false;
-			}
-		};
-		$fake_scripts          = $GLOBALS['wp_scripts'];
+		$GLOBALS['wp_scripts'] = $this->make_fake_wp_scripts();
 
 		$recorded = array();
-		Functions\when( 'wp_script_add_data' )->alias(
-			static function ( $handle, $key, $value ) use ( &$recorded, $fake_scripts ) {
-				$recorded[] = array( $handle, $key, $value );
-				$fake_scripts->add_data( $handle, $key, $value );
-				return true;
-			}
-		);
-		Functions\when( 'apply_filters' )->alias(
-			static function ( $hook, $value ) {
-				// Other suites in the same process may define LSCWP_V (a process-
-				// persistent constant), which makes LiteSpeed_Integration treat
-				// LSCache as active and disable the optimizer guard. Keep the
-				// guard decision false for this unit test regardless.
-				if ( 'wppo_litespeed_should_disable_optimizer' === $hook ) {
-					return false;
-				}
-				return $value;
-			}
-		);
-		// The LiteSpeed guard checks has_filter('litespeed_can_optm') — keep it absent.
-		// should_disable_wppo_optimizer() early-bails on is_lscache_active() (no
-		// LSCWP_V constant / LiteSpeed classes in the unit environment), so the
-		// LiteSpeed_Integration class itself needs no stubbing. When the class was
-		// already loaded by another suite in the same process, its cached statics
-		// must be reset so the guard re-evaluates on its real branch.
-		Functions\when( 'has_filter' )->justReturn( false );
-		if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'reset_cache' ) ) {
-			\PerformanceOptimise\Inc\LiteSpeed_Integration::reset_cache();
-		}
+		$this->stub_defer_strategy_env( $recorded );
 
 		$main->add_defer_strategy();
 
@@ -629,53 +650,12 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		$exclude_prop->setAccessible( true );
 		$exclude_prop->setValue( $main, array() );
 
-		$GLOBALS['wp_scripts'] = new class() extends WP_Scripts {
-			/**
-			 * Queued handles (mirrors WP_Scripts::$queue).
-			 *
-			 * @var string[]
-			 */
-			public $queue = array( 'third-party-analytics' );
-
-			/**
-			 * Recorded data keys per handle (mirrors wp_script_add_data).
-			 *
-			 * @var array<string, array<string, mixed>>
-			 */
-			public $data = array();
-
-			/**
-			 * Record data keys so get_data() mirrors core.
-			 *
-			 * @param string $handle Script handle.
-			 * @param string $key    Data key.
-			 * @param mixed  $value  Data value.
-			 * @return bool
-			 */
-			public function add_data( $handle, $key, $value ) {
-				$this->data[ $handle ][ $key ] = $value;
-				return true;
-			}
-
-			/**
-			 * Read a recorded data key (mirrors WP_Dependencies::get_data()).
-			 *
-			 * @param string $handle Script handle.
-			 * @param string $key    Data key.
-			 * @return mixed
-			 */
-			public function get_data( $handle, $key ) {
-				return $this->data[ $handle ][ $key ] ?? false;
-			}
-		};
+		$GLOBALS['wp_scripts'] = $this->make_fake_wp_scripts();
 		$fake_scripts          = $GLOBALS['wp_scripts'];
 
-		Functions\when( 'wp_script_add_data' )->alias(
-			static function ( $handle, $key, $value ) use ( $fake_scripts ) {
-				$fake_scripts->add_data( $handle, $key, $value );
-				return true;
-			}
-		);
+		$recorded = array();
+		$this->stub_defer_strategy_env( $recorded );
+		// Re-configure apply_filters so wppo_deferred_in_footer opts this handle out.
 		Functions\when( 'apply_filters' )->alias(
 			static function ( $hook, $value, ...$args ) {
 				if ( 'wppo_litespeed_should_disable_optimizer' === $hook ) {
@@ -687,13 +667,8 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 				return $value;
 			}
 		);
-		Functions\when( 'has_filter' )->justReturn( false );
-		if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'reset_cache' ) ) {
-			\PerformanceOptimise\Inc\LiteSpeed_Integration::reset_cache();
-		}
 
 		$main->add_defer_strategy();
-
 		$this->assertArrayNotHasKey( 'group', $fake_scripts->data['third-party-analytics'] ?? array(), 'The wppo_deferred_in_footer opt-out must keep the handle out of the footer group.' );
 		// The defer strategy itself still applies.
 		$this->assertSame( 'defer', $fake_scripts->data['third-party-analytics']['strategy'] ?? null );
