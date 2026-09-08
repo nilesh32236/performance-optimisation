@@ -1185,46 +1185,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					continue;
 				}
 
-				$value = $params[ $key ];
-
-				switch ( $key ) {
-					case 'host':
-					case 'master_name':
-					case 'compression':
-					case 'mode':
-						$config[ $key ] = sanitize_text_field( (string) $value );
-						break;
-					case 'port':
-					case 'database':
-						$config[ $key ] = (int) $value;
-						break;
-					case 'password':
-						// When WPPO_REDIS_PASSWORD is defined the constant takes
-						// precedence: request-supplied passwords are dropped unless
-						// the wppo_redis_allow_request_password escape hatch returns true.
-						if ( defined( 'WPPO_REDIS_PASSWORD' ) && ! apply_filters( 'wppo_redis_allow_request_password', false ) ) {
-							$config['password'] = '';
-						} else {
-							$config['password'] = sanitize_text_field( (string) $value );
-						}
-						break;
-					case 'use_tls':
-					case 'persistent':
-						$config[ $key ] = (bool) $value;
-						break;
-					case 'nodes':
-						$config[ $key ] = $this->sanitize_nodes( $value );
-						break;
-				}
+				$config[ $key ] = $this->sanitize_redis_config_value( $key, $params[ $key ] );
 			}
 
 			// Stored-config fallback for keys the request omits (used by the
 			// circuit-breaker recover action, which typically sends only the
-			// mode). Explicit request keys always win.
+			// mode). Merged values run through the same sanitizers (including
+			// the WPPO_REDIS_PASSWORD precedence guard), so a recover can
+			// never smuggle a raw stored password past the constant.
+			// Explicit request keys always win.
 			if ( is_array( $defaults ) && ! empty( $defaults ) ) {
 				foreach ( $allowed_keys as $key ) {
 					if ( ! array_key_exists( $key, $config ) && array_key_exists( $key, $defaults ) ) {
-						$config[ $key ] = $defaults[ $key ];
+						$config[ $key ] = $this->sanitize_redis_config_value( $key, $defaults[ $key ] );
 					}
 				}
 			}
@@ -1235,6 +1208,46 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$config['port'] = $config['port'] ?? 6379;
 
 			return $config;
+		}
+
+		/**
+		 * Sanitize a single Redis configuration value by key.
+		 *
+		 * Single sanitization contract shared by request-supplied values and
+		 * stored-config fallbacks in build_redis_config(), so both paths
+		 * enforce the same types and the WPPO_REDIS_PASSWORD precedence guard.
+		 *
+		 * @param string $key Config key (one of the build_redis_config() allowlist).
+		 * @param mixed  $value Raw value.
+		 * @since NEXT
+		 * @return mixed Sanitized value.
+		 */
+		private function sanitize_redis_config_value( $key, $value ) {
+			switch ( $key ) {
+				case 'host':
+				case 'master_name':
+				case 'compression':
+				case 'mode':
+					return sanitize_text_field( (string) $value );
+				case 'port':
+				case 'database':
+					return (int) $value;
+				case 'password':
+					// When WPPO_REDIS_PASSWORD is defined the constant takes
+					// precedence: supplied passwords are dropped unless
+					// the wppo_redis_allow_request_password escape hatch returns true.
+					if ( defined( 'WPPO_REDIS_PASSWORD' ) && ! apply_filters( 'wppo_redis_allow_request_password', false ) ) {
+						return '';
+					}
+					return sanitize_text_field( (string) $value );
+				case 'use_tls':
+				case 'persistent':
+					return (bool) $value;
+				case 'nodes':
+					return $this->sanitize_nodes( $value );
+				default:
+					return $value;
+			}
 		}
 
 		/**

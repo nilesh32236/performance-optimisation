@@ -495,12 +495,18 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 			$parked      = $dropin . '.wppo-disabled';
 			$state_file  = $content_dir . '/wppo-redis-disabled.json';
 
-			if ( @file_exists( $parked ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			// Run the trip body exactly once per outage: either artefact
+			// proves a trip already happened. Without the bridge guard, a
+			// failed rename (permissions, race) would re-trip and error_log
+			// on every subsequent failing request instead of logging once.
+			if ( @file_exists( $parked ) || @file_exists( $state_file ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 				return;
 			}
 
-			// Never touch a foreign drop-in: only park the file when it
-			// carries this plugin's marker.
+			// Never touch a foreign drop-in: parking is destructive, so it
+			// requires the narrow plugin-specific marker. (The shorter
+			// legacy phrase can appear in foreign drop-ins and stays valid
+			// only for read-only ownership detection elsewhere.)
 			$is_ours = false;
 			if ( @is_readable( $dropin ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize
@@ -509,7 +515,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 					// The drop-in boots before WP_Filesystem exists; local file reads are the only option.
 					// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents,WordPress.PHP.NoSilencedErrors.Discouraged
 					$content = @file_get_contents( $dropin );
-					if ( is_string( $content ) && ( false !== strpos( $content, 'Redis Object Cache Drop-in for Performance Optimisation' ) || false !== strpos( $content, 'Redis Object Cache Drop-in' ) ) ) {
+					if ( is_string( $content ) && false !== strpos( $content, 'Redis Object Cache Drop-in for Performance Optimisation' ) ) {
 						$is_ours = true;
 					}
 				}

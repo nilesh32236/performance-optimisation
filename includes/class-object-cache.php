@@ -366,10 +366,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				$state['open'] = true;
 			}
 
+			// A parked-sibling-only open state (bridge cleaned or never
+			// written) carries no timestamp of its own; fall back to the
+			// parked file's mtime so per-trip dismissal can still match it.
+			if ( $state['open'] && 0 === $state['tripped_at'] && file_exists( $this->get_parked_path() ) ) {
+				$mtime = filemtime( $this->get_parked_path() ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filemtime
+				if ( false !== $mtime && $mtime > 0 ) {
+					$state['tripped_at'] = (int) $mtime;
+				}
+			}
+
 			if ( 0 === $state['failures'] ) {
 				$failures = $this->read_json_state_file( $this->get_failures_path() );
 				if ( is_array( $failures ) && isset( $failures['count'] ) ) {
 					$state['failures'] = (int) $failures['count'];
+				}
+			}
+
+			// Transient mirror of the drop-in counter (written by
+			// auto_disable_circuit()): last-resort failures source when the
+			// JSON counter file is absent.
+			if ( 0 === $state['failures'] ) {
+				$mirror = get_transient( Util::transient_key( self::FAIL_TRANSIENT ) );
+				if ( is_array( $mirror ) && isset( $mirror['count'] ) ) {
+					$state['failures'] = (int) $mirror['count'];
 				}
 			}
 
@@ -385,16 +405,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * to object-cache.php.wppo-disabled (marker-guarded — foreign
 		 * drop-ins are never touched), writes the disabled-state bridge file,
 		 * mirrors state into CIRCUIT_OPTION, arms the admin-notice transient
-		 * (blog-prefixed via Util::transient_key() for multisite isolation),
-		 * and logs the event.
+		 * and the FAIL_TRANSIENT failure mirror (both blog-prefixed via
+		 * Util::transient_key() for multisite isolation), and logs the event.
 		 *
 		 * @since NEXT
 		 * @param string $reason Human-readable trip reason.
 		 * @return bool|\WP_Error True on success, WP_Error for foreign drop-ins or filesystem failures.
 		 */
 		public function auto_disable_circuit( string $reason = '' ) {
-			$status = $this->get_status();
-			if ( $status['foreign_dropin'] ) {
+			// Foreign check via the local marker read (no Redis round-trip:
+			// a trip path must never pay a connection timeout to decide).
+			if ( file_exists( $this->dropin_path ) && ! $this->is_own_dropin() ) {
 				return new \WP_Error( 'foreign_dropin', __( 'A foreign drop-in exists. We will not park it for safety.', 'performance-optimisation' ) );
 			}
 
@@ -448,6 +469,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					'reason'     => $reason,
 				),
 				WEEK_IN_SECONDS
+			);
+			// Mirror the failure count for admin UI/cron readers that must
+			// not touch the filesystem (see FAIL_TRANSIENT).
+			set_transient(
+				Util::transient_key( self::FAIL_TRANSIENT ),
+				array(
+					'count'   => $failures,
+					'updated' => $tripped_at,
+				),
+				DAY_IN_SECONDS
 			);
 
 			if ( is_callable( array( 'PerformanceOptimise\Inc\System_Info', 'flush_dropin_cache' ) ) ) {

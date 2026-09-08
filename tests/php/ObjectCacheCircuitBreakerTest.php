@@ -306,6 +306,14 @@ class ObjectCacheCircuitBreakerTest extends \PHPUnit\Framework\TestCase {
 				return true;
 			}
 		);
+		// Realistic sanitize_text_field (core trims + strips tags; the
+		// common stub is a plain passthrough, which would hide normalizer
+		// bugs in the Redis config merge tests).
+		Functions\when( 'sanitize_text_field' )->alias(
+			static function ( $value ) {
+				return is_string( $value ) ? trim( strip_tags( $value ) ) : $value;
+			}
+		);
 		Functions\when( 'is_multisite' )->alias(
 			function () use ( $test ) {
 				return $test->multisite;
@@ -734,6 +742,64 @@ class ObjectCacheCircuitBreakerTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Legacy-only marker content is never renamed (narrow marker required).
+	 *
+	 * The short legacy phrase can appear in foreign drop-ins, so the
+	 * destructive rename requires the full plugin-specific marker. The
+	 * trip bridge is still written so the admin UI can report the outage.
+	 */
+	public function test_legacy_marker_content_is_never_renamed(): void {
+		$this->threshold_override = 1;
+
+		$dropin  = WP_CONTENT_DIR . '/object-cache.php';
+		$parked  = $dropin . '.wppo-disabled';
+		$bridge  = WP_CONTENT_DIR . '/wppo-redis-disabled.json';
+		$counter = WP_CONTENT_DIR . '/wppo-redis-failures.json';
+		$this->track( $dropin );
+		$this->track( $parked );
+		$this->track( $bridge );
+		$this->track( $counter );
+		$this->track( WP_CONTENT_DIR . '/wppo-redis-down.flag' );
+
+		$legacy = "<?php // Redis Object Cache Drop-in (legacy fork)\n";
+		$this->write_tracked( $dropin, $legacy );
+
+		$this->dropin_record( 'conn_fail', 'Could not connect to Redis.' );
+
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+		$this->assertSame( $legacy, file_get_contents( $dropin ), 'Legacy-marker content must be untouched.' );
+		$this->assertFalse( file_exists( $parked ) );
+		$this->assertNotNull( $this->read_json( $bridge ) );
+	}
+
+	/**
+	 * A failed rename trips exactly once: the bridge guards re-trips.
+	 */
+	public function test_repeat_trip_after_failed_rename_logs_once(): void {
+		$this->threshold_override = 1;
+
+		$bridge  = WP_CONTENT_DIR . '/wppo-redis-disabled.json';
+		$counter = WP_CONTENT_DIR . '/wppo-redis-failures.json';
+		$this->track( $bridge );
+		$this->track( $counter );
+		$this->track( WP_CONTENT_DIR . '/wppo-redis-down.flag' );
+
+		// No drop-in file on disk: rename is skipped, bridge is written.
+		$this->dropin_record( 'conn_fail', 'Could not connect to Redis.' );
+		$first = $this->read_json( $bridge );
+		$this->assertIsArray( $first );
+		$this->assertSame( 1, $first['failures'] );
+
+		$this->dropin_record( 'conn_fail', 'Could not connect to Redis.' );
+		$this->dropin_record( 'conn_fail', 'Could not connect to Redis.' );
+
+		$second = $this->read_json( $bridge );
+		$this->assertIsArray( $second );
+		$this->assertSame( $first['tripped_at'], $second['tripped_at'], 'Re-trips must not rewrite the bridge.' );
+		$this->assertSame( 1, $second['failures'], 'Re-trips must not bump the bridged failure count.' );
+	}
+
+	/**
 	 * Status exposes circuit fields with closed defaults.
 	 */
 	public function test_status_reports_circuit_fields_when_closed(): void {
@@ -840,6 +906,43 @@ class ObjectCacheCircuitBreakerTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Parked-sibling-only state synthesizes tripped_at from filemtime.
+	 *
+	 * Without a timestamp the per-trip dismissal could never match and a
+	 * dismissed notice would reappear on every page load.
+	 */
+	public function test_parked_only_state_synthesizes_tripped_at(): void {
+		$dir = $this->make_temp_dir();
+		$this->dropin_override = $dir . '/object-cache.php';
+		$parked                = $this->dropin_override . '.wppo-disabled';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+		file_put_contents( $parked, "<?php // parked\n" );
+
+		$manager = new Object_Cache();
+		$state   = $manager->get_circuit_state();
+
+		$this->assertTrue( $state['open'] );
+		$this->assertGreaterThan( 0, $state['tripped_at'] );
+		$this->assertSame( (int) filemtime( $parked ), $state['tripped_at'] ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filemtime
+	}
+
+	/**
+	 * Failure count falls back to the transient mirror when files are absent.
+	 */
+	public function test_failures_fall_back_to_transient_mirror(): void {
+		$this->transients[ Util::transient_key( Object_Cache::FAIL_TRANSIENT ) ] = array(
+			'count'   => 3,
+			'updated' => time(),
+		);
+
+		$manager = new Object_Cache();
+		$state   = $manager->get_circuit_state();
+
+		$this->assertFalse( $state['open'], 'The mirror alone must not open the circuit.' );
+		$this->assertSame( 3, $state['failures'] );
+	}
+
+	/**
 	 * Auto-disable parks our drop-in, mirrors state and logs.
 	 */
 	public function test_auto_disable_parks_own_dropin_and_arms_notice(): void {
@@ -864,6 +967,11 @@ class ObjectCacheCircuitBreakerTest extends \PHPUnit\Framework\TestCase {
 		$notice_key = Util::transient_key( Object_Cache::CIRCUIT_NOTICE_TRANSIENT );
 		$this->assertSame( 'wppo_object_cache_circuit_notice', $notice_key );
 		$this->assertArrayHasKey( $notice_key, $this->transients, 'Trip must arm the admin-notice transient.' );
+
+		$mirror_key = Util::transient_key( Object_Cache::FAIL_TRANSIENT );
+		$this->assertArrayHasKey( $mirror_key, $this->transients, 'Trip must mirror the failure count transient.' );
+		$this->assertArrayHasKey( 'count', $this->transients[ $mirror_key ] );
+
 		$this->assertContains( 'wppo_object_cache_probe', $this->scheduled, 'Trip must arm the recovery probe.' );
 
 		// phpcs:disable WordPress.WP.GlobalVariablesOverride.Prohibited
@@ -964,9 +1072,11 @@ class ObjectCacheCircuitBreakerTest extends \PHPUnit\Framework\TestCase {
 		$stored = array(
 			'mode'     => 'standalone',
 			'host'     => '10.0.0.5',
-			'port'     => 6380,
+			'port'     => '6380',
 			'password' => 's3cret',
-			'database' => 2,
+			'database' => '2',
+			'nodes'    => array( ' 10.0.0.6:6379 ', '', '10.0.0.7:6379' ),
+			'use_tls'  => 1,
 		);
 
 		$merged = $method->invoke(
@@ -980,9 +1090,11 @@ class ObjectCacheCircuitBreakerTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertSame( 'sentinel', $merged['mode'], 'Explicit request keys win.' );
 		$this->assertSame( '10.0.0.5', $merged['host'], 'Stored host fills keys the request omits.' );
-		$this->assertSame( 6380, $merged['port'] );
+		$this->assertSame( 6380, $merged['port'], 'Merged values use the same int coercion as requests.' );
 		$this->assertSame( 's3cret', $merged['password'] );
 		$this->assertSame( 2, $merged['database'] );
+		$this->assertSame( array( '10.0.0.6:6379', '10.0.0.7:6379' ), $merged['nodes'], 'Merged nodes use the same normalizer as requests.' );
+		$this->assertTrue( $merged['use_tls'] );
 
 		$legacy = $method->invoke( $rest, array( 'action' => 'status' ) );
 		$this->assertSame( 'standalone', $legacy['mode'] );
