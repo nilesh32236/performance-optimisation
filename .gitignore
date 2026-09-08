@@ -6,6 +6,7 @@
 .omo/
 .opencode/
 .phpunit.cache/
+.slim/deepwork/
 /vendor/
 app/
 coverage/

@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "run": {
+    "commit": "c19cbba2498d4661f25c07cd3a18aa4428abb481",
+    "wordpress_target": "6.2+",
+    "php_target": "8.2+",
+    "date": "2026-09-08"
+  },
+  "findings": [
+    {
+      "id": "cdea73c752e13ebe8dd28b973ea20f0befd2c510bc4de2d2ed50ef99619318a5",
+      "category": "competitor-gap",
+      "title": "Serve AVIF with WebP fallback through the existing Img_Converter picture pipeline",
+      "status": "candidate",
+      "priority": "high",
+      "difficulty": "medium",
+      "risk": "medium",
+      "risk_numeric": 2,
+      "confidence": 0.9,
+      "score": 201.6,
+      "performance_impact": 8,
+      "user_value": 8,
+      "feasibility": 7,
+      "classification": "PLUGIN_UNIQUE",
+      "tier": "A",
+      "evidence": [
+        {
+          "url": "https://developer.wordpress.org/reference/functions/wp_image_editor_supports/",
+          "version": "6.5",
+          "published": "2026-05-12"
+        },
+        {
+          "url": "https://wordpress.org/plugins/shortpixel-advanced-compressor/#developers",
+          "version": "5.3.1",
+          "published": "2026-08-02"
+        }
+      ],
+      "implementation": {
+        "files": [
+          "includes/class-img-converter.php",
+          "includes/class-image-optimisation.php"
+        ],
+        "functions": [
+          "Img_Converter::convert",
+          "Image_Optimisation::wrap_picture"
+        ]
+      },
+      "estimated_impact": {
+        "queries": 0,
+        "frontend_kb": 120,
+        "request_ms": 150
+      },
+      "fallback": "If AVIF encoding is unavailable (no Imagick/GD AVIF support), keep serving WebP via the existing picture wrapper and log one activity entry; never fatal.",
+      "acceptance_criteria": [
+        "Given an uploaded JPEG, When conversion runs, Then an AVIF variant is stored beside the WebP variant without fatal errors",
+        "Given Imagick lacks AVIF support, When conversion falls back to GD, Then the plugin degrades to WebP-only and logs one activity entry",
+        "Given a multisite install, When serving <picture> markup, Then blog-specific upload paths are respected"
+      ]
+    },
+    {
+      "id": "2419b168492fe842eb9b4e6e56111c3b337895bdf5597b3eff4be1e3819ca092",
+      "category": "ai-feature",
+      "title": "Experiment: AI anomaly detection for RUM Web Vitals trends",
+      "status": "candidate",
+      "priority": "low",
+      "difficulty": "hard",
+      "risk": "high",
+      "risk_numeric": 4,
+      "confidence": 0.4,
+      "score": 10,
+      "performance_impact": 5,
+      "user_value": 5,
+      "feasibility": 4,
+      "classification": "EXPERIMENTAL",
+      "tier": "C",
+      "evidence": [
+        {
+          "url": "https://web.dev/articles/vitals",
+          "version": "2026-01",
+          "published": "2026-01-20"
+        }
+      ],
+      "implementation": {
+        "files": [
+          "includes/class-ai-adaptive.php"
+        ],
+        "functions": [
+          "AI_Adaptive::analyse_trend"
+        ]
+      },
+      "estimated_impact": {
+        "queries": 0,
+        "frontend_kb": 0,
+        "request_ms": 0
+      },
+      "fallback": "Read-only suggestion engine: if RUM data is insufficient, output nothing and disable itself.",
+      "acceptance_criteria": [
+        "Given stored RUM trends, When an anomaly is detected, Then a read-only suggestion is logged without side effects"
+      ]
+    }
+  ]
+}

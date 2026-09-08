@@ -1,0 +1,227 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WPPO WordPress Feature Monitor findings",
+  "description": "Strict schema for the research job's findings JSON. The OpenCode researcher's final message must parse against this; CI validates, recomputes scores, and applies the deterministic Tier-A gate.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run",
+    "findings"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commit",
+        "wordpress_target",
+        "php_target",
+        "date"
+      ],
+      "properties": {
+        "commit": {
+          "type": "string"
+        },
+        "wordpress_target": {
+          "type": "string"
+        },
+        "php_target": {
+          "type": "string"
+        },
+        "date": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "category",
+          "title",
+          "status",
+          "priority",
+          "difficulty",
+          "risk",
+          "risk_numeric",
+          "confidence",
+          "score",
+          "performance_impact",
+          "user_value",
+          "feasibility",
+          "classification",
+          "tier",
+          "evidence",
+          "implementation",
+          "estimated_impact",
+          "fallback",
+          "acceptance_criteria"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "category": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "const": "candidate"
+          },
+          "priority": {
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "difficulty": {
+            "enum": [
+              "easy",
+              "medium",
+              "hard"
+            ]
+          },
+          "risk": {
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+          "risk_numeric": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "score": {
+            "type": "number",
+            "minimum": 0
+          },
+          "performance_impact": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "user_value": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "feasibility": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "classification": {
+            "enum": [
+              "NEW",
+              "CORE_PARTIAL",
+              "CORE_COMPLETE",
+              "PLUGIN_UNIQUE",
+              "COMPETITOR_ONLY",
+              "EXPERIMENTAL",
+              "IRRELEVANT"
+            ]
+          },
+          "tier": {
+            "enum": [
+              "A",
+              "B",
+              "C"
+            ]
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "url"
+              ],
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "pattern": "^https?://"
+                },
+                "version": {
+                  "type": "string"
+                },
+                "published": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "implementation": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "files",
+              "functions"
+            ],
+            "properties": {
+              "files": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "functions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "estimated_impact": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "queries",
+              "frontend_kb",
+              "request_ms"
+            ],
+            "properties": {
+              "queries": {
+                "type": "number"
+              },
+              "frontend_kb": {
+                "type": "number"
+              },
+              "request_ms": {
+                "type": "number"
+              }
+            }
+          },
+          "fallback": {
+            "type": "string"
+          },
+          "acceptance_criteria": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}
