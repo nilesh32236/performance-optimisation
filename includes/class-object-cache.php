@@ -229,7 +229,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				}
 
 				if ( isset( $content ) && is_string( $content ) ) {
-					if ( false !== strpos( $content, self::DROPIN_MARKER ) || false !== strpos( $content, self::LEGACY_DROPIN_MARKER ) ) {
+					if ( self::is_own_dropin_content( $content ) ) {
 						$status['enabled'] = true;
 					} else {
 						$status['foreign_dropin'] = true;
@@ -568,12 +568,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		}
 
 		/**
+		 * Check whether a drop-in file content belongs to this plugin.
+		 *
+		 * Standalone helper for uninstall/deactivation contexts that have raw
+		 * file contents without a booted Object_Cache instance.
+		 *
+		 * @since NEXT
+		 * @param mixed $content Raw file contents.
+		 * @return bool True when the content carries this plugin's marker.
+		 */
+		public static function is_own_dropin_content( $content ): bool {
+			if ( ! is_string( $content ) ) {
+				return false;
+			}
+
+			return false !== strpos( $content, self::DROPIN_MARKER ) || false !== strpos( $content, self::LEGACY_DROPIN_MARKER );
+		}
+
+		/**
 		 * Whether the installed drop-in carries this plugin's marker.
 		 *
 		 * @since NEXT
 		 * @return bool True when the drop-in is ours (or absent), false for foreign files.
 		 */
-		private function is_own_dropin(): bool {
+		public function is_own_dropin(): bool {
 			if ( ! file_exists( $this->dropin_path ) ) {
 				return true;
 			}
@@ -598,7 +616,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				return false;
 			}
 
-			return false !== strpos( $content, self::DROPIN_MARKER ) || false !== strpos( $content, self::LEGACY_DROPIN_MARKER );
+			return self::is_own_dropin_content( $content );
 		}
 
 		/**
