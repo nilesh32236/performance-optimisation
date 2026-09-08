@@ -44,6 +44,12 @@ on:
     types: [labeled]
   issue_comment:
     types: [created]
+  workflow_dispatch:
+    inputs:
+      fast_review:
+        description: 'Run the experimental fast-review path (hybrid-C) instead of legacy review'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -241,6 +247,237 @@ jobs:
             All REST endpoints require manage_options + X-WP-Nonce.
             SCSS uses .wppo- prefix, BEM-like naming. No Tailwind or CSS-in-JS.
             Verification commands: npm run lint:js, composer lint, npm test, npm run build.
+
+  # ── 2b. FAST REVIEW (EXPERIMENTAL — hybrid-C) ─────────────────────────────────
+  # Manual experiment: raw OpenCode review via the wppo-reviewer agent
+  # (opencode.json) with deterministic JSON output, schema validation, and
+  # deterministic gates — vs the legacy `review` job (opencode-ai-reviewer
+  # action, mode: review), which remains the default AND the fallback.
+  # Runs ONLY via workflow_dispatch with fast_review=true (inputs are empty
+  # off dispatch, so every other event skips this job).
+  fast-review:
+    name: Fast Review (experimental)
+    if: inputs.fast_review == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Resolve PR ref
+        id: resolve-ref
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.event_name }}" = "issue_comment" ] && [ -n "${{ github.event.issue.pull_request }}" ]; then
+            PR_NUMBER="${{ github.event.issue.number }}"
+            REF=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json headRefName --jq .headRefName)
+            echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=${{ github.event.pull_request.head.ref }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          ref: ${{ steps.resolve-ref.outputs.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45 # v2
+        with:
+          php-version: '8.2'
+          tools: composer:v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          composer install --ignore-platform-reqs
+          npm ci || npm install
+
+      - name: Install OpenCode
+        run: |
+          .github/scripts/setup-opencode.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          # Pinned for reproducible runs (resolved 2026-09-08 via
+          # `npm view opencode-ai version` — matches the anomalyco/opencode
+          # release tag the setup script downloads).
+          OPENCODE_VERSION: v1.18.29
+
+      - name: Run fast review
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        run: |
+          date -u '+%Y-%m-%dT%H:%M:%SZ' > /tmp/fast-review-start.txt
+          date -u +%s > /tmp/fast-review-start-epoch.txt
+
+          cat << 'FAST_REVIEW_PROMPT' > /tmp/fast-review-prompt.txt
+          ROLE:
+          You are the read-only review orchestrator (wppo-reviewer) for the
+          experimental fast-review path of the "Performance Optimisation"
+          WordPress plugin (PHP 8.2+, WP 6.2+). You cannot edit files or
+          write anything to disk (CI captures your final message and
+          writes/validates every file itself). Use the shell only for
+          read-only inspection (git diff/show, grep/read).
+
+          REVIEW OBJECTIVE:
+          Review the files changed in HEAD for correctness bugs, security
+          issues (nonce/capability checks, escaping, sanitization), WP 6.2+
+          / PHP 8.2+ compatibility breaks, and WordPress Coding Standards
+          violations. Report ONLY actionable findings with file + line
+          evidence.
+
+          ── MANDATORY EXECUTION MODE: ORCHESTRATOR + FIXED REVIEW LANES ──
+          Determine the review file list with:
+            git log -1 --name-only --pretty=format:
+          (files changed in HEAD). Skip vendor/, node_modules/, build/ and
+          non-code assets. Cap at ~24 files.
+          Spawn one sub-agent per file group as a Task sub-agent named
+          verbatim `wppo-review-lane`, about 3 files per lane, max 8 lanes.
+          Every lane REVIEWS ONLY and RETURNS ITS FINDINGS AS MESSAGE TEXT
+          (JSON objects with id/file/lines/severity/confidence/category/
+          evidence/summary). NO lane writes any file.
+          Orchestrator merges all lane findings into ONE final JSON,
+          deduplicating by file+lines+summary. Per-lane retry budget max 2:
+          if a lane returns nothing usable, re-spawn it at most twice with
+          a narrower brief.
+
+          FINDING FIELDS (every finding MUST have all of these):
+          id (stable fingerprint, e.g. sha256 of file+lines+summary), file,
+          lines (e.g. "120-145"), severity (critical/important/minor),
+          confidence (0-1), category, evidence[] (code refs or URLs),
+          summary.
+
+          FINAL-MESSAGE DISCIPLINE:
+          - The final message MUST be exactly ONE JSON document
+            {"findings":[...]} — no status updates, no prose, no markdown
+            fences, nothing before or after it. Its FIRST LINE must begin
+            exactly with {"findings" (CI anchors extraction on that prefix).
+          - Emit progress commentary ONLY in earlier separate messages
+            during the run, never in the final message.
+
+          MANDATORY SELF-VERIFICATION BEFORE STOPPING:
+          - Compose the complete JSON, then run:
+              echo '<json>' | jq -e . > /dev/null && echo SELFCHECK-OK
+            It MUST exit 0 and print SELFCHECK-OK.
+          - If jq reports any error, fix the JSON and re-validate until it
+            passes — an unvalidated final message is a forbidden stop state.
+          FAST_REVIEW_PROMPT
+
+          # Single attempt with a 10m wrapper; any failure falls back to the
+          # legacy mode: review action step below (no repair loop in the
+          # experiment).
+          if ! timeout 10m opencode run --auto --agent wppo-reviewer --model "${{ vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free' }}" < /tmp/fast-review-prompt.txt > /tmp/opencode-review-output.txt; then
+            echo "::error::OpenCode fast review failed"
+            exit 1
+          fi
+
+      - name: Extract review findings JSON
+        run: |
+          # Hardened extraction: opencode streams ALL agent messages to
+          # stdout, so narrow to the JSON document (first line beginning
+          # with {"findings"), strip fences, and keep the LAST COMPLETE
+          # document. Fail-hard: no placeholder, no fallback.
+          awk '/^\{"findings"/{found=1} found' /tmp/opencode-review-output.txt | sed '/^```/d' | jq -c . 2>/dev/null | tail -1 > /tmp/review-output-clean.txt
+          if ! jq -e '.' /tmp/review-output-clean.txt > /dev/null 2>&1; then
+            echo "::error::OpenCode fast-review output is not valid JSON (final message must be pure findings JSON)"
+            exit 1
+          fi
+          if ! jq -e 'type == "object" and (.findings | type == "array")' /tmp/review-output-clean.txt > /dev/null 2>&1; then
+            echo "::error::fast-review output JSON is not an object with a findings array"
+            exit 1
+          fi
+          cp /tmp/review-output-clean.txt /tmp/review-findings.json
+          echo "Extracted $(jq '.findings | length' /tmp/review-findings.json) raw findings."
+
+      - name: Validate review findings (ajv)
+        run: |
+          # Schema proof: the run's findings JSON, plus the committed valid
+          # fixture (proves the schema itself loads in CI).
+          npx -y ajv-cli@5.0.0 validate --spec=draft7 -s .github/schemas/wppo-review-findings.schema.json -d /tmp/review-findings.json
+          npx -y ajv-cli@5.0.0 validate --spec=draft7 -s .github/schemas/wppo-review-findings.schema.json -d .github/schemas/fixtures/review-findings-valid.json
+
+      - name: Apply deterministic review gates
+        run: |
+          # Deterministic gates: confidence floor 0.5; severity minor only
+          # with confidence >= 0.8; file + lines must be non-empty.
+          jq '[.findings[] | select(.confidence >= 0.5 and (.severity != "minor" or .confidence >= 0.8) and ((.file | length) > 0) and ((.lines | length) > 0))]' /tmp/review-findings.json > /tmp/actionable-review.json
+          echo "actionable=$(jq 'length' /tmp/actionable-review.json) of $(jq '.findings | length' /tmp/review-findings.json) findings passed the deterministic gates."
+
+      - name: Report fast-review findings
+        run: |
+          {
+            echo "## Fast review findings (experimental hybrid-C)"
+            echo ""
+            RAW=$(jq '.findings | length' /tmp/review-findings.json)
+            ACTIONABLE=$(jq 'length' /tmp/actionable-review.json)
+            echo "raw=${RAW} findings, actionable(after deterministic gates)=${ACTIONABLE}."
+            echo ""
+            jq -r '.[] | "- [\(.severity)] \(.file):\(.lines) (confidence=\(.confidence), \(.category)) \(.summary)"' /tmp/actionable-review.json
+            echo ""
+            echo "Posting follow-up: validated findings are NOT auto-posted — feeding them into the reviewer action is not cleanly possible, so posting via the existing action path stays on the legacy mode: review fallback. Full JSON in the wp-fast-review-json artifact."
+          } >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload fast-review findings as artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: wp-fast-review-json
+          path: |
+            /tmp/review-findings.json
+            /tmp/actionable-review.json
+          retention-days: 30
+
+      - name: AI Code Review
+        uses: nilesh32236/opencode-ai-reviewer@main # floating: tracks latest reviewer action
+        if: failure()
+        with:
+          mode: review
+          github_token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          opencode_api_key: ${{ secrets.OPENCODE_API_KEY }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          git_user_name: nilesh32236
+          git_user_email: nilesh32236@gmail.com
+          model: ${{ vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free' }}
+          review_model: ${{ vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free' }}
+          fix_model: ${{ vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free' }}
+          max_files_per_batch: 3
+          enable_mcp: false
+          include_strengths: true
+          review_comment_summary: true
+          project_context: >
+            WordPress Performance Optimisation Plugin — PHP 8.2+, WP 6.2+.
+            PHP follows WordPress Coding Standards. JS is React with @wordpress/scripts.
+            All REST endpoints require manage_options + X-WP-Nonce.
+            SCSS uses .wppo- prefix, BEM-like naming. No Tailwind or CSS-in-JS.
+            Verification commands: npm run lint:js, composer lint, npm test, npm run build.
+
+      - name: Measure fast-review timing
+        if: always()
+        run: |
+          # Experiment measurement only — no auto-comparison; a human
+          # compares these timestamps against the legacy review job.
+          START_ISO=$(cat /tmp/fast-review-start.txt 2>/dev/null || echo "unknown")
+          START_EPOCH=$(cat /tmp/fast-review-start-epoch.txt 2>/dev/null || echo 0)
+          END_ISO=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+          END_EPOCH=$(date -u +%s)
+          {
+            echo "## Fast-review timing (experimental hybrid-C)"
+            echo "start: ${START_ISO} | end: ${END_ISO}"
+            if [ "${START_EPOCH}" != "0" ]; then
+              echo "elapsed: $((END_EPOCH - START_EPOCH))s (agent run + CI gates)"
+            fi
+            if [ -f /tmp/actionable-review.json ]; then
+              echo "fast path: $(jq 'length' /tmp/actionable-review.json 2>/dev/null || echo 0) actionable findings reported above; full JSON in wp-fast-review-json artifact."
+            else
+              echo "fast path produced no validated findings file — legacy fallback (mode: review) ran; see its step log."
+            fi
+            echo "Human: compare against the legacy \`review\` job wall-clock on the same PR."
+          } >> $GITHUB_STEP_SUMMARY
 
   # ── 3. AUTOFIX LOOP ──────────────────────────────────────────────────────────
   # Runs the complete review → fix → review cycle entirely within one workflow

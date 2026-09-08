@@ -51,6 +51,33 @@
           "echo *": "allow"
         }
       }
+    },
+    "wppo-reviewer": {
+      "description": "Read-only review orchestrator for the experimental fast-review path. Fans out file review to wppo-review-lane subagents, merges JSON findings returned as message text, and returns exactly one findings JSON document. Full shell is available for read-only verification — but no file writes/edits and no gh/issue/PR commands.",
+      "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "edit": "deny",
+        "bash": "allow",
+        "task": {
+          "*": "deny",
+          "wppo-review-lane*": "allow"
+        }
+      }
+    },
+    "wppo-review-lane": {
+      "mode": "subagent",
+      "hidden": true,
+      "description": "Read-only review lane (Task-invoked). Reviews ~3 assigned files and returns JSON findings as message text; cannot edit files or write anything to disk, cannot run gh/issue/PR commands, cannot spawn subagents.",
+      "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "edit": "deny",
+        "bash": "allow",
+        "task": "deny"
+      }
     }
   }
 }

@@ -1,0 +1,28 @@
+{
+  "findings": [
+    {
+      "id": "7ed9261cf5aaa90cd536bf4462cdfbd87d7d9b7d73686d7fd8ce09dfe5ccb2a3",
+      "file": "includes/class-cache.php",
+      "lines": "120-145",
+      "severity": "important",
+      "confidence": 0.8,
+      "category": "security",
+      "evidence": [
+        "includes/class-cache.php:132"
+      ],
+      "summary": "Cache write path lacks a capability check before purging shared transients"
+    },
+    {
+      "id": "56509d985580f5b2644d20f4eb3f5e7277752b943a04afa22b4290c3e805e86e",
+      "file": "src/components/common/Tooltip.js",
+      "lines": "12-18",
+      "severity": "minor",
+      "confidence": 0.3,
+      "category": "style",
+      "evidence": [
+        "src/components/common/Tooltip.js:15"
+      ],
+      "summary": "Minor copy inconsistency in tooltip aria-label text"
+    }
+  ]
+}

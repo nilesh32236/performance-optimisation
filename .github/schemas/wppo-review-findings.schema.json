@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WPPO fast-review findings",
+  "description": "Strict schema for the experimental fast-review path's findings JSON (hybrid-C experiment). The wppo-reviewer agent's final message must parse against this; CI validates, applies the deterministic gates, and reports.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "findings"
+  ],
+  "properties": {
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "file",
+          "lines",
+          "severity",
+          "confidence",
+          "category",
+          "evidence",
+          "summary"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "file": {
+            "type": "string"
+          },
+          "lines": {
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "critical",
+              "important",
+              "minor"
+            ]
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "category": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "summary": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
