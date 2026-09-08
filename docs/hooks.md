@@ -721,6 +721,14 @@ Filters whether the Server-Timing header is emitted. @since NEXT.
 
 When `true`, the plugin registers `wp_finalized_template_enhancement_output_buffer` (see WordPress Core section below), which opts into the template-enhancement buffer (priority 1000 by default) and disables response streaming — TTFB increases while TTLB unchanged. Keep disabled by default; header is emitted only on cache-miss generation passes (`advanced-cache.php` serves cached pages without booting WordPress).
 
+**Performance Lab interop (@since NEXT):** When the Performance Lab Server-Timing module is active (`perflab_server_timing_register_metric()` / `perflab_wrap_server_timed_call()` present — `Main::is_pl_server_timing_active()`), Performance Lab owns the `Server-Timing` header and prefixes every registered metric slug with `wp-` (its defaults `before-template` / `template` / `total` surface as `wp-before-template` / `wp-template` / `wp-total`). The plugin then avoids duplicate/conflicting metric names:
+
+- Performance Lab **with output buffering enabled**: the plugin's emission is suppressed entirely — Performance Lab's defaults already measure before-template + template + total from the same underlying timestamps and send a single header.
+- Performance Lab **without output buffering**: Performance Lab sends its header at `template_include` (before the template renders) with `wp-before-template` only. The plugin emits only the render duration (`wp-template` — unclaimed by Performance Lab in this mode) as an appended, distinct entry; the duplicate `wp-before-template` is dropped.
+- Performance Lab **inactive**: unchanged — both `wp-before-template` and `wp-template` are emitted.
+
+No metric slugs are registered through the Performance Lab API by this plugin; the header value is coexistence-managed only. i18n note: metric names are protocol literals (never translated).
+
 **Example:**
 ```php
 add_filter( 'wppo_server_timing_enabled', function( $enabled ) {
