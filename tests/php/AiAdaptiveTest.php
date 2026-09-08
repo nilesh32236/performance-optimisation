@@ -367,6 +367,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 					'eagerness'     => 'eager',
 					'prefetch_urls' => array( 'http://example.com/x/', 'http://example.com/y/', 'http://example.com/z/', array( 'not-a-string' ) ),
 					'exclude_js'    => array( 'handle-a', 'handle-b', 'handle-c', 'handle-d' ),
+					'rogue_key'     => 'dropped',
 				)
 			)
 		);
@@ -380,6 +381,8 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		// with non-strings dropped, handles sliced to 3.
 		$this->assertSame( array( 'http://example.com/x/', 'http://example.com/y/' ), $model['prefetch_urls'] );
 		$this->assertSame( array( 'handle-a', 'handle-b', 'handle-c' ), $model['exclude_js'] );
+		// Unknown LLM keys are not persisted.
+		$this->assertArrayNotHasKey( 'rogue_key', $model );
 		$this->assertSame( 'moderate', $this->options[ AI_Adaptive::OPTION ]['eagerness'] );
 	}
 
@@ -794,11 +797,14 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test commerce exclude paths derive from WooCommerce URLs when available.
 	 *
-	 * Runs last: stubbing the WooCommerce helpers defines them process-wide
-	 * (bare function_exists probe), so no commerce-off assertion may follow.
-	 * Suite order note: keep Woo-stubbing tests last in this file; the full
-	 * suite is green with these stubs (later files either stub the helpers
-	 * themselves or stub function_exists directly).
+	 * Runs last: covering the Woo-presence branch requires eval-declaring the
+	 * Woo helpers, and Brain Monkey cannot undeclare functions, so these
+	 * definitions persist process-wide (bare function_exists probe reads
+	 * true afterwards). Contained by file order — no commerce-off assertion
+	 * follows — and the full suite is green with them; this matches the
+	 * existing SystemInfoTest.collects_urls precedent, which leaks the same
+	 * helpers. A function_exists override cannot substitute: presence-branch
+	 * coverage needs callable helpers, not just a true existence report.
 	 *
 	 * @return void
 	 */
@@ -816,7 +822,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'wc_get_page_permalink' )->justReturn( 'http://example.com/my-account/' );
 
 		$this->assertSame(
-			array( '/checkout/*', '/cart/*', '/my-account/*' ),
+			array( '/cart/*', '/checkout/*', '/my-account/*' ),
 			AI_Adaptive::get_commerce_exclude_paths()
 		);
 	}

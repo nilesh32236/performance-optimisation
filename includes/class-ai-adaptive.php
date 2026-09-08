@@ -194,11 +194,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		public static function get_commerce_exclude_paths(): array {
 			$paths = array();
 
-			if ( function_exists( 'wc_get_checkout_url' ) ) {
+			// Canonical order (cart, checkout, my-account) matches the fallback
+			// below so output order never depends on probe order.
+			if ( function_exists( 'wc_get_cart_url' ) ) {
 				try {
-					$checkout_url = wc_get_checkout_url();
-					if ( $checkout_url ) {
-						$path = wp_parse_url( $checkout_url, PHP_URL_PATH );
+					$cart_url = wc_get_cart_url();
+					if ( $cart_url ) {
+						$path = wp_parse_url( $cart_url, PHP_URL_PATH );
 						if ( $path && '/' !== $path ) {
 							$paths[] = trailingslashit( $path ) . '*';
 						}
@@ -208,11 +210,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				}
 			}
 
-			if ( function_exists( 'wc_get_cart_url' ) ) {
+			if ( function_exists( 'wc_get_checkout_url' ) ) {
 				try {
-					$cart_url = wc_get_cart_url();
-					if ( $cart_url ) {
-						$path = wp_parse_url( $cart_url, PHP_URL_PATH );
+					$checkout_url = wc_get_checkout_url();
+					if ( $checkout_url ) {
+						$path = wp_parse_url( $checkout_url, PHP_URL_PATH );
 						if ( $path && '/' !== $path ) {
 							$paths[] = trailingslashit( $path ) . '*';
 						}
@@ -381,6 +383,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 						}
 					}
 					$ai_model['eagerness'] = self::normalize_eagerness( $ai_model['eagerness'] ?? 'conservative' );
+					// Persist only the known schema: drop unknown LLM keys so
+					// the stored model shape stays predictable for readers.
+					$ai_model = array_intersect_key(
+						$ai_model,
+						array(
+							'version'       => 1,
+							'prefetch_urls' => 1,
+							'exclude_js'    => 1,
+							'exclude_css'   => 1,
+							'eagerness'     => 1,
+							'source'        => 1,
+							'updated_at'    => 1,
+						)
+					);
 					self::update_model( $ai_model );
 					return $ai_model;
 				}
