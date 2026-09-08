@@ -42,3 +42,7 @@
 **Vulnerability:** Reading nonces directly from raw $_SERVER variable bypassing WP REST abstraction layer.
 **Learning:** WP core utilizes WP_REST_Request abstraction and proper lower-casing to avoid bypass scenarios when proxy layers muddle headers.
 **Prevention:** Always use WP_REST_Request::get_header to fetch HTTP request headers.
+## 2026-09-08 - Prevent path traversal in directory deletion
+**Vulnerability:** Symlink path traversal leading to arbitrary directory deletion during uninstall.
+**Learning:** Recursive directory deletion functions must enforce strict prefix matching to ensure they don't escape intended boundaries (like WP_CONTENT_DIR). Checking if a path contains '..' is also required.
+**Prevention:** Always validate that the target directory string starts with the expected normalized root path and doesn't contain '..'.
