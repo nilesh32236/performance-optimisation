@@ -1,0 +1,105 @@
+<?php
+/**
+ * Tests that Main, Util, and Activate share a single defaults source (#901).
+ *
+ * @package PerformanceOptimise\Tests
+ *
+ * @phpcs:disable WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+ */
+
+use PerformanceOptimise\Inc\Activate;
+use PerformanceOptimise\Inc\Util;
+use Brain\Monkey\Functions;
+
+/**
+ * Defaults-parity tests for the canonical Util::get_default_settings().
+ *
+ * @package PerformanceOptimise\Tests
+ */
+class DefaultsParityTest extends \PHPUnit\Framework\TestCase {
+	use WPPO_Test_Bootstrap;
+
+	/**
+	 * Canonical defaults must carry the previously drifted keys.
+	 */
+	public function test_canonical_defaults_contain_preload_and_cdn_keys(): void {
+		$defaults = Util::get_default_settings();
+
+		$this->assertArrayHasKey( 'cdnMapping', $defaults['file_optimisation'] );
+		$this->assertSame( array(), $defaults['file_optimisation']['cdnMapping'] );
+
+		$this->assertArrayHasKey( 'enablePreloadCache', $defaults['preload_settings'] );
+		$this->assertFalse( $defaults['preload_settings']['enablePreloadCache'] );
+
+		$this->assertArrayHasKey( 'excludePreloadCache', $defaults['preload_settings'] );
+		$this->assertSame(
+			"my-account/(.*)\ncart/(.*)\ncheckout/(.*)",
+			$defaults['preload_settings']['excludePreloadCache'],
+			'SPA parity: must match the PreloadSettings.js defaultSettings string'
+		);
+
+		// The default must split into the three exclusion rules via process_urls().
+		$this->assertSame(
+			array( 'my-account/(.*)', 'cart/(.*)', 'checkout/(.*)' ),
+			Util::process_urls( $defaults['preload_settings']['excludePreloadCache'] )
+		);
+
+		// Dynamic keys evaluate in-process; assert presence, not a hardcoded value.
+		$this->assertArrayHasKey( 'blockAssetsOnDemand', $defaults['file_optimisation'] );
+		$this->assertArrayHasKey( 'enabled', $defaults['od_integration'] );
+	}
+
+	/**
+	 * Activate must seed exactly the canonical defaults on fresh installs.
+	 */
+	public function test_activate_seeds_canonical_defaults(): void {
+		Functions\when( 'get_option' )->alias(
+			function ( $name, $fallback = false ) {
+				if ( 'wppo_settings' === $name ) {
+					return null;
+				}
+				return $fallback;
+			}
+		);
+
+		$seeded = null;
+		Functions\when( 'add_option' )->alias(
+			function ( $name, $value, $deprecated = '', $autoload = null ) use ( &$seeded ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+				if ( 'wppo_settings' === $name ) {
+					$seeded = $value;
+				}
+				return true;
+			}
+		);
+
+		$method = new ReflectionMethod( Activate::class, 'maybe_seed_settings' );
+		$method->setAccessible( true );
+		$method->invoke( null );
+
+		$this->assertNotNull( $seeded, 'Fresh install must seed wppo_settings' );
+		$this->assertSame( Util::get_default_settings(), $seeded );
+	}
+
+	/**
+	 * Main::__construct() must consume the canonical defaults (no duplicate literal).
+	 */
+	public function test_main_consumes_canonical_defaults(): void {
+		$path = dirname( __DIR__, 2 ) . '/includes/class-main.php';
+		$this->assertFileExists( $path );
+		$source = file_get_contents( $path );
+		$this->assertIsString( $source );
+
+		$this->assertStringContainsString(
+			'Util::get_default_settings()',
+			$source,
+			'Main::__construct() must delegate to Util::get_default_settings()'
+		);
+
+		// The old inline literal keyed cache_settings inside __construct must be gone.
+		$this->assertSame(
+			0,
+			substr_count( $source, "'cache_settings'        => array(" ),
+			'Main must not carry its own duplicate defaults array'
+		);
+	}
+}

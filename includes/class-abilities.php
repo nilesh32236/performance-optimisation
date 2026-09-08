@@ -590,7 +590,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * @return bool
 		 */
 		public static function can_cache_management(): bool {
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			return ! empty( $options['cache_settings']['enableCache'] );
 		}
 
@@ -601,7 +601,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * @return bool
 		 */
 		public static function can_image_optimization(): bool {
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			return ! empty( $options['image_optimisation']['convertImg'] );
 		}
 
@@ -612,7 +612,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * @return bool
 		 */
 		public static function can_css_minification(): bool {
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			return ! empty( $options['file_optimisation']['minifyCSS'] );
 		}
 
@@ -623,7 +623,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * @return bool
 		 */
 		public static function can_js_optimization(): bool {
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			return ! empty( $options['file_optimisation']['minifyJS'] ) || ! empty( $options['file_optimisation']['deferJS'] ) || ! empty( $options['file_optimisation']['delayJS'] );
 		}
 
@@ -634,7 +634,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * @return bool
 		 */
 		public static function can_database_cleanup(): bool {
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			return ! empty( $options['database_cleanup'] );
 		}
 
@@ -1208,11 +1208,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * Execute callback: Run Crawler (wppo/crawler).
 		 *
 		 * Delegates to `LiteSpeed_Crawler::crawl_batch()` when available,
-		 * otherwise returns an error payload. Mirrors `Rest::handle_crawler()`
-		 * without IP rate-limiting (ability is `manage_options` gated and
-		 * therefore not anonymous). Input URLs are validated via
-		 * `wp_http_validate_url()` and capped to 20 (same cap as REST).
-		 * Same-site enforcement aligns with REST's home-host check.
+		 * otherwise returns an error payload. Omits IP rate-limiting (ability
+		 * is `manage_options` gated and therefore not anonymous). Input URLs
+		 * are validated via `wp_http_validate_url()` and capped to 20.
+		 * Same-site enforcement aligns with the home-host check formerly in
+		 * the removed `Rest::handle_crawler()` route (#900).
 		 *
 		 * @since NEXT
 		 *
@@ -1236,7 +1236,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 			$urls = array_values( array_filter( $urls ) );
 			$urls = array_values( array_filter( array_map( 'esc_url_raw', $urls ) ) );
 			$urls = array_values( array_filter( $urls, 'wp_http_validate_url' ) );
-			// Same-site check mirrors Rest::handle_crawler home-host validation.
+			// Same-site check: home-host validation (see LiteSpeed_Crawler::crawl_batch()).
 			$home_host = wp_parse_url( Util::cached_home_url(), PHP_URL_HOST );
 			if ( is_string( $home_host ) && '' !== $home_host ) {
 				$urls = array_values(

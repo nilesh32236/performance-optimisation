@@ -192,7 +192,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			$cookie_hash   = defined( 'COOKIEHASH' ) ? COOKIEHASH : $fallback_hash;
 
 			// Cache life in hours baked into the drop-in; 0 = never expire.
-			$wppo_options = get_option( 'wppo_settings', array() );
+			// NOTE: create() runs in plugin context so Util::get_settings() is fine
+			// here, but the generated drop-in string below serves cached pages
+			// before WordPress (and Util) loads — it must stay Util-free.
+			// See tests/php/SettingsReadGuardTest.php.
+			$wppo_options = Util::get_settings();
 			$cache_life   = isset( $wppo_options['cache_settings']['cacheLife'] ) ? absint( $wppo_options['cache_settings']['cacheLife'] ) : 0;
 
 			$handler_code = '<?php' . PHP_EOL .

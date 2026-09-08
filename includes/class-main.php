@@ -229,128 +229,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// finding 4). get_settings() keeps a lazy backstop registration.
 			Util::register_settings_cache_hooks();
 
-			$defaults      = array(
-				'cache_settings'        => array(
-					'enableCache'         => false,
-					'cacheLife'           => 0,
-					'enableLoggedInCache' => false,
-					'loggedInCacheRoles'  => array(),
-					'ttlOverrides'        => array(),
-				),
-				'file_optimisation'     => array(
-					'enableServerRules'          => false,
-					'cdnURL'                     => '',
-					'removeUnusedCSS'            => false,
-					'excludeUnusedCSS'           => '',
-					'criticalCSS'                => false,
-					'hostGoogleFontsLocally'     => false,
-					// On WP 6.9+ classic themes load core block assets on demand by default, so
-					// the toggle defaults to ON there and only acts as an opt-out. Pre-6.9 cores
-					// keep the legacy opt-in default (OFF).
-					'blockAssetsOnDemand'        => function_exists( 'wp_load_classic_theme_block_styles_on_demand' ),
-					'loadAllCoreBlockAssets'     => false,
-					'delayJSDefaultStrategy'     => 'interaction',
-					'delayJSIdleList'            => '',
-					'delayJSViewportList'        => '',
-					'delayJSPriority'            => '',
-					'delayJSIdleTimeout'         => 3000,
-					'minifyHTML'                 => false,
-					'minifyJS'                   => false,
-					'minifyCSS'                  => false,
-					'deferJS'                    => false,
-					'delayJS'                    => false,
-					'combineCSS'                 => false,
-					'excludeJS'                  => '',
-					'excludeCSS'                 => '',
-					'excludeDeferJS'             => '',
-					'excludeDelayJS'             => '',
-					'excludeCombineCSS'          => '',
-					'minifyInlineCSS'            => false,
-					'minifyInlineJS'             => false,
-					'removeHTMLComments'         => true,
-					'removeQueryStrings'         => false,
-					'disableRestApiLinks'        => false,
-					'disableRssFeeds'            => false,
-					'disableShortlinks'          => false,
-					'disableGeneratorTag'        => false,
-					'disableJQueryMigrate'       => false,
-					'disablePasswordStrength'    => false,
-					'disableSelfPingbacks'       => false,
-					'disableRSD'                 => false,
-					'disableWLWManifest'         => false,
-					'disableGlobalStyles'        => false,
-					'disableClassicThemeStyles'  => false,
-					'disableWooCartFragments'    => false,
-					'disableRecentCommentsStyle' => false,
-					'disableCommentReply'        => false,
-					'disableOEmbedDiscovery'     => false,
-					'disableBlockWidgets'        => false,
-					'fontMetricFallback'         => false,
-				),
-				'preload_settings'      => array(
-					'enableSpeculationRules' => false,
-					'speculationMode'        => 'prefetch',
-					'speculationEagerness'   => 'conservative',
-					'speculationExcludeUrls' => '',
-					'preloadSitemap'         => false,
-				),
-				'image_optimisation'    => array(
-					'lazyLoadImages'             => false,
-					'lazyLoadNative'             => true,
-					'placeholderType'            => 'svg',
-					'autoPreloadLCP'             => false,
-					'prioritizeLCPImages'        => false,
-					'clientSideMimeTypeOverride' => false,
-					'clientSideMimeTypes'        => array(),
-					'lazyLoadBackgroundImages'   => false,
-				),
-				'performance_audit'     => array(
-					'pagespeed_api_key'     => '',
-					'high_value_urls'       => array(),
-					'auto_fix_enabled'      => false,
-					'server_timing_enabled' => false,
-					'auto_rescan'           => '',
-					'rum_enabled'           => false,
-				),
-				'litespeed_integration' => array(
-					'mode'                 => 'auto',
-					'enableNextGenRewrite' => false,
-					'enableBrotli'         => false,
-					'purgeSync'            => true,
-					'varyGroups'           => array(
-						'guest'  => false,
-						'mobile' => false,
-						'webp'   => false,
-					),
-					'crawler'              => array(
-						'concurrency'        => 2,
-						'loadLimit'          => 0,
-						'blacklistThreshold' => 3,
-					),
-					'esi'                  => array(
-						'enabled' => false,
-					),
-				),
-				'llms_txt'              => array(
-					'enabled' => false,
-					'source'  => 'both',
-				),
-				'od_integration'        => array(
-					'enabled' => class_exists( 'OD_URL_Metric' ) || function_exists( 'od_get_url_metrics' ),
-				),
-				'bfcache'               => array(
-					'enabled' => false,
-				),
-				'perf_translations'     => array(
-					'enabled' => false,
-				),
-				'ai_adaptive'           => array(
-					'enabled' => false,
-				),
-				'edge_cache'            => array(
-					'enabled' => false,
-				),
-			);
+			// Canonical defaults live in Util::get_default_settings() (single source of
+			// truth, #901). Previously duplicated here; kept in sync via this call.
+			$defaults      = Util::get_default_settings();
 			$stored        = Util::get_settings();
 			$this->options = ! empty( $stored ) ? $stored : $defaults;
 
@@ -1021,6 +902,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 
+			// allowlist(settings-read-guard): deliberate direct read — must distinguish
+			// "no stored row" (false) from "stored array", which Util::get_settings()
+			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
 			$stored = get_option( 'wppo_settings' );
 			if ( ! is_array( $stored ) ) {
 				// Fresh install (or no stored settings): constructor defaults already match
@@ -1298,7 +1182,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 
-			$options       = get_option( 'wppo_settings', array() );
+			$options       = Util::get_settings();
 			$img_converter = new Img_Converter( $options );
 
 			$source_path = wp_normalize_path( $args['source_path'] );
@@ -1355,7 +1239,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			if ( empty( $options['file_optimisation']['removeUnusedCSS'] ) ) {
 				return;
 			}

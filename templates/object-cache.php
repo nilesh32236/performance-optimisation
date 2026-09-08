@@ -2,6 +2,11 @@
 /**
  * Redis Object Cache Drop-in for Performance Optimisation
  *
+ * NOTE: this file loads before the plugin (and before Util) — it must never
+ * call Util::get_settings() or read the wppo_settings option. Redis config
+ * comes only from WP_CONTENT_DIR . '/wppo-redis-config.php'.
+ * See tests/php/SettingsReadGuardTest.php.
+ *
  * @package PerformanceOptimise
  * @since 1.4.0
  */

@@ -138,7 +138,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Get default settings structure for fresh installs.
 		 *
-		 * Single source of truth for Main::__construct() defaults and
+		 * Single source of truth for Main::__construct() defaults,
+		 * Activate::maybe_seed_settings(), and
 		 * WPPO_CLI_Command::get_default_settings() to fix 7-tab drift
 		 * (CLI:451 vs Main:240). Covers all allowed tabs; database_cleanup
 		 * and object_cache are empty (no defaults) for BC.
@@ -204,6 +205,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'fontMetricFallback'         => false,
 				),
 				'preload_settings'      => array(
+					'enablePreloadCache'     => false,
+					'excludePreloadCache'    => "my-account/(.*)\ncart/(.*)\ncheckout/(.*)",
 					'enableSpeculationRules' => false,
 					'speculationMode'        => 'prefetch',
 					'speculationEagerness'   => 'conservative',
@@ -1099,13 +1102,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * Prevents transient key collisions when a shared object cache backend
 		 * (Redis, Memcached) is present. On single-site installs the key is
-		 * returned unchanged.
+		 * returned unchanged. For option names use {@see option_key()} instead.
 		 *
 		 * @param string $key The bare transient key.
 		 * @return string Blog-ID-prefixed key on multisite, or the original key.
 		 * @since NEXT
 		 */
 		public static function transient_key( string $key ): string {
+			if ( ! function_exists( 'is_multisite' ) ) {
+				return $key;
+			}
+			try {
+				return is_multisite() ? (string) get_current_blog_id() . '_' . $key : $key;
+			} catch ( \Throwable $e ) {
+				return $key;
+			}
+		}
+
+		/**
+		 * Qualify an option name with the current blog ID on multisite.
+		 *
+		 * Same blog-ID-prefixing semantics as {@see transient_key()}, but for
+		 * option names (get_option/update_option/delete_option). Kept as a
+		 * separate method so transient and option namespaces stay distinct
+		 * and can diverge in the future. On single-site installs the key is
+		 * returned unchanged.
+		 *
+		 * @param string $key The bare option name.
+		 * @return string Blog-ID-prefixed option name on multisite, or the original name.
+		 * @since NEXT
+		 */
+		public static function option_key( string $key ): string {
 			if ( ! function_exists( 'is_multisite' ) ) {
 				return $key;
 			}

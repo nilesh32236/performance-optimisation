@@ -160,7 +160,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				$use_nextgen = LiteSpeed_Integration::is_nextgen_rewrite_enabled();
 			} else {
 				// Fallback when LiteSpeed_Integration not loaded: raw option check with filters.
-				$opts        = get_option( 'wppo_settings', array() );
+				$opts        = Util::get_settings();
 				$enabled     = ! empty( $opts['litespeed_integration']['enableNextGenRewrite'] );
 				$convert     = ! empty( $opts['image_optimisation']['convertImg'] );
 				$is_ls       = class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) && method_exists( 'PerformanceOptimise\Inc\Server_Rules', 'is_litespeed' ) ? Server_Rules::is_litespeed() : false;

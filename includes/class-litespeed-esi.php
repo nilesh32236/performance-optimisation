@@ -79,7 +79,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * @return bool
 		 */
 		public static function is_setting_enabled(): bool {
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			$enabled = ! empty( $options['litespeed_integration']['esi']['enabled'] );
 			/**
 			 * Filter whether the ESI bridge setting is enabled.

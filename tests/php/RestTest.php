@@ -223,6 +223,8 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			'import_settings',
 			'database_cleanup',
 			'database_cleanup_counts',
+			// @deprecated NEXT get_page_assets is deprecated but still registered
+			// for one release; removal happens next release (#900).
 			'get_page_assets',
 			'image_job_status',
 			'object_cache',
@@ -243,12 +245,10 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			'ai_model',
 			'ai_learn',
 			'ai_suggestions',
-			'crawler',
-			'crawler_status',
 		);
 
-		// Keep in sync with the AGENTS.md endpoint count (30).
-		$this->assertCount( 30, $routes, 'REST route count drifted from the documented endpoint count' );
+		// Keep in sync with the AGENTS.md endpoint count (28).
+		$this->assertCount( 28, $routes, 'REST route count drifted from the documented endpoint count' );
 
 		foreach ( $expected as $route ) {
 			$this->assertArrayHasKey( $route, $routes, "Missing route: {$route}" );

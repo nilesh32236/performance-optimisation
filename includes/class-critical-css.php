@@ -1144,8 +1144,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			if ( is_admin() ) {
 				return $tag;
 			}
+			$options = Util::get_settings();
 			if ( is_user_logged_in() ) {
-				$options = get_option( 'wppo_settings', array() );
 				$enabled = ! empty( $options['cache_settings']['enableLoggedInCache'] ?? false );
 				if ( ! $enabled ) {
 					return $tag;
@@ -1156,8 +1156,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// This leaves cached pages unstyled (media=print deadlock with removeUnusedCSS + criticalCSS + combineCSS).
 			// Keep media=all when either deferJS or delayJS is active so cached HTML stays styled.
 			// @since NEXT.
-			$opts = get_option( 'wppo_settings', array() );
-			$fo   = $opts['file_optimisation'] ?? array();
+			$fo = $options['file_optimisation'] ?? array();
 			if ( ! empty( $fo['deferJS'] ) || ! empty( $fo['delayJS'] ) ) {
 				return $tag;
 			}

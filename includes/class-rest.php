@@ -123,6 +123,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+				// @deprecated NEXT get_page_assets is deprecated; kept one release for
+				// external consumers. Migrate to the Abilities API
+				// performance-optimisation/get-page-assets.
 				'get_page_assets'         => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_page_assets' ),
@@ -257,18 +260,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
-				'crawler'                 => array(
-					'methods'             => 'POST',
-					'callback'            => array( $this, 'handle_crawler' ),
-					'permission_callback' => array( $this, 'permission_callback' ),
-					'schema'              => $schemas,
-				),
-				'crawler_status'          => array(
-					'methods'             => 'GET',
-					'callback'            => array( $this, 'get_crawler_status' ),
-					'permission_callback' => array( $this, 'permission_callback' ),
-					'schema'              => $schemas,
-				),
 			);
 		}
 
@@ -284,87 +275,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$result = Database_Cleanup::get_autoloaded_options( $limit );
 
 			return $this->send_response( array( 'options' => $result ) );
-		}
-
-		/**
-		 * Handle crawler manual trigger (POST /crawler).
-		 *
-		 * @since NEXT
-		 * @param \WP_REST_Request $request Request.
-		 * @return \WP_REST_Response Response.
-		 */
-		public function handle_crawler( \WP_REST_Request $request ): \WP_REST_Response {
-			$params = $request->get_params();
-			$url    = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : '';
-			$urls   = array();
-			if ( '' !== $url ) {
-				$urls[] = $url;
-			} elseif ( isset( $params['urls'] ) && is_array( $params['urls'] ) ) {
-				$urls = array_values( array_filter( array_map( 'esc_url_raw', $params['urls'] ) ) );
-			} elseif ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
-				// Default: warm sitemap+post URLs via LiteSpeed_Crawler::get_urls_to_crawl.
-				$urls = LiteSpeed_Crawler::get_urls_to_crawl( 20 );
-			}
-			if ( empty( $urls ) ) {
-				return $this->send_response( null, false, 400, __( 'No URLs to crawl.', 'performance-optimisation' ) );
-			}
-			// Rate-limit 60/min IP via transient (blog-prefixed).
-			$ip_key = Util::transient_key( 'wppo_crawler_ratelimit_' . md5( isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : 'unknown' ) );
-			$count  = (int) get_transient( $ip_key );
-			if ( $count >= 60 ) {
-				return $this->send_response( null, false, 429, __( 'Rate limit exceeded. Try again later.', 'performance-optimisation' ) );
-			}
-			set_transient( $ip_key, $count + 1, MINUTE_IN_SECONDS );
-
-			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
-				$result = LiteSpeed_Crawler::crawl_batch( $urls );
-				return $this->send_response( $result );
-			}
-			return $this->send_response( null, false, 500, __( 'Crawler not available.', 'performance-optimisation' ) );
-		}
-
-		/**
-		 * Get crawler status (GET /crawler_status).
-		 *
-		 * @since NEXT
-		 * @param \WP_REST_Request $request Request.
-		 * @return \WP_REST_Response Response.
-		 */
-		public function get_crawler_status( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
-			if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
-				// Crawler class unavailable (should not happen in a normal
-				// install) — serve minimal fallback defaults.
-				return $this->send_response(
-					array(
-						'concurrency' => 2,
-						'load_limit'  => 4.0,
-						'overloaded'  => false,
-						'queue_depth' => 0,
-					)
-				);
-			}
-
-			// Real crawler status is authoritative; only queue_depth is
-			// enriched here because the crawler class does not know about
-			// the Action Scheduler queue.
-			$status                = LiteSpeed_Crawler::get_status();
-			$status['queue_depth'] = 0;
-			if ( function_exists( 'as_get_scheduled_actions' ) ) {
-				try {
-					$actions               = as_get_scheduled_actions(
-						array(
-							'hook'   => 'wppo_crawler_warm',
-							'status' => \ActionScheduler_Store::STATUS_PENDING,
-							'group'  => 'performance_optimisation',
-						),
-						'ARRAY_A'
-					);
-					$status['queue_depth'] = is_array( $actions ) ? count( $actions ) : 0;
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-			}
-			return $this->send_response( $status );
 		}
 
 		/**
@@ -611,7 +521,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				}
 			}
 
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 
 			// Preserve the pagespeed_api_key when the request omits it.
 			if ( 'performance_audit' === $tab && ! isset( $params['settings']['pagespeed_api_key'] ) && isset( $options['performance_audit']['pagespeed_api_key'] ) ) {
@@ -805,7 +715,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			// Fallback: synchronous processing (Action Scheduler not available).
-			$options       = get_option( 'wppo_settings', array() );
+			$options       = Util::get_settings();
 			$img_converter = new Img_Converter( $options );
 
 			foreach ( $webp_images as $webp_image ) {
@@ -912,7 +822,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			// Retrieve the existing settings and merge the imported settings on top,
 			// so newer setting keys from future plugin versions are preserved.
-			$existing_settings = get_option( 'wppo_settings', array() );
+			$existing_settings = Util::get_settings();
 			$merged_settings   = array_replace_recursive( $existing_settings, $sanitized_settings );
 
 			// Check if the settings are the same.
@@ -1063,11 +973,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Returns the cached assets for a specific post/page.
 		 *
+		 * @deprecated NEXT Use the Abilities API `performance-optimisation/get-page-assets`
+		 *             or Asset_Manager::get_page_assets() directly. This REST route will
+		 *             be removed in a future release.
 		 * @param \WP_REST_Request $request The request object.
 		 * @since 1.1.0
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function get_page_assets( \WP_REST_Request $request ) {
+			_deprecated_function( __METHOD__, 'NEXT', 'Abilities::execute_get_page_assets' );
 			$params  = $request->get_params();
 			$post_id = isset( $params['post_id'] ) ? absint( $params['post_id'] ) : 0;
 
