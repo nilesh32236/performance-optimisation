@@ -1670,6 +1670,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Whether the current request is a WooCommerce AJAX endpoint.
+		 *
+		 * Matches the pretty-permalink /wc-ajax/... path segment and the
+		 * ?wc-ajax=... query parameter (via $_GET and the raw query string).
+		 * A bare substring (e.g. /my-wc-ajax-guide/) intentionally does NOT
+		 * match — only the exact path segment or parameter name bypasses
+		 * the cache (issue #907 review).
+		 *
+		 * Shared by is_not_cacheable() and maybe_store_cache() so the
+		 * storage layer refuses wc-ajax XHRs even if is_not_cacheable() is
+		 * bypassed via the wppo_should_cache_request filter.
+		 *
+		 * @since NEXT
+		 * @return bool True for wc-ajax requests.
+		 */
+		private function is_wc_ajax_request(): bool {
+			$path = (string) wp_parse_url( $this->request_uri, PHP_URL_PATH );
+			if ( preg_match( '#(^|/)wc-ajax(/|$)#', $path ) ) {
+				return true;
+			}
+			if ( isset( $_GET['wc-ajax'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
+				return true;
+			}
+			return ! empty( $_SERVER['QUERY_STRING'] ) &&
+				(bool) preg_match( '/(?:^|&)(wc-ajax)(?:=|&|$)/', sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) ) );
+		}
+
+		/**
 		 * Check if the page is not cacheable.
 		 *
 		 * Note: for pages opted out via the DONOTCACHEPAGE constant this also records
@@ -1760,16 +1788,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			// Exclude WooCommerce AJAX endpoints (issue #907): wc-ajax XHRs
 			// (?wc-ajax=get_refreshed_fragments, /wc-ajax/...) are dynamic JSON
-			// and must never be buffered or stored (@since NEXT).
-			if ( false !== strpos( $this->request_uri, 'wc-ajax' ) ) {
-				return true;
-			}
-			if ( isset( $_GET['wc-ajax'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
-				return true;
-			}
-			if ( ! empty( $_SERVER['QUERY_STRING'] ) &&
-				preg_match( '/(?:^|&)(wc-ajax)(?:=|&|$)/', sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) ) )
-			) {
+			// and must never be buffered or stored.
+			if ( $this->is_wc_ajax_request() ) {
 				return true;
 			}
 
@@ -2054,15 +2074,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return false;
 			}
 
-			// Refuse storage for search/version query strings and WooCommerce
-			// AJAX endpoints (issue #907 defense-in-depth: storage still refuses
-			// wc-ajax XHRs even if is_not_cacheable() is bypassed via the
-			// wppo_should_cache_request filter).
-			//
-			// @since NEXT wc-ajax added to the query-string guard.
 			if ( ! empty( $_SERVER['QUERY_STRING'] ) &&
-				preg_match( '/(?:^|&)(s|ver|v|wc-ajax)(?:=|&|$)/', sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) ) )
+				preg_match( '/(?:^|&)(s|ver|v)(?:=|&|$)/', sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) ) )
 			) {
+				return false;
+			}
+
+			// Refuse storage for WooCommerce AJAX endpoints (issue #907
+			// defense-in-depth: storage still refuses wc-ajax XHRs even if
+			// is_not_cacheable() is bypassed via the wppo_should_cache_request
+			// filter; covers pretty-permalink paths with an empty query string; @since NEXT).
+			if ( $this->is_wc_ajax_request() ) {
 				return false;
 			}
 

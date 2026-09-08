@@ -182,6 +182,18 @@ class WcAjaxGuardTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * A benign slug merely containing the string stays cacheable (the guard
+	 * matches the wc-ajax path segment, not a raw substring).
+	 */
+	public function test_wc_ajax_substring_slug_remains_cacheable(): void {
+		$this->stub_front_end_guests();
+
+		$cache = $this->make_cache( array(), '/my-wc-ajax-guide/' );
+		$this->assertFalse( $this->invoke_private( $cache, 'is_not_cacheable' ) );
+		$this->assertTrue( $cache->is_page_cacheable() );
+	}
+
+	/**
 	 * Ordinary pages stay cacheable (regression guard).
 	 */
 	public function test_normal_page_remains_cacheable(): void {
@@ -247,6 +259,17 @@ class WcAjaxGuardTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * The maybe_store_cache() method refuses pretty-permalink wc-ajax paths
+	 * even with an empty query string (storage-layer defense-in-depth).
+	 */
+	public function test_maybe_store_cache_refuses_wc_ajax_path_without_query(): void {
+		$this->stub_front_end_guests();
+
+		$cache = $this->make_cache( array(), '/wc-ajax/get_refreshed_fragments/' );
+		$this->assertFalse( $this->invoke_private( $cache, 'maybe_store_cache' ) );
+	}
+
+	/**
 	 * The WP 6.9+ buffer filter path passes wc-ajax output through untouched.
 	 */
 	public function test_process_buffer_for_cache_returns_unfiltered_for_wc_ajax(): void {
@@ -293,6 +316,7 @@ class WcAjaxGuardTest extends \PHPUnit\Framework\TestCase {
 		$this->assertTrue( Advanced_Cache_Handler::create() );
 		$this->assertStringContainsString( 'wc-ajax', $fs->put_contents );
 		$this->assertStringContainsString( "\$_GET['wc-ajax']", $fs->put_contents );
+		$this->assertStringContainsString( 'wc-ajax(/|$)', $fs->put_contents );
 	}
 }
 
