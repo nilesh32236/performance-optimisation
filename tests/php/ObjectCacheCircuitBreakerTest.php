@@ -311,6 +311,8 @@ class ObjectCacheCircuitBreakerTest extends \PHPUnit\Framework\TestCase {
 		// bugs in the Redis config merge tests).
 		Functions\when( 'sanitize_text_field' )->alias(
 			static function ( $value ) {
+				// Test double mimicking core: strip_tags() stands in for wp_strip_all_tags().
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.strip_tags_strip_tags
 				return is_string( $value ) ? trim( strip_tags( $value ) ) : $value;
 			}
 		);
@@ -912,7 +914,7 @@ class ObjectCacheCircuitBreakerTest extends \PHPUnit\Framework\TestCase {
 	 * dismissed notice would reappear on every page load.
 	 */
 	public function test_parked_only_state_synthesizes_tripped_at(): void {
-		$dir = $this->make_temp_dir();
+		$dir                   = $this->make_temp_dir();
 		$this->dropin_override = $dir . '/object-cache.php';
 		$parked                = $this->dropin_override . '.wppo-disabled';
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents

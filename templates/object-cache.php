@@ -504,9 +504,9 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 			}
 
 			// Never touch a foreign drop-in: parking is destructive, so it
-			// requires the narrow plugin-specific marker. (The shorter
-			// legacy phrase can appear in foreign drop-ins and stays valid
-			// only for read-only ownership detection elsewhere.)
+			// requires the narrow plugin-specific marker. The shorter legacy
+			// phrase can appear in foreign drop-ins, so it stays valid for
+			// read-only ownership detection only.
 			$is_ours = false;
 			if ( @is_readable( $dropin ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize
