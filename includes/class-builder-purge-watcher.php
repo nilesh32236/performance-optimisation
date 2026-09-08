@@ -57,7 +57,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * correct the map via the wppo_builder_purge_map filter.
 		 *
 		 * @since NEXT
-		 * @var array<string,array{label:string,plugins:string[],themes:string[],upload_subdirs:string[],content_subdirs:string[],clear_hooks:string[]}>
+		 * @var array<string,array{label:string,plugins:string[],themes:string[],upload_subdirs:string[],content_subdirs:string[],clear_hooks:string[],css_only?:bool}>
 		 */
 		private const BUILDER_MAP = array(
 			'elementor' => array(
@@ -71,7 +71,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 			'divi'      => array(
 				'label'           => 'Divi',
 				'plugins'         => array( 'divi-builder/divi-builder.php' ),
-				'themes'          => array( 'Divi', 'divi' ),
+				'themes'          => array( 'Divi' ),
 				'upload_subdirs'  => array(),
 				'content_subdirs' => array( 'et-cache' ),
 				'clear_hooks'     => array( 'et_core_cache_clear' ),
@@ -215,8 +215,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 				if ( ! is_array( $entry ) ) {
 					continue;
 				}
-				$entry_plugins = isset( $entry['plugins'] ) && is_array( $entry['plugins'] ) ? array_map( 'strtolower', $entry['plugins'] ) : array();
-				$entry_themes  = isset( $entry['themes'] ) && is_array( $entry['themes'] ) ? array_map( 'strtolower', $entry['themes'] ) : array();
+				$entry_plugins = array();
+				if ( isset( $entry['plugins'] ) && is_array( $entry['plugins'] ) ) {
+					$entry_plugins = array_map( 'strtolower', array_filter( $entry['plugins'], 'is_string' ) );
+				}
+				$entry_themes = array();
+				if ( isset( $entry['themes'] ) && is_array( $entry['themes'] ) ) {
+					$entry_themes = array_map( 'strtolower', array_filter( $entry['themes'], 'is_string' ) );
+				}
 
 				if ( ! empty( array_intersect( $entry_plugins, $plugins_lc ) ) || ! empty( array_intersect( $entry_themes, $themes_lc ) ) ) {
 					$matched[] = (string) $key;
@@ -382,7 +388,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 *
 		 * Used for css_only map entries (Bricks/WPBakery): non-CSS files and
 		 * subdirectories are left untouched so anything non-regenerable in
-		 * the same root survives the purge.
+		 * the same root survives the purge. Top-level-only is sufficient
+		 * because the same purge chain also clears the full page cache plus
+		 * used-CSS and critical-CSS, so any stale nested reference is
+		 * dropped with the HTML that pointed at it and rebuilt on next visit.
 		 *
 		 * @since NEXT
 		 * @param object   $fs      WP_Filesystem instance.

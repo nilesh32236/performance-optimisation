@@ -207,6 +207,18 @@ class WcAjaxGuardTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * An upper-case wc-ajax query parameter is still not cacheable (the
+	 * query-string match is case-insensitive, covering what $_GET misses).
+	 */
+	public function test_wc_ajax_uppercase_query_is_not_cacheable(): void {
+		$this->stub_front_end_guests();
+		$_SERVER['QUERY_STRING'] = 'WC-AJAX=get_refreshed_fragments';
+
+		$cache = $this->make_cache( array(), '/?WC-AJAX=get_refreshed_fragments' );
+		$this->assertTrue( $this->invoke_private( $cache, 'is_not_cacheable' ) );
+	}
+
+	/**
 	 * Ordinary pages stay cacheable (regression guard).
 	 */
 	public function test_normal_page_remains_cacheable(): void {

@@ -287,6 +287,39 @@ class BuilderPurgeWatcherTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Non-string slugs in a filtered map entry are ignored instead of
+	 * fataling, and valid slugs in the same entry still match.
+	 */
+	public function test_match_builders_ignores_non_string_slugs(): void {
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $tag, $value ) {
+				if ( 'wppo_builder_purge_map' === $tag && is_array( $value ) ) {
+					$value['weird'] = array(
+						'label'           => 'Weird',
+						'plugins'         => array( array( 'nested' ), 42, 'weird/weird.php' ),
+						'themes'          => array(),
+						'upload_subdirs'  => array(),
+						'content_subdirs' => array(),
+						'clear_hooks'     => array(),
+					);
+				}
+				return $value;
+			}
+		);
+
+		$watcher = new WPPO_Test_Builder_Watcher();
+		$watcher->on_builder_update(
+			null,
+			array(
+				'action' => 'update',
+				'type'   => 'plugin',
+				'plugin' => 'weird/weird.php',
+			)
+		);
+		$this->assertSame( array( 'weird' ), $watcher->purged );
+	}
+
+	/**
 	 * Builder-directory purge is scoped to the listed subdirectories —
 	 * never the bare uploads or content base directories.
 	 */

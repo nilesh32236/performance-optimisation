@@ -1694,7 +1694,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return true;
 			}
 			return ! empty( $_SERVER['QUERY_STRING'] ) &&
-				(bool) preg_match( '/(?:^|&)(wc-ajax)(?:=|&|$)/', sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) ) );
+				(bool) preg_match( '/(?:^|&)(wc-ajax)(?:=|&|$)/i', sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) ) );
 		}
 
 		/**

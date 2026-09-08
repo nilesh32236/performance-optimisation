@@ -195,6 +195,9 @@ add_filter( 'wppo_builder_purge_map', function( $map ) {
         'upload_subdirs'  => array( 'oxygen/css' ),
         'content_subdirs' => array(),
         'clear_hooks'     => array(),
+        // Set css_only => true when the directory may hold non-regenerable
+        // files (only top-level *.css files are then removed).
+        'css_only'        => true,
     );
     return $map;
 } );
