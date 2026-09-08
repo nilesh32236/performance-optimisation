@@ -183,6 +183,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * /my-account/* patterns when WooCommerce helpers are absent but a
 		 * commerce/auth context (cookie/logged-in) was detected.
 		 *
+		 * Keep in sync with Main::add_speculation_rules() — both derive the same
+		 * WooCommerce cart/checkout/account paths.
+		 *
+		 * @see Main::add_speculation_rules()
+		 *
 		 * @return string[]
 		 * @since NEXT
 		 */
@@ -609,7 +614,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			if ( ! is_array( $urls ) ) {
 				return array();
 			}
-			$urls = array_values( array_filter( array_map( 'esc_url_raw', $urls ) ) );
+			$urls = array_values( array_filter( array_map( 'esc_url_raw', array_filter( $urls, 'is_string' ) ) ) );
+			// Guardrail (#908): never AI-prefetch commerce/auth URLs in commerce
+			// contexts. Explicit list-source rules bypass href exclude-path
+			// filtering, so a RUM/LLM-nominated /checkout/ would otherwise be
+			// injected verbatim (the eagerness cap alone cannot prevent it).
+			if ( ! empty( $urls ) && self::is_commerce_or_auth_context() ) {
+				$excludes = self::get_commerce_exclude_paths();
+				$urls     = array_values(
+					array_filter(
+						$urls,
+						static function ( $url ) use ( $excludes ) {
+							$path = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url, PHP_URL_PATH ) : null;
+							$path = is_string( $path ) && '' !== $path ? rtrim( $path, '/' ) : rtrim( $url, '/' );
+							foreach ( $excludes as $exclude ) {
+								$prefix = rtrim( rtrim( $exclude, '*' ), '/' );
+								if ( '' !== $prefix && ( $path === $prefix || 0 === strpos( $path . '/', $prefix . '/' ) ) ) {
+									return false;
+								}
+							}
+							return true;
+						}
+					)
+				);
+			}
 			return array_slice( $urls, 0, 2 );
 		}
 

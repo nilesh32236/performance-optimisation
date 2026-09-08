@@ -451,6 +451,53 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test commerce URLs are excluded from AI prefetch injection in commerce context.
+	 *
+	 * Explicit list-source rules bypass href exclude-path filtering, so the
+	 * model-level filter is the only guard for a nominated /checkout/.
+	 *
+	 * @return void
+	 */
+	public function test_filter_speculation_rules_drops_commerce_prefetch_urls(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings']       = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		$this->options[ AI_Adaptive::OPTION ] = array(
+			'prefetch_urls' => array( 'http://example.com/checkout/', 'http://example.com/a/' ),
+			'eagerness'     => 'moderate',
+		);
+		Util::clear_settings_cache();
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( true );
+
+		$rules = AI_Adaptive::filter_speculation_rules( array() );
+		$this->assertCount( 1, $rules );
+		$this->assertSame( array( 'http://example.com/a/' ), $rules[0]['urls'] );
+	}
+
+	/**
+	 * Test prefetch URLs are preserved without a commerce context.
+	 *
+	 * @return void
+	 */
+	public function test_filter_speculation_rules_preserves_prefetch_without_commerce_context(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings']       = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		$this->options[ AI_Adaptive::OPTION ] = array(
+			'prefetch_urls' => array( 'http://example.com/checkout/', 'http://example.com/a/' ),
+			'eagerness'     => 'moderate',
+		);
+		Util::clear_settings_cache();
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$rules = AI_Adaptive::filter_speculation_rules( array() );
+		$this->assertCount( 1, $rules );
+		$this->assertSame( array( 'http://example.com/checkout/', 'http://example.com/a/' ), $rules[0]['urls'] );
+	}
+
+	/**
 	 * Test the eagerness filter cannot loosen past moderate in commerce context.
 	 *
 	 * @return void
