@@ -100,6 +100,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * comes from the always-on WooCommerce cart/checkout/account exclude
 		 * paths in Main::add_speculation_rules().
 		 *
+		 * Limitation: the logged-in probe only fires in frontend contexts, so
+		 * learn()/suggestions served from wp-admin on an auth-only (non-Woo)
+		 * site cannot see the visitor's login state and may keep `eager`.
+		 * Per-request protection still applies via filter_speculation_rules()
+		 * for logged-in frontend visitors.
+		 *
 		 * @return bool True when a commerce/auth context is detected.
 		 * @since NEXT
 		 */
@@ -689,13 +695,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				$commerce_paths = self::get_commerce_exclude_paths();
 				$settings       = Util::get_settings();
 				$existing       = isset( $settings['preload_settings']['speculationExcludeUrls'] ) ? (string) $settings['preload_settings']['speculationExcludeUrls'] : '';
+				// Normalized line-by-line compare (trim + trailing-slash and
+				// wildcard insensitive) so formatting variants do not re-suggest.
+				$normalize_path = static function ( $path ) {
+					return rtrim( rtrim( rtrim( trim( (string) $path ), '/' ), '*' ), '/' );
+				};
+				$existing_list  = array_map( $normalize_path, Util::process_urls( $existing ) );
 				$missing        = array();
 				foreach ( $commerce_paths as $commerce_path ) {
-					if ( false === strpos( $existing, rtrim( $commerce_path, '*' ) ) ) {
+					if ( ! in_array( $normalize_path( $commerce_path ), $existing_list, true ) ) {
 						$missing[] = $commerce_path;
 					}
 				}
 				if ( ! empty( $missing ) ) {
+					// AiPanel.js merges ai_payload at settings-object level, so the
+					// payload must carry existing + missing or applying would
+					// discard the user's current custom excludes.
+					$payload_excludes = implode( "\n", $missing );
+					$existing_trimmed = trim( str_replace( "\r\n", "\n", $existing ) );
+					if ( '' !== $existing_trimmed ) {
+						$payload_excludes = $existing_trimmed . "\n" . $payload_excludes;
+					}
 					$suggestions[] = array(
 						'metric'      => 'ai_speculation_excludes',
 						'value'       => implode( ', ', $missing ),
@@ -705,7 +725,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 						'fix_action'  => 'open_preload_tab',
 						'ai_payload'  => array(
 							'tab'      => 'preload_settings',
-							'settings' => array( 'speculationExcludeUrls' => implode( "\n", $missing ) ),
+							'settings' => array( 'speculationExcludeUrls' => $payload_excludes ),
 						),
 					);
 				}

@@ -48,7 +48,6 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 				'is_multisite',
 				'get_current_blog_id',
 				'home_url',
-				'wp_parse_url',
 			)
 		);
 		Functions\when( 'get_option' )->alias(
@@ -87,6 +86,9 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		);
 		Functions\when( 'is_multisite' )->justReturn( false );
 		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		// Restore component parsing (bootstrap alias): install_stubs() must not
+		// leave wp_parse_url as returnArg, or Woo URL derivation gets full URLs.
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
 		Functions\when( 'home_url' )->alias(
 			function ( $path = '' ) {
 				return 'http://example.com' . $path;
@@ -630,5 +632,83 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$this->assertNotNull( $eagerness_suggestion );
 		$this->assertSame( 'eager', $eagerness_suggestion['value'] );
 		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_speculation_excludes' ) );
+	}
+
+	/**
+	 * Test excludes suggestion only lists missing paths but preserves existing in payload.
+	 *
+	 * @return void
+	 */
+	public function test_get_suggestions_excludes_preserve_existing_on_apply(): void {
+		$this->install_stubs();
+		$this->options[ AI_Adaptive::OPTION ] = array(
+			'prefetch_urls' => array( 'http://example.com/a/' ),
+			'eagerness'     => 'eager',
+		);
+		$this->options['wppo_settings']       = array(
+			'preload_settings' => array(
+				// Formatting variant ('/cart' without trailing slash) must
+				// still count as configured via normalized comparison.
+				'speculationExcludeUrls' => "  /cart  \n/members/*",
+			),
+		);
+		Util::clear_settings_cache();
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( true );
+
+		$suggestions = AI_Adaptive::get_suggestions();
+
+		$excludes_suggestion = $this->find_suggestion( $suggestions, 'ai_speculation_excludes' );
+		$this->assertNotNull( $excludes_suggestion );
+		$this->assertSame( '/checkout/*, /my-account/*', $excludes_suggestion['value'] );
+		// Payload preserves the user's existing excludes and appends missing.
+		$payload_excludes = $excludes_suggestion['ai_payload']['settings']['speculationExcludeUrls'];
+		$this->assertStringContainsString( '/members/*', $payload_excludes );
+		$this->assertStringContainsString( '/checkout/*', $payload_excludes );
+		$this->assertStringContainsString( '/my-account/*', $payload_excludes );
+	}
+
+	/**
+	 * Test shop-page probes (cart/checkout/account) signal a commerce context.
+	 *
+	 * @return void
+	 */
+	public function test_is_commerce_context_detects_shop_pages(): void {
+		$this->install_stubs();
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		Functions\when( 'is_cart' )->justReturn( true );
+		$this->assertTrue( AI_Adaptive::is_commerce_or_auth_context() );
+
+		Functions\when( 'is_cart' )->justReturn( false );
+		Functions\when( 'is_checkout' )->justReturn( true );
+		$this->assertTrue( AI_Adaptive::is_commerce_or_auth_context() );
+
+		Functions\when( 'is_checkout' )->justReturn( false );
+		Functions\when( 'is_account_page' )->justReturn( true );
+		$this->assertTrue( AI_Adaptive::is_commerce_or_auth_context() );
+	}
+
+	/**
+	 * Test commerce exclude paths derive from WooCommerce URLs when available.
+	 *
+	 * Runs last: stubbing the WooCommerce helpers defines them process-wide
+	 * (bare function_exists probe), so no commerce-off assertion may follow.
+	 *
+	 * @return void
+	 */
+	public function test_get_commerce_exclude_paths_derives_woo_urls(): void {
+		$this->install_stubs();
+		Functions\when( 'wc_get_checkout_url' )->justReturn( 'http://example.com/checkout/' );
+		Functions\when( 'wc_get_cart_url' )->justReturn( 'http://example.com/cart/' );
+		Functions\when( 'wc_get_page_permalink' )->justReturn( 'http://example.com/my-account/' );
+
+		$this->assertSame(
+			array( '/checkout/*', '/cart/*', '/my-account/*' ),
+			AI_Adaptive::get_commerce_exclude_paths()
+		);
+		$this->assertTrue( AI_Adaptive::is_commerce_or_auth_context() );
 	}
 }
