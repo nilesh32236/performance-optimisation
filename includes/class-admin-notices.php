@@ -115,6 +115,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			$this->maybe_competing_plugins_notice();
 			$this->maybe_litespeed_coexistence_notice();
 			$this->maybe_object_cache_circuit_notice();
+			$this->maybe_builder_purge_notice();
 			$this->maybe_review_notice();
 		}
 
@@ -306,6 +307,53 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			echo '<div class="notice notice-info is-dismissible" role="status" aria-live="polite"><p>';
 			echo esc_html__( 'You have another page caching plugin active:', 'performance-optimisation' ) . ' ' . esc_html( $names ) . '. ';
 			echo esc_html__( 'Running multiple full-page cache solutions can cause conflicts. Consider using only one.', 'performance-optimisation' );
+			echo '</p></div>';
+		}
+
+		/**
+		 * Success notice after a builder-update purge (issue #907).
+		 *
+		 * The watcher stages a transient with the purged builder labels; it
+		 * is read and deleted here so the notice renders once, and expires
+		 * via its TTL otherwise (no dismiss key needed).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private function maybe_builder_purge_notice(): void {
+			if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
+				return;
+			}
+
+			$notice = get_transient( Util::transient_key( Builder_Purge_Watcher::NOTICE_TRANSIENT ) );
+
+			if ( ! is_array( $notice ) || ! isset( $notice['builders'] ) || ! is_array( $notice['builders'] ) || empty( $notice['builders'] ) ) {
+				return;
+			}
+
+			$labels = array();
+			foreach ( $notice['builders'] as $label ) {
+				$label = sanitize_text_field( wp_unslash( (string) $label ) );
+				if ( '' !== $label ) {
+					$labels[] = $label;
+				}
+			}
+
+			if ( empty( $labels ) ) {
+				return;
+			}
+
+			// Consume only once a valid notice is confirmed for render, so a
+			// malformed transient is left for inspection instead of being
+			// silently swallowed.
+			delete_transient( Util::transient_key( Builder_Purge_Watcher::NOTICE_TRANSIENT ) );
+
+			echo '<div class="notice notice-success is-dismissible" role="status" aria-live="polite"><p><strong>' . esc_html__( 'Performance Optimisation', 'performance-optimisation' ) . '</strong> — ';
+			printf(
+				/* translators: %s: comma-separated builder names */
+				esc_html__( 'Builder update detected (%s). Page cache and builder CSS were purged.', 'performance-optimisation' ),
+				esc_html( implode( ', ', $labels ) )
+			);
 			echo '</p></div>';
 		}
 

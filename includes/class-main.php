@@ -451,6 +451,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-cdn.php' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-cdn.php';
 			}
+			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-builder-purge-watcher.php' ) ) {
+				require_once WPPO_PLUGIN_PATH . 'includes/class-builder-purge-watcher.php';
+			}
 
 			if ( defined( 'WP_CLI' ) && WP_CLI ) {
 				\WP_CLI::add_command( 'wppo', 'PerformanceOptimise\Inc\WPPO_CLI_Command' );
@@ -473,6 +476,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'upgrader_process_complete', array( $this, 'maybe_schedule_upgrade_routine' ), 10, 2 );
 			add_action( 'admin_init', array( $this, 'maybe_run_version_upgrade' ) );
 			add_action( 'upgrader_process_complete', array( $this, 'maybe_run_version_upgrade' ), 10, 0 );
+			// Builder-update purge watcher (issue #907): scoped purge of builder
+			// CSS + WPPO caches after Elementor/Divi/Bricks/WPBakery updates.
+			// No settings UI; the watcher self-gates to builder slugs.
+			if ( class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
+				( new Builder_Purge_Watcher() )->register();
+			}
 			add_action( 'admin_init', array( $this, 'maybe_migrate_block_assets_setting' ) );
 			add_action( 'admin_enqueue_scripts', array( $this, 'admin_enqueue_scripts' ) );
 			add_action( 'init', array( $this, 'set_role_hash_cookie' ) );

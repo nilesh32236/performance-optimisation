@@ -41,6 +41,24 @@ add_action( 'wppo_after_cache_clear', function( $type, $url_path ) {
 
 ---
 
+### `wppo_after_builder_purge`
+Fires after WPPO purges builder + page caches for a page-builder update (issue #907). The watcher (`Builder_Purge_Watcher`, hooked to `upgrader_process_complete`) self-gates to Elementor/Divi/Bricks/WPBakery slugs, deletes the builders' regenerable CSS directories, clears the page cache + used-CSS + critical-CSS, writes an audit log entry, and stages a one-time admin notice. @since NEXT.
+
+**Parameters:**
+- `$matched` *(string[])* — Matched builder keys (e.g. `array( 'elementor' )`).
+
+**Example:**
+```php
+add_action( 'wppo_after_builder_purge', function( $matched ) {
+    if ( in_array( 'elementor', $matched, true ) ) {
+        // e.g. warm the homepage so the regenerated CSS is fresh.
+        wp_remote_get( home_url( '/' ) );
+    }
+} );
+```
+
+---
+
 ### `wppo_database_cleanup_completed`
 Fires after a database cleanup operation completes. Since NEXT, also fires per-type after each individual cleanup (before the `all` aggregate). @since NEXT for per-type.
 
@@ -76,6 +94,8 @@ add_filter( 'wppo_should_cache_request', function( $should, $request_uri, $is_mo
     return $should;
 }, 10, 4 );
 ```
+
+**WooCommerce cookie behavior note (issue #907):** only cart-content cookies (`woocommerce_items_in_cart`, `woocommerce_cart_hash`) bypass the cache; currency-switcher cookies (`WOOCS` / `wmc-current-currency`, Aelia, …) intentionally do **not** vary or bypass — there is no per-currency segmentation today. Currency vary is a future M-sized item. WooCommerce AJAX endpoints (`?wc-ajax=…`, `/wc-ajax/…`) are always excluded from serving (the `advanced-cache.php` drop-in returns early pre-boot), buffering, and storage.
 
 ---
 
@@ -158,6 +178,32 @@ add_filter( 'wppo_object_cache_probe_interval', function() {
 ---
 
 ## 🎛️ Filter Hooks
+
+### `wppo_builder_purge_map`
+Filters the builder-update purge map used by the watcher (`Builder_Purge_Watcher::get_builder_map()`, issue #907). Lets hosts and themes add builders or correct slugs and cache directories. @since NEXT.
+
+**Parameters:**
+- `$map` *(array)* — Builder map keyed by builder slug. Each entry: `label` (string), `plugins` (plugin-file slugs), `themes` (theme directory slugs), `upload_subdirs` (cache dirs relative to the uploads basedir), `content_subdirs` (cache dirs relative to `WP_CONTENT_DIR`), `clear_hooks` (builder-native actions fired best-effort when a listener exists), `css_only` (bool — when true, only top-level `*.css` files are removed instead of the whole directory; used for Bricks/WPBakery whose roots may hold non-regenerable files).
+
+**Example:**
+```php
+add_filter( 'wppo_builder_purge_map', function( $map ) {
+    $map['oxygen'] = array(
+        'label'           => 'Oxygen',
+        'plugins'         => array( 'oxygen/functions.php' ),
+        'themes'          => array(),
+        'upload_subdirs'  => array( 'oxygen/css' ),
+        'content_subdirs' => array(),
+        'clear_hooks'     => array(),
+        // Set css_only => true when the directory may hold non-regenerable
+        // files (only top-level *.css files are then removed).
+        'css_only'        => true,
+    );
+    return $map;
+} );
+```
+
+---
 
 ### `wppo_exclude_delay_js`
 Filters the list of script handles or URL substrings excluded from JavaScript delay loading.

@@ -221,6 +221,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
 
+			'// WooCommerce AJAX endpoints are dynamic JSON and must never be served from the static cache (issue #907).' . PHP_EOL .
+			'// The segment match mirrors Cache::is_wc_ajax_request() case-insensitively, including the raw' . PHP_EOL .
+			'// QUERY_STRING fallback (intentional pre-boot duplication — the drop-in serves cached pages before' . PHP_EOL .
+			'// WordPress boots, so no sanitize_text_field/Util calls here); the empty-QUERY_STRING gate before' . PHP_EOL .
+			'// wppo_serve_cache_file() below remains as a second backstop.' . PHP_EOL .
+			'if ( preg_match( \'#(^|/)wc-ajax(/|$)#i\', $request_uri ) || isset( $_GET[\'wc-ajax\'] ) ) {' . PHP_EOL .
+			'	return;' . PHP_EOL .
+			'}' . PHP_EOL .
+			'if ( ! empty( $_SERVER[\'QUERY_STRING\'] ) && preg_match( \'/(?:^|&)wc-ajax(?:=|&|$)/i\', $_SERVER[\'QUERY_STRING\'] ) ) {' . PHP_EOL .
+			'	return;' . PHP_EOL .
+			'}' . PHP_EOL . PHP_EOL .
+
 			'if ( preg_match( \'#^/(?:cart|checkout|my-account)(?:/|$)#i\', $request_uri ) || preg_match( \'/(?:sitemap[^\/]*\.xml|wp-sitemap[^\/]*\.xml|\.xml)$/i\', $request_uri ) ) {' . PHP_EOL .
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
