@@ -75,7 +75,7 @@ Frontend lazy loading: `src/lazyload.js` (vanilla JS, not React) — Intersectio
 Admin bar cache clearing: `src/main.js` — two buttons ("Clear All Cache", "Clear This Page") with automatic nonce refresh on 403.
 
 ### REST API
-Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (30 routes). All require `manage_options` capability + `X-WP-Nonce` except `rum_collect` (public, token + IP rate-limited) and `crawler` (60/min/IP rate-limited). The authoritative 30-route table lives in `.agents/AGENTS.md`; the summary table below lists the most-used routes.
+Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (28 routes). All require `manage_options` capability + `X-WP-Nonce` except `rum_collect` (public, token + IP rate-limited). The authoritative 28-route table lives in `.agents/AGENTS.md`; the summary table below lists the most-used routes.
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -87,7 +87,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (3
 | `import_settings` | POST | Import settings JSON |
 | `database_cleanup` | POST | Run cleanup by type |
 | `database_cleanup_counts` | GET | Counts per cleanup type |
-| `get_page_assets` | GET | Captured frontend assets |
+| `get_page_assets` | GET | Captured frontend assets (deprecated, removal pending) |
 | `image_job_status` | GET | Image conversion job status |
 | `object_cache` | POST | Redis status/enable/disable/flush/ping |
 | `system_info` | GET | PHP/DB/WP/Server/Cache info |
@@ -119,7 +119,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (3
 | `class-cron.php` | WP-Cron: preload (5h), image conversion (hourly), DB cleanup (daily), web vitals rescan, used/critical CSS, llms.txt |
 | `class-img-converter.php` | WebP/AVIF conversion (GD, Imagick), deferred option commits |
 | `class-image-optimisation.php` | Next-gen serving, lazy load, picture wrap, preload, video lazy |
-| `class-rest.php` | All 25 REST API endpoints |
+| `class-rest.php` | All 28 REST API endpoints |
 | `class-pagespeed.php` | Google PageSpeed Insights API + Action Scheduler job |
 | `class-suggestion-engine.php` | Performance suggestions from telemetry + PageSpeed |
 | `class-telemetry.php` | Local cURL-based performance scanner |

@@ -86,6 +86,10 @@ After activation, you can manage the following from the settings tabs:
 
 == Changelog ==
 
+= NEXT (unreleased) =
+* Removed: orphaned `performance-optimisation/v1/crawler` and `crawler_status` REST routes (no SPA/CLI consumers; cache warming remains driven by WP-Cron/Action Scheduler via `LiteSpeed_Crawler`).
+* Deprecated: `performance-optimisation/v1/get_page_assets` REST route (kept one release; migrate to the Abilities API `performance-optimisation/get-page-assets` or `Asset_Manager::get_page_assets()`).
+
 = 1.9.0 (2026-08-11) =
 * Performance: Centralized `content_url()` static caching across asset minification loops via `Util::cached_content_url()`. Keys static cache per site per request (`get_current_blog_id()`) for multisite safety under `switch_to_blog()` and gates caching with `has_filter('content_url')`.
 * New: Added WordPress 7.1+ client-side media processing toggle (`filter_client_side_supported_mime_types`). Admin setting enables selecting in-browser Web Worker supported MIME types, intersected with core's reported capabilities to prevent unsupported formats from shadowing core defaults.
