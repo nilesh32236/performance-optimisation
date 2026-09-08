@@ -219,17 +219,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 
 			'if ( isset( $_COOKIE[\'woocommerce_items_in_cart\'] ) || isset( $_COOKIE[\'woocommerce_cart_hash\'] ) ) {' . PHP_EOL .
 			'	return;' . PHP_EOL .
-			'}' . PHP_EOL . PHP_EOL .
+			'}' . PHP_EOL .
+			'foreach ( $_COOKIE as $k => $v ) { if ( 0 === strpos( $k, \'wp_woocommerce_session_\' ) && ! empty( $v ) ) { return; } }' . PHP_EOL . PHP_EOL .
 
 			'// WooCommerce AJAX endpoints are dynamic JSON and must never be served from the static cache (issue #907).' . PHP_EOL .
 			'// The segment match mirrors Cache::is_wc_ajax_request() case-insensitively, including the raw' . PHP_EOL .
 			'// QUERY_STRING fallback (intentional pre-boot duplication — the drop-in serves cached pages before' . PHP_EOL .
 			'// WordPress boots, so no sanitize_text_field/Util calls here); the empty-QUERY_STRING gate before' . PHP_EOL .
 			'// wppo_serve_cache_file() below remains as a second backstop.' . PHP_EOL .
-			'if ( preg_match( \'#(^|/)wc-ajax(/|$)#i\', $request_uri ) || isset( $_GET[\'wc-ajax\'] ) ) {' . PHP_EOL .
+			'// Woo safe-mode: also guard add-to-cart query param and session cookie (issue #922).' . PHP_EOL .
+			'if ( preg_match( \'#(^|/)wc-ajax(/|$)#i\', $request_uri ) || isset( $_GET[\'wc-ajax\'] ) || isset( $_GET[\'add-to-cart\'] ) ) {' . PHP_EOL .
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL .
 			'if ( ! empty( $_SERVER[\'QUERY_STRING\'] ) && preg_match( \'/(?:^|&)wc-ajax(?:=|&|$)/i\', $_SERVER[\'QUERY_STRING\'] ) ) {' . PHP_EOL .
+			'	return;' . PHP_EOL .
+			'}' . PHP_EOL .
+			'if ( ! empty( $_SERVER[\'QUERY_STRING\'] ) && preg_match( \'/(?:^|&)add-to-cart(?:=|&|$)/i\', $_SERVER[\'QUERY_STRING\'] ) ) {' . PHP_EOL .
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
 

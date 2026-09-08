@@ -155,6 +155,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'enableCache'         => false,
 					'cacheLife'           => 0,
 					'ttlOverrides'        => array(),
+					'wooSafeMode'         => true,
 				),
 				'file_optimisation'     => array(
 					'enableServerRules'          => false,

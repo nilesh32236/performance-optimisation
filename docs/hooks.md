@@ -97,6 +97,27 @@ add_filter( 'wppo_should_cache_request', function( $should, $request_uri, $is_mo
 
 **WooCommerce cookie behavior note (issue #907):** only cart-content cookies (`woocommerce_items_in_cart`, `woocommerce_cart_hash`) bypass the cache; currency-switcher cookies (`WOOCS` / `wmc-current-currency`, Aelia, …) intentionally do **not** vary or bypass — there is no per-currency segmentation today. Currency vary is a future M-sized item. WooCommerce AJAX endpoints (`?wc-ajax=…`, `/wc-ajax/…`) are always excluded from serving (the `advanced-cache.php` drop-in returns early pre-boot), buffering, and storage.
 
+**WooCommerce safe mode (issue #922):** when `cache_settings.wooSafeMode` is `true` (default), `cart`/`checkout`/`my-account` endpoints, `wc-ajax` and `?add-to-cart` requests, and Woo session cookies (`wp_woocommerce_session_*` + cart fragments) are never served as cache HIT. Guarded by `has_filter('wppo_woo_cacheable')` so per-URL override is possible; the `advanced-cache.php` drop-in mirrors the same guards pre-boot (no WP/Woo calls). Disable safe mode by setting `wooSafeMode => false` via `wppo_settings` (e.g. `wp wppo settings` or import).
+
+---
+
+### `wppo_woo_cacheable`
+Filters whether a Woo-excluded request should be re-allowed as cacheable. Guarded by `has_filter()` — the filter is only applied when a listener is present. Return `true` to re-allow caching for that URL; default `false` (not cacheable). Runs inside `Cache::is_woo_excluded()` after any Woo exclusion is detected. @since NEXT.
+
+**Parameters:**
+- `$cacheable` *(bool)* — Whether the Woo request should be re-allowed as cacheable. Default `false`.
+- `$request_uri` *(string)* — The request URI.
+
+**Example:**
+```php
+add_filter( 'wppo_woo_cacheable', function( $cacheable, $request_uri ) {
+    if ( false !== strpos( $request_uri, '/my-account/custom-public/' ) ) {
+        return true; // Re-allow caching for a custom public account sub-page.
+    }
+    return $cacheable;
+}, 10, 2 );
+```
+
 ---
 
 ### `wppo_invalidation_urls`
