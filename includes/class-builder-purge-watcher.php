@@ -48,7 +48,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * relative to the uploads basedir (upload_subdirs) or to
 		 * WP_CONTENT_DIR (content_subdirs, e.g. Divi's et-cache), and
 		 * builder-native regeneration actions fired best-effort when a
-		 * listener is registered.
+		 * listener is registered. Entries whose directory layout is not
+		 * documented as fully regenerable set css_only so only *.css files
+		 * (never the whole directory tree) are removed.
 		 *
 		 * Slugs verified against wordpress.org / vendor distributions at
 		 * implementation time (issue #907); hosts and themes can extend or
@@ -81,6 +83,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 				'upload_subdirs'  => array( 'bricks' ),
 				'content_subdirs' => array(),
 				'clear_hooks'     => array(),
+				'css_only'        => true,
 			),
 			'wpbakery'  => array(
 				'label'           => 'WPBakery',
@@ -89,6 +92,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 				'upload_subdirs'  => array( 'js_composer' ),
 				'content_subdirs' => array(),
 				'clear_hooks'     => array(),
+				'css_only'        => true,
 			),
 		);
 
@@ -178,12 +182,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 				}
 			}
 
-			$matched = $this->match_builders( $updated_plugins, $updated_themes );
+			// Resolve the map once so routing and purging use the same map even
+			// if the wppo_builder_purge_map filter is non-deterministic.
+			$map     = self::get_builder_map();
+			$matched = $this->match_builders( $updated_plugins, $updated_themes, $map );
 			if ( empty( $matched ) ) {
 				return;
 			}
 
-			$this->purge_for_builders( $matched );
+			$this->purge_for_builders( $matched, $map );
 		}
 
 		/**
@@ -195,10 +202,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * @since NEXT
 		 * @param string[] $plugins Updated plugin files.
 		 * @param string[] $themes  Updated theme slugs.
+		 * @param array    $map     Builder map (resolved once per update).
 		 * @return string[] Matched builder keys.
 		 */
-		private function match_builders( array $plugins, array $themes ): array {
-			$map     = self::get_builder_map();
+		private function match_builders( array $plugins, array $themes, array $map ): array {
 			$matched = array();
 
 			$plugins_lc = array_map( 'strtolower', $plugins );
@@ -227,10 +234,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 *
 		 * @since NEXT
 		 * @param string[] $matched Matched builder keys.
+		 * @param array    $map     Builder map (resolved once per update).
 		 * @return void
 		 */
-		protected function purge_for_builders( array $matched ): void {
-			$map    = self::get_builder_map();
+		protected function purge_for_builders( array $matched, array $map ): void {
 			$labels = array();
 			foreach ( $matched as $key ) {
 				$labels[] = isset( $map[ $key ]['label'] ) && is_string( $map[ $key ]['label'] ) ? $map[ $key ]['label'] : (string) $key;
@@ -260,12 +267,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * Only the listed subdirectories are removed — never the uploads or
 		 * content base directories themselves. Every candidate is normalized
 		 * and verified to stay inside its base (containment prefix check plus
-		 * `..` rejection); missing directories are skipped.
+		 * dot-segment rejection); missing directories are skipped. Entries
+		 * flagged css_only (Bricks/WPBakery, whose directory layout is not
+		 * documented as fully regenerable) delete only top-level *.css files
+		 * so templates, assets, or custom files in the same root survive.
 		 *
 		 * @since NEXT
 		 * @param string[] $matched Matched builder keys.
 		 * @param array    $map     Builder map.
-		 * @return string[] Deleted directory paths (for tests and logging).
+		 * @return string[] Deleted paths (for tests and logging).
 		 */
 		protected function purge_builder_directories( array $matched, array $map ): array {
 			$deleted = array();
@@ -317,6 +327,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 						if ( method_exists( $fs, 'is_dir' ) && ! $fs->is_dir( $dir ) ) {
 							continue;
 						}
+						if ( ! empty( $entry['css_only'] ) ) {
+							$this->delete_css_files_only( $fs, $dir, $deleted );
+							continue;
+						}
 						if ( $fs->delete( $dir, true ) ) {
 							$deleted[] = $dir;
 						}
@@ -345,6 +359,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 			if ( '' === $sub || false !== strpos( $sub, '..' ) ) {
 				return '';
 			}
+			// Reject dot-only segments ('.', '...') so a crafted map entry
+			// can never resolve delete() against the base directory itself.
+			foreach ( explode( '/', $sub ) as $segment ) {
+				if ( '' === trim( (string) $segment, '.' ) ) {
+					return '';
+				}
+			}
 			$base = rtrim( wp_normalize_path( $base ), '/' );
 			if ( '' === $base ) {
 				return '';
@@ -354,6 +375,52 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 				return '';
 			}
 			return $dir;
+		}
+
+		/**
+		 * Delete only top-level *.css files inside a builder directory.
+		 *
+		 * Used for css_only map entries (Bricks/WPBakery): non-CSS files and
+		 * subdirectories are left untouched so anything non-regenerable in
+		 * the same root survives the purge.
+		 *
+		 * @since NEXT
+		 * @param object   $fs      WP_Filesystem instance.
+		 * @param string   $dir     Scoped directory (already containment-checked).
+		 * @param string[] $deleted Deleted paths accumulator.
+		 * @return void
+		 */
+		private function delete_css_files_only( $fs, string $dir, array &$deleted ): void {
+			try {
+				if ( ! method_exists( $fs, 'dirlist' ) || ! method_exists( $fs, 'delete' ) ) {
+					return;
+				}
+				$entries = $fs->dirlist( $dir );
+				if ( ! is_array( $entries ) ) {
+					return;
+				}
+				foreach ( $entries as $name => $entry ) {
+					if ( ! is_string( $name ) || '.css' !== strtolower( substr( $name, -4 ) ) ) {
+						continue;
+					}
+					if ( isset( $entry['type'] ) && 'f' !== $entry['type'] ) {
+						continue;
+					}
+					$file = wp_normalize_path( rtrim( $dir, '/' ) . '/' . $name );
+					if ( 0 !== strpos( $file, rtrim( $dir, '/' ) . '/' ) ) {
+						continue;
+					}
+					try {
+						if ( $fs->delete( $file ) ) {
+							$deleted[] = $file;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 
 		/**

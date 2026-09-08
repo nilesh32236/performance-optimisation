@@ -1672,7 +1672,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Whether the current request is a WooCommerce AJAX endpoint.
 		 *
-		 * Matches the pretty-permalink /wc-ajax/... path segment and the
+		 * Matches the pretty-permalink /wc-ajax/... path segment (decoded, case-insensitive) and the
 		 * ?wc-ajax=... query parameter (via $_GET and the raw query string).
 		 * A bare substring (e.g. /my-wc-ajax-guide/) intentionally does NOT
 		 * match — only the exact path segment or parameter name bypasses
@@ -1686,8 +1686,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return bool True for wc-ajax requests.
 		 */
 		private function is_wc_ajax_request(): bool {
-			$path = (string) wp_parse_url( $this->request_uri, PHP_URL_PATH );
-			if ( preg_match( '#(^|/)wc-ajax(/|$)#', $path ) ) {
+			$path = wp_normalize_path( trim( rawurldecode( (string) wp_parse_url( $this->request_uri, PHP_URL_PATH ) ), '/' ) );
+			if ( preg_match( '#(^|/)wc-ajax(/|$)#i', $path ) ) {
 				return true;
 			}
 			if ( isset( $_GET['wc-ajax'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.

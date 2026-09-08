@@ -331,8 +331,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				return;
 			}
 
-			delete_transient( Util::transient_key( Builder_Purge_Watcher::NOTICE_TRANSIENT ) );
-
 			$labels = array();
 			foreach ( $notice['builders'] as $label ) {
 				$label = sanitize_text_field( wp_unslash( (string) $label ) );
@@ -344,6 +342,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			if ( empty( $labels ) ) {
 				return;
 			}
+
+			// Consume only once a valid notice is confirmed for render, so a
+			// malformed transient is left for inspection instead of being
+			// silently swallowed.
+			delete_transient( Util::transient_key( Builder_Purge_Watcher::NOTICE_TRANSIENT ) );
 
 			echo '<div class="notice notice-success is-dismissible" role="status" aria-live="polite"><p><strong>' . esc_html__( 'Performance Optimisation', 'performance-optimisation' ) . '</strong> — ';
 			printf(

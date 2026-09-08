@@ -194,6 +194,19 @@ class WcAjaxGuardTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Encoded or upper-case wc-ajax path segments are still not cacheable
+	 * (the guard decodes and matches case-insensitively).
+	 */
+	public function test_wc_ajax_encoded_and_uppercase_path_is_not_cacheable(): void {
+		$this->stub_front_end_guests();
+
+		foreach ( array( '/wc%2Dajax/get_refreshed_fragments/', '/WC-AJAX/get_refreshed_fragments/', '/%77c-ajax/x/' ) as $uri ) {
+			$cache = $this->make_cache( array(), $uri );
+			$this->assertTrue( $this->invoke_private( $cache, 'is_not_cacheable' ), 'Expected not cacheable: ' . $uri );
+		}
+	}
+
+	/**
 	 * Ordinary pages stay cacheable (regression guard).
 	 */
 	public function test_normal_page_remains_cacheable(): void {
@@ -316,7 +329,10 @@ class WcAjaxGuardTest extends \PHPUnit\Framework\TestCase {
 		$this->assertTrue( Advanced_Cache_Handler::create() );
 		$this->assertStringContainsString( 'wc-ajax', $fs->put_contents );
 		$this->assertStringContainsString( "\$_GET['wc-ajax']", $fs->put_contents );
-		$this->assertStringContainsString( 'wc-ajax(/|$)', $fs->put_contents );
+		// Segment-anchored, delimiter-closed, case-insensitive guard (locks
+		// the template quoting — a broken delimiter would silently disable
+		// the bypass in the generated file).
+		$this->assertStringContainsString( '#(^|/)wc-ajax(/|$)#i', $fs->put_contents );
 	}
 }
 

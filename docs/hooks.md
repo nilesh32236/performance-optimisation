@@ -95,7 +95,7 @@ add_filter( 'wppo_should_cache_request', function( $should, $request_uri, $is_mo
 }, 10, 4 );
 ```
 
-**WooCommerce cookie behavior note (issue #907):** only cart-content cookies (`woocommerce_items_in_cart`, `woocommerce_cart_hash`) bypass the cache; currency-switcher cookies (`WOOCS`, `wppo` multicurrency-style, Aelia, …) intentionally do **not** vary or bypass — there is no per-currency segmentation today. Currency vary is a future M-sized item. WooCommerce AJAX endpoints (`?wc-ajax=…`, `/wc-ajax/…`) are always excluded from buffering and storage.
+**WooCommerce cookie behavior note (issue #907):** only cart-content cookies (`woocommerce_items_in_cart`, `woocommerce_cart_hash`) bypass the cache; currency-switcher cookies (`WOOCS`, `wppo` multicurrency-style, Aelia, …) intentionally do **not** vary or bypass — there is no per-currency segmentation today. Currency vary is a future M-sized item. WooCommerce AJAX endpoints (`?wc-ajax=…`, `/wc-ajax/…`) are always excluded from serving (the `advanced-cache.php` drop-in returns early pre-boot), buffering, and storage.
 
 ---
 
@@ -183,7 +183,7 @@ add_filter( 'wppo_object_cache_probe_interval', function() {
 Filters the builder-update purge map used by the watcher (`Builder_Purge_Watcher::get_builder_map()`, issue #907). Lets hosts and themes add builders or correct slugs and cache directories. @since NEXT.
 
 **Parameters:**
-- `$map` *(array)* — Builder map keyed by builder slug. Each entry: `label` (string), `plugins` (plugin-file slugs), `themes` (theme directory slugs), `upload_subdirs` (cache dirs relative to the uploads basedir), `content_subdirs` (cache dirs relative to `WP_CONTENT_DIR`), `clear_hooks` (builder-native actions fired best-effort when a listener exists).
+- `$map` *(array)* — Builder map keyed by builder slug. Each entry: `label` (string), `plugins` (plugin-file slugs), `themes` (theme directory slugs), `upload_subdirs` (cache dirs relative to the uploads basedir), `content_subdirs` (cache dirs relative to `WP_CONTENT_DIR`), `clear_hooks` (builder-native actions fired best-effort when a listener exists), `css_only` (bool — when true, only top-level `*.css` files are removed instead of the whole directory; used for Bricks/WPBakery whose roots may hold non-regenerable files).
 
 **Example:**
 ```php

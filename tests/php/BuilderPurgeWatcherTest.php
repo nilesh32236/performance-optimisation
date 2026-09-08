@@ -276,6 +276,17 @@ class BuilderPurgeWatcherTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * A non-array wppo_builder_purge_map filter result falls back to the
+	 * default map.
+	 */
+	public function test_builder_map_filter_non_array_falls_back(): void {
+		Functions\when( 'apply_filters' )->justReturn( 'not-an-array' );
+
+		$map = Builder_Purge_Watcher::get_builder_map();
+		$this->assertSame( array( 'elementor', 'divi', 'bricks', 'wpbakery' ), array_keys( $map ) );
+	}
+
+	/**
 	 * Builder-directory purge is scoped to the listed subdirectories —
 	 * never the bare uploads or content base directories.
 	 */
@@ -306,6 +317,66 @@ class BuilderPurgeWatcherTest extends \PHPUnit\Framework\TestCase {
 			$this->assertNotSame( $content_base, $dir, 'Must never delete the bare content directory.' );
 		}
 		$this->assertNotEmpty( $fs->deleted );
+	}
+
+	/**
+	 * Dot-only map segments never resolve to a deletable directory.
+	 */
+	public function test_scoped_dir_rejects_dot_segments(): void {
+		$watcher = new Builder_Purge_Watcher();
+		$method  = new \ReflectionMethod( $watcher, 'scoped_cache_dir' );
+		$method->setAccessible( true );
+
+		$base = '/tmp/wordpress/wp-content/uploads';
+		$this->assertSame( '', $method->invoke( $watcher, $base, '.' ) );
+		$this->assertSame( '', $method->invoke( $watcher, $base, '...' ) );
+		$this->assertSame( '', $method->invoke( $watcher, $base, '../x' ) );
+		$this->assertSame( '', $method->invoke( $watcher, $base, '' ) );
+		$this->assertSame( $base . '/elementor/css', $method->invoke( $watcher, $base, 'elementor/css' ) );
+	}
+
+	/**
+	 * Directory purge is a no-op when the filesystem is unavailable.
+	 */
+	public function test_purge_directories_noop_without_filesystem(): void {
+		Functions\when( 'WP_Filesystem' )->justReturn( false );
+		unset( $GLOBALS['wp_filesystem'] );
+
+		$watcher = new Builder_Purge_Watcher();
+		$method  = new \ReflectionMethod( $watcher, 'purge_builder_directories' );
+		$method->setAccessible( true );
+
+		$this->assertSame( array(), $method->invoke( $watcher, array( 'elementor' ), Builder_Purge_Watcher::get_builder_map() ) );
+	}
+
+	/**
+	 * Entries flagged css_only (Bricks/WPBakery) delete only top-level
+	 * *.css files, leaving other files and subdirectories untouched.
+	 */
+	public function test_css_only_entries_delete_only_css_files(): void {
+		Functions\when( 'WP_Filesystem' )->justReturn( true );
+		$fs                       = new WPPO_Builder_FS_Mock();
+		$fs->dirlist              = array(
+			'style.css' => array( 'type' => 'f' ),
+			'photo.jpg' => array( 'type' => 'f' ),
+			'nested'    => array( 'type' => 'd' ),
+		);
+		$GLOBALS['wp_filesystem'] = $fs;
+		Functions\when( 'wp_upload_dir' )->justReturn(
+			array(
+				'basedir' => '/tmp/wordpress/wp-content/uploads',
+				'baseurl' => 'http://example.com/wp-content/uploads',
+			)
+		);
+
+		$watcher = new Builder_Purge_Watcher();
+		$method  = new \ReflectionMethod( $watcher, 'purge_builder_directories' );
+		$method->setAccessible( true );
+
+		$deleted = $method->invoke( $watcher, array( 'bricks' ), Builder_Purge_Watcher::get_builder_map() );
+
+		$this->assertSame( array( '/tmp/wordpress/wp-content/uploads/bricks/style.css' ), $deleted );
+		$this->assertSame( $deleted, $fs->deleted );
 	}
 
 	/**
@@ -408,9 +479,11 @@ class WPPO_Test_Builder_Watcher extends Builder_Purge_Watcher {
 	 * Record the purge routing.
 	 *
 	 * @param string[] $matched Matched builder keys.
+	 * @param array    $map     Builder map (unused).
 	 * @return void
 	 */
-	protected function purge_for_builders( array $matched ): void {
+	protected function purge_for_builders( array $matched, array $map ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- Signature must match the parent.
+		unset( $map );
 		$this->purged = $matched;
 	}
 }
@@ -477,6 +550,23 @@ class WPPO_Builder_FS_Mock {
 	 */
 	public function is_dir( $path ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 		return true;
+	}
+
+	/**
+	 * Directory listing returned by dirlist().
+	 *
+	 * @var array
+	 */
+	public $dirlist = array();
+
+	/**
+	 * Simulate a directory listing.
+	 *
+	 * @param string $path Path (unused).
+	 * @return array
+	 */
+	public function dirlist( $path ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+		return $this->dirlist;
 	}
 
 	/**
