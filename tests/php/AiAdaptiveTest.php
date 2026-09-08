@@ -553,6 +553,63 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test suggestions omit commerce excludes already present in settings.
+	 *
+	 * The suggestion must resolve once the user applies it instead of
+	 * reappearing on every load.
+	 *
+	 * @return void
+	 */
+	public function test_get_suggestions_omits_excludes_when_already_configured(): void {
+		$this->install_stubs();
+		$this->options[ AI_Adaptive::OPTION ] = array(
+			'prefetch_urls' => array( 'http://example.com/a/' ),
+			'eagerness'     => 'eager',
+		);
+		$this->options['wppo_settings']       = array(
+			'preload_settings' => array(
+				'speculationExcludeUrls' => "/cart/*\n/checkout/*\n/my-account/*",
+			),
+		);
+		Util::clear_settings_cache();
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( true );
+
+		$suggestions = AI_Adaptive::get_suggestions();
+
+		// Eagerness suggestion is still emitted (capped), excludes resolve.
+		$eagerness_suggestion = $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' );
+		$this->assertNotNull( $eagerness_suggestion );
+		$this->assertSame( 'moderate', $eagerness_suggestion['value'] );
+		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_speculation_excludes' ) );
+	}
+
+	/**
+	 * Test non-string (malformed) eagerness coerces to conservative without warnings.
+	 *
+	 * @return void
+	 */
+	public function test_non_string_eagerness_coerces_to_conservative(): void {
+		$this->install_stubs();
+		$this->options[ AI_Adaptive::OPTION ] = array(
+			'prefetch_urls' => array( 'http://example.com/a/' ),
+			'eagerness'     => array( 'eager' ),
+		);
+		$this->options['wppo_settings']       = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		Util::clear_settings_cache();
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$suggestions = AI_Adaptive::get_suggestions();
+		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' ) );
+
+		$rules = AI_Adaptive::filter_speculation_rules( array() );
+		$this->assertCount( 1, $rules );
+		$this->assertSame( 'conservative', $rules[0]['eagerness'] );
+	}
+
+	/**
 	 * Test suggestions omit commerce excludes without a commerce context.
 	 *
 	 * @return void

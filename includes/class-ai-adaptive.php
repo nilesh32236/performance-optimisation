@@ -297,7 +297,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @since NEXT
 		 */
 		private static function normalize_eagerness( $eagerness ): string {
-			$eagerness = (string) $eagerness;
+			// Non-stringable input (e.g. an array from a malformed AI payload)
+			// must not reach the (string) cast (PHP warning); coerce to '' so
+			// the allowlist below falls back to conservative.
+			if ( ! is_string( $eagerness ) ) {
+				$eagerness = is_scalar( $eagerness ) ? (string) $eagerness : '';
+			}
 			if ( ! in_array( $eagerness, array( 'conservative', 'moderate', 'eager' ), true ) ) {
 				$eagerness = 'conservative';
 			}
@@ -677,20 +682,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 
 			// Guardrail (#908): in commerce/auth contexts suggest excluding
 			// transactional/authenticated URLs from speculation. Suggestions only —
-			// never auto-applied (see method docblock).
+			// never auto-applied (see method docblock). Only paths missing from the
+			// stored speculationExcludeUrls are suggested, so the suggestion
+			// resolves once the user applies it.
 			if ( self::is_commerce_or_auth_context() ) {
 				$commerce_paths = self::get_commerce_exclude_paths();
-				if ( ! empty( $commerce_paths ) ) {
+				$settings       = Util::get_settings();
+				$existing       = isset( $settings['preload_settings']['speculationExcludeUrls'] ) ? (string) $settings['preload_settings']['speculationExcludeUrls'] : '';
+				$missing        = array();
+				foreach ( $commerce_paths as $commerce_path ) {
+					if ( false === strpos( $existing, rtrim( $commerce_path, '*' ) ) ) {
+						$missing[] = $commerce_path;
+					}
+				}
+				if ( ! empty( $missing ) ) {
 					$suggestions[] = array(
 						'metric'      => 'ai_speculation_excludes',
-						'value'       => implode( ', ', $commerce_paths ),
+						'value'       => implode( ', ', $missing ),
 						'unit'        => 'list',
 						'status'      => 'needs_improvement',
 						'description' => __( 'AI: Exclude commerce/auth URLs from speculation', 'performance-optimisation' ),
 						'fix_action'  => 'open_preload_tab',
 						'ai_payload'  => array(
 							'tab'      => 'preload_settings',
-							'settings' => array( 'speculationExcludeUrls' => implode( "\n", $commerce_paths ) ),
+							'settings' => array( 'speculationExcludeUrls' => implode( "\n", $missing ) ),
 						),
 					);
 				}
