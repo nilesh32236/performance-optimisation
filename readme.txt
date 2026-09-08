@@ -46,6 +46,30 @@ Built-in Redis object cache with support for standalone, Sentinel, and Cluster t
 **📊 Performance Monitor**
 Built-in performance scanner that measures real load times, TTFB, DNS resolution, and Core Web Vitals — right from your WordPress dashboard.
 
+**📡 Real-User Monitoring (RUM)**
+Collects anonymised field Web Vitals (LCP, INP, CLS) from real visitors and charts trends in the dashboard, so you can see what each optimisation actually changed.
+
+**🤖 AI Adaptive Suggestions**
+Heuristic auto-tune that reads RUM trends and audit results to suggest safe next steps — read-only recommendations, never silent changes.
+
+**🔀 LiteSpeed Coexistence**
+Auto-detects LiteSpeed/OLS servers and LSCache: pick Auto, WPPO, LiteSpeed, or Standalone mode, with purge sync and header-protocol support so the two caches never fight.
+
+**🧩 Edge Cache & CDN Purge**
+Purge fan-out for Cloudflare, Bunny, and Varnish edge caches plus per-mapping CDN URL rewriting with attribute controls.
+
+**🕷️ Cache Crawler**
+Background crawler (WP-Cron/Action Scheduler) that warms the static cache across a variant matrix with concurrency and load limits.
+
+**⏪ bfcache Support**
+Serves revalidatable cache headers for logged-in users so the browser back/forward cache keeps working instead of forcing full reloads.
+
+**📄 llms.txt**
+Auto-generated `/llms.txt` and `/llms-full.txt` virtual files (refreshed daily) so AI crawlers and assistants can understand your site.
+
+**🔌 ESI & Abilities API**
+LiteSpeed ESI bridge for dynamic fragments (LSWS Enterprise; AJAX fallback on OLS) and a WordPress Abilities/MCP surface (abilities like `performance-optimisation/cache-management`) for programmatic access.
+
 **🛠️ Developer Friendly**
 System Info dashboard, Google PageSpeed Insights integration, per-page asset manager, and import/export settings.
 

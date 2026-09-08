@@ -180,7 +180,7 @@ add_filter( 'wppo_exclude_defer_js', function( $exclusions ) {
 ---
 
 ### `wppo_cve_guard_handles`
-Filter-only (S scope) list of handle strings to auto-exclude from optimization when a CVE is known. Default empty (no auto-exclude). Merged with `array_unique` into `minify_js`/`minify_css` (`exclude_js`/`exclude_css`) and `exclude_defer_js`/`exclude_delay_js` inside `PerformanceOptimisation\Inc\Main::setup_hooks()`; respects the existing `litespeed_can_optm` gate; no `wp_options` persistence and no cron. @since NEXT.
+Filter-only (S scope) list of handle strings to auto-exclude from optimization when a CVE is known. Default empty (no auto-exclude). Merged with `array_unique` into `minify_js`/`minify_css` (`exclude_js`/`exclude_css`) and `exclude_defer_js`/`exclude_delay_js` inside `PerformanceOptimise\Inc\Main::setup_hooks()`; respects the existing `litespeed_can_optm` gate; no `wp_options` persistence and no cron. @since NEXT.
 
 **Parameters:**
 - `$handles` *(string[])* — Array of handle strings to exclude (e.g. `['vulnerable-slider']`).
@@ -1235,3 +1235,15 @@ Filters the final click-to-play placeholder markup. @since NEXT.
 - `$video_id` *(string)* — Video ID.
 - `$video_type` *(string)* — `youtube`|`vimeo`.
 - `$thumbnail_url` *(string)* — Poster image URL.
+
+---
+
+## 🔧 CLI-Only Settings Keys
+
+These `wppo_settings` keys have no SPA toggle — they are read by background
+jobs / WP-CLI and edited via `wp wppo settings` (or `import_settings`).
+
+| Key | Type / Default | Consumed by |
+|-----|----------------|-------------|
+| `image_optimisation.excludeWebPImages` | string (newline-separated URLs/handles), default `''` | `Img_Converter::__construct()` (`includes/class-img-converter.php`) — images matching these URLs/handles are skipped during WebP/AVIF conversion. |
+| `image_optimisation.batch` | int, default `50` | `Cron` image-conversion worker (`includes/class-cron.php`) and `wp wppo image convert` (`includes/class-wppo-cli-command.php`) — number of images processed per batch. |

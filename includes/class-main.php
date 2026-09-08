@@ -1768,8 +1768,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'nonce'                                => wp_create_nonce( 'wp_rest' ),
 					'nonce_refresh'                        => wp_create_nonce( 'wppo_nonce_refresh' ),
 					'version'                              => WPPO_VERSION,
-					'wpVersion'                            => get_bloginfo( 'version' ),
-					'isBlockTheme'                         => function_exists( 'wp_is_block_theme' ) && wp_is_block_theme(),
 					'settings'                             => $safe_options,
 					'show_welcome'                         => ! (bool) get_user_meta( get_current_user_id(), 'wppo_welcome_dismissed', true ),
 					'image_info'                           => $this->sanitize_image_info_for_client( get_option( 'wppo_img_info', array() ) ),
@@ -1792,7 +1790,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'performance_audit'                    => array(
 						'homeUrl'                   => Util::cached_home_url( '/' ),
 						'pagespeedApiKeyConfigured' => ! empty( $this->options['performance_audit']['pagespeed_api_key'] ),
-						'highValueUrls'             => $this->options['performance_audit']['high_value_urls'] ?? array(), // Phase 3 will populate this.
+						'highValueUrls'             => $this->options['performance_audit']['high_value_urls'] ?? array(), // High-value URLs from settings (edited in Tools tab; consumed by preload/PageSpeed rescan cron + llms.txt proxy).
 						'autoFixEnabled'            => (bool) ( $this->options['performance_audit']['auto_fix_enabled'] ?? false ),
 						'autoRescan'                => $this->options['performance_audit']['auto_rescan'] ?? '',
 					),
