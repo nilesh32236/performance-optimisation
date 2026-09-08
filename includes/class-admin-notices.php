@@ -81,6 +81,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				update_user_meta( get_current_user_id(), 'wppo_litespeed_notice_dismissed', 1 );
 			}
 
+			if ( 'object_cache_circuit' === $key ) {
+				// Dismiss only this trip: persist its tripped_at timestamp so
+				// the next trip (newer timestamp) automatically re-arms the notice.
+				$tripped_at = 0;
+				if ( class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
+					try {
+						$circuit    = ( new Object_Cache() )->get_circuit_state();
+						$tripped_at = isset( $circuit['tripped_at'] ) ? (int) $circuit['tripped_at'] : 0;
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				update_option( Object_Cache::CIRCUIT_DISMISSED_OPTION, $tripped_at > 0 ? $tripped_at : time(), false );
+				delete_transient( Util::transient_key( Object_Cache::CIRCUIT_NOTICE_TRANSIENT ) );
+			}
+
 			wp_safe_redirect( remove_query_arg( array( 'wppo_dismiss', '_wpnonce' ) ) );
 			exit;
 		}
@@ -98,6 +114,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			$this->maybe_activation_notices();
 			$this->maybe_competing_plugins_notice();
 			$this->maybe_litespeed_coexistence_notice();
+			$this->maybe_object_cache_circuit_notice();
 			$this->maybe_review_notice();
 		}
 
@@ -154,6 +171,64 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				echo '<li>' . wp_kses_post( $html ) . '</li>';
 			}
 			echo '</ul><p><a href="' . esc_url( $dismiss ) . '">' . esc_html__( 'Dismiss this notice', 'performance-optimisation' ) . '</a></p></div>';
+		}
+
+		/**
+		 * Object-cache circuit-breaker warning — the drop-in auto-disabled.
+		 *
+		 * The breaker never disables silently: when the circuit is open (the
+		 * drop-in parked itself after repeated Redis failures) this renders
+		 * a notice-error with the trip reason, the trip time, a link to the
+		 * Object Cache screen, and a dismiss link. Dismissal persists only
+		 * for the current trip (tripped_at comparison) so the next trip
+		 * automatically re-arms the notice.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private function maybe_object_cache_circuit_notice(): void {
+			if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
+				return;
+			}
+
+			try {
+				$circuit = ( new Object_Cache() )->get_circuit_state();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return;
+			}
+
+			if ( empty( $circuit['open'] ) ) {
+				return;
+			}
+
+			$tripped_at = isset( $circuit['tripped_at'] ) ? (int) $circuit['tripped_at'] : 0;
+			$dismissed  = (int) get_option( Object_Cache::CIRCUIT_DISMISSED_OPTION, 0 );
+			if ( $tripped_at > 0 && $dismissed === $tripped_at ) {
+				return;
+			}
+
+			$dismiss = wp_nonce_url(
+				add_query_arg( 'wppo_dismiss', 'object_cache_circuit' ),
+				'wppo_dismiss_notice',
+				'_wpnonce'
+			);
+
+			$reason = isset( $circuit['reason'] ) && '' !== $circuit['reason']
+				? $circuit['reason']
+				: __( 'Repeated Redis connection failures.', 'performance-optimisation' );
+
+			$when = $tripped_at > 0
+				/* translators: %s: date/time the circuit breaker tripped */
+				? sprintf( __( 'Tripped on %s.', 'performance-optimisation' ), date_i18n( get_option( 'date_format', 'F j, Y' ) . ' ' . get_option( 'time_format', 'g:i a' ), $tripped_at ) )
+				: '';
+
+			echo '<div class="notice notice-error" role="alert" aria-live="assertive"><p><strong>' . esc_html__( 'Performance Optimisation — Object cache auto-disabled', 'performance-optimisation' ) . '</strong> — ';
+			echo esc_html( $reason ) . ' ' . esc_html( $when ) . ' ';
+			echo esc_html__( 'Redis will be re-checked automatically, or re-enable it manually once Redis recovers.', 'performance-optimisation' );
+			echo ' <a href="' . esc_url( admin_url( 'admin.php?page=performance-optimisation' ) ) . '">' . esc_html__( 'Open settings', 'performance-optimisation' ) . '</a>';
+			echo ' &middot; <a href="' . esc_url( $dismiss ) . '">' . esc_html__( 'Dismiss', 'performance-optimisation' ) . '</a>';
+			echo '</p></div>';
 		}
 
 		/**

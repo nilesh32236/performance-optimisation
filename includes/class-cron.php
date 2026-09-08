@@ -84,6 +84,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			'wppo_litespeed_crawler_batch', // Dual-scheduled: WP-Cron here + AS in the crawler bridge.
 			'wppo_crawler_warm',         // Dual-scheduled: WP-Cron here + AS in the crawler bridge.
 			'wppo_generate_ccss',        // Dual-scheduled: AS-first + WP-Cron fallback single event.
+			'wppo_object_cache_probe',   // Recurring object-cache recovery probe (only while the circuit is open).
 		);
 
 		/**
@@ -132,6 +133,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			add_action( 'wppo_used_css_cron', array( $this, 'used_css_cron' ) );
 			add_action( 'wppo_ccss_regeneration', array( $this, 'ccss_regeneration_cron' ) );
 			add_action( 'wppo_rum_flush', array( 'PerformanceOptimise\Inc\RUM', 'flush_queue' ) );
+			add_action( 'wppo_object_cache_probe', array( $this, 'object_cache_probe_cron' ) );
 		}
 
 		/**
@@ -160,6 +162,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			$schedules['every_5_hours'] = array(
 				'interval' => 5 * 60 * 60,
 				'display'  => __( 'Every 5 Hours', 'performance-optimisation' ),
+			);
+
+			/**
+			 * Filter the object-cache recovery-probe interval in seconds.
+			 *
+			 * @since NEXT
+			 * @param int $interval Seconds between recovery probes while the circuit is open. Default HOUR_IN_SECONDS, minimum 300.
+			 */
+			$probe_interval                       = max( 300, (int) apply_filters( 'wppo_object_cache_probe_interval', HOUR_IN_SECONDS ) );
+			$schedules['wppo_object_cache_probe'] = array(
+				'interval' => $probe_interval,
+				'display'  => __( 'Object Cache Recovery Probe', 'performance-optimisation' ),
 			);
 			return $schedules;
 		}
@@ -215,6 +229,72 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 
 			if ( ! wp_next_scheduled( 'wppo_ccss_regeneration' ) ) {
 				wp_schedule_event( time(), 'daily', 'wppo_ccss_regeneration' );
+			}
+
+			// Object-cache recovery probe: scheduled only while the circuit
+			// is open (drop-in parked after repeated Redis failures) and
+			// cleared as soon as it closes, so healthy sites carry no extra
+			// cron event.
+			if ( $this->is_object_cache_circuit_open() ) {
+				if ( ! wp_next_scheduled( 'wppo_object_cache_probe' ) ) {
+					wp_schedule_event( time(), 'wppo_object_cache_probe', 'wppo_object_cache_probe' );
+				}
+			} else {
+				wp_clear_scheduled_hook( 'wppo_object_cache_probe' );
+			}
+		}
+
+		/**
+		 * Whether the object-cache circuit breaker is currently open.
+		 *
+		 * Small wrapper so schedule_cron_jobs() (which runs on every init)
+		 * degrades gracefully when the Object_Cache class is unavailable.
+		 *
+		 * @since NEXT
+		 * @return bool True when the circuit is open.
+		 */
+		private function is_object_cache_circuit_open(): bool {
+			if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
+				return false;
+			}
+
+			try {
+				$manager = new Object_Cache();
+				$state   = $manager->get_circuit_state();
+				return ! empty( $state['open'] );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Callback for the object-cache recovery probe cron.
+		 *
+		 * Runs only while the circuit is open. Guarded by a 5-minute
+		 * transient lock (blog-prefixed via Util::transient_key(), matching
+		 * the existing lock pattern) so overlapping workers cannot ping in
+		 * parallel. On success Object_Cache::probe_recovery() restores the
+		 * drop-in and clears this schedule.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public function object_cache_probe_cron(): void {
+			if ( get_transient( Util::transient_key( 'wppo_object_cache_probe_lock' ) ) ) {
+				return;
+			}
+			set_transient( Util::transient_key( 'wppo_object_cache_probe_lock' ), 1, 5 * MINUTE_IN_SECONDS );
+
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
+					return;
+				}
+
+				$manager = new Object_Cache();
+				$manager->probe_recovery();
+			} finally {
+				delete_transient( Util::transient_key( 'wppo_object_cache_probe_lock' ) );
 			}
 		}
 
@@ -561,6 +641,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			delete_option( 'wppo_preload_cron_migrated' );
 			delete_transient( Util::transient_key( 'wppo_preload_cron_lock' ) );
 			delete_transient( Util::transient_key( 'wppo_used_css_lock' ) );
+			delete_transient( Util::transient_key( 'wppo_object_cache_probe_lock' ) );
 		}
 
 		/**

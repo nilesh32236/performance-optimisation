@@ -1121,6 +1121,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				return $this->send_response( true, true, 200, __( 'Object Cache disabled.', 'performance-optimisation' ) );
 			}
 
+			if ( 'recover' === $action || 're-enable' === $action ) {
+				// Manual circuit-breaker recovery: reuse the stored Redis
+				// settings as defaults (request params only override keys
+				// they explicitly carry) and restore via the enable() path,
+				// which pings first and clears all circuit state on success.
+				$stored = $manager->get_redis_config();
+				$config = $this->build_redis_config( $params, $stored );
+				$result = $manager->enable( $config );
+
+				if ( is_wp_error( $result ) ) {
+					Log::add( __( 'Object Cache circuit recovery failed — Redis still unreachable.', 'performance-optimisation' ) );
+					return $this->send_response( null, false, 400, __( 'Redis is still unreachable. The circuit breaker stays open.', 'performance-optimisation' ) );
+				}
+
+				$manager->clear_circuit_state();
+
+				if ( function_exists( 'wp_clear_scheduled_hook' ) ) {
+					wp_clear_scheduled_hook( 'wppo_object_cache_probe' );
+				}
+
+				Log::add( __( 'Object Cache circuit breaker recovered — drop-in re-enabled manually.', 'performance-optimisation' ) );
+				return $this->send_response( true, true, 200, __( 'Object Cache recovered successfully.', 'performance-optimisation' ) );
+			}
+
 			if ( 'flush' === $action ) {
 				$result = $manager->flush();
 				if ( $result ) {
@@ -1144,11 +1168,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * the generated drop-in config file and from stored settings).
 		 *
 		 * @param array $params Request parameters.
+		 * @param array $defaults Optional stored config (e.g. from Object_Cache::get_redis_config())
+		 *                        filling keys the request does not explicitly carry. Defaults to array()
+		 *                        (historic behaviour: hardcoded host/port/mode fallbacks).
 		 * @since 1.4.0
 		 * @since NEXT Request-supplied passwords are ignored when WPPO_REDIS_PASSWORD is defined, unless the `wppo_redis_allow_request_password` filter returns true.
+		 * @since NEXT Added the $defaults parameter for circuit-breaker recovery.
 		 * @return array Sanitized Redis config.
 		 */
-		private function build_redis_config( $params ) {
+		private function build_redis_config( $params, $defaults = array() ) {
 			$allowed_keys = array( 'mode', 'host', 'port', 'password', 'database', 'nodes', 'master_name', 'use_tls', 'persistent', 'compression' );
 			$config       = array();
 
@@ -1187,6 +1215,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					case 'nodes':
 						$config[ $key ] = $this->sanitize_nodes( $value );
 						break;
+				}
+			}
+
+			// Stored-config fallback for keys the request omits (used by the
+			// circuit-breaker recover action, which typically sends only the
+			// mode). Explicit request keys always win.
+			if ( is_array( $defaults ) && ! empty( $defaults ) ) {
+				foreach ( $allowed_keys as $key ) {
+					if ( ! array_key_exists( $key, $config ) && array_key_exists( $key, $defaults ) ) {
+						$config[ $key ] = $defaults[ $key ];
+					}
 				}
 			}
 

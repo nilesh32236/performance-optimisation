@@ -109,6 +109,11 @@ const ObjectCache = ( { options = {} } ) => {
 		redis_missing: false,
 		foreign_dropin: false,
 		redis_reachable: false,
+		circuit_open: false,
+		circuit_tripped_at: 0,
+		circuit_reason: '',
+		circuit_error_code: '',
+		failure_count: 0,
 		statusLoaded: false,
 		supported_compressors: null,
 	} );
@@ -240,7 +245,9 @@ const ObjectCache = ( { options = {} } ) => {
 				setBaseline( ( prev ) => ( { ...prev, password: '' } ) );
 			}
 
-			if ( [ 'enable', 'disable', 'ping' ].includes( action ) ) {
+			if (
+				[ 'enable', 'disable', 'ping', 'recover' ].includes( action )
+			) {
 				await fetchStatus();
 			}
 			notify( {
@@ -298,6 +305,24 @@ const ObjectCache = ( { options = {} } ) => {
 			level: 'warning',
 			text: `○ ${ __( 'Unreachable', 'performance-optimisation' ) }`,
 		};
+	} )();
+
+	const circuitDetail = ( () => {
+		const parts = [];
+		if ( cacheStatus.circuit_reason ) {
+			parts.push( cacheStatus.circuit_reason );
+		} else if ( cacheStatus.circuit_error_code ) {
+			parts.push( cacheStatus.circuit_error_code );
+		}
+		if ( cacheStatus.failure_count > 0 ) {
+			parts.push(
+				`(${ cacheStatus.failure_count } ${ __(
+					'failures',
+					'performance-optimisation'
+				) })`
+			);
+		}
+		return parts.join( ' ' );
 	} )();
 
 	return (
@@ -399,6 +424,43 @@ const ObjectCache = ( { options = {} } ) => {
 									'Another object cache plugin is currently active. Please disable it to avoid site crashes.',
 									'performance-optimisation'
 								) }
+							</p>
+						</div>
+					</div>
+				) }
+				{ cacheStatus.circuit_open && (
+					<div
+						className="wppo-notice wppo-notice--warning"
+						role="alert"
+						aria-live="assertive"
+					>
+						<FontAwesomeIcon icon={ faExclamationCircle } />
+						<div>
+							<strong>
+								{ __(
+									'Object Cache Auto-Disabled',
+									'performance-optimisation'
+								) }
+							</strong>
+							<p>
+								{ __(
+									'The circuit breaker disabled the object cache after repeated Redis failures.',
+									'performance-optimisation'
+								) }{ ' ' }
+								{ circuitDetail }
+							</p>
+							<p>
+								<LoadingSubmitButton
+									type="button"
+									className="wppo-button wppo-button--primary"
+									onClick={ () => handleAction( 'recover' ) }
+									disabled={ isActionLoading }
+									isLoading={ activeAction === 'recover' }
+									label={ __(
+										'Re-enable Object Cache',
+										'performance-optimisation'
+									) }
+								/>
 							</p>
 						</div>
 					</div>
