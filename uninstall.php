@@ -86,6 +86,15 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 		delete_post_meta_by_key( '_wppo_disabled_scripts' );
 		delete_post_meta_by_key( '_wppo_disabled_styles' );
 
+		// Per-strategy LCP image URL post meta (`_wppo_lcp_image_url_{strategy}`,
+		// written by Pagespeed::store_lcp_image_url(), read by the LCP
+		// prioritizer) has a dynamic strategy suffix, so remove it with a
+		// postmeta LIKE sweep — a per-key delete would miss strategies
+		// (PR #912 review follow-up). Runs inside the per-site cleanup, so
+		// $wpdb->postmeta already points at the current blog's table.
+		$like_lcp_meta = $wpdb->esc_like( '_wppo_lcp_image_url_' ) . '%';
+		$wpdb->query( "DELETE FROM {$wpdb->postmeta} WHERE meta_key LIKE '{$like_lcp_meta}'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+
 		// Remove cache directory.
 		// NOTE: This path must stay in sync with Cache::CACHE_DIR constant in includes/class-cache.php.
 		$cache_dir = WP_CONTENT_DIR . '/cache/wppo/';

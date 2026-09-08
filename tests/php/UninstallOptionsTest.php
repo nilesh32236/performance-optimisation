@@ -135,6 +135,18 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 		$expected = Util::UNINSTALL_OPTIONS;
 		sort( $expected );
 
+		// Count checks first: a duplicated entry inside uninstall.php would
+		// still pass the unique-comparison below (PR #912 review follow-up).
+		$this->assertSame(
+			count( $expected ),
+			count( $found ),
+			'uninstall.php option list length drifted from Util::UNINSTALL_OPTIONS'
+		);
+		$this->assertSame(
+			count( $found ),
+			count( array_unique( $found ) ),
+			'uninstall.php option list contains duplicate entries'
+		);
 		$this->assertSame(
 			array_values( $expected ),
 			array_values( array_unique( $found ) ),
