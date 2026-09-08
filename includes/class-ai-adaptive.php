@@ -83,6 +83,268 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		}
 
 		/**
+		 * Whether the current request runs in a commerce or authenticated context.
+		 *
+		 * Conservative gate for AI speculation guardrails (issue #908): when true,
+		 * AI-learned speculation eagerness is capped at `moderate` and commerce
+		 * paths are suggested as speculation excludes. Mirrors the WooCommerce /
+		 * auth detection precedents in Cache cart/checkout/account guards
+		 * (class-cache.php) and LiteSpeed_ESI::should_punch_hole().
+		 *
+		 * Manual user settings are never touched — the AI only tightens, never
+		 * loosens past moderate.
+		 *
+		 * Tradeoff: a mere active WooCommerce install caps eagerness site-wide
+		 * (even on blog/product pages), because eagerness is a global setting
+		 * and speculation rules apply globally. Page-level safety additionally
+		 * comes from the always-on WooCommerce cart/checkout/account exclude
+		 * paths in Main::add_speculation_rules().
+		 *
+		 * Limitation: the logged-in probe only fires in frontend contexts, so
+		 * learn()/suggestions served from wp-admin on an auth-only (non-Woo)
+		 * site cannot see the visitor's login state and may keep `eager`.
+		 * Per-request protection still applies via filter_speculation_rules()
+		 * for logged-in frontend visitors.
+		 *
+		 * @return bool True when a commerce/auth context is detected.
+		 * @since NEXT
+		 */
+		public static function is_commerce_or_auth_context(): bool {
+			$is_commerce = false;
+
+			// WooCommerce active (plugin present, even outside shop pages — conservative cap).
+			try {
+				if ( class_exists( 'WooCommerce' ) || function_exists( 'WC' ) || function_exists( 'wc_get_checkout_url' ) ) {
+					$is_commerce = true;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
+			if ( ! $is_commerce && function_exists( 'is_cart' ) ) {
+				try {
+					$is_commerce = (bool) is_cart();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			if ( ! $is_commerce && function_exists( 'is_checkout' ) ) {
+				try {
+					$is_commerce = (bool) is_checkout();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			if ( ! $is_commerce && function_exists( 'is_account_page' ) ) {
+				try {
+					$is_commerce = (bool) is_account_page();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			if ( ! $is_commerce && function_exists( 'is_user_logged_in' ) ) {
+				try {
+					// Frontend visitors only: learn()/get_suggestions() execute in
+					// wp-admin/REST/cron/CLI where a logged-in admin is always
+					// present, which would otherwise cap every site site-wide.
+					if ( self::is_frontend_context() ) {
+						$is_commerce = (bool) is_user_logged_in();
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			// Active cart session on any page (read-only heuristic, no nonce needed).
+			if ( ! $is_commerce && ( ! empty( $_COOKIE['woocommerce_items_in_cart'] ) || ! empty( $_COOKIE['woocommerce_cart_hash'] ) ) ) {
+				$is_commerce = true;
+			}
+
+			/**
+			 * Filters whether the current request is a commerce/auth context for AI speculation guardrails.
+			 *
+			 * Allows hosts/tests to force the context deterministically.
+			 *
+			 * @since NEXT
+			 * @param bool $is_commerce Whether a commerce/auth context was detected.
+			 */
+			return (bool) apply_filters( 'wppo_ai_adaptive_commerce_context', $is_commerce );
+		}
+
+		/**
+		 * Commerce/auth URL exclusion patterns for speculation suggestions.
+		 *
+		 * Derives cart/checkout/myaccount paths via wc_get_checkout_url() /
+		 * wc_get_cart_url() / wc_get_page_permalink('myaccount') (exact precedent
+		 * Main::add_speculation_rules()), falling back to /cart/*, /checkout/*,
+		 * /my-account/* patterns when WooCommerce helpers are absent but a
+		 * commerce/auth context (cookie/logged-in) was detected.
+		 *
+		 * Keep in sync with Main::add_speculation_rules() — both derive the same
+		 * WooCommerce cart/checkout/account paths.
+		 *
+		 * @see Main::add_speculation_rules()
+		 *
+		 * @return string[]
+		 * @since NEXT
+		 */
+		public static function get_commerce_exclude_paths(): array {
+			$paths = array();
+
+			// URL helpers are WP core (always present in normal runtime);
+			// guarded for minimal installs, mirroring the other probes.
+			$has_url_helpers = function_exists( 'wp_parse_url' ) && function_exists( 'trailingslashit' );
+
+			// Canonical order (cart, checkout, my-account) matches the fallback
+			// below so output order never depends on probe order.
+			if ( $has_url_helpers && function_exists( 'wc_get_cart_url' ) ) {
+				try {
+					$cart_url = wc_get_cart_url();
+					if ( $cart_url ) {
+						$path = wp_parse_url( $cart_url, PHP_URL_PATH );
+						if ( $path && '/' !== $path ) {
+							$paths[] = trailingslashit( $path ) . '*';
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			if ( $has_url_helpers && function_exists( 'wc_get_checkout_url' ) ) {
+				try {
+					$checkout_url = wc_get_checkout_url();
+					if ( $checkout_url ) {
+						$path = wp_parse_url( $checkout_url, PHP_URL_PATH );
+						if ( $path && '/' !== $path ) {
+							$paths[] = trailingslashit( $path ) . '*';
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			if ( $has_url_helpers && function_exists( 'wc_get_page_permalink' ) ) {
+				try {
+					$myaccount_url = wc_get_page_permalink( 'myaccount' );
+					if ( $myaccount_url ) {
+						$path = wp_parse_url( $myaccount_url, PHP_URL_PATH );
+						if ( $path && '/' !== $path ) {
+							$paths[] = trailingslashit( $path ) . '*';
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			if ( empty( $paths ) ) {
+				$paths = array( '/cart/*', '/checkout/*', '/my-account/*' );
+			}
+
+			return array_values( array_unique( $paths ) );
+		}
+
+		/**
+		 * Whether the current request is a frontend visitor context.
+		 *
+		 * Used to scope the logged-in probe in is_commerce_or_auth_context():
+		 * admin dashboard, REST, AJAX, cron, and CLI requests never represent a
+		 * frontend visitor seeing speculation rules, and learn() runs there with
+		 * an always-logged-in admin. All probes are function_exists-guarded so
+		 * unit tests and minimal installs default to frontend (true).
+		 *
+		 * @return bool True when the request looks like a frontend visit.
+		 * @since NEXT
+		 */
+		private static function is_frontend_context(): bool {
+			if ( defined( 'WP_CLI' ) && WP_CLI ) {
+				return false;
+			}
+			if ( defined( 'DOING_CRON' ) && DOING_CRON ) {
+				return false;
+			}
+			if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+				return false;
+			}
+			if ( function_exists( 'wp_doing_cron' ) ) {
+				try {
+					if ( wp_doing_cron() ) {
+						return false;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			if ( function_exists( 'is_admin' ) ) {
+				try {
+					if ( is_admin() ) {
+						return false;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			if ( function_exists( 'wp_doing_ajax' ) ) {
+				try {
+					if ( wp_doing_ajax() ) {
+						return false;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			return true;
+		}
+
+		/**
+		 * Normalize an eagerness value: allowlist then commerce/auth cap.
+		 *
+		 * Anything outside conservative|moderate|eager (e.g. LLM garbage like
+		 * 'Eager' or 'aggressive', or stale pre-guardrail models) is coerced to
+		 * conservative; `eager` is then capped at `moderate` in commerce/auth
+		 * contexts via maybe_cap_eagerness().
+		 *
+		 * @param mixed $eagerness Raw eagerness value.
+		 * @return string Normalized eagerness value.
+		 * @since NEXT
+		 */
+		private static function normalize_eagerness( $eagerness ): string {
+			// Non-stringable input (e.g. an array from a malformed AI payload)
+			// must not reach the (string) cast (PHP warning); coerce to '' so
+			// the allowlist below falls back to conservative.
+			if ( ! is_string( $eagerness ) ) {
+				$eagerness = is_scalar( $eagerness ) ? (string) $eagerness : '';
+			}
+			if ( ! in_array( $eagerness, array( 'conservative', 'moderate', 'eager' ), true ) ) {
+				$eagerness = 'conservative';
+			}
+			return self::maybe_cap_eagerness( $eagerness );
+		}
+
+		/**
+		 * Cap an AI-learned eagerness value at `moderate` in commerce/auth contexts.
+		 *
+		 * The AI only tightens, never loosens: `eager` becomes `moderate`, every
+		 * other value passes through untouched. Manual user settings
+		 * (wppo_settings[preload_settings][speculationEagerness]) are never touched.
+		 *
+		 * @param string $eagerness Learned eagerness value.
+		 * @return string Capped eagerness value.
+		 * @since NEXT
+		 */
+		public static function maybe_cap_eagerness( string $eagerness ): string {
+			if ( 'eager' === $eagerness && self::is_commerce_or_auth_context() ) {
+				return 'moderate';
+			}
+			return $eagerness;
+		}
+
+		/**
 		 * Learn from RUM + trends + disabled-script frequency.
 		 *
 		 * When WP 7.0 AI Client is available (function_exists('wp_ai_client')),
@@ -110,6 +372,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				if ( is_array( $ai_model ) && ! empty( $ai_model ) ) {
 					$ai_model['source']     = 'ai_client';
 					$ai_model['updated_at'] = time();
+					// Guardrail (#908): the LLM payload is untrusted. Sanitize
+					// fields at persist time mirroring the heuristic path, and
+					// allowlist/cap eagerness (missing key defaults to
+					// conservative so every stored model has a valid value).
+					if ( isset( $ai_model['prefetch_urls'] ) ) {
+						$urls                      = is_array( $ai_model['prefetch_urls'] ) ? array_filter( $ai_model['prefetch_urls'], 'is_string' ) : array();
+						$ai_model['prefetch_urls'] = array_slice( array_values( array_filter( array_map( 'esc_url_raw', $urls ) ) ), 0, 2 );
+					}
+					foreach ( array( 'exclude_js', 'exclude_css' ) as $exclude_key ) {
+						if ( isset( $ai_model[ $exclude_key ] ) ) {
+							$handles                  = is_array( $ai_model[ $exclude_key ] ) ? array_filter( $ai_model[ $exclude_key ], 'is_string' ) : array();
+							$ai_model[ $exclude_key ] = array_slice( array_values( array_filter( array_map( 'sanitize_text_field', $handles ) ) ), 0, 3 );
+						}
+					}
+					$ai_model['eagerness'] = self::normalize_eagerness( $ai_model['eagerness'] ?? 'conservative' );
+					$ai_model['version']   = isset( $ai_model['version'] ) ? (int) $ai_model['version'] : 1;
+					// Persist only the known schema: drop unknown LLM keys so
+					// the stored model shape stays predictable for readers.
+					$ai_model = array_intersect_key(
+						$ai_model,
+						array(
+							'version'       => 1,
+							'prefetch_urls' => 1,
+							'exclude_js'    => 1,
+							'exclude_css'   => 1,
+							'eagerness'     => 1,
+							'source'        => 1,
+							'updated_at'    => 1,
+						)
+					);
 					self::update_model( $ai_model );
 					return $ai_model;
 				}
@@ -304,9 +596,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			 * @param array  $rum RUM aggregates.
 			 */
 			$eagerness = apply_filters( 'wppo_ai_adaptive_eagerness', $eagerness, $rum );
-			if ( ! in_array( $eagerness, array( 'conservative', 'moderate', 'eager' ), true ) ) {
-				$eagerness = 'conservative';
-			}
+			// Guardrail (#908): allowlist then cap at `moderate` in commerce/auth
+			// contexts AFTER the filter, so a third-party filter returning
+			// `eager` is still tightened.
+			$eagerness = self::normalize_eagerness( $eagerness );
 
 			return array(
 				'version'       => 1,
@@ -324,12 +617,48 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @since NEXT
 		 */
 		public static function get_prefetch_urls(): array {
-			$model = self::get_model();
-			$urls  = $model['prefetch_urls'] ?? array();
+			return self::get_prefetch_urls_from_model( self::get_model() );
+		}
+
+		/**
+		 * Extract top-2 sanitized prefetch URLs from a model array.
+		 *
+		 * Shared by get_prefetch_urls() and filter_speculation_rules() so the
+		 * latter reads the stored model only once per filter run.
+		 *
+		 * @param array $model Model data.
+		 * @return string[]
+		 * @since NEXT
+		 */
+		private static function get_prefetch_urls_from_model( array $model ): array {
+			$urls = $model['prefetch_urls'] ?? array();
 			if ( ! is_array( $urls ) ) {
 				return array();
 			}
-			$urls = array_values( array_filter( array_map( 'esc_url_raw', $urls ) ) );
+			$urls = array_values( array_filter( array_map( 'esc_url_raw', array_filter( $urls, 'is_string' ) ) ) );
+			// Guardrail (#908): never AI-prefetch commerce/auth URLs in commerce
+			// contexts. Explicit list-source rules bypass href exclude-path
+			// filtering, so a RUM/LLM-nominated /checkout/ would otherwise be
+			// injected verbatim (the eagerness cap alone cannot prevent it).
+			if ( ! empty( $urls ) && self::is_commerce_or_auth_context() ) {
+				$excludes = self::get_commerce_exclude_paths();
+				$urls     = array_values(
+					array_filter(
+						$urls,
+						static function ( $url ) use ( $excludes ) {
+							$path = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url, PHP_URL_PATH ) : null;
+							$path = is_string( $path ) && '' !== $path ? rtrim( $path, '/' ) : rtrim( $url, '/' );
+							foreach ( $excludes as $exclude ) {
+								$prefix = rtrim( rtrim( $exclude, '*' ), '/' );
+								if ( '' !== $prefix && ( $path === $prefix || 0 === strpos( $path . '/', $prefix . '/' ) ) ) {
+									return false;
+								}
+							}
+							return true;
+						}
+					)
+				);
+			}
 			return array_slice( $urls, 0, 2 );
 		}
 
@@ -382,6 +711,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			}
 
 			$eagerness = $model['eagerness'] ?? 'conservative';
+			// Guardrail (#908): allowlist stale values and never propose `eager`
+			// in commerce/auth contexts (covers models persisted before the cap).
+			$eagerness = self::normalize_eagerness( $eagerness );
 			if ( 'conservative' !== $eagerness ) {
 				$suggestions[] = array(
 					'metric'      => 'ai_speculation_eagerness',
@@ -413,6 +745,57 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				);
 			}
 
+			// Guardrail (#908): in commerce/auth contexts suggest excluding
+			// transactional/authenticated URLs from speculation. Suggestions only —
+			// never auto-applied (see method docblock). Only paths missing from the
+			// stored speculationExcludeUrls are suggested, so the suggestion
+			// resolves once the user applies it.
+			if ( self::is_commerce_or_auth_context() ) {
+				$commerce_paths = self::get_commerce_exclude_paths();
+				$settings       = Util::get_settings();
+				$existing       = isset( $settings['preload_settings']['speculationExcludeUrls'] ) ? (string) $settings['preload_settings']['speculationExcludeUrls'] : '';
+				// Normalized line-by-line compare (full URLs reduced to path-only,
+				// trim + trailing-slash and wildcard insensitive) so formatting
+				// variants do not re-suggest.
+				$normalize_path = static function ( $path ) {
+					$path   = trim( (string) $path );
+					$parsed = function_exists( 'wp_parse_url' ) ? wp_parse_url( $path, PHP_URL_PATH ) : null;
+					if ( is_string( $parsed ) && '' !== $parsed ) {
+						$path = $parsed;
+					}
+					return rtrim( rtrim( rtrim( $path, '/' ), '*' ), '/' );
+				};
+				$existing_list  = array_map( $normalize_path, Util::process_urls( $existing ) );
+				$missing        = array();
+				foreach ( $commerce_paths as $commerce_path ) {
+					if ( ! in_array( $normalize_path( $commerce_path ), $existing_list, true ) ) {
+						$missing[] = $commerce_path;
+					}
+				}
+				if ( ! empty( $missing ) ) {
+					// AiPanel.js merges ai_payload at settings-object level, so the
+					// payload must carry existing + missing or applying would
+					// discard the user's current custom excludes.
+					$payload_excludes = implode( "\n", $missing );
+					$existing_trimmed = trim( str_replace( "\r\n", "\n", $existing ) );
+					if ( '' !== $existing_trimmed ) {
+						$payload_excludes = $existing_trimmed . "\n" . $payload_excludes;
+					}
+					$suggestions[] = array(
+						'metric'      => 'ai_speculation_excludes',
+						'value'       => implode( ', ', $missing ),
+						'unit'        => 'list',
+						'status'      => 'needs_improvement',
+						'description' => __( 'AI: Exclude commerce/auth URLs from speculation', 'performance-optimisation' ),
+						'fix_action'  => 'open_preload_tab',
+						'ai_payload'  => array(
+							'tab'      => 'preload_settings',
+							'settings' => array( 'speculationExcludeUrls' => $payload_excludes ),
+						),
+					);
+				}
+			}
+
 			// Ensure fix_action is valid per Suggestion_Engine guard (already valid).
 			return $suggestions;
 		}
@@ -435,16 +818,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			if ( ! is_array( $rules ) ) {
 				return $rules;
 			}
-			$urls = self::get_prefetch_urls();
+			// Single model read: reused for both prefetch URLs and eagerness.
+			$model = self::get_model();
+			$urls  = self::get_prefetch_urls_from_model( $model );
 			if ( empty( $urls ) ) {
 				return $rules;
 			}
 			// Append AI prefetch rule (prefetch top-2). Structure mirrors WP core:
 			// rules = [ { source: 'list', urls: [...] , eagerness: 'conservative' } ].
-			$rules[] = array(
+			// Guardrail (#908): allowlist stale values and downgrade a persisted
+			// `eager` to `moderate` in commerce/auth contexts before injecting.
+			$eagerness = self::normalize_eagerness( $model['eagerness'] ?? 'conservative' );
+			$rules[]   = array(
 				'source'    => 'list',
 				'urls'      => $urls,
-				'eagerness' => self::get_model()['eagerness'] ?? 'conservative',
+				'eagerness' => $eagerness,
 			);
 			/**
 			 * Filters AI-injected speculation rules.

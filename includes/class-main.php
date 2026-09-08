@@ -2697,6 +2697,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 					$woocommerce_excludes = array();
 
+					// Keep in sync with AI_Adaptive::get_commerce_exclude_paths() —
+					// both derive the same WooCommerce cart/checkout/account paths.
 					if ( function_exists( 'wc_get_checkout_url' ) ) {
 						$checkout_url = wc_get_checkout_url();
 						if ( $checkout_url ) {
