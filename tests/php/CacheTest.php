@@ -240,6 +240,12 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'esc_url' )->returnArg();
 		Functions\when( 'esc_attr' )->returnArg();
 		Functions\when( 'wp_kses' )->returnArg( 1 );
+		// Front-end context for generate_preload_link() echo (issue #905:
+		// earlier suites may have defined these conditionals globally).
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'wp_doing_ajax' )->justReturn( false );
+		Functions\when( 'wp_doing_cron' )->justReturn( false );
+		Functions\when( 'wp_is_json_request' )->justReturn( false );
 
 		$cache = ( new \ReflectionClass( Cache::class ) )->newInstanceWithoutConstructor();
 		$prop  = new \ReflectionProperty( Cache::class, 'combine_css_preload_url' );

@@ -414,6 +414,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-server-rules.php' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-server-rules.php';
 			}
+			// Header emitter first: LiteSpeed_Integration + ESI delegate to it.
+			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-header-emitter.php' ) ) {
+				require_once WPPO_PLUGIN_PATH . 'includes/class-header-emitter.php';
+			}
 			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-litespeed-integration.php' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-litespeed-integration.php';
 			}

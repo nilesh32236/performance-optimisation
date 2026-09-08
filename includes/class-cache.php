@@ -2060,16 +2060,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
-		 * Whether current request is cacheable (public wrapper for LiteSpeed).
+		 * Whether current page request is cacheable (public wrapper for LiteSpeed).
 		 *
-		 * Mirrors is_not_cacheable() for external callers (e.g. LiteSpeed
-		 * header emission) without exposing private internals. Cheap — creates
-		 * no I/O beyond what is_not_cacheable() already does.
+		 * Renamed from is_request_cacheable() (issue #905) to avoid confusion
+		 * with LiteSpeed_Integration::is_request_cacheable(), which has
+		 * different semantics (adds query-string + preload-exclusion gates on
+		 * top of this predicate). Mirrors is_not_cacheable() for external
+		 * callers (e.g. LiteSpeed header emission) without exposing private
+		 * internals. Cheap — creates no I/O beyond what is_not_cacheable()
+		 * already does.
 		 *
 		 * @since NEXT
 		 * @return bool True if cacheable.
 		 */
-		public function is_request_cacheable(): bool {
+		public function is_page_cacheable(): bool {
 			return ! $this->is_not_cacheable();
 		}
 
