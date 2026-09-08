@@ -194,9 +194,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		public static function get_commerce_exclude_paths(): array {
 			$paths = array();
 
+			// URL helpers are WP core (always present in normal runtime);
+			// guarded for minimal installs, mirroring the other probes.
+			$has_url_helpers = function_exists( 'wp_parse_url' ) && function_exists( 'trailingslashit' );
+
 			// Canonical order (cart, checkout, my-account) matches the fallback
 			// below so output order never depends on probe order.
-			if ( function_exists( 'wc_get_cart_url' ) ) {
+			if ( $has_url_helpers && function_exists( 'wc_get_cart_url' ) ) {
 				try {
 					$cart_url = wc_get_cart_url();
 					if ( $cart_url ) {
@@ -210,7 +214,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				}
 			}
 
-			if ( function_exists( 'wc_get_checkout_url' ) ) {
+			if ( $has_url_helpers && function_exists( 'wc_get_checkout_url' ) ) {
 				try {
 					$checkout_url = wc_get_checkout_url();
 					if ( $checkout_url ) {
@@ -224,7 +228,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				}
 			}
 
-			if ( function_exists( 'wc_get_page_permalink' ) ) {
+			if ( $has_url_helpers && function_exists( 'wc_get_page_permalink' ) ) {
 				try {
 					$myaccount_url = wc_get_page_permalink( 'myaccount' );
 					if ( $myaccount_url ) {
@@ -383,6 +387,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 						}
 					}
 					$ai_model['eagerness'] = self::normalize_eagerness( $ai_model['eagerness'] ?? 'conservative' );
+					$ai_model['version']   = isset( $ai_model['version'] ) ? (int) $ai_model['version'] : 1;
 					// Persist only the known schema: drop unknown LLM keys so
 					// the stored model shape stays predictable for readers.
 					$ai_model = array_intersect_key(

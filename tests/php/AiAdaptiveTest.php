@@ -377,6 +377,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$model = AI_Adaptive::learn();
 		$this->assertSame( 'ai_client', $model['source'] );
 		$this->assertSame( 'moderate', $model['eagerness'] );
+		$this->assertSame( 1, $model['version'] );
 		// Untrusted LLM output is sanitized at persist: URLs sliced to top-2
 		// with non-strings dropped, handles sliced to 3.
 		$this->assertSame( array( 'http://example.com/x/', 'http://example.com/y/' ), $model['prefetch_urls'] );
@@ -406,6 +407,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$model = AI_Adaptive::learn();
 		$this->assertSame( 'ai_client', $model['source'] );
 		$this->assertSame( 'conservative', $model['eagerness'] );
+		$this->assertSame( 1, $model['version'] );
 	}
 
 	/**
@@ -429,6 +431,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 'ai_client', $model['source'] );
 		$this->assertArrayHasKey( 'eagerness', $model );
 		$this->assertSame( 'conservative', $model['eagerness'] );
+		$this->assertSame( 1, $model['version'] );
 	}
 
 	/**
