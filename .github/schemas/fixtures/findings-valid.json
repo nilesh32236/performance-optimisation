@@ -6,6 +6,20 @@
     "php_target": "8.2+",
     "date": "2026-09-08"
   },
+  "lanes": [
+    {
+      "name": "core-researcher",
+      "searches_performed": 5,
+      "sources_consulted": 7,
+      "findings": 1
+    },
+    {
+      "name": "competitor-researcher",
+      "searches_performed": 4,
+      "sources_consulted": 6,
+      "findings": 1
+    }
+  ],
   "findings": [
     {
       "id": "cdea73c752e13ebe8dd28b973ea20f0befd2c510bc4de2d2ed50ef99619318a5",
@@ -50,6 +64,7 @@
         "frontend_kb": 120,
         "request_ms": 150
       },
+      "measured_impact": null,
       "fallback": "If AVIF encoding is unavailable (no Imagick/GD AVIF support), keep serving WebP via the existing picture wrapper and log one activity entry; never fatal.",
       "acceptance_criteria": [
         "Given an uploaded JPEG, When conversion runs, Then an AVIF variant is stored beside the WebP variant without fatal errors",

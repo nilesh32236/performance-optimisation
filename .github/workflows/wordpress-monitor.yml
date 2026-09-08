@@ -21,9 +21,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
-env:
-  CONTEXT7_API_KEY: ${{ secrets.CONTEXT7_API_KEY }}
-
 jobs:
   # ── 1. RESEARCH ──────────────────────────────────────────────────────────────
   # Uses raw OpenCode with the read-only wppo-researcher agent (opencode.json)
@@ -41,12 +38,12 @@ jobs:
       improvements_found: ${{ steps.metrics.outputs.improvements_found }}
       actionable_found: ${{ steps.metrics.outputs.actionable_found }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 1
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
@@ -74,6 +71,7 @@ jobs:
           # is provided as a GitHub secret; the model comes from the repo
           # variable OPENCODE_MODEL (falls back to the default below).
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          CONTEXT7_API_KEY: ${{ secrets.CONTEXT7_API_KEY }}
           FORCE_CHECK: ${{ inputs.force_check }}
         run: |
           cat << 'RESEARCH_PROMPT' > /tmp/research-prompt.txt
@@ -108,7 +106,8 @@ jobs:
           - Orchestrator reconciles all lane findings (message text) into ONE
             final JSON (see FINAL DELIVERABLE). If a lane returns nothing,
             re-spawn it with a broader query — "None found" is only allowed
-            after at least 3 distinct searches per lane.
+            after at least 3 distinct searches per lane, documented via
+            lanes[].searches_performed.
           - Cost of extra sub-agents is acceptable. Thoroughness beats speed.
           - FOCUS FEATURE (env FORCE_CHECK): if non-empty, scope all lanes to
             that slug/feature, reduce to 2 lanes (core + relevant lane), skip
@@ -186,7 +185,8 @@ jobs:
 
           ANTI-CREEP + CORE-DEDUP (per finding):
           - Classification REQUIRED: NEW|CORE_PARTIAL|CORE_COMPLETE|
-            PLUGIN_UNIQUE|COMPETITOR_ONLY|EXPERIMENTAL|IRRELEVANT.
+            PLUGIN_UNIQUE|COMPETITOR_ONLY|EXPERIMENTAL|IRRELEVANT|
+            REMOVE_OBSOLETE|ALREADY_IMPLEMENTED (must match the schema enum).
           - "Core already solves this?" check: fetchpriority/loading/decoding,
             strategy-aware defer/async since 6.3, HTML API, Interactivity —
             integrate, don't duplicate; note dependency-ordering conflicts.
@@ -222,18 +222,26 @@ jobs:
           markdown fences, no prose before or after. CI captures the message,
           validates it against the committed schema
           (.github/schemas/wppo-findings.schema.json, JSON Schema draft-07),
-          recomputes scores, applies the deterministic Tier-A gate, and files
-          issues. Required shape:
+          recomputes scores + ids, applies the deterministic Tier-A gate, and
+          files issues. Required shape:
              {schema_version:1, run:{commit,wordpress_target:"6.2+",
-             php_target:"8.2+",date}, findings:[{id,category,title,
+             php_target:"8.2+",date},
+             lanes:[{name,searches_performed,sources_consulted,findings}],
+             findings:[{id,category,title,
              status:"candidate",priority,difficulty,risk,risk_numeric,
              confidence:0-1,score,performance_impact,user_value,feasibility,
              classification,tier,evidence:[{url,version,published}],
              implementation:{files[],functions[]},
              estimated_impact:{queries,frontend_kb,request_ms},
+             measured_impact:null,
              fallback,acceptance_criteria[]}]}
-             - id = sha256(category+primary_file+primary_function+
-               normalized_title) hex (stable fingerprint).
+             - lanes[] REQUIRED: one entry per specialist lane — all 8 —
+               with REAL counts (searches performed, sources consulted,
+               findings produced). "None found" for a lane is only valid
+               with searches_performed > 0 documented there.
+             - id is advisory: CI recomputes it as
+               sha256(category|files[0]|functions[0]|lowercased title)
+               (stable dedup fingerprint).
              - Numeric fields REQUIRED: performance_impact 1-10,
                user_value 1-10, feasibility 1-10 (integers), risk_numeric
                1-5 (integer).
@@ -242,7 +250,16 @@ jobs:
                risk_numeric — the CI value is authoritative.
              - confidence from the evidence table above.
              - classification one of NEW|CORE_PARTIAL|CORE_COMPLETE|
-               PLUGIN_UNIQUE|COMPETITOR_ONLY|EXPERIMENTAL|IRRELEVANT.
+               PLUGIN_UNIQUE|COMPETITOR_ONLY|EXPERIMENTAL|IRRELEVANT|
+               REMOVE_OBSOLETE (dead/obsolete code that should be deleted)|
+               ALREADY_IMPLEMENTED (our plugin already fully implements the
+               competitor/core capability).
+             - status stays "candidate": future states (validated,
+               issue_created, in_progress, implemented, benchmark_failed,
+               merged, rejected, obsolete, superseded) are reserved for the
+               PR-linkage loop.
+             - measured_impact is null at research time — NEVER guess
+               measured values; only the future benchmark loop fills it.
           Do NOT write any files and do NOT emit a markdown report — the
           final message is the JSON only (unknown extra fields are rejected
           by the schema; missing required fields fail the run).
@@ -255,6 +272,13 @@ jobs:
           - Never propose breaking the settings schema, dropping WP 6.2 /
             PHP 8.2 support, or adding heavy mandatory dependencies.
           RESEARCH_PROMPT
+
+          # Sanitize force_check before it is ever echoed into the prompt:
+          # slug-like characters only, length-capped.
+          if [ -n "${FORCE_CHECK:-}" ] && ! printf '%s' "${FORCE_CHECK}" | grep -qE '^[a-z0-9._:-]{1,80}$'; then
+            echo "::error::force_check contains invalid characters"
+            exit 1
+          fi
 
           # Wire force_check input into the prompt (FORCE_CHECK env).
           if [ -n "${FORCE_CHECK:-}" ]; then
@@ -295,12 +319,27 @@ jobs:
           npx -y ajv-cli@5.0.0 validate --spec=draft7 --errors=json -s .github/schemas/wppo-findings.schema.json -d /tmp/wp-findings.json
           npx -y ajv-cli@5.0.0 validate --spec=draft7 --errors=json -s .github/schemas/wppo-findings.schema.json -d .github/schemas/fixtures/findings-valid.json
 
-      - name: Recompute scores deterministically
+      - name: Recompute scores + ids deterministically
         run: |
-          # CI's score is authoritative — the model's score is advisory and
-          # gets overwritten from the four numeric inputs + confidence.
+          # CI's score and id are authoritative — the model's score/id are
+          # advisory and get overwritten. score = PI×UV×conf×F÷risk_numeric;
+          # id = sha256(category|files[0]|functions[0]|lowercased title)
+          # (stable dedup fingerprint; jq has no sha256, hence node).
           jq '.findings |= map(.score = ((.performance_impact * .user_value * .confidence * .feasibility) / .risk_numeric))' /tmp/wp-findings.json > /tmp/wp-findings.recomputed.json
           mv /tmp/wp-findings.recomputed.json /tmp/wp-findings.json
+          node -e '
+            const fs = require("fs");
+            const crypto = require("crypto");
+            const doc = JSON.parse(fs.readFileSync("/tmp/wp-findings.json", "utf8"));
+            for (const f of doc.findings) {
+              const file = (f.implementation && Array.isArray(f.implementation.files) && f.implementation.files[0]) || "";
+              const func = (f.implementation && Array.isArray(f.implementation.functions) && f.implementation.functions[0]) || "";
+              const input = [f.category, file, func, String(f.title).toLowerCase()].join("|");
+              f.id = crypto.createHash("sha256").update(input).digest("hex");
+            }
+            fs.writeFileSync("/tmp/wp-findings.json", JSON.stringify(doc, null, 2) + "\n");
+          '
+          echo "Recomputed scores + ids for $(jq '.findings | length' /tmp/wp-findings.json) findings."
 
       - name: Build actionable findings (deterministic Tier-A gate)
         run: |
@@ -314,22 +353,22 @@ jobs:
       # validated + re-scored findings, gated actionable list); on any
       # failure everything produced so far still uploads.
       - name: Upload research report as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: wp-research-report
           path: /tmp/opencode-research-output.txt
-          retention-days: 7
+          retention-days: 30
 
       - name: Upload findings JSON as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: wp-findings-json
           path: |
             /tmp/wp-findings.json
             /tmp/actionable-findings.json
-          retention-days: 7
+          retention-days: 30
           if-no-files-found: ignore
 
       - name: Set research outputs
@@ -398,25 +437,19 @@ jobs:
       contents: read
       issues: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 1
           # Default GITHUB_TOKEN is sufficient for checkout — least privilege.
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
 
-      - name: Download research report
-        uses: actions/download-artifact@v4
-        with:
-          name: wp-research-report
-          path: /tmp/
-
       - name: Download findings JSON
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: wp-findings-json
           path: /tmp/
@@ -546,10 +579,15 @@ jobs:
 
           Use this command to create each issue:
           gh issue create --title "[WP Monitor][<category>] <short description>" \
-            --label "wp-monitor,autofix-trigger" \
+            --label "<per the mapping below>" \
             --body "<issue body with: Summary, Source URLs (2+ for user-request), Current Implementation (file+function), Proposed Change, Standout Angle, Fallback/Fail-open Strategy, Risk, Priority/Difficulty, Confidence+Score, Acceptance Criteria (Given/When/Then + verification order npm run lint:js -> composer lint -> npm test -> npm run build), Test Plan, plus footer <!-- wppo-monitor-id: <id> -->>"
 
-          For hard/high-value bets use ONLY: --label "wp-monitor,wppo-epic" (NO autofix-trigger — wppo-epic is excluded from auto-fix).
+          Label mapping (DETERMINISTIC — apply mechanically per finding):
+          - risk == "high"  -> --label "wp-monitor,wppo-epic"   (NO autofix-trigger)
+          - risk low/medium -> --label "wp-monitor,autofix-trigger"
+          Do NOT deviate from this mapping; risk is the automation boundary,
+          not difficulty. (wppo-epic is excluded from auto-fix;
+          autofix-trigger queues the AI fix loop.)
           Fingerprint: stable id per finding = sha256(category+primary_file+primary_function+normalized_title); store as `id` in JSON + footer `<!-- wppo-monitor-id: <id> -->` in issue body. Reuse the JSON `id` verbatim — do not invent a new slug.
 
           The findings follow in the next sections.
@@ -619,6 +657,18 @@ jobs:
             best-effort guidance (tool-level domain enforcement is
             unavailable); weigh domain trust in confidence scoring.
 
+          ## FINAL MESSAGE — PURE JSON (CI-PARSED)
+          After the last gh issue create, emit your FINAL MESSAGE as PURE
+          JSON — no markdown fences, no prose:
+          {"created":[{"id","number","url","title","score"}],
+           "skipped":[{"id","reason"}],"failed":[{"id","error"}]}
+          - created: one entry per issue ACTUALLY created, with the real
+            number/url from the gh issue create output.
+          - skipped: findings skipped by dedup, with reason.
+          - failed: gh issue create attempts that errored, with the error.
+          Empty arrays are allowed. Do NOT write files — CI captures this
+          message into /tmp/created-issues.json.
+
           IMPORTANT: Run "gh issue create" for EACH finding in
           /tmp/actionable-findings.json only, one at a time, sorted by score
           desc. Never file Tier-B/C findings (report-only). Deduplicate by
@@ -628,11 +678,37 @@ jobs:
           # wppo-issue-publisher (opencode.json) restricts bash to
           # `gh issue create` / `gh issue list` / `sleep`; --auto approves
           # within the agent's own permission config. Fail-hard on error.
-          if ! opencode run --auto --agent wppo-issue-publisher --model "${{ vars.OPENCODE_MODEL || 'opencode-go/muse-spark-1.2-contributor' }}" < /tmp/create-issues-prompt.md; then
+          if ! opencode run --auto --agent wppo-issue-publisher --model "${{ vars.OPENCODE_MODEL || 'opencode-go/muse-spark-1.2-contributor' }}" < /tmp/create-issues-prompt.md > /tmp/opencode-create-issues-output.txt; then
             echo "::error::OpenCode issue publisher failed"
             exit 1
           fi
           echo "created=true" >> "$GITHUB_OUTPUT"
+
+      - name: Extract created-issues JSON
+        run: |
+          # The publisher's final message is pure JSON (fences stripped
+          # defensively). Unparseable output fails the run — consistent with
+          # the fail-hard research pipeline.
+          sed '/^```/d' /tmp/opencode-create-issues-output.txt > /tmp/create-issues-output-clean.txt
+          if ! jq -e '.' /tmp/create-issues-output-clean.txt > /dev/null 2>&1; then
+            echo "::error::OpenCode issue publisher output is not valid JSON (final message must be pure JSON)"
+            exit 1
+          fi
+          if ! jq -e 'type == "object" and (.created | type == "array") and (.skipped | type == "array") and (.failed | type == "array")' /tmp/create-issues-output-clean.txt > /dev/null 2>&1; then
+            echo "::error::publisher output JSON must be an object with created/skipped/failed arrays"
+            exit 1
+          fi
+          cp /tmp/create-issues-output-clean.txt /tmp/created-issues.json
+          echo "created=$(jq '.created | length' /tmp/created-issues.json) skipped=$(jq '.skipped | length' /tmp/created-issues.json) failed=$(jq '.failed | length' /tmp/created-issues.json)"
+
+      - name: Upload created issues JSON as artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: wp-created-issues-json
+          path: /tmp/created-issues.json
+          retention-days: 30
+          if-no-files-found: ignore
 
   # ── 3. SUMMARY ───────────────────────────────────────────────────────────────
   summary:
@@ -641,11 +717,12 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    permissions:
-      contents: read
+    # No token-requiring steps here (no checkout, no gh/api calls;
+    # download-artifact@v4 uses the run's runtime token) — least privilege.
+    permissions: {}
     steps:
       - name: Download research report
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: wp-research-report
           path: /tmp/
@@ -653,9 +730,17 @@ jobs:
         timeout-minutes: 5
 
       - name: Download findings JSON
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: wp-findings-json
+          path: /tmp/
+        continue-on-error: true
+        timeout-minutes: 5
+
+      - name: Download created issues JSON
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: wp-created-issues-json
           path: /tmp/
         continue-on-error: true
         timeout-minutes: 5
@@ -671,7 +756,18 @@ jobs:
             echo "| Metric | Value |"
             echo "|--------|-------|"
             echo "| Improvement opportunities found | ${{ needs.research.outputs.improvements_found }} |"
-            echo "| Issues created | ${{ needs['create-issues'].result == 'success' && '✅' || needs['create-issues'].result == 'skipped' && '⏭️ (0 improvements found)' || '❌' }} |"
+            echo "| Actionable candidates (Tier-A gate) | ${{ needs.research.outputs.actionable_found }} |"
+            if [ -f /tmp/created-issues.json ] && command -v jq >/dev/null 2>&1; then
+              CREATED=$(jq '.created | length' /tmp/created-issues.json 2>/dev/null || echo 0)
+              SKIPPED=$(jq '.skipped | length' /tmp/created-issues.json 2>/dev/null || echo 0)
+              FAILED=$(jq '.failed | length' /tmp/created-issues.json 2>/dev/null || echo 0)
+              echo "| Issues created | ${CREATED} |"
+              echo "| Skipped (dedup) | ${SKIPPED} |"
+              echo "| Failed creates | ${FAILED} |"
+            else
+              # Fallback only when the created-issues JSON is unavailable.
+              echo "| Issues created | (JSON unavailable — job result: ${{ needs['create-issues'].result == 'success' && '✅' || needs['create-issues'].result == 'skipped' && '⏭️ (no actionable findings)' || '❌' }}) |"
+            fi
             echo ""
             echo "Issues labeled \`wp-monitor\` + \`autofix-trigger\` are queued for the AI fix loop (wppo-epic excluded from auto-fix)."
             echo "The \`wppo-ai-review.yml\` \`fix-issue\` job will handle each queued one automatically."
@@ -685,7 +781,7 @@ jobs:
               MED=$(jq '[.findings[]|select(.priority=="medium")]|length' /tmp/wp-findings.json 2>/dev/null || echo 0)
               LOW=$(jq '[.findings[]|select(.priority=="low")]|length' /tmp/wp-findings.json 2>/dev/null || echo 0)
               echo "## Research Health"
-              echo "sources checked: $(jq '[.findings[].evidence[]?]|length' /tmp/wp-findings.json 2>/dev/null || echo 0) evidence links; core/competitor/user/security counts derived from categories via jq."
+              echo "lanes: $(jq '(.lanes // []) | length' /tmp/wp-findings.json 2>/dev/null || echo 0) | total searches: $(jq '[(.lanes // [])[].searches_performed] | add // 0' /tmp/wp-findings.json 2>/dev/null || echo 0) | sources consulted: $(jq '[(.lanes // [])[].sources_consulted] | add // 0' /tmp/wp-findings.json 2>/dev/null || echo 0) | evidence links: $(jq '[.findings[].evidence[]?] | length' /tmp/wp-findings.json 2>/dev/null || echo 0)."
               echo ""
               echo "## Validation"
               echo "raw=${RAW}, validated(Tier A)=${TIERA}, duplicates skipped (fingerprint), rejected(Tier C)=${TIERC}, report-only(Tier B)=${TIERB}."
@@ -715,15 +811,5 @@ jobs:
               echo "## Performance"
               echo "footnote: measured-benchmark gates live in wppo-ai-review.yml, not here."
               echo ""
-            fi
-            if [ -f /tmp/wp-research.md ]; then
-              echo "<details>"
-              echo "<summary>Research Report</summary>"
-              echo ""
-              head -c 20000 /tmp/wp-research.md
-              echo ""
-              echo "_Truncated — see wp-research-report + wp-findings-json artifacts for full report._"
-              echo ""
-              echo "</details>"
             fi
           } >> $GITHUB_STEP_SUMMARY

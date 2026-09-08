@@ -7,11 +7,42 @@
   "required": [
     "schema_version",
     "run",
+    "lanes",
     "findings"
   ],
   "properties": {
     "schema_version": {
       "const": 1
+    },
+    "lanes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "searches_performed",
+          "sources_consulted",
+          "findings"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "searches_performed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sources_consulted": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "findings": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
     },
     "run": {
       "type": "object",
@@ -77,7 +108,18 @@
             "type": "string"
           },
           "status": {
-            "const": "candidate"
+            "enum": [
+              "candidate",
+              "validated",
+              "issue_created",
+              "in_progress",
+              "implemented",
+              "benchmark_failed",
+              "merged",
+              "rejected",
+              "obsolete",
+              "superseded"
+            ]
           },
           "priority": {
             "enum": [
@@ -137,7 +179,9 @@
               "PLUGIN_UNIQUE",
               "COMPETITOR_ONLY",
               "EXPERIMENTAL",
-              "IRRELEVANT"
+              "IRRELEVANT",
+              "REMOVE_OBSOLETE",
+              "ALREADY_IMPLEMENTED"
             ]
           },
           "tier": {
@@ -158,7 +202,8 @@
               "properties": {
                 "url": {
                   "type": "string",
-                  "pattern": "^https?://"
+                  "pattern": "^https?://",
+                  "minLength": 1
                 },
                 "version": {
                   "type": "string"
@@ -180,13 +225,15 @@
               "files": {
                 "type": "array",
                 "items": {
-                  "type": "string"
+                  "type": "string",
+                  "minLength": 1
                 }
               },
               "functions": {
                 "type": "array",
                 "items": {
-                  "type": "string"
+                  "type": "string",
+                  "minLength": 1
                 }
               }
             }
@@ -211,13 +258,46 @@
               }
             }
           },
+          "measured_impact": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": false,
+            "required": [
+              "queries",
+              "frontend_kb",
+              "request_ms"
+            ],
+            "properties": {
+              "queries": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "frontend_kb": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "request_ms": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            }
+          },
           "fallback": {
             "type": "string"
           },
           "acceptance_criteria": {
             "type": "array",
             "items": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             }
           }
         }
