@@ -167,6 +167,8 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 					$this->redis_connected = false;
 					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 					$this->log_redis_failure_once( 'WPPO Redis object cache: connection failed — ' . $connection->get_error_message() . ' Serving from memory.' );
+					$error_code = $connection->get_error_code();
+					$this->record_redis_failure( is_string( $error_code ) && '' !== $error_code ? $error_code : 'unknown', $connection->get_error_message() );
 					return;
 				}
 
@@ -220,6 +222,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				$this->redis_replica   = null;
 				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 				$this->log_redis_failure_once( 'WPPO Redis object cache: boot connection error — ' . $e->getMessage() . ' Serving from memory.' );
+				$this->record_redis_failure( 'boot_exception', $e->getMessage() );
 			}
 		}
 
@@ -271,12 +274,288 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				return;
 			}
 
+			// A healthy boot resets the circuit-breaker failure window so a
+			// past outage cannot trip the breaker long after recovery.
+			$this->clear_redis_failures();
+
 			$flag_file = WP_CONTENT_DIR . '/wppo-redis-down.flag';
 			if ( @file_exists( $flag_file ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 				@unlink( $flag_file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.unlink_unlink
 				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 				error_log( 'WPPO Redis object cache: connection recovered.' );
 			}
+		}
+
+		/**
+		 * WP_Error codes from wppo_redis_connect() that must NOT count toward
+		 * the circuit breaker.
+		 *
+		 * These describe environment/configuration problems (missing PHP
+		 * classes, no nodes configured, old phpredis) rather than a Redis
+		 * outage, so tripping the breaker on them would park a drop-in that
+		 * no recovery probe could ever heal.
+		 *
+		 * @since NEXT
+		 * @var string[]
+		 */
+		private const NON_CIRCUIT_ERROR_CODES = array( 'missing_redis', 'missing_cluster', 'missing_sentinel', 'low_nodes', 'redis_version' );
+
+		/**
+		 * Resolve the circuit-breaker failure threshold.
+		 *
+		 * Readable without WordPress: the WPPO_CB_THRESHOLD constant wins,
+		 * then the wppo_object_cache_circuit_breaker_threshold filter (when
+		 * plugins are loaded), defaulting to 5 consecutive failures.
+		 *
+		 * @since NEXT
+		 * @return int Minimum 1.
+		 */
+		private function get_circuit_threshold(): int {
+			$threshold = defined( 'WPPO_CB_THRESHOLD' ) ? (int) WPPO_CB_THRESHOLD : 5;
+			if ( function_exists( 'apply_filters' ) ) {
+				/**
+				 * Filter the object-cache circuit-breaker failure threshold.
+				 *
+				 * @since NEXT
+				 * @param int $threshold Consecutive counted failures that trip the breaker. Default 5.
+				 */
+				$threshold = (int) apply_filters( 'wppo_object_cache_circuit_breaker_threshold', $threshold );
+			}
+			return max( 1, $threshold );
+		}
+
+		/**
+		 * Resolve the circuit-breaker counting window in seconds.
+		 *
+		 * Readable without WordPress: the WPPO_CB_WINDOW constant wins, then
+		 * the wppo_object_cache_circuit_breaker_window filter (when plugins
+		 * are loaded), defaulting to 600 (10 minutes). Failures older than
+		 * the window reset the counter instead of tripping the breaker.
+		 *
+		 * @since NEXT
+		 * @return int Minimum 1.
+		 */
+		private function get_circuit_window(): int {
+			$window = defined( 'WPPO_CB_WINDOW' ) ? (int) WPPO_CB_WINDOW : 600;
+			if ( function_exists( 'apply_filters' ) ) {
+				/**
+				 * Filter the object-cache circuit-breaker counting window.
+				 *
+				 * @since NEXT
+				 * @param int $window Seconds in which threshold failures must occur to trip. Default 600.
+				 */
+				$window = (int) apply_filters( 'wppo_object_cache_circuit_breaker_window', $window );
+			}
+			return max( 1, $window );
+		}
+
+		/**
+		 * Record one counted Redis failure and trip the breaker at threshold.
+		 *
+		 * The counter lives in WP_CONTENT_DIR/wppo-redis-failures.json as
+		 * { count, first, last } and is updated under an exclusive flock()
+		 * because the drop-in boots on every request — transients and the
+		 * options API are unavailable (and would recurse into this very
+		 * cache) at this boot stage. Only auth/connection-class errors count;
+		 * environment/config codes (see NON_CIRCUIT_ERROR_CODES) are ignored.
+		 * When the breaker already tripped (parked sibling on disk) counting
+		 * stops so the state file is written exactly once.
+		 *
+		 * @since NEXT
+		 * @param string $error_code Machine-readable failure code.
+		 * @param string $reason     Human-readable failure description.
+		 * @return void
+		 */
+		private function record_redis_failure( string $error_code, string $reason ): void {
+			if ( ! defined( 'WP_CONTENT_DIR' ) ) {
+				return;
+			}
+
+			if ( in_array( $error_code, self::NON_CIRCUIT_ERROR_CODES, true ) ) {
+				return;
+			}
+
+			$content_dir   = WP_CONTENT_DIR;
+			$failures_file = $content_dir . '/wppo-redis-failures.json';
+
+			// Already tripped: the parked sibling is the open state. Skip
+			// counting so a restored-then-failing drop-in cannot double-trip
+			// and so the one final trip log line stays final.
+			if ( @file_exists( $content_dir . '/object-cache.php.wppo-disabled' ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+				return;
+			}
+
+			$threshold = $this->get_circuit_threshold();
+			$window    = $this->get_circuit_window();
+			$now       = time();
+
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen,WordPress.PHP.NoSilencedErrors.Discouraged
+			$handle = @fopen( $failures_file, 'c+' );
+			if ( ! $handle ) {
+				return;
+			}
+
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_flock
+			if ( ! flock( $handle, LOCK_EX ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
+				fclose( $handle );
+				return;
+			}
+
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rewind
+			rewind( $handle );
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_stream_get_contents
+			$raw   = stream_get_contents( $handle );
+			$state = is_string( $raw ) && '' !== $raw ? json_decode( $raw, true ) : null;
+			if ( ! is_array( $state ) ) {
+				$state = array();
+			}
+
+			$count = isset( $state['count'] ) ? (int) $state['count'] : 0;
+			$first = isset( $state['first'] ) ? (int) $state['first'] : 0;
+
+			// Failures outside the window start a fresh counting period.
+			if ( $count < 1 || $first < 1 || ( $now - $first ) > $window ) {
+				$count = 0;
+				$first = $now;
+			}
+
+			++$count;
+			$state = array(
+				'count' => $count,
+				'first' => $first,
+				'last'  => $now,
+			);
+
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_ftruncate
+			ftruncate( $handle, 0 );
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rewind
+			rewind( $handle );
+			// wp_json_encode() may not exist yet at drop-in boot; json_encode() is the early-boot fallback.
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.json_encode_json_encode
+			$encoded_state = function_exists( 'wp_json_encode' ) ? wp_json_encode( $state ) : json_encode( $state );
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite
+			fwrite( $handle, (string) $encoded_state );
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_flock
+			flock( $handle, LOCK_UN );
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
+			fclose( $handle );
+
+			if ( $count >= $threshold ) {
+				$this->trip_circuit_breaker( $error_code, $reason, $state );
+			}
+		}
+
+		/**
+		 * Clear the circuit-breaker failure counter.
+		 *
+		 * Called on every healthy boot (via log_redis_recovery()) so past
+		 * outages cannot trip the breaker after recovery.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private function clear_redis_failures(): void {
+			if ( ! defined( 'WP_CONTENT_DIR' ) ) {
+				return;
+			}
+
+			$failures_file = WP_CONTENT_DIR . '/wppo-redis-failures.json';
+			if ( @file_exists( $failures_file ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+				@unlink( $failures_file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.unlink_unlink
+			}
+		}
+
+		/**
+		 * Trip the circuit breaker: park this drop-in so failing Redis stops
+		 * costing a connection timeout on every request.
+		 *
+		 * Renames WP_CONTENT_DIR/object-cache.php to
+		 * object-cache.php.wppo-disabled ONLY when the file carries this
+		 * plugin's marker — foreign drop-ins are never touched — and writes
+		 * WP_CONTENT_DIR/wppo-redis-disabled.json ({ reason, error_code,
+		 * tripped_at, failures }) as the bridge the plugin side
+		 * (Object_Cache::get_circuit_state()) reads for the admin notice and
+		 * the recovery probe. Logs exactly one final line; the tripping
+		 * request itself keeps serving from the in-memory fallback.
+		 *
+		 * @since NEXT
+		 * @param string $error_code Machine-readable failure code.
+		 * @param string $reason     Human-readable failure description.
+		 * @param array  $state      Counter state { count, first, last }.
+		 * @return void
+		 */
+		private function trip_circuit_breaker( string $error_code, string $reason, array $state ): void {
+			if ( ! defined( 'WP_CONTENT_DIR' ) ) {
+				return;
+			}
+
+			$content_dir = WP_CONTENT_DIR;
+			$dropin      = $content_dir . '/object-cache.php';
+			$parked      = $dropin . '.wppo-disabled';
+			$state_file  = $content_dir . '/wppo-redis-disabled.json';
+
+			// Run the trip body exactly once per outage: either artefact
+			// proves a trip already happened. Without the bridge guard, a
+			// failed rename (permissions, race) would re-trip and error_log
+			// on every subsequent failing request instead of logging once.
+			if ( @file_exists( $parked ) || @file_exists( $state_file ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+				return;
+			}
+
+			// Never touch a foreign drop-in: parking is destructive, so it
+			// requires the narrow plugin-specific marker. The shorter legacy
+			// phrase can appear in foreign drop-ins, so it stays valid for
+			// read-only ownership detection only.
+			$is_ours = false;
+			if ( @is_readable( $dropin ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize
+				$size = @filesize( $dropin ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+				if ( false !== $size && $size < 1048576 ) {
+					// The drop-in boots before WP_Filesystem exists; local file reads are the only option.
+					// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents,WordPress.PHP.NoSilencedErrors.Discouraged
+					$content = @file_get_contents( $dropin );
+					if ( is_string( $content ) && false !== strpos( $content, 'Redis Object Cache Drop-in for Performance Optimisation' ) ) {
+						$is_ours = true;
+					}
+				}
+			}
+
+			// wp_strip_all_tags() may not exist yet at drop-in boot; strip_tags() is the early-boot fallback.
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.strip_tags_strip_tags
+			$clean_reason = function_exists( 'wp_strip_all_tags' ) ? wp_strip_all_tags( $reason ) : strip_tags( $reason );
+			$payload      = array(
+				'reason'     => substr( (string) $clean_reason, 0, 200 ),
+				'error_code' => substr( (string) $error_code, 0, 64 ),
+				'tripped_at' => time(),
+				'failures'   => isset( $state['count'] ) ? (int) $state['count'] : 0,
+			);
+
+			// wp_json_encode() may not exist yet at drop-in boot; json_encode() is the early-boot fallback.
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.json_encode_json_encode
+			$encoded = function_exists( 'wp_json_encode' ) ? wp_json_encode( $payload ) : json_encode( $payload );
+			if ( is_string( $encoded ) && '' !== $encoded ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents,WordPress.PHP.NoSilencedErrors.Discouraged
+				@file_put_contents( $state_file, $encoded, LOCK_EX );
+			}
+
+			// Keep the down-flag touched so the throttled outage logging stays
+			// quiet now that the breaker owns the failure state.
+			@touch( $content_dir . '/wppo-redis-down.flag' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.file_system_operations_touch
+
+			if ( $is_ours ) {
+				// The drop-in boots before WP_Filesystem exists; rename() is the only parking primitive.
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename,WordPress.PHP.NoSilencedErrors.Discouraged
+				$renamed = @rename( $dropin, $parked );
+				if ( $renamed ) {
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					error_log( 'WPPO Redis object cache: circuit breaker tripped after ' . (int) $payload['failures'] . ' failures (' . $payload['error_code'] . ') — drop-in auto-disabled to ' . basename( $parked ) . '. Re-enable from Performance → Object Cache once Redis recovers.' );
+					return;
+				}
+			}
+
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			error_log( 'WPPO Redis object cache: circuit breaker tripped after ' . (int) $payload['failures'] . ' failures (' . $payload['error_code'] . ') — drop-in left in place (rename skipped or failed). Serving from memory.' );
 		}
 
 		/**
@@ -369,6 +648,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				// replica could route reads to a broken connection.
 				$this->redis_replica = null;
 				$this->log_redis_failure_once( 'WPPO Redis object cache: write failed — ' . $e->getMessage() . ' Dropping to memory until next boot.' );
+				$this->record_redis_failure( 'write_fail', $e->getMessage() );
 				$this->cache[ $formatted_key ] = $data;
 				return true;
 			}

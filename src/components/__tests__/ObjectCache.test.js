@@ -174,6 +174,145 @@ describe( 'ObjectCache Component', () => {
 		);
 	} );
 
+	it( 'renders the circuit-breaker banner with reason and failure count when open', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				enabled: false,
+				redis_missing: false,
+				foreign_dropin: false,
+				redis_reachable: false,
+				circuit_open: true,
+				circuit_reason: 'Redis Auth failed.',
+				circuit_error_code: 'auth_fail',
+				failure_count: 5,
+				supported_compressors: { none: true },
+			},
+		} );
+
+		await act( async () => {
+			render( <ObjectCache options={ {} } /> );
+		} );
+
+		const banner = await screen.findByRole( 'alert' );
+		expect( banner ).toHaveTextContent( /Auto-Disabled/i );
+		expect( banner ).toHaveTextContent( 'Redis Auth failed.' );
+		expect( banner ).toHaveTextContent( '(5 failures)' );
+		expect(
+			screen.getByRole( 'button', {
+				name: /Re-enable Object Cache/i,
+			} )
+		).toBeInTheDocument();
+	} );
+
+	it( 'hides the circuit-breaker banner when the circuit is closed', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				enabled: true,
+				redis_missing: false,
+				foreign_dropin: false,
+				redis_reachable: true,
+				circuit_open: false,
+				failure_count: 0,
+				supported_compressors: { none: true },
+			},
+		} );
+
+		await act( async () => {
+			render( <ObjectCache options={ {} } /> );
+		} );
+
+		await waitFor( () =>
+			expect( apiCall ).toHaveBeenCalledWith(
+				'object_cache',
+				expect.objectContaining( { action: 'status' } )
+			)
+		);
+
+		expect(
+			screen.queryByText( /Auto-Disabled/i )
+		).not.toBeInTheDocument();
+		expect(
+			screen.queryByRole( 'button', {
+				name: /Re-enable Object Cache/i,
+			} )
+		).not.toBeInTheDocument();
+	} );
+
+	it( 'recovers via the recover action with mode-only payload and refreshes status', async () => {
+		const statusResponse = {
+			success: true,
+			data: {
+				enabled: false,
+				redis_missing: false,
+				foreign_dropin: false,
+				redis_reachable: false,
+				circuit_open: true,
+				circuit_reason: 'Redis Auth failed.',
+				failure_count: 5,
+				supported_compressors: { none: true },
+			},
+		};
+		const recoveredResponse = {
+			success: true,
+			data: {
+				enabled: true,
+				redis_missing: false,
+				foreign_dropin: false,
+				redis_reachable: true,
+				circuit_open: false,
+				failure_count: 0,
+				supported_compressors: { none: true },
+			},
+		};
+		let statusCalls = 0;
+		apiCall.mockImplementation( async ( action, payload = {} ) => {
+			if ( 'object_cache' === action && 'status' === payload.action ) {
+				statusCalls += 1;
+				return 1 === statusCalls ? statusResponse : recoveredResponse;
+			}
+			if ( 'object_cache' === action && 'recover' === payload.action ) {
+				return {
+					success: true,
+					message: 'Object Cache recovered successfully.',
+				};
+			}
+			return { success: true };
+		} );
+
+		await act( async () => {
+			render( <ObjectCache options={ { password: 's3cret' } } /> );
+		} );
+
+		const recoverBtn = await screen.findByRole( 'button', {
+			name: /Re-enable Object Cache/i,
+		} );
+		await act( async () => {
+			fireEvent.click( recoverBtn );
+		} );
+
+		// Recover reuses stored settings server-side: only the mode travels,
+		// never the password.
+		const recoverPayload = apiCall.mock.calls.find(
+			( [ action, payload ] ) =>
+				'object_cache' === action && 'recover' === payload?.action
+		);
+		expect( recoverPayload ).toBeDefined();
+		expect( recoverPayload[ 1 ].password ).toBeUndefined();
+		expect( recoverPayload[ 1 ].mode ).toBe( 'standalone' );
+
+		// Status refreshes after recovery and the banner clears.
+		await waitFor( () =>
+			expect(
+				screen.queryByText( /Auto-Disabled/i )
+			).not.toBeInTheDocument()
+		);
+		expect(
+			screen.getByText( 'Object Cache recovered successfully.' )
+		).toBeInTheDocument();
+	} );
+
 	it( 'never includes the password in payloads for non-credential actions', async () => {
 		const statusResponse = {
 			success: true,

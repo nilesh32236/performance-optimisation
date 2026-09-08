@@ -38,6 +38,71 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		public const LEGACY_DROPIN_MARKER = 'Redis Object Cache Drop-in';
 
 		/**
+		 * Option name storing the plugin-side circuit-breaker state.
+		 *
+		 * The drop-in (templates/object-cache.php) trips itself at early boot
+		 * and bridges state via WP_CONTENT_DIR/wppo-redis-disabled.json; this
+		 * option mirrors that state for fully-booted WordPress (admin notices,
+		 * cron probe scheduling, SPA status).
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		public const CIRCUIT_OPTION = 'wppo_object_cache_circuit';
+
+		/**
+		 * Transient key (blog-prefixed via Util::transient_key()) mirroring
+		 * the drop-in failure counter for admin UI and cron use.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		public const FAIL_TRANSIENT = 'wppo_redis_failures';
+
+		/**
+		 * Admin-notice transient key (blog-prefixed via Util::transient_key())
+		 * armed when the circuit trips and cleared on dismiss/recovery.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		public const CIRCUIT_NOTICE_TRANSIENT = 'wppo_object_cache_circuit_notice';
+
+		/**
+		 * Option name storing the tripped_at timestamp the admin notice was
+		 * dismissed for. A later trip carries a newer timestamp, which
+		 * automatically re-arms the notice.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		public const CIRCUIT_DISMISSED_OPTION = 'wppo_object_cache_circuit_dismissed';
+
+		/**
+		 * Parked drop-in suffix used when the breaker auto-disables.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		public const PARKED_SUFFIX = '.wppo-disabled';
+
+		/**
+		 * File bridging the drop-in trip to fully-booted WordPress.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		public const DISABLED_STATE_FILE = 'wppo-redis-disabled.json';
+
+		/**
+		 * Drop-in failure-counter file (JSON { count, first, last }).
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		public const FAILURES_FILE = 'wppo-redis-failures.json';
+
+		/**
 		 * Allowed Redis configuration keys (single source for REST + CLI).
 		 *
 		 * Converges CLI 6-key allowlist (host,port,password,database,timeout,prefix)
@@ -132,11 +197,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 */
 		public function get_status() {
 			$status = array(
-				'enabled'         => false,
-				'redis_missing'   => ! class_exists( 'Redis' ),
-				'redis_reachable' => false,
-				'foreign_dropin'  => false,
+				'enabled'            => false,
+				'redis_missing'      => ! class_exists( 'Redis' ),
+				'redis_reachable'    => false,
+				'foreign_dropin'     => false,
+				'circuit_open'       => false,
+				'circuit_tripped_at' => 0,
+				'circuit_reason'     => '',
+				'circuit_error_code' => '',
+				'failure_count'      => 0,
 			);
+
+			// Circuit state is file/option-backed (no Redis needed), so it is
+			// reported even when the extension is missing or Redis is down.
+			$circuit                      = $this->get_circuit_state();
+			$status['circuit_open']       = $circuit['open'];
+			$status['circuit_tripped_at'] = $circuit['tripped_at'];
+			$status['circuit_reason']     = $circuit['reason'];
+			$status['circuit_error_code'] = $circuit['error_code'];
+			$status['failure_count']      = $circuit['failures'];
 
 			if ( file_exists( $this->dropin_path ) ) {
 				$wp_filesystem = Util::init_filesystem();
@@ -222,6 +301,366 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			}
 
 			return $status;
+		}
+
+		/**
+		 * Read the merged circuit-breaker state.
+		 *
+		 * Sources (first non-empty wins per field): the CIRCUIT_OPTION mirror
+		 * written by auto_disable_circuit(), the wppo-redis-disabled.json
+		 * bridge written by the drop-in's trip_circuit_breaker(), the parked
+		 * object-cache.php.wppo-disabled sibling, and the wppo-redis-failures.json
+		 * counter for the failure count.
+		 *
+		 * @since NEXT
+		 * @return array Shape { open: bool, tripped_at: int, reason: string, error_code: string, failures: int }.
+		 */
+		public function get_circuit_state(): array {
+			$state = array(
+				'open'       => false,
+				'tripped_at' => 0,
+				'reason'     => '',
+				'error_code' => '',
+				'failures'   => 0,
+			);
+
+			$option = get_option( self::CIRCUIT_OPTION, array() );
+			if ( is_array( $option ) ) {
+				if ( ! empty( $option['open'] ) ) {
+					$state['open'] = true;
+				}
+				if ( isset( $option['tripped_at'] ) ) {
+					$state['tripped_at'] = (int) $option['tripped_at'];
+				}
+				if ( ! empty( $option['reason'] ) ) {
+					$state['reason'] = (string) $option['reason'];
+				}
+				if ( ! empty( $option['error_code'] ) ) {
+					$state['error_code'] = (string) $option['error_code'];
+				}
+				if ( isset( $option['failures'] ) ) {
+					$state['failures'] = (int) $option['failures'];
+				}
+			}
+
+			// Drop-in bridge: the early-boot trip cannot touch options, so it
+			// leaves JSON state behind for fully-booted WordPress to pick up.
+			$bridge = $this->read_json_state_file( $this->get_disabled_state_path() );
+			if ( is_array( $bridge ) ) {
+				$state['open'] = true;
+				if ( 0 === $state['tripped_at'] && isset( $bridge['tripped_at'] ) ) {
+					$state['tripped_at'] = (int) $bridge['tripped_at'];
+				}
+				if ( '' === $state['reason'] && ! empty( $bridge['reason'] ) ) {
+					$state['reason'] = (string) $bridge['reason'];
+				}
+				if ( '' === $state['error_code'] && ! empty( $bridge['error_code'] ) ) {
+					$state['error_code'] = (string) $bridge['error_code'];
+				}
+				if ( 0 === $state['failures'] && isset( $bridge['failures'] ) ) {
+					$state['failures'] = (int) $bridge['failures'];
+				}
+			}
+
+			if ( file_exists( $this->get_parked_path() ) ) {
+				$state['open'] = true;
+			}
+
+			// A parked-sibling-only open state (bridge cleaned or never
+			// written) carries no timestamp of its own; fall back to the
+			// parked file's mtime so per-trip dismissal can still match it.
+			if ( $state['open'] && 0 === $state['tripped_at'] && file_exists( $this->get_parked_path() ) ) {
+				$mtime = filemtime( $this->get_parked_path() ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filemtime
+				if ( false !== $mtime && $mtime > 0 ) {
+					$state['tripped_at'] = (int) $mtime;
+				}
+			}
+
+			if ( 0 === $state['failures'] ) {
+				$failures = $this->read_json_state_file( $this->get_failures_path() );
+				if ( is_array( $failures ) && isset( $failures['count'] ) ) {
+					$state['failures'] = (int) $failures['count'];
+				}
+			}
+
+			// Transient mirror of the drop-in counter (written by
+			// auto_disable_circuit()): last-resort failures source when the
+			// JSON counter file is absent.
+			if ( 0 === $state['failures'] ) {
+				$mirror = get_transient( Util::transient_key( self::FAIL_TRANSIENT ) );
+				if ( is_array( $mirror ) && isset( $mirror['count'] ) ) {
+					$state['failures'] = (int) $mirror['count'];
+				}
+			}
+
+			return $state;
+		}
+
+		/**
+		 * Trip the circuit from fully-booted WordPress: park the drop-in.
+		 *
+		 * Plugin-side twin of the drop-in's trip_circuit_breaker() for
+		 * WP-context trips (programmatic callers, future WP-CLI wiring). The
+		 * drop-in itself trips at early boot; this method renames the drop-in
+		 * to object-cache.php.wppo-disabled (marker-guarded — foreign
+		 * drop-ins are never touched), writes the disabled-state bridge file,
+		 * mirrors state into CIRCUIT_OPTION, arms the admin-notice transient
+		 * and the FAIL_TRANSIENT failure mirror (both blog-prefixed via
+		 * Util::transient_key() for multisite isolation), and logs the event.
+		 *
+		 * @since NEXT
+		 * @param string $reason Human-readable trip reason.
+		 * @return bool|\WP_Error True on success, WP_Error for foreign drop-ins or filesystem failures.
+		 */
+		public function auto_disable_circuit( string $reason = '' ) {
+			// Foreign check via the local marker read (no Redis round-trip:
+			// a trip path must never pay a connection timeout to decide).
+			if ( file_exists( $this->dropin_path ) && ! $this->is_own_dropin() ) {
+				return new \WP_Error( 'foreign_dropin', __( 'A foreign drop-in exists. We will not park it for safety.', 'performance-optimisation' ) );
+			}
+
+			$failures = 0;
+			$counter  = $this->read_json_state_file( $this->get_failures_path() );
+			if ( is_array( $counter ) && isset( $counter['count'] ) ) {
+				$failures = (int) $counter['count'];
+			}
+
+			$tripped_at = time();
+			$reason     = '' !== $reason ? substr( sanitize_text_field( $reason ), 0, 200 ) : __( 'Repeated Redis connection failures.', 'performance-optimisation' );
+
+			$wp_filesystem = Util::init_filesystem();
+			if ( ! $wp_filesystem ) {
+				return new \WP_Error( 'write_error', __( 'Unable to initialize filesystem.', 'performance-optimisation' ) );
+			}
+
+			// Park our own drop-in; a foreign file must never be renamed.
+			if ( file_exists( $this->dropin_path ) ) {
+				if ( ! $this->is_own_dropin() ) {
+					return new \WP_Error( 'foreign_dropin', __( 'A foreign drop-in exists. We will not park it for safety.', 'performance-optimisation' ) );
+				}
+				if ( ! $wp_filesystem->move( $this->dropin_path, $this->get_parked_path(), true ) ) {
+					return new \WP_Error( 'write_error', __( 'Cannot park object-cache.php drop-in.', 'performance-optimisation' ) );
+				}
+			}
+
+			$payload = array(
+				'reason'     => $reason,
+				'error_code' => 'manual_trip',
+				'tripped_at' => $tripped_at,
+				'failures'   => $failures,
+			);
+			$wp_filesystem->put_contents( $this->get_disabled_state_path(), (string) wp_json_encode( $payload ), FS_CHMOD_FILE );
+
+			update_option(
+				self::CIRCUIT_OPTION,
+				array(
+					'open'       => true,
+					'tripped_at' => $tripped_at,
+					'reason'     => $reason,
+					'error_code' => 'manual_trip',
+					'failures'   => $failures,
+				),
+				false
+			);
+			set_transient(
+				Util::transient_key( self::CIRCUIT_NOTICE_TRANSIENT ),
+				array(
+					'tripped_at' => $tripped_at,
+					'reason'     => $reason,
+				),
+				WEEK_IN_SECONDS
+			);
+			// Mirror the failure count for admin UI/cron readers that must
+			// not touch the filesystem (see FAIL_TRANSIENT).
+			set_transient(
+				Util::transient_key( self::FAIL_TRANSIENT ),
+				array(
+					'count'   => $failures,
+					'updated' => $tripped_at,
+				),
+				DAY_IN_SECONDS
+			);
+
+			if ( is_callable( array( 'PerformanceOptimise\Inc\System_Info', 'flush_dropin_cache' ) ) ) {
+				System_Info::flush_dropin_cache();
+			}
+
+			Log::add( __( 'Object Cache circuit breaker tripped — drop-in auto-disabled after repeated Redis failures.', 'performance-optimisation' ) );
+
+			// Arm the recovery probe immediately; Cron::schedule_cron_jobs()
+			// keeps it scheduled while the circuit stays open. The
+			// 'wppo_object_cache_probe' recurrence slug (interval filterable
+			// via wppo_object_cache_probe_interval) is registered by
+			// Cron::add_custom_cron_interval().
+			if ( function_exists( 'wp_next_scheduled' ) && function_exists( 'wp_schedule_event' ) && ! wp_next_scheduled( 'wppo_object_cache_probe' ) ) {
+				wp_schedule_event( time(), 'wppo_object_cache_probe', 'wppo_object_cache_probe' );
+			}
+
+			return true;
+		}
+
+		/**
+		 * Probe Redis and close the circuit when it recovers.
+		 *
+		 * Lightweight ping(get_redis_config()); on success the drop-in is
+		 * restored from the template via enable(), all circuit state is
+		 * cleared, the probe schedule is removed, and the recovery is logged.
+		 * On failure the circuit stays open (the WP_Error is returned so cron
+		 * and REST callers can distinguish "still down" from success).
+		 *
+		 * @since NEXT
+		 * @return bool|\WP_Error True when the circuit is closed (or was never open), WP_Error while Redis is still unreachable.
+		 */
+		public function probe_recovery() {
+			$state = $this->get_circuit_state();
+			if ( ! $state['open'] ) {
+				return true;
+			}
+
+			$config = $this->get_redis_config();
+			$ping   = $this->ping( $config );
+			if ( is_wp_error( $ping ) ) {
+				return $ping;
+			}
+
+			$result = $this->enable( $config );
+			if ( is_wp_error( $result ) ) {
+				return $result;
+			}
+
+			$this->clear_circuit_state();
+
+			if ( function_exists( 'wp_clear_scheduled_hook' ) ) {
+				wp_clear_scheduled_hook( 'wppo_object_cache_probe' );
+			}
+
+			Log::add( __( 'Object Cache circuit breaker recovered — drop-in re-enabled after successful Redis probe.', 'performance-optimisation' ) );
+
+			return true;
+		}
+
+		/**
+		 * Clear every circuit-breaker artefact: option, notice transient,
+		 * failure counter, disabled-state bridge, and parked drop-in sibling.
+		 *
+		 * Called after successful enable()/disable()/probe recovery so a
+		 * healed setup never shows a stale "auto-disabled" notice.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public function clear_circuit_state(): void {
+			delete_option( self::CIRCUIT_OPTION );
+			delete_transient( Util::transient_key( self::FAIL_TRANSIENT ) );
+			delete_transient( Util::transient_key( self::CIRCUIT_NOTICE_TRANSIENT ) );
+
+			$wp_filesystem = Util::init_filesystem();
+			foreach ( array( $this->get_parked_path(), $this->get_disabled_state_path(), $this->get_failures_path() ) as $path ) {
+				if ( ! file_exists( $path ) ) {
+					continue;
+				}
+				if ( $wp_filesystem ) {
+					$wp_filesystem->delete( $path );
+				} else {
+					@unlink( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.unlink_unlink
+				}
+			}
+		}
+
+		/**
+		 * Whether the installed drop-in carries this plugin's marker.
+		 *
+		 * @since NEXT
+		 * @return bool True when the drop-in is ours (or absent), false for foreign files.
+		 */
+		private function is_own_dropin(): bool {
+			if ( ! file_exists( $this->dropin_path ) ) {
+				return true;
+			}
+
+			if ( ! is_readable( $this->dropin_path ) ) {
+				return false;
+			}
+
+			$size = filesize( $this->dropin_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize
+			if ( false === $size || $size >= 1048576 ) {
+				return false;
+			}
+
+			$wp_filesystem = Util::init_filesystem();
+			if ( $wp_filesystem ) {
+				$content = $wp_filesystem->get_contents( $this->dropin_path );
+			} else {
+				$content = file_get_contents( $this->dropin_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+			}
+
+			if ( ! is_string( $content ) ) {
+				return false;
+			}
+
+			return false !== strpos( $content, self::DROPIN_MARKER ) || false !== strpos( $content, self::LEGACY_DROPIN_MARKER );
+		}
+
+		/**
+		 * Read a small JSON state file from wp-content.
+		 *
+		 * @since NEXT
+		 * @param string $path Absolute file path.
+		 * @return array|null Decoded array, or null when missing/unreadable/invalid.
+		 */
+		private function read_json_state_file( string $path ) {
+			if ( ! file_exists( $path ) || ! is_readable( $path ) ) {
+				return null;
+			}
+
+			$size = filesize( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize
+			if ( false === $size || $size < 2 || $size > 65536 ) {
+				return null;
+			}
+
+			$wp_filesystem = Util::init_filesystem();
+			if ( $wp_filesystem ) {
+				$raw = $wp_filesystem->get_contents( $path );
+			} else {
+				$raw = file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+			}
+
+			if ( ! is_string( $raw ) || '' === $raw ) {
+				return null;
+			}
+
+			$decoded = json_decode( $raw, true );
+			return is_array( $decoded ) ? $decoded : null;
+		}
+
+		/**
+		 * Absolute path of the parked drop-in sibling.
+		 *
+		 * @since NEXT
+		 * @return string
+		 */
+		private function get_parked_path(): string {
+			return $this->dropin_path . self::PARKED_SUFFIX;
+		}
+
+		/**
+		 * Absolute path of the disabled-state bridge file.
+		 *
+		 * @since NEXT
+		 * @return string
+		 */
+		private function get_disabled_state_path(): string {
+			return WP_CONTENT_DIR . '/' . self::DISABLED_STATE_FILE;
+		}
+
+		/**
+		 * Absolute path of the drop-in failure-counter file.
+		 *
+		 * @since NEXT
+		 * @return string
+		 */
+		private function get_failures_path(): string {
+			return WP_CONTENT_DIR . '/' . self::FAILURES_FILE;
 		}
 
 		/**
@@ -399,6 +838,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				System_Info::flush_dropin_cache();
 			}
 
+			// A successful enable closes the circuit: drop the parked
+			// sibling, the disabled-state bridge, the failure counter, and
+			// the circuit option/notice so no stale "auto-disabled" UI lingers.
+			$this->clear_circuit_state();
+
 			// Optionally, ping cache flush if enabled just to clear old cruft.
 			wp_cache_flush();
 
@@ -433,6 +877,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			if ( file_exists( $this->config_path ) ) {
 				$wp_filesystem->delete( $this->config_path );
 			}
+
+			// A deliberate manual disable resolves any parked circuit state
+			// too, so a stale "auto-disabled" notice never outlives it.
+			$this->clear_circuit_state();
 
 			// The drop-in changed — System Info's cached ownership verdict is
 			// stale (audit #888 finding 25). is_callable also covers a partially

@@ -112,6 +112,51 @@ add_filter( 'wppo_object_cache_config', function( $config ) {
 
 ---
 
+### `wppo_object_cache_circuit_breaker_threshold`
+Filters how many counted Redis failures trip the object-cache circuit breaker (auto-disable the drop-in). Readable at early boot: the `WPPO_CB_THRESHOLD` constant wins when defined, otherwise this filter, otherwise `5`. Only auth/connection-class errors count (`auth_fail`, `conn_fail`, `sentinel_fail`, `cluster_fail`, `select_fail`, boot exceptions, write failures) — environment/config codes never trip the breaker. @since NEXT.
+
+**Parameters:**
+- `$threshold` *(int)* — Consecutive counted failures within the window that trip the breaker. Default `5`, minimum `1`.
+
+**Example:**
+```php
+add_filter( 'wppo_object_cache_circuit_breaker_threshold', function() {
+    return 3; // Trip sooner on fragile infrastructure.
+} );
+```
+
+---
+
+### `wppo_object_cache_circuit_breaker_window`
+Filters the counting window in seconds in which threshold failures must occur to trip the object-cache circuit breaker. Readable at early boot: the `WPPO_CB_WINDOW` constant wins when defined, otherwise this filter, otherwise `600` (10 minutes). Failures older than the window restart the counter instead of tripping. @since NEXT.
+
+**Parameters:**
+- `$window` *(int)* — Window in seconds. Default `600`, minimum `1`.
+
+**Example:**
+```php
+add_filter( 'wppo_object_cache_circuit_breaker_window', function() {
+    return 300; // Count failures over the last 5 minutes.
+} );
+```
+
+---
+
+### `wppo_object_cache_probe_interval`
+Filters the recovery-probe interval in seconds while the object-cache circuit is open (the `wppo_object_cache_probe` cron recurrence). Default `HOUR_IN_SECONDS`, minimum `300`. The probe is scheduled only while the circuit is open and cleared on recovery. @since NEXT.
+
+**Parameters:**
+- `$interval` *(int)* — Seconds between recovery probes. Default `3600`, minimum `300`.
+
+**Example:**
+```php
+add_filter( 'wppo_object_cache_probe_interval', function() {
+    return 900; // Re-check Redis every 15 minutes while down.
+} );
+```
+
+---
+
 ## 🎛️ Filter Hooks
 
 ### `wppo_exclude_delay_js`
