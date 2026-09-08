@@ -221,7 +221,7 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 
 		// Scope the assertions to the extracted function body so a stray
 		// comment elsewhere in the file cannot satisfy the guard checks.
-		$pattern = '/function wppo_delete_directory\([^)]*\)[^{]*\{(.*?)\n\t\}\n\}/s';
+		$pattern = '/function wppo_delete_directory\([^)]*\)[^{]*\{(.*?)\n\s*\}\s*\}/s';
 		if ( ! preg_match( $pattern, (string) $source, $m ) ) {
 			$this->fail( 'Could not extract wppo_delete_directory() body from uninstall.php' );
 		}
@@ -241,6 +241,16 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 			'strpos( $normalized_real_dir, $normalized_real_root )',
 			$body,
 			'wppo_delete_directory() must require the resolved path to stay inside WP_CONTENT_DIR'
+		);
+		$this->assertStringContainsString(
+			'trailingslashit( $normalized_dir )',
+			$body,
+			'wppo_delete_directory() must reject WP_CONTENT_DIR itself (root-equality guard)'
+		);
+		$this->assertStringContainsString(
+			'\.\.',
+			$body,
+			'wppo_delete_directory() must reject dot-dot traversal segments'
 		);
 	}
 }
