@@ -69,13 +69,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Header_Emitter' ) ) {
 		 * cart/checkout/account/punch-hole paths); one helper pins the exact
 		 * pair so the strings cannot drift. Uses the default replace=true to
 		 * preserve the pre-extraction header() semantics (issue #905 review).
+		 * Single headers_sent() check mirrors the pre-extraction
+		 * `if ( ! headers_sent() ) { header(); header(); }` shape so a
+		 * mid-pair race cannot emit a partial pair.
 		 *
 		 * @since NEXT
 		 * @return void
 		 */
 		public static function emit_private_pair(): void {
-			self::emit( 'Cache-Control: private,no-cache' );
-			self::emit( 'X-LiteSpeed-Cache-Control: private,no-vary' );
+			if ( function_exists( 'headers_sent' ) && headers_sent() ) {
+				return;
+			}
+			header( self::strip_crlf( 'Cache-Control: private,no-cache' ) );
+			header( self::strip_crlf( 'X-LiteSpeed-Cache-Control: private,no-vary' ) );
 		}
 
 		/**
@@ -83,14 +89,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Header_Emitter' ) ) {
 		 *
 		 * Used for the admin / no-cache ESI path. Uses the default
 		 * replace=true to preserve the pre-extraction header() semantics
-		 * (issue #905 review).
+		 * (issue #905 review). Single headers_sent() check mirrors the
+		 * pre-extraction shape (see emit_private_pair()).
 		 *
 		 * @since NEXT
 		 * @return void
 		 */
 		public static function emit_nocache_pair(): void {
-			self::emit( 'Cache-Control: no-cache' );
-			self::emit( 'X-LiteSpeed-Cache-Control: no-cache' );
+			if ( function_exists( 'headers_sent' ) && headers_sent() ) {
+				return;
+			}
+			header( self::strip_crlf( 'Cache-Control: no-cache' ) );
+			header( self::strip_crlf( 'X-LiteSpeed-Cache-Control: no-cache' ) );
 		}
 
 		/**

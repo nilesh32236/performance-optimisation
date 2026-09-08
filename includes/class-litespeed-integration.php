@@ -1491,7 +1491,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 *
 		 * Internal shim delegating to {@see Header_Emitter::strip_crlf()}
 		 * (issue #905) so pre-existing internal call sites keep working;
-		 * new code should call Header_Emitter directly.
+		 * new code should call Header_Emitter directly. Temporary — planned
+		 * for removal in a follow-up once the migration is fully soaked.
 		 *
 		 * @since NEXT
 		 * @param string $value Header value to clean.
@@ -1728,6 +1729,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				do_action( 'litespeed_control_set_nocache', $reason );
 			}
 
+			// Preserve pre-extraction semantics (issue #905 review): the
+			// wppo_litespeed_nocache_header filter fired only when headers
+			// were not already sent. Header_Emitter::emit() re-guards for
+			// races between this check and the emission.
+			if ( function_exists( 'headers_sent' ) && headers_sent() ) {
+				return;
+			}
 			$header = 'X-LiteSpeed-Cache-Control: no-cache';
 			/**
 			 * Filter the LiteSpeed no-cache header.
@@ -1737,7 +1745,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			 * @param string $reason Reason.
 			 */
 			$header = (string) apply_filters( 'wppo_litespeed_nocache_header', $header, $reason );
-			// Header_Emitter::emit() guards headers_sent() internally (issue #905 review).
 			Header_Emitter::emit( $header );
 		}
 
