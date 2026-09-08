@@ -82,7 +82,7 @@
 	}
 
 	&:hover {
-		background: #fff;
+		background: var(--wppo-bg-card);
 		border-color: var(--wppo-border, #e2e8f0);
 		color: var(--wppo-text-main);
 	}
@@ -100,7 +100,7 @@
 
 		&:hover {
 			background: var(--wppo-primary-hover);
-			color: #fff;
+			color: var(--wppo-bg-card);
 			border-color: var(--wppo-primary-hover);
 		}
 	}
