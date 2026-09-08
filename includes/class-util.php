@@ -270,11 +270,76 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				'ai_adaptive'           => array(
 					'enabled' => false,
 				),
-				'edge_cache'            => array(
-					'enabled' => false,
-				),
-			);
+			'edge_cache'            => array(
+				'enabled' => false,
+			),
+		);
+	}
+
+	/**
+	 * Relative paths treated as WooCommerce endpoints for static-cache bypass.
+	 *
+	 * Defaults cover stock permalinks (`cart`, `checkout`, `my-account`). When
+	 * WooCommerce is active, the configured page paths (`wc_get_page_id()` for
+	 * `cart`/`checkout`/`myaccount`, resolved via permalink path with a
+	 * `post_name` fallback) are merged in so custom slugs (e.g. `/basket/`,
+	 * including nested pages like `shop/basket`) are excluded too — including
+	 * in the pre-boot `advanced-cache.php` drop-in, which cannot call
+	 * `is_cart()`/`is_checkout()`/`is_account_page()`. Fail-soft: any
+	 * resolution failure returns the defaults (never fatal, 0 queries when
+	 * Woo is absent).
+	 *
+	 * @since NEXT
+	 * @return string[] Relative paths (e.g. `cart`, `shop/basket`), unique, lowercased.
+	 */
+	public static function get_woo_excluded_paths(): array {
+		$paths = array( 'cart', 'checkout', 'my-account' );
+		try {
+			if ( ! function_exists( 'wc_get_page_id' ) ) {
+				return $paths;
+			}
+			foreach ( array( 'cart', 'checkout', 'myaccount' ) as $page_key ) {
+				$page_id = (int) wc_get_page_id( $page_key );
+				if ( $page_id <= 0 ) {
+					continue;
+				}
+				$path = '';
+				if ( function_exists( 'get_permalink' ) ) {
+					$permalink = get_permalink( $page_id );
+					if ( is_string( $permalink ) && '' !== $permalink ) {
+						$parsed = wp_parse_url( $permalink, PHP_URL_PATH );
+						if ( is_string( $parsed ) && '' !== trim( $parsed, '/' ) ) {
+							$path = strtolower( trim( $parsed, '/' ) );
+						}
+					}
+				}
+				if ( '' === $path && function_exists( 'get_post_field' ) ) {
+					$path = strtolower( (string) get_post_field( 'post_name', $page_id ) );
+				}
+				$segments = array_values(
+					array_filter(
+						array_map(
+							static function ( $segment ) {
+								return preg_replace( '/[^a-z0-9\-_]/', '', strtolower( (string) $segment ) );
+							},
+							explode( '/', $path )
+						)
+					)
+				);
+				if ( empty( $segments ) ) {
+					continue;
+				}
+				$candidate = implode( '/', $segments );
+				$seen      = array_map( 'strtolower', $paths );
+				if ( ! in_array( $candidate, $seen, true ) ) {
+					$paths[] = $candidate;
+				}
+			}
+		} catch ( \Throwable $e ) {
+			unset( $e );
 		}
+		return $paths;
+	}
 
 		/**
 		 * Static cache for resolved home URLs, keyed by blog ID.
@@ -1492,7 +1557,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					continue;
 				}
 
-				if ( is_array( $value ) ) {
+				// Woo safe mode toggle (issue #922) — normalize malformed import
+			// shapes (0/1, '0'/'1', 'false'/'true') to bool so the toggle
+			// check in Cache::is_woo_excluded() is reliable. Unrecognized
+			// values fail safe to true (enabled).
+			if ( 'wooSafeMode' === $safe_key && ! is_array( $value ) ) {
+				$bool                     = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+				$sanitized[ $safe_key ] = null === $bool ? true : $bool;
+				continue;
+			}
+
+			if ( is_array( $value ) ) {
 					$sanitized[ $safe_key ] = self::sanitize_settings_recursively( $value );
 				} elseif ( is_bool( $value ) ) {
 					$sanitized[ $safe_key ] = (bool) $value;
