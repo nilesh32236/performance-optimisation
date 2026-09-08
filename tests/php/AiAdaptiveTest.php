@@ -252,6 +252,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$this->install_stubs();
 		$this->seed_eager_rum();
 		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
 		Functions\when( 'is_user_logged_in' )->justReturn( false );
 
 		$model = AI_Adaptive::learn();
@@ -259,7 +260,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Test learn caps eager eagerness to moderate for logged-in users.
+	 * Test learn caps eager eagerness to moderate for logged-in frontend visitors.
 	 *
 	 * @return void
 	 */
@@ -267,10 +268,32 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$this->install_stubs();
 		$this->seed_eager_rum();
 		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
 		Functions\when( 'is_user_logged_in' )->justReturn( true );
 
 		$model = AI_Adaptive::learn();
 		$this->assertSame( 'moderate', $model['eagerness'] );
+	}
+
+	/**
+	 * Test learn in wp-admin (always logged in) is not capped by the login probe.
+	 *
+	 * Learn/get_suggestions execute via manage_options REST endpoints in
+	 * wp-admin; the logged-in admin there is not a frontend visitor, so a
+	 * plain non-commerce site can still learn `eager`.
+	 *
+	 * @return void
+	 */
+	public function test_learn_in_admin_context_ignores_login_probe(): void {
+		$this->install_stubs();
+		$this->seed_eager_rum();
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( true );
+		Functions\when( 'is_user_logged_in' )->justReturn( true );
+
+		$this->assertFalse( AI_Adaptive::is_commerce_or_auth_context() );
+		$model = AI_Adaptive::learn();
+		$this->assertSame( 'eager', $model['eagerness'] );
 	}
 
 	/**
@@ -281,12 +304,120 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	public function test_learn_caps_eager_to_moderate_via_cart_cookie(): void {
 		$this->install_stubs();
 		$this->seed_eager_rum();
+		Functions\when( 'is_admin' )->justReturn( false );
 		Functions\when( 'is_user_logged_in' )->justReturn( false );
 		$_COOKIE['woocommerce_items_in_cart'] = '1';
 
 		$model = AI_Adaptive::learn();
 		unset( $_COOKIE['woocommerce_items_in_cart'] );
 		$this->assertSame( 'moderate', $model['eagerness'] );
+	}
+
+	/**
+	 * Fake AI client returning a canned prompt() result.
+	 *
+	 * @param mixed $result Canned prompt() result.
+	 * @return object
+	 */
+	private function fake_ai_client( $result ): object {
+		return new class( $result ) {
+			/**
+			 * Canned result.
+			 *
+			 * @var mixed
+			 */
+			private $result;
+
+			/**
+			 * Constructor.
+			 *
+			 * @param mixed $result Canned prompt() result.
+			 */
+			public function __construct( $result ) {
+				$this->result = $result;
+			}
+
+			/**
+			 * Return the canned result.
+			 *
+			 * @param string $prompt Prompt text (ignored).
+			 * @return mixed
+			 */
+			public function prompt( $prompt ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+				return $this->result;
+			}
+		};
+	}
+
+	/**
+	 * Test the AI-client path caps eager at moderate in commerce context.
+	 *
+	 * @return void
+	 */
+	public function test_learn_via_ai_client_caps_eager_in_commerce_context(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		Util::clear_settings_cache();
+		Functions\when( 'wp_json_encode' )->alias( 'json_encode' );
+		Functions\when( 'wp_ai_client' )->justReturn(
+			$this->fake_ai_client(
+				array(
+					'eagerness'     => 'eager',
+					'prefetch_urls' => array( 'http://example.com/x/' ),
+				)
+			)
+		);
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( true );
+
+		$model = AI_Adaptive::learn();
+		$this->assertSame( 'ai_client', $model['source'] );
+		$this->assertSame( 'moderate', $model['eagerness'] );
+		$this->assertSame( 'moderate', $this->options[ AI_Adaptive::OPTION ]['eagerness'] );
+	}
+
+	/**
+	 * Test the AI-client path coerces garbage eagerness to conservative.
+	 *
+	 * @return void
+	 */
+	public function test_learn_via_ai_client_validates_garbage_eagerness(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		Util::clear_settings_cache();
+		Functions\when( 'wp_json_encode' )->alias( 'json_encode' );
+		Functions\when( 'wp_ai_client' )->justReturn(
+			$this->fake_ai_client( array( 'eagerness' => 'aggressive' ) )
+		);
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$model = AI_Adaptive::learn();
+		$this->assertSame( 'ai_client', $model['source'] );
+		$this->assertSame( 'conservative', $model['eagerness'] );
+	}
+
+	/**
+	 * Test stale invalid eagerness is allowlisted before rule injection.
+	 *
+	 * @return void
+	 */
+	public function test_filter_speculation_rules_validates_stale_eagerness(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings']       = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		$this->options[ AI_Adaptive::OPTION ] = array(
+			'prefetch_urls' => array( 'http://example.com/a/' ),
+			'eagerness'     => 'aggressive',
+		);
+		Util::clear_settings_cache();
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$rules = AI_Adaptive::filter_speculation_rules( array() );
+		$this->assertCount( 1, $rules );
+		$this->assertSame( 'conservative', $rules[0]['eagerness'] );
 	}
 
 	/**
@@ -300,6 +431,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$this->options['wppo_web_vitals_trends'] = array();
 		$this->options['wppo_settings']          = array( 'ai_adaptive' => array( 'enabled' => true ) );
 		Util::clear_settings_cache();
+		Functions\when( 'is_admin' )->justReturn( false );
 		Functions\when( 'is_user_logged_in' )->justReturn( true );
 		Functions\when( 'apply_filters' )->alias(
 			function ( $hook, $value ) {
@@ -363,6 +495,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 			'eagerness'     => 'eager',
 		);
 		Util::clear_settings_cache();
+		Functions\when( 'is_admin' )->justReturn( false );
 		Functions\when( 'is_user_logged_in' )->justReturn( true );
 
 		$rules = AI_Adaptive::filter_speculation_rules( array() );
@@ -384,6 +517,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		);
 		Util::clear_settings_cache();
 		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
 		Functions\when( 'is_user_logged_in' )->justReturn( false );
 
 		$rules = AI_Adaptive::filter_speculation_rules( array() );
@@ -402,6 +536,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 			'prefetch_urls' => array( 'http://example.com/a/' ),
 			'eagerness'     => 'eager',
 		);
+		Functions\when( 'is_admin' )->justReturn( false );
 		Functions\when( 'is_user_logged_in' )->justReturn( true );
 
 		$suggestions = AI_Adaptive::get_suggestions();
@@ -429,6 +564,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 			'eagerness'     => 'eager',
 		);
 		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
 		Functions\when( 'is_user_logged_in' )->justReturn( false );
 
 		$suggestions = AI_Adaptive::get_suggestions();

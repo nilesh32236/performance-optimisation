@@ -141,7 +141,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 
 			if ( ! $is_commerce && function_exists( 'is_user_logged_in' ) ) {
 				try {
-					$is_commerce = (bool) is_user_logged_in();
+					// Frontend visitors only: learn()/get_suggestions() execute in
+					// wp-admin/REST/cron/CLI where a logged-in admin is always
+					// present, which would otherwise cap every site site-wide.
+					if ( self::is_frontend_context() ) {
+						$is_commerce = (bool) is_user_logged_in();
+					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
@@ -228,6 +233,78 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		}
 
 		/**
+		 * Whether the current request is a frontend visitor context.
+		 *
+		 * Used to scope the logged-in probe in is_commerce_or_auth_context():
+		 * admin dashboard, REST, AJAX, cron, and CLI requests never represent a
+		 * frontend visitor seeing speculation rules, and learn() runs there with
+		 * an always-logged-in admin. All probes are function_exists-guarded so
+		 * unit tests and minimal installs default to frontend (true).
+		 *
+		 * @return bool True when the request looks like a frontend visit.
+		 * @since NEXT
+		 */
+		private static function is_frontend_context(): bool {
+			if ( defined( 'WP_CLI' ) && WP_CLI ) {
+				return false;
+			}
+			if ( defined( 'DOING_CRON' ) && DOING_CRON ) {
+				return false;
+			}
+			if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+				return false;
+			}
+			if ( function_exists( 'wp_doing_cron' ) ) {
+				try {
+					if ( wp_doing_cron() ) {
+						return false;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			if ( function_exists( 'is_admin' ) ) {
+				try {
+					if ( is_admin() ) {
+						return false;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			if ( function_exists( 'wp_doing_ajax' ) ) {
+				try {
+					if ( wp_doing_ajax() ) {
+						return false;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			return true;
+		}
+
+		/**
+		 * Normalize an eagerness value: allowlist then commerce/auth cap.
+		 *
+		 * Anything outside conservative|moderate|eager (e.g. LLM garbage like
+		 * 'Eager' or 'aggressive', or stale pre-guardrail models) is coerced to
+		 * conservative; `eager` is then capped at `moderate` in commerce/auth
+		 * contexts via maybe_cap_eagerness().
+		 *
+		 * @param mixed $eagerness Raw eagerness value.
+		 * @return string Normalized eagerness value.
+		 * @since NEXT
+		 */
+		private static function normalize_eagerness( $eagerness ): string {
+			$eagerness = (string) $eagerness;
+			if ( ! in_array( $eagerness, array( 'conservative', 'moderate', 'eager' ), true ) ) {
+				$eagerness = 'conservative';
+			}
+			return self::maybe_cap_eagerness( $eagerness );
+		}
+
+		/**
 		 * Cap an AI-learned eagerness value at `moderate` in commerce/auth contexts.
 		 *
 		 * The AI only tightens, never loosens: `eager` becomes `moderate`, every
@@ -273,10 +350,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				if ( is_array( $ai_model ) && ! empty( $ai_model ) ) {
 					$ai_model['source']     = 'ai_client';
 					$ai_model['updated_at'] = time();
-					// Guardrail (#908): an LLM-returned `eager` is capped at
-					// `moderate` in commerce/auth contexts before persisting.
+					// Guardrail (#908): allowlist-validate (LLM output is untrusted)
+					// and cap `eager` at `moderate` in commerce/auth contexts.
 					if ( isset( $ai_model['eagerness'] ) ) {
-						$ai_model['eagerness'] = self::maybe_cap_eagerness( (string) $ai_model['eagerness'] );
+						$ai_model['eagerness'] = self::normalize_eagerness( $ai_model['eagerness'] );
 					}
 					self::update_model( $ai_model );
 					return $ai_model;
@@ -472,12 +549,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			 * @param array  $rum RUM aggregates.
 			 */
 			$eagerness = apply_filters( 'wppo_ai_adaptive_eagerness', $eagerness, $rum );
-			if ( ! in_array( $eagerness, array( 'conservative', 'moderate', 'eager' ), true ) ) {
-				$eagerness = 'conservative';
-			}
-			// Guardrail (#908): cap at `moderate` in commerce/auth contexts AFTER
-			// the filter, so a third-party filter returning `eager` is still tightened.
-			$eagerness = self::maybe_cap_eagerness( $eagerness );
+			// Guardrail (#908): allowlist then cap at `moderate` in commerce/auth
+			// contexts AFTER the filter, so a third-party filter returning
+			// `eager` is still tightened.
+			$eagerness = self::normalize_eagerness( $eagerness );
 
 			return array(
 				'version'       => 1,
@@ -566,9 +641,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			}
 
 			$eagerness = $model['eagerness'] ?? 'conservative';
-			// Guardrail (#908): never propose `eager` in commerce/auth contexts
-			// (covers models persisted before the learn() cap).
-			$eagerness = self::maybe_cap_eagerness( (string) $eagerness );
+			// Guardrail (#908): allowlist stale values and never propose `eager`
+			// in commerce/auth contexts (covers models persisted before the cap).
+			$eagerness = self::normalize_eagerness( $eagerness );
 			if ( 'conservative' !== $eagerness ) {
 				$suggestions[] = array(
 					'metric'      => 'ai_speculation_eagerness',
@@ -651,9 +726,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			}
 			// Append AI prefetch rule (prefetch top-2). Structure mirrors WP core:
 			// rules = [ { source: 'list', urls: [...] , eagerness: 'conservative' } ].
-			// Guardrail (#908): downgrade a stale persisted `eager` to `moderate`
-			// in commerce/auth contexts before injecting.
-			$eagerness = self::maybe_cap_eagerness( (string) ( $model['eagerness'] ?? 'conservative' ) );
+			// Guardrail (#908): allowlist stale values and downgrade a persisted
+			// `eager` to `moderate` in commerce/auth contexts before injecting.
+			$eagerness = self::normalize_eagerness( $model['eagerness'] ?? 'conservative' );
 			$rules[]   = array(
 				'source'    => 'list',
 				'urls'      => $urls,
