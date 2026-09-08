@@ -695,10 +695,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				$commerce_paths = self::get_commerce_exclude_paths();
 				$settings       = Util::get_settings();
 				$existing       = isset( $settings['preload_settings']['speculationExcludeUrls'] ) ? (string) $settings['preload_settings']['speculationExcludeUrls'] : '';
-				// Normalized line-by-line compare (trim + trailing-slash and
-				// wildcard insensitive) so formatting variants do not re-suggest.
+				// Normalized line-by-line compare (full URLs reduced to path-only,
+				// trim + trailing-slash and wildcard insensitive) so formatting
+				// variants do not re-suggest.
 				$normalize_path = static function ( $path ) {
-					return rtrim( rtrim( rtrim( trim( (string) $path ), '/' ), '*' ), '/' );
+					$path   = trim( (string) $path );
+					$parsed = function_exists( 'wp_parse_url' ) ? wp_parse_url( $path, PHP_URL_PATH ) : null;
+					if ( is_string( $parsed ) && '' !== $parsed ) {
+						$path = $parsed;
+					}
+					return rtrim( rtrim( rtrim( $path, '/' ), '*' ), '/' );
 				};
 				$existing_list  = array_map( $normalize_path, Util::process_urls( $existing ) );
 				$missing        = array();

@@ -669,6 +669,31 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test full-URL existing excludes match path patterns (no re-suggest).
+	 *
+	 * @return void
+	 */
+	public function test_get_suggestions_omits_excludes_matching_full_urls(): void {
+		$this->install_stubs();
+		$this->options[ AI_Adaptive::OPTION ] = array(
+			'prefetch_urls' => array( 'http://example.com/a/' ),
+			'eagerness'     => 'eager',
+		);
+		$this->options['wppo_settings']       = array(
+			'preload_settings' => array(
+				'speculationExcludeUrls' => "https://example.com/cart/*\nhttps://example.com/checkout/*\nhttps://example.com/my-account/*",
+			),
+		);
+		Util::clear_settings_cache();
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( true );
+
+		$suggestions = AI_Adaptive::get_suggestions();
+
+		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_speculation_excludes' ) );
+	}
+
+	/**
 	 * Test shop-page probes (cart/checkout/account) signal a commerce context.
 	 *
 	 * @return void
