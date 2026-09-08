@@ -133,7 +133,21 @@ if ( ! function_exists( 'wppo_delete_directory' ) ) {
 	function wppo_delete_directory( string $dir ): void {
 		$normalized_dir  = wp_normalize_path( $dir );
 		$normalized_root = trailingslashit( wp_normalize_path( WP_CONTENT_DIR ) );
-		if ( false !== strpos( $normalized_dir, '..' ) || 0 !== strpos( $normalized_dir, $normalized_root ) ) {
+
+		if ( preg_match( '#(^|/)\.\.(/|$)#', $normalized_dir ) ) {
+			return;
+		}
+
+		$real_dir  = realpath( $dir );
+		$real_root = realpath( WP_CONTENT_DIR );
+
+		if ( false !== $real_dir && false !== $real_root ) {
+			$normalized_real_dir  = wp_normalize_path( $real_dir );
+			$normalized_real_root = trailingslashit( wp_normalize_path( $real_root ) );
+			if ( 0 !== strpos( $normalized_real_dir, $normalized_real_root ) ) {
+				return;
+			}
+		} elseif ( 0 !== strpos( $normalized_dir, $normalized_root ) ) {
 			return;
 		}
 
