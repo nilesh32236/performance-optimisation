@@ -141,6 +141,10 @@ if ( ! function_exists( 'wppo_delete_directory' ) ) {
 		$normalized_dir  = wp_normalize_path( $dir );
 		$normalized_root = trailingslashit( wp_normalize_path( WP_CONTENT_DIR ) );
 
+		if ( trailingslashit( $normalized_dir ) === $normalized_root ) {
+			return;
+		}
+
 		if ( preg_match( '#(^|/)\.\.(/|$)#', $normalized_dir ) ) {
 			return;
 		}
@@ -151,6 +155,11 @@ if ( ! function_exists( 'wppo_delete_directory' ) ) {
 		if ( false !== $real_dir && false !== $real_root ) {
 			$normalized_real_dir  = wp_normalize_path( $real_dir );
 			$normalized_real_root = trailingslashit( wp_normalize_path( $real_root ) );
+
+			if ( trailingslashit( $normalized_real_dir ) === $normalized_real_root ) {
+				return;
+			}
+
 			if ( 0 !== strpos( $normalized_real_dir, $normalized_real_root ) ) {
 				return;
 			}
