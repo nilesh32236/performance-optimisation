@@ -322,7 +322,7 @@ jobs:
           RESEARCH_OK=false
           while [ "${ATTEMPT}" -le 3 ]; do
             echo "Research attempt ${ATTEMPT}/3..."
-            if ! timeout 18m opencode run --auto --agent wppo-researcher --model "${{ vars.OPENCODE_MODEL || 'opencode-go/muse-spark-1.2-contributor' }}" < /tmp/research-prompt.txt > /tmp/opencode-research-output.txt; then
+            if ! timeout 18m opencode run --auto --agent wppo-researcher --model "${{ vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free' }}" < /tmp/research-prompt.txt > /tmp/opencode-research-output.txt; then
               echo "::error::OpenCode research failed (attempt ${ATTEMPT})"
               exit 1
             fi
@@ -783,7 +783,7 @@ jobs:
           PUBLISH_OK=false
           while [ "${ATTEMPT}" -le 2 ]; do
             echo "Publish attempt ${ATTEMPT}/2..."
-            if ! timeout 10m opencode run --auto --agent wppo-issue-publisher --model "${{ vars.OPENCODE_MODEL || 'opencode-go/muse-spark-1.2-contributor' }}" < /tmp/create-issues-prompt.md > /tmp/opencode-create-issues-output.txt; then
+            if ! timeout 10m opencode run --auto --agent wppo-issue-publisher --model "${{ vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free' }}" < /tmp/create-issues-prompt.md > /tmp/opencode-create-issues-output.txt; then
               echo "::error::OpenCode issue publisher failed (attempt ${ATTEMPT})"
               exit 1
             fi

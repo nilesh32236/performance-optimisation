@@ -275,13 +275,13 @@ This plugin has autonomous AI agent workflows. See `.agents/AGENTS.md` for agent
 
 The model used by the AI workflows is **not** a secret — it is read from the
 repo **variable** `OPENCODE_MODEL` (Settings → Secrets and variables → Actions →
-Variables). If unset, workflows fall back to `opencode-go/deepseek-v4-flash`.
+Variables). If unset, workflows fall back to `opencode/muse-spark-1.3-contributor-free`.
 
 ```yaml
 # Pattern used in .github/workflows:
-model: ${{ vars.OPENCODE_MODEL || 'opencode-go/deepseek-v4-flash' }}
+model: ${{ vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free' }}
 # and for the opencode CLI:
-opencode run --auto --model "${{ vars.OPENCODE_MODEL || 'opencode-go/deepseek-v4-flash' }}"
+opencode run --auto --model "${{ vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free' }}"
 ```
 
 The `OPENCODE_API_KEY` secret is injected as both `OPENCODE_API_KEY` and
