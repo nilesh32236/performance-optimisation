@@ -113,90 +113,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				return;
 			}
 
-			$defaults = array(
-				'cache_settings'     => array(
-					'enableCache'         => false,
-					'cacheLife'           => 0,
-					'enableLoggedInCache' => false,
-					'loggedInCacheRoles'  => array(),
-					'ttlOverrides'        => array(),
-				),
-				'file_optimisation'  => array(
-					'enableServerRules'          => false,
-					'cdnURL'                     => '',
-					'removeUnusedCSS'            => false,
-					'excludeUnusedCSS'           => '',
-					'criticalCSS'                => false,
-					'hostGoogleFontsLocally'     => false,
-					'blockAssetsOnDemand'        => false,
-					'loadAllCoreBlockAssets'     => false,
-					'delayJSDefaultStrategy'     => 'interaction',
-					'delayJSIdleList'            => '',
-					'delayJSViewportList'        => '',
-					'delayJSPriority'            => '',
-					'delayJSIdleTimeout'         => 3000,
-					'minifyHTML'                 => false,
-					'minifyJS'                   => false,
-					'minifyCSS'                  => false,
-					'deferJS'                    => false,
-					'delayJS'                    => false,
-					'combineCSS'                 => false,
-					'excludeJS'                  => '',
-					'excludeCSS'                 => '',
-					'excludeDeferJS'             => '',
-					'excludeDelayJS'             => '',
-					'excludeCombineCSS'          => '',
-					'minifyInlineCSS'            => false,
-					'minifyInlineJS'             => false,
-					'removeHTMLComments'         => true,
-					'removeQueryStrings'         => false,
-					'disableRSD'                 => false,
-					'disableWLWManifest'         => false,
-					'disableGlobalStyles'        => false,
-					'disableClassicThemeStyles'  => false,
-					'disableWooCartFragments'    => false,
-					'disableRecentCommentsStyle' => false,
-					'disableCommentReply'        => false,
-					'disableOEmbedDiscovery'     => false,
-					'disableBlockWidgets'        => false,
-					'fontMetricFallback'         => false,
-				),
-				'preload_settings'   => array(
-					'enableSpeculationRules' => false,
-					'speculationMode'        => 'prefetch',
-					'speculationEagerness'   => 'conservative',
-					'speculationExcludeUrls' => '',
-					'preloadSitemap'         => false,
-				),
-				'image_optimisation' => array(
-					'lazyLoadImages'             => false,
-					'lazyLoadNative'             => true,
-					'placeholderType'            => 'svg',
-					'autoPreloadLCP'             => false,
-					'prioritizeLCPImages'        => false,
-					'clientSideMimeTypeOverride' => false,
-					'clientSideMimeTypes'        => array(),
-					'lazyLoadBackgroundImages'   => false,
-				),
-				'performance_audit'  => array(
-					'pagespeed_api_key'     => '',
-					'high_value_urls'       => array(),
-					'auto_fix_enabled'      => false,
-					'server_timing_enabled' => false,
-					'auto_rescan'           => '',
-					'rum_enabled'           => false,
-				),
-				'database_cleanup'   => array(),
-				'object_cache'       => array(),
-				'bfcache'            => array(
-					'enabled' => false,
-				),
-				'perf_translations'  => array(
-					'enabled' => false,
-				),
-			);
+		// Canonical defaults live in Util::get_default_settings() (single source of
+		// truth, #901). Previously duplicated here with drift (missing tabs/keys
+		// and a hardcoded blockAssetsOnDemand); fresh installs now seed the
+		// canonical array so Main, CLI, and activation agree.
+		$defaults = Util::get_default_settings();
 
-			add_option( 'wppo_settings', $defaults, '', false );
+		add_option( 'wppo_settings', $defaults, '', false );
 		}
 
 		/**

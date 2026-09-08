@@ -138,7 +138,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Get default settings structure for fresh installs.
 		 *
-		 * Single source of truth for Main::__construct() defaults and
+		 * Single source of truth for Main::__construct() defaults,
+		 * Activate::maybe_seed_settings(), and
 		 * WPPO_CLI_Command::get_default_settings() to fix 7-tab drift
 		 * (CLI:451 vs Main:240). Covers all allowed tabs; database_cleanup
 		 * and object_cache are empty (no defaults) for BC.
@@ -203,13 +204,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'disableBlockWidgets'        => false,
 					'fontMetricFallback'         => false,
 				),
-				'preload_settings'      => array(
-					'enableSpeculationRules' => false,
-					'speculationMode'        => 'prefetch',
-					'speculationEagerness'   => 'conservative',
-					'speculationExcludeUrls' => '',
-					'preloadSitemap'         => false,
-				),
+			'preload_settings'      => array(
+				'enablePreloadCache'     => false,
+				'excludePreloadCache'    => "my-account/(.*)\ncart/(.*)\ncheckout/(.*)",
+				'enableSpeculationRules' => false,
+				'speculationMode'        => 'prefetch',
+				'speculationEagerness'   => 'conservative',
+				'speculationExcludeUrls' => '',
+				'preloadSitemap'         => false,
+			),
 				'image_optimisation'    => array(
 					'lazyLoadImages'             => false,
 					'lazyLoadNative'             => true,
