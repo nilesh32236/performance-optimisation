@@ -219,6 +219,27 @@ class WcAjaxGuardTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Reflection-seeded instances agree with real constructor-built ones
+	 * for encoded paths (locks the constructor sanitization parity).
+	 */
+	public function test_encoded_path_matches_constructor_built_instance(): void {
+		$this->stub_front_end_guests();
+		$_SERVER['HTTP_HOST']   = 'example.com';
+		$_SERVER['REQUEST_URI'] = '/wc%2Dajax/get_refreshed_fragments/';
+
+		$via_constructor = new Cache();
+		$seeded          = $this->make_cache( array(), '/wc%2Dajax/get_refreshed_fragments/' );
+
+		$this->assertTrue( $this->invoke_private( $via_constructor, 'is_not_cacheable' ) );
+		$this->assertSame(
+			$this->invoke_private( $seeded, 'is_not_cacheable' ),
+			$this->invoke_private( $via_constructor, 'is_not_cacheable' )
+		);
+
+		unset( $_SERVER['HTTP_HOST'], $_SERVER['REQUEST_URI'] );
+	}
+
+	/**
 	 * Ordinary pages stay cacheable (regression guard).
 	 */
 	public function test_normal_page_remains_cacheable(): void {
@@ -341,10 +362,13 @@ class WcAjaxGuardTest extends \PHPUnit\Framework\TestCase {
 		$this->assertTrue( Advanced_Cache_Handler::create() );
 		$this->assertStringContainsString( 'wc-ajax', $fs->put_contents );
 		$this->assertStringContainsString( "\$_GET['wc-ajax']", $fs->put_contents );
-		// Segment-anchored, delimiter-closed, case-insensitive guard (locks
-		// the template quoting — a broken delimiter would silently disable
-		// the bypass in the generated file).
+		// Segment-anchored, delimiter-closed, case-insensitive path guard
+		// (locks the template quoting — a broken delimiter would silently
+		// disable the bypass in the generated file).
 		$this->assertStringContainsString( '#(^|/)wc-ajax(/|$)#i', $fs->put_contents );
+		// Raw QUERY_STRING fallback mirrors is_wc_ajax_request() so the
+		// drop-in does not rely solely on the empty-query gate below it.
+		$this->assertStringContainsString( '/(?:^|&)wc-ajax(?:=|&|$)/i', $fs->put_contents );
 	}
 }
 

@@ -491,6 +491,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 				if ( class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					Used_CSS::delete_all_used_css();
 					if ( function_exists( 'as_enqueue_async_action' ) ) {
+						// Note: regenerate_all() writes its own 'N jobs queued'
+						// audit entry; write_purge_log() below adds the
+						// builder-purge summary. Two entries per update is
+						// intentional — distinct facts on a rare event.
 						( new Used_CSS( Util::get_settings() ) )->regenerate_all();
 					}
 				}
@@ -501,7 +505,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 			try {
 				if ( class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					if ( function_exists( 'as_enqueue_async_action' ) ) {
-						// Clears now and queues per-template regeneration.
+						// Clears now and queues per-template regeneration (see
+						// the audit-entry note above).
 						Critical_CSS::regenerate_all();
 					} else {
 						Critical_CSS::clear_all();

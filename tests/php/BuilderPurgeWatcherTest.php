@@ -12,6 +12,9 @@
  */
 
 use PerformanceOptimise\Inc\Builder_Purge_Watcher;
+use PerformanceOptimise\Inc\Cache;
+use PerformanceOptimise\Inc\Critical_CSS;
+use PerformanceOptimise\Inc\Used_CSS;
 use PerformanceOptimise\Inc\Util;
 use Brain\Monkey\Functions;
 
@@ -490,6 +493,22 @@ class BuilderPurgeWatcherTest extends \PHPUnit\Framework\TestCase {
 
 		// After-purge action fired with the matched builder keys.
 		$this->assertContains( array( 'wppo_after_builder_purge', array( 'elementor' ) ), $actions );
+	}
+
+	/**
+	 * The purge-chain collaborator seams exist (rename guard).
+	 *
+	 * The full-flow test above stubs purge_wppo_derived_caches(), so this
+	 * smoke test locks the real wiring targets: renaming
+	 * Cache::clear_cache(), Used_CSS::delete_all_used_css(), or
+	 * Critical_CSS::regenerate_all()/clear_all() fails here.
+	 */
+	public function test_purge_chain_wiring_exists(): void {
+		$this->assertTrue( method_exists( Cache::class, 'clear_cache' ) );
+		$this->assertTrue( method_exists( Used_CSS::class, 'delete_all_used_css' ) );
+		$this->assertTrue( method_exists( Critical_CSS::class, 'regenerate_all' ) );
+		$this->assertTrue( method_exists( Critical_CSS::class, 'clear_all' ) );
+		$this->assertTrue( method_exists( Builder_Purge_Watcher::class, 'purge_wppo_derived_caches' ) );
 	}
 }
 

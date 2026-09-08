@@ -222,12 +222,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'}' . PHP_EOL . PHP_EOL .
 
 			'// WooCommerce AJAX endpoints are dynamic JSON and must never be served from the static cache (issue #907).' . PHP_EOL .
-			'// The pretty-permalink /wc-ajax/... path segment maps to a cacheable-looking path, while the ?wc-ajax=... form' . PHP_EOL .
-			'// is covered both here and by the empty-QUERY_STRING gate before wppo_serve_cache_file() below.' . PHP_EOL .
-			'// Note: $request_uri is already rawurldecode()d above; the case-insensitive segment match' . PHP_EOL .
-			'// mirrors Cache::is_wc_ajax_request() (intentional pre-boot duplication — the drop-in' . PHP_EOL .
-			'// serves cached pages before WordPress boots).' . PHP_EOL .
+			'// The segment match mirrors Cache::is_wc_ajax_request() case-insensitively, including the raw' . PHP_EOL .
+			'// QUERY_STRING fallback (intentional pre-boot duplication — the drop-in serves cached pages before' . PHP_EOL .
+			'// WordPress boots, so no sanitize_text_field/Util calls here); the empty-QUERY_STRING gate before' . PHP_EOL .
+			'// wppo_serve_cache_file() below remains as a second backstop.' . PHP_EOL .
 			'if ( preg_match( \'#(^|/)wc-ajax(/|$)#i\', $request_uri ) || isset( $_GET[\'wc-ajax\'] ) ) {' . PHP_EOL .
+			'	return;' . PHP_EOL .
+			'}' . PHP_EOL .
+			'if ( ! empty( $_SERVER[\'QUERY_STRING\'] ) && preg_match( \'/(?:^|&)wc-ajax(?:=|&|$)/i\', $_SERVER[\'QUERY_STRING\'] ) ) {' . PHP_EOL .
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
 
