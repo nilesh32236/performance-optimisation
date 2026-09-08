@@ -445,7 +445,14 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 	public function test_enqueue_hydration_client_fires_on_ols_placeholder_mode(): void {
 		$this->install_enqueue_stubs( true, false );
 		LiteSpeed_Integration::reset_cache();
-		Util::set_settings_cache( array( 'litespeed_integration' => array( 'mode' => 'wppo' ) ) );
+		Util::set_settings_cache(
+			array(
+				'litespeed_integration' => array(
+					'mode' => 'wppo',
+					'esi'  => array( 'enabled' => true ),
+				),
+			)
+		);
 
 		LiteSpeed_ESI::enqueue_hydration_client();
 
@@ -461,7 +468,14 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 	public function test_enqueue_hydration_client_skips_enterprise_native_esi(): void {
 		$this->install_enqueue_stubs( true, true );
 		LiteSpeed_Integration::reset_cache();
-		Util::set_settings_cache( array( 'litespeed_integration' => array( 'mode' => 'wppo' ) ) );
+		Util::set_settings_cache(
+			array(
+				'litespeed_integration' => array(
+					'mode' => 'wppo',
+					'esi'  => array( 'enabled' => true ),
+				),
+			)
+		);
 
 		LiteSpeed_ESI::enqueue_hydration_client();
 
@@ -471,7 +485,14 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 	public function test_enqueue_hydration_client_skips_when_setting_disabled(): void {
 		$this->install_enqueue_stubs( false, false );
 		LiteSpeed_Integration::reset_cache();
-		Util::set_settings_cache( array( 'litespeed_integration' => array( 'mode' => 'wppo' ) ) );
+		Util::set_settings_cache(
+			array(
+				'litespeed_integration' => array(
+					'mode' => 'wppo',
+					'esi'  => array( 'enabled' => false ),
+				),
+			)
+		);
 
 		LiteSpeed_ESI::enqueue_hydration_client();
 
@@ -481,7 +502,14 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 	public function test_enqueue_hydration_client_skips_standalone_mode(): void {
 		$this->install_enqueue_stubs( true, false );
 		LiteSpeed_Integration::reset_cache();
-		Util::set_settings_cache( array( 'litespeed_integration' => array( 'mode' => 'standalone' ) ) );
+		Util::set_settings_cache(
+			array(
+				'litespeed_integration' => array(
+					'mode' => 'standalone',
+					'esi'  => array( 'enabled' => true ),
+				),
+			)
+		);
 
 		LiteSpeed_ESI::enqueue_hydration_client();
 
@@ -491,7 +519,14 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 	public function test_init_registers_hydration_client_enqueue_hook(): void {
 		$this->install_enqueue_stubs( true, false );
 		LiteSpeed_Integration::reset_cache();
-		Util::set_settings_cache( array( 'litespeed_integration' => array( 'mode' => 'wppo' ) ) );
+		Util::set_settings_cache(
+			array(
+				'litespeed_integration' => array(
+					'mode' => 'wppo',
+					'esi'  => array( 'enabled' => true ),
+				),
+			)
+		);
 
 		LiteSpeed_ESI::init();
 
@@ -512,6 +547,7 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 			}
 		);
 		Functions\when( 'get_option' )->justReturn( array() );
+		Util::clear_settings_cache();
 
 		// Setting off but filter forces it on.
 		$this->assertTrue( LiteSpeed_ESI::is_setting_enabled() );
@@ -526,10 +562,12 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 				return $fallback;
 			}
 		);
+		Util::clear_settings_cache();
 		$this->assertTrue( LiteSpeed_ESI::is_setting_enabled() );
 
 		// Setting off, filter passthrough.
 		Functions\when( 'get_option' )->justReturn( array() );
+		Util::clear_settings_cache();
 		$this->assertFalse( LiteSpeed_ESI::is_setting_enabled() );
 	}
 }

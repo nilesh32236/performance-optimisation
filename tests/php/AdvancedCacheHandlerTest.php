@@ -6,6 +6,7 @@
  */
 
 use PerformanceOptimise\Inc\Advanced_Cache_Handler;
+use PerformanceOptimise\Inc\Util;
 use Brain\Monkey\Functions;
 
 /**
@@ -25,6 +26,10 @@ class AdvancedCacheHandlerTest extends \PHPUnit\Framework\TestCase {
 		parent::setUp();
 		\Brain\Monkey\setUp();
 		$this->register_common_function_stubs();
+		// This setUp shadows the trait's, which normally clears the
+		// Util::get_settings() memo — clear it here so per-test get_option
+		// stubs are re-read (#902 routes create() through the memo).
+		Util::clear_settings_cache();
 		Functions\stubs(
 			array(
 				'get_transient',

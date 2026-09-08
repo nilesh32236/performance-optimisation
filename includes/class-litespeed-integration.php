@@ -727,7 +727,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		public static function flush_tag_queue(): void {
 			$key     = Util::transient_key( self::TAG_QUEUE );
 			$tags    = get_transient( $key );
-			$db_key  = Util::transient_key( self::DB_QUEUE );
+			$db_key  = Util::option_key( self::DB_QUEUE );
 			$db_tags = self::read_db_queue( $db_key );
 			if ( is_array( $tags ) && ! empty( $tags ) ) {
 				delete_transient( $key );
@@ -860,7 +860,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * @return string
 		 */
 		public static function get_db_queue_key(): string {
-			return Util::transient_key( self::DB_QUEUE );
+			return Util::option_key( self::DB_QUEUE );
 		}
 
 		/**

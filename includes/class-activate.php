@@ -81,7 +81,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 			// version-upgrade routine (drop-in regeneration + full cache clear).
 			update_option( 'wppo_version', WPPO_VERSION, false );
 
-			$options             = get_option( 'wppo_settings', array() );
+			$options             = Util::get_settings();
 			$enable_server_rules = isset( $options['file_optimisation']['enableServerRules'] ) ? (bool) $options['file_optimisation']['enableServerRules'] : false;
 
 			if ( $enable_server_rules ) {
@@ -108,18 +108,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		 * @return void
 		 */
 		private static function maybe_seed_settings(): void {
+			// allowlist(settings-read-guard): deliberate direct read — must distinguish
+			// "no stored row" (null) from "stored value", which Util::get_settings()
+			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
 			$existing = get_option( 'wppo_settings', null );
 			if ( null !== $existing ) {
 				return;
 			}
 
-		// Canonical defaults live in Util::get_default_settings() (single source of
-		// truth, #901). Previously duplicated here with drift (missing tabs/keys
-		// and a hardcoded blockAssetsOnDemand); fresh installs now seed the
-		// canonical array so Main, CLI, and activation agree.
-		$defaults = Util::get_default_settings();
+			// Canonical defaults live in Util::get_default_settings() (single source of
+			// truth, #901). Previously duplicated here with drift (missing tabs/keys
+			// and a hardcoded blockAssetsOnDemand); fresh installs now seed the
+			// canonical array so Main, CLI, and activation agree.
+			$defaults = Util::get_default_settings();
 
-		add_option( 'wppo_settings', $defaults, '', false );
+			add_option( 'wppo_settings', $defaults, '', false );
 		}
 
 		/**

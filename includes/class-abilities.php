@@ -590,7 +590,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * @return bool
 		 */
 		public static function can_cache_management(): bool {
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			return ! empty( $options['cache_settings']['enableCache'] );
 		}
 
@@ -601,7 +601,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * @return bool
 		 */
 		public static function can_image_optimization(): bool {
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			return ! empty( $options['image_optimisation']['convertImg'] );
 		}
 
@@ -612,7 +612,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * @return bool
 		 */
 		public static function can_css_minification(): bool {
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			return ! empty( $options['file_optimisation']['minifyCSS'] );
 		}
 
@@ -623,7 +623,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * @return bool
 		 */
 		public static function can_js_optimization(): bool {
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			return ! empty( $options['file_optimisation']['minifyJS'] ) || ! empty( $options['file_optimisation']['deferJS'] ) || ! empty( $options['file_optimisation']['delayJS'] );
 		}
 
@@ -634,7 +634,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * @return bool
 		 */
 		public static function can_database_cleanup(): bool {
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			return ! empty( $options['database_cleanup'] );
 		}
 

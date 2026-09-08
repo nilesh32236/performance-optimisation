@@ -3,6 +3,8 @@
  * Tests that Main, Util, and Activate share a single defaults source (#901).
  *
  * @package PerformanceOptimise\Tests
+ *
+ * @phpcs:disable WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
  */
 
 use PerformanceOptimise\Inc\Activate;

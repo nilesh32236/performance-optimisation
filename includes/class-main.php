@@ -229,10 +229,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// finding 4). get_settings() keeps a lazy backstop registration.
 			Util::register_settings_cache_hooks();
 
-		// Canonical defaults live in Util::get_default_settings() (single source of
-		// truth, #901). Previously duplicated here; kept in sync via this call.
-		$defaults      = Util::get_default_settings();
-		$stored        = Util::get_settings();
+			// Canonical defaults live in Util::get_default_settings() (single source of
+			// truth, #901). Previously duplicated here; kept in sync via this call.
+			$defaults      = Util::get_default_settings();
+			$stored        = Util::get_settings();
 			$this->options = ! empty( $stored ) ? $stored : $defaults;
 
 			// WP 6.9+ loads core block assets on demand in classic themes by default. Existing
@@ -902,6 +902,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 
+			// allowlist(settings-read-guard): deliberate direct read — must distinguish
+			// "no stored row" (false) from "stored array", which Util::get_settings()
+			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
 			$stored = get_option( 'wppo_settings' );
 			if ( ! is_array( $stored ) ) {
 				// Fresh install (or no stored settings): constructor defaults already match
@@ -1179,7 +1182,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 
-			$options       = get_option( 'wppo_settings', array() );
+			$options       = Util::get_settings();
 			$img_converter = new Img_Converter( $options );
 
 			$source_path = wp_normalize_path( $args['source_path'] );
@@ -1236,7 +1239,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			if ( empty( $options['file_optimisation']['removeUnusedCSS'] ) ) {
 				return;
 			}
