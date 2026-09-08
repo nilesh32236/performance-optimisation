@@ -372,4 +372,164 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 		$this->assertContains( 'wp_ajax_wppo_esi_fragment', $calls );
 		$this->assertContains( 'wp_ajax_nopriv_wppo_esi_fragment', $calls );
 	}
+
+	/**
+	 * Captured enqueue/action/filter state for the hydration-client tests.
+	 *
+	 * Lives on the instance so the Brain Monkey closures can mutate it (a
+	 * helper-local array would be copied out of scope).
+	 *
+	 * @var array{enqueued: array<int, array<string, mixed>>, actions: string[], filters: string[]}
+	 */
+	private array $esi_hook_state = array(
+		'enqueued' => array(),
+		'actions'  => array(),
+		'filters'  => array(),
+	);
+
+	/**
+	 * Install the shared stub set for enqueue_hydration_client() tests.
+	 *
+	 * @param bool $esi_enabled    Whether the ESI setting toggle is on.
+	 * @param bool $esi_enterprise Whether native (Enterprise) ESI is available.
+	 * @return void
+	 */
+	private function install_enqueue_stubs( bool $esi_enabled, bool $esi_enterprise ): void {
+		$this->esi_hook_state = array(
+			'enqueued' => array(),
+			'actions'  => array(),
+			'filters'  => array(),
+		);
+
+		$this->set_litespeed( true );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_multisite' )->justReturn( false );
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $tag, $value, ...$args ) use ( $esi_enterprise ) {
+				if ( 'wppo_litespeed_esi_available' === $tag || 'wppo_esi_available' === $tag ) {
+					return $esi_enterprise;
+				}
+				return $value;
+			}
+		);
+		Functions\when( 'get_option' )->alias(
+			static function ( $name, $fallback = false ) use ( $esi_enabled ) {
+				if ( 'wppo_settings' === $name ) {
+					return array( 'litespeed_integration' => array( 'esi' => array( 'enabled' => $esi_enabled ) ) );
+				}
+				return $fallback;
+			}
+		);
+		Functions\when( 'wp_enqueue_script' )->alias(
+			function ( $handle, $src = '', $deps = array(), $ver = false, $args = array() ) {
+				$this->esi_hook_state['enqueued'][] = compact( 'handle', 'src', 'deps', 'ver', 'args' );
+				return true;
+			}
+		);
+		Functions\when( 'add_action' )->alias(
+			function ( $hook, $cb = null, $prio = 10, $args = 1 ) {
+				$this->esi_hook_state['actions'][] = $hook;
+				return true;
+			}
+		);
+		Functions\when( 'add_filter' )->alias(
+			function ( $hook, $cb = null, $prio = 10, $args = 1 ) {
+				$this->esi_hook_state['filters'][] = $hook;
+				return true;
+			}
+		);
+	}
+
+	public function test_enqueue_hydration_client_fires_on_ols_placeholder_mode(): void {
+		$this->install_enqueue_stubs( true, false );
+		LiteSpeed_Integration::reset_cache();
+		Util::set_settings_cache( array( 'litespeed_integration' => array( 'mode' => 'wppo' ) ) );
+
+		LiteSpeed_ESI::enqueue_hydration_client();
+
+		$this->assertCount( 1, $this->esi_hook_state['enqueued'], 'ESI hydration client must be enqueued in OLS placeholder mode (audit #898)' );
+		$this->assertSame( 'wppo-esi', $this->esi_hook_state['enqueued'][0]['handle'] );
+		$this->assertSame( WPPO_PLUGIN_URL . 'build/esi.js', $this->esi_hook_state['enqueued'][0]['src'] );
+		$this->assertSame( array( 'in_footer' => true ), $this->esi_hook_state['enqueued'][0]['args'], 'Client must load in the footer' );
+		$this->assertIsString( $this->esi_hook_state['enqueued'][0]['ver'], 'Version must come from build/esi.asset.php' );
+		$this->assertNotSame( '', $this->esi_hook_state['enqueued'][0]['ver'] );
+		$this->assertIsArray( $this->esi_hook_state['enqueued'][0]['deps'] );
+	}
+
+	public function test_enqueue_hydration_client_skips_enterprise_native_esi(): void {
+		$this->install_enqueue_stubs( true, true );
+		LiteSpeed_Integration::reset_cache();
+		Util::set_settings_cache( array( 'litespeed_integration' => array( 'mode' => 'wppo' ) ) );
+
+		LiteSpeed_ESI::enqueue_hydration_client();
+
+		$this->assertSame( array(), $this->esi_hook_state['enqueued'], 'Enterprise native ESI hydrates server-side — no JS client' );
+	}
+
+	public function test_enqueue_hydration_client_skips_when_setting_disabled(): void {
+		$this->install_enqueue_stubs( false, false );
+		LiteSpeed_Integration::reset_cache();
+		Util::set_settings_cache( array( 'litespeed_integration' => array( 'mode' => 'wppo' ) ) );
+
+		LiteSpeed_ESI::enqueue_hydration_client();
+
+		$this->assertSame( array(), $this->esi_hook_state['enqueued'], 'ESI disabled → no hydration client' );
+	}
+
+	public function test_enqueue_hydration_client_skips_standalone_mode(): void {
+		$this->install_enqueue_stubs( true, false );
+		LiteSpeed_Integration::reset_cache();
+		Util::set_settings_cache( array( 'litespeed_integration' => array( 'mode' => 'standalone' ) ) );
+
+		LiteSpeed_ESI::enqueue_hydration_client();
+
+		$this->assertSame( array(), $this->esi_hook_state['enqueued'], 'Standalone mode means no ESI at all — no hydration client' );
+	}
+
+	public function test_init_registers_hydration_client_enqueue_hook(): void {
+		$this->install_enqueue_stubs( true, false );
+		LiteSpeed_Integration::reset_cache();
+		Util::set_settings_cache( array( 'litespeed_integration' => array( 'mode' => 'wppo' ) ) );
+
+		LiteSpeed_ESI::init();
+
+		$this->assertContains( 'wp_enqueue_scripts', $this->esi_hook_state['actions'], 'init() must hook the hydration client onto wp_enqueue_scripts' );
+		$this->assertContains( 'wp_ajax_wppo_esi_fragment', $this->esi_hook_state['actions'] );
+		$this->assertContains( 'send_headers', $this->esi_hook_state['actions'] );
+	}
+
+	public function test_is_setting_enabled_reflects_setting_and_filter(): void {
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $tag, $value, ...$args ) {
+				// Third parties may force-enable ESI via the filter (same
+				// contract as the legacy is_enabled() filter application).
+				if ( 'wppo_esi_enabled' === $tag ) {
+					return true;
+				}
+				return $value;
+			}
+		);
+		Functions\when( 'get_option' )->justReturn( array() );
+
+		// Setting off but filter forces it on.
+		$this->assertTrue( LiteSpeed_ESI::is_setting_enabled() );
+
+		// Setting on, filter passthrough.
+		Functions\when( 'apply_filters' )->returnArg( 2 );
+		Functions\when( 'get_option' )->alias(
+			static function ( $name, $fallback = false ) {
+				if ( 'wppo_settings' === $name ) {
+					return array( 'litespeed_integration' => array( 'esi' => array( 'enabled' => true ) ) );
+				}
+				return $fallback;
+			}
+		);
+		$this->assertTrue( LiteSpeed_ESI::is_setting_enabled() );
+
+		// Setting off, filter passthrough.
+		Functions\when( 'get_option' )->justReturn( array() );
+		$this->assertFalse( LiteSpeed_ESI::is_setting_enabled() );
+	}
 }

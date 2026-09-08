@@ -69,6 +69,63 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		public const ALLOWED_SETTINGS_TABS = self::ALLOWED_SETTINGS_KEYS;
 
 		/**
+		 * Fixed plugin option names removed per-site on uninstall.
+		 *
+		 * Canonical list consumed by `UtilTest` membership/completeness checks;
+		 * `uninstall.php` keeps an inline copy because it runs standalone
+		 * (without the plugin's classes) under `WP_UNINSTALL_PLUGIN`. Keep the
+		 * two in sync — the uninstall.php sync test guards against drift
+		 * (audit #899).
+		 *
+		 * The `wppo_litespeed_purge_queue` entry is blog-prefixed at runtime via
+		 * transient_key() on multisite; the list stores its base name.
+		 *
+		 * @since NEXT
+		 * @var string[]
+		 */
+		public const UNINSTALL_OPTIONS = array(
+			'wppo_settings',
+			'wppo_img_info',
+			'wppo_transient_index',
+			'wppo_preload_cron_offset',
+			'wppo_last_db_cleanup',
+			'wppo_version',
+			'wppo_block_assets_migrated',
+			'wppo_cache_last_cleared',
+			'wppo_cache_last_cleared_time',
+			'wppo_activation_time',
+			'wppo_activity_cache_version',
+			'wppo_audit_salt',
+			'wppo_db_cleanup_salt',
+			'wppo_activity_log_salt',
+			'wppo_img_info_salt',
+			'wppo_review_dismissed',
+			'wppo_review_snoozed_until',
+			'wppo_web_vitals_rum',
+			'wppo_ai_model',
+			'wppo_web_vitals_trends',
+			'wppo_web_vitals_trends_lock',
+			'wppo_web_vitals_last_rescan',
+			'wppo_preload_cron_last_id',
+			'wppo_preload_cron_migrated',
+			'wppo_img_scan_cursor',
+			'wppo_img_scan_cursor_max',
+			'wppo_litespeed_purge_queue',
+		);
+
+		/**
+		 * Option-name prefix shared by the dynamic per-strategy front-page LCP
+		 * image URL options (`wppo_front_page_lcp_{mobile|desktop}`, see
+		 * Pagespeed::store_lcp_image_url()). Deleted on uninstall via an
+		 * options-table LIKE match because the strategy suffix is dynamic
+		 * (audit #899).
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		public const FRONT_PAGE_LCP_OPTION_PREFIX = 'wppo_front_page_lcp_';
+
+		/**
 		 * Get the allowlisted top-level settings keys.
 		 *
 		 * @since NEXT

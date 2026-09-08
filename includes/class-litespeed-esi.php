@@ -67,22 +67,102 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		}
 
 		/**
-		 * Whether ESI is enabled via settings.
+		 * Whether the ESI bridge setting is enabled.
+		 *
+		 * Raw setting + filter only — unlike is_enabled() this does not require
+		 * Enterprise ESI availability, so it also covers the OLS AJAX-fallback
+		 * placeholder mode where the server renders <div data-wppo-esi> holes
+		 * and src/esi.js hydrates them via the wppo_esi_fragment endpoint
+		 * (audit #898).
+		 *
+		 * @since NEXT
+		 * @return bool
+		 */
+		public static function is_setting_enabled(): bool {
+			$options = get_option( 'wppo_settings', array() );
+			$enabled = ! empty( $options['litespeed_integration']['esi']['enabled'] );
+			/**
+			 * Filter whether the ESI bridge setting is enabled.
+			 *
+			 * @since NEXT
+			 * @param bool $enabled Whether the ESI setting is enabled.
+			 */
+			return (bool) apply_filters( 'wppo_esi_enabled', $enabled );
+		}
+
+		/**
+		 * Whether ESI is enabled via settings AND available (Enterprise).
 		 *
 		 * @since NEXT
 		 * @return bool
 		 */
 		public static function is_enabled(): bool {
-			$options = get_option( 'wppo_settings', array() );
-			$enabled = ! empty( $options['litespeed_integration']['esi']['enabled'] );
-			/**
-			 * Filter whether ESI bridge is enabled.
-			 *
-			 * @since NEXT
-			 * @param bool $enabled Whether enabled.
-			 */
-			$enabled = (bool) apply_filters( 'wppo_esi_enabled', $enabled );
-			return $enabled && self::is_esi_available();
+			return self::is_setting_enabled() && self::is_esi_available();
+		}
+
+		/**
+		 * Enqueue the ESI hydration client (build/esi.js) for OLS placeholder mode.
+		 *
+		 * On OpenLiteSpeed there is no native ESI, so the server renders
+		 * `<div data-wppo-esi="…">` placeholders (render_esi_placeholder()) that
+		 * src/esi.js hydrates via the wppo_esi_fragment admin-ajax endpoint.
+		 * Without this client those placeholders stay empty forever (audit #898).
+		 *
+		 * Gates mirror the placeholder path exactly:
+		 *
+		 * - ESI setting enabled (is_setting_enabled()) — same toggle + filter the
+		 *   bridge itself uses;
+		 * - LiteSpeed-family server (is_litespeed()) with a non-standalone
+		 *   effective mode — identical to the gates in should_punch_hole()/init();
+		 * - NOT Enterprise ESI (is_esi_available()) — on LSWS Enterprise the
+		 *   server hydrates `<esi:include>` server-side, so the JS client must
+		 *   not load.
+		 *
+		 * Enqueue mirrors RUM::maybe_enqueue_scripts(): build/esi.asset.php
+		 * supplies the version + dependency list, with a classic footer enqueue —
+		 * this client is plain vanilla JS, not a script module.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function enqueue_hydration_client(): void {
+			if ( is_admin() ) {
+				return;
+			}
+			if ( ! self::is_setting_enabled() ) {
+				return;
+			}
+			if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) || ! LiteSpeed_Integration::is_litespeed() ) {
+				return;
+			}
+			// Standalone mode means "ignore LiteSpeed" — no ESI at all (same
+			// try/catch gate as should_punch_hole()).
+			if ( method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'effective_mode' ) ) {
+				try {
+					$mode = LiteSpeed_Integration::effective_mode();
+					if ( 'standalone' === $mode ) {
+						return;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			// Enterprise native ESI hydrates server-side via <esi:include> — the
+			// JS client must not load there.
+			if ( self::is_esi_available() ) {
+				return;
+			}
+
+			$asset_file = WPPO_PLUGIN_PATH . 'build/esi.asset.php';
+			$deps       = array();
+			$version    = WPPO_VERSION;
+			if ( file_exists( $asset_file ) ) {
+				$asset   = include $asset_file; // phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable
+				$deps    = isset( $asset['dependencies'] ) && is_array( $asset['dependencies'] ) ? $asset['dependencies'] : array();
+				$version = isset( $asset['version'] ) ? $asset['version'] : WPPO_VERSION;
+			}
+
+			wp_enqueue_script( 'wppo-esi', WPPO_PLUGIN_URL . 'build/esi.js', $deps, $version, array( 'in_footer' => true ) );
 		}
 
 		/**
@@ -842,6 +922,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 
 			// Register AJAX handlers regardless of enabled (needed for OLS hydration).
 			self::register_ajax_handlers();
+
+			// OLS placeholder mode (audit #898): enqueue the hydration client
+			// whenever ESI placeholders can be emitted. The callback re-checks
+			// setting + mode + ESI availability so Enterprise native ESI (which
+			// hydrates server-side via <esi:include>) never loads the JS client.
+			add_action( 'wp_enqueue_scripts', array( self::class, 'enqueue_hydration_client' ) );
 
 			// Always register send_headers for private/no-vary.
 			add_action( 'send_headers', array( self::class, 'handle_send_headers' ), 1 );
