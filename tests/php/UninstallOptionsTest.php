@@ -219,19 +219,27 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 		$source = file_get_contents( $path );
 		$this->assertNotFalse( $source );
 
+		// Scope the assertions to the extracted function body so a stray
+		// comment elsewhere in the file cannot satisfy the guard checks.
+		$pattern = '/function wppo_delete_directory\([^)]*\)[^{]*\{(.*?)\n\t\}\n\}/s';
+		if ( ! preg_match( $pattern, (string) $source, $m ) ) {
+			$this->fail( 'Could not extract wppo_delete_directory() body from uninstall.php' );
+		}
+		$body = $m[1];
+
 		$this->assertStringContainsString(
 			'wp_normalize_path( WP_CONTENT_DIR )',
-			(string) $source,
+			$body,
 			'wppo_delete_directory() must normalise WP_CONTENT_DIR as the containment root'
 		);
 		$this->assertStringContainsString(
 			'realpath( $dir )',
-			(string) $source,
+			$body,
 			'wppo_delete_directory() must resolve symlinks via realpath before the prefix check'
 		);
 		$this->assertStringContainsString(
 			'strpos( $normalized_real_dir, $normalized_real_root )',
-			(string) $source,
+			$body,
 			'wppo_delete_directory() must require the resolved path to stay inside WP_CONTENT_DIR'
 		);
 	}

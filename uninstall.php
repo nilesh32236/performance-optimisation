@@ -165,8 +165,7 @@ if ( ! function_exists( 'wppo_delete_directory' ) ) {
 	 *
 	 * @param string $dir Absolute path to the directory.
 	 * @return void
-	 * @since NEXT Symlink traversal hardening (is_link guard).
-	 * @since NEXT Path-containment guard (WP_CONTENT_DIR prefix + realpath).
+	 * @since NEXT Symlink guard (is_link) + path-containment guard (WP_CONTENT_DIR prefix + realpath).
 	 */
 	function wppo_delete_directory( string $dir ): void {
 		// If $dir itself is a symlink, delete the link only — do not follow.
