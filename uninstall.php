@@ -29,32 +29,57 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 		$wpdb->query( "DROP TABLE IF EXISTS {$table_name}" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
 		// Delete options.
-		delete_option( 'wppo_settings' );
-		delete_option( 'wppo_img_info' );
-		delete_option( 'wppo_transient_index' );
-		delete_option( 'wppo_preload_cron_offset' );
-		delete_option( 'wppo_last_db_cleanup' );
-		delete_option( 'wppo_version' );
-		delete_option( 'wppo_block_assets_migrated' );
-		delete_option( 'wppo_cache_last_cleared' );
-		delete_option( 'wppo_cache_last_cleared_time' );
-		delete_option( 'wppo_activation_time' );
-		delete_option( 'wppo_activity_cache_version' );
-		delete_option( 'wppo_audit_salt' );
-		delete_option( 'wppo_db_cleanup_salt' );
-		delete_option( 'wppo_activity_log_salt' );
-		delete_option( 'wppo_img_info_salt' );
-		delete_option( 'wppo_review_dismissed' );
-		delete_option( 'wppo_review_snoozed_until' );
-		delete_option( 'wppo_web_vitals_rum' );
-		delete_option( 'wppo_ai_model' );
-		delete_option( 'wppo_web_vitals_trends' );
-		delete_option( 'wppo_web_vitals_trends_lock' );
-		delete_option( 'wppo_web_vitals_last_rescan' );
-		delete_option( 'wppo_preload_cron_last_id' );
-		delete_option( 'wppo_preload_cron_migrated' );
-		delete_option( 'wppo_litespeed_purge_queue' );
-		delete_option( 'wppo_lscache_tag_queue' );
+		//
+		// Must stay in sync with Util::UNINSTALL_OPTIONS in
+		// includes/class-util.php (audit #899) — this file runs standalone
+		// under WP_UNINSTALL_PLUGIN, without the plugin's classes autoloaded.
+		$transient_prefix = is_multisite() ? (string) get_current_blog_id() . '_' : '';
+		$wppo_options     = array(
+			'wppo_settings',
+			'wppo_img_info',
+			'wppo_transient_index',
+			'wppo_preload_cron_offset',
+			'wppo_last_db_cleanup',
+			'wppo_version',
+			'wppo_block_assets_migrated',
+			'wppo_cache_last_cleared',
+			'wppo_cache_last_cleared_time',
+			'wppo_activation_time',
+			'wppo_activity_cache_version',
+			'wppo_audit_salt',
+			'wppo_db_cleanup_salt',
+			'wppo_activity_log_salt',
+			'wppo_img_info_salt',
+			'wppo_review_dismissed',
+			'wppo_review_snoozed_until',
+			'wppo_web_vitals_rum',
+			'wppo_ai_model',
+			'wppo_web_vitals_trends',
+			'wppo_web_vitals_trends_lock',
+			'wppo_web_vitals_last_rescan',
+			'wppo_preload_cron_last_id',
+			'wppo_preload_cron_migrated',
+			// Image library scan cursors (class-img-converter.php) — previously
+			// only removed on deactivation, never on uninstall (audit #899).
+			'wppo_img_scan_cursor',
+			'wppo_img_scan_cursor_max',
+			// LiteSpeed purge-queue fallback option. The real name is
+			// blog-prefixed on multisite via Util::transient_key()
+			// (LiteSpeed_Integration::get_db_queue_key()), so compose it here
+			// (audit #899) — a plain-name delete orphaned per-site rows.
+			$transient_prefix . 'wppo_litespeed_purge_queue',
+		);
+		foreach ( $wppo_options as $wppo_option ) {
+			delete_option( $wppo_option );
+		}
+
+		// Dynamic per-strategy front-page LCP image URL options
+		// (wppo_front_page_lcp_{mobile|desktop} — Pagespeed::store_lcp_image_url())
+		// were deleted nowhere (audit #899). The strategy suffix is dynamic, so
+		// remove them with an options-table LIKE match inside the per-site
+		// cleanup (this runs under switch_to_blog() in the multisite loop).
+		$like_lcp = $wpdb->esc_like( 'wppo_front_page_lcp_' ) . '%';
+		$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '{$like_lcp}'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
 		// Delete post meta using the meta API to respect hooks.
 		delete_post_meta_by_key( '_wppo_preload_image_url' );
@@ -98,8 +123,7 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 		// Delete user meta.
 		delete_user_meta_by_key( 'wppo_welcome_dismissed' );
 
-		// Delete transients.
-		$transient_prefix = is_multisite() ? get_current_blog_id() . '_' : '';
+		// Delete transients (prefix computed above with the option cleanup).
 		delete_transient( $transient_prefix . 'wppo_activation_notices' );
 		delete_transient( $transient_prefix . 'wppo_show_welcome_notice' );
 		delete_transient( $transient_prefix . 'wppo_cache_size' );
