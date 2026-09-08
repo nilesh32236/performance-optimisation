@@ -127,7 +127,7 @@ class HeaderEmitterTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Verify emit_private_pair emits the exact ESI pair with replace=false.
+	 * Verify emit_private_pair emits the exact ESI pair with replace=true (pre-extraction semantics).
 	 */
 	public function test_emit_private_pair_exact_strings(): void {
 		Functions\when( 'headers_sent' )->justReturn( false );
@@ -139,11 +139,11 @@ class HeaderEmitterTest extends \PHPUnit\Framework\TestCase {
 			),
 			$this->captured_headers
 		);
-		$this->assertSame( array( false, false ), $this->captured_replace );
+		$this->assertSame( array( true, true ), $this->captured_replace );
 	}
 
 	/**
-	 * Verify emit_nocache_pair emits the exact admin no-cache pair.
+	 * Verify emit_nocache_pair emits the exact admin no-cache pair with replace=true.
 	 */
 	public function test_emit_nocache_pair_exact_strings(): void {
 		Functions\when( 'headers_sent' )->justReturn( false );
@@ -155,6 +155,7 @@ class HeaderEmitterTest extends \PHPUnit\Framework\TestCase {
 			),
 			$this->captured_headers
 		);
+		$this->assertSame( array( true, true ), $this->captured_replace );
 	}
 
 	/**

@@ -67,27 +67,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Header_Emitter' ) ) {
 		 *
 		 * Repeated 5x across the ESI bridge (AJAX fragments + send_headers
 		 * cart/checkout/account/punch-hole paths); one helper pins the exact
-		 * pair so the strings cannot drift.
+		 * pair so the strings cannot drift. Uses the default replace=true to
+		 * preserve the pre-extraction header() semantics (issue #905 review).
 		 *
 		 * @since NEXT
 		 * @return void
 		 */
 		public static function emit_private_pair(): void {
-			self::emit( 'Cache-Control: private,no-cache', false );
-			self::emit( 'X-LiteSpeed-Cache-Control: private,no-vary', false );
+			self::emit( 'Cache-Control: private,no-cache' );
+			self::emit( 'X-LiteSpeed-Cache-Control: private,no-vary' );
 		}
 
 		/**
 		 * Emit the ESI no-cache pair (Cache-Control + X-LiteSpeed-Cache-Control).
 		 *
-		 * Used for the admin / no-cache ESI path.
+		 * Used for the admin / no-cache ESI path. Uses the default
+		 * replace=true to preserve the pre-extraction header() semantics
+		 * (issue #905 review).
 		 *
 		 * @since NEXT
 		 * @return void
 		 */
 		public static function emit_nocache_pair(): void {
-			self::emit( 'Cache-Control: no-cache', false );
-			self::emit( 'X-LiteSpeed-Cache-Control: no-cache', false );
+			self::emit( 'Cache-Control: no-cache' );
+			self::emit( 'X-LiteSpeed-Cache-Control: no-cache' );
 		}
 
 		/**

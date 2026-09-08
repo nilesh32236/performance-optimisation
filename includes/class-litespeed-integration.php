@@ -757,9 +757,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			if ( has_action( 'litespeed_purge' ) ) {
 				do_action( 'litespeed_purge', $tags );
 			}
-			if ( ! headers_sent() ) {
-				Header_Emitter::emit_purge_tag( $tag_str );
-			} else {
+			// Branch on the emitter return so a headers_sent() race between
+			// the check and the emission still falls back to the DB queue
+			// (issue #905 review).
+			if ( ! Header_Emitter::emit_purge_tag( $tag_str ) ) {
 				// Fallback: re-queue to DB for next request if headers already sent and lock not set.
 				// Already cleared above; if we couldn't send header, persist stale tag with next flush.
 				// Capped to the newest DB_QUEUE_MAX tags and stamped so an
@@ -1488,9 +1489,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Strip CR/LF (and NUL) bytes from a value before it is passed to header().
 		 *
-		 * Thin delegation to {@see Header_Emitter::strip_crlf()} (issue #905).
-		 * Kept for backward compatibility; new code should call Header_Emitter
-		 * directly.
+		 * Internal shim delegating to {@see Header_Emitter::strip_crlf()}
+		 * (issue #905) so pre-existing internal call sites keep working;
+		 * new code should call Header_Emitter directly.
 		 *
 		 * @since NEXT
 		 * @param string $value Header value to clean.
@@ -1700,9 +1701,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			}
 
 			// Always emit raw header as fallback for OLS without LSCWP (OLS honors raw header).
-			if ( ! headers_sent() ) {
-				Header_Emitter::emit( $header );
-			}
+			// Header_Emitter::emit() guards headers_sent() internally (issue #905 review).
+			Header_Emitter::emit( $header );
 		}
 
 		/**
@@ -1728,18 +1728,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				do_action( 'litespeed_control_set_nocache', $reason );
 			}
 
-			if ( ! headers_sent() ) {
-				$header = 'X-LiteSpeed-Cache-Control: no-cache';
-				/**
-				 * Filter the LiteSpeed no-cache header.
-				 *
-				 * @since NEXT
-				 * @param string $header Header string.
-				 * @param string $reason Reason.
-				 */
-				$header = (string) apply_filters( 'wppo_litespeed_nocache_header', $header, $reason );
-				Header_Emitter::emit( $header );
-			}
+			$header = 'X-LiteSpeed-Cache-Control: no-cache';
+			/**
+			 * Filter the LiteSpeed no-cache header.
+			 *
+			 * @since NEXT
+			 * @param string $header Header string.
+			 * @param string $reason Reason.
+			 */
+			$header = (string) apply_filters( 'wppo_litespeed_nocache_header', $header, $reason );
+			// Header_Emitter::emit() guards headers_sent() internally (issue #905 review).
+			Header_Emitter::emit( $header );
 		}
 
 		/**
