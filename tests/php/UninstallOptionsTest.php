@@ -208,4 +208,49 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 			'Canonical front-page LCP prefix must match Pagespeed::store_lcp_image_url()'
 		);
 	}
+
+	/**
+	 * Path-containment guard: wppo_delete_directory() must refuse anything
+	 * outside WP_CONTENT_DIR (normalised prefix + realpath check) so a
+	 * crafted path can never escape to the filesystem root (audit #897).
+	 */
+	public function test_uninstall_php_delete_directory_has_path_containment_guard(): void {
+		$path   = WPPO_PLUGIN_PATH . 'uninstall.php';
+		$source = file_get_contents( $path );
+		$this->assertNotFalse( $source );
+
+		// Scope the assertions to the extracted function body so a stray
+		// comment elsewhere in the file cannot satisfy the guard checks.
+		$pattern = '/function wppo_delete_directory\([^)]*\)[^{]*\{(.*?)\n\s*\}\s*\}/s';
+		if ( ! preg_match( $pattern, (string) $source, $m ) ) {
+			$this->fail( 'Could not extract wppo_delete_directory() body from uninstall.php' );
+		}
+		$body = $m[1];
+
+		$this->assertStringContainsString(
+			'wp_normalize_path( WP_CONTENT_DIR )',
+			$body,
+			'wppo_delete_directory() must normalise WP_CONTENT_DIR as the containment root'
+		);
+		$this->assertStringContainsString(
+			'realpath( $dir )',
+			$body,
+			'wppo_delete_directory() must resolve symlinks via realpath before the prefix check'
+		);
+		$this->assertStringContainsString(
+			'strpos( $normalized_real_dir, $normalized_real_root )',
+			$body,
+			'wppo_delete_directory() must require the resolved path to stay inside WP_CONTENT_DIR'
+		);
+		$this->assertStringContainsString(
+			'trailingslashit( $normalized_dir )',
+			$body,
+			'wppo_delete_directory() must reject WP_CONTENT_DIR itself (root-equality guard)'
+		);
+		$this->assertStringContainsString(
+			'\.\.',
+			$body,
+			'wppo_delete_directory() must reject dot-dot traversal segments'
+		);
+	}
 }

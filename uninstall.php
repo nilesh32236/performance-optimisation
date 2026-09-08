@@ -159,15 +159,50 @@ if ( ! function_exists( 'wppo_delete_directory' ) ) {
 	 * prevents a planted symlink inside cache/wppo from causing arbitrary
 	 * directory deletion on uninstall (classic symlink traversal).
 	 *
+	 * Path-containment guard: refuse to delete anything outside
+	 * WP_CONTENT_DIR (normalised prefix + realpath check), so a crafted
+	 * path can never escape to the filesystem root.
+	 *
 	 * @param string $dir Absolute path to the directory.
 	 * @return void
-	 * @since NEXT Symlink traversal hardening (is_link guard).
+	 * @since NEXT Symlink guard (is_link) + path-containment guard (WP_CONTENT_DIR prefix + realpath).
 	 */
 	function wppo_delete_directory( string $dir ): void {
 		// If $dir itself is a symlink, delete the link only — do not follow.
 		// @since NEXT — added.
 		if ( is_link( $dir ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 			@unlink( $dir ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.unlink_unlink
+			return;
+		}
+
+		// Path-containment guard: never delete outside WP_CONTENT_DIR.
+		// @since NEXT — added.
+		$normalized_dir  = wp_normalize_path( $dir );
+		$normalized_root = trailingslashit( wp_normalize_path( WP_CONTENT_DIR ) );
+
+		if ( trailingslashit( $normalized_dir ) === $normalized_root ) {
+			return;
+		}
+
+		if ( preg_match( '#(^|/)\.\.(/|$)#', $normalized_dir ) ) {
+			return;
+		}
+
+		$real_dir  = realpath( $dir );
+		$real_root = realpath( WP_CONTENT_DIR );
+
+		if ( false !== $real_dir && false !== $real_root ) {
+			$normalized_real_dir  = wp_normalize_path( $real_dir );
+			$normalized_real_root = trailingslashit( wp_normalize_path( $real_root ) );
+
+			if ( trailingslashit( $normalized_real_dir ) === $normalized_real_root ) {
+				return;
+			}
+
+			if ( 0 !== strpos( $normalized_real_dir, $normalized_real_root ) ) {
+				return;
+			}
+		} elseif ( 0 !== strpos( $normalized_dir, $normalized_root ) ) {
 			return;
 		}
 
