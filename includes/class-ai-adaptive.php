@@ -94,6 +94,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Manual user settings are never touched — the AI only tightens, never
 		 * loosens past moderate.
 		 *
+		 * Tradeoff: a mere active WooCommerce install caps eagerness site-wide
+		 * (even on blog/product pages), because eagerness is a global setting
+		 * and speculation rules apply globally. Page-level safety additionally
+		 * comes from the always-on WooCommerce cart/checkout/account exclude
+		 * paths in Main::add_speculation_rules().
+		 *
 		 * @return bool True when a commerce/auth context is detected.
 		 * @since NEXT
 		 */
@@ -489,8 +495,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @since NEXT
 		 */
 		public static function get_prefetch_urls(): array {
-			$model = self::get_model();
-			$urls  = $model['prefetch_urls'] ?? array();
+			return self::get_prefetch_urls_from_model( self::get_model() );
+		}
+
+		/**
+		 * Extract top-2 sanitized prefetch URLs from a model array.
+		 *
+		 * Shared by get_prefetch_urls() and filter_speculation_rules() so the
+		 * latter reads the stored model only once per filter run.
+		 *
+		 * @param array $model Model data.
+		 * @return string[]
+		 * @since NEXT
+		 */
+		private static function get_prefetch_urls_from_model( array $model ): array {
+			$urls = $model['prefetch_urls'] ?? array();
 			if ( ! is_array( $urls ) ) {
 				return array();
 			}
@@ -624,7 +643,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			if ( ! is_array( $rules ) ) {
 				return $rules;
 			}
-			$urls = self::get_prefetch_urls();
+			// Single model read: reused for both prefetch URLs and eagerness.
+			$model = self::get_model();
+			$urls  = self::get_prefetch_urls_from_model( $model );
 			if ( empty( $urls ) ) {
 				return $rules;
 			}
@@ -632,7 +653,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			// rules = [ { source: 'list', urls: [...] , eagerness: 'conservative' } ].
 			// Guardrail (#908): downgrade a stale persisted `eager` to `moderate`
 			// in commerce/auth contexts before injecting.
-			$eagerness = self::maybe_cap_eagerness( (string) ( self::get_model()['eagerness'] ?? 'conservative' ) );
+			$eagerness = self::maybe_cap_eagerness( (string) ( $model['eagerness'] ?? 'conservative' ) );
 			$rules[]   = array(
 				'source'    => 'list',
 				'urls'      => $urls,
