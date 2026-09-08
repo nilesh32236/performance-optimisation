@@ -475,37 +475,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
-		 * Whether content contains a block type via streaming processor.
-		 *
-		 * Delegates to {@see Util::content_has_block()} so asset decisions can
-		 * remain block-aware without duplicating the `WP_Block_Processor`
-		 * streaming logic. Reused for LCP/gallery counts (see Image_Optimisation).
-		 *
-		 * @since NEXT
-		 * @param string $content    Post content.
-		 * @param string $block_name Block name e.g. 'core/gallery'.
-		 * @return bool True when the block type is present.
-		 */
-		private function content_has_block( string $content, string $block_name ): bool {
-			return Util::content_has_block( $content, $block_name );
-		}
-
-		/**
-		 * Count blocks of a given type in post content.
-		 *
-		 * Reused for gallery/LCP counts. Streaming via `WP_Block_Processor` on
-		 * WP 6.9+; fallback to `parse_blocks()` recursion.
-		 *
-		 * @since NEXT
-		 * @param string $content    Post content.
-		 * @param string $block_name Block name e.g. 'core/gallery'.
-		 * @return int
-		 */
-		private function count_blocks_by_type( string $content, string $block_name ): int {
-			return Util::count_blocks_by_type( $content, $block_name );
-		}
-
-		/**
 		 * Combines all enqueued CSS files into a single file.
 		 *
 		 * @return void
@@ -1277,7 +1246,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// Covers both the legacy cdnURL field and the per-mapping
 			// cdnMapping config (plus wppo_cdn_mapping filters) resolved by
 			// the CDN class (issue #880 review).
-			if ( ! empty( $this->options['file_optimisation']['cdnURL'] ) || ! empty( $this->get_cdn_mappings() ) ) {
+			$cdn_mappings = class_exists( 'PerformanceOptimise\Inc\CDN' ) ? CDN::get_mappings( $this->options ) : array();
+			if ( ! empty( $this->options['file_optimisation']['cdnURL'] ) || ! empty( $cdn_mappings ) ) {
 				return false;
 			}
 
@@ -1631,34 +1601,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return $buffer;
 			}
 			return $buffer;
-		}
-
-		/**
-		 * Get CDN mappings — BC proxy to CDN::get_mappings().
-		 *
-		 * @since NEXT
-		 * @return array
-		 */
-		private function get_cdn_mappings(): array {
-			if ( class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
-				return CDN::get_mappings( $this->options );
-			}
-			return array();
-		}
-
-		/**
-		 * Find CDN URL for a given asset URL — BC proxy to CDN::find_cdn_for_url().
-		 *
-		 * @since NEXT
-		 * @param string $url Asset URL.
-		 * @param array  $mappings CDN mappings.
-		 * @return string|null
-		 */
-		private function find_cdn_for_url( string $url, array $mappings ): ?string {
-			if ( class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
-				return CDN::find_cdn_for_url( $url, $mappings );
-			}
-			return null;
 		}
 
 		/**
@@ -2666,21 +2608,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			Used_CSS::delete_all_used_css();
 
 			return $res1 && $res2;
-		}
-
-		/**
-		 * Clear all CCSS files.
-		 *
-		 * @return void
-		 * @since 1.9.0
-		 */
-		public static function clear_ccss(): void {
-			$instance = new self();
-			$fs       = $instance->get_filesystem();
-			$ccss_dir = "{$instance->cache_root_dir}/ccss";
-			if ( $fs && $fs->is_dir( $ccss_dir ) ) {
-				$fs->delete( $ccss_dir, true );
-			}
 		}
 
 		/**

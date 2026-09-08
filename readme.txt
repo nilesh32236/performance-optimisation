@@ -46,6 +46,30 @@ Built-in Redis object cache with support for standalone, Sentinel, and Cluster t
 **📊 Performance Monitor**
 Built-in performance scanner that measures real load times, TTFB, DNS resolution, and Core Web Vitals — right from your WordPress dashboard.
 
+**📡 Real-User Monitoring (RUM)**
+Collects anonymised field Web Vitals (LCP, INP, CLS) from real visitors and charts trends in the dashboard, so you can see what each optimisation actually changed.
+
+**🤖 AI Adaptive Suggestions**
+Heuristic auto-tune that reads RUM trends and audit results to suggest safe next steps — read-only recommendations, never silent changes.
+
+**🔀 LiteSpeed Coexistence**
+Auto-detects LiteSpeed/OLS servers and LSCache: pick Auto, WPPO, LiteSpeed, or Standalone mode, with purge sync and header-protocol support so the two caches never fight.
+
+**🧩 Edge Cache & CDN Purge**
+Purge fan-out for Cloudflare, Bunny, and Varnish edge caches plus per-mapping CDN URL rewriting with attribute controls.
+
+**🕷️ Cache Crawler**
+Background crawler (WP-Cron/Action Scheduler) that warms the static cache across a variant matrix with concurrency and load limits.
+
+**⏪ bfcache Support**
+Serves revalidatable cache headers for logged-in users so the browser back/forward cache keeps working instead of forcing full reloads.
+
+**📄 llms.txt**
+Auto-generated `/llms.txt` and `/llms-full.txt` virtual files (refreshed daily) so AI crawlers and assistants can understand your site.
+
+**🔌 ESI & Abilities API**
+LiteSpeed ESI bridge for dynamic fragments (LSWS Enterprise; AJAX fallback on OLS) and a WordPress Abilities/MCP surface (abilities like `performance-optimisation/cache-management`) for programmatic access.
+
 **🛠️ Developer Friendly**
 System Info dashboard, Google PageSpeed Insights integration, per-page asset manager, and import/export settings.
 
@@ -87,6 +111,7 @@ After activation, you can manage the following from the settings tabs:
 == Changelog ==
 
 = NEXT (unreleased) =
+* Deprecated: `file_optimisation.removeQueryStrings` ("Remove Query Strings From Static Resources"). `?ver=` is the cache-busting mechanism (fingerprinting) and the htaccess Expires handler already sets long immutable TTLs — stripping it risks stale assets. The toggle moved to a "Legacy Options" section with warning copy; default stays off. Planned hard removal two minor releases after this release (#904).
 * Removed: orphaned `performance-optimisation/v1/crawler` and `crawler_status` REST routes (no SPA/CLI consumers; cache warming remains driven by WP-Cron/Action Scheduler via `LiteSpeed_Crawler`).
 * Deprecated: `performance-optimisation/v1/get_page_assets` REST route (kept one release; migrate to the Abilities API `performance-optimisation/get-page-assets` or `Asset_Manager::get_page_assets()`).
 

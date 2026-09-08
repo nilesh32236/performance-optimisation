@@ -40,7 +40,7 @@ npm run start                # dev watch mode
 ## Architecture
 
 ### Plugin entry
-`performance-optimisation.php` → `includes/class-main.php` (orchestrator). Namespace `PerformanceOptimisation\Inc`. Classes are **manually loaded** via `Main::includes()` + `vendor/autoload.php` (Composer for vendor packages only, no PSR-4 autoload for plugin classes).
+`performance-optimisation.php` → `includes/class-main.php` (orchestrator). Namespace `PerformanceOptimise\Inc`. Classes are **manually loaded** via `Main::includes()` + `vendor/autoload.php` (Composer for vendor packages only, no PSR-4 autoload for plugin classes).
 
 ### React SPA
 - Mounts at `<div id="performance-optimisation">` in WP admin

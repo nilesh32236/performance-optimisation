@@ -593,26 +593,6 @@ const FileOptimization = ( {
 								) }
 								<Tooltip
 									content={
-										optimizerDisabled ? pausedTooltip : ''
-									}
-								>
-									<SwitchField
-										label={ __(
-											'Remove Query Strings From Static Resources',
-											'performance-optimisation'
-										) }
-										description={ __(
-											'Strip ?ver= query strings from CSS and JavaScript URLs so proxies and CDNs can cache them more effectively.',
-											'performance-optimisation'
-										) }
-										name="removeQueryStrings"
-										checked={ settings.removeQueryStrings }
-										onChange={ handleChange( setSettings ) }
-										disabled={ optimizerDisabled }
-									/>
-								</Tooltip>
-								<Tooltip
-									content={
 										optimizerDisabled
 											? pausedTooltip
 											: __(
@@ -892,6 +872,50 @@ const FileOptimization = ( {
 										) }
 										name="minifyInlineJS"
 										checked={ settings.minifyInlineJS }
+										onChange={ handleChange( setSettings ) }
+										disabled={ optimizerDisabled }
+									/>
+								</Tooltip>
+							</div>
+						</FeatureCard>
+
+						<FeatureCard
+							title={ __(
+								'Legacy Options (Deprecated)',
+								'performance-optimisation'
+							) }
+							icon={
+								<FontAwesomeIcon
+									icon={ faExclamationTriangle }
+								/>
+							}
+						>
+							<div className="wppo-notice wppo-notice--warning wppo-mb-16">
+								<FontAwesomeIcon
+									icon={ faExclamationTriangle }
+								/>{ ' ' }
+								{ __(
+									'These options are deprecated and will be removed in a future release. They are kept for backward compatibility only — leave them off on new sites.',
+									'performance-optimisation'
+								) }
+							</div>
+							<div className="wppo-field-group">
+								<Tooltip
+									content={
+										optimizerDisabled ? pausedTooltip : ''
+									}
+								>
+									<SwitchField
+										label={ __(
+											'Remove Query Strings From Static Resources (Legacy)',
+											'performance-optimisation'
+										) }
+										description={ __(
+											'Deprecated: ?ver= query strings ARE the cache-busting mechanism — stripping them risks serving stale CSS/JS after updates. Modern caching relies on fingerprinting with long immutable TTLs (already set by Enable Server Rules). Only enable for a proxy/CDN that cannot cache URLs with query strings.',
+											'performance-optimisation'
+										) }
+										name="removeQueryStrings"
+										checked={ settings.removeQueryStrings }
 										onChange={ handleChange( setSettings ) }
 										disabled={ optimizerDisabled }
 									/>

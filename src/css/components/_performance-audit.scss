@@ -22,52 +22,6 @@
 }
 
 // -----------------------------------------------------------------------------
-// Tab bar
-// -----------------------------------------------------------------------------
-
-.wppo-audit-tabs {
-	display: flex;
-	gap: 4px;
-	border-bottom: 2px solid var(--wppo-border);
-	margin-bottom: 20px;
-}
-
-.wppo-audit-tab {
-	padding: 8px 16px;
-	font-size: 0.875rem;
-	font-weight: 500;
-	color: var(--wppo-text-muted);
-	background: transparent;
-	border: none;
-	border-bottom: 2px solid transparent;
-	margin-bottom: -2px;
-	cursor: pointer;
-	transition: var(--wppo-transition);
-	border-radius: var(--wppo-radius-xs) var(--wppo-radius-xs) 0 0;
-
-	&:hover {
-		color: var(--wppo-primary);
-		background: var(--wppo-primary-soft);
-	}
-
-	&--active {
-		color: var(--wppo-primary);
-		border-bottom-color: var(--wppo-primary);
-		font-weight: 600;
-	}
-}
-
-// -----------------------------------------------------------------------------
-// Tab panel
-// -----------------------------------------------------------------------------
-
-.wppo-audit-panel {
-	&[hidden] {
-		display: none;
-	}
-}
-
-// -----------------------------------------------------------------------------
 // Results table (Unified layout)
 // -----------------------------------------------------------------------------
 
@@ -144,16 +98,6 @@
 			width: 100px;
 		}
 	}
-}
-
-// -----------------------------------------------------------------------------
-// Metric grid (legacy — kept for backward compat, not used in tabbed view)
-// -----------------------------------------------------------------------------
-
-.wppo-metric-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-	gap: 12px;
 }
 
 // -----------------------------------------------------------------------------
@@ -335,11 +279,6 @@
 		font-weight: 500;
 		word-break: break-all;
 	}
-}
-
-.wppo-sysinfo-loading {
-	color: var(--wppo-text-muted);
-	font-size: 0.9rem;
 }
 
 // -----------------------------------------------------------------------------

@@ -185,6 +185,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'minifyInlineCSS'            => false,
 					'minifyInlineJS'             => false,
 					'removeHTMLComments'         => true,
+					// Deprecated NEXT (#904): legacy toggle, default off. See Main::strip_static_query_strings().
 					'removeQueryStrings'         => false,
 					'disableRestApiLinks'        => false,
 					'disableRssFeeds'            => false,
@@ -460,19 +461,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			// The hook params are unused (keys already isolate) — consumed
 			// explicitly to satisfy the unused-parameter sniff.
 			unset( $new_blog_id, $prev_blog_id );
-			self::clear_permalink_cache();
-		}
-
-		/**
-		 * Reset all Util static caches (home_url + settings) for testing isolation.
-		 *
-		 * @since NEXT
-		 * @return void
-		 */
-		public static function reset_all_caches(): void {
-			self::$home_url_cache        = array();
-			self::$settings_cache        = array();
-			self::$settings_cache_loaded = array();
 			self::clear_permalink_cache();
 		}
 
@@ -1338,20 +1326,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
-		 * Whether safe mode is active via ?wppo_safe=1 kill-switch.
-		 *
-		 * Checked in Main::setup_hooks() to bypass Buffer::process_buffer_only
-		 * (see class-cache.php). When `?wppo_safe=1` is present on the request,
-		 * a `wppo_safe_mode=1` cookie is set for 10 minutes (600s) so the
-		 * bypass persists without keeping the query string. Subsequent requests
-		 * without the query string are still considered safe when the cookie
-		 * value is `1`. Uses COOKIEPATH/COOKIE_DOMAIN when available and mirrors
-		 * WordPress cookie conventions (secure + httponly).
-		 *
-		 * @since NEXT
-		 * @return bool True when safe mode should bypass optimisations.
-		 */
-		/**
 		 * Convert wildcard pattern to regex fragment (mirrors CDN::wildcard2regex / LSCWP cdn.cls.php:188).
 		 *
 		 * @since NEXT
@@ -1368,50 +1342,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			}
 			$escaped = preg_quote( $pattern, '#' );
 			return str_replace( '\*', '.*', $escaped );
-		}
-
-		/**
-		 * Whether safe mode is active for the current request.
-		 *
-		 * @since NEXT
-		 * @return bool True if safe mode is active.
-		 */
-		public static function is_safe_mode(): bool {
-			// Kill-switch via query string `?wppo_safe=1` — also arms the 10-minute cookie.
-			if ( isset( $_GET['wppo_safe'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-				$wppo_safe = sanitize_text_field( wp_unslash( $_GET['wppo_safe'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-				if ( '1' === $wppo_safe ) {
-					if ( ! headers_sent() ) {
-						$expire = time() + 600;
-						$path   = defined( 'COOKIEPATH' ) ? COOKIEPATH : '/';
-						$domain = defined( 'COOKIE_DOMAIN' ) ? COOKIE_DOMAIN : '';
-						$secure = function_exists( 'is_ssl' ) ? is_ssl() : false;
-						// SameSite=Lax for CSRF resilience while preserving normal navigation (MUST per Security Agent F).
-						$opts = array(
-							'expires'  => $expire,
-							'path'     => $path,
-							'domain'   => $domain,
-							'secure'   => $secure,
-							'httponly' => true,
-							'samesite' => 'Lax',
-						);
-						if ( PHP_VERSION_ID >= 70300 ) {
-							// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.cookies_setcookie
-							setcookie( 'wppo_safe_mode', '1', $opts );
-						} else {
-							// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.cookies_setcookie
-							setcookie( 'wppo_safe_mode', '1', $expire, $path . '; SameSite=Lax', $domain, $secure, true );
-						}
-					}
-					$_COOKIE['wppo_safe_mode'] = '1';
-					return true;
-				}
-			}
-			if ( isset( $_COOKIE['wppo_safe_mode'] ) ) {
-				$cookie = sanitize_text_field( wp_unslash( $_COOKIE['wppo_safe_mode'] ) );
-				return '1' === $cookie;
-			}
-			return false;
 		}
 
 		/**

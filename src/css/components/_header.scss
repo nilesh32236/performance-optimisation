@@ -98,22 +98,6 @@
 		margin-top: 12px;
 
 		svg { font-size: 12px; }
-
-		&.wppo-status--success {
-			color: var(--wppo-success);
-			border-color: var(--wppo-success-border);
-			background: var(--wppo-success-bg);
-		}
-		&.wppo-status--warning {
-			color: var(--wppo-warning);
-			border-color: var(--wppo-warning-border);
-			background: var(--wppo-warning-bg);
-		}
-		&.wppo-status--error {
-			color: var(--wppo-error);
-			border-color: var(--wppo-error-border);
-			background: var(--wppo-error-bg);
-		}
 	}
 
 	&__actions {

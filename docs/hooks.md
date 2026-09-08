@@ -180,7 +180,7 @@ add_filter( 'wppo_exclude_defer_js', function( $exclusions ) {
 ---
 
 ### `wppo_cve_guard_handles`
-Filter-only (S scope) list of handle strings to auto-exclude from optimization when a CVE is known. Default empty (no auto-exclude). Merged with `array_unique` into `minify_js`/`minify_css` (`exclude_js`/`exclude_css`) and `exclude_defer_js`/`exclude_delay_js` inside `PerformanceOptimisation\Inc\Main::setup_hooks()`; respects the existing `litespeed_can_optm` gate; no `wp_options` persistence and no cron. @since NEXT.
+Filter-only (S scope) list of handle strings to auto-exclude from optimization when a CVE is known. Default empty (no auto-exclude). Merged with `array_unique` into `minify_js`/`minify_css` (`exclude_js`/`exclude_css`) and `exclude_defer_js`/`exclude_delay_js` inside `PerformanceOptimise\Inc\Main::setup_hooks()`; respects the existing `litespeed_can_optm` gate; no `wp_options` persistence and no cron. @since NEXT.
 
 **Parameters:**
 - `$handles` *(string[])* — Array of handle strings to exclude (e.g. `['vulnerable-slider']`).
@@ -1235,3 +1235,29 @@ Filters the final click-to-play placeholder markup. @since NEXT.
 - `$video_id` *(string)* — Video ID.
 - `$video_type` *(string)* — `youtube`|`vimeo`.
 - `$thumbnail_url` *(string)* — Poster image URL.
+
+---
+
+## 🔧 CLI-Only Settings Keys
+
+These `wppo_settings` keys have no SPA toggle — they are read by background
+jobs / WP-CLI and edited via `wp wppo settings` (or `import_settings`).
+
+| Key | Type / Default | Consumed by |
+|-----|----------------|-------------|
+| `image_optimisation.excludeWebPImages` | string (newline-separated URLs/handles), default `''` | `Img_Converter::__construct()` (`includes/class-img-converter.php`) — images matching these URLs/handles are skipped during WebP/AVIF conversion. |
+| `image_optimisation.batch` | int, default `50` | `Cron` image-conversion worker (`includes/class-cron.php`) and `wp wppo image convert` (`includes/class-wppo-cli-command.php`) — number of images processed per batch. |
+
+---
+
+## ⚠️ Deprecated Features
+
+### `file_optimisation.removeQueryStrings` (deprecated NEXT, removal tracked in #904)
+Strips `?ver=` from enqueued CSS/JS URLs. Obsolete per the 2026
+cache-busting consensus: `?ver=` **is** the cache-busting mechanism
+(fingerprinting), and WPPO's htaccess Expires handler already sets long
+immutable TTLs — stripping `ver` risks stale assets with no measurable
+gain (see `docs/research/competitor-research-2026-09-08.md` §5). The SPA
+toggle now lives in a "Legacy Options" section with warning copy;
+default stays off. Planned hard removal two minor releases after the
+NEXT release (`Main::strip_static_query_strings()` + setting + filters).

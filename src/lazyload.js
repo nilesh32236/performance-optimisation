@@ -82,14 +82,10 @@ const AUTO_SIZES_SUPPORTED = ( () => {
  * @return {string} The selector string.
  */
 const getLazySelector = () => {
-	const useNative =
-		typeof window.wppoSettings !== 'undefined' &&
-		window.wppoSettings.settings &&
-		typeof window.wppoSettings.settings.general !== 'undefined'
-			? !! window.wppoSettings.settings.general.native_lazy &&
-			  NATIVE_LAZY_SUPPORTED
-			: USE_NATIVE_LAZY;
-	return useNative
+	// Live path is module data (`window.wppoNativeLazy` / `moduleData.nativeLazy`
+	// via USE_NATIVE_LAZY above). No `general` settings tab exists, so there is
+	// no legacy `wppoSettings.settings.general.native_lazy` branch to honour.
+	return USE_NATIVE_LAZY
 		? 'video.wppo-lazy-video'
 		: 'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video';
 };

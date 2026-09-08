@@ -686,6 +686,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				add_filter( 'style_loader_tag', array( $this, 'minify_css' ), 10, 3 );
 			}
 
+			// Deprecated (NEXT): file_optimisation.removeQueryStrings is a legacy
+			// toggle kept for backward compatibility. `?ver=` IS the cache-busting
+			// mechanism (fingerprinting) and the htaccess Expires handler already
+			// sets long immutable TTLs — stripping ver risks stale assets.
+			// TODO(#904): hard-remove the toggle + these filters two minor
+			// releases after the NEXT release. Default stays off; no behaviour change.
 			if ( ! empty( $this->options['file_optimisation']['removeQueryStrings'] ) ) {
 				add_filter( 'script_loader_src', array( $this, 'strip_static_query_strings' ), 10, 2 );
 				add_filter( 'style_loader_src', array( $this, 'strip_static_query_strings' ), 10, 2 );
@@ -1768,8 +1774,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'nonce'                                => wp_create_nonce( 'wp_rest' ),
 					'nonce_refresh'                        => wp_create_nonce( 'wppo_nonce_refresh' ),
 					'version'                              => WPPO_VERSION,
-					'wpVersion'                            => get_bloginfo( 'version' ),
-					'isBlockTheme'                         => function_exists( 'wp_is_block_theme' ) && wp_is_block_theme(),
 					'settings'                             => $safe_options,
 					'show_welcome'                         => ! (bool) get_user_meta( get_current_user_id(), 'wppo_welcome_dismissed', true ),
 					'image_info'                           => $this->sanitize_image_info_for_client( get_option( 'wppo_img_info', array() ) ),
@@ -1792,7 +1796,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'performance_audit'                    => array(
 						'homeUrl'                   => Util::cached_home_url( '/' ),
 						'pagespeedApiKeyConfigured' => ! empty( $this->options['performance_audit']['pagespeed_api_key'] ),
-						'highValueUrls'             => $this->options['performance_audit']['high_value_urls'] ?? array(), // Phase 3 will populate this.
+						'highValueUrls'             => $this->options['performance_audit']['high_value_urls'] ?? array(), // High-value URLs from settings (edited in Tools tab; consumed by preload/PageSpeed rescan cron + llms.txt proxy).
 						'autoFixEnabled'            => (bool) ( $this->options['performance_audit']['auto_fix_enabled'] ?? false ),
 						'autoRescan'                => $this->options['performance_audit']['auto_rescan'] ?? '',
 					),
@@ -2976,13 +2980,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Strips version query strings from enqueued static asset URLs.
 		 *
-		 * Removing `?ver=` from CSS/JS URLs lets proxies, CDNs, and browsers cache
-		 * the files more effectively. Cache-busting is retained where the plugin
-		 * rewrites URLs (minify/combine) because those already embed the file
-		 * modification time; this only affects URLs that still carry a `ver` arg
-		 * and are not served from the plugin's own `cache/wppo` directories.
+		 * Deprecated. `?ver=` IS the cache-busting mechanism (fingerprinting)
+		 * and the htaccess Expires handler already sets long immutable TTLs,
+		 * so stripping it risks serving stale assets with no measurable gain.
+		 * Kept for backward compatibility for sites that explicitly opted in;
+		 * default stays off. The SPA toggle lives in a "Legacy Options"
+		 * section with warning copy.
+		 *
+		 * TODO(#904): hard-remove this method, the removeQueryStrings setting,
+		 * and the script/style_loader_src filters two minor releases after
+		 * the NEXT release.
 		 *
 		 * @since NEXT
+		 * @deprecated NEXT Use long immutable cache TTLs instead.
 		 *
 		 * @param string $src    The asset source URL.
 		 * @param string $handle The script/style handle.

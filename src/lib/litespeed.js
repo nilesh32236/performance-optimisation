@@ -89,16 +89,3 @@ export const getVaryEnv = ( varyGroups = {} ) => {
 	}
 	return parts.join( ',' );
 };
-
-/**
- * Get CDN mapping label for display.
- *
- * @param {Array} mapping - CDN mapping array.
- * @return {string} Label.
- */
-export const getCdnMappingLabel = ( mapping = [] ) => {
-	if ( ! Array.isArray( mapping ) || 0 === mapping.length ) {
-		return 'None';
-	}
-	return mapping.map( ( m ) => m.cdn_url ).join( ', ' );
-};
