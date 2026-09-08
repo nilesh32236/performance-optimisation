@@ -1716,12 +1716,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return false;
 			}
 
-			$woo_active = function_exists( 'is_cart' ) || function_exists( 'is_checkout' ) || function_exists( 'is_account_page' ) || function_exists( 'is_woocommerce' ) || class_exists( 'WooCommerce', false );
+			try {
+				$woo_active = function_exists( 'is_cart' ) || function_exists( 'is_checkout' ) || function_exists( 'is_account_page' ) || function_exists( 'is_woocommerce' ) || class_exists( 'WooCommerce', false );
 
-			$excluded = false;
+				$excluded = false;
 
-			if ( $woo_active ) {
-				try {
+				if ( $woo_active ) {
 					if ( function_exists( 'is_cart' ) && is_cart() ) {
 						$excluded = true;
 					} elseif ( function_exists( 'is_checkout' ) && is_checkout() ) {
@@ -1729,62 +1729,63 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					} elseif ( function_exists( 'is_account_page' ) && is_account_page() ) {
 						$excluded = true;
 					}
-				} catch ( \Throwable $e ) {
-					// Fail-open: treat as not cacheable on detection failure.
-					return true;
 				}
-			}
 
-			if ( ! $excluded ) {
-				$parsed_path    = wp_parse_url( $this->request_uri, PHP_URL_PATH );
-				$local_url_path = wp_normalize_path( trim( rawurldecode( (string) $parsed_path ), '/' ) );
-				if ( preg_match( '#^/(?:cart|checkout|my-account)(?:/|$)#i', '/' . $local_url_path ) ) {
-					$excluded = true;
-				}
-			}
-
-			if ( ! $excluded ) {
-				if ( ! empty( $_COOKIE['woocommerce_items_in_cart'] ) || ! empty( $_COOKIE['woocommerce_cart_hash'] ) ) {
-					$excluded = true;
-				}
-			}
-
-			if ( ! $excluded ) {
-				foreach ( $_COOKIE as $k => $v ) {
-					if ( 0 === strpos( (string) $k, 'wp_woocommerce_session_' ) && ! empty( $v ) ) {
+				if ( ! $excluded ) {
+					$parsed_path    = wp_parse_url( $this->request_uri, PHP_URL_PATH );
+					$local_url_path = wp_normalize_path( trim( rawurldecode( (string) $parsed_path ), '/' ) );
+					if ( preg_match( '#^/(?:cart|checkout|my-account)(?:/|$)#i', '/' . $local_url_path ) ) {
 						$excluded = true;
-						break;
 					}
 				}
-			}
 
-			if ( ! $excluded ) {
-				if ( $this->is_wc_ajax_request() ) {
-					$excluded = true;
+				if ( ! $excluded ) {
+					if ( ! empty( $_COOKIE['woocommerce_items_in_cart'] ) || ! empty( $_COOKIE['woocommerce_cart_hash'] ) ) {
+						$excluded = true;
+					}
 				}
-			}
 
-			if ( ! $excluded ) {
-				if ( isset( $_GET['add-to-cart'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
-					$excluded = true;
-				} elseif ( ! empty( $_SERVER['QUERY_STRING'] ) && preg_match( '/(?:^|&)(add-to-cart)(?:=|&|$)/i', sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) ) ) ) {
-					$excluded = true;
+				if ( ! $excluded && isset( $_COOKIE ) && is_array( $_COOKIE ) ) {
+					foreach ( $_COOKIE as $k => $v ) {
+						if ( 0 === strpos( (string) $k, 'wp_woocommerce_session_' ) && ! empty( $v ) ) {
+							$excluded = true;
+							break;
+						}
+					}
 				}
-			}
 
-			if ( ! $excluded ) {
-				return false;
-			}
+				if ( ! $excluded ) {
+					if ( $this->is_wc_ajax_request() ) {
+						$excluded = true;
+					}
+				}
 
-			// Allow per-URL override: wppo_woo_cacheable returning true re-allows caching.
-			if ( function_exists( 'has_filter' ) && has_filter( 'wppo_woo_cacheable' ) ) {
-				$cacheable = (bool) apply_filters( 'wppo_woo_cacheable', false, $this->request_uri ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.DynamicHooknameFound -- Filter documented in docs/hooks.md.
-				if ( $cacheable ) {
+				if ( ! $excluded ) {
+					if ( isset( $_GET['add-to-cart'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
+						$excluded = true;
+					} elseif ( ! empty( $_SERVER['QUERY_STRING'] ) && preg_match( '/(?:^|&)(add-to-cart)(?:=|&|$)/i', sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) ) ) ) {
+						$excluded = true;
+					}
+				}
+
+				if ( ! $excluded ) {
 					return false;
 				}
-			}
 
-			return true;
+				// Allow per-URL override: wppo_woo_cacheable returning true re-allows caching.
+				if ( function_exists( 'has_filter' ) && has_filter( 'wppo_woo_cacheable' ) ) {
+					$cacheable = (bool) apply_filters( 'wppo_woo_cacheable', false, $this->request_uri ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.DynamicHooknameFound -- Filter documented in docs/hooks.md.
+					if ( $cacheable ) {
+						return false;
+					}
+				}
+
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				// Fail-open: any detection failure treats the page as non-cacheable (never fatal).
+				return true;
+			}
 		}
 
 		/**
@@ -2155,6 +2156,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// is_not_cacheable() is bypassed via the wppo_should_cache_request
 			// filter; covers pretty-permalink paths with an empty query string; @since NEXT).
 			if ( $this->is_wc_ajax_request() ) {
+				return false;
+			}
+
+			// Woo safe-mode storage parity (issue #922): refuse storage for
+			// cart/checkout/account, add-to-cart, and Woo session/cart cookies
+			// so HTML that gains a Woo signal after the buffer gate (e.g. Woo
+			// session handler populating $_COOKIE mid-request) is never
+			// persisted. Honors wooSafeMode=false and wppo_woo_cacheable via
+			// is_woo_excluded().
+			if ( $this->is_woo_excluded() ) {
 				return false;
 			}
 
