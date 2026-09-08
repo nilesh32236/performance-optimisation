@@ -1463,6 +1463,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * / #43258; Performance Lab #2225/#2515), try/catch wrapped with WP_DEBUG_DISPLAY
 		 * on error.
 		 *
+		 * Performance Lab interop: when the Performance Lab Server-Timing module is
+		 * active it owns the Server-Timing header and its default metrics surface as
+		 * `wp-before-template`, `wp-template` and `wp-total` (Performance Lab prefixes
+		 * every registered metric slug with `wp-`). Emitting our own raw header with
+		 * the same metric names would produce duplicate/conflicting entries in
+		 * DevTools, so:
+		 *
+		 * - Performance Lab with output buffering enabled already measures
+		 *   before-template + template + total from the same underlying timestamps
+		 *   (timestart / template render window), so our emission is suppressed
+		 *   entirely and Performance Lab's single header carries the data.
+		 * - Performance Lab without output buffering sends its header at
+		 *   template_include (before the template renders) and only carries
+		 *   `wp-before-template`; the `wp-template` name stays unclaimed, so only
+		 *   the template render duration is emitted as a distinct appended entry —
+		 *   the duplicate `wp-before-template` is dropped. When the buffering-state
+		 *   helper (`perflab_server_timing_use_output_buffer()`) is absent the
+		 *   buffering mode is unknown and the emission is suppressed instead.
+		 *
+		 * When Performance Lab is inactive nothing changes: both
+		 * `wp-before-template` and `wp-template` are emitted as before.
+		 *
 		 * Param $output ($final) is the final HTML string passed by Core to the action
 		 * (not the filtered value); reserved for future ETag hashing without re-registration
 		 * and currently unused.
@@ -1486,7 +1508,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * @param string $output The finalized output buffer content (final HTML string, alias $final).
 		 * @return void
-		 * @since NEXT
+		 * @since NEXT Performance Lab Server-Timing interop: defer to the
+		 *             Performance Lab-owned header (no duplicate/conflicting
+		 *             metric names); {@see is_pl_server_timing_active()}.
 		 */
 		public function emit_server_timing_header( string $output = '' ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Reserved for future ETag hashing without re-registration.
 			if ( ! $this->server_timing_enabled() || is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
@@ -1501,27 +1525,69 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 
-			$now     = microtime( true );
-			$timings = array();
+			$now = microtime( true );
 
 			// wp-before-template: request bootstrap to template start. Measured from the
 			// captured template-start marker so it is disjoint from wp-template below.
+			$before_duration = '';
 			if ( $this->server_timing_template_start > $start ) {
-				$timings[] = 'wp-before-template;dur=' . round( ( $this->server_timing_template_start - $start ) * 1000, 2 );
+				$before_duration = 'wp-before-template;dur=' . round( ( $this->server_timing_template_start - $start ) * 1000, 2 );
 			}
 
 			// wp-template: template render duration.
+			$template_duration = '';
 			if ( $this->server_timing_template_start > 0 ) {
 				$render = ( $now - $this->server_timing_template_start ) * 1000;
 				if ( $render > 0 ) {
-					$timings[] = 'wp-template;dur=' . round( $render, 2 );
+					$template_duration = 'wp-template;dur=' . round( $render, 2 );
 				}
 			}
 
-			if ( ! empty( $timings ) ) {
-				// Append rather than replace so coexisting Server-Timing entries are preserved.
-				header( 'Server-Timing: ' . implode( ', ', $timings ), false );
+			if ( '' === $before_duration && '' === $template_duration ) {
+				return;
 			}
+
+			if ( $this->is_pl_server_timing_active() ) {
+				// Performance Lab owns the Server-Timing header. When it uses
+				// output buffering its defaults already carry wp-before-template,
+				// wp-template and wp-total measured from the same underlying
+				// timestamps — suppress our duplicate emission entirely.
+				// When the buffering-state helper itself is absent the buffering
+				// mode is unknown, so defer to Performance Lab as well rather
+				// than risking a duplicate emission.
+				// Without output buffering Performance Lab already sent its header
+				// (wp-before-template only) at template_include; emitting only the
+				// unclaimed wp-template render duration keeps a single source per
+				// metric name (no duplicate/conflicting entries).
+				if ( ! function_exists( 'perflab_server_timing_use_output_buffer' ) || perflab_server_timing_use_output_buffer() ) {
+					return;
+				}
+				if ( '' === $template_duration ) {
+					return;
+				}
+				header( 'Server-Timing: ' . $template_duration, false );
+				return;
+			}
+
+			// Append rather than replace so coexisting Server-Timing entries are preserved.
+			header( 'Server-Timing: ' . implode( ', ', array_filter( array( $before_duration, $template_duration ) ) ), false );
+		}
+
+		/**
+		 * Whether the Performance Lab Server-Timing module is active.
+		 *
+		 * Detects the canonical Performance Lab Server-Timing API surface
+		 * (`perflab_server_timing_register_metric()` / `perflab_wrap_server_timed_call()`).
+		 * Performance Lab is a plugin (not core), so this is a function_exists
+		 * gate with no WordPress version check. Used by
+		 * {@see emit_server_timing_header()} to defer to the Performance Lab-owned
+		 * Server-Timing header instead of emitting a second, conflicting one.
+		 *
+		 * @since NEXT
+		 * @return bool True when the Performance Lab Server-Timing API is present.
+		 */
+		public function is_pl_server_timing_active(): bool {
+			return function_exists( 'perflab_server_timing_register_metric' ) || function_exists( 'perflab_wrap_server_timed_call' );
 		}
 
 		/**
@@ -2175,6 +2241,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * args via the Script Loader API (Trac #61734 / #63486) so core renders
 		 * them with dependency bumping; the regex fallback
 		 * add_fetchpriority_to_deferred() stays disabled on 6.9+ via setup_hooks().
+		 * The footer move uses the 'group' data key (core maps the in_footer
+		 * enqueue arg to group=1; the 'in_footer' data key itself is never read
+		 * for classic scripts) and can be disabled per handle via the
+		 * `wppo_deferred_in_footer` filter.
 		 *
 		 * @since NEXT
 		 *
@@ -2232,11 +2302,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						wp_script_add_data( $handle, 'fetchpriority', $fetchpriority );
 					}
 					if ( $is_wp69_plus ) {
-						// Optional native in_footer for Script Modules on 6.9+ (Trac #63486).
-						// Guarded — no-op on older core or when the API is absent.
-						if ( class_exists( 'WP_Script_Modules' ) && method_exists( 'WP_Script_Modules', 'set_in_footer' ) ) {
-							// Non-critical deferred handles are safe to move to footer.
-							wp_script_add_data( $handle, 'in_footer', true );
+						// Native in_footer for deferred classic scripts on WP 6.9+
+						// (Trac #63486). Core reads the 'group' data key for footer
+						// placement — wp_enqueue_script()'s args handler
+						// (_wp_scripts_add_args_data()) maps in_footer to group=1,
+						// and 'in_footer' itself is never read for classic scripts,
+						// so set 'group' directly (issue #879 review). Skipped when
+						// the handle is already footer-bound and opt-out per handle.
+						/**
+						 * Filters whether deferred classic scripts are moved to the footer.
+						 *
+						 * Default true on WP 6.9+ (native in_footer for deferred
+						 * scripts). Return false for a handle that must stay in
+						 * the head (e.g. document.write dependencies).
+						 *
+						 * @since NEXT
+						 *
+						 * @param bool   $in_footer Whether to set the footer group.
+						 * @param string $handle    Script handle.
+						 */
+						$in_footer = apply_filters( 'wppo_deferred_in_footer', true, $handle );
+						if ( $in_footer && 1 !== (int) $wp_scripts->get_data( $handle, 'group' ) ) {
+							wp_script_add_data( $handle, 'group', 1 );
 						}
 					}
 				}

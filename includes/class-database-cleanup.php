@@ -401,13 +401,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Delete all spam comments.
 		 *
+		 * Excludes WordPress 6.9+ Notes (`comment_type='note'`) from deletion —
+		 * Notes are personal-note comment rows that can legitimately land in the
+		 * spam approval state and must never be destroyed by cleanup. On WP <6.9
+		 * no `note` rows exist so the predicate is a no-op (issue #884). The
+		 * COALESCE makes the predicate NULL-safe so a row with an unexpected
+		 * NULL `comment_type` stays eligible for cleanup.
+		 *
 		 * @since 1.1.0
+		 * @since NEXT Exclude WP 6.9+ Notes (`comment_type='note'`).
 		 * @return int|false Number of rows deleted, or false on error.
 		 */
 		public static function clean_spam_comments() {
 			global $wpdb;
 			return self::delete_in_batches(
-				"SELECT comment_ID FROM {$wpdb->comments} WHERE comment_approved = 'spam' LIMIT 1000",
+				"SELECT comment_ID FROM {$wpdb->comments} WHERE comment_approved = 'spam' AND COALESCE( comment_type, '' ) != 'note' LIMIT 1000",
 				$wpdb->commentmeta,
 				'comment_id',
 				$wpdb->comments,
@@ -418,13 +426,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Remove trashed comments and their comment meta from the database in batches.
 		 *
+		 * Excludes WordPress 6.9+ Notes (`comment_type='note'`) from deletion —
+		 * Notes are personal-note comment rows that can legitimately land in the
+		 * trash approval state and must never be destroyed by cleanup. On WP <6.9
+		 * no `note` rows exist so the predicate is a no-op (issue #884). The
+		 * COALESCE makes the predicate NULL-safe so a row with an unexpected
+		 * NULL `comment_type` stays eligible for cleanup.
+		 *
 		 * @since 1.1.0
+		 * @since NEXT Exclude WP 6.9+ Notes (`comment_type='note'`).
 		 * @return int|false Number of rows deleted, or false on error.
 		 */
 		public static function clean_trashed_comments() {
 			global $wpdb;
 			return self::delete_in_batches(
-				"SELECT comment_ID FROM {$wpdb->comments} WHERE comment_approved = 'trash' LIMIT 1000",
+				"SELECT comment_ID FROM {$wpdb->comments} WHERE comment_approved = 'trash' AND COALESCE( comment_type, '' ) != 'note' LIMIT 1000",
 				$wpdb->commentmeta,
 				'comment_id',
 				$wpdb->comments,
@@ -880,7 +896,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * `revisions`, `auto_drafts`, `trashed_posts`, `spam_comments`, `trashed_comments`,
 		 * `expired_transients`, and `orphan_postmeta`.
 		 *
+		 * The `spam_comments`/`trashed_comments` counts exclude WordPress 6.9+ Notes
+		 * (`comment_type='note'`) using the same predicate as
+		 * clean_spam_comments()/clean_trashed_comments() so the advertised counts
+		 * match what cleanup would actually delete (issue #884).
+		 *
 		 * @since 1.1.0
+		 * @since NEXT Exclude WP 6.9+ Notes from spam/trashed comment counts.
 		 * @return array<string,int> Associative array mapping cleanup type to its current count.
 		 */
 		public static function get_counts() {
@@ -939,8 +961,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				'revisions'          => (int) $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->posts WHERE post_type = 'revision'" ),
 				'auto_drafts'        => (int) $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->posts WHERE post_status = 'auto-draft'" ),
 				'trashed_posts'      => (int) $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->posts WHERE post_status = 'trash'" ),
-				'spam_comments'      => (int) $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->comments WHERE comment_approved = 'spam'" ),
-				'trashed_comments'   => (int) $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->comments WHERE comment_approved = 'trash'" ),
+				// Exclude WP 6.9+ Notes (`comment_type='note'`) so counts match what
+				// clean_spam_comments()/clean_trashed_comments() would actually delete (issue #884).
+				'spam_comments'      => (int) $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->comments WHERE comment_approved = 'spam' AND COALESCE( comment_type, '' ) != 'note'" ),
+				'trashed_comments'   => (int) $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->comments WHERE comment_approved = 'trash' AND COALESCE( comment_type, '' ) != 'note'" ),
 				'expired_transients' => $transient_count,
 				'orphan_postmeta'    => (int) $wpdb->get_var(
 					"SELECT COUNT(*) FROM $wpdb->postmeta pm
