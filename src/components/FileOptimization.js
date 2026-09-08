@@ -890,7 +890,7 @@ const FileOptimization = ( {
 								/>
 							}
 						>
-							<div className="wppo-notice wppo-notice--warning wppo-mb-12">
+							<div className="wppo-notice wppo-notice--warning wppo-mb-16">
 								<FontAwesomeIcon
 									icon={ faExclamationTriangle }
 								/>{ ' ' }
