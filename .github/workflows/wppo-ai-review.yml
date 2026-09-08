@@ -122,7 +122,7 @@ jobs:
           npm ci || npm install
 
       - name: Fix Issue
-        uses: nilesh32236/opencode-ai-reviewer@448a67ef7310fbe0528c1ef629ae1c943779faae # v1.10.1
+        uses: nilesh32236/opencode-ai-reviewer@main # floating: tracks latest reviewer action
         with:
           mode: fix
           github_token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
@@ -219,7 +219,7 @@ jobs:
           npm ci || npm install
 
       - name: AI Code Review
-        uses: nilesh32236/opencode-ai-reviewer@448a67ef7310fbe0528c1ef629ae1c943779faae # v1.10.1
+        uses: nilesh32236/opencode-ai-reviewer@main # floating: tracks latest reviewer action
         with:
           mode: review
           github_token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
@@ -313,7 +313,7 @@ jobs:
           npm ci || npm install
 
       - name: Autofix Review Loop
-        uses: nilesh32236/opencode-ai-reviewer@448a67ef7310fbe0528c1ef629ae1c943779faae # v1.10.1
+        uses: nilesh32236/opencode-ai-reviewer@main # floating: tracks latest reviewer action
         with:
           mode: fix
           github_token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
