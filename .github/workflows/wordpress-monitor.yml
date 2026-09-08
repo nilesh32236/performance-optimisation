@@ -87,9 +87,11 @@ jobs:
           features where they genuinely help. Find EVERY actionable gap.
 
           ── MANDATORY EXECUTION MODE: ORCHESTRATOR + FIXED SPECIALIST LANES ──
-          You are a read-only orchestrator: you cannot edit files, run shell
-          commands, or write anything to disk (CI captures your final message
-          and writes/validates every file itself).
+          You are a read-only orchestrator: you cannot edit files or write
+          anything to disk, and your ONLY shell access is `jq` and `echo` —
+          reserved for the mandatory final-JSON self-verification below (CI
+          captures your final message and writes/validates every file
+          itself).
           Spawn each of the 8 named specialists below as a sub-agent named
           verbatim `wppo-lane-researcher` (Task tool), passing the lane brief
           in the task prompt. Do NOT research serially yourself; do NOT use
@@ -264,6 +266,30 @@ jobs:
           final message is the JSON only (unknown extra fields are rejected
           by the schema; missing required fields fail the run).
 
+          FINAL-MESSAGE DISCIPLINE:
+          - The final message MUST be exactly ONE JSON document conforming to
+            the schema — no status updates, no prose, no markdown fences,
+            nothing before or after it. Its FIRST LINE must begin exactly
+            with {"schema_version" (CI anchors extraction on that prefix).
+          - Emit progress commentary ONLY in earlier separate messages during
+            the run ("Dispatching lanes…", "Reconciling…"), never in the
+            final message.
+
+          MANDATORY SELF-VERIFICATION BEFORE STOPPING (jq/echo are the only
+          approved shell commands and are sufficient):
+          - Compose the complete JSON, then run:
+              echo '<complete json>' | jq -e .
+            and:
+              echo '<same json>' | jq -e '.findings | type == "array" and (.lanes | type == "array")'
+            Both MUST exit 0.
+          - If jq reports any error, fix the JSON and re-validate until BOTH
+            commands pass — an unvalidated final message is a forbidden stop
+            state.
+          - Length discipline: if the JSON risks truncation/corruption,
+            shorten finding prose (fallback text, acceptance_criteria
+            wording) rather than weakening structure; corrupted or truncated
+            output is invalid.
+
           STRICTNESS RULES:
           - Cite a source URL + version/date for every external claim.
           - Prefer easy/medium difficulty, low-risk, backward-compatible wins;
@@ -286,21 +312,70 @@ jobs:
             echo "FOCUS FEATURE: ${FORCE_CHECK} (scope all lanes to this slug, reduce to 2 lanes, skip parity matrix)." >> /tmp/research-prompt.txt
           fi
 
-          # Fail-hard + capture: the agent's final message (pure findings
-          # JSON) is captured to disk. The 45m wrapper is the Gate-1-mandated
-          # artifact-loss mitigation (research job ONLY — none in
-          # create-issues).
-          if ! timeout 45m opencode run --auto --agent wppo-researcher --model "${{ vars.OPENCODE_MODEL || 'opencode-go/muse-spark-1.2-contributor' }}" < /tmp/research-prompt.txt > /tmp/opencode-research-output.txt; then
-            echo "::error::OpenCode research failed"
+          # Bounded research loop: 1 initial attempt + up to 2 JSON-repair
+          # attempts. Per attempt: 18m opencode run (3×18m=54m stays inside
+          # the 60m job timeout) followed by the hardened extraction; on JSON
+          # failure, append a REPAIR appendix to the prompt and retry.
+          # Fail-hard after the 3rd failed attempt (notify-failure alerts).
+          ATTEMPT=1
+          RESEARCH_OK=false
+          while [ "${ATTEMPT}" -le 3 ]; do
+            echo "Research attempt ${ATTEMPT}/3..."
+            if ! timeout 18m opencode run --auto --agent wppo-researcher --model "${{ vars.OPENCODE_MODEL || 'opencode-go/muse-spark-1.2-contributor' }}" < /tmp/research-prompt.txt > /tmp/opencode-research-output.txt; then
+              echo "::error::OpenCode research failed (attempt ${ATTEMPT})"
+              exit 1
+            fi
+
+            # Hardened extraction: opencode streams ALL agent messages to
+            # stdout, so narrow to the JSON document (first line beginning
+            # with {"schema_version"), strip fences, then parse + shape
+            # check. Positive checks (not stderr-capture): jq exits non-zero
+            # with EMPTY stderr on empty input, so JQ_ERR emptiness must
+            # never imply success. Captured error feeds the repair appendix.
+            awk '/^\{"schema_version"/{found=1} found' /tmp/opencode-research-output.txt | sed '/^```/d' > /tmp/research-output-clean.txt
+            JQ_ERR=""
+            if jq -e '.' /tmp/research-output-clean.txt > /dev/null 2>&1; then
+              if ! jq -e 'type == "object" and (.findings | type == "array")' /tmp/research-output-clean.txt > /dev/null 2>&1; then
+                JQ_ERR="output JSON is not an object with a findings array"
+              fi
+            else
+              JQ_ERR=$(jq -e '.' /tmp/research-output-clean.txt 2>&1 >/dev/null | head -c 500 || true)
+              if [ -z "${JQ_ERR}" ]; then
+                JQ_ERR="no JSON document found (output empty, or no line starting with {\"schema_version\")"
+              fi
+            fi
+
+            if [ -z "${JQ_ERR}" ]; then
+              RESEARCH_OK=true
+              echo "attempts=${ATTEMPT}" >> "$GITHUB_OUTPUT"
+              echo "Research attempt ${ATTEMPT} produced valid findings JSON."
+              break
+            fi
+
+            if [ "${ATTEMPT}" -lt 3 ]; then
+              echo "::warning::Research attempt ${ATTEMPT} produced invalid JSON — queueing repair attempt"
+              {
+                echo ""
+                echo "PREVIOUS ATTEMPT FAILED JSON VALIDATION. jq error: ${JQ_ERR}. Your previous output began: $(head -c 1500 /tmp/opencode-research-output.txt). Re-emit ONLY the corrected, complete, schema-conformant JSON document as your final message. Run \`echo '<json>' | jq -e .\` to self-verify before stopping."
+              } >> /tmp/research-prompt.txt
+            fi
+            ATTEMPT=$((ATTEMPT + 1))
+          done
+
+          if [ "${RESEARCH_OK}" != "true" ]; then
+            echo "::error::OpenCode research failed JSON validation after 3 attempts"
             exit 1
           fi
 
       - name: Extract findings JSON
         run: |
-          # The researcher's final message is pure JSON (markdown fences are
-          # stripped defensively). No placeholder JSON, no grep fallback:
-          # invalid output fails the run (RESEARCH_FAILED).
-          sed '/^```/d' /tmp/opencode-research-output.txt > /tmp/research-output-clean.txt
+          # Canonical hardened extraction of the successful attempt's output:
+          # opencode streams ALL agent messages to stdout, so narrow to the
+          # JSON document first (start at the first line beginning with
+          # {"schema_version") and strip any fences after it. The research
+          # loop only breaks after this check passed, so failure here is a
+          # hard invariant violation — fail-hard, no placeholder, no fallback.
+          awk '/^\{"schema_version"/{found=1} found' /tmp/opencode-research-output.txt | sed '/^```/d' > /tmp/research-output-clean.txt
           if ! jq -e '.' /tmp/research-output-clean.txt > /dev/null 2>&1; then
             echo "::error::OpenCode research output is not valid JSON (final message must be pure findings JSON)"
             exit 1
