@@ -11,6 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    # 30m ceiling: full production build + ZIP + GitHub release + SVN
+    # deploy, single pass — guardrail only.
+    timeout-minutes: 30
     steps:
       - name: Checkout Code
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6

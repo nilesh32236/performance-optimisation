@@ -12,8 +12,8 @@ permissions:
   actions: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.run_id }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   CONTEXT7_API_KEY: ${{ secrets.CONTEXT7_API_KEY }}
@@ -183,3 +183,37 @@ jobs:
             PHP directory: includes/ (25 classes, manual require_once, no PSR-4 autoload).
             JS/React directory: src/ (React SPA, @wordpress/scripts, wppoSettings global injected by PHP).
             Settings stored in single option wppo_settings. Activity log in wppo_activity_logs table.
+
+  # ── NOTIFY FAILURE ───────────────────────────────────────────────────────────
+  # Files/updates an audit-failure issue when the audit job fails, so a broken
+  # daily run never fails silently. Dedup: reuses the existing open issue on
+  # that label. Uses GITHUB_TOKEN (notification-only; deliberately does not
+  # trigger downstream `issues.labeled` workflows).
+  notify-failure:
+    name: Notify Audit Failure
+    needs: [audit]
+    if: failure()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Create or update failure issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          BODY=$(printf '%s\n' \
+            "The daily codebase audit job failed." \
+            "" \
+            "Failed run: ${RUN_URL}" \
+            "" \
+            "Check the run log for the cause (verification suite, AI audit, or issue-reporting step).")
+          gh label create "audit-failure" --color "d93f0b" --description "Daily audit failure" -R "${{ github.repository }}" || true
+          EXISTING=$(gh issue list -R "${{ github.repository }}" --label "audit-failure" --state open --json number --jq '.[0].number' 2>/dev/null || true)
+          if [ -n "${EXISTING}" ]; then
+            gh issue comment "${EXISTING}" -R "${{ github.repository }}" --body "Audit failed again — run: ${RUN_URL}"
+          else
+            gh issue create -R "${{ github.repository }}" --title "Daily Audit: verification failed" --label "audit-failure" --body "${BODY}"
+          fi

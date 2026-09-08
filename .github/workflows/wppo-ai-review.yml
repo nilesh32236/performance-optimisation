@@ -185,6 +185,11 @@ jobs:
       )
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Least privilege: the review job only reads (checkout + gh pr view);
+    # all writes go through GH_PAT in the action inputs (see top-level
+    # comment). fix-issue/autofix/auto-merge keep inheriting write.
+    permissions:
+      contents: read
 
     steps:
       - name: Resolve PR ref
@@ -398,8 +403,8 @@ jobs:
         run: |
           # Schema proof: the run's findings JSON, plus the committed valid
           # fixture (proves the schema itself loads in CI).
-          npx -y ajv-cli@5.0.0 validate --spec=draft7 -s .github/schemas/wppo-review-findings.schema.json -d /tmp/review-findings.json
-          npx -y ajv-cli@5.0.0 validate --spec=draft7 -s .github/schemas/wppo-review-findings.schema.json -d .github/schemas/fixtures/review-findings-valid.json
+          npx -y ajv-cli@5.0.0 validate --spec=draft7 --errors=json -s .github/schemas/wppo-review-findings.schema.json -d /tmp/review-findings.json
+          npx -y ajv-cli@5.0.0 validate --spec=draft7 --errors=json -s .github/schemas/wppo-review-findings.schema.json -d .github/schemas/fixtures/review-findings-valid.json
 
       - name: Apply deterministic review gates
         run: |

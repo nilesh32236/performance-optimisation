@@ -27,6 +27,9 @@ jobs:
   code-quality:
     name: WPCS & Psalm Security Scan
     runs-on: ubuntu-latest
+    # 20m ceiling: single-pass WPCS checkstyle + psalm scan + SARIF upload,
+    # no retries — guardrail only, far above normal runtimes.
+    timeout-minutes: 20
     steps:
       - name: Checkout code
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -53,6 +56,12 @@ jobs:
         with:
           report_file: reports/psalm.sarif
         continue-on-error: true
+
+      - name: Warn on Psalm scan failure
+        if: steps.psalm.outcome == 'failure'
+        run: |
+          echo "::warning::Psalm security scan failed (continue-on-error kept so the SARIF path still runs)"
+          echo "Psalm security scan failed (continue-on-error) — SARIF upload path still ran; treat results as partial." >> $GITHUB_STEP_SUMMARY
 
       - name: Check psalm report exists
         id: psalm_report
