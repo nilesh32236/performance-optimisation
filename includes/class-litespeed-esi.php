@@ -668,10 +668,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			$nonce_valid = function_exists( 'wp_verify_nonce' ) ? wp_verify_nonce( $nonce, 'wppo_esi' ) : false;
 
 			if ( ! $nonce_valid && 'cart' !== $block && 'nonce' !== $block ) {
-				if ( ! headers_sent() ) {
-					header( 'Cache-Control: private,no-cache' );
-					header( 'X-LiteSpeed-Cache-Control: private,no-vary' );
-				}
+				Header_Emitter::emit_private_pair();
 				if ( function_exists( 'wp_send_json_error' ) ) {
 					wp_send_json_error( array( 'message' => 'Unauthorized' ), 403 );
 				}
@@ -681,10 +678,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			// For adminbar, require logged-in.
 			if ( 'adminbar' === $block || 'admin_bar' === $block || 'admin-bar' === $block ) {
 				if ( ! is_user_logged_in() ) {
-					if ( ! headers_sent() ) {
-						header( 'Cache-Control: private,no-cache' );
-						header( 'X-LiteSpeed-Cache-Control: private,no-vary' );
-					}
+					Header_Emitter::emit_private_pair();
 					if ( function_exists( 'wp_send_json_error' ) ) {
 						wp_send_json_error( array( 'message' => 'Unauthorized' ), 401 );
 					}
@@ -732,10 +726,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 				array( 'http', 'https', 'mailto', 'tel', 'relative' )
 			);
 
-			if ( ! headers_sent() ) {
-				header( 'Cache-Control: private,no-cache' );
-				header( 'X-LiteSpeed-Cache-Control: private,no-vary' );
-			}
+			Header_Emitter::emit_private_pair();
 
 			if ( function_exists( 'wp_send_json_success' ) ) {
 				wp_send_json_success( array( 'html' => $fragment ) );
@@ -862,8 +853,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 
 			// Cart / checkout / account → private,no-vary.
 			if ( $is_cart || $is_checkout || $is_account ) {
-				header( 'Cache-Control: private,no-cache' );
-				header( 'X-LiteSpeed-Cache-Control: private,no-vary' );
+				Header_Emitter::emit_private_pair();
 				/**
 				 * Filter ESI private header decision.
 				 *
@@ -876,16 +866,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 
 			// Admin → no-cache.
 			if ( $is_admin ) {
-				header( 'Cache-Control: no-cache' );
-				header( 'X-LiteSpeed-Cache-Control: no-cache' );
+				Header_Emitter::emit_nocache_pair();
 				do_action( 'wppo_esi_private_headers_sent', 'no-cache' );
 				return;
 			}
 
 			// Also check should_punch_hole for generic private.
 			if ( self::should_punch_hole( 'cart' ) || self::should_punch_hole( 'checkout' ) || self::should_punch_hole( 'account' ) || self::should_punch_hole( 'adminbar' ) ) {
-				header( 'Cache-Control: private,no-cache' );
-				header( 'X-LiteSpeed-Cache-Control: private,no-vary' );
+				Header_Emitter::emit_private_pair();
 				do_action( 'wppo_esi_private_headers_sent', 'private' );
 			}
 		}
@@ -967,9 +955,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				LiteSpeed_Integration::queue_purge_tags( array( 'ESI.' . $action, 'W.' . md5( $action ) ), 'private' );
 			}
-			if ( ! headers_sent() ) {
-				header( 'X-LiteSpeed-Tag: ESI.' . $action, false );
-			}
+			Header_Emitter::emit_esi_tag( $action );
 		}
 
 		/**

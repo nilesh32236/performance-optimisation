@@ -757,9 +757,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			if ( has_action( 'litespeed_purge' ) ) {
 				do_action( 'litespeed_purge', $tags );
 			}
-			if ( ! headers_sent() ) {
-				header( 'X-LiteSpeed-Purge: tag=' . self::strip_crlf( $tag_str ), false );
-			} else {
+			// Branch on the emitter return so a headers_sent() race between
+			// the check and the emission still falls back to the DB queue
+			// (issue #905 review).
+			if ( ! Header_Emitter::emit_purge_tag( $tag_str ) ) {
 				// Fallback: re-queue to DB for next request if headers already sent and lock not set.
 				// Already cleared above; if we couldn't send header, persist stale tag with next flush.
 				// Capped to the newest DB_QUEUE_MAX tags and stamped so an
@@ -1206,8 +1207,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			try {
 				if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					$cache = new Cache();
-					if ( method_exists( $cache, 'is_request_cacheable' ) ) {
-						$cacheable = $cache->is_request_cacheable();
+					if ( method_exists( $cache, 'is_page_cacheable' ) ) {
+						$cacheable = $cache->is_page_cacheable();
 					} else {
 						$ref = new \ReflectionMethod( Cache::class, 'is_not_cacheable' );
 						$ref->setAccessible( true );
@@ -1488,16 +1489,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Strip CR/LF (and NUL) bytes from a value before it is passed to header().
 		 *
-		 * PHP itself rejects multi-line header() values, but this keeps every
-		 * dynamic LiteSpeed header emission safe against filter-injected control
-		 * characters instead of relying on PHP's failure mode.
+		 * Internal shim delegating to {@see Header_Emitter::strip_crlf()}
+		 * (issue #905) so pre-existing internal call sites keep working;
+		 * new code should call Header_Emitter directly. Temporary — planned
+		 * for removal in a follow-up once the migration is fully soaked.
 		 *
 		 * @since NEXT
 		 * @param string $value Header value to clean.
 		 * @return string Value without header-breaking control characters.
 		 */
 		private static function strip_crlf( string $value ): string {
-			return str_replace( array( "\r", "\n", "\0" ), '', $value );
+			return Header_Emitter::strip_crlf( $value );
 		}
 
 		/**
@@ -1639,14 +1641,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				if ( ! $has_external && ! $headers_sent ) {
 					$has_cookie_vary = $groups_for_header['role'] || $groups_for_header['guest'] || $groups_for_header['mobile'];
 					if ( $has_cookie_vary ) {
-						header( 'Vary: Cookie', false );
+						Header_Emitter::emit( 'Vary: Cookie', false );
 					}
 					if ( $groups_for_header['webp'] ) {
-						header( 'Vary: Accept', false );
+						Header_Emitter::emit( 'Vary: Accept', false );
 					}
 					$vary_header = self::build_vary_header();
 					if ( '' !== $vary_header ) {
-						header( 'X-LiteSpeed-Vary: ' . self::strip_crlf( $vary_header ), false );
+						Header_Emitter::emit( 'X-LiteSpeed-Vary: ' . $vary_header, false );
 					}
 					/**
 					 * Filter the fallback vary header value when litespeed_vary not present.
@@ -1656,7 +1658,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 					 */
 					$fallback = (string) apply_filters( 'wppo_litespeed_vary_fallback', $vary_header );
 					if ( '' !== $fallback && $vary_header !== $fallback ) {
-						header( 'X-LiteSpeed-Vary: ' . self::strip_crlf( $fallback ), false );
+						Header_Emitter::emit( 'X-LiteSpeed-Vary: ' . $fallback, false );
 					}
 				}
 			}
@@ -1700,9 +1702,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			}
 
 			// Always emit raw header as fallback for OLS without LSCWP (OLS honors raw header).
-			if ( ! headers_sent() ) {
-				header( self::strip_crlf( $header ) );
-			}
+			// Header_Emitter::emit() guards headers_sent() internally (issue #905 review).
+			Header_Emitter::emit( $header );
 		}
 
 		/**
@@ -1728,18 +1729,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				do_action( 'litespeed_control_set_nocache', $reason );
 			}
 
-			if ( ! headers_sent() ) {
-				$header = 'X-LiteSpeed-Cache-Control: no-cache';
-				/**
-				 * Filter the LiteSpeed no-cache header.
-				 *
-				 * @since NEXT
-				 * @param string $header Header string.
-				 * @param string $reason Reason.
-				 */
-				$header = (string) apply_filters( 'wppo_litespeed_nocache_header', $header, $reason );
-				header( self::strip_crlf( $header ) );
+			// Preserve pre-extraction semantics (issue #905 review): the
+			// wppo_litespeed_nocache_header filter fired only when headers
+			// were not already sent. Header_Emitter::emit() re-guards for
+			// races between this check and the emission.
+			if ( function_exists( 'headers_sent' ) && headers_sent() ) {
+				return;
 			}
+			$header = 'X-LiteSpeed-Cache-Control: no-cache';
+			/**
+			 * Filter the LiteSpeed no-cache header.
+			 *
+			 * @since NEXT
+			 * @param string $header Header string.
+			 * @param string $reason Reason.
+			 */
+			$header = (string) apply_filters( 'wppo_litespeed_nocache_header', $header, $reason );
+			Header_Emitter::emit( $header );
 		}
 
 		/**
@@ -1964,7 +1970,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 					do_action( 'litespeed_tag', $tag );
 				}
 				if ( ! $headers_sent ) {
-					header( 'X-LiteSpeed-Tag: ' . self::strip_crlf( $tag ), false );
+					Header_Emitter::emit_tag( $tag );
 				}
 			}
 			// Singular post tag via litespeed_tag_post for parity (already includes Po.* above, but keep hook).
@@ -2246,14 +2252,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			 */
 			$strip = (bool) apply_filters( 'wppo_litespeed_strip_cache_control', true );
 
-			if ( ! $strip || headers_sent() ) {
+			if ( ! $strip ) {
 				return;
 			}
 
-			if ( function_exists( 'header_remove' ) ) {
-				header_remove( 'Cache-Control' );
-				header_remove( 'Pragma' );
-			}
+			Header_Emitter::remove_generic_cache_control();
 		}
 
 		/**
