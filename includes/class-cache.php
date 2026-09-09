@@ -85,10 +85,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * The domain name of the site.
 		 *
+		 * Pinned to the canonical home host (see {@see Util::get_canonical_host()})
+		 * so a forged Host header can never create a poisoned cache directory
+		 * tree. Falls back to the legacy Host-derived value only when the
+		 * canonical host cannot be resolved (early boot, CLI).
+		 *
 		 * @var string
 		 * @since 1.0.0
 		 */
 		private string $domain;
+
+		/**
+		 * Whether the request Host header differs from the canonical home host.
+		 *
+		 * When true the request is served uncached (fail-open) and no cache
+		 * file is written, so forged hosts can neither poison nor read stored
+		 * payloads.
+		 *
+		 * @var bool
+		 * @since NEXT
+		 */
+		private bool $host_mismatch = false;
 
 		/**
 		 * The root directory for cache files.
@@ -295,30 +312,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		public function __construct( array $options = array() ) {
-			$domain = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
+			$raw_host     = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
+			$request_host = Util::normalize_cache_host( $raw_host );
+			$canonical    = Util::get_canonical_host();
 
-			// Convert internationalized domain names to ASCII (punycode) to support IDN chars.
-			if ( function_exists( 'idn_to_ascii' ) ) {
-				$converted = idn_to_ascii( $domain, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46 );
-				if ( false !== $converted ) {
-					$domain = $converted;
-				}
-			}
-
-			// Strip the port before validation.
-			$host = explode( ':', $domain, 2 )[0];
-
-			$valid_domain = ! (
-				strpos( $host, '..' ) !== false ||
-				strpos( $host, '/' ) !== false ||
-				strpos( $host, '\\' ) !== false ||
-				! preg_match( '/^[a-z0-9\.\-]+$/i', $host )
-			);
-
-			if ( ! $valid_domain ) {
-				$domain = '';
+			if ( '' !== $canonical ) {
+				// Pin the cache key to the canonical home host by construction:
+				// a forged Host header can never create its own cache tree.
+				$domain              = $canonical;
+				$valid_domain        = true;
+				$this->host_mismatch = ( $request_host !== $canonical );
 			} else {
-				$domain = strtolower( $host );
+				// Canonical host unavailable (early boot, CLI): legacy
+				// Host-derived behaviour so nothing fatals.
+				$domain              = $request_host;
+				$valid_domain        = ( '' !== $request_host );
+				$this->host_mismatch = false;
 			}
 
 			$this->domain = $domain;
@@ -348,6 +357,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( ! $valid_domain && ! empty( $this->options['debug'] ) ) {
 				do_action( 'wppo_debug_log', 'Cache domain validation failed' );
 			}
+		}
+
+		/**
+		 * Whether the request Host header mismatched the canonical home host.
+		 *
+		 * A mismatched request is served uncached (fail-open) and never writes
+		 * a cache file, so forged hosts can neither poison nor read stored
+		 * payloads.
+		 *
+		 * @return bool True when the request host differs from the canonical host.
+		 * @since NEXT
+		 */
+		public function is_host_mismatched(): bool {
+			return $this->host_mismatch;
 		}
 
 		/**
@@ -1904,6 +1927,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( empty( $this->domain ) ) {
 				return true;
 			}
+			// Host-header poisoning guard: a forged Host is served uncached via
+			// the canonical fallback and never touches the cache tree.
+			if ( $this->host_mismatch ) {
+				return true;
+			}
 
 			// Core, WooCommerce, and third-party plugins signal dynamic pages via DONOTCACHEPAGE.
 			if ( defined( 'DONOTCACHEPAGE' ) && DONOTCACHEPAGE ) {
@@ -2235,8 +2263,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return false;
 			}
 
-			if ( empty( $this->domain ) || strpos( $this->url_path, '..' ) !== false ) {
+			if ( empty( $this->domain ) || $this->host_mismatch || strpos( $this->url_path, '..' ) !== false ) {
 				// Prevent empty domain caching which could occur after traversal sanitation.
+				// A Host mismatch is served uncached and never stored under the forged host.
 				return false;
 			}
 

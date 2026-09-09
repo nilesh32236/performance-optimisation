@@ -308,6 +308,32 @@ class AdvancedCacheHandlerTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that create bakes the canonical host into the drop-in with a
+	 * Host-mismatch early return, and builds the cache path from it.
+	 */
+	public function test_create_pins_dropin_to_canonical_host(): void {
+		$fs                       = new WPPO_AdvancedCache_FS_Mock();
+		$fs->file_exists          = false;
+		$GLOBALS['wp_filesystem'] = $fs;
+
+		Functions\when( 'wp_normalize_path' )->returnArg();
+		Functions\when( 'home_url' )->justReturn( 'https://example.com' );
+		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'absint' )->alias(
+			static function ( $value ) {
+				return abs( (int) $value );
+			}
+		);
+
+		$this->assertTrue( Advanced_Cache_Handler::create() );
+
+		$this->assertStringContainsString( "\$canonical_host = 'example.com';", $fs->put_contents );
+		$this->assertStringContainsString( '$request_host !== $canonical_host', $fs->put_contents );
+		$this->assertStringContainsString( '\'/cache/wppo/\' . $canonical_host . $request_uri', $fs->put_contents );
+		$this->assertStringNotContainsString( '\'/cache/wppo/\' . $site_domain . $request_uri', $fs->put_contents );
+	}
+
+	/**
 	 * Test that create leaves a foreign drop-in untouched.
 	 */
 	public function test_create_skips_foreign_dropin(): void {
