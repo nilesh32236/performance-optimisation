@@ -573,6 +573,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * Standalone helper for uninstall/deactivation contexts that have raw
 		 * file contents without a booted Object_Cache instance.
 		 *
+		 * The legacy marker ('Redis Object Cache Drop-in') is a strict
+		 * substring of DROPIN_MARKER and can appear in third-party drop-ins,
+		 * so a legacy-only match additionally requires the WPPO-specific
+		 * 'wppo-redis-config' signal present in every plugin drop-in.
+		 *
 		 * @since NEXT
 		 * @param mixed $content Raw file contents.
 		 * @return bool True when the content carries this plugin's marker.
@@ -582,7 +587,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				return false;
 			}
 
-			return false !== strpos( $content, self::DROPIN_MARKER ) || false !== strpos( $content, self::LEGACY_DROPIN_MARKER );
+			if ( false !== strpos( $content, self::DROPIN_MARKER ) ) {
+				return true;
+			}
+
+			return false !== strpos( $content, self::LEGACY_DROPIN_MARKER ) && false !== strpos( $content, 'wppo-redis-config' );
 		}
 
 		/**
@@ -591,7 +600,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * @since NEXT
 		 * @return bool True when the drop-in is ours (or absent), false for foreign files.
 		 */
-		public function is_own_dropin(): bool {
+		private function is_own_dropin(): bool {
 			if ( ! file_exists( $this->dropin_path ) ) {
 				return true;
 			}
