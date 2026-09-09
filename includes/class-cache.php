@@ -540,44 +540,60 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$css_file_path = $this->get_cache_file_path( 'css', '', $css_variant );
 
 			if ( $fs->exists( $css_file_path ) ) {
-				$cache_mtime  = (int) $fs->mtime( $css_file_path );
-				$source_newer = false;
+				// Strict guard: stale/missing/empty/unreadable cached file must
+				// never be served — fall through to regeneration.
+				if ( $this->is_safe_css_combine_fallback_enabled() && ! $this->is_combined_css_valid( $css_file_path ) ) {
+					// Treat as stale so regeneration path runs; log once per window.
+					$this->log_combine_fallback( 'stale_cached_file', $eligible_handles );
+				} else {
+					$cache_mtime  = (int) $fs->mtime( $css_file_path );
+					$source_newer = false;
 
-				// Reuse the pre-classified eligible handles to avoid re-running
-				// core_will_inline / block-asset / exclusion checks (triple classify).
-				foreach ( $eligible_handles as $handle ) {
-					if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
-						continue;
+					// Reuse the pre-classified eligible handles to avoid re-running
+					// core_will_inline / block-asset / exclusion checks (triple classify).
+					foreach ( $eligible_handles as $handle ) {
+						if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
+							continue;
+						}
+						$src      = $wp_styles->registered[ $handle ]->src;
+						$src_path = Util::get_local_path( (string) $src );
+						if ( '' !== $src_path && $fs->exists( $src_path ) && $fs->mtime( $src_path ) > $cache_mtime ) {
+							$source_newer = true;
+							break;
+						}
 					}
-					$src      = $wp_styles->registered[ $handle ]->src;
-					$src_path = Util::get_local_path( (string) $src );
-					if ( '' !== $src_path && $fs->exists( $src_path ) && $fs->mtime( $src_path ) > $cache_mtime ) {
+
+					// A combined file built before this inline-CSS support may embed styles
+					// that core now inlines, or the set of handles may have changed; such a
+					// file would duplicate inlined rules, so regenerate instead of reusing.
+					if ( ! $source_newer && ! $this->combined_handles_match( $css_file_path, $eligible_handles ) ) {
 						$source_newer = true;
-						break;
 					}
-				}
 
-				// A combined file built before this inline-CSS support may embed styles
-				// that core now inlines, or the set of handles may have changed; such a
-				// file would duplicate inlined rules, so regenerate instead of reusing.
-				if ( ! $source_newer && ! $this->combined_handles_match( $css_file_path, $eligible_handles ) ) {
-					$source_newer = true;
-				}
-
-				if ( ! $source_newer ) {
-					$css_url = $this->get_cache_file_url( 'css', $css_variant );
-					$version = (string) $cache_mtime;
-					wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
-					$this->register_combine_css_path( $css_file_path );
-					$this->set_combine_css_preload( $css_url, $version, $css_file_path );
-					return;
+					if ( ! $source_newer ) {
+						// Final valid check before enqueueing cached file.
+						if ( $this->is_safe_css_combine_fallback_enabled() && ! $this->is_combined_css_valid( $css_file_path ) ) {
+							$this->log_combine_fallback( 'invalid_cached_file', $eligible_handles );
+						} else {
+							$css_url = $this->get_cache_file_url( 'css', $css_variant );
+							$version = (string) $cache_mtime;
+							wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
+							$this->register_combine_css_path( $css_file_path );
+							$this->set_combine_css_preload( $css_url, $version, $css_file_path );
+							return;
+						}
+					}
 				}
 			}
 
-			$combined_css = '';
+			$combined_css       = '';
+			$successful_handles = array();
 
 			// Generate from the pre-classified eligible handles to avoid
 			// re-classifying each handle (triple classify -> single classify).
+			// Dequeue is deferred until the combined payload is verified and
+			// written (safe fallback: never strip originals until replacement
+			// is confirmed present).
 			foreach ( $eligible_handles as $handle ) {
 				if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
 					continue;
@@ -604,35 +620,70 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					$combined_css .= implode( "\n", $style_data->extra['after'] ) . "\n";
 				}
 
-				wp_dequeue_style( $handle ); // Remove individual style.
+				$successful_handles[] = $handle;
 			}
 
-			if ( ! empty( $combined_css ) ) {
-				$combined_css = preg_replace( '/font-display\s*:\s*block\s*;?/', 'font-display: swap;', $combined_css );
-
-				$combined_css = Minify\CSS::inject_font_display_swap( $combined_css );
-
-				$css_minifier  = new CSSMinifier( $combined_css );
-				$combined_css  = $css_minifier->minify();
-				$css_file_path = $this->get_cache_file_path( 'css', '', $css_variant );
-
-				$this->prepare_cache_dir();
-				$this->save_cache_files( $combined_css, $css_file_path, 'css' );
-
-				// Fresh combined CSS changes the total-asset stats — do not let
-				// the dashboard show stale numbers until the TTL expires (audit
-				// #874 finding 6).
-				self::bump_stats_cache();
-
-				$css_url = $this->get_cache_file_url( 'css', $css_variant );
-
-				$version = $fs->mtime( $css_file_path );
-				wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
-				$this->register_combine_css_path( $css_file_path );
-				$this->write_combined_handles( $css_file_path, $eligible_handles );
-
-				$this->set_combine_css_preload( $css_url, $version, $css_file_path );
+			if ( $this->is_safe_css_combine_fallback_enabled() ) {
+				if ( empty( $successful_handles ) || '' === trim( $combined_css ) ) {
+					$this->log_combine_fallback( 'empty_payload', $eligible_handles );
+					return;
+				}
+			} elseif ( '' === trim( $combined_css ) ) {
+				return;
 			}
+
+			$combined_css = preg_replace( '/font-display\s*:\s*block\s*;?/', 'font-display: swap;', $combined_css );
+			if ( null === $combined_css ) {
+				if ( $this->is_safe_css_combine_fallback_enabled() ) {
+					$this->log_combine_fallback( 'preg_error', $successful_handles );
+				}
+				return;
+			}
+
+			$combined_css = Minify\CSS::inject_font_display_swap( $combined_css );
+
+			$css_minifier = new CSSMinifier( $combined_css );
+			$combined_css = $css_minifier->minify();
+
+			if ( '' === trim( (string) $combined_css ) ) {
+				if ( $this->is_safe_css_combine_fallback_enabled() ) {
+					$this->log_combine_fallback( 'empty_after_minify', $successful_handles );
+				}
+				return;
+			}
+
+			$css_file_path = $this->get_cache_file_path( 'css', '', $css_variant );
+
+			if ( ! $this->prepare_cache_dir() ) {
+				if ( $this->is_safe_css_combine_fallback_enabled() ) {
+					$this->log_combine_fallback( 'prepare_dir_failed', $successful_handles );
+				}
+				return;
+			}
+			$this->save_cache_files( $combined_css, $css_file_path, 'css' );
+
+			if ( $this->is_safe_css_combine_fallback_enabled() && ! $this->is_combined_css_valid( $css_file_path ) ) {
+				$this->log_combine_fallback( 'write_failure', $successful_handles );
+				return;
+			}
+
+			// Fresh combined CSS changes the total-asset stats — do not let
+			// the dashboard show stale numbers until the TTL expires (audit
+			// #874 finding 6).
+			self::bump_stats_cache();
+
+			foreach ( $successful_handles as $handle ) {
+				wp_dequeue_style( $handle );
+			}
+
+			$css_url = $this->get_cache_file_url( 'css', $css_variant );
+
+			$version = $fs->mtime( $css_file_path );
+			wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
+			$this->register_combine_css_path( $css_file_path );
+			$this->write_combined_handles( $css_file_path, $eligible_handles );
+
+			$this->set_combine_css_preload( $css_url, $version, $css_file_path );
 		}
 
 		/**
@@ -1048,6 +1099,46 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					$limit
 				)
 			);
+		}
+
+		/**
+		 * Whether the safe CSS combine fallback is enabled.
+		 *
+		 * Operator opt-out via `wppo_safe_css_combine_fallback` (default true).
+		 * When false the legacy combine path is used without strict guards.
+		 *
+		 * @since NEXT
+		 * @return bool True when fallback guards are active.
+		 */
+		private function is_safe_css_combine_fallback_enabled(): bool {
+			return Util::safe_css_fallback_enabled();
+		}
+
+		/**
+		 * Whether a combined CSS file is valid (exists, readable, non-empty).
+		 *
+		 * @since NEXT
+		 * @param string $path Absolute path to the combined CSS file.
+		 * @return bool True when the file is usable.
+		 */
+		private function is_combined_css_valid( string $path ): bool {
+			return Util::css_file_valid( $path );
+		}
+
+		/**
+		 * Log a combine fallback (fail-open) event with throttling.
+		 *
+		 * Delegates to {@see Util::log_css_fallback()} with the 'combine' context;
+		 * per-reason transient throttling (DAY_IN_SECONDS) prevents the log from
+		 * growing per pageview on persistent failures.
+		 *
+		 * @since NEXT
+		 * @param string $reason  Machine-readable reason (empty_payload, fetch_failure, write_failure, head_match_failure).
+		 * @param array  $handles Handles preserved by the fallback.
+		 * @return void
+		 */
+		private function log_combine_fallback( string $reason, array $handles ): void {
+			Util::log_css_fallback( $reason, $handles, 'combine' );
 		}
 
 		/**
