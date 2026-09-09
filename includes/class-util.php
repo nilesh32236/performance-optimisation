@@ -186,8 +186,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'minifyInlineCSS'            => false,
 					'minifyInlineJS'             => false,
 					'removeHTMLComments'         => true,
-					// Deprecated NEXT (#904): legacy toggle, default off. See Main::strip_static_query_strings().
-					'removeQueryStrings'         => false,
 					'disableRestApiLinks'        => false,
 					'disableRssFeeds'            => false,
 					'disableShortlinks'          => false,

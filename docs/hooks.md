@@ -1392,12 +1392,13 @@ jobs / WP-CLI and edited via `wp wppo settings` (or `import_settings`).
 
 ## ⚠️ Deprecated Features
 
-### `file_optimisation.removeQueryStrings` (deprecated NEXT, removal tracked in #904)
-Strips `?ver=` from enqueued CSS/JS URLs. Obsolete per the 2026
-cache-busting consensus: `?ver=` **is** the cache-busting mechanism
-(fingerprinting), and WPPO's htaccess Expires handler already sets long
-immutable TTLs — stripping `ver` risks stale assets with no measurable
-gain (see `docs/research/competitor-research-2026-09-08.md` §5). The SPA
-toggle now lives in a "Legacy Options" section with warning copy;
-default stays off. Planned hard removal two minor releases after the
-NEXT release (`Main::strip_static_query_strings()` + setting + filters).
+### `file_optimisation.removeQueryStrings` (removed NEXT, #925, formerly tracked in #904)
+Removed. The `?ver=` stripping path (`Main::strip_static_query_strings()` on
+`script_loader_src` / `style_loader_src`, the `is_plugin_cache_url()` helpers,
+the setting default, and the SPA toggle) is gone. `?ver=` **is** the
+cache-busting mechanism (fingerprinting) — stripping it risked stale assets
+with no measurable gain (see `docs/research/competitor-research-2026-09-08.md`
+§5). A stored legacy value is ignored (fail-open): assets always keep `?ver`,
+a one-time activity-log notice is written on `admin_init`
+(`Main::maybe_notify_remove_query_strings_removal()`), and the key is dropped
+on the next `file_optimisation` save (`Rest::update_settings()`).
