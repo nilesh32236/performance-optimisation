@@ -874,23 +874,105 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
+		 * Decode numeric/hex HTML entities so encoded payloads cannot smuggle
+		 * `<` past the encoder (e.g. `&#60;script&#62;`, `&#x3c;`, `&lt;`).
+		 *
+		 * Bounded to two passes so double-encoded input (`&amp;lt;`) is still
+		 * caught while triple-encoded remnants are neutralized downstream by
+		 * the `&` escape in sanitize_inline_css().
+		 *
+		 * @param string $css Raw critical CSS.
+		 * @return string Entity-decoded CSS.
+		 * @since NEXT
+		 */
+		private static function decode_css_entities( string $css ): string {
+			for ( $i = 0; $i < 2; ++$i ) {
+				$decoded = html_entity_decode( $css, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+				if ( ! is_string( $decoded ) ) {
+					break;
+				}
+				if ( $decoded === $css ) {
+					break;
+				}
+				$css = $decoded;
+			}
+			return $css;
+		}
+
+		/**
+		 * Whether decoded CSS contains tokens that could break out of a
+		 * `<style>` element or execute script when inlined.
+		 *
+		 * Fail-closed pre-cache gate used by generate_and_store(): a poisoned
+		 * source stylesheet must never reach the CCSS cache.
+		 *
+		 * @param string $css Raw critical CSS.
+		 * @return bool True when hostile tokens are present.
+		 * @since NEXT
+		 */
+		private static function contains_unsafe_css_tokens( string $css ): bool {
+			$decoded = self::decode_css_entities( $css );
+			return (bool) preg_match( '/<\/style|<script|<!--|-->|expression\s*\(|javascript\s*:|vbscript\s*:|behaviou?r|-moz-binding|&(lt|gt|amp|quot|#\d+|#x[0-9a-f]+);?/i', $decoded );
+		}
+
+		/**
 		 * Sanitize generated critical CSS for safe output inside a <style> tag.
 		 *
-		 * Neutralizes the `</style>` raw-text terminator and `<script` injection
-		 * token case-insensitively, then encodes any remaining `<` as the
-		 * equivalent CSS escape so stored CSS can never break out of the style
-		 * element.
+		 * Neutralizes the `</style>` raw-text terminator plus `script`,
+		 * comment (`<!--`/`-->`), and CSS expression vectors
+		 * (`expression()`, `javascript:`/`vbscript:` URLs, `behaviour`,
+		 * `-moz-binding`) case-insensitively, decodes numeric/hex entities
+		 * first so encoded payloads cannot smuggle `<` past the encoder,
+		 * then encodes any remaining `<` as the equivalent CSS escape so
+		 * stored CSS can never break out of the style element. Fail-closed:
+		 * a sanitizer error drops the block (returns '') so output degrades
+		 * to unoptimized markup, never script execution.
 		 *
 		 * @param string $css Raw critical CSS.
 		 * @return string Sanitized critical CSS.
 		 * @since NEXT
 		 */
 		private static function sanitize_inline_css( string $css ): string {
-			$css = str_ireplace( '</style', '<\/style', $css );
-			$css = str_ireplace( '<script', '<\script', $css );
+			try {
+				$css = self::decode_css_entities( $css );
+				$css = str_ireplace( '</style', '<\/style', $css );
+				$css = str_ireplace( '<script', '<\script', $css );
+				$css = str_ireplace( '<!--', '<\!--', $css );
+				$css = str_ireplace( '-->', '--\>', $css );
+				// Break CSS expression/URL vectors, tolerating whitespace
+				// between the keyword and its delimiter (e.g. 'expression (').
+				// A callback builds the replacement so the backslash is never
+				// parsed as a PCRE backreference.
+				$css = (string) preg_replace_callback(
+					'/expression\s*\(|javascript\s*:|vbscript\s*:/i',
+					static function ( array $matches ): string {
+						$token = $matches[0];
+						return substr( $token, 0, -1 ) . '\\' . substr( $token, -1 );
+					},
+					$css
+				);
+				$css = str_ireplace( 'behaviour', 'behaviou\r', $css );
+				$css = str_ireplace( 'behavior', 'behavio\r', $css );
+				$css = str_ireplace( '-moz-binding', '-moz-bindin\g', $css );
 
-			// Defense-in-depth: encode every remaining '<' (CSS-valid escape).
-			$css = str_replace( '<', '\3c ', $css );
+				// Neutralize entity remnants that survived decoding (e.g.
+				// triple-encoded input): encode the '&' as a CSS escape so
+				// '&#60;' / '&lt;' can never decode back to '<' at render.
+				// A callback builds the replacement so '\26' is emitted
+				// literally instead of being parsed as a backreference.
+				$css = (string) preg_replace_callback(
+					'/&(?=#\d|#x[0-9a-f]|lt|gt|amp|quot);?/i',
+					static function (): string {
+						return "\\26 ";
+					},
+					$css
+				);
+
+				// Defense-in-depth: encode every remaining '<' (CSS-valid escape).
+				$css = str_replace( '<', '\3c ', $css );
+			} catch ( \Throwable $e ) {
+				return '';
+			}
 
 			/**
 			 * Filters the inline critical CSS right before output.
@@ -898,7 +980,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			 * @param string $css Sanitized critical CSS.
 			 * @since NEXT
 			 */
-			return apply_filters( 'wppo_ccss_sanitize_inline', $css );
+			if ( function_exists( 'has_filter' ) && has_filter( 'wppo_ccss_sanitize_inline' ) ) {
+				return apply_filters( 'wppo_ccss_sanitize_inline', $css );
+			}
+			return $css;
 		}
 
 		/**
@@ -1175,7 +1260,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 
 			// Reject generated CSS that could break out of the <style> context when
 			// inlined — a poisoned source stylesheet must never reach the CCSS cache.
-			if ( false === $critical_css || preg_match( '/<\/style|<script/i', $critical_css ) ) {
+			// Fail closed: drop the block instead of caching raw input.
+			if ( false === $critical_css || self::contains_unsafe_css_tokens( $critical_css ) ) {
 				self::set_status_cache( $template_hash, 'failed', DAY_IN_SECONDS );
 				return false;
 			}

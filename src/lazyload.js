@@ -1467,15 +1467,26 @@ const initVideoPlaceholders = () => {
 			// only — src/width/height/style are set by this code, and a
 			// tampered payload must not be able to escalate iframe
 			// capabilities (e.g. overwrite allow/sandbox/referrerpolicy) or
-			// smuggle event handlers.
+			// smuggle event handlers. Stored-XSS hardening (issue #967): the
+			// on* denylist + attribute-name shape check are defense-in-depth
+			// on top of the allowlist, and values must be strings.
 			const attrsJson = el.getAttribute( 'data-wppo-iframe-attrs' );
 			if ( attrsJson ) {
 				try {
 					const attrs = JSON.parse( attrsJson );
 					Object.entries( attrs ).forEach( ( [ k, v ] ) => {
+						if ( typeof v !== 'string' ) {
+							return;
+						}
 						const name = String( k ).toLowerCase();
+						if ( ! /^[a-z][a-z0-9-]*$/.test( name ) ) {
+							return;
+						}
+						if ( name.startsWith( 'on' ) ) {
+							return;
+						}
 						if ( IFRAME_ATTR_ALLOWLIST.has( name ) ) {
-							iframe.setAttribute( k, v );
+							iframe.setAttribute( name, v );
 						}
 					} );
 				} catch ( _err ) {
