@@ -796,8 +796,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 
 				$this->delay_js_idle_timeout = ! empty( $file_opt['delayJSIdleTimeout'] )
-				? absint( $file_opt['delayJSIdleTimeout'] )
-				: 3000;
+					? absint( $file_opt['delayJSIdleTimeout'] )
+					: 3000;
 
 				// INP-first preset (#932): one-click idle-first default so delayed
 				// scripts yield to input; an explicit non-interaction manual default
@@ -2276,7 +2276,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! empty( $this->options['file_optimisation']['delayJS'] ) ) {
 				// Woo / builder-context guardrail (#932): fail open to un-delayed
 				// scripts, never fatal. See is_delay_excluded_context().
-				if ( $this->is_delay_excluded_context() ) {
+				if ( self::is_delay_excluded_context() ) {
 					return $tag;
 				}
 				if ( ! in_array( $handle, $this->exclude_delay_js, true ) ) {
@@ -2377,72 +2377,148 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Whether the current request must skip delay-JS rewriting.
 		 *
 		 * Woo guardrail: cart, checkout, and account pages stay excluded from delay
-		 * by default (mirrors Cache::is_woo_excluded(): conditional tags, path
-		 * fallback, and cart cookies). Builder guardrail: preview/edit contexts
-		 * only — rendered frontend output from builders still gets the INP win.
-		 * Fail-open: any detection failure returns false (delay proceeds); a
-		 * positive match returns true so scripts stay un-delayed, never fatal.
+		 * by default, plus wc-ajax and add-to-cart requests. Intentionally narrower
+		 * than Cache::is_woo_excluded(): visitor-scoped cookie signals (cart hash,
+		 * wp_woocommerce_session_*) are NOT mirrored — disabling delay site-wide
+		 * for every shopper would wipe out the INP win on the homepage/blog, and
+		 * mini-cart fragments elsewhere are already protected by the per-handle
+		 * Woo exclusions in get_delay_js_preset_exclusions(). Likewise there is no
+		 * blanket is_woocommerce() gate: shop/product archives rely on the same
+		 * per-handle exclusions (wc-add-to-cart, wc-single-product, …).
+		 * Builder guardrail: preview/edit contexts only — rendered frontend output
+		 * from builders still gets the INP win.
+		 * Fail-open: any detection failure returns true (skip delay) so scripts
+		 * stay un-delayed, never fatal. A positive match also returns true.
+		 *
+		 * The cart/checkout/account path fallback matches the slug as any leading
+		 * path segment (covers subdirectory installs and multisite sub-sites) and
+		 * additionally resolves custom/translated slugs via wc_get_page_id() when
+		 * WooCommerce is active; on non-Woo installs only the default slugs apply.
 		 *
 		 * @since NEXT
 		 *
 		 * @return bool True when delay must be skipped for this request.
 		 */
-		public function is_delay_excluded_context(): bool {
-			// Woo conditional tags (guarded for non-Woo installs / WP 6.2+ compat).
-			if ( function_exists( 'is_cart' ) && is_cart() ) {
-				return true;
-			}
-			if ( function_exists( 'is_checkout' ) && is_checkout() ) {
-				return true;
-			}
-			if ( function_exists( 'is_account_page' ) && is_account_page() ) {
-				return true;
-			}
-
-			// Path fallback for hardcoded cart/checkout/account slugs (also covers
-			// installs where Woo conditional functions are unavailable).
-			// wp_parse_url() exists since WP 4.4; the plugin requires WP 6.2+.
-			if ( isset( $_SERVER['REQUEST_URI'] ) ) {
-				$request_uri = wp_unslash( $_SERVER['REQUEST_URI'] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Unslashed here; read-only routing check, no output.
-				$parsed_path = wp_parse_url( (string) $request_uri, PHP_URL_PATH );
-				$local_path  = trim( rawurldecode( (string) $parsed_path ), '/' );
-				if ( '' !== $local_path && preg_match( '#^(cart|checkout|my-account)(/|$)#i', $local_path ) ) {
+		public static function is_delay_excluded_context(): bool {
+			try {
+				// Woo conditional tags (guarded for non-Woo installs / WP 6.2+ compat).
+				if ( function_exists( 'is_cart' ) && is_cart() ) {
 					return true;
 				}
-			}
+				if ( function_exists( 'is_checkout' ) && is_checkout() ) {
+					return true;
+				}
+				if ( function_exists( 'is_account_page' ) && is_account_page() ) {
+					return true;
+				}
 
-			// Woo cart/session cookies (mini-cart fragments on other pages).
-			if ( ! empty( $_COOKIE['woocommerce_items_in_cart'] ) || ! empty( $_COOKIE['woocommerce_cart_hash'] ) ) { // phpcs:ignore WordPressVIPMinimum.Variables.RestrictedVariables.cache_constraints___COOKIE
-				return true;
-			}
-
-			// Builder preview/edit contexts only (never blanket-disable rendered frontend).
-			// Elementor.
-			if ( isset( $_GET['elementor-preview'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
-				return true;
-			}
-			if ( class_exists( 'Elementor\Plugin' ) ) {
-				try {
-					$elementor = \Elementor\Plugin::$instance ?? null;
-					if ( isset( $elementor->preview ) && method_exists( $elementor->preview, 'is_preview_mode' ) && $elementor->preview->is_preview_mode() ) {
+				// Woo page-slug path fallback (also covers installs where Woo
+				// conditional functions are unavailable). Matches the slug as any
+				// leading path segment so subdirectory installs (/shop/checkout)
+				// and multisite sub-sites (/subsite/cart) stay excluded; custom
+				// or translated slugs are resolved via wc_get_page_id() when
+				// WooCommerce is active.
+				// wp_parse_url() exists since WP 4.4; the plugin requires WP 6.2+.
+				if ( isset( $_SERVER['REQUEST_URI'] ) ) {
+					$request_uri = wp_unslash( $_SERVER['REQUEST_URI'] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Unslashed here; read-only routing check, no output.
+					$parsed_path = wp_parse_url( (string) $request_uri, PHP_URL_PATH );
+					$local_path  = '/' . trim( rawurldecode( (string) $parsed_path ), '/' );
+					if ( '/' !== $local_path && self::matches_woo_page_path( $local_path ) ) {
 						return true;
 					}
-				} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: fall through to delay.
-					return false;
+
+					// wc-ajax XHR endpoints (?wc-ajax= / /wc-ajax/ path).
+					if ( preg_match( '#(^|/)wc-ajax(/|$)#i', trim( $local_path, '/' ) ) ) {
+						return true;
+					}
+				}
+
+				if ( isset( $_GET['wc-ajax'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
+					return true;
+				}
+
+				// Add-to-cart requests (?add-to-cart= / query string).
+				if ( isset( $_GET['add-to-cart'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
+					return true;
+				}
+				if ( ! empty( $_SERVER['QUERY_STRING'] ) && preg_match( '/(?:^|&)(add-to-cart|wc-ajax)(?:=|&|$)/i', sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) ) ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Unslashed before sanitizing; read-only routing check, no output.
+					return true;
+				}
+
+				// Builder preview/edit contexts only (never blanket-disable rendered frontend).
+				// Elementor.
+				if ( isset( $_GET['elementor-preview'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
+					return true;
+				}
+				if ( class_exists( 'Elementor\Plugin' ) ) {
+					try {
+						$elementor = \Elementor\Plugin::$instance ?? null;
+						if ( isset( $elementor->preview ) && method_exists( $elementor->preview, 'is_preview_mode' ) && $elementor->preview->is_preview_mode() ) {
+							return true;
+						}
+					} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: fall through to the remaining builder checks below.
+						unset( $e );
+					}
+				}
+				// Divi (et_fb / et_pb_preview), WPBakery (vc_action / vc_editable), Bricks (bricks=run).
+				if ( isset( $_GET['et_fb'] ) || isset( $_GET['et_pb_preview'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
+					return true;
+				}
+				if ( isset( $_GET['vc_action'] ) || isset( $_GET['vc_editable'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
+					return true;
+				}
+				if ( isset( $_GET['bricks'] ) && 'run' === sanitize_text_field( wp_unslash( (string) $_GET['bricks'] ) ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
+					return true;
+				}
+
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				// Fail-open: any detection failure skips delay (un-delayed scripts, never fatal).
+				return true;
+			}
+		}
+
+		/**
+		 * Whether a request path belongs to a WooCommerce cart/checkout/account page.
+		 *
+		 * Matches the slug as any leading path segment so subdirectory installs
+		 * (/shop/checkout) and multisite sub-sites (/subsite/cart) stay excluded.
+		 * Custom/translated slugs are resolved via wc_get_page_id() when
+		 * WooCommerce is active; otherwise only the default slugs apply.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $local_path Request path with a leading slash.
+		 * @return bool True when the path is a Woo page path.
+		 */
+		private static function matches_woo_page_path( string $local_path ): bool {
+			$slugs = array( 'cart', 'checkout', 'my-account' );
+
+			if ( function_exists( 'wc_get_page_id' ) && function_exists( 'get_post_field' ) ) {
+				try {
+					foreach ( array( 'cart', 'checkout', 'myaccount' ) as $page ) {
+						$page_id = (int) wc_get_page_id( $page );
+						if ( $page_id > 0 ) {
+							$slug = get_post_field( 'post_name', $page_id );
+							if ( is_string( $slug ) && '' !== $slug ) {
+								$slugs[] = $slug;
+							}
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
 				}
 			}
-			// Divi (et_fb / et_pb_preview), WPBakery (vc_action / vc_editable), Bricks (bricks=run).
-			if ( isset( $_GET['et_fb'] ) || isset( $_GET['et_pb_preview'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
-				return true;
-			}
-			if ( isset( $_GET['vc_action'] ) || isset( $_GET['vc_editable'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
-				return true;
-			}
-			if ( isset( $_GET['bricks'] ) && 'run' === sanitize_text_field( wp_unslash( (string) $_GET['bricks'] ) ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
-				return true;
-			}
 
-			return false;
+			$slugs  = array_unique( $slugs );
+			$quoted = array();
+			foreach ( $slugs as $slug ) {
+				$quoted[] = preg_quote( $slug, '#' );
+			}
+			$pattern = '#/(' . implode( '|', $quoted ) . ')(/|$)#i';
+
+			return (bool) preg_match( $pattern, $local_path );
 		}
 
 		/**

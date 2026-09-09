@@ -47,8 +47,16 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 				'sanitize_text_field' => '',
 				'wp_unslash'          => '',
 				'is_user_logged_in'   => false,
-				'absint'              => 3000,
 			)
+		);
+
+		// absint maps to a real int cast (not a pinned constant) so configured
+		// delayJSIdleTimeout values are actually verified instead of the 3000
+		// fallback passing tautologically.
+		Functions\when( 'absint' )->alias(
+			static function ( $maybeint ) {
+				return (int) $maybeint;
+			}
 		);
 
 		Functions\when( 'get_option' )->alias(
@@ -84,6 +92,47 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 				return \function_exists( $function_name );
 			}
 		);
+	}
+
+	/**
+	 * Reset the request superglobals read by is_delay_excluded_context().
+	 *
+	 * Brain Monkey tearDown() does not restore $_SERVER/$_GET/$_COOKIE, so
+	 * guardrail fixtures must be cleared before (leakage from other suites)
+	 * and after (leakage into other suites) each guard test.
+	 *
+	 * @return void
+	 */
+	private function reset_delay_guard_superglobals(): void {
+		unset( $_SERVER['REQUEST_URI'], $_SERVER['QUERY_STRING'] );
+		foreach ( array( 'elementor-preview', 'et_fb', 'et_pb_preview', 'vc_action', 'vc_editable', 'bricks', 'wc-ajax', 'add-to-cart' ) as $key ) {
+			unset( $_GET[ $key ] );
+		}
+		foreach ( array( 'woocommerce_items_in_cart', 'woocommerce_cart_hash' ) as $key ) {
+			unset( $_COOKIE[ $key ] );
+		}
+	}
+
+	/**
+	 * Restore passthrough request sanitizers pinned to fixed empty strings by
+	 * stub_main_construction().
+	 *
+	 * Guard tests that exercise REQUEST_URI paths, QUERY_STRING signals, or
+	 * the bricks=run check need the real passthrough behavior.
+	 *
+	 * Note: the Woo-tag function_exists probes are intentionally NOT faked
+	 * here. Brain Monkey consults function_exists() internally when declaring
+	 * stubs, so forcing it true for not-yet-declared functions breaks
+	 * Functions\when('is_cart') with "Call to undefined function". The real
+	 * lookup is correct in all cases: Brain Monkey-declared tags return true,
+	 * undeclared ones are skipped, and wc_get_page_id()/get_post_field() stay
+	 * false so the default slugs apply.
+	 *
+	 * @return void
+	 */
+	private function stub_guard_request_env(): void {
+		Functions\when( 'wp_unslash' )->returnArg();
+		Functions\when( 'sanitize_text_field' )->returnArg();
 	}
 
 	/**
@@ -300,24 +349,27 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 
 	/**
 	 * Test that the INP-first preset flips the effective default strategy to
-	 * idle while manual idle/viewport lists still take precedence.
+	 * idle, and that a configured idle timeout is honored (not the 3000
+	 * fallback passing tautologically).
 	 */
 	public function test_inp_preset_sets_idle_default_strategy(): void {
 		$this->stub_main_construction(
 			array(
-				'delayJS'          => true,
-				'delayJSINPPreset' => true,
+				'delayJS'            => true,
+				'delayJSINPPreset'   => true,
+				'delayJSIdleTimeout' => '4500',
 			)
 		);
 
 		$main = new Main();
 
 		$this->assertSame( 'idle', $this->invoke_private_method( $main, 'get_delay_strategy_for_handle', 'totally-unrelated-handle' ) );
-		$this->assertSame( 3000, $this->read_private_prop( $main, 'delay_js_idle_timeout' ) );
+		$this->assertSame( 4500, $this->read_private_prop( $main, 'delay_js_idle_timeout' ) );
 	}
 
 	/**
-	 * Test that without the preset the default strategy stays interaction-only.
+	 * Test that without the preset the default strategy stays interaction-only
+	 * and the idle timeout falls back to 3000.
 	 */
 	public function test_inp_preset_off_falls_back_to_interaction(): void {
 		$this->stub_main_construction(
@@ -329,6 +381,33 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		$main = new Main();
 
 		$this->assertSame( 'interaction', $this->invoke_private_method( $main, 'get_delay_strategy_for_handle', 'totally-unrelated-handle' ) );
+		$this->assertSame( 3000, $this->read_private_prop( $main, 'delay_js_idle_timeout' ) );
+	}
+
+	/**
+	 * Test that an explicit non-interaction default wins over the preset and
+	 * manual idle/viewport lists still take per-handle precedence (Option A
+	 * in-memory override semantics, issue #932).
+	 */
+	public function test_inp_preset_explicit_default_wins_with_list_precedence(): void {
+		$this->stub_main_construction(
+			array(
+				'delayJS'                => true,
+				'delayJSINPPreset'       => true,
+				'delayJSDefaultStrategy' => 'viewport',
+				'delayJSIdleList'        => 'my-idle-script',
+				'delayJSViewportList'    => 'my-viewport-script',
+			)
+		);
+		// The stored default strategy is sanitized, not pinned, so restore
+		// passthrough sanitization for this test.
+		Functions\when( 'sanitize_text_field' )->returnArg();
+
+		$main = new Main();
+
+		$this->assertSame( 'idle', $this->invoke_private_method( $main, 'get_delay_strategy_for_handle', 'my-idle-script' ) );
+		$this->assertSame( 'viewport', $this->invoke_private_method( $main, 'get_delay_strategy_for_handle', 'my-viewport-script' ) );
+		$this->assertSame( 'viewport', $this->invoke_private_method( $main, 'get_delay_strategy_for_handle', 'totally-unrelated-handle' ) );
 	}
 
 	/**
@@ -349,6 +428,8 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		$this->assertContains( 'wc-cart-fragments', $delay_excludes );
 		$this->assertContains( 'wc-checkout', $delay_excludes );
 		$this->assertContains( 'woocommerce', $delay_excludes );
+		$this->assertContains( 'wc-add-to-cart', $delay_excludes );
+		$this->assertContains( 'wc-single-product', $delay_excludes );
 	}
 
 	/**
@@ -361,18 +442,9 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 				'delayJS' => true,
 			)
 		);
+		$this->reset_delay_guard_superglobals();
+		$this->stub_guard_request_env();
 		Functions\when( 'is_cart' )->justReturn( true );
-		Functions\when( 'function_exists' )->alias(
-			static function ( $function_name ) {
-				if ( in_array( $function_name, array( 'is_cart', 'is_checkout', 'is_account_page' ), true ) ) {
-					return true;
-				}
-				if ( 'WP_Filesystem' === $function_name || 'wp_is_block_theme' === $function_name ) {
-					return true;
-				}
-				return \function_exists( $function_name );
-			}
-		);
 
 		$main = new Main();
 
@@ -381,6 +453,180 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for add_defer_attribute() tests.
 		$tag = '<script src="https://example.com/app.js" type="text/javascript"></script>';
 		$this->assertSame( $tag, $main->add_defer_attribute( $tag, 'app' ) );
+
+		$this->reset_delay_guard_superglobals();
+	}
+
+	/**
+	 * Test that checkout and account pages are excluded delay contexts.
+	 *
+	 * @param string $tag_function Woo conditional tag returning true.
+	 */
+	#[\PHPUnit\Framework\Attributes\DataProvider( 'woo_tag_provider' )]
+	public function test_delay_excluded_context_on_woo_tags( string $tag_function ): void {
+		$this->stub_main_construction(
+			array(
+				'delayJS' => true,
+			)
+		);
+		$this->reset_delay_guard_superglobals();
+		$this->stub_guard_request_env();
+		Functions\when( $tag_function )->justReturn( true );
+
+		$main = new Main();
+
+		$this->assertTrue( $main->is_delay_excluded_context(), "Expected {$tag_function}() to mark an excluded delay context." );
+
+		$this->reset_delay_guard_superglobals();
+	}
+
+	/**
+	 * Provide the Woo conditional tags covered by the guardrail.
+	 *
+	 * @return array<string, array{string}>
+	 */
+	public static function woo_tag_provider(): array {
+		return array(
+			'cart'     => array( 'is_cart' ),
+			'checkout' => array( 'is_checkout' ),
+			'account'  => array( 'is_account_page' ),
+		);
+	}
+
+	/**
+	 * Test the slug path fallback, including subdirectory installs.
+	 *
+	 * @param string $request_uri Request URI fixture.
+	 * @param bool   $expected Whether the context is excluded.
+	 */
+	#[\PHPUnit\Framework\Attributes\DataProvider( 'woo_path_provider' )]
+	public function test_delay_excluded_context_path_fallback( string $request_uri, bool $expected ): void {
+		$this->stub_main_construction(
+			array(
+				'delayJS' => true,
+			)
+		);
+		$this->reset_delay_guard_superglobals();
+		$this->stub_guard_request_env();
+		$_SERVER['REQUEST_URI'] = $request_uri;
+
+		$main = new Main();
+
+		$this->assertSame( $expected, $main->is_delay_excluded_context(), "Unexpected guardrail result for {$request_uri}." );
+
+		$this->reset_delay_guard_superglobals();
+	}
+
+	/**
+	 * Provide path fallback fixtures.
+	 *
+	 * @return array<string, array{string, bool}>
+	 */
+	public static function woo_path_provider(): array {
+		return array(
+			'top-level cart'         => array( '/cart/', true ),
+			'top-level checkout'     => array( '/checkout/', true ),
+			'top-level my-account'   => array( '/my-account/', true ),
+			'subdirectory checkout'  => array( '/shop/checkout/order-pay/123/', true ),
+			'multisite subsite cart' => array( '/subsite/cart/', true ),
+			'unrelated page'         => array( '/blog/hello-world/', false ),
+			'lookalike slug'         => array( '/cartography/', false ),
+		);
+	}
+
+	/**
+	 * Test wc-ajax and add-to-cart request signals.
+	 */
+	public function test_delay_excluded_context_on_wc_ajax_and_add_to_cart(): void {
+		$this->stub_main_construction(
+			array(
+				'delayJS' => true,
+			)
+		);
+		$this->reset_delay_guard_superglobals();
+		$this->stub_guard_request_env();
+
+		$main = new Main();
+
+		$_GET['wc-ajax'] = 'get_refreshed_fragments';
+		$this->assertTrue( $main->is_delay_excluded_context() );
+		unset( $_GET['wc-ajax'] );
+
+		$_GET['add-to-cart'] = '123';
+		$this->assertTrue( $main->is_delay_excluded_context() );
+		unset( $_GET['add-to-cart'] );
+
+		$_SERVER['QUERY_STRING'] = 'foo=bar&add-to-cart=123';
+		$this->assertTrue( $main->is_delay_excluded_context() );
+
+		$_SERVER['REQUEST_URI'] = '/wc-ajax/get_refreshed_fragments/';
+		unset( $_SERVER['QUERY_STRING'] );
+		$this->assertTrue( $main->is_delay_excluded_context() );
+
+		$this->reset_delay_guard_superglobals();
+	}
+
+	/**
+	 * Test that Woo cart cookies alone no longer blanket-disable delay.
+	 *
+	 * Visitor-scoped cookies would wipe out the INP win on every page for all
+	 * shoppers; mini-cart fragments are protected by the per-handle Woo
+	 * exclusions instead (issue #932 review).
+	 */
+	public function test_delay_not_excluded_by_cart_cookies_alone(): void {
+		$this->stub_main_construction(
+			array(
+				'delayJS' => true,
+			)
+		);
+		$this->reset_delay_guard_superglobals();
+		$this->stub_guard_request_env();
+		$_COOKIE['woocommerce_items_in_cart'] = '3';
+		$_COOKIE['woocommerce_cart_hash']     = 'abc123';
+
+		$main = new Main();
+
+		$this->assertFalse( $main->is_delay_excluded_context() );
+
+		$this->reset_delay_guard_superglobals();
+	}
+
+	/**
+	 * Test builder preview/edit contexts are excluded delay contexts.
+	 *
+	 * @param string $param Query param fixture.
+	 * @param string $value Query param value.
+	 */
+	#[\PHPUnit\Framework\Attributes\DataProvider( 'builder_param_provider' )]
+	public function test_delay_excluded_context_on_builder_params( string $param, string $value ): void {
+		$this->stub_main_construction(
+			array(
+				'delayJS' => true,
+			)
+		);
+		$this->reset_delay_guard_superglobals();
+		$this->stub_guard_request_env();
+		$_GET[ $param ] = $value;
+
+		$main = new Main();
+
+		$this->assertTrue( $main->is_delay_excluded_context(), "Expected ?{$param} to mark an excluded delay context." );
+
+		$this->reset_delay_guard_superglobals();
+	}
+
+	/**
+	 * Provide builder preview/edit query params.
+	 *
+	 * @return array<string, array{string, string}>
+	 */
+	public static function builder_param_provider(): array {
+		return array(
+			'elementor' => array( 'elementor-preview', '123' ),
+			'divi'      => array( 'et_fb', '1' ),
+			'wpbakery'  => array( 'vc_action', 'vc_inline' ),
+			'bricks'    => array( 'bricks', 'run' ),
+		);
 	}
 
 	/**
@@ -392,10 +638,48 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 				'delayJS' => true,
 			)
 		);
+		// Guard against superglobal leakage from other suites sharing the process.
+		$this->reset_delay_guard_superglobals();
 
 		$main = new Main();
 
 		$this->assertFalse( $main->is_delay_excluded_context() );
+
+		$this->reset_delay_guard_superglobals();
+	}
+
+	/**
+	 * Test that the inline-script delay path honors the Woo guardrail, matching
+	 * the external-script path in add_defer_attribute() (issue #932 review).
+	 */
+	public function test_inline_delay_skipped_in_excluded_context(): void {
+		$this->reset_delay_guard_superglobals();
+		$this->stub_guard_request_env();
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		Functions\when( 'untrailingslashit' )->returnArg();
+		// Stub all three Woo tags: functions declared by earlier tests in the
+		// same process throw MissingFunctionExpectations when called without
+		// an expectation, which the guardrail (correctly) fails open on.
+		Functions\when( 'is_cart' )->justReturn( true );
+
+		$html    = '<html><head></head><body><script>var wppoGuard = 1;</script></body></html>'; // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for inline delay tests.
+		$options = array(
+			'file_optimisation' => array(
+				'delayJS' => true,
+			),
+		);
+
+		$excluded = new \PerformanceOptimise\Inc\Minify\HTML( $html, $options );
+		$this->assertStringNotContainsString( 'wppo/javascript', $excluded->get_minified_html() );
+
+		Functions\when( 'is_cart' )->justReturn( false );
+		Functions\when( 'is_checkout' )->justReturn( false );
+		Functions\when( 'is_account_page' )->justReturn( false );
+		$delayed = new \PerformanceOptimise\Inc\Minify\HTML( $html, $options );
+		$this->assertStringContainsString( 'wppo/javascript', $delayed->get_minified_html() );
+
+		$this->reset_delay_guard_superglobals();
 	}
 
 	/**

@@ -18,6 +18,7 @@ use voku\helper\HtmlMin;
 use MatthiasMullie\Minify\CSS as CSSMinifier;
 use MatthiasMullie\Minify\JS as JSMinifier;
 use PerformanceOptimise\Inc\Util;
+use PerformanceOptimise\Inc\Main;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	die();
@@ -155,8 +156,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				)
 			);
 			$this->delay_js_default_strategy = ! empty( $this->options['file_optimisation']['delayJSDefaultStrategy'] )
-			? sanitize_text_field( $this->options['file_optimisation']['delayJSDefaultStrategy'] )
-			: 'interaction';
+				? sanitize_text_field( $this->options['file_optimisation']['delayJSDefaultStrategy'] )
+				: 'interaction';
 
 			// INP-first preset (#932): mirror Main::setup_hooks() — an explicit
 			// non-interaction manual default wins, otherwise idle-first so inline
@@ -465,7 +466,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				return '<script' . $attributes . '>' . $content . '</script>';
 			}
 
-			if ( ! empty( $this->options['file_optimisation']['delayJS'] ) ) {
+			if ( ! empty( $this->options['file_optimisation']['delayJS'] ) && ! self::is_delay_excluded_context() ) {
 
 				$should_exclude = false;
 				if ( ! empty( $this->exclude_delay_js ) ) {
@@ -575,6 +576,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				}
 			}
 			return 'normal';
+		}
+
+		/**
+		 * Whether the current request must skip delay-JS rewriting.
+		 *
+		 * Mirrors the external-script guardrail in Main::is_delay_excluded_context()
+		 * so cart/checkout/account and builder preview/edit contexts skip inline
+		 * rewriting too. Delegates to Main when available; fails open to delay
+		 * (false) when Main is not loaded so minification never fatals.
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when delay must be skipped for this request.
+		 */
+		private static function is_delay_excluded_context(): bool {
+			if ( class_exists( Main::class ) && method_exists( Main::class, 'is_delay_excluded_context' ) ) {
+				return Main::is_delay_excluded_context();
+			}
+			return false;
 		}
 
 		/**
