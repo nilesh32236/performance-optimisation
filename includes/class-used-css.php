@@ -1332,7 +1332,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			foreach ( $removal_urls as $url => $_ ) {
 				$quoted_srcs[] = preg_quote( $url, '/' );
 			}
-			$stripped = preg_replace(
+			$strip_count = 0;
+			$stripped    = preg_replace(
 				'/<link[^>]*rel=[\'"]stylesheet[\'"][^>]*href=[\'"](' . implode( '|', $quoted_srcs ) . ')(?:\?[^\'"]*)?[\'"][^>]*\/?>\s*/i',
 				'',
 				$buffer,
@@ -1470,6 +1471,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @return bool
 		 */
 		private function is_used_css_valid( string $path ): bool {
+			if ( '' !== $path ) {
+				clearstatcache( true, $path );
+			}
 			return '' !== $path && is_file( $path ) && is_readable( $path ) && filesize( $path ) > 0;
 		}
 

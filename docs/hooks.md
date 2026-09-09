@@ -1080,7 +1080,7 @@ add_filter( 'wppo_safe_css_combine_fallback', '__return_false' ); // disable saf
 ---
 
 ### `wppo_inline_combined_css`
-Filters whether the combined/minified CSS is inlined via core `wp_maybe_inline_styles()`. Return falsy to disable inlining (e.g. when serving the combined file from a CDN). When `wppo_safe_css_combine_fallback` is true the fallback also suppresses stripping originals when `wppo_inline_combined_css` is falsy is extended to the new guards (no zero-stylesheet risk). @since NEXT.
+Filters whether the combined/minified CSS is inlined via core `wp_maybe_inline_styles()`. Return falsy to disable inlining (e.g. when serving the combined file from a CDN). When `wppo_safe_css_combine_fallback` is true, originals are also preserved when this filter returns falsy (no zero-stylesheet risk). @since NEXT.
 
 ---
 

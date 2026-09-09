@@ -633,18 +633,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			$combined_css = preg_replace( '/font-display\s*:\s*block\s*;?/', 'font-display: swap;', $combined_css );
+			if ( null === $combined_css ) {
+				if ( $this->is_safe_css_combine_fallback_enabled() ) {
+					$this->log_combine_fallback( 'preg_error', $successful_handles );
+				}
+				return;
+			}
 
 			$combined_css = Minify\CSS::inject_font_display_swap( $combined_css );
 
 			$css_minifier = new CSSMinifier( $combined_css );
 			$combined_css = $css_minifier->minify();
 
-			if ( $this->is_safe_css_combine_fallback_enabled() && '' === trim( (string) $combined_css ) ) {
-				$this->log_combine_fallback( 'empty_after_minify', $successful_handles );
-				return;
-			}
-
 			if ( '' === trim( (string) $combined_css ) ) {
+				if ( $this->is_safe_css_combine_fallback_enabled() ) {
+					$this->log_combine_fallback( 'empty_after_minify', $successful_handles );
+				}
 				return;
 			}
 
@@ -677,7 +681,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$version = $fs->mtime( $css_file_path );
 			wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
 			$this->register_combine_css_path( $css_file_path );
-			$this->write_combined_handles( $css_file_path, $successful_handles );
+			$this->write_combined_handles( $css_file_path, $eligible_handles );
 
 			$this->set_combine_css_preload( $css_url, $version, $css_file_path );
 		}
@@ -1128,6 +1132,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return bool True when the file is usable.
 		 */
 		private function is_combined_css_valid( string $path ): bool {
+			if ( '' !== $path ) {
+				clearstatcache( true, $path );
+			}
 			return '' !== $path && is_file( $path ) && is_readable( $path ) && filesize( $path ) > 0;
 		}
 
