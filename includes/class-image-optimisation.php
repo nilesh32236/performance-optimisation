@@ -2368,6 +2368,149 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Whether the current request advertises AVIF support via Accept header.
+		 *
+		 * Fail-open contract lives with the caller: when false, AVIF sources
+		 * are omitted and WebP/original delivery is used instead.
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when the request Accept header allows image/avif.
+		 */
+		public function client_accepts_avif(): bool {
+			if ( ! isset( $_SERVER['HTTP_ACCEPT'] ) ) {
+				return false;
+			}
+			if ( ! function_exists( 'wp_unslash' ) || ! function_exists( 'sanitize_text_field' ) ) {
+				return false;
+			}
+			$http_accept = sanitize_text_field( wp_unslash( $_SERVER['HTTP_ACCEPT'] ) );
+			return false !== strpos( $http_accept, 'image/avif' );
+		}
+
+		/**
+		 * Build AVIF-first <source> tags for a <picture> wrapper.
+		 *
+		 * Emits `<source type="image/avif">` first, `<source type="image/webp">`
+		 * second, and falls back to a single original-MIME source when no
+		 * converted file exists (fail-open, never fatal). The AVIF source is
+		 * only emitted when the request Accept header allows AVIF and the
+		 * converted `.avif` file exists; the fallback `<img>` (with
+		 * width/height intact) is left to the caller. The original source
+		 * file is never deleted, so delivery stays restorable.
+		 *
+		 * Shared by the TagProcessor and regex-fallback wrap paths.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $original_src   Original image URL.
+		 * @param string $srcset         Raw srcset value from the processed img (may be empty).
+		 * @param string $sizes          Raw sizes value from the processed img (may be empty).
+		 * @param bool   $is_lazy        Whether lazy attributes (data-srcset/data-sizes) are in use.
+		 * @param bool   $should_exclude Whether the image is excluded from conversion.
+		 * @return string One or more <source> tags.
+		 */
+		public function build_avif_first_sources( string $original_src, string $srcset = '', string $sizes = '', bool $is_lazy = false, bool $should_exclude = false ): string {
+			$srcset_attr = $is_lazy ? 'data-srcset' : 'srcset';
+			$sizes_attr  = $is_lazy ? 'data-sizes' : 'sizes';
+			$orig_mime   = Util::get_image_mime_type( $original_src );
+
+			if ( $should_exclude || empty( $this->options['image_optimisation']['convertImg'] ) ) {
+				if ( '' !== $srcset ) {
+					$tag = '<source type="' . $orig_mime . '" ' . $srcset_attr . '="' . esc_attr( $srcset ) . '"';
+					if ( '' !== $sizes ) {
+						$tag .= ' ' . $sizes_attr . '="' . esc_attr( $sizes ) . '"';
+					}
+					return $tag . '>';
+				}
+				return '<source type="' . $orig_mime . '" ' . $srcset_attr . '="' . esc_attr( $original_src ) . '">';
+			}
+
+			$img_converter     = $this->get_img_converter();
+			$conversion_format = method_exists( $img_converter, 'get_format' ) ? $img_converter->get_format() : 'webp';
+			$avif_first        = ! empty( $this->options['image_optimisation']['avifFirst'] ?? true );
+			$accepts_avif      = $this->client_accepts_avif();
+
+			$candidates = array();
+			if ( '' !== $srcset ) {
+				foreach ( explode( ',', $srcset ) as $item ) {
+					$parts = array_pad( preg_split( '/\s+/', trim( $item ), 2 ), 2, '' );
+					if ( '' !== $parts[0] ) {
+						$candidates[] = array(
+							'url'        => $parts[0],
+							'descriptor' => $parts[1],
+						);
+					}
+				}
+			}
+			if ( empty( $candidates ) ) {
+				$candidates[] = array(
+					'url'        => $original_src,
+					'descriptor' => '',
+				);
+			}
+
+			$sources = '';
+
+			if ( $avif_first && in_array( $conversion_format, array( 'avif', 'both' ), true ) && $accepts_avif ) {
+				$avif_items = array();
+				$has_avif   = false;
+				foreach ( $candidates as $candidate ) {
+					$converted_path = $img_converter->get_img_path( $candidate['url'], 'avif' );
+					if ( '' !== $converted_path && $this->cached_file_exists( $converted_path ) ) {
+						$converted_url = $img_converter->get_img_url( $candidate['url'], 'avif' );
+						$avif_items[]  = $converted_url . ( '' !== $candidate['descriptor'] ? ' ' . $candidate['descriptor'] : '' );
+						$has_avif      = true;
+					} else {
+						$avif_items[] = $candidate['url'] . ( '' !== $candidate['descriptor'] ? ' ' . $candidate['descriptor'] : '' );
+					}
+				}
+				if ( $has_avif ) {
+					$sources .= '<source type="image/avif" ' . $srcset_attr . '="' . esc_attr( implode( ', ', $avif_items ) ) . '"';
+					if ( '' !== $sizes ) {
+						$sources .= ' ' . $sizes_attr . '="' . esc_attr( $sizes ) . '"';
+					}
+					$sources .= '>';
+				}
+			}
+
+			if ( in_array( $conversion_format, array( 'webp', 'both' ), true ) ) {
+				$webp_items = array();
+				$has_webp   = false;
+				foreach ( $candidates as $candidate ) {
+					$converted_path = $img_converter->get_img_path( $candidate['url'], 'webp' );
+					if ( '' !== $converted_path && $this->cached_file_exists( $converted_path ) ) {
+						$converted_url = $img_converter->get_img_url( $candidate['url'] );
+						$webp_items[]  = $converted_url . ( '' !== $candidate['descriptor'] ? ' ' . $candidate['descriptor'] : '' );
+						$has_webp      = true;
+					} else {
+						$webp_items[] = $candidate['url'] . ( '' !== $candidate['descriptor'] ? ' ' . $candidate['descriptor'] : '' );
+					}
+				}
+				if ( $has_webp ) {
+					$sources .= '<source type="image/webp" ' . $srcset_attr . '="' . esc_attr( implode( ', ', $webp_items ) ) . '"';
+					if ( '' !== $sizes ) {
+						$sources .= ' ' . $sizes_attr . '="' . esc_attr( $sizes ) . '"';
+					}
+					$sources .= '>';
+				}
+			}
+
+			if ( '' === $sources ) {
+				if ( '' !== $srcset ) {
+					$tag = '<source type="' . $orig_mime . '" ' . $srcset_attr . '="' . esc_attr( $srcset ) . '"';
+					if ( '' !== $sizes ) {
+						$tag .= ' ' . $sizes_attr . '="' . esc_attr( $sizes ) . '"';
+					}
+					return $tag . '>';
+				}
+				return '<source type="' . $orig_mime . '" ' . $srcset_attr . '="' . esc_attr( $original_src ) . '">';
+			}
+
+			return $sources;
+		}
+
+		/**
 		 * Wraps an image in a <picture> element or updates an existing <picture> by adding appropriate <source>
 		 * attributes for optimized delivery and lazy-loading based on current options and exclusions.
 		 *
@@ -2514,27 +2657,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							$srcset = $tags->get_attribute( 'data-srcset' ) ?? $tags->get_attribute( 'srcset' );
 							$sizes  = $tags->get_attribute( 'data-sizes' ) ?? $tags->get_attribute( 'sizes' );
 
-							$is_lazy     = null !== $tags->get_attribute( 'data-src' );
-							$srcset_attr = $is_lazy ? 'data-srcset' : 'srcset';
-							$sizes_attr  = $is_lazy ? 'data-sizes' : 'sizes';
-							$source_tag  = '<source type="' . Util::get_image_mime_type( $original_src ) . '"';
-
-							if ( ! $should_exclude ) {
-								if ( ! empty( $srcset ) || ! empty( $sizes ) ) {
-									if ( ! empty( $srcset ) ) {
-										$source_tag .= ' ' . $srcset_attr . '="' . esc_attr( $srcset ) . '"';
-									}
-
-									if ( ! empty( $sizes ) ) {
-										$source_tag .= ' ' . $sizes_attr . '="' . esc_attr( $sizes ) . '"';
-									}
-									$source_tag .= '>';
-								} else {
-									$source_tag .= ' ' . $srcset_attr . '="' . esc_attr( $original_src ) . '">';
-								}
-							} else {
-								$source_tag .= '>';
-							}
+							$is_lazy = null !== $tags->get_attribute( 'data-src' );
+							// AVIF-first <picture> output: AVIF source, WebP source, original <img> fallback.
+							$source_tag = $this->build_avif_first_sources( $original_src, (string) ( $srcset ?? '' ), (string) ( $sizes ?? '' ), $is_lazy, $should_exclude );
 
 							// Hybrid wrapping: Processed <img> tag is wrapped inside <picture>.
 							$img_tag = '<picture>' . $source_tag . $img_tag . '</picture>';
@@ -2596,27 +2721,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							$sizes = $sizes_matches[1];
 						}
 
-						$is_lazy     = (bool) strpos( $img_tag, 'data-src' );
-						$srcset_attr = $is_lazy ? 'data-srcset' : 'srcset';
-						$sizes_attr  = $is_lazy ? 'data-sizes' : 'sizes';
-						$source_tag  = '<source type="' . Util::get_image_mime_type( $original_src ) . '"';
-
-						if ( ! $should_exclude ) {
-							if ( ! empty( $srcset ) || ! empty( $sizes ) ) {
-								if ( ! empty( $srcset ) ) {
-									$source_tag .= ' ' . $srcset_attr . '="' . esc_attr( $srcset ) . '"';
-								}
-
-								if ( ! empty( $sizes ) ) {
-									$source_tag .= ' ' . $sizes_attr . '="' . esc_attr( $sizes ) . '"';
-								}
-								$source_tag .= '>';
-							} else {
-								$source_tag .= ' ' . $srcset_attr . '="' . esc_attr( $original_src ) . '">';
-							}
-						} else {
-							$source_tag .= '>';
-						}
+						$is_lazy = (bool) strpos( $img_tag, 'data-src' );
+						// AVIF-first <picture> output: AVIF source, WebP source, original <img> fallback.
+						$source_tag = $this->build_avif_first_sources( $original_src, (string) $srcset, (string) $sizes, $is_lazy, $should_exclude );
 
 						// Wrap <img> tag inside <picture>.
 						$img_tag = '<picture>' . $source_tag . $img_tag . '</picture>';

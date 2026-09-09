@@ -81,7 +81,69 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				$rules = self::get_rules();
 			}
 
-			return insert_with_markers( $htaccess_file, self::MARKER, $rules );
+			// Backup prior rules so a failed write can restore them. Only the
+			// settings-save path calls update_rules() (Main::on_settings_update()),
+			// so this backup covers exactly the ordered-write contract.
+			$backup = self::read_existing_rules( $htaccess_file, $wp_filesystem );
+
+			$result = insert_with_markers( $htaccess_file, self::MARKER, $rules );
+
+			if ( ! $result && null !== $backup ) {
+				insert_with_markers( $htaccess_file, self::MARKER, $backup );
+				return false;
+			}
+
+			return (bool) $result;
+		}
+
+		/**
+		 * Read the existing wppo_rules block as a backup.
+		 *
+		 * Parses the current .htaccess marker block so update_rules() can
+		 * restore it when a new write fails. Returns null when the file is
+		 * missing or unreadable (nothing to restore).
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $htaccess_file Absolute path to the .htaccess file.
+		 * @param mixed  $wp_filesystem WP_Filesystem instance.
+		 * @return array|null Existing rules, or null when unavailable.
+		 */
+		private static function read_existing_rules( string $htaccess_file, $wp_filesystem ): ?array {
+			if ( ! $wp_filesystem || ! method_exists( $wp_filesystem, 'exists' ) || ! method_exists( $wp_filesystem, 'get_contents' ) ) {
+				return null;
+			}
+
+			if ( ! $wp_filesystem->exists( $htaccess_file ) ) {
+				return null;
+			}
+
+			$contents = $wp_filesystem->get_contents( $htaccess_file );
+			if ( ! is_string( $contents ) || '' === $contents ) {
+				return null;
+			}
+
+			$start = strpos( $contents, '# BEGIN ' . self::MARKER );
+			$end   = strpos( $contents, '# END ' . self::MARKER );
+			if ( false === $start || false === $end || $end <= $start ) {
+				return null;
+			}
+
+			$block = substr( $contents, $start, $end - $start );
+			$lines = preg_split( "/\r\n|\n|\r/", $block );
+			if ( ! is_array( $lines ) ) {
+				return null;
+			}
+
+			$rules = array();
+			foreach ( $lines as $line ) {
+				if ( 0 === strpos( $line, '# BEGIN ' ) || 0 === strpos( $line, '# END ' ) ) {
+					continue;
+				}
+				$rules[] = $line;
+			}
+
+			return $rules;
 		}
 
 		/**
@@ -184,6 +246,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 						'# This block checks sibling first, then wppo/ directory mirror. Vary: Accept correct per spec.',
 						'<IfModule mod_rewrite.c>',
 						'    RewriteEngine On',
+						'    # Serve .avif first when the client supports it (AVIF-first: Apache applies the first matching rule)',
+						'    RewriteCond %{HTTP:Accept} image/avif',
+						'    RewriteCond %{REQUEST_FILENAME}.avif -f',
+						'    RewriteRule ^(.+)\.(jpe?g|png)$ $1.avif [T=image/avif,E=accept:1]',
+						'    # Fallback: wppo/ directory mirror for AVIF',
+						'    RewriteCond %{HTTP:Accept} image/avif',
+						'    RewriteCond %{DOCUMENT_ROOT}/wp-content/wppo%{REQUEST_URI}.avif -f',
+						'    RewriteRule ^wp-content/(.+)\.(jpe?g|png)$ /wp-content/wppo/$1.avif [T=image/avif,E=accept:1]',
 						'    # Serve .webp when client supports it and file exists (sibling)',
 						'    RewriteCond %{HTTP:Accept} image/webp',
 						'    RewriteCond %{REQUEST_FILENAME}.webp -f',
@@ -192,14 +262,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 						'    RewriteCond %{HTTP:Accept} image/webp',
 						'    RewriteCond %{DOCUMENT_ROOT}/wp-content/wppo%{REQUEST_URI}.webp -f',
 						'    RewriteRule ^wp-content/(.+)\.(jpe?g|png)$ /wp-content/wppo/$1.webp [T=image/webp,E=accept:1]',
-						'    # Serve .avif when client prefers it (prefer AVIF over WebP — order after)',
-						'    RewriteCond %{HTTP:Accept} image/avif',
-						'    RewriteCond %{REQUEST_FILENAME}.avif -f',
-						'    RewriteRule ^(.+)\.(jpe?g|png)$ $1.avif [T=image/avif,E=accept:1]',
-						'    # Fallback: wppo/ directory mirror for AVIF',
-						'    RewriteCond %{HTTP:Accept} image/avif',
-						'    RewriteCond %{DOCUMENT_ROOT}/wp-content/wppo%{REQUEST_URI}.avif -f',
-						'    RewriteRule ^wp-content/(.+)\.(jpe?g|png)$ /wp-content/wppo/$1.avif [T=image/avif,E=accept:1]',
 						'</IfModule>',
 						'<IfModule mod_headers.c>',
 						'    Header append Vary Accept',

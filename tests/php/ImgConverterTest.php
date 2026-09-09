@@ -389,6 +389,10 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	 * The 'avif' format is used because in this harness wp_image_quality() is
 	 * always stubbed, so core_handles_next_gen() is true and 'webp'/'both'
 	 * short-circuit to 'skipped' before quality resolution is reached.
+	 *
+	 * Smart quality mapping and the skip-small threshold are disabled here so
+	 * the raw resolve_encode_quality() path is asserted; the smart/skip-small
+	 * behaviour is covered by ImageAvifPictureTest.
 	 */
 	public function test_convert_image_uses_wp_get_image_encode_quality(): void {
 		if ( ! function_exists( 'imageavif' ) ) {
@@ -409,7 +413,13 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 			}
 		);
 
-		$converter = $this->make_converter( array( 'conversionFormat' => 'avif' ) );
+		$converter = $this->make_converter(
+			array(
+				'conversionFormat'        => 'avif',
+				'smartQuality'            => false,
+				'skipSmallThresholdBytes' => 0,
+			)
+		);
 		$result    = $converter->convert_image( $file, 'avif' );
 
 		$this->assertTrue( $result );
@@ -465,7 +475,13 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 			}
 		);
 
-		$converter = $this->make_converter( array( 'conversionFormat' => 'webp' ) );
+		// Skip-small is disabled: the 64x48 fixture is under the default threshold.
+		$converter = $this->make_converter(
+			array(
+				'conversionFormat'        => 'webp',
+				'skipSmallThresholdBytes' => 0,
+			)
+		);
 		$result    = $converter->convert_image( $file, 'webp' );
 
 		$this->assertTrue( $result );
@@ -814,7 +830,12 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 			}
 		);
 
-		$converter = $this->make_converter( array( 'conversionFormat' => 'avif' ) );
+		$converter = $this->make_converter(
+			array(
+				'conversionFormat'        => 'avif',
+				'skipSmallThresholdBytes' => 0,
+			)
+		);
 		$result    = $converter->convert_image( $file, 'avif' );
 
 		$this->assertTrue( $result );

@@ -224,6 +224,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'clientSideMimeTypeOverride' => false,
 					'clientSideMimeTypes'        => array(),
 					'lazyLoadBackgroundImages'   => false,
+					'avifFirst'                  => true,
+					'smartQuality'               => true,
+					'skipSmallThresholdBytes'    => 5120,
 				),
 				'performance_audit'     => array(
 					'pagespeed_api_key'     => '',

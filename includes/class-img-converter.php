@@ -276,6 +276,135 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		}
 
 		/**
+		 * Whether an AVIF encoder is available on this host.
+		 *
+		 * The AVIF conversion path only boots when this returns true: GD
+		 * `imageavif()` (PHP 8.2+) or Imagick with AVIF delegate support.
+		 * All callers fail open to WebP, else the original, when false.
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when AVIF encoding is supported.
+		 */
+		public static function is_avif_encoder_available(): bool {
+			if ( function_exists( 'imageavif' ) && version_compare( PHP_VERSION, '8.2', '>=' ) ) {
+				return true;
+			}
+
+			if ( extension_loaded( 'imagick' ) && class_exists( 'Imagick' ) ) {
+				try {
+					$imagick = new \Imagick();
+					if ( method_exists( $imagick, 'queryFormats' ) ) {
+						$formats = $imagick->queryFormats( 'AVIF*' );
+						if ( ! empty( $formats ) ) {
+							return true;
+						}
+					}
+				} catch ( \Exception $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Probe only; absence means no AVIF support.
+				} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Probe only; absence means no AVIF support.
+				}
+			}
+
+			return false;
+		}
+
+		/**
+		 * Get the skip-small byte threshold for image conversion.
+		 *
+		 * Files at or under this size are skipped: re-encoding them wastes CPU
+		 * for negligible byte savings. Filterable via
+		 * `wppo_skip_small_threshold_bytes`. Defaults to 5120 bytes.
+		 *
+		 * @since NEXT
+		 *
+		 * @return int Threshold in bytes (>= 0).
+		 */
+		public function get_skip_small_threshold(): int {
+			$threshold = $this->options['image_optimisation']['skipSmallThresholdBytes'] ?? 5120;
+			if ( function_exists( 'apply_filters' ) ) {
+				/**
+				 * Filter the skip-small byte threshold.
+				 *
+				 * @since NEXT
+				 * @param int $threshold Threshold in bytes.
+				 */
+				$threshold = apply_filters( 'wppo_skip_small_threshold_bytes', $threshold );
+			}
+
+			$threshold = (int) $threshold;
+			if ( $threshold < 0 ) {
+				$threshold = 0;
+			}
+
+			return $threshold;
+		}
+
+		/**
+		 * Whether a source file should be skipped as too small to convert.
+		 *
+		 * Fail-open (returns false) when the file is unreadable so behaviour
+		 * is unchanged for missing files — downstream guards still apply.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $path Filesystem path to the source image.
+		 * @return bool True when the file is at or under the threshold.
+		 */
+		public function should_skip_small_file( string $path ): bool {
+			$threshold = $this->get_skip_small_threshold();
+			if ( $threshold <= 0 ) {
+				return false;
+			}
+
+			if ( ! file_exists( $path ) || ! is_readable( $path ) ) {
+				return false;
+			}
+
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- filesize() emits warnings on unreadable files; guarded above, silenced for race safety.
+			$size = @filesize( $path );
+			if ( false === $size ) {
+				return false;
+			}
+
+			return (int) $size <= $threshold;
+		}
+
+		/**
+		 * Resolve the smart encode quality for an output MIME type.
+		 *
+		 * Wraps resolve_encode_quality(): when the `smartQuality` setting is
+		 * enabled, AVIF targets a lower numeric quality than WebP at equal
+		 * visual quality (AVIF's efficiency). Falls back to the flat 82
+		 * default chain otherwise.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $mime Output MIME type (e.g. 'image/avif').
+		 * @param array  $size Optional source dimensions ('width'/'height').
+		 * @return int The encode quality to use (1-100).
+		 */
+		public function get_smart_quality( string $mime, array $size = array() ): int {
+			$smart = $this->options['image_optimisation']['smartQuality'] ?? true;
+			if ( function_exists( 'apply_filters' ) ) {
+				/**
+				 * Filter whether smart quality mapping is applied.
+				 *
+				 * @since NEXT
+				 * @param bool $smart Whether smart quality is enabled.
+				 */
+				$smart = apply_filters( 'wppo_smart_quality', (bool) $smart );
+			}
+
+			if ( $smart && 'image/avif' === $mime ) {
+				$webp_quality = $this->resolve_encode_quality( 'image/webp', 82, $size );
+				$quality      = max( 1, $webp_quality - 20 );
+				return min( 100, max( 1, $quality ) );
+			}
+
+			return $this->resolve_encode_quality( $mime, 82, $size );
+		}
+
+		/**
 		 * Whether the source embeds an UltraHDR gain map.
 		 *
 		 * Core skips such images end-to-end when applying
@@ -378,11 +507,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				$size = $this->get_source_image_dimensions( $source_image );
 
 				if ( 'both' === $format ) {
-					$avif_quality = $this->resolve_encode_quality( 'image/avif', 82, $size );
-					$webp_quality = $this->resolve_encode_quality( 'image/webp', 82, $size );
+					$avif_quality = $this->get_smart_quality( 'image/avif', $size );
+					$webp_quality = $this->get_smart_quality( 'image/webp', $size );
 				} else {
 					$mime    = in_array( $format, array( 'avif', 'both' ), true ) ? 'image/avif' : 'image/webp';
-					$quality = $this->resolve_encode_quality( $mime, 82, $size );
+					$quality = $this->get_smart_quality( $mime, $size );
 				}
 			}
 			if ( -1 === $quality ) {
@@ -395,6 +524,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 			if ( ! file_exists( $source_image ) || ! is_readable( $source_image ) ) {
 				$this->update_conversion_status( $source_image, 'failed', $format );
+				return false;
+			}
+
+			// Skip-small threshold: tiny files cost more CPU than they save in
+			// bytes. Skipped files keep the restorable original untouched.
+			if ( $this->should_skip_small_file( $source_image ) ) {
+				$this->update_conversion_status( $source_image, 'skipped', $format );
 				return false;
 			}
 
@@ -465,7 +601,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 					case IMAGETYPE_WEBP:
 						if ( in_array( $format, array( 'avif', 'both' ), true ) ) {
-							if ( ! function_exists( 'imageavif' ) ) {
+							if ( ! self::is_avif_encoder_available() || ! function_exists( 'imageavif' ) ) {
 								$this->update_conversion_status( $source_image, 'failed', $format );
 								return false;
 							}
@@ -488,7 +624,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 								}
 
 								$avif_path = $this->get_img_path( $source_image, 'avif' );
-								Util::prepare_cache_dir( dirname( $avif_path ) );
+								if ( ! Util::prepare_cache_dir( dirname( $avif_path ) ) ) {
+									$this->update_conversion_status( $source_image, 'failed', $format );
+									return false;
+								}
 
 								if ( imageavif( $image, $avif_path, $avif_quality ?? $quality ) ) {
 									$this->update_conversion_status( $source_image, 'completed', 'avif' );
@@ -619,7 +758,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 				$success = true;
 
-				if ( in_array( $format, array( 'webp', 'both' ), true ) ) {
+				// AVIF-first encode ordering: AVIF is attempted before WebP so the
+				// highest-efficiency output wins. On AVIF-encoder-unavailable the
+				// path fails open to WebP, else the original is kept (never fatal).
+				$avif_first    = ! empty( $this->options['image_optimisation']['avifFirst'] ?? true );
+				$avif_encoder  = self::is_avif_encoder_available();
+				$encode_format = $format;
+				if ( 'avif' === $format && ! $avif_encoder ) {
+					$encode_format = 'webp';
+					$this->update_conversion_status( $source_image, 'skipped', 'avif' );
+				}
+
+				if ( in_array( $encode_format, array( 'avif', 'both' ), true ) && ( $avif_first || 'webp' !== $encode_format ) ) {
+					$avif_path = $this->get_img_path( $source_image, 'avif' );
+
+					if ( ! file_exists( $avif_path ) ) {
+						if ( ! $avif_encoder || ! function_exists( 'imageavif' ) || ! Util::prepare_cache_dir( dirname( $avif_path ) ) || ! imageavif( $image, $avif_path, $avif_quality ?? $quality ) ) {
+							$success = false;
+							$this->update_conversion_status( $source_image, 'failed', 'avif' );
+						} else {
+							$this->update_conversion_status( $source_image, 'completed', 'avif' );
+						}
+					} else {
+						$this->update_conversion_status( $source_image, 'completed', 'avif' );
+					}
+				}
+
+				if ( in_array( $encode_format, array( 'webp', 'both' ), true ) ) {
 					$webp_path = $this->get_img_path( $source_image, 'webp' );
 
 					if ( ! file_exists( $webp_path ) ) {
@@ -631,22 +796,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 						}
 					} else {
 						$this->update_conversion_status( $source_image, 'completed', 'webp' );
-					}
-				}
-
-				if ( in_array( $format, array( 'avif', 'both' ), true ) ) {
-					$avif_path = $this->get_img_path( $source_image, 'avif' );
-
-					if ( ! file_exists( $avif_path ) ) {
-						Util::prepare_cache_dir( dirname( $avif_path ) );
-						if ( ! function_exists( 'imageavif' ) || ! imageavif( $image, $avif_path, $avif_quality ?? $quality ) ) {
-							$success = false;
-							$this->update_conversion_status( $source_image, 'failed', 'avif' );
-						} else {
-							$this->update_conversion_status( $source_image, 'completed', 'avif' );
-						}
-					} else {
-						$this->update_conversion_status( $source_image, 'completed', 'avif' );
 					}
 				}
 
@@ -1172,6 +1321,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					return $metadata;
 				}
 
+				// Skip-small threshold: tiny uploads never enter the queue so no
+				// CPU is wasted on negligible byte wins. Original stays restorable.
+				if ( $this->should_skip_small_file( $file ) ) {
+					return $metadata;
+				}
+
 				$img_url = wp_get_attachment_url( $attachment_id );
 				if ( ! empty( $this->exclude_imgs ) ) {
 					foreach ( $this->exclude_imgs as $exclude_img ) {
@@ -1194,6 +1349,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					foreach ( $metadata['sizes'] as $size => $size_data ) {
 						$image_path = wp_normalize_path( $upload_dir['path'] . '/' . $size_data['file'] );
 						if ( file_exists( $image_path ) ) {
+							if ( $this->should_skip_small_file( $image_path ) ) {
+								continue;
+							}
 							if ( in_array( $this->format, array( 'webp', 'both' ), true ) ) {
 								self::add_img_into_queue( $image_path );
 							}
