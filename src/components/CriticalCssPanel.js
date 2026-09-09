@@ -85,12 +85,31 @@ const CriticalCssPanel = ( { status = {}, onRegenerate } ) => {
 							typeof entry === 'object' && entry.label
 								? entry.label
 								: hash.substring( 0, 8 ) + '…';
+						const size =
+							typeof entry === 'object' &&
+							Number.isFinite( entry.size )
+								? entry.size
+								: null;
+						const truncated =
+							typeof entry === 'object' && !! entry.truncated;
 						const config =
 							STATUS_CONFIG[ statusKey ] || STATUS_CONFIG.none;
 						return (
 							<div key={ hash } className="wppo-ccss-status-item">
 								<span className="wppo-ccss-status-hash">
 									{ label }
+									{ null !== size && size > 0 && (
+										<span className="wppo-text-muted">
+											{ ` — ${ Math.round(
+												size / 1024
+											) } KB` }
+											{ truncated &&
+												` (${ __(
+													'capped',
+													'performance-optimisation'
+												) })` }
+										</span>
+									) }
 								</span>
 								<span
 									className={ `wppo-badge ${ config.className }` }

@@ -39,6 +39,13 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 	private array $filter_overrides = array();
 
 	/**
+	 * In-memory option map backing the get_option stub.
+	 *
+	 * @var array
+	 */
+	private array $option_map = array();
+
+	/**
 	 * Stub the WP functions used by the Critical_CSS helpers.
 	 *
 	 * @return void
@@ -53,6 +60,12 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 		$this->filter_overrides = array();
 
 		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		Functions\when( 'wp_normalize_path' )->alias(
+			static function ( $path ) {
+				$path = str_replace( '\\', '/', (string) $path );
+				return preg_replace( '|(?<=.)/+|', '/', $path );
+			}
+		);
 		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
 
 		Functions\when( 'apply_filters' )->alias(
@@ -67,6 +80,34 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'is_multisite' )->justReturn( false );
 		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
 		Functions\when( 'is_wp_error' )->justReturn( false );
+
+		// Stubs for the CCSS cap / file-first delivery paths (issue #933).
+		$this->option_map = array();
+		Functions\when( 'get_option' )->alias(
+			function ( $name, $fallback = false ) {
+				return array_key_exists( $name, $this->option_map ) ? $this->option_map[ $name ] : $fallback;
+			}
+		);
+		Functions\when( 'add_action' )->justReturn( true );
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'absint' )->alias(
+			static function ( $value ) {
+				return abs( (int) $value );
+			}
+		);
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+		Functions\when( 'esc_url' )->returnArg();
+		Functions\when( 'is_front_page' )->justReturn( true );
+		Functions\when( 'is_home' )->justReturn( false );
+		Functions\when( 'is_singular' )->justReturn( false );
+		Functions\when( 'is_page' )->justReturn( false );
+		Functions\when( 'is_archive' )->justReturn( false );
+		Functions\when( 'is_search' )->justReturn( false );
+		Functions\when( 'is_404' )->justReturn( false );
+		Functions\when( 'get_stylesheet' )->justReturn( 'test-theme' );
+
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
 
 		// Deterministic stand-in for core's private/loopback rejection.
 		Functions\when( 'wp_http_validate_url' )->alias(
@@ -284,5 +325,197 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertStringContainsString( '\3c ', $out );
 		$this->assertDoesNotMatchRegularExpression( '/</', $out );
+	}
+
+	/**
+	 * Under-cap CSS passes through truncate_to_cap() byte-for-byte.
+	 *
+	 * @return void
+	 */
+	public function test_truncate_to_cap_passes_under_cap_through(): void {
+		$css = 'body{color:red}h1{font-size:2em}';
+
+		$this->assertSame( $css, Critical_CSS::truncate_to_cap( $css, 20480 ) );
+		$this->assertSame( $css, Critical_CSS::truncate_to_cap( $css, strlen( $css ) ) );
+	}
+
+	/**
+	 * Over-cap CSS is cut at the last closing brace within the cap, never mid-rule.
+	 *
+	 * @return void
+	 */
+	public function test_truncate_to_cap_cuts_at_last_rule_boundary(): void {
+		$css = 'body{color:red}h1{font-size:2em}p{margin:0}';
+		$cap = strlen( 'body{color:red}' ) + 5; // Lands inside the h1 rule.
+
+		$truncated = Critical_CSS::truncate_to_cap( $css, $cap );
+
+		$this->assertSame( 'body{color:red}', $truncated );
+		$this->assertLessThanOrEqual( $cap, strlen( $truncated ) );
+	}
+
+	/**
+	 * Returns '' when no complete rule fits in the cap.
+	 *
+	 * Callers treat that as over-cap and serve the file variant instead.
+	 *
+	 * @return void
+	 */
+	public function test_truncate_to_cap_returns_empty_when_nothing_fits(): void {
+		$this->assertSame( '', Critical_CSS::truncate_to_cap( 'body{color:red}', 5 ) );
+		$this->assertSame( '', Critical_CSS::truncate_to_cap( '', 20480 ) );
+	}
+
+	/**
+	 * The cap defaults to 20 KB and honours the stored setting.
+	 *
+	 * @return void
+	 */
+	public function test_get_ccss_max_size_default_and_override(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		$this->assertSame( 20480, Critical_CSS::get_ccss_max_size() );
+
+		$this->option_map['wppo_settings'] = array(
+			'file_optimisation' => array( 'ccssMaxSize' => 1024 ),
+		);
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		$this->assertSame( 1024, Critical_CSS::get_ccss_max_size() );
+
+		// Non-positive values fall back to the default so output stays bounded.
+		$this->option_map['wppo_settings'] = array(
+			'file_optimisation' => array( 'ccssMaxSize' => 0 ),
+		);
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		$this->assertSame( 20480, Critical_CSS::get_ccss_max_size() );
+	}
+
+	/**
+	 * Missing variants report zero size metadata (fail-open, never fatal).
+	 *
+	 * @return void
+	 */
+	public function test_get_ccss_meta_reports_zeros_for_missing_variant(): void {
+		$this->assertSame(
+			array(
+				'size'      => 0,
+				'truncated' => false,
+				'mtime'     => 0,
+			),
+			Critical_CSS::get_ccss_meta( 'ccss-missing-variant-123' )
+		);
+	}
+
+	/**
+	 * A stored variant reports its size and whether it exceeds the cap.
+	 *
+	 * @return void
+	 */
+	public function test_get_ccss_meta_reports_size_and_truncation(): void {
+		$hash = 'ccssmetatest1234567890abcdef';
+		$dir  = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/ccss' );
+		if ( ! is_dir( $dir ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
+			mkdir( $dir, 0775, true );
+		}
+		$file = $dir . '/' . $hash . '.css';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+		file_put_contents( $file, 'body{color:red}' );
+
+		try {
+			$meta = Critical_CSS::get_ccss_meta( $hash );
+
+			$this->assertSame( strlen( 'body{color:red}' ), $meta['size'] );
+			$this->assertFalse( $meta['truncated'] );
+			$this->assertGreaterThan( 0, $meta['mtime'] );
+		} finally {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+			unlink( $file );
+		}
+	}
+
+	/**
+	 * File-first URLs carry mtime cache busting that changes on regenerate.
+	 *
+	 * @return void
+	 */
+	public function test_get_ccss_file_url_uses_mtime_cache_busting(): void {
+		$hash = 'ccssmtimebust1234567890abcdef';
+		$dir  = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/ccss' );
+		if ( ! is_dir( $dir ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
+			mkdir( $dir, 0775, true );
+		}
+		$file = $dir . '/' . $hash . '.css';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+		file_put_contents( $file, 'body{color:red}' );
+
+		try {
+			$url_before = $this->invoke_private( 'get_ccss_file_url', $hash );
+
+			$this->assertStringContainsString( $hash . '.css?ver=', $url_before );
+
+			// Simulate a regenerate: new mtime must produce a new URL.
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_touch -- Test fixture mtime control.
+			touch( $file, time() + 3600 );
+			clearstatcache( true, $file );
+			Critical_CSS::reset_ccss_memo();
+
+			$url_after = $this->invoke_private( 'get_ccss_file_url', $hash );
+
+			$this->assertNotSame( $url_before, $url_after );
+		} finally {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+			unlink( $file );
+		}
+	}
+
+	/**
+	 * Missing file variants yield an empty file URL.
+	 *
+	 * @return void
+	 */
+	public function test_get_ccss_file_url_empty_for_missing_variant(): void {
+		$this->assertSame( '', $this->invoke_private( 'get_ccss_file_url', 'ccss-no-such-variant-123' ) );
+	}
+
+	/**
+	 * A falsy wppo_inline_combined_css filter yields no inline output.
+	 *
+	 * @return void
+	 */
+	public function test_falsy_inline_filter_skips_inline_ccss(): void {
+		$this->filter_overrides['wppo_inline_combined_css'] = false;
+
+		ob_start();
+		Critical_CSS::inline_ccss();
+		$output = ob_get_clean();
+
+		$this->assertSame( '', $output );
+	}
+
+	/**
+	 * A falsy wppo_inline_combined_css filter leaves stylesheet tags untouched.
+	 *
+	 * @return void
+	 */
+	public function test_falsy_inline_filter_skips_deferral(): void {
+		$this->filter_overrides['wppo_inline_combined_css'] = false;
+
+		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- Fixture tag for the deferral filter.
+		$tag = '<link rel="stylesheet" id="theme-style-css" href="http://example.com/theme.css" media="all" />';
+
+		$this->assertSame( $tag, Critical_CSS::defer_stylesheets( $tag, 'theme-style', 'http://example.com/theme.css' ) );
+	}
+
+	/**
+	 * Missing template variants fail open: stylesheets load normally.
+	 *
+	 * @return void
+	 */
+	public function test_missing_variant_fallback_loads_stylesheet_normally(): void {
+		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- Fixture tag for the deferral filter.
+		$tag = '<link rel="stylesheet" id="theme-style-css" href="http://example.com/theme.css" media="all" />';
+
+		$this->assertSame( $tag, Critical_CSS::defer_stylesheets( $tag, 'theme-style', 'http://example.com/theme.css' ) );
 	}
 }

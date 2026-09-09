@@ -164,6 +164,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'removeUnusedCSS'            => false,
 					'excludeUnusedCSS'           => '',
 					'criticalCSS'                => false,
+					'ccssMaxSize'                => 20480,
 					'hostGoogleFontsLocally'     => false,
 					'blockAssetsOnDemand'        => function_exists( 'wp_load_classic_theme_block_styles_on_demand' ),
 					'loadAllCoreBlockAssets'     => false,

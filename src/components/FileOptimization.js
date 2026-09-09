@@ -60,6 +60,7 @@ const FileOptimization = ( {
 		removeCssJsHandle: '',
 		enableServerRules: false,
 		criticalCSS: false,
+		ccssMaxSize: options.ccssMaxSize || 20480,
 		hostGoogleFontsLocally: false,
 		fontMetricFallback: false,
 		cdnURL: '',
@@ -723,6 +724,41 @@ const FileOptimization = ( {
 								</Tooltip>
 								{ settings.criticalCSS && (
 									<>
+										<div className="wppo-field wppo-mt-16">
+											<label
+												className="wppo-field-label"
+												htmlFor="ccssMaxSize"
+											>
+												{ __(
+													'Critical CSS Max Size (bytes)',
+													'performance-optimisation'
+												) }
+											</label>
+											<input
+												className="wppo-input"
+												type="number"
+												inputMode="numeric"
+												id="ccssMaxSize"
+												name="ccssMaxSize"
+												min="1024"
+												max="102400"
+												step="1024"
+												value={ settings.ccssMaxSize }
+												onChange={ handleChange(
+													setSettings
+												) }
+												aria-describedby="ccssMaxSize-desc"
+											/>
+											<p
+												id="ccssMaxSize-desc"
+												className="wppo-text-muted wppo-mt-8 wppo-text-small"
+											>
+												{ __(
+													'Inline output above this size is served from a per-template file with cache busting instead (default: 20480).',
+													'performance-optimisation'
+												) }
+											</p>
+										</div>
 										{ ccssError && (
 											<div className="wppo-notice wppo-notice--error">
 												<span>

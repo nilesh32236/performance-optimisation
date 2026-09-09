@@ -308,6 +308,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$this->options['edge_cache']['enabled'] = false;
 			}
 
+			// Existing installs whose stored settings predate the ccssMaxSize
+			// key inherit the 20 KB default in-memory here (no database write
+			// on front-end requests); the persisted value is backfilled once
+			// by maybe_migrate_ccss_max_size() on admin_init.
+			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
+				$this->options['file_optimisation'] = array();
+			}
+			if ( ! isset( $this->options['file_optimisation']['ccssMaxSize'] ) ) {
+				$this->options['file_optimisation']['ccssMaxSize'] = 20480;
+			}
+
 			$this->includes();
 			$this->image_optimisation = new Image_Optimisation( $this->options );
 			$this->google_fonts       = new Google_Fonts( $this->options );
@@ -483,6 +494,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				( new Builder_Purge_Watcher() )->register();
 			}
 			add_action( 'admin_init', array( $this, 'maybe_migrate_block_assets_setting' ) );
+			add_action( 'admin_init', array( $this, 'maybe_migrate_ccss_max_size' ) );
 			add_action( 'admin_enqueue_scripts', array( $this, 'admin_enqueue_scripts' ) );
 			add_action( 'init', array( $this, 'set_role_hash_cookie' ) );
 			add_action( 'wp_logout', array( $this, 'clear_role_hash_cookie' ) );
@@ -947,6 +959,48 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			update_option( 'wppo_block_assets_migrated', 1 );
+		}
+
+		/**
+		 * One-time backfill for the CCSS inline size cap.
+		 *
+		 * Runs on `admin_init` (not the constructor) so a cacheable front-end
+		 * request never triggers a settings write. Only installs whose stored
+		 * settings predate the `ccssMaxSize` key (key absent) are backfilled
+		 * with the 20 KB default; any stored explicit value is preserved
+		 * verbatim, and fresh installs with no stored option are skipped
+		 * because the constructor defaults already match. The check is
+		 * idempotent (key presence is the marker), so no extra option row is
+		 * needed. In-memory options are synced too so the current request
+		 * observes the backfilled value.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public function maybe_migrate_ccss_max_size(): void {
+			// allowlist(settings-read-guard): deliberate direct read — must distinguish
+			// "no stored row" (false) from "stored array", which Util::get_settings()
+			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
+			$stored = get_option( 'wppo_settings' );
+			if ( ! is_array( $stored ) ) {
+				return;
+			}
+
+			$file = isset( $stored['file_optimisation'] ) && is_array( $stored['file_optimisation'] ) ? $stored['file_optimisation'] : array();
+
+			if ( array_key_exists( 'ccssMaxSize', $file ) ) {
+				return;
+			}
+
+			$stored['file_optimisation'] = $file + array( 'ccssMaxSize' => 20480 );
+			update_option( 'wppo_settings', $stored );
+
+			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
+				$this->options['file_optimisation'] = array();
+			}
+			$this->options['file_optimisation']['ccssMaxSize'] = 20480;
+
+			Log::add( __( 'Added default Critical CSS size cap (20 KB).', 'performance-optimisation' ) );
 		}
 
 		/**
