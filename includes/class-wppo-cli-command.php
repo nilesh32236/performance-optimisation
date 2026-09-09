@@ -1095,7 +1095,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				$format = (string) \WP_CLI\Utils::get_flag_value( $assoc_args, 'format', 'table' );
 			}
 			if ( ! in_array( $format, array( 'table', 'json' ), true ) ) {
-				$format = 'table';
+				/* translators: %s: Requested format */
+				WP_CLI::error( sprintf( __( 'Invalid verify format "%s". Available formats: table, json.', 'performance-optimisation' ), $format ) );
+				return;
 			}
 
 			$severity = isset( $assoc_args['severity'] ) ? (string) $assoc_args['severity'] : 'fail';
@@ -1103,7 +1105,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				$severity = (string) \WP_CLI\Utils::get_flag_value( $assoc_args, 'severity', 'fail' );
 			}
 			if ( ! in_array( $severity, array( 'fail', 'warn' ), true ) ) {
-				$severity = 'fail';
+				/* translators: %s: Requested severity */
+				WP_CLI::error( sprintf( __( 'Invalid verify severity "%s". Available severities: fail, warn.', 'performance-optimisation' ), $severity ) );
+				return;
 			}
 
 			$only = isset( $assoc_args['check'] ) ? (string) $assoc_args['check'] : '';
@@ -1199,8 +1203,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 			// same severity gate), so JSON readers and the CLI gate agree.
 			$should_fail = 'fail' === $payload['overall'];
 			if ( $should_fail ) {
-				/* translators: %d: Number of failing checks */
-				WP_CLI::error( sprintf( __( 'Verify failed: %d check(s) failing.', 'performance-optimisation' ), $fail_count > 0 ? $fail_count : $warn_count ) );
+				$gated = 'warn' === $severity ? $fail_count + $warn_count : $fail_count;
+				/* translators: 1: Number of non-passing checks, 2: Severity gate */
+				WP_CLI::error( sprintf( __( 'Verify failed: %1$d check(s) not passing (severity=%2$s).', 'performance-optimisation' ), $gated, $severity ) );
 				return;
 			}
 
@@ -1736,9 +1741,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 			}
 			$oc_content = $this->read_small_file( $oc_path );
 			$oc_own     = is_string( $oc_content ) && Object_Cache::is_own_dropin_content( $oc_content );
+			// Empty (0-byte) files read back as '' — treat as broken/absent,
+			// not foreign, so operators get a distinct note.
+			$oc_empty = '' === $oc_content;
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_readable
-			$oc_exists  = is_readable( $oc_path ) || is_string( $oc_content );
-			$oc_foreign = $oc_exists && ! $oc_own;
+			$oc_exists  = ( is_string( $oc_content ) && '' !== $oc_content ) || ( ! $oc_empty && is_readable( $oc_path ) );
+			$oc_foreign = $oc_exists && ! $oc_own && ! $oc_empty;
 			$oc_legacy  = is_string( $oc_content )
 				&& false === strpos( $oc_content, Object_Cache::DROPIN_MARKER )
 				&& false !== strpos( $oc_content, Object_Cache::LEGACY_DROPIN_MARKER );
@@ -1758,6 +1766,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				if ( $oc_implied && ! $config_exists ) {
 					$has_fail = true;
 					$notes[]  = 'wppo-redis-config.php missing while object cache implied enabled';
+				}
+			} elseif ( $oc_empty ) {
+				$notes[]  = 'object-cache: present but empty (broken, not foreign)';
+				$has_warn = true;
+				if ( $config_exists ) {
+					$notes[] = 'wppo-redis-config.php present but drop-in empty';
 				}
 			} elseif ( $oc_foreign ) {
 				$notes[]  = 'object-cache: foreign drop-in owns the slot';
@@ -2056,46 +2070,64 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		/**
 		 * Check 7 — uninstall-completeness spot check (read-only).
 		 *
-		 * Single `wp_options WHERE option_name LIKE '%wppo_%'` query (contains
-		 * match so multisite blog-prefixed rows like `2_wppo_settings` are
-		 * visible to the classifier); never deletes.
+		 * Single `wp_options WHERE option_name LIKE '%wppo_%'` query capped at
+		 * 51 rows (contains match so multisite blog-prefixed rows like
+		 * `2_wppo_settings` are visible to the classifier); never deletes.
 		 *
 		 * @since NEXT
 		 * @return array{check:string,status:string,detail:string} Verify row.
 		 */
 		private function check_verify_uninstall_spot(): array {
-			$found = array();
+			$found   = array();
+			$queried = false;
 			try {
 				global $wpdb;
 				if ( isset( $wpdb ) && is_object( $wpdb ) && isset( $wpdb->options ) && method_exists( $wpdb, 'get_col' ) && method_exists( $wpdb, 'esc_like' ) ) {
 					$like = '%' . $wpdb->esc_like( 'wppo_' ) . '%';
 					// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-					$found = $wpdb->get_col( $wpdb->prepare( 'SELECT option_name FROM %i WHERE option_name LIKE %s', $wpdb->options, $like ) );
+					$found = $wpdb->get_col( $wpdb->prepare( 'SELECT option_name FROM %i WHERE option_name LIKE %s LIMIT 51', $wpdb->options, $like ) );
 					// phpcs:enable
-					if ( ! is_array( $found ) ) {
+					if ( is_array( $found ) ) {
+						$queried = true;
+					} else {
 						$found = array();
 					}
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
-				$found = array();
+				$found   = array();
+				$queried = false;
 			}
+
+			if ( ! $queried ) {
+				return array(
+					'check'  => 'uninstall',
+					'status' => 'warn',
+					'detail' => __( 'Options table unreadable — uninstall state could not be verified.', 'performance-optimisation' ),
+				);
+			}
+
+			$truncated = count( $found ) >= 51;
 
 			if ( empty( $found ) ) {
 				return array(
 					'check'  => 'uninstall',
 					'status' => 'pass',
-					'detail' => __( 'No wppo_* options outside the known set (or options table unreadable — nothing to flag).', 'performance-optimisation' ),
+					'detail' => __( 'No wppo_* options outside the known set.', 'performance-optimisation' ),
 				);
 			}
 
 			$unknown = self::find_unknown_wppo_options( array_map( 'strval', $found ) );
 			if ( empty( $unknown ) ) {
+				/* translators: %d: Number of wppo_* options found */
+				$detail = sprintf( __( 'All %d wppo_* options have a known owner.', 'performance-optimisation' ), count( $found ) );
+				if ( $truncated ) {
+					$detail .= __( ' (query capped at 51 rows; more may exist)', 'performance-optimisation' );
+				}
 				return array(
 					'check'  => 'uninstall',
 					'status' => 'pass',
-					/* translators: %d: Number of wppo_* options found */
-					'detail' => sprintf( __( 'All %d wppo_* options have a known owner.', 'performance-optimisation' ), count( $found ) ),
+					'detail' => $detail,
 				);
 			}
 
@@ -2105,6 +2137,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 			if ( $extra > 0 ) {
 				/* translators: %d: Number of additional unknown options not listed */
 				$detail .= sprintf( __( ' +%d more', 'performance-optimisation' ), $extra );
+			}
+			if ( $truncated ) {
+				$detail .= __( ' (query capped at 51 rows; more may exist)', 'performance-optimisation' );
 			}
 			return array(
 				'check'  => 'uninstall',
