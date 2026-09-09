@@ -578,7 +578,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// whether this buffer-level LCP prioritization / fetchpriority stamping
 				// can defer to core-provided attributes (wp_get_loading_optimization_attributes()
 				// output is already honoured). No runtime change until the core API lands.
-				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) ) {
+				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && $is_wp69_plus ) {
 					// WP 6.9+ template enhancement output buffer. Runs after cache (10) and used-CSS (20).
 					add_filter( 'wp_template_enhancement_output_buffer', array( $this->image_optimisation, 'prioritize_lcp_in_buffer' ), 30, 2 );
 				}
@@ -3188,6 +3188,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Whether a style handle is a core block asset owned by core's on-demand loader.
+		 *
+		 * On WP 6.9+ with separate core block assets active, the combined
+		 * stylesheet (`wp-block-library`) and every per-block stylesheet
+		 * (`wp-block-cover`, `wp-block-group`, ...) are loaded on demand for the
+		 * blocks actually present on the page. Rewriting their `src` (minify) or
+		 * folding them into the combined file would re-monolithize what core
+		 * ships conditionally, so the minify path skips them in that mode —
+		 * mirroring `Cache::is_core_block_asset()`.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $handle The registered style handle.
+		 * @return bool True when core owns the handle under separate-assets mode.
+		 */
+		private function is_core_block_asset_skipped( $handle ): bool {
+			return function_exists( 'wp_should_load_separate_core_block_assets' ) && wp_should_load_separate_core_block_assets() && str_starts_with( (string) $handle, 'wp-block-' );
+		}
+
+		/**
 		 * Rewrites enqueued styles to their minified versions at enqueue time and
 		 * registers the on-disk path so core can inline them.
 		 *
@@ -3229,6 +3249,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 				// Preserve auto-sizes containment fix (WP 6.9+) — must not be minified/combined.
 				if ( 'wp-img-auto-sizes-contain' === $handle && function_exists( 'wp_enqueue_img_auto_sizes_contain_css_fix' ) ) {
+					continue;
+				}
+
+				// On WP 6.9+ with separate (on-demand) core block assets active, never
+				// rewrite core block-asset stylesheets — core loads them conditionally
+				// for the blocks on the page (see is_core_block_asset_skipped()).
+				if ( $this->is_core_block_asset_skipped( $handle ) ) {
 					continue;
 				}
 
@@ -3319,6 +3346,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		public function minify_css( $tag, $handle, $href ) {
 			// Preserve auto-sizes containment fix (WP 6.9+) — must not be minified.
 			if ( 'wp-img-auto-sizes-contain' === $handle && function_exists( 'wp_enqueue_img_auto_sizes_contain_css_fix' ) ) {
+				return $tag;
+			}
+			// On WP 6.9+ with separate (on-demand) core block assets active, never
+			// rewrite core block-asset stylesheets — core loads them conditionally
+			// for the blocks on the page (see is_core_block_asset_skipped()).
+			if ( $this->is_core_block_asset_skipped( $handle ) ) {
 				return $tag;
 			}
 			// LiteSpeed safe coexistence — when LSCache owns optimization, skip WPPO minify.

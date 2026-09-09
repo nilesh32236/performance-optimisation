@@ -608,6 +608,27 @@ class BufferCharacterizationTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Pre-6.9 registers ONLY the legacy LCP fallback (no enhancement filter).
+	 *
+	 * Issue #937: the LCP enhancement filter registration is gated on the
+	 * 6.9+ version floor like the cache and used-CSS paths; older cores keep
+	 * the template_redirect fallback unchanged.
+	 */
+	public function test_setup_hooks_registers_lcp_legacy_only_pre69(): void {
+		$captured = $this->capture_setup_hooks(
+			array(
+				'cache_settings'     => array(),
+				'file_optimisation'  => array(),
+				'image_optimisation' => array( 'prioritizeLCPImages' => true ),
+			),
+			'6.8.2',
+			false
+		);
+		$this->assertNull( $this->find_hook( $captured['filters'], 'wp_template_enhancement_output_buffer', 'prioritize_lcp_in_buffer' ) );
+		$this->assertNotNull( $this->find_hook( $captured['actions'], 'template_redirect', 'start_lcp_priority_buffer' ) );
+	}
+
+	/**
 	 * Cache priority ordering: cache filter (10) runs before used-CSS (20) before LCP (30).
 	 */
 	public function test_buffer_filter_priority_ordering(): void {
