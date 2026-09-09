@@ -206,7 +206,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			// Semantics mirror Cache::is_woo_excluded(): an absent key defaults to
 			// enabled (fail-safe), and malformed values normalize to enabled.
 			$woo_safe_mode = true;
-			if ( isset( $wppo_options['cache_settings']['wooSafeMode'] ) ) {
+			if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_safe_mode_enabled' ) ) {
+				try {
+					$woo_safe_mode = \PerformanceOptimise\Inc\Util::is_woo_safe_mode_enabled( is_array( $wppo_options ) ? $wppo_options : null );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$woo_safe_mode = true;
+				}
+			} elseif ( isset( $wppo_options['cache_settings']['wooSafeMode'] ) ) {
 				$parsed_mode   = filter_var( $wppo_options['cache_settings']['wooSafeMode'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
 				$woo_safe_mode = null === $parsed_mode ? true : $parsed_mode;
 			}
@@ -219,7 +226,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			if ( $woo_safe_mode ) {
 				foreach ( Util::get_woo_excluded_paths() as $woo_path ) {
 					$woo_path = strtolower( trim( (string) $woo_path, '/' ) );
-					$woo_path = preg_replace( '/[^a-z0-9\-_\/]/', '', $woo_path );
+					$woo_path = (string) preg_replace( '/[\x00-\x1F\x7F]/u', '', $woo_path );
+					$woo_path = trim( $woo_path, '/' );
 					if ( '' !== $woo_path && ! in_array( $woo_path, $woo_uri_segments, true ) ) {
 						$woo_uri_segments[] = $woo_path;
 					}

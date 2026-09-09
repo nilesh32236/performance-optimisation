@@ -1408,10 +1408,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$url = get_permalink( $post_id );
 				if ( is_string( $url ) && '' !== $url ) {
 					// Never schedule preload work for Woo dynamic pages.
-					if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_dynamic_path' ) && Util::is_woo_safe_mode_enabled( $options ) ) {
+					if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_dynamic_path' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_safe_mode_enabled' ) ) {
 						try {
-							$url_path = (string) wp_parse_url( $url, PHP_URL_PATH );
-							if ( Util::is_woo_dynamic_path( $url_path ) ) {
+							// Safe mode off falls through to crawler-warm scheduling below.
+							if ( Util::is_woo_safe_mode_enabled( $options ) && Util::is_woo_dynamic_path( (string) wp_parse_url( $url, PHP_URL_PATH ) ) ) {
 								return;
 							}
 						} catch ( \Throwable $e ) {
@@ -2699,9 +2699,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					}
 
 					// Woo page-slug path fallback (also covers installs where Woo
-					// conditional functions are unavailable). Matches the slug as any
-					// leading path segment so subdirectory installs (/shop/checkout)
-					// and multisite sub-sites (/subsite/cart) stay excluded; custom
+					// conditional functions are unavailable). Matches the slug as a full
+					// path segment anywhere in the request path (fail-safe: covers
+					// subdirectory installs (/shop/checkout) and multisite sub-sites
+					// (/subsite/cart), so a non-Woo page containing the segment is also
+					// treated as dynamic); custom
 					// or translated slugs are resolved via wc_get_page_id() when
 					// WooCommerce is active.
 					// wp_parse_url() exists since WP 4.4; the plugin requires WP 6.2+.
@@ -2787,8 +2789,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Whether a request path belongs to a WooCommerce cart/checkout/account page.
 		 *
-		 * Matches the slug as any leading path segment so subdirectory installs
-		 * (/shop/checkout) and multisite sub-sites (/subsite/cart) stay excluded.
+		 * Matches the slug as a full path segment anywhere in the request path
+		 * (fail-safe: covers subdirectory/multisite prefixes such as /shop/checkout
+		 * and /subsite/cart; a non-Woo page containing the segment is also
+		 * treated as dynamic).
 		 * Custom/translated slugs are resolved via wc_get_page_id() when
 		 * WooCommerce is active; otherwise only the default slugs apply.
 		 *
@@ -2800,7 +2804,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private static function matches_woo_page_path( string $local_path ): bool {
 			// Canonical path list (issue #962): Util::get_woo_excluded_paths()
 			// merged with the cart/checkout/my-account defaults so custom /
-			// translated / nested slugs stay excluded. Leading-segment
+			// translated / nested slugs stay excluded. Anywhere-segment fail-safe
 			// semantics cover subdirectory installs and multisite sub-sites.
 			$slugs = array( 'cart', 'checkout', 'my-account' );
 

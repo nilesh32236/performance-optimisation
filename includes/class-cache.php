@@ -1798,7 +1798,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Store API responses (`wc/store`, `wcstore`, `wp-json/wc/store*`,
 		 * `wp-json/wcstore*`) are dynamic JSON and must never be cached —
 		 * unconditional on the `wooSafeMode` toggle, mirroring wc-ajax.
-		 * Fail-open false-positive-safe: detection failure returns false and
+		 * Fail-open: detection failure returns true (treated as dynamic, never cached) and
 		 * the broader Woo guards still apply.
 		 *
 		 * @since NEXT

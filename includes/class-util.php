@@ -425,9 +425,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					if ( '' === $candidate ) {
 						continue;
 					}
-					// Leading-segment semantics: match the candidate as a full
-					// path segment at the start or after a subdirectory /
-					// multisite prefix (e.g. /shop/basket, /subsite/cart).
+					// Anywhere-segment fail-safe semantics: match the candidate as a
+					// full path segment anywhere in the request path (covers nested
+					// shop/basket and subdirectory / multisite prefixes such as
+					// /subsite/cart; a non-Woo page containing the segment is also
+					// treated as dynamic).
 					if ( (bool) preg_match( '#/(?:' . preg_quote( $candidate, '#' ) . ')(/|$)#i', '/' . $normalized ) ) {
 						return true;
 					}
