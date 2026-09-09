@@ -145,6 +145,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		private const MAX_IMPORT_DEPTH = 3;
 
 		/**
+		 * Default cap for inlined critical CSS in bytes (20 KB).
+		 *
+		 * Stays under core's `styles_inline_size_limit` on every supported
+		 * core version (20K pre-6.9 / 40K on 6.9+). Overridable per site via
+		 * the `file_optimisation.ccssMaxSize` setting.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const DEFAULT_CCSS_MAX_SIZE = 20480;
+
+		/**
+		 * Minimum CCSS payload worth inlining.
+		 *
+		 * Shorter output is treated as a failed extraction: the async loader
+		 * stub is printed and background regeneration is queued instead.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const MIN_INLINE_SIZE = 500;
+
+		/**
 		 * Get the CCSS directory path.
 		 *
 		 * @return string
@@ -221,6 +244,146 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return '';
 			}
 			return $dir . '/' . $template_hash . '.css';
+		}
+
+		/**
+		 * Read the configured CCSS inline size cap in bytes.
+		 *
+		 * The single source of truth is `Util::get_default_settings()`
+		 * (`file_optimisation.ccssMaxSize`). Missing or non-positive values
+		 * fall back to DEFAULT_CCSS_MAX_SIZE so inline output is always
+		 * bounded.
+		 *
+		 * @return int Cap in bytes.
+		 * @since NEXT
+		 */
+		public static function get_ccss_max_size(): int {
+			$options = Util::get_settings();
+			$raw     = $options['file_optimisation']['ccssMaxSize'] ?? self::DEFAULT_CCSS_MAX_SIZE;
+			$cap     = function_exists( 'absint' ) ? absint( $raw ) : abs( (int) $raw );
+			return $cap > 0 ? (int) $cap : self::DEFAULT_CCSS_MAX_SIZE;
+		}
+
+		/**
+		 * Truncate CSS to the cap without breaking a rule.
+		 *
+		 * Cuts at the last closing brace at or under the cap so output never
+		 * ends mid-rule. Returns an empty string when no complete rule fits —
+		 * callers treat that as over-cap and serve the file variant instead.
+		 *
+		 * @param string $css CSS content.
+		 * @param int    $cap Maximum bytes.
+		 * @return string Truncated CSS, or '' when nothing fits.
+		 * @since NEXT
+		 */
+		public static function truncate_to_cap( string $css, int $cap ): string {
+			if ( strlen( $css ) <= $cap ) {
+				return $css;
+			}
+			$cut = strrpos( substr( $css, 0, $cap ), '}' );
+			if ( false === $cut ) {
+				return '';
+			}
+			return substr( $css, 0, $cut + 1 );
+		}
+
+		/**
+		 * Read core's `styles_inline_size_limit` budget.
+		 *
+		 * Mirrors the version-dependent default in Cache::get_styles_inline_limit():
+		 * 20KB before WP 6.9, 40KB on 6.9+. Site-level overrides through the
+		 * `styles_inline_size_limit` filter always win.
+		 *
+		 * @return int The inline size limit in bytes.
+		 * @since NEXT
+		 */
+		private static function get_styles_inline_limit(): int {
+			$default = 40000;
+			if ( isset( $GLOBALS['wp_version'] ) && version_compare( (string) $GLOBALS['wp_version'], '6.9', '<' ) ) {
+				$default = 20000;
+			}
+			if ( ! function_exists( 'apply_filters' ) ) {
+				return $default;
+			}
+			return (int) apply_filters( 'styles_inline_size_limit', $default );
+		}
+
+		/**
+		 * Whether CCSS may be inlined on this request.
+		 *
+		 * Yields to the `wppo_inline_combined_css` falsy filter (same contract
+		 * as Cache::register_combine_css_path()): operators who disabled
+		 * plugin inlining get normally-enqueued stylesheets instead of inline
+		 * critical CSS plus deferred stylesheets.
+		 *
+		 * @return bool True when inlining is allowed.
+		 * @since NEXT
+		 */
+		private static function is_inline_allowed(): bool {
+			if ( ! function_exists( 'apply_filters' ) ) {
+				return true;
+			}
+			return (bool) apply_filters( 'wppo_inline_combined_css', true );
+		}
+
+		/**
+		 * File-first CCSS URL with mtime cache busting.
+		 *
+		 * Per-template variants are already stored as files; this exposes them
+		 * for over-cap delivery as `<hash>.css?ver=<mtime>` so a regenerate
+		 * automatically busts browser/CDN caches. The URL passes through
+		 * CDN::rewrite_url() when a CDN mapping is configured.
+		 *
+		 * @param string $template_hash Template hash.
+		 * @return string File URL with mtime version, or '' when unavailable.
+		 * @since NEXT
+		 */
+		private static function get_ccss_file_url( string $template_hash ): string {
+			$file = self::get_ccss_file( $template_hash );
+			$base = self::get_ccss_url();
+			if ( '' === $file || '' === $base || ! file_exists( $file ) ) {
+				return '';
+			}
+			$mtime = filemtime( $file );
+			if ( false === $mtime ) {
+				return '';
+			}
+			$url = $base . '/' . $template_hash . '.css?ver=' . $mtime;
+			if ( class_exists( 'PerformanceOptimise\Inc\CDN' ) && method_exists( 'PerformanceOptimise\Inc\CDN', 'rewrite_url' ) ) {
+				$url = CDN::rewrite_url( $url );
+			}
+			return $url;
+		}
+
+		/**
+		 * Size metadata for a stored CCSS variant.
+		 *
+		 * Computed live from the file so it is always fresh (no extra
+		 * transient to invalidate on regenerate); `truncated` reports whether
+		 * the variant exceeds the configured inline cap.
+		 *
+		 * @param string $template_hash Template hash.
+		 * @return array{size: int, truncated: bool, mtime: int} Size in bytes,
+		 *                                                      over-cap flag, and file mtime (0 when missing).
+		 * @since NEXT
+		 */
+		public static function get_ccss_meta( string $template_hash ): array {
+			$file = self::get_ccss_file( $template_hash );
+			if ( '' === $file || ! file_exists( $file ) ) {
+				return array(
+					'size'      => 0,
+					'truncated' => false,
+					'mtime'     => 0,
+				);
+			}
+			$size  = filesize( $file );
+			$mtime = filemtime( $file );
+			$size  = false === $size ? 0 : (int) $size;
+			return array(
+				'size'      => $size,
+				'truncated' => $size > self::get_ccss_max_size(),
+				'mtime'     => false === $mtime ? 0 : (int) $mtime,
+			);
 		}
 
 		/**
@@ -329,9 +492,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Get all registered template hashes and their status.
 		 *
 		 * Returns an associative array where keys are template hashes and values
-		 * are arrays with 'status' and 'label' keys.
+		 * are arrays with 'status', 'label', 'size', and 'truncated' keys. The
+		 * size fields are computed live from the stored file variants so the
+		 * SPA can display the capped state without an extra lookup.
 		 *
-		 * @return array<string, array{status: string, label: string}> Template hash => status + label.
+		 * @return array<string, array{status: string, label: string, size: int, truncated: bool}> Template hash => status + label + size.
 		 * @since NEXT
 		 */
 		public static function get_status_all(): array {
@@ -341,15 +506,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			foreach ( $templates as $template => $label ) {
 				$hash = self::get_template_hash( $template );
 				if ( self::ccss_exists( $hash ) ) {
+					$meta              = self::get_ccss_meta( $hash );
 					$statuses[ $hash ] = array(
-						'status' => 'ready',
-						'label'  => $label,
+						'status'    => 'ready',
+						'label'     => $label,
+						'size'      => $meta['size'],
+						'truncated' => $meta['truncated'],
 					);
 				} else {
 					$cache_status      = self::get_status_cache( $hash );
 					$statuses[ $hash ] = array(
-						'status' => $cache_status ? $cache_status : 'none',
-						'label'  => $label,
+						'status'    => $cache_status ? $cache_status : 'none',
+						'label'     => $label,
+						'size'      => 0,
+						'truncated' => false,
 					);
 				}
 			}
@@ -1047,6 +1217,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * the current template slug (based on WordPress conditional tags)
 		 * to match the hashes stored by generate_and_store().
 		 *
+		 * Output decision, in order:
+		 * 1. Yield entirely when the `wppo_inline_combined_css` filter is
+		 *    falsy — stylesheets load normally (no inline, no deferral).
+		 * 2. Missing/unreadable variant — fail-open: queue background
+		 *    generation and print the async loader stub (never fatal).
+		 * 3. Content under MIN_INLINE_SIZE — treated as a failed extraction.
+		 * 4. Content within the configured cap and core's
+		 *    `styles_inline_size_limit` budget — inlined as before.
+		 * 5. Over-cap content — file-first delivery: a render-blocking
+		 *    `<link>` to the per-template variant with mtime cache busting
+		 *    (no FOUC), while the full theme stylesheets are still deferred.
+		 *
 		 * @return void
 		 * @since NEXT
 		 */
@@ -1062,14 +1244,47 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				}
 			}
 
+			// Operators who disabled plugin inlining (e.g. serving CSS from a
+			// CDN) get normally-enqueued stylesheets: skip inline output and
+			// leave deferral to defer_stylesheets(), which yields too.
+			if ( ! self::is_inline_allowed() ) {
+				return;
+			}
+
 			$template_slug = self::get_current_template_slug();
 			$template_hash = self::get_template_hash( $template_slug );
 
 			$content = self::get_ccss_content( $template_hash );
 			if ( null !== $content ) {
 				// Fallback when CCSS is too short (<500B) — treat as failed and inject async loadCSS guard.
-				if ( strlen( $content ) < 500 ) {
+				if ( strlen( $content ) < self::MIN_INLINE_SIZE ) {
 					echo '<script>!function(e){"use strict";var n=function(n,t,o){var r=e.document.createElement("link"),a=t||e.document.getElementsByTagName("script")[0];r.rel="stylesheet",r.href=n,r.media="only x",a.parentNode.insertBefore(r,a),setTimeout(function(){r.media=o||"all"}),r.onload=function(){r.media=o||"all"}};e.wppoLoadCSS=n}(window);</script>' . "\n";
+					return;
+				}
+				$cap   = self::get_ccss_max_size();
+				$limit = self::get_styles_inline_limit();
+				// Over-cap output (or output beyond core's inline budget) is
+				// never inlined: serve the per-template file variant with
+				// mtime cache busting instead. The plain stylesheet link is
+				// render-blocking, so there is no FOUC; the remaining full
+				// stylesheets are still deferred by defer_stylesheets().
+				if ( strlen( $content ) > $cap || strlen( $content ) > $limit ) {
+					$file_url = self::get_ccss_file_url( $template_hash );
+					if ( '' !== $file_url ) {
+						// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- Per-template CCSS file variant served directly (no registered handle exists for it).
+						echo '<link rel="stylesheet" id="wppo-critical-css" href="' . esc_url( $file_url ) . '" media="all" />' . "\n";
+						return;
+					}
+					// File URL unavailable — fall back to truncated inline
+					// output so the response still carries above-fold CSS.
+					$truncated = self::truncate_to_cap( $content, min( $cap, $limit ) );
+					if ( '' === $truncated ) {
+						return;
+					}
+					echo '<style id="wppo-critical-css" data-truncated="1">' . "\n";
+					// Sanitized against HTML breakout tokens; see sanitize_inline_css().
+					echo self::sanitize_inline_css( $truncated ) . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- CSS content sanitized for the <style> context by sanitize_inline_css().
+					echo '</style>' . "\n";
 					return;
 				}
 				echo '<style id="wppo-critical-css">' . "\n";
@@ -1165,6 +1380,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				if ( $handle === $skip || false !== strpos( $href, $skip ) ) {
 					return $tag;
 				}
+			}
+
+			// Yield when operators disabled plugin inlining via the
+			// wppo_inline_combined_css falsy filter: stylesheets load normally
+			// (mirrors the inline_ccss() early return).
+			if ( ! self::is_inline_allowed() ) {
+				return $tag;
+			}
+
+			// Missing-variant fail-open: without a CCSS file for the current
+			// template, deferring the full stylesheets would leave the page
+			// unstyled until JS runs — load normally instead (never fatal).
+			if ( ! self::ccss_exists( self::get_template_hash() ) ) {
+				return $tag;
 			}
 
 			// Skip if already modified.

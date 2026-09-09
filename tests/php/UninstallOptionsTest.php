@@ -27,7 +27,8 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 	 * The fixed option names every uninstall must remove per site.
 	 *
 	 * Completeness baseline: the 24 names that existed before audit #899 plus
-	 * the three audit findings (img-scan cursors, blog-prefixed purge queue).
+	 * the three audit #899 findings (img-scan cursors, blog-prefixed purge
+	 * queue) plus the issue #934 autoload-remediation priors option.
 	 *
 	 * @var string[]
 	 */
@@ -60,6 +61,8 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 		'wppo_img_scan_cursor',
 		'wppo_img_scan_cursor_max',
 		'wppo_litespeed_purge_queue',
+		// Issue #934 autoload remediation priors.
+		'wppo_autoload_remediated',
 	);
 
 	/**

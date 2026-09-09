@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 // eslint-disable-next-line import/no-extraneous-dependencies -- React is required for JSX rendering in tests
 import React from 'react';
@@ -72,10 +72,352 @@ describe( 'AutoloadedOptions', () => {
 				screen.getByText( 'Failed to load autoloaded options.' )
 			).toBeInTheDocument()
 		);
+		// The audit list renders independently of the notice banner, so the
+		// empty state stays visible alongside the failure notice.
 		expect(
-			screen.queryByText( 'No autoloaded options found.' )
-		).not.toBeInTheDocument();
+			screen.getByText( 'No autoloaded options found.' )
+		).toBeInTheDocument();
 
 		errorSpy.mockRestore();
+	} );
+
+	it( 'renders the dry-run report with savings before touching anything', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				options: [ { option_name: 'big_option', size: 5000 } ],
+			},
+		} );
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				threshold: 1024,
+				supported: true,
+				total_autoload_bytes: 2097152,
+				count: 1,
+				bytes_saved: 1048576,
+				options: [ { option_name: 'big_plugin_blob', size: 1048576 } ],
+				remediated: {},
+			},
+		} );
+
+		render( <AutoloadedOptions /> );
+
+		await waitFor( () =>
+			expect( screen.getByText( 'big_option' ) ).toBeInTheDocument()
+		);
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: 'Check savings' } )
+		);
+
+		await waitFor( () =>
+			expect(
+				screen.getByText( /Dry run: 1 options would save/ )
+			).toBeInTheDocument()
+		);
+		expect( screen.getByText( 'big_plugin_blob' ) ).toBeInTheDocument();
+		expect( apiCall ).toHaveBeenCalledWith( 'autoload_remediate', {
+			mode: 'dry_run',
+		} );
+	} );
+
+	it( 'applies the fix and offers per-option revert', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				options: [ { option_name: 'big_option', size: 5000 } ],
+			},
+		} );
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				threshold: 1024,
+				supported: true,
+				total_autoload_bytes: 2097152,
+				count: 1,
+				bytes_saved: 1048576,
+				options: [ { option_name: 'big_plugin_blob', size: 1048576 } ],
+				remediated: {},
+			},
+		} );
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				threshold: 1024,
+				supported: true,
+				applied: [
+					{
+						option_name: 'big_plugin_blob',
+						size: 1048576,
+						prior: 'yes',
+					},
+				],
+				failed: [],
+				bytes_saved: 1048576,
+				total_autoload_bytes: 1048576,
+				remediated: { big_plugin_blob: 'yes' },
+			},
+		} );
+		// applyFix() reloads the option list afterwards.
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { options: [] },
+		} );
+		// revertOption() call + the option-list reload afterwards.
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { reverted: 'big_plugin_blob' },
+		} );
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { options: [] },
+		} );
+
+		render( <AutoloadedOptions /> );
+
+		await waitFor( () =>
+			expect( screen.getByText( 'big_option' ) ).toBeInTheDocument()
+		);
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: 'Check savings' } )
+		);
+
+		await waitFor( () =>
+			expect(
+				screen.getByRole( 'button', { name: 'Apply fix' } )
+			).toBeInTheDocument()
+		);
+
+		fireEvent.click( screen.getByRole( 'button', { name: 'Apply fix' } ) );
+
+		await waitFor( () =>
+			expect(
+				screen.getByText( 'Remediation applied to 1 options.' )
+			).toBeInTheDocument()
+		);
+		expect( apiCall ).toHaveBeenCalledWith( 'autoload_remediate', {
+			mode: 'apply',
+		} );
+
+		await waitFor( () =>
+			expect(
+				screen.getByRole( 'button', { name: 'Revert' } )
+			).toBeInTheDocument()
+		);
+
+		fireEvent.click( screen.getByRole( 'button', { name: 'Revert' } ) );
+
+		await waitFor( () =>
+			expect(
+				screen.getByText( 'Reverted autoload for big_plugin_blob.' )
+			).toBeInTheDocument()
+		);
+		expect( apiCall ).toHaveBeenCalledWith( 'autoload_remediate', {
+			mode: 'revert',
+			option: 'big_plugin_blob',
+		} );
+	} );
+
+	it( 'shows a failure notice when the dry run request fails', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				options: [ { option_name: 'big_option', size: 5000 } ],
+			},
+		} );
+		apiCall.mockRejectedValueOnce( new Error( 'boom' ) );
+		const errorSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
+
+		render( <AutoloadedOptions /> );
+
+		await waitFor( () =>
+			expect( screen.getByText( 'big_option' ) ).toBeInTheDocument()
+		);
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: 'Check savings' } )
+		);
+
+		await waitFor( () =>
+			expect(
+				screen.getByText( 'Failed to build the remediation report.' )
+			).toBeInTheDocument()
+		);
+		// The audit list stays visible alongside the notice.
+		expect( screen.getByText( 'big_option' ) ).toBeInTheDocument();
+
+		errorSpy.mockRestore();
+	} );
+
+	it( 'shows a failure notice when the apply request fails', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				options: [ { option_name: 'big_option', size: 5000 } ],
+			},
+		} );
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				threshold: 1024,
+				supported: true,
+				total_autoload_bytes: 2097152,
+				count: 1,
+				bytes_saved: 1048576,
+				options: [ { option_name: 'big_plugin_blob', size: 1048576 } ],
+				remediated: {},
+			},
+		} );
+		apiCall.mockRejectedValueOnce( new Error( 'boom' ) );
+		const errorSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
+
+		render( <AutoloadedOptions /> );
+
+		await waitFor( () =>
+			expect( screen.getByText( 'big_option' ) ).toBeInTheDocument()
+		);
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: 'Check savings' } )
+		);
+
+		await waitFor( () =>
+			expect(
+				screen.getByRole( 'button', { name: 'Apply fix' } )
+			).toBeInTheDocument()
+		);
+
+		fireEvent.click( screen.getByRole( 'button', { name: 'Apply fix' } ) );
+
+		await waitFor( () =>
+			expect(
+				screen.getByText( 'Failed to apply remediation.' )
+			).toBeInTheDocument()
+		);
+
+		errorSpy.mockRestore();
+	} );
+
+	it( 'hides Apply fix when the dry-run report is empty', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				options: [ { option_name: 'big_option', size: 5000 } ],
+			},
+		} );
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				threshold: 1024,
+				supported: true,
+				total_autoload_bytes: 100,
+				count: 0,
+				bytes_saved: 0,
+				options: [],
+				remediated: {},
+			},
+		} );
+
+		render( <AutoloadedOptions /> );
+
+		await waitFor( () =>
+			expect( screen.getByText( 'big_option' ) ).toBeInTheDocument()
+		);
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: 'Check savings' } )
+		);
+
+		await waitFor( () =>
+			expect(
+				screen.getByText( /Dry run: 0 options would save/ )
+			).toBeInTheDocument()
+		);
+		expect(
+			screen.queryByRole( 'button', { name: 'Apply fix' } )
+		).not.toBeInTheDocument();
+	} );
+
+	it( 'keeps the dry-run report intact after apply and formats MB savings', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				options: [ { option_name: 'big_option', size: 5000 } ],
+			},
+		} );
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				threshold: 1024,
+				supported: true,
+				total_autoload_bytes: 2097152,
+				count: 1,
+				bytes_saved: 1048576,
+				options: [ { option_name: 'big_plugin_blob', size: 1048576 } ],
+				remediated: {},
+			},
+		} );
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				threshold: 1024,
+				supported: true,
+				applied: [
+					{
+						option_name: 'big_plugin_blob',
+						size: 1048576,
+						prior: 'yes',
+					},
+				],
+				failed: [],
+				bytes_saved: 1048576,
+				total_autoload_bytes: 1048576,
+				remediated: { big_plugin_blob: 'yes' },
+			},
+		} );
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { options: [ { option_name: 'big_option', size: 5000 } ] },
+		} );
+
+		render( <AutoloadedOptions /> );
+
+		await waitFor( () =>
+			expect( screen.getByText( 'big_option' ) ).toBeInTheDocument()
+		);
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: 'Check savings' } )
+		);
+
+		await waitFor( () =>
+			expect(
+				screen.getByRole( 'button', { name: 'Apply fix' } )
+			).toBeInTheDocument()
+		);
+
+		fireEvent.click( screen.getByRole( 'button', { name: 'Apply fix' } ) );
+
+		await waitFor( () =>
+			expect(
+				screen.getByText( 'Remediation applied to 1 options.' )
+			).toBeInTheDocument()
+		);
+		// Dry-run report is preserved (not overwritten by the apply payload).
+		expect(
+			screen.getByText( /Dry run: 1 options would save/ )
+		).toBeInTheDocument();
+		// Apply payload renders in its own applied-summary branch with MB units.
+		expect(
+			screen.getByText( /Applied fix: 1 options now save 1\.0 MB/ )
+		).toBeInTheDocument();
+		// Audit list stays visible alongside the success notice.
+		expect( screen.getByText( 'big_option' ) ).toBeInTheDocument();
 	} );
 } );

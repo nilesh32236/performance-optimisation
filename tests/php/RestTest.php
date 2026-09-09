@@ -242,13 +242,15 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			'rum_collect',
 			'rum_data',
 			'autoloaded_options',
+			'autoload_remediate',
+			'expired_transients_export',
 			'ai_model',
 			'ai_learn',
 			'ai_suggestions',
 		);
 
-		// Keep in sync with the AGENTS.md endpoint count (28).
-		$this->assertCount( 28, $routes, 'REST route count drifted from the documented endpoint count' );
+		// Keep in sync with the AGENTS.md endpoint count (30).
+		$this->assertCount( 30, $routes, 'REST route count drifted from the documented endpoint count' );
 
 		foreach ( $expected as $route ) {
 			$this->assertArrayHasKey( $route, $routes, "Missing route: {$route}" );
@@ -398,6 +400,42 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 'alert(1)/wp-admin', $captured['file_optimisation']['excludeCSS'], 'Markup must be stripped from exclude fields' );
 		$this->assertSame( '321', $captured['file_optimisation']['delayJS'], 'Markup must be stripped from delay fields' );
 		$this->assertSame( 123, $captured['file_optimisation']['minifyHTML'], 'Numeric strings must be typed to int' );
+	}
+
+	/**
+	 * Test that update_settings drops the removed removeQueryStrings key (#925).
+	 *
+	 * A legacy client that still posts the key is accepted silently
+	 * (fail-open, HTTP 200) but the key never persists, so it decays
+	 * naturally on the next save.
+	 */
+	public function test_update_settings_drops_removed_remove_query_strings_key(): void {
+		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'get_option' )->justReturn( array() );
+
+		$captured = array();
+		Functions\when( 'update_option' )->alias(
+			static function ( $name, $value ) use ( &$captured ) {
+				$captured = $value;
+				return true;
+			}
+		);
+
+		$request = new WP_REST_Request(
+			array(
+				'tab'      => 'file_optimisation',
+				'settings' => array(
+					'removeQueryStrings' => true,
+					'minifyHTML'         => true,
+				),
+			)
+		);
+
+		$response = $this->rest->update_settings( $request );
+
+		$this->assertSame( 200, $response->get_status(), 'Legacy key must be accepted silently, never fatal' );
+		$this->assertArrayNotHasKey( 'removeQueryStrings', $captured['file_optimisation'], 'Removed key must not persist' );
+		$this->assertTrue( $captured['file_optimisation']['minifyHTML'], 'Sibling settings must persist untouched' );
 	}
 
 	/**
