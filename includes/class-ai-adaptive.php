@@ -345,10 +345,68 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		}
 
 		/**
+		 * Whether the optional WordPress AI client path is enabled.
+		 *
+		 * Local-only scoring stays the default: the AI client is used only
+		 * when the explicit `ai_adaptive.use_wp_ai_client` opt-in setting is
+		 * true (and host-controlled via filter). Fail-open: absent client
+		 * classes/functions fall back to the local heuristic.
+		 *
+		 * @return bool
+		 * @since NEXT
+		 */
+		public static function is_wp_ai_client_enabled(): bool {
+			$settings = Util::get_settings();
+			$enabled  = ! empty( $settings['ai_adaptive']['use_wp_ai_client'] );
+			/**
+			 * Filters whether the WordPress AI client path may be used.
+			 *
+			 * @since NEXT
+			 * @param bool $enabled Whether the WP AI client opt-in is on.
+			 */
+			return (bool) apply_filters( 'wppo_ai_adaptive_use_wp_client', $enabled );
+		}
+
+		/**
+		 * Validate a suggestion object shape before display.
+		 *
+		 * Every emitted item must carry the 6 required keys with a known
+		 * status and an allowlisted fix_action. Commerce-impacting advice is
+		 * capped at `moderate` via normalize_eagerness() before this check;
+		 * the `ai_speculation_excludes` / `ai_lcp_regression` items are
+		 * informational `needs_improvement` list/string items, never
+		 * auto-applied.
+		 *
+		 * @param mixed $s Candidate suggestion.
+		 * @return bool True when the shape is valid.
+		 * @since NEXT
+		 */
+		private static function is_valid_suggestion( $s ): bool {
+			if ( ! is_array( $s ) ) {
+				return false;
+			}
+			foreach ( array( 'metric', 'value', 'unit', 'status', 'description', 'fix_action' ) as $key ) {
+				if ( ! array_key_exists( $key, $s ) ) {
+					return false;
+				}
+			}
+			if ( ! in_array( $s['status'], array( 'good', 'needs_improvement', 'poor' ), true ) ) {
+				return false;
+			}
+			if ( class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ) {
+				if ( ! in_array( $s['fix_action'], Suggestion_Engine::VALID_FIX_ACTIONS, true ) ) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		/**
 		 * Learn from RUM + trends + disabled-script frequency.
 		 *
-		 * When WP 7.0 AI Client is available (function_exists('wp_ai_client')),
-		 * delegates to it; otherwise uses the local heuristic fallback.
+		 * Local-only scorer by default with no remote calls; delegates to
+		 * the WordPress AI client only when the explicit
+		 * `ai_adaptive.use_wp_ai_client` opt-in is enabled and the client
 		 *
 		 * The heuristic is a simple logistic-like scorer over
 		 * wppo_web_vitals_rum + wppo_web_vitals_trends + wppo_settings:
@@ -367,7 +425,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			}
 			set_transient( $lock_key, 1, MINUTE_IN_SECONDS );
 
-			if ( function_exists( 'wp_ai_client' ) ) {
+			if ( self::is_wp_ai_client_enabled() && ( class_exists( 'WP_AI_Client' ) || function_exists( 'wp_ai_client' ) ) ) {
 				$ai_model = self::learn_via_ai_client();
 				if ( is_array( $ai_model ) && ! empty( $ai_model ) ) {
 					$ai_model['source']     = 'ai_client';
@@ -421,11 +479,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @since NEXT
 		 */
 		private static function learn_via_ai_client(): ?array {
+			if ( ! self::is_wp_ai_client_enabled() ) {
+				return null;
+			}
+			if ( ! class_exists( 'WP_AI_Client' ) && ! function_exists( 'wp_ai_client' ) ) {
+				return null;
+			}
+		try {
 			if ( ! function_exists( 'wp_ai_client' ) ) {
 				return null;
 			}
-			try {
-				$client = wp_ai_client();
+			$client = wp_ai_client();
 				if ( ! is_object( $client ) || ! method_exists( $client, 'prompt' ) ) {
 					return null;
 				}
@@ -912,8 +976,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				);
 			}
 
-			// Ensure fix_action is valid per Suggestion_Engine guard (already valid).
-			return $suggestions;
+		// Ensure fix_action is valid per Suggestion_Engine guard (already valid).
+		$suggestions = array_values( array_filter( $suggestions, array( self::class, 'is_valid_suggestion' ) ) );
+		return $suggestions;
 		}
 
 		/**

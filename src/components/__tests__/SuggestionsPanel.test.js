@@ -149,8 +149,7 @@ describe( 'SuggestionsPanel Component', () => {
 		expect( passingElements.length ).toBeGreaterThanOrEqual( 1 );
 	} );
 
-	it( 'renders suggestion icons with correct status classes', () => {
-		const suggestions = [
+	it( 'renders suggestion icons with correct status classes', () => {		const suggestions = [
 			{
 				metric: 'a',
 				value: 'test',

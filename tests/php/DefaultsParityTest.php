@@ -59,6 +59,15 @@ class DefaultsParityTest extends \PHPUnit\Framework\TestCase {
 		$this->assertTrue( $defaults['image_optimisation']['smartQuality'] );
 		$this->assertArrayHasKey( 'skipSmallThresholdBytes', $defaults['image_optimisation'] );
 		$this->assertSame( 5120, $defaults['image_optimisation']['skipSmallThresholdBytes'] );
+
+		// AI Adaptive WP-client opt-in (issue #964): additive keys only, off by default.
+		$this->assertSame(
+			array(
+				'enabled'          => false,
+				'use_wp_ai_client' => false,
+			),
+			$defaults['ai_adaptive']
+		);
 	}
 
 	/**

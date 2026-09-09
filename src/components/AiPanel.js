@@ -21,6 +21,9 @@ const AiPanel = () => {
 			: {};
 
 	const [ enabled, setEnabled ] = useState( !! initial.enabled );
+	const [ useWpAiClient, setUseWpAiClient ] = useState(
+		!! initial.use_wp_ai_client
+	);
 	const [ saving, setSaving ] = useState( false );
 	const [ learning, setLearning ] = useState( false );
 	const [ model, setModel ] = useState( null );
@@ -58,19 +61,22 @@ const AiPanel = () => {
 		setSaving( true );
 		dismiss();
 		try {
-			const response = await apiCall( 'update_settings', {
-				tab: 'ai_adaptive',
-				settings: { enabled },
-			} );
-			if ( response.success ) {
-				if (
-					typeof wppoSettings !== 'undefined' &&
-					wppoSettings.settings
-				) {
-					wppoSettings.settings = Object.freeze( {
-						...wppoSettings.settings,
-						ai_adaptive: Object.freeze( { enabled } ),
-					} );
+		const response = await apiCall( 'update_settings', {
+			tab: 'ai_adaptive',
+			settings: { enabled, use_wp_ai_client: useWpAiClient },
+		} );
+		if ( response.success ) {
+			if (
+				typeof wppoSettings !== 'undefined' &&
+				wppoSettings.settings
+			) {
+				wppoSettings.settings = Object.freeze( {
+					...wppoSettings.settings,
+					ai_adaptive: Object.freeze( {
+						enabled,
+						use_wp_ai_client: useWpAiClient,
+					} ),
+				} );
 				}
 				notify( {
 					type: 'success',
@@ -214,8 +220,21 @@ const AiPanel = () => {
 				) }
 				name="aiAdaptiveEnabled"
 				checked={ enabled }
-				onChange={ ( e ) => setEnabled( e.target.checked ) }
-			/>
+			onChange={ ( e ) => setEnabled( e.target.checked ) }
+		/>
+		<SwitchField
+			label={ __(
+				'Use WordPress AI client when available',
+				'performance-optimisation'
+			) }
+			description={ __(
+				'Off by default, falls back to local heuristic. No remote calls unless explicitly enabled.',
+				'performance-optimisation'
+			) }
+			name="aiAdaptiveUseWpAiClient"
+			checked={ useWpAiClient }
+			onChange={ ( e ) => setUseWpAiClient( e.target.checked ) }
+		/>
 			<p className="wppo-text-muted wppo-text-small">
 				{ __(
 					'Toggle is gated by wppo_ai_adaptive_enabled filter.',

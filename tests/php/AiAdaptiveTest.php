@@ -363,7 +363,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_learn_via_ai_client_caps_eager_in_commerce_context(): void {
 		$this->install_stubs();
-		$this->options['wppo_settings'] = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		$this->options['wppo_settings'] = array( 'ai_adaptive' => array( 'enabled' => true, 'use_wp_ai_client' => true ) );
 		Util::clear_settings_cache();
 		Functions\when( 'wp_json_encode' )->alias( 'json_encode' );
 		Functions\when( 'wp_ai_client' )->justReturn(
@@ -399,7 +399,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_learn_via_ai_client_validates_garbage_eagerness(): void {
 		$this->install_stubs();
-		$this->options['wppo_settings'] = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		$this->options['wppo_settings'] = array( 'ai_adaptive' => array( 'enabled' => true, 'use_wp_ai_client' => true ) );
 		Util::clear_settings_cache();
 		Functions\when( 'wp_json_encode' )->alias( 'json_encode' );
 		Functions\when( 'wp_ai_client' )->justReturn(
@@ -422,7 +422,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_learn_via_ai_client_defaults_missing_eagerness(): void {
 		$this->install_stubs();
-		$this->options['wppo_settings'] = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		$this->options['wppo_settings'] = array( 'ai_adaptive' => array( 'enabled' => true, 'use_wp_ai_client' => true ) );
 		Util::clear_settings_cache();
 		Functions\when( 'wp_json_encode' )->alias( 'json_encode' );
 		Functions\when( 'wp_ai_client' )->justReturn(
@@ -929,5 +929,112 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$rules = AI_Adaptive::filter_speculation_rules( array() );
 		$this->assertCount( 1, $rules );
 		$this->assertSame( array( 'http://example.com/good/' ), $rules[0]['urls'] );
+	}
+
+	/**
+	 * Test learn stays on the local heuristic when the opt-in is off.
+	 *
+	 * Even with a wp_ai_client function present, the default path must be
+	 * local-only with no remote calls.
+	 *
+	 * @return void
+	 */
+	public function test_learn_stays_heuristic_without_opt_in(): void {
+		$this->install_stubs();
+		$this->seed_eager_rum();
+		$this->options['wppo_settings'] = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		Util::clear_settings_cache();
+		Functions\when( 'wp_json_encode' )->alias( 'json_encode' );
+		Functions\when( 'wp_ai_client' )->justReturn(
+			$this->fake_ai_client( array( 'eagerness' => 'moderate' ) )
+		);
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( true );
+		Functions\when( 'is_user_logged_in' )->justReturn( true );
+
+		$this->assertFalse( AI_Adaptive::is_wp_ai_client_enabled() );
+		$model = AI_Adaptive::learn();
+		$this->assertSame( 'heuristic', $model['source'] );
+	}
+
+	/**
+	 * Test learn uses the AI client path only with the explicit opt-in.
+	 *
+	 * @return void
+	 */
+	public function test_learn_uses_ai_client_with_opt_in(): void {
+		$this->install_stubs();
+		$this->seed_eager_rum();
+		$this->options['wppo_settings'] = array( 'ai_adaptive' => array( 'enabled' => true, 'use_wp_ai_client' => true ) );
+		Util::clear_settings_cache();
+		Functions\when( 'wp_json_encode' )->alias( 'json_encode' );
+		Functions\when( 'wp_ai_client' )->justReturn(
+			$this->fake_ai_client( array( 'eagerness' => 'moderate' ) )
+		);
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( true );
+		Functions\when( 'is_user_logged_in' )->justReturn( true );
+
+		$this->assertTrue( AI_Adaptive::is_wp_ai_client_enabled() );
+		$model = AI_Adaptive::learn();
+		$this->assertSame( 'ai_client', $model['source'] );
+	}
+
+	/**
+	 * Test every suggestion validates as a suggestion object.
+	 *
+	 * @return void
+	 */
+	public function test_get_suggestions_all_items_validate_as_suggestions(): void {
+		$this->install_stubs();
+		$this->seed_eager_rum();
+		$this->options[ AI_Adaptive::OPTION ] = array(
+			'prefetch_urls' => array( 'http://example.com/a/' ),
+			'exclude_js'    => array( 'handle-a' ),
+			'exclude_css'   => array( 'style-a' ),
+			'eagerness'     => 'moderate',
+		);
+		Functions\when( 'is_admin' )->justReturn( true );
+		Functions\when( 'is_user_logged_in' )->justReturn( true );
+
+		$suggestions = AI_Adaptive::get_suggestions();
+		$this->assertNotEmpty( $suggestions );
+		$allowed = \PerformanceOptimise\Inc\Suggestion_Engine::VALID_FIX_ACTIONS;
+		foreach ( $suggestions as $s ) {
+			foreach ( array( 'metric', 'value', 'unit', 'status', 'description', 'fix_action' ) as $key ) {
+				$this->assertArrayHasKey( $key, $s, "Missing key {$key}" );
+			}
+			$this->assertContains( $s['status'], array( 'good', 'needs_improvement', 'poor' ) );
+			$this->assertContains( $s['fix_action'], $allowed );
+		}
+	}
+
+	/**
+	 * Test learn makes no HTTP requests without the opt-in.
+	 *
+	 * @return void
+	 */
+	public function test_learn_makes_no_http_requests_without_opt_in(): void {
+		$this->install_stubs();
+		$this->seed_eager_rum();
+		$this->options['wppo_settings'] = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		Util::clear_settings_cache();
+		Functions\when( 'wp_json_encode' )->alias( 'json_encode' );
+		Functions\when( 'wp_ai_client' )->justReturn(
+			$this->fake_ai_client( array( 'eagerness' => 'moderate' ) )
+		);
+		foreach ( array( 'wp_remote_get', 'wp_remote_post', 'wp_safe_remote_get', 'wp_safe_remote_post' ) as $http_fn ) {
+			Functions\when( $http_fn )->alias(
+				static function () {
+					throw new \Exception( 'HTTP must not be called without opt-in' );
+				}
+			);
+		}
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( true );
+		Functions\when( 'is_user_logged_in' )->justReturn( true );
+
+		$model = AI_Adaptive::learn();
+		$this->assertSame( 'heuristic', $model['source'] );
 	}
 }

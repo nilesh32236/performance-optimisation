@@ -80,6 +80,15 @@ const SuggestionIcon = ( { status } ) => {
  * @return {string} Formatted display string.
  */
 const formatValue = ( value, unit ) => {
+	if ( unit === 'list' ) {
+		if ( Array.isArray( value ) ) {
+			return value.join( ', ' );
+		}
+		return String( value );
+	}
+	if ( unit === 'string' ) {
+		return String( value );
+	}
 	if ( unit === 'boolean' ) {
 		return value === 'pass'
 			? __( 'Passing', 'performance-optimisation' )
