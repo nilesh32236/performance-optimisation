@@ -216,10 +216,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * WebP). When core maps the source MIME to a next-gen format, the
 		 * plugin converts to that format so both pipelines produce the same
 		 * output; when core maps it to a legacy format, core owns the
-		 * conversion and the plugin returns 'none' (skip). On older cores, when
-		 * no `image_editor_output_format` filter is registered, or when core
-		 * provides no mapping for the source MIME, the requested format is
-		 * returned unchanged (legacy fallback intact).
+		 * conversion and the plugin returns 'none' (skip). On older cores
+		 * without the helper, or when core provides no mapping for the
+		 * source MIME, the requested format is returned unchanged (legacy
+		 * fallback intact).
 		 *
 		 * Format authority lives here: `get_smart_quality()` owns only the
 		 * numeric quality mapping (AVIF = WebP − 20) and stays fail-open when
@@ -233,14 +233,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 */
 		private function resolve_output_format( string $source_image, string $requested_format ): string {
 			if ( ! function_exists( 'wp_get_image_editor_output_format' ) ) {
-				return $requested_format;
-			}
-
-			// Core stays authoritative on format choice: only consult its
-			// centralized mapping when a consumer has registered the
-			// `image_editor_output_format` filter. Otherwise keep the legacy
-			// fallback (requested format unchanged).
-			if ( function_exists( 'has_filter' ) && ! has_filter( 'image_editor_output_format' ) ) {
 				return $requested_format;
 			}
 

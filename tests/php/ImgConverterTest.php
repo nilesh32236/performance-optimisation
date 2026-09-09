@@ -779,11 +779,6 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 			'image/png'  => 'image/avif',
 			'image/heic' => 'image/jpeg',
 		);
-		Functions\when( 'has_filter' )->alias(
-			static function ( $hook_name ) {
-				return 'image_editor_output_format' === $hook_name;
-			}
-		);
 		Functions\when( 'wp_get_image_editor_output_format' )->alias(
 			static function ( $filename, $mime_type ) use ( $mappings ) {
 				return isset( $mappings[ $mime_type ] ) ? array( $mime_type => $mappings[ $mime_type ] ) : array();
@@ -801,21 +796,16 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Test that resolve_output_format() keeps the legacy fallback (requested
-	 * format unchanged) when no `image_editor_output_format` filter is
-	 * registered, even though wp_get_image_editor_output_format() exists and
-	 * would otherwise map the source MIME elsewhere. Core stays authoritative
-	 * only when it has opted in via the filter.
+	 * Test that resolve_output_format() defers to core's built-in defaults
+	 * even with no `image_editor_output_format` filter registered: core
+	 * ships an HEIC -> JPEG default mapping, so an HEIC source resolves to
+	 * 'none' (core owns the output) while unmapped sources keep the
+	 * requested format unchanged.
 	 */
 	public function test_resolve_output_format_falls_back_without_core_filter(): void {
-		Functions\when( 'has_filter' )->alias(
-			static function ( $hook_name ) {
-				return 'image_editor_output_format' !== $hook_name;
-			}
-		);
 		Functions\when( 'wp_get_image_editor_output_format' )->alias(
 			static function ( $filename, $mime_type ) {
-				return 'image/png' === $mime_type ? array( 'image/png' => 'image/avif' ) : array();
+				return 'image/heic' === $mime_type ? array( 'image/heic' => 'image/jpeg' ) : array();
 			}
 		);
 
@@ -823,9 +813,10 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		$method->setAccessible( true );
 		$converter = $this->make_converter();
 
-		$this->assertSame( 'webp', $method->invoke( $converter, '/srv/wp-content/uploads/2026/08/photo.png', 'webp' ) );
+		$this->assertSame( 'none', $method->invoke( $converter, '/srv/wp-content/uploads/2026/08/photo.heic', 'webp' ) );
+		$this->assertSame( 'none', $method->invoke( $converter, '/srv/wp-content/uploads/2026/08/photo.heic', 'avif' ) );
+		$this->assertSame( 'webp', $method->invoke( $converter, '/srv/wp-content/uploads/2026/08/photo.jpg', 'webp' ) );
 		$this->assertSame( 'avif', $method->invoke( $converter, '/srv/wp-content/uploads/2026/08/photo.png', 'avif' ) );
-		$this->assertSame( 'both', $method->invoke( $converter, '/srv/wp-content/uploads/2026/08/photo.png', 'both' ) );
 	}
 
 	/**
@@ -852,14 +843,6 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'function_exists' )->alias(
 			static function ( $function_name ) {
 				return 'wp_image_quality' !== $function_name;
-			}
-		);
-
-		// Core stays authoritative only when the image_editor_output_format
-		// filter is registered.
-		Functions\when( 'has_filter' )->alias(
-			static function ( $hook_name ) {
-				return 'image_editor_output_format' === $hook_name;
 			}
 		);
 
@@ -899,11 +882,6 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		$file = $this->create_sample_png( 'mapped-legacy.png' );
 		$this->prepare_wppo_output_dir();
 
-		Functions\when( 'has_filter' )->alias(
-			static function ( $hook_name ) {
-				return 'image_editor_output_format' === $hook_name;
-			}
-		);
 		Functions\when( 'wp_get_image_editor_output_format' )->alias(
 			static function ( $filename, $mime_type ) {
 				return 'image/png' === $mime_type ? array( 'image/png' => 'image/jpeg' ) : array();
