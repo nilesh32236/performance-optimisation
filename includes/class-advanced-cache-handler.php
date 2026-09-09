@@ -241,7 +241,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'$request_uri   = function_exists( \'wp_normalize_path\' ) ? wp_normalize_path( $request_uri ) : str_replace( \'\\\\\', \'/\', $request_uri );' . PHP_EOL .
 			'$cache_life    = ' . $cache_life . ';' . PHP_EOL . PHP_EOL .
 
-			'if ( \'\' === $site_domain || strpos( $site_domain, \'..\' ) !== false || strpos( $request_uri, \'..\' ) !== false ) {' . PHP_EOL .
+			'if ( \'\' === $site_domain || false !== strpos( $site_domain, ".." ) || false !== strpos( $request_uri, ".." ) || false !== strpos( $request_uri, "\0" ) || false !== strpos( $site_domain, "\0" ) ) {' . PHP_EOL .
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
 
@@ -286,6 +286,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'$file_path      = str_replace( \'\\\\\', \'/\', $file_path );' . PHP_EOL .
 			'$file_path      = preg_replace( \'#/+#\', \'/\', $file_path );' . PHP_EOL .
 			'$file_path      = rtrim( $file_path, \'/\' );' . PHP_EOL .
+			'$cache_base     = str_replace( \'\\\\\', \'/\', WP_CONTENT_DIR . \'/cache/wppo/\' . $site_domain . \'/\' );' . PHP_EOL .
+			'if ( \'\' === $site_domain || 0 !== strpos( $file_path, $cache_base ) ) {' . PHP_EOL .
+			'	return;' . PHP_EOL .
+			'}' . PHP_EOL .
 			'$gzip_file_path = $file_path . \'.gz\';' . PHP_EOL .
 			'$brotli_file_path = $file_path . \'.br\';' . PHP_EOL .
 			'$accept_encoding = isset( $_SERVER[\'HTTP_ACCEPT_ENCODING\'] ) ? (string) $_SERVER[\'HTTP_ACCEPT_ENCODING\'] : \'\';' . PHP_EOL . PHP_EOL .
