@@ -507,7 +507,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$is_wp63_plus = version_compare( $wp_version, '6.3-alpha', '>=' );
 			// Pre-release-inclusive floor: '6.9-alpha' also matches alpha/beta/RC builds
 			// of 6.9 which already ship the template-enhancement buffer functions.
-			// TODO(#553): remove the legacy buffer paths when minimum supported WP is raised to 6.9.
+			// TODO(#553, #829): remove the legacy buffer paths when minimum supported WP is raised to 6.9.
+			// Blocked until `Requires at least: 6.9` — keep the dual path (modern filter + legacy fallback).
 			$is_wp69_plus = version_compare( $wp_version, '6.9-alpha', '>=' );
 
 			// Delay JS: the script_loader_tag filter performs the wppo-src/type rewriting
@@ -1505,6 +1506,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Start output buffer for used-CSS (legacy path, WP &lt; 6.9).
 		 *
+		 * Tracked by #829: do not remove until minimum supported WP is raised
+		 * to 6.9 (`Requires at least: 6.9`).
+		 *
 		 * @return void
 		 * @since 1.9.0
 		 */
@@ -1525,6 +1529,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 		/**
 		 * Start output buffer for LCP image prioritization (legacy path, WP &lt; 6.9).
+		 *
+		 * Tracked by #829: do not remove until minimum supported WP is raised
+		 * to 6.9 (`Requires at least: 6.9`).
 		 *
 		 * Registers at priority 20, after the cache and used-CSS buffers (default
 		 * priority 10), so its inner buffer callback runs first on the raw buffer
