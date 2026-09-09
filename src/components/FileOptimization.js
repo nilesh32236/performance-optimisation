@@ -44,7 +44,6 @@ const FileOptimization = ( {
 		excludeCSS: '',
 		combineCSS: false,
 		excludeCombineCSS: '',
-		removeQueryStrings: false,
 		minifyHTML: false,
 		deferJS: false,
 		excludeDeferJS: '',
@@ -60,6 +59,7 @@ const FileOptimization = ( {
 		removeCssJsHandle: '',
 		enableServerRules: false,
 		criticalCSS: false,
+		ccssMaxSize: options.ccssMaxSize || 20480,
 		hostGoogleFontsLocally: false,
 		fontMetricFallback: false,
 		cdnURL: '',
@@ -723,6 +723,41 @@ const FileOptimization = ( {
 								</Tooltip>
 								{ settings.criticalCSS && (
 									<>
+										<div className="wppo-field wppo-mt-16">
+											<label
+												className="wppo-field-label"
+												htmlFor="ccssMaxSize"
+											>
+												{ __(
+													'Critical CSS Max Size (bytes)',
+													'performance-optimisation'
+												) }
+											</label>
+											<input
+												className="wppo-input"
+												type="number"
+												inputMode="numeric"
+												id="ccssMaxSize"
+												name="ccssMaxSize"
+												min="1024"
+												max="102400"
+												step="1024"
+												value={ settings.ccssMaxSize }
+												onChange={ handleChange(
+													setSettings
+												) }
+												aria-describedby="ccssMaxSize-desc"
+											/>
+											<p
+												id="ccssMaxSize-desc"
+												className="wppo-text-muted wppo-mt-8 wppo-text-small"
+											>
+												{ __(
+													'Inline output above this size is served from a per-template file with cache busting instead (default: 20480).',
+													'performance-optimisation'
+												) }
+											</p>
+										</div>
 										{ ccssError && (
 											<div className="wppo-notice wppo-notice--error">
 												<span>
@@ -872,50 +907,6 @@ const FileOptimization = ( {
 										) }
 										name="minifyInlineJS"
 										checked={ settings.minifyInlineJS }
-										onChange={ handleChange( setSettings ) }
-										disabled={ optimizerDisabled }
-									/>
-								</Tooltip>
-							</div>
-						</FeatureCard>
-
-						<FeatureCard
-							title={ __(
-								'Legacy Options (Deprecated)',
-								'performance-optimisation'
-							) }
-							icon={
-								<FontAwesomeIcon
-									icon={ faExclamationTriangle }
-								/>
-							}
-						>
-							<div className="wppo-notice wppo-notice--warning wppo-mb-16">
-								<FontAwesomeIcon
-									icon={ faExclamationTriangle }
-								/>{ ' ' }
-								{ __(
-									'These options are deprecated and will be removed in a future release. They are kept for backward compatibility only — leave them off on new sites.',
-									'performance-optimisation'
-								) }
-							</div>
-							<div className="wppo-field-group">
-								<Tooltip
-									content={
-										optimizerDisabled ? pausedTooltip : ''
-									}
-								>
-									<SwitchField
-										label={ __(
-											'Remove Query Strings From Static Resources (Legacy)',
-											'performance-optimisation'
-										) }
-										description={ __(
-											'Deprecated: ?ver= query strings ARE the cache-busting mechanism — stripping them risks serving stale CSS/JS after updates. Modern caching relies on fingerprinting with long immutable TTLs (already set by Enable Server Rules). Only enable for a proxy/CDN that cannot cache URLs with query strings.',
-											'performance-optimisation'
-										) }
-										name="removeQueryStrings"
-										checked={ settings.removeQueryStrings }
 										onChange={ handleChange( setSettings ) }
 										disabled={ optimizerDisabled }
 									/>

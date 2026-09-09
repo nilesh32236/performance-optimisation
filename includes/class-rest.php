@@ -616,6 +616,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				}
 			}
 
+			// Removed (#925): the legacy file_optimisation.removeQueryStrings key
+			// is dropped on save so it decays naturally. A legacy client that
+			// still posts the key is accepted silently (fail-open, never fatal);
+			// stored legacy values are ignored and `?ver` is always preserved.
+			if ( 'file_optimisation' === $tab && isset( $sanitized_settings['removeQueryStrings'] ) ) {
+				unset( $sanitized_settings['removeQueryStrings'] );
+			}
+
 			$options = Util::get_settings();
 
 			// Preserve the pagespeed_api_key when the request omits it.

@@ -166,6 +166,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'removeUnusedCSS'            => false,
 					'excludeUnusedCSS'           => '',
 					'criticalCSS'                => false,
+					'ccssMaxSize'                => 20480,
 					'hostGoogleFontsLocally'     => false,
 					'blockAssetsOnDemand'        => function_exists( 'wp_load_classic_theme_block_styles_on_demand' ),
 					'loadAllCoreBlockAssets'     => false,
@@ -188,8 +189,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'minifyInlineCSS'            => false,
 					'minifyInlineJS'             => false,
 					'removeHTMLComments'         => true,
-					// Deprecated NEXT (#904): legacy toggle, default off. See Main::strip_static_query_strings().
-					'removeQueryStrings'         => false,
 					'disableRestApiLinks'        => false,
 					'disableRssFeeds'            => false,
 					'disableShortlinks'          => false,
@@ -226,6 +225,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'clientSideMimeTypeOverride' => false,
 					'clientSideMimeTypes'        => array(),
 					'lazyLoadBackgroundImages'   => false,
+					'avifFirst'                  => true,
+					'smartQuality'               => true,
+					'skipSmallThresholdBytes'    => 5120,
 				),
 				'performance_audit'     => array(
 					'pagespeed_api_key'     => '',
@@ -1795,6 +1797,89 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					$count
 				)
 			);
+		}
+
+		/**
+		 * Whether the current runtime deprecates explicit handle-close calls (PHP 8.5+).
+		 *
+		 * PHP 8.5 deprecates the former resource-teardown no-ops `curl_close()`,
+		 * `curl_share_close()`, `finfo_close()`, `xml_parser_free()` and
+		 * `imagedestroy()` (see wiki.php.net/rfc/deprecations_php_8_5): on 8.5+
+		 * handles are released by dropping the reference instead of calling the
+		 * close function. Below 8.5 the legacy close path is kept unchanged.
+		 *
+		 * The optional $php_version parameter exists so PHPUnit (Brain Monkey)
+		 * can exercise both sides of the gate without redefining PHP_VERSION.
+		 *
+		 * @since NEXT
+		 * @param string|null $php_version Optional version string for testing; defaults to PHP_VERSION.
+		 * @return bool True on PHP 8.5+, false below.
+		 */
+		public static function is_php85_or_greater( ?string $php_version = null ): bool {
+			$version = $php_version ?? PHP_VERSION;
+			return version_compare( $version, '8.5', '>=' );
+		}
+
+		/**
+		 * Release a cURL handle without triggering the PHP 8.5 deprecation.
+		 *
+		 * On PHP 8.5+ the handle reference is dropped (null + unset) instead of
+		 * calling `curl_close()`; below 8.5 the legacy `curl_close()` path runs
+		 * unchanged. Fail-open: when `curl_close()` is unavailable the reference
+		 * is dropped on every runtime. Multisite-safe: no option/cache changes.
+		 *
+		 * Note: the handle is passed by reference and nulled (not only unset)
+		 * because `unset()` of a by-reference parameter would leave the caller's
+		 * variable untouched; assigning null releases the CurlHandle object in
+		 * the caller scope on every supported runtime.
+		 *
+		 * @since NEXT
+		 * @param mixed       $ch          cURL handle to release (nulled in the caller scope).
+		 * @param string|null $php_version Optional version override for testing; defaults to PHP_VERSION.
+		 * @return void
+		 */
+		public static function close_curl_handle( &$ch, ?string $php_version = null ): void {
+			if ( self::is_php85_or_greater( $php_version ) ) {
+				$ch = null;
+				unset( $ch );
+				return;
+			}
+			if ( function_exists( 'curl_close' ) ) {
+				// phpcs:ignore Generic.PHP.DeprecatedFunctions.Deprecated,WordPress.WP.AlternativeFunctions.curl_curl_close -- legacy close path below PHP 8.5 only.
+				curl_close( $ch );
+				return;
+			}
+			$ch = null;
+			unset( $ch );
+		}
+
+		/**
+		 * Release a GD image without triggering the PHP 8.5 deprecation.
+		 *
+		 * On PHP 8.5+ the image reference is dropped (null + unset) instead of
+		 * calling `imagedestroy()`; below 8.5 the legacy `imagedestroy()` path
+		 * runs unchanged. Fail-open: when `imagedestroy()` is unavailable the
+		 * reference is dropped on every runtime. Multisite-safe: no
+		 * option/cache changes.
+		 *
+		 * @since NEXT
+		 * @param mixed       $image       GD image to release (nulled in the caller scope).
+		 * @param string|null $php_version Optional version override for testing; defaults to PHP_VERSION.
+		 * @return void
+		 */
+		public static function destroy_gd_image( &$image, ?string $php_version = null ): void {
+			if ( self::is_php85_or_greater( $php_version ) ) {
+				$image = null;
+				unset( $image );
+				return;
+			}
+			if ( function_exists( 'imagedestroy' ) ) {
+				// phpcs:ignore Generic.PHP.DeprecatedFunctions.Deprecated -- legacy destroy path below PHP 8.5 only.
+				imagedestroy( $image );
+				return;
+			}
+			$image = null;
+			unset( $image );
 		}
 	}
 }

@@ -451,4 +451,82 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 		$this->assertArrayHasKey( $newest, $data );
 		$this->assertArrayNotHasKey( gmdate( 'Y-m-d', time() - ( 13 * DAY_IN_SECONDS ) ), $data );
 	}
+
+	/**
+	 * Test that maybe_enqueue_scripts() uses the native defer strategy on WP 6.3+.
+	 */
+	public function test_maybe_enqueue_scripts_uses_defer_strategy_on_wp63_plus(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		Util::clear_settings_cache();
+		Functions\when( 'is_admin' )->justReturn( false );
+
+		$calls = array();
+		Functions\when( 'wp_enqueue_script' )->alias(
+			static function ( $handle, $src = '', $deps = array(), $ver = false, $args = array() ) use ( &$calls ) {
+				$calls[] = array( $handle, $src, $deps, $ver, $args );
+				return true;
+			}
+		);
+
+		$original_version      = $GLOBALS['wp_version'] ?? null;
+		$GLOBALS['wp_version'] = '6.3';
+		try {
+			RUM::maybe_enqueue_scripts();
+		} finally {
+			if ( null === $original_version ) {
+				unset( $GLOBALS['wp_version'] );
+			} else {
+				$GLOBALS['wp_version'] = $original_version;
+			}
+		}
+
+		$this->assertCount( 1, $calls );
+		$this->assertSame( 'wppo-rum', $calls[0][0] );
+		$this->assertSame(
+			array(
+				'strategy'  => 'defer',
+				'in_footer' => true,
+			),
+			$calls[0][4]
+		);
+	}
+
+	/**
+	 * Test that maybe_enqueue_scripts() keeps the legacy boolean path on WP < 6.3.
+	 */
+	public function test_maybe_enqueue_scripts_uses_legacy_args_on_older_wp(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		Util::clear_settings_cache();
+		Functions\when( 'is_admin' )->justReturn( false );
+
+		$calls = array();
+		Functions\when( 'wp_enqueue_script' )->alias(
+			static function ( $handle, $src = '', $deps = array(), $ver = false, $args = array() ) use ( &$calls ) {
+				$calls[] = array( $handle, $src, $deps, $ver, $args );
+				return true;
+			}
+		);
+
+		$original_version      = $GLOBALS['wp_version'] ?? null;
+		$GLOBALS['wp_version'] = '6.2';
+		try {
+			RUM::maybe_enqueue_scripts();
+		} finally {
+			if ( null === $original_version ) {
+				unset( $GLOBALS['wp_version'] );
+			} else {
+				$GLOBALS['wp_version'] = $original_version;
+			}
+		}
+
+		$this->assertCount( 1, $calls );
+		$this->assertSame( 'wppo-rum', $calls[0][0] );
+		$this->assertTrue( $calls[0][4] );
+	}
 }

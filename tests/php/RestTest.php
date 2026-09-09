@@ -403,6 +403,42 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that update_settings drops the removed removeQueryStrings key (#925).
+	 *
+	 * A legacy client that still posts the key is accepted silently
+	 * (fail-open, HTTP 200) but the key never persists, so it decays
+	 * naturally on the next save.
+	 */
+	public function test_update_settings_drops_removed_remove_query_strings_key(): void {
+		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'get_option' )->justReturn( array() );
+
+		$captured = array();
+		Functions\when( 'update_option' )->alias(
+			static function ( $name, $value ) use ( &$captured ) {
+				$captured = $value;
+				return true;
+			}
+		);
+
+		$request = new WP_REST_Request(
+			array(
+				'tab'      => 'file_optimisation',
+				'settings' => array(
+					'removeQueryStrings' => true,
+					'minifyHTML'         => true,
+				),
+			)
+		);
+
+		$response = $this->rest->update_settings( $request );
+
+		$this->assertSame( 200, $response->get_status(), 'Legacy key must be accepted silently, never fatal' );
+		$this->assertArrayNotHasKey( 'removeQueryStrings', $captured['file_optimisation'], 'Removed key must not persist' );
+		$this->assertTrue( $captured['file_optimisation']['minifyHTML'], 'Sibling settings must persist untouched' );
+	}
+
+	/**
 	 * Test that import_settings sanitizes markup injected into exclude/delay
 	 * fields and coerces numeric strings supplied for string settings.
 	 */

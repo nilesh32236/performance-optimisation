@@ -8,6 +8,25 @@ import NoticeBanner from './common/NoticeBanner';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 
 /**
+ * Whether a URL is safe to render as an external link href (http(s) only).
+ *
+ * @since NEXT
+ * @param {string} url Raw URL.
+ * @return {boolean} True when the URL parses as http(s).
+ */
+export const isHttpUrl = ( url ) => {
+	if ( ! url || typeof url !== 'string' ) {
+		return false;
+	}
+	try {
+		const parsed = new URL( url );
+		return 'http:' === parsed.protocol || 'https:' === parsed.protocol;
+	} catch {
+		return false;
+	}
+};
+
+/**
  * LLMs.txt panel for Dashboard (N8).
  *
  * @since NEXT
@@ -128,9 +147,17 @@ const LlmsPanel = () => {
 						'File will be available at:',
 						'performance-optimisation'
 					) }{ ' ' }
-					<a href={ llmsUrl } target="_blank" rel="noreferrer">
-						{ llmsUrl }
-					</a>
+					{ isHttpUrl( llmsUrl ) ? (
+						<a
+							href={ llmsUrl }
+							target="_blank"
+							rel="noopener noreferrer"
+						>
+							{ llmsUrl }
+						</a>
+					) : (
+						<span>{ llmsUrl }</span>
+					) }
 				</p>
 			) }
 			<div className="wppo-feature-card__footer">
