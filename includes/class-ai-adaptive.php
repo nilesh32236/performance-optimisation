@@ -560,6 +560,102 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		}
 
 		/**
+		 * Detect LCP regressions from stored Web Vitals trend history.
+		 *
+		 * Rolling-baseline comparison per URL+strategy key: the latest sample
+		 * ("current", last-1 for determinism) is compared against the mean of
+		 * all prior numeric samples. A key regresses when current >= baseline
+		 * * 1.3 (+30%). At most one anomaly overall is returned (first
+		 * regressed key in iteration order) so dashboards surface a single
+		 * read-only suggestion instead of a flood.
+		 *
+		 * Local computation only: no remote calls, no API keys, no option or
+		 * transient writes. Fail-open: under-sampled history (<10 numeric
+		 * samples), short history (<2 usable windows), non-positive baseline,
+		 * or any failure returns an empty array — never fatal.
+		 *
+		 * Trend source is Pagespeed::get_trends() (capped 30/URL+strategy);
+		 * RUM::get_data() aggregates are intentionally not used here (daily
+		 * per-day/per-path aggregates with a transient-locked write path).
+		 *
+		 * @param array|null $trends Optional trends map for testability. When null, reads Pagespeed::get_trends().
+		 * @return array[] At most one anomaly: array(array('key'=>string,'baseline'=>float,'current'=>float,'change_pct'=>float)).
+		 * @since NEXT
+		 */
+		public static function detect_anomalies( ?array $trends = null ): array {
+			try {
+				if ( null === $trends ) {
+					if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
+						return array();
+					}
+					$trends = Pagespeed::get_trends();
+				}
+				if ( ! is_array( $trends ) || empty( $trends ) ) {
+					return array();
+				}
+				foreach ( $trends as $trend_key => $snapshots ) {
+					if ( ! is_array( $snapshots ) ) {
+						continue;
+					}
+					$lcps = array();
+					foreach ( $snapshots as $snapshot ) {
+						if ( ! is_array( $snapshot ) || ! isset( $snapshot['lcp'] ) ) {
+							continue;
+						}
+						$lcp = $snapshot['lcp'];
+						if ( ! is_numeric( $lcp ) ) {
+							continue;
+						}
+						$lcp = (float) $lcp;
+						if ( $lcp <= 0 ) {
+							continue;
+						}
+						$lcps[] = $lcp;
+					}
+					// Fail-open: under-sampled history never alarms.
+					if ( count( $lcps ) < 10 ) {
+						continue;
+					}
+					// Need baseline + current windows.
+					if ( count( $lcps ) < 2 ) {
+						continue;
+					}
+					$current  = (float) end( $lcps );
+					$prior    = array_slice( $lcps, 0, -1 );
+					$baseline = array_sum( $prior ) / count( $prior );
+					if ( $baseline <= 0 ) {
+						continue;
+					}
+					if ( $current >= $baseline * 1.3 ) {
+						$change_pct = ( $current - $baseline ) / $baseline * 100.0;
+						$anomaly    = array(
+							'key'        => (string) $trend_key,
+							'baseline'   => (float) $baseline,
+							'current'    => (float) $current,
+							'change_pct' => (float) $change_pct,
+						);
+						/**
+						 * Filters the detected LCP regression anomalies.
+						 *
+						 * @since NEXT
+						 * @param array[] $anomalies At most one anomaly array.
+						 */
+						$filtered = apply_filters( 'wppo_ai_lcp_regression', array( $anomaly ) );
+						if ( ! is_array( $filtered ) ) {
+							return array( $anomaly );
+						}
+						// Cap to a single anomaly even if a filter appends more.
+						return array_slice( array_values( $filtered ), 0, 1 );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+			return array();
+		}
+
+		/**
 		 * Get most-frequently disabled assets from postmeta.
 		 *
 		 * @param string $meta_key The meta key to query.
@@ -784,6 +880,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 						),
 					);
 				}
+			}
+
+			// Self-watching performance: surface a single read-only suggestion on
+			// +30% LCP regression. Fail-open: detector errors contribute zero
+			// suggestions (never fatal, never white-screen). No auto-tune, no
+			// speculation override here — that stays gated by is_enabled() in
+			// filter_speculation_rules().
+			try {
+				$anomalies = self::detect_anomalies();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$anomalies = array();
+			}
+			if ( is_array( $anomalies ) && ! empty( $anomalies ) ) {
+				$anomaly    = $anomalies[0];
+				$change_pct = isset( $anomaly['change_pct'] ) ? (float) $anomaly['change_pct'] : 0.0;
+				/* translators: %d is the LCP percentage increase vs baseline. */
+				$value         = sprintf( __( 'LCP +%d%% vs baseline', 'performance-optimisation' ), (int) round( $change_pct ) );
+				$suggestions[] = array(
+					'metric'      => 'ai_lcp_regression',
+					'value'       => $value,
+					'unit'        => 'string',
+					'status'      => 'needs_improvement',
+					'description' => __( 'AI: LCP regression detected', 'performance-optimisation' ),
+					'fix_action'  => 'open_image_optimization_tab',
+					'ai_payload'  => array(
+						'tab'      => 'image_optimisation',
+						'settings' => array(),
+					),
+				);
 			}
 
 			// Ensure fix_action is valid per Suggestion_Engine guard (already valid).
