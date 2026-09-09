@@ -152,6 +152,154 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 		}
 
 		/**
+		 * Path to the backup copy of our drop-in kept alongside advanced-cache.php.
+		 *
+		 * The backup lives in the same directory so tmp, final, and backup are
+		 * always on the same filesystem and the rename stays atomic.
+		 *
+		 * @since NEXT
+		 * @return string Backup file path.
+		 */
+		public static function get_dropin_backup_path(): string {
+			return self::get_dropin_path() . '.wppo-backup';
+		}
+
+		/**
+		 * Atomically write the drop-in via tmp-plus-rename with backup and verification.
+		 *
+		 * Writes the generated code to a uniquely named temp sibling, verifies the
+		 * marker and PHP open tag, re-checks drop-in ownership immediately before
+		 * the rename, keeps one backup copy of the previous working file, renames
+		 * atomically, then verifies the final file. On any failure the old file
+		 * (or no file) survives and no half-written file is left in place, so the
+		 * site fails open with caching bypassed.
+		 *
+		 * @since NEXT
+		 * @param string $handler_code Generated drop-in code.
+		 * @return bool True on success (or when a foreign drop-in is left untouched), false on failure.
+		 */
+		private static function atomic_write_dropin( string $handler_code ): bool {
+			global $wp_filesystem;
+
+			if ( false === strpos( $handler_code, self::DROPIN_MARKER ) ) {
+				self::log_dropin_issue( __( 'Could not write advanced-cache.php: generated code is missing the drop-in marker.', 'performance-optimisation' ) );
+				return false;
+			}
+
+			if ( 0 !== strpos( ltrim( $handler_code ), '<?php' ) ) {
+				self::log_dropin_issue( __( 'Could not write advanced-cache.php: generated code is missing the PHP open tag.', 'performance-optimisation' ) );
+				return false;
+			}
+
+			if ( ! is_object( $wp_filesystem ) ) {
+				self::log_dropin_issue( __( 'Could not write advanced-cache.php: WP_Filesystem unavailable.', 'performance-optimisation' ) );
+				return false;
+			}
+
+			if ( ! method_exists( $wp_filesystem, 'put_contents' ) || ! method_exists( $wp_filesystem, 'get_contents' ) || ! method_exists( $wp_filesystem, 'exists' ) ) {
+				self::log_dropin_issue( __( 'Could not write advanced-cache.php: filesystem API incomplete.', 'performance-optimisation' ) );
+				return false;
+			}
+
+			$handler_file = self::get_dropin_path();
+			$backup_file  = self::get_dropin_backup_path();
+			$chmod_file   = defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644;
+			$tmp_file     = '';
+
+			try {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.rand_mt_rand -- Fallback only when wp_rand() is unavailable (WP < 6.2 compat); uniqueness is all that is needed for the tmp suffix.
+				$rand_suffix = function_exists( 'wp_rand' ) ? wp_rand() : mt_rand();
+				$tmp_file    = $handler_file . '.tmp.' . $rand_suffix;
+
+				$written = $wp_filesystem->put_contents( $tmp_file, $handler_code, $chmod_file );
+				if ( ! $written ) {
+					if ( method_exists( $wp_filesystem, 'delete' ) ) {
+						$wp_filesystem->delete( $tmp_file );
+					}
+					self::log_dropin_issue( __( 'Could not write advanced-cache.php: temporary file write failed, previous file kept.', 'performance-optimisation' ) );
+					return false;
+				}
+
+				$tmp_contents = $wp_filesystem->get_contents( $tmp_file );
+				if ( ! is_string( $tmp_contents ) || false === strpos( $tmp_contents, self::DROPIN_MARKER ) || 0 !== strpos( ltrim( $tmp_contents ), '<?php' ) ) {
+					if ( method_exists( $wp_filesystem, 'delete' ) ) {
+						$wp_filesystem->delete( $tmp_file );
+					}
+					self::log_dropin_issue( __( 'Could not write advanced-cache.php: temporary file verification failed, previous file kept.', 'performance-optimisation' ) );
+					return false;
+				}
+
+				// Ownership may have changed while we wrote tmp; never overwrite a foreign drop-in.
+				if ( $wp_filesystem->exists( $handler_file ) && ! self::is_our_dropin() ) {
+					if ( method_exists( $wp_filesystem, 'delete' ) ) {
+						$wp_filesystem->delete( $tmp_file );
+					}
+					self::log_dropin_issue( __( 'Skipped writing advanced-cache.php: a foreign drop-in appeared during the write.', 'performance-optimisation' ) );
+					return true;
+				}
+
+				// Best-effort backup of the previous working file; a failed backup must not block the rename.
+				if ( $wp_filesystem->exists( $handler_file ) && self::is_our_dropin() && method_exists( $wp_filesystem, 'copy' ) ) {
+					$backed_up = $wp_filesystem->copy( $handler_file, $backup_file, true, $chmod_file );
+					if ( ! $backed_up ) {
+						self::log_dropin_issue( __( 'Could not back up advanced-cache.php before replacing it.', 'performance-optimisation' ) );
+					}
+				}
+
+				$moved = false;
+				if ( method_exists( $wp_filesystem, 'move' ) ) {
+					$moved = (bool) $wp_filesystem->move( $tmp_file, $handler_file, true );
+				}
+
+				if ( ! $moved ) {
+					if ( method_exists( $wp_filesystem, 'copy' ) ) {
+						$copied = (bool) $wp_filesystem->copy( $tmp_file, $handler_file, true, $chmod_file );
+						if ( $copied ) {
+							if ( method_exists( $wp_filesystem, 'delete' ) ) {
+								$wp_filesystem->delete( $tmp_file );
+							}
+							$moved = true;
+						}
+					}
+
+					if ( ! $moved ) {
+						if ( method_exists( $wp_filesystem, 'delete' ) ) {
+							$wp_filesystem->delete( $tmp_file );
+						}
+						self::log_dropin_issue( __( 'Could not write advanced-cache.php: rename failed, previous file kept.', 'performance-optimisation' ) );
+						return false;
+					}
+				}
+
+				$final_contents = $wp_filesystem->get_contents( $handler_file );
+				if ( ! is_string( $final_contents ) || false === strpos( $final_contents, self::DROPIN_MARKER ) ) {
+					if ( method_exists( $wp_filesystem, 'copy' ) && method_exists( $wp_filesystem, 'exists' ) && $wp_filesystem->exists( $backup_file ) ) {
+						$wp_filesystem->copy( $backup_file, $handler_file, true, $chmod_file );
+					}
+					self::log_dropin_issue( __( 'Could not verify advanced-cache.php after write; previous backup restored where available.', 'performance-optimisation' ) );
+					return false;
+				}
+
+				return true;
+			} catch ( \Throwable $e ) {
+				if ( '' !== $tmp_file && is_object( $wp_filesystem ) && method_exists( $wp_filesystem, 'delete' ) ) {
+					try {
+						$wp_filesystem->delete( $tmp_file );
+					} catch ( \Throwable $ignored ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Best-effort tmp cleanup must never throw.
+					}
+				}
+				self::log_dropin_issue(
+					sprintf(
+						/* translators: %s: error message */
+						__( 'Could not write advanced-cache.php: %s', 'performance-optimisation' ),
+						sanitize_text_field( $e->getMessage() )
+					)
+				);
+				return false;
+			}
+		}
+
+		/**
 		 * Creates the advanced-cache.php file.
 		 *
 		 * Generates the file to serve cached content, including gzip versions, and ensures required directories exist.
@@ -392,9 +540,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'	}' . PHP_EOL .
 			'}' . PHP_EOL;
 
-			// Write the handler file in the wp-content directory as advanced-cache.php.
-			$chmod_file = defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644;
-			$written    = (bool) $wp_filesystem->put_contents( wp_normalize_path( WP_CONTENT_DIR . '/advanced-cache.php' ), $handler_code, $chmod_file );
+			// Write the handler file atomically: tmp-plus-rename with backup and
+			// post-write marker verification, so a crash never leaves a truncated drop-in.
+			$written = self::atomic_write_dropin( $handler_code );
 
 			// The drop-in changed — System Info's cached ownership verdict is
 			// stale (audit #888 finding 25).

@@ -169,6 +169,162 @@ class AdvancedCacheHandlerTest extends \PHPUnit\Framework\TestCase {
 		$this->assertTrue( $result );
 		$this->assertTrue( $fs->put_called );
 		$this->assertStringContainsString( Advanced_Cache_Handler::DROPIN_MARKER, $fs->put_contents );
+		// Atomic write: content goes to a tmp sibling first, then rename.
+		$tmp_path = $fs->get_tmp_path();
+		$this->assertStringContainsString( '.tmp.', $tmp_path );
+		$this->assertStringNotContainsString( 'advanced-cache.php.wppo-backup', $tmp_path );
+		$this->assertTrue( $fs->move_called );
+		$this->assertSame( $fs->put_contents, $fs->contents );
+		$this->assertStringContainsString( Advanced_Cache_Handler::DROPIN_MARKER, $fs->contents );
+		// No previous file, so no backup is kept.
+		$this->assertFalse( $fs->copy_called );
+	}
+
+	/**
+	 * Test that a successful regeneration over an existing drop-in keeps a backup.
+	 */
+	public function test_create_keeps_backup_of_previous_dropin(): void {
+		$fs                       = new WPPO_AdvancedCache_FS_Mock();
+		$fs->file_exists          = true;
+		$fs->contents             = '<?php // ' . Advanced_Cache_Handler::DROPIN_MARKER . ' old';
+		$GLOBALS['wp_filesystem'] = $fs;
+
+		Functions\when( 'wp_normalize_path' )->returnArg();
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'absint' )->alias(
+			static function ( $value ) {
+				return abs( (int) $value );
+			}
+		);
+
+		$this->assertTrue( Advanced_Cache_Handler::create() );
+
+		$this->assertTrue( $fs->move_called );
+		$this->assertTrue( $fs->copy_called );
+		$backup_path = Advanced_Cache_Handler::get_dropin_backup_path();
+		$this->assertArrayHasKey( $backup_path, $fs->copied );
+		$this->assertStringContainsString( Advanced_Cache_Handler::DROPIN_MARKER, $fs->copied[ $backup_path ] );
+		$this->assertStringContainsString( 'old', $fs->copied[ $backup_path ] );
+		$this->assertStringContainsString( Advanced_Cache_Handler::DROPIN_MARKER, $fs->contents );
+		// Tmp sibling is gone after the rename.
+		$this->assertFalse( $fs->exists( $fs->get_tmp_path() ) );
+	}
+
+	/**
+	 * Test that a tmp write failure keeps the old file and removes tmp.
+	 */
+	public function test_create_tmp_write_failure_keeps_old_file(): void {
+		$fs                       = new WPPO_AdvancedCache_FS_Mock();
+		$fs->file_exists          = true;
+		$fs->contents             = '<?php // ' . Advanced_Cache_Handler::DROPIN_MARKER . ' old';
+		$fs->put_result           = false;
+		$GLOBALS['wp_filesystem'] = $fs;
+
+		Functions\when( 'wp_normalize_path' )->returnArg();
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'absint' )->alias(
+			static function ( $value ) {
+				return abs( (int) $value );
+			}
+		);
+		// Suppress drop-in issue logging (rate-limit transient hit).
+		Functions\when( 'get_transient' )->justReturn( 1 );
+
+		$this->assertFalse( Advanced_Cache_Handler::create() );
+
+		$this->assertFalse( $fs->move_called );
+		$this->assertSame( '<?php // ' . Advanced_Cache_Handler::DROPIN_MARKER . ' old', $fs->contents );
+		$this->assertContains( $fs->get_tmp_path(), $fs->deleted );
+	}
+
+	/**
+	 * Test that a rename failure keeps the old file and removes tmp.
+	 */
+	public function test_create_rename_failure_keeps_old_file(): void {
+		$fs                       = new WPPO_AdvancedCache_FS_Mock();
+		$fs->file_exists          = true;
+		$fs->contents             = '<?php // ' . Advanced_Cache_Handler::DROPIN_MARKER . ' old';
+		$fs->move_result          = false;
+		$fs->copy_result          = false;
+		$GLOBALS['wp_filesystem'] = $fs;
+
+		Functions\when( 'wp_normalize_path' )->returnArg();
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'absint' )->alias(
+			static function ( $value ) {
+				return abs( (int) $value );
+			}
+		);
+		Functions\when( 'get_transient' )->justReturn( 1 );
+
+		$this->assertFalse( Advanced_Cache_Handler::create() );
+
+		$this->assertTrue( $fs->move_called );
+		$this->assertSame( '<?php // ' . Advanced_Cache_Handler::DROPIN_MARKER . ' old', $fs->contents );
+		$this->assertContains( $fs->get_tmp_path(), $fs->deleted );
+	}
+
+	/**
+	 * Test that a foreign drop-in appearing mid-write is left untouched.
+	 */
+	public function test_create_leaves_mid_write_foreign_dropin_untouched(): void {
+		$fs                                 = new WPPO_AdvancedCache_FS_Mock();
+		$fs->file_exists                    = false;
+		$fs->become_foreign_after_tmp_write = true;
+		$GLOBALS['wp_filesystem']           = $fs;
+
+		Functions\when( 'wp_normalize_path' )->returnArg();
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'absint' )->alias(
+			static function ( $value ) {
+				return abs( (int) $value );
+			}
+		);
+		Functions\when( 'get_transient' )->justReturn( 1 );
+
+		$this->assertTrue( Advanced_Cache_Handler::create() );
+
+		$this->assertFalse( $fs->move_called );
+		$this->assertSame( '<?php // WP Super Cache drop-in', $fs->contents );
+		$this->assertContains( $fs->get_tmp_path(), $fs->deleted );
+	}
+
+	/**
+	 * Test that post-write verification failure restores the backup.
+	 */
+	public function test_create_post_write_failure_restores_backup(): void {
+		$fs                       = new WPPO_AdvancedCache_FS_Mock();
+		$fs->file_exists          = true;
+		$fs->contents             = '<?php // ' . Advanced_Cache_Handler::DROPIN_MARKER . ' old';
+		$fs->corrupt_final_once   = true;
+		$GLOBALS['wp_filesystem'] = $fs;
+
+		Functions\when( 'wp_normalize_path' )->returnArg();
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'absint' )->alias(
+			static function ( $value ) {
+				return abs( (int) $value );
+			}
+		);
+		Functions\when( 'get_transient' )->justReturn( 1 );
+
+		$this->assertFalse( Advanced_Cache_Handler::create() );
+
+		// Backup was taken, then a restore from the backup was attempted.
+		$backup_path = Advanced_Cache_Handler::get_dropin_backup_path();
+		$this->assertArrayHasKey( $backup_path, $fs->copied );
+		$restore_calls = array_filter(
+			$fs->copy_calls,
+			static function ( $call ) use ( $backup_path ) {
+				return $backup_path === $call[0];
+			}
+		);
+		$this->assertNotEmpty( $restore_calls );
 	}
 
 	/**
@@ -364,18 +520,22 @@ class AdvancedCacheHandlerTest extends \PHPUnit\Framework\TestCase {
 /**
  * Minimal WP_Filesystem stand-in for Advanced_Cache_Handler tests.
  *
+ * Simulates a tiny in-memory filesystem so the tmp-plus-rename write path
+ * can be exercised: writes to tmp paths are stored per-path, move() promotes
+ * tmp content to the handler file, and copy()/delete() are tracked.
+ *
  * @package PerformanceOptimise\Tests
  */
 class WPPO_AdvancedCache_FS_Mock {
 	/**
-	 * Whether the file exists.
+	 * Whether the handler file exists (seed state, updated by move/copy).
 	 *
 	 * @var bool
 	 */
 	public $file_exists = false;
 
 	/**
-	 * File contents returned by get_contents().
+	 * Current handler file contents (seed state, updated by move/copy).
 	 *
 	 * @var string
 	 */
@@ -396,6 +556,83 @@ class WPPO_AdvancedCache_FS_Mock {
 	public $put_contents = '';
 
 	/**
+	 * Contents keyed by put_contents() path.
+	 *
+	 * @var array
+	 */
+	public $put_paths = array();
+
+	/**
+	 * Paths passed to failed put_contents() calls.
+	 *
+	 * @var array
+	 */
+	public $failed_put_paths = array();
+
+	/**
+	 * When false, put_contents() reports failure.
+	 *
+	 * @var bool
+	 */
+	public $put_result = true;
+
+	/**
+	 * Whether move() was called.
+	 *
+	 * @var bool
+	 */
+	public $move_called = false;
+
+	/**
+	 * When false, move() reports failure.
+	 *
+	 * @var bool
+	 */
+	public $move_result = true;
+
+	/**
+	 * List of array( $src, $dst ) move() calls.
+	 *
+	 * @var array
+	 */
+	public $moved = array();
+
+	/**
+	 * Whether copy() was called.
+	 *
+	 * @var bool
+	 */
+	public $copy_called = false;
+
+	/**
+	 * When false, copy() reports failure.
+	 *
+	 * @var bool
+	 */
+	public $copy_result = true;
+
+	/**
+	 * List of array( $src, $dst ) copy() calls.
+	 *
+	 * @var array
+	 */
+	public $copy_calls = array();
+
+	/**
+	 * Contents keyed by copy() destination path.
+	 *
+	 * @var array
+	 */
+	public $copied = array();
+
+	/**
+	 * Paths passed to delete().
+	 *
+	 * @var array
+	 */
+	public $deleted = array();
+
+	/**
 	 * Whether delete() was called.
 	 *
 	 * @var bool
@@ -403,47 +640,208 @@ class WPPO_AdvancedCache_FS_Mock {
 	public $delete_called = false;
 
 	/**
-	 * Simulate file existence.
+	 * When true, the handler flips to foreign content right after the tmp
+	 * file is first read (simulates a foreign drop-in appearing mid-write).
 	 *
-	 * @param string $path File path (unused).
+	 * @var bool
+	 */
+	public $become_foreign_after_tmp_write = false;
+
+	/**
+	 * When true, the first handler read after a move/copy returns
+	 * marker-less content (simulates post-write verification failure).
+	 *
+	 * @var bool
+	 */
+	public $corrupt_final_once = false;
+
+	/**
+	 * Whether the handler file was rewritten via move()/copy() since seeding.
+	 *
+	 * @var bool
+	 */
+	private $handler_rewritten = false;
+
+	/**
+	 * Whether the mid-write foreign flip already happened.
+	 *
+	 * @var bool
+	 */
+	private $foreign_flipped = false;
+
+	/**
+	 * Whether the one-time corrupt final read was consumed.
+	 *
+	 * @var bool
+	 */
+	private $corrupt_consumed = false;
+
+	/**
+	 * Whether a path is a tmp sibling.
+	 *
+	 * @param string $path File path.
 	 * @return bool
 	 */
-	public function exists( $path ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
-		return $this->file_exists;
+	private function is_tmp_path( $path ): bool {
+		return false !== strpos( (string) $path, '.tmp.' );
 	}
 
 	/**
-	 * Return the configured file contents.
+	 * Whether a path is the backup sibling.
 	 *
-	 * @param string $path File path (unused).
+	 * @param string $path File path.
+	 * @return bool
+	 */
+	private function is_backup_path( $path ): bool {
+		return '.wppo-backup' === substr( (string) $path, -13 );
+	}
+
+	/**
+	 * First tmp path written via put_contents(), or empty string.
+	 *
 	 * @return string
 	 */
-	public function get_contents( $path ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+	public function get_tmp_path(): string {
+		foreach ( $this->put_paths as $path => $ignored ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Key iteration only.
+			return (string) $path;
+		}
+		foreach ( $this->failed_put_paths as $path ) {
+			return (string) $path;
+		}
+		return '';
+	}
+
+	/**
+	 * Simulate file existence.
+	 *
+	 * @param string $path File path.
+	 * @return bool
+	 */
+	public function exists( $path ) {
+		if ( $this->is_tmp_path( $path ) ) {
+			return isset( $this->put_paths[ $path ] ) && ! in_array( $path, $this->deleted, true );
+		}
+		if ( $this->is_backup_path( $path ) ) {
+			return isset( $this->copied[ $path ] ) && ! in_array( $path, $this->deleted, true );
+		}
+		return $this->file_exists && ! in_array( $path, $this->deleted, true );
+	}
+
+	/**
+	 * Return file contents per path.
+	 *
+	 * @param string $path File path.
+	 * @return string|false
+	 */
+	public function get_contents( $path ) {
+		if ( $this->is_tmp_path( $path ) ) {
+			$tmp = isset( $this->put_paths[ $path ] ) ? $this->put_paths[ $path ] : '';
+			if ( $this->become_foreign_after_tmp_write && ! $this->foreign_flipped ) {
+				$this->foreign_flipped = true;
+				$this->file_exists     = true;
+				$this->contents        = '<?php // WP Super Cache drop-in';
+			}
+			return $tmp;
+		}
+		if ( $this->is_backup_path( $path ) ) {
+			return isset( $this->copied[ $path ] ) ? $this->copied[ $path ] : false;
+		}
+		if ( $this->corrupt_final_once && ! $this->corrupt_consumed && $this->handler_rewritten ) {
+			$this->corrupt_consumed = true;
+			return '<?php // corrupt file without the marker';
+		}
 		return $this->contents;
 	}
 
 	/**
 	 * Record a write call.
 	 *
-	 * @param string $path     File path (unused).
+	 * @param string $path     File path.
 	 * @param string $contents Contents to write.
 	 * @param int    $chmod    Chmod mode (unused).
-	 * @return true
+	 * @return bool
 	 */
-	public function put_contents( $path, $contents, $chmod = 0 ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found, Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+	public function put_contents( $path, $contents, $chmod = 0 ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 		$this->put_called   = true;
 		$this->put_contents = $contents;
+		if ( ! $this->put_result ) {
+			$this->failed_put_paths[] = $path;
+			return false;
+		}
+		$this->put_paths[ $path ] = $contents;
+		if ( ! $this->is_tmp_path( $path ) && ! $this->is_backup_path( $path ) ) {
+			$this->contents    = $contents;
+			$this->file_exists = true;
+		}
+		return true;
+	}
+
+	/**
+	 * Record a move call; promotes tmp content to the destination.
+	 *
+	 * @param string $src       Source path.
+	 * @param string $dst       Destination path.
+	 * @param bool   $overwrite Overwrite flag (unused).
+	 * @return bool
+	 */
+	public function move( $src, $dst, $overwrite = false ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		$this->move_called = true;
+		if ( ! $this->move_result ) {
+			return false;
+		}
+		$content = isset( $this->put_paths[ $src ] ) ? $this->put_paths[ $src ] : $this->contents;
+		if ( $this->is_backup_path( $dst ) ) {
+			$this->copied[ $dst ] = $content;
+		} else {
+			$this->contents          = $content;
+			$this->file_exists       = true;
+			$this->handler_rewritten = true;
+		}
+		$this->moved[]   = array( $src, $dst );
+		$this->deleted[] = $src;
+		return true;
+	}
+
+	/**
+	 * Record a copy call.
+	 *
+	 * @param string $src       Source path.
+	 * @param string $dst       Destination path.
+	 * @param bool   $overwrite Overwrite flag (unused).
+	 * @param int    $chmod     Chmod mode (unused).
+	 * @return bool
+	 */
+	public function copy( $src, $dst, $overwrite = false, $chmod = 0 ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		$this->copy_called  = true;
+		$this->copy_calls[] = array( $src, $dst );
+		if ( ! $this->copy_result ) {
+			return false;
+		}
+		if ( $this->is_tmp_path( $src ) ) {
+			$content = isset( $this->put_paths[ $src ] ) ? $this->put_paths[ $src ] : '';
+		} elseif ( $this->is_backup_path( $src ) ) {
+			$content = isset( $this->copied[ $src ] ) ? $this->copied[ $src ] : '';
+		} else {
+			$content = $this->contents;
+		}
+		$this->copied[ $dst ] = $content;
+		if ( ! $this->is_backup_path( $dst ) && ! $this->is_tmp_path( $dst ) ) {
+			$this->contents          = $content;
+			$this->file_exists       = true;
+			$this->handler_rewritten = true;
+		}
 		return true;
 	}
 
 	/**
 	 * Record a delete call.
 	 *
-	 * @param string $path File path (unused).
+	 * @param string $path File path.
 	 * @return true
 	 */
 	public function delete( $path ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 		$this->delete_called = true;
+		$this->deleted[]     = $path;
 		return true;
 	}
 }
