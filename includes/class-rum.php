@@ -432,6 +432,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			} catch ( \Throwable $e ) {
 				return false;
 			}
+		}
 
 		/**
 		 * Buffer a sample to a transient queue and flush periodically.
