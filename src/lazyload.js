@@ -963,6 +963,50 @@ const checkCleanup = () => {
 };
 
 /**
+ * Whether an element is the LCP hero and must never be lazy-loaded.
+ *
+ * Fail-open redundancy: PHP is authoritative; JS just refuses to lazy-load
+ * a hero PHP missed (fetchpriority=high, data-wppo-hero/data-wppo-lcp, or
+ * loading=eager). Such images keep src/srcset intact and are never observed.
+ *
+ * @since NEXT
+ * @param {Element} el The DOM element.
+ * @return {boolean} True when the element is a hero image.
+ */
+const isHeroImage = ( el ) => {
+	if ( ! el || el.tagName !== 'IMG' ) {
+		return false;
+	}
+	return (
+		el.getAttribute( 'fetchpriority' ) === 'high' ||
+		el.hasAttribute( 'data-wppo-hero' ) ||
+		el.hasAttribute( 'data-wppo-lcp' ) ||
+		el.getAttribute( 'loading' ) === 'eager'
+	);
+};
+
+/**
+ * Eagerly restore a hero image that PHP missed (leave src/srcset intact,
+ * drop data-* placeholders) so it is never lazy-loaded.
+ *
+ * @since NEXT
+ * @param {Element} el The hero IMG element.
+ */
+const restoreHeroImage = ( el ) => {
+	if ( el.hasAttribute( 'data-src' ) ) {
+		el.src = el.getAttribute( 'data-src' );
+		el.removeAttribute( 'data-src' );
+	}
+	if ( el.hasAttribute( 'data-srcset' ) ) {
+		el.srcset = el.getAttribute( 'data-srcset' );
+		el.removeAttribute( 'data-srcset' );
+	}
+	if ( el.getAttribute( 'loading' ) === 'lazy' ) {
+		el.removeAttribute( 'loading' );
+	}
+};
+
+/**
  * Register an element for lazy-load observation if it has data-* attributes.
  *
  * @since 1.0.0
@@ -974,6 +1018,13 @@ const observeElement = ( el ) => {
 	}
 
 	if ( observedElements.has( el ) ) {
+		return;
+	}
+
+	// LCP hero guard: never observe a hero image; restore it eagerly instead.
+	if ( isHeroImage( el ) ) {
+		restoreHeroImage( el );
+		observedElements.add( el );
 		return;
 	}
 
@@ -1257,6 +1308,11 @@ const loadImages = () => {
 					getLazySelector()
 				);
 				lazyElements.forEach( ( el ) => {
+					// LCP hero guard (scroll fallback): restore eagerly, never lazy-load.
+					if ( isHeroImage( el ) ) {
+						restoreHeroImage( el );
+						return;
+					}
 					if ( isElementInViewport( el ) ) {
 						if ( el.tagName === 'VIDEO' ) {
 							if ( el.hasAttribute( 'data-poster' ) ) {
