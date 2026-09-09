@@ -940,6 +940,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			if ( empty( $urls ) ) {
 				return $rules;
 			}
+			// Same-site guard: never inject cross-site/admin/commerce URLs, and
+			// dedupe against list-source URLs already present (Main's
+			// high-value list runs at priority 10, AI at 20).
+			$urls = self::filter_same_site_urls( $urls );
+			$urls = self::dedupe_against_existing_lists( $urls, $rules );
+			if ( empty( $urls ) ) {
+				return $rules;
+			}
 			// Append AI prefetch rule (prefetch top-2). Structure mirrors WP core:
 			// rules = [ { source: 'list', urls: [...] , eagerness: 'conservative' } ].
 			// Guardrail (#908): allowlist stale values and downgrade a persisted
@@ -961,13 +969,85 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		}
 
 		/**
+		 * Keep only same-site, non-admin, non-commerce list URLs.
+		 *
+		 * Prevents multisite cross-site leakage and transactional/admin
+		 * prefetch when a RUM/LLM-nominated URL is off-site or sensitive.
+		 * Invalid entries are skipped individually (fail-open).
+		 *
+		 * @param string[] $urls Candidate URLs.
+		 * @return string[]
+		 * @since NEXT
+		 */
+		private static function filter_same_site_urls( array $urls ): array {
+			$home = Util::cached_home_url();
+			if ( '' === $home ) {
+				return array();
+			}
+			$home_host = wp_parse_url( $home, PHP_URL_HOST );
+			if ( ! is_string( $home_host ) || '' === $home_host ) {
+				return array();
+			}
+			$kept = array();
+			foreach ( $urls as $url ) {
+				if ( ! is_string( $url ) || '' === $url ) {
+					continue;
+				}
+				$parts = wp_parse_url( $url );
+				if ( ! is_array( $parts ) || empty( $parts['host'] ) ) {
+					continue;
+				}
+				if ( strtolower( (string) $parts['host'] ) !== strtolower( $home_host ) ) {
+					continue;
+				}
+				$path  = strtolower( (string) ( $parts['path'] ?? '/' ) );
+				$lower = strtolower( $url );
+				if ( false !== strpos( $path, '/wp-admin' ) || false !== strpos( $lower, 'wp-login.php' ) || false !== strpos( $path, '/wp-json' ) ) {
+					continue;
+				}
+				$kept[] = $url;
+			}
+			return array_values( $kept );
+		}
+
+		/**
+		 * Remove URLs already covered by an existing list-source rule.
+		 *
+		 * @param string[] $urls  Candidate AI URLs.
+		 * @param array    $rules Existing speculation rules.
+		 * @return string[]
+		 * @since NEXT
+		 */
+		private static function dedupe_against_existing_lists( array $urls, array $rules ): array {
+			$existing = array();
+			foreach ( $rules as $rule ) {
+				if ( ! is_array( $rule ) || ( $rule['source'] ?? '' ) !== 'list' ) {
+					continue;
+				}
+				$rule_urls = $rule['urls'] ?? array();
+				if ( ! is_array( $rule_urls ) ) {
+					continue;
+				}
+				foreach ( $rule_urls as $existing_url ) {
+					if ( is_string( $existing_url ) && '' !== $existing_url ) {
+						$existing[] = $existing_url;
+					}
+				}
+			}
+			if ( empty( $existing ) ) {
+				return array_values( $urls );
+			}
+			return array_values( array_diff( $urls, $existing ) );
+		}
+
+		/**
 		 * Register hooks.
 		 *
 		 * @return void
 		 * @since NEXT
 		 */
 		public static function init(): void {
-			if ( function_exists( 'wp_get_speculation_rules_configuration' ) ) {
+			if ( function_exists( 'wp_get_speculation_rules' ) ) {
 				add_filter( 'wp_speculation_rules', array( self::class, 'filter_speculation_rules' ), 20 );
 			}
 		}
