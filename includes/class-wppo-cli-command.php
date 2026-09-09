@@ -1035,5 +1035,1100 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 
 			WP_CLI::log( (string) wp_json_encode( $all, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
 		}
+
+		/**
+		 * Verify live site state (self-verification gate for the autonomous maintenance loop).
+		 *
+		 * Reads LIVE state only — options, filesystem, drop-ins, Redis, cron —
+		 * and never cached transients (`wppo_cache_size`, `wppo_total_js_css`,
+		 * System Info drop-in verdict cache). Read-only: never writes options,
+		 * files, or schedules.
+		 *
+		 * ## OPTIONS
+		 *
+		 * [--format=<format>]
+		 * : Output format.
+		 * ---
+		 * default: table
+		 * options:
+		 *   - table
+		 *   - json
+		 * ---
+		 *
+		 * [--check=<name>]
+		 * : Run a single check only (cache_dirs, dropins, redis, litespeed, settings_schema, cron, uninstall).
+		 *
+		 * [--severity=<level>]
+		 * : Exit-code gate.
+		 * ---
+		 * default: fail
+		 * options:
+		 *   - fail
+		 *   - warn
+		 * ---
+		 * When `fail` (default) only `fail` rows exit non-zero; when `warn`,
+		 * `warn` rows also exit non-zero.
+		 *
+		 * ## EXAMPLES
+		 *
+		 *     # Full live-state verification (table)
+		 *     wp wppo verify
+		 *
+		 *     # Machine-readable output for the maintenance loop
+		 *     wp wppo verify --format=json
+		 *
+		 *     # Single gate
+		 *     wp wppo verify --check=settings_schema
+		 *
+		 * @when after_wp_load
+		 * @subcommand verify
+		 * @since NEXT
+		 * @param array $args Command positional arguments.
+		 * @param array $assoc_args Command associative arguments.
+		 * @return void
+		 */
+		public function verify( array $args, array $assoc_args ): void {
+			unset( $args );
+
+			$format = isset( $assoc_args['format'] ) ? (string) $assoc_args['format'] : 'table';
+			if ( class_exists( '\\WP_CLI\\Utils' ) && method_exists( '\\WP_CLI\\Utils', 'get_flag_value' ) ) {
+				$format = (string) \WP_CLI\Utils::get_flag_value( $assoc_args, 'format', 'table' );
+			}
+			if ( ! in_array( $format, array( 'table', 'json' ), true ) ) {
+				$format = 'table';
+			}
+
+			$severity = isset( $assoc_args['severity'] ) ? (string) $assoc_args['severity'] : 'fail';
+			if ( class_exists( '\\WP_CLI\\Utils' ) && method_exists( '\\WP_CLI\\Utils', 'get_flag_value' ) ) {
+				$severity = (string) \WP_CLI\Utils::get_flag_value( $assoc_args, 'severity', 'fail' );
+			}
+			if ( ! in_array( $severity, array( 'fail', 'warn' ), true ) ) {
+				$severity = 'fail';
+			}
+
+			$only = isset( $assoc_args['check'] ) ? (string) $assoc_args['check'] : '';
+			if ( class_exists( '\\WP_CLI\\Utils' ) && method_exists( '\\WP_CLI\\Utils', 'get_flag_value' ) ) {
+				$only_raw = \WP_CLI\Utils::get_flag_value( $assoc_args, 'check', '' );
+				$only     = is_string( $only_raw ) ? $only_raw : '';
+			}
+			if ( '' !== $only && ! in_array( $only, self::get_verify_check_names(), true ) ) {
+				/* translators: 1: Requested check name, 2: List of available checks */
+				WP_CLI::error( sprintf( __( 'Invalid verify check "%1$s". Available checks: %2$s.', 'performance-optimisation' ), $only, implode( ', ', self::get_verify_check_names() ) ) );
+				return;
+			}
+
+			// Live settings read: bust the per-request memo first so a stale
+			// in-request write (same process) cannot mask drift. Reading through
+			// Util::get_settings() after the clear re-fetches the option row
+			// (no transient involved), keeping verify on the canonical read
+			// path (settings-read-guard).
+			Util::clear_settings_cache();
+			$stored = Util::get_settings();
+			if ( ! is_array( $stored ) ) {
+				$stored = array();
+			}
+
+			// Fresh stat cache — CLI is single-request so stale file_exists
+			// memos (not transients) are the main staleness risk.
+			if ( function_exists( 'clearstatcache' ) ) {
+				clearstatcache(); // phpcs:ignore WordPress.WP.AlternativeFunctions.clearstatcache_clearstatcache
+			}
+
+			$rows = array(
+				$this->check_verify_cache_dirs(),
+				$this->check_verify_dropins( $stored ),
+				$this->check_verify_redis( $stored ),
+				$this->check_verify_litespeed( $stored ),
+				self::validate_settings_schema( $stored ),
+				$this->check_verify_cron( $stored ),
+				$this->check_verify_uninstall_spot(),
+			);
+
+			if ( '' !== $only ) {
+				$rows = array_values(
+					array_filter(
+						$rows,
+						static function ( $row ) use ( $only ) {
+							return isset( $row['check'] ) && $only === $row['check'];
+						}
+					)
+				);
+			}
+
+			$fail_count = 0;
+			$warn_count = 0;
+			foreach ( $rows as $row ) {
+				if ( isset( $row['status'] ) && 'fail' === $row['status'] ) {
+					++$fail_count;
+				} elseif ( isset( $row['status'] ) && 'warn' === $row['status'] ) {
+					++$warn_count;
+				}
+			}
+
+			$overall = $fail_count > 0 ? 'fail' : 'pass';
+
+			if ( 'json' === $format ) {
+				WP_CLI::log(
+					(string) wp_json_encode(
+						array(
+							'overall' => $overall,
+							'checks'  => $rows,
+						),
+						JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES
+					)
+				);
+			} elseif ( class_exists( '\\WP_CLI\\Utils' ) && method_exists( '\\WP_CLI\\Utils', 'format_items' ) ) {
+					\WP_CLI\Utils::format_items( 'table', $rows, array( 'check', 'status', 'detail' ) );
+			} else {
+				foreach ( $rows as $row ) {
+					WP_CLI::log( sprintf( '%s [%s] %s', $row['check'], $row['status'], $row['detail'] ) );
+				}
+			}
+
+			$should_fail = $fail_count > 0 || ( 'warn' === $severity && $warn_count > 0 );
+			if ( $should_fail ) {
+				/* translators: %d: Number of failing checks */
+				WP_CLI::error( sprintf( __( 'Verify failed: %d check(s) failing.', 'performance-optimisation' ), $fail_count > 0 ? $fail_count : $warn_count ) );
+				return;
+			}
+
+			/* translators: 1: Number of passing checks, 2: Total checks */
+			WP_CLI::success( sprintf( __( 'Verify passed: %1$d/%2$d checks passing.', 'performance-optimisation' ), count( $rows ) - $fail_count - $warn_count, count( $rows ) ) );
+		}
+
+		/**
+		 * Canonical verify check names (single source for --check validation).
+		 *
+		 * @since NEXT
+		 * @return string[]
+		 */
+		public static function get_verify_check_names(): array {
+			return array( 'cache_dirs', 'dropins', 'redis', 'litespeed', 'settings_schema', 'cron', 'uninstall' );
+		}
+
+		/**
+		 * Resolve the static-cache domain for a home URL (Cache::__construct convention).
+		 *
+		 * Mirrors Cache::__construct(): sanitize + IDN-to-ASCII + port-strip +
+		 * `^[a-z0-9.\-]+$` allowlist + `..` reject, lowercased. The port is
+		 * intentionally stripped (audit C-06: the drop-in keeps `:` while Cache
+		 * strips it — verify resolves against the Cache convention).
+		 *
+		 * @since NEXT
+		 * @param string $home_url Home URL.
+		 * @return string Sanitized domain, or '' when unresolvable.
+		 */
+		public static function resolve_verify_domain( string $home_url ): string {
+			$host = '';
+			if ( function_exists( 'wp_parse_url' ) ) {
+				$parsed = wp_parse_url( $home_url, PHP_URL_HOST );
+				$host   = is_string( $parsed ) ? $parsed : '';
+			} else {
+				$parsed = parse_url( $home_url, PHP_URL_HOST ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url
+				$host   = is_string( $parsed ) ? $parsed : '';
+			}
+
+			if ( function_exists( 'sanitize_text_field' ) ) {
+				$host = sanitize_text_field( $host );
+			}
+
+			if ( '' !== $host && function_exists( 'idn_to_ascii' ) ) {
+				$converted = idn_to_ascii( $host, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46 );
+				if ( false !== $converted && is_string( $converted ) ) {
+					$host = $converted;
+				}
+			}
+
+			// Strip the port before validation (Cache convention).
+			$parts = explode( ':', $host, 2 );
+			$host  = $parts[0];
+
+			if ( '' === $host || false !== strpos( $host, '..' ) || 1 !== preg_match( '/^[a-z0-9.\-]+$/i', $host ) ) {
+				return '';
+			}
+
+			return strtolower( $host );
+		}
+
+		/**
+		 * Build a Redis config array from stored settings (ALLOWED_KEYS allowlist).
+		 *
+		 * Same key list WPPO_CLI_Command::get_redis_config_from_assoc() uses.
+		 *
+		 * @since NEXT
+		 * @param array $stored Raw wppo_settings array.
+		 * @return array<string, mixed> Redis connection configuration.
+		 */
+		public static function build_redis_config_from_settings( array $stored ): array {
+			$config = array();
+			$oc     = isset( $stored['object_cache'] ) && is_array( $stored['object_cache'] ) ? $stored['object_cache'] : array();
+			foreach ( Object_Cache::ALLOWED_KEYS as $key ) {
+				if ( isset( $oc[ $key ] ) ) {
+					$config[ $key ] = $oc[ $key ];
+				}
+			}
+			return $config;
+		}
+
+		/**
+		 * Validate stored settings against the canonical schema (read-only).
+		 *
+		 * Unknown top-level keys → fail (schema drift); tabs present in
+		 * Util::get_default_settings() but missing from storage → warn
+		 * (fresh/partial install); array-vs-scalar mismatches vs defaults
+		 * (one level deep) → fail. Never calls update_option().
+		 *
+		 * @since NEXT
+		 * @param array         $stored Raw wppo_settings array (live get_option).
+		 * @param string[]|null $allowed Optional allowlist override (testing).
+		 * @param array|null    $defaults Optional defaults override (testing).
+		 * @return array{check:string,status:string,detail:string} Verify row.
+		 */
+		public static function validate_settings_schema( array $stored, ?array $allowed = null, ?array $defaults = null ): array {
+			$allowed  = is_array( $allowed ) ? $allowed : Util::ALLOWED_SETTINGS_KEYS;
+			$defaults = is_array( $defaults ) ? $defaults : Util::get_default_settings();
+
+			$unknown = array();
+			foreach ( array_keys( $stored ) as $key ) {
+				if ( ! in_array( $key, $allowed, true ) ) {
+					$unknown[] = (string) $key;
+				}
+			}
+
+			$missing = array();
+			foreach ( array_keys( $defaults ) as $tab ) {
+				if ( ! array_key_exists( $tab, $stored ) ) {
+					$missing[] = (string) $tab;
+				}
+			}
+
+			$mismatches = array();
+			foreach ( $stored as $tab => $value ) {
+				if ( ! array_key_exists( $tab, $defaults ) || ! is_array( $defaults[ $tab ] ) || ! is_array( $value ) ) {
+					continue;
+				}
+				foreach ( $value as $sub_key => $sub_value ) {
+					if ( ! array_key_exists( $sub_key, $defaults[ $tab ] ) ) {
+						continue;
+					}
+					$default_is_array = is_array( $defaults[ $tab ][ $sub_key ] );
+					$stored_is_array  = is_array( $sub_value );
+					if ( $default_is_array !== $stored_is_array ) {
+						$mismatches[] = sprintf(
+							'%s.%s expected %s got %s',
+							$tab,
+							$sub_key,
+							$default_is_array ? 'array' : 'scalar',
+							$stored_is_array ? 'array' : 'scalar'
+						);
+					}
+				}
+				// A whole tab stored as a scalar while the default is an array.
+				if ( ! is_array( $value ) ) {
+					$mismatches[] = sprintf( '%s expected array got scalar', $tab );
+				}
+			}
+			// Tabs stored as scalars at the top level (defaults are all arrays).
+			foreach ( $stored as $tab => $value ) {
+				if ( array_key_exists( $tab, $defaults ) && is_array( $defaults[ $tab ] ) && ! is_array( $value ) ) {
+					$dup = sprintf( '%s expected array got scalar', $tab );
+					if ( ! in_array( $dup, $mismatches, true ) ) {
+						$mismatches[] = $dup;
+					}
+				}
+			}
+
+			if ( ! empty( $unknown ) || ! empty( $mismatches ) ) {
+				$parts = array();
+				if ( ! empty( $unknown ) ) {
+					$parts[] = 'unknown keys: ' . implode( ', ', $unknown );
+				}
+				if ( ! empty( $mismatches ) ) {
+					$parts[] = 'type mismatches: ' . implode( '; ', $mismatches );
+				}
+				return array(
+					'check'  => 'settings_schema',
+					'status' => 'fail',
+					'detail' => implode( ' | ', $parts ),
+				);
+			}
+
+			if ( ! empty( $missing ) ) {
+				return array(
+					'check'  => 'settings_schema',
+					'status' => 'warn',
+					/* translators: %s: Comma-separated list of missing settings tabs */
+					'detail' => sprintf( __( 'Missing tabs (fresh/partial install): %s', 'performance-optimisation' ), implode( ', ', $missing ) ),
+				);
+			}
+
+			return array(
+				'check'  => 'settings_schema',
+				'status' => 'pass',
+				'detail' => __( 'Settings schema valid.', 'performance-optimisation' ),
+			);
+		}
+
+		/**
+		 * Split found wppo_* cron hooks into orphans vs known-legacy (pure helper).
+		 *
+		 * The legacy `wppo_img_conversation` misspelling is allowlisted as
+		 * known-BC and reported separately (warn, not fail).
+		 *
+		 * @since NEXT
+		 * @param string[] $found_hooks Hook names discovered in WP-Cron.
+		 * @return array{orphans:string[],legacy:string[]} Orphan and legacy lists.
+		 */
+		public static function find_orphan_cron_hooks( array $found_hooks ): array {
+			$orphans = array();
+			$legacy  = array();
+			foreach ( $found_hooks as $hook ) {
+				if ( 0 !== strpos( $hook, 'wppo_' ) ) {
+					continue;
+				}
+				if ( 'wppo_img_conversation' === $hook ) {
+					$legacy[] = $hook;
+					continue;
+				}
+				if ( ! in_array( $hook, Cron::SCHEDULED_HOOKS, true ) ) {
+					$orphans[] = $hook;
+				}
+			}
+			return array(
+				'orphans' => $orphans,
+				'legacy'  => $legacy,
+			);
+		}
+
+		/**
+		 * Evaluate LiteSpeed coherence from live inputs (pure helper, no I/O).
+		 *
+		 * @since NEXT
+		 * @param string $raw_mode Raw configured mode string (unvalidated).
+		 * @param string $effective Resolved effective mode.
+		 * @param bool   $server_ls Whether the server is LiteSpeed.
+		 * @param bool   $lscache Whether the LSCache plugin is active.
+		 * @param bool   $esi_enabled Whether the ESI bridge setting is on.
+		 * @param bool   $esi_available Whether native ESI is available (Enterprise).
+		 * @return array{check:string,status:string,detail:string} Verify row.
+		 */
+		public static function evaluate_litespeed_state( string $raw_mode, string $effective, bool $server_ls, bool $lscache, bool $esi_enabled, bool $esi_available ): array {
+			$allowed = array( 'auto', 'wppo', 'litespeed', 'standalone' );
+			$base    = sprintf(
+				'mode=%s effective=%s server-ls=%s lscache=%s',
+				$raw_mode,
+				$effective,
+				$server_ls ? 'yes' : 'no',
+				$lscache ? 'yes' : 'no'
+			);
+
+			if ( ! in_array( $raw_mode, $allowed, true ) ) {
+				return array(
+					'check'  => 'litespeed',
+					'status' => 'fail',
+					'detail' => 'unknown mode "' . $raw_mode . '" | ' . $base,
+				);
+			}
+
+			if ( 'litespeed' === $effective && ! $server_ls && ! $lscache ) {
+				return array(
+					'check'  => 'litespeed',
+					'status' => 'fail',
+					'detail' => 'effective litespeed with no LS server and no LSCache plugin | ' . $base,
+				);
+			}
+
+			$warnings = array();
+			if ( 'wppo' === $raw_mode && $server_ls && $lscache ) {
+				$warnings[] = 'mode wppo on LS server with LSCache active (double-cache risk)';
+			}
+			if ( 'standalone' === $raw_mode && $server_ls ) {
+				$warnings[] = 'standalone on LS server (intentional but flagged)';
+			}
+			if ( $esi_enabled && ! $esi_available ) {
+				$warnings[] = 'ESI enabled without Enterprise/native ESI';
+			}
+
+			if ( ! empty( $warnings ) ) {
+				return array(
+					'check'  => 'litespeed',
+					'status' => 'warn',
+					'detail' => implode( '; ', $warnings ) . ' | ' . $base,
+				);
+			}
+
+			return array(
+				'check'  => 'litespeed',
+				'status' => 'pass',
+				'detail' => $base,
+			);
+		}
+
+		/**
+		 * Find wppo_* options without a known live owner (pure helper).
+		 *
+		 * Known = Util::UNINSTALL_OPTIONS (blog-prefix stripped) + dynamic
+		 * prefixes (front-page LCP, crawler batches) + runtime circuit keys.
+		 *
+		 * @since NEXT
+		 * @param string[] $found_names Option names from the options table.
+		 * @return string[] Unknown option names.
+		 */
+		public static function find_unknown_wppo_options( array $found_names ): array {
+			$known = array();
+			foreach ( Util::UNINSTALL_OPTIONS as $name ) {
+				$known[] = $name;
+			}
+			// Runtime keys with a live owner but no uninstall row.
+			$known[] = 'wppo_object_cache_circuit';
+			$known[] = 'wppo_object_cache_circuit_dismissed';
+
+			$prefixes = array(
+				Util::FRONT_PAGE_LCP_OPTION_PREFIX,
+				'wppo_crawler_batch_',
+				'wppo_litespeed_purge_queue',
+			);
+
+			$unknown = array();
+			foreach ( $found_names as $name ) {
+				$name = (string) $name;
+				if ( 0 !== strpos( $name, 'wppo_' ) && 0 === preg_match( '/^\d+_wppo_/', $name ) ) {
+					continue;
+				}
+				// Strip a multisite blog-ID prefix for comparison.
+				$bare = (string) preg_replace( '/^\d+_/', '', $name );
+				if ( in_array( $bare, $known, true ) || in_array( $name, $known, true ) ) {
+					continue;
+				}
+				$matched_prefix = false;
+				foreach ( $prefixes as $prefix ) {
+					if ( 0 === strpos( $bare, $prefix ) || 0 === strpos( $name, $prefix ) ) {
+						$matched_prefix = true;
+						break;
+					}
+				}
+				if ( ! $matched_prefix ) {
+					$unknown[] = $name;
+				}
+			}
+			return $unknown;
+		}
+
+		/**
+		 * Build the machine-readable verify payload (pure helper).
+		 *
+		 * @since NEXT
+		 * @param array $rows Verify rows.
+		 * @return array{overall:string,checks:array} Payload for --format=json.
+		 */
+		public static function build_verify_payload( array $rows ): array {
+			$overall = 'pass';
+			foreach ( $rows as $row ) {
+				if ( isset( $row['status'] ) && 'fail' === $row['status'] ) {
+					$overall = 'fail';
+					break;
+				}
+			}
+			return array(
+				'overall' => $overall,
+				'checks'  => array_values( $rows ),
+			);
+		}
+
+		/**
+		 * Check 1 — cache directories live (writable + consistent).
+		 *
+		 * Never calls Cache::get_cache_stats(), Cache::get_cache_size(), or any
+		 * wppo_* transient — every probe hits the filesystem directly.
+		 *
+		 * @since NEXT
+		 * @return array{check:string,status:string,detail:string} Verify row.
+		 */
+		private function check_verify_cache_dirs(): array {
+			$fs = Util::init_filesystem();
+			if ( ! $fs ) {
+				return array(
+					'check'  => 'cache_dirs',
+					'status' => 'fail',
+					'detail' => __( 'WP_Filesystem unavailable — cannot assert cache dirs.', 'performance-optimisation' ),
+				);
+			}
+
+			$root = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo' );
+
+			// phpcs:disable WordPress.WP.AlternativeFunctions.file_system_operations_is_dir, WordPress.WP.AlternativeFunctions.file_system_operations_is_writable
+			$root_is_dir      = is_dir( $root );
+			$root_is_writable = $root_is_dir && is_writable( $root );
+			// phpcs:enable
+
+			if ( ! $root_is_dir ) {
+				return array(
+					'check'  => 'cache_dirs',
+					'status' => 'fail',
+					'detail' => 'cache root missing: ' . $root,
+				);
+			}
+
+			if ( ! $root_is_writable ) {
+				return array(
+					'check'  => 'cache_dirs',
+					'status' => 'fail',
+					'detail' => 'cache root not writable: ' . $root,
+				);
+			}
+
+			$home_url = function_exists( 'home_url' ) ? home_url() : '';
+			if ( '' === $home_url && method_exists( 'PerformanceOptimise\Inc\Util', 'cached_home_url' ) ) {
+				try {
+					$home_url = Util::cached_home_url();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$home_url = '';
+				}
+			}
+			$domain = self::resolve_verify_domain( (string) $home_url );
+
+			$optionals = array(
+				'min/js'  => Util::min_cache_dir( 'js' ),
+				'min/css' => Util::min_cache_dir( 'css' ),
+				'ccss'    => wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/ccss' ),
+				'fonts'   => wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/fonts' ),
+			);
+			if ( '' !== $domain ) {
+				$optionals[ 'domain(' . $domain . ')' ] = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/' . $domain );
+			}
+
+			$missing = array();
+			foreach ( $optionals as $label => $dir ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_dir
+				if ( ! is_dir( $dir ) ) {
+					$missing[] = $label;
+				}
+			}
+
+			$port_note = '';
+			if ( false !== strpos( (string) $home_url, ':' ) && 1 === preg_match( '#https?://[^/]+:[0-9]+#', (string) $home_url ) ) {
+				$port_note = ' (port stripped per Cache convention)';
+			}
+
+			if ( ! empty( $missing ) ) {
+				return array(
+					'check'  => 'cache_dirs',
+					'status' => 'warn',
+					/* translators: %s: Comma-separated list of missing optional cache subdirectories */
+					'detail' => sprintf( __( 'Root healthy; optional subdirs missing: %s', 'performance-optimisation' ), implode( ', ', $missing ) ) . $port_note,
+				);
+			}
+
+			if ( '' === $domain ) {
+				return array(
+					'check'  => 'cache_dirs',
+					'status' => 'warn',
+					'detail' => 'root writable but home host unresolvable; domain dir unchecked' . $port_note,
+				);
+			}
+
+			return array(
+				'check'  => 'cache_dirs',
+				'status' => 'pass',
+				'detail' => 'root writable; domain=' . $domain . ' min/ccss/fonts present' . $port_note,
+			);
+		}
+
+		/**
+		 * Check 2 — drop-ins present & intended (incl. foreign).
+		 *
+		 * @since NEXT
+		 * @param array $stored Raw wppo_settings array.
+		 * @return array{check:string,status:string,detail:string} Verify row.
+		 */
+		private function check_verify_dropins( array $stored ): array {
+			$notes    = array();
+			$has_fail = false;
+			$has_warn = false;
+
+			// Advanced-cache drop-in.
+			$adv_path = Advanced_Cache_Handler::get_dropin_path();
+			try {
+				$is_ours = Advanced_Cache_Handler::is_our_dropin();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$is_ours = false;
+			}
+			try {
+				$foreign = Advanced_Cache_Handler::foreign_dropin_present();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$foreign = false;
+			}
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_readable
+			$adv_exists = is_readable( $adv_path );
+			$wp_cache   = defined( 'WP_CACHE' ) && WP_CACHE;
+
+			$cache_enabled = ! empty( $stored['cache_settings']['enableCache'] );
+
+			if ( $is_ours ) {
+				$notes[] = 'advanced-cache: ours';
+				if ( ! $wp_cache ) {
+					$has_warn = true;
+					$notes[]  = 'WP_CACHE off while WPPO drop-in installed';
+				}
+			} elseif ( $foreign ) {
+				$notes[] = 'advanced-cache: foreign drop-in owns the slot';
+				if ( $cache_enabled ) {
+					$has_warn = true;
+					$notes[]  = 'WPPO cache enabled but foreign drop-in active';
+				}
+			} elseif ( $cache_enabled ) {
+					$has_fail = true;
+					$notes[]  = 'advanced-cache: missing while WPPO cache enabled';
+			} else {
+				$notes[] = 'advanced-cache: absent (cache disabled)';
+			}
+
+			// wp-config.php WP_CACHE scan (only when readable — best effort).
+			$wp_config = '';
+			if ( defined( 'ABSPATH' ) ) {
+				$candidate = wp_normalize_path( ABSPATH . 'wp-config.php' );
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_readable
+				if ( is_readable( $candidate ) ) {
+					$wp_config = $candidate;
+				} else {
+					$parent = wp_normalize_path( dirname( ABSPATH ) . '/wp-config.php' );
+					// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_readable
+					if ( is_readable( $parent ) ) {
+						$wp_config = $parent;
+					}
+				}
+			}
+			if ( '' !== $wp_config ) {
+				$content = $this->read_small_file( $wp_config );
+				if ( is_string( $content ) && false === strpos( $content, 'WP_CACHE' ) && $cache_enabled && $is_ours ) {
+					$has_warn = true;
+					$notes[]  = 'wp-config.php has no WP_CACHE define';
+				}
+			}
+			unset( $adv_exists );
+
+			// Object-cache drop-in.
+			try {
+				$oc_manager = new Object_Cache();
+				$oc_path    = $oc_manager->get_dropin_path();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$oc_path = wp_normalize_path( WP_CONTENT_DIR . '/object-cache.php' );
+			}
+			$oc_content = $this->read_small_file( $oc_path );
+			$oc_own     = is_string( $oc_content ) && Object_Cache::is_own_dropin_content( $oc_content );
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_readable
+			$oc_exists  = is_readable( $oc_path ) || is_string( $oc_content );
+			$oc_foreign = $oc_exists && ! $oc_own;
+			$oc_legacy  = is_string( $oc_content )
+				&& false === strpos( $oc_content, Object_Cache::DROPIN_MARKER )
+				&& false !== strpos( $oc_content, Object_Cache::LEGACY_DROPIN_MARKER );
+
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_readable
+			$config_path   = wp_normalize_path( WP_CONTENT_DIR . '/wppo-redis-config.php' );
+			$config_exists = is_readable( $config_path );
+
+			$oc_settings = isset( $stored['object_cache'] ) && is_array( $stored['object_cache'] ) ? $stored['object_cache'] : array();
+			$oc_implied  = ! empty( $oc_settings['host'] ) || ! empty( $oc_settings['nodes'] );
+
+			if ( $oc_own ) {
+				$notes[] = 'object-cache: ours' . ( $oc_legacy ? ' (legacy marker)' : '' );
+				if ( $oc_legacy ) {
+					$has_warn = true;
+				}
+				if ( $oc_implied && ! $config_exists ) {
+					$has_fail = true;
+					$notes[]  = 'wppo-redis-config.php missing while object cache implied enabled';
+				}
+			} elseif ( $oc_foreign ) {
+				$notes[]  = 'object-cache: foreign drop-in owns the slot';
+				$has_warn = true;
+				if ( $config_exists ) {
+					$notes[] = 'wppo-redis-config.php present but drop-in foreign/absent';
+				}
+			} else {
+				$notes[] = 'object-cache: absent';
+				if ( $oc_implied ) {
+					$has_warn = true;
+					$notes[]  = 'object-cache implied enabled in settings but no drop-in';
+				}
+				if ( $config_exists ) {
+					$has_warn = true;
+					$notes[]  = 'wppo-redis-config.php present but no drop-in';
+				}
+			}
+
+			$status = $has_fail ? 'fail' : ( $has_warn ? 'warn' : 'pass' );
+			return array(
+				'check'  => 'dropins',
+				'status' => $status,
+				'detail' => implode( '; ', $notes ),
+			);
+		}
+
+		/**
+		 * Check 3 — Redis reachable when enabled (live probe).
+		 *
+		 * "Enabled" is derived live from stored settings (non-empty host/nodes)
+		 * AND own drop-in presence — never from get_status() caches.
+		 *
+		 * @since NEXT
+		 * @param array $stored Raw wppo_settings array.
+		 * @return array{check:string,status:string,detail:string} Verify row.
+		 */
+		private function check_verify_redis( array $stored ): array {
+			$oc_settings = isset( $stored['object_cache'] ) && is_array( $stored['object_cache'] ) ? $stored['object_cache'] : array();
+			$has_host    = ! empty( $oc_settings['host'] ) || ! empty( $oc_settings['nodes'] );
+
+			$own_dropin = false;
+			try {
+				$manager    = new Object_Cache();
+				$oc_path    = $manager->get_dropin_path();
+				$content    = $this->read_small_file( $oc_path );
+				$own_dropin = is_string( $content ) && Object_Cache::is_own_dropin_content( $content );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$own_dropin = false;
+			}
+
+			if ( ! $has_host || ! $own_dropin ) {
+				$detail = __( 'Redis disabled — skipped.', 'performance-optimisation' );
+				if ( ! class_exists( 'Redis' ) ) {
+					$detail .= ' (php-redis missing; needed if enabling)';
+				}
+				return array(
+					'check'  => 'redis',
+					'status' => 'pass',
+					'detail' => $detail,
+				);
+			}
+
+			if ( ! class_exists( 'Redis' ) ) {
+				return array(
+					'check'  => 'redis',
+					'status' => 'fail',
+					'detail' => __( 'Object cache enabled but the PhpRedis extension is missing.', 'performance-optimisation' ),
+				);
+			}
+
+			$config = self::build_redis_config_from_settings( $stored );
+			try {
+				$manager = new Object_Cache();
+				$ping    = $manager->ping( $config );
+			} catch ( \Throwable $e ) {
+				return array(
+					'check'  => 'redis',
+					'status' => 'fail',
+					'detail' => 'ping exception: ' . sanitize_text_field( $e->getMessage() ),
+				);
+			}
+
+			if ( true === $ping ) {
+				return array(
+					'check'  => 'redis',
+					'status' => 'pass',
+					'detail' => __( 'Redis reachable (live ping).', 'performance-optimisation' ),
+				);
+			}
+
+			$message = __( 'Redis unreachable.', 'performance-optimisation' );
+			if ( $ping instanceof \WP_Error ) {
+				$message = $ping->get_error_message();
+			}
+			return array(
+				'check'  => 'redis',
+				'status' => 'fail',
+				'detail' => $message,
+			);
+		}
+
+		/**
+		 * Check 4 — LiteSpeed mode coherent.
+		 *
+		 * @since NEXT
+		 * @param array $stored Raw wppo_settings array.
+		 * @return array{check:string,status:string,detail:string} Verify row.
+		 */
+		private function check_verify_litespeed( array $stored ): array {
+			$raw_mode = 'auto';
+			if ( isset( $stored['litespeed_integration']['mode'] ) && is_string( $stored['litespeed_integration']['mode'] ) ) {
+				$raw_mode = $stored['litespeed_integration']['mode'];
+			}
+
+			$effective = 'standalone';
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'effective_mode' ) ) {
+					$effective = (string) LiteSpeed_Integration::effective_mode();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
+			$server_ls = false;
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) && method_exists( 'PerformanceOptimise\Inc\Server_Rules', 'is_litespeed' ) ) {
+					$server_ls = (bool) Server_Rules::is_litespeed();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
+			$lscache = false;
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'is_lscache_active' ) ) {
+					$lscache = (bool) LiteSpeed_Integration::is_lscache_active();
+				} else {
+					$lscache = class_exists( 'LiteSpeed_Cache_API' ) || ( function_exists( 'is_plugin_active' ) && is_plugin_active( 'litespeed-cache/litespeed-cache.php' ) );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
+			$esi_enabled   = false;
+			$esi_available = false;
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
+					if ( method_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI', 'is_setting_enabled' ) ) {
+						$esi_enabled = (bool) LiteSpeed_ESI::is_setting_enabled();
+					}
+					if ( method_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI', 'is_esi_available' ) ) {
+						$esi_available = (bool) LiteSpeed_ESI::is_esi_available();
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
+			return self::evaluate_litespeed_state( $raw_mode, $effective, $server_ls, $lscache, $esi_enabled, $esi_available );
+		}
+
+		/**
+		 * Check 6 — orphaned cron / Action Scheduler events.
+		 *
+		 * @since NEXT
+		 * @param array $stored Raw wppo_settings array.
+		 * @return array{check:string,status:string,detail:string} Verify row.
+		 */
+		private function check_verify_cron( array $stored ): array {
+			$notes    = array();
+			$has_fail = false;
+			$has_warn = false;
+
+			// WP-Cron side: enumerate live via _get_cron_array().
+			$found = array();
+			try {
+				if ( function_exists( '_get_cron_array' ) ) {
+					$cron = _get_cron_array();
+					if ( is_array( $cron ) ) {
+						foreach ( $cron as $timestamp => $hooks ) {
+							unset( $timestamp );
+							if ( ! is_array( $hooks ) ) {
+								continue;
+							}
+							foreach ( array_keys( $hooks ) as $hook ) {
+								$found[] = (string) $hook;
+							}
+						}
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			$found = array_values( array_unique( $found ) );
+
+			$split = self::find_orphan_cron_hooks( $found );
+			if ( ! empty( $split['orphans'] ) ) {
+				$has_fail = true;
+				$notes[]  = 'orphan cron hooks: ' . implode( ', ', $split['orphans'] );
+			} else {
+				$notes[] = 'no orphan cron hooks';
+			}
+			if ( ! empty( $split['legacy'] ) ) {
+				$has_warn = true;
+				$notes[]  = 'legacy hook present (BC): ' . implode( ', ', $split['legacy'] );
+			}
+
+			// Expected-but-missing recurring dispatchers.
+			$missing_expected = array();
+			if ( function_exists( 'wp_next_scheduled' ) ) {
+				try {
+					$preload_on = ! empty( $stored['preload_settings']['enablePreloadCache'] );
+					if ( $preload_on && ! wp_next_scheduled( 'wppo_page_cron_hook' ) ) {
+						$missing_expected[] = 'wppo_page_cron_hook';
+					}
+					if ( ! wp_next_scheduled( 'wppo_img_conversion' ) ) {
+						$missing_expected[] = 'wppo_img_conversion';
+					}
+					$db_schedule = isset( $stored['database_cleanup']['dbSchedule'] ) ? (string) $stored['database_cleanup']['dbSchedule'] : '';
+					if ( '' !== $db_schedule && 'none' !== $db_schedule && ! wp_next_scheduled( 'wppo_database_cleanup_cron' ) ) {
+						$missing_expected[] = 'wppo_database_cleanup_cron';
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			if ( ! empty( $missing_expected ) ) {
+				$has_warn = true;
+				$notes[]  = 'expected but unscheduled: ' . implode( ', ', $missing_expected );
+			}
+
+			// Action Scheduler side (guarded — missing vendor install degrades to warn).
+			if ( function_exists( 'as_get_scheduled_actions' ) ) {
+				try {
+					// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+					$actions = as_get_scheduled_actions(
+						array(
+							'status'   => 'pending',
+							'per_page' => 100,
+						),
+						'ids'
+					);
+					// phpcs:enable
+					$as_hooks = array();
+					if ( is_array( $actions ) ) {
+						foreach ( $actions as $action_id ) {
+							if ( function_exists( 'as_get_scheduled_action' ) ) {
+								$action = as_get_scheduled_action( $action_id );
+								if ( is_object( $action ) && method_exists( $action, 'get_hook' ) ) {
+									$as_hooks[] = (string) $action->get_hook();
+								}
+							}
+						}
+					}
+					// Fallback: query by hook when the action-object API is unavailable.
+					if ( empty( $as_hooks ) && function_exists( 'as_has_scheduled_action' ) ) {
+						foreach ( Cron::AS_HOOKS as $hook ) {
+							if ( as_has_scheduled_action( $hook ) ) {
+								$as_hooks[] = $hook;
+							}
+						}
+					}
+					$as_hooks   = array_values( array_unique( $as_hooks ) );
+					$as_orphans = array();
+					foreach ( $as_hooks as $hook ) {
+						if ( 0 === strpos( $hook, 'wppo_' ) && ! in_array( $hook, Cron::AS_HOOKS, true ) ) {
+							$as_orphans[] = $hook;
+						}
+					}
+					if ( ! empty( $as_orphans ) ) {
+						$has_fail = true;
+						$notes[]  = 'orphan AS actions: ' . implode( ', ', $as_orphans );
+					} else {
+						$notes[] = 'AS queue clean';
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$has_warn = true;
+					$notes[]  = 'AS inspection failed (skipped)';
+				}
+			} else {
+				$has_warn = true;
+				$notes[]  = 'AS unavailable — skipped';
+			}
+
+			$status = $has_fail ? 'fail' : ( $has_warn ? 'warn' : 'pass' );
+			return array(
+				'check'  => 'cron',
+				'status' => $status,
+				'detail' => implode( '; ', $notes ),
+			);
+		}
+
+		/**
+		 * Check 7 — uninstall-completeness spot check (read-only).
+		 *
+		 * Single `wp_options WHERE option_name LIKE 'wppo_%'` query; never deletes.
+		 *
+		 * @since NEXT
+		 * @return array{check:string,status:string,detail:string} Verify row.
+		 */
+		private function check_verify_uninstall_spot(): array {
+			$found = array();
+			try {
+				global $wpdb;
+				if ( isset( $wpdb ) && is_object( $wpdb ) && isset( $wpdb->options ) && method_exists( $wpdb, 'get_col' ) && method_exists( $wpdb, 'esc_like' ) ) {
+					$like = $wpdb->esc_like( 'wppo_' ) . '%';
+					// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+					$found = $wpdb->get_col( $wpdb->prepare( 'SELECT option_name FROM %i WHERE option_name LIKE %s', $wpdb->options, $like ) );
+					// phpcs:enable
+					if ( ! is_array( $found ) ) {
+						$found = array();
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$found = array();
+			}
+
+			if ( empty( $found ) ) {
+				return array(
+					'check'  => 'uninstall',
+					'status' => 'pass',
+					'detail' => __( 'No wppo_* options outside the known set (or options table unreadable — nothing to flag).', 'performance-optimisation' ),
+				);
+			}
+
+			$unknown = self::find_unknown_wppo_options( array_map( 'strval', $found ) );
+			if ( empty( $unknown ) ) {
+				return array(
+					'check'  => 'uninstall',
+					'status' => 'pass',
+					/* translators: %d: Number of wppo_* options found */
+					'detail' => sprintf( __( 'All %d wppo_* options have a known owner.', 'performance-optimisation' ), count( $found ) ),
+				);
+			}
+
+			$shown  = array_slice( $unknown, 0, 10 );
+			$extra  = count( $unknown ) - count( $shown );
+			$detail = 'unknown wppo_* options: ' . implode( ', ', $shown );
+			if ( $extra > 0 ) {
+				/* translators: %d: Number of additional unknown options not listed */
+				$detail .= sprintf( __( ' +%d more', 'performance-optimisation' ), $extra );
+			}
+			return array(
+				'check'  => 'uninstall',
+				'status' => 'warn',
+				'detail' => $detail,
+			);
+		}
+
+		/**
+		 * Read a small file via WP_Filesystem with a native fallback (size-guarded).
+		 *
+		 * @since NEXT
+		 * @param string $path Absolute path.
+		 * @return string|null Contents, or null when missing/unreadable/too large.
+		 */
+		private function read_small_file( string $path ): ?string {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_readable
+			if ( ! is_readable( $path ) ) {
+				return null;
+			}
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize
+			$size = filesize( $path );
+			if ( false === $size || $size < 0 || $size >= 1048576 ) {
+				return null;
+			}
+			if ( 0 === $size ) {
+				return '';
+			}
+
+			$fs = Util::init_filesystem();
+			if ( $fs && is_object( $fs ) && method_exists( $fs, 'get_contents' ) ) {
+				try {
+					$content = $fs->get_contents( $path );
+					return is_string( $content ) ? $content : null;
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+			$content = file_get_contents( $path );
+			return is_string( $content ) ? $content : null;
+		}
 	}
 }
