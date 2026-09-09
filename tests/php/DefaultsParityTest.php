@@ -47,6 +47,10 @@ class DefaultsParityTest extends \PHPUnit\Framework\TestCase {
 		// Dynamic keys evaluate in-process; assert presence, not a hardcoded value.
 		$this->assertArrayHasKey( 'blockAssetsOnDemand', $defaults['file_optimisation'] );
 		$this->assertArrayHasKey( 'enabled', $defaults['od_integration'] );
+
+		// WooCommerce safe mode default (issue #922) must be enabled + boolean.
+		$this->assertArrayHasKey( 'wooSafeMode', $defaults['cache_settings'] );
+		$this->assertTrue( $defaults['cache_settings']['wooSafeMode'] );
 	}
 
 	/**

@@ -199,6 +199,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			$wppo_options = Util::get_settings();
 			$cache_life   = isset( $wppo_options['cache_settings']['cacheLife'] ) ? absint( $wppo_options['cache_settings']['cacheLife'] ) : 0;
 
+			// Woo safe-mode policy (issue #922), baked in at generation time.
+			// The generated drop-in serves cached pages before WordPress boots,
+			// so it cannot read settings or run the wppo_woo_cacheable filter at
+			// serve time; the toggle is resolved here and written into the file.
+			// Semantics mirror Cache::is_woo_excluded(): an absent key defaults to
+			// enabled (fail-safe), and malformed values normalize to enabled.
+			$woo_safe_mode = true;
+			if ( isset( $wppo_options['cache_settings']['wooSafeMode'] ) ) {
+				$parsed_mode   = filter_var( $wppo_options['cache_settings']['wooSafeMode'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+				$woo_safe_mode = null === $parsed_mode ? true : $parsed_mode;
+			}
+
+			// Pre-boot request-URI segments to exclude. The defaults are always
+			// baked (pre-#922 behaviour); under safe mode the configured
+			// WooCommerce page slugs are resolved so a custom slug (e.g. /basket/)
+			// never reaches wppo_serve_cache_file().
+			$woo_uri_segments = array( 'cart', 'checkout', 'my-account' );
+			if ( $woo_safe_mode ) {
+				foreach ( Util::get_woo_excluded_paths() as $woo_path ) {
+					$woo_path = strtolower( trim( (string) $woo_path, '/' ) );
+					$woo_path = preg_replace( '/[^a-z0-9\-_\/]/', '', $woo_path );
+					if ( '' !== $woo_path && ! in_array( $woo_path, $woo_uri_segments, true ) ) {
+						$woo_uri_segments[] = $woo_path;
+					}
+				}
+			}
+			$woo_uri_pattern = implode( '|', array_map( 'preg_quote', $woo_uri_segments ) );
+
 			$handler_code = '<?php' . PHP_EOL .
 			'// ' . self::DROPIN_MARKER . PHP_EOL .
 			'if ( ! defined( \'ABSPATH\' ) ) {' . PHP_EOL .
@@ -220,25 +248,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'if ( isset( $_COOKIE[\'woocommerce_items_in_cart\'] ) || isset( $_COOKIE[\'woocommerce_cart_hash\'] ) ) {' . PHP_EOL .
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL .
-			'foreach ( $_COOKIE as $k => $v ) { if ( 0 === strpos( $k, \'wp_woocommerce_session_\' ) && ! empty( $v ) ) { return; } }' . PHP_EOL . PHP_EOL .
+			( $woo_safe_mode
+				? 'foreach ( (array) $_COOKIE as $k => $v ) { if ( 0 === strpos( $k, \'wp_woocommerce_session_\' ) && ! empty( $v ) ) { return; } }' . PHP_EOL . PHP_EOL . PHP_EOL
+				: PHP_EOL // Safe mode disabled: restore pre-#922 drop-in behaviour.
+			) .
 
 			'// WooCommerce AJAX endpoints are dynamic JSON and must never be served from the static cache (issue #907).' . PHP_EOL .
 			'// The segment match mirrors Cache::is_wc_ajax_request() case-insensitively, including the raw' . PHP_EOL .
 			'// QUERY_STRING fallback (intentional pre-boot duplication — the drop-in serves cached pages before' . PHP_EOL .
 			'// WordPress boots, so no sanitize_text_field/Util calls here); the empty-QUERY_STRING gate before' . PHP_EOL .
 			'// wppo_serve_cache_file() below remains as a second backstop.' . PHP_EOL .
-			'// Woo safe-mode: also guard add-to-cart query param and session cookie (issue #922).' . PHP_EOL .
-			'if ( preg_match( \'#(^|/)wc-ajax(/|$)#i\', $request_uri ) || isset( $_GET[\'wc-ajax\'] ) || isset( $_GET[\'add-to-cart\'] ) ) {' . PHP_EOL .
+			'// Woo safe-mode (issue #922): when enabled, the session-cookie and add-to-cart guards are' . PHP_EOL .
+			'// baked in above/below, and the configured WooCommerce page paths are added to the URI' . PHP_EOL .
+			'// guard. When disabled, only the pre-#922 guards remain (parity with master).' . PHP_EOL .
+			'if ( preg_match( \'#(^|/)wc-ajax(/|$)#i\', $request_uri ) || isset( $_GET[\'wc-ajax\'] )' . ( $woo_safe_mode ? ' || isset( $_GET[\'add-to-cart\'] )' : '' ) . ' ) {' . PHP_EOL .
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL .
 			'if ( ! empty( $_SERVER[\'QUERY_STRING\'] ) && preg_match( \'/(?:^|&)wc-ajax(?:=|&|$)/i\', $_SERVER[\'QUERY_STRING\'] ) ) {' . PHP_EOL .
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL .
-			'if ( ! empty( $_SERVER[\'QUERY_STRING\'] ) && preg_match( \'/(?:^|&)add-to-cart(?:=|&|$)/i\', $_SERVER[\'QUERY_STRING\'] ) ) {' . PHP_EOL .
-			'	return;' . PHP_EOL .
-			'}' . PHP_EOL . PHP_EOL .
+			( $woo_safe_mode
+				? 'if ( ! empty( $_SERVER[\'QUERY_STRING\'] ) && preg_match( \'/(?:^|&)add-to-cart(?:=|&|$)/i\', $_SERVER[\'QUERY_STRING\'] ) ) {' . PHP_EOL .
+				'	return;' . PHP_EOL .
+				'}' . PHP_EOL . PHP_EOL
+				: PHP_EOL // Keeps the blank-line separator consistent below.
+			) .
 
-			'if ( preg_match( \'#^/(?:cart|checkout|my-account)(?:/|$)#i\', $request_uri ) || preg_match( \'/(?:sitemap[^\/]*\.xml|wp-sitemap[^\/]*\.xml|\.xml)$/i\', $request_uri ) ) {' . PHP_EOL .
+			'if ( preg_match( \'#^/(?:' . $woo_uri_pattern . ')(?:/|$)#i\', $request_uri ) || preg_match( \'/(?:sitemap[^\/]*\.xml|wp-sitemap[^\/]*\.xml|\.xml)$/i\', $request_uri ) ) {' . PHP_EOL .
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
 

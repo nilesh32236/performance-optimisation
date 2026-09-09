@@ -97,26 +97,7 @@ add_filter( 'wppo_should_cache_request', function( $should, $request_uri, $is_mo
 
 **WooCommerce cookie behavior note (issue #907):** only cart-content cookies (`woocommerce_items_in_cart`, `woocommerce_cart_hash`) bypass the cache; currency-switcher cookies (`WOOCS` / `wmc-current-currency`, Aelia, …) intentionally do **not** vary or bypass — there is no per-currency segmentation today. Currency vary is a future M-sized item. WooCommerce AJAX endpoints (`?wc-ajax=…`, `/wc-ajax/…`) are always excluded from serving (the `advanced-cache.php` drop-in returns early pre-boot), buffering, and storage.
 
-**WooCommerce safe mode (issue #922):** when `cache_settings.wooSafeMode` is `true` (default), `cart`/`checkout`/`my-account` endpoints, `wc-ajax` and `?add-to-cart` requests, and Woo session cookies (`wp_woocommerce_session_*` + cart fragments) are never served as cache HIT. Guarded by `has_filter('wppo_woo_cacheable')` so per-URL override is possible; the `advanced-cache.php` drop-in mirrors the same guards pre-boot (no WP/Woo calls). Disable safe mode by setting `wooSafeMode => false` via `wppo_settings` (e.g. `wp wppo settings` or import).
-
----
-
-### `wppo_woo_cacheable`
-Filters whether a Woo-excluded request should be re-allowed as cacheable. Guarded by `has_filter()` — the filter is only applied when a listener is present. Return `true` to re-allow caching for that URL; default `false` (not cacheable). Runs inside `Cache::is_woo_excluded()` after any Woo exclusion is detected. @since NEXT.
-
-**Parameters:**
-- `$cacheable` *(bool)* — Whether the Woo request should be re-allowed as cacheable. Default `false`.
-- `$request_uri` *(string)* — The request URI.
-
-**Example:**
-```php
-add_filter( 'wppo_woo_cacheable', function( $cacheable, $request_uri ) {
-    if ( false !== strpos( $request_uri, '/my-account/custom-public/' ) ) {
-        return true; // Re-allow caching for a custom public account sub-page.
-    }
-    return $cacheable;
-}, 10, 2 );
-```
+**WooCommerce safe mode (issue #922):** when `cache_settings.wooSafeMode` is `true` (default), `cart`/`checkout`/`my-account` endpoints (plus any configured custom WooCommerce page slugs), `wc-ajax` and `?add-to-cart` requests, and Woo session cookies (`wp_woocommerce_session_*` + cart fragments) are never served as cache HIT. The per-URL override below (`wppo_woo_cacheable`) applies only after WordPress boots (Cache layer); the pre-boot `advanced-cache.php` drop-in cannot run the filter and instead bakes the toggle and the configured Woo paths in at generation time — disabling safe mode (`wooSafeMode => false` via `wppo_settings`, e.g. `wp wppo settings` or import) regenerates the drop-in with only the pre-#922 guards, restoring master behaviour.
 
 ---
 
@@ -199,6 +180,25 @@ add_filter( 'wppo_object_cache_probe_interval', function() {
 ---
 
 ## 🎛️ Filter Hooks
+
+### `wppo_woo_cacheable`
+Filters whether a Woo-excluded request should be re-allowed as cacheable (issue #922). Guarded by `has_filter()` — the filter is only applied when a listener is present. Return `true` to re-allow caching for that URL; default `false` (not cacheable). Runs inside `Cache::is_woo_excluded()` after any Woo exclusion is detected. Override applies only after WordPress boots (Cache layer); the pre-boot drop-in remains unconditional — it bakes the `wooSafeMode` toggle and configured Woo paths at generation time and cannot run this filter. @since NEXT.
+
+**Parameters:**
+- `$cacheable` *(bool)* — Whether the Woo request should be re-allowed as cacheable. Default `false`.
+- `$request_uri` *(string)* — The request URI.
+
+**Example:**
+```php
+add_filter( 'wppo_woo_cacheable', function( $cacheable, $request_uri ) {
+    if ( false !== strpos( $request_uri, '/my-account/custom-public/' ) ) {
+        return true; // Re-allow caching for a custom public account sub-page.
+    }
+    return $cacheable;
+}, 10, 2 );
+```
+
+---
 
 ### `wppo_builder_purge_map`
 Filters the builder-update purge map used by the watcher (`Builder_Purge_Watcher::get_builder_map()`, issue #907). Lets hosts and themes add builders or correct slugs and cache directories. @since NEXT.
@@ -746,6 +746,14 @@ Filters AI-learned speculation eagerness. @since NEXT.
 **Parameters:**
 - `$eagerness` *(string)* — `conservative` | `moderate` | `eager`.
 - `$rum` *(array)* — RUM aggregates.
+
+---
+
+### `wppo_ai_adaptive_commerce_context`
+Filters whether the current request is a commerce/auth context for AI speculation guardrails. @since NEXT. When true, AI-learned speculation eagerness is capped at `moderate` and commerce paths are suggested as speculation excludes (manual user settings stay authoritative).
+
+**Parameters:**
+- `$is_commerce` *(bool)* — Whether a commerce/auth context was detected (WooCommerce active, cart/checkout/account page, logged-in user, or active cart cookies).
 
 ---
 
