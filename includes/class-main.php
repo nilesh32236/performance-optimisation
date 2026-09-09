@@ -3608,6 +3608,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'ajaxUrl'       => admin_url( 'admin-ajax.php' ),
 				'nonce'         => wp_create_nonce( 'wp_rest' ),
 				'nonce_refresh' => wp_create_nonce( 'wppo_nonce_refresh' ),
+				'translations'  => array(
+					'cacheCleared' => __( 'Cache cleared successfully.', 'performance-optimisation' ),
+					'clearFailed'  => __( 'Failed to clear cache.', 'performance-optimisation' ),
+					'clearRetry'   => __( 'Failed to clear cache. Please try again.', 'performance-optimisation' ),
+					'pageCleared'  => __( 'Page cache cleared successfully.', 'performance-optimisation' ),
+					'pageFailed'   => __( 'Failed to clear page cache.', 'performance-optimisation' ),
+					'pageRetry'    => __( 'Failed to clear page cache. Please try again.', 'performance-optimisation' ),
+					'dismiss'      => __( 'Dismiss', 'performance-optimisation' ),
+				),
 			);
 
 			wp_add_inline_script(
@@ -3615,6 +3624,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'const wppoObject = ' . wp_json_encode( $data ) . ';',
 				'before'
 			);
+
+			wp_set_script_translations( 'wppo-admin-bar-script', 'performance-optimisation' );
 		}
 	}
 }

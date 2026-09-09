@@ -1,3 +1,19 @@
+/**
+ * Safe accessor for the global wppoSettings object injected by PHP via
+ * wp_localize_script. Optional chaining alone does not protect against an
+ * undeclared global (ReferenceError), so every direct read must go through
+ * the typeof guard centralised here.
+ *
+ * @since NEXT
+ * @return {Object} The global settings object, or an empty object when absent.
+ */
+export const getWppoSettings = () => {
+	if ( typeof wppoSettings === 'undefined' || ! wppoSettings ) {
+		return {};
+	}
+	return wppoSettings;
+};
+
 let pendingRefresh = null;
 
 /**

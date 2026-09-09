@@ -101,6 +101,47 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	};
 
 	/**
+	 * Resolve an admin-bar notice string with i18n priority:
+	 * window.wp.i18n.__ (via wp_set_script_translations) first, then the
+	 * wppoObject.translations map (via wp_localize-style inline data), then
+	 * the English fallback. Keeps this entry standalone (no @wordpress/i18n
+	 * import) so build/main.asset.php dependencies stay unchanged.
+	 *
+	 * @param {string} key      Translation key in wppoObject.translations.
+	 * @param {string} fallback English fallback string.
+	 * @return {string} Localized string.
+	 */
+	const getNoticeString = ( key, fallback ) => {
+		if (
+			window.wp &&
+			window.wp.i18n &&
+			typeof window.wp.i18n.__ === 'function'
+		) {
+			try {
+				// Static extraction is covered by the PHP-side __() calls in
+				// Main::enqueue_admin_bar_script(); the variable fallback here
+				// only exercises the runtime wp_set_script_translations JSON.
+				// eslint-disable-next-line @wordpress/i18n-no-variables
+				return window.wp.i18n.__(
+					fallback,
+					'performance-optimisation'
+				);
+			} catch {
+				// Fall through to the translations map / fallback below.
+			}
+		}
+		if (
+			typeof wppoObject !== 'undefined' &&
+			wppoObject.translations &&
+			'string' === typeof wppoObject.translations[ key ] &&
+			wppoObject.translations[ key ]
+		) {
+			return wppoObject.translations[ key ];
+		}
+		return fallback;
+	};
+
+	/**
 	 * Displays a notice using the WordPress core notice store if available,
 	 * otherwise falls back to a standard alert.
 	 *
@@ -136,7 +177,10 @@ document.addEventListener( 'DOMContentLoaded', function () {
 			noticeEl.textContent = message;
 			const dismissBtn = document.createElement( 'button' );
 			dismissBtn.className = 'notice-dismiss';
-			dismissBtn.setAttribute( 'aria-label', 'Dismiss' );
+			dismissBtn.setAttribute(
+				'aria-label',
+				getNoticeString( 'dismiss', 'Dismiss' )
+			);
 			dismissBtn.addEventListener( 'click', () => {
 				if ( fallbackTimer ) {
 					clearTimeout( fallbackTimer );
@@ -172,10 +216,19 @@ document.addEventListener( 'DOMContentLoaded', function () {
 			postJsonRequest( '/clear_cache', { action: 'clear_cache' } )
 				.then( ( res ) => {
 					if ( res.success ) {
-						showNotice( 'Cache cleared successfully.' );
+						showNotice(
+							getNoticeString(
+								'cacheCleared',
+								'Cache cleared successfully.'
+							)
+						);
 					} else {
 						showNotice(
-							res.message || 'Failed to clear cache.',
+							res.message ||
+								getNoticeString(
+									'clearFailed',
+									'Failed to clear cache.'
+								),
 							'error'
 						);
 					}
@@ -183,7 +236,10 @@ document.addEventListener( 'DOMContentLoaded', function () {
 				.catch( ( error ) => {
 					console.error( 'Cache clear failed: ', error );
 					showNotice(
-						'Failed to clear cache. Please try again.',
+						getNoticeString(
+							'clearRetry',
+							'Failed to clear cache. Please try again.'
+						),
 						'error'
 					);
 				} );
@@ -219,10 +275,19 @@ document.addEventListener( 'DOMContentLoaded', function () {
 			} )
 				.then( ( res ) => {
 					if ( res.success ) {
-						showNotice( 'Page cache cleared successfully.' );
+						showNotice(
+							getNoticeString(
+								'pageCleared',
+								'Page cache cleared successfully.'
+							)
+						);
 					} else {
 						showNotice(
-							res.message || 'Failed to clear page cache.',
+							res.message ||
+								getNoticeString(
+									'pageFailed',
+									'Failed to clear page cache.'
+								),
 							'error'
 						);
 					}
@@ -230,7 +295,10 @@ document.addEventListener( 'DOMContentLoaded', function () {
 				.catch( ( error ) => {
 					console.error( 'Page cache clear failed: ', error );
 					showNotice(
-						'Failed to clear page cache. Please try again.',
+						getNoticeString(
+							'pageRetry',
+							'Failed to clear page cache. Please try again.'
+						),
 						'error'
 					);
 				} );

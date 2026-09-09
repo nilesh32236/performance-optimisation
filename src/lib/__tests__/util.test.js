@@ -59,4 +59,44 @@ describe( 'handleChange', () => {
 			other: 'keep',
 		} );
 	} );
+
+	describe( 'delayJSIdleTimeout clamping', () => {
+		const dispatch = ( value, type = 'number' ) => {
+			const setSettings = jest.fn();
+			handleChange( setSettings )( {
+				target: {
+					name: 'delayJSIdleTimeout',
+					type,
+					value,
+					checked: false,
+				},
+			} );
+			return setSettings.mock.calls[ 0 ][ 0 ]( {} ).delayJSIdleTimeout;
+		};
+
+		it( 'falls back to 3000 for empty values', () => {
+			expect( dispatch( '' ) ).toBe( 3000 );
+		} );
+
+		it( 'falls back to 3000 for non-numeric values', () => {
+			expect( dispatch( 'abc', 'text' ) ).toBe( 3000 );
+		} );
+
+		it( 'falls back to 3000 for zero and negative values', () => {
+			expect( dispatch( '0' ) ).toBe( 3000 );
+			expect( dispatch( '-100' ) ).toBe( 3000 );
+		} );
+
+		it( 'clamps small values up to 500', () => {
+			expect( dispatch( '100' ) ).toBe( 500 );
+		} );
+
+		it( 'clamps large values down to 20000', () => {
+			expect( dispatch( '99999' ) ).toBe( 20000 );
+		} );
+
+		it( 'keeps in-range values as numbers', () => {
+			expect( dispatch( '5000' ) ).toBe( 5000 );
+		} );
+	} );
 } );

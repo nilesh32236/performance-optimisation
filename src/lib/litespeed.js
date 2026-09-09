@@ -1,12 +1,13 @@
 /**
- * LiteSpeed helper — pure JS, no WordPress dependencies.
- *
- * Mirrors the PHP LiteSpeed_Integration::effective_mode() logic for the SPA
- * so the UI can decide ownership without an extra REST call. Imported by
- * FileOptimization.js and Dashboard.js for mode-label rendering (A05/A10).
+ * LiteSpeed helper — mirrors the PHP LiteSpeed_Integration::effective_mode()
+ * logic for the SPA so the UI can decide ownership without an extra REST
+ * call. Imported by FileOptimization.js and Dashboard.js for mode-label
+ * rendering (A05/A10).
  *
  * @since NEXT
  */
+
+import { __ } from '@wordpress/i18n';
 
 /**
  * Resolve the effective LiteSpeed mode from config + detection.
@@ -59,10 +60,10 @@ export const shouldDisableOptimizer = ( opts = {} ) => {
  */
 export const modeLabel = ( mode ) => {
 	const map = {
-		auto: 'Auto',
-		wppo: 'WPPO',
-		litespeed: 'LiteSpeed Cache',
-		standalone: 'Standalone',
+		auto: __( 'Auto', 'performance-optimisation' ),
+		wppo: __( 'WPPO', 'performance-optimisation' ),
+		litespeed: __( 'LiteSpeed Cache', 'performance-optimisation' ),
+		standalone: __( 'Standalone', 'performance-optimisation' ),
 	};
 	return map[ mode ] || mode;
 };

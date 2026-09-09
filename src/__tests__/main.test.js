@@ -13,12 +13,13 @@ describe( 'Admin Bar (main.js)', () => {
 		`;
 	};
 
-	const setupWppoObject = () => {
+	const setupWppoObject = ( translations = {} ) => {
 		global.wppoObject = {
 			apiUrl: 'http://test.com/wp-json/wppo/v1',
 			ajaxUrl: 'http://test.com/wp-admin/admin-ajax.php',
 			nonce: 'testnonce',
 			nonce_refresh: 'testnonce_refresh',
+			translations,
 		};
 	};
 
@@ -40,6 +41,7 @@ describe( 'Admin Bar (main.js)', () => {
 		jest.restoreAllMocks();
 		global.fetch = originalFetch;
 		delete global.wppoObject;
+		delete window.wp;
 	} );
 
 	it( 'sends POST to clear_cache when Clear All Cache is clicked', async () => {
@@ -125,6 +127,76 @@ describe( 'Admin Bar (main.js)', () => {
 		const notice = document.querySelector( '.wppo-admin-notice' );
 		expect( notice ).toHaveClass( 'notice-error' );
 		expect( notice ).toHaveTextContent( 'Failed to clear cache.' );
+	} );
+
+	it( 'prefers window.wp.i18n translations when available', async () => {
+		window.wp = {
+			i18n: {
+				__: ( str ) => `TR:${ str }`,
+			},
+		};
+		global.fetch.mockResolvedValueOnce( {
+			ok: true,
+			json: jest.fn().mockResolvedValueOnce( { success: true } ),
+		} );
+
+		const clearAllCacheBtn = document.querySelector(
+			'#wp-admin-bar-wppo_clear_all .ab-item'
+		);
+		clearAllCacheBtn.click();
+
+		await new Promise( ( r ) => setTimeout( r, 50 ) );
+
+		const notice = document.querySelector( '.wppo-admin-notice' );
+		expect( notice ).toHaveTextContent( 'TR:Cache cleared successfully.' );
+	} );
+
+	it( 'falls back to wppoObject.translations when wp.i18n is absent', async () => {
+		global.wppoObject.translations = {
+			cacheCleared: 'Zwischenspeicher geleert.',
+			dismiss: 'Schliessen',
+		};
+		global.fetch.mockResolvedValueOnce( {
+			ok: true,
+			json: jest.fn().mockResolvedValueOnce( { success: true } ),
+		} );
+
+		const clearAllCacheBtn = document.querySelector(
+			'#wp-admin-bar-wppo_clear_all .ab-item'
+		);
+		clearAllCacheBtn.click();
+
+		await new Promise( ( r ) => setTimeout( r, 50 ) );
+
+		const notice = document.querySelector( '.wppo-admin-notice' );
+		expect( notice ).toHaveTextContent( 'Zwischenspeicher geleert.' );
+		expect(
+			notice
+				.querySelector( '.notice-dismiss' )
+				.getAttribute( 'aria-label' )
+		).toBe( 'Schliessen' );
+	} );
+
+	it( 'falls back to English strings when no translations exist', async () => {
+		global.fetch.mockResolvedValueOnce( {
+			ok: true,
+			json: jest.fn().mockResolvedValueOnce( { success: true } ),
+		} );
+
+		const clearAllCacheBtn = document.querySelector(
+			'#wp-admin-bar-wppo_clear_all .ab-item'
+		);
+		clearAllCacheBtn.click();
+
+		await new Promise( ( r ) => setTimeout( r, 50 ) );
+
+		const notice = document.querySelector( '.wppo-admin-notice' );
+		expect( notice ).toHaveTextContent( 'Cache cleared successfully.' );
+		expect(
+			notice
+				.querySelector( '.notice-dismiss' )
+				.getAttribute( 'aria-label' )
+		).toBe( 'Dismiss' );
 	} );
 
 	it( 'prevents default on admin bar link click', async () => {

@@ -27,6 +27,7 @@ import {
 	apiCall,
 	fetchRecentActivities,
 	fetchServerRules,
+	getWppoSettings,
 } from './lib/apiRequest';
 import ErrorBoundary from './components/common/ErrorBoundary';
 
@@ -309,7 +310,7 @@ const App = () => {
 
 	// Inject frontend theme accent colors as CSS custom properties.
 	useEffect( () => {
-		const themeColors = wppoSettings?.themeColors;
+		const themeColors = getWppoSettings()?.themeColors;
 		if ( ! themeColors ) {
 			return;
 		}
@@ -452,7 +453,13 @@ const App = () => {
 			rulesController.abort();
 			ccssController.abort();
 		};
-	}, [ activeTab, rulesRetryTrigger, ccssRefreshTrigger ] );
+	}, [
+		activeTab,
+		rulesRetryTrigger,
+		ccssRefreshTrigger,
+		recentActivities.length,
+		serverRules,
+	] );
 
 	useEffect( () => {
 		setTransition( true );
@@ -577,8 +584,8 @@ const App = () => {
 					</nav>
 					<div className="wppo-sidebar-footer">
 						<div className="wppo-sidebar-version">
-							{ wppoSettings?.version
-								? `v${ wppoSettings.version }`
+							{ getWppoSettings()?.version
+								? `v${ getWppoSettings().version }`
 								: '' }
 						</div>
 					</div>

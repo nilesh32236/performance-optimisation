@@ -8,6 +8,7 @@ import {
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
+import useUnsavedChanges from '../lib/useUnsavedChanges';
 import UnsavedChangesContext from '../lib/UnsavedChangesContext';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faDatabase, faCalendarAlt } from '@fortawesome/free-solid-svg-icons';
@@ -155,13 +156,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 		options.dbRevKeepLatest,
 		options.dbOptimize,
 	] );
-	useEffect( () => {
-		const dirty = JSON.stringify( settings ) !== JSON.stringify( baseline );
-		setIsDirty( dirty );
-	}, [ settings, baseline, setIsDirty ] );
-	useEffect( () => {
-		return () => setIsDirty( false );
-	}, [ setIsDirty ] );
+	useUnsavedChanges( settings, baseline );
 	const [ counts, setCounts ] = useState( {} );
 	const [ loading, setLoading ] = useState( {} );
 	const [ loadingCounts, setLoadingCounts ] = useState( true );
