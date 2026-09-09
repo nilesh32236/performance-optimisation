@@ -4,6 +4,13 @@
  * undeclared global (ReferenceError), so every direct read must go through
  * the typeof guard centralised here.
  *
+ * Note: refreshNonce() and apiCall() below intentionally keep their own
+ * typeof wppoSettings guards instead of routing through this helper. Those
+ * paths must throw when the global is absent and mutate the live global
+ * (wppoSettings.nonce / wppoSettings.settings); this helper returns a
+ * fallback {} which would mask the absent-global case and break the live
+ * mutation contract.
+ *
  * @since NEXT
  * @return {Object} The global settings object, or an empty object when absent.
  */

@@ -82,7 +82,7 @@
 		min-width: 80px;
 	}
 
-	@include respond-to( 'sm' ) {
+	@include respond-to('sm') {
 		padding: 20px;
 
 		.wppo-dialog-actions {

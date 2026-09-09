@@ -91,6 +91,15 @@ describe( 'handleChange', () => {
 			expect( dispatch( '100' ) ).toBe( 500 );
 		} );
 
+		it( 'keeps exact boundary values 500 and 20000', () => {
+			expect( dispatch( '500' ) ).toBe( 500 );
+			expect( dispatch( '20000' ) ).toBe( 20000 );
+		} );
+
+		it( 'falls back to 3000 for non-finite values', () => {
+			expect( dispatch( 'Infinity' ) ).toBe( 3000 );
+		} );
+
 		it( 'clamps large values down to 20000', () => {
 			expect( dispatch( '99999' ) ).toBe( 20000 );
 		} );

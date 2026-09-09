@@ -2,26 +2,29 @@ import { renderHook, act } from '@testing-library/react';
 import useUnsavedChanges from '../useUnsavedChanges';
 import UnsavedChangesContext from '../UnsavedChangesContext';
 
-const renderWithDirtyFlag = ( settings, baseline ) => {
-	const setIsDirty = jest.fn();
-	let currentDirty = false;
+const createWrapper = ( state ) => {
 	const wrapper = ( { children } ) => (
 		<UnsavedChangesContext.Provider
 			value={ {
-				isDirty: currentDirty,
+				isDirty: state.currentDirty,
 				setIsDirty: ( value ) => {
-					currentDirty = value;
-					setIsDirty( value );
+					state.currentDirty = value;
+					state.setIsDirty( value );
 				},
 			} }
 		>
 			{ children }
 		</UnsavedChangesContext.Provider>
 	);
+	return wrapper;
+};
+
+const renderWithDirtyFlag = ( settings, baseline ) => {
+	const state = { setIsDirty: jest.fn(), currentDirty: false };
 	const utils = renderHook( () => useUnsavedChanges( settings, baseline ), {
-		wrapper,
+		wrapper: createWrapper( state ),
 	} );
-	return { ...utils, setIsDirty };
+	return { ...utils, setIsDirty: state.setIsDirty };
 };
 
 describe( 'useUnsavedChanges', () => {
@@ -57,28 +60,17 @@ describe( 'useUnsavedChanges', () => {
 	} );
 
 	it( 'updates the flag when settings change', () => {
-		const setIsDirty = jest.fn();
-		let currentDirty = false;
-		const wrapper = ( { children } ) => (
-			<UnsavedChangesContext.Provider
-				value={ {
-					isDirty: currentDirty,
-					setIsDirty: ( value ) => {
-						currentDirty = value;
-						setIsDirty( value );
-					},
-				} }
-			>
-				{ children }
-			</UnsavedChangesContext.Provider>
-		);
+		const state = { setIsDirty: jest.fn(), currentDirty: false };
 		const { rerender } = renderHook(
 			( { settings } ) => useUnsavedChanges( settings, { a: 1 } ),
-			{ wrapper, initialProps: { settings: { a: 1 } } }
+			{
+				wrapper: createWrapper( state ),
+				initialProps: { settings: { a: 1 } },
+			}
 		);
-		expect( setIsDirty ).toHaveBeenLastCalledWith( false );
+		expect( state.setIsDirty ).toHaveBeenLastCalledWith( false );
 		rerender( { settings: { a: 2 } } );
-		expect( setIsDirty ).toHaveBeenLastCalledWith( true );
+		expect( state.setIsDirty ).toHaveBeenLastCalledWith( true );
 	} );
 
 	it( 'clears the flag on unmount', () => {

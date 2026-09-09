@@ -453,19 +453,22 @@ const App = () => {
 			rulesController.abort();
 			ccssController.abort();
 		};
-	}, [
-		activeTab,
-		rulesRetryTrigger,
-		ccssRefreshTrigger,
-		recentActivities.length,
-		serverRules,
-	] );
+		// Intentionally minimal deps: hasFetched* refs (not state) gate
+		// re-fetches, so effect-written state (recentActivities, serverRules)
+		// is read but not depended on — depending on it would cause an extra
+		// effect run plus AbortController teardown/recreation after each
+		// fetch and could abort the parallel CCSS request when serverRules
+		// resolves first.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [ activeTab, rulesRetryTrigger, ccssRefreshTrigger ] );
 
 	useEffect( () => {
 		setTransition( true );
 		const timeout = setTimeout( () => setTransition( false ), 400 );
 		return () => clearTimeout( timeout );
 	}, [ activeTab ] );
+
+	const wppoVersion = getWppoSettings()?.version ?? '';
 
 	return (
 		<UnsavedChangesContext.Provider value={ { isDirty, setIsDirty } }>
@@ -584,9 +587,7 @@ const App = () => {
 					</nav>
 					<div className="wppo-sidebar-footer">
 						<div className="wppo-sidebar-version">
-							{ getWppoSettings()?.version
-								? `v${ getWppoSettings().version }`
-								: '' }
+							{ wppoVersion ? `v${ wppoVersion }` : '' }
 						</div>
 					</div>
 				</div>

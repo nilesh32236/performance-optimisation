@@ -61,11 +61,12 @@ export const shouldDisableOptimizer = ( opts = {} ) => {
 export const modeLabel = ( mode ) => {
 	const map = {
 		auto: __( 'Auto', 'performance-optimisation' ),
-		wppo: __( 'WPPO', 'performance-optimisation' ),
-		litespeed: __( 'LiteSpeed Cache', 'performance-optimisation' ),
+		// Brand/product names are proper nouns — intentionally not translated.
+		wppo: 'WPPO',
+		litespeed: 'LiteSpeed Cache',
 		standalone: __( 'Standalone', 'performance-optimisation' ),
 	};
-	return map[ mode ] || mode;
+	return map[ mode ] ?? String( mode ?? '' );
 };
 
 /**

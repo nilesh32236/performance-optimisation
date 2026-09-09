@@ -151,6 +151,34 @@ describe( 'Admin Bar (main.js)', () => {
 		expect( notice ).toHaveTextContent( 'TR:Cache cleared successfully.' );
 	} );
 
+	it( 'prefers wppoObject.translations when wp.i18n has no JSON entry', async () => {
+		// Production case: window.wp.i18n exists but returns the input
+		// unchanged (no translation JSON loaded), while the PHP-localized
+		// map carries the server-translated string.
+		window.wp = {
+			i18n: {
+				__: ( str ) => str,
+			},
+		};
+		global.wppoObject.translations = {
+			cacheCleared: 'Zwischenspeicher geleert.',
+		};
+		global.fetch.mockResolvedValueOnce( {
+			ok: true,
+			json: jest.fn().mockResolvedValueOnce( { success: true } ),
+		} );
+
+		const clearAllCacheBtn = document.querySelector(
+			'#wp-admin-bar-wppo_clear_all .ab-item'
+		);
+		clearAllCacheBtn.click();
+
+		await new Promise( ( r ) => setTimeout( r, 50 ) );
+
+		const notice = document.querySelector( '.wppo-admin-notice' );
+		expect( notice ).toHaveTextContent( 'Zwischenspeicher geleert.' );
+	} );
+
 	it( 'falls back to wppoObject.translations when wp.i18n is absent', async () => {
 		global.wppoObject.translations = {
 			cacheCleared: 'Zwischenspeicher geleert.',

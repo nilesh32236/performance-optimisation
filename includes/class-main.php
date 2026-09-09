@@ -3625,6 +3625,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'before'
 			);
 
+			// Best-effort only: the admin-bar bundle declares no wp-i18n
+			// dependency, so window.wp.i18n is typically absent on the
+			// frontend. The inline wppoObject.translations map above is the
+			// authoritative source; src/main.js consults it first.
 			wp_set_script_translations( 'wppo-admin-bar-script', 'performance-optimisation' );
 		}
 	}
