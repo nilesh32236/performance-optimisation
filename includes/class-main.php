@@ -709,15 +709,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				add_filter( 'style_loader_tag', array( $this, 'minify_css' ), 10, 3 );
 			}
 
-			// Deprecated (NEXT): file_optimisation.removeQueryStrings is a legacy
-			// toggle kept for backward compatibility. `?ver=` IS the cache-busting
-			// mechanism (fingerprinting) and the htaccess Expires handler already
-			// sets long immutable TTLs — stripping ver risks stale assets.
-			// TODO(#904): hard-remove the toggle + these filters two minor
-			// releases after the NEXT release. Default stays off; no behaviour change.
+			// Removed (#925): the legacy file_optimisation.removeQueryStrings path
+			// (strip_static_query_strings() on script/style_loader_src) is gone.
+			// `?ver=` IS the cache-busting mechanism (fingerprinting); a stored
+			// legacy value is ignored (fail-open, `?ver` always preserved) with a
+			// one-time activity-log notice on admin_init.
 			if ( ! empty( $this->options['file_optimisation']['removeQueryStrings'] ) ) {
-				add_filter( 'script_loader_src', array( $this, 'strip_static_query_strings' ), 10, 2 );
-				add_filter( 'style_loader_src', array( $this, 'strip_static_query_strings' ), 10, 2 );
+				add_action( 'admin_init', array( $this, 'maybe_notify_remove_query_strings_removal' ) );
 			}
 
 			if ( ! empty( $this->options['file_optimisation']['hostGoogleFontsLocally'] ) ) {
@@ -957,6 +955,38 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			update_option( 'wppo_block_assets_migrated', 1 );
+		}
+
+		/**
+		 * One-time notice for the removed removeQueryStrings path (#925).
+		 *
+		 * The legacy `file_optimisation.removeQueryStrings` option is ignored
+		 * (fail-open): `?ver=` is always preserved. Logs once to the activity
+		 * log and sets a non-autoloaded flag option so later requests skip the
+		 * log write. Never alters asset URLs; never fatals when the log table
+		 * or option APIs are unavailable.
+		 *
+		 * Runs on `admin_init` (not the constructor) so a cacheable front-end
+		 * request never pays for the flag lookup.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public function maybe_notify_remove_query_strings_removal(): void {
+			$file_opt = isset( $this->options['file_optimisation'] ) && is_array( $this->options['file_optimisation'] ) ? $this->options['file_optimisation'] : array();
+			if ( empty( $file_opt['removeQueryStrings'] ) ) {
+				return;
+			}
+			if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
+				return;
+			}
+			if ( get_option( 'wppo_remove_query_strings_deprecated_logged', false ) ) {
+				return;
+			}
+			if ( class_exists( Log::class ) && function_exists( '__' ) ) {
+				Log::add( __( 'The legacy "Remove Query Strings" option was removed; ?ver= query strings are now always preserved for correct cache-busting.', 'performance-optimisation' ) );
+			}
+			update_option( 'wppo_remove_query_strings_deprecated_logged', true, false );
 		}
 
 		/**
@@ -3240,179 +3270,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$handles = array_map( 'trim', $handles );
 			$handles = array_filter( $handles );
 			return array_values( array_unique( $handles ) );
-		}
-
-		/**
-		 * Strips version query strings from enqueued static asset URLs.
-		 *
-		 * Deprecated. `?ver=` IS the cache-busting mechanism (fingerprinting)
-		 * and the htaccess Expires handler already sets long immutable TTLs,
-		 * so stripping it risks serving stale assets with no measurable gain.
-		 * Kept for backward compatibility for sites that explicitly opted in;
-		 * default stays off. The SPA toggle lives in a "Legacy Options"
-		 * section with warning copy.
-		 *
-		 * TODO(#904): hard-remove this method, the removeQueryStrings setting,
-		 * and the script/style_loader_src filters two minor releases after
-		 * the NEXT release.
-		 *
-		 * @since NEXT
-		 * @deprecated NEXT Use long immutable cache TTLs instead.
-		 *
-		 * @param string $src    The asset source URL.
-		 * @param string $handle The script/style handle.
-		 * @return string The URL without its version query string.
-		 */
-		public function strip_static_query_strings( $src, $handle ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-			if ( empty( $src ) ) {
-				return $src;
-			}
-
-			$parsed = wp_parse_url( $src );
-			if ( ! isset( $parsed['query'] ) || '' === $parsed['query'] ) {
-				return $src;
-			}
-
-			// Never strip the ver arg from the plugin's own cache files (minified
-			// or combined assets). Those URLs are versioned with the file mtime at
-			// enqueue time, so stripping it would let browsers serve stale copies
-			// of regenerated files.
-			if ( $this->is_plugin_cache_url( $src ) ) {
-				return $src;
-			}
-
-			// When CDN mapping is configured, preserve ver for CDN cache busting (versioned URL edge case).
-			$file_opt = $this->options['file_optimisation'] ?? array();
-			if ( ! empty( $file_opt['cdnURL'] ) || ! empty( $file_opt['cdnMapping'] ) ) {
-				return $src;
-			}
-
-			// Remove only the ver component(s) from the raw query, keeping every
-			// other part byte-for-byte identical: duplicate keys, percent-encoding
-			// and ordering survive (parse_str/http_build_query would collapse
-			// duplicates and re-encode values).
-			$kept      = array();
-			$found_ver = false;
-			foreach ( explode( '&', $parsed['query'] ) as $component ) {
-				$eq  = strpos( $component, '=' );
-				$key = false !== $eq ? substr( $component, 0, $eq ) : $component;
-				if ( 'ver' === rawurldecode( $key ) ) {
-					$found_ver = true;
-					continue;
-				}
-				$kept[] = $component;
-			}
-
-			if ( ! $found_ver ) {
-				return $src;
-			}
-
-			// Replace only the query portion inside the original string so relative
-			// and protocol-relative sources, ports and fragments stay intact.
-			$fragment = '';
-			$head     = $src;
-			$frag_pos = strpos( $src, '#' );
-			if ( false !== $frag_pos ) {
-				$fragment = substr( $src, $frag_pos );
-				$head     = substr( $src, 0, $frag_pos );
-			}
-
-			$query_pos = strpos( $head, '?' );
-			if ( false === $query_pos ) {
-				return $src;
-			}
-
-			$base = substr( $head, 0, $query_pos );
-
-			if ( empty( $kept ) ) {
-				// No remaining args: drop the '?' entirely.
-				return $base . $fragment;
-			}
-
-			return $base . '?' . implode( '&', $kept ) . $fragment;
-		}
-
-		/**
-		 * Whether a URL points at the plugin's own cache directories.
-		 *
-		 * Origin-aware so a third-party URL whose path merely contains
-		 * `/cache/wppo/` is not exempted. Relative and protocol-relative URLs
-		 * match on the content path prefix alone (no host to compare).
-		 *
-		 * This runs on every enqueued JS/CSS file via `script_loader_src` /
-		 * `style_loader_src`, so the parsed `content_url()` host/path parts are
-		 * statically cached per blog. The cache is bypassed while a `content_url`
-		 * filter is registered (the filter may return context-dependent output),
-		 * so the caching benefit only applies to installs without such a filter.
-		 *
-		 * @since NEXT
-		 *
-		 * @param string $src The asset source URL.
-		 * @return bool
-		 */
-		private function is_plugin_cache_url( string $src ): bool {
-			// Skip caching while a content_url filter is registered: the filter may
-			// return context-dependent output, so the resolved host/prefix cannot be
-			// safely reused (same convention as Util::cached_content_url()).
-			if ( false !== has_filter( 'content_url' ) ) {
-				return $this->is_plugin_cache_url_uncached( $src );
-			}
-
-			static $cache = array();
-			$blog_id      = get_current_blog_id();
-
-			if ( ! isset( $cache[ $blog_id ] ) ) {
-				// Resolve the base via the shared helper (which also centralizes the
-				// has_filter( 'content_url' ) bypass), then cache the parsed parts.
-				$content_url  = Util::cached_content_url( '/' );
-				$content_path = (string) wp_parse_url( $content_url, PHP_URL_PATH );
-				$cache_host   = wp_parse_url( $content_url, PHP_URL_HOST );
-
-				$cache[ $blog_id ] = array(
-					'prefix' => rtrim( $content_path, '/' ) . '/cache/wppo',
-					'host'   => $cache_host,
-				);
-			}
-
-			$parsed = wp_parse_url( $src );
-			$path   = isset( $parsed['path'] ) ? (string) $parsed['path'] : '';
-
-			if ( isset( $parsed['host'] ) ) {
-				if ( null !== $cache[ $blog_id ]['host'] && 0 !== strcasecmp( (string) $parsed['host'], (string) $cache[ $blog_id ]['host'] ) ) {
-					return false;
-				}
-			}
-
-			return 0 === strpos( $path, $cache[ $blog_id ]['prefix'] );
-		}
-
-		/**
-		 * Filter-respecting variant of {@see is_plugin_cache_url()}.
-		 *
-		 * Resolves content_url() on every call so a registered `content_url` filter
-		 * is honored per invocation. Only used while such a filter is active.
-		 *
-		 * @since NEXT
-		 *
-		 * @param string $src The asset source URL.
-		 * @return bool
-		 */
-		private function is_plugin_cache_url_uncached( string $src ): bool {
-			$content_url  = Util::cached_content_url( '/' );
-			$content_path = (string) wp_parse_url( $content_url, PHP_URL_PATH );
-			$prefix       = rtrim( $content_path, '/' ) . '/cache/wppo';
-
-			$parsed = wp_parse_url( $src );
-			$path   = isset( $parsed['path'] ) ? (string) $parsed['path'] : '';
-
-			if ( isset( $parsed['host'] ) ) {
-				$cache_host = wp_parse_url( $content_url, PHP_URL_HOST );
-				if ( null !== $cache_host && 0 !== strcasecmp( (string) $parsed['host'], (string) $cache_host ) ) {
-					return false;
-				}
-			}
-
-			return 0 === strpos( $path, $prefix );
 		}
 
 		/**

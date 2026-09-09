@@ -53,51 +53,14 @@ describe( 'FileOptimization Component', () => {
 		expect( minifyCssSwitch ).toBeChecked();
 	} );
 
-	it( 'renders and toggles the Remove Query Strings switch', () => {
-		render(
-			<FileOptimization
-				options={ { removeQueryStrings: false } }
-				serverRules={ {} }
-			/>
-		);
+	it( 'does not render the removed Remove Query Strings toggle', () => {
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
 
-		const toggle = screen.getByLabelText(
-			/Remove Query Strings From Static Resources/i
-		);
-		expect( toggle ).not.toBeChecked();
-
-		fireEvent.click( toggle );
-		expect( toggle ).toBeChecked();
-	} );
-
-	it( 'includes removeQueryStrings in the submitted settings payload', async () => {
-		apiCall.mockResolvedValueOnce( {
-			success: true,
-			message: 'Settings updated successfully.',
-		} );
-
-		render(
-			<FileOptimization
-				options={ { removeQueryStrings: true } }
-				serverRules={ {} }
-			/>
-		);
-
-		await act( async () => {
-			fireEvent.click(
-				screen.getByRole( 'button', { name: /Save Settings/i } )
-			);
-		} );
-
-		expect( apiCall ).toHaveBeenCalledWith(
-			'update_settings',
-			expect.objectContaining( {
-				tab: 'file_optimisation',
-				settings: expect.objectContaining( {
-					removeQueryStrings: true,
-				} ),
-			} )
-		);
+		expect(
+			screen.queryByLabelText(
+				/Remove Query Strings From Static Resources/i
+			)
+		).not.toBeInTheDocument();
 	} );
 
 	it( 'submits settings successfully and displays success notification', async () => {
