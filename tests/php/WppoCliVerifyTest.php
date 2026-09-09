@@ -328,6 +328,126 @@ class WppoCliVerifyTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Warn-only payload must surface a warn overall by default and escalate
+	 * to fail under --severity=warn (mirrors the verify() exit gate).
+	 */
+	public function test_payload_warn_overall_and_severity_gate(): void {
+		$warn_rows = array(
+			array(
+				'check'  => 'a',
+				'status' => 'pass',
+				'detail' => 'ok',
+			),
+			array(
+				'check'  => 'b',
+				'status' => 'warn',
+				'detail' => 'something optional',
+			),
+		);
+
+		$default = WPPO_CLI_Command::build_verify_payload( $warn_rows );
+		$this->assertSame( 'warn', $default['overall'] );
+
+		$escalated = WPPO_CLI_Command::build_verify_payload( $warn_rows, 'warn' );
+		$this->assertSame( 'fail', $escalated['overall'] );
+
+		$clean_default = WPPO_CLI_Command::build_verify_payload(
+			array(
+				array(
+					'check'  => 'a',
+					'status' => 'pass',
+					'detail' => 'ok',
+				),
+			),
+			'warn'
+		);
+		$this->assertSame( 'pass', $clean_default['overall'] );
+	}
+
+	/**
+	 * A whole tab stored as a scalar must still fail after dead-code removal.
+	 */
+	public function test_schema_flags_scalar_tab(): void {
+		$stored                   = Util::get_default_settings();
+		$stored['cache_settings'] = 'not-an-array';
+		$row                      = WPPO_CLI_Command::validate_settings_schema( $stored );
+		$this->assertSame( 'fail', $row['status'] );
+		$this->assertStringContainsString( 'cache_settings expected array got scalar', $row['detail'] );
+	}
+
+	/**
+	 * An unknown --check value must record a WP_CLI error.
+	 */
+	public function test_verify_invalid_check_records_error(): void {
+		$this->install_verify_stubs( Util::get_default_settings() );
+		$this->install_dropin_filesystem_stub();
+
+		$command = new WPPO_CLI_Command();
+		$command->verify(
+			array(),
+			array(
+				'format' => 'json',
+				'check'  => 'bogus_check_name',
+			)
+		);
+
+		$this->assertNotEmpty( WP_CLI::$errors, 'Expected an error for an unknown --check value.' );
+		$this->assertStringContainsString( 'bogus_check_name', WP_CLI::$errors[0] );
+		$this->assertSame( array(), WP_CLI::$successes );
+	}
+
+	/**
+	 * JSON overall must agree with the exit gate under both severities.
+	 */
+	public function test_verify_overall_matches_exit_gate_for_both_severities(): void {
+		$this->install_verify_stubs( Util::get_default_settings() );
+		$this->install_dropin_filesystem_stub();
+
+		foreach ( array( 'fail', 'warn' ) as $severity ) {
+			WP_CLI::reset_output();
+
+			$command = new WPPO_CLI_Command();
+			$command->verify(
+				array(),
+				array(
+					'format'   => 'json',
+					'severity' => $severity,
+				)
+			);
+
+			$this->assertNotEmpty( WP_CLI::$logs );
+			$payload = json_decode( WP_CLI::$logs[0], true );
+			$this->assertIsArray( $payload );
+			$this->assertArrayHasKey( 'overall', $payload );
+
+			$expected = WPPO_CLI_Command::build_verify_payload( $payload['checks'], $severity );
+			$this->assertSame( $expected['overall'], $payload['overall'] );
+			$this->assertSame( 'fail' === $payload['overall'], ! empty( WP_CLI::$errors ) );
+			if ( 'fail' === $payload['overall'] ) {
+				$this->assertSame( array(), WP_CLI::$successes );
+			} else {
+				$this->assertNotEmpty( WP_CLI::$successes );
+			}
+		}
+	}
+
+	/**
+	 * Table format fallback must log one line per check row.
+	 */
+	public function test_verify_table_format_logs_rows(): void {
+		$this->install_verify_stubs( Util::get_default_settings() );
+		$this->install_dropin_filesystem_stub();
+
+		$command = new WPPO_CLI_Command();
+		$command->verify( array(), array( 'format' => 'table' ) );
+
+		$this->assertCount( 7, WP_CLI::$logs );
+		foreach ( WP_CLI::$logs as $line ) {
+			$this->assertStringContainsString( '[', $line );
+		}
+	}
+
+	/**
 	 * --check must filter to a single row (redis disabled skips to pass).
 	 */
 	public function test_verify_single_check_filter(): void {

@@ -1134,25 +1134,38 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				clearstatcache(); // phpcs:ignore WordPress.WP.AlternativeFunctions.clearstatcache_clearstatcache
 			}
 
-			$rows = array(
-				$this->check_verify_cache_dirs(),
-				$this->check_verify_dropins( $stored ),
-				$this->check_verify_redis( $stored ),
-				$this->check_verify_litespeed( $stored ),
-				self::validate_settings_schema( $stored ),
-				$this->check_verify_cron( $stored ),
-				$this->check_verify_uninstall_spot(),
+			// Only run the requested check so --check avoids unrelated live
+			// probes (Redis ping, $wpdb query, filesystem scans).
+			$check_map = array(
+				'cache_dirs'      => function (): array {
+					return $this->check_verify_cache_dirs();
+				},
+				'dropins'         => function () use ( $stored ): array {
+					return $this->check_verify_dropins( $stored );
+				},
+				'redis'           => function () use ( $stored ): array {
+					return $this->check_verify_redis( $stored );
+				},
+				'litespeed'       => function () use ( $stored ): array {
+					return $this->check_verify_litespeed( $stored );
+				},
+				'settings_schema' => function () use ( $stored ): array {
+					return self::validate_settings_schema( $stored );
+				},
+				'cron'            => function () use ( $stored ): array {
+					return $this->check_verify_cron( $stored );
+				},
+				'uninstall'       => function (): array {
+					return $this->check_verify_uninstall_spot();
+				},
 			);
 
-			if ( '' !== $only ) {
-				$rows = array_values(
-					array_filter(
-						$rows,
-						static function ( $row ) use ( $only ) {
-							return isset( $row['check'] ) && $only === $row['check'];
-						}
-					)
-				);
+			$names = '' !== $only ? array( $only ) : array_keys( $check_map );
+			$rows  = array();
+			foreach ( $names as $name ) {
+				if ( isset( $check_map[ $name ] ) ) {
+					$rows[] = $check_map[ $name ]();
+				}
 			}
 
 			$fail_count = 0;
@@ -1165,15 +1178,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				}
 			}
 
-			$overall = $fail_count > 0 ? 'fail' : 'pass';
+			$payload = self::build_verify_payload( $rows, $severity );
 
 			if ( 'json' === $format ) {
 				WP_CLI::log(
 					(string) wp_json_encode(
-						array(
-							'overall' => $overall,
-							'checks'  => $rows,
-						),
+						$payload,
 						JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES
 					)
 				);
@@ -1185,7 +1195,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				}
 			}
 
-			$should_fail = $fail_count > 0 || ( 'warn' === $severity && $warn_count > 0 );
+			// Overall 'fail' <=> non-zero exit by construction (builder uses the
+			// same severity gate), so JSON readers and the CLI gate agree.
+			$should_fail = 'fail' === $payload['overall'];
 			if ( $should_fail ) {
 				/* translators: %d: Number of failing checks */
 				WP_CLI::error( sprintf( __( 'Verify failed: %d check(s) failing.', 'performance-optimisation' ), $fail_count > 0 ? $fail_count : $warn_count ) );
@@ -1323,18 +1335,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 						);
 					}
 				}
-				// A whole tab stored as a scalar while the default is an array.
-				if ( ! is_array( $value ) ) {
-					$mismatches[] = sprintf( '%s expected array got scalar', $tab );
-				}
 			}
 			// Tabs stored as scalars at the top level (defaults are all arrays).
 			foreach ( $stored as $tab => $value ) {
 				if ( array_key_exists( $tab, $defaults ) && is_array( $defaults[ $tab ] ) && ! is_array( $value ) ) {
-					$dup = sprintf( '%s expected array got scalar', $tab );
-					if ( ! in_array( $dup, $mismatches, true ) ) {
-						$mismatches[] = $dup;
-					}
+					$mismatches[] = sprintf( '%s expected array got scalar', $tab );
 				}
 			}
 
@@ -1517,17 +1522,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		/**
 		 * Build the machine-readable verify payload (pure helper).
 		 *
+		 * Overall mirrors the verify() exit gate so machine readers stay
+		 * consistent: `fail` when any row fails (or any row warns with
+		 * `$severity='warn'`), `warn` when rows warn but the gate stays
+		 * green, otherwise `pass`.
+		 *
 		 * @since NEXT
-		 * @param array $rows Verify rows.
+		 * @param array  $rows Verify rows.
+		 * @param string $severity Exit-code gate ('fail' or 'warn').
 		 * @return array{overall:string,checks:array} Payload for --format=json.
 		 */
-		public static function build_verify_payload( array $rows ): array {
-			$overall = 'pass';
+		public static function build_verify_payload( array $rows, string $severity = 'fail' ): array {
+			$fail_count = 0;
+			$warn_count = 0;
 			foreach ( $rows as $row ) {
 				if ( isset( $row['status'] ) && 'fail' === $row['status'] ) {
-					$overall = 'fail';
-					break;
+					++$fail_count;
+				} elseif ( isset( $row['status'] ) && 'warn' === $row['status'] ) {
+					++$warn_count;
 				}
+			}
+			if ( $fail_count > 0 || ( 'warn' === $severity && $warn_count > 0 ) ) {
+				$overall = 'fail';
+			} elseif ( $warn_count > 0 ) {
+				$overall = 'warn';
+			} else {
+				$overall = 'pass';
 			}
 			return array(
 				'overall' => $overall,
@@ -1647,8 +1667,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 			$has_fail = false;
 			$has_warn = false;
 
-			// Advanced-cache drop-in.
-			$adv_path = Advanced_Cache_Handler::get_dropin_path();
+			// Advanced-cache drop-in (verdict via is_our_dropin()/foreign_dropin_present()).
 			try {
 				$is_ours = Advanced_Cache_Handler::is_our_dropin();
 			} catch ( \Throwable $e ) {
@@ -1661,9 +1680,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				unset( $e );
 				$foreign = false;
 			}
-			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_readable
-			$adv_exists = is_readable( $adv_path );
-			$wp_cache   = defined( 'WP_CACHE' ) && WP_CACHE;
+			$wp_cache = defined( 'WP_CACHE' ) && WP_CACHE;
 
 			$cache_enabled = ! empty( $stored['cache_settings']['enableCache'] );
 
@@ -1708,7 +1725,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 					$notes[]  = 'wp-config.php has no WP_CACHE define';
 				}
 			}
-			unset( $adv_exists );
 
 			// Object-cache drop-in.
 			try {
@@ -2040,7 +2056,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		/**
 		 * Check 7 — uninstall-completeness spot check (read-only).
 		 *
-		 * Single `wp_options WHERE option_name LIKE 'wppo_%'` query; never deletes.
+		 * Single `wp_options WHERE option_name LIKE '%wppo_%'` query (contains
+		 * match so multisite blog-prefixed rows like `2_wppo_settings` are
+		 * visible to the classifier); never deletes.
 		 *
 		 * @since NEXT
 		 * @return array{check:string,status:string,detail:string} Verify row.
@@ -2050,7 +2068,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 			try {
 				global $wpdb;
 				if ( isset( $wpdb ) && is_object( $wpdb ) && isset( $wpdb->options ) && method_exists( $wpdb, 'get_col' ) && method_exists( $wpdb, 'esc_like' ) ) {
-					$like = $wpdb->esc_like( 'wppo_' ) . '%';
+					$like = '%' . $wpdb->esc_like( 'wppo_' ) . '%';
 					// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 					$found = $wpdb->get_col( $wpdb->prepare( 'SELECT option_name FROM %i WHERE option_name LIKE %s', $wpdb->options, $like ) );
 					// phpcs:enable
