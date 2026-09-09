@@ -779,6 +779,11 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 			'image/png'  => 'image/avif',
 			'image/heic' => 'image/jpeg',
 		);
+		Functions\when( 'has_filter' )->alias(
+			static function ( $hook_name ) {
+				return 'image_editor_output_format' === $hook_name;
+			}
+		);
 		Functions\when( 'wp_get_image_editor_output_format' )->alias(
 			static function ( $filename, $mime_type ) use ( $mappings ) {
 				return isset( $mappings[ $mime_type ] ) ? array( $mime_type => $mappings[ $mime_type ] ) : array();
@@ -793,6 +798,34 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 'avif', $method->invoke( $converter, '/srv/wp-content/uploads/2026/08/photo.png', 'webp' ) );
 		$this->assertSame( 'none', $method->invoke( $converter, '/srv/wp-content/uploads/2026/08/photo.heic', 'webp' ) );
 		$this->assertSame( 'webp', $method->invoke( $converter, '/srv/wp-content/uploads/2026/08/photo.gif', 'webp' ) );
+	}
+
+	/**
+	 * Test that resolve_output_format() keeps the legacy fallback (requested
+	 * format unchanged) when no `image_editor_output_format` filter is
+	 * registered, even though wp_get_image_editor_output_format() exists and
+	 * would otherwise map the source MIME elsewhere. Core stays authoritative
+	 * only when it has opted in via the filter.
+	 */
+	public function test_resolve_output_format_falls_back_without_core_filter(): void {
+		Functions\when( 'has_filter' )->alias(
+			static function ( $hook_name ) {
+				return 'image_editor_output_format' !== $hook_name;
+			}
+		);
+		Functions\when( 'wp_get_image_editor_output_format' )->alias(
+			static function ( $filename, $mime_type ) {
+				return 'image/png' === $mime_type ? array( 'image/png' => 'image/avif' ) : array();
+			}
+		);
+
+		$method = new ReflectionMethod( Img_Converter::class, 'resolve_output_format' );
+		$method->setAccessible( true );
+		$converter = $this->make_converter();
+
+		$this->assertSame( 'webp', $method->invoke( $converter, '/srv/wp-content/uploads/2026/08/photo.png', 'webp' ) );
+		$this->assertSame( 'avif', $method->invoke( $converter, '/srv/wp-content/uploads/2026/08/photo.png', 'avif' ) );
+		$this->assertSame( 'both', $method->invoke( $converter, '/srv/wp-content/uploads/2026/08/photo.png', 'both' ) );
 	}
 
 	/**
@@ -819,6 +852,14 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'function_exists' )->alias(
 			static function ( $function_name ) {
 				return 'wp_image_quality' !== $function_name;
+			}
+		);
+
+		// Core stays authoritative only when the image_editor_output_format
+		// filter is registered.
+		Functions\when( 'has_filter' )->alias(
+			static function ( $hook_name ) {
+				return 'image_editor_output_format' === $hook_name;
 			}
 		);
 
@@ -858,6 +899,11 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		$file = $this->create_sample_png( 'mapped-legacy.png' );
 		$this->prepare_wppo_output_dir();
 
+		Functions\when( 'has_filter' )->alias(
+			static function ( $hook_name ) {
+				return 'image_editor_output_format' === $hook_name;
+			}
+		);
 		Functions\when( 'wp_get_image_editor_output_format' )->alias(
 			static function ( $filename, $mime_type ) {
 				return 'image/png' === $mime_type ? array( 'image/png' => 'image/jpeg' ) : array();
@@ -1083,5 +1129,46 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		$full_rel = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $file ) );
 		$info     = Img_Converter::get_img_info();
 		$this->assertContains( $full_rel, $info['skipped']['webp'] ?? array() );
+	}
+
+	/**
+	 * Test that the `wppo_convert_gain_map_images` filter opts gain-map
+	 * sources back into conversion: with the filter returning true the
+	 * gain-map skip is bypassed and the (unparseable fixture) conversion
+	 * fails instead of being recorded as skipped.
+	 */
+	public function test_convert_image_gain_map_opt_in_flips_skip(): void {
+		$file = $this->uploads_dir . '/ultrahdr-optin.jpg';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+		file_put_contents(
+			$file,
+			"\xFF\xD8\xFF\xE0" . str_repeat( "\x00", 16 )
+				. 'xmpmeta hdrgm:GainMapMin="0.0" hdrgm:GainMapMax="1.0"'
+				. str_repeat( "\x00", 16 ) . "\xFF\xD9"
+		);
+
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook_name, $value ) {
+				if ( 'wppo_convert_gain_map_images' === $hook_name ) {
+					return true;
+				}
+				return $value;
+			}
+		);
+
+		$converter = $this->make_converter(
+			array(
+				'conversionFormat'        => 'avif',
+				'skipSmallThresholdBytes' => 0,
+			)
+		);
+		$result    = $converter->convert_image( $file, 'avif' );
+
+		$this->assertFalse( $result );
+
+		$full_rel = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $file ) );
+		$info     = Img_Converter::get_img_info();
+		$this->assertNotContains( $full_rel, $info['skipped']['avif'] ?? array() );
+		$this->assertContains( $full_rel, $info['failed']['avif'] ?? array() );
 	}
 }

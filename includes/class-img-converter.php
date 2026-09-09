@@ -216,9 +216,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * WebP). When core maps the source MIME to a next-gen format, the
 		 * plugin converts to that format so both pipelines produce the same
 		 * output; when core maps it to a legacy format, core owns the
-		 * conversion and the plugin returns 'none' (skip). On older cores, or
-		 * when core provides no mapping for the source MIME, the requested
-		 * format is returned unchanged.
+		 * conversion and the plugin returns 'none' (skip). On older cores, when
+		 * no `image_editor_output_format` filter is registered, or when core
+		 * provides no mapping for the source MIME, the requested format is
+		 * returned unchanged (legacy fallback intact).
+		 *
+		 * Format authority lives here: `get_smart_quality()` owns only the
+		 * numeric quality mapping (AVIF = WebP − 20) and stays fail-open when
+		 * core maps the source MIME elsewhere.
 		 *
 		 * @since NEXT
 		 *
@@ -228,6 +233,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 */
 		private function resolve_output_format( string $source_image, string $requested_format ): string {
 			if ( ! function_exists( 'wp_get_image_editor_output_format' ) ) {
+				return $requested_format;
+			}
+
+			// Core stays authoritative on format choice: only consult its
+			// centralized mapping when a consumer has registered the
+			// `image_editor_output_format` filter. Otherwise keep the legacy
+			// fallback (requested format unchanged).
+			if ( function_exists( 'has_filter' ) && ! has_filter( 'image_editor_output_format' ) ) {
 				return $requested_format;
 			}
 
@@ -376,6 +389,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * enabled, AVIF targets a lower numeric quality than WebP at equal
 		 * visual quality (AVIF's efficiency). Falls back to the flat 82
 		 * default chain otherwise.
+		 *
+		 * Format authority lives in `resolve_output_format()`, which defers to
+		 * core's `image_editor_output_format` filter (guarded by `has_filter()`
+		 * and `function_exists()`); this method owns only the numeric mapping
+		 * and stays fail-open whatever core decides.
 		 *
 		 * @since NEXT
 		 *
