@@ -180,6 +180,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		/**
 		 * Enqueue the frontend beacon script on the public site.
 		 *
+		 * On WP 6.3+ the beacon uses the native `strategy: defer` script args
+		 * so the tag prints render-non-blocking with correct execution order.
+		 * On older core the legacy boolean `$in_footer` path is kept (fail-open:
+		 * the beacon is still collected, just render-blocking).
+		 *
 		 * @return void
 		 */
 		public static function maybe_enqueue_scripts(): void {
@@ -196,7 +201,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				$version = isset( $asset['version'] ) ? $asset['version'] : WPPO_VERSION;
 			}
 
+			if ( self::supports_script_strategy() ) {
+				wp_enqueue_script(
+					'wppo-rum',
+					WPPO_PLUGIN_URL . 'build/rum.js',
+					$deps,
+					$version,
+					array(
+						'strategy'  => 'defer',
+						'in_footer' => true,
+					)
+				);
+				return;
+			}
+
 			wp_enqueue_script( 'wppo-rum', WPPO_PLUGIN_URL . 'build/rum.js', $deps, $version, true );
+		}
+
+		/**
+		 * Whether core supports the native `strategy` script args (WP 6.3+).
+		 *
+		 * @since NEXT
+		 * @return bool
+		 */
+		private static function supports_script_strategy(): bool {
+			$wp_version = (string) ( $GLOBALS['wp_version'] ?? get_bloginfo( 'version' ) );
+			return version_compare( $wp_version, '6.3-alpha', '>=' );
 		}
 
 		/**
