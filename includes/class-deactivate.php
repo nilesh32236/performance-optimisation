@@ -69,11 +69,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 			}
 
 			// Remove Redis object cache drop-in if it belongs to this plugin.
+			// Marker-verified (current + legacy with WPPO signal) — never delete foreign drop-ins.
+			// Size-guarded like Object_Cache::is_own_dropin() so a large foreign
+			// file is never read fully into memory during deactivation.
 			$object_cache_file = wp_normalize_path( WP_CONTENT_DIR . '/object-cache.php' );
-			if ( $wp_filesystem && $wp_filesystem->exists( $object_cache_file ) ) {
-				$content = $wp_filesystem->get_contents( $object_cache_file );
-				if ( false !== $content && false !== strpos( $content, 'Redis Object Cache Drop-in for Performance Optimisation' ) ) {
-					$wp_filesystem->delete( $object_cache_file );
+			if ( $wp_filesystem && $wp_filesystem->exists( $object_cache_file ) && is_readable( $object_cache_file ) ) {
+				$dropin_size = filesize( $object_cache_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize
+				if ( false !== $dropin_size && $dropin_size < 1048576 ) {
+					$content = $wp_filesystem->get_contents( $object_cache_file );
+					$is_own  = false;
+					if ( is_string( $content ) ) {
+						if ( method_exists( 'PerformanceOptimise\Inc\Object_Cache', 'is_own_dropin_content' ) ) {
+							$is_own = Object_Cache::is_own_dropin_content( $content );
+						} else {
+							$is_own = ( false !== strpos( $content, 'Redis Object Cache Drop-in for Performance Optimisation' ) || ( false !== strpos( $content, 'Redis Object Cache Drop-in' ) && false !== strpos( $content, 'wppo-redis-config' ) ) );
+						}
+					}
+					if ( $is_own ) {
+						$wp_filesystem->delete( $object_cache_file );
+					}
 				}
 			}
 
