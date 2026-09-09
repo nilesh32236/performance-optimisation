@@ -354,8 +354,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// Initialize filesystem lazily via get_filesystem().
 			$this->options = ! empty( $options ) ? $options : Util::get_settings();
 
-			if ( ! $valid_domain && ! empty( $this->options['debug'] ) ) {
-				do_action( 'wppo_debug_log', 'Cache domain validation failed' );
+			if ( ! empty( $this->options['debug'] ) ) {
+				if ( $this->host_mismatch ) {
+					do_action( 'wppo_debug_log', 'Cache host mismatch: request host differs from canonical home host, serving uncached' );
+				} elseif ( ! $valid_domain ) {
+					do_action( 'wppo_debug_log', 'Cache domain validation failed' );
+				}
 			}
 		}
 

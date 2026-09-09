@@ -334,6 +334,31 @@ class AdvancedCacheHandlerTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that the generated drop-in normalizes the request host with
+	 * idn_to_ascii() before the port-strip, so IDN (punycode) request hosts
+	 * compare equal to the baked canonical host instead of always mismatching.
+	 */
+	public function test_create_dropin_normalizes_request_host_with_idn(): void {
+		$fs                       = new WPPO_AdvancedCache_FS_Mock();
+		$fs->file_exists          = false;
+		$GLOBALS['wp_filesystem'] = $fs;
+
+		Functions\when( 'wp_normalize_path' )->returnArg();
+		Functions\when( 'home_url' )->justReturn( 'https://example.com' );
+		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'absint' )->alias(
+			static function ( $value ) {
+				return abs( (int) $value );
+			}
+		);
+
+		$this->assertTrue( Advanced_Cache_Handler::create() );
+
+		$this->assertStringContainsString( 'idn_to_ascii', $fs->put_contents );
+		$this->assertStringContainsString( '$request_base', $fs->put_contents );
+	}
+
+	/**
 	 * Test that create leaves a foreign drop-in untouched.
 	 */
 	public function test_create_skips_foreign_dropin(): void {

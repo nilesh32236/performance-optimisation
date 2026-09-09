@@ -1211,19 +1211,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				return '';
 			}
 
+			// Strip any port BEFORE IDN conversion: UTS46 rejects
+			// 'münchen.de:8080' as a whole, so converting first would fail
+			// and force a fail-open '' for IDN hosts with explicit ports.
+			$host = explode( ':', $domain, 2 )[0];
+			if ( '' === $host ) {
+				return '';
+			}
+
 			if ( function_exists( 'idn_to_ascii' ) ) {
 				try {
-					$converted = idn_to_ascii( $domain, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46 );
+					$converted = idn_to_ascii( $host, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46 );
 				} catch ( \Throwable $e ) {
 					unset( $e );
 					$converted = false;
 				}
 				if ( false !== $converted && is_string( $converted ) && '' !== $converted ) {
-					$domain = $converted;
+					$host = $converted;
 				}
 			}
-
-			$host = explode( ':', $domain, 2 )[0];
 
 			$valid = ! (
 				strpos( $host, '..' ) !== false ||

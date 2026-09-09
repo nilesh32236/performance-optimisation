@@ -870,6 +870,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'update_option_permalink_structure', array( __CLASS__, 'clear_all_cache' ) );
 			add_action( 'switch_theme', array( __CLASS__, 'clear_all_cache' ) );
 			add_action( 'update_option_wppo_settings', array( __CLASS__, 'on_settings_update' ), 10, 2 );
+			// The canonical host is baked into advanced-cache.php at create()
+			// time; re-bake it when the home/site URL changes (domain migration)
+			// so the drop-in does not silently run uncached on a stale host.
+			add_action( 'update_option_home', array( __CLASS__, 'on_site_url_change' ), 10, 3 );
+			add_action( 'update_option_siteurl', array( __CLASS__, 'on_site_url_change' ), 10, 3 );
 			add_action( 'activated_plugin', array( __CLASS__, 'clear_all_cache' ) );
 			add_action( 'deactivated_plugin', array( __CLASS__, 'clear_all_cache' ) );
 
@@ -1307,6 +1312,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		public static function clear_all_cache() {
 			Cache::clear_cache();
+		}
+
+		/**
+		 * Regenerate the advanced-cache.php drop-in when the home or site URL
+		 * changes (domain migration).
+		 *
+		 * The canonical host is baked into the drop-in at create() time; without
+		 * a re-bake every request would mismatch the stale host and silently
+		 * run uncached. No cache clear here — the old-domain files are keyed
+		 * under a different host directory and simply stop being served.
+		 *
+		 * @param mixed  $old_value Previous option value (unused).
+		 * @param mixed  $value     New option value (unused).
+		 * @param string $option    Option name (unused).
+		 * @return void
+		 * @since NEXT
+		 */
+		public static function on_site_url_change( $old_value = null, $value = null, $option = '' ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found,Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+			unset( $old_value, $value, $option );
+			Advanced_Cache_Handler::create();
 		}
 
 		/**
