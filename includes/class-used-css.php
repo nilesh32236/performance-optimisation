@@ -101,6 +101,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			'.admin-bar-',
 			'.dashicons-',
 			'.customize-',
+			// Builder / JS-state selectors (issue #966): builders inject
+			// dynamic classes at runtime that the static DOM walk never sees.
+			// Prefix entries ending in '-' match via startsWith in
+			// is_selector_used().
+			'.elementor-',
+			'.e-con',
+			'.et_',
+			'.et_pb_',
+			'.et-pb-',
+			'.bricks-',
+			'.brx-',
+			'.vc_',
+			'.wpb_',
+			'.oxygen-',
+			'.oxy-',
+			'.no-js',
+			'.js-enabled',
+			'[data-elementor-type]',
 		);
 
 		/**
@@ -174,6 +192,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 
 			if ( ! empty( $file_opts['excludeUnusedCSS'] ) ) {
 				$user_list = Util::process_urls( $file_opts['excludeUnusedCSS'] );
+			}
+
+			// Extra safelist (issue #966): additive user textarea merged
+			// alongside the legacy excludeUnusedCSS list.
+			if ( ! empty( $file_opts['unusedCSSSafelistExtra'] ) ) {
+				$extra     = Util::process_urls( $file_opts['unusedCSSSafelistExtra'] );
+				$user_list = array_merge( $user_list, $extra );
 			}
 
 			$this->safelist = array_merge( $this->built_in_safelist, $user_list );
@@ -819,7 +844,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 
 			$parsed = $this->parse_css( $combined_css );
 
-			return $this->purge_css( $parsed, $used_selectors );
+			$purged = $this->purge_css( $parsed, $used_selectors );
+
+			// Visual regression guard (issue #966): an over-aggressive purge
+			// (retained-bytes ratio below threshold, or tiny output from a
+			// large input) fails back to the full stylesheet, never fatal.
+			if ( $this->is_regression_guard_tripped( $combined_css, $purged ) ) {
+				$this->log_used_css_fallback( 'regression_guard', array_keys( $css_assets ) );
+				return $combined_css;
+			}
+
+			return $purged;
 		}
 
 		/**
@@ -1415,6 +1450,78 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			}
 
 			return $out;
+		}
+
+		/**
+		 * Whether the visual regression guard is enabled (issue #966).
+		 *
+		 * Safe-by-default on; a missing key backfills to on so old installs
+		 * get the fail-open guard without a storage migration (per-site
+		 * settings, multisite-safe).
+		 *
+		 * @since NEXT
+		 * @return bool
+		 */
+		public function is_regression_guard_enabled(): bool {
+			$file_opts = $this->options['file_optimisation'] ?? array();
+			if ( ! array_key_exists( 'unusedCSSRegressionGuard', $file_opts ) ) {
+				return true;
+			}
+			return ! empty( $file_opts['unusedCSSRegressionGuard'] );
+		}
+
+		/**
+		 * Retained-% threshold below which trimming is deemed a mismatch.
+		 *
+		 * Clamped to 5-50; unrecognized values fail safe to 20.
+		 *
+		 * @since NEXT
+		 * @return int
+		 */
+		public function get_regression_threshold(): int {
+			$file_opts = $this->options['file_optimisation'] ?? array();
+			$threshold = isset( $file_opts['unusedCSSRegressionThreshold'] ) ? (int) $file_opts['unusedCSSRegressionThreshold'] : 20;
+			if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_unused_css_regression_threshold' ) ) {
+				$threshold = (int) apply_filters( 'wppo_unused_css_regression_threshold', $threshold );
+			} elseif ( function_exists( 'apply_filters' ) && ! function_exists( 'has_filter' ) ) {
+				$threshold = (int) apply_filters( 'wppo_unused_css_regression_threshold', $threshold );
+			}
+			if ( $threshold < 5 || $threshold > 50 ) {
+				return 20;
+			}
+			return $threshold;
+		}
+
+		/**
+		 * Whether purged output trips the visual regression guard.
+		 *
+		 * Trips when the retained-bytes ratio falls below the configured
+		 * threshold, or when a large input (>10 KB) purges to <1 KB. Empty
+		 * inputs never trip (callers handle empties separately).
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $combined_css Full combined stylesheet.
+		 * @param string $purged_css   Purged output.
+		 * @return bool True when the guard trips (serve the full stylesheet).
+		 */
+		public function is_regression_guard_tripped( string $combined_css, string $purged_css ): bool {
+			if ( ! $this->is_regression_guard_enabled() ) {
+				return false;
+			}
+			$input_len = strlen( $combined_css );
+			if ( 0 === $input_len ) {
+				return false;
+			}
+			if ( '' === trim( $purged_css ) ) {
+				return true;
+			}
+			$output_len = strlen( $purged_css );
+			if ( $input_len > 10240 && $output_len < 1024 ) {
+				return true;
+			}
+			$retained = ( $output_len / $input_len ) * 100;
+			return $retained < $this->get_regression_threshold();
 		}
 
 		/**

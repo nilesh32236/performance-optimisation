@@ -160,53 +160,58 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'wooSafeMode'         => true,
 				),
 				'file_optimisation'     => array(
-					'enableServerRules'          => false,
-					'cdnURL'                     => '',
-					'cdnMapping'                 => array(),
-					'removeUnusedCSS'            => false,
-					'excludeUnusedCSS'           => '',
-					'criticalCSS'                => false,
-					'ccssMaxSize'                => 20480,
-					'hostGoogleFontsLocally'     => false,
-					'blockAssetsOnDemand'        => function_exists( 'wp_load_classic_theme_block_styles_on_demand' ),
-					'loadAllCoreBlockAssets'     => false,
-					'delayJSDefaultStrategy'     => 'interaction',
-					'delayJSINPPreset'           => false,
-					'delayJSIdleList'            => '',
-					'delayJSViewportList'        => '',
-					'delayJSPriority'            => '',
-					'delayJSIdleTimeout'         => 3000,
-					'minifyHTML'                 => false,
-					'minifyJS'                   => false,
-					'minifyCSS'                  => false,
-					'deferJS'                    => false,
-					'delayJS'                    => false,
-					'combineCSS'                 => false,
-					'excludeJS'                  => '',
-					'excludeCSS'                 => '',
-					'excludeDeferJS'             => '',
-					'excludeDelayJS'             => '',
-					'excludeCombineCSS'          => '',
-					'minifyInlineCSS'            => false,
-					'minifyInlineJS'             => false,
-					'removeHTMLComments'         => true,
-					'disableRestApiLinks'        => false,
-					'disableRssFeeds'            => false,
-					'disableShortlinks'          => false,
-					'disableGeneratorTag'        => false,
-					'disableJQueryMigrate'       => false,
-					'disablePasswordStrength'    => false,
-					'disableSelfPingbacks'       => false,
-					'disableRSD'                 => false,
-					'disableWLWManifest'         => false,
-					'disableGlobalStyles'        => false,
-					'disableClassicThemeStyles'  => false,
-					'disableWooCartFragments'    => false,
-					'disableRecentCommentsStyle' => false,
-					'disableCommentReply'        => false,
-					'disableOEmbedDiscovery'     => false,
-					'disableBlockWidgets'        => false,
-					'fontMetricFallback'         => false,
+					'enableServerRules'            => false,
+					'cdnURL'                       => '',
+					'cdnMapping'                   => array(),
+					'removeUnusedCSS'              => false,
+					'excludeUnusedCSS'             => '',
+					'unusedCSSSafelistExtra'       => '',
+					'unusedCSSRegressionGuard'     => true,
+					'unusedCSSRegressionThreshold' => 20,
+					'criticalCSS'                  => false,
+					'ccssMaxSize'                  => 20480,
+					'hostGoogleFontsLocally'       => false,
+					'blockAssetsOnDemand'          => function_exists( 'wp_load_classic_theme_block_styles_on_demand' ),
+					'loadAllCoreBlockAssets'       => false,
+					'delayJSDefaultStrategy'       => 'interaction',
+					'delayJSINPPreset'             => false,
+					'delayJSExternalOnly'          => false,
+					'delayJSBuilderPreset'         => true,
+					'delayJSIdleList'              => '',
+					'delayJSViewportList'          => '',
+					'delayJSPriority'              => '',
+					'delayJSIdleTimeout'           => 3000,
+					'minifyHTML'                   => false,
+					'minifyJS'                     => false,
+					'minifyCSS'                    => false,
+					'deferJS'                      => false,
+					'delayJS'                      => false,
+					'combineCSS'                   => false,
+					'excludeJS'                    => '',
+					'excludeCSS'                   => '',
+					'excludeDeferJS'               => '',
+					'excludeDelayJS'               => '',
+					'excludeCombineCSS'            => '',
+					'minifyInlineCSS'              => false,
+					'minifyInlineJS'               => false,
+					'removeHTMLComments'           => true,
+					'disableRestApiLinks'          => false,
+					'disableRssFeeds'              => false,
+					'disableShortlinks'            => false,
+					'disableGeneratorTag'          => false,
+					'disableJQueryMigrate'         => false,
+					'disablePasswordStrength'      => false,
+					'disableSelfPingbacks'         => false,
+					'disableRSD'                   => false,
+					'disableWLWManifest'           => false,
+					'disableGlobalStyles'          => false,
+					'disableClassicThemeStyles'    => false,
+					'disableWooCartFragments'      => false,
+					'disableRecentCommentsStyle'   => false,
+					'disableCommentReply'          => false,
+					'disableOEmbedDiscovery'       => false,
+					'disableBlockWidgets'          => false,
+					'fontMetricFallback'           => false,
 				),
 				'preload_settings'      => array(
 					'enablePreloadCache'     => false,
@@ -1618,6 +1623,44 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 						$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
 						$sanitized[ $safe_key ] = null === $bool ? false : $bool;
 					}
+					continue;
+				}
+
+				// Safe-default delay keys (issue #966) — external-only defaults
+				// off (fail-safe: delay everything unless asked), builder preset
+				// defaults on (fail-safe: never delay builder runtimes).
+				if ( in_array( $safe_key, array( 'delayJSExternalOnly' ), true ) && ! is_array( $value ) ) {
+					if ( is_bool( $value ) ) {
+						$sanitized[ $safe_key ] = $value;
+					} else {
+						$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+						$sanitized[ $safe_key ] = null === $bool ? false : $bool;
+					}
+					continue;
+				}
+
+				if ( in_array( $safe_key, array( 'delayJSBuilderPreset', 'unusedCSSRegressionGuard' ), true ) && ! is_array( $value ) ) {
+					if ( is_bool( $value ) ) {
+						$sanitized[ $safe_key ] = $value;
+					} else {
+						$bool = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+						// Fail-safe: preset/guard default on; unrecognized values stay on.
+						$sanitized[ $safe_key ] = null === $bool ? true : $bool;
+					}
+					continue;
+				}
+
+				// Unused-CSS regression threshold (issue #966) — int clamped to
+				// 5-50 (% retained). Unrecognized values fail safe to 20.
+				if ( 'unusedCSSRegressionThreshold' === $safe_key && ! is_array( $value ) ) {
+					$threshold              = (int) $value;
+					$sanitized[ $safe_key ] = ( $threshold >= 5 && $threshold <= 50 ) ? $threshold : 20;
+					continue;
+				}
+
+				// Unused-CSS extra safelist (issue #966) — one selector per line.
+				if ( 'unusedCSSSafelistExtra' === $safe_key && ! is_array( $value ) ) {
+					$sanitized[ $safe_key ] = sanitize_textarea_field( (string) $value );
 					continue;
 				}
 

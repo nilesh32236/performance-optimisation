@@ -51,6 +51,14 @@ const FileOptimization = ( {
 		excludeDelayJS: '',
 		delayJSDefaultStrategy: options.delayJSDefaultStrategy || 'interaction',
 		delayJSINPPreset: options.delayJSINPPreset || false,
+		delayJSExternalOnly:
+			options.delayJSExternalOnly !== undefined
+				? options.delayJSExternalOnly
+				: false,
+		delayJSBuilderPreset:
+			options.delayJSBuilderPreset !== undefined
+				? options.delayJSBuilderPreset
+				: true,
 		delayJSIdleList: options.delayJSIdleList || '',
 		delayJSViewportList: options.delayJSViewportList || '',
 		delayJSPriority: options.delayJSPriority || '',
@@ -67,6 +75,13 @@ const FileOptimization = ( {
 		cdnMapping: options.cdnMapping || [],
 		removeUnusedCSS: false,
 		excludeUnusedCSS: '',
+		unusedCSSSafelistExtra: options.unusedCSSSafelistExtra || '',
+		unusedCSSRegressionGuard:
+			options.unusedCSSRegressionGuard !== undefined
+				? options.unusedCSSRegressionGuard
+				: true,
+		unusedCSSRegressionThreshold:
+			options.unusedCSSRegressionThreshold || 20,
 		disableEmojis: false,
 		disableEmbeds: false,
 		disableDashicons: false,
@@ -679,6 +694,100 @@ const FileOptimization = ( {
 												'performance-optimisation'
 											) }
 										</p>
+										<label
+											className="wppo-field-label wppo-mt-16"
+											htmlFor="unusedCSSSafelistExtra"
+										>
+											{ __(
+												'Extra Safelist (builders / dynamic)',
+												'performance-optimisation'
+											) }
+										</label>
+										<textarea
+											className="wppo-textarea wppo-textarea--mono"
+											id="unusedCSSSafelistExtra"
+											name="unusedCSSSafelistExtra"
+											rows="3"
+											placeholder={ __(
+												'e.g. .elementor-widget-container',
+												'performance-optimisation'
+											) }
+											value={
+												settings.unusedCSSSafelistExtra
+											}
+											onChange={ handleChange(
+												setSettings
+											) }
+											aria-describedby="unusedCSSSafelistExtra-desc"
+										/>
+										<p
+											id="unusedCSSSafelistExtra-desc"
+											className="wppo-text-muted wppo-text-small wppo-mt-8"
+										>
+											{ __(
+												'Additional selectors always preserved — use for builder or JS-injected classes.',
+												'performance-optimisation'
+											) }
+										</p>
+										<div className="wppo-mt-16">
+											<SwitchField
+												label={ __(
+													'Visual regression guard',
+													'performance-optimisation'
+												) }
+												description={ __(
+													'Fall back to the full stylesheet when trimming keeps too little CSS (over-aggressive purge).',
+													'performance-optimisation'
+												) }
+												name="unusedCSSRegressionGuard"
+												checked={
+													settings.unusedCSSRegressionGuard
+												}
+												onChange={ handleChange(
+													setSettings
+												) }
+												disabled={ optimizerDisabled }
+											/>
+										</div>
+										{ settings.unusedCSSRegressionGuard && (
+											<>
+												<label
+													className="wppo-field-label wppo-mt-16"
+													htmlFor="unusedCSSRegressionThreshold"
+												>
+													{ __(
+														'Minimum Retained CSS (%)',
+														'performance-optimisation'
+													) }
+												</label>
+												<input
+													className="wppo-input"
+													type="number"
+													inputMode="numeric"
+													id="unusedCSSRegressionThreshold"
+													name="unusedCSSRegressionThreshold"
+													min="5"
+													max="50"
+													step="1"
+													value={
+														settings.unusedCSSRegressionThreshold
+													}
+													onChange={ handleChange(
+														setSettings
+													) }
+													aria-describedby="unusedCSSRegressionThreshold-desc"
+												/>
+												<p
+													id="unusedCSSRegressionThreshold-desc"
+													className="wppo-text-muted wppo-text-small wppo-mt-8"
+												>
+													{ __(
+														'Below this retained percentage the full stylesheet is served instead (5–50, default: 20).',
+														'performance-optimisation'
+													) }
+												</p>
+											</>
+										) }
 										<button
 											className="wppo-button wppo-button--secondary wppo-mt-12"
 											onClick={ handleRegenerateUsedCSS }
@@ -1126,6 +1235,42 @@ const FileOptimization = ( {
 												onChange={
 													handleINPPresetToggle
 												}
+												disabled={ optimizerDisabled }
+											/>
+											<SwitchField
+												label={ __(
+													'External scripts only',
+													'performance-optimisation'
+												) }
+												description={ __(
+													'Delay only external scripts (with src). Inline scripts stay un-delayed — safer on builder pages.',
+													'performance-optimisation'
+												) }
+												name="delayJSExternalOnly"
+												checked={
+													settings.delayJSExternalOnly
+												}
+												onChange={ handleChange(
+													setSettings
+												) }
+												disabled={ optimizerDisabled }
+											/>
+											<SwitchField
+												label={ __(
+													'Builder safe preset',
+													'performance-optimisation'
+												) }
+												description={ __(
+													'Keep Elementor, Divi, Bricks, WPBakery, Oxygen and block runtimes un-delayed by default. Disable only if you manage exclusions manually.',
+													'performance-optimisation'
+												) }
+												name="delayJSBuilderPreset"
+												checked={
+													settings.delayJSBuilderPreset
+												}
+												onChange={ handleChange(
+													setSettings
+												) }
 												disabled={ optimizerDisabled }
 											/>
 											<div className="wppo-field">

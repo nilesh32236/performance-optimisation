@@ -129,6 +129,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				array( 'wppo-lazyload', 'data-wppo-preserve' ),
 				Util::process_urls( $this->options['file_optimisation']['excludeDelayJS'] ?? array() )
 			);
+			// Builder safe preset (#966): mirror Main::get_delay_js_builder_exclusions()
+			// via the shared static helper so the lists never drift. Safe-by-default
+			// on; missing key backfills to on. See Main::get_delay_js_preset_exclusions().
+			$builder_on = ! isset( $this->options['file_optimisation']['delayJSBuilderPreset'] )
+				|| ! empty( $this->options['file_optimisation']['delayJSBuilderPreset'] );
+			if ( $builder_on && class_exists( Main::class ) && method_exists( Main::class, 'get_delay_js_builder_exclusions' ) ) {
+				try {
+					$this->exclude_delay_js = array_merge( $this->exclude_delay_js, Main::get_delay_js_builder_exclusions() );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
 			$this->exclude_delay_js = array_values(
 				array_filter(
 					$this->exclude_delay_js,
@@ -467,6 +479,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			}
 
 			if ( ! empty( $this->options['file_optimisation']['delayJS'] ) && ! self::is_delay_excluded_context() ) {
+
+				// Per-page kill-switch (#966): skip inline delay for this page.
+				if ( class_exists( Main::class ) && method_exists( Main::class, 'is_delay_disabled_for_page' ) ) {
+					try {
+						if ( Main::is_delay_disabled_for_page() ) {
+							return '<script' . $attributes . '>' . $content . '</script>';
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+
+				// External-scripts-only mode (#966): inline scripts (no src
+				// attribute) stay un-delayed; only external scripts delay.
+				// Fail-open: leave the tag untouched.
+				if ( ! empty( $this->options['file_optimisation']['delayJSExternalOnly'] ) ) {
+					if ( ! preg_match( '/\bsrc\s*=/i', (string) $attributes ) ) {
+						return '<script' . $attributes . '>' . $content . '</script>';
+					}
+				}
 
 				$should_exclude = false;
 				if ( ! empty( $this->exclude_delay_js ) ) {

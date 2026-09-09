@@ -104,6 +104,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private int $delay_js_idle_timeout = 3000;
 
 		/**
+		 * Whether delay-JS is disabled for the current singular page.
+		 *
+		 * Set by apply_per_page_delay_config() from the `_wppo_delay_disabled`
+		 * post meta escape hatch (issue #966). Checked in add_defer_attribute().
+		 *
+		 * @var   bool
+		 * @since NEXT
+		 */
+		private bool $delay_disabled_for_page = false;
+
+		/**
 		 * Associative array of deferred script handles (keyed by handle for O(1) lookups).
 		 *
 		 * @var   array<string, bool>
@@ -2385,6 +2396,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( self::is_delay_excluded_context() ) {
 					return $tag;
 				}
+				// Per-page kill-switch (#966): `_wppo_delay_disabled` meta.
+				if ( $this->delay_disabled_for_page || self::is_delay_disabled_for_page() ) {
+					return $tag;
+				}
+				// External-scripts-only mode (#966): leave inline scripts
+				// (no src attribute) untouched; only external handles delay.
+				if ( ! empty( $this->options['file_optimisation']['delayJSExternalOnly'] ) ) {
+					if ( ! preg_match( '/\bsrc\s*=/i', (string) $tag ) ) {
+						return $tag;
+					}
+				}
 				if ( ! in_array( $handle, $this->exclude_delay_js, true ) ) {
 					$tag = str_replace( '<script ', '<script fetchpriority="low" ', $tag );
 					$tag = str_replace( ' src', ' wppo-src', $tag );
@@ -2699,6 +2721,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 
+			// Per-page kill-switch (#966): skip all delay rewriting for this
+			// request. Notes field (`_wppo_delay_notes`) is informational only.
+			if ( self::is_delay_disabled_for_page( (int) $post_id ) ) {
+				$this->delay_disabled_for_page = true;
+				return;
+			}
+
 			$delay_strategies = get_post_meta( $post_id, '_wppo_delay_strategies', true );
 			$delay_priorities = get_post_meta( $post_id, '_wppo_delay_priorities', true );
 
@@ -2730,6 +2759,86 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						$this->delay_js_priority[ $handle ] = $priority;
 					}
 				}
+			}
+		}
+
+		/**
+		 * Curated per-builder Delay JS exclusions (issue #966).
+		 *
+		 * Builder runtimes must stay un-delayed by default — delaying them
+		 * breaks Elementor/Divi/Bricks/WPBakery/Oxygen rendering and the
+		 * block-interactivity runtime. Matched via matches_delay_pattern()
+		 * word-boundary logic by callers. Shared with Minify\HTML so the
+		 * external and inline delay paths never drift.
+		 *
+		 * @since NEXT
+		 * @return string[]
+		 */
+		public static function get_delay_js_builder_exclusions(): array {
+			return array(
+				// Elementor.
+				'elementor-frontend',
+				'elementor-pro-frontend',
+				'elementor-common',
+				'e-sticky',
+				'elementor-waypoints',
+				// Divi.
+				'divi-custom-script',
+				'et-core-api',
+				'et_pb_custom',
+				'divi-builder',
+				// Bricks.
+				'bricks-scripts',
+				'bricks-builder',
+				// WPBakery.
+				'vc_tta',
+				'vc_teaser',
+				'wpb_composer_front_js',
+				'js_composer_front',
+				// Oxygen.
+				'oxygen',
+				'oxy-front-end',
+				// Gutenberg / block interactivity.
+				'wp-block-library',
+				'wp-interactivity',
+				'wp-i18n',
+			);
+		}
+
+		/**
+		 * Whether Delay JS is disabled for a singular page (issue #966).
+		 *
+		 * Reads the `_wppo_delay_disabled` post-meta kill-switch. Fail-open:
+		 * any detection failure returns false (delay stays enabled) except
+		 * unexpected throwables, which return false as well — callers already
+		 * fail open to original scripts on rewrite errors.
+		 *
+		 * @since NEXT
+		 *
+		 * @param int $post_id Optional post ID. Defaults to the current post.
+		 * @return bool True when delay must be skipped for this page.
+		 */
+		public static function is_delay_disabled_for_page( int $post_id = 0 ): bool {
+			try {
+				if ( function_exists( 'is_singular' ) && ! is_singular() && 0 === $post_id ) {
+					return false;
+				}
+				if ( 0 === $post_id ) {
+					if ( ! function_exists( 'get_the_ID' ) ) {
+						return false;
+					}
+					$post_id = (int) get_the_ID();
+				}
+				if ( $post_id <= 0 ) {
+					return false;
+				}
+				if ( ! function_exists( 'get_post_meta' ) ) {
+					return false;
+				}
+				return ! empty( get_post_meta( $post_id, '_wppo_delay_disabled', true ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
 			}
 		}
 
@@ -2772,13 +2881,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'wc-add-to-cart',
 				'wc-single-product',
 			);
+			// Builder safe preset (#966): safe-by-default on; merges builder
+			// runtime handles unless explicitly disabled. Missing key backfills
+			// to on (per-site settings, multisite-safe).
+			$builder_on = ! isset( $this->options['file_optimisation']['delayJSBuilderPreset'] )
+				|| ! empty( $this->options['file_optimisation']['delayJSBuilderPreset'] );
+			if ( $builder_on ) {
+				$preset = array_merge( $preset, self::get_delay_js_builder_exclusions() );
+			}
 			/**
 			 * Filters delay JS preset exclusions.
 			 *
 			 * @since NEXT
 			 * @param string[] $preset Preset exclusions.
 			 */
-			return (array) apply_filters( 'wppo_delay_js_exclusions', $preset );
+			if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) ) {
+				return (array) apply_filters( 'wppo_delay_js_exclusions', $preset );
+			}
+			return $preset;
 		}
 
 		/**
