@@ -225,6 +225,89 @@ class AdvancedCacheHandlerTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that create bakes the configured WooCommerce paths plus the
+	 * session-cookie and add-to-cart guards when woo safe mode is enabled.
+	 *
+	 * Regression coverage for the coderabbit major on issue #922: a custom
+	 * Woo slug (e.g. /basket/) must never reach wppo_serve_cache_file().
+	 */
+	public function test_create_bakes_configured_woo_paths_when_safe_mode_on(): void {
+		$fs                       = new WPPO_AdvancedCache_FS_Mock();
+		$fs->file_exists          = false;
+		$GLOBALS['wp_filesystem'] = $fs;
+
+		Functions\when( 'wp_normalize_path' )->returnArg();
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'absint' )->alias(
+			static function ( $value ) {
+				return abs( (int) $value );
+			}
+		);
+		// Safe mode defaults to enabled when the key is absent (fail-safe).
+		// Drive the REAL Util::get_woo_excluded_paths() with stubbed Woo deps so
+		// a custom slug (basket) is resolved like it would be on a live install.
+		Functions\when( 'wc_get_page_id' )->alias(
+			static function ( $key ) {
+				$pages = array(
+					'cart'      => 10,
+					'checkout'  => 20,
+					'myaccount' => 30,
+				);
+				return isset( $pages[ $key ] ) ? $pages[ $key ] : 0;
+			}
+		);
+		Functions\when( 'get_permalink' )->justReturn( 'http://example.com/basket/' );
+		Functions\when( 'wp_parse_url' )->justReturn( '/basket/' );
+
+		$this->assertTrue( Advanced_Cache_Handler::create() );
+
+		// Custom slug is folded into the pre-boot URI guard (preg_quote escapes
+		// the hyphen in my-account).
+		$this->assertStringContainsString( '(?:cart|checkout|my\-account|basket)', $fs->put_contents );
+		// Session-cookie guard uses an (array) cast and is present while safe mode is on.
+		$this->assertStringContainsString( 'foreach ( (array) $_COOKIE as $k => $v )', $fs->put_contents );
+		$this->assertStringContainsString( 'wp_woocommerce_session_', $fs->put_contents );
+		// add-to-cart guards are baked in.
+		$this->assertStringContainsString( 'add-to-cart', $fs->put_contents );
+	}
+
+	/**
+	 * Test that create restores pre-#922 drop-in behaviour when woo safe mode
+	 * is disabled: the session-cookie and add-to-cart guards are omitted while
+	 * the default cart/checkout/my-account protections remain unconditional.
+	 */
+	public function test_create_skips_woo_safe_guards_when_safe_mode_off(): void {
+		$fs                       = new WPPO_AdvancedCache_FS_Mock();
+		$fs->file_exists          = false;
+		$GLOBALS['wp_filesystem'] = $fs;
+
+		Functions\when( 'wp_normalize_path' )->returnArg();
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		Functions\when( 'get_option' )->justReturn(
+			array(
+				'cache_settings' => array( 'wooSafeMode' => false ),
+			)
+		);
+		Functions\when( 'absint' )->alias(
+			static function ( $value ) {
+				return abs( (int) $value );
+			}
+		);
+
+		$this->assertTrue( Advanced_Cache_Handler::create() );
+
+		// Guard CODE is omitted (a generated comment may still mention
+		// add-to-cart, so assert on the guard expressions themselves).
+		$this->assertStringNotContainsString( 'wp_woocommerce_session_', $fs->put_contents );
+		$this->assertStringNotContainsString( "isset( \$_GET['add-to-cart'] )", $fs->put_contents );
+		$this->assertStringNotContainsString( '(?:^|&)add-to-cart(?:=|&|$)', $fs->put_contents );
+		$this->assertStringNotContainsString( 'foreach ( (array) $_COOKIE as $k => $v )', $fs->put_contents );
+		// The pre-#922 default URI guard is still baked in.
+		$this->assertStringContainsString( '#^/(?:cart|checkout|my\-account)(?:/|$)#i', $fs->put_contents );
+	}
+
+	/**
 	 * Test that create leaves a foreign drop-in untouched.
 	 */
 	public function test_create_skips_foreign_dropin(): void {

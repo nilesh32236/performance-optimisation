@@ -1698,6 +1698,97 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Whether the current request should be excluded from static cache due to WooCommerce safe mode.
+		 *
+		 * Safe-by-default exclusions for WooCommerce: cart/checkout/account,
+		 * wc-ajax, add-to-cart, and Woo session/cart cookies. Fail-open: any
+		 * detection failure treats the page as non-cacheable (never fatal). When
+		 * Woo symbols are missing the conditional-function branch is skipped but
+		 * URI/cookie guards remain so hardcoded cart/checkout slugs stay safe even
+		 * on non-Woo installs (legacy behaviour preserved, 0 queries).
+		 *
+		 * @since NEXT
+		 * @return bool True when the request is Woo-excluded (not cacheable).
+		 */
+		private function is_woo_excluded(): bool {
+			// Feature toggle: explicit false disables safe mode; absent key = true for BC.
+			if ( isset( $this->options['cache_settings']['wooSafeMode'] ) && false === $this->options['cache_settings']['wooSafeMode'] ) {
+				return false;
+			}
+
+			try {
+				$woo_active = function_exists( 'is_cart' ) || function_exists( 'is_checkout' ) || function_exists( 'is_account_page' ) || function_exists( 'is_woocommerce' ) || class_exists( 'WooCommerce', false );
+
+				$excluded = false;
+
+				if ( $woo_active ) {
+					if ( function_exists( 'is_cart' ) && is_cart() ) {
+						$excluded = true;
+					} elseif ( function_exists( 'is_checkout' ) && is_checkout() ) {
+						$excluded = true;
+					} elseif ( function_exists( 'is_account_page' ) && is_account_page() ) {
+						$excluded = true;
+					}
+				}
+
+				if ( ! $excluded ) {
+					$parsed_path    = wp_parse_url( $this->request_uri, PHP_URL_PATH );
+					$local_url_path = wp_normalize_path( trim( rawurldecode( (string) $parsed_path ), '/' ) );
+					if ( preg_match( '#^/(?:cart|checkout|my-account)(?:/|$)#i', '/' . $local_url_path ) ) {
+						$excluded = true;
+					}
+				}
+
+				if ( ! $excluded ) {
+					if ( ! empty( $_COOKIE['woocommerce_items_in_cart'] ) || ! empty( $_COOKIE['woocommerce_cart_hash'] ) ) {
+						$excluded = true;
+					}
+				}
+
+				if ( ! $excluded && isset( $_COOKIE ) && is_array( $_COOKIE ) ) {
+					foreach ( $_COOKIE as $k => $v ) {
+						if ( 0 === strpos( (string) $k, 'wp_woocommerce_session_' ) && ! empty( $v ) ) {
+							$excluded = true;
+							break;
+						}
+					}
+				}
+
+				if ( ! $excluded ) {
+					if ( $this->is_wc_ajax_request() ) {
+						$excluded = true;
+					}
+				}
+
+				if ( ! $excluded ) {
+					if ( isset( $_GET['add-to-cart'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
+						$excluded = true;
+					} elseif ( ! empty( $_SERVER['QUERY_STRING'] ) && preg_match( '/(?:^|&)(add-to-cart)(?:=|&|$)/i', sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) ) ) ) {
+						$excluded = true;
+					}
+				}
+
+				if ( ! $excluded ) {
+					return false;
+				}
+
+				// Allow per-URL override: wppo_woo_cacheable returning true re-allows caching.
+				if ( function_exists( 'has_filter' ) && has_filter( 'wppo_woo_cacheable' ) ) {
+					$cacheable = (bool) apply_filters( 'wppo_woo_cacheable', false, $this->request_uri ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.DynamicHooknameFound -- Filter documented in docs/hooks.md.
+					if ( $cacheable ) {
+						return false;
+					}
+				}
+
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				// Fail-open: any detection failure treats the page as non-cacheable (never fatal).
+				return true;
+			}
+		}
+
+		/**
 		 * Check if the page is not cacheable.
 		 *
 		 * Note: for pages opted out via the DONOTCACHEPAGE constant this also records
@@ -1761,22 +1852,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return true;
 			}
 
-			// Exclude WooCommerce cart, checkout, and account pages.
-			if ( function_exists( 'is_cart' ) && is_cart() ) {
-				return true;
-			}
-			if ( function_exists( 'is_checkout' ) && is_checkout() ) {
-				return true;
-			}
-			if ( function_exists( 'is_account_page' ) && is_account_page() ) {
-				return true;
-			}
-			if ( preg_match( '#^/(?:cart|checkout|my-account)(?:/|$)#i', '/' . $local_url_path ) ) {
-				return true;
-			}
-
-			// Exclude if active WooCommerce cart session cookies exist.
-			if ( ! empty( $_COOKIE['woocommerce_items_in_cart'] ) || ! empty( $_COOKIE['woocommerce_cart_hash'] ) ) {
+			// WooCommerce safe mode: cart/checkout/account, wc-ajax, add-to-cart, session/cart cookies.
+			// Filter wppo_woo_cacheable (guarded by has_filter) can re-allow a URL.
+			if ( $this->is_woo_excluded() ) {
 				return true;
 			}
 
@@ -1785,13 +1863,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// cart-content cookies above imply dynamic cart fragments.
 			// Per-currency segmentation is a future enhancement, not new vary
 			// logic in this change (see docs/hooks.md, wppo_should_cache_request).
-
-			// Exclude WooCommerce AJAX endpoints (issue #907): wc-ajax XHRs
-			// (?wc-ajax=get_refreshed_fragments, /wc-ajax/...) are dynamic JSON
-			// and must never be buffered or stored.
-			if ( $this->is_wc_ajax_request() ) {
-				return true;
-			}
 
 			// ESI punch-holing: when hole active, treat as not cacheable via DONOTCACHEPAGE.
 			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
@@ -2085,6 +2156,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// is_not_cacheable() is bypassed via the wppo_should_cache_request
 			// filter; covers pretty-permalink paths with an empty query string; @since NEXT).
 			if ( $this->is_wc_ajax_request() ) {
+				return false;
+			}
+
+			// Woo safe-mode storage parity (issue #922): refuse storage for
+			// cart/checkout/account, add-to-cart, and Woo session/cart cookies
+			// so HTML that gains a Woo signal after the buffer gate (e.g. Woo
+			// session handler populating $_COOKIE mid-request) is never
+			// persisted. Honors wooSafeMode=false and wppo_woo_cacheable via
+			// is_woo_excluded().
+			if ( $this->is_woo_excluded() ) {
 				return false;
 			}
 
