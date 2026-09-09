@@ -287,6 +287,93 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Whether WooCommerce safe mode is enabled.
+		 *
+		 * Single toggle for all Woo dynamic-page guards (cache, delay,
+		 * used-CSS, preload). Absent key defaults to enabled (fail-safe);
+		 * explicit false disables. Malformed values normalize to enabled.
+		 *
+		 * @since NEXT
+		 * @param array|null $settings Optional settings array (defaults to get_settings()).
+		 * @return bool True when safe mode is enabled.
+		 */
+		public static function is_woo_safe_mode_enabled( ?array $settings = null ): bool {
+			try {
+				if ( null === $settings ) {
+					$settings = self::get_settings();
+				}
+				if ( ! isset( $settings['cache_settings']['wooSafeMode'] ) ) {
+					return true;
+				}
+				$parsed = filter_var( $settings['cache_settings']['wooSafeMode'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+				return null === $parsed ? true : $parsed;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
+		 * Whether a normalized request path is a WooCommerce Store API route.
+		 *
+		 * Matches `wc/store`, `wcstore`, `wp-json/wc/store*`, and
+		 * `wp-json/wcstore*` as leading path segments (case-insensitive).
+		 * Store API responses are dynamic JSON and must never be cached,
+		 * delayed, or preloaded — unconditional on safe-mode toggle.
+		 *
+		 * @since NEXT
+		 * @param string $path Request path (leading slash optional).
+		 * @return bool True when the path is a Store API route.
+		 */
+		public static function is_woo_store_api_path( string $path ): bool {
+			$normalized = strtolower( trim( (string) $path, '/' ) );
+			if ( '' === $normalized ) {
+				return false;
+			}
+			return (bool) preg_match( '#(^|/)(?:wc/store|wcstore|wp-json/wc/store|wp-json/wcstore)(/|$)#i', '/' . $normalized );
+		}
+
+		/**
+		 * Whether a request path belongs to a WooCommerce dynamic page.
+		 *
+		 * Matches every path from {@see get_woo_excluded_paths()} as a full
+		 * leading path segment (covers nested `shop/basket` and subdirectory /
+		 * multisite prefixes) plus Store API routes. Fail-open: any detection
+		 * failure returns true (treated as dynamic, never fatal).
+		 *
+		 * @since NEXT
+		 * @param string $path Request path (leading slash optional).
+		 * @return bool True when the path is Woo-dynamic.
+		 */
+		public static function is_woo_dynamic_path( string $path ): bool {
+			try {
+				if ( self::is_woo_store_api_path( $path ) ) {
+					return true;
+				}
+				$normalized = strtolower( trim( (string) $path, '/' ) );
+				if ( '' === $normalized ) {
+					return false;
+				}
+				foreach ( self::get_woo_excluded_paths() as $excluded ) {
+					$candidate = strtolower( trim( (string) $excluded, '/' ) );
+					if ( '' === $candidate ) {
+						continue;
+					}
+					// Leading-segment semantics: match the candidate as a full
+					// path segment at the start or after a subdirectory /
+					// multisite prefix (e.g. /shop/basket, /subsite/cart).
+					if ( (bool) preg_match( '#/(?:' . preg_quote( $candidate, '#' ) . ')(/|$)#i', '/' . $normalized ) ) {
+						return true;
+					}
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
 		 * Relative paths treated as WooCommerce endpoints for static-cache bypass.
 		 *
 		 * Defaults cover stock permalinks (`cart`, `checkout`, `my-account`). When

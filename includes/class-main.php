@@ -579,6 +579,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// never stacks on top of an active core buffer.
 				add_action( 'template_redirect', array( $this->cache, 'start_output_buffer' ) );
 				add_action( 'save_post', array( $this, 'on_save_post_invalidate_cache' ), 10, 3 );
+				// WooCommerce surgical invalidation (issue #962): product /
+				// order / coupon changes purge only affected URLs — never a
+				// full-cache wipe. add_action() on unregistered hooks is
+				// harmless on non-Woo installs; callbacks guard WC APIs at
+				// call time for WP 6.2 / PHP 8.2 compat. @since NEXT.
+				add_action( 'woocommerce_update_product', array( $this, 'on_woocommerce_product_updated' ), 10, 1 );
+				add_action( 'woocommerce_checkout_order_created', array( $this, 'on_woocommerce_order_changed' ), 10, 1 );
+				add_action( 'woocommerce_update_order', array( $this, 'on_woocommerce_order_changed' ), 10, 1 );
+				add_action( 'woocommerce_coupon_options_save', array( $this, 'on_woocommerce_coupon_saved' ), 10, 1 );
 			}
 
 			// Server-Timing (WP 6.9+). Registering wp_finalized_template_enhancement_output_buffer
@@ -1343,7 +1352,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
 				return;
 			}
-			if ( $this->cache ) {
+			// WooCommerce surgical path (issue #962): product / order / coupon
+			// saves purge only affected URLs instead of the smart-purge fan-out.
+			$post_type = null;
+			if ( is_object( $post ) && isset( $post->post_type ) ) {
+				$post_type = $post->post_type;
+			} elseif ( function_exists( 'get_post_type' ) ) {
+				$post_type = get_post_type( $post_id );
+			}
+			$woo_kind = null;
+			if ( 'product' === $post_type ) {
+				$woo_kind = 'product';
+			} elseif ( 'shop_order' === $post_type || 'shop_order_placehold' === $post_type ) {
+				$woo_kind = 'order';
+			} elseif ( 'shop_coupon' === $post_type ) {
+				$woo_kind = 'coupon';
+			}
+			if ( null !== $woo_kind && $this->cache && method_exists( $this->cache, 'invalidate_woo_object' ) ) {
+				$this->cache->invalidate_woo_object( (int) $post_id, $woo_kind );
+			} elseif ( $this->cache ) {
 				$this->cache->invalidate_dynamic_static_html( $post_id );
 			}
 
@@ -1352,12 +1379,96 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! empty( $options['preload_settings']['preloadSitemap'] ) && function_exists( 'as_enqueue_async_action' ) && function_exists( 'as_has_scheduled_action' ) ) {
 				$url = get_permalink( $post_id );
 				if ( is_string( $url ) && '' !== $url ) {
+					// Never schedule preload work for Woo dynamic pages.
+					if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_dynamic_path' ) && Util::is_woo_safe_mode_enabled( $options ) ) {
+						try {
+							$url_path = (string) wp_parse_url( $url, PHP_URL_PATH );
+							if ( Util::is_woo_dynamic_path( $url_path ) ) {
+								return;
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							return;
+						}
+					}
 					$url = esc_url_raw( $url );
 					if ( '' !== $url && ! as_has_scheduled_action( 'wppo_crawler_warm', array( $url ), 'performance_optimisation' ) ) {
 						as_enqueue_async_action( 'wppo_crawler_warm', array( $url ), 'performance_optimisation' );
 					}
 				}
 			}
+		}
+
+		/**
+		 * Surgically invalidate cache when a WooCommerce product is updated.
+		 *
+		 * @param int $product_id Product ID.
+		 * @return void
+		 * @since NEXT
+		 */
+		public function on_woocommerce_product_updated( $product_id ): void {
+			if ( ! $this->cache || ! method_exists( $this->cache, 'invalidate_woo_object' ) ) {
+				return;
+			}
+			$this->cache->invalidate_woo_object( (int) $product_id, 'product' );
+		}
+
+		/**
+		 * Surgically invalidate cache when a WooCommerce order is created/updated.
+		 *
+		 * Accepts either an order ID or a WC_Order object (hook signatures
+		 * differ between `woocommerce_checkout_order_created` and
+		 * `woocommerce_update_order` across WC versions).
+		 *
+		 * @param mixed $order Order ID or WC_Order object.
+		 * @return void
+		 * @since NEXT
+		 */
+		public function on_woocommerce_order_changed( $order ): void {
+			if ( ! $this->cache || ! method_exists( $this->cache, 'invalidate_woo_object' ) ) {
+				return;
+			}
+			$order_id = $order;
+			if ( is_object( $order ) && method_exists( $order, 'get_id' ) ) {
+				try {
+					$order_id = $order->get_id();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return;
+				}
+			}
+			$order_id = (int) $order_id;
+			if ( $order_id <= 0 ) {
+				return;
+			}
+			$this->cache->invalidate_woo_object( $order_id, 'order' );
+		}
+
+		/**
+		 * Surgically invalidate cache when a WooCommerce coupon is saved.
+		 *
+		 * @param mixed $coupon Coupon ID or WC_Coupon object.
+		 * @return void
+		 * @since NEXT
+		 */
+		public function on_woocommerce_coupon_saved( $coupon ): void {
+			if ( ! $this->cache || ! method_exists( $this->cache, 'invalidate_woo_object' ) ) {
+				return;
+			}
+			$coupon_id = $coupon;
+			if ( is_object( $coupon ) && method_exists( $coupon, 'get_id' ) ) {
+				try {
+					$coupon_id = $coupon->get_id();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return;
+				}
+			}
+			$coupon_id = (int) $coupon_id;
+			if ( $coupon_id <= 0 ) {
+				return;
+			}
+			$this->cache->invalidate_woo_object( $coupon_id, 'coupon' );
 		}
 
 		/**
@@ -2533,6 +2644,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						return true;
 					}
 
+					// Store API routes are dynamic JSON: never delay (issue #962).
+					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_path' ) ) {
+						try {
+							if ( Util::is_woo_store_api_path( $local_path ) ) {
+								return true;
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							return true;
+						}
+					} elseif ( preg_match( '#(^|/)(?:wc/store|wcstore|wp-json/wc/store|wp-json/wcstore)(/|$)#i', $local_path ) ) {
+						return true;
+					}
+
+					// Woo endpoint URLs (order-pay, view-order, downloads, …).
+					if ( function_exists( 'is_wc_endpoint_url' ) ) {
+						try {
+							if ( is_wc_endpoint_url() ) {
+								return true;
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							return true;
+						}
+					}
+
 					// wc-ajax XHR endpoints (?wc-ajax= / /wc-ajax/ path).
 					if ( preg_match( '#(^|/)wc-ajax(/|$)#i', trim( $local_path, '/' ) ) ) {
 						return true;
@@ -2599,9 +2736,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return bool True when the path is a Woo page path.
 		 */
 		private static function matches_woo_page_path( string $local_path ): bool {
+			// Canonical path list (issue #962): Util::get_woo_excluded_paths()
+			// merged with the cart/checkout/my-account defaults so custom /
+			// translated / nested slugs stay excluded. Leading-segment
+			// semantics cover subdirectory installs and multisite sub-sites.
 			$slugs = array( 'cart', 'checkout', 'my-account' );
 
-			if ( function_exists( 'wc_get_page_id' ) && function_exists( 'get_post_field' ) ) {
+			if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_woo_excluded_paths' ) ) {
+				try {
+					foreach ( Util::get_woo_excluded_paths() as $woo_path ) {
+						$candidate = strtolower( trim( (string) $woo_path, '/' ) );
+						if ( '' !== $candidate && ! in_array( $candidate, $slugs, true ) ) {
+							$slugs[] = $candidate;
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			} elseif ( function_exists( 'wc_get_page_id' ) && function_exists( 'get_post_field' ) ) {
 				try {
 					foreach ( array( 'cart', 'checkout', 'myaccount' ) as $page ) {
 						$page_id = (int) wc_get_page_id( $page );

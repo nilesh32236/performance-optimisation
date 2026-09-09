@@ -582,10 +582,47 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					continue;
 				}
 
+				// WooCommerce dynamic routes (issue #962): never preload cart /
+				// checkout / account, custom Woo slugs, or Store API routes.
+				if ( $this->is_woo_excluded_url( $url ) ) {
+					continue;
+				}
+
 				if ( ! wp_next_scheduled( 'wppo_generate_static_url', array( $url ) ) ) {
 					wp_schedule_single_event( time() + wp_rand( 0, 1800 ), 'wppo_generate_static_url', array( $url ) );
 				}
 			}
+		}
+
+		/**
+		 * Whether a preload URL targets a WooCommerce dynamic route.
+		 *
+		 * Gated on `wooSafeMode` (absent = enabled); Store API routes are
+		 * always skipped, mirroring Cache::is_woo_excluded(). Fail-open:
+		 * detection failure skips the URL (never preload dynamic content).
+		 *
+		 * @since NEXT
+		 * @param string $url Absolute URL.
+		 * @return bool True when the URL must not be preloaded.
+		 */
+		private function is_woo_excluded_url( string $url ): bool {
+			try {
+				$path = (string) wp_parse_url( $url, PHP_URL_PATH );
+				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_path' ) && Util::is_woo_store_api_path( $path ) ) {
+					return true;
+				}
+				if ( ! method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_safe_mode_enabled' ) || ! Util::is_woo_safe_mode_enabled() ) {
+					// Safe mode off: only the unconditional Store API skip applies.
+					return false;
+				}
+				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_dynamic_path' ) ) {
+					return Util::is_woo_dynamic_path( $path );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+			return false;
 		}
 
 		/**
@@ -654,6 +691,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 */
 		public function process_page( $page_id ): void {
 			if ( $page_id ) {
+				// Defensive Woo skip (issue #962): never warm dynamic pages.
+				try {
+					if ( function_exists( 'get_permalink' ) ) {
+						$permalink = get_permalink( $page_id );
+						if ( is_string( $permalink ) && '' !== $permalink && $this->is_woo_excluded_url( $permalink ) ) {
+							$this->mark_page_as_processed( $page_id );
+							return;
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 				$this->mark_page_as_processed( $page_id );
 				$this->load_page( $page_id );
 			}
@@ -677,6 +726,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 
 			$url = esc_url_raw( $url );
 			if ( '' === $url ) {
+				return;
+			}
+
+			// Defensive Woo skip (issue #962): never warm dynamic routes.
+			if ( $this->is_woo_excluded_url( $url ) ) {
 				return;
 			}
 

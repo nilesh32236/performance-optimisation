@@ -1793,6 +1793,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Whether the current request targets a WooCommerce Store API route.
+		 *
+		 * Store API responses (`wc/store`, `wcstore`, `wp-json/wc/store*`,
+		 * `wp-json/wcstore*`) are dynamic JSON and must never be cached —
+		 * unconditional on the `wooSafeMode` toggle, mirroring wc-ajax.
+		 * Fail-open false-positive-safe: detection failure returns false and
+		 * the broader Woo guards still apply.
+		 *
+		 * @since NEXT
+		 * @return bool True for Store API requests.
+		 */
+		private function is_woo_store_api_request(): bool {
+			$path = wp_normalize_path( trim( rawurldecode( (string) wp_parse_url( $this->request_uri, PHP_URL_PATH ) ), '/' ) );
+			if ( '' === $path ) {
+				return false;
+			}
+			if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_path' ) ) {
+				try {
+					return Util::is_woo_store_api_path( $path );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			return (bool) preg_match( '#(^|/)(?:wc/store|wcstore|wp-json/wc/store|wp-json/wcstore)(/|$)#i', '/' . $path );
+		}
+
+		/**
 		 * Whether the current request should be excluded from static cache due to WooCommerce safe mode.
 		 *
 		 * Safe-by-default exclusions for WooCommerce: cart/checkout/account,
@@ -1806,17 +1833,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return bool True when the request is Woo-excluded (not cacheable).
 		 */
 		private function is_woo_excluded(): bool {
+			// Store API routes are never cacheable, even when safe mode is off
+			// (unconditional, mirroring wc-ajax). Checked before the toggle
+			// so wooSafeMode=false cannot re-allow dynamic Store API JSON.
+			try {
+				if ( $this->is_woo_store_api_request() ) {
+					return true;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
 			// Feature toggle: explicit false disables safe mode; absent key = true for BC.
 			if ( isset( $this->options['cache_settings']['wooSafeMode'] ) && false === $this->options['cache_settings']['wooSafeMode'] ) {
 				return false;
 			}
 
 			try {
-				$woo_active = function_exists( 'is_cart' ) || function_exists( 'is_checkout' ) || function_exists( 'is_account_page' ) || function_exists( 'is_woocommerce' ) || class_exists( 'WooCommerce', false );
-
 				$excluded = false;
 
-				if ( $woo_active ) {
+				// Woo endpoint URLs (order-pay, view-order, downloads, …) are dynamic.
+				if ( ! $excluded && function_exists( 'is_wc_endpoint_url' ) ) {
+					try {
+						if ( is_wc_endpoint_url() ) {
+							$excluded = true;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$excluded = true;
+					}
+				}
+
+				$woo_active = function_exists( 'is_cart' ) || function_exists( 'is_checkout' ) || function_exists( 'is_account_page' ) || function_exists( 'is_woocommerce' ) || class_exists( 'WooCommerce', false );
+
+				if ( ! $excluded && $woo_active ) {
 					if ( function_exists( 'is_cart' ) && is_cart() ) {
 						$excluded = true;
 					} elseif ( function_exists( 'is_checkout' ) && is_checkout() ) {
@@ -1829,7 +1879,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( ! $excluded ) {
 					$parsed_path    = wp_parse_url( $this->request_uri, PHP_URL_PATH );
 					$local_url_path = wp_normalize_path( trim( rawurldecode( (string) $parsed_path ), '/' ) );
-					if ( preg_match( '#^/(?:cart|checkout|my-account)(?:/|$)#i', '/' . $local_url_path ) ) {
+					$matched        = false;
+					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_dynamic_path' ) ) {
+						try {
+							// Canonical list: defaults + configured custom/nested
+							// Woo slugs (e.g. shop/basket). Store API already
+							// handled unconditionally above.
+							$matched = Util::is_woo_dynamic_path( $local_url_path );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$matched = true;
+						}
+					} else {
+						$matched = (bool) preg_match( '#^/(?:cart|checkout|my-account)(?:/|$)#i', '/' . $local_url_path );
+					}
+					if ( $matched ) {
 						$excluded = true;
 					}
 				}
@@ -1949,6 +2013,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			// WooCommerce safe mode: cart/checkout/account, wc-ajax, add-to-cart, session/cart cookies.
 			// Filter wppo_woo_cacheable (guarded by has_filter) can re-allow a URL.
+			// Explicit Store API guard (greppable intent, survives a future
+			// wppo_should_cache_request bypass above).
+			if ( $this->is_woo_store_api_request() ) {
+				return true;
+			}
 			if ( $this->is_woo_excluded() ) {
 				return true;
 			}
@@ -2254,6 +2323,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return false;
 			}
 
+			// Store API defense-in-depth (issue #962): storage refuses even if
+			// is_not_cacheable() is bypassed via filter. Unconditional on
+			// wooSafeMode, mirroring wc-ajax.
+			if ( $this->is_woo_store_api_request() ) {
+				return false;
+			}
+
 			// Woo safe-mode storage parity (issue #922): refuse storage for
 			// cart/checkout/account, add-to-cart, and Woo session/cart cookies
 			// so HTML that gains a Woo signal after the buffer gate (e.g. Woo
@@ -2500,6 +2576,166 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			// The smart purge removed pages/files — dashboard stats must not
 			// stay frozen until the 15-min TTL (audit #874 finding 6).
+			self::bump_stats_cache();
+		}
+
+		/**
+		 * Surgically invalidate cache for a WooCommerce product, order, or coupon.
+		 *
+		 * Purges only the object's own permalink path (+ css/used-css sidecars)
+		 * plus, for products, its product-category/tag archive paths and the
+		 * shop page path. Never purges the home page, never calls
+		 * clear_cache() (no full-cache wipe), and never schedules preload for
+		 * Woo-excluded permalinks. Multisite-safe: per-site get_permalink() +
+		 * domain-based get_file_path(), no cross-site purge.
+		 *
+		 * @since NEXT
+		 * @param int    $object_id Woo object (product/order/coupon) ID.
+		 * @param string $kind      Object kind: 'product', 'order', or 'coupon'.
+		 * @return void
+		 */
+		public function invalidate_woo_object( int $object_id, string $kind ): void {
+			$kind = sanitize_text_field( (string) $kind );
+			if ( ! in_array( $kind, array( 'product', 'order', 'coupon' ), true ) ) {
+				$kind = 'product';
+			}
+			if ( $object_id <= 0 ) {
+				return;
+			}
+
+			$urls = array();
+			try {
+				$permalink = function_exists( 'get_permalink' ) ? get_permalink( $object_id ) : '';
+				if ( is_string( $permalink ) && '' !== $permalink && ! is_wp_error( $permalink ) ) {
+					$rel = function_exists( 'wp_make_link_relative' ) ? wp_make_link_relative( $permalink ) : (string) wp_parse_url( $permalink, PHP_URL_PATH );
+					if ( is_string( $rel ) && '' !== $rel ) {
+						$urls[] = $rel;
+					}
+				}
+
+				if ( 'product' === $kind ) {
+					// Product-category/tag archives for this product only.
+					if ( function_exists( 'get_object_taxonomies' ) && function_exists( 'wp_get_object_terms' ) ) {
+						$taxonomies = get_object_taxonomies( 'product', 'names' );
+						if ( ! empty( $taxonomies ) ) {
+							$terms = wp_get_object_terms( $object_id, $taxonomies );
+							if ( ! empty( $terms ) && ! is_wp_error( $terms ) ) {
+								foreach ( (array) $terms as $term ) {
+									if ( ! isset( $term->taxonomy ) ) {
+										continue;
+									}
+									if ( function_exists( 'get_taxonomy' ) ) {
+										$tax_obj = get_taxonomy( $term->taxonomy );
+										if ( ! $tax_obj || empty( $tax_obj->public ) ) {
+											continue;
+										}
+									}
+									if ( function_exists( 'get_term_link' ) ) {
+										$term_link = get_term_link( $term );
+										if ( ! empty( $term_link ) && ! is_wp_error( $term_link ) ) {
+											$term_rel = function_exists( 'wp_make_link_relative' ) ? wp_make_link_relative( $term_link ) : (string) wp_parse_url( (string) $term_link, PHP_URL_PATH );
+											if ( is_string( $term_rel ) && '' !== $term_rel ) {
+												$urls[] = $term_rel;
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+					// Shop page path.
+					if ( function_exists( 'wc_get_page_id' ) && function_exists( 'get_permalink' ) ) {
+						try {
+							$shop_id = (int) wc_get_page_id( 'shop' );
+							if ( $shop_id > 0 ) {
+								$shop_link = get_permalink( $shop_id );
+								if ( is_string( $shop_link ) && '' !== $shop_link && ! is_wp_error( $shop_link ) ) {
+									$shop_rel = function_exists( 'wp_make_link_relative' ) ? wp_make_link_relative( $shop_link ) : (string) wp_parse_url( $shop_link, PHP_URL_PATH );
+									if ( is_string( $shop_rel ) && '' !== $shop_rel ) {
+										$urls[] = $shop_rel;
+									}
+								}
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
+			/**
+			 * Filter the surgical Woo invalidation URL list.
+			 *
+			 * @since NEXT
+			 * @param string[] $urls      List of URL paths to purge.
+			 * @param int      $object_id The Woo object ID being invalidated.
+			 * @param string   $kind      Object kind ('product', 'order', 'coupon').
+			 */
+			$urls = (array) apply_filters( 'wppo_woo_invalidation_urls', $urls, $object_id, $kind ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.DynamicHooknameFound -- Filter documented in docs/hooks.md.
+
+			$sanitized = array();
+			foreach ( $urls as $u ) {
+				$u = is_string( $u ) ? $u : (string) $u;
+				$u = wp_normalize_path( trim( $u, '/' ) );
+				if ( '' !== $u && strpos( $u, '..' ) !== false ) {
+					continue;
+				}
+				$sanitized[] = $u;
+			}
+			$sanitized = array_values( array_unique( $sanitized ) );
+
+			$primary_normalized = '';
+			if ( ! empty( $sanitized ) ) {
+				$primary_normalized = $sanitized[0];
+			}
+			foreach ( $sanitized as $url_path ) {
+				$html_file_path = $this->get_file_path( $url_path, 'html' );
+				if ( '' === $html_file_path ) {
+					continue;
+				}
+				$norm            = wp_normalize_path( $html_file_path );
+				$cache_root_norm = '' !== $this->cache_root_dir ? wp_normalize_path( $this->cache_root_dir ) : '';
+				$abspath_norm    = defined( 'ABSPATH' ) ? wp_normalize_path( ABSPATH ) : '';
+				if ( '' !== $cache_root_norm && 0 !== strpos( $norm, $cache_root_norm ) ) {
+					continue;
+				}
+				if ( '' !== $abspath_norm && 0 !== strpos( $norm, $abspath_norm ) ) {
+					continue;
+				}
+				$this->delete_cache_files( $html_file_path );
+				$this->delete_role_variant_files( dirname( $html_file_path ) );
+				$this->delete_no_cache_marker( $html_file_path );
+				if ( $url_path === $primary_normalized ) {
+					$css_file_path = $this->get_file_path( $url_path, 'css' );
+					$used_css_path = $this->get_file_path( $url_path, 'used-css' );
+					if ( '' !== $css_file_path ) {
+						$this->delete_cache_files( $css_file_path );
+					}
+					if ( '' !== $used_css_path ) {
+						$this->delete_cache_files( $used_css_path );
+					}
+				}
+			}
+
+			// Regenerate only when the primary permalink is cacheable (never
+			// schedule preload work for Woo-excluded dynamic paths).
+			$skip_regen = false;
+			if ( '' !== $primary_normalized && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_dynamic_path' ) ) {
+				try {
+					$skip_regen = Util::is_woo_dynamic_path( $primary_normalized );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$skip_regen = true;
+				}
+			}
+			if ( ! $skip_regen && $object_id > 0 && function_exists( 'wp_next_scheduled' ) && function_exists( 'wp_schedule_single_event' ) && function_exists( 'wp_rand' ) ) {
+				if ( ! wp_next_scheduled( 'wppo_generate_static_page', array( $object_id ) ) ) {
+					wp_schedule_single_event( time() + wp_rand( 0, 5 ), 'wppo_generate_static_page', array( $object_id ) );
+				}
+			}
+
 			self::bump_stats_cache();
 		}
 

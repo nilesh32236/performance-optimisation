@@ -97,7 +97,7 @@ add_filter( 'wppo_should_cache_request', function( $should, $request_uri, $is_mo
 
 **WooCommerce cookie behavior note (issue #907):** only cart-content cookies (`woocommerce_items_in_cart`, `woocommerce_cart_hash`) bypass the cache; currency-switcher cookies (`WOOCS` / `wmc-current-currency`, Aelia, …) intentionally do **not** vary or bypass — there is no per-currency segmentation today. Currency vary is a future M-sized item. WooCommerce AJAX endpoints (`?wc-ajax=…`, `/wc-ajax/…`) are always excluded from serving (the `advanced-cache.php` drop-in returns early pre-boot), buffering, and storage.
 
-**WooCommerce safe mode (issue #922):** when `cache_settings.wooSafeMode` is `true` (default), `cart`/`checkout`/`my-account` endpoints (plus any configured custom WooCommerce page slugs), `wc-ajax` and `?add-to-cart` requests, and Woo session cookies (`wp_woocommerce_session_*` + cart fragments) are never served as cache HIT. The per-URL override below (`wppo_woo_cacheable`) applies only after WordPress boots (Cache layer); the pre-boot `advanced-cache.php` drop-in cannot run the filter and instead bakes the toggle and the configured Woo paths in at generation time — disabling safe mode (`wooSafeMode => false` via `wppo_settings`, e.g. `wp wppo settings` or import) regenerates the drop-in with only the pre-#922 guards, restoring master behaviour.
+**WooCommerce safe mode (issue #922, extended by #962):** when `cache_settings.wooSafeMode` is `true` (default), `cart`/`checkout`/`my-account` endpoints (plus any configured custom WooCommerce page slugs resolved via `Util::get_woo_excluded_paths()`, including nested paths like `shop/basket`), Woo endpoint URLs (`is_wc_endpoint_url()`: order-pay, view-order, downloads, …), `wc-ajax` and `?add-to-cart` requests, and Woo session cookies (`wp_woocommerce_session_*` + cart fragments) are never served as cache HIT. Store API routes (`wc/store`, `wcstore`, `wp-json/wc/store*`, `wp-json/wcstore*`) are never cached unconditionally (safe-mode independent), at serve time, write time, and in the pre-boot drop-in. The same dynamic set is auto-excluded from script delay, remove-unused-CSS, and preload scheduling. Product/order/coupon updates purge only affected URLs via `Cache::invalidate_woo_object()` (product → own permalink + category/tag archives + shop page; order/coupon → own permalink only) — never a full-cache wipe. The per-URL override below (`wppo_woo_cacheable`) applies only after WordPress boots (Cache layer); the pre-boot `advanced-cache.php` drop-in cannot run the filter and instead bakes the toggle and the configured Woo paths in at generation time — disabling safe mode (`wooSafeMode => false` via `wppo_settings`, e.g. `wp wppo settings` or import) regenerates the drop-in with only the pre-#922 guards plus the unconditional Store API guard, restoring master behaviour.
 
 ---
 
@@ -196,6 +196,26 @@ add_filter( 'wppo_woo_cacheable', function( $cacheable, $request_uri ) {
     }
     return $cacheable;
 }, 10, 2 );
+```
+
+---
+
+### `wppo_woo_invalidation_urls`
+Filters the surgical Woo invalidation URL list purged by `Cache::invalidate_woo_object()` (issue #962) when a product, order, or coupon changes. Sanitized via `wp_normalize_path` + deduped before deletion; never fans out to home/archives and never triggers a full-cache wipe. @since NEXT.
+
+**Parameters:**
+- `$urls` *(string[])* — List of URL paths to purge (relative, e.g. `'/product/hoodie/'`).
+- `$object_id` *(int)* — The Woo object ID being invalidated.
+- `$kind` *(string)* — Object kind: `'product'`, `'order'`, or `'coupon'`.
+
+**Example:**
+```php
+add_filter( 'wppo_woo_invalidation_urls', function( $urls, $object_id, $kind ) {
+    if ( 'product' === $kind ) {
+        $urls[] = '/sale/';
+    }
+    return $urls;
+}, 10, 3 );
 ```
 
 ---

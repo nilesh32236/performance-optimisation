@@ -274,6 +274,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 				: PHP_EOL // Keeps the blank-line separator consistent below.
 			) .
 
+			'// WooCommerce Store API routes are dynamic JSON and must never be served from the static cache (issue #962).' . PHP_EOL .
+			'// Unconditional on safe mode, mirroring wc-ajax: wc/store, wcstore, wp-json/wc/store, wp-json/wcstore.' . PHP_EOL .
+			'if ( preg_match( \'#(^|/)(?:wc/store|wcstore|wp-json/wc/store|wp-json/wcstore)(/|$)#i\', $request_uri ) ) {' . PHP_EOL .
+			'	return;' . PHP_EOL .
+			'}' . PHP_EOL . PHP_EOL .
+
 			'if ( preg_match( \'#^/(?:' . $woo_uri_pattern . ')(?:/|$)#i\', $request_uri ) || preg_match( \'/(?:sitemap[^\/]*\.xml|wp-sitemap[^\/]*\.xml|\.xml)$/i\', $request_uri ) ) {' . PHP_EOL .
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .

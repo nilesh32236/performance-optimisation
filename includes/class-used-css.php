@@ -1471,6 +1471,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				return $buffer;
 			}
 
+			// WooCommerce dynamic pages (issue #962): cart / checkout /
+			// account, Store API, and endpoints stay excluded from
+			// remove-unused-CSS so checkout keeps full styles. Reuses the
+			// delay guard (same slug list + endpoint semantics) to avoid a
+			// new cross-class dependency. DONOTCACHEPAGE pages opt out too.
+			if ( defined( 'DONOTCACHEPAGE' ) && DONOTCACHEPAGE ) {
+				return $buffer;
+			}
+			if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'is_delay_excluded_context' ) ) {
+				try {
+					if ( Main::is_delay_excluded_context() ) {
+						return $buffer;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return $buffer;
+				}
+			}
+
 			$file_opts = $this->options['file_optimisation'] ?? array();
 
 			if ( empty( $file_opts['removeUnusedCSS'] ) ) {
