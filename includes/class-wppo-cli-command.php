@@ -1121,48 +1121,54 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				return;
 			}
 
-			// Live settings read: bust the per-request memo first so a stale
-			// in-request write (same process) cannot mask drift. Reading through
-			// Util::get_settings() after the clear re-fetches the option row
-			// (no transient involved), keeping verify on the canonical read
-			// path (settings-read-guard).
-			Util::clear_settings_cache();
-			$stored = Util::get_settings();
-			if ( ! is_array( $stored ) ) {
-				$stored = array();
+		// Live settings read (lazy): bust the per-request memo first so a
+		// stale in-request write (same process) cannot mask drift. Reading
+		// through Util::get_settings() after the clear re-fetches the
+		// option row (no transient involved), keeping verify on the
+		// canonical read path (settings-read-guard). Deferred until a
+		// check that actually needs $stored runs, so --check=cache_dirs
+		// and --check=uninstall skip the DB read entirely.
+		$stored      = null;
+		$load_stored = function (): array use ( &$stored ): array {
+			if ( null === $stored ) {
+				Util::clear_settings_cache();
+				$fetched = Util::get_settings();
+				$stored  = is_array( $fetched ) ? $fetched : array();
 			}
+			return $stored;
+		};
 
-			// Fresh stat cache — CLI is single-request so stale file_exists
-			// memos (not transients) are the main staleness risk.
-			if ( function_exists( 'clearstatcache' ) ) {
-				clearstatcache(); // phpcs:ignore WordPress.WP.AlternativeFunctions.clearstatcache_clearstatcache
-			}
+		// Fresh stat cache — CLI is single-request so stale file_exists
+		// memos (not transients) are the main staleness risk.
+		if ( function_exists( 'clearstatcache' ) ) {
+			clearstatcache(); // phpcs:ignore WordPress.WP.AlternativeFunctions.clearstatcache_clearstatcache
+		}
 
-			// Only run the requested check so --check avoids unrelated live
-			// probes (Redis ping, $wpdb query, filesystem scans).
-			$check_map = array(
-				'cache_dirs'      => function (): array {
-					return $this->check_verify_cache_dirs();
-				},
-				'dropins'         => function () use ( $stored ): array {
-					return $this->check_verify_dropins( $stored );
-				},
-				'redis'           => function () use ( $stored ): array {
-					return $this->check_verify_redis( $stored );
-				},
-				'litespeed'       => function () use ( $stored ): array {
-					return $this->check_verify_litespeed( $stored );
-				},
-				'settings_schema' => function () use ( $stored ): array {
-					return self::validate_settings_schema( $stored );
-				},
-				'cron'            => function () use ( $stored ): array {
-					return $this->check_verify_cron( $stored );
-				},
-				'uninstall'       => function (): array {
-					return $this->check_verify_uninstall_spot();
-				},
-			);
+		// Only run the requested check so --check avoids unrelated live
+		// probes (Redis ping, $wpdb query, filesystem scans).
+		$check_map = array(
+			'cache_dirs'      => function (): array {
+				return $this->check_verify_cache_dirs();
+			},
+			'dropins'         => function () use ( $load_stored ): array {
+				return $this->check_verify_dropins( $load_stored() );
+			},
+			'redis'           => function () use ( $load_stored ): array {
+				return $this->check_verify_redis( $load_stored() );
+			},
+			'litespeed'       => function () use ( $load_stored ): array {
+				return $this->check_verify_litespeed( $load_stored() );
+			},
+			'settings_schema' => function () use ( $load_stored ): array {
+				return self::validate_settings_schema( $load_stored() );
+			},
+			'cron'            => function () use ( $load_stored ): array {
+				return $this->check_verify_cron( $load_stored() );
+			},
+			'uninstall'       => function (): array {
+				return $this->check_verify_uninstall_spot();
+			},
+		);
 
 			$names = '' !== $only ? array( $only ) : array_keys( $check_map );
 			$rows  = array();
@@ -1256,9 +1262,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				}
 			}
 
-			// Strip the port before validation (Cache convention).
+		// Strip the port before validation (Cache convention). IPv6
+		// literals contain multiple colons (or brackets) — never strip
+		// there, otherwise "[::1]" would mangle to "[".
+		$is_ipv6_literal = ( 0 === strpos( $host, '[' ) ) || ( substr_count( $host, ':' ) > 1 );
+		if ( ! $is_ipv6_literal ) {
 			$parts = explode( ':', $host, 2 );
 			$host  = $parts[0];
+		}
 
 			if ( '' === $host || false !== strpos( $host, '..' ) || 1 !== preg_match( '/^[a-z0-9.\-]+$/i', $host ) ) {
 				return '';
@@ -1290,7 +1301,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		/**
 		 * Validate stored settings against the canonical schema (read-only).
 		 *
-		 * Unknown top-level keys → fail (schema drift); tabs present in
+		 * Unknown top-level keys → fail (schema drift); unknown nested
+	 * sub-keys (one level deep, e.g. `cache_settings.enablCache`)
+	 * → fail; tabs present in
 		 * Util::get_default_settings() but missing from storage → warn
 		 * (fresh/partial install); array-vs-scalar mismatches vs defaults
 		 * (one level deep) → fail. Never calls update_option().
@@ -1319,15 +1332,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				}
 			}
 
-			$mismatches = array();
-			foreach ( $stored as $tab => $value ) {
-				if ( ! array_key_exists( $tab, $defaults ) || ! is_array( $defaults[ $tab ] ) || ! is_array( $value ) ) {
+		$mismatches     = array();
+		$unknown_nested = array();
+		foreach ( $stored as $tab => $value ) {
+			if ( ! array_key_exists( $tab, $defaults ) || ! is_array( $defaults[ $tab ] ) || ! is_array( $value ) ) {
+				continue;
+			}
+			foreach ( $value as $sub_key => $sub_value ) {
+				if ( ! array_key_exists( $sub_key, $defaults[ $tab ] ) ) {
+					$unknown_nested[] = sprintf( '%s.%s', $tab, $sub_key );
 					continue;
 				}
-				foreach ( $value as $sub_key => $sub_value ) {
-					if ( ! array_key_exists( $sub_key, $defaults[ $tab ] ) ) {
-						continue;
-					}
 					$default_is_array = is_array( $defaults[ $tab ][ $sub_key ] );
 					$stored_is_array  = is_array( $sub_value );
 					if ( $default_is_array !== $stored_is_array ) {
@@ -1348,11 +1363,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				}
 			}
 
-			if ( ! empty( $unknown ) || ! empty( $mismatches ) ) {
-				$parts = array();
-				if ( ! empty( $unknown ) ) {
-					$parts[] = 'unknown keys: ' . implode( ', ', $unknown );
-				}
+		if ( ! empty( $unknown ) || ! empty( $unknown_nested ) || ! empty( $mismatches ) ) {
+			$parts = array();
+			if ( ! empty( $unknown ) ) {
+				$parts[] = 'unknown keys: ' . implode( ', ', $unknown );
+			}
+			if ( ! empty( $unknown_nested ) ) {
+				$parts[] = 'unknown sub-keys: ' . implode( ', ', $unknown_nested );
+			}
 				if ( ! empty( $mismatches ) ) {
 					$parts[] = 'type mismatches: ' . implode( '; ', $mismatches );
 				}
@@ -2107,29 +2125,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				);
 			}
 
-			$truncated = count( $found ) >= 51;
+		$truncated = count( $found ) >= 51;
 
-			if ( empty( $found ) ) {
+		if ( empty( $found ) ) {
+			return array(
+				'check'  => 'uninstall',
+				'status' => 'warn',
+				'detail' => __( 'No wppo_* options found — could not corroborate live settings (empty result may indicate a scope/caching issue).', 'performance-optimisation' ),
+			);
+		}
+
+		$unknown = self::find_unknown_wppo_options( array_map( 'strval', $found ) );
+		if ( empty( $unknown ) ) {
+			/* translators: %d: Number of wppo_* options found */
+			$detail = sprintf( __( 'All %d wppo_* options have a known owner.', 'performance-optimisation' ), count( $found ) );
+			if ( $truncated ) {
+				$detail .= __( ' (query capped at 51 rows; more may exist)', 'performance-optimisation' );
 				return array(
 					'check'  => 'uninstall',
-					'status' => 'pass',
-					'detail' => __( 'No wppo_* options outside the known set.', 'performance-optimisation' ),
-				);
-			}
-
-			$unknown = self::find_unknown_wppo_options( array_map( 'strval', $found ) );
-			if ( empty( $unknown ) ) {
-				/* translators: %d: Number of wppo_* options found */
-				$detail = sprintf( __( 'All %d wppo_* options have a known owner.', 'performance-optimisation' ), count( $found ) );
-				if ( $truncated ) {
-					$detail .= __( ' (query capped at 51 rows; more may exist)', 'performance-optimisation' );
-				}
-				return array(
-					'check'  => 'uninstall',
-					'status' => 'pass',
+					'status' => 'warn',
 					'detail' => $detail,
 				);
 			}
+			return array(
+				'check'  => 'uninstall',
+				'status' => 'pass',
+				'detail' => $detail,
+			);
+		}
 
 			$shown  = array_slice( $unknown, 0, 10 );
 			$extra  = count( $unknown ) - count( $shown );
