@@ -1626,5 +1626,95 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 
 			return $processor;
 		}
+
+		/**
+		 * Whether the safe CSS combine/used-CSS fallback is enabled.
+		 *
+		 * Shared source of truth for the combine-CSS and used-CSS inject paths.
+		 * Operator opt-out via `wppo_safe_css_combine_fallback` (default true).
+		 * When false the legacy path is used without strict guards.
+		 *
+		 * @since NEXT
+		 * @return bool True when fallback guards are active.
+		 */
+		public static function safe_css_fallback_enabled(): bool {
+			/**
+			 * Filters whether the safe CSS combine fallback is enabled.
+			 *
+			 * When true (default) the combine/inject paths verify the replacement
+			 * payload is non-empty and the target file exists/readable before
+			 * stripping original stylesheets, and fail-open to originals on error.
+			 *
+			 * @since NEXT
+			 * @param bool $enabled Whether the safe fallback is enabled.
+			 */
+			return (bool) apply_filters( 'wppo_safe_css_combine_fallback', true );
+		}
+
+		/**
+		 * Whether a generated CSS file is valid (exists, readable, non-empty).
+		 *
+		 * Shared validator for combined-CSS and used-CSS sidecar files. The stat
+		 * cache is cleared for the exact path so a file written earlier in the
+		 * same request is never judged stale.
+		 *
+		 * @since NEXT
+		 * @param string $path Absolute path to the CSS file.
+		 * @return bool True when the file is usable.
+		 */
+		public static function css_file_valid( string $path ): bool {
+			if ( '' !== $path ) {
+				clearstatcache( true, $path );
+			}
+			return '' !== $path && is_file( $path ) && is_readable( $path ) && filesize( $path ) > 0;
+		}
+
+		/**
+		 * Log a guarded CSS fallback (combine or used-CSS) event with throttling.
+		 *
+		 * Per-reason transient throttling (DAY_IN_SECONDS) prevents the log from
+		 * growing per pageview on persistent failures, without a process-wide
+		 * static flag (so a later request failure in the same process is still
+		 * observable).
+		 *
+		 * @since NEXT
+		 * @param string $reason  Machine-readable reason code (empty_payload, write_failure, head_match_failure, ...).
+		 * @param array  $handles Handles preserved by the fallback.
+		 * @param string $context 'combine' or 'usedcss' — selects the log-key prefix and message.
+		 * @return void
+		 */
+		public static function log_css_fallback( string $reason, array $handles, string $context ): void {
+			if ( ! in_array( $context, array( 'combine', 'usedcss' ), true ) ) {
+				$context = 'combine';
+			}
+
+			if ( ! class_exists( Log::class ) ) {
+				return;
+			}
+
+			$count  = count( $handles );
+			$reason = sanitize_key( $reason );
+			if ( '' === $reason ) {
+				$reason = 'unknown';
+			}
+
+			$log_key = self::transient_key( 'wppo_' . $context . '_fallback_' . md5( $reason . '|' . implode( ',', $handles ) ) );
+			if ( get_transient( $log_key ) ) {
+				return;
+			}
+			set_transient( $log_key, 1, DAY_IN_SECONDS );
+
+			$message = ( 'usedcss' === $context )
+				? /* translators: %1$s: reason, %2$d: number of stylesheets preserved. */ __( 'Used-CSS fallback: %1$s — preserved %2$d stylesheet(s) (served originals).', 'performance-optimisation' )
+				: /* translators: %1$s: reason, %2$d: number of stylesheets preserved. */ __( 'CSS combine fallback: %1$s — preserved %2$d stylesheet(s) (served originals).', 'performance-optimisation' );
+
+			Log::add(
+				sprintf(
+					$message,
+					$reason,
+					$count
+				)
+			);
+		}
 	}
 }

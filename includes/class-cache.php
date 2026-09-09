@@ -1111,17 +1111,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return bool True when fallback guards are active.
 		 */
 		private function is_safe_css_combine_fallback_enabled(): bool {
-			/**
-			 * Filters whether the safe CSS combine fallback is enabled.
-			 *
-			 * When true (default) the combine/inject paths verify the replacement
-			 * payload is non-empty and the target file exists/readable before
-			 * stripping original stylesheets, and fail-open to originals on error.
-			 *
-			 * @since NEXT
-			 * @param bool $enabled Whether the safe fallback is enabled.
-			 */
-			return (bool) apply_filters( 'wppo_safe_css_combine_fallback', true );
+			return Util::safe_css_fallback_enabled();
 		}
 
 		/**
@@ -1132,18 +1122,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return bool True when the file is usable.
 		 */
 		private function is_combined_css_valid( string $path ): bool {
-			if ( '' !== $path ) {
-				clearstatcache( true, $path );
-			}
-			return '' !== $path && is_file( $path ) && is_readable( $path ) && filesize( $path ) > 0;
+			return Util::css_file_valid( $path );
 		}
 
 		/**
 		 * Log a combine fallback (fail-open) event with throttling.
 		 *
-		 * Mirrors {@see log_inline_budget_drift()} throttling: once-per-process
-		 * static flag + per-reason transient (DAY_IN_SECONDS) so a persistent
-		 * failure does not grow the log per pageview.
+		 * Delegates to {@see Util::log_css_fallback()} with the 'combine' context;
+		 * per-reason transient throttling (DAY_IN_SECONDS) prevents the log from
+		 * growing per pageview on persistent failures.
 		 *
 		 * @since NEXT
 		 * @param string $reason  Machine-readable reason (empty_payload, fetch_failure, write_failure, head_match_failure).
@@ -1151,36 +1138,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return void
 		 */
 		private function log_combine_fallback( string $reason, array $handles ): void {
-			static $logged = false;
-			if ( $logged ) {
-				return;
-			}
-			$logged = true;
-
-			if ( ! class_exists( Log::class ) ) {
-				return;
-			}
-
-			$count  = count( $handles );
-			$reason = sanitize_key( $reason );
-			if ( '' === $reason ) {
-				$reason = 'unknown';
-			}
-
-			$log_key = Util::transient_key( 'wppo_combine_fallback_' . md5( $reason . '|' . implode( ',', $handles ) ) );
-			if ( get_transient( $log_key ) ) {
-				return;
-			}
-			set_transient( $log_key, 1, DAY_IN_SECONDS );
-
-			Log::add(
-				sprintf(
-					/* translators: %1$s: reason, %2$d: number of handles preserved. */
-					__( 'CSS combine fallback: %1$s — preserved %2$d stylesheet(s) (served originals).', 'performance-optimisation' ),
-					$reason,
-					$count
-				)
-			);
+			Util::log_css_fallback( $reason, $handles, 'combine' );
 		}
 
 		/**

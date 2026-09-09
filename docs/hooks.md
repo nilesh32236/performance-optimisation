@@ -1067,12 +1067,14 @@ Filters whether combining styles is skipped for small block themes under the han
 ---
 
 ### `wppo_safe_css_combine_fallback`
+
 Filters whether the safe CSS combine fallback is enabled. When true (default) the combine path (`Cache::combine_css()`) verifies the combined payload is non-empty and the written file is valid (`is_file`, `is_readable`, `filesize > 0`) before dequeuing original handles, and `Used_CSS::inject_used_css()` verifies non-empty payload, successful head match, and confirms injection before stripping original `<link>` tags — fail-open to originals with throttled `Log::add()` on any guard failure. Return falsy to restore legacy (unsafe) stripping behavior. @since NEXT.
 
 **Parameters:**
 - `$enabled` *(bool)* — Default `true`.
 
 **Example:**
+
 ```php
 add_filter( 'wppo_safe_css_combine_fallback', '__return_false' ); // disable safe guards (not recommended)
 ```
@@ -1080,7 +1082,7 @@ add_filter( 'wppo_safe_css_combine_fallback', '__return_false' ); // disable saf
 ---
 
 ### `wppo_inline_combined_css`
-Filters whether the combined/minified CSS is inlined via core `wp_maybe_inline_styles()`. Return falsy to disable inlining (e.g. when serving the combined file from a CDN). When `wppo_safe_css_combine_fallback` is true, originals are also preserved when this filter returns falsy (no zero-stylesheet risk). @since NEXT.
+Filters whether the combined/minified CSS is inlined via core `wp_maybe_inline_styles()`. Return falsy to disable inlining (e.g. when serving the combined file from a CDN); the combined file is still generated and enqueued in that case. @since NEXT.
 
 ---
 

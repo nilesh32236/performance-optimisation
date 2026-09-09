@@ -12,6 +12,7 @@
 use PerformanceOptimise\Inc\Cache;
 use PerformanceOptimise\Inc\Used_CSS;
 use Brain\Monkey\Functions;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 
 /**
  * Tests for safe CSS combine fallback guards.
@@ -219,5 +220,183 @@ class CssCombineFallbackTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertTrue( $this->invoke_private( Cache::class, 'is_safe_css_combine_fallback_enabled', array() ) );
 		$this->assertTrue( $this->invoke_private( Used_CSS::class, 'is_safe_fallback_enabled', array() ) );
+	}
+
+	/**
+	 * Set up the environment for combine_css() guard-path tests.
+	 *
+	 * Configures a Cache instance via reflection (no constructor), a mocked
+	 * filesystem (existing combine file never present, get_contents() driven
+	 * by $get_contents), and the WP function stubs combine_css() needs on the
+	 * fresh-generation branch. Callers assert $dequeued / $enqueued stay empty
+	 * to prove the guard failed open without stripping originals.
+	 *
+	 * @param callable $get_contents Invoked with the stylesheet path; return raw CSS or false.
+	 * @param array    $dequeued     Out param, records wp_dequeue_style() calls.
+	 * @param array    $enqueued     Out param, records wp_enqueue_style() calls.
+	 * @return Cache
+	 */
+	private function stub_combine_guard_environment( callable $get_contents, array &$dequeued, array &$enqueued ): Cache {
+		Functions\when( 'apply_filters' )->returnArg( 2 );
+		Functions\when( 'is_404' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+		Functions\when( 'wp_is_mobile' )->justReturn( false );
+		Functions\when( 'is_feed' )->justReturn( false );
+		Functions\when( 'is_cart' )->justReturn( false );
+		Functions\when( 'is_checkout' )->justReturn( false );
+		Functions\when( 'is_account_page' )->justReturn( false );
+		Functions\when( 'wp_should_load_separate_core_block_assets' )->justReturn( false );
+		Functions\when( 'is_multisite' )->justReturn( false );
+		// LiteSpeed_Integration::should_disable_wppo_optimizer() reads plugin
+		// lists before returning false when LSCWP is absent.
+		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'get_site_option' )->justReturn( array() );
+		Functions\when( 'wp_normalize_path' )->returnArg();
+		Functions\when( 'sanitize_key' )->returnArg();
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		Functions\when( 'site_url' )->justReturn( 'http://example.com/' );
+		Functions\when( 'content_url' )->justReturn( 'http://example.com/wp-content' );
+		// Arm the fallback-log throttle so Util::log_css_fallback() never
+		// reaches Log::add() (which needs $wpdb) — these tests assert the
+		// fail-open behavior, not the logging side effect.
+		Functions\when( 'get_transient' )->justReturn( true );
+		Functions\when( 'set_transient' )->justReturn( true );
+		Functions\when( 'wp_dequeue_style' )->alias(
+			static function ( string $handle ) use ( &$dequeued ): void {
+				$dequeued[] = $handle;
+			}
+		);
+		Functions\when( 'wp_enqueue_style' )->alias(
+			static function ( ...$args ) use ( &$enqueued ): void {
+				$enqueued[] = $args;
+			}
+		);
+
+		global $wp_styles, $wp_filesystem;
+		$wp_styles = \Mockery::mock();
+		$wp_styles->shouldReceive( 'get_data' )->andReturn( false );
+		$wp_styles->queue      = array( 'theme' );
+		$wp_styles->registered = array(
+			'theme' => (object) array(
+				'src'  => 'http://example.com/wp-content/themes/t/style.css',
+				'args' => 'all',
+			),
+		);
+
+		$fs = \Mockery::mock();
+		$fs->shouldReceive( 'exists' )->andReturn( false );
+		$fs->shouldReceive( 'get_contents' )->andReturnUsing( $get_contents );
+
+		$instance       = ( new \ReflectionClass( Cache::class ) )->newInstanceWithoutConstructor();
+		$cache_root_dir = new \ReflectionProperty( Cache::class, 'cache_root_dir' );
+		$cache_root_dir->setAccessible( true );
+		$cache_root_dir->setValue( $instance, '/tmp/wordpress/wp-content/cache/wppo' );
+		$domain = new \ReflectionProperty( Cache::class, 'domain' );
+		$domain->setAccessible( true );
+		$domain->setValue( $instance, 'example.com' );
+		$options = new \ReflectionProperty( Cache::class, 'options' );
+		$options->setAccessible( true );
+		$options->setValue(
+			$instance,
+			array(
+				'file_optimisation' => array(),
+				'cache_settings'    => array(),
+			)
+		);
+		$filesystem = new \ReflectionProperty( Cache::class, 'filesystem' );
+		$filesystem->setAccessible( true );
+		$filesystem->setValue( $instance, $fs );
+		$initialized = new \ReflectionProperty( Cache::class, 'fs_initialized' );
+		$initialized->setAccessible( true );
+		$initialized->setValue( $instance, true );
+		$request_uri = new \ReflectionProperty( Cache::class, 'request_uri' );
+		$request_uri->setAccessible( true );
+		$request_uri->setValue( $instance, '/' );
+		$url_path = new \ReflectionProperty( Cache::class, 'url_path' );
+		$url_path->setAccessible( true );
+		$url_path->setValue( $instance, '' );
+
+		// Util::prepare_cache_dir() uses the global filesystem, not the
+		// memoized instance one.
+		$wp_filesystem = \Mockery::mock();
+		$wp_filesystem->shouldReceive( 'is_dir' )->andReturn( false );
+		$wp_filesystem->shouldReceive( 'mkdir' )->andReturn( false );
+		Functions\when( 'WP_Filesystem' )->justReturn( true );
+
+		// Force the pre-6.9 combine path so should_skip_combine_for_inline_budget()
+		// short-circuits before the block-theme budget logic.
+		$GLOBALS['wp_version'] = '6.8.0';
+
+		return $instance;
+	}
+
+	/**
+	 * Test that combine_css() fails open (no dequeue, no combined enqueue)
+	 * when every stylesheet fetch fails and the payload is empty.
+	 */
+	public function test_combine_css_fails_open_on_empty_payload(): void {
+		$dequeued = array();
+		$enqueued = array();
+		$instance = $this->stub_combine_guard_environment(
+			static function () {
+				return false;
+			},
+			$dequeued,
+			$enqueued
+		);
+
+		$instance->combine_css();
+
+		$this->assertSame( array(), $dequeued );
+		$this->assertSame( array(), $enqueued );
+	}
+
+	/**
+	 * Test that combine_css() fails open when the payload minifies away to nothing.
+	 *
+	 * Runs in a separate process: reaching the minify stage loads the real
+	 * PerformanceOptimise\Inc\Minify\CSS class, which would break
+	 * InlineCssTest's `overload:` mock of the same class in this process.
+	 */
+	#[RunInSeparateProcess]
+	public function test_combine_css_fails_open_when_payload_minifies_to_empty(): void {
+		$dequeued = array();
+		$enqueued = array();
+		$instance = $this->stub_combine_guard_environment(
+			static function () {
+				// A comment-only payload: non-empty before minify, empty after.
+				return '/* stripped */';
+			},
+			$dequeued,
+			$enqueued
+		);
+
+		$instance->combine_css();
+
+		$this->assertSame( array(), $dequeued );
+		$this->assertSame( array(), $enqueued );
+	}
+
+	/**
+	 * Test that combine_css() fails open when the cache directory cannot be prepared.
+	 *
+	 * Runs in a separate process (see the minify-stage test above).
+	 */
+	#[RunInSeparateProcess]
+	public function test_combine_css_fails_open_when_cache_dir_unpreparable(): void {
+		$dequeued = array();
+		$enqueued = array();
+		$instance = $this->stub_combine_guard_environment(
+			static function () {
+				return 'body { color: red; }';
+			},
+			$dequeued,
+			$enqueued
+		);
+
+		$instance->combine_css();
+
+		$this->assertSame( array(), $dequeued );
+		$this->assertSame( array(), $enqueued );
 	}
 }

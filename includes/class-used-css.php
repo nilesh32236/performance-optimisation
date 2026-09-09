@@ -1327,9 +1327,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			// Note: On WP 6.9+, small block styles inlined as <style id="wp-block-*-inline-css">
 			// blocks (added when a block renders) are intentionally left in place; only
 			// <link> tags are stripped. This is a pre-existing limitation, not a regression.
-			$buffer_after_strip = $buffer;
-			$quoted_srcs        = array();
-			foreach ( $removal_urls as $url => $_ ) {
+			$quoted_srcs = array();
+			foreach ( array_keys( $removal_urls ) as $url ) {
 				$quoted_srcs[] = preg_quote( $url, '/' );
 			}
 			$strip_count = 0;
@@ -1375,13 +1374,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			$used_css_tag .= "\n" . '<noscript>' . $noscript_fallback . '</noscript>';
 
 			// Strict head injection: prefer </head>, fallback to <head> injection,
-			// fail-open to originals when neither is present.
-			$out = null;
-			if ( false !== strpos( $buffer_after_strip, '</head>' ) ) {
-				$out = str_replace( '</head>', $used_css_tag . "\n</head>", $buffer_after_strip );
+			// fail-open to originals when neither is present. Only the FIRST
+			// </head> is targeted so the tag is never injected multiple times.
+			$out      = null;
+			$head_pos = stripos( $buffer_after_strip, '</head>' );
+			if ( false !== $head_pos ) {
+				$out = substr_replace( $buffer_after_strip, $used_css_tag . "\n</head>", $head_pos, strlen( '</head>' ) );
 			} else {
 				$head_count = 0;
-				$out        = preg_replace( '/<head[^>]*>/i', '$0' . $used_css_tag . "\n", $buffer_after_strip, 1, $head_count );
+				// preg_replace_callback avoids any $-backreference interpretation
+				// of the (esc_url'd) URL inside $used_css_tag.
+				$out = preg_replace_callback(
+					'/<head(\s[^>]*)?>/i',
+					static function ( $m ) use ( $used_css_tag ) {
+						return $m[0] . $used_css_tag . "\n";
+					},
+					$buffer_after_strip,
+					1,
+					$head_count
+				);
 				if ( null === $out ) {
 					if ( $this->is_safe_fallback_enabled() ) {
 						$this->log_used_css_fallback( 'preg_error_head', $handles );
@@ -1413,17 +1424,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @return bool
 		 */
 		private function is_safe_fallback_enabled(): bool {
-			/**
-			 * Filters whether the safe CSS combine fallback is enabled for used-CSS.
-			 *
-			 * @since NEXT
-			 * @param bool $enabled Whether fallback is enabled.
-			 */
-			return (bool) apply_filters( 'wppo_safe_css_combine_fallback', true );
+			return Util::safe_css_fallback_enabled();
 		}
 
 		/**
 		 * Log a used-CSS fallback with throttling.
+		 *
+		 * Delegates to {@see Util::log_css_fallback()} with the 'usedcss' context;
+		 * per-reason transient throttling (DAY_IN_SECONDS) prevents the log from
+		 * growing per pageview on persistent failures.
 		 *
 		 * @since NEXT
 		 * @param string $reason  Reason code.
@@ -1431,36 +1440,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @return void
 		 */
 		private function log_used_css_fallback( string $reason, array $handles ): void {
-			static $logged = false;
-			if ( $logged ) {
-				return;
-			}
-			$logged = true;
-
-			if ( ! class_exists( Log::class ) ) {
-				return;
-			}
-
-			$reason = sanitize_key( $reason );
-			if ( '' === $reason ) {
-				$reason = 'unknown';
-			}
-
-			$count   = count( $handles );
-			$log_key = Util::transient_key( 'wppo_usedcss_fallback_' . md5( $reason . '|' . implode( ',', $handles ) ) );
-			if ( get_transient( $log_key ) ) {
-				return;
-			}
-			set_transient( $log_key, 1, DAY_IN_SECONDS );
-
-			Log::add(
-				sprintf(
-					/* translators: %1$s: reason, %2$d: handle count. */
-					__( 'Used-CSS fallback: %1$s — preserved %2$d stylesheet(s) (served originals).', 'performance-optimisation' ),
-					$reason,
-					$count
-				)
-			);
+			Util::log_css_fallback( $reason, $handles, 'usedcss' );
 		}
 
 		/**
@@ -1471,10 +1451,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @return bool
 		 */
 		private function is_used_css_valid( string $path ): bool {
-			if ( '' !== $path ) {
-				clearstatcache( true, $path );
-			}
-			return '' !== $path && is_file( $path ) && is_readable( $path ) && filesize( $path ) > 0;
+			return Util::css_file_valid( $path );
 		}
 
 		/**
@@ -1512,9 +1489,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					$this->log_used_css_fallback( 'invalid_cached_file', array() );
 				} else {
 					$used_css_mtime = filemtime( $used_css_path );
-					$fresh          = true;
+					$fresh          = ( false !== $used_css_mtime );
 
-					if ( $wp_styles && ! empty( $wp_styles->queue ) ) {
+					if ( ! $fresh ) {
+						// The sidecar vanished between the exists() check and
+						// now — treat as stale and fall through to regeneration.
+						if ( $this->is_safe_fallback_enabled() ) {
+							$this->log_used_css_fallback( 'mtime_failed', array() );
+						}
+					} elseif ( $wp_styles && ! empty( $wp_styles->queue ) ) {
 						foreach ( $wp_styles->queue as $handle ) {
 							if ( isset( $wp_styles->registered[ $handle ] ) ) {
 								$src = $wp_styles->registered[ $handle ]->src;
