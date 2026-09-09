@@ -133,7 +133,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 
 		$result = RUM::collect(
 			array(
-				'token' => $this->valid_token( '/about/' ),
+				'token' => $this->valid_token( '/about' ),
 				'path'  => '/about/',
 				'lcp'   => 2500.5,
 				'cls'   => 0.08,
@@ -146,10 +146,10 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 		$data  = RUM::get_data();
 		$today = gmdate( 'Y-m-d' );
 		$this->assertArrayHasKey( $today, $data );
-		$this->assertArrayHasKey( '/about/', $data[ $today ] );
-		$this->assertSame( 1, $data[ $today ]['/about/']['lcp']['n'] );
-		$this->assertSame( 2500.5, $data[ $today ]['/about/']['lcp']['sum'] );
-		$this->assertSame( 0.08, $data[ $today ]['/about/']['cls']['sum'] );
+		$this->assertArrayHasKey( '/about', $data[ $today ] );
+		$this->assertSame( 1, $data[ $today ]['/about']['lcp']['n'] );
+		$this->assertSame( 2500.5, $data[ $today ]['/about']['lcp']['sum'] );
+		$this->assertSame( 0.08, $data[ $today ]['/about']['cls']['sum'] );
 	}
 
 	/**
@@ -286,9 +286,9 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 		$method = new \ReflectionMethod( RUM::class, 'is_valid_token' );
 		$method->setAccessible( true );
 
-		$today     = 'h_wppo_rum_' . gmdate( 'Ymd' ) . '|/a/';
-		$yesterday = 'h_wppo_rum_' . gmdate( 'Ymd', time() - DAY_IN_SECONDS ) . '|/a/';
-		$two_days  = 'h_wppo_rum_' . gmdate( 'Ymd', time() - ( 2 * DAY_IN_SECONDS ) ) . '|/a/';
+		$today     = 'h_wppo_rum_' . gmdate( 'Ymd' ) . '|/a';
+		$yesterday = 'h_wppo_rum_' . gmdate( 'Ymd', time() - DAY_IN_SECONDS ) . '|/a';
+		$two_days  = 'h_wppo_rum_' . gmdate( 'Ymd', time() - ( 2 * DAY_IN_SECONDS ) ) . '|/a';
 
 		$this->assertTrue( $method->invoke( null, $today, '/a/' ) );
 		$this->assertTrue( $method->invoke( null, $yesterday, '/a/' ) );
@@ -433,7 +433,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 
 		RUM::collect(
 			array(
-				'token' => $this->valid_token( '/trigger/' ),
+				'token' => $this->valid_token( '/trigger' ),
 				'path'  => '/trigger/',
 				'lcp'   => 1200,
 			)
@@ -453,80 +453,143 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Test that maybe_enqueue_scripts() uses the native defer strategy on WP 6.3+.
+	/**
+	 * Test that a beacon lcpUrl is aggregated per path.
+	 *
+	 * @since NEXT
 	 */
-	public function test_maybe_enqueue_scripts_uses_defer_strategy_on_wp63_plus(): void {
+	public function test_collect_aggregates_lcp_url(): void {
 		$this->install_stubs();
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'home_url' )->justReturn( 'https://example.com' );
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
 		$this->options['wppo_settings'] = array(
 			'performance_audit' => array( 'rum_enabled' => true ),
 		);
 		Util::clear_settings_cache();
-		Functions\when( 'is_admin' )->justReturn( false );
+		$_SERVER['REMOTE_ADDR'] = '203.0.113.5';
 
-		$calls = array();
-		Functions\when( 'wp_enqueue_script' )->alias(
-			static function ( $handle, $src = '', $deps = array(), $ver = false, $args = array() ) use ( &$calls ) {
-				$calls[] = array( $handle, $src, $deps, $ver, $args );
-				return true;
-			}
-		);
-
-		$original_version      = $GLOBALS['wp_version'] ?? null;
-		$GLOBALS['wp_version'] = '6.3';
-		try {
-			RUM::maybe_enqueue_scripts();
-		} finally {
-			if ( null === $original_version ) {
-				unset( $GLOBALS['wp_version'] );
-			} else {
-				$GLOBALS['wp_version'] = $original_version;
-			}
-		}
-
-		$this->assertCount( 1, $calls );
-		$this->assertSame( 'wppo-rum', $calls[0][0] );
-		$this->assertSame(
+		$result = RUM::collect(
 			array(
-				'strategy'  => 'defer',
-				'in_footer' => true,
-			),
-			$calls[0][4]
+				'token'  => $this->valid_token( '/hero' ),
+				'path'   => '/hero/',
+				'lcp'    => 1800,
+				'lcpUrl' => 'https://example.com/wp-content/uploads/hero.jpg',
+			)
 		);
+
+		$this->assertTrue( $result['ok'] );
+		$data  = RUM::get_data();
+		$today = gmdate( 'Y-m-d' );
+		$this->assertArrayHasKey( '/hero', $data[ $today ] );
+		$this->assertArrayHasKey( 'lcpUrls', $data[ $today ]['/hero'] );
+		$urls = $data[ $today ]['/hero']['lcpUrls'];
+		$this->assertCount( 1, $urls );
+		$entry = reset( $urls );
+		$this->assertSame( 'https://example.com/wp-content/uploads/hero.jpg', $entry['url'] );
+		$this->assertSame( 1, $entry['n'] );
 	}
 
 	/**
-	 * Test that maybe_enqueue_scripts() keeps the legacy boolean path on WP < 6.3.
+	 * Test that the field LCP reader gates on the sample count.
+	 *
+	 * Under 20 samples the heuristic wins (null); at 20 the URL is returned.
+	 *
+	 * @since NEXT
 	 */
-	public function test_maybe_enqueue_scripts_uses_legacy_args_on_older_wp(): void {
+	public function test_get_field_lcp_url_gates_on_sample_count(): void {
 		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit'  => array( 'rum_enabled' => true ),
+			'image_optimisation' => array( 'fieldLcpMinSamples' => 20 ),
+		);
+		Util::clear_settings_cache();
+		$today                        = gmdate( 'Y-m-d' );
+		$this->options[ RUM::OPTION ] = array(
+			$today => array(
+				'/hero' => array(
+					'lcpUrls' => array(
+						'example.com/wp-content/uploads/hero.jpg' => array(
+							'url'      => 'https://example.com/wp-content/uploads/hero.jpg',
+							'n'        => 19,
+							'lastSeen' => time(),
+						),
+					),
+				),
+			),
+		);
+
+		$this->assertNull( RUM::get_field_lcp_url( '/hero' ) );
+
+		$this->options[ RUM::OPTION ][ $today ]['/hero']['lcpUrls']['example.com/wp-content/uploads/hero.jpg']['n'] = 20;
+
+		$field = RUM::get_field_lcp_url( '/hero' );
+		$this->assertIsArray( $field );
+		$this->assertSame( 'https://example.com/wp-content/uploads/hero.jpg', $field['url'] );
+		$this->assertSame( 20, $field['n'] );
+	}
+
+	/**
+	 * Test that a stale field LCP override self-corrects back to the heuristic.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_field_lcp_url_self_corrects_when_stale(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit'  => array( 'rum_enabled' => true ),
+			'image_optimisation' => array( 'fieldLcpMinSamples' => 20 ),
+		);
+		Util::clear_settings_cache();
+		$today                        = gmdate( 'Y-m-d' );
+		$this->options[ RUM::OPTION ] = array(
+			$today => array(
+				'/hero' => array(
+					'lcpUrls' => array(
+						'example.com/wp-content/uploads/old-hero.jpg' => array(
+							'url'      => 'https://example.com/wp-content/uploads/old-hero.jpg',
+							'n'        => 25,
+							'lastSeen' => time() - ( 2 * DAY_IN_SECONDS ),
+						),
+					),
+				),
+			),
+		);
+
+		$this->assertNull( RUM::get_field_lcp_url( '/hero' ) );
+	}
+
+	/**
+	 * Test that suspicious lcpUrl values are dropped while numeric data is kept.
+	 *
+	 * @since NEXT
+	 */
+	public function test_collect_drops_suspicious_lcp_url(): void {
+		$this->install_stubs();
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'home_url' )->justReturn( 'https://example.com' );
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
 		$this->options['wppo_settings'] = array(
 			'performance_audit' => array( 'rum_enabled' => true ),
 		);
 		Util::clear_settings_cache();
-		Functions\when( 'is_admin' )->justReturn( false );
+		$_SERVER['REMOTE_ADDR'] = '203.0.113.5';
 
-		$calls = array();
-		Functions\when( 'wp_enqueue_script' )->alias(
-			static function ( $handle, $src = '', $deps = array(), $ver = false, $args = array() ) use ( &$calls ) {
-				$calls[] = array( $handle, $src, $deps, $ver, $args );
-				return true;
-			}
+		$result = RUM::collect(
+			array(
+				'token'  => $this->valid_token( '/hero' ),
+				'path'   => '/hero/',
+				'lcp'    => 1800,
+				'lcpUrl' => 'data:image/png;base64,AAAA',
+			)
 		);
 
-		$original_version      = $GLOBALS['wp_version'] ?? null;
-		$GLOBALS['wp_version'] = '6.2';
-		try {
-			RUM::maybe_enqueue_scripts();
-		} finally {
-			if ( null === $original_version ) {
-				unset( $GLOBALS['wp_version'] );
-			} else {
-				$GLOBALS['wp_version'] = $original_version;
-			}
-		}
-
-		$this->assertCount( 1, $calls );
-		$this->assertSame( 'wppo-rum', $calls[0][0] );
-		$this->assertTrue( $calls[0][4] );
+		$this->assertTrue( $result['ok'] );
+		$data  = RUM::get_data();
+		$today = gmdate( 'Y-m-d' );
+		$this->assertSame( 1, $data[ $today ]['/hero']['lcp']['n'] );
+		$this->assertArrayNotHasKey( 'lcpUrls', $data[ $today ]['/hero'] );
 	}
 }

@@ -229,6 +229,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'avifFirst'                  => true,
 					'smartQuality'               => true,
 					'skipSmallThresholdBytes'    => 5120,
+					'fieldLcpOverride'           => false,
+					'fieldLcpMinSamples'         => 20,
+					'cssHeroPreload'             => false,
 				),
 				'performance_audit'     => array(
 					'pagespeed_api_key'     => '',
@@ -1002,6 +1005,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			global $wp;
 			$url = self::cached_home_url( (string) add_query_arg( array(), $wp->request ?? '' ) );
 			return untrailingslashit( esc_url_raw( $url ) );
+		}
+
+		/**
+		 * Normalize a RUM page path for storage and lookup.
+		 *
+		 * Both the beacon store path (RUM::print_config/sanitize_sample) and
+		 * the field-LCP lookup path (Image_Optimisation::get_current_lcp_url)
+		 * must agree, otherwise the override silently never fires: the
+		 * lookup strips the trailing slash via get_current_url() while the
+		 * stored beacon path kept it verbatim. Trims the trailing slash
+		 * (keeping '/' for the root) and ensures a leading slash.
+		 *
+		 * @since NEXT
+		 * @param string $path Raw page path.
+		 * @return string Normalized path (e.g. '/hero-page', '/').
+		 */
+		public static function normalize_rum_path( string $path ): string {
+			$path = trim( $path );
+			if ( '' === $path ) {
+				return '/';
+			}
+			if ( '/' !== substr( $path, 0, 1 ) ) {
+				$path = '/' . $path;
+			}
+			if ( '/' !== $path ) {
+				$path = rtrim( $path, '/' );
+				if ( '' === $path ) {
+					return '/';
+				}
+			}
+			return $path;
 		}
 
 		/**
