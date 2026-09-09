@@ -262,6 +262,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['image_optimisation']['lazyLoadImages'] ) ) {
 				$this->options['image_optimisation']['lazyLoadImages'] = false;
 			}
+			if ( ! isset( $this->options['image_optimisation']['avifFirst'] ) ) {
+				$this->options['image_optimisation']['avifFirst'] = true;
+			}
+			if ( ! isset( $this->options['image_optimisation']['smartQuality'] ) ) {
+				$this->options['image_optimisation']['smartQuality'] = true;
+			}
+			if ( ! isset( $this->options['image_optimisation']['skipSmallThresholdBytes'] ) ) {
+				$this->options['image_optimisation']['skipSmallThresholdBytes'] = 5120;
+			}
 
 			if ( ! isset( $this->options['llms_txt'] ) || ! is_array( $this->options['llms_txt'] ) ) {
 				$this->options['llms_txt'] = array();
@@ -495,6 +504,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 			add_action( 'admin_init', array( $this, 'maybe_migrate_block_assets_setting' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_ccss_max_size' ) );
+			// One-time activity-log notice on admin_init.
+			if ( isset( $this->options['file_optimisation']['removeQueryStrings'] ) ) {
+				add_action( 'admin_init', array( $this, 'maybe_notify_remove_query_strings_removal' ) );
+			}
 			add_action( 'admin_enqueue_scripts', array( $this, 'admin_enqueue_scripts' ) );
 			add_action( 'init', array( $this, 'set_role_hash_cookie' ) );
 			add_action( 'wp_logout', array( $this, 'clear_role_hash_cookie' ) );
@@ -510,7 +523,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$is_wp63_plus = version_compare( $wp_version, '6.3-alpha', '>=' );
 			// Pre-release-inclusive floor: '6.9-alpha' also matches alpha/beta/RC builds
 			// of 6.9 which already ship the template-enhancement buffer functions.
-			// TODO(#553): remove the legacy buffer paths when minimum supported WP is raised to 6.9.
+			// TODO(#553, #829): remove the legacy buffer paths when minimum supported WP is raised to 6.9.
+			// Blocked until `Requires at least: 6.9` — keep the dual path (modern filter + legacy fallback).
 			$is_wp69_plus = version_compare( $wp_version, '6.9-alpha', '>=' );
 
 			// Delay JS: the script_loader_tag filter performs the wppo-src/type rewriting
@@ -590,7 +604,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// whether this buffer-level LCP prioritization / fetchpriority stamping
 				// can defer to core-provided attributes (wp_get_loading_optimization_attributes()
 				// output is already honoured). No runtime change until the core API lands.
-				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) ) {
+				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && $is_wp69_plus ) {
 					// WP 6.9+ template enhancement output buffer. Runs after cache (10) and used-CSS (20).
 					add_filter( 'wp_template_enhancement_output_buffer', array( $this->image_optimisation, 'prioritize_lcp_in_buffer' ), 30, 2 );
 				}
@@ -711,15 +725,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				add_filter( 'style_loader_tag', array( $this, 'minify_css' ), 10, 3 );
 			}
 
-			// Deprecated (NEXT): file_optimisation.removeQueryStrings is a legacy
-			// toggle kept for backward compatibility. `?ver=` IS the cache-busting
-			// mechanism (fingerprinting) and the htaccess Expires handler already
-			// sets long immutable TTLs — stripping ver risks stale assets.
-			// TODO(#904): hard-remove the toggle + these filters two minor
-			// releases after the NEXT release. Default stays off; no behaviour change.
+			// Removed (#925): the legacy file_optimisation.removeQueryStrings path
+			// (strip_static_query_strings() on script/style_loader_src) is gone.
+			// `?ver=` IS the cache-busting mechanism (fingerprinting); a stored
+			// legacy value is ignored (fail-open, `?ver` always preserved) with a
+			// one-time activity-log notice on admin_init.
 			if ( ! empty( $this->options['file_optimisation']['removeQueryStrings'] ) ) {
-				add_filter( 'script_loader_src', array( $this, 'strip_static_query_strings' ), 10, 2 );
-				add_filter( 'style_loader_src', array( $this, 'strip_static_query_strings' ), 10, 2 );
+				add_action( 'admin_init', array( $this, 'maybe_notify_remove_query_strings_removal' ) );
 			}
 
 			if ( ! empty( $this->options['file_optimisation']['hostGoogleFontsLocally'] ) ) {
@@ -1001,6 +1013,38 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$this->options['file_optimisation']['ccssMaxSize'] = 20480;
 
 			Log::add( __( 'Added default Critical CSS size cap (20 KB).', 'performance-optimisation' ) );
+		}
+
+		/**
+		 * One-time notice for the removed removeQueryStrings path (#925).
+		 *
+		 * The legacy `file_optimisation.removeQueryStrings` option is ignored
+		 * (fail-open): `?ver=` is always preserved. Logs once to the activity
+		 * log and sets a non-autoloaded flag option so later requests skip the
+		 * log write. Never alters asset URLs; never fatals when the log table
+		 * or option APIs are unavailable.
+		 *
+		 * Runs on `admin_init` (not the constructor) so a cacheable front-end
+		 * request never pays for the flag lookup.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public function maybe_notify_remove_query_strings_removal(): void {
+			$file_opt = isset( $this->options['file_optimisation'] ) && is_array( $this->options['file_optimisation'] ) ? $this->options['file_optimisation'] : array();
+			if ( empty( $file_opt['removeQueryStrings'] ) ) {
+				return;
+			}
+			if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
+				return;
+			}
+			if ( get_option( 'wppo_remove_query_strings_deprecated_logged', false ) ) {
+				return;
+			}
+			if ( class_exists( Log::class ) && function_exists( '__' ) ) {
+				Log::add( __( 'The legacy "Remove Query Strings" option was removed; ?ver= query strings are now always preserved for correct cache-busting.', 'performance-optimisation' ) );
+			}
+			update_option( 'wppo_remove_query_strings_deprecated_logged', true, false );
 		}
 
 		/**
@@ -1550,6 +1594,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Start output buffer for used-CSS (legacy path, WP &lt; 6.9).
 		 *
+		 * Tracked by #829: do not remove until minimum supported WP is raised
+		 * to 6.9 (`Requires at least: 6.9`).
+		 *
 		 * @return void
 		 * @since 1.9.0
 		 */
@@ -1570,6 +1617,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 		/**
 		 * Start output buffer for LCP image prioritization (legacy path, WP &lt; 6.9).
+		 *
+		 * Tracked by #829: do not remove until minimum supported WP is raised
+		 * to 6.9 (`Requires at least: 6.9`).
 		 *
 		 * Registers at priority 20, after the cache and used-CSS buffers (default
 		 * priority 10), so its inner buffer callback runs first on the raw buffer
@@ -2795,6 +2845,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					return $this->filter_speculation_rules_configuration( $config, $preload_settings, $enable_speculation );
 				}
 			);
+
+			add_filter( 'wp_speculation_rules', array( $this, 'filter_speculation_list_rules' ), 10 );
 		}
 
 		/**
@@ -2887,6 +2939,238 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			return $config;
+		}
+
+		/**
+		 * Collect high-value same-site URLs for the speculation list rule.
+		 *
+		 * Source: home URL first, then `performance_audit.high_value_urls`.
+		 * Each candidate is normalized via `esc_url_raw(trim())`, deduped,
+		 * same-site validated, and capped (keeps the ~1KB footprint).
+		 * Invalid URLs are skipped individually (fail-open); an empty array
+		 * means "emit nothing".
+		 *
+		 * @since NEXT
+		 *
+		 * @return string[] Validated absolute URLs (possibly empty).
+		 */
+		public function get_speculation_list_urls(): array {
+			if ( function_exists( 'is_admin' ) ) {
+				try {
+					if ( is_admin() ) {
+						return array();
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			if ( function_exists( 'get_option' ) ) {
+				try {
+					$structure = get_option( 'permalink_structure' );
+					if ( '' === $structure || false === $structure ) {
+						return array();
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			$candidates = array( Util::cached_home_url( '/' ) );
+
+			$settings   = Util::get_settings();
+			$high_value = $settings['performance_audit']['high_value_urls'] ?? array();
+			if ( is_string( $high_value ) ) {
+				$high_value = preg_split( '/[\r\n,]+/', $high_value );
+			}
+			if ( is_array( $high_value ) ) {
+				foreach ( $high_value as $high_url ) {
+					if ( is_string( $high_url ) && '' !== trim( $high_url ) ) {
+						$candidates[] = $high_url;
+					}
+				}
+			}
+
+			$urls = array();
+			foreach ( $candidates as $candidate ) {
+				if ( ! is_string( $candidate ) ) {
+					continue;
+				}
+				$clean = function_exists( 'esc_url_raw' ) ? esc_url_raw( trim( $candidate ) ) : trim( $candidate );
+				if ( '' === $clean ) {
+					continue;
+				}
+				if ( in_array( $clean, $urls, true ) ) {
+					continue;
+				}
+				if ( ! $this->is_speculation_list_url_valid( $clean ) ) {
+					continue;
+				}
+				$urls[] = $clean;
+				if ( count( $urls ) >= 10 ) {
+					break;
+				}
+			}
+
+			return $urls;
+		}
+
+		/**
+		 * Validate a single speculation list URL.
+		 *
+		 * Same-site (host must match home host, preventing multisite
+		 * cross-site leakage), http(s) only, and rejects admin, login,
+		 * REST, and commerce (cart/checkout/account) paths.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $url Candidate absolute URL.
+		 * @return bool True when the URL may be prefetched.
+		 */
+		private function is_speculation_list_url_valid( string $url ): bool {
+			$parts = wp_parse_url( $url );
+			if ( ! is_array( $parts ) || empty( $parts['host'] ) ) {
+				return false;
+			}
+
+			$scheme = strtolower( (string) ( $parts['scheme'] ?? '' ) );
+			if ( '' !== $scheme && ! in_array( $scheme, array( 'http', 'https' ), true ) ) {
+				return false;
+			}
+
+			$home      = Util::cached_home_url();
+			$home_host = wp_parse_url( $home, PHP_URL_HOST );
+			if ( ! is_string( $home_host ) || '' === $home_host ) {
+				return false;
+			}
+			if ( strtolower( $parts['host'] ) !== strtolower( $home_host ) ) {
+				return false;
+			}
+
+			$path  = strtolower( (string) ( $parts['path'] ?? '/' ) );
+			$lower = strtolower( $url );
+
+			if ( false !== strpos( $path, '/wp-admin' ) || false !== strpos( $lower, 'wp-login.php' ) || false !== strpos( $path, '/wp-json' ) ) {
+				return false;
+			}
+
+			$commerce_paths = array( '/cart', '/checkout', '/my-account', '/account' );
+			if ( function_exists( 'wc_get_checkout_url' ) ) {
+				try {
+					$checkout_url = wc_get_checkout_url();
+					if ( $checkout_url ) {
+						$p = wp_parse_url( $checkout_url, PHP_URL_PATH );
+						if ( is_string( $p ) && '' !== $p && '/' !== $p ) {
+							$commerce_paths[] = rtrim( $p, '/' );
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			if ( function_exists( 'wc_get_cart_url' ) ) {
+				try {
+					$cart_url = wc_get_cart_url();
+					if ( $cart_url ) {
+						$p = wp_parse_url( $cart_url, PHP_URL_PATH );
+						if ( is_string( $p ) && '' !== $p && '/' !== $p ) {
+							$commerce_paths[] = rtrim( $p, '/' );
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			if ( function_exists( 'wc_get_page_permalink' ) ) {
+				try {
+					$myaccount_url = wc_get_page_permalink( 'myaccount' );
+					if ( $myaccount_url ) {
+						$p = wp_parse_url( $myaccount_url, PHP_URL_PATH );
+						if ( is_string( $p ) && '' !== $p && '/' !== $p ) {
+							$commerce_paths[] = rtrim( $p, '/' );
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			$path_trimmed = rtrim( $path, '/' );
+			foreach ( $commerce_paths as $commerce_path ) {
+				$prefix = strtolower( rtrim( (string) $commerce_path, '/' ) );
+				if ( '' === $prefix ) {
+					continue;
+				}
+				if ( $path_trimmed === $prefix || 0 === strpos( $path_trimmed . '/', $prefix . '/' ) ) {
+					return false;
+				}
+			}
+
+			return true;
+		}
+
+		/**
+		 * Append the high-value list rule to the `wp_speculation_rules` array.
+		 *
+		 * Runs on WP 6.8+ only (registered inside the `wp_get_speculation_rules`
+		 * guard in {@see add_speculation_rules()}). Null/non-array config is
+		 * returned untouched; speculation is never auto-enabled.
+		 *
+		 * @since NEXT
+		 *
+		 * @param mixed $rules Speculation rules array from core.
+		 * @return mixed Updated rules, or the input unchanged.
+		 */
+		public function filter_speculation_list_rules( $rules ) {
+			if ( ! is_array( $rules ) ) {
+				return $rules;
+			}
+
+			if ( empty( $this->options['preload_settings']['enableSpeculationRules'] ) ) {
+				return $rules;
+			}
+
+			$urls = $this->get_speculation_list_urls();
+
+			/**
+			 * Filters the high-value speculation list URLs.
+			 *
+			 * @since NEXT
+			 * @param string[] $urls Validated list URLs.
+			 */
+			$urls = apply_filters( 'wppo_speculation_list_urls', $urls );
+			if ( ! is_array( $urls ) ) {
+				return $rules;
+			}
+			$urls = array_values( array_filter( $urls, 'is_string' ) );
+			if ( empty( $urls ) ) {
+				return $rules;
+			}
+
+			$preload_settings = $this->options['preload_settings'] ?? array();
+			$eagerness        = $preload_settings['speculationEagerness'] ?? 'conservative';
+			if ( class_exists( 'WP_Speculation_Rules' ) && method_exists( 'WP_Speculation_Rules', 'is_valid_eagerness' ) ) {
+				if ( ! \WP_Speculation_Rules::is_valid_eagerness( $eagerness ) ) {
+					$eagerness = 'conservative';
+				}
+			} elseif ( ! in_array( $eagerness, array( 'conservative', 'moderate', 'eager' ), true ) ) {
+				$eagerness = 'conservative';
+			}
+
+			$rules[] = array(
+				'source'    => 'list',
+				'urls'      => array_values( $urls ),
+				'eagerness' => $eagerness,
+			);
+
+			/**
+			 * Filters the speculation rules after the high-value list rule is appended.
+			 *
+			 * @since NEXT
+			 * @param array    $rules Updated rules.
+			 * @param string[] $urls  List URLs that were appended.
+			 */
+			return apply_filters( 'wppo_speculation_list_rules', $rules, $urls );
 		}
 
 		/**
@@ -3047,179 +3331,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
-		 * Strips version query strings from enqueued static asset URLs.
-		 *
-		 * Deprecated. `?ver=` IS the cache-busting mechanism (fingerprinting)
-		 * and the htaccess Expires handler already sets long immutable TTLs,
-		 * so stripping it risks serving stale assets with no measurable gain.
-		 * Kept for backward compatibility for sites that explicitly opted in;
-		 * default stays off. The SPA toggle lives in a "Legacy Options"
-		 * section with warning copy.
-		 *
-		 * TODO(#904): hard-remove this method, the removeQueryStrings setting,
-		 * and the script/style_loader_src filters two minor releases after
-		 * the NEXT release.
-		 *
-		 * @since NEXT
-		 * @deprecated NEXT Use long immutable cache TTLs instead.
-		 *
-		 * @param string $src    The asset source URL.
-		 * @param string $handle The script/style handle.
-		 * @return string The URL without its version query string.
-		 */
-		public function strip_static_query_strings( $src, $handle ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-			if ( empty( $src ) ) {
-				return $src;
-			}
-
-			$parsed = wp_parse_url( $src );
-			if ( ! isset( $parsed['query'] ) || '' === $parsed['query'] ) {
-				return $src;
-			}
-
-			// Never strip the ver arg from the plugin's own cache files (minified
-			// or combined assets). Those URLs are versioned with the file mtime at
-			// enqueue time, so stripping it would let browsers serve stale copies
-			// of regenerated files.
-			if ( $this->is_plugin_cache_url( $src ) ) {
-				return $src;
-			}
-
-			// When CDN mapping is configured, preserve ver for CDN cache busting (versioned URL edge case).
-			$file_opt = $this->options['file_optimisation'] ?? array();
-			if ( ! empty( $file_opt['cdnURL'] ) || ! empty( $file_opt['cdnMapping'] ) ) {
-				return $src;
-			}
-
-			// Remove only the ver component(s) from the raw query, keeping every
-			// other part byte-for-byte identical: duplicate keys, percent-encoding
-			// and ordering survive (parse_str/http_build_query would collapse
-			// duplicates and re-encode values).
-			$kept      = array();
-			$found_ver = false;
-			foreach ( explode( '&', $parsed['query'] ) as $component ) {
-				$eq  = strpos( $component, '=' );
-				$key = false !== $eq ? substr( $component, 0, $eq ) : $component;
-				if ( 'ver' === rawurldecode( $key ) ) {
-					$found_ver = true;
-					continue;
-				}
-				$kept[] = $component;
-			}
-
-			if ( ! $found_ver ) {
-				return $src;
-			}
-
-			// Replace only the query portion inside the original string so relative
-			// and protocol-relative sources, ports and fragments stay intact.
-			$fragment = '';
-			$head     = $src;
-			$frag_pos = strpos( $src, '#' );
-			if ( false !== $frag_pos ) {
-				$fragment = substr( $src, $frag_pos );
-				$head     = substr( $src, 0, $frag_pos );
-			}
-
-			$query_pos = strpos( $head, '?' );
-			if ( false === $query_pos ) {
-				return $src;
-			}
-
-			$base = substr( $head, 0, $query_pos );
-
-			if ( empty( $kept ) ) {
-				// No remaining args: drop the '?' entirely.
-				return $base . $fragment;
-			}
-
-			return $base . '?' . implode( '&', $kept ) . $fragment;
-		}
-
-		/**
-		 * Whether a URL points at the plugin's own cache directories.
-		 *
-		 * Origin-aware so a third-party URL whose path merely contains
-		 * `/cache/wppo/` is not exempted. Relative and protocol-relative URLs
-		 * match on the content path prefix alone (no host to compare).
-		 *
-		 * This runs on every enqueued JS/CSS file via `script_loader_src` /
-		 * `style_loader_src`, so the parsed `content_url()` host/path parts are
-		 * statically cached per blog. The cache is bypassed while a `content_url`
-		 * filter is registered (the filter may return context-dependent output),
-		 * so the caching benefit only applies to installs without such a filter.
-		 *
-		 * @since NEXT
-		 *
-		 * @param string $src The asset source URL.
-		 * @return bool
-		 */
-		private function is_plugin_cache_url( string $src ): bool {
-			// Skip caching while a content_url filter is registered: the filter may
-			// return context-dependent output, so the resolved host/prefix cannot be
-			// safely reused (same convention as Util::cached_content_url()).
-			if ( false !== has_filter( 'content_url' ) ) {
-				return $this->is_plugin_cache_url_uncached( $src );
-			}
-
-			static $cache = array();
-			$blog_id      = get_current_blog_id();
-
-			if ( ! isset( $cache[ $blog_id ] ) ) {
-				// Resolve the base via the shared helper (which also centralizes the
-				// has_filter( 'content_url' ) bypass), then cache the parsed parts.
-				$content_url  = Util::cached_content_url( '/' );
-				$content_path = (string) wp_parse_url( $content_url, PHP_URL_PATH );
-				$cache_host   = wp_parse_url( $content_url, PHP_URL_HOST );
-
-				$cache[ $blog_id ] = array(
-					'prefix' => rtrim( $content_path, '/' ) . '/cache/wppo',
-					'host'   => $cache_host,
-				);
-			}
-
-			$parsed = wp_parse_url( $src );
-			$path   = isset( $parsed['path'] ) ? (string) $parsed['path'] : '';
-
-			if ( isset( $parsed['host'] ) ) {
-				if ( null !== $cache[ $blog_id ]['host'] && 0 !== strcasecmp( (string) $parsed['host'], (string) $cache[ $blog_id ]['host'] ) ) {
-					return false;
-				}
-			}
-
-			return 0 === strpos( $path, $cache[ $blog_id ]['prefix'] );
-		}
-
-		/**
-		 * Filter-respecting variant of {@see is_plugin_cache_url()}.
-		 *
-		 * Resolves content_url() on every call so a registered `content_url` filter
-		 * is honored per invocation. Only used while such a filter is active.
-		 *
-		 * @since NEXT
-		 *
-		 * @param string $src The asset source URL.
-		 * @return bool
-		 */
-		private function is_plugin_cache_url_uncached( string $src ): bool {
-			$content_url  = Util::cached_content_url( '/' );
-			$content_path = (string) wp_parse_url( $content_url, PHP_URL_PATH );
-			$prefix       = rtrim( $content_path, '/' ) . '/cache/wppo';
-
-			$parsed = wp_parse_url( $src );
-			$path   = isset( $parsed['path'] ) ? (string) $parsed['path'] : '';
-
-			if ( isset( $parsed['host'] ) ) {
-				$cache_host = wp_parse_url( $content_url, PHP_URL_HOST );
-				if ( null !== $cache_host && 0 !== strcasecmp( (string) $parsed['host'], (string) $cache_host ) ) {
-					return false;
-				}
-			}
-
-			return 0 === strpos( $path, $prefix );
-		}
-
-		/**
 		 * Checks if an asset name (URL or file path) indicates it is already minified.
 		 *
 		 * @since 1.5.1
@@ -3239,6 +3350,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			return (bool) preg_match( '/(\.min|\.bundle|-min)\.' . preg_quote( $ext, '/' ) . '$/i', $path );
+		}
+
+		/**
+		 * Whether a style handle is a core block asset owned by core's on-demand loader.
+		 *
+		 * On WP 6.9+ with separate core block assets active, the combined
+		 * stylesheet (`wp-block-library`) and every per-block stylesheet
+		 * (`wp-block-cover`, `wp-block-group`, ...) are loaded on demand for the
+		 * blocks actually present on the page. Rewriting their `src` (minify) or
+		 * folding them into the combined file would re-monolithize what core
+		 * ships conditionally, so the minify path skips them in that mode —
+		 * mirroring `Cache::is_core_block_asset()`.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $handle The registered style handle.
+		 * @return bool True when core owns the handle under separate-assets mode.
+		 */
+		private function is_core_block_asset_skipped( $handle ): bool {
+			return function_exists( 'wp_should_load_separate_core_block_assets' ) && wp_should_load_separate_core_block_assets() && str_starts_with( (string) $handle, 'wp-block-' );
 		}
 
 		/**
@@ -3283,6 +3414,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 				// Preserve auto-sizes containment fix (WP 6.9+) — must not be minified/combined.
 				if ( 'wp-img-auto-sizes-contain' === $handle && function_exists( 'wp_enqueue_img_auto_sizes_contain_css_fix' ) ) {
+					continue;
+				}
+
+				// On WP 6.9+ with separate (on-demand) core block assets active, never
+				// rewrite core block-asset stylesheets — core loads them conditionally
+				// for the blocks on the page (see is_core_block_asset_skipped()).
+				if ( $this->is_core_block_asset_skipped( $handle ) ) {
 					continue;
 				}
 
@@ -3373,6 +3511,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		public function minify_css( $tag, $handle, $href ) {
 			// Preserve auto-sizes containment fix (WP 6.9+) — must not be minified.
 			if ( 'wp-img-auto-sizes-contain' === $handle && function_exists( 'wp_enqueue_img_auto_sizes_contain_css_fix' ) ) {
+				return $tag;
+			}
+			// On WP 6.9+ with separate (on-demand) core block assets active, never
+			// rewrite core block-asset stylesheets — core loads them conditionally
+			// for the blocks on the page (see is_core_block_asset_skipped()).
+			if ( $this->is_core_block_asset_skipped( $handle ) ) {
 				return $tag;
 			}
 			// LiteSpeed safe coexistence — when LSCache owns optimization, skip WPPO minify.

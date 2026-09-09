@@ -86,6 +86,11 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		);
 		Functions\when( 'is_multisite' )->justReturn( false );
 		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'untrailingslashit' )->alias(
+			static function ( $url ) {
+				return rtrim( (string) $url, '/' );
+			}
+		);
 		// Restore component parsing (bootstrap alias): install_stubs() must not
 		// leave wp_parse_url as returnArg, or Woo URL derivation gets full URLs.
 		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
@@ -845,5 +850,84 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'wc_get_checkout_url' )->justReturn( 'http://example.com/checkout/' );
 
 		$this->assertTrue( AI_Adaptive::is_commerce_or_auth_context() );
+	}
+
+	/**
+	 * Test AI URLs already covered by an existing list rule are deduped.
+	 *
+	 * Main's high-value list runs at priority 10, AI at 20, so the AI rule
+	 * must not double-prefetch the same URL.
+	 *
+	 * @return void
+	 */
+	public function test_filter_speculation_rules_dedupes_against_existing_list(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings']       = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		$this->options[ AI_Adaptive::OPTION ] = array(
+			'prefetch_urls' => array( 'http://example.com/a/', 'http://example.com/b/' ),
+			'eagerness'     => 'conservative',
+		);
+		Util::clear_settings_cache();
+		Functions\when( 'untrailingslashit' )->alias(
+			static function ( $url ) {
+				return rtrim( (string) $url, '/' );
+			}
+		);
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$existing = array(
+			array(
+				'source'    => 'list',
+				'urls'      => array( 'http://example.com/a/' ),
+				'eagerness' => 'moderate',
+			),
+		);
+
+		$rules = AI_Adaptive::filter_speculation_rules( $existing );
+		$this->assertCount( 2, $rules );
+		$this->assertSame( array( 'http://example.com/b/' ), $rules[1]['urls'] );
+	}
+
+	/**
+	 * Test cross-site, admin, and login AI URLs are skipped individually.
+	 *
+	 * @return void
+	 */
+	public function test_filter_speculation_rules_skips_cross_site_and_admin_urls(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings']       = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		$this->options[ AI_Adaptive::OPTION ] = array(
+			// Note: the model keeps top-2 prefetch URLs, so the valid URL
+			// must be within the first two entries to reach the filter.
+			'prefetch_urls' => array(
+				'https://evil.test/steal/',
+				'http://example.com/good/',
+			),
+			'eagerness'     => 'conservative',
+		);
+		Util::clear_settings_cache();
+		Functions\when( 'untrailingslashit' )->alias(
+			static function ( $url ) {
+				return rtrim( (string) $url, '/' );
+			}
+		);
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$rules = AI_Adaptive::filter_speculation_rules( array() );
+		$this->assertCount( 1, $rules );
+		$this->assertSame( array( 'http://example.com/good/' ), $rules[0]['urls'] );
+
+		// Admin/login URLs are skipped the same way.
+		$this->options[ AI_Adaptive::OPTION ]['prefetch_urls'] = array(
+			'http://example.com/wp-admin/edit.php',
+			'http://example.com/good/',
+		);
+		$rules = AI_Adaptive::filter_speculation_rules( array() );
+		$this->assertCount( 1, $rules );
+		$this->assertSame( array( 'http://example.com/good/' ), $rules[0]['urls'] );
 	}
 }

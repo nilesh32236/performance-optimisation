@@ -184,6 +184,10 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 	public static function data_provider_get_styles_inline_limit(): array {
 		return array(
 			'WP 6.8 defaults to 20KB'          => array( '6.8', false, 20000 ),
+			'WP 6.8-RC defaults to 20KB'       => array( '6.8-RC1', false, 20000 ),
+			'WP 6.9-alpha defaults to 40KB'    => array( '6.9-alpha', false, 40000 ),
+			'WP 6.9-beta defaults to 40KB'     => array( '6.9-beta1', false, 40000 ),
+			'WP 6.9-RC defaults to 40KB'       => array( '6.9-RC1', false, 40000 ),
 			'WP 6.9 defaults to 40KB'          => array( '6.9', false, 40000 ),
 			'WP 7.0 defaults to 40KB'          => array( '7.0', false, 40000 ),
 			'unknown version defaults to 40KB' => array( '', false, 40000 ),
