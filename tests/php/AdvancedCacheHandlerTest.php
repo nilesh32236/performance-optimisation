@@ -249,7 +249,11 @@ class AdvancedCacheHandlerTest extends \PHPUnit\Framework\TestCase {
 		// a custom slug (basket) is resolved like it would be on a live install.
 		Functions\when( 'wc_get_page_id' )->alias(
 			static function ( $key ) {
-				$pages = array( 'cart' => 10, 'checkout' => 20, 'myaccount' => 30 );
+				$pages = array(
+					'cart'      => 10,
+					'checkout'  => 20,
+					'myaccount' => 30,
+				);
 				return isset( $pages[ $key ] ) ? $pages[ $key ] : 0;
 			}
 		);
