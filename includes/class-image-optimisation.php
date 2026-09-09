@@ -1362,16 +1362,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$this->get_post_type_preload_data( $image_optimisation )
 			);
 
-			// Deduplicate by URL + media (issue #935): the field-measured LCP URL
-			// may equal a manually configured preload, but exactly one link tag
-			// must be emitted per resource.
+			// Deduplicate by normalized URL + media (issue #935): the
+			// field-measured LCP URL may equal a manually configured preload
+			// as an absolute URL vs a relative URL (or http vs https), but
+			// exactly one link tag must be emitted per resource.
 			$seen   = array();
 			$unique = array();
 			foreach ( $merged as $item ) {
 				if ( ! is_array( $item ) || empty( $item['url'] ) ) {
 					continue;
 				}
-				$key = $item['url'] . '|' . ( $item['media'] ?? '' );
+				$normalized = '';
+				try {
+					$normalized = $this->normalize_image_url( (string) $item['url'] );
+				} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+					$normalized = '';
+				}
+				$dedup_url = ( '' !== $normalized ) ? $normalized : (string) $item['url'];
+				$key       = $dedup_url . '|' . ( $item['media'] ?? '' );
 				if ( isset( $seen[ $key ] ) ) {
 					continue;
 				}
@@ -1446,7 +1454,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_field_lcp_url' ) ) {
 					try {
 						$parsed_path = function_exists( 'wp_parse_url' ) ? wp_parse_url( Util::get_current_url(), PHP_URL_PATH ) : '/';
-						$field_path  = is_string( $parsed_path ) && '' !== $parsed_path ? $parsed_path : '/';
+						$raw_path    = is_string( $parsed_path ) && '' !== $parsed_path ? $parsed_path : '/';
+						// Normalized identically to the RUM store side so
+						// '/hero-page' matches a stored '/hero-page/' bucket.
+						$field_path  = Util::normalize_rum_path( $raw_path );
 						$field       = \PerformanceOptimise\Inc\RUM::get_field_lcp_url( $field_path );
 						if ( is_array( $field ) && ! empty( $field['url'] ) && is_string( $field['url'] ) ) {
 							return $field['url'];
@@ -2752,7 +2763,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			// CSS-hero pages may contain no <img> tags at all; let those through
 			// to Pass C when the CSS hero preload is enabled.
 			$css_hero_eligible = $css_preload_enabled && false !== stripos( $filtered_output, 'background' );
-			if ( ! class_exists( 'WP_HTML_Tag_Processor' ) || ( false === strpos( $filtered_output, '<img' ) && ! $css_hero_eligible ) ) {
+			if ( ! class_exists( 'WP_HTML_Tag_Processor' ) || ( false === stripos( $filtered_output, '<img' ) && ! $css_hero_eligible ) ) {
 				return $filtered_output;
 			}
 
@@ -2763,6 +2774,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			try {
 				$buffer = $filtered_output;
 
+				// Resolve the LCP URL once per buffer so Pass B and Pass C
+				// share it instead of re-reading options and the RUM
+				// aggregate option on every request.
+				$lcp_url = $prioritize_enabled ? $this->get_current_lcp_url() : '';
 				if ( $prioritize_enabled ) {
 					// Pass A: un-lazy-load the first N above-the-fold images.
 					$buffer = $this->unlazyload_first_images( $buffer, $image_optimisation );
@@ -2770,13 +2785,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					// Pass B: stamp fetchpriority="high" on the detected LCP image.
 					// The stamp always removes loading="lazy" from the same node,
 					// so fetchpriority="high" and loading="lazy" never combine.
-					$buffer = $this->prioritize_lcp_image( $buffer );
+					$buffer = $this->prioritize_lcp_image( $buffer, $lcp_url );
 				}
 
 				// Pass C: CSS background hero (issue #935) — exactly one preload
 				// link when the hero is a CSS background; no-ops unless the
 				// cssHeroPreload toggle is enabled.
-				$buffer = $this->maybe_inject_css_hero_preload( $buffer );
+				$buffer = $this->maybe_inject_css_hero_preload( $buffer, ( $prioritize_enabled ? $lcp_url : null ) );
 
 				return $buffer;
 			} catch ( \Throwable $e ) {
@@ -2837,12 +2852,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @since NEXT
 		 *
-		 * @param string $buffer The HTML buffer.
+		 * @param string      $buffer  The HTML buffer.
+		 * @param string|null $lcp_url Optional pre-resolved LCP URL. When null the
+		 *                             URL is resolved via get_current_lcp_url().
 		 * @return string The buffer with fetchpriority="high" on the LCP image.
 		 */
-		private function prioritize_lcp_image( string $buffer ): string {
-			$lcp_url = $this->get_current_lcp_url();
-			if ( empty( $lcp_url ) || false === strpos( $buffer, '<img' ) ) {
+		private function prioritize_lcp_image( string $buffer, ?string $lcp_url = null ): string {
+			if ( null === $lcp_url ) {
+				$lcp_url = $this->get_current_lcp_url();
+			}
+			if ( empty( $lcp_url ) || false === stripos( $buffer, '<img' ) ) {
 				return $buffer;
 			}
 
@@ -2988,11 +3007,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Extract the first CSS background-image hero URL from an HTML buffer.
 		 *
-		 * Scans inline style attributes (including the background shorthand)
-		 * for the first url() candidate, skipping data: URIs and elements
-		 * already deferred for lazy backgrounds (data-wppo-bg). Relative URLs
-		 * are resolved against the home URL so they compare against the LCP URL.
-		 * Any scan failure returns an empty string (fail-open to heuristic).
+		 * Scans inline style attributes only (including the background
+		 * shorthand) for the first url() candidate, skipping data:, blob:,
+		 * and javascript: URIs and elements already deferred for lazy
+		 * backgrounds (data-wppo-bg). Heroes set via <style> blocks,
+		 * external stylesheets, or CSS classes are not detected. Relative
+		 * URLs are resolved against the home URL so they compare against
+		 * the LCP URL. Any scan failure returns an empty string (fail-open
+		 * to heuristic).
 		 *
 		 * @since NEXT
 		 *
@@ -3017,7 +3039,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					if ( preg_match( '#background(?:-image)?\s*:[^;]*?url\(\s*[\'"]?([^\'")]+)[\'"]?\s*\)#i', $style, $m ) ) {
 						$bg_url = trim( $m[1] );
 					}
-					if ( '' === $bg_url || 0 === stripos( $bg_url, 'data:' ) ) {
+					if ( '' === $bg_url || 0 === stripos( $bg_url, 'data:' ) || 0 === stripos( $bg_url, 'blob:' ) || 0 === stripos( $bg_url, 'javascript:' ) ) {
 						continue;
 					}
 					if ( 0 === strpos( $bg_url, '//' ) ) {

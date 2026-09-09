@@ -256,7 +256,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 
 			$parsed_path = isset( $_SERVER['REQUEST_URI'] ) ? wp_parse_url( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ), PHP_URL_PATH ) : '/';
 			// Fallback to strict check to prevent '0' being treated as false.
-			$path = is_string( $parsed_path ) && '' !== $parsed_path ? esc_url_raw( substr( $parsed_path, 0, 512 ) ) : '/';
+			// Normalized (trailing slash trimmed, '/' kept for root) so the
+			// token scope, the stored bucket key, and the field-LCP lookup
+			// in get_field_lcp_url() all agree (issue #935 review).
+			$raw_path = is_string( $parsed_path ) && '' !== $parsed_path ? substr( $parsed_path, 0, 512 ) : '/';
+			$path     = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::normalize_rum_path( esc_url_raw( $raw_path ) ) : '/';
 
 			$config = array(
 				'apiUrl' => esc_url_raw( rest_url( 'performance-optimisation/v1/rum_collect' ) ),
@@ -345,6 +349,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			$parsed_path = wp_parse_url( $raw_path, PHP_URL_PATH );
 			$path        = is_string( $parsed_path ) && '' !== $parsed_path ? $parsed_path : '/';
 			$path        = substr( $path, 0, 512 );
+			// Normalize identically to print_config() and get_field_lcp_url()
+			// so '/hero-page/' and '/hero-page' share one bucket.
+			if ( class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
+				$path = \PerformanceOptimise\Inc\Util::normalize_rum_path( $path );
+			}
 
 			$ranges = array(
 				'ttfb' => array( 0, 60000 ),
@@ -375,7 +384,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			// Optional field-measured LCP element URL (issue #935). Rides along
 			// with a valid numeric sample; never a substitute for one. Rejects
 			// data:/javascript:/blob: URIs and caps length so a crafted beacon
-			// cannot bloat the aggregate option.
+			// cannot bloat the aggregate option. Only same-origin URLs are
+			// accepted (root-relative or matching the home host) so an
+			// anonymous client holding the public per-path page token cannot
+			// steer the site's LCP preload to an attacker-chosen host.
 			if ( isset( $params['lcpUrl'] ) && is_string( $params['lcpUrl'] ) ) {
 				$lcp_url = trim( substr( $params['lcpUrl'], 0, self::LCP_URL_MAX_LENGTH ) );
 				if ( '' !== $lcp_url
@@ -383,6 +395,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				&& 0 !== stripos( $lcp_url, 'javascript:' )
 				&& 0 !== strpos( $lcp_url, 'blob:' )
 				&& ( 0 === strpos( $lcp_url, 'http://' ) || 0 === strpos( $lcp_url, 'https://' ) || 0 === strpos( $lcp_url, '/' ) )
+				&& self::is_same_origin_lcp_url( $lcp_url )
 				) {
 					$sample['lcpUrl'] = $lcp_url;
 				}
@@ -390,6 +403,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 
 			return $sample;
 		}
+
+		/**
+		 * Whether an LCP element URL is same-origin with this site.
+		 *
+		 * Root-relative paths ('/...') are always accepted. Absolute URLs
+		 * must carry a host identical (case-insensitive) to the home host;
+		 * anything else (including protocol-relative URLs with a foreign
+		 * host) is rejected so the public beacon cannot inject a
+		 * cross-origin preload target.
+		 *
+		 * @since NEXT
+		 * @param string $lcp_url Candidate LCP URL.
+		 * @return bool True when same-origin.
+		 */
+		private static function is_same_origin_lcp_url( string $lcp_url ): bool {
+			if ( 0 === strpos( $lcp_url, '/' ) && 0 !== strpos( $lcp_url, '//' ) ) {
+				return true;
+			}
+			try {
+				$host = strtolower( (string) wp_parse_url( $lcp_url, PHP_URL_HOST ) );
+				if ( '' === $host ) {
+					return false;
+				}
+				$home_url = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::cached_home_url() : ( function_exists( 'home_url' ) ? home_url() : '' );
+				$home     = strtolower( (string) wp_parse_url( $home_url, PHP_URL_HOST ) );
+				return '' !== $home && $host === $home;
+			} catch ( \Throwable $e ) {
+				return false;
+			}
 
 		/**
 		 * Buffer a sample to a transient queue and flush periodically.
@@ -621,6 +663,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				if ( '' === $path ) {
 					return null;
 				}
+				// Normalize identically to sanitize_sample()/print_config()
+				// so trailing-slash variants share one bucket (issue #935).
+				$normalized_path = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::normalize_rum_path( $path ) : $path;
 				$options = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::get_settings() : array();
 				$min     = isset( $options['image_optimisation']['fieldLcpMinSamples'] ) ? (int) $options['image_optimisation']['fieldLcpMinSamples'] : self::FIELD_LCP_DEFAULT_MIN_SAMPLES;
 				if ( $min < 1 ) {
@@ -633,27 +678,54 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				$now  = time();
 				$best = array();
 				foreach ( $all as $day_bucket ) {
-					if ( ! is_array( $day_bucket ) || ! isset( $day_bucket[ $path ] ) || ! is_array( $day_bucket[ $path ] ) ) {
+					if ( ! is_array( $day_bucket ) ) {
 						continue;
 					}
-					$urls = $day_bucket[ $path ]['lcpUrls'] ?? null;
-					if ( ! is_array( $urls ) ) {
-						continue;
-					}
-					foreach ( $urls as $entry ) {
-						if ( ! is_array( $entry ) || empty( $entry['url'] ) || ! is_string( $entry['url'] ) ) {
+					// Match the normalized path against normalized bucket
+					// keys so legacy trailing-slash buckets ('/hero-page/')
+					// still resolve after the store side was normalized.
+					foreach ( $day_bucket as $bucket_path => $bucket ) {
+						if ( ! is_array( $bucket ) ) {
 							continue;
 						}
-						$key = $entry['url'];
-						if ( ! isset( $best[ $key ] ) ) {
-							$best[ $key ] = array(
-								'url'      => $entry['url'],
-								'n'        => 0,
-								'lastSeen' => 0,
-							);
+						$bucket_norm = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::normalize_rum_path( (string) $bucket_path ) : (string) $bucket_path;
+						if ( $bucket_norm !== $normalized_path ) {
+							continue;
 						}
-						$best[ $key ]['n']       += isset( $entry['n'] ) ? (int) $entry['n'] : 0;
-						$best[ $key ]['lastSeen'] = max( $best[ $key ]['lastSeen'], isset( $entry['lastSeen'] ) ? (int) $entry['lastSeen'] : 0 );
+						$urls = $bucket['lcpUrls'] ?? null;
+						if ( ! is_array( $urls ) ) {
+							continue;
+						}
+						foreach ( $urls as $entry ) {
+							if ( ! is_array( $entry ) || empty( $entry['url'] ) || ! is_string( $entry['url'] ) ) {
+								continue;
+							}
+							// Aggregate by normalized URL (fall back to raw
+							// when unparseable) so http vs https vs
+							// root-relative observations of the same image
+							// share one candidate and jointly pass the
+							// sample gate. Keep the highest-n raw URL for
+							// preload output.
+							$norm = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::normalize_url( $entry['url'] ) : '';
+							$key  = ( '' !== $norm ) ? $norm : $entry['url'];
+							if ( ! isset( $best[ $key ] ) ) {
+								$best[ $key ] = array(
+									'url'      => $entry['url'],
+									'n'        => 0,
+									'lastSeen' => 0,
+								);
+							}
+							$entry_n                        = isset( $entry['n'] ) ? (int) $entry['n'] : 0;
+							$best[ $key ]['n']             += $entry_n;
+							$best[ $key ]['lastSeen']       = max( $best[ $key ]['lastSeen'], isset( $entry['lastSeen'] ) ? (int) $entry['lastSeen'] : 0 );
+							// Prefer the raw URL variant with the most
+							// observations for output.
+							$best[ $key ]['_raw_n']         = ( $best[ $key ]['_raw_n'] ?? 0 );
+							if ( $entry_n >= $best[ $key ]['_raw_n'] ) {
+								$best[ $key ]['url']   = $entry['url'];
+								$best[ $key ]['_raw_n'] = $entry_n;
+							}
+						}
 					}
 				}
 				if ( empty( $best ) ) {
@@ -671,6 +743,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				if ( $top['lastSeen'] <= 0 || ( $now - $top['lastSeen'] ) > self::FIELD_LCP_STALE_TTL ) {
 					return null;
 				}
+				unset( $top['_raw_n'] );
 				return $top;
 			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
 				return null;
