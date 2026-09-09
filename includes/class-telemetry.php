@@ -238,11 +238,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 			$raw_response = curl_exec( $ch );
 			$info         = curl_getinfo( $ch );
 			$curl_error   = curl_errno( $ch );
-			// curl_close() is a no-op in PHP 8.0+ but calling it is harmless and
-			// keeps compatibility with PHP 7.4 where it still frees resources.
-			// phpcs:ignore Generic.PHP.DeprecatedFunctions.Deprecated
-			curl_close( $ch );
-			// phpcs:enable
+			// PHP 8.5 deprecates curl_close(): the Util helper unsets the handle
+			// on 8.5+ and keeps the legacy close path below 8.5.
+			Util::close_curl_handle( $ch );
+		// phpcs:enable
 
 			return array(
 				'raw_response' => is_string( $raw_response ) ? $raw_response : false,

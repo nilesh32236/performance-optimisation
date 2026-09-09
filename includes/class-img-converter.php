@@ -498,8 +498,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 								}
 							} catch ( \Exception $e ) {
 								if ( null !== $image && ( is_resource( $image ) || $image instanceof \GdImage ) ) {
-									// phpcs:ignore Generic.PHP.DeprecatedFunctions.Deprecated -- imagedestroy() is still the correct way to free GD resources in PHP 8.x
-									imagedestroy( $image );
+									Util::destroy_gd_image( $image );
 								}
 								$this->update_conversion_status( $source_image, 'failed', $format );
 								return false;
@@ -523,8 +522,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 								$dominant_color = $this->extract_dominant_color( $webp_gd );
 								$lqip           = $this->generate_lqip( $webp_gd );
 								$this->store_placeholder_data( $rel_path, $dominant_color, $lqip );
-								// phpcs:ignore Generic.PHP.DeprecatedFunctions.Deprecated
-								imagedestroy( $webp_gd );
+								Util::destroy_gd_image( $webp_gd );
 							}
 						}
 
@@ -591,8 +589,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 									$dominant_color = $this->extract_dominant_color( $gif_gd );
 									$lqip           = $this->generate_lqip( $gif_gd );
 									$this->store_placeholder_data( $rel_path, $dominant_color, $lqip );
-									// phpcs:ignore
-									imagedestroy( $gif_gd );
+									Util::destroy_gd_image( $gif_gd );
 								}
 							} catch ( \Exception $e ) {
 								Log::add( __( 'Failed to extract placeholder data from GIF image.', 'performance-optimisation' ) );
@@ -660,16 +657,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				}
 
 				if ( null !== $image && ( is_resource( $image ) || $image instanceof \GdImage ) ) {
-					// phpcs:ignore Generic.PHP.DeprecatedFunctions.Deprecated -- imagedestroy() is still the correct way to free GD resources in PHP 8.x
-					imagedestroy( $image );
+					Util::destroy_gd_image( $image );
 				}
 
 				return $success;
 			} catch ( \Exception $e ) {
 
 				if ( null !== $image && ( is_resource( $image ) || $image instanceof \GdImage ) ) {
-					// phpcs:ignore
-					imagedestroy( $image );
+					Util::destroy_gd_image( $image );
 				}
 
 				$this->update_conversion_status( $source_image, 'failed', $format );
@@ -705,8 +700,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				$transparent = imagecolorallocatealpha( $truecolor, 255, 255, 255, 127 );
 				imagefill( $truecolor, 0, 0, $transparent );
 				imagecopy( $truecolor, $image, 0, 0, 0, 0, $width, $height );
-				// phpcs:ignore
-				imagedestroy( $image );
+				Util::destroy_gd_image( $image );
 				return $truecolor;
 			}
 			return $image;
@@ -805,8 +799,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			imagecopyresampled( $thumb, $image, 0, 0, 0, 0, $thumb_width, $thumb_height, $orig_width, $orig_height );
 
 			if ( ! ob_start() ) {
-				// phpcs:ignore
-				imagedestroy( $thumb );
+				Util::destroy_gd_image( $thumb );
 				return '';
 			}
 			// LQIP thumbnails are intentionally low-quality placeholders: a fixed
@@ -828,8 +821,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				}
 			}
 
-			// phpcs:ignore
-			imagedestroy( $thumb );
+			Util::destroy_gd_image( $thumb );
 
 			if ( ! $success || false === $data ) {
 				return '';
@@ -1532,8 +1524,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				}
 			}
 
-			// phpcs:ignore Generic.PHP.DeprecatedFunctions.Deprecated -- imagedestroy() is still the correct way to free GD resources in PHP 8.x
-			imagedestroy( $image );
+			Util::destroy_gd_image( $image );
 		}
 
 		/**

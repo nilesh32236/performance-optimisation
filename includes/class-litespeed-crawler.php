@@ -782,12 +782,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 						}
 					}
 					curl_multi_remove_handle( $mh, $ch ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_multi_remove_handle -- crawler requires curl_multi
-					curl_close( $ch ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_close -- crawler requires curl
-					// Remove from handles.
+					// Remove from handles before releasing: close_curl_handle()
+					// nulls $ch on PHP 8.5+ so the lookup must run first.
 					$key = array_search( $ch, $handles, true );
 					if ( false !== $key ) {
 						unset( $handles[ $key ] );
 					}
+					Util::close_curl_handle( $ch );
 					// Add next from queue if within deadline.
 					if ( microtime( true ) < $deadline && ! empty( $queue ) ) {
 						$add_next();
@@ -798,8 +799,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			// Cleanup remaining.
 			foreach ( $handles as $ch ) {
 				curl_multi_remove_handle( $mh, $ch ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_multi_remove_handle -- crawler requires curl_multi
-				curl_close( $ch ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_close -- crawler requires curl
+				Util::close_curl_handle( $ch );
 			}
+			unset( $ch );
 			curl_multi_close( $mh ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_multi_close -- crawler requires curl_multi
 
 			return array(
