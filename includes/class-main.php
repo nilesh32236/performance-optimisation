@@ -262,6 +262,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['image_optimisation']['lazyLoadImages'] ) ) {
 				$this->options['image_optimisation']['lazyLoadImages'] = false;
 			}
+			if ( ! isset( $this->options['image_optimisation']['lcpHeroPreload'] ) ) {
+				$this->options['image_optimisation']['lcpHeroPreload'] = true;
+			}
+			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
+				$this->options['file_optimisation'] = array();
+			}
+			if ( ! isset( $this->options['file_optimisation']['delayJSSafeMode'] ) ) {
+				$this->options['file_optimisation']['delayJSSafeMode'] = true;
+			}
 
 			if ( ! isset( $this->options['llms_txt'] ) || ! is_array( $this->options['llms_txt'] ) ) {
 				$this->options['llms_txt'] = array();
@@ -2252,6 +2261,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			if ( ! empty( $this->options['file_optimisation']['delayJS'] ) ) {
+				if ( $this->is_delay_js_safe_context() ) {
+					return $tag;
+				}
 				if ( ! in_array( $handle, $this->exclude_delay_js, true ) ) {
 					$tag = str_replace( '<script ', '<script fetchpriority="low" ', $tag );
 					$tag = str_replace( ' src', ' wppo-src', $tag );
@@ -2455,7 +2467,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Get curated delay JS preset exclusions (jquery, recaptcha, stripe, analytics, etc.).
 		 *
-		 * Filterable via wppo_delay_js_exclusions. Preset prevents breakage on 10% sites.
+		 * Safe-by-default: WooCommerce, Elementor, and form plugins are always
+		 * excluded so checkout and forms never break. Filterable via
+		 * wppo_delay_js_exclusions. Preset prevents breakage on 10% sites.
 		 *
 		 * @since NEXT
 		 * @return string[]
@@ -2482,6 +2496,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'linkedin',
 				'twitter',
 				'paypal',
+				// WooCommerce safe list.
+				'woocommerce',
+				'wc-',
+				'cart-fragments',
+				'wc-cart',
+				'wc-checkout',
+				'wc-single-product',
+				'wc-add-to-cart',
+				// Elementor safe list.
+				'elementor',
+				'elementor-frontend',
+				'elementor-pro',
+				// Form plugins safe list.
+				'contact-form-7',
+				'wpcf7',
+				'gravityforms',
+				'gform',
+				'wpforms',
+				'ninja-forms',
+				'fluentform',
 			);
 			/**
 			 * Filters delay JS preset exclusions.
@@ -2489,7 +2523,68 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			 * @since NEXT
 			 * @param string[] $preset Preset exclusions.
 			 */
+			if ( ! has_filter( 'wppo_delay_js_exclusions' ) ) {
+				return $preset;
+			}
 			return (array) apply_filters( 'wppo_delay_js_exclusions', $preset );
+		}
+
+		/**
+		 * Whether Delay-JS must be skipped for the current request (fail-open safe context).
+		 *
+		 * Returns true (serve undeferred) on WooCommerce dynamic pages
+		 * (cart/checkout/account/endpoints) or when a known form shortcode/block
+		 * is present in the current post content. Any detection failure fails
+		 * open to safe (no delay) so interactivity is never broken.
+		 *
+		 * @since NEXT
+		 * @return bool True when Delay-JS must be skipped.
+		 */
+		public function is_delay_js_safe_context(): bool {
+			try {
+				if ( ! empty( $this->options['file_optimisation']['delayJSSafeMode'] ) || ! isset( $this->options['file_optimisation']['delayJSSafeMode'] ) ) {
+					if ( function_exists( 'is_cart' ) && is_cart() ) {
+						return true;
+					}
+					if ( function_exists( 'is_checkout' ) && is_checkout() ) {
+						return true;
+					}
+					if ( function_exists( 'is_account_page' ) && is_account_page() ) {
+						return true;
+					}
+					if ( function_exists( 'is_wc_endpoint_url' ) && is_wc_endpoint_url() ) {
+						return true;
+					}
+					if ( function_exists( 'get_the_ID' ) ) {
+						$post_id = get_the_ID();
+						if ( ! empty( $post_id ) ) {
+							$shortcodes = array( 'contact-form-7', 'gravityform', 'wpforms', 'ninja_forms', 'fluentform' );
+							foreach ( $shortcodes as $shortcode ) {
+								if ( function_exists( 'has_shortcode' ) ) {
+									$post_content = '';
+									if ( function_exists( 'get_post_field' ) ) {
+										$post_content = (string) get_post_field( 'post_content', $post_id );
+									}
+									if ( '' !== $post_content && has_shortcode( $post_content, $shortcode ) ) {
+										return true;
+									}
+								}
+							}
+							if ( function_exists( 'has_block' ) ) {
+								$blocks = array( 'contact-form-7/contact-form-selector', 'gravityforms/form', 'wpforms/form-selector', 'ninja-forms/form', 'fluentfom/gutenblock', 'elementor-widget/form' );
+								foreach ( $blocks as $block ) {
+									if ( has_block( $block, $post_id ) ) {
+										return true;
+									}
+								}
+							}
+						}
+					}
+				}
+			} catch ( \Throwable $e ) {
+				return true;
+			}
+			return false;
 		}
 
 		/**

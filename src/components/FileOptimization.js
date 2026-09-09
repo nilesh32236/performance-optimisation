@@ -1330,6 +1330,14 @@ const FileOptimization = ( {
 													) }
 												</span>
 											</div>
+											<div className="wppo-notice wppo-notice--info wppo-mt-16">
+												<span>
+													{ __(
+														'Safe mode: WooCommerce, Elementor and form scripts are auto-excluded, and Delay-JS is skipped on cart, checkout and form pages. Customize via the wppo_delay_js_exclusions filter.',
+														'performance-optimisation'
+													) }
+												</span>
+											</div>
 										</>
 									) }
 								</div>

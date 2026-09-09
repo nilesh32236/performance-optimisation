@@ -292,6 +292,76 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that the Delay-JS preset exclusions are safe by default (Woo, Elementor, forms).
+	 *
+	 * @since NEXT
+	 */
+	public function test_delay_js_preset_exclusions_include_safe_entries(): void {
+		$this->stub_main_construction(
+			array(
+				'delayJS' => true,
+			)
+		);
+
+		$main = new Main();
+
+		$preset = $this->invoke_private_method( $main, 'get_delay_js_preset_exclusions' );
+
+		foreach ( array( 'woocommerce', 'wc-checkout', 'cart-fragments', 'elementor', 'elementor-frontend', 'contact-form-7', 'wpcf7', 'gravityforms', 'gform', 'wpforms', 'ninja-forms', 'fluentform', 'jquery', 'stripe' ) as $entry ) {
+			$this->assertContains( $entry, $preset );
+		}
+	}
+
+	/**
+	 * Test that Delay-JS safe context fails open (no delay skipped) without WP conditional functions.
+	 *
+	 * @since NEXT
+	 */
+	public function test_delay_js_safe_context_fails_open_without_wp(): void {
+		$this->stub_main_construction(
+			array(
+				'delayJS' => true,
+			)
+		);
+
+		// Pin all safe-context conditionals false: earlier suites leave
+		// stale Brain Monkey function definitions behind, so absence of a
+		// mock cannot be relied on for determinism here.
+		Functions\when( 'is_cart' )->justReturn( false );
+		Functions\when( 'is_checkout' )->justReturn( false );
+		Functions\when( 'is_account_page' )->justReturn( false );
+		Functions\when( 'is_wc_endpoint_url' )->justReturn( false );
+		Functions\when( 'get_the_ID' )->justReturn( 0 );
+
+		$main = new Main();
+
+		$this->assertFalse( $main->is_delay_js_safe_context() );
+	}
+
+	/**
+	 * Test that add_defer_attribute skips Delay-JS rewriting on WooCommerce checkout pages.
+	 *
+	 * @since NEXT
+	 */
+	public function test_add_defer_attribute_skips_delay_on_checkout(): void {
+		$this->stub_main_construction(
+			array(
+				'delayJS' => true,
+			)
+		);
+
+		Functions\when( 'is_checkout' )->justReturn( true );
+
+		$main = new Main();
+
+		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for add_defer_attribute() tests.
+		$tag    = '<script src="https://example.com/app.js" type="text/javascript"></script>';
+		$result = $main->add_defer_attribute( $tag, 'app' );
+
+		$this->assertSame( $tag, $result );
+	}
+
+	/**
 	 * Build a Main instance with given options without invoking the constructor.
 	 *
 	 * @param array $options wppo_settings options.
