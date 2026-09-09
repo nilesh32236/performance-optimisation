@@ -262,6 +262,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['image_optimisation']['lazyLoadImages'] ) ) {
 				$this->options['image_optimisation']['lazyLoadImages'] = false;
 			}
+			if ( ! isset( $this->options['image_optimisation']['avifFirst'] ) ) {
+				$this->options['image_optimisation']['avifFirst'] = true;
+			}
+			if ( ! isset( $this->options['image_optimisation']['smartQuality'] ) ) {
+				$this->options['image_optimisation']['smartQuality'] = true;
+			}
+			if ( ! isset( $this->options['image_optimisation']['skipSmallThresholdBytes'] ) ) {
+				$this->options['image_optimisation']['skipSmallThresholdBytes'] = 5120;
+			}
 
 			if ( ! isset( $this->options['llms_txt'] ) || ! is_array( $this->options['llms_txt'] ) ) {
 				$this->options['llms_txt'] = array();
