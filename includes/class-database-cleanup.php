@@ -921,7 +921,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * @param int $limit     Maximum number of candidates to return.
 		 * @return array<int, array{option_name:string,size:int,autoload:string}> Sorted by size desc.
 		 */
-		public static function get_autoload_candidates( int $threshold = 1024, int $limit = 100 ): array {
+		public static function get_autoload_candidates( int $threshold = self::AUTOLOAD_SIZE_THRESHOLD, int $limit = self::AUTOLOAD_REMEDIATION_LIMIT ): array {
 			global $wpdb;
 			$threshold = max( 1, $threshold );
 			$limit     = max( 1, min( 500, $limit ) );
@@ -929,10 +929,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			$autoload_values = self::get_autoloadable_values();
 			$placeholders    = implode( ',', array_fill( 0, count( $autoload_values ), '%s' ) );
 
+			// Fetch a wider window than $limit: PHP-side exclusions below (core,
+			// transients, oEmbed, wppo_*, already-remediated) would otherwise
+			// silently hide candidates sitting below the SQL LIMIT cutoff.
+			$fetch = max( $limit * 5, $limit + 100 );
+
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Read-only diagnostic query.
 			$rows = $wpdb->get_results(
 				$wpdb->prepare(
-					"SELECT option_name, autoload, LENGTH(option_value) AS opt_size FROM {$wpdb->options} WHERE autoload IN ($placeholders) AND LENGTH(option_value) >= %d ORDER BY opt_size DESC LIMIT " . (int) $limit, // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+					"SELECT option_name, autoload, LENGTH(option_value) AS opt_size FROM {$wpdb->options} WHERE autoload IN ($placeholders) AND LENGTH(option_value) >= %d ORDER BY opt_size DESC LIMIT " . (int) $fetch, // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
 					...array_merge( $autoload_values, array( $threshold ) )
 				),
 				ARRAY_A
@@ -972,7 +977,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				);
 			}
 
-			return $result;
+			return array_slice( $result, 0, $limit );
+		}
+
+		/**
+		 * Clamp a caller-supplied remediation threshold to the supported range.
+		 *
+		 * Matches the settings clamp (100 B .. 10 MB) so direct PHP calls cannot
+		 * bypass the bounds enforced by settings validation and the REST layer.
+		 *
+		 * @since NEXT
+		 * @param int $threshold Threshold in bytes.
+		 * @return int Clamped threshold in bytes.
+		 */
+		private static function clamp_autoload_threshold( int $threshold ): int {
+			return max( 100, min( 10485760, $threshold ) );
 		}
 
 		/**
@@ -983,8 +1002,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * @param int      $limit     Maximum number of candidates.
 		 * @return array{threshold:int,supported:bool,total_autoload_bytes:int,count:int,bytes_saved:int,options:array}
 		 */
-		public static function plan_autoload_remediation( ?int $threshold = null, int $limit = 100 ): array {
-			$threshold  = null === $threshold ? self::get_autoload_remediation_threshold() : max( 1, $threshold );
+		public static function plan_autoload_remediation( ?int $threshold = null, int $limit = self::AUTOLOAD_REMEDIATION_LIMIT ): array {
+			$threshold  = null === $threshold ? self::get_autoload_remediation_threshold() : self::clamp_autoload_threshold( $threshold );
 			$candidates = self::get_autoload_candidates( $threshold, $limit );
 			$saved      = 0;
 			foreach ( $candidates as $candidate ) {
@@ -1023,7 +1042,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * @param string $autoload_off Value disabling autoload ('off' on WP 6.6+, 'no' legacy).
 		 * @return bool True on success, false on failure.
 		 */
-		private static function set_option_autoload_off( string $option_name, string $autoload_off = 'off' ): bool {
+		private static function set_option_autoload_off( string $option_name, string $autoload_off = 'no' ): bool {
 			try {
 				if ( function_exists( 'wp_set_option_autoload' ) ) {
 					$result = wp_set_option_autoload( $option_name, false );
@@ -1096,8 +1115,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * @param int      $limit     Maximum number of options to flip.
 		 * @return array{threshold:int,supported:bool,applied:array,failed:array,bytes_saved:int,total_autoload_bytes:int}
 		 */
-		public static function remediate_autoload( ?int $threshold = null, int $limit = 100 ): array {
-			$threshold = null === $threshold ? self::get_autoload_remediation_threshold() : max( 1, $threshold );
+		public static function remediate_autoload( ?int $threshold = null, int $limit = self::AUTOLOAD_REMEDIATION_LIMIT ): array {
+			$threshold = null === $threshold ? self::get_autoload_remediation_threshold() : self::clamp_autoload_threshold( $threshold );
 			$limit     = max( 1, min( 500, $limit ) );
 			$result    = array(
 				'threshold'            => $threshold,
@@ -1125,10 +1144,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 
 			$priors = self::get_remediated_options();
 			$saved  = 0;
+			// Hoist the core list once: get_core_autoload_options() fires a filter.
+			$core_options = array_flip( self::get_core_autoload_options() );
 			foreach ( $candidates as $candidate ) {
 				$name = $candidate['option_name'];
 				// Re-check core exclusion at apply time (filter may have changed).
-				if ( in_array( $name, self::get_core_autoload_options(), true ) ) {
+				if ( isset( $core_options[ $name ] ) ) {
 					$result['failed'][] = $name;
 					continue;
 				}
@@ -1153,13 +1174,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			$result['bytes_saved']          = $saved;
 			$result['total_autoload_bytes'] = self::get_autoload_total_bytes();
 
-			Log::add(
-				sprintf(
-					/* translators: %d: Number of options remediated */
-					__( 'Autoload remediation: %d options set to autoload off.', 'performance-optimisation' ),
-					count( $result['applied'] )
-				)
-			);
+			if ( ! empty( $result['applied'] ) ) {
+				Log::add(
+					sprintf(
+						/* translators: %d: Number of options remediated */
+						__( 'Autoload remediation: %d options set to autoload off.', 'performance-optimisation' ),
+						count( $result['applied'] )
+					)
+				);
+			}
 
 			return $result;
 		}

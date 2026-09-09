@@ -27,7 +27,8 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 	 * The fixed option names every uninstall must remove per site.
 	 *
 	 * Completeness baseline: the 24 names that existed before audit #899 plus
-	 * the three audit findings (img-scan cursors, blog-prefixed purge queue).
+	 * the three audit #899 findings (img-scan cursors, blog-prefixed purge
+	 * queue) plus the issue #934 autoload-remediation priors option.
 	 *
 	 * @var string[]
 	 */

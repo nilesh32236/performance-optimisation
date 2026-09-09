@@ -333,7 +333,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			if ( null !== $threshold ) {
 				$threshold = max( 100, min( 10485760, $threshold ) );
 			}
-			$limit = isset( $params['limit'] ) ? absint( $params['limit'] ) : 100;
+			$limit = isset( $params['limit'] ) ? absint( $params['limit'] ) : Database_Cleanup::AUTOLOAD_REMEDIATION_LIMIT;
 			$limit = max( 1, min( 500, $limit ) );
 
 			if ( 'apply' === $mode ) {
