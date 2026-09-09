@@ -573,7 +573,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			// Optional LCP image prioritization on the finalized HTML (default off).
-			if ( ! empty( $this->options['image_optimisation']['prioritizeLCPImages'] ) ) {
+			// The CSS background hero preload (issue #935) shares this buffer, so
+			// the hook is registered when either toggle is enabled.
+			if ( ! empty( $this->options['image_optimisation']['prioritizeLCPImages'] ) || ! empty( $this->options['image_optimisation']['cssHeroPreload'] ) ) {
 				// TODO(#624): when core's Enhanced Responsive Images ships, reassess
 				// whether this buffer-level LCP prioritization / fetchpriority stamping
 				// can defer to core-provided attributes (wp_get_loading_optimization_attributes()

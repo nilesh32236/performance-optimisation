@@ -94,6 +94,48 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		private const QUEUE_MAX = 100;
 
 		/**
+		 * Maximum distinct LCP element URLs tracked per path bucket.
+		 *
+		 * Bounds the `lcpUrls` map added for field-measured LCP targeting
+		 * (issue #935) so the aggregate option stays within its byte budget.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const MAX_LCP_URLS_PER_PATH = 10;
+
+		/**
+		 * Maximum length (chars) accepted for an LCP element URL.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const LCP_URL_MAX_LENGTH = 2048;
+
+		/**
+		 * Default sample gate for the field-measured LCP override.
+		 *
+		 * The top LCP URL for a path overrides the PageSpeed heuristic only
+		 * once it has been observed at least this many times.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const FIELD_LCP_DEFAULT_MIN_SAMPLES = 20;
+
+		/**
+		 * Freshness window (seconds) for the field-measured LCP override.
+		 *
+		 * An override whose top URL was last seen longer ago than this
+		 * self-corrects back to the heuristic, so a changed hero recovers
+		 * within 24h.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const FIELD_LCP_STALE_TTL = 86400;
+
+		/**
 		 * Flush when queue reaches this size.
 		 *
 		 * @var int
@@ -330,6 +372,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				return null;
 			}
 
+			// Optional field-measured LCP element URL (issue #935). Rides along
+			// with a valid numeric sample; never a substitute for one. Rejects
+			// data:/javascript:/blob: URIs and caps length so a crafted beacon
+			// cannot bloat the aggregate option.
+			if ( isset( $params['lcpUrl'] ) && is_string( $params['lcpUrl'] ) ) {
+				$lcp_url = trim( substr( $params['lcpUrl'], 0, self::LCP_URL_MAX_LENGTH ) );
+				if ( '' !== $lcp_url
+				&& 0 !== strpos( $lcp_url, 'data:' )
+				&& 0 !== stripos( $lcp_url, 'javascript:' )
+				&& 0 !== strpos( $lcp_url, 'blob:' )
+				&& ( 0 === strpos( $lcp_url, 'http://' ) || 0 === strpos( $lcp_url, 'https://' ) || 0 === strpos( $lcp_url, '/' ) )
+				) {
+					$sample['lcpUrl'] = $lcp_url;
+				}
+			}
+
 			return $sample;
 		}
 
@@ -431,6 +489,49 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 						$bucket[ $metric ]['max']  = max( $bucket[ $metric ]['max'], $value );
 					}
 
+					// Field-measured LCP element URLs (issue #935): count
+					// normalized URLs per path with a bounded map, keeping the
+					// first-seen raw URL for preload output. Evicts the
+					// lowest-count/oldest entry when over budget.
+					if ( isset( $sample['lcpUrl'] ) && is_string( $sample['lcpUrl'] ) && '' !== $sample['lcpUrl'] ) {
+						$normalized = ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'normalize_url' ) )
+						? \PerformanceOptimise\Inc\Util::normalize_url( $sample['lcpUrl'] )
+						: '';
+						if ( '' !== $normalized ) {
+							if ( ! isset( $bucket['lcpUrls'] ) || ! is_array( $bucket['lcpUrls'] ) ) {
+								$bucket['lcpUrls'] = array();
+							}
+							if ( isset( $bucket['lcpUrls'][ $normalized ] ) ) {
+								++$bucket['lcpUrls'][ $normalized ]['n'];
+								$bucket['lcpUrls'][ $normalized ]['lastSeen'] = $ts;
+							} else {
+								$bucket['lcpUrls'][ $normalized ] = array(
+									'url'      => substr( $sample['lcpUrl'], 0, self::LCP_URL_MAX_LENGTH ),
+									'n'        => 1,
+									'lastSeen' => $ts,
+								);
+							}
+							while ( count( $bucket['lcpUrls'] ) > self::MAX_LCP_URLS_PER_PATH ) {
+								$evict_key = null;
+								$evict_n   = null;
+								$evict_ts  = null;
+								foreach ( $bucket['lcpUrls'] as $key => $entry ) {
+									$entry_n  = isset( $entry['n'] ) ? (int) $entry['n'] : 0;
+									$entry_ts = isset( $entry['lastSeen'] ) ? (int) $entry['lastSeen'] : 0;
+									if ( null === $evict_key || $entry_n < $evict_n || ( $entry_n === $evict_n && $entry_ts < $evict_ts ) ) {
+										$evict_key = $key;
+										$evict_n   = $entry_n;
+										$evict_ts  = $entry_ts;
+									}
+								}
+								if ( null === $evict_key ) {
+									break;
+								}
+								unset( $bucket['lcpUrls'][ $evict_key ] );
+							}
+						}
+					}
+
 					$day[ $path ] = $bucket;
 
 					// Bound paths per day.
@@ -495,6 +596,84 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				update_option( self::OPTION, $all, false );
 			} finally {
 				delete_transient( $lock_key );
+			}
+		}
+
+		/**
+		 * Get the field-measured LCP URL for a page path.
+		 *
+		 * Returns the most-observed LCP element URL for the path only when it
+		 * has been seen at least the configured minimum number of times
+		 * (defaults to 20) and was last seen within the last 24h, so a
+		 * changed hero self-corrects back to the heuristic. Returns null
+		 * otherwise so callers fall through to the PageSpeed heuristic.
+		 *
+		 * @since NEXT
+		 * @param string|null $path Page path (e.g. "/about/"). Defaults to the current request path.
+		 * @return array{url:string,n:int,lastSeen:int}|null Top LCP URL entry or null.
+		 */
+		public static function get_field_lcp_url( ?string $path = null ): ?array {
+			try {
+				if ( null === $path ) {
+					$raw_path = isset( $_SERVER['REQUEST_URI'] ) ? wp_parse_url( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ), PHP_URL_PATH ) : '/';
+					$path     = is_string( $raw_path ) && '' !== $raw_path ? substr( $raw_path, 0, 512 ) : '/';
+				}
+				if ( '' === $path ) {
+					return null;
+				}
+				$options = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::get_settings() : array();
+				$min     = isset( $options['image_optimisation']['fieldLcpMinSamples'] ) ? (int) $options['image_optimisation']['fieldLcpMinSamples'] : self::FIELD_LCP_DEFAULT_MIN_SAMPLES;
+				if ( $min < 1 ) {
+					$min = self::FIELD_LCP_DEFAULT_MIN_SAMPLES;
+				}
+				$all = get_option( self::OPTION, array() );
+				if ( ! is_array( $all ) || empty( $all ) ) {
+					return null;
+				}
+				$now  = time();
+				$best = array();
+				foreach ( $all as $day_bucket ) {
+					if ( ! is_array( $day_bucket ) || ! isset( $day_bucket[ $path ] ) || ! is_array( $day_bucket[ $path ] ) ) {
+						continue;
+					}
+					$urls = $day_bucket[ $path ]['lcpUrls'] ?? null;
+					if ( ! is_array( $urls ) ) {
+						continue;
+					}
+					foreach ( $urls as $entry ) {
+						if ( ! is_array( $entry ) || empty( $entry['url'] ) || ! is_string( $entry['url'] ) ) {
+							continue;
+						}
+						$key = $entry['url'];
+						if ( ! isset( $best[ $key ] ) ) {
+							$best[ $key ] = array(
+								'url'      => $entry['url'],
+								'n'        => 0,
+								'lastSeen' => 0,
+							);
+						}
+						$best[ $key ]['n']       += isset( $entry['n'] ) ? (int) $entry['n'] : 0;
+						$best[ $key ]['lastSeen'] = max( $best[ $key ]['lastSeen'], isset( $entry['lastSeen'] ) ? (int) $entry['lastSeen'] : 0 );
+					}
+				}
+				if ( empty( $best ) ) {
+					return null;
+				}
+				$top = null;
+				foreach ( $best as $entry ) {
+					if ( null === $top || $entry['n'] > $top['n'] ) {
+						$top = $entry;
+					}
+				}
+				if ( null === $top || $top['n'] < $min ) {
+					return null;
+				}
+				if ( $top['lastSeen'] <= 0 || ( $now - $top['lastSeen'] ) > self::FIELD_LCP_STALE_TTL ) {
+					return null;
+				}
+				return $top;
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+				return null;
 			}
 		}
 	}

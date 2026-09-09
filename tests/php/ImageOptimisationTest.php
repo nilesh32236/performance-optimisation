@@ -1099,4 +1099,230 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$this->assertStringContainsString( 'fetchpriority="low"', $result );
 		$this->assertStringContainsString( 'loading="lazy"', $result );
 	}
+
+	/**
+	 * Stub the WP functions used to resolve the field-measured LCP URL.
+	 *
+	 * get_option() answers per option name: plugin settings for
+	 * 'wppo_settings', the RUM aggregate for the RUM option, and the
+	 * fallback for everything else.
+	 *
+	 * @since NEXT
+	 * @param array  $wppo_settings  Plugin settings for Util::get_settings().
+	 * @param array  $rum_aggregate  Aggregate stored under the RUM option.
+	 * @param string $heuristic_url  LCP URL the transient lookup should return.
+	 */
+	private function stub_field_lcp_environment( array $wppo_settings, array $rum_aggregate, string $heuristic_url ): void {
+		Functions\when( 'is_singular' )->justReturn( false );
+		Functions\when( 'is_front_page' )->justReturn( false );
+		Functions\when( 'get_post_meta' )->justReturn( '' );
+		Functions\when( 'untrailingslashit' )->returnArg();
+		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'is_multisite' )->justReturn( false );
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		Functions\when( 'get_bloginfo' )->justReturn( '6.8' );
+		Functions\when( 'home_url' )->justReturn( 'https://example.com' );
+		Functions\when( 'add_query_arg' )->justReturn( '/hero-page/' );
+		Functions\when( 'get_transient' )->justReturn( $heuristic_url );
+		Functions\when( 'get_option' )->alias(
+			function ( $name, $fallback = false ) use ( $wppo_settings, $rum_aggregate ) {
+				if ( 'wppo_settings' === $name ) {
+					return $wppo_settings;
+				}
+				if ( \PerformanceOptimise\Inc\RUM::OPTION === $name ) {
+					return $rum_aggregate;
+				}
+				return $fallback;
+			}
+		);
+
+		global $wp;
+		$wp          = new \stdClass();
+		$wp->request = 'hero-page';
+
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+	}
+
+	/**
+	 * Build a RUM aggregate with a single LCP URL entry for a path.
+	 *
+	 * @since NEXT
+	 * @param string $path      Page path.
+	 * @param string $url       Raw LCP element URL.
+	 * @param int    $samples   Observation count.
+	 * @param int    $last_seen Last-seen timestamp.
+	 * @return array Aggregate option value.
+	 */
+	private function make_rum_aggregate( string $path, string $url, int $samples, int $last_seen ): array {
+		return array(
+			'2026-09-09' => array(
+				$path => array(
+					'lcpUrls' => array(
+						'entry' => array(
+							'url'      => $url,
+							'n'        => $samples,
+							'lastSeen' => $last_seen,
+						),
+					),
+				),
+			),
+		);
+	}
+
+	/**
+	 * Test that the field-measured LCP URL overrides the heuristic after enough samples.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_current_lcp_url_field_override_wins_after_min_samples(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		$this->stub_field_lcp_environment(
+			array( 'image_optimisation' => array( 'fieldLcpMinSamples' => 20 ) ),
+			$this->make_rum_aggregate( '/hero-page/', 'https://example.com/wp-content/uploads/field.jpg', 20, time() ),
+			'https://example.com/wp-content/uploads/heuristic.jpg'
+		);
+
+		$options = $this->default_options;
+		$options['image_optimisation']['fieldLcpOverride'] = true;
+		$image_opt = new Image_Optimisation( $options );
+
+		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'get_current_lcp_url' );
+		$reflection->setAccessible( true );
+
+		$this->assertSame( 'https://example.com/wp-content/uploads/field.jpg', $reflection->invoke( $image_opt ) );
+	}
+
+	/**
+	 * Test that the heuristic wins while field samples are under the threshold.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_current_lcp_url_field_override_keeps_heuristic_when_under_threshold(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		$this->stub_field_lcp_environment(
+			array( 'image_optimisation' => array( 'fieldLcpMinSamples' => 20 ) ),
+			$this->make_rum_aggregate( '/hero-page/', 'https://example.com/wp-content/uploads/field.jpg', 19, time() ),
+			'https://example.com/wp-content/uploads/heuristic.jpg'
+		);
+
+		$options = $this->default_options;
+		$options['image_optimisation']['fieldLcpOverride'] = true;
+		$image_opt = new Image_Optimisation( $options );
+
+		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'get_current_lcp_url' );
+		$reflection->setAccessible( true );
+
+		$this->assertSame( 'https://example.com/wp-content/uploads/heuristic.jpg', $reflection->invoke( $image_opt ) );
+	}
+
+	/**
+	 * Test that a stale field override self-corrects back to the heuristic.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_current_lcp_url_field_override_self_corrects_when_stale(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		$this->stub_field_lcp_environment(
+			array( 'image_optimisation' => array( 'fieldLcpMinSamples' => 20 ) ),
+			$this->make_rum_aggregate( '/hero-page/', 'https://example.com/wp-content/uploads/old-field.jpg', 25, time() - ( 2 * DAY_IN_SECONDS ) ),
+			'https://example.com/wp-content/uploads/heuristic.jpg'
+		);
+
+		$options = $this->default_options;
+		$options['image_optimisation']['fieldLcpOverride'] = true;
+		$image_opt = new Image_Optimisation( $options );
+
+		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'get_current_lcp_url' );
+		$reflection->setAccessible( true );
+
+		$this->assertSame( 'https://example.com/wp-content/uploads/heuristic.jpg', $reflection->invoke( $image_opt ) );
+	}
+
+	/**
+	 * Test that a CSS background hero emits exactly one preload link.
+	 *
+	 * @since NEXT
+	 */
+	public function test_css_hero_emits_exactly_one_preload_link(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+		Functions\when( 'esc_attr' )->returnArg();
+		Functions\when( 'esc_url' )->returnArg();
+		Functions\when( 'wp_kses' )->returnArg( 1 );
+		$this->stub_field_lcp_environment(
+			array( 'image_optimisation' => array( 'fieldLcpOverride' => false ) ),
+			array(),
+			'https://example.com/wp-content/uploads/hero.jpg'
+		);
+
+		$options = $this->default_options;
+		$options['image_optimisation']['prioritizeLCPImages'] = true;
+		$options['image_optimisation']['cssHeroPreload']      = true;
+		$image_opt = new Image_Optimisation( $options );
+
+		$html   = '<html><head><title>T</title></head><body><div class="hero" style="background-image: url(\'https://example.com/wp-content/uploads/hero.jpg\'); color: red;">Hi</div></body></html>';
+		$result = $image_opt->prioritize_lcp_in_buffer( $html, $html );
+
+		$this->assertSame( 1, substr_count( $result, 'rel="preload"' ) );
+		$this->assertStringContainsString( 'https://example.com/wp-content/uploads/hero.jpg', $result );
+		$this->assertStringContainsString( 'fetchpriority="high"', $result );
+	}
+
+	/**
+	 * Test that an img hero emits zero CSS preload links.
+	 *
+	 * @since NEXT
+	 */
+	public function test_css_hero_skipped_when_img_matches(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+		Functions\when( 'esc_attr' )->returnArg();
+		Functions\when( 'esc_url' )->returnArg();
+		Functions\when( 'wp_kses' )->returnArg( 1 );
+		$this->stub_field_lcp_environment(
+			array( 'image_optimisation' => array( 'fieldLcpOverride' => false ) ),
+			array(),
+			'https://example.com/wp-content/uploads/hero.jpg'
+		);
+
+		$options = $this->default_options;
+		$options['image_optimisation']['prioritizeLCPImages'] = true;
+		$options['image_optimisation']['cssHeroPreload']      = true;
+		$image_opt = new Image_Optimisation( $options );
+
+		$html   = '<html><head><title>T</title></head><body><img src="https://example.com/wp-content/uploads/hero.jpg" /></body></html>';
+		$result = $image_opt->prioritize_lcp_in_buffer( $html, $html );
+
+		$this->assertSame( 0, substr_count( $result, 'rel="preload"' ) );
+		$this->assertSame( 1, substr_count( $result, 'fetchpriority="high"' ) );
+	}
+
+	/**
+	 * Test that no node carries fetchpriority high plus loading lazy together.
+	 *
+	 * @since NEXT
+	 */
+	public function test_prioritize_lcp_never_combines_fetchpriority_with_lazy(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+		$this->stub_field_lcp_environment(
+			array( 'image_optimisation' => array( 'fieldLcpOverride' => false ) ),
+			array(),
+			'https://example.com/wp-content/uploads/hero.jpg'
+		);
+
+		$image_opt = $this->make_lcp_enabled_instance();
+
+		$html   = '<img src="https://example.com/wp-content/uploads/hero.jpg" loading="lazy" />';
+		$result = $image_opt->prioritize_lcp_in_buffer( $html, $html );
+
+		$this->assertStringContainsString( 'fetchpriority="high"', $result );
+		$this->assertStringNotContainsString( 'loading="lazy"', $result );
+	}
 }

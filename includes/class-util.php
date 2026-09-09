@@ -224,6 +224,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'clientSideMimeTypeOverride' => false,
 					'clientSideMimeTypes'        => array(),
 					'lazyLoadBackgroundImages'   => false,
+					'fieldLcpOverride'           => false,
+					'fieldLcpMinSamples'         => 20,
+					'cssHeroPreload'             => false,
 				),
 				'performance_audit'     => array(
 					'pagespeed_api_key'     => '',
