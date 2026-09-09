@@ -165,6 +165,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 	const [ counts, setCounts ] = useState( {} );
 	const [ loading, setLoading ] = useState( {} );
 	const [ loadingCounts, setLoadingCounts ] = useState( true );
+	const [ exporting, setExporting ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
 	const [ confirmDialog, setConfirmDialog ] = useState( {
 		isOpen: false,
@@ -309,6 +310,68 @@ const DatabaseCleanup = ( { options = {} } ) => {
 		( sum, val ) => sum + ( parseInt( val ) || 0 ),
 		0
 	);
+
+	const handleExportTransients = async () => {
+		setExporting( true );
+		try {
+			const response = await apiCall(
+				'expired_transients_export?limit=500',
+				{},
+				'GET'
+			);
+			if ( response.success && response.data ) {
+				const blob = new Blob(
+					[ JSON.stringify( response.data, null, 2 ) ],
+					{ type: 'application/json' }
+				);
+				const url = URL.createObjectURL( blob );
+				const link = document.createElement( 'a' );
+				link.href = url;
+				link.download = 'wppo-expired-transients.json';
+				document.body.appendChild( link );
+				link.click();
+				link.remove();
+				URL.revokeObjectURL( url );
+				notify( {
+					type: 'success',
+					message: sprintf(
+						// translators: %d is the number of expired transients exported.
+						_n(
+							'Exported %d expired transient.',
+							'Exported %d expired transients.',
+							response.data?.count ?? 0,
+							'performance-optimisation'
+						),
+						response.data?.count ?? 0
+					),
+					durationMs: 5000,
+				} );
+			} else {
+				notify( {
+					type: 'error',
+					message:
+						response.message ||
+						__(
+							'Failed to export expired transients.',
+							'performance-optimisation'
+						),
+					durationMs: 5000,
+				} );
+			}
+		} catch ( error ) {
+			console.error( 'Error exporting expired transients:', error );
+			notify( {
+				type: 'error',
+				message: __(
+					'Failed to export expired transients.',
+					'performance-optimisation'
+				),
+				durationMs: 5000,
+			} );
+		} finally {
+			setExporting( false );
+		}
+	};
 
 	return (
 		<div className="wppo-dashboard-view">
@@ -597,6 +660,24 @@ const DatabaseCleanup = ( { options = {} } ) => {
 											>
 												{ risk.label }
 											</span>
+										) }
+										{ item.key === 'expired_transients' && (
+											<LoadingSubmitButton
+												type="button"
+												className="wppo-button wppo-button--secondary wppo-button--sm"
+												onClick={
+													handleExportTransients
+												}
+												isLoading={ exporting }
+												label={ __(
+													'Export',
+													'performance-optimisation'
+												) }
+												loadingLabel={ __(
+													'Exporting',
+													'performance-optimisation'
+												) }
+											/>
 										) }
 										{ isCleanDisabled && count === 0 ? (
 											<Tooltip

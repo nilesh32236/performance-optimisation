@@ -563,4 +563,49 @@ describe( 'DatabaseCleanup Component', () => {
 			).toBeInTheDocument();
 		} );
 	} );
+
+	it( 'exports expired transients as a JSON download before purge', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { revisions: 0, expired_transients: 2 },
+		} );
+		render( <DatabaseCleanup /> );
+
+		await waitFor( () => {
+			expect(
+				screen.getByRole( 'button', { name: 'Export' } )
+			).toBeInTheDocument();
+		} );
+
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				count: 2,
+				transients: [
+					{
+						option_name: '_transient_expired_one',
+						timeout_option: '_transient_timeout_expired_one',
+						expired_at: 1700000000,
+						size: 42,
+					},
+				],
+			},
+		} );
+
+		global.URL.createObjectURL = jest.fn( () => 'blob:mock' );
+		global.URL.revokeObjectURL = jest.fn();
+
+		fireEvent.click( screen.getByRole( 'button', { name: 'Export' } ) );
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith(
+				'expired_transients_export?limit=500',
+				{},
+				'GET'
+			);
+			expect(
+				screen.getByText( 'Exported 2 expired transients.' )
+			).toBeInTheDocument();
+		} );
+	} );
 } );

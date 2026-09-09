@@ -111,6 +111,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			'wppo_img_scan_cursor',
 			'wppo_img_scan_cursor_max',
 			'wppo_litespeed_purge_queue',
+			'wppo_autoload_remediated',
 		);
 
 		/**
@@ -141,8 +142,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Single source of truth for Main::__construct() defaults,
 		 * Activate::maybe_seed_settings(), and
 		 * WPPO_CLI_Command::get_default_settings() to fix 7-tab drift
-		 * (CLI:451 vs Main:240). Covers all allowed tabs; database_cleanup
-		 * and object_cache are empty (no defaults) for BC.
+		 * (CLI:451 vs Main:240). Covers all allowed tabs; object_cache stays
+		 * empty (no defaults) for BC, database_cleanup carries only the
+		 * additive autoloadThreshold default (issue #934).
 		 *
 		 * @since NEXT
 		 * @return array<string, array<string, mixed>> Default settings keyed by tab.
@@ -233,7 +235,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'auto_rescan'           => '',
 					'rum_enabled'           => false,
 				),
-				'database_cleanup'      => array(),
+				'database_cleanup'      => array(
+					'autoloadThreshold' => 1024,
+				),
 				'object_cache'          => array(),
 				'litespeed_integration' => array(
 					'mode'                 => 'auto',

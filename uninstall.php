@@ -63,6 +63,8 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 			// only removed on deactivation, never on uninstall (audit #899).
 			'wppo_img_scan_cursor',
 			'wppo_img_scan_cursor_max',
+			// Autoload remediation priors (Database_Cleanup::REMEDIATED_OPTION, issue #934).
+			'wppo_autoload_remediated',
 			// LiteSpeed purge-queue fallback option. The real name is
 			// blog-prefixed on multisite via Util::transient_key()
 			// (LiteSpeed_Integration::get_db_queue_key()), so compose it here

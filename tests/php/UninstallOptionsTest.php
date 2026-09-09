@@ -60,6 +60,8 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 		'wppo_img_scan_cursor',
 		'wppo_img_scan_cursor_max',
 		'wppo_litespeed_purge_queue',
+		// Issue #934 autoload remediation priors.
+		'wppo_autoload_remediated',
 	);
 
 	/**

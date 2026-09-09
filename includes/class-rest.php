@@ -75,49 +75,49 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$schemas = array( $this, 'get_schema_for_route' );
 
 			return array(
-				'clear_cache'             => array(
+				'clear_cache'               => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'clear_cache' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
-				'update_settings'         => array(
+				'update_settings'           => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'update_settings' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
-				'optimise_image'          => array(
+				'optimise_image'            => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'optimise_image' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
-				'delete_optimised_image'  => array(
+				'delete_optimised_image'    => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'delete_optimised_image' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
-				'recent_activities'       => array(
+				'recent_activities'         => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_recent_activities' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
-				'import_settings'         => array(
+				'import_settings'           => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'import_settings' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
-				'database_cleanup'        => array(
+				'database_cleanup'          => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'database_cleanup' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
-				'database_cleanup_counts' => array(
+				'database_cleanup_counts'   => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_database_cleanup_counts' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
@@ -126,19 +126,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				// @deprecated NEXT get_page_assets is deprecated; kept one release for
 				// external consumers. Migrate to the Abilities API
 				// performance-optimisation/get-page-assets.
-				'get_page_assets'         => array(
+				'get_page_assets'           => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_page_assets' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
-				'image_job_status'        => array(
+				'image_job_status'          => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_image_job_status' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
-				'object_cache'            => array(
+				'object_cache'              => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'handle_object_cache' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
@@ -146,13 +146,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				),
 
 				// Phase 1 — Local Diagnostics (v1.5.0).
-				'system_info'             => array(
+				'system_info'               => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_system_info' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
-				'performance_scan'        => array(
+				'performance_scan'          => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'run_performance_scan' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
@@ -160,55 +160,55 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				),
 
 				// Phase 2 — PageSpeed Integration & Actionable Suggestions (v1.6.0).
-				'pagespeed_scan'          => array(
+				'pagespeed_scan'            => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'queue_pagespeed_scan' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
-				'pagespeed_results'       => array(
+				'pagespeed_results'         => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_pagespeed_results' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
-				'web_vitals_trends'       => array(
+				'web_vitals_trends'         => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_web_vitals_trends' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
-				'suggestions'             => array(
+				'suggestions'               => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_suggestions' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
-				'server_rules'            => array(
+				'server_rules'              => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_server_rules' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
-				'used_css_regenerate'     => array(
+				'used_css_regenerate'       => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'used_css_regenerate' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
-				'regenerate_ccss'         => array(
+				'regenerate_ccss'           => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'regenerate_ccss' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
-				'ccss_status'             => array(
+				'ccss_status'               => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_ccss_status' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
-				'dismiss_welcome'         => array(
+				'dismiss_welcome'           => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'dismiss_welcome' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
@@ -224,37 +224,49 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				// - Bounded storage: 14 days × 200 paths/day with oldest-path eviction; metrics clamped.
 				// __return_true is intentional and reviewed (A08 A-AUTH-01) — do not gate with manage_options.
 				// @since NEXT Added rate-limit documentation.
-				'rum_collect'             => array(
+				'rum_collect'               => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'collect_rum' ),
 					'permission_callback' => '__return_true',
 					'schema'              => $schemas,
 				),
-				'rum_data'                => array(
+				'rum_data'                  => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_rum_data' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
-				'autoloaded_options'      => array(
+				'autoloaded_options'        => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_autoloaded_options' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
-				'ai_model'                => array(
+				'autoload_remediate'        => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'handle_autoload_remediate' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
+				'expired_transients_export' => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'export_expired_transients' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
+				'ai_model'                  => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_ai_model' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
-				'ai_learn'                => array(
+				'ai_learn'                  => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'ai_learn' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
-				'ai_suggestions'          => array(
+				'ai_suggestions'            => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_ai_suggestions' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
@@ -275,6 +287,87 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$result = Database_Cleanup::get_autoloaded_options( $limit );
 
 			return $this->send_response( array( 'options' => $result ) );
+		}
+
+		/**
+		 * Handle one-click autoload-bloat remediation (dry run, apply, revert).
+		 *
+		 * POST param `mode` controls the operation:
+		 * - `dry_run` (default): report candidates + bytes saved, changes nothing.
+		 * - `apply`: flip non-core options above the threshold to autoload off.
+		 * - `revert`: restore one option (`option` param) to its prior value.
+		 * - `revert_all`: restore every remediated option.
+		 *
+		 * Optional params: `threshold` (bytes, 100..10MB), `limit` (1..500).
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		public function handle_autoload_remediate( \WP_REST_Request $request ): \WP_REST_Response {
+			$params = $request->get_params();
+			$mode   = isset( $params['mode'] ) ? sanitize_text_field( $params['mode'] ) : 'dry_run';
+
+			if ( ! in_array( $mode, array( 'dry_run', 'apply', 'revert', 'revert_all' ), true ) ) {
+				return $this->send_response( null, false, 400, __( 'Invalid remediation mode.', 'performance-optimisation' ) );
+			}
+
+			if ( 'revert' === $mode ) {
+				$option = isset( $params['option'] ) ? sanitize_text_field( $params['option'] ) : '';
+				if ( '' === $option ) {
+					return $this->send_response( null, false, 400, __( 'Option name is required for revert.', 'performance-optimisation' ) );
+				}
+				$result = Database_Cleanup::revert_autoload_option( $option );
+				if ( is_wp_error( $result ) ) {
+					return $this->send_response( null, false, 400, $result->get_error_message() );
+				}
+				return $this->send_response( array( 'reverted' => $option ) );
+			}
+
+			if ( 'revert_all' === $mode ) {
+				$result = Database_Cleanup::revert_autoload_all();
+				return $this->send_response( $result );
+			}
+
+			$threshold = isset( $params['threshold'] ) ? absint( $params['threshold'] ) : null;
+			if ( null !== $threshold ) {
+				$threshold = max( 100, min( 10485760, $threshold ) );
+			}
+			$limit = isset( $params['limit'] ) ? absint( $params['limit'] ) : 100;
+			$limit = max( 1, min( 500, $limit ) );
+
+			if ( 'apply' === $mode ) {
+				$result               = Database_Cleanup::remediate_autoload( $threshold, $limit );
+				$result['remediated'] = Database_Cleanup::get_remediated_options();
+				return $this->send_response( $result );
+			}
+
+			$report               = Database_Cleanup::plan_autoload_remediation( $threshold, $limit );
+			$report['remediated'] = Database_Cleanup::get_remediated_options();
+			return $this->send_response( $report );
+		}
+
+		/**
+		 * Export expired transients for pre-run review (read-only, expired rows only).
+		 *
+		 * Optional GET param `limit` (1..2000, default 500).
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		public function export_expired_transients( \WP_REST_Request $request ): \WP_REST_Response {
+			$params = $request->get_params();
+			$limit  = isset( $params['limit'] ) ? absint( $params['limit'] ) : 500;
+			$limit  = max( 1, min( 2000, $limit ) );
+			$rows   = Database_Cleanup::export_expired_transients( $limit );
+
+			return $this->send_response(
+				array(
+					'count'      => count( $rows ),
+					'transients' => $rows,
+				)
+			);
 		}
 
 		/**
