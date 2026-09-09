@@ -103,17 +103,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			'.customize-',
 			// Builder / JS-state selectors (issue #966): builders inject
 			// dynamic classes at runtime that the static DOM walk never sees.
-			// Prefix entries ending in '-' match via startsWith in
-			// is_selector_used().
+			// Prefix entries ending in '-' or '*' match via prefix in
+			// is_selector_used(); attribute entries (e.g. [data-elementor-type])
+			// match by attribute-name substring so compound selectors stay kept.
 			'.elementor-',
 			'.e-con',
-			'.et_',
-			'.et_pb_',
+			'.e-con*',
+			'.et_*',
+			'.et_pb_*',
 			'.et-pb-',
 			'.bricks-',
 			'.brx-',
-			'.vc_',
-			'.wpb_',
+			'.vc_*',
+			'.wpb_*',
 			'.oxygen-',
 			'.oxy-',
 			'.no-js',
@@ -565,7 +567,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			}
 
 			foreach ( $this->safelist as $safe ) {
+				if ( '' !== $safe && '[' === $safe[0] ) {
+					// Attribute safelist (e.g. [data-elementor-type]): match by
+					// attribute-name substring so compound selectors like
+					// div[data-elementor-type] or [data-elementor-type="x"] stay
+					// kept. Bare [data-*]/[aria-*] selectors are additionally
+					// conserved by matches_simple_selector().
+					$attr_name = preg_replace( '/[\[\]=~|^$*"\'].*$/', '', $safe );
+					$attr_name = trim( (string) $attr_name, " \t\n\r\0\x0B[]" );
+					if ( '' !== $attr_name && false !== stripos( $selector, $attr_name ) ) {
+						return true;
+					}
+					continue;
+				}
 				if ( '-' === substr( $safe, -1 ) && 0 === strpos( $selector, $safe ) ) {
+					return true;
+				}
+				if ( '_' === substr( $safe, -1 ) && 0 === strpos( $selector, $safe ) ) {
 					return true;
 				}
 				if ( '*' === substr( $safe, -1 ) && 0 === strpos( $selector, substr( $safe, 0, -1 ) ) ) {
@@ -1482,8 +1500,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			$file_opts = $this->options['file_optimisation'] ?? array();
 			$threshold = isset( $file_opts['unusedCSSRegressionThreshold'] ) ? (int) $file_opts['unusedCSSRegressionThreshold'] : 20;
 			if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_unused_css_regression_threshold' ) ) {
-				$threshold = (int) apply_filters( 'wppo_unused_css_regression_threshold', $threshold );
-			} elseif ( function_exists( 'apply_filters' ) && ! function_exists( 'has_filter' ) ) {
 				$threshold = (int) apply_filters( 'wppo_unused_css_regression_threshold', $threshold );
 			}
 			if ( $threshold < 5 || $threshold > 50 ) {

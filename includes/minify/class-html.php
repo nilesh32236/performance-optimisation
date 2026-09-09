@@ -495,7 +495,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				// attribute) stay un-delayed; only external scripts delay.
 				// Fail-open: leave the tag untouched.
 				if ( ! empty( $this->options['file_optimisation']['delayJSExternalOnly'] ) ) {
-					if ( ! preg_match( '/\bsrc\s*=/i', (string) $attributes ) ) {
+					if ( ! preg_match( '/\ssrc\s*=/i', ' ' . (string) $attributes ) ) {
 						return '<script' . $attributes . '>' . $content . '</script>';
 					}
 				}

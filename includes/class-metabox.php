@@ -407,14 +407,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 
 			// Per-page Delay JS kill-switch + notes (issue #966). Checkbox-only
 			// (no JS); notes capped at 2000 chars, informational only.
-			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_asset_manager_nonce.
-			$delay_disabled = isset( $_POST['wppo_delay_disabled'] ) && ! empty( $_POST['wppo_delay_disabled'] );
-			update_post_meta( $post_id, '_wppo_delay_disabled', $delay_disabled ? '1' : '' );
-
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_asset_manager_nonce.
+			$delay_disabled = isset( $_POST['wppo_delay_disabled'] ) && ! empty( $_POST['wppo_delay_disabled'] );
+			if ( $delay_disabled ) {
+				update_post_meta( $post_id, '_wppo_delay_disabled', '1' );
+			} else {
+				delete_post_meta( $post_id, '_wppo_delay_disabled' );
+			}
+
+	// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_asset_manager_nonce.
 			$raw_notes = $this->get_raw_post_string( 'wppo_delay_notes' );
 			$notes     = is_string( $raw_notes ) ? sanitize_textarea_field( $raw_notes ) : '';
-			if ( strlen( $notes ) > 2000 ) {
+			if ( function_exists( 'mb_strlen' ) && function_exists( 'mb_substr' ) ) {
+				if ( mb_strlen( $notes, 'UTF-8' ) > 2000 ) {
+					$notes = mb_substr( $notes, 0, 2000, 'UTF-8' );
+				}
+			} elseif ( strlen( $notes ) > 2000 ) {
 				$notes = substr( $notes, 0, 2000 );
 			}
 			update_post_meta( $post_id, '_wppo_delay_notes', $notes );

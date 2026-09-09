@@ -2397,17 +2397,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					return $tag;
 				}
 				// Per-page kill-switch (#966): `_wppo_delay_disabled` meta.
+				// The instance flag is set at the `wp` hook by
+				// apply_per_page_delay_config(); the static call below is
+				// request-cached so per-tag lookups stay a single meta read.
 				if ( $this->delay_disabled_for_page || self::is_delay_disabled_for_page() ) {
 					return $tag;
 				}
 				// External-scripts-only mode (#966): leave inline scripts
 				// (no src attribute) untouched; only external handles delay.
+				// Anchored on whitespace so data-src=/wppo-src= don't match.
 				if ( ! empty( $this->options['file_optimisation']['delayJSExternalOnly'] ) ) {
-					if ( ! preg_match( '/\bsrc\s*=/i', (string) $tag ) ) {
+					if ( ! preg_match( '/\ssrc\s*=/i', ' ' . (string) $tag ) ) {
 						return $tag;
 					}
 				}
-				if ( ! in_array( $handle, $this->exclude_delay_js, true ) ) {
+				if ( ! $this->is_delay_excluded_handle( $handle ) ) {
 					$tag = str_replace( '<script ', '<script fetchpriority="low" ', $tag );
 					$tag = str_replace( ' src', ' wppo-src', $tag );
 					$tag = preg_replace(
@@ -2416,8 +2420,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						$tag
 					) ?? $tag;
 
-					// Determine delay strategy for this handle.
-					$strategy = $this->get_delay_strategy_for_handle( $handle );
+						// Determine delay strategy for this handle.
+						$strategy = $this->get_delay_strategy_for_handle( $handle );
 					if ( 'interaction' !== $strategy ) {
 						$tag = str_replace(
 							'<script ',
@@ -2426,8 +2430,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						);
 					}
 
-					// Determine priority for this handle.
-					$priority = $this->get_delay_priority_for_handle( $handle );
+						// Determine priority for this handle.
+						$priority = $this->get_delay_priority_for_handle( $handle );
 					if ( 'normal' !== $priority ) {
 						$tag = str_replace(
 							'<script ',
@@ -2499,6 +2503,49 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return false;
 			}
 			return (bool) preg_match( '/\b' . preg_quote( $pattern, '/' ) . '\b/', $handle );
+		}
+
+		/**
+		 * Whether a script handle is excluded from Delay JS.
+		 *
+		 * Checks exact membership first, then falls back to
+		 * matches_delay_pattern() word-boundary matching so builder-handle
+		 * variants (e.g. `oxygen-*` via `oxygen`, `et-*` via `et-core-api`)
+		 * stay excluded on the external-script path exactly as the inline
+		 * path in Minify\HTML excludes them by substring.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $handle The script's registered handle.
+		 * @return bool True when the handle must stay un-delayed.
+		 */
+		private function is_delay_excluded_handle( string $handle ): bool {
+			if ( in_array( $handle, $this->exclude_delay_js, true ) ) {
+				return true;
+			}
+			foreach ( $this->exclude_delay_js as $pattern ) {
+				$pattern = (string) $pattern;
+				if ( '' === $pattern ) {
+					continue;
+				}
+				// Pure-prefix entries (trailing '-' or '_', mirroring the
+				// used-CSS safelist): e.g. 'et_' excludes 'et_core_api_shortcodes'.
+				$last = substr( $pattern, -1 );
+				if ( ( '_' === $last || '-' === $last ) && 0 === strpos( $handle, $pattern ) ) {
+					return true;
+				}
+				// Dash/underscore-delimited variants: 'oxygen' excludes
+				// 'oxygen-foo', 'vc_tta' excludes 'vc_tta-custom'. Word
+				// boundaries alone cannot express this because '_' is a word
+				// character, so the separator check comes first.
+				if ( 0 === strpos( $handle, $pattern . '-' ) || 0 === strpos( $handle, $pattern . '_' ) ) {
+					return true;
+				}
+				if ( $this->matches_delay_pattern( $handle, $pattern ) ) {
+					return true;
+				}
+			}
+			return false;
 		}
 
 		/**
@@ -2785,6 +2832,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// Divi.
 				'divi-custom-script',
 				'et-core-api',
+				'et_',
 				'et_pb_custom',
 				'divi-builder',
 				// Bricks.
@@ -2797,6 +2845,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'js_composer_front',
 				// Oxygen.
 				'oxygen',
+				'oxy-',
 				'oxy-front-end',
 				// Gutenberg / block interactivity.
 				'wp-block-library',
@@ -2819,6 +2868,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return bool True when delay must be skipped for this page.
 		 */
 		public static function is_delay_disabled_for_page( int $post_id = 0 ): bool {
+			static $cache = array();
 			try {
 				if ( function_exists( 'is_singular' ) && ! is_singular() && 0 === $post_id ) {
 					return false;
@@ -2832,10 +2882,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( $post_id <= 0 ) {
 					return false;
 				}
+				if ( isset( $cache[ $post_id ] ) ) {
+					return $cache[ $post_id ];
+				}
 				if ( ! function_exists( 'get_post_meta' ) ) {
 					return false;
 				}
-				return ! empty( get_post_meta( $post_id, '_wppo_delay_disabled', true ) );
+				$disabled          = ! empty( get_post_meta( $post_id, '_wppo_delay_disabled', true ) );
+				$cache[ $post_id ] = $disabled;
+				return $disabled;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;
