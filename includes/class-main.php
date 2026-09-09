@@ -2542,7 +2542,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		public function is_delay_js_safe_context(): bool {
 			try {
-				if ( ! empty( $this->options['file_optimisation']['delayJSSafeMode'] ) || ! isset( $this->options['file_optimisation']['delayJSSafeMode'] ) ) {
+				// Explicit opt-out (delayJSSafeMode=false) skips all checks and
+				// returns false (delay allowed) — safe mode off means no
+				// protection is applied. An unset key preserves the legacy
+				// behavior of running the checks.
+				$safe_mode = $this->options['file_optimisation']['delayJSSafeMode'] ?? null;
+				if ( false !== $safe_mode ) {
 					if ( function_exists( 'is_cart' ) && is_cart() ) {
 						return true;
 					}

@@ -313,11 +313,12 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Test that Delay-JS safe context fails open (no delay skipped) without WP conditional functions.
+	 * Test that is_delay_js_safe_context() returns false (delay allowed)
+	 * when no safe signals are present.
 	 *
 	 * @since NEXT
 	 */
-	public function test_delay_js_safe_context_fails_open_without_wp(): void {
+	public function test_delay_js_safe_context_returns_false_when_no_safe_signals(): void {
 		$this->stub_main_construction(
 			array(
 				'delayJS' => true,
@@ -350,6 +351,13 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 			)
 		);
 
+		// Pin the other safe-context conditionals false: Brain Monkey stubs
+		// are process-persistent, so a stale true here would pass the test
+		// for the wrong reason.
+		Functions\when( 'is_cart' )->justReturn( false );
+		Functions\when( 'is_account_page' )->justReturn( false );
+		Functions\when( 'is_wc_endpoint_url' )->justReturn( false );
+		Functions\when( 'get_the_ID' )->justReturn( 0 );
 		Functions\when( 'is_checkout' )->justReturn( true );
 
 		$main = new Main();
@@ -359,6 +367,60 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		$result = $main->add_defer_attribute( $tag, 'app' );
 
 		$this->assertSame( $tag, $result );
+	}
+
+	/**
+	 * Test that delayJSSafeMode=false disables the safe-context check entirely,
+	 * so a checkout page does NOT skip Delay-JS.
+	 *
+	 * @since NEXT
+	 */
+	public function test_delay_js_safe_context_disabled_when_safe_mode_false(): void {
+		$this->stub_main_construction(
+			array(
+				'delayJS'         => true,
+				'delayJSSafeMode' => false,
+			)
+		);
+
+		Functions\when( 'is_checkout' )->justReturn( true );
+
+		$main = new Main();
+
+		$this->assertFalse( $main->is_delay_js_safe_context() );
+	}
+
+	/**
+	 * Test that a form shortcode in the current post content skips Delay-JS.
+	 *
+	 * @since NEXT
+	 */
+	public function test_delay_js_safe_context_skips_on_form_shortcode(): void {
+		$this->stub_main_construction(
+			array(
+				'delayJS' => true,
+			)
+		);
+
+		Functions\when( 'is_cart' )->justReturn( false );
+		Functions\when( 'is_checkout' )->justReturn( false );
+		Functions\when( 'is_account_page' )->justReturn( false );
+		Functions\when( 'is_wc_endpoint_url' )->justReturn( false );
+		Functions\when( 'get_the_ID' )->justReturn( 42 );
+		Functions\when( 'has_shortcode' )->alias(
+			static function ( $content, $shortcode ) {
+				return 'contact-form-7' === $shortcode && false !== strpos( $content, '[contact-form-7]' );
+			}
+		);
+		Functions\when( 'get_post_field' )->alias(
+			static function ( $field ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+				return 'post_content' === $field ? '[contact-form-7]' : '';
+			}
+		);
+
+		$main = new Main();
+
+		$this->assertTrue( $main->is_delay_js_safe_context() );
 	}
 
 	/**
