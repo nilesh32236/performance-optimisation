@@ -766,6 +766,25 @@ Filters AI-injected speculation rules. @since NEXT.
 
 ---
 
+### `wppo_speculation_list_urls`
+Filters the high-value speculation list URLs (home + `performance_audit.high_value_urls`, same-site validated, capped at 10). @since NEXT.
+
+Emitted as a `{"source":"list"}` rule via the `wp_speculation_rules` filter (WP 6.8+) when `preload_settings.enableSpeculationRules` is on. Return an empty array to suppress the list rule.
+
+**Parameters:**
+- `$urls` *(string[])* — Validated list URLs.
+
+---
+
+### `wppo_speculation_list_rules`
+Filters the speculation rules after the high-value list rule is appended. @since NEXT.
+
+**Parameters:**
+- `$rules` *(array)* — Speculation rules array.
+- `$urls` *(string[])* — List URLs that were appended.
+
+---
+
 ### `wppo_edge_cache_enabled`
 Filters whether Edge HTML Cache (N2) is enabled. @since NEXT.
 

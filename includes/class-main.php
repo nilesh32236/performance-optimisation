@@ -2741,6 +2741,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					return $this->filter_speculation_rules_configuration( $config, $preload_settings, $enable_speculation );
 				}
 			);
+
+			add_filter( 'wp_speculation_rules', array( $this, 'filter_speculation_list_rules' ), 10 );
 		}
 
 		/**
@@ -2833,6 +2835,238 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			return $config;
+		}
+
+		/**
+		 * Collect high-value same-site URLs for the speculation list rule.
+		 *
+		 * Source: home URL first, then `performance_audit.high_value_urls`.
+		 * Each candidate is normalized via `esc_url_raw(trim())`, deduped,
+		 * same-site validated, and capped (keeps the ~1KB footprint).
+		 * Invalid URLs are skipped individually (fail-open); an empty array
+		 * means "emit nothing".
+		 *
+		 * @since NEXT
+		 *
+		 * @return string[] Validated absolute URLs (possibly empty).
+		 */
+		public function get_speculation_list_urls(): array {
+			if ( function_exists( 'is_admin' ) ) {
+				try {
+					if ( is_admin() ) {
+						return array();
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			if ( function_exists( 'get_option' ) ) {
+				try {
+					$structure = get_option( 'permalink_structure' );
+					if ( '' === $structure || false === $structure ) {
+						return array();
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			$candidates = array( Util::cached_home_url( '/' ) );
+
+			$settings   = Util::get_settings();
+			$high_value = $settings['performance_audit']['high_value_urls'] ?? array();
+			if ( is_string( $high_value ) ) {
+				$high_value = preg_split( '/[\r\n,]+/', $high_value );
+			}
+			if ( is_array( $high_value ) ) {
+				foreach ( $high_value as $high_url ) {
+					if ( is_string( $high_url ) && '' !== trim( $high_url ) ) {
+						$candidates[] = $high_url;
+					}
+				}
+			}
+
+			$urls = array();
+			foreach ( $candidates as $candidate ) {
+				if ( ! is_string( $candidate ) ) {
+					continue;
+				}
+				$clean = function_exists( 'esc_url_raw' ) ? esc_url_raw( trim( $candidate ) ) : trim( $candidate );
+				if ( '' === $clean ) {
+					continue;
+				}
+				if ( in_array( $clean, $urls, true ) ) {
+					continue;
+				}
+				if ( ! $this->is_speculation_list_url_valid( $clean ) ) {
+					continue;
+				}
+				$urls[] = $clean;
+				if ( count( $urls ) >= 10 ) {
+					break;
+				}
+			}
+
+			return $urls;
+		}
+
+		/**
+		 * Validate a single speculation list URL.
+		 *
+		 * Same-site (host must match home host, preventing multisite
+		 * cross-site leakage), http(s) only, and rejects admin, login,
+		 * REST, and commerce (cart/checkout/account) paths.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $url Candidate absolute URL.
+		 * @return bool True when the URL may be prefetched.
+		 */
+		private function is_speculation_list_url_valid( string $url ): bool {
+			$parts = wp_parse_url( $url );
+			if ( ! is_array( $parts ) || empty( $parts['host'] ) ) {
+				return false;
+			}
+
+			$scheme = strtolower( (string) ( $parts['scheme'] ?? '' ) );
+			if ( '' !== $scheme && ! in_array( $scheme, array( 'http', 'https' ), true ) ) {
+				return false;
+			}
+
+			$home      = Util::cached_home_url();
+			$home_host = wp_parse_url( $home, PHP_URL_HOST );
+			if ( ! is_string( $home_host ) || '' === $home_host ) {
+				return false;
+			}
+			if ( strtolower( $parts['host'] ) !== strtolower( $home_host ) ) {
+				return false;
+			}
+
+			$path  = strtolower( (string) ( $parts['path'] ?? '/' ) );
+			$lower = strtolower( $url );
+
+			if ( false !== strpos( $path, '/wp-admin' ) || false !== strpos( $lower, 'wp-login.php' ) || false !== strpos( $path, '/wp-json' ) ) {
+				return false;
+			}
+
+			$commerce_paths = array( '/cart', '/checkout', '/my-account', '/account' );
+			if ( function_exists( 'wc_get_checkout_url' ) ) {
+				try {
+					$checkout_url = wc_get_checkout_url();
+					if ( $checkout_url ) {
+						$p = wp_parse_url( $checkout_url, PHP_URL_PATH );
+						if ( is_string( $p ) && '' !== $p && '/' !== $p ) {
+							$commerce_paths[] = rtrim( $p, '/' );
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			if ( function_exists( 'wc_get_cart_url' ) ) {
+				try {
+					$cart_url = wc_get_cart_url();
+					if ( $cart_url ) {
+						$p = wp_parse_url( $cart_url, PHP_URL_PATH );
+						if ( is_string( $p ) && '' !== $p && '/' !== $p ) {
+							$commerce_paths[] = rtrim( $p, '/' );
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			if ( function_exists( 'wc_get_page_permalink' ) ) {
+				try {
+					$myaccount_url = wc_get_page_permalink( 'myaccount' );
+					if ( $myaccount_url ) {
+						$p = wp_parse_url( $myaccount_url, PHP_URL_PATH );
+						if ( is_string( $p ) && '' !== $p && '/' !== $p ) {
+							$commerce_paths[] = rtrim( $p, '/' );
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			$path_trimmed = rtrim( $path, '/' );
+			foreach ( $commerce_paths as $commerce_path ) {
+				$prefix = strtolower( rtrim( (string) $commerce_path, '/' ) );
+				if ( '' === $prefix ) {
+					continue;
+				}
+				if ( $path_trimmed === $prefix || 0 === strpos( $path_trimmed . '/', $prefix . '/' ) ) {
+					return false;
+				}
+			}
+
+			return true;
+		}
+
+		/**
+		 * Append the high-value list rule to the `wp_speculation_rules` array.
+		 *
+		 * Runs on WP 6.8+ only (registered inside the `wp_get_speculation_rules`
+		 * guard in {@see add_speculation_rules()}). Null/non-array config is
+		 * returned untouched; speculation is never auto-enabled.
+		 *
+		 * @since NEXT
+		 *
+		 * @param mixed $rules Speculation rules array from core.
+		 * @return mixed Updated rules, or the input unchanged.
+		 */
+		public function filter_speculation_list_rules( $rules ) {
+			if ( ! is_array( $rules ) ) {
+				return $rules;
+			}
+
+			if ( empty( $this->options['preload_settings']['enableSpeculationRules'] ) ) {
+				return $rules;
+			}
+
+			$urls = $this->get_speculation_list_urls();
+
+			/**
+			 * Filters the high-value speculation list URLs.
+			 *
+			 * @since NEXT
+			 * @param string[] $urls Validated list URLs.
+			 */
+			$urls = apply_filters( 'wppo_speculation_list_urls', $urls );
+			if ( ! is_array( $urls ) ) {
+				return $rules;
+			}
+			$urls = array_values( array_filter( $urls, 'is_string' ) );
+			if ( empty( $urls ) ) {
+				return $rules;
+			}
+
+			$preload_settings = $this->options['preload_settings'] ?? array();
+			$eagerness        = $preload_settings['speculationEagerness'] ?? 'conservative';
+			if ( class_exists( 'WP_Speculation_Rules' ) && method_exists( 'WP_Speculation_Rules', 'is_valid_eagerness' ) ) {
+				if ( ! \WP_Speculation_Rules::is_valid_eagerness( $eagerness ) ) {
+					$eagerness = 'conservative';
+				}
+			} elseif ( ! in_array( $eagerness, array( 'conservative', 'moderate', 'eager' ), true ) ) {
+				$eagerness = 'conservative';
+			}
+
+			$rules[] = array(
+				'source'    => 'list',
+				'urls'      => array_values( $urls ),
+				'eagerness' => $eagerness,
+			);
+
+			/**
+			 * Filters the speculation rules after the high-value list rule is appended.
+			 *
+			 * @since NEXT
+			 * @param array    $rules Updated rules.
+			 * @param string[] $urls  List URLs that were appended.
+			 */
+			return apply_filters( 'wppo_speculation_list_rules', $rules, $urls );
 		}
 
 		/**
