@@ -509,59 +509,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			}
 
 			// Most-frequently disabled handles = least-used (candidates to exclude).
-			$exclude_js  = array();
-			$exclude_css = array();
-			global $wpdb;
-			if ( isset( $wpdb ) && is_object( $wpdb ) && method_exists( $wpdb, 'get_col' ) ) {
-				$disabled = array();
-				try {
-					// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-					$rows = $wpdb->get_col( "SELECT meta_value FROM {$wpdb->postmeta} WHERE meta_key = '_wppo_disabled_scripts' LIMIT 500" );
-					if ( is_array( $rows ) ) {
-						foreach ( $rows as $row ) {
-							$val = maybe_unserialize( $row );
-							if ( is_array( $val ) ) {
-								foreach ( $val as $handle ) {
-									$handle = sanitize_text_field( (string) $handle );
-									if ( '' === $handle ) {
-										continue;
-									}
-									$disabled[ $handle ] = ( $disabled[ $handle ] ?? 0 ) + 1;
-								}
-							}
-						}
-					}
-				} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
-				}
-				if ( ! empty( $disabled ) ) {
-					arsort( $disabled );
-					$exclude_js = array_slice( array_keys( $disabled ), 0, 3 );
-				}
-				$disabled_css = array();
-				try {
-					// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-					$rows_css = $wpdb->get_col( "SELECT meta_value FROM {$wpdb->postmeta} WHERE meta_key = '_wppo_disabled_styles' LIMIT 500" );
-					if ( is_array( $rows_css ) ) {
-						foreach ( $rows_css as $row ) {
-							$val = maybe_unserialize( $row );
-							if ( is_array( $val ) ) {
-								foreach ( $val as $handle ) {
-									$handle = sanitize_text_field( (string) $handle );
-									if ( '' === $handle ) {
-										continue;
-									}
-									$disabled_css[ $handle ] = ( $disabled_css[ $handle ] ?? 0 ) + 1;
-								}
-							}
-						}
-					}
-				} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
-				}
-				if ( ! empty( $disabled_css ) ) {
-					arsort( $disabled_css );
-					$exclude_css = array_slice( array_keys( $disabled_css ), 0, 3 );
-				}
-			}
+			$exclude_js  = self::get_disabled_assets( '_wppo_disabled_scripts' );
+			$exclude_css = self::get_disabled_assets( '_wppo_disabled_styles' );
 
 			// Eagerness heuristic: conservative by default, moderate if avg LCP > 2500 or high TTFB.
 			$eagerness   = 'conservative';
@@ -608,6 +557,47 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				'exclude_css'   => array_values( array_filter( $exclude_css ) ),
 				'eagerness'     => $eagerness,
 			);
+		}
+
+		/**
+		 * Get most-frequently disabled assets from postmeta.
+		 *
+		 * @param string $meta_key The meta key to query.
+		 * @return string[]
+		 * @since NEXT
+		 */
+		private static function get_disabled_assets( string $meta_key ): array {
+			global $wpdb;
+			if ( ! isset( $wpdb ) || ! is_object( $wpdb ) || ! method_exists( $wpdb, 'get_col' ) ) {
+				return array();
+			}
+			$disabled = array();
+			try {
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+				$rows = $wpdb->get_col( $wpdb->prepare( "SELECT meta_value FROM {$wpdb->postmeta} WHERE meta_key = %s LIMIT 500", $meta_key ) );
+				if ( ! is_array( $rows ) ) {
+					return array();
+				}
+				foreach ( $rows as $row ) {
+					$val = maybe_unserialize( $row );
+					if ( ! is_array( $val ) ) {
+						continue;
+					}
+					foreach ( $val as $handle ) {
+						$handle = sanitize_text_field( (string) $handle );
+						if ( '' === $handle ) {
+							continue;
+						}
+						$disabled[ $handle ] = ( $disabled[ $handle ] ?? 0 ) + 1;
+					}
+				}
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+			}
+			if ( empty( $disabled ) ) {
+				return array();
+			}
+			arsort( $disabled );
+			return array_slice( array_keys( $disabled ), 0, 3 );
 		}
 
 		/**
