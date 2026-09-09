@@ -51,6 +51,7 @@ const FileOptimization = ( {
 		delayJS: false,
 		excludeDelayJS: '',
 		delayJSDefaultStrategy: options.delayJSDefaultStrategy || 'interaction',
+		delayJSINPPreset: options.delayJSINPPreset || false,
 		delayJSIdleList: options.delayJSIdleList || '',
 		delayJSViewportList: options.delayJSViewportList || '',
 		delayJSPriority: options.delayJSPriority || '',
@@ -119,6 +120,33 @@ const FileOptimization = ( {
 	useEffect( () => {
 		setSettings( ( prev ) => ( { ...prev, ...options } ) );
 	}, [ options ] );
+
+	// INP-first preset (#932): one-click idle + viewport delay with 60s
+	// heartbeat. Enabling fills delayJS/strategy/heartbeat client-side (only
+	// when still on their defaults); disabling leaves manual values intact so
+	// the interaction-only default + manual lists act as fallback.
+	const handleINPPresetToggle = ( e ) => {
+		const checked = e.target.checked;
+		setSettings( ( prev ) => {
+			const next = { ...prev, delayJSINPPreset: checked };
+			if ( checked ) {
+				next.delayJS = true;
+				if (
+					! prev.delayJSDefaultStrategy ||
+					'interaction' === prev.delayJSDefaultStrategy
+				) {
+					next.delayJSDefaultStrategy = 'idle';
+				}
+				if (
+					! prev.heartbeatControl ||
+					'default' === prev.heartbeatControl
+				) {
+					next.heartbeatControl = '60s';
+				}
+			}
+			return next;
+		} );
+	};
 
 	// LiteSpeed integration (Phase 1 — safe coexistence).
 	const litespeedInfo =
@@ -1091,6 +1119,24 @@ const FileOptimization = ( {
 									) }
 									{ settings.delayJS && (
 										<>
+											<SwitchField
+												label={ __(
+													'INP-first preset: idle + viewport with 60s heartbeat',
+													'performance-optimisation'
+												) }
+												description={ __(
+													'One-click preset for better responsiveness. Cart, checkout, and builder previews stay excluded automatically.',
+													'performance-optimisation'
+												) }
+												name="delayJSINPPreset"
+												checked={
+													settings.delayJSINPPreset
+												}
+												onChange={
+													handleINPPresetToggle
+												}
+												disabled={ optimizerDisabled }
+											/>
 											<div className="wppo-field">
 												<label
 													className="wppo-field-label"

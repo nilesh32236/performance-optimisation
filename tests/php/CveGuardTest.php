@@ -64,6 +64,13 @@ class CveGuardTest extends \PHPUnit\Framework\TestCase {
 			}
 		);
 
+		// Woo conditional tags: default to plain frontend so the delay
+		// guardrail (Main::is_delay_excluded_context()) is deterministic even
+		// when another suite defined these functions process-wide via Patchwork.
+		Functions\when( 'is_cart' )->justReturn( false );
+		Functions\when( 'is_checkout' )->justReturn( false );
+		Functions\when( 'is_account_page' )->justReturn( false );
+
 		Functions\when( 'apply_filters' )->alias(
 			static function ( $hook, $value, ...$unused_args ) use ( $cve_handles, $cve_alias ) {
 				$_ = $unused_args; // phpcs:ignore Squiz.PHP.DiscouragedFunctions -- silence unused variadic.

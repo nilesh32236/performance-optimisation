@@ -322,6 +322,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			$file_optimisation_opts = $this->options['file_optimisation'] ?? array();
+			// INP-first preset (#932): one-click 60s heartbeat via the existing
+			// disable_heartbeat path. In-memory only — an explicit user choice
+			// (disable_all/disable_ext) always wins, never overridden.
+			if ( ! empty( $this->options['file_optimisation']['delayJSINPPreset'] ) && ( $this->options['file_optimisation']['heartbeatControl'] ?? 'default' ) === 'default' ) {
+				$this->options['file_optimisation']['heartbeatControl'] = '60s';
+				$file_optimisation_opts['heartbeatControl']             = '60s';
+			}
 			new Core_Tweaks( $file_optimisation_opts );
 		}
 
@@ -789,8 +796,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 
 				$this->delay_js_idle_timeout = ! empty( $file_opt['delayJSIdleTimeout'] )
-					? absint( $file_opt['delayJSIdleTimeout'] )
-					: 3000;
+				? absint( $file_opt['delayJSIdleTimeout'] )
+				: 3000;
+
+				// INP-first preset (#932): one-click idle-first default so delayed
+				// scripts yield to input; an explicit non-interaction manual default
+				// wins, and the viewport list is still honored per-handle.
+				// In-memory effective value only — the stored option is untouched
+				// so disabling the preset falls back to interaction-only.
+				if ( ! empty( $file_opt['delayJSINPPreset'] ) ) {
+					$stored_default = isset( $file_opt['delayJSDefaultStrategy'] ) ? strtolower( trim( (string) $file_opt['delayJSDefaultStrategy'] ) ) : '';
+					if ( '' === $stored_default || 'interaction' === $stored_default ) {
+						$this->delay_js_default_strategy = 'idle';
+					}
+				}
 			}
 
 			add_action( 'wp_head', array( $this, 'add_preload_prefetch_preconnect' ), 1 );
@@ -1876,12 +1895,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					}
 
 					if ( $delay_js ) {
-						$idle_timeout     = ! empty( $this->options['file_optimisation']['delayJSIdleTimeout'] )
-							? absint( $this->options['file_optimisation']['delayJSIdleTimeout'] )
-							: 3000;
-						$default_strategy = ! empty( $this->options['file_optimisation']['delayJSDefaultStrategy'] )
-							? sanitize_text_field( $this->options['file_optimisation']['delayJSDefaultStrategy'] )
-							: 'interaction';
+						$idle_timeout = ! empty( $this->options['file_optimisation']['delayJSIdleTimeout'] )
+						? absint( $this->options['file_optimisation']['delayJSIdleTimeout'] )
+						: 3000;
+						// Prefer the in-memory effective strategy (INP preset may have
+						// flipped interaction → idle in setup_hooks) over the stored
+						// option so the frontend loader matches the rewritten tags.
+						$default_strategy = in_array( $this->delay_js_default_strategy, array( 'interaction', 'idle', 'viewport' ), true )
+						? $this->delay_js_default_strategy
+						: 'interaction';
 
 						$lazy_config['delayConfig'] = array(
 							'idleTimeout'     => $idle_timeout,
@@ -2252,6 +2274,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			if ( ! empty( $this->options['file_optimisation']['delayJS'] ) ) {
+				// Woo / builder-context guardrail (#932): fail open to un-delayed
+				// scripts, never fatal. See is_delay_excluded_context().
+				if ( $this->is_delay_excluded_context() ) {
+					return $tag;
+				}
 				if ( ! in_array( $handle, $this->exclude_delay_js, true ) ) {
 					$tag = str_replace( '<script ', '<script fetchpriority="low" ', $tag );
 					$tag = str_replace( ' src', ' wppo-src', $tag );
@@ -2344,6 +2371,78 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return false;
 			}
 			return (bool) preg_match( '/\b' . preg_quote( $pattern, '/' ) . '\b/', $handle );
+		}
+
+		/**
+		 * Whether the current request must skip delay-JS rewriting.
+		 *
+		 * Woo guardrail: cart, checkout, and account pages stay excluded from delay
+		 * by default (mirrors Cache::is_woo_excluded(): conditional tags, path
+		 * fallback, and cart cookies). Builder guardrail: preview/edit contexts
+		 * only — rendered frontend output from builders still gets the INP win.
+		 * Fail-open: any detection failure returns false (delay proceeds); a
+		 * positive match returns true so scripts stay un-delayed, never fatal.
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when delay must be skipped for this request.
+		 */
+		public function is_delay_excluded_context(): bool {
+			// Woo conditional tags (guarded for non-Woo installs / WP 6.2+ compat).
+			if ( function_exists( 'is_cart' ) && is_cart() ) {
+				return true;
+			}
+			if ( function_exists( 'is_checkout' ) && is_checkout() ) {
+				return true;
+			}
+			if ( function_exists( 'is_account_page' ) && is_account_page() ) {
+				return true;
+			}
+
+			// Path fallback for hardcoded cart/checkout/account slugs (also covers
+			// installs where Woo conditional functions are unavailable).
+			// wp_parse_url() exists since WP 4.4; the plugin requires WP 6.2+.
+			if ( isset( $_SERVER['REQUEST_URI'] ) ) {
+				$request_uri = wp_unslash( $_SERVER['REQUEST_URI'] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Unslashed here; read-only routing check, no output.
+				$parsed_path = wp_parse_url( (string) $request_uri, PHP_URL_PATH );
+				$local_path  = trim( rawurldecode( (string) $parsed_path ), '/' );
+				if ( '' !== $local_path && preg_match( '#^(cart|checkout|my-account)(/|$)#i', $local_path ) ) {
+					return true;
+				}
+			}
+
+			// Woo cart/session cookies (mini-cart fragments on other pages).
+			if ( ! empty( $_COOKIE['woocommerce_items_in_cart'] ) || ! empty( $_COOKIE['woocommerce_cart_hash'] ) ) { // phpcs:ignore WordPressVIPMinimum.Variables.RestrictedVariables.cache_constraints___COOKIE
+				return true;
+			}
+
+			// Builder preview/edit contexts only (never blanket-disable rendered frontend).
+			// Elementor.
+			if ( isset( $_GET['elementor-preview'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
+				return true;
+			}
+			if ( class_exists( 'Elementor\Plugin' ) ) {
+				try {
+					$elementor = \Elementor\Plugin::$instance ?? null;
+					if ( isset( $elementor->preview ) && method_exists( $elementor->preview, 'is_preview_mode' ) && $elementor->preview->is_preview_mode() ) {
+						return true;
+					}
+				} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: fall through to delay.
+					return false;
+				}
+			}
+			// Divi (et_fb / et_pb_preview), WPBakery (vc_action / vc_editable), Bricks (bricks=run).
+			if ( isset( $_GET['et_fb'] ) || isset( $_GET['et_pb_preview'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
+				return true;
+			}
+			if ( isset( $_GET['vc_action'] ) || isset( $_GET['vc_editable'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
+				return true;
+			}
+			if ( isset( $_GET['bricks'] ) && 'run' === sanitize_text_field( wp_unslash( (string) $_GET['bricks'] ) ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
+				return true;
+			}
+
+			return false;
 		}
 
 		/**
@@ -2482,6 +2581,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'linkedin',
 				'twitter',
 				'paypal',
+				// Woo-critical handles (#932): stay un-delayed by default even
+				// outside is_cart()/is_checkout() contexts (e.g. mini-cart
+				// fragments on other pages). Deduped via array_unique at merge.
+				'wc-cart-fragments',
+				'wc-checkout',
+				'woocommerce',
+				'wc-add-to-cart',
+				'wc-single-product',
 			);
 			/**
 			 * Filters delay JS preset exclusions.

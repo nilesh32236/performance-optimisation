@@ -866,6 +866,54 @@ describe( 'FileOptimization Component', () => {
 		).toBeInTheDocument();
 	} );
 
+	it( 'toggles INP-first preset, fills strategy + heartbeat, and persists via update_settings', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			message: 'Settings updated successfully.',
+		} );
+
+		render(
+			<FileOptimization
+				options={ { delayJS: true } }
+				serverRules={ {} }
+			/>
+		);
+
+		const scriptsTab = screen.getByRole( 'tab', { name: /Scripts/i } );
+		fireEvent.click( scriptsTab );
+
+		const presetToggle = screen.getByLabelText( /INP-first preset/i );
+		expect( presetToggle ).not.toBeChecked();
+
+		fireEvent.click( presetToggle );
+		expect( presetToggle ).toBeChecked();
+		// One-click fill: idle strategy + 60s heartbeat from defaults.
+		expect( screen.getByLabelText( 'Default Load Strategy' ) ).toHaveValue(
+			'idle'
+		);
+
+		const submitButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+		await act( async () => {
+			fireEvent.click( submitButton );
+		} );
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				expect.objectContaining( {
+					tab: 'file_optimisation',
+					settings: expect.objectContaining( {
+						delayJSINPPreset: true,
+						delayJSDefaultStrategy: 'idle',
+						heartbeatControl: '60s',
+					} ),
+				} )
+			);
+		} );
+	} );
+
 	it( 'toggles Remove HTML Comments switch', () => {
 		render(
 			<FileOptimization

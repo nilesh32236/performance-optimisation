@@ -65,6 +65,13 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'trailingslashit' )->returnArg();
 		Functions\when( 'wp_is_block_theme' )->justReturn( false );
 		Functions\when( 'get_bloginfo' )->justReturn( '6.8' );
+		// Woo conditional tags: default to plain frontend so the delay
+		// guardrail (is_delay_excluded_context()) is deterministic even when
+		// another suite defined these functions process-wide via Patchwork.
+		// Tests covering the guard override is_cart() after this helper.
+		Functions\when( 'is_cart' )->justReturn( false );
+		Functions\when( 'is_checkout' )->justReturn( false );
+		Functions\when( 'is_account_page' )->justReturn( false );
 
 		// Only the target function_exists probes are faked; everything else is
 		// delegated to the real function_exists so the rest of the Main
@@ -289,6 +296,106 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		$result = $main->add_defer_attribute( $tag, 'my-deferred-script' );
 
 		$this->assertSame( $tag, $result );
+	}
+
+	/**
+	 * Test that the INP-first preset flips the effective default strategy to
+	 * idle while manual idle/viewport lists still take precedence.
+	 */
+	public function test_inp_preset_sets_idle_default_strategy(): void {
+		$this->stub_main_construction(
+			array(
+				'delayJS'          => true,
+				'delayJSINPPreset' => true,
+			)
+		);
+
+		$main = new Main();
+
+		$this->assertSame( 'idle', $this->invoke_private_method( $main, 'get_delay_strategy_for_handle', 'totally-unrelated-handle' ) );
+		$this->assertSame( 3000, $this->read_private_prop( $main, 'delay_js_idle_timeout' ) );
+	}
+
+	/**
+	 * Test that without the preset the default strategy stays interaction-only.
+	 */
+	public function test_inp_preset_off_falls_back_to_interaction(): void {
+		$this->stub_main_construction(
+			array(
+				'delayJS' => true,
+			)
+		);
+
+		$main = new Main();
+
+		$this->assertSame( 'interaction', $this->invoke_private_method( $main, 'get_delay_strategy_for_handle', 'totally-unrelated-handle' ) );
+	}
+
+	/**
+	 * Test that the curated preset exclusions keep Woo-critical handles
+	 * un-delayed by default (existing exclude path, issue #932).
+	 */
+	public function test_inp_preset_exclusions_cover_woo_handles(): void {
+		$this->stub_main_construction(
+			array(
+				'delayJS'          => true,
+				'delayJSINPPreset' => true,
+			)
+		);
+
+		$main           = new Main();
+		$delay_excludes = $this->read_private_prop( $main, 'exclude_delay_js' );
+
+		$this->assertContains( 'wc-cart-fragments', $delay_excludes );
+		$this->assertContains( 'wc-checkout', $delay_excludes );
+		$this->assertContains( 'woocommerce', $delay_excludes );
+	}
+
+	/**
+	 * Test that the Woo guardrail skips delay rewriting on cart pages and
+	 * fails open (un-delayed tag, never fatal).
+	 */
+	public function test_delay_excluded_context_on_cart_returns_tag_unmodified(): void {
+		$this->stub_main_construction(
+			array(
+				'delayJS' => true,
+			)
+		);
+		Functions\when( 'is_cart' )->justReturn( true );
+		Functions\when( 'function_exists' )->alias(
+			static function ( $function_name ) {
+				if ( in_array( $function_name, array( 'is_cart', 'is_checkout', 'is_account_page' ), true ) ) {
+					return true;
+				}
+				if ( 'WP_Filesystem' === $function_name || 'wp_is_block_theme' === $function_name ) {
+					return true;
+				}
+				return \function_exists( $function_name );
+			}
+		);
+
+		$main = new Main();
+
+		$this->assertTrue( $main->is_delay_excluded_context() );
+
+		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for add_defer_attribute() tests.
+		$tag = '<script src="https://example.com/app.js" type="text/javascript"></script>';
+		$this->assertSame( $tag, $main->add_defer_attribute( $tag, 'app' ) );
+	}
+
+	/**
+	 * Test that a normal frontend request is not an excluded delay context.
+	 */
+	public function test_delay_excluded_context_false_on_plain_frontend(): void {
+		$this->stub_main_construction(
+			array(
+				'delayJS' => true,
+			)
+		);
+
+		$main = new Main();
+
+		$this->assertFalse( $main->is_delay_excluded_context() );
 	}
 
 	/**

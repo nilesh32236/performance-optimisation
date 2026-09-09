@@ -168,6 +168,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'blockAssetsOnDemand'        => function_exists( 'wp_load_classic_theme_block_styles_on_demand' ),
 					'loadAllCoreBlockAssets'     => false,
 					'delayJSDefaultStrategy'     => 'interaction',
+					'delayJSINPPreset'           => false,
 					'delayJSIdleList'            => '',
 					'delayJSViewportList'        => '',
 					'delayJSPriority'            => '',
@@ -1564,6 +1565,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				if ( 'wooSafeMode' === $safe_key && ! is_array( $value ) ) {
 					$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
 					$sanitized[ $safe_key ] = null === $bool ? true : $bool;
+					continue;
+				}
+
+				// INP-first delay preset (issue #932) — normalize malformed import
+				// shapes (0/1, '0'/'1', 'false'/'true') to bool. Unrecognized
+				// values fail safe to false (preset off, existing behavior).
+				if ( 'delayJSINPPreset' === $safe_key && ! is_array( $value ) ) {
+					if ( is_bool( $value ) ) {
+						$sanitized[ $safe_key ] = $value;
+					} else {
+						$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+						$sanitized[ $safe_key ] = null === $bool ? false : $bool;
+					}
 					continue;
 				}
 

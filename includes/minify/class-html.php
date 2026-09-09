@@ -155,8 +155,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				)
 			);
 			$this->delay_js_default_strategy = ! empty( $this->options['file_optimisation']['delayJSDefaultStrategy'] )
-				? sanitize_text_field( $this->options['file_optimisation']['delayJSDefaultStrategy'] )
-				: 'interaction';
+			? sanitize_text_field( $this->options['file_optimisation']['delayJSDefaultStrategy'] )
+			: 'interaction';
+
+			// INP-first preset (#932): mirror Main::setup_hooks() — an explicit
+			// non-interaction manual default wins, otherwise idle-first so inline
+			// scripts inherit the preset default while idle/viewport lists still
+			// take precedence. In-memory only; stored option untouched.
+			if ( ! empty( $this->options['file_optimisation']['delayJSINPPreset'] ) ) {
+				$stored_default = isset( $this->options['file_optimisation']['delayJSDefaultStrategy'] ) ? strtolower( trim( (string) $this->options['file_optimisation']['delayJSDefaultStrategy'] ) ) : '';
+				if ( '' === $stored_default || 'interaction' === $stored_default ) {
+					$this->delay_js_default_strategy = 'idle';
+				}
+			}
 
 			// Parse priority map.
 			$this->delay_js_priority = array();
