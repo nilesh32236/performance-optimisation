@@ -309,6 +309,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			if ( '' === $token ) {
 				return false;
 			}
+			// Normalize path so token validation matches sanitize_sample()
+			// and print_config() — token scope must match the stored bucket key.
+			if ( class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
+				$path = \PerformanceOptimise\Inc\Util::normalize_rum_path( $path );
+			}
 			$now = time();
 			foreach ( array( $now, $now - DAY_IN_SECONDS ) as $timestamp ) {
 				if ( hash_equals( self::token_for( $timestamp, $path ), $token ) ) {
@@ -554,7 +559,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 									'lastSeen' => $ts,
 								);
 							}
-							while ( count( $bucket['lcpUrls'] ) > self::MAX_LCP_URLS_PER_PATH ) {
+							$lcp_urls_count = count( $bucket['lcpUrls'] );
+							while ( $lcp_urls_count > self::MAX_LCP_URLS_PER_PATH ) {
 								$evict_key = null;
 								$evict_n   = null;
 								$evict_ts  = null;
@@ -571,6 +577,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 									break;
 								}
 								unset( $bucket['lcpUrls'][ $evict_key ] );
+								--$lcp_urls_count;
 							}
 						}
 					}
@@ -667,8 +674,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				// Normalize identically to sanitize_sample()/print_config()
 				// so trailing-slash variants share one bucket (issue #935).
 				$normalized_path = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::normalize_rum_path( $path ) : $path;
-				$options = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::get_settings() : array();
-				$min     = isset( $options['image_optimisation']['fieldLcpMinSamples'] ) ? (int) $options['image_optimisation']['fieldLcpMinSamples'] : self::FIELD_LCP_DEFAULT_MIN_SAMPLES;
+				$options         = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::get_settings() : array();
+				$min             = isset( $options['image_optimisation']['fieldLcpMinSamples'] ) ? (int) $options['image_optimisation']['fieldLcpMinSamples'] : self::FIELD_LCP_DEFAULT_MIN_SAMPLES;
 				if ( $min < 1 ) {
 					$min = self::FIELD_LCP_DEFAULT_MIN_SAMPLES;
 				}
@@ -716,14 +723,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 									'lastSeen' => 0,
 								);
 							}
-							$entry_n                        = isset( $entry['n'] ) ? (int) $entry['n'] : 0;
-							$best[ $key ]['n']             += $entry_n;
-							$best[ $key ]['lastSeen']       = max( $best[ $key ]['lastSeen'], isset( $entry['lastSeen'] ) ? (int) $entry['lastSeen'] : 0 );
+							$entry_n                  = isset( $entry['n'] ) ? (int) $entry['n'] : 0;
+							$best[ $key ]['n']       += $entry_n;
+							$best[ $key ]['lastSeen'] = max( $best[ $key ]['lastSeen'], isset( $entry['lastSeen'] ) ? (int) $entry['lastSeen'] : 0 );
 							// Prefer the raw URL variant with the most
 							// observations for output.
-							$best[ $key ]['_raw_n']         = ( $best[ $key ]['_raw_n'] ?? 0 );
+							$best[ $key ]['_raw_n'] = ( $best[ $key ]['_raw_n'] ?? 0 );
 							if ( $entry_n >= $best[ $key ]['_raw_n'] ) {
-								$best[ $key ]['url']   = $entry['url'];
+								$best[ $key ]['url']    = $entry['url'];
 								$best[ $key ]['_raw_n'] = $entry_n;
 							}
 						}

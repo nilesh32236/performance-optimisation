@@ -133,7 +133,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 
 		$result = RUM::collect(
 			array(
-				'token' => $this->valid_token( '/about/' ),
+				'token' => $this->valid_token( '/about' ),
 				'path'  => '/about/',
 				'lcp'   => 2500.5,
 				'cls'   => 0.08,
@@ -146,10 +146,10 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 		$data  = RUM::get_data();
 		$today = gmdate( 'Y-m-d' );
 		$this->assertArrayHasKey( $today, $data );
-		$this->assertArrayHasKey( '/about/', $data[ $today ] );
-		$this->assertSame( 1, $data[ $today ]['/about/']['lcp']['n'] );
-		$this->assertSame( 2500.5, $data[ $today ]['/about/']['lcp']['sum'] );
-		$this->assertSame( 0.08, $data[ $today ]['/about/']['cls']['sum'] );
+		$this->assertArrayHasKey( '/about', $data[ $today ] );
+		$this->assertSame( 1, $data[ $today ]['/about']['lcp']['n'] );
+		$this->assertSame( 2500.5, $data[ $today ]['/about']['lcp']['sum'] );
+		$this->assertSame( 0.08, $data[ $today ]['/about']['cls']['sum'] );
 	}
 
 	/**
@@ -286,9 +286,9 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 		$method = new \ReflectionMethod( RUM::class, 'is_valid_token' );
 		$method->setAccessible( true );
 
-		$today     = 'h_wppo_rum_' . gmdate( 'Ymd' ) . '|/a/';
-		$yesterday = 'h_wppo_rum_' . gmdate( 'Ymd', time() - DAY_IN_SECONDS ) . '|/a/';
-		$two_days  = 'h_wppo_rum_' . gmdate( 'Ymd', time() - ( 2 * DAY_IN_SECONDS ) ) . '|/a/';
+		$today     = 'h_wppo_rum_' . gmdate( 'Ymd' ) . '|/a';
+		$yesterday = 'h_wppo_rum_' . gmdate( 'Ymd', time() - DAY_IN_SECONDS ) . '|/a';
+		$two_days  = 'h_wppo_rum_' . gmdate( 'Ymd', time() - ( 2 * DAY_IN_SECONDS ) ) . '|/a';
 
 		$this->assertTrue( $method->invoke( null, $today, '/a/' ) );
 		$this->assertTrue( $method->invoke( null, $yesterday, '/a/' ) );
@@ -433,7 +433,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 
 		RUM::collect(
 			array(
-				'token' => $this->valid_token( '/trigger/' ),
+				'token' => $this->valid_token( '/trigger' ),
 				'path'  => '/trigger/',
 				'lcp'   => 1200,
 			)
@@ -471,7 +471,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 
 		$result = RUM::collect(
 			array(
-				'token'  => $this->valid_token( '/hero/' ),
+				'token'  => $this->valid_token( '/hero' ),
 				'path'   => '/hero/',
 				'lcp'    => 1800,
 				'lcpUrl' => 'https://example.com/wp-content/uploads/hero.jpg',
@@ -481,9 +481,9 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 		$this->assertTrue( $result['ok'] );
 		$data  = RUM::get_data();
 		$today = gmdate( 'Y-m-d' );
-		$this->assertArrayHasKey( '/hero/', $data[ $today ] );
-		$this->assertArrayHasKey( 'lcpUrls', $data[ $today ]['/hero/'] );
-		$urls = $data[ $today ]['/hero/']['lcpUrls'];
+		$this->assertArrayHasKey( '/hero', $data[ $today ] );
+		$this->assertArrayHasKey( 'lcpUrls', $data[ $today ]['/hero'] );
+		$urls = $data[ $today ]['/hero']['lcpUrls'];
 		$this->assertCount( 1, $urls );
 		$entry = reset( $urls );
 		$this->assertSame( 'https://example.com/wp-content/uploads/hero.jpg', $entry['url'] );
@@ -578,7 +578,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 
 		$result = RUM::collect(
 			array(
-				'token'  => $this->valid_token( '/hero/' ),
+				'token'  => $this->valid_token( '/hero' ),
 				'path'   => '/hero/',
 				'lcp'    => 1800,
 				'lcpUrl' => 'data:image/png;base64,AAAA',
@@ -588,7 +588,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 		$this->assertTrue( $result['ok'] );
 		$data  = RUM::get_data();
 		$today = gmdate( 'Y-m-d' );
-		$this->assertSame( 1, $data[ $today ]['/hero/']['lcp']['n'] );
-		$this->assertArrayNotHasKey( 'lcpUrls', $data[ $today ]['/hero/'] );
+		$this->assertSame( 1, $data[ $today ]['/hero']['lcp']['n'] );
+		$this->assertArrayNotHasKey( 'lcpUrls', $data[ $today ]['/hero'] );
 	}
 }
