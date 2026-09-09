@@ -275,8 +275,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			) .
 
 			'// WooCommerce Store API routes are dynamic JSON and must never be served from the static cache (issue #962).' . PHP_EOL .
-			'// Unconditional on safe mode, mirroring wc-ajax: wc/store, wcstore, wp-json/wc/store, wp-json/wcstore.' . PHP_EOL .
+			'// Unconditional on safe mode, mirroring wc-ajax: wc/store, wcstore, wp-json/wc/store, wp-json/wcstore,' . PHP_EOL .
+			'// plus the plain-permalink ?rest_route=/wc/store/... form (path is "/" there, so the' . PHP_EOL .
+			'// path-only regex would miss it — mirrors the QUERY_STRING guard above).' . PHP_EOL .
 			'if ( preg_match( \'#(^|/)(?:wc/store|wcstore|wp-json/wc/store|wp-json/wcstore)(/|$)#i\', $request_uri ) ) {' . PHP_EOL .
+			'	return;' . PHP_EOL .
+			'}' . PHP_EOL .
+			'if ( isset( $_GET[\'rest_route\'] ) && is_string( $_GET[\'rest_route\'] ) && preg_match( \'#(^|/)(?:wc/store|wcstore|wp-json/wc/store|wp-json/wcstore)(/|$)#i\', \'/\' . ltrim( $_GET[\'rest_route\'], \'/\' ) ) ) {' . PHP_EOL .
+			'	return;' . PHP_EOL .
+			'}' . PHP_EOL .
+			'if ( ! empty( $_SERVER[\'QUERY_STRING\'] ) && preg_match( \'#rest_route=[^&]*(?:wc/store|wcstore)#i\', rawurldecode( $_SERVER[\'QUERY_STRING\'] ) ) ) {' . PHP_EOL .
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
 

@@ -577,6 +577,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		private function schedule_sitemap_url_jobs( array $exclude_urls ): void {
 			$sitemap_urls = $this->get_sitemap_urls( 500 );
 
+			// Hoist the safe-mode toggle + Woo path list out of the per-URL
+			// loop: get_woo_excluded_paths() resolves wc_get_page_id +
+			// get_permalink per call, so resolve once per batch.
+			$woo_safe  = true;
+			$woo_paths = array();
+			try {
+				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_safe_mode_enabled' ) ) {
+					$woo_safe = Util::is_woo_safe_mode_enabled();
+				}
+				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'get_woo_excluded_paths' ) ) {
+					$woo_paths = (array) Util::get_woo_excluded_paths();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
 			foreach ( $sitemap_urls as $url ) {
 				if ( Util::is_url_excluded( $url, $exclude_urls ) ) {
 					continue;
@@ -584,7 +600,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 
 				// WooCommerce dynamic routes (issue #962): never preload cart /
 				// checkout / account, custom Woo slugs, or Store API routes.
-				if ( $this->is_woo_excluded_url( $url ) ) {
+				if ( $this->is_woo_excluded_url( $url, $woo_safe, $woo_paths ) ) {
 					continue;
 				}
 
@@ -602,27 +618,79 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * detection failure skips the URL (never preload dynamic content).
 		 *
 		 * @since NEXT
-		 * @param string $url Absolute URL.
+		 * @param string        $url       Absolute URL.
+		 * @param bool|null     $woo_safe  Optional pre-resolved safe-mode flag (hoisted by batch callers).
+		 * @param string[]|null $woo_paths Optional pre-resolved Woo excluded paths (hoisted by batch callers).
 		 * @return bool True when the URL must not be preloaded.
 		 */
-		private function is_woo_excluded_url( string $url ): bool {
+		private function is_woo_excluded_url( string $url, ?bool $woo_safe = null, ?array $woo_paths = null ): bool {
 			try {
-				$path = (string) wp_parse_url( $url, PHP_URL_PATH );
-				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_path' ) && Util::is_woo_store_api_path( $path ) ) {
+				$query = (string) wp_parse_url( $url, PHP_URL_QUERY );
+				$path  = (string) wp_parse_url( $url, PHP_URL_PATH );
+				// Plain-permalink Store API (?rest_route=/wc/store/...) is never
+				// preloaded — unconditional on safe mode.
+				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_request' ) ) {
+					if ( Util::is_woo_store_api_request( $path, $query, '' ) || Util::is_woo_store_api_request( $path, '', $this->get_rest_route_param( $url, $query ) ) ) {
+						return true;
+					}
+				} elseif ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_path' ) && ( Util::is_woo_store_api_path( $path ) || Util::is_woo_store_api_path( $this->get_rest_route_param( $url, $query ) ) ) ) {
+					return true;
+				} elseif ( (bool) preg_match( '#(^|/)(?:wc/store|wcstore|wp-json/wc/store|wp-json/wcstore)(/|$)#i', '/' . ltrim( $path, '/' ) ) || (bool) preg_match( '#rest_route=[^&]*(?:wc/store|wcstore)#i', rawurldecode( $query ) ) ) {
 					return true;
 				}
-				if ( ! method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_safe_mode_enabled' ) || ! Util::is_woo_safe_mode_enabled() ) {
+				if ( ! method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_safe_mode_enabled' ) || ! method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_dynamic_path' ) ) {
+					// Fail-safe on mixed-version deploys: absent helper means
+					// exclude (never preload potentially dynamic content).
+					return true;
+				}
+				if ( null === $woo_safe ) {
+					$woo_safe = Util::is_woo_safe_mode_enabled();
+				}
+				if ( ! $woo_safe ) {
 					// Safe mode off: only the unconditional Store API skip applies.
 					return false;
 				}
-				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_dynamic_path' ) ) {
-					return Util::is_woo_dynamic_path( $path );
+				if ( null !== $woo_paths ) {
+					$path_norm = strtolower( trim( $path, '/' ) );
+					foreach ( $woo_paths as $excluded ) {
+						$candidate = strtolower( trim( (string) $excluded, '/' ) );
+						if ( '' === $candidate ) {
+							continue;
+						}
+						if ( (bool) preg_match( '#/(?:' . preg_quote( $candidate, '#' ) . ')(/|$)#i', '/' . $path_norm ) ) {
+							return true;
+						}
+					}
+					return Util::is_woo_store_api_path( $path );
 				}
+				return Util::is_woo_dynamic_path( $path );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return true;
 			}
 			return false;
+		}
+
+		/**
+		 * Extract the `rest_route` query value from a preload URL.
+		 *
+		 * @since NEXT
+		 * @param string $url   Absolute URL.
+		 * @param string $query Pre-parsed query string.
+		 * @return string The `rest_route` value or ''.
+		 */
+		private function get_rest_route_param( string $url, string $query ): string {
+			if ( '' === $query ) {
+				$query = (string) wp_parse_url( $url, PHP_URL_QUERY );
+			}
+			if ( '' === $query ) {
+				return '';
+			}
+			parse_str( $query, $params );
+			if ( isset( $params['rest_route'] ) && is_string( $params['rest_route'] ) ) {
+				return $params['rest_route'];
+			}
+			return '';
 		}
 
 		/**

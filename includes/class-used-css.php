@@ -1471,11 +1471,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				return $buffer;
 			}
 
+			// Feature flag first: skip all Woo/DONOTCACHEPAGE detection work
+			// (REQUEST_URI parsing, WC conditionals) when remove-unused-CSS is
+			// off. The Woo early return below intentionally reuses Main's delay
+			// guard (same slug list + endpoint semantics) so checkout keeps full
+			// styles; blast radius: future delay-only changes also alter CSS
+			// purging on Woo-dynamic pages (fail-safe direction).
+			$file_opts = $this->options['file_optimisation'] ?? array();
+
+			if ( empty( $file_opts['removeUnusedCSS'] ) ) {
+				return $buffer;
+			}
+
 			// WooCommerce dynamic pages (issue #962): cart / checkout /
 			// account, Store API, and endpoints stay excluded from
-			// remove-unused-CSS so checkout keeps full styles. Reuses the
-			// delay guard (same slug list + endpoint semantics) to avoid a
-			// new cross-class dependency. DONOTCACHEPAGE pages opt out too.
+			// remove-unused-CSS so checkout keeps full styles.
+			// DONOTCACHEPAGE pages opt out too.
 			if ( defined( 'DONOTCACHEPAGE' ) && DONOTCACHEPAGE ) {
 				return $buffer;
 			}
@@ -1488,12 +1499,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					unset( $e );
 					return $buffer;
 				}
-			}
-
-			$file_opts = $this->options['file_optimisation'] ?? array();
-
-			if ( empty( $file_opts['removeUnusedCSS'] ) ) {
-				return $buffer;
 			}
 
 			global $wp_styles;

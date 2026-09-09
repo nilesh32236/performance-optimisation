@@ -305,7 +305,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				if ( ! isset( $settings['cache_settings']['wooSafeMode'] ) ) {
 					return true;
 				}
-				$parsed = filter_var( $settings['cache_settings']['wooSafeMode'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+				$value = $settings['cache_settings']['wooSafeMode'];
+				if ( ! is_scalar( $value ) && null !== $value ) {
+					return true;
+				}
+				$parsed = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
 				return null === $parsed ? true : $parsed;
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -317,12 +321,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Whether a normalized request path is a WooCommerce Store API route.
 		 *
 		 * Matches `wc/store`, `wcstore`, `wp-json/wc/store*`, and
-		 * `wp-json/wcstore*` as leading path segments (case-insensitive).
-		 * Store API responses are dynamic JSON and must never be cached,
-		 * delayed, or preloaded — unconditional on safe-mode toggle.
+		 * `wp-json/wcstore*` as path segments (case-insensitive), plus the
+		 * plain-permalink `?rest_route=/wc/store/...` form (pass the
+		 * `rest_route` query value directly — it normalizes to the same
+		 * Store API path). Store API responses are dynamic JSON and must
+		 * never be cached, delayed, or preloaded — unconditional on
+		 * safe-mode toggle.
 		 *
 		 * @since NEXT
-		 * @param string $path Request path (leading slash optional).
+		 * @param string $path Request path (leading slash optional) or a `rest_route` value.
 		 * @return bool True when the path is a Store API route.
 		 */
 		public static function is_woo_store_api_path( string $path ): bool {
@@ -330,16 +337,75 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			if ( '' === $normalized ) {
 				return false;
 			}
+			// Plain permalinks pass rest_route=/wc/store/... as the path or
+			// query value — strip a leading rest_route= wrapper if present.
+			if ( 0 === strpos( $normalized, 'rest_route=' ) ) {
+				$normalized = trim( substr( $normalized, strlen( 'rest_route=' ) ), '/' );
+			}
+			// URL-encoded rest_route values (e.g. %2Fwc%2Fstore%2Fv1%2Fcart).
+			if ( false !== strpos( $normalized, '%' ) ) {
+				$decoded = strtolower( trim( (string) rawurldecode( $normalized ), '/' ) );
+				if ( '' !== $decoded ) {
+					$normalized = $decoded;
+				}
+			}
+			if ( '' === $normalized ) {
+				return false;
+			}
 			return (bool) preg_match( '#(^|/)(?:wc/store|wcstore|wp-json/wc/store|wp-json/wcstore)(/|$)#i', '/' . $normalized );
+		}
+
+		/**
+		 * Whether the current request targets a WooCommerce Store API route.
+		 *
+		 * Checks the request path plus the plain-permalink `rest_route` query
+		 * parameter and raw `QUERY_STRING` so `?rest_route=/wc/store/v1/cart`
+		 * (path `/`) is treated as Store API across all layers. Fail-open:
+		 * detection failure returns true (treated as dynamic).
+		 *
+		 * @since NEXT
+		 * @param string      $path         Request path (leading slash optional).
+		 * @param string|null $query_string Optional raw query string (defaults to `$_SERVER['QUERY_STRING']`).
+		 * @param string|null $rest_route   Optional `rest_route` value (defaults to `$_GET['rest_route']`).
+		 * @return bool True when the request is a Store API request.
+		 */
+		public static function is_woo_store_api_request( string $path = '', ?string $query_string = null, ?string $rest_route = null ): bool {
+			try {
+				if ( '' !== $path && self::is_woo_store_api_path( $path ) ) {
+					return true;
+				}
+				if ( null === $rest_route ) {
+					$rest_route = isset( $_GET['rest_route'] ) ? sanitize_text_field( wp_unslash( $_GET['rest_route'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
+					if ( '' === $rest_route ) {
+						$rest_route = null;
+					}
+				}
+				if ( is_string( $rest_route ) && '' !== $rest_route && self::is_woo_store_api_path( $rest_route ) ) {
+					return true;
+				}
+				if ( null === $query_string ) {
+					$query_string = isset( $_SERVER['QUERY_STRING'] ) ? sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Unslashed before sanitizing; read-only routing check, no output.
+				}
+				if ( is_string( $query_string ) && '' !== $query_string && preg_match( '#rest_route=[^&]*(?:wc/store|wcstore)#i', rawurldecode( $query_string ) ) ) {
+					return true;
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
 		}
 
 		/**
 		 * Whether a request path belongs to a WooCommerce dynamic page.
 		 *
 		 * Matches every path from {@see get_woo_excluded_paths()} as a full
-		 * leading path segment (covers nested `shop/basket` and subdirectory /
-		 * multisite prefixes) plus Store API routes. Fail-open: any detection
-		 * failure returns true (treated as dynamic, never fatal).
+		 * path segment anywhere in the request path (covers nested
+		 * `shop/basket` and subdirectory / multisite prefixes such as
+		 * `/subsite/cart`; intentionally fail-safe — a non-Woo page like
+		 * `/blog/checkout/` is also treated as dynamic rather than risk
+		 * caching checkout content) plus Store API routes. Fail-open: any
+		 * detection failure returns true (treated as dynamic, never fatal).
 		 *
 		 * @since NEXT
 		 * @param string $path Request path (leading slash optional).
@@ -417,7 +483,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 						array_filter(
 							array_map(
 								static function ( $segment ) {
-									return preg_replace( '/[^a-z0-9\-_]/', '', strtolower( (string) $segment ) );
+									$segment = strtolower( trim( (string) $segment ) );
+									// Keep unicode letters/numbers so translated
+									// slugs match exactly as resolved; strip only
+									// control characters. Matches the raw request
+									// path comparison in is_woo_dynamic_path().
+									$segment = (string) preg_replace( '/[\x00-\x1F\x7F]/u', '', $segment );
+									return trim( $segment, '/' );
 								},
 								explode( '/', $path )
 							)
