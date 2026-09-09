@@ -314,12 +314,16 @@ const DatabaseCleanup = ( { options = {} } ) => {
 	const handleExportTransients = async () => {
 		setExporting( true );
 		try {
+			const EXPORT_LIMIT = 500;
 			const response = await apiCall(
-				'expired_transients_export?limit=500',
+				`expired_transients_export?limit=${ EXPORT_LIMIT }`,
 				{},
 				'GET'
 			);
 			if ( response.success && response.data ) {
+				const count = response.data?.count ?? 0;
+				const truncated =
+					response.data?.truncated ?? count >= EXPORT_LIMIT;
 				const blob = new Blob(
 					[ JSON.stringify( response.data, null, 2 ) ],
 					{ type: 'application/json' }
@@ -327,25 +331,43 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				const url = URL.createObjectURL( blob );
 				const link = document.createElement( 'a' );
 				link.href = url;
-				link.download = 'wppo-expired-transients.json';
+				link.download = truncated
+					? `wppo-expired-transients-partial-${ EXPORT_LIMIT }.json`
+					: 'wppo-expired-transients.json';
 				document.body.appendChild( link );
 				link.click();
 				link.remove();
 				URL.revokeObjectURL( url );
-				notify( {
-					type: 'success',
-					message: sprintf(
-						// translators: %d is the number of expired transients exported.
-						_n(
-							'Exported %d expired transient.',
-							'Exported %d expired transients.',
-							response.data?.count ?? 0,
-							'performance-optimisation'
+				if ( truncated ) {
+					notify( {
+						type: 'warning',
+						message: sprintf(
+							// translators: %1$d is the number exported, %2$d is the export limit.
+							__(
+								'Exported first %1$d of more than %2$d expired transients (truncated). Purge and re-export for the rest.',
+								'performance-optimisation'
+							),
+							count,
+							EXPORT_LIMIT
 						),
-						response.data?.count ?? 0
-					),
-					durationMs: 5000,
-				} );
+						durationMs: 8000,
+					} );
+				} else {
+					notify( {
+						type: 'success',
+						message: sprintf(
+							// translators: %d is the number of expired transients exported.
+							_n(
+								'Exported %d expired transient.',
+								'Exported %d expired transients.',
+								count,
+								'performance-optimisation'
+							),
+							count
+						),
+						durationMs: 5000,
+					} );
+				}
 			} else {
 				notify( {
 					type: 'error',

@@ -737,6 +737,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		public const AUTOLOAD_REMEDIATION_LIMIT = 100;
 
 		/**
+		 * Minimum remediation threshold in bytes (100 B).
+		 *
+		 * Shared by settings validation, the clamp helper, and the REST layer
+		 * so direct PHP calls cannot bypass the bounds.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const AUTOLOAD_THRESHOLD_MIN = 100;
+
+		/**
+		 * Maximum remediation threshold in bytes (10 MB).
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const AUTOLOAD_THRESHOLD_MAX = 10485760;
+
+		/**
+		 * Maximum number of candidates a single remediation pass will consider.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const AUTOLOAD_LIMIT_MAX = 500;
+
+		/**
+		 * Maximum number of expired-transient rows a single export will return.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const EXPORT_LIMIT_MAX = 2000;
+
+		/**
 		 * Core option names that must never have their autoload value flipped.
 		 *
 		 * Filterable via `wppo_core_autoload_options`.
@@ -886,7 +921,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				}
 			}
 			$threshold = isset( $settings['autoloadThreshold'] ) ? (int) $settings['autoloadThreshold'] : self::AUTOLOAD_SIZE_THRESHOLD;
-			return max( 100, min( 10485760, $threshold ) );
+			return max( self::AUTOLOAD_THRESHOLD_MIN, min( self::AUTOLOAD_THRESHOLD_MAX, $threshold ) );
 		}
 
 		/**
@@ -924,7 +959,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		public static function get_autoload_candidates( int $threshold = self::AUTOLOAD_SIZE_THRESHOLD, int $limit = self::AUTOLOAD_REMEDIATION_LIMIT ): array {
 			global $wpdb;
 			$threshold = max( 1, $threshold );
-			$limit     = max( 1, min( 500, $limit ) );
+			$limit     = max( 1, min( self::AUTOLOAD_LIMIT_MAX, $limit ) );
 
 			$autoload_values = self::get_autoloadable_values();
 			$placeholders    = implode( ',', array_fill( 0, count( $autoload_values ), '%s' ) );
@@ -991,7 +1026,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * @return int Clamped threshold in bytes.
 		 */
 		private static function clamp_autoload_threshold( int $threshold ): int {
-			return max( 100, min( 10485760, $threshold ) );
+			return max( self::AUTOLOAD_THRESHOLD_MIN, min( self::AUTOLOAD_THRESHOLD_MAX, $threshold ) );
 		}
 
 		/**
@@ -1070,17 +1105,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Restore one option's prior autoload value, guarded like the flip path.
 		 *
+		 * Restores the exact stored prior string (e.g. `yes` vs `auto` vs
+		 * `auto-on` on WP 6.6+) via a direct options-table update after the
+		 * `wp_set_option_autoload()` bool flip, so revert restores the exact
+		 * flavor rather than just autoload-on semantics. Falls back to a
+		 * direct update on WP < 6.6. Any failure returns false (fail-open).
+		 *
 		 * @since NEXT
 		 * @param string $option_name Option name.
 		 * @param string $prior       Prior autoload value to restore.
 		 * @return bool True on success, false on failure.
 		 */
 		private static function restore_option_autoload( string $option_name, string $prior ): bool {
+			$allowed_priors = array( 'yes', 'no', 'on', 'off', 'auto', 'auto-on', 'auto-off' );
 			try {
 				if ( function_exists( 'wp_set_option_autoload' ) ) {
 					$autoload = in_array( $prior, self::get_autoloadable_values(), true );
 					$result   = wp_set_option_autoload( $option_name, $autoload );
-					return (bool) $result;
+					if ( ! $result ) {
+						return false;
+					}
+					// wp_set_option_autoload() only flips on/off, losing the exact
+					// 6.6+ flavor (yes vs auto vs auto-on). Restore the exact
+					// prior string when it is a known value.
+					if ( in_array( $prior, $allowed_priors, true ) ) {
+						global $wpdb;
+						if ( ! isset( $wpdb->options ) ) {
+							return true;
+						}
+						// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Exact-flavor restore after the core bool flip.
+						$updated = $wpdb->update(
+							$wpdb->options,
+							array( 'autoload' => $prior ),
+							array( 'option_name' => $option_name ),
+							array( '%s' ),
+							array( '%s' )
+						);
+						return false !== $updated;
+					}
+					return true;
 				}
 				global $wpdb;
 				if ( ! isset( $wpdb->options ) ) {
@@ -1117,7 +1180,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 */
 		public static function remediate_autoload( ?int $threshold = null, int $limit = self::AUTOLOAD_REMEDIATION_LIMIT ): array {
 			$threshold = null === $threshold ? self::get_autoload_remediation_threshold() : self::clamp_autoload_threshold( $threshold );
-			$limit     = max( 1, min( 500, $limit ) );
+			$limit     = max( 1, min( self::AUTOLOAD_LIMIT_MAX, $limit ) );
 			$result    = array(
 				'threshold'            => $threshold,
 				'supported'            => self::is_autoload_remediation_supported(),
@@ -1272,7 +1335,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 */
 		public static function export_expired_transients( int $limit = 500 ): array {
 			global $wpdb;
-			$limit = max( 1, min( 2000, $limit ) );
+			$limit = max( 1, min( self::EXPORT_LIMIT_MAX, $limit ) );
 			$time  = time();
 			$rows  = array();
 
@@ -1294,6 +1357,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					continue;
 				}
 
+				// Split the per-family limit so the first family cannot starve the
+				// second: each query only asks for the rows still needed to fill
+				// $limit, and the combined list is capped in PHP as a backstop.
+				$remaining = $limit - count( $rows );
+				if ( $remaining <= 0 ) {
+					break;
+				}
+
 				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Read-only pre-run export.
 				$batch = $wpdb->get_results(
 					$wpdb->prepare(
@@ -1308,7 +1379,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 						$wpdb->esc_like( $prefix ) . '%',
 						$wpdb->esc_like( $timeout_prefix ) . '%',
 						$time,
-						$limit
+						$remaining
 					),
 					ARRAY_A
 				);

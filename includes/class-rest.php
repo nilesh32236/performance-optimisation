@@ -331,10 +331,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			$threshold = isset( $params['threshold'] ) ? absint( $params['threshold'] ) : null;
 			if ( null !== $threshold ) {
-				$threshold = max( 100, min( 10485760, $threshold ) );
+				$threshold = max( Database_Cleanup::AUTOLOAD_THRESHOLD_MIN, min( Database_Cleanup::AUTOLOAD_THRESHOLD_MAX, $threshold ) );
 			}
 			$limit = isset( $params['limit'] ) ? absint( $params['limit'] ) : Database_Cleanup::AUTOLOAD_REMEDIATION_LIMIT;
-			$limit = max( 1, min( 500, $limit ) );
+			$limit = max( 1, min( Database_Cleanup::AUTOLOAD_LIMIT_MAX, $limit ) );
 
 			if ( 'apply' === $mode ) {
 				$result               = Database_Cleanup::remediate_autoload( $threshold, $limit );
@@ -359,12 +359,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		public function export_expired_transients( \WP_REST_Request $request ): \WP_REST_Response {
 			$params = $request->get_params();
 			$limit  = isset( $params['limit'] ) ? absint( $params['limit'] ) : 500;
-			$limit  = max( 1, min( 2000, $limit ) );
+			$limit  = max( 1, min( Database_Cleanup::EXPORT_LIMIT_MAX, $limit ) );
 			$rows   = Database_Cleanup::export_expired_transients( $limit );
 
 			return $this->send_response(
 				array(
 					'count'      => count( $rows ),
+					'limit'      => $limit,
+					'truncated'  => count( $rows ) >= $limit,
 					'transients' => $rows,
 				)
 			);

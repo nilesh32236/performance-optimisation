@@ -608,4 +608,37 @@ describe( 'DatabaseCleanup Component', () => {
 			).toBeInTheDocument();
 		} );
 	} );
+
+	it( 'warns when the expired-transient export is truncated at the limit', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { revisions: 0, expired_transients: 600 },
+		} );
+		render( <DatabaseCleanup /> );
+
+		await waitFor( () => {
+			expect(
+				screen.getByRole( 'button', { name: 'Export' } )
+			).toBeInTheDocument();
+		} );
+
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				count: 500,
+				limit: 500,
+				truncated: true,
+				transients: [],
+			},
+		} );
+
+		global.URL.createObjectURL = jest.fn( () => 'blob:mock' );
+		global.URL.revokeObjectURL = jest.fn();
+
+		fireEvent.click( screen.getByRole( 'button', { name: 'Export' } ) );
+
+		await waitFor( () => {
+			expect( screen.getByText( /truncated/ ) ).toBeInTheDocument();
+		} );
+	} );
 } );

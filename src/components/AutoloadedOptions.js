@@ -30,9 +30,11 @@ const AutoloadedOptions = () => {
 	const [ options, setOptions ] = useState( [] );
 	const [ loading, setLoading ] = useState( true );
 	const [ report, setReport ] = useState( null );
+	const [ appliedSummary, setAppliedSummary ] = useState( null );
 	const [ remediated, setRemediated ] = useState( {} );
 	const [ checking, setChecking ] = useState( false );
 	const [ applying, setApplying ] = useState( false );
+	const [ revertingAll, setRevertingAll ] = useState( false );
 	const [ reverting, setReverting ] = useState( {} );
 	const { notice, notify, dismiss } = useNotice();
 
@@ -86,6 +88,7 @@ const AutoloadedOptions = () => {
 			} );
 			if ( response.success && response.data ) {
 				setReport( response.data );
+				setAppliedSummary( null );
 				setRemediated( response.data.remediated || {} );
 			} else {
 				notify( {
@@ -121,7 +124,9 @@ const AutoloadedOptions = () => {
 				mode: 'apply',
 			} );
 			if ( response.success && response.data ) {
-				setReport( response.data );
+				// Keep the dry-run report intact: the apply payload has no
+				// count/options, so store it separately for the applied summary.
+				setAppliedSummary( response.data );
 				setRemediated( response.data.remediated || {} );
 				// Reload first: load() dismisses stale notices, so notify after.
 				await load();
@@ -178,6 +183,22 @@ const AutoloadedOptions = () => {
 						delete next[ optionName ];
 						return next;
 					} );
+					setAppliedSummary( ( prev ) => {
+						if ( ! prev || ! Array.isArray( prev.applied ) ) {
+							return prev;
+						}
+						const applied = prev.applied.filter(
+							( item ) => item?.option_name !== optionName
+						);
+						return {
+							...prev,
+							applied,
+							bytes_saved: applied.reduce(
+								( sum, item ) => sum + ( item?.size || 0 ),
+								0
+							),
+						};
+					} );
 					// Reload first: load() dismisses stale notices, so notify after.
 					await load();
 					notify( {
@@ -225,13 +246,14 @@ const AutoloadedOptions = () => {
 	);
 
 	const revertAll = useCallback( async () => {
-		setApplying( true );
+		setRevertingAll( true );
 		try {
 			const response = await apiCall( 'autoload_remediate', {
 				mode: 'revert_all',
 			} );
 			if ( response.success ) {
 				setRemediated( {} );
+				setAppliedSummary( null );
 				// Reload first: load() dismisses stale notices, so notify after.
 				await load();
 				notify( {
@@ -265,7 +287,7 @@ const AutoloadedOptions = () => {
 				durationMs: 5000,
 			} );
 		} finally {
-			setApplying( false );
+			setRevertingAll( false );
 		}
 	}, [ notify, load ] );
 
@@ -273,15 +295,19 @@ const AutoloadedOptions = () => {
 		if ( bytes < 1024 ) {
 			return `${ bytes } B`;
 		}
-		return `${ ( bytes / 1024 ).toFixed( 1 ) } KB`;
+		if ( bytes < 1048576 ) {
+			return `${ ( bytes / 1024 ).toFixed( 1 ) } KB`;
+		}
+		if ( bytes < 1073741824 ) {
+			return `${ ( bytes / 1048576 ).toFixed( 1 ) } MB`;
+		}
+		return `${ ( bytes / 1073741824 ).toFixed( 1 ) } GB`;
 	};
 
 	const remediatedNames = Object.keys( remediated );
 
 	let body = null;
-	if ( notice ) {
-		body = null;
-	} else if ( options.length === 0 && ! loading ) {
+	if ( options.length === 0 && ! loading ) {
 		body = (
 			<p className="wppo-text-muted">
 				{ __(
@@ -364,6 +390,7 @@ const AutoloadedOptions = () => {
 						className="wppo-button wppo-button--secondary wppo-button--sm"
 						onClick={ runDryRun }
 						isLoading={ checking }
+						disabled={ applying || revertingAll }
 						label={ __(
 							'Check savings',
 							'performance-optimisation'
@@ -379,6 +406,7 @@ const AutoloadedOptions = () => {
 							className="wppo-button wppo-button--primary wppo-button--sm"
 							onClick={ applyFix }
 							isLoading={ applying }
+							disabled={ checking || revertingAll }
 							label={ __(
 								'Apply fix',
 								'performance-optimisation'
@@ -394,7 +422,8 @@ const AutoloadedOptions = () => {
 							type="button"
 							className="wppo-button wppo-button--secondary wppo-button--sm"
 							onClick={ revertAll }
-							isLoading={ applying }
+							isLoading={ revertingAll }
+							disabled={ checking || applying }
 							label={ __(
 								'Revert all',
 								'performance-optimisation'
@@ -406,6 +435,21 @@ const AutoloadedOptions = () => {
 						/>
 					) }
 				</div>
+				{ appliedSummary && Array.isArray( appliedSummary.applied ) && (
+					<div className="wppo-mt-10">
+						<p className="wppo-text-small">
+							{ sprintf(
+								/* translators: %1$d: option count, %2$s: bytes saved. */
+								__(
+									'Applied fix: %1$d options now save %2$s. Core options untouched.',
+									'performance-optimisation'
+								),
+								appliedSummary.applied.length || 0,
+								formatSize( appliedSummary.bytes_saved || 0 )
+							) }
+						</p>
+					</div>
+				) }
 				{ report && (
 					<div className="wppo-mt-10">
 						<p className="wppo-text-small">
