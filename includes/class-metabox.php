@@ -425,7 +425,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 			} elseif ( strlen( $notes ) > 2000 ) {
 				$notes = substr( $notes, 0, 2000 );
 			}
+			if ( '' === $notes ) {
+			delete_post_meta( $post_id, '_wppo_delay_notes' );
+		} else {
 			update_post_meta( $post_id, '_wppo_delay_notes', $notes );
+		}
 		}
 
 		/**

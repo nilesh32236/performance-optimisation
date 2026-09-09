@@ -2420,8 +2420,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						$tag
 					) ?? $tag;
 
-						// Determine delay strategy for this handle.
-						$strategy = $this->get_delay_strategy_for_handle( $handle );
+					// Determine delay strategy for this handle.
+					$strategy = $this->get_delay_strategy_for_handle( $handle );
 					if ( 'interaction' !== $strategy ) {
 						$tag = str_replace(
 							'<script ',
@@ -2430,8 +2430,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						);
 					}
 
-						// Determine priority for this handle.
-						$priority = $this->get_delay_priority_for_handle( $handle );
+					// Determine priority for this handle.
+					$priority = $this->get_delay_priority_for_handle( $handle );
 					if ( 'normal' !== $priority ) {
 						$tag = str_replace(
 							'<script ',
@@ -2814,8 +2814,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * Builder runtimes must stay un-delayed by default — delaying them
 		 * breaks Elementor/Divi/Bricks/WPBakery/Oxygen rendering and the
-		 * block-interactivity runtime. Matched via matches_delay_pattern()
-		 * word-boundary logic by callers. Shared with Minify\HTML so the
+		 * block-interactivity runtime. Matched via is_delay_excluded_handle()
+		 * (exact, dash/underscore variants, pure prefixes, word-boundary
+		 * fallback) by callers. Shared with Minify\HTML so the
 		 * external and inline delay paths never drift.
 		 *
 		 * @since NEXT

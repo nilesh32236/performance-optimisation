@@ -107,7 +107,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			// is_selector_used(); attribute entries (e.g. [data-elementor-type])
 			// match by attribute-name substring so compound selectors stay kept.
 			'.elementor-',
-			'.e-con',
 			'.e-con*',
 			'.et_*',
 			'.et_pb_*',
@@ -573,8 +572,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					// div[data-elementor-type] or [data-elementor-type="x"] stay
 					// kept. Bare [data-*]/[aria-*] selectors are additionally
 					// conserved by matches_simple_selector().
-					$attr_name = preg_replace( '/[\[\]=~|^$*"\'].*$/', '', $safe );
-					$attr_name = trim( (string) $attr_name, " \t\n\r\0\x0B[]" );
+					$attr_name = preg_replace( '/[\]=~|^$*"\'].*$/', '', $safe );
+					$attr_name = ltrim( trim( (string) $attr_name ), '[' );
 					if ( '' !== $attr_name && false !== stripos( $selector, $attr_name ) ) {
 						return true;
 					}
