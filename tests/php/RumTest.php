@@ -561,6 +561,161 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that a beacon device/template pair is aggregated into a bounded segment.
+	 *
+	 * @since NEXT
+	 */
+	public function test_collect_aggregates_device_template_segment(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		Util::clear_settings_cache();
+		$_SERVER['REMOTE_ADDR'] = '203.0.113.5';
+
+		$result = RUM::collect(
+			array(
+				'token'    => $this->valid_token( '/seg' ),
+				'path'     => '/seg/',
+				'lcp'      => 1800,
+				'device'   => 'Mobile',
+				'template' => 'Single!',
+			)
+		);
+
+		$this->assertTrue( $result['ok'] );
+		$data  = RUM::get_data();
+		$today = gmdate( 'Y-m-d' );
+		$this->assertArrayHasKey( 'lcpSeg', $data[ $today ]['/seg'] );
+		$seg = $data[ $today ]['/seg']['lcpSeg'];
+		// Template is lowercased + allowlisted; device is allowlisted.
+		$this->assertArrayHasKey( 'mobile|single', $seg );
+		$this->assertSame( 1, $seg['mobile|single']['n'] );
+		$this->assertSame( array( 1800.0 ), $seg['mobile|single']['samples'] );
+	}
+
+	/**
+	 * Test that an invalid device falls back to unknown without rejecting the sample.
+	 *
+	 * @since NEXT
+	 */
+	public function test_collect_falls_back_to_unknown_segment(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		Util::clear_settings_cache();
+		$_SERVER['REMOTE_ADDR'] = '203.0.113.5';
+
+		$result = RUM::collect(
+			array(
+				'token'  => $this->valid_token( '/seg' ),
+				'path'   => '/seg/',
+				'lcp'    => 1800,
+				'device' => 'tablet',
+			)
+		);
+
+		$this->assertTrue( $result['ok'] );
+		$data  = RUM::get_data();
+		$today = gmdate( 'Y-m-d' );
+		$this->assertArrayHasKey( 'unknown|unknown', $data[ $today ]['/seg']['lcpSeg'] );
+	}
+
+	/**
+	 * Test that the segmented p75 reader gates on the sample count.
+	 *
+	 * Under 20 samples no row is returned; at 20 the segment row with the
+	 * computed p75 is returned, slowest-first.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_field_lcp_p75_by_segment_gates_on_sample_count(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit'  => array( 'rum_enabled' => true ),
+			'image_optimisation' => array( 'fieldLcpMinSamples' => 20 ),
+		);
+		Util::clear_settings_cache();
+		$today                        = gmdate( 'Y-m-d' );
+		$this->options[ RUM::OPTION ] = array(
+			$today => array(
+				'/shop' => array(
+					'lcpSeg' => array(
+						'mobile|single' => array(
+							'device'   => 'mobile',
+							'template' => 'single',
+							'n'        => 19,
+							'sum'      => 57000.0,
+							'min'      => 3000.0,
+							'max'      => 3000.0,
+							'samples'  => array_fill( 0, 19, 3000.0 ),
+						),
+					),
+				),
+			),
+		);
+
+		$this->assertSame( array(), RUM::get_field_lcp_p75_by_segment() );
+
+		$this->options[ RUM::OPTION ][ $today ]['/shop']['lcpSeg']['mobile|single']['n']       = 20;
+		$this->options[ RUM::OPTION ][ $today ]['/shop']['lcpSeg']['mobile|single']['samples'] = array_fill( 0, 20, 3000.0 );
+
+		$rows = RUM::get_field_lcp_p75_by_segment();
+		$this->assertCount( 1, $rows );
+		$this->assertSame( '/shop', $rows[0]['path'] );
+		$this->assertSame( 'mobile', $rows[0]['device'] );
+		$this->assertSame( 'single', $rows[0]['template'] );
+		$this->assertSame( 20, $rows[0]['n'] );
+		$this->assertSame( 3000.0, $rows[0]['p75'] );
+	}
+
+	/**
+	 * Test that the segmented p75 read path performs no option/transient writes.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_field_lcp_p75_by_segment_makes_no_writes(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		Util::clear_settings_cache();
+		$today                        = gmdate( 'Y-m-d' );
+		$this->options[ RUM::OPTION ] = array(
+			$today => array(
+				'/shop' => array(
+					'lcpSeg' => array(
+						'mobile|single' => array(
+							'device'   => 'mobile',
+							'template' => 'single',
+							'n'        => 20,
+							'sum'      => 60000.0,
+							'min'      => 3000.0,
+							'max'      => 3000.0,
+							'samples'  => array_fill( 0, 20, 3000.0 ),
+						),
+					),
+				),
+			),
+		);
+		Functions\when( 'update_option' )->alias(
+			static function () {
+				throw new \Exception( 'Read path must not write options' );
+			}
+		);
+		Functions\when( 'set_transient' )->alias(
+			static function () {
+				throw new \Exception( 'Read path must not write transients' );
+			}
+		);
+
+		$rows = RUM::get_field_lcp_p75_by_segment();
+		$this->assertCount( 1, $rows );
+		$this->assertSame( 3000.0, $rows[0]['p75'] );
+	}
+
+	/**
 	 * Test that suspicious lcpUrl values are dropped while numeric data is kept.
 	 *
 	 * @since NEXT

@@ -528,6 +528,73 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		}
 
 		/**
+		 * Read segmented field-LCP p75 rows (device × template) fail-open.
+		 *
+		 * Thin wrapper over RUM::get_field_lcp_p75_by_segment() so
+		 * heuristic_learn() degrades to the global-average path when RUM is
+		 * unavailable. No option or transient writes; never throws.
+		 *
+		 * @since NEXT
+		 * @param int $min_samples Minimum samples per segment (1 = observe all).
+		 * @return array[] Rows of array(path,device,template,n,p75).
+		 */
+		private static function segmented_field_lcp( int $min_samples = 1 ): array {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'get_field_lcp_p75_by_segment' ) ) {
+					return array();
+				}
+				$rows = RUM::get_field_lcp_p75_by_segment( $min_samples );
+				return is_array( $rows ) ? $rows : array();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
+		 * Resolve the field-LCP minimum-sample threshold for auto-tune.
+		 *
+		 * Delegates to RUM::get_field_lcp_min_samples() when available so the
+		 * `ai_adaptive.field_lcp_min_samples` setting (with legacy
+		 * `image_optimisation.fieldLcpMinSamples` fallback) is honoured in
+		 * one place. Fail-open to 20.
+		 *
+		 * @since NEXT
+		 * @return int Minimum samples (>=1).
+		 */
+		private static function field_lcp_min_samples(): int {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_field_lcp_min_samples' ) ) {
+					$min = (int) RUM::get_field_lcp_min_samples();
+					if ( $min >= 1 ) {
+						return $min;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && defined( 'PerformanceOptimise\Inc\RUM::FIELD_LCP_DEFAULT_MIN_SAMPLES' ) ) {
+				return (int) RUM::FIELD_LCP_DEFAULT_MIN_SAMPLES;
+			}
+			return 20;
+		}
+
+		/**
+		 * Format a p75 millisecond value as seconds for suggestion copy.
+		 *
+		 * @since NEXT
+		 * @param float $p75_ms p75 in milliseconds.
+		 * @return string e.g. "3.8s".
+		 */
+		private static function format_p75_seconds( float $p75_ms ): string {
+			$seconds = $p75_ms / 1000.0;
+			if ( $seconds >= 10 ) {
+				return sprintf( '%.1fs', $seconds );
+			}
+			return sprintf( '%.1fs', round( $seconds, 1 ) );
+		}
+
+		/**
 		 * Heuristic fallback learning.
 		 *
 		 * @return array
@@ -616,6 +683,76 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				}
 			}
 
+			// Field-data-driven tuning (issue #986): route segmented device ×
+			// template p75 into the eagerness decision. Below the minimum
+			// threshold the global-average path above is used unchanged with
+			// no eagerness upgrade; at/above threshold the slowest-p75
+			// segment may upgrade eagerness via the same ladder (never
+			// downgrades the global result). Fail-open: RUM failures keep
+			// the global path.
+			$field_lcp_provisional = true;
+			$field_lcp_segment     = null;
+			$field_lcp_p75         = 0.0;
+			$field_lcp_samples     = 0;
+			$field_lcp_min         = self::field_lcp_min_samples();
+			try {
+				$observed = self::segmented_field_lcp( 1 );
+				$max_n    = 0;
+				foreach ( $observed as $row ) {
+					if ( is_array( $row ) && isset( $row['n'] ) ) {
+						$max_n = max( $max_n, (int) $row['n'] );
+					}
+				}
+				$field_lcp_samples = $max_n;
+				$qualified         = array();
+				foreach ( $observed as $row ) {
+					if ( is_array( $row ) && isset( $row['n'] ) && (int) $row['n'] >= $field_lcp_min ) {
+						$qualified[] = $row;
+					}
+				}
+				if ( ! empty( $qualified ) ) {
+					usort(
+						$qualified,
+						static function ( $a, $b ) {
+							$pa = isset( $a['p75'] ) ? (float) $a['p75'] : 0.0;
+							$pb = isset( $b['p75'] ) ? (float) $b['p75'] : 0.0;
+							if ( $pa === $pb ) {
+								return 0;
+							}
+							return $pa > $pb ? -1 : 1;
+						}
+					);
+					$slowest           = $qualified[0];
+					$segment_p75       = isset( $slowest['p75'] ) ? (float) $slowest['p75'] : 0.0;
+					$segment_eagerness = 'conservative';
+					if ( $segment_p75 > 3500 ) {
+						$segment_eagerness = 'eager';
+					} elseif ( $segment_p75 > 2500 ) {
+						$segment_eagerness = 'moderate';
+					}
+					// Upgrade-only: the segment may raise eagerness above the
+					// global-average result, never lower it.
+					$ladder = array(
+						'conservative' => 0,
+						'moderate'     => 1,
+						'eager'        => 2,
+					);
+					if ( ( $ladder[ $segment_eagerness ] ?? 0 ) > ( $ladder[ $eagerness ] ?? 0 ) ) {
+						$eagerness = $segment_eagerness;
+					}
+					$field_lcp_provisional = false;
+					$field_lcp_segment     = array(
+						'path'     => isset( $slowest['path'] ) ? (string) $slowest['path'] : '',
+						'device'   => isset( $slowest['device'] ) ? (string) $slowest['device'] : 'unknown',
+						'template' => isset( $slowest['template'] ) ? (string) $slowest['template'] : 'unknown',
+					);
+					$field_lcp_p75         = $segment_p75;
+					$field_lcp_samples     = isset( $slowest['n'] ) ? (int) $slowest['n'] : $max_n;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
 			// Allow filter for eagerness.
 			/**
 			 * Filters AI-learned speculation eagerness.
@@ -631,11 +768,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			$eagerness = self::normalize_eagerness( $eagerness );
 
 			return array(
-				'version'       => 1,
-				'prefetch_urls' => array_values( array_filter( $prefetch_urls ) ),
-				'exclude_js'    => array_values( array_filter( $exclude_js ) ),
-				'exclude_css'   => array_values( array_filter( $exclude_css ) ),
-				'eagerness'     => $eagerness,
+				'version'               => 1,
+				'prefetch_urls'         => array_values( array_filter( $prefetch_urls ) ),
+				'exclude_js'            => array_values( array_filter( $exclude_js ) ),
+				'exclude_css'           => array_values( array_filter( $exclude_css ) ),
+				'eagerness'             => $eagerness,
+				'field_lcp_segment'     => $field_lcp_segment,
+				'field_lcp_p75'         => $field_lcp_p75,
+				'field_lcp_provisional' => $field_lcp_provisional,
+				'field_lcp_samples'     => $field_lcp_samples,
+				'field_lcp_min_samples' => $field_lcp_min,
 			);
 		}
 
@@ -880,17 +1022,107 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			// Guardrail (#908): allowlist stale values and never propose `eager`
 			// in commerce/auth contexts (covers models persisted before the cap).
 			$eagerness = self::normalize_eagerness( $eagerness );
+			// Field LCP segment context (issue #986): prefer persisted model
+			// keys, fall back to a live read-only lookup for models stored
+			// before the segmentation shipped. Fail-open to provisional.
+			$field_segment     = isset( $model['field_lcp_segment'] ) && is_array( $model['field_lcp_segment'] ) ? $model['field_lcp_segment'] : null;
+			$field_p75         = isset( $model['field_lcp_p75'] ) ? (float) $model['field_lcp_p75'] : 0.0;
+			$field_provisional = array_key_exists( 'field_lcp_provisional', $model ) ? (bool) $model['field_lcp_provisional'] : true;
+			$field_samples     = isset( $model['field_lcp_samples'] ) ? (int) $model['field_lcp_samples'] : 0;
+			$field_min         = isset( $model['field_lcp_min_samples'] ) ? (int) $model['field_lcp_min_samples'] : self::field_lcp_min_samples();
+			if ( $field_min < 1 ) {
+				$field_min = self::field_lcp_min_samples();
+			}
+			if ( null === $field_segment || $field_provisional ) {
+				try {
+					$live = self::segmented_field_lcp( $field_min );
+					if ( ! empty( $live ) && is_array( $live[0] ) ) {
+						$top               = $live[0];
+						$field_segment     = array(
+							'path'     => isset( $top['path'] ) ? (string) $top['path'] : '',
+							'device'   => isset( $top['device'] ) ? (string) $top['device'] : 'unknown',
+							'template' => isset( $top['template'] ) ? (string) $top['template'] : 'unknown',
+						);
+						$field_p75         = isset( $top['p75'] ) ? (float) $top['p75'] : 0.0;
+						$field_samples     = isset( $top['n'] ) ? (int) $top['n'] : 0;
+						$field_provisional = false;
+					} else {
+						$observed = self::segmented_field_lcp( 1 );
+						$max_n    = 0;
+						foreach ( $observed as $row ) {
+							if ( is_array( $row ) && isset( $row['n'] ) ) {
+								$max_n = max( $max_n, (int) $row['n'] );
+							}
+						}
+						$field_samples     = max( $field_samples, $max_n );
+						$field_provisional = true;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
 			if ( 'conservative' !== $eagerness ) {
+				$eagerness_value       = $eagerness;
+				$eagerness_description = __( 'AI: Speculation eagerness suggestion', 'performance-optimisation' );
+				if ( ! $field_provisional && is_array( $field_segment ) ) {
+					$seg_device   = isset( $field_segment['device'] ) ? (string) $field_segment['device'] : 'unknown';
+					$seg_template = isset( $field_segment['template'] ) ? (string) $field_segment['template'] : 'unknown';
+					/* translators: %1$s eagerness, %2$s device, %3$s template, %4$s p75. */
+					$eagerness_value = sprintf( __( '%1$s · %2$s · %3$s · p75 %4$s', 'performance-optimisation' ), $eagerness, $seg_device, $seg_template, self::format_p75_seconds( $field_p75 ) );
+					/* translators: %1$s device, %2$s template, %3$s p75 seconds. */
+					$eagerness_description = sprintf( __( 'AI: Speculation eagerness suggestion (field LCP %1$s/%2$s p75 %3$s)', 'performance-optimisation' ), $seg_device, $seg_template, self::format_p75_seconds( $field_p75 ) );
+				}
 				$suggestions[] = array(
 					'metric'      => 'ai_speculation_eagerness',
-					'value'       => $eagerness,
+					'value'       => $eagerness_value,
 					'unit'        => 'string',
 					'status'      => 'needs_improvement',
-					'description' => __( 'AI: Speculation eagerness suggestion', 'performance-optimisation' ),
+					'description' => $eagerness_description,
 					'fix_action'  => 'open_preload_tab',
 					'ai_payload'  => array(
 						'tab'      => 'preload_settings',
 						'settings' => array( 'speculationEagerness' => $eagerness ),
+					),
+				);
+			}
+
+			// Field LCP auto-tune suggestion (issue #986): at/above threshold
+			// the copy names device + template + p75; below threshold the
+			// copy reads provisional with no eagerness upgrade.
+			if ( ! $field_provisional && is_array( $field_segment ) ) {
+				$seg_device   = isset( $field_segment['device'] ) ? (string) $field_segment['device'] : 'unknown';
+				$seg_template = isset( $field_segment['template'] ) ? (string) $field_segment['template'] : 'unknown';
+				/* translators: %1$s device, %2$s template, %3$s p75 seconds. */
+				$field_value = sprintf( __( '%1$s · %2$s · p75 %3$s', 'performance-optimisation' ), $seg_device, $seg_template, self::format_p75_seconds( $field_p75 ) );
+				/* translators: %1$s device, %2$s template, %3$s p75 seconds, %4$d sample count. */
+				$field_description = sprintf( __( 'AI: Field LCP tune for %1$s/%2$s (p75 %3$s, %4$d samples)', 'performance-optimisation' ), $seg_device, $seg_template, self::format_p75_seconds( $field_p75 ), $field_samples );
+				$suggestions[]     = array(
+					'metric'      => 'ai_field_lcp_tune',
+					'value'       => $field_value,
+					'unit'        => 'string',
+					'status'      => 'needs_improvement',
+					'description' => $field_description,
+					'fix_action'  => 'open_preload_tab',
+					'ai_payload'  => array(
+						'tab'      => 'preload_settings',
+						'settings' => array(),
+					),
+				);
+			} else {
+				/* translators: %1$d observed samples, %2$d required samples. */
+				$provisional_value = sprintf( __( 'provisional (%1$d/%2$d samples)', 'performance-optimisation' ), $field_samples, $field_min );
+				/* translators: %1$d observed samples, %2$d required samples. */
+				$provisional_description = sprintf( __( 'AI: Field LCP provisional (%1$d/%2$d samples) — collecting data', 'performance-optimisation' ), $field_samples, $field_min );
+				$suggestions[]           = array(
+					'metric'      => 'ai_field_lcp_tune',
+					'value'       => $provisional_value,
+					'unit'        => 'string',
+					'status'      => 'needs_improvement',
+					'description' => $provisional_description,
+					'fix_action'  => 'open_preload_tab',
+					'ai_payload'  => array(
+						'tab'      => 'preload_settings',
+						'settings' => array(),
 					),
 				);
 			}

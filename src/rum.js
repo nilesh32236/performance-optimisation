@@ -73,10 +73,53 @@
 		}
 		disconnectObservers();
 
+		// Field LCP device × template segmentation (issue #986): attach
+		// optional device/template dimensions fail-open. Detection failures
+		// omit the fields; the numeric path is unchanged.
+		const extra = {};
+		try {
+			let isMobile = null;
+			if (
+				navigator.userAgentData &&
+				typeof navigator.userAgentData.mobile === 'boolean'
+			) {
+				isMobile = navigator.userAgentData.mobile;
+			} else if (
+				typeof window.screen !== 'undefined' &&
+				window.screen
+			) {
+				const width =
+					window.screen.width ||
+					( window.innerWidth ? window.innerWidth : 0 );
+				if ( width > 0 ) {
+					isMobile = width < 768;
+				}
+			}
+			if ( isMobile === true ) {
+				extra.device = 'mobile';
+			} else if ( isMobile === false ) {
+				extra.device = 'desktop';
+			}
+		} catch {
+			// Device detection unavailable; field omitted.
+		}
+		try {
+			if (
+				config.template &&
+				typeof config.template === 'string' &&
+				config.template.length > 0
+			) {
+				extra.template = config.template.slice( 0, 64 );
+			}
+		} catch {
+			// Template passthrough unavailable; field omitted.
+		}
+
 		const payload = JSON.stringify( {
 			token: config.token,
 			path: config.path,
 			...values,
+			...extra,
 		} );
 
 		if ( navigator.sendBeacon ) {
