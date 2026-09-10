@@ -3846,11 +3846,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Canonical speculation-rules href exclusion patterns.
 		 *
 		 * Merges core safety defaults (auth, admin, REST), generic commerce
-		 * paths (cart/checkout/account), nonce/logout/add-to-cart wildcards,
-		 * admin-ajax preview endpoints, WooCommerce dynamic cart/checkout/
+		 * paths (cart/checkout/account), WooCommerce dynamic cart/checkout/
 		 * account paths, and user-configured `speculationExcludeUrls`.
 		 * Fill-gaps-only: callers dedupe against pre-existing core patterns
 		 * so the core ruleset is never duplicated.
+		 *
+		 * Intentionally narrow: nonce/logout/add-to-cart are query-param
+		 * actions (`?_wpnonce=`, `?action=logout`, `?add-to-cart=`) already
+		 * excluded by core's `?`-URL handling and by
+		 * {@see is_speculation_list_url_valid()}, so no `*substring*`
+		 * wildcard is emitted — such wildcards would also block legitimate
+		 * slugs (e.g. a post about "add to cart").
 		 *
 		 * @since NEXT
 		 *
@@ -3860,18 +3866,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		public function get_speculation_exclude_paths( array $preload_settings = array() ): array {
 			try {
 				$excludes = array(
-					'/wp-login.php',
 					'/wp-login*',
 					'/wp-admin/*',
-					'/wp-admin/admin-ajax.php*',
 					'/wp-json/*',
 					'/cart/*',
 					'/checkout/*',
 					'/my-account/*',
 					'/account/*',
-					'/*logout*',
-					'/*nonce*',
-					'/*add-to-cart*',
 				);
 
 				$custom_excludes = ! empty( $preload_settings['speculationExcludeUrls'] )
@@ -4496,17 +4497,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return false;
 			}
 
-			$path  = strtolower( (string) ( $parts['path'] ?? '/' ) );
-			$lower = strtolower( $url );
+			$path = strtolower( (string) ( $parts['path'] ?? '/' ) );
 
-			if ( false !== strpos( $path, '/wp-admin' ) || false !== strpos( $lower, 'wp-login.php' ) || false !== strpos( $path, '/wp-json' ) ) {
+			if ( false !== strpos( $path, '/wp-admin' ) || false !== strpos( $path, 'wp-login.php' ) || false !== strpos( $path, '/wp-json' ) ) {
 				return false;
 			}
 
-			// Nonce-bearing, logout, add-to-cart, admin-ajax preview, and
-			// customize-preview URLs must never be speculated.
-			foreach ( array( 'nonce', 'logout', 'add-to-cart', 'admin-ajax', 'customize_changeset', 'preview=true', 'preview_id' ) as $unsafe ) {
-				if ( false !== strpos( $lower, $unsafe ) ) {
+			// Nonce-bearing, logout, add-to-cart, and admin-ajax URLs must
+			// never be speculated. Scoped to path+query (never scheme+host)
+			// so hosts containing these substrings — or legitimate slugs
+			// like /add-to-cart-guide/ handled below — are not over-blocked.
+			// Query-param forms (preview, customize_changeset) need no check
+			// here: any URL carrying a query string already returned false
+			// above, mirroring core's `?`-URL exclusion.
+			$query_string = '';
+			try {
+				$parsed_query = wp_parse_url( $url, PHP_URL_QUERY );
+				if ( is_string( $parsed_query ) ) {
+					$query_string = strtolower( $parsed_query );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			$haystack = $path . '?' . $query_string;
+			foreach ( array( 'nonce', 'logout', 'add-to-cart', 'admin-ajax' ) as $unsafe ) {
+				if ( false !== strpos( $haystack, $unsafe ) ) {
 					return false;
 				}
 			}
@@ -4703,14 +4718,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// Fill-gaps-only: never duplicate a document-source rule
 				// already contributed by core or another plugin — at most one
 				// document rule is emitted per request.
-				$has_document_rule = false;
-				foreach ( $rules as $existing_rule ) {
-					if ( is_array( $existing_rule ) && ( $existing_rule['source'] ?? '' ) === 'document' ) {
-						$has_document_rule = true;
-						break;
-					}
-				}
-				if ( ! $has_document_rule ) {
+				if ( ! $this->has_document_source_rule( $rules ) ) {
 					/**
 					 * Filters the archive first-post document rule before it is appended.
 					 *
@@ -4740,6 +4748,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			 * @param string[] $urls  List URLs that were appended.
 			 */
 			return apply_filters( 'wppo_speculation_list_rules', $rules, $urls );
+		}
+
+		/**
+		 * Whether any rule in the set uses a document source.
+		 *
+		 * Shared by the fill-gaps-only document-rule gate in
+		 * {@see filter_speculation_list_rules()} so source-checking logic
+		 * lives in one place.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $rules Existing speculation rules.
+		 * @return bool True when a document-source rule is present.
+		 */
+		private function has_document_source_rule( array $rules ): bool {
+			foreach ( $rules as $rule ) {
+				if ( is_array( $rule ) && ( $rule['source'] ?? '' ) === 'document' ) {
+					return true;
+				}
+			}
+			return false;
 		}
 
 		/**
