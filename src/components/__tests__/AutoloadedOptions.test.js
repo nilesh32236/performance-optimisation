@@ -14,7 +14,7 @@ jest.mock( '../common/FeatureCard', () => ( { children, title } ) => (
 	</div>
 ) );
 
-import AutoloadedOptions from '../AutoloadedOptions';
+import AutoloadedOptions, { isValidOptionName } from '../AutoloadedOptions';
 import { apiCall } from '../../lib/apiRequest';
 
 describe( 'AutoloadedOptions', () => {
@@ -420,5 +420,18 @@ describe( 'AutoloadedOptions', () => {
 		).toBeInTheDocument();
 		// Audit list stays visible alongside the success notice.
 		expect( screen.getByText( 'big_option' ) ).toBeInTheDocument();
+	} );
+
+	it( 'validates option names before they reach the remediate endpoint', () => {
+		expect( isValidOptionName( 'big_plugin_blob' ) ).toBe( true );
+		expect( isValidOptionName( 'my.option-name_1' ) ).toBe( true );
+		expect( isValidOptionName( '' ) ).toBe( false );
+		expect( isValidOptionName( null ) ).toBe( false );
+		expect( isValidOptionName( 123 ) ).toBe( false );
+		expect( isValidOptionName( 'a'.repeat( 192 ) ) ).toBe( false );
+		expect( isValidOptionName( 'a'.repeat( 191 ) ) ).toBe( true );
+		expect( isValidOptionName( '../../etc/passwd' ) ).toBe( false );
+		expect( isValidOptionName( 'evil; DROP TABLE x' ) ).toBe( false );
+		expect( isValidOptionName( 'key with spaces' ) ).toBe( false );
 	} );
 } );

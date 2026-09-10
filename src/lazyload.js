@@ -391,6 +391,15 @@ const hostInAllowlist = ( hostname, hosts ) =>
  * @since NEXT
  * @return {string[]|'*'} Allowlist entries, or '*' to allow everything.
  */
+/**
+ * Whether the '*' wildcard warning has already been emitted. getScriptSrcHosts
+ * runs per deferred script, so the warning must fire once, not per script.
+ *
+ * @since NEXT
+ * @type {boolean}
+ */
+let wildcardWarned = false;
+
 const getScriptSrcHosts = () => {
 	const runtimeHosts =
 		( typeof window !== 'undefined' && window.wppoAllowedScriptHosts ) ||
@@ -400,6 +409,16 @@ const getScriptSrcHosts = () => {
 		new Set( [ ...SCRIPT_SRC_HOST_ALLOWLIST, ...runtimeHosts ] )
 	);
 	if ( hosts.includes( '*' ) ) {
+		// The '*' wildcard disables the deferred-script host allowlist
+		// entirely: any host may execute delayed scripts. Loud on purpose —
+		// a single inline-script injection or misconfiguration must not
+		// silently turn the allowlist off.
+		if ( ! wildcardWarned ) {
+			wildcardWarned = true;
+			console.warn(
+				'WPPO: window.wppoAllowedScriptHosts contains "*": the deferred-script host allowlist is disabled and any host may load delayed scripts. Remove the wildcard in production.'
+			);
+		}
 		return '*';
 	}
 	return hosts;

@@ -42,6 +42,61 @@ export const classifyDeviceWidth = ( screenWidth, viewportWidth ) => {
 	return width <= 1024;
 };
 
+/**
+ * Upper bound (ms) accepted for time-based Web Vitals metrics before the
+ * beacon is sent. Mirrors the server-side 0–60000 range enforced by
+ * `RUM::sanitize_sample()` — extreme observer values (or forged beacons
+ * replaying the page-visible token) are dropped client-side so they cannot
+ * pollute the stored aggregates. Server-side per-IP rate limiting and
+ * per-path token validation remain authoritative.
+ *
+ * @since NEXT
+ * @type {number}
+ */
+export const RUM_MAX_METRIC_MS = 60000;
+
+/**
+ * Drop out-of-range metric values before the beacon is sent.
+ *
+ * Time metrics (ttfb/fcp/lcp/inp) must be finite numbers in 0–60000ms;
+ * cls must be a finite number in 0–1. Anything else is omitted from the
+ * payload. Unknown keys pass through untouched.
+ *
+ * @since NEXT
+ * @param {Object} raw Collected metric values.
+ * @return {Object} Sanitized copy containing only in-range metrics.
+ */
+export const sanitizeRumValues = ( raw ) => {
+	const clean = {};
+	if ( ! raw || typeof raw !== 'object' ) {
+		return clean;
+	}
+	for ( const key of [ 'ttfb', 'fcp', 'lcp', 'inp' ] ) {
+		const value = raw[ key ];
+		if (
+			typeof value === 'number' &&
+			Number.isFinite( value ) &&
+			value >= 0 &&
+			value <= RUM_MAX_METRIC_MS
+		) {
+			clean[ key ] = value;
+		}
+	}
+	const cls = raw.cls;
+	if (
+		typeof cls === 'number' &&
+		Number.isFinite( cls ) &&
+		cls >= 0 &&
+		cls <= 1
+	) {
+		clean.cls = cls;
+	}
+	if ( typeof raw.lcpUrl === 'string' && raw.lcpUrl ) {
+		clean.lcpUrl = raw.lcpUrl;
+	}
+	return clean;
+};
+
 ( function () {
 	if (
 		! window.wppoRum ||
@@ -50,7 +105,6 @@ export const classifyDeviceWidth = ( screenWidth, viewportWidth ) => {
 	) {
 		return;
 	}
-
 	const config = window.wppoRum;
 	const values = {};
 	let sent = false;
@@ -90,12 +144,17 @@ export const classifyDeviceWidth = ( screenWidth, viewportWidth ) => {
 		if ( sent ) {
 			return;
 		}
+		// Cap metric magnitudes client-side (mirrors the server-side
+		// 0–60000ms / 0–1 CLS ranges): extreme observer values never leave
+		// the page. Out-of-range values are dropped, not clamped, so forged
+		// magnitudes cannot skew aggregates upward.
+		const metrics = sanitizeRumValues( values );
 		const hasMetric =
-			values.ttfb !== undefined ||
-			values.fcp !== undefined ||
-			values.lcp !== undefined ||
-			values.cls !== undefined ||
-			values.inp !== undefined;
+			metrics.ttfb !== undefined ||
+			metrics.fcp !== undefined ||
+			metrics.lcp !== undefined ||
+			metrics.cls !== undefined ||
+			metrics.inp !== undefined;
 		if ( ! hasMetric ) {
 			return;
 		}
@@ -153,7 +212,7 @@ export const classifyDeviceWidth = ( screenWidth, viewportWidth ) => {
 		const payload = JSON.stringify( {
 			token: config.token,
 			path: config.path,
-			...values,
+			...metrics,
 			...extra,
 		} );
 

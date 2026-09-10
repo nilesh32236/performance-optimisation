@@ -23,7 +23,11 @@ jest.mock( '@fortawesome/free-solid-svg-icons', () => ( {
 	faTachometerAlt: { iconName: 'tachometer-alt' },
 } ) );
 
-import PluginSetting from '../PluginSetting';
+import PluginSetting, {
+	redactSecrets,
+	validateImportData,
+	MAX_IMPORT_TOP_KEYS,
+} from '../PluginSetting';
 import { apiCall, fetchRecentActivities } from '../../lib/apiRequest';
 
 describe( 'PluginSetting', () => {
@@ -356,5 +360,34 @@ describe( 'PluginSetting', () => {
 				settings: { file_optimisation: { minifyJS: true } },
 			} )
 		);
+	} );
+
+	it( 'redacts generic *_key names on export', () => {
+		const redacted = redactSecrets( {
+			object_cache: {
+				auth_key: 'supersecret',
+				consumer_key: 'ck_123',
+				private_key: 'pk_456',
+				google_key: 'gkey',
+				host: 'localhost',
+			},
+		} );
+		expect( redacted.object_cache.auth_key ).toBe( 'REDACTED' );
+		expect( redacted.object_cache.consumer_key ).toBe( 'REDACTED' );
+		expect( redacted.object_cache.private_key ).toBe( 'REDACTED' );
+		expect( redacted.object_cache.google_key ).toBe( 'REDACTED' );
+		expect( redacted.object_cache.host ).toBe( 'localhost' );
+	} );
+
+	it( 'does not redact ordinary words ending in key', () => {
+		const redacted = redactSecrets( { monkey: 'banana' } );
+		expect( redacted.monkey ).toBe( 'banana' );
+	} );
+
+	it( 'caps top-level import keys at the allowlist length', () => {
+		expect( MAX_IMPORT_TOP_KEYS ).toBe( 9 );
+		expect(
+			validateImportData( { file_optimisation: { minifyJS: true } } )
+		).toBe( true );
 	} );
 } );

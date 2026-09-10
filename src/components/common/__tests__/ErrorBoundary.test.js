@@ -56,7 +56,7 @@ describe( 'ErrorBoundary Component', () => {
 		).toBeInTheDocument();
 	} );
 
-	it( 'calls console.error with error info', () => {
+	it( 'logs only the error message by default (no component stack)', () => {
 		render(
 			<ErrorBoundary>
 				<ProblemChild shouldThrow={ true } />
@@ -64,9 +64,27 @@ describe( 'ErrorBoundary Component', () => {
 		);
 		expect( console.error ).toHaveBeenCalledWith(
 			'ErrorBoundary caught:',
-			expect.any( Error ),
-			expect.any( Object )
+			'Test error'
 		);
+	} );
+
+	it( 'logs the full error and component stack when wppoSettings.debug is set', () => {
+		const saved = global.wppoSettings;
+		global.wppoSettings = { ...( saved || {} ), debug: true };
+		try {
+			render(
+				<ErrorBoundary>
+					<ProblemChild shouldThrow={ true } />
+				</ErrorBoundary>
+			);
+			expect( console.error ).toHaveBeenCalledWith(
+				'ErrorBoundary caught:',
+				expect.any( Error ),
+				expect.any( Object )
+			);
+		} finally {
+			global.wppoSettings = saved;
+		}
 	} );
 
 	it( 'recovers when the ErrorBoundary is remounted with a new key', () => {

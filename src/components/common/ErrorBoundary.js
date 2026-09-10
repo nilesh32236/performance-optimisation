@@ -12,7 +12,19 @@ class ErrorBoundary extends Component {
 	}
 
 	componentDidCatch( error, errorInfo ) {
-		console.error( 'ErrorBoundary caught:', error, errorInfo );
+		// Minimal logging by default: the full errorInfo component stack can
+		// contain props/state fragments (settings, request payloads) that
+		// should not sit in a shared console. Verbose output is gated behind
+		// window.wppoSettings.debug.
+		const debug =
+			typeof wppoSettings !== 'undefined' && wppoSettings?.debug;
+		if ( debug ) {
+			console.error( 'ErrorBoundary caught:', error, errorInfo );
+		} else if ( error instanceof Error ) {
+			console.error( 'ErrorBoundary caught:', error.message );
+		} else {
+			console.error( 'ErrorBoundary caught an error.' );
+		}
 	}
 
 	render() {

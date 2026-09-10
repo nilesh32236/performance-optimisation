@@ -220,6 +220,23 @@ export const isValidScanUrl = ( url ) => {
 };
 
 /**
+ * Validate a PageSpeed scan strategy client-side before it reaches the
+ * resource-intensive pagespeed_scan / pagespeed_results / web_vitals_trends
+ * endpoints. Server-side allowlisting remains authoritative.
+ *
+ * @since NEXT
+ * @param {string}  strategy   Raw strategy value.
+ * @param {boolean} allowEmpty Whether '' is accepted (list endpoints).
+ * @return {boolean} True when the strategy is safe to forward to the server.
+ */
+export const isValidScanStrategy = ( strategy, allowEmpty = false ) => {
+	if ( allowEmpty && '' === strategy ) {
+		return true;
+	}
+	return 'mobile' === strategy || 'desktop' === strategy;
+};
+
+/**
  * Run a local telemetry scan on the given URL.
  *
  * @since 1.5.0
@@ -263,7 +280,7 @@ export const queuePagespeedScan = ( url, strategy = 'mobile' ) => {
 			new Error( 'Invalid scan URL: must be a same-origin http(s) URL.' )
 		);
 	}
-	if ( 'mobile' !== strategy && 'desktop' !== strategy ) {
+	if ( ! isValidScanStrategy( strategy ) ) {
 		return Promise.reject(
 			new Error( "Invalid strategy: must be 'mobile' or 'desktop'." )
 		);
@@ -279,12 +296,23 @@ export const queuePagespeedScan = ( url, strategy = 'mobile' ) => {
  *
  * @since 1.6.0
  * @since NEXT Accepts an optional AbortSignal for request cancellation.
+ * @since NEXT Scan URL and strategy are validated client-side before the request.
  * @param {string}      url      The scanned URL.
  * @param {string}      strategy 'mobile' or 'desktop'.
  * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
  * @return {Promise<Object>} Resolved result data or not_ready status.
  */
 export const getPagespeedResults = ( url, strategy = 'mobile', signal ) => {
+	if ( ! isValidScanUrl( url ) ) {
+		return Promise.reject(
+			new Error( 'Invalid scan URL: must be a same-origin http(s) URL.' )
+		);
+	}
+	if ( ! isValidScanStrategy( strategy ) ) {
+		return Promise.reject(
+			new Error( "Invalid strategy: must be 'mobile' or 'desktop'." )
+		);
+	}
 	return apiCall(
 		`pagespeed_results?url=${ encodeURIComponent(
 			url
@@ -302,12 +330,23 @@ export const getPagespeedResults = ( url, strategy = 'mobile', signal ) => {
  *
  * @since 2.14.0
  * @since NEXT Accepts an optional AbortSignal for request cancellation.
+ * @since NEXT Scan URL and strategy are validated client-side before the request.
  * @param {string}      url      The scanned URL.
  * @param {string}      strategy 'mobile', 'desktop' or ''.
  * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
  * @return {Promise<Object>} Resolved trends data.
  */
 export const fetchWebVitalsTrends = ( url = '', strategy = '', signal ) => {
+	if ( url && ! isValidScanUrl( url ) ) {
+		return Promise.reject(
+			new Error( 'Invalid scan URL: must be a same-origin http(s) URL.' )
+		);
+	}
+	if ( ! isValidScanStrategy( strategy, true ) ) {
+		return Promise.reject(
+			new Error( "Invalid strategy: must be 'mobile', 'desktop' or ''." )
+		);
+	}
 	const params = new URLSearchParams();
 	if ( url ) {
 		params.set( 'url', url );
@@ -328,11 +367,17 @@ export const fetchWebVitalsTrends = ( url = '', strategy = '', signal ) => {
  * Retrieve Suggestion_Engine output for a cached telemetry scan.
  *
  * @since 1.6.0
+ * @since NEXT Scan URL is validated client-side before the request.
  * @param {string}      url      The scanned URL.
  * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
  * @return {Promise<Object>} Resolved suggestions array.
  */
 export const fetchSuggestions = ( url, signal ) => {
+	if ( ! isValidScanUrl( url ) ) {
+		return Promise.reject(
+			new Error( 'Invalid scan URL: must be a same-origin http(s) URL.' )
+		);
+	}
 	return apiCall(
 		`suggestions?url=${ encodeURIComponent( url ) }`,
 		{},

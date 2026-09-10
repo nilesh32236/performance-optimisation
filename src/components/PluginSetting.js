@@ -84,18 +84,35 @@ const MAX_IMPORT_DEPTH = 10;
 /**
  * Maximum top-level keys accepted in an imported settings file.
  *
+ * Mirrors the enforced invariant in validateImportData(): every top-level
+ * key must be in ALLOWED_IMPORT_KEYS, so the cap is the allowlist length —
+ * not an independent limit. Nested objects/arrays use
+ * MAX_IMPORT_NESTED_KEYS instead.
+ *
  * @since NEXT
  */
-const MAX_IMPORT_TOP_KEYS = 1000;
+const MAX_IMPORT_TOP_KEYS = ALLOWED_IMPORT_KEYS.length;
+
+/**
+ * Maximum keys/entries accepted in a nested object or array inside an
+ * imported settings file. Real exports are small; larger values risk
+ * freezing the admin UI during parse.
+ *
+ * @since NEXT
+ */
+const MAX_IMPORT_NESTED_KEYS = 1000;
 
 /**
  * Pattern matching nested secret keys redacted on export (Redis password,
  * Cloudflare/Bunny tokens, nonces, generic *key/*token/*secret/password).
+ * The generic [_-]keys? suffix covers auth_key, consumer_key, private_key,
+ * google_key, etc.; the separator requirement avoids matching words like
+ * "monkey" that merely end in "key".
  *
  * @since NEXT
  */
 const SECRET_KEY_PATTERN =
-	/(password|passwd|secret|api[_-]?key|api[_-]?token|auth[_-]?token|cloudflare|bunny|token|nonce)$/i;
+	/(?:[_-]keys?|password|passwd|secret|api[_-]?token|auth[_-]?token|cloudflare|bunny|token|nonce)$/i;
 
 /**
  * Deep-clone an object while masking every nested key matching
@@ -153,7 +170,7 @@ const isValidImportValue = ( value, depth ) => {
 		return true;
 	}
 	if ( Array.isArray( value ) ) {
-		if ( value.length > MAX_IMPORT_TOP_KEYS ) {
+		if ( value.length > MAX_IMPORT_NESTED_KEYS ) {
 			return false;
 		}
 		return value.every( ( item ) => {
@@ -169,7 +186,7 @@ const isValidImportValue = ( value, depth ) => {
 			return false;
 		}
 		const keys = Object.keys( value );
-		if ( keys.length > MAX_IMPORT_TOP_KEYS ) {
+		if ( keys.length > MAX_IMPORT_NESTED_KEYS ) {
 			return false;
 		}
 		return keys.every( ( key ) =>
@@ -1143,6 +1160,8 @@ export {
 	isValidImportValue,
 	MAX_IMPORT_BYTES,
 	MAX_IMPORT_DEPTH,
+	MAX_IMPORT_TOP_KEYS,
+	MAX_IMPORT_NESTED_KEYS,
 	SECRET_KEY_PATTERN,
 };
 

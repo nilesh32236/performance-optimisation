@@ -24,6 +24,22 @@ import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 
 /**
+ * Validate an option name client-side before it reaches the privileged
+ * autoload_remediate endpoint. Mirrors the wp_options.option_name column
+ * (varchar(191)): non-empty string, max 191 chars, conservative charset.
+ * Server-side sanitization remains authoritative.
+ *
+ * @since NEXT
+ * @param {*} optionName Raw option name value.
+ * @return {boolean} True when the name is safe to forward to the server.
+ */
+export const isValidOptionName = ( optionName ) =>
+	typeof optionName === 'string' &&
+	optionName.length > 0 &&
+	optionName.length <= 191 &&
+	/^[A-Za-z0-9_.-]+$/.test( optionName );
+
+/**
  * @return {Element} The autoloaded-options card.
  */
 const AutoloadedOptions = () => {
@@ -188,6 +204,17 @@ const AutoloadedOptions = () => {
 
 	const revertOption = useCallback(
 		async ( optionName ) => {
+			if ( ! isValidOptionName( optionName ) ) {
+				notify( {
+					type: 'error',
+					message: __(
+						'Failed to revert option.',
+						'performance-optimisation'
+					),
+					durationMs: 5000,
+				} );
+				return;
+			}
 			setReverting( ( prev ) => ( { ...prev, [ optionName ]: true } ) );
 			try {
 				const response = await apiCall( 'autoload_remediate', {

@@ -651,6 +651,84 @@ describe( 'API Request library', () => {
 		} );
 	} );
 
+	describe( 'scan input validation', () => {
+		it( 'exposes isValidScanStrategy for mobile/desktop with optional empty', async () => {
+			const { isValidScanStrategy } = await import( '../apiRequest' );
+			expect( isValidScanStrategy( 'mobile' ) ).toBe( true );
+			expect( isValidScanStrategy( 'desktop' ) ).toBe( true );
+			expect( isValidScanStrategy( 'tablet' ) ).toBe( false );
+			expect( isValidScanStrategy( '' ) ).toBe( false );
+			expect( isValidScanStrategy( '', true ) ).toBe( true );
+			expect( isValidScanStrategy( 'mobile', true ) ).toBe( true );
+		} );
+
+		it( 'getPagespeedResults rejects javascript: URLs without fetching', async () => {
+			const { getPagespeedResults } = await import( '../apiRequest' );
+			await expect(
+				getPagespeedResults( 'javascript:alert(1)', 'mobile' )
+			).rejects.toThrow( 'Invalid scan URL' );
+			expect( global.fetch ).not.toHaveBeenCalled();
+		} );
+
+		it( 'getPagespeedResults rejects invalid strategies without fetching', async () => {
+			const { getPagespeedResults } = await import( '../apiRequest' );
+			await expect(
+				getPagespeedResults( 'https://example.com', 'tablet' )
+			).rejects.toThrow( 'Invalid strategy' );
+			expect( global.fetch ).not.toHaveBeenCalled();
+		} );
+
+		it( 'getPagespeedResults rejects off-origin URLs when homeUrl is known', async () => {
+			global.wppoSettings.homeUrl = 'https://example.com';
+			try {
+				const { getPagespeedResults } = await import( '../apiRequest' );
+				await expect(
+					getPagespeedResults( 'https://evil.example.net/', 'mobile' )
+				).rejects.toThrow( 'Invalid scan URL' );
+				expect( global.fetch ).not.toHaveBeenCalled();
+			} finally {
+				delete global.wppoSettings.homeUrl;
+			}
+		} );
+
+		it( 'fetchSuggestions rejects non-http(s) URLs without fetching', async () => {
+			const { fetchSuggestions } = await import( '../apiRequest' );
+			await expect(
+				fetchSuggestions( 'javascript:alert(1)' )
+			).rejects.toThrow( 'Invalid scan URL' );
+			expect( global.fetch ).not.toHaveBeenCalled();
+		} );
+
+		it( 'fetchWebVitalsTrends rejects invalid strategies without fetching', async () => {
+			const { fetchWebVitalsTrends } = await import( '../apiRequest' );
+			await expect(
+				fetchWebVitalsTrends( '', 'tablet' )
+			).rejects.toThrow( 'Invalid strategy' );
+			expect( global.fetch ).not.toHaveBeenCalled();
+		} );
+
+		it( 'fetchWebVitalsTrends allows empty url and strategy', async () => {
+			const mockData = { success: true, data: {} };
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( mockData ),
+			} );
+
+			const { fetchWebVitalsTrends } = await import( '../apiRequest' );
+			const result = await fetchWebVitalsTrends( '', '' );
+
+			expect( global.fetch ).toHaveBeenCalledWith(
+				'http://test.com/wp-json/wppo/v1/web_vitals_trends',
+				{
+					method: 'GET',
+					headers: {
+						'X-WP-Nonce': 'testnonce',
+					},
+				}
+			);
+			expect( result ).toEqual( mockData );
+		} );
+	} );
+
 	describe( 'getWppoSettings', () => {
 		it( 'returns an empty object when the global is absent', () => {
 			const saved = global.wppoSettings;

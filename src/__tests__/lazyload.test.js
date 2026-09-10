@@ -257,6 +257,10 @@ describe( 'Lazy Load (lazyload.js)', () => {
 					'script[src="https://anything.example.dev/x.js"]'
 				)
 			).toBeInTheDocument();
+			// The disabled allowlist must be loud, not silent.
+			expect( consoleWarnSpy ).toHaveBeenCalledWith(
+				expect.stringContaining( 'allowlist is disabled' )
+			);
 		} );
 
 		it( 'copies only allowlisted attributes on inline script replacement', async () => {
