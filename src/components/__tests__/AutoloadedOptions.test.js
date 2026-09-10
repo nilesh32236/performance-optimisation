@@ -434,4 +434,53 @@ describe( 'AutoloadedOptions', () => {
 		expect( isValidOptionName( 'evil; DROP TABLE x' ) ).toBe( false );
 		expect( isValidOptionName( 'key with spaces' ) ).toBe( false );
 	} );
+
+	it( 'does not call the remediate endpoint when reverting an invalid option name', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				options: [ { option_name: 'big_option', size: 5000 } ],
+			},
+		} );
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				count: 1,
+				bytes_saved: 100,
+				options: [],
+				remediated: { 'evil; DROP TABLE x': 'yes' },
+			},
+		} );
+
+		render( <AutoloadedOptions /> );
+
+		await waitFor( () =>
+			expect( screen.getByText( 'big_option' ) ).toBeInTheDocument()
+		);
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: 'Check savings' } )
+		);
+
+		await waitFor( () =>
+			expect(
+				screen.getByRole( 'button', { name: 'Revert' } )
+			).toBeInTheDocument()
+		);
+
+		const callsBefore = apiCall.mock.calls.length;
+
+		fireEvent.click( screen.getByRole( 'button', { name: 'Revert' } ) );
+
+		await waitFor( () =>
+			expect(
+				screen.getByText( 'Failed to revert option.' )
+			).toBeInTheDocument()
+		);
+		expect( apiCall.mock.calls.length ).toBe( callsBefore );
+		expect( apiCall ).not.toHaveBeenCalledWith(
+			'autoload_remediate',
+			expect.objectContaining( { mode: 'revert' } )
+		);
+	} );
 } );

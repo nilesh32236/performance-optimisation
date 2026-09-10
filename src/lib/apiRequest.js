@@ -230,6 +230,9 @@ export const isValidScanUrl = ( url ) => {
  * @return {boolean} True when the strategy is safe to forward to the server.
  */
 export const isValidScanStrategy = ( strategy, allowEmpty = false ) => {
+	if ( typeof strategy !== 'string' ) {
+		return false;
+	}
 	if ( allowEmpty && '' === strategy ) {
 		return true;
 	}

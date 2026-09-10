@@ -59,8 +59,9 @@ export const RUM_MAX_METRIC_MS = 60000;
  * Drop out-of-range metric values before the beacon is sent.
  *
  * Time metrics (ttfb/fcp/lcp/inp) must be finite numbers in 0–60000ms;
- * cls must be a finite number in 0–1. Anything else is omitted from the
- * payload. Unknown keys pass through untouched.
+ * cls must be a finite number in 0–1. lcpUrl must use the same policy as
+ * the PerformanceObserver collector (http(s):// or leading '/' and
+ * ≤2048 chars). Only known metric keys are kept; unknown keys are dropped.
  *
  * @since NEXT
  * @param {Object} raw Collected metric values.
@@ -91,7 +92,14 @@ export const sanitizeRumValues = ( raw ) => {
 	) {
 		clean.cls = cls;
 	}
-	if ( typeof raw.lcpUrl === 'string' && raw.lcpUrl ) {
+	if (
+		typeof raw.lcpUrl === 'string' &&
+		raw.lcpUrl &&
+		raw.lcpUrl.length <= 2048 &&
+		( raw.lcpUrl.indexOf( 'http://' ) === 0 ||
+			raw.lcpUrl.indexOf( 'https://' ) === 0 ||
+			raw.lcpUrl.charAt( 0 ) === '/' )
+	) {
 		clean.lcpUrl = raw.lcpUrl;
 	}
 	return clean;

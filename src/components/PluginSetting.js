@@ -42,30 +42,6 @@ const ALLOWED_IMPORT_KEYS =
 		? wppoSettings.allowedSettingsKeys
 		: FALLBACK_ALLOWED_KEYS;
 
-const validateImportData = ( data ) => {
-	if ( ! data || typeof data !== 'object' || Array.isArray( data ) ) {
-		return false;
-	}
-	const keys = Object.keys( data );
-	if ( keys.length === 0 ) {
-		return false;
-	}
-	if ( keys.length > MAX_IMPORT_TOP_KEYS ) {
-		return false;
-	}
-	return keys.every( ( key ) => {
-		if (
-			! ALLOWED_IMPORT_KEYS.includes( key ) ||
-			typeof data[ key ] !== 'object' ||
-			data[ key ] === null ||
-			Array.isArray( data[ key ] )
-		) {
-			return false;
-		}
-		return isValidImportValue( data[ key ], 1 );
-	} );
-};
-
 /**
  * Maximum accepted settings-file size (512KB). Real exports are <100KB;
  * larger files risk freezing the admin UI during parse.
@@ -102,17 +78,42 @@ const MAX_IMPORT_TOP_KEYS = ALLOWED_IMPORT_KEYS.length;
  */
 const MAX_IMPORT_NESTED_KEYS = 1000;
 
+const validateImportData = ( data ) => {
+	if ( ! data || typeof data !== 'object' || Array.isArray( data ) ) {
+		return false;
+	}
+	const keys = Object.keys( data );
+	if ( keys.length === 0 ) {
+		return false;
+	}
+	if ( keys.length > MAX_IMPORT_TOP_KEYS ) {
+		return false;
+	}
+	return keys.every( ( key ) => {
+		if (
+			! ALLOWED_IMPORT_KEYS.includes( key ) ||
+			typeof data[ key ] !== 'object' ||
+			data[ key ] === null ||
+			Array.isArray( data[ key ] )
+		) {
+			return false;
+		}
+		return isValidImportValue( data[ key ], 1 );
+	} );
+};
+
 /**
  * Pattern matching nested secret keys redacted on export (Redis password,
  * Cloudflare/Bunny tokens, nonces, generic *key/*token/*secret/password).
  * The generic [_-]keys? suffix covers auth_key, consumer_key, private_key,
  * google_key, etc.; the separator requirement avoids matching words like
- * "monkey" that merely end in "key".
+ * "monkey" that merely end in "key". The separator-optional api[_-]?keys?
+ * alternative covers separator-less 'apikey'/'apiKey' variants.
  *
  * @since NEXT
  */
 const SECRET_KEY_PATTERN =
-	/(?:[_-]keys?|password|passwd|secret|api[_-]?token|auth[_-]?token|cloudflare|bunny|token|nonce)$/i;
+	/(?:[_-]keys?|api[_-]?keys?|password|passwd|secret|api[_-]?token|auth[_-]?token|cloudflare|bunny|token|nonce)$/i;
 
 /**
  * Deep-clone an object while masking every nested key matching

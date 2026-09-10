@@ -17,13 +17,16 @@ class ErrorBoundary extends Component {
 		// should not sit in a shared console. Verbose output is gated behind
 		// window.wppoSettings.debug.
 		const debug =
-			typeof wppoSettings !== 'undefined' && wppoSettings?.debug;
+			typeof window !== 'undefined' &&
+			typeof window.wppoSettings !== 'undefined' &&
+			window.wppoSettings?.debug;
 		if ( debug ) {
 			console.error( 'ErrorBoundary caught:', error, errorInfo );
 		} else if ( error instanceof Error ) {
 			console.error( 'ErrorBoundary caught:', error.message );
 		} else {
-			console.error( 'ErrorBoundary caught an error.' );
+			const primitive = String( error );
+			console.error( 'ErrorBoundary caught:', primitive || 'an error.' );
 		}
 	}
 

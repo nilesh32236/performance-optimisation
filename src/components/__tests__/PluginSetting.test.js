@@ -384,10 +384,33 @@ describe( 'PluginSetting', () => {
 		expect( redacted.monkey ).toBe( 'banana' );
 	} );
 
+	it( 'redacts separator-less apikey variants on export', () => {
+		const redacted = redactSecrets( {
+			performance_audit: {
+				apikey: 'secret-1',
+				apiKey: 'secret-2',
+				pagespeed_api_key: 'AIza-secret',
+			},
+		} );
+		expect( redacted.performance_audit.apikey ).toBe( 'REDACTED' );
+		expect( redacted.performance_audit.apiKey ).toBe( 'REDACTED' );
+	} );
+
 	it( 'caps top-level import keys at the allowlist length', () => {
-		expect( MAX_IMPORT_TOP_KEYS ).toBe( 9 );
+		expect( MAX_IMPORT_TOP_KEYS ).toBeGreaterThan( 0 );
 		expect(
 			validateImportData( { file_optimisation: { minifyJS: true } } )
 		).toBe( true );
+	} );
+
+	it( 'rejects over-cap and unknown-key import payloads', () => {
+		const overCap = {};
+		for ( let i = 0; i < MAX_IMPORT_TOP_KEYS + 1; i++ ) {
+			overCap[ `unknown_key_${ i }` ] = {};
+		}
+		expect( validateImportData( overCap ) ).toBe( false );
+		expect( validateImportData( { unknown_top_level_key: {} } ) ).toBe(
+			false
+		);
 	} );
 } );

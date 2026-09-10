@@ -105,4 +105,42 @@ describe( 'sanitizeRumValues', () => {
 		expect( sanitizeRumValues( null ) ).toEqual( {} );
 		expect( sanitizeRumValues( 'nope' ) ).toEqual( {} );
 	} );
+
+	it( 'rejects out-of-policy lcpUrl values and drops unknown keys', () => {
+		expect(
+			sanitizeRumValues( { lcp: 1200, lcpUrl: 'javascript:alert(1)' } )
+				.lcpUrl
+		).toBeUndefined();
+		expect(
+			sanitizeRumValues( {
+				lcp: 1200,
+				lcpUrl: 'data:image/png;base64,x',
+			} ).lcpUrl
+		).toBeUndefined();
+		expect(
+			sanitizeRumValues( {
+				lcp: 1200,
+				lcpUrl: `https://example.com/${ 'a'.repeat( 2048 ) }`,
+			} ).lcpUrl
+		).toBeUndefined();
+		expect(
+			sanitizeRumValues( { lcp: 1200, lcpUrl: '' } ).lcpUrl
+		).toBeUndefined();
+		expect(
+			sanitizeRumValues( {
+				lcp: 1200,
+				lcpUrl: 'http://example.com/hero.jpg',
+			} ).lcpUrl
+		).toBe( 'http://example.com/hero.jpg' );
+		expect(
+			sanitizeRumValues( { lcp: 1200, lcpUrl: '/hero.jpg' } ).lcpUrl
+		).toBe( '/hero.jpg' );
+		const clean = sanitizeRumValues( {
+			ttfb: 50,
+			evilKey: 'evil',
+			__proto__: 'pollution',
+		} );
+		expect( clean ).toEqual( { ttfb: 50 } );
+		expect( clean.evilKey ).toBeUndefined();
+	} );
 } );
