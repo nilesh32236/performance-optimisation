@@ -216,9 +216,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * WebP). When core maps the source MIME to a next-gen format, the
 		 * plugin converts to that format so both pipelines produce the same
 		 * output; when core maps it to a legacy format, core owns the
-		 * conversion and the plugin returns 'none' (skip). On older cores, or
-		 * when core provides no mapping for the source MIME, the requested
-		 * format is returned unchanged.
+		 * conversion and the plugin returns 'none' (skip). On older cores
+		 * without the helper, or when core provides no mapping for the
+		 * source MIME, the requested format is returned unchanged (legacy
+		 * fallback intact).
+		 *
+		 * Format authority lives here: `get_smart_quality()` owns only the
+		 * numeric quality mapping (AVIF = WebP − 20) and stays fail-open when
+		 * core maps the source MIME elsewhere.
 		 *
 		 * @since NEXT
 		 *
@@ -376,6 +381,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * enabled, AVIF targets a lower numeric quality than WebP at equal
 		 * visual quality (AVIF's efficiency). Falls back to the flat 82
 		 * default chain otherwise.
+		 *
+		 * Format authority lives in `resolve_output_format()`, which defers to
+		 * core's `image_editor_output_format` filter (guarded by `has_filter()`
+		 * and `function_exists()`); this method owns only the numeric mapping
+		 * and stays fail-open whatever core decides.
 		 *
 		 * @since NEXT
 		 *

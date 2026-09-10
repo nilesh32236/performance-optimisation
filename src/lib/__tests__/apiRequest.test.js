@@ -1,4 +1,4 @@
-import { apiCall, fetchRecentActivities } from '../apiRequest';
+import { apiCall, fetchRecentActivities, getWppoSettings } from '../apiRequest';
 
 const originalFetch = global.fetch;
 
@@ -648,6 +648,22 @@ describe( 'API Request library', () => {
 			await expect( fetchServerRules() ).rejects.toThrow(
 				'Network error'
 			);
+		} );
+	} );
+
+	describe( 'getWppoSettings', () => {
+		it( 'returns an empty object when the global is absent', () => {
+			const saved = global.wppoSettings;
+			delete global.wppoSettings;
+			try {
+				expect( getWppoSettings() ).toEqual( {} );
+			} finally {
+				global.wppoSettings = saved;
+			}
+		} );
+
+		it( 'returns the live global reference when present', () => {
+			expect( getWppoSettings() ).toBe( global.wppoSettings );
 		} );
 	} );
 

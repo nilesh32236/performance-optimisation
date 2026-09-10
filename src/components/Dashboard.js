@@ -123,11 +123,15 @@ const Dashboard = ( {
 	} );
 
 	// Logged-in user cache settings — prefer props from App.js, fallback to global for direct mounts/tests.
-	const cacheSettings =
-		propCacheSettings ??
-		( typeof wppoSettings !== 'undefined'
-			? wppoSettings?.settings?.cache_settings || {}
-			: {} );
+	// Memoized so the save*Settings useCallbacks below keep stable deps.
+	const cacheSettings = useMemo(
+		() =>
+			propCacheSettings ??
+			( typeof wppoSettings !== 'undefined'
+				? wppoSettings?.settings?.cache_settings || {}
+				: {} ),
+		[ propCacheSettings ]
+	);
 	const userRoles =
 		propUserRoles ??
 		( typeof wppoSettings !== 'undefined'

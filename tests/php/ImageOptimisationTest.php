@@ -1244,6 +1244,11 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	 * @since NEXT
 	 */
 	public function test_css_hero_emits_exactly_one_preload_link(): void {
+	 * Test that a stored LCP URL gets a companion preload link, fetchpriority high, and is never lazy.
+	 *
+	 * @since NEXT
+	 */
+	public function test_hero_lcp_emits_preload_and_never_lazy(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
 		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
 		Functions\when( 'is_admin' )->justReturn( false );
@@ -1324,5 +1329,44 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertStringContainsString( 'fetchpriority="high"', $result );
 		$this->assertStringNotContainsString( 'loading="lazy"', $result );
+	}
+		Functions\when( 'wp_kses' )->returnArg();
+		$this->stub_lcp_resolution( 'https://example.com/wp-content/uploads/hero.jpg' );
+
+		$image_opt = $this->make_lcp_enabled_instance();
+
+		$html   = '<html><head></head><body><img src="https://example.com/wp-content/uploads/hero.jpg" loading="lazy" /></body></html>';
+		$result = $image_opt->prioritize_lcp_in_buffer( $html, $html );
+
+		$this->assertStringContainsString( 'fetchpriority="high"', $result );
+		$this->assertStringContainsString( 'data-wppo-hero', $result );
+		$this->assertStringContainsString( 'rel="preload"', $result );
+		$this->assertStringNotContainsString( 'loading="lazy"', $result );
+	}
+
+	/**
+	 * Test that the first-viewport image is treated as hero when no stored LCP URL resolves.
+	 *
+	 * @since NEXT
+	 */
+	public function test_hero_fallback_treats_first_image_as_hero(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+		Functions\when( 'esc_attr' )->returnArg();
+		Functions\when( 'esc_url' )->returnArg();
+		Functions\when( 'wp_kses' )->returnArg();
+		$this->stub_lcp_resolution( '' );
+
+		$image_opt = $this->make_lcp_enabled_instance();
+
+		$html   = '<html><head></head><body><img src="https://example.com/first.jpg" loading="lazy" /><img src="https://example.com/second.jpg" loading="lazy" /></body></html>';
+		$result = $image_opt->prioritize_lcp_in_buffer( $html, $html );
+
+		$this->assertStringContainsString( 'data-wppo-hero', $result );
+		$this->assertStringContainsString( 'rel="preload"', $result );
+		// The below-fold image keeps its lazy loading.
+		$this->assertStringContainsString( '<img src="https://example.com/second.jpg" loading="lazy"', $result );
 	}
 }

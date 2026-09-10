@@ -1473,28 +1473,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$strategies = array( 'mobile', 'desktop' );
 
 			// Priority 1: Singular post — check post meta (mobile first, then desktop).
-			if ( is_singular() ) {
-				$post_id = get_the_ID();
-				foreach ( $strategies as $strategy ) {
-					$meta_lcp = get_post_meta( $post_id, '_wppo_lcp_image_url_' . $strategy, true );
-					if ( ! empty( $meta_lcp ) && is_string( $meta_lcp ) ) {
-						return $meta_lcp;
+			// Guarded by function_exists() so unit contexts without WP fail open.
+			if ( function_exists( 'is_singular' ) && is_singular() ) {
+				$post_id = function_exists( 'get_the_ID' ) ? get_the_ID() : 0;
+				if ( ! empty( $post_id ) && function_exists( 'get_post_meta' ) ) {
+					foreach ( $strategies as $strategy ) {
+						$meta_lcp = get_post_meta( $post_id, '_wppo_lcp_image_url_' . $strategy, true );
+						if ( ! empty( $meta_lcp ) && is_string( $meta_lcp ) ) {
+							return $meta_lcp;
+						}
 					}
 				}
 			}
 
 			// Priority 2: Front page — check option (mobile first, then desktop).
-			if ( is_front_page() ) {
-				foreach ( $strategies as $strategy ) {
-					$front_lcp = get_option( 'wppo_front_page_lcp_' . $strategy, '' );
-					if ( ! empty( $front_lcp ) && is_string( $front_lcp ) ) {
-						return $front_lcp;
+			if ( function_exists( 'is_front_page' ) && is_front_page() ) {
+				if ( function_exists( 'get_option' ) ) {
+					foreach ( $strategies as $strategy ) {
+						$front_lcp = get_option( 'wppo_front_page_lcp_' . $strategy, '' );
+						if ( ! empty( $front_lcp ) && is_string( $front_lcp ) ) {
+							return $front_lcp;
+						}
 					}
 				}
 			}
 
 			// Priority 3: Check transient keyed by strategy + current URL hash.
-			$current_url = untrailingslashit( esc_url_raw( Util::get_current_url() ) );
+			// Fail-open: Util::get_current_url() needs WP URL helpers that may be
+			// unavailable (e.g. unit contexts); any failure returns ''.
+			if ( ! function_exists( 'get_transient' ) ) {
+				return '';
+			}
+			try {
+				if ( ! function_exists( 'untrailingslashit' ) || ! function_exists( 'esc_url_raw' ) ) {
+					return '';
+				}
+				$current_url = untrailingslashit( esc_url_raw( Util::get_current_url() ) );
+			} catch ( \Throwable $e ) {
+				return '';
+			}
 			foreach ( $strategies as $strategy ) {
 				$transient = get_transient( Util::transient_key( 'wppo_lcp_url_' . $strategy . '_' . md5( $current_url ) ) );
 				if ( ! empty( $transient ) && is_string( $transient ) ) {
@@ -2941,6 +2958,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				// cssHeroPreload toggle is enabled.
 				$buffer = $this->maybe_inject_css_hero_preload( $buffer, ( $prioritize_enabled ? $lcp_url : null ) );
 
+				// Pass C: hero fallback + companion preload link (fail-open, never lazy).
+				$buffer = $this->maybe_preload_hero_image( $buffer, $image_optimisation );
+
 				return $buffer;
 			} catch ( \Throwable $e ) {
 				do_action( 'wppo_debug_log', 'WPPO LCP prioritization failed: ' . $e->getMessage(), array( 'exception' => $e ) );
@@ -3062,6 +3082,116 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 
 			return $stamped ? $tags->get_updated_html() : $buffer;
+		}
+
+		/**
+		 * Hero fallback: ensure the first-viewport image preloads with fetchpriority=high and is never lazy.
+		 *
+		 * When stored LCP data exists the companion preload link is emitted for
+		 * it; when detection fails the first <img src> in the buffer is treated
+		 * as the hero (eager, fetchpriority high, never data-src lazy). Core's
+		 * wp_get_loading_optimization_attributes() decision is honoured — gaps
+		 * are only filled. Fail-open: any failure returns the buffer unchanged.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $buffer             The HTML buffer.
+		 * @param array  $image_optimisation Image optimisation settings.
+		 * @return string The buffer with hero preload link injected.
+		 */
+		private function maybe_preload_hero_image( string $buffer, array $image_optimisation ): string {
+			try {
+				if ( isset( $image_optimisation['lcpHeroPreload'] ) && empty( $image_optimisation['lcpHeroPreload'] ) ) {
+					return $buffer;
+				}
+				if ( false === strpos( $buffer, '<img' ) ) {
+					return $buffer;
+				}
+
+				$lcp_url = $this->get_current_lcp_url();
+				if ( '' === $lcp_url ) {
+					$lcp_url = $this->get_first_image_src_in_buffer( $buffer );
+				}
+				if ( '' === $lcp_url ) {
+					return $buffer;
+				}
+
+				// Never lazy: strip loading=lazy + stamp fetchpriority high on the hero tag only when absent.
+				$tags    = new \WP_HTML_Tag_Processor( $buffer );
+				$changed = false;
+				while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
+					if ( $this->tag_matches_lcp_url( $tags, $lcp_url ) ) {
+						if ( 'lazy' === $tags->get_attribute( 'loading' ) ) {
+							$tags->remove_attribute( 'loading' );
+							$changed = true;
+						}
+						if ( null === $tags->get_attribute( 'fetchpriority' ) ) {
+							$tags->set_attribute( 'fetchpriority', 'high' );
+							$changed = true;
+						}
+						if ( null === $tags->get_attribute( 'data-wppo-hero' ) ) {
+							$tags->set_attribute( 'data-wppo-hero', '1' );
+							$changed = true;
+						}
+						break;
+					}
+				}
+				if ( $changed ) {
+					$buffer = $tags->get_updated_html();
+				}
+
+				// Companion preload link (fetchpriority=high). Skip when already present.
+				if ( false !== strpos( $buffer, $lcp_url ) && false !== strpos( $buffer, 'rel="preload"' ) && false !== strpos( $buffer, esc_attr( $lcp_url ) ) ) {
+					return $buffer;
+				}
+				$link_tag = Util::get_preload_link(
+					$lcp_url,
+					'preload',
+					'image',
+					false,
+					Util::get_image_mime_type( $lcp_url ),
+					'',
+					'high'
+				);
+				if ( '' === $link_tag ) {
+					return $buffer;
+				}
+				if ( false !== stripos( $buffer, '</head>' ) ) {
+					$buffer = (string) preg_replace( '#</head>#i', $link_tag . "\n</head>", $buffer, 1 );
+				} else {
+					$buffer = $link_tag . "\n" . $buffer;
+				}
+				return $buffer;
+			} catch ( \Throwable $e ) {
+				return $buffer;
+			}
+		}
+
+		/**
+		 * Get the first <img src> URL in the buffer (hero fallback).
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $buffer The HTML buffer.
+		 * @return string First image src, or empty string when none found.
+		 */
+		private function get_first_image_src_in_buffer( string $buffer ): string {
+			try {
+				$tags = new \WP_HTML_Tag_Processor( $buffer );
+				while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
+					$src = $tags->get_attribute( 'src' );
+					if ( is_string( $src ) && '' !== $src ) {
+						return $src;
+					}
+					$data_src = $tags->get_attribute( 'data-src' );
+					if ( is_string( $data_src ) && '' !== $data_src ) {
+						return $data_src;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				return '';
+			}
+			return '';
 		}
 
 		/**
@@ -3354,6 +3484,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 							error_log( 'WPPO Image optimisation OD error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 						}
+					}
+				}
+
+				// Stored LCP + hero fallback (LCP-aware lazy-load, @since NEXT).
+				// Gated on the LCP feature toggles so default lazy behaviour is
+				// unchanged when LCP prioritization is off (backward compat):
+				// the stored LCP URL (PageSpeed/post-meta/transient) and, when
+				// no stored URL resolves, the first <img src> (hero) are merged
+				// into the never-lazy exclusion list. Fail-open: any detection
+				// failure leaves the exclusion list untouched.
+				$stored_lcp   = '';
+				$hero_enabled = ( ! isset( $image_optimisation['lcpHeroPreload'] ) || ! empty( $image_optimisation['lcpHeroPreload'] ) )
+					&& ( ! empty( $image_optimisation['prioritizeLCPImages'] ) || ! empty( $image_optimisation['autoPreloadLCP'] ) );
+				if ( $hero_enabled ) {
+					try {
+						$stored_lcp = $this->get_current_lcp_url();
+						if ( '' !== $stored_lcp && ! in_array( $stored_lcp, $exclude_imgs, true ) ) {
+							$exclude_imgs[] = $stored_lcp;
+							$exclude_imgs   = array_unique( $exclude_imgs );
+						}
+						if ( '' === $stored_lcp ) {
+							$first_src = $this->get_first_image_src_in_buffer( $buffer );
+							if ( '' !== $first_src && ! in_array( $first_src, $exclude_imgs, true ) ) {
+								$exclude_imgs[] = $first_src;
+								$exclude_imgs   = array_unique( $exclude_imgs );
+							}
+						}
+					} catch ( \Throwable $e ) {
+						do_action( 'wppo_debug_log', 'WPPO hero exclusion failed: ' . $e->getMessage(), array( 'exception' => $e ) );
 					}
 				}
 

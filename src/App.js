@@ -27,6 +27,7 @@ import {
 	apiCall,
 	fetchRecentActivities,
 	fetchServerRules,
+	getWppoSettings,
 } from './lib/apiRequest';
 import ErrorBoundary from './components/common/ErrorBoundary';
 
@@ -309,7 +310,7 @@ const App = () => {
 
 	// Inject frontend theme accent colors as CSS custom properties.
 	useEffect( () => {
-		const themeColors = wppoSettings?.themeColors;
+		const themeColors = getWppoSettings()?.themeColors;
 		if ( ! themeColors ) {
 			return;
 		}
@@ -452,6 +453,13 @@ const App = () => {
 			rulesController.abort();
 			ccssController.abort();
 		};
+		// Intentionally minimal deps: hasFetched* refs (not state) gate
+		// re-fetches, so effect-written state (recentActivities, serverRules)
+		// is read but not depended on — depending on it would cause an extra
+		// effect run plus AbortController teardown/recreation after each
+		// fetch and could abort the parallel CCSS request when serverRules
+		// resolves first.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [ activeTab, rulesRetryTrigger, ccssRefreshTrigger ] );
 
 	useEffect( () => {
@@ -459,6 +467,8 @@ const App = () => {
 		const timeout = setTimeout( () => setTransition( false ), 400 );
 		return () => clearTimeout( timeout );
 	}, [ activeTab ] );
+
+	const wppoVersion = getWppoSettings()?.version ?? '';
 
 	return (
 		<UnsavedChangesContext.Provider value={ { isDirty, setIsDirty } }>
@@ -577,9 +587,7 @@ const App = () => {
 					</nav>
 					<div className="wppo-sidebar-footer">
 						<div className="wppo-sidebar-version">
-							{ wppoSettings?.version
-								? `v${ wppoSettings.version }`
-								: '' }
+							{ wppoVersion ? `v${ wppoVersion }` : '' }
 						</div>
 					</div>
 				</div>

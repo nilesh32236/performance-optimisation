@@ -85,10 +85,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * The domain name of the site.
 		 *
+		 * Pinned to the canonical home host (see {@see Util::get_canonical_host()})
+		 * so a forged Host header can never create a poisoned cache directory
+		 * tree. Falls back to the legacy Host-derived value only when the
+		 * canonical host cannot be resolved (early boot, CLI).
+		 *
 		 * @var string
 		 * @since 1.0.0
 		 */
 		private string $domain;
+
+		/**
+		 * Whether the request Host header differs from the canonical home host.
+		 *
+		 * When true the request is served uncached (fail-open) and no cache
+		 * file is written, so forged hosts can neither poison nor read stored
+		 * payloads.
+		 *
+		 * @var bool
+		 * @since NEXT
+		 */
+		private bool $host_mismatch = false;
 
 		/**
 		 * The root directory for cache files.
@@ -295,30 +312,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		public function __construct( array $options = array() ) {
-			$domain = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
+			$raw_host     = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
+			$request_host = Util::normalize_cache_host( $raw_host );
+			$canonical    = Util::get_canonical_host();
 
-			// Convert internationalized domain names to ASCII (punycode) to support IDN chars.
-			if ( function_exists( 'idn_to_ascii' ) ) {
-				$converted = idn_to_ascii( $domain, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46 );
-				if ( false !== $converted ) {
-					$domain = $converted;
-				}
-			}
-
-			// Strip the port before validation.
-			$host = explode( ':', $domain, 2 )[0];
-
-			$valid_domain = ! (
-				strpos( $host, '..' ) !== false ||
-				strpos( $host, '/' ) !== false ||
-				strpos( $host, '\\' ) !== false ||
-				! preg_match( '/^[a-z0-9\.\-]+$/i', $host )
-			);
-
-			if ( ! $valid_domain ) {
-				$domain = '';
+			if ( '' !== $canonical ) {
+				// Pin the cache key to the canonical home host by construction:
+				// a forged Host header can never create its own cache tree.
+				// An absent/blank request host (CLI/cron, no forgery signal) is
+				// not a mismatch so background contexts can still read/write
+				// the canonical tree; a presented-but-invalid host that
+				// normalizes to '' (e.g. 'evil!/..') is still a mismatch so it
+				// cannot poison the canonical file.
+				$domain              = $canonical;
+				$valid_domain        = true;
+				$raw_trimmed         = trim( (string) $raw_host );
+				$this->host_mismatch = ( '' === $request_host ? '' !== $raw_trimmed : $request_host !== $canonical );
 			} else {
-				$domain = strtolower( $host );
+				// Canonical host unavailable (early boot, CLI): legacy
+				// Host-derived behaviour so nothing fatals.
+				$domain              = $request_host;
+				$valid_domain        = ( '' !== $request_host );
+				$this->host_mismatch = false;
 			}
 
 			$this->domain = $domain;
@@ -335,8 +350,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$this->request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
 			$url_path          = wp_normalize_path( trim( rawurldecode( (string) wp_parse_url( $this->request_uri, PHP_URL_PATH ) ), '/' ) );
 
-			// Reject directory traversal.
-			if ( strpos( $url_path, '..' ) !== false ) {
+			// Reject directory traversal and null-byte probes (serve uncached).
+			if ( false !== strpos( $url_path, "\0" ) || false !== strpos( $url_path, '..' ) ) {
 				$url_path = '';
 			}
 
@@ -345,9 +360,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// Initialize filesystem lazily via get_filesystem().
 			$this->options = ! empty( $options ) ? $options : Util::get_settings();
 
-			if ( ! $valid_domain && ! empty( $this->options['debug'] ) ) {
-				do_action( 'wppo_debug_log', 'Cache domain validation failed' );
+			if ( ! empty( $this->options['debug'] ) ) {
+				if ( $this->host_mismatch ) {
+					do_action( 'wppo_debug_log', 'Cache host mismatch: request host differs from canonical home host, serving uncached' );
+				} elseif ( ! $valid_domain ) {
+					do_action( 'wppo_debug_log', 'Cache domain validation failed' );
+				}
 			}
+		}
+
+		/**
+		 * Whether the request Host header mismatched the canonical home host.
+		 *
+		 * A mismatched request is served uncached (fail-open) and never writes
+		 * a cache file, so forged hosts can neither poison nor read stored
+		 * payloads.
+		 *
+		 * @return bool True when the request host differs from the canonical host.
+		 * @since NEXT
+		 */
+		public function is_host_mismatched(): bool {
+			return $this->host_mismatch;
 		}
 
 		/**
@@ -1738,7 +1771,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$this->no_cache_marker_written = true;
 
 			$html_file_path = $this->get_cache_file_path( 'html' );
-			$marker_path    = trailingslashit( dirname( $html_file_path ) ) . '.wppo-no-cache';
+			if ( '' === $html_file_path ) {
+				return;
+			}
+			$marker_path = trailingslashit( dirname( $html_file_path ) ) . '.wppo-no-cache';
+			if ( ! $this->is_path_contained( $marker_path ) ) {
+				$this->log_traversal_probe( $this->url_path );
+				return;
+			}
 
 			$fs = $this->get_filesystem();
 			if ( ! $fs ) {
@@ -1793,6 +1833,58 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Whether the current request targets a WooCommerce Store API route.
+		 *
+		 * Store API responses (`wc/store`, `wcstore`, `wp-json/wc/store*`,
+		 * `wp-json/wcstore*`) are dynamic JSON and must never be cached —
+		 * unconditional on the `wooSafeMode` toggle, mirroring wc-ajax.
+		 * Fail-open: detection failure returns true (treated as dynamic, never cached) and
+		 * the broader Woo guards still apply.
+		 *
+		 * @since NEXT
+		 * @return bool True for Store API requests.
+		 */
+		private function is_woo_store_api_request(): bool {
+			$path = wp_normalize_path( trim( rawurldecode( (string) wp_parse_url( $this->request_uri, PHP_URL_PATH ) ), '/' ) );
+			if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_request' ) ) {
+				try {
+					return Util::is_woo_store_api_request( $path );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return true;
+				}
+			}
+			if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_path' ) ) {
+				try {
+					if ( Util::is_woo_store_api_path( $path ) ) {
+						return true;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				// Plain-permalink fallback (?rest_route=/wc/store/...) when the
+				// newer request helper is unavailable (mixed-version deploys).
+				try {
+					$rest_route_fb = isset( $_GET['rest_route'] ) ? sanitize_text_field( wp_unslash( $_GET['rest_route'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
+					if ( '' !== $rest_route_fb && Util::is_woo_store_api_path( $rest_route_fb ) ) {
+						return true;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			if ( (bool) preg_match( '#(^|/)(?:wc/store|wcstore|wp-json/wc/store|wp-json/wcstore)(/|$)#i', '/' . $path ) ) {
+				return true;
+			}
+			$rest_route_raw = isset( $_GET['rest_route'] ) ? sanitize_text_field( wp_unslash( $_GET['rest_route'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
+			if ( '' !== $rest_route_raw && (bool) preg_match( '#(^|/)(?:wc/store|wcstore|wp-json/wc/store|wp-json/wcstore)(/|$)#i', '/' . ltrim( $rest_route_raw, '/' ) ) ) {
+				return true;
+			}
+			return ! empty( $_SERVER['QUERY_STRING'] ) &&
+			(bool) preg_match( '#rest_route=[^&]*(?:wc/store|wcstore)#i', rawurldecode( sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) ) ) );
+		}
+
+		/**
 		 * Whether the current request should be excluded from static cache due to WooCommerce safe mode.
 		 *
 		 * Safe-by-default exclusions for WooCommerce: cart/checkout/account,
@@ -1806,17 +1898,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return bool True when the request is Woo-excluded (not cacheable).
 		 */
 		private function is_woo_excluded(): bool {
+			// Store API routes are never cacheable, even when safe mode is off
+			// (unconditional, mirroring wc-ajax). Checked before the toggle
+			// so wooSafeMode=false cannot re-allow dynamic Store API JSON.
+			try {
+				if ( $this->is_woo_store_api_request() ) {
+					return true;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
 			// Feature toggle: explicit false disables safe mode; absent key = true for BC.
-			if ( isset( $this->options['cache_settings']['wooSafeMode'] ) && false === $this->options['cache_settings']['wooSafeMode'] ) {
+			// Unified on Util::is_woo_safe_mode_enabled() (absent = on,
+			// malformed/non-scalar = on) so serve/store layers match Cron/Main.
+			if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_safe_mode_enabled' ) ) {
+				try {
+					if ( ! Util::is_woo_safe_mode_enabled( is_array( $this->options ) ? $this->options : null ) ) {
+						return false;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return true;
+				}
+			} elseif ( isset( $this->options['cache_settings']['wooSafeMode'] ) && false === $this->options['cache_settings']['wooSafeMode'] ) {
 				return false;
 			}
 
 			try {
-				$woo_active = function_exists( 'is_cart' ) || function_exists( 'is_checkout' ) || function_exists( 'is_account_page' ) || function_exists( 'is_woocommerce' ) || class_exists( 'WooCommerce', false );
-
 				$excluded = false;
 
-				if ( $woo_active ) {
+				// Woo endpoint URLs (order-pay, view-order, downloads, …) are dynamic.
+				if ( ! $excluded && function_exists( 'is_wc_endpoint_url' ) ) {
+					try {
+						if ( is_wc_endpoint_url() ) {
+							$excluded = true;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$excluded = true;
+					}
+				}
+
+				$woo_active = function_exists( 'is_cart' ) || function_exists( 'is_checkout' ) || function_exists( 'is_account_page' ) || function_exists( 'is_woocommerce' ) || class_exists( 'WooCommerce', false );
+
+				if ( ! $excluded && $woo_active ) {
 					if ( function_exists( 'is_cart' ) && is_cart() ) {
 						$excluded = true;
 					} elseif ( function_exists( 'is_checkout' ) && is_checkout() ) {
@@ -1829,7 +1955,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( ! $excluded ) {
 					$parsed_path    = wp_parse_url( $this->request_uri, PHP_URL_PATH );
 					$local_url_path = wp_normalize_path( trim( rawurldecode( (string) $parsed_path ), '/' ) );
-					if ( preg_match( '#^/(?:cart|checkout|my-account)(?:/|$)#i', '/' . $local_url_path ) ) {
+					$matched        = false;
+					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_dynamic_path' ) ) {
+						try {
+							// Canonical list: defaults + configured custom/nested
+							// Woo slugs (e.g. shop/basket). Store API already
+							// handled unconditionally above.
+							$matched = Util::is_woo_dynamic_path( $local_url_path );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$matched = true;
+						}
+					} else {
+						$matched = (bool) preg_match( '#^/(?:cart|checkout|my-account)(?:/|$)#i', '/' . $local_url_path );
+					}
+					if ( $matched ) {
 						$excluded = true;
 					}
 				}
@@ -1904,6 +2044,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( empty( $this->domain ) ) {
 				return true;
 			}
+			// Host-header poisoning guard: a forged Host is served uncached via
+			// the canonical fallback and never touches the cache tree.
+			if ( $this->host_mismatch ) {
+				return true;
+			}
 
 			// Core, WooCommerce, and third-party plugins signal dynamic pages via DONOTCACHEPAGE.
 			if ( defined( 'DONOTCACHEPAGE' ) && DONOTCACHEPAGE ) {
@@ -1935,7 +2080,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$parsed_path    = wp_parse_url( $this->request_uri, PHP_URL_PATH );
 			$local_url_path = wp_normalize_path( trim( rawurldecode( (string) $parsed_path ), '/' ) );
 
-			if ( strpos( $local_url_path, '..' ) !== false ) {
+			if ( false !== strpos( $local_url_path, "\0" ) || false !== strpos( $local_url_path, '..' ) ) {
 				return true;
 			}
 
@@ -1949,6 +2094,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			// WooCommerce safe mode: cart/checkout/account, wc-ajax, add-to-cart, session/cart cookies.
 			// Filter wppo_woo_cacheable (guarded by has_filter) can re-allow a URL.
+			// Explicit Store API guard (greppable intent, survives a future
+			// wppo_should_cache_request bypass above).
+			if ( $this->is_woo_store_api_request() ) {
+				return true;
+			}
 			if ( $this->is_woo_excluded() ) {
 				return true;
 			}
@@ -1993,14 +2143,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		private function get_cache_file_path( $type = 'html', string $role_hash = '', string $variant = '' ): string {
-			if ( '' === $this->cache_root_dir ) {
+			if ( '' === $this->cache_root_dir || '' === $this->domain ) {
+				return '';
+			}
+			if ( false !== strpos( $this->url_path, "\0" ) || false !== strpos( $this->url_path, '..' ) ) {
 				return '';
 			}
 			$suffix = $role_hash ? "-{$role_hash}" : '';
 			if ( $variant ) {
 				$suffix .= "-{$variant}";
 			}
-			return "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $this->url_path ? "index{$suffix}.{$type}" : "{$this->url_path}/index{$suffix}.{$type}" );
+			$resolved = "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $this->url_path ? "index{$suffix}.{$type}" : "{$this->url_path}/index{$suffix}.{$type}" );
+			if ( ! $this->is_path_contained( $resolved ) ) {
+				$this->log_traversal_probe( $this->url_path );
+				return '';
+			}
+			return $resolved;
 		}
 
 		/**
@@ -2041,7 +2199,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		private function prepare_cache_dir(): bool {
-			return Util::prepare_cache_dir( "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $this->url_path ? '' : "/{$this->url_path}" ) );
+			$target = "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $this->url_path ? '' : "/{$this->url_path}" );
+			if ( ! $this->is_path_contained( trailingslashit( $target ) ) ) {
+				$this->log_traversal_probe( $this->url_path );
+				return false;
+			}
+			return Util::prepare_cache_dir( $target );
 		}
 
 		/**
@@ -2086,6 +2249,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since NEXT
 		 */
 		private function save_cache_files( $buffer, $file_path, $type = 'html' ): void {
+			if ( '' === (string) $file_path || ! $this->is_path_contained( (string) $file_path ) ) {
+				$this->log_traversal_probe( (string) $file_path );
+				return;
+			}
 
 			// Only evaluate the storage decision for HTML writes so the DONOTCACHEPAGE
 			// side effects never fire for CSS/JS file saves.
@@ -2176,6 +2343,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since NEXT
 		 */
 		private function save_processed_buffer( string $buffer, string $file_path ): void {
+			if ( '' === $file_path || ! $this->is_path_contained( $file_path ) ) {
+				$this->log_traversal_probe( $file_path );
+				return;
+			}
 			if ( ! $this->get_filesystem() || ! $this->prepare_cache_dir() ) {
 				return;
 			}
@@ -2235,8 +2406,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return false;
 			}
 
-			if ( empty( $this->domain ) || strpos( $this->url_path, '..' ) !== false ) {
+			if ( empty( $this->domain ) || $this->host_mismatch || false !== strpos( $this->url_path, "\0" ) || false !== strpos( $this->url_path, '..' ) ) {
 				// Prevent empty domain caching which could occur after traversal sanitation.
+				// A Host mismatch is served uncached and never stored under the forged host.
 				return false;
 			}
 
@@ -2251,6 +2423,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// is_not_cacheable() is bypassed via the wppo_should_cache_request
 			// filter; covers pretty-permalink paths with an empty query string; @since NEXT).
 			if ( $this->is_wc_ajax_request() ) {
+				return false;
+			}
+
+			// Store API defense-in-depth (issue #962): storage refuses even if
+			// is_not_cacheable() is bypassed via filter. Unconditional on
+			// wooSafeMode, mirroring wc-ajax.
+			if ( $this->is_woo_store_api_request() ) {
 				return false;
 			}
 
@@ -2374,12 +2553,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			 */
 			$urls = (array) apply_filters( 'wppo_invalidation_urls', $urls, $page_id );
 
-			// Sanitize: normalize, reject traversal, dedupe.
+			// Sanitize: normalize, reject traversal and null bytes, dedupe.
 			$sanitized = array();
 			foreach ( $urls as $u ) {
 				$u = is_string( $u ) ? $u : (string) $u;
 				$u = wp_normalize_path( trim( $u, '/' ) );
-				if ( '' !== $u && strpos( $u, '..' ) !== false ) {
+				if ( '' !== $u && ( false !== strpos( $u, "\0" ) || false !== strpos( $u, '..' ) ) ) {
 					continue;
 				}
 				$sanitized[] = $u;
@@ -2504,6 +2683,193 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Surgically invalidate cache for a WooCommerce product, order, or coupon.
+		 *
+		 * Purges only the object's own permalink path (+ css/used-css sidecars)
+		 * plus, for products, its product-category/tag archive paths and the
+		 * shop page path. Never purges the home page, never calls
+		 * clear_cache() (no full-cache wipe), and never schedules preload for
+		 * Woo-excluded permalinks. Multisite-safe: per-site get_permalink() +
+		 * domain-based get_file_path(), no cross-site purge.
+		 *
+		 * @since NEXT
+		 * @param int    $object_id Woo object (product/order/coupon) ID.
+		 * @param string $kind      Object kind: 'product', 'order', or 'coupon'.
+		 * @return void
+		 */
+		public function invalidate_woo_object( int $object_id, string $kind ): void {
+			$kind = sanitize_text_field( (string) $kind );
+			if ( ! in_array( $kind, array( 'product', 'order', 'coupon' ), true ) ) {
+				$kind = 'product';
+			}
+			if ( $object_id <= 0 ) {
+				return;
+			}
+
+			$urls = array();
+			try {
+				$permalink = function_exists( 'get_permalink' ) ? get_permalink( $object_id ) : '';
+				if ( is_string( $permalink ) && '' !== $permalink && ! is_wp_error( $permalink ) ) {
+					$rel = function_exists( 'wp_make_link_relative' ) ? wp_make_link_relative( $permalink ) : (string) wp_parse_url( $permalink, PHP_URL_PATH );
+					if ( is_string( $rel ) && '' !== $rel ) {
+						$urls[] = $rel;
+					}
+				}
+
+				if ( 'product' === $kind ) {
+					// Product-category/tag archives for this product only.
+					if ( function_exists( 'get_object_taxonomies' ) && function_exists( 'wp_get_object_terms' ) ) {
+						$taxonomies = get_object_taxonomies( 'product', 'names' );
+						if ( ! empty( $taxonomies ) ) {
+							$terms = wp_get_object_terms( $object_id, $taxonomies );
+							if ( ! empty( $terms ) && ! is_wp_error( $terms ) ) {
+								foreach ( (array) $terms as $term ) {
+									if ( ! isset( $term->taxonomy ) ) {
+										continue;
+									}
+									if ( function_exists( 'get_taxonomy' ) ) {
+										$tax_obj = get_taxonomy( $term->taxonomy );
+										if ( ! $tax_obj || empty( $tax_obj->public ) ) {
+											continue;
+										}
+									}
+									if ( function_exists( 'get_term_link' ) ) {
+										$term_link = get_term_link( $term );
+										if ( ! empty( $term_link ) && ! is_wp_error( $term_link ) ) {
+											$term_rel = function_exists( 'wp_make_link_relative' ) ? wp_make_link_relative( $term_link ) : (string) wp_parse_url( (string) $term_link, PHP_URL_PATH );
+											if ( is_string( $term_rel ) && '' !== $term_rel ) {
+												$urls[] = $term_rel;
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+					// Shop page path.
+					if ( function_exists( 'wc_get_page_id' ) && function_exists( 'get_permalink' ) ) {
+						try {
+							$shop_id = (int) wc_get_page_id( 'shop' );
+							if ( $shop_id > 0 ) {
+								$shop_link = get_permalink( $shop_id );
+								if ( is_string( $shop_link ) && '' !== $shop_link && ! is_wp_error( $shop_link ) ) {
+									$shop_rel = function_exists( 'wp_make_link_relative' ) ? wp_make_link_relative( $shop_link ) : (string) wp_parse_url( $shop_link, PHP_URL_PATH );
+									if ( is_string( $shop_rel ) && '' !== $shop_rel ) {
+										$urls[] = $shop_rel;
+									}
+								}
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
+			/**
+			 * Filter the surgical Woo invalidation URL list.
+			 *
+			 * @since NEXT
+			 * @param string[] $urls      List of URL paths to purge.
+			 * @param int      $object_id The Woo object ID being invalidated.
+			 * @param string   $kind      Object kind ('product', 'order', 'coupon').
+			 */
+			$urls = (array) apply_filters( 'wppo_woo_invalidation_urls', $urls, $object_id, $kind ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.DynamicHooknameFound -- Filter documented in docs/hooks.md.
+
+			$sanitized          = array();
+			$primary_normalized = '';
+			// Track the object's own permalink separately from filtered extras
+			// so a filter entry cannot redefine sidecar/regen decisions.
+			if ( ! empty( $urls ) && is_string( $urls[0] ) ) {
+				$primary_candidate = (string) wp_parse_url( $urls[0], PHP_URL_PATH );
+				if ( '' === $primary_candidate ) {
+					$primary_candidate = $urls[0];
+				}
+				$primary_candidate = wp_normalize_path( trim( rawurldecode( $primary_candidate ), '/' ) );
+				if ( '' !== $primary_candidate && false === strpos( $primary_candidate, '..' ) ) {
+					$primary_normalized = $primary_candidate;
+				}
+			}
+			foreach ( $urls as $u ) {
+				$u = is_string( $u ) ? $u : (string) $u;
+				// Accept full URLs/query strings from the filter: purge by path only.
+				$path_only = (string) wp_parse_url( $u, PHP_URL_PATH );
+				if ( '' === trim( (string) $path_only, '/' ) && false !== strpos( $u, '?' ) ) {
+					continue;
+				}
+				if ( '' !== $path_only ) {
+					$u = $path_only;
+				}
+				$u = wp_normalize_path( trim( rawurldecode( $u ), '/' ) );
+				if ( '' === $u || false !== strpos( $u, '..' ) ) {
+					continue;
+				}
+				$sanitized[] = $u;
+			}
+			$sanitized = array_values( array_unique( $sanitized ) );
+
+			if ( '' === $primary_normalized && ! empty( $sanitized ) ) {
+				$primary_normalized = $sanitized[0];
+			}
+			foreach ( $sanitized as $url_path ) {
+				$html_file_path = $this->get_file_path( $url_path, 'html' );
+				if ( '' === $html_file_path ) {
+					continue;
+				}
+				$norm            = wp_normalize_path( $html_file_path );
+				$cache_root_norm = '' !== $this->cache_root_dir ? wp_normalize_path( $this->cache_root_dir ) : '';
+				$abspath_norm    = defined( 'ABSPATH' ) ? wp_normalize_path( ABSPATH ) : '';
+				if ( '' !== $cache_root_norm && 0 !== strpos( $norm, $cache_root_norm ) ) {
+					continue;
+				}
+				if ( '' !== $abspath_norm && 0 !== strpos( $norm, $abspath_norm ) ) {
+					continue;
+				}
+				$this->delete_cache_files( $html_file_path );
+				$this->delete_role_variant_files( dirname( $html_file_path ) );
+				$this->delete_no_cache_marker( $html_file_path );
+				if ( $url_path === $primary_normalized ) {
+					$css_file_path = $this->get_file_path( $url_path, 'css' );
+					$used_css_path = $this->get_file_path( $url_path, 'used-css' );
+					if ( '' !== $css_file_path ) {
+						$this->delete_cache_files( $css_file_path );
+					}
+					if ( '' !== $used_css_path ) {
+						$this->delete_cache_files( $used_css_path );
+					}
+				}
+			}
+
+			// Regenerate only when the primary permalink is cacheable (never
+			// schedule preload work for Woo-excluded dynamic paths) and only
+			// when there is something to purge — an empty list means URL
+			// collection failed, so skip regen instead of warming a
+			// potentially dynamic or non-existent URL.
+			if ( empty( $sanitized ) ) {
+				self::bump_stats_cache();
+				return;
+			}
+			$skip_regen = false;
+			if ( '' !== $primary_normalized && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_dynamic_path' ) ) {
+				try {
+					$skip_regen = Util::is_woo_dynamic_path( $primary_normalized );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$skip_regen = true;
+				}
+			}
+			if ( ! $skip_regen && $object_id > 0 && function_exists( 'wp_next_scheduled' ) && function_exists( 'wp_schedule_single_event' ) && function_exists( 'wp_rand' ) ) {
+				if ( ! wp_next_scheduled( 'wppo_generate_static_page', array( $object_id ) ) ) {
+					wp_schedule_single_event( time() + wp_rand( 0, 5 ), 'wppo_generate_static_page', array( $object_id ) );
+				}
+			}
+
+			self::bump_stats_cache();
+		}
+
+		/**
 		 * Get the file path for a specific page.
 		 *
 		 * @param string|null $url_path The URL path (optional).
@@ -2512,16 +2878,189 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 1.1.1
 		 */
-		private function get_file_path( ?string $url_path = null, string $type = 'html' ): string {
-			$url_path = wp_normalize_path( trim( (string) $url_path, '/' ) );
+		/**
+		 * Whether a traversal probe has been logged this request.
+		 *
+		 * Rate-limits activity-log writes so a hostile crawler cannot flood
+		 * the log table with one entry per request path probe.
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static bool $traversal_probe_logged = false;
 
-			if ( strpos( $url_path, '..' ) !== false ) {
-				return ''; // Return empty string to prevent deletion or creation outside cache root.
+		/**
+		 * Sanitize a URL path for cache file mapping.
+		 *
+		 * Uses only the PHP_URL_PATH component, applies exactly one
+		 * rawurldecode pass (single-decode semantics: `%252e` stays encoded
+		 * on disk and is never re-decoded), then rejects null bytes, any
+		 * remaining `..` segments, and Windows drive prefixes. Returns an
+		 * empty string for hostile or empty input.
+		 *
+		 * @since NEXT
+		 * @param string|null $url_path Raw URL path or URL.
+		 * @return string Sanitized relative path or empty string.
+		 */
+		private static function sanitize_cache_url_path( ?string $url_path ): string {
+			$raw_input = (string) $url_path;
+
+			// Reject Windows drive prefixes and UNC roots before URL parsing
+			// (parse_url() would otherwise strip `C:` as a scheme and hide
+			// the absolute-path smuggling attempt).
+			$trimmed_raw = ltrim( $raw_input );
+			if ( '' !== $trimmed_raw && ( preg_match( '#^[a-zA-Z]:#', $trimmed_raw ) || 0 === strpos( $trimmed_raw, '\\\\' ) ) ) {
+				return '';
+			}
+
+			if ( function_exists( 'wp_parse_url' ) ) {
+				$parsed = wp_parse_url( $raw_input, PHP_URL_PATH );
+			} else {
+				$parsed = parse_url( $raw_input, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
+			}
+
+			$path_component = ( null === $parsed || false === $parsed ) ? $raw_input : (string) $parsed;
+
+			$decoded = function_exists( 'rawurldecode' ) ? rawurldecode( $path_component ) : $path_component;
+
+			if ( false !== strpos( $decoded, "\0" ) ) {
+				return '';
+			}
+
+			if ( function_exists( 'wp_normalize_path' ) ) {
+				$normalized = wp_normalize_path( trim( $decoded, '/' ) );
+			} else {
+				$normalized = str_replace( '\\', '/', trim( $decoded, '/' ) );
+			}
+
+			if ( false !== strpos( $normalized, "\0" ) || false !== strpos( $normalized, '..' ) ) {
+				return '';
+			}
+
+			if ( '' !== $normalized && preg_match( '#^[a-zA-Z]:#', $normalized ) ) {
+				return '';
+			}
+
+			return $normalized;
+		}
+
+		/**
+		 * Whether an absolute path stays inside the cache tree.
+		 *
+		 * Dual-prefix containment: the normalized path must start with both
+		 * the cache root and the per-domain directory (trailing-slash aware
+		 * so `wppo-evil` never prefix-matches `wppo`). Empty root or domain
+		 * fails closed.
+		 *
+		 * @since NEXT
+		 * @param string $path Absolute file or directory path.
+		 * @return bool True when contained.
+		 */
+		private function is_path_contained( string $path ): bool {
+			if ( '' === $this->cache_root_dir || '' === $this->domain ) {
+				return false;
+			}
+
+			if ( function_exists( 'wp_normalize_path' ) ) {
+				$norm = wp_normalize_path( $path );
+				$root = wp_normalize_path( $this->cache_root_dir );
+			} else {
+				$norm = str_replace( '\\', '/', $path );
+				$root = str_replace( '\\', '/', $this->cache_root_dir );
+			}
+
+			$root       = rtrim( $root, '/' ) . '/';
+			$domain_dir = $root . trim( $this->domain, '/' ) . '/';
+
+			return 0 === strpos( $norm, $root ) && 0 === strpos( $norm, $domain_dir );
+		}
+
+		/**
+		 * Log a blocked cache path traversal probe (once per request).
+		 *
+		 * Never throws: failures degrade silently to serving uncached.
+		 *
+		 * @since NEXT
+		 * @param string $raw_input The hostile input that was rejected.
+		 * @return void
+		 */
+		private function log_traversal_probe( string $raw_input ): void {
+			if ( self::$traversal_probe_logged ) {
+				return;
+			}
+			self::$traversal_probe_logged = true;
+
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
+					return;
+				}
+				$snippet = str_replace( "\0", '', (string) $raw_input );
+				if ( function_exists( 'sanitize_text_field' ) ) {
+					$snippet = sanitize_text_field( $snippet );
+				}
+				$snippet = substr( $snippet, 0, 200 );
+				$message = function_exists( '__' ) ? __( 'Blocked cache path traversal probe.', 'performance-optimisation' ) : 'Blocked cache path traversal probe.';
+				if ( '' !== $snippet ) {
+					$message .= ' ' . $snippet;
+				}
+				Log::add( $message );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Get the file path for a specific page.
+		 *
+		 * Hardened against cache-key path traversal (CVE-2026-3129 follow-up):
+		 * only the PHP_URL_PATH component is used, exactly one rawurldecode
+		 * pass is applied, and null bytes plus `..` segments are rejected.
+		 * The resolved path must pass dual-prefix containment before it is
+		 * returned; otherwise an empty string is returned and the probe is
+		 * logged so the request is served uncached.
+		 *
+		 * @param string|null $url_path The URL path (optional).
+		 * @param string      $type The file type (default: 'html').
+		 * @return string The file path.
+		 *
+		 * @since 1.1.1
+		 */
+		private function get_file_path( ?string $url_path = null, string $type = 'html' ): string {
+			$raw_input = (string) $url_path;
+			$url_path  = self::sanitize_cache_url_path( $url_path );
+
+			if ( '' === $this->cache_root_dir || '' === $this->domain ) {
+				return '';
+			}
+
+			if ( '' === $url_path && '' !== trim( $raw_input ) ) {
+				// Distinguish the benign homepage ('/', '') from a rejected
+				// hostile input: only log when the raw path component is
+				// non-empty after trimming slashes and whitespace.
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$raw_component = wp_parse_url( $raw_input, PHP_URL_PATH );
+				} else {
+					$raw_component = parse_url( $raw_input, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
+				}
+				if ( null === $raw_component || false === $raw_component ) {
+					$raw_component = $raw_input;
+				}
+				if ( '' !== trim( trim( (string) $raw_component ), '/' ) ) {
+					$this->log_traversal_probe( $raw_input );
+					return ''; // Return empty string to prevent deletion or creation outside cache root.
+				}
 			}
 
 			$filename = 'used-css' === $type ? 'used-css.css' : "index.{$type}";
 
-			return "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $url_path ? $filename : "{$url_path}/{$filename}" );
+			$resolved = "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $url_path ? $filename : "{$url_path}/{$filename}" );
+
+			if ( ! $this->is_path_contained( $resolved ) ) {
+				$this->log_traversal_probe( $raw_input );
+				return '';
+			}
+
+			return $resolved;
 		}
 
 		/**
@@ -2545,7 +3084,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.9.0
 		 */
 		private function delete_no_cache_marker( string $html_file_path ): void {
-			$this->delete_cache_files( trailingslashit( dirname( $html_file_path ) ) . '.wppo-no-cache' );
+			$marker = trailingslashit( dirname( $html_file_path ) ) . '.wppo-no-cache';
+			if ( ! $this->is_path_contained( $marker ) ) {
+				$this->log_traversal_probe( $html_file_path );
+				return;
+			}
+			$this->delete_cache_files( $marker );
 		}
 
 		/**
@@ -2557,6 +3101,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.1.0
 		 */
 		private function delete_cache_files( $file_path ): bool {
+			if ( '' === (string) $file_path || ! $this->is_path_contained( (string) $file_path ) ) {
+				$this->log_traversal_probe( (string) $file_path );
+				return false;
+			}
 			$gzip_file_path = $file_path . '.gz';
 			$br_file_path   = $file_path . '.br';
 
@@ -2579,6 +3127,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.9.0
 		 */
 		private function delete_role_variant_files( string $dir ): void {
+			if ( '' === $dir || ! $this->is_path_contained( trailingslashit( $dir ) ) ) {
+				$this->log_traversal_probe( $dir );
+				return;
+			}
 			$fs = $this->get_filesystem();
 			if ( ! $fs || ! $fs->is_dir( $dir ) ) {
 				return;
@@ -2625,9 +3177,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			if ( $url_path ) {
-				$url_path = wp_normalize_path( $url_path );
+				$raw_clear_path = (string) $url_path;
+				$url_path       = wp_normalize_path( $raw_clear_path );
 
-				if ( strpos( $url_path, '..' ) !== false ) {
+				if ( false !== strpos( $url_path, "\0" ) || false !== strpos( $url_path, '..' ) ) {
 					return false;
 				}
 
@@ -2636,6 +3189,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$used_css_path  = $instance->get_file_path( $url_path, 'used-css' );
 
 				if ( empty( $html_file_path ) || empty( $css_file_path ) || empty( $used_css_path ) ) {
+					return false;
+				}
+
+				if ( ! $instance->is_path_contained( $html_file_path ) || ! $instance->is_path_contained( $css_file_path ) || ! $instance->is_path_contained( $used_css_path ) ) {
+					$instance->log_traversal_probe( $raw_clear_path );
 					return false;
 				}
 

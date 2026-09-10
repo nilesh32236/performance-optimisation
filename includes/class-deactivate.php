@@ -137,6 +137,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 			// Deactivate::init() has cleared the cache itself.
 			remove_action( 'update_option_permalink_structure', array( Main::class, 'clear_all_cache' ) );
 			remove_action( 'switch_theme', array( Main::class, 'clear_all_cache' ) );
+			remove_action( 'update_option_home', array( Main::class, 'on_site_url_change' ), 10 );
+			remove_action( 'update_option_siteurl', array( Main::class, 'on_site_url_change' ), 10 );
 			remove_action( 'activated_plugin', array( Main::class, 'clear_all_cache' ) );
 			remove_action( 'deactivated_plugin', array( Main::class, 'clear_all_cache' ) );
 

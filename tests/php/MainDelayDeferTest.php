@@ -372,6 +372,11 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	 * and the idle timeout falls back to 3000.
 	 */
 	public function test_inp_preset_off_falls_back_to_interaction(): void {
+	 * Test that the Delay-JS preset exclusions are safe by default (Woo, Elementor, forms).
+	 *
+	 * @since NEXT
+	 */
+	public function test_delay_js_preset_exclusions_include_safe_entries(): void {
 		$this->stub_main_construction(
 			array(
 				'delayJS' => true,
@@ -437,6 +442,20 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	 * fails open (un-delayed tag, never fatal).
 	 */
 	public function test_delay_excluded_context_on_cart_returns_tag_unmodified(): void {
+		$preset = $this->invoke_private_method( $main, 'get_delay_js_preset_exclusions' );
+
+		foreach ( array( 'woocommerce', 'wc-checkout', 'cart-fragments', 'elementor', 'elementor-frontend', 'contact-form-7', 'wpcf7', 'gravityforms', 'gform', 'wpforms', 'ninja-forms', 'fluentform', 'jquery', 'stripe' ) as $entry ) {
+			$this->assertContains( $entry, $preset );
+		}
+	}
+
+	/**
+	 * Test that is_delay_js_safe_context() returns false (delay allowed)
+	 * when no safe signals are present.
+	 *
+	 * @since NEXT
+	 */
+	public function test_delay_js_safe_context_returns_false_when_no_safe_signals(): void {
 		$this->stub_main_construction(
 			array(
 				'delayJS' => true,
@@ -464,6 +483,78 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	 */
 	#[\PHPUnit\Framework\Attributes\DataProvider( 'woo_tag_provider' )]
 	public function test_delay_excluded_context_on_woo_tags( string $tag_function ): void {
+
+		// Pin all safe-context conditionals false: earlier suites leave
+		// stale Brain Monkey function definitions behind, so absence of a
+		// mock cannot be relied on for determinism here.
+		Functions\when( 'is_cart' )->justReturn( false );
+		Functions\when( 'is_checkout' )->justReturn( false );
+		Functions\when( 'is_account_page' )->justReturn( false );
+		Functions\when( 'is_wc_endpoint_url' )->justReturn( false );
+		Functions\when( 'get_the_ID' )->justReturn( 0 );
+
+		$main = new Main();
+
+		$this->assertFalse( $main->is_delay_js_safe_context() );
+	}
+
+	/**
+	 * Test that add_defer_attribute skips Delay-JS rewriting on WooCommerce checkout pages.
+	 *
+	 * @since NEXT
+	 */
+	public function test_add_defer_attribute_skips_delay_on_checkout(): void {
+		$this->stub_main_construction(
+			array(
+				'delayJS' => true,
+			)
+		);
+
+		// Pin the other safe-context conditionals false: Brain Monkey stubs
+		// are process-persistent, so a stale true here would pass the test
+		// for the wrong reason.
+		Functions\when( 'is_cart' )->justReturn( false );
+		Functions\when( 'is_account_page' )->justReturn( false );
+		Functions\when( 'is_wc_endpoint_url' )->justReturn( false );
+		Functions\when( 'get_the_ID' )->justReturn( 0 );
+		Functions\when( 'is_checkout' )->justReturn( true );
+
+		$main = new Main();
+
+		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for add_defer_attribute() tests.
+		$tag    = '<script src="https://example.com/app.js" type="text/javascript"></script>';
+		$result = $main->add_defer_attribute( $tag, 'app' );
+
+		$this->assertSame( $tag, $result );
+	}
+
+	/**
+	 * Test that delayJSSafeMode=false disables the safe-context check entirely,
+	 * so a checkout page does NOT skip Delay-JS.
+	 *
+	 * @since NEXT
+	 */
+	public function test_delay_js_safe_context_disabled_when_safe_mode_false(): void {
+		$this->stub_main_construction(
+			array(
+				'delayJS'         => true,
+				'delayJSSafeMode' => false,
+			)
+		);
+
+		Functions\when( 'is_checkout' )->justReturn( true );
+
+		$main = new Main();
+
+		$this->assertFalse( $main->is_delay_js_safe_context() );
+	}
+
+	/**
+	 * Test that a form shortcode in the current post content skips Delay-JS.
+	 *
+	 * @since NEXT
+	 */
+	public function test_delay_js_safe_context_skips_on_form_shortcode(): void {
 		$this->stub_main_construction(
 			array(
 				'delayJS' => true,
@@ -680,6 +771,22 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		$this->assertStringContainsString( 'wppo/javascript', $delayed->get_minified_html() );
 
 		$this->reset_delay_guard_superglobals();
+		Functions\when( 'is_wc_endpoint_url' )->justReturn( false );
+		Functions\when( 'get_the_ID' )->justReturn( 42 );
+		Functions\when( 'has_shortcode' )->alias(
+			static function ( $content, $shortcode ) {
+				return 'contact-form-7' === $shortcode && false !== strpos( $content, '[contact-form-7]' );
+			}
+		);
+		Functions\when( 'get_post_field' )->alias(
+			static function ( $field ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+				return 'post_content' === $field ? '[contact-form-7]' : '';
+			}
+		);
+
+		$main = new Main();
+
+		$this->assertTrue( $main->is_delay_js_safe_context() );
 	}
 
 	/**

@@ -70,6 +70,148 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that a forged Host header pins the cache key to the canonical home
+	 * host and the mismatched request is served uncached (never stored).
+	 */
+	public function test_constructor_pins_domain_to_canonical_host_on_mismatch(): void {
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Test-only superglobal backup/restore.
+		$backup_host = isset( $_SERVER['HTTP_HOST'] ) ? $_SERVER['HTTP_HOST'] : null;
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Test-only superglobal backup/restore.
+		$backup_uri = isset( $_SERVER['REQUEST_URI'] ) ? $_SERVER['REQUEST_URI'] : null;
+		try {
+			$_SERVER['HTTP_HOST']   = 'evil.com';
+			$_SERVER['REQUEST_URI'] = '/test-page/';
+			unset( $_SERVER['QUERY_STRING'] );
+			Functions\when( 'get_option' )->justReturn( array() );
+
+			$cache = new Cache();
+
+			$domain_prop = new \ReflectionProperty( Cache::class, 'domain' );
+			$domain_prop->setAccessible( true );
+			$this->assertSame( 'example.com', $domain_prop->getValue( $cache ) );
+			$this->assertTrue( $cache->is_host_mismatched() );
+
+			$not_cacheable = new ReflectionMethod( Cache::class, 'is_not_cacheable' );
+			$not_cacheable->setAccessible( true );
+			$this->assertTrue( $not_cacheable->invoke( $cache ) );
+
+			$store = new ReflectionMethod( Cache::class, 'maybe_store_cache' );
+			$store->setAccessible( true );
+			$this->assertFalse( $store->invoke( $cache ) );
+		} finally {
+			if ( null === $backup_host ) {
+				unset( $_SERVER['HTTP_HOST'] );
+			} else {
+				$_SERVER['HTTP_HOST'] = $backup_host;
+			}
+			if ( null === $backup_uri ) {
+				unset( $_SERVER['REQUEST_URI'] );
+			} else {
+				$_SERVER['REQUEST_URI'] = $backup_uri;
+			}
+		}
+	}
+
+	/**
+	 * Test that a presented-but-invalid Host (normalizes to '') still counts
+	 * as a mismatch instead of being treated as benign CLI absence, so it
+	 * can never poison the canonical cache file.
+	 */
+	public function test_invalid_host_normalizing_to_empty_is_mismatch(): void {
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Test-only superglobal backup/restore.
+		$backup_host = isset( $_SERVER['HTTP_HOST'] ) ? $_SERVER['HTTP_HOST'] : null;
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Test-only superglobal backup/restore.
+		$backup_uri = isset( $_SERVER['REQUEST_URI'] ) ? $_SERVER['REQUEST_URI'] : null;
+		try {
+			$_SERVER['HTTP_HOST']   = 'evil!/..';
+			$_SERVER['REQUEST_URI'] = '/test-page/';
+			unset( $_SERVER['QUERY_STRING'] );
+			Functions\when( 'get_option' )->justReturn( array() );
+
+			$cache = new Cache();
+
+			$domain_prop = new \ReflectionProperty( Cache::class, 'domain' );
+			$domain_prop->setAccessible( true );
+			$this->assertSame( 'example.com', $domain_prop->getValue( $cache ) );
+			$this->assertTrue( $cache->is_host_mismatched() );
+
+			$not_cacheable = new ReflectionMethod( Cache::class, 'is_not_cacheable' );
+			$not_cacheable->setAccessible( true );
+			$this->assertTrue( $not_cacheable->invoke( $cache ) );
+
+			$store = new ReflectionMethod( Cache::class, 'maybe_store_cache' );
+			$store->setAccessible( true );
+			$this->assertFalse( $store->invoke( $cache ) );
+		} finally {
+			if ( null === $backup_host ) {
+				unset( $_SERVER['HTTP_HOST'] );
+			} else {
+				$_SERVER['HTTP_HOST'] = $backup_host;
+			}
+			if ( null === $backup_uri ) {
+				unset( $_SERVER['REQUEST_URI'] );
+			} else {
+				$_SERVER['REQUEST_URI'] = $backup_uri;
+			}
+		}
+	}
+
+	/**
+	 * Test that a matching Host header keeps the request cacheable.
+	 *
+	 * Runs in a separate process: DONOTCACHEPAGE is a process-global
+	 * constant that earlier suites (e.g. BufferCharacterizationTest) may
+	 * define, which would force is_not_cacheable()/maybe_store_cache() to
+	 * refuse and weaken this control to a bare assertion count. Isolation
+	 * guarantees the positive cacheability assertions always execute.
+	 */
+	#[\PHPUnit\Framework\Attributes\RunInSeparateProcess]
+	#[\PHPUnit\Framework\Attributes\PreserveGlobalState( false )]
+	public function test_constructor_matching_host_stays_cacheable(): void {
+		$_SERVER['HTTP_HOST']   = 'example.com';
+		$_SERVER['REQUEST_URI'] = '/test-page/';
+		unset( $_SERVER['QUERY_STRING'] );
+		// Superglobals persist across suites sharing one process (e.g. Woo
+		// cookie/query markers set by guard tests); reset them so this control
+		// is order-independent.
+		$_GET    = array();
+		$_COOKIE = array();
+		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'apply_filters' )->returnArg( 2 );
+		Functions\when( 'is_404' )->justReturn( false );
+		// Conditional tags may already be defined by earlier suites sharing the
+		// process (stubs persist); pin them so this test is order-independent.
+		Functions\when( 'wp_is_mobile' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+		Functions\when( 'is_feed' )->justReturn( false );
+		// Woo conditional tags may already be defined by earlier suites sharing
+		// the process (stubs persist); pin them so this test is order-independent.
+		Functions\when( 'is_cart' )->justReturn( false );
+		Functions\when( 'is_checkout' )->justReturn( false );
+		Functions\when( 'is_account_page' )->justReturn( false );
+		// LiteSpeed_Integration memoizes detection per process; earlier suites
+		// may leave it true, which would divert maybe_store_cache() into the
+		// LS-owns-cache bypass. Reset so this control is order-independent.
+		\PerformanceOptimise\Inc\LiteSpeed_Integration::reset_cache();
+
+		$cache = new Cache();
+
+		$this->assertFalse( $cache->is_host_mismatched() );
+
+		$domain_prop = new \ReflectionProperty( Cache::class, 'domain' );
+		$domain_prop->setAccessible( true );
+		$this->assertSame( 'example.com', $domain_prop->getValue( $cache ) );
+
+		$not_cacheable = new ReflectionMethod( Cache::class, 'is_not_cacheable' );
+		$not_cacheable->setAccessible( true );
+		$this->assertFalse( $not_cacheable->invoke( $cache ) );
+
+		$store = new ReflectionMethod( Cache::class, 'maybe_store_cache' );
+		$store->setAccessible( true );
+		$this->assertTrue( $store->invoke( $cache ) );
+	}
+
+	/**
 	 * Test that clear_cache static method exists.
 	 */
 	public function test_clear_cache_static_method_exists(): void {
