@@ -397,6 +397,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				if ( ! in_array( $s['fix_action'], Suggestion_Engine::VALID_FIX_ACTIONS, true ) ) {
 					return false;
 				}
+			} elseif ( ! in_array( $s['fix_action'], array( 'open_object_cache_tab', 'open_image_optimization_tab', 'open_file_optimization_tab', 'open_ccss_settings', 'enable_server_rules', 'open_preload_tab', 'no_action_required' ), true ) ) {
+				return false;
 			}
 			return true;
 		}
@@ -407,6 +409,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Local-only scorer by default with no remote calls; delegates to
 		 * the WordPress AI client only when the explicit
 		 * `ai_adaptive.use_wp_ai_client` opt-in is enabled and the client
+		 * function exists; otherwise the local heuristic is used.
 		 *
 		 * The heuristic is a simple logistic-like scorer over
 		 * wppo_web_vitals_rum + wppo_web_vitals_trends + wppo_settings:
@@ -425,7 +428,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			}
 			set_transient( $lock_key, 1, MINUTE_IN_SECONDS );
 
-			if ( self::is_wp_ai_client_enabled() && ( class_exists( 'WP_AI_Client' ) || function_exists( 'wp_ai_client' ) ) ) {
+			if ( self::is_wp_ai_client_enabled() && function_exists( 'wp_ai_client' ) ) {
 				$ai_model = self::learn_via_ai_client();
 				if ( is_array( $ai_model ) && ! empty( $ai_model ) ) {
 					$ai_model['source']     = 'ai_client';
@@ -482,14 +485,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			if ( ! self::is_wp_ai_client_enabled() ) {
 				return null;
 			}
-			if ( ! class_exists( 'WP_AI_Client' ) && ! function_exists( 'wp_ai_client' ) ) {
-				return null;
-			}
-		try {
 			if ( ! function_exists( 'wp_ai_client' ) ) {
 				return null;
 			}
-			$client = wp_ai_client();
+			try {
+				$client = wp_ai_client();
 				if ( ! is_object( $client ) || ! method_exists( $client, 'prompt' ) ) {
 					return null;
 				}
@@ -976,9 +976,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				);
 			}
 
-		// Ensure fix_action is valid per Suggestion_Engine guard (already valid).
-		$suggestions = array_values( array_filter( $suggestions, array( self::class, 'is_valid_suggestion' ) ) );
-		return $suggestions;
+			// Ensure fix_action is valid per Suggestion_Engine guard (already valid).
+			$suggestions = array_values( array_filter( $suggestions, array( self::class, 'is_valid_suggestion' ) ) );
+			return $suggestions;
 		}
 
 		/**

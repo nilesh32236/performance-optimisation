@@ -277,10 +277,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				'perf_translations'     => array(
 					'enabled' => false,
 				),
-			'ai_adaptive'           => array(
-				'enabled'          => false,
-				'use_wp_ai_client' => false,
-			),
+				'ai_adaptive'           => array(
+					'enabled'          => false,
+					'use_wp_ai_client' => false,
+				),
 				'edge_cache'            => array(
 					'enabled' => false,
 				),

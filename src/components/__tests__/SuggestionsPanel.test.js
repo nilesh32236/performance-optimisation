@@ -2,7 +2,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 // eslint-disable-next-line import/no-extraneous-dependencies -- React is required for JSX rendering in tests
 import React from 'react';
-import SuggestionsPanel from '../SuggestionsPanel';
+import SuggestionsPanel, { formatValue } from '../SuggestionsPanel';
 
 describe( 'SuggestionsPanel Component', () => {
 	const onNavigate = jest.fn();
@@ -149,7 +149,8 @@ describe( 'SuggestionsPanel Component', () => {
 		expect( passingElements.length ).toBeGreaterThanOrEqual( 1 );
 	} );
 
-	it( 'renders suggestion icons with correct status classes', () => {		const suggestions = [
+	it( 'renders suggestion icons with correct status classes', () => {
+		const suggestions = [
 			{
 				metric: 'a',
 				value: 'test',
@@ -173,43 +174,6 @@ describe( 'SuggestionsPanel Component', () => {
 } );
 
 describe( 'formatValue', () => {
-	const formatValue = ( value, unit ) => {
-		if ( unit === 'boolean' ) {
-			return value === 'pass' ? 'Passing' : 'Failing';
-		}
-		if ( unit === 'header' ) {
-			if ( value === 'none' ) {
-				return 'None';
-			}
-			return value;
-		}
-		if ( unit === 'encoding' ) {
-			if ( value === 'none' ) {
-				return 'None';
-			}
-			const encodings = {
-				br: 'Brotli',
-				gzip: 'Gzip',
-				deflate: 'Deflate',
-				zstd: 'Zstd',
-			};
-			return encodings[ String( value ).toLowerCase() ] || value;
-		}
-		if ( unit === 'score' ) {
-			return `${ Math.round( parseFloat( value ) * 100 ) } / 100`;
-		}
-		if ( unit === '%' ) {
-			return `${ Number( value ).toFixed( 1 ) }%`;
-		}
-		if ( unit === 's' ) {
-			return `${ Number( value ).toFixed( 2 ) }s`;
-		}
-		if ( unit === 'ms' ) {
-			return `${ Math.round( value ) }ms`;
-		}
-		return `${ value } ${ unit }`;
-	};
-
 	it( 'formats boolean pass', () => {
 		expect( formatValue( 'pass', 'boolean' ) ).toBe( 'Passing' );
 	} );
@@ -252,5 +216,54 @@ describe( 'formatValue', () => {
 
 	it( 'formats default unit', () => {
 		expect( formatValue( '5', 'kb' ) ).toBe( '5 kb' );
+	} );
+
+	it( 'joins array list values', () => {
+		expect( formatValue( [ 'a.js', 'b.js' ], 'list' ) ).toBe(
+			'a.js, b.js'
+		);
+	} );
+
+	it( 'stringifies non-array list values', () => {
+		expect( formatValue( 'a.js, b.js', 'list' ) ).toBe( 'a.js, b.js' );
+	} );
+
+	it( 'stringifies string units', () => {
+		expect( formatValue( 'moderate', 'string' ) ).toBe( 'moderate' );
+	} );
+
+	it( 'renders em-dash for nullish values', () => {
+		expect( formatValue( null, 'list' ) ).toBe( '—' );
+		expect( formatValue( undefined, 'string' ) ).toBe( '—' );
+	} );
+
+	it( 'renders AI list suggestions through cards', () => {
+		const onNavigate = jest.fn();
+		const suggestions = [
+			{
+				metric: 'ai_exclude_js',
+				value: 'a.js, b.js',
+				unit: 'list',
+				status: 'needs_improvement',
+				description: 'AI: Scripts to exclude (least-used)',
+				fix_action: 'open_file_optimization_tab',
+			},
+			{
+				metric: 'ai_speculation_eagerness',
+				value: 'moderate',
+				unit: 'string',
+				status: 'needs_improvement',
+				description: 'AI: Speculation eagerness suggestion',
+				fix_action: 'open_preload_tab',
+			},
+		];
+		render(
+			<SuggestionsPanel
+				suggestions={ suggestions }
+				onNavigate={ onNavigate }
+			/>
+		);
+		expect( screen.getByText( 'a.js, b.js' ) ).toBeInTheDocument();
+		expect( screen.getByText( 'moderate' ) ).toBeInTheDocument();
 	} );
 } );

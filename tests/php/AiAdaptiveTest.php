@@ -363,7 +363,12 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_learn_via_ai_client_caps_eager_in_commerce_context(): void {
 		$this->install_stubs();
-		$this->options['wppo_settings'] = array( 'ai_adaptive' => array( 'enabled' => true, 'use_wp_ai_client' => true ) );
+		$this->options['wppo_settings'] = array(
+			'ai_adaptive' => array(
+				'enabled'          => true,
+				'use_wp_ai_client' => true,
+			),
+		);
 		Util::clear_settings_cache();
 		Functions\when( 'wp_json_encode' )->alias( 'json_encode' );
 		Functions\when( 'wp_ai_client' )->justReturn(
@@ -399,7 +404,12 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_learn_via_ai_client_validates_garbage_eagerness(): void {
 		$this->install_stubs();
-		$this->options['wppo_settings'] = array( 'ai_adaptive' => array( 'enabled' => true, 'use_wp_ai_client' => true ) );
+		$this->options['wppo_settings'] = array(
+			'ai_adaptive' => array(
+				'enabled'          => true,
+				'use_wp_ai_client' => true,
+			),
+		);
 		Util::clear_settings_cache();
 		Functions\when( 'wp_json_encode' )->alias( 'json_encode' );
 		Functions\when( 'wp_ai_client' )->justReturn(
@@ -422,7 +432,12 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_learn_via_ai_client_defaults_missing_eagerness(): void {
 		$this->install_stubs();
-		$this->options['wppo_settings'] = array( 'ai_adaptive' => array( 'enabled' => true, 'use_wp_ai_client' => true ) );
+		$this->options['wppo_settings'] = array(
+			'ai_adaptive' => array(
+				'enabled'          => true,
+				'use_wp_ai_client' => true,
+			),
+		);
 		Util::clear_settings_cache();
 		Functions\when( 'wp_json_encode' )->alias( 'json_encode' );
 		Functions\when( 'wp_ai_client' )->justReturn(
@@ -965,7 +980,12 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	public function test_learn_uses_ai_client_with_opt_in(): void {
 		$this->install_stubs();
 		$this->seed_eager_rum();
-		$this->options['wppo_settings'] = array( 'ai_adaptive' => array( 'enabled' => true, 'use_wp_ai_client' => true ) );
+		$this->options['wppo_settings'] = array(
+			'ai_adaptive' => array(
+				'enabled'          => true,
+				'use_wp_ai_client' => true,
+			),
+		);
 		Util::clear_settings_cache();
 		Functions\when( 'wp_json_encode' )->alias( 'json_encode' );
 		Functions\when( 'wp_ai_client' )->justReturn(
