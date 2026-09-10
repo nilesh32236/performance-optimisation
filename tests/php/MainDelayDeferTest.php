@@ -948,6 +948,9 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		// WP 6.9+ gate for fetchpriority/in_footer (apply_module_loading_strategies).
 		// @since NEXT.
 		$GLOBALS['wp_version'] = '6.9';
+		// The implementation guards on class_exists( 'WP_Script_Modules' ); the
+		// stand-in below (end of file) guarantees the probe passes when core is
+		// absent so the fake modules instance is reached.
 		Functions\when( 'get_bloginfo' )->justReturn( '6.9' );
 		Functions\when( 'wp_script_modules' )->justReturn( $fake );
 		Functions\when( 'function_exists' )->alias(
@@ -958,6 +961,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 				return \function_exists( $function_name );
 			}
 		);
+
 		// Visitors (not logged in) are always eligible, so the logged-in gate
 		// passes in the happy-path tests; a dedicated test covers the gate.
 		Functions\when( 'is_user_logged_in' )->justReturn( false );
@@ -1136,6 +1140,17 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		// LiteSpeed_Integration class itself needs no stubbing. When the class was
 		// already loaded by another suite in the same process, its cached statics
 		// must be reset so the guard re-evaluates on its real branch.
+		// The fetchpriority write is gated on function_exists( 'wp_script_add_data' );
+		// core is absent in the unit environment, so probe true while preserving
+		// the WP_Filesystem / wp_is_block_theme probes from stub_main_construction().
+		Functions\when( 'function_exists' )->alias(
+			static function ( $function_name ) {
+				if ( 'wp_script_add_data' === $function_name || 'WP_Filesystem' === $function_name || 'wp_is_block_theme' === $function_name ) {
+					return true;
+				}
+				return \function_exists( $function_name );
+			}
+		);
 		Functions\when( 'has_filter' )->justReturn( false );
 		if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'reset_cache' ) ) {
 			\PerformanceOptimise\Inc\LiteSpeed_Integration::reset_cache();
@@ -1254,6 +1269,112 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		// The defer strategy itself still applies.
 		$this->assertSame( 'defer', $fake_scripts->data['third-party-analytics']['strategy'] ?? null );
 	}
+
+	/**
+	 * Test that add_defer_strategy() never overwrites an explicit fetchpriority
+	 * (fill-gaps-only, issue #1019).
+	 *
+	 * A handle already carrying fetchpriority=high (e.g. LCP-critical) must keep
+	 * it; the strategy + footer group still apply.
+	 *
+	 * @since NEXT
+	 */
+	public function test_add_defer_strategy_fills_fetchpriority_gaps_only(): void {
+		$this->stub_main_construction(
+			array(
+				'deferJS'        => true,
+				'delayJS'        => false,
+				'excludeDeferJS' => '',
+			)
+		);
+		$GLOBALS['wp_version'] = '6.9';
+		Functions\when( 'get_bloginfo' )->justReturn( '6.9' );
+
+		$main = $this->make_main(
+			array(
+				'file_optimisation' => array(
+					'deferJS'        => true,
+					'excludeDeferJS' => '',
+				),
+			)
+		);
+
+		$exclude_prop = new \ReflectionProperty( Main::class, 'exclude_defer_js' );
+		$exclude_prop->setAccessible( true );
+		$exclude_prop->setValue( $main, array() );
+
+		$GLOBALS['wp_scripts'] = $this->make_fake_wp_scripts();
+		$fake_scripts          = $GLOBALS['wp_scripts'];
+		// Simulate a theme stamping fetchpriority=high before our pass runs.
+		$fake_scripts->add_data( 'third-party-analytics', 'fetchpriority', 'high' );
+
+		$recorded = array();
+		$this->stub_defer_strategy_env( $recorded );
+
+		$main->add_defer_strategy();
+
+		$this->assertSame( 'high', $fake_scripts->data['third-party-analytics']['fetchpriority'] ?? null, 'An explicit fetchpriority must never be overwritten.' );
+		$this->assertSame( 'defer', $fake_scripts->data['third-party-analytics']['strategy'] ?? null );
+		$priority_writes = array_filter(
+			$recorded,
+			static function ( array $call ): bool {
+				return 'third-party-analytics' === $call[0] && 'fetchpriority' === $call[1];
+			}
+		);
+		$this->assertSame( array(), $priority_writes, 'Fill-gaps-only must not write fetchpriority where one already exists.' );
+	}
+
+	/**
+	 * Test that the module pass skips modules with an explicit fetchpriority
+	 * (fill-gaps-only, issue #1019) while still moving them to the footer.
+	 *
+	 * @since NEXT
+	 */
+	public function test_apply_module_loading_strategies_skips_explicit_fetchpriority(): void {
+		$main = $this->make_main(
+			array(
+				'file_optimisation' => array(
+					'deferJS'        => true,
+					'excludeDeferJS' => '',
+				),
+			)
+		);
+		$fake = $this->make_fake_modules();
+		// Simulate core/another plugin stamping an LCP-critical module high.
+		$fake->registered['my-mod'] = array( 'fetchpriority' => 'high' );
+		$this->stub_script_modules( $fake );
+
+		$main->apply_module_loading_strategies();
+
+		$this->assertContains( 'footer:my-mod:true', $fake->calls );
+		$this->assertNotContains( 'priority:my-mod:low', $fake->calls, 'An explicit module fetchpriority must never be overwritten.' );
+		$this->assertContains( 'priority:interactive:low', $fake->calls, 'Gap modules without an explicit value still receive low.' );
+	}
+
+	/**
+	 * Test that the Delay-JS tag rewriter never emits a duplicate fetchpriority
+	 * attribute when one is already present (issue #1019).
+	 *
+	 * @since NEXT
+	 */
+	public function test_add_defer_attribute_skips_duplicate_fetchpriority(): void {
+		$this->stub_main_construction(
+			array(
+				'deferJS' => false,
+				'delayJS' => true,
+			)
+		);
+
+		$main = new Main();
+
+		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for add_defer_attribute() tests.
+		$tag    = '<script fetchpriority="high" src="https://example.com/my-custom-script.js" type="text/javascript"></script>';
+		$result = $main->add_defer_attribute( $tag, 'my-custom-script' );
+
+		$this->assertSame( 1, substr_count( strtolower( $result ), 'fetchpriority=' ), 'The rewritten tag must carry exactly one fetchpriority attribute.' );
+		$this->assertStringContainsString( 'fetchpriority="high"', $result, 'The explicit fetchpriority value must be preserved.' );
+		$this->assertStringNotContainsString( 'fetchpriority="low"', $result );
+	}
 }
 
 // phpcs:disable Generic.Files.OneObjectStructurePerFile
@@ -1262,6 +1383,27 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 // Declared after the test class so the FileName sniff keeps treating this file
 // as test code (the first class decides), mirroring WPPO_DB_Mock in
 // DatabaseCleanupTest.php.
+
+if ( ! class_exists( 'WP_Script_Modules' ) ) {
+	/**
+	 * Minimal WP_Script_Modules stand-in for unit tests.
+	 *
+	 * Core is not loaded here; apply_module_loading_strategies() guards on
+	 * class_exists( 'WP_Script_Modules' ), so the probe needs a target. The
+	 * fake modules instance used by the tests is an anonymous class carrying
+	 * the same public $registered store plus the set_* methods.
+	 *
+	 * @package PerformanceOptimise\Tests
+	 */
+	class WP_Script_Modules {
+		/**
+		 * Registered modules.
+		 *
+		 * @var array
+		 */
+		public $registered = array();
+	}
+}
 
 if ( ! class_exists( 'WP_Scripts' ) ) {
 	/**

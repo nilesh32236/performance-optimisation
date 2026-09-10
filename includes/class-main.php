@@ -2406,13 +2406,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! function_exists( 'wp_script_modules' ) ) {
 				return;
 			}
+			if ( ! class_exists( 'WP_Script_Modules' ) ) {
+				return;
+			}
 
 			$modules = wp_script_modules();
 			if ( ! is_object( $modules ) ) {
 				return;
 			}
 
-			$excluded = Util::process_urls( (string) ( $this->options['file_optimisation']['excludeDeferJS'] ?? '' ) );
+			// Canonical exclusions: the $this->exclude_defer_js property carries the
+			// wppo-lazyload default, the wppo_exclude_defer_js filter, and the
+			// CVE-guard handles. Merge the raw option as a fallback so instances
+			// built without the constructor path stay covered. Fail-open.
+			$excluded = is_array( $this->exclude_defer_js ) ? $this->exclude_defer_js : array();
+			$raw      = (string) ( $this->options['file_optimisation']['excludeDeferJS'] ?? '' );
+			if ( '' !== $raw ) {
+				$excluded = array_unique( array_merge( $excluded, Util::process_urls( $raw ) ) );
+			}
+			if ( ! in_array( 'wppo-lazyload', $excluded, true ) ) {
+				$excluded[] = 'wppo-lazyload';
+			}
 
 			// Collect registered module ids, tolerating core version differences.
 			$ids = array();
@@ -2434,6 +2448,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					$modules->set_in_footer( (string) $id, true );
 				}
 				if ( method_exists( $modules, 'set_fetchpriority' ) ) {
+					// Fill-gaps-only: skip modules that already carry an explicit
+					// fetchpriority. Core defaults gaps to 'auto' (see
+					// WP_Script_Modules::register), so only 'auto'/missing/empty
+					// counts as a gap; 'high' (LCP-critical) and explicit 'low'
+					// are left untouched. Inspects the public $registered store
+					// directly because core exposes no single-module getter.
+					// Fail-open: any unreadable shape falls through to 'low'.
+					$existing = null;
+					if ( isset( $modules->registered ) ) {
+						$registered = (array) $modules->registered;
+						if ( array_key_exists( (string) $id, $registered ) ) {
+							$entry = $registered[ (string) $id ];
+							if ( is_array( $entry ) && array_key_exists( 'fetchpriority', $entry ) ) {
+								$existing = $entry['fetchpriority'];
+							} elseif ( is_object( $entry ) && isset( $entry->fetchpriority ) ) {
+								$existing = $entry->fetchpriority;
+							}
+						}
+					}
+					if ( is_string( $existing ) && '' !== trim( $existing ) && 'auto' !== strtolower( trim( $existing ) ) ) {
+						continue;
+					}
 					$modules->set_fetchpriority( (string) $id, 'low' );
 				}
 			}
@@ -2598,28 +2634,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					$this->deferred_handles[ $handle ] = true;
 					// Native fetchpriority on WP 6.9+ (Trac #61734); pre-6.9 is handled
 					// by the script_loader_tag regex fallback (add_fetchpriority_to_deferred).
-					/**
-					 * Filters fetchpriority for each deferred handle.
-					 *
-					 * Default 'low' deprioritises deferred (non-render-blocking)
-					 * scripts. Return 'high' for an LCP-critical handle, falsy to
-					 * suppress, or 'auto' to defer to browser.
-					 *
-					 * @since NEXT
-					 *
-					 * @param string $fetchpriority Fetchpriority value.
-					 * @param string $handle        Script handle.
-					 */
-					$fetchpriority = apply_filters( 'wppo_deferred_fetchpriority', 'low', $handle );
-					if ( ! is_string( $fetchpriority ) ) {
-						$fetchpriority = '';
-					}
-					$fetchpriority = strtolower( trim( $fetchpriority ) );
-					if ( ! in_array( $fetchpriority, array( 'high', 'low', 'auto' ), true ) ) {
-						$fetchpriority = '';
-					}
-					if ( '' !== $fetchpriority ) {
-						wp_script_add_data( $handle, 'fetchpriority', $fetchpriority );
+					// Pre-release-inclusive '6.9-alpha' floor matches setup_hooks() so
+					// alpha/beta/RC builds already carrying the API are covered.
+					// Fill-gaps-only: never overwrite an explicit fetchpriority value
+					// (e.g. an LCP-critical handle filtered to 'high').
+					if ( $is_wp69_plus && function_exists( 'wp_script_add_data' ) ) {
+						$existing_fetchpriority = method_exists( $wp_scripts, 'get_data' ) ? $wp_scripts->get_data( $handle, 'fetchpriority' ) : false;
+						if ( empty( $existing_fetchpriority ) ) {
+							/**
+							 * Filters fetchpriority for each deferred handle.
+							 *
+							 * Default 'low' deprioritises deferred (non-render-blocking)
+							 * scripts. Return 'high' for an LCP-critical handle, falsy to
+							 * suppress, or 'auto' to defer to browser.
+							 *
+							 * @since NEXT
+							 *
+							 * @param string $fetchpriority Fetchpriority value.
+							 * @param string $handle        Script handle.
+							 */
+							$fetchpriority = apply_filters( 'wppo_deferred_fetchpriority', 'low', $handle );
+							if ( ! is_string( $fetchpriority ) ) {
+								$fetchpriority = '';
+							}
+							$fetchpriority = strtolower( trim( $fetchpriority ) );
+							if ( ! in_array( $fetchpriority, array( 'high', 'low', 'auto' ), true ) ) {
+								$fetchpriority = '';
+							}
+							if ( '' !== $fetchpriority ) {
+								wp_script_add_data( $handle, 'fetchpriority', $fetchpriority );
+							}
+						}
 					}
 					if ( $is_wp69_plus ) {
 						// Native in_footer for deferred classic scripts on WP 6.9+
@@ -2692,7 +2737,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					}
 				}
 				if ( ! $this->is_delay_excluded_handle( $handle ) ) {
-					$tag = str_replace( '<script ', '<script fetchpriority="low" ', $tag );
+					// Fill-gaps-only: never emit a duplicate fetchpriority attribute
+					// when core or an earlier filter already stamped one.
+					if ( false === stripos( (string) $tag, 'fetchpriority=' ) ) {
+						$tag = str_replace( '<script ', '<script fetchpriority="low" ', $tag );
+					}
 					$tag = str_replace( ' src', ' wppo-src', $tag );
 					$tag = preg_replace(
 						'/type=("|\')text\/javascript("|\')/',
