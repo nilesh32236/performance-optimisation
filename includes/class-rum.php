@@ -105,6 +105,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		public const MAX_LCP_URLS_PER_PATH = 10;
 
 		/**
+		 * Maximum device × template segments tracked per path bucket.
+		 *
+		 * Bounds the `lcpSeg` map added for field-LCP p75 routing
+		 * (issue #986) so the aggregate option stays within its byte budget.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const MAX_LCP_SEGMENTS_PER_PATH = 6;
+
+		/**
+		 * Maximum LCP samples retained per device × template segment.
+		 *
+		 * Capped reservoir (most-recent values) used solely for p75
+		 * computation; oldest values are dropped first.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const MAX_LCP_SAMPLES_PER_SEGMENT = 100;
+
+		/**
 		 * Maximum length (chars) accepted for an LCP element URL.
 		 *
 		 * @since NEXT
@@ -298,6 +320,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				'path'   => $path,
 			);
 
+			// Optional template dimension for device × template p75 routing
+			// (issue #986). Additive only: omitted when undetectable so the
+			// beacon contract stays backward compatible.
+			$template = self::detect_template_slug();
+			if ( '' !== $template ) {
+				$config['template'] = $template;
+			}
+
 			// JSON_HEX_* flags escape <, >, ', " and & so a crafted REQUEST_URI
 			// path can never split out of the <script> element (audit #888
 			// finding 9). wp_print_inline_script_tag() handles the surrounding
@@ -308,6 +338,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			) . ';';
 
 			wp_print_inline_script_tag( $javascript, array( 'id' => 'wppo-rum-config' ) );
+		}
+
+		/**
+		 * Detect the current template slug for RUM segmentation.
+		 *
+		 * Fail-open: returns '' when undetectable so the beacon field is
+		 * omitted and aggregation falls back to the `unknown` bucket.
+		 *
+		 * @since NEXT
+		 * @return string Template slug (max 64 chars) or ''.
+		 */
+		private static function detect_template_slug(): string {
+			try {
+				$slug = '';
+				if ( function_exists( 'get_page_template_slug' ) ) {
+					$queried = function_exists( 'get_queried_object_id' ) ? get_queried_object_id() : 0;
+					$slug    = (string) get_page_template_slug( $queried ? $queried : null );
+				}
+				if ( '' === $slug && function_exists( 'get_page_template' ) ) {
+					$tpl = (string) get_page_template();
+					if ( '' !== $tpl ) {
+						$slug = (string) basename( $tpl, '.php' );
+					}
+				}
+				if ( '' === $slug ) {
+					return '';
+				}
+				$slug = function_exists( 'sanitize_text_field' ) ? sanitize_text_field( $slug ) : $slug;
+				$slug = strtolower( substr( $slug, 0, 64 ) );
+				$slug = (string) preg_replace( '/[^a-z0-9_-]/', '', $slug );
+				return substr( $slug, 0, 64 );
+			} catch ( \Throwable $e ) {
+				return '';
+			}
 		}
 
 		/**
@@ -435,6 +499,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					$sample['lcpUrl'] = $lcp_url;
 				}
 			}
+
+			// Optional device × template segmentation (issue #986). Fail-open:
+			// missing/invalid values fall back to `unknown` and never reject
+			// the sample — the numeric path above is unchanged.
+			$device = 'unknown';
+			if ( isset( $params['device'] ) && is_string( $params['device'] ) ) {
+				$candidate = strtolower( trim( substr( $params['device'], 0, 16 ) ) );
+				if ( 'mobile' === $candidate || 'desktop' === $candidate ) {
+					$device = $candidate;
+				}
+			}
+			$sample['device'] = $device;
+
+			$template = 'unknown';
+			if ( isset( $params['template'] ) && is_string( $params['template'] ) ) {
+				$raw = function_exists( 'sanitize_text_field' ) ? sanitize_text_field( $params['template'] ) : $params['template'];
+				$raw = strtolower( trim( substr( $raw, 0, 64 ) ) );
+				$raw = function_exists( 'preg_replace' ) ? (string) preg_replace( '/[^a-z0-9_-]/', '', $raw ) : $raw;
+				if ( '' !== $raw ) {
+					$template = substr( $raw, 0, 64 );
+				}
+			}
+			$sample['template'] = $template;
 
 			return $sample;
 		}
@@ -609,6 +696,63 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 								unset( $bucket['lcpUrls'][ $evict_key ] );
 								--$lcp_urls_count;
 							}
+						}
+					}
+
+					// Device × template LCP segments (issue #986): bounded per-path
+					// `lcpSeg` map keyed `{device}|{template}` holding n/sum/
+					// min/max plus a capped most-recent reservoir for p75.
+					// Evicts the lowest-n segment when over budget. Reuses the
+					// existing option byte-budget loop below so the size cap
+					// still holds; no new option or transient names.
+					if ( isset( $sample['lcp'] ) ) {
+						$lcp_value = (float) $sample['lcp'];
+						$device    = isset( $sample['device'] ) && is_string( $sample['device'] ) ? $sample['device'] : 'unknown';
+						if ( 'mobile' !== $device && 'desktop' !== $device ) {
+							$device = 'unknown';
+						}
+						$template = isset( $sample['template'] ) && is_string( $sample['template'] ) && '' !== $sample['template'] ? substr( $sample['template'], 0, 64 ) : 'unknown';
+						$seg_key  = $device . '|' . $template;
+						if ( ! isset( $bucket['lcpSeg'] ) || ! is_array( $bucket['lcpSeg'] ) ) {
+							$bucket['lcpSeg'] = array();
+						}
+						if ( ! isset( $bucket['lcpSeg'][ $seg_key ] ) || ! is_array( $bucket['lcpSeg'][ $seg_key ] ) ) {
+							$bucket['lcpSeg'][ $seg_key ] = array(
+								'device'   => $device,
+								'template' => $template,
+								'n'        => 0,
+								'sum'      => 0.0,
+								'min'      => $lcp_value,
+								'max'      => $lcp_value,
+								'samples'  => array(),
+							);
+						}
+						++$bucket['lcpSeg'][ $seg_key ]['n'];
+						$bucket['lcpSeg'][ $seg_key ]['sum'] += $lcp_value;
+						$bucket['lcpSeg'][ $seg_key ]['min']  = min( $bucket['lcpSeg'][ $seg_key ]['min'], $lcp_value );
+						$bucket['lcpSeg'][ $seg_key ]['max']  = max( $bucket['lcpSeg'][ $seg_key ]['max'], $lcp_value );
+						$samples                              = isset( $bucket['lcpSeg'][ $seg_key ]['samples'] ) && is_array( $bucket['lcpSeg'][ $seg_key ]['samples'] ) ? $bucket['lcpSeg'][ $seg_key ]['samples'] : array();
+						$samples[]                            = $lcp_value;
+						if ( count( $samples ) > self::MAX_LCP_SAMPLES_PER_SEGMENT ) {
+							$samples = array_slice( $samples, -self::MAX_LCP_SAMPLES_PER_SEGMENT );
+						}
+						$bucket['lcpSeg'][ $seg_key ]['samples'] = array_values( $samples );
+						$lcp_seg_count                           = count( $bucket['lcpSeg'] );
+						while ( $lcp_seg_count > self::MAX_LCP_SEGMENTS_PER_PATH ) {
+							$evict_key = null;
+							$evict_n   = null;
+							foreach ( $bucket['lcpSeg'] as $key => $entry ) {
+								$entry_n = isset( $entry['n'] ) ? (int) $entry['n'] : 0;
+								if ( null === $evict_key || $entry_n < $evict_n ) {
+									$evict_key = $key;
+									$evict_n   = $entry_n;
+								}
+							}
+							if ( null === $evict_key ) {
+								break;
+							}
+							unset( $bucket['lcpSeg'][ $evict_key ] );
+							--$lcp_seg_count;
 						}
 					}
 
@@ -982,6 +1126,155 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				unset( $e );
 			}
 			return '';
+		}
+
+		/**
+		 * Resolve the field-LCP minimum-sample threshold for auto-tune.
+		 *
+		 * Prefers the additive `ai_adaptive.field_lcp_min_samples` setting,
+		 * falls back to the legacy `image_optimisation.fieldLcpMinSamples`
+		 * for backward compatibility, then to FIELD_LCP_DEFAULT_MIN_SAMPLES.
+		 *
+		 * Pure read path: no option or transient writes.
+		 *
+		 * @since NEXT
+		 * @return int Minimum samples (>=1).
+		 */
+		public static function get_field_lcp_min_samples(): int {
+			try {
+				$options = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::get_settings() : array();
+				if ( isset( $options['ai_adaptive']['field_lcp_min_samples'] ) ) {
+					$min = (int) $options['ai_adaptive']['field_lcp_min_samples'];
+					if ( $min >= 1 ) {
+						return $min;
+					}
+				}
+				if ( isset( $options['image_optimisation']['fieldLcpMinSamples'] ) ) {
+					$min = (int) $options['image_optimisation']['fieldLcpMinSamples'];
+					if ( $min >= 1 ) {
+						return $min;
+					}
+				}
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+			}
+			return self::FIELD_LCP_DEFAULT_MIN_SAMPLES;
+		}
+
+		/**
+		 * Compute the p75 of a numeric sample list.
+		 *
+		 * Nearest-rank method: sort ascending, pick index ceil(0.75*n)-1.
+		 *
+		 * @since NEXT
+		 * @param float[] $samples Numeric samples.
+		 * @return float p75 value or 0.0 when empty.
+		 */
+		public static function compute_p75( array $samples ): float {
+			$values = array_values( array_filter( $samples, 'is_numeric' ) );
+			$count  = count( $values );
+			if ( 0 === $count ) {
+				return 0.0;
+			}
+			$values = array_map( 'floatval', $values );
+			sort( $values, SORT_NUMERIC );
+			$rank = (int) ceil( 0.75 * $count ) - 1;
+			$rank = max( 0, min( $count - 1, $rank ) );
+			return (float) $values[ $rank ];
+		}
+
+		/**
+		 * Get field LCP p75 segmented by device × template (read-only).
+		 *
+		 * Pure read path for AI-Adaptive auto-tune (issue #986): reads the
+		 * aggregate option only via get_option() — never flushes the queue
+		 * and never calls update_option/set_transient, so the frontend
+		 * incurs no new writes. Segments across all retained days are merged
+		 * by `{path}|{device}|{template}`; only segments with n >=
+		 * $min_samples are returned. Fail-open: any failure returns array().
+		 *
+		 * @since NEXT
+		 * @param int|null $min_samples Minimum samples per segment. Null resolves via get_field_lcp_min_samples().
+		 * @return array[] Rows of array(path,device,template,n,p75).
+		 */
+		public static function get_field_lcp_p75_by_segment( ?int $min_samples = null ): array {
+			try {
+				$min = null === $min_samples ? self::get_field_lcp_min_samples() : (int) $min_samples;
+				if ( $min < 1 ) {
+					$min = self::FIELD_LCP_DEFAULT_MIN_SAMPLES;
+				}
+				if ( ! function_exists( 'get_option' ) ) {
+					return array();
+				}
+				$all = get_option( self::OPTION, array() );
+				if ( ! is_array( $all ) || empty( $all ) ) {
+					return array();
+				}
+				$merged = array();
+				foreach ( $all as $day_bucket ) {
+					if ( ! is_array( $day_bucket ) ) {
+						continue;
+					}
+					foreach ( $day_bucket as $bucket_path => $bucket ) {
+						if ( ! is_array( $bucket ) || ! isset( $bucket['lcpSeg'] ) || ! is_array( $bucket['lcpSeg'] ) ) {
+							continue;
+						}
+						$path = (string) $bucket_path;
+						foreach ( $bucket['lcpSeg'] as $seg ) {
+							if ( ! is_array( $seg ) ) {
+								continue;
+							}
+							$device   = isset( $seg['device'] ) && is_string( $seg['device'] ) ? $seg['device'] : 'unknown';
+							$template = isset( $seg['template'] ) && is_string( $seg['template'] ) && '' !== $seg['template'] ? $seg['template'] : 'unknown';
+							$key      = $path . '|' . $device . '|' . $template;
+							if ( ! isset( $merged[ $key ] ) ) {
+								$merged[ $key ] = array(
+									'path'     => $path,
+									'device'   => $device,
+									'template' => $template,
+									'n'        => 0,
+									'samples'  => array(),
+								);
+							}
+							$merged[ $key ]['n'] += isset( $seg['n'] ) ? (int) $seg['n'] : 0;
+							$samples              = isset( $seg['samples'] ) && is_array( $seg['samples'] ) ? $seg['samples'] : array();
+							foreach ( $samples as $value ) {
+								if ( is_numeric( $value ) ) {
+									$merged[ $key ]['samples'][] = (float) $value;
+								}
+							}
+						}
+					}
+				}
+				$rows = array();
+				foreach ( $merged as $entry ) {
+					$n = (int) $entry['n'];
+					if ( $n < $min ) {
+						continue;
+					}
+					$p75    = self::compute_p75( $entry['samples'] );
+					$rows[] = array(
+						'path'     => $entry['path'],
+						'device'   => $entry['device'],
+						'template' => $entry['template'],
+						'n'        => $n,
+						'p75'      => $p75,
+					);
+				}
+				usort(
+					$rows,
+					static function ( $a, $b ) {
+						$pa = isset( $a['p75'] ) ? (float) $a['p75'] : 0.0;
+						$pb = isset( $b['p75'] ) ? (float) $b['p75'] : 0.0;
+						if ( $pa === $pb ) {
+							return 0;
+						}
+						return $pa > $pb ? -1 : 1;
+					}
+				);
+				return $rows;
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+				return array();
+			}
 		}
 	}
 }

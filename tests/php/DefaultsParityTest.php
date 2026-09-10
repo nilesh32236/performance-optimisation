@@ -61,10 +61,12 @@ class DefaultsParityTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 5120, $defaults['image_optimisation']['skipSmallThresholdBytes'] );
 
 		// AI Adaptive WP-client opt-in (issue #964): additive keys only, off by default.
+		// Field-LCP min samples (issue #986): additive key, 20 by default.
 		$this->assertSame(
 			array(
-				'enabled'          => false,
-				'use_wp_ai_client' => false,
+				'enabled'               => false,
+				'use_wp_ai_client'      => false,
+				'field_lcp_min_samples' => 20,
 			),
 			$defaults['ai_adaptive']
 		);

@@ -332,6 +332,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['ai_adaptive']['use_wp_ai_client'] ) ) {
 				$this->options['ai_adaptive']['use_wp_ai_client'] = false;
 			}
+			if ( ! isset( $this->options['ai_adaptive']['field_lcp_min_samples'] ) ) {
+				$this->options['ai_adaptive']['field_lcp_min_samples'] = 20;
+			}
 
 			if ( ! isset( $this->options['edge_cache'] ) || ! is_array( $this->options['edge_cache'] ) ) {
 				$this->options['edge_cache'] = array();
