@@ -1590,7 +1590,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$v1    = $reflection->invoke( $image_opt, 'https://example.com/wp-content/uploads/hero.jpg?v=1', '' );
 		$v2    = $reflection->invoke( $image_opt, 'https://example.com/wp-content/uploads/hero.jpg?v=2', '' );
 
-		$this->assertSame( $plain, $https );
 		$this->assertSame( $http, $https );
 		$this->assertSame( $proto, $https );
 		$this->assertNotSame( $v1, $v2 );

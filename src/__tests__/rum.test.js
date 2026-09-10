@@ -21,4 +21,24 @@ describe( 'classifyDeviceWidth', () => {
 	it( 'returns null when no width is available', () => {
 		expect( classifyDeviceWidth( 0, 0 ) ).toBe( null );
 	} );
+
+	it( 'treats the 1024px boundary as mobile and 1025px as desktop', () => {
+		expect( classifyDeviceWidth( 1024, 0 ) ).toBe( true );
+		expect( classifyDeviceWidth( 1025, 0 ) ).toBe( false );
+	} );
+
+	it( 'coerces numeric strings', () => {
+		expect( classifyDeviceWidth( '768', 0 ) ).toBe( true );
+		expect( classifyDeviceWidth( '1280', 0 ) ).toBe( false );
+	} );
+
+	it( 'falls back to the viewport for NaN or negative screen widths', () => {
+		expect( classifyDeviceWidth( NaN, 390 ) ).toBe( true );
+		expect( classifyDeviceWidth( -1, 1280 ) ).toBe( false );
+	} );
+
+	it( 'returns null when both screen and viewport widths are invalid', () => {
+		expect( classifyDeviceWidth( NaN, NaN ) ).toBe( null );
+		expect( classifyDeviceWidth( -1, -1 ) ).toBe( null );
+	} );
 } );

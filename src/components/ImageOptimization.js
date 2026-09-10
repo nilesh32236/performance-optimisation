@@ -51,10 +51,15 @@ const DEFAULT_CLIENT_SIDE_MIME_TYPES = [
 const coerceLongestEdge = ( value, fallback ) => {
 	if (
 		Array.isArray( value ) ||
-		value === '' ||
+		typeof value === 'boolean' ||
 		value === null ||
 		value === undefined
 	) {
+		return fallback;
+	}
+	// Mirror PHP is_numeric(): whitespace-only strings are not numeric, and
+	// Number('   ') would otherwise coerce to 0 instead of the 2560 fallback.
+	if ( typeof value === 'string' && value.trim() === '' ) {
 		return fallback;
 	}
 	const num = Number( value );

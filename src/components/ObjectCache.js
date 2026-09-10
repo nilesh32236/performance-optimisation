@@ -131,7 +131,8 @@ const ObjectCache = ( { options = {} } ) => {
 					setCacheStatus( ( prev ) => ( {
 						...res.data,
 						statusLoaded: true,
-						supported_compressors: res.data.supported_compressors ??
+						supported_compressors: res.data
+							?.supported_compressors ??
 							prev.supported_compressors ?? { none: true },
 					} ) );
 				} else {

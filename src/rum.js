@@ -8,7 +8,9 @@
  *
  * The collector is a plain ES module (no dependencies) so it can be served
  * from the static build directory on cached pages.
- *
+ */
+
+/**
  * Classify a device as mobile/desktop from its physical screen width.
  *
  * Resize-stable: the physical screen width does not change when a desktop
@@ -111,6 +113,7 @@ export const classifyDeviceWidth = ( screenWidth, viewportWidth ) => {
 		try {
 			let isMobile = null;
 			if (
+				typeof navigator !== 'undefined' &&
 				navigator.userAgentData &&
 				typeof navigator.userAgentData.mobile === 'boolean'
 			) {

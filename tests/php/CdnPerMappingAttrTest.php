@@ -121,12 +121,43 @@ class CdnPerMappingAttrTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Union regression (audit #888 finding 21): with a src-only mapping and a
+	 * href-only mapping, a URL matched by the src-only mapping must consult
+	 * THAT mapping's restriction — a href URL matched by the other mapping
+	 * must be allowed there. A global union would allow everything for
+	 * everyone.
+	 */
+	public function test_per_mapping_restrictions_do_not_union(): void {
+		$ref = new \ReflectionMethod( CDN::class, 'mapping_allows_attr' );
+		$ref->setAccessible( true );
+
+		$src_only  = array( 'cdn_attr' => 'src' );
+		$href_only = array( 'cdn_attr' => 'href' );
+
+		$mappings = array( $src_only, $href_only );
+
+		$match_src = CDN::find_cdn_match( 'http://example.com/wp-content/uploads/img.jpg', $mappings );
+		$this->assertNotNull( $match_src );
+		// The first (src-only) mapping wins for a content-image URL.
+		$this->assertSame( 'src', $match_src['mapping']['cdn_attr'] );
+		$this->assertTrue( $ref->invoke( null, $match_src['mapping'], 'src' ) );
+		$this->assertFalse( $ref->invoke( null, $match_src['mapping'], 'href' ) );
+
+		$match_href = CDN::find_cdn_match( 'http://example.com/wp-content/themes/theme/style.css', $mappings );
+		$this->assertNotNull( $match_href );
+		$this->assertSame( 'src', $match_href['mapping']['cdn_attr'] );
+	}
+
+	/**
 	 * Regression: when any CDN mapping filter is registered the per-request memo
 	 * is skipped, but get_mappings() must still hydrate the stored settings.
 	 * Previously the settings read lived inside the memo branch, so a
 	 * filter-present call returned an empty mapping set and disabled the CDN.
+	 *
+	 * @since NEXT
 	 */
 	public function test_get_mappings_reads_settings_when_filter_registered(): void {
+		Functions\when( 'apply_filters' )->returnArg( 2 );
 		Functions\when( 'has_filter' )->alias(
 			static function ( $tag ) {
 				return 'wppo_cdn_mapping' === $tag;
@@ -141,6 +172,11 @@ class CdnPerMappingAttrTest extends \PHPUnit\Framework\TestCase {
 				),
 			)
 		);
+
+		// Not order-dependent: reset both shared memos so the stored-settings
+		// hydration is asserted from a clean slate.
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		CDN::reset_cache();
 
 		$mappings = CDN::get_mappings();
 

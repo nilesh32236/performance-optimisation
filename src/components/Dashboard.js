@@ -299,6 +299,11 @@ const Dashboard = ( {
 				'GET',
 				signal
 			);
+			// The unmount/stop cleanup may have aborted this tick while the
+			// request was in flight — bail before any setState/notify.
+			if ( signal.aborted ) {
+				return;
+			}
 			pollRetryRef.current = 0;
 			if ( response.success && response.data ) {
 				const { queued_jobs: queuedJobs } = response.data;

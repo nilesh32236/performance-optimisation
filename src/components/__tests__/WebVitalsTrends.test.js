@@ -121,7 +121,7 @@ describe( 'WebVitalsTrends Component', () => {
 
 	it( 'aborts the in-flight request on unmount without updating state', async () => {
 		let resolveFetch;
-		fetchWebVitalsTrends.mockImplementation(
+		fetchWebVitalsTrends.mockImplementationOnce(
 			() =>
 				new Promise( ( resolve ) => {
 					resolveFetch = resolve;

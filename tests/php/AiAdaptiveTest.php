@@ -823,6 +823,8 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * The global-average path stays conservative (per-path averages of 1000ms)
 	 * so any eagerness upgrade is attributable to the segmented p75 routing.
 	 *
+	 * @since NEXT
+	 *
 	 * @param int $segment_n Segment sample count.
 	 * @return void
 	 */
@@ -869,6 +871,8 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 *
 	 * Given <20 samples the heuristic uses the global-average path unchanged.
 	 *
+	 * @since NEXT
+	 *
 	 * @return void
 	 */
 	public function test_learn_below_threshold_stays_provisional_without_upgrade(): void {
@@ -895,6 +899,8 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 
 	/**
 	 * Test at-threshold segments route device + template + p75 into the suggestion.
+	 *
+	 * @since NEXT
 	 *
 	 * @return void
 	 */
@@ -927,6 +933,8 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 
 	/**
 	 * Test empty RUM data falls back to the global path without errors.
+	 *
+	 * @since NEXT
 	 *
 	 * @return void
 	 */

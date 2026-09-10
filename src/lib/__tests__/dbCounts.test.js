@@ -58,6 +58,22 @@ describe( 'dbCounts memoization (lib/dbCounts.js)', () => {
 		expect( withSignal ).toEqual( first );
 	} );
 
+	it( 'throws AbortError on a cache hit when the signal is already aborted', async () => {
+		apiCall.mockResolvedValue( { success: true, data: { posts: 8 } } );
+
+		await getDbCounts();
+
+		const controller = new AbortController();
+		controller.abort();
+
+		await expect( getDbCounts( controller.signal ) ).rejects.toMatchObject(
+			{
+				name: 'AbortError',
+			}
+		);
+		expect( apiCall ).toHaveBeenCalledTimes( 1 );
+	} );
+
 	it( 'treats explicit null like undefined for the 3-arg call shape', async () => {
 		apiCall.mockResolvedValueOnce( {
 			success: true,

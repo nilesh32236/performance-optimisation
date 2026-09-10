@@ -86,7 +86,7 @@ describe( 'WebVitalsRum', () => {
 
 	it( 'aborts the in-flight request on unmount without updating state', async () => {
 		let resolveFetch;
-		apiCall.mockImplementation(
+		apiCall.mockImplementationOnce(
 			() =>
 				new Promise( ( resolve ) => {
 					resolveFetch = resolve;

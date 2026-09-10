@@ -158,15 +158,17 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 
 				if ( pollCountRef.current > MAX_POLL_ATTEMPTS ) {
 					stopPolling();
-					setPending( false );
-					setScanning( false );
-					notify( {
-						type: 'error',
-						message: __(
-							'PageSpeed scan timed out. Please try again.',
-							'performance-optimisation'
-						),
-					} );
+					if ( isMounted.current ) {
+						setPending( false );
+						setScanning( false );
+						notify( {
+							type: 'error',
+							message: __(
+								'PageSpeed scan timed out. Please try again.',
+								'performance-optimisation'
+							),
+						} );
+					}
 					return;
 				}
 
@@ -191,17 +193,19 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 
 					if ( ! response.success ) {
 						stopPolling();
-						setPending( false );
-						setScanning( false );
-						notify( {
-							type: 'error',
-							message:
-								response.message ||
-								__(
-									'PageSpeed scan failed. Please try again.',
-									'performance-optimisation'
-								),
-						} );
+						if ( isMounted.current ) {
+							setPending( false );
+							setScanning( false );
+							notify( {
+								type: 'error',
+								message:
+									response.message ||
+									__(
+										'PageSpeed scan failed. Please try again.',
+										'performance-optimisation'
+									),
+							} );
+						}
 						return;
 					}
 
@@ -230,21 +234,24 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 					}
 				} catch ( err ) {
 					if ( err?.name === 'AbortError' ) {
+						pollSignalRef.current = null;
 						return;
 					}
 					if ( signal && signal.aborted ) {
 						return;
 					}
 					stopPolling();
-					setPending( false );
-					setScanning( false );
-					notify( {
-						type: 'error',
-						message: __(
-							'PageSpeed scan failed.',
-							'performance-optimisation'
-						),
-					} );
+					if ( isMounted.current ) {
+						setPending( false );
+						setScanning( false );
+						notify( {
+							type: 'error',
+							message: __(
+								'PageSpeed scan failed.',
+								'performance-optimisation'
+							),
+						} );
+					}
 					console.error( 'PageSpeed poll error:', err );
 				}
 			};

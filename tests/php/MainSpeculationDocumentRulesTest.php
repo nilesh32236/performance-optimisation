@@ -102,6 +102,8 @@ class MainSpeculationDocumentRulesTest extends \PHPUnit\Framework\TestCase {
 	 * patterns with the trailing `*` stripped) so the two can be compared on the
 	 * same basis.
 	 *
+	 * @since NEXT
+	 *
 	 * @param array $rules Speculation rules.
 	 * @return string[] Normalized target paths.
 	 */
@@ -372,6 +374,8 @@ class MainSpeculationDocumentRulesTest extends \PHPUnit\Framework\TestCase {
 	 * so a user-configured high-value URL that equals the first post is out of
 	 * scope for this invariant.
 	 *
+	 * @since NEXT
+	 *
 	 * @return void
 	 */
 	public function test_no_duplicate_across_list_and_document_sources(): void {
@@ -388,7 +392,7 @@ class MainSpeculationDocumentRulesTest extends \PHPUnit\Framework\TestCase {
 		$GLOBALS['wp_query'] = (object) array( 'posts' => array( (object) array( 'ID' => 1 ) ) );
 
 		try {
-			$main  = $this->make_main( $this->default_settings()['preload_settings'] );
+			$main  = $this->make_main( $settings['preload_settings'] );
 			$rules = $main->filter_speculation_list_rules( array() );
 		} finally {
 			unset( $GLOBALS['wp_query'] );

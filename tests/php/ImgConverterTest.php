@@ -1218,6 +1218,10 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	 * @since NEXT
 	 */
 	public function test_maybe_downscale_gd_image(): void {
+		if ( ! function_exists( 'imagecreatetruecolor' ) ) {
+			$this->markTestSkipped( 'GD support is required.' );
+		}
+
 		$converter = $this->make_converter( array( 'maxLongestEdgePx' => 32 ) );
 
 		$image  = imagecreatetruecolor( 64, 48 );
@@ -1264,17 +1268,15 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 
 		$this->prepare_wppo_output_dir();
 
-		// Blast radius note: stubbing the builtin function_exists intercepts
-		// every unqualified function_exists() call in the Img_Converter
-		// namespace for the duration of this test; Brain Monkey resets the
-		// stub in tearDown. Only the wp_image_quality probe is faked, all
-		// other names fall through to the real PHP builtin.
-		Functions\when( 'function_exists' )->alias(
+		// Narrow override: force only the `wp_image_quality` core-handles probe
+		// false, and restore the real builtin right after convert_image() so
+		// function_exists() is not intercepted for the rest of the test. Brain
+		// Monkey's Functions\when() discards Patchwork's handle, so the raw
+		// handle is captured here and expired in the finally block.
+		$function_exists_handle = \Patchwork\redefine(
+			'function_exists',
 			static function ( $function_name ) {
-				if ( 'wp_image_quality' === $function_name ) {
-					return false;
-				}
-				return \function_exists( $function_name );
+				return 'wp_image_quality' !== $function_name;
 			}
 		);
 
@@ -1287,6 +1289,7 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		);
 		try {
 			$result = $converter->convert_image( $path, 'webp' );
+			\Patchwork\restore( $function_exists_handle );
 
 			$this->assertTrue( $result );
 
@@ -1301,6 +1304,7 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 			$this->assertSame( 600, $out[0] );
 			$this->assertSame( 450, $out[1] );
 		} finally {
+			\Patchwork\restore( $function_exists_handle );
 			if ( file_exists( $path ) ) {
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
 				unlink( $path );

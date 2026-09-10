@@ -30,6 +30,14 @@ export const getDbCounts = async ( signal ) => {
 	const ownerSignal = signal ?? null;
 	const now = Date.now();
 	if ( cachedData && now - cachedAt < TTL_MS ) {
+		// A cache hit must still honour an already-aborted caller signal —
+		// callers expect AbortError rather than a value after cancellation.
+		if ( hasSignal && signal.aborted ) {
+			throw new DOMException(
+				'The operation was aborted.',
+				'AbortError'
+			);
+		}
 		return { ...cachedData };
 	}
 	// Only coalesce onto an in-flight request created by the same caller

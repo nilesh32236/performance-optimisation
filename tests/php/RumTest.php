@@ -756,7 +756,11 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	private function stub_pagespeed_candidate_environment( string $heuristic_url ): void {
 		Functions\when( 'is_singular' )->justReturn( false );
 		Functions\when( 'is_front_page' )->justReturn( false );
-		Functions\when( 'untrailingslashit' )->returnArg();
+		Functions\when( 'untrailingslashit' )->alias(
+			static function ( $url ) {
+				return rtrim( (string) $url, '/' );
+			}
+		);
 		Functions\when( 'add_query_arg' )->justReturn( '/hero-page/' );
 		Functions\when( 'home_url' )->justReturn( 'https://example.com' );
 		Functions\when( 'has_filter' )->justReturn( false );
