@@ -2876,6 +2876,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					return true;
 				}
 
+				// Per-URL delay disable (#988): skip delay on listed URLs only,
+				// without disabling the plugin. Fail-open: matcher errors never exclude.
+				try {
+					$delay_exclude_list = '';
+					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+						$delay_settings     = Util::get_settings();
+						$delay_exclude_list = isset( $delay_settings['file_optimisation']['delayJSExcludeUrls'] ) ? (string) $delay_settings['file_optimisation']['delayJSExcludeUrls'] : '';
+					}
+					if ( '' !== trim( $delay_exclude_list ) && self::is_url_excluded_by_list( $delay_exclude_list ) ) {
+						return true;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+
 				// Builder preview/edit contexts only (never blanket-disable rendered frontend).
 				// Elementor.
 				if ( isset( $_GET['elementor-preview'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
@@ -3132,6 +3147,192 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Curated commerce Delay JS exclusions (issue #988).
+		 *
+		 * The jQuery plus cart-fragments/checkout handles stay un-delayed when
+		 * the commerce preset is on so carts and checkouts never break.
+		 * Filterable via wppo_delay_js_commerce_exclusions.
+		 *
+		 * @since NEXT
+		 * @return string[]
+		 */
+		public static function get_delay_js_commerce_exclusions(): array {
+			$preset = array(
+				'jquery',
+				'jquery-core',
+				'jquery-migrate',
+				'wc-cart-fragments',
+				'wc-checkout',
+				'woocommerce',
+				'wc-add-to-cart',
+				'wc-single-product',
+				'wc-',
+				'cart-fragments',
+				'wc-cart',
+				'wc-blocks',
+				'wc-store',
+			);
+			/**
+			 * Filters delay JS commerce preset exclusions.
+			 *
+			 * @since NEXT
+			 * @param string[] $preset Commerce preset exclusions.
+			 */
+			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_commerce_exclusions' ) ) {
+				return $preset;
+			}
+			return (array) apply_filters( 'wppo_delay_js_commerce_exclusions', $preset );
+		}
+
+		/**
+		 * Curated slider Delay JS exclusions (issue #988).
+		 *
+		 * Slider runtimes stay un-delayed with the builder preset so hero
+		 * sliders keep working. Filterable via wppo_delay_js_slider_exclusions.
+		 *
+		 * @since NEXT
+		 * @return string[]
+		 */
+		public static function get_delay_js_slider_exclusions(): array {
+			$preset = array(
+				'revslider',
+				'rs-',
+				'rev-slider',
+				'smart-slider',
+				'metaslider',
+				'soliloquy',
+				'swiper',
+				'slick',
+				'owl-carousel',
+				'splide',
+				'bxslider',
+			);
+			/**
+			 * Filters delay JS slider preset exclusions.
+			 *
+			 * @since NEXT
+			 * @param string[] $preset Slider preset exclusions.
+			 */
+			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_slider_exclusions' ) ) {
+				return $preset;
+			}
+			return (array) apply_filters( 'wppo_delay_js_slider_exclusions', $preset );
+		}
+
+		/**
+		 * Whether the current URL matches a newline-separated exclusion list (issue #988).
+		 *
+		 * Each non-empty line is a case-insensitive URL-substring match, or a
+		 * regex when wrapped in valid delimiters (e.g. `#...#`). Fail-open:
+		 * any detection failure returns false (no exclusion).
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $url_list Newline-separated exclusion list.
+		 * @return bool True when the current request URL is excluded.
+		 */
+		public static function is_url_excluded_by_list( string $url_list ): bool {
+			try {
+				$url_list = trim( $url_list );
+				if ( '' === $url_list ) {
+					return false;
+				}
+				$raw_uri     = isset( $_SERVER['REQUEST_URI'] ) ? wp_unslash( $_SERVER['REQUEST_URI'] ) : '/'; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Unslashed here; read-only routing check, no output.
+				$request_uri = sanitize_text_field( (string) $raw_uri );
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$path = (string) wp_parse_url( $request_uri, PHP_URL_PATH );
+				} else {
+					// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for wp_parse_url(); WP 6.2+ always provides it.
+					$qpos = strpos( $request_uri, '?' );
+					$path = false === $qpos ? $request_uri : substr( $request_uri, 0, $qpos );
+				}
+				$haystack = strtolower( $request_uri . ' ' . $path );
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'process_urls' ) ) {
+					$lines = Util::process_urls( $url_list );
+				} else {
+					$lines = array_values( array_filter( array_map( 'trim', explode( "\n", $url_list ) ) ) );
+				}
+				foreach ( $lines as $line ) {
+					$line = trim( (string) $line );
+					if ( '' === $line ) {
+						continue;
+					}
+					// Regex-per-line when wrapped in valid delimiters; invalid regex fails open to substring.
+					if ( strlen( $line ) > 2 && '#' === $line[0] && false !== strrpos( $line, '#', 1 ) ) {
+						$valid = false;
+						set_error_handler( static function () {} ); // phpcs:ignore -- Suppress warnings from user-supplied regex validation.
+						try {
+							$valid = false !== preg_match( $line, '' );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$valid = false;
+						}
+						restore_error_handler();
+						if ( $valid ) {
+							set_error_handler( static function () {} ); // phpcs:ignore -- Suppress warnings from user-supplied regex matching.
+							try {
+								$matched = preg_match( $line . 'i', $request_uri );
+							} catch ( \Throwable $e ) {
+								unset( $e );
+								$matched = false;
+							}
+							restore_error_handler();
+							if ( 1 === $matched ) {
+								return true;
+							}
+							continue;
+						}
+					}
+					if ( false !== stripos( $haystack, strtolower( $line ) ) ) {
+						return true;
+					}
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Whether used CSS must be skipped for the current URL (issue #988).
+		 *
+		 * Checks the per-URL `usedCSSExcludeUrls` list plus the `_wppo_used_css_disabled`
+		 * per-page kill-switch. Fail-open: any detection failure returns false.
+		 *
+		 * @since NEXT
+		 * @return bool True when used CSS must be skipped.
+		 */
+		public static function is_used_css_excluded_for_url(): bool {
+			try {
+				$list = '';
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					$settings = Util::get_settings();
+					$list     = isset( $settings['file_optimisation']['usedCSSExcludeUrls'] ) ? (string) $settings['file_optimisation']['usedCSSExcludeUrls'] : '';
+				}
+				if ( '' !== trim( $list ) && self::is_url_excluded_by_list( $list ) ) {
+					return true;
+				}
+				if ( function_exists( 'is_singular' ) && function_exists( 'get_the_ID' ) && function_exists( 'get_post_meta' ) ) {
+					try {
+						if ( is_singular() ) {
+							$post_id = (int) get_the_ID();
+							if ( $post_id > 0 && ! empty( get_post_meta( $post_id, '_wppo_used_css_disabled', true ) ) ) {
+								return true;
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
 		 * Whether Delay JS is disabled for a singular page (issue #966).
 		 *
 		 * Reads the `_wppo_delay_disabled` post-meta kill-switch. Fail-open:
@@ -3186,9 +3387,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		private function get_delay_js_preset_exclusions(): array {
 			$preset = array(
-				'jquery',
-				'jquery-core',
-				'jquery-migrate',
 				'recaptcha',
 				'google-recaptcha',
 				'grecaptcha',
@@ -3206,22 +3404,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'linkedin',
 				'twitter',
 				'paypal',
-				// Woo-critical handles (#932): stay un-delayed by default even
-				// outside is_cart()/is_checkout() contexts (e.g. mini-cart
-				// fragments on other pages). Deduped via array_unique at merge.
-				'wc-cart-fragments',
-				'wc-checkout',
-				'woocommerce',
-				'wc-add-to-cart',
-				'wc-single-product',
-				// WooCommerce safe list.
-				'wc-',
-				'cart-fragments',
-				'wc-cart',
-				// Elementor safe list.
-				'elementor',
-				'elementor-frontend',
-				'elementor-pro',
 				// Form plugins safe list.
 				'contact-form-7',
 				'wpcf7',
@@ -3230,14 +3412,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'wpforms',
 				'ninja-forms',
 				'fluentform',
+				// Elementor base handles stay global so builder pages never break
+				// even when the builder preset toggle is off.
+				'elementor',
+				'elementor-frontend',
+				'elementor-pro',
 			);
+			// Commerce safe preset (#988): safe-by-default on; merges jQuery +
+			// cart-fragments/checkout handles unless explicitly disabled.
+			// Missing key backfills to on (per-site settings, multisite-safe).
+			$commerce_on = ! isset( $this->options['file_optimisation']['delayJSCommercePreset'] )
+				|| ! empty( $this->options['file_optimisation']['delayJSCommercePreset'] );
+			if ( $commerce_on ) {
+				$preset = array_merge( $preset, self::get_delay_js_commerce_exclusions() );
+			}
 			// Builder safe preset (#966): safe-by-default on; merges builder
-			// runtime handles unless explicitly disabled. Missing key backfills
-			// to on (per-site settings, multisite-safe).
+			// runtime handles plus slider runtimes (#988) unless explicitly disabled.
+			// Missing key backfills to on (per-site settings, multisite-safe).
 			$builder_on = ! isset( $this->options['file_optimisation']['delayJSBuilderPreset'] )
 				|| ! empty( $this->options['file_optimisation']['delayJSBuilderPreset'] );
 			if ( $builder_on ) {
-				$preset = array_merge( $preset, self::get_delay_js_builder_exclusions() );
+				$preset = array_merge( $preset, self::get_delay_js_builder_exclusions(), self::get_delay_js_slider_exclusions() );
 			}
 			/**
 			 * Filters delay JS preset exclusions.

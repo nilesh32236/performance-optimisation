@@ -60,6 +60,12 @@ const FileOptimization = ( {
 			options.delayJSBuilderPreset !== undefined
 				? options.delayJSBuilderPreset
 				: true,
+		delayJSCommercePreset:
+			options.delayJSCommercePreset !== undefined
+				? options.delayJSCommercePreset
+				: true,
+		delayJSExcludeUrls: options.delayJSExcludeUrls || '',
+		usedCSSExcludeUrls: options.usedCSSExcludeUrls || '',
 		delayJSIdleList: options.delayJSIdleList || '',
 		delayJSViewportList: options.delayJSViewportList || '',
 		delayJSPriority: options.delayJSPriority || '',
@@ -138,6 +144,10 @@ const FileOptimization = ( {
 		options.excludeDeferJS,
 		options.delayJS,
 		options.excludeDelayJS,
+		options.delayJSCommercePreset,
+		options.delayJSBuilderPreset,
+		options.delayJSExcludeUrls,
+		options.usedCSSExcludeUrls,
 		options.delayJSDefaultStrategy,
 		options.delayJSIdleList,
 		options.delayJSViewportList,
@@ -781,6 +791,41 @@ const FileOptimization = ( {
 												'performance-optimisation'
 											) }
 										</p>
+										<label
+											className="wppo-field-label wppo-mt-16"
+											htmlFor="usedCSSExcludeUrls"
+										>
+											{ __(
+												'Disable Used CSS on these URLs',
+												'performance-optimisation'
+											) }
+										</label>
+										<textarea
+											className="wppo-textarea wppo-textarea--mono"
+											id="usedCSSExcludeUrls"
+											name="usedCSSExcludeUrls"
+											rows="3"
+											placeholder={ __(
+												'e.g. /checkout/',
+												'performance-optimisation'
+											) }
+											value={
+												settings.usedCSSExcludeUrls
+											}
+											onChange={ handleChange(
+												setSettings
+											) }
+											aria-describedby="usedCSSExcludeUrls-desc"
+										/>
+										<p
+											id="usedCSSExcludeUrls-desc"
+											className="wppo-text-muted wppo-text-small wppo-mt-8"
+										>
+											{ __(
+												'One per line — URL substring or #regex#. Used CSS is skipped on matching URLs only.',
+												'performance-optimisation'
+											) }
+										</p>
 										<div className="wppo-mt-16">
 											<SwitchField
 												label={ __(
@@ -1313,12 +1358,30 @@ const FileOptimization = ( {
 													'performance-optimisation'
 												) }
 												description={ __(
-													'Keep Elementor, Divi, Bricks, WPBakery, Oxygen and block runtimes un-delayed by default. Disable only if you manage exclusions manually.',
+													'Keep Elementor, Divi, Bricks, WPBakery, Oxygen, block runtimes and sliders un-delayed by default. Disable only if you manage exclusions manually.',
 													'performance-optimisation'
 												) }
 												name="delayJSBuilderPreset"
 												checked={
 													settings.delayJSBuilderPreset
+												}
+												onChange={ handleChange(
+													setSettings
+												) }
+												disabled={ optimizerDisabled }
+											/>
+											<SwitchField
+												label={ __(
+													'Commerce safe preset',
+													'performance-optimisation'
+												) }
+												description={ __(
+													'Keep jQuery and cart-fragments/checkout handles un-delayed by default. Disable only if you manage exclusions manually.',
+													'performance-optimisation'
+												) }
+												name="delayJSCommercePreset"
+												checked={
+													settings.delayJSCommercePreset
 												}
 												onChange={ handleChange(
 													setSettings
@@ -1354,6 +1417,39 @@ const FileOptimization = ( {
 												<p className="wppo-text-muted wppo-text-small wppo-mt-8">
 													{ __(
 														'One per line — partial URL or keyword (e.g. gtag).',
+														'performance-optimisation'
+													) }
+												</p>
+											</div>
+											<div className="wppo-field wppo-mt-16">
+												<label
+													className="wppo-field-label"
+													htmlFor="delayJSExcludeUrls"
+												>
+													{ __(
+														'Disable Delay JS on these URLs',
+														'performance-optimisation'
+													) }
+												</label>
+												<textarea
+													className="wppo-textarea wppo-textarea--mono"
+													id="delayJSExcludeUrls"
+													name="delayJSExcludeUrls"
+													rows="3"
+													placeholder={ __(
+														'e.g. /checkout/',
+														'performance-optimisation'
+													) }
+													value={
+														settings.delayJSExcludeUrls
+													}
+													onChange={ handleChange(
+														setSettings
+													) }
+												/>
+												<p className="wppo-text-muted wppo-text-small wppo-mt-8">
+													{ __(
+														'One per line — URL substring or #regex#. Delay is skipped on matching URLs only.',
 														'performance-optimisation'
 													) }
 												</p>
@@ -1564,6 +1660,17 @@ const FileOptimization = ( {
 													) }
 												</span>
 											</div>
+											{ settings.delayJS &&
+												( ! settings.delayJSCommercePreset ||
+													! settings.delayJSBuilderPreset ) && (
+													<NoticeBanner
+														type="warning"
+														message={ __(
+															'Aggressive mode: a safe preset is off — jQuery, cart, builder or slider scripts may be delayed. Re-enable presets unless you manage exclusions manually.',
+															'performance-optimisation'
+														) }
+													/>
+												) }
 											<div className="wppo-notice wppo-notice--info wppo-mt-16">
 												<span>
 													{ __(

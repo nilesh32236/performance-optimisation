@@ -140,6 +140,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
+				if ( method_exists( Main::class, 'get_delay_js_slider_exclusions' ) ) {
+					try {
+						$this->exclude_delay_js = array_merge( $this->exclude_delay_js, Main::get_delay_js_slider_exclusions() );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+			}
+			// Commerce safe preset (#988): mirror Main::get_delay_js_commerce_exclusions()
+			// via the shared static helper so the lists never drift. Safe-by-default
+			// on; missing key backfills to on.
+			$commerce_on = ! isset( $this->options['file_optimisation']['delayJSCommercePreset'] )
+				|| ! empty( $this->options['file_optimisation']['delayJSCommercePreset'] );
+			if ( $commerce_on && class_exists( Main::class ) && method_exists( Main::class, 'get_delay_js_commerce_exclusions' ) ) {
+				try {
+					$this->exclude_delay_js = array_merge( $this->exclude_delay_js, Main::get_delay_js_commerce_exclusions() );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 			}
 			$this->exclude_delay_js = array_values(
 				array_filter(

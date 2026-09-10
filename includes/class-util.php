@@ -177,6 +177,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'delayJSINPPreset'             => false,
 					'delayJSExternalOnly'          => false,
 					'delayJSBuilderPreset'         => true,
+					'delayJSCommercePreset'        => true,
+					'delayJSExcludeUrls'           => '',
+					'usedCSSExcludeUrls'           => '',
 					'delayJSIdleList'              => '',
 					'delayJSViewportList'          => '',
 					'delayJSPriority'              => '',
@@ -1913,7 +1916,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					continue;
 				}
 
-				if ( in_array( $safe_key, array( 'delayJSBuilderPreset', 'unusedCSSRegressionGuard' ), true ) && ! is_array( $value ) ) {
+				if ( in_array( $safe_key, array( 'delayJSBuilderPreset', 'delayJSCommercePreset', 'unusedCSSRegressionGuard' ), true ) && ! is_array( $value ) ) {
 					if ( is_bool( $value ) ) {
 						$sanitized[ $safe_key ] = $value;
 					} else {
