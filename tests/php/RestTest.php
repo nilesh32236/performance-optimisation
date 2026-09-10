@@ -272,6 +272,10 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			}
 		);
 		Functions\when( 'get_option' )->justReturn( array() );
+		// Read-only proof: the endpoint must never write options or transients.
+		Functions\expect( 'update_option' )->never();
+		Functions\expect( 'set_transient' )->never();
+		Functions\expect( 'set_site_transient' )->never();
 		// phpcs:disable WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Test-only wp_parse_url stub.
 		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
 		// phpcs:enable WordPress.WP.AlternativeFunctions.parse_url_parse_url
@@ -284,11 +288,19 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 		$data = $response->get_data();
 		$this->assertTrue( $data['success'] );
 		$this->assertTrue( $data['data']['runnable'] );
+		// woo_active reflects process-wide Woo symbol state (Brain Monkey
+		// stubs eval-persist, see bootstrap), so only the shape is asserted.
+		$this->assertArrayHasKey( 'woo_active', $data['data'] );
+		$this->assertIsBool( $data['data']['woo_active'] );
 		$this->assertTrue( $data['data']['safe_mode'] );
+		$this->assertTrue( $data['data']['all_pass'] );
+		$this->assertTrue( $data['data']['donotcachepage_honored'] );
+		$this->assertNotEmpty( $data['data']['excluded_paths'] );
 		$this->assertNotEmpty( $data['data']['checks'] );
 		foreach ( $data['data']['checks'] as $check ) {
 			$this->assertFalse( $check['cacheable'] );
 			$this->assertTrue( $check['pass'] );
+			$this->assertTrue( $check['donotcachepage_honored'] );
 		}
 	}
 

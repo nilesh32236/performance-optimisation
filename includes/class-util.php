@@ -561,12 +561,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * `/checkout/`, `/my-account/`), every resolved custom path from
 		 * {@see get_woo_excluded_paths()} and one Store API probe
 		 * (`/wp-json/wc/store/v1/cart`), asserts `is_cacheable=false` by
-		 * mirroring `Cache::is_woo_excluded()` semantics without
+		 * mirroring `Cache::is_woo_excluded()` path/safe-mode semantics without
 		 * instantiating Cache (`is_woo_store_api_path()` uncacheable
 		 * unconditionally, otherwise `safe_mode && is_woo_dynamic_path()`).
-		 * `donotcachepage_honored` documents that `Cache::is_not_cacheable()`
-		 * honors the `DONOTCACHEPAGE` constant — this method never defines
-		 * the constant, it only asserts the existing enforcement path.
+		 * Scope note: this covers path/safe-mode semantics only and does not
+		 * evaluate the `wppo_woo_cacheable` / `wppo_should_cache_request`
+		 * overrides, which can re-allow caching of an excluded URL at runtime.
+		 * `donotcachepage_honored` is assumed (not probed): DONOTCACHEPAGE
+		 * enforcement lives in `Cache::is_not_cacheable()` — this method never
+		 * defines the constant, it only asserts the existing enforcement path.
 		 *
 		 * Fail-open: any per-URL detection failure yields
 		 * `pass=false, cacheable=false, error` (treated non-cacheable, never

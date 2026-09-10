@@ -476,7 +476,7 @@ class WooSafeModeTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Self-test fails closed to uncached visibility when safe mode is off (issue #1020).
+	 * Self-test fails visibly (pass=false, cacheable=true for page probes) when safe mode is off (issue #1020).
 	 *
 	 * Page probes become cacheable (pass=false) while the Store API probe
 	 * stays uncacheable even with the toggle off.
@@ -502,6 +502,34 @@ class WooSafeModeTest extends \PHPUnit\Framework\TestCase {
 		$this->assertFalse( $by_path['/cart/']['pass'] );
 		$this->assertFalse( $by_path['/wp-json/wc/store/v1/cart/']['cacheable'] );
 		$this->assertTrue( $by_path['/wp-json/wc/store/v1/cart/']['pass'] );
+	}
+
+	/**
+	 * Self-test reports woo_active=false with runnable shape when Woo is absent (issue #1020).
+	 *
+	 * Woo conditional symbols eval-persist process-wide once any Brain Monkey
+	 * stub declares them (see bootstrap), so absence is simulated via the
+	 * redefinable-internals `function_exists` stub — the same pattern as
+	 * SystemInfoTest::test_get_woocommerce_presets_null_when_inactive.
+	 * The default-path probes still run (safe mode defaults on) — the shape
+	 * the Dashboard read-only notice branch consumes.
+	 */
+	public function test_woo_cache_self_test_woo_inactive_shape(): void {
+		$this->stub_front_end_guests();
+		$this->stub_self_test_urls();
+		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\stubs( array( 'function_exists' ) );
+		Functions\when( 'function_exists' )->justReturn( false );
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+
+		$result = \PerformanceOptimise\Inc\Util::woo_cache_self_test();
+
+		$this->assertFalse( $result['woo_active'] );
+		$this->assertTrue( $result['runnable'] );
+		$this->assertTrue( $result['safe_mode'] );
+		$this->assertSame( array( 'cart', 'checkout', 'my-account' ), $result['excluded_paths'] );
+		$this->assertTrue( $result['all_pass'] );
+		$this->assertNotEmpty( $result['checks'] );
 	}
 
 	/**

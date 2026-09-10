@@ -5,7 +5,7 @@ import {
 	useRef,
 	useMemo,
 } from '@wordpress/element';
-import { apiCall } from '../lib/apiRequest';
+import { apiCall, fetchWooCacheSelfTest } from '../lib/apiRequest';
 import { getDbCounts } from '../lib/dbCounts';
 import useNotice from '../lib/useNotice';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
@@ -634,7 +634,7 @@ const Dashboard = ( {
 
 	const runWooCacheSelfTest = useCallback( () => {
 		setWooSelfTestLoading( true );
-		apiCall( 'woo_cache_self_test', {}, 'GET' )
+		fetchWooCacheSelfTest()
 			.then( ( response ) => {
 				if ( response.success && response.data ) {
 					setWooSelfTest( response.data );
@@ -1356,7 +1356,7 @@ const Dashboard = ( {
 					</button>
 					<p className="wppo-text-muted wppo-text-small">
 						{ __(
-							'Proves in one click that cart, checkout and account pages bypass the static cache with DONOTCACHEPAGE honored.',
+							'Proves in one click that cart, checkout and account paths bypass the static cache under path/safe-mode semantics (DONOTCACHEPAGE enforcement is assumed via Cache::is_not_cacheable(); the wppo_woo_cacheable override is out of scope).',
 							'performance-optimisation'
 						) }
 					</p>
@@ -1399,8 +1399,8 @@ const Dashboard = ( {
 						</p>
 						{ Array.isArray( wooSelfTest.checks ) && (
 							<ul className="wppo-woo-self-test">
-								{ wooSelfTest.checks.map( ( check ) => (
-									<li key={ check.path }>
+								{ wooSelfTest.checks.map( ( check, index ) => (
+									<li key={ `${ check.path }-${ index }` }>
 										<span>{ check.path }</span>
 										{ ' — ' }
 										<span>

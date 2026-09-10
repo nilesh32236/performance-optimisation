@@ -12,6 +12,7 @@ import React from 'react';
 jest.mock( '../../lib/apiRequest', () => ( {
 	apiCall: jest.fn(),
 	fetchWebVitalsTrends: jest.fn(),
+	fetchWooCacheSelfTest: jest.fn(),
 } ) );
 
 jest.mock( '../WelcomePanel', () => () => <div data-testid="welcome-panel" /> );
@@ -103,7 +104,11 @@ jest.mock(
 );
 
 import Dashboard from '../Dashboard';
-import { apiCall, fetchWebVitalsTrends } from '../../lib/apiRequest';
+import {
+	apiCall,
+	fetchWebVitalsTrends,
+	fetchWooCacheSelfTest,
+} from '../../lib/apiRequest';
 import { clearDbCountsCache } from '../../lib/dbCounts';
 
 /**
@@ -142,6 +147,7 @@ describe( 'Dashboard', () => {
 		// always resolves; action-specific responses queue via mockResolvedValueOnce.
 		apiCall.mockResolvedValue( { success: true, data: {} } );
 		fetchWebVitalsTrends.mockResolvedValue( { success: true, data: {} } );
+		fetchWooCacheSelfTest.mockResolvedValue( { success: true, data: {} } );
 	} );
 
 	it( 'renders stats and the welcome panel', async () => {
@@ -599,7 +605,7 @@ describe( 'Dashboard', () => {
 
 		await flushDashboardMount();
 
-		apiCall.mockResolvedValueOnce( {
+		fetchWooCacheSelfTest.mockResolvedValueOnce( {
 			success: true,
 			data: {
 				woo_active: true,
@@ -634,11 +640,7 @@ describe( 'Dashboard', () => {
 		);
 
 		await waitFor( () =>
-			expect( apiCall ).toHaveBeenCalledWith(
-				'woo_cache_self_test',
-				{},
-				'GET'
-			)
+			expect( fetchWooCacheSelfTest ).toHaveBeenCalled()
 		);
 		expect( screen.getByText( '/cart/' ) ).toBeInTheDocument();
 		expect( screen.getByText( '/checkout/' ) ).toBeInTheDocument();
@@ -655,7 +657,7 @@ describe( 'Dashboard', () => {
 
 		await flushDashboardMount();
 
-		apiCall.mockResolvedValueOnce( {
+		fetchWooCacheSelfTest.mockResolvedValueOnce( {
 			success: true,
 			data: {
 				woo_active: false,
@@ -690,7 +692,9 @@ describe( 'Dashboard', () => {
 
 			await flushDashboardMount();
 
-			apiCall.mockRejectedValueOnce( new Error( 'network error' ) );
+			fetchWooCacheSelfTest.mockRejectedValueOnce(
+				new Error( 'network error' )
+			);
 
 			fireEvent.click(
 				screen.getByRole( 'button', {
