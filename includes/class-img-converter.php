@@ -292,17 +292,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * @return bool True when AVIF encoding is supported.
 		 */
 		public static function is_avif_encoder_available(): bool {
+			static $memo = null;
+			if ( null !== $memo ) {
+				return $memo;
+			}
 			if ( function_exists( 'imageavif' ) && version_compare( PHP_VERSION, '8.2', '>=' ) ) {
+				$memo = true;
 				return true;
 			}
 
 			if ( extension_loaded( 'imagick' ) && class_exists( 'Imagick' ) ) {
 				try {
 					$imagick = new \Imagick();
-					if ( method_exists( $imagick, 'queryFormats' ) ) {
-						$formats = $imagick->queryFormats( 'AVIF*' );
-						if ( ! empty( $formats ) ) {
-							return true;
+					try {
+						if ( method_exists( $imagick, 'queryFormats' ) ) {
+							$formats = $imagick->queryFormats( 'AVIF*' );
+							if ( ! empty( $formats ) ) {
+								$memo = true;
+								return true;
+							}
+						}
+					} finally {
+						if ( method_exists( $imagick, 'clear' ) ) {
+							$imagick->clear();
+						}
+						if ( method_exists( $imagick, 'destroy' ) ) {
+							$imagick->destroy();
 						}
 					}
 				} catch ( \Exception $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Probe only; absence means no AVIF support.
@@ -310,6 +325,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				}
 			}
 
+			$memo = false;
 			return false;
 		}
 
@@ -2246,6 +2262,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			);
 
 			$queued = 0;
+
+			// Prime post + postmeta caches for the batch so the per-ID
+			// get_attached_file() calls below do not each issue post and
+			// postmeta lookups.
+			$prime_ids = array_map( 'intval', (array) $all_ids );
+			if ( ! empty( $prime_ids ) ) {
+				try {
+					if ( function_exists( '_prime_post_caches' ) ) {
+						_prime_post_caches( $prime_ids, false, false );
+					}
+					if ( function_exists( 'update_postmeta_cache' ) ) {
+						update_postmeta_cache( $prime_ids );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
 
 			foreach ( $all_ids as $attachment_id ) {
 				$file = get_attached_file( (int) $attachment_id );

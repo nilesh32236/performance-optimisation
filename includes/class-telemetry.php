@@ -718,15 +718,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 						if ( isset( $head_cache[ $url ] ) ) {
 							return $head_cache[ $url ];
 						}
+						// Persist per-URL content-length in a bounded short-TTL
+						// transient so repeat scans do not re-issue HEADs.
+						$persist_key = Util::transient_key( 'wppo_head_len_' . md5( $url ) );
+						try {
+							$persisted = get_transient( $persist_key );
+							if ( is_int( $persisted ) && $persisted >= 0 ) {
+								$head_cache[ $url ] = $persisted;
+								return $persisted;
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
 						$response = wp_remote_head( $url, array( 'timeout' => 3 ) );
 						if ( ! is_wp_error( $response ) ) {
 							$len = wp_remote_retrieve_header( $response, 'content-length' );
 							if ( $len ) {
 								$head_cache[ $url ] = (int) $len;
+								try {
+									set_transient( $persist_key, (int) $len, HOUR_IN_SECONDS );
+								} catch ( \Throwable $e ) {
+									unset( $e );
+								}
 								return (int) $len;
 							}
 						}
 						$head_cache[ $url ] = 0;
+						try {
+							set_transient( $persist_key, 0, HOUR_IN_SECONDS );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
 					}
 				}
 				return 0;
@@ -869,6 +891,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				return false;
 			}
 
+			// Cache per host (including negative results) so repeated scans
+			// of different URLs on the same host do not re-fetch robots.txt.
+			$cache_key = Util::transient_key( 'wppo_robots_' . md5( strtolower( $host ) ) );
+			try {
+				$cached = get_transient( $cache_key );
+				if ( is_array( $cached ) && array_key_exists( 'exists', $cached ) ) {
+					return (bool) $cached['exists'];
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
 			$response = wp_remote_get(
 				$robots_url,
 				array(
@@ -878,10 +912,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 			);
 
 			if ( is_wp_error( $response ) ) {
-				return false;
+				$result = false;
+			} else {
+				$result = 200 === (int) wp_remote_retrieve_response_code( $response );
 			}
 
-			return 200 === (int) wp_remote_retrieve_response_code( $response );
+			try {
+				set_transient( $cache_key, array( 'exists' => $result ), DAY_IN_SECONDS );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
+			return $result;
 		}
 
 		/**
@@ -953,6 +995,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				// Monotonic increment: two bumps within the same second must
 				// produce distinct salts (issue #882 review).
 				update_option( self::AUDIT_SALT_KEY, (int) get_option( self::AUDIT_SALT_KEY, 0 ) + 1, false );
+				return;
+			}
+			// Transient fallback (most single-site installs): delete the
+			// registered wppo_audit_* keys so settings changes do not leave
+			// stale audit data cached up to the 1h TTL.
+			try {
+				$index = get_option( 'wppo_transient_index', array() );
+				if ( is_array( $index ) && ! empty( $index ) ) {
+					foreach ( $index as $stored_key => $expiry ) {
+						if ( false !== strpos( (string) $stored_key, 'wppo_audit_' ) ) {
+							delete_transient( (string) $stored_key );
+						}
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 			}
 		}
 

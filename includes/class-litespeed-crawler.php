@@ -539,6 +539,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 							'post_status'    => 'publish',
 							'posts_per_page' => 200, // phpcs:ignore WordPress.WP.PostsPerPage.posts_per_page_posts_per_page -- bounded sitemap batch 200
 							'fields'         => 'ids',
+							'no_found_rows'  => true,
 						)
 					);
 					if ( is_array( $posts ) ) {

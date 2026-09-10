@@ -662,6 +662,9 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 
 		$this->options[ RUM::OPTION ][ $today ]['/shop']['lcpSeg']['mobile|single']['n']       = 20;
 		$this->options[ RUM::OPTION ][ $today ]['/shop']['lcpSeg']['mobile|single']['samples'] = array_fill( 0, 20, 3000.0 );
+		// The aggregate is memoized per request; reset to simulate a fresh
+		// request after the underlying data changed.
+		RUM::clear_field_lcp_cache();
 
 		$rows = RUM::get_field_lcp_p75_by_segment();
 		$this->assertCount( 1, $rows );

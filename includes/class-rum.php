@@ -1334,7 +1334,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				if ( ! function_exists( 'get_option' ) ) {
 					return array();
 				}
-				$all = get_option( self::OPTION, array() );
+				// Reuse the per-request memo so repeated calls do not each
+				// deserialize the full aggregate option. Read-only: the memo
+				// never flushes the queue.
+				$all = self::get_memoized_aggregate();
 				if ( ! is_array( $all ) || empty( $all ) ) {
 					return array();
 				}

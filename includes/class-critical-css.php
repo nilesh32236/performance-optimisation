@@ -591,10 +591,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				case 'single':
 					$posts                                = get_posts(
 						array(
-							'numberposts'  => 1,
-							'post_status'  => 'publish',
-							'has_password' => false,
-							'fields'       => 'ids',
+							'numberposts'   => 1,
+							'post_status'   => 'publish',
+							'has_password'  => false,
+							'fields'        => 'ids',
+							'no_found_rows' => true,
 						)
 					);
 					self::$sample_url_cache[ $cache_key ] = ! empty( $posts ) ? get_permalink( $posts[0] ) : false;
@@ -602,11 +603,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				case 'page':
 					$pages                                = get_posts(
 						array(
-							'post_type'    => 'page',
-							'numberposts'  => 1,
-							'post_status'  => 'publish',
-							'has_password' => false,
-							'fields'       => 'ids',
+							'post_type'     => 'page',
+							'numberposts'   => 1,
+							'post_status'   => 'publish',
+							'has_password'  => false,
+							'fields'        => 'ids',
+							'no_found_rows' => true,
 						)
 					);
 					self::$sample_url_cache[ $cache_key ] = ! empty( $pages ) ? get_permalink( $pages[0] ) : Util::cached_home_url( '/' );
@@ -614,10 +616,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				case 'archive':
 					$archives = get_posts(
 						array(
-							'numberposts'  => 1,
-							'post_status'  => 'publish',
-							'has_password' => false,
-							'fields'       => 'ids',
+							'numberposts'   => 1,
+							'post_status'   => 'publish',
+							'has_password'  => false,
+							'fields'        => 'ids',
+							'no_found_rows' => true,
 						)
 					);
 					if ( ! empty( $archives ) ) {
