@@ -1214,8 +1214,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$config = $this->build_redis_config( $params );
 				$ping   = $manager->ping( $config );
 				if ( is_wp_error( $ping ) ) {
-					$code = $ping->get_error_code();
-					Log::add( sprintf( 'Redis connection ping failed (%s): %s', $code, $ping->get_error_message() ) );
+					// No Log::add here: Object_Cache::ping() already records
+					// the failure in-app via log_redis_failure().
 					return $this->send_response( $this->redis_error_payload( $ping, 'error' ), false, 400, __( 'Redis connection failed.', 'performance-optimisation' ) );
 				}
 
@@ -1227,8 +1227,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$result = $manager->enable( $config );
 
 				if ( is_wp_error( $result ) ) {
-					$code = $result->get_error_code();
-					Log::add( sprintf( 'Redis connection enable failed (%s): %s', $code, $result->get_error_message() ) );
+					// No Log::add here: enable() → ping() already logged it.
 					return $this->send_response( $this->redis_error_payload( $result, 'error' ), false, 400, __( 'Redis connection failed.', 'performance-optimisation' ) );
 				}
 
@@ -1258,7 +1257,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$result = $manager->enable( $config );
 
 				if ( is_wp_error( $result ) ) {
-					Log::add( sprintf( 'Object Cache circuit recovery failed (%s) — Redis still unreachable: %s', $result->get_error_code(), $result->get_error_message() ) );
+					// No Log::add here: enable() → ping() already logged it.
 					return $this->send_response( $this->redis_error_payload( $result, 'warning' ), false, 400, __( 'Redis is still unreachable. The circuit breaker stays open.', 'performance-optimisation' ) );
 				}
 
@@ -1278,8 +1277,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					Log::add( __( 'Object Cache flushed.', 'performance-optimisation' ) );
 					return $this->send_response( true, true, 200, __( 'Object Cache flushed.', 'performance-optimisation' ) );
 				}
-				$flush_error = new \WP_Error( 'flush_stale', __( 'Flush left stale keys behind or reported failure.', 'performance-optimisation' ) );
-				Log::add( sprintf( 'Object Cache flush failed (%s): %s', $flush_error->get_error_code(), $flush_error->get_error_message() ) );
+				// No Log::add here: Object_Cache::flush() already recorded
+				// the failure in-app. Forward the manager's real error so
+				// the SPA notice keeps its specificity.
+				$flush_error = $manager->get_last_flush_error();
+				if ( ! ( $flush_error instanceof \WP_Error ) ) {
+					$flush_error = new \WP_Error( 'flush_fail', __( 'Flush reported failure.', 'performance-optimisation' ) );
+				}
 				return $this->send_response( $this->redis_error_payload( $flush_error, 'error' ), false, 400, __( 'Failed to flush object cache.', 'performance-optimisation' ) );
 			}
 

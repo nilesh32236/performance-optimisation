@@ -223,7 +223,107 @@ class ObjectCacheRedisResilienceTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Connect failure logging writes to the activity log + notice transient.
+	 * Option application is an explicit no-op without the Redis extension.
+	 *
+	 * Guards on class_exists()/defined() must decide — never try/catch
+	 * control flow — so a recording client must see zero setOption calls
+	 * when the extension is absent.
+	 */
+	public function test_apply_redis_options_noop_without_extension(): void {
+		if ( class_exists( 'Redis' ) ) {
+			$this->markTestSkipped( 'Redis extension is present; guard path not exercisable.' );
+		}
+
+		$client = new class() {
+			/**
+			 * Call counter.
+			 *
+			 * @var int
+			 */
+			public $calls = 0;
+
+			/**
+			 * Record setOption calls.
+			 *
+			 * @param mixed $option Option.
+			 * @param mixed $value Value.
+			 * @return bool
+			 */
+			public function setOption( $option, $value ) { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid,Universal.NamingConventions.NoReservedKeywordParameterNames -- phpredis signature.
+				unset( $option, $value );
+				++$this->calls;
+				return true;
+			}
+		};
+
+		wppo_apply_redis_options( $client, array( 'compression' => 'zstd' ) );
+
+		$this->assertSame( 0, $client->calls, 'Without the Redis class the helper must return early without touching the client.' );
+	}
+
+	/**
+	 * A rejected serializer falls back to the PHP serializer (deterministic).
+	 *
+	 * The fake throws on the first setOption() regardless of the resolved
+	 * value; the helper must then retry with SERIALIZER_PHP instead of
+	 * letting the failure escape.
+	 */
+	public function test_apply_redis_options_falls_back_to_php_on_throw(): void {
+		if ( ! defined( '\Redis::SERIALIZER_PHP' ) || ! defined( '\Redis::OPT_SERIALIZER' ) ) {
+			$this->markTestSkipped( 'phpredis option constants are unavailable.' );
+		}
+
+		$client = new class() {
+			/**
+			 * Values received by setOption, in order.
+			 *
+			 * @var array
+			 */
+			public $values = array();
+
+			/**
+			 * Throw on first call, accept the retry.
+			 *
+			 * @param mixed $option Option.
+			 * @param mixed $value Value.
+			 * @return bool
+			 * @throws \RuntimeException On the first call.
+			 */
+			public function setOption( $option, $value ) { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid,Universal.NamingConventions.NoReservedKeywordParameterNames -- phpredis signature.
+				unset( $option );
+				$this->values[] = $value;
+				if ( 1 === count( $this->values ) ) {
+					throw new \RuntimeException( 'serializer unavailable' );
+				}
+				return true;
+			}
+		};
+
+		wppo_apply_redis_options( $client, array() );
+
+		$this->assertNotEmpty( $client->values );
+		$this->assertSame(
+			\Redis::SERIALIZER_PHP,
+			end( $client->values ),
+			'After a serializer rejection the helper must retry with the PHP serializer.'
+		);
+	}
+
+	/**
+	 * Non-object clients are ignored without throwing.
+	 */
+	public function test_apply_redis_options_ignores_non_clients(): void {
+		wppo_apply_redis_options( null, array() );
+		wppo_apply_redis_options( 'not-a-client', array( 'compression' => 'lz4' ) );
+		$this->assertTrue( true );
+	}
+
+	/**
+	 * Connect failure logging writes to the activity log + last-failure transient.
+	 *
+	 * Plain failures must NOT arm the circuit-notice transient (only the
+	 * breaker trip path arms it); the latest failure is surfaced via
+	 * get_status()['last_failure'] instead.
 	 */
 	public function test_log_redis_failure_writes_activity_log_and_transient(): void {
 		$manager = new Object_Cache();
@@ -239,7 +339,12 @@ class ObjectCacheRedisResilienceTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 'conn_fail', $this->transients[ $failure_key ]['code'] );
 
 		$notice_key = Util::transient_key( Object_Cache::CIRCUIT_NOTICE_TRANSIENT );
-		$this->assertArrayHasKey( $notice_key, $this->transients );
+		$this->assertArrayNotHasKey( $notice_key, $this->transients, 'Plain failures must not clobber the trip notice payload/TTL.' );
+
+		$status = $manager->get_status();
+		$this->assertArrayHasKey( 'last_failure', $status );
+		$this->assertIsArray( $status['last_failure'] );
+		$this->assertSame( 'conn_fail', $status['last_failure']['code'] );
 	}
 
 	/**
@@ -272,6 +377,14 @@ class ObjectCacheRedisResilienceTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Fresh manager carries no flush error.
+	 */
+	public function test_last_flush_error_defaults_to_null(): void {
+		$manager = new Object_Cache();
+		$this->assertNull( $manager->get_last_flush_error() );
+	}
+
+	/**
 	 * Drop-in flush helpers are namespace-aware (verify + scan-delete exist).
 	 */
 	public function test_dropin_flush_helpers_exist(): void {
@@ -280,5 +393,127 @@ class ObjectCacheRedisResilienceTest extends \PHPUnit\Framework\TestCase {
 
 		$ref = new \ReflectionMethod( 'WP_Object_Cache', 'flush' );
 		$this->assertTrue( $ref->isPublic() );
+
+		$this->assertTrue( ( new \ReflectionClass( 'WP_Object_Cache' ) )->hasMethod( 'verify_prefix_flushed' ) );
+		$this->assertTrue( ( new \ReflectionClass( 'WP_Object_Cache' ) )->hasMethod( 'scan_pattern_is_empty' ) );
+	}
+
+	/**
+	 * Invoke a private drop-in verify helper with a stubbed redis client.
+	 *
+	 * @param object $redis Stub client exposing scan().
+	 * @return bool verify_prefix_flushed() result.
+	 */
+	private function invoke_dropin_verify( $redis ): bool {
+		$instance = ( new \ReflectionClass( 'WP_Object_Cache' ) )->newInstanceWithoutConstructor();
+
+		$prop = new \ReflectionProperty( 'WP_Object_Cache', 'redis' );
+		$prop->setAccessible( true );
+		$prop->setValue( $instance, $redis );
+
+		$connected = new \ReflectionProperty( 'WP_Object_Cache', 'redis_connected' );
+		$connected->setAccessible( true );
+		$connected->setValue( $instance, true );
+
+		$ref = new \ReflectionMethod( 'WP_Object_Cache', 'verify_prefix_flushed' );
+		$ref->setAccessible( true );
+		return (bool) $ref->invoke( $instance, 'wp_:*' );
+	}
+
+	/**
+	 * Verifier reports dirty when keys survive the sweep.
+	 */
+	public function test_dropin_verify_reports_stale_keys(): void {
+		$stub = new class() {
+			/**
+			 * Always report one surviving key.
+			 *
+			 * @param mixed  $cursor Cursor (by reference).
+			 * @param string $pattern Pattern.
+			 * @param int    $count Count.
+			 * @return array
+			 */
+			public function scan( &$cursor, $pattern, $count = 100 ) {
+				unset( $pattern, $count );
+				$cursor = 0;
+				return array( 'wp_:stale' );
+			}
+		};
+
+		$this->assertFalse( $this->invoke_dropin_verify( $stub ) );
+	}
+
+	/**
+	 * Verifier walks past the first page: stale keys on page two fail.
+	 */
+	public function test_dropin_verify_walks_full_keyspace(): void {
+		$stub = new class() {
+			/**
+			 * Page counter.
+			 *
+			 * @var int
+			 */
+			public $pages = 0;
+
+			/**
+			 * Empty first page (cursor continues), stale second page.
+			 *
+			 * @param mixed  $cursor Cursor (by reference).
+			 * @param string $pattern Pattern.
+			 * @param int    $count Count.
+			 * @return array
+			 */
+			public function scan( &$cursor, $pattern, $count = 100 ) {
+				unset( $pattern, $count );
+				++$this->pages;
+				if ( 1 === $this->pages ) {
+					$cursor = 1;
+					return array();
+				}
+				$cursor = 0;
+				return array( 'wp_:late-stale' );
+			}
+		};
+
+		$this->assertFalse( $this->invoke_dropin_verify( $stub ) );
+		$this->assertGreaterThan( 1, $stub->pages, 'Verifier must read beyond the first SCAN page.' );
+	}
+
+	/**
+	 * Verifier is fail-open: scan errors and throws report clean.
+	 */
+	public function test_dropin_verify_fail_open_on_scan_error(): void {
+		$false_stub = new class() {
+			/**
+			 * Report scan failure.
+			 *
+			 * @param mixed  $cursor Cursor (by reference).
+			 * @param string $pattern Pattern.
+			 * @param int    $count Count.
+			 * @return bool
+			 */
+			public function scan( &$cursor, $pattern, $count = 100 ) {
+				unset( $pattern, $count );
+				$cursor = 0;
+				return false;
+			}
+		};
+		$this->assertTrue( $this->invoke_dropin_verify( $false_stub ) );
+
+		$throw_stub = new class() {
+			/**
+			 * Throw on scan.
+			 *
+			 * @param mixed  $cursor Cursor (by reference).
+			 * @param string $pattern Pattern.
+			 * @param int    $count Count.
+			 * @throws \RuntimeException Always.
+			 */
+			public function scan( &$cursor, $pattern, $count = 100 ) {
+				unset( $cursor, $pattern, $count );
+				throw new \RuntimeException( 'transient blip' );
+			}
+		};
+		$this->assertTrue( $this->invoke_dropin_verify( $throw_stub ) );
 	}
 }

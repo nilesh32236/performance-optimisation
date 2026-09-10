@@ -217,6 +217,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			$status['circuit_error_code'] = $circuit['error_code'];
 			$status['failure_count']      = $circuit['failures'];
 			$status['serializers']        = $this->get_serializer_support();
+			$status['last_failure']       = $this->get_last_failure_payload();
 
 			if ( file_exists( $this->dropin_path ) ) {
 				$wp_filesystem = Util::init_filesystem();
@@ -983,17 +984,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					),
 					DAY_IN_SECONDS
 				);
-				// Arm the existing circuit-notice transient payload shape so
-				// the admin notice and SPA circuit banner can surface the
-				// latest failure even before the breaker trips.
-				set_transient(
-					Util::transient_key( self::CIRCUIT_NOTICE_TRANSIENT ),
-					array(
-						'tripped_at' => time(),
-						'reason'     => $message,
-					),
-					DAY_IN_SECONDS
-				);
+				// NOTE: the circuit-notice transient is armed only by the
+				// breaker trip path (auto_disable_circuit()); plain failures
+				// must not clobber the trip payload/TTL (WEEK vs DAY), and the
+				// latest failure is surfaced via get_status()['last_failure'].
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
@@ -1053,43 +1047,90 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		}
 
 		/**
-		 * Flush the complete object cache with verification + memory-delta assertion.
+		 * Last flush failure (set by flush(), cleared on success).
+		 *
+		 * Lets the REST flush handler forward the manager's real failure
+		 * code/message instead of synthesizing a generic one, without
+		 * changing the bool flush() contract relied on by WP-CLI/abilities.
+		 *
+		 * @since NEXT
+		 * @var \WP_Error|null
+		 */
+		private $last_flush_error = null;
+
+		/**
+		 * Read the latest recorded Redis failure for admin/REST surfacing.
+		 *
+		 * Fail-open: returns null when the transient is missing, malformed,
+		 * or unreadable — callers treat null as "no known failure".
+		 *
+		 * @since NEXT
+		 * @return array|null Shape { code: string, message: string, time: int } or null.
+		 */
+		public function get_last_failure_payload() {
+			try {
+				$payload = get_transient( Util::transient_key( self::LAST_FAILURE_TRANSIENT ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return null;
+			}
+			if ( ! is_array( $payload ) || empty( $payload['code'] ) ) {
+				return null;
+			}
+			return array(
+				'code'    => (string) $payload['code'],
+				'message' => isset( $payload['message'] ) ? (string) $payload['message'] : '',
+				'time'    => isset( $payload['time'] ) ? (int) $payload['time'] : 0,
+			);
+		}
+
+		/**
+		 * Latest flush failure, if any.
+		 *
+		 * @since NEXT
+		 * @return \WP_Error|null The WP_Error set by the last failed flush(), or null.
+		 */
+		public function get_last_flush_error() {
+			return $this->last_flush_error instanceof \WP_Error ? $this->last_flush_error : null;
+		}
+
+		/**
+		 * Flush the complete object cache with best-effort memory-delta logging.
 		 *
 		 * Runs wp_cache_flush() (the drop-in performs the namespace-aware
-		 * SCAN+DEL sweep with its own post-flush verification sample), then
-		 * asserts hygiene on the plugin side: samples Redis memory via INFO
-		 * before/after when reachable and re-scans the blog prefix over the
-		 * live connection. A failed verification is logged in-app via
-		 * log_redis_failure() and returns false so REST can surface stale keys.
+		 * SCAN+DEL sweep with its own full-keyspace verification + retry).
+		 * No plugin-side re-scan is done here: re-scanning over a fresh
+		 * connection races with concurrent writers repopulating between the
+		 * drop-in sweep and this check (flaky false negatives) and costs an
+		 * extra connection per flush. Memory growth after a flush is logged,
+		 * never failed. Failures are recorded in-app via
+		 * log_redis_failure() and exposed via get_last_flush_error() so REST
+		 * can surface the real code/message.
 		 *
 		 * @since 1.4.0
-		 * @since NEXT Verification sample + memory-delta assertion; false when stale keys remain.
-		 * @return bool True when flushed and verified, false otherwise.
+		 * @since NEXT Removed plugin-side re-verification (drop-in verifies with retry); failures exposed via get_last_flush_error().
+		 * @return bool True when flushed, false otherwise.
 		 */
 		public function flush() {
 			if ( ! function_exists( 'wp_cache_flush' ) ) {
+				$this->last_flush_error = new \WP_Error( 'flush_unavailable', __( 'Object cache flush is unavailable.', 'performance-optimisation' ) );
 				return false;
 			}
 
-			$memory_before = $this->read_redis_memory_bytes();
-			$flushed       = wp_cache_flush();
+			$this->last_flush_error = null;
+			$memory_before          = $this->read_redis_memory_bytes();
+			$flushed                = wp_cache_flush();
 			if ( ! $flushed ) {
+				$this->last_flush_error = new \WP_Error( 'flush_fail', __( 'Object cache flush reported failure.', 'performance-optimisation' ) );
 				$this->log_redis_failure( 'flush_fail', __( 'Object cache flush reported failure.', 'performance-optimisation' ) );
-				return false;
-			}
-
-			$verified = $this->verify_namespace_flushed();
-			if ( ! $verified ) {
-				$this->log_redis_failure( 'flush_stale', __( 'Object cache flush left stale keys behind.', 'performance-optimisation' ) );
 				return false;
 			}
 
 			$memory_after = $this->read_redis_memory_bytes();
 			if ( null !== $memory_before && null !== $memory_after && $memory_after > $memory_before ) {
-				// Memory growth after a verified-empty namespace means
-				// writers repopulated (or another blog shares the DB) — not
-				// a flush failure, so still report success but log the delta
-				// for diagnosability.
+				// Memory growth after a flush means writers repopulated (or
+				// another blog shares the DB) — not a flush failure, so
+				// still report success but log the delta for diagnosability.
 				try {
 					Log::add(
 						sprintf(
@@ -1129,10 +1170,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 						return (int) $info['used_memory'];
 					}
 					if ( is_array( $info ) ) {
-						// Cluster mode returns per-node info maps.
-						$first = reset( $info );
-						if ( is_array( $first ) && isset( $first['used_memory'] ) ) {
-							return (int) $first['used_memory'];
+						// Cluster mode returns per-node info maps: sum
+						// used_memory across all nodes.
+						$total = 0;
+						$found = false;
+						foreach ( $info as $node_info ) {
+							if ( is_array( $node_info ) && isset( $node_info['used_memory'] ) ) {
+								$total += (int) $node_info['used_memory'];
+								$found  = true;
+							}
+						}
+						if ( $found ) {
+							return $total;
 						}
 					}
 				} finally {
@@ -1148,64 +1197,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				unset( $e );
 			}
 			return null;
-		}
-
-		/**
-		 * Verify the blog-prefix namespace is empty via a bounded SCAN sample.
-		 *
-		 * Best-effort and fail-open: returns true when Redis is unreachable
-		 * (nothing to assert against) or when the scan confirms zero keys.
-		 *
-		 * @since NEXT
-		 * @return bool True when verified clean or unverifiable (fail-open).
-		 */
-		private function verify_namespace_flushed(): bool {
-			try {
-				$config     = $this->get_redis_config();
-				$connection = $this->connect_internal( $config );
-				if ( is_wp_error( $connection ) ) {
-					return true;
-				}
-				try {
-					global $table_prefix;
-					$prefix  = function_exists( 'is_multisite' ) && is_multisite()
-						? (string) get_current_blog_id() . ':'
-						: (string) ( $table_prefix ?? 'wp_' ) . ':';
-					$pattern = $prefix . '*';
-
-					if ( $connection instanceof \RedisCluster && method_exists( $connection, '_masters' ) ) {
-						foreach ( (array) $connection->_masters() as $node ) {
-							$cursor = null;
-							$keys   = $connection->scan( $cursor, $node, $pattern, 100 );
-							if ( is_array( $keys ) && ! empty( $keys ) ) {
-								return false;
-							}
-						}
-						return true;
-					}
-
-					if ( ! method_exists( $connection, 'scan' ) ) {
-						return true;
-					}
-					$cursor = null;
-					$keys   = $connection->scan( $cursor, $pattern, 100 );
-					if ( false === $keys ) {
-						return true;
-					}
-					return empty( $keys );
-				} finally {
-					if ( method_exists( $connection, 'close' ) ) {
-						try {
-							$connection->close();
-						} catch ( \Throwable $e ) {
-							unset( $e );
-						}
-					}
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return true;
-			}
 		}
 	}
 }

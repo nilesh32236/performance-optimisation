@@ -980,12 +980,13 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		}
 
 		/**
-		 * Verify a flushed prefix with a bounded SCAN sample.
+		 * Verify a flushed prefix with a bounded full-keyspace SCAN.
 		 *
-		 * Reads at most one SCAN page (count 100); any surviving key means
-		 * the prefix is still dirty. Bounded so verification cannot block a
-		 * request on a large keyspace. Returns true when disconnected (the
-		 * in-memory store was already cleared by the caller).
+		 * Walks the full keyspace page by page (count 100, capped at 50
+		 * pages per node so verification cannot block a request on a huge
+		 * keyspace); any surviving key means the prefix is still dirty.
+		 * Fail-open: scan errors or a disconnected client report clean
+		 * because the in-memory store was already cleared by the caller.
 		 *
 		 * @since NEXT
 		 * @param string $pattern SCAN match pattern.
@@ -998,25 +999,50 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 			try {
 				if ( $this->redis instanceof \RedisCluster ) {
 					foreach ( (array) $this->redis->_masters() as $node ) {
-						$cursor = null;
-						$keys   = $this->redis->scan( $cursor, $node, $pattern, 100 );
-						if ( is_array( $keys ) && ! empty( $keys ) ) {
+						if ( ! $this->scan_pattern_is_empty( $pattern, $node ) ) {
 							return false;
 						}
 					}
 					return true;
 				}
 
-				$cursor = null;
-				$keys   = $this->redis->scan( $cursor, $pattern, 100 );
+				return $this->scan_pattern_is_empty( $pattern );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
+		 * Check a SCAN pattern is empty via a bounded full-keyspace walk.
+		 *
+		 * @since NEXT
+		 * @param string     $pattern SCAN match pattern.
+		 * @param array|null $node    Cluster node (RedisCluster scan signature), null for standalone.
+		 * @return bool True when no keys match, or the scan itself failed (fail-open).
+		 */
+		private function scan_pattern_is_empty( string $pattern, $node = null ): bool {
+			$pages      = 0;
+			$cursor     = null;
+			$is_cluster = null !== $node;
+			do {
+				if ( $is_cluster ) {
+					$keys = $this->redis->scan( $cursor, $node, $pattern, 100 );
+				} else {
+					$keys = $this->redis->scan( $cursor, $pattern, 100 );
+				}
 				if ( false === $keys ) {
 					return true;
 				}
-				return empty( $keys );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
+				if ( is_array( $keys ) && ! empty( $keys ) ) {
+					return false;
+				}
+				++$pages;
+				if ( $pages >= 50 ) {
+					return true;
+				}
+			} while ( $cursor && ( is_numeric( $cursor ) && 0 !== (int) $cursor ) );
+			return true;
 		}
 
 		/**

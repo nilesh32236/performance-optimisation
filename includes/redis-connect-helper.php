@@ -414,9 +414,17 @@ if ( ! function_exists( 'wppo_apply_redis_options' ) ) {
 	 * @since 1.4.0
 	 */
 	function wppo_apply_redis_options( $redis, $config ) {
+		if ( ! is_object( $redis ) || ! method_exists( $redis, 'setOption' ) ) {
+			return;
+		}
+		if ( ! class_exists( 'Redis' ) || ! defined( '\Redis::OPT_SERIALIZER' ) ) {
+			// Without the extension there are no option constants to apply;
+			// bail explicitly instead of relying on try/catch control flow.
+			return;
+		}
 		try {
 			$resolved   = function_exists( 'wppo_resolve_redis_serializer' ) ? wppo_resolve_redis_serializer() : array(
-				'serializer' => \Redis::SERIALIZER_PHP,
+				'serializer' => defined( '\Redis::SERIALIZER_PHP' ) ? \Redis::SERIALIZER_PHP : 1,
 				'name'       => 'php',
 			);
 			$serializer = $resolved['serializer'];
@@ -448,7 +456,7 @@ if ( ! function_exists( 'wppo_apply_redis_options' ) ) {
 				$compression_type = \Redis::COMPRESSION_LZ4;
 			}
 
-			if ( null !== $compression_type ) {
+			if ( null !== $compression_type && defined( '\Redis::OPT_COMPRESSION' ) ) {
 				try {
 					$redis->setOption( \Redis::OPT_COMPRESSION, $compression_type );
 				} catch ( \Throwable $e ) {
