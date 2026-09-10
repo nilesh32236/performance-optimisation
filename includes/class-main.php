@@ -3819,61 +3819,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_filter(
 				'wp_speculation_rules_href_exclude_paths',
 				function ( $exclude_paths ) use ( $preload_settings ) {
-					$exclude_paths[] = '/wp-login.php';
-					$exclude_paths[] = '/wp-admin/*';
-					$exclude_paths[] = '/wp-json/*';
-
-					$custom_excludes = ! empty( $preload_settings['speculationExcludeUrls'] )
-						? Util::process_urls( $preload_settings['speculationExcludeUrls'] )
-						: array();
-					foreach ( $custom_excludes as $exclude ) {
-						// Convert bare paths to wildcard pattern via WP_URL_Pattern_Prefixer when available (WP 6.8+).
-						if ( class_exists( 'WP_URL_Pattern_Prefixer' ) && method_exists( 'WP_URL_Pattern_Prefixer', 'prefix_path_pattern' ) ) {
-							// Core helper adds /* for path prefix patterns; guard already wildcarded.
-							if ( false === strpos( $exclude, '*' ) && '/' === $exclude[0] ) {
-								$exclude = \WP_URL_Pattern_Prefixer::prefix_path_pattern( $exclude, '/' );
-							}
-						} elseif ( '/' === $exclude[0] && false === strpos( $exclude, '*' ) ) {
-							// Fallback: ensure wildcard for path prefix.
-							$exclude = rtrim( $exclude, '/' ) . '/*';
-						}
+					if ( ! is_array( $exclude_paths ) ) {
+						$exclude_paths = array();
+					}
+					foreach ( $this->get_speculation_exclude_paths( $preload_settings ) as $exclude ) {
 						if ( ! in_array( $exclude, $exclude_paths, true ) ) {
-							$exclude_paths[] = $exclude;
-						}
-					}
-
-					$woocommerce_excludes = array();
-
-					// Keep in sync with AI_Adaptive::get_commerce_exclude_paths() —
-					// both derive the same WooCommerce cart/checkout/account paths.
-					if ( function_exists( 'wc_get_checkout_url' ) ) {
-						$checkout_url = wc_get_checkout_url();
-						if ( $checkout_url ) {
-							$path = wp_parse_url( $checkout_url, PHP_URL_PATH );
-							if ( $path && '/' !== $path ) {
-								$woocommerce_excludes[] = trailingslashit( $path ) . '*';
-							}
-						}
-
-						$cart_url = wc_get_cart_url();
-						if ( $cart_url ) {
-							$path = wp_parse_url( $cart_url, PHP_URL_PATH );
-							if ( $path && '/' !== $path ) {
-								$woocommerce_excludes[] = trailingslashit( $path ) . '*';
-							}
-						}
-
-						$myaccount_url = wc_get_page_permalink( 'myaccount' );
-						if ( $myaccount_url ) {
-							$path = wp_parse_url( $myaccount_url, PHP_URL_PATH );
-							if ( $path && '/' !== $path ) {
-								$woocommerce_excludes[] = trailingslashit( $path ) . '*';
-							}
-						}
-					}
-
-					foreach ( $woocommerce_excludes as $exclude ) {
-						if ( ! in_array( $exclude, $custom_excludes, true ) ) {
 							$exclude_paths[] = $exclude;
 						}
 					}
@@ -3890,6 +3840,129 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			);
 
 			add_filter( 'wp_speculation_rules', array( $this, 'filter_speculation_list_rules' ), 10 );
+		}
+
+		/**
+		 * Canonical speculation-rules href exclusion patterns.
+		 *
+		 * Merges core safety defaults (auth, admin, REST), generic commerce
+		 * paths (cart/checkout/account), nonce/logout/add-to-cart wildcards,
+		 * admin-ajax preview endpoints, WooCommerce dynamic cart/checkout/
+		 * account paths, and user-configured `speculationExcludeUrls`.
+		 * Fill-gaps-only: callers dedupe against pre-existing core patterns
+		 * so the core ruleset is never duplicated.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $preload_settings The plugin's preload_settings option value.
+		 * @return string[] Exclusion patterns (possibly empty, never fatal).
+		 */
+		public function get_speculation_exclude_paths( array $preload_settings = array() ): array {
+			try {
+				$excludes = array(
+					'/wp-login.php',
+					'/wp-login*',
+					'/wp-admin/*',
+					'/wp-admin/admin-ajax.php*',
+					'/wp-json/*',
+					'/cart/*',
+					'/checkout/*',
+					'/my-account/*',
+					'/account/*',
+					'/*logout*',
+					'/*nonce*',
+					'/*add-to-cart*',
+				);
+
+				$custom_excludes = ! empty( $preload_settings['speculationExcludeUrls'] )
+					? Util::process_urls( $preload_settings['speculationExcludeUrls'] )
+					: array();
+				foreach ( $custom_excludes as $exclude ) {
+					// Convert bare paths to wildcard pattern via WP_URL_Pattern_Prefixer when available (WP 6.8+).
+					if ( class_exists( 'WP_URL_Pattern_Prefixer' ) && method_exists( 'WP_URL_Pattern_Prefixer', 'prefix_path_pattern' ) ) {
+						// Core helper adds /* for path prefix patterns; guard already wildcarded.
+						if ( false === strpos( $exclude, '*' ) && isset( $exclude[0] ) && '/' === $exclude[0] ) {
+							$exclude = \WP_URL_Pattern_Prefixer::prefix_path_pattern( $exclude, '/' );
+						}
+					} elseif ( isset( $exclude[0] ) && '/' === $exclude[0] && false === strpos( $exclude, '*' ) ) {
+						// Fallback: ensure wildcard for path prefix.
+						$exclude = rtrim( $exclude, '/' ) . '/*';
+					}
+					if ( ! in_array( $exclude, $excludes, true ) ) {
+						$excludes[] = $exclude;
+					}
+				}
+
+				// Keep in sync with AI_Adaptive::get_commerce_exclude_paths() —
+				// both derive the same WooCommerce cart/checkout/account paths.
+				if ( function_exists( 'wc_get_checkout_url' ) ) {
+					try {
+						$checkout_url = wc_get_checkout_url();
+						if ( $checkout_url ) {
+							$path = wp_parse_url( $checkout_url, PHP_URL_PATH );
+							if ( $path && '/' !== $path ) {
+								$pattern = trailingslashit( $path ) . '*';
+								if ( ! in_array( $pattern, $excludes, true ) ) {
+									$excludes[] = $pattern;
+								}
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( function_exists( 'wc_get_cart_url' ) ) {
+					try {
+						$cart_url = wc_get_cart_url();
+						if ( $cart_url ) {
+							$path = wp_parse_url( $cart_url, PHP_URL_PATH );
+							if ( $path && '/' !== $path ) {
+								$pattern = trailingslashit( $path ) . '*';
+								if ( ! in_array( $pattern, $excludes, true ) ) {
+									$excludes[] = $pattern;
+								}
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( function_exists( 'wc_get_page_permalink' ) ) {
+					try {
+						$myaccount_url = wc_get_page_permalink( 'myaccount' );
+						if ( $myaccount_url ) {
+							$path = wp_parse_url( $myaccount_url, PHP_URL_PATH );
+							if ( $path && '/' !== $path ) {
+								$pattern = trailingslashit( $path ) . '*';
+								if ( ! in_array( $pattern, $excludes, true ) ) {
+									$excludes[] = $pattern;
+								}
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+
+				if ( function_exists( 'apply_filters' ) ) {
+					/**
+					 * Filters the speculation-rules href exclusion patterns.
+					 *
+					 * @since NEXT
+					 * @param string[] $excludes         Canonical exclusion patterns.
+					 * @param array    $preload_settings The plugin's preload_settings option value.
+					 */
+					$filtered = apply_filters( 'wppo_speculation_exclusions', $excludes, $preload_settings );
+					if ( is_array( $filtered ) ) {
+						$excludes = array_values( array_unique( array_filter( $filtered, 'is_string' ) ) );
+					}
+				}
+
+				return $excludes;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
 		}
 
 		/**
@@ -3918,6 +3991,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * (user `speculationExcludeUrls` + WooCommerce cart/checkout/account via
 		 * {@see add_speculation_rules()}).
 		 *
+		 * Cache awareness: non-cacheable responses (`DONOTCACHEPAGE`,
+		 * cart/checkout/account, previews, logged-in visitors) return null so
+		 * neither core nor plugin rules prefetch them.
+		 *
 		 * @since 1.9.0
 		 * @since NEXT Honor `wp_get_speculation_rules_default_configuration()` when available (WP 7.1).
 		 *
@@ -3929,6 +4006,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		public function filter_speculation_rules_configuration( $config, array $preload_settings, bool $enable_speculation ) {
 			if ( ! is_array( $config ) ) {
 				return $config;
+			}
+
+			// Cache awareness: never speculate non-cacheable responses
+			// (DONOTCACHEPAGE / cart/checkout/account / previews). Returning
+			// null disables speculation for the request (core convention),
+			// so neither core nor plugin rules prefetch the cart.
+			if ( $this->is_speculation_suppressed_for_visitor() ) {
+				return null;
 			}
 
 			if ( $enable_speculation ) {
@@ -4183,6 +4268,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * Logged-in users stay excluded (mirrors the `null` config
 		 * passthrough in {@see filter_speculation_rules_configuration()}).
+		 * Cache-aware: pages served with `DONOTCACHEPAGE` / `no-store`
+		 * (cart/checkout/account, previews) never speculate — speculating a
+		 * non-cacheable URL wastes origin load and risks broken carts.
 		 * Fail-open: any throwable means "not suppressed".
 		 *
 		 * @since NEXT
@@ -4191,7 +4279,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		private function is_speculation_suppressed_for_visitor(): bool {
 			try {
-				return function_exists( 'is_user_logged_in' ) && is_user_logged_in();
+				if ( function_exists( 'is_user_logged_in' ) && is_user_logged_in() ) {
+					return true;
+				}
+
+				// Non-cacheable responses must not speculate.
+				if ( defined( 'DONOTCACHEPAGE' ) && DONOTCACHEPAGE ) {
+					return true;
+				}
+
+				// Commerce / preview contexts are served no-store.
+				foreach ( array( 'is_cart', 'is_checkout', 'is_account_page', 'is_preview', 'is_customize_preview' ) as $conditional ) {
+					if ( function_exists( $conditional ) ) {
+						try {
+							if ( call_user_func( $conditional ) ) {
+								return true;
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+					}
+				}
+
+				return false;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;
@@ -4393,6 +4503,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return false;
 			}
 
+			// Nonce-bearing, logout, add-to-cart, admin-ajax preview, and
+			// customize-preview URLs must never be speculated.
+			foreach ( array( 'nonce', 'logout', 'add-to-cart', 'admin-ajax', 'customize_changeset', 'preview=true', 'preview_id' ) as $unsafe ) {
+				if ( false !== strpos( $lower, $unsafe ) ) {
+					return false;
+				}
+			}
+
 			$commerce_paths = array( '/cart', '/checkout', '/my-account', '/account' );
 			if ( function_exists( 'wc_get_checkout_url' ) ) {
 				try {
@@ -4582,15 +4700,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$new_rules[] = $singular_rule;
 			}
 			if ( is_array( $archive_rule ) ) {
-				/**
-				 * Filters the archive first-post document rule before it is appended.
-				 *
-				 * @since NEXT
-				 * @param array $archive_rule The archive document rule.
-				 */
-				$archive_rule = apply_filters( 'wppo_speculation_document_rule', $archive_rule );
-				if ( is_array( $archive_rule ) ) {
-					$new_rules[] = $archive_rule;
+				// Fill-gaps-only: never duplicate a document-source rule
+				// already contributed by core or another plugin — at most one
+				// document rule is emitted per request.
+				$has_document_rule = false;
+				foreach ( $rules as $existing_rule ) {
+					if ( is_array( $existing_rule ) && ( $existing_rule['source'] ?? '' ) === 'document' ) {
+						$has_document_rule = true;
+						break;
+					}
+				}
+				if ( ! $has_document_rule ) {
+					/**
+					 * Filters the archive first-post document rule before it is appended.
+					 *
+					 * @since NEXT
+					 * @param array $archive_rule The archive document rule.
+					 */
+					$archive_rule = apply_filters( 'wppo_speculation_document_rule', $archive_rule );
+					if ( is_array( $archive_rule ) ) {
+						$new_rules[] = $archive_rule;
+					}
 				}
 			}
 
