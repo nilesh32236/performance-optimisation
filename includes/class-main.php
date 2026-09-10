@@ -202,6 +202,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private static ?Main $instance = null;
 
 		/**
+		 * Per-request cache for the `_wppo_delay_disabled` kill-switch lookups.
+		 *
+		 * Keyed by `blog_id:post_id` so multisite `switch_to_blog()` contexts
+		 * never leak one site's kill-switch state into another site sharing the
+		 * same post ID (#1037). Cleared per key by
+		 * {@see invalidate_delay_kill_switch_cache()}.
+		 *
+		 * @var array<string, bool>
+		 * @since NEXT
+		 */
+		private static array $delay_disabled_page_cache = array();
+
+		/**
 		 * Get the current Main instance (null before construction / in tests).
 		 *
 		 * @since NEXT
@@ -612,6 +625,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// never stacks on top of an active core buffer.
 				add_action( 'template_redirect', array( $this->cache, 'start_output_buffer' ) );
 				add_action( 'save_post', array( $this, 'on_save_post_invalidate_cache' ), 10, 3 );
+				// Per-page delay kill-switch single-URL purge (#1037): programmatic
+				// `_wppo_delay_disabled` writes (REST, WP-CLI, imports) purge that
+				// URL only via invalidate_delay_kill_switch_cache() — never a
+				// full-cache wipe. The metabox save path is covered by save_post
+				// above plus the toggle check in Metabox::save_asset_manager_settings().
+				// add_action() on these hooks is harmless when meta is untouched;
+				// callbacks ignore every key except `_wppo_delay_disabled`.
+				add_action( 'added_post_meta', array( $this, 'on_delay_kill_switch_meta_changed' ), 10, 3 );
+				add_action( 'updated_post_meta', array( $this, 'on_delay_kill_switch_meta_changed' ), 10, 3 );
+				add_action( 'deleted_post_meta', array( $this, 'on_delay_kill_switch_meta_changed' ), 10, 3 );
 				// WooCommerce surgical invalidation (issue #962): product /
 				// order / coupon changes purge only affected URLs — never a
 				// full-cache wipe. add_action() on unregistered hooks is
@@ -3200,7 +3223,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return string[]
 		 */
 		public static function get_delay_js_builder_exclusions(): array {
-			return array(
+			$preset = array(
 				// Elementor.
 				'elementor-frontend',
 				'elementor-pro-frontend',
@@ -3230,6 +3253,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'wp-interactivity',
 				'wp-i18n',
 			);
+			/**
+			 * Filters delay JS builder preset exclusions.
+			 *
+			 * Builder runtimes (Elementor/Divi/Bricks/WPBakery/Oxygen) stay
+			 * un-delayed when the builder preset is on so page builders never
+			 * break. Merged with `array_unique` by callers.
+			 *
+			 * @since NEXT
+			 * @param string[] $preset Builder preset exclusions.
+			 */
+			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_builder_exclusions' ) ) {
+				return $preset;
+			}
+			return array_values( (array) apply_filters( 'wppo_delay_js_builder_exclusions', $preset ) );
 		}
 
 		/**
@@ -3438,7 +3475,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return bool True when delay must be skipped for this page.
 		 */
 		public static function is_delay_disabled_for_page( int $post_id = 0 ): bool {
-			static $cache = array();
 			try {
 				if ( function_exists( 'is_singular' ) && ! is_singular() && 0 === $post_id ) {
 					return false;
@@ -3452,18 +3488,105 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( $post_id <= 0 ) {
 					return false;
 				}
-				if ( isset( $cache[ $post_id ] ) ) {
-					return $cache[ $post_id ];
+				// Multisite-safe request cache (#1037): key by blog ID + post ID
+				// so `switch_to_blog()` can never leak one site's kill-switch
+				// state into another site sharing the same post ID.
+				$blog_id = 0;
+				if ( function_exists( 'is_multisite' ) && function_exists( 'get_current_blog_id' ) ) {
+					try {
+						if ( is_multisite() ) {
+							$blog_id = (int) get_current_blog_id();
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$blog_id = 0;
+					}
+				}
+				$cache_key = $blog_id . ':' . $post_id;
+				if ( isset( self::$delay_disabled_page_cache[ $cache_key ] ) ) {
+					return self::$delay_disabled_page_cache[ $cache_key ];
 				}
 				if ( ! function_exists( 'get_post_meta' ) ) {
 					return false;
 				}
-				$disabled          = ! empty( get_post_meta( $post_id, '_wppo_delay_disabled', true ) );
-				$cache[ $post_id ] = $disabled;
+				$disabled                                      = ! empty( get_post_meta( $post_id, '_wppo_delay_disabled', true ) );
+				self::$delay_disabled_page_cache[ $cache_key ] = $disabled;
 				return $disabled;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;
+			}
+		}
+
+		/**
+		 * Clear the per-page delay kill-switch request cache and purge that URL only.
+		 *
+		 * Called when the `_wppo_delay_disabled` meta toggles (metabox save or
+		 * programmatic meta write) so the next frontend hit for that URL renders
+		 * with the new delay state. Purges only the single post URL's static
+		 * HTML/CSS sidecars via `Cache::invalidate_single_static_html()` — never
+		 * a full-cache wipe. Multisite-safe: per-site post/meta, domain-based
+		 * cache paths, no cross-site leakage. Fail-open: any failure is
+		 * swallowed so meta saves never fatal.
+		 *
+		 * @since NEXT
+		 * @param int $post_id Post ID whose kill-switch changed.
+		 * @return void
+		 */
+		public static function invalidate_delay_kill_switch_cache( int $post_id ): void {
+			try {
+				if ( $post_id <= 0 ) {
+					return;
+				}
+				// Bust this request's cached kill-switch entries for the post on
+				// every known blog key (at most a handful of entries).
+				foreach ( array_keys( self::$delay_disabled_page_cache ) as $key ) {
+					if ( (string) $key === (string) $post_id || str_ends_with( (string) $key, ':' . (string) $post_id ) ) {
+						unset( self::$delay_disabled_page_cache[ $key ] );
+					}
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
+					try {
+						$settings = array();
+						if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+							$settings = (array) Util::get_settings();
+						}
+						$cache = new Cache( $settings );
+						if ( method_exists( $cache, 'invalidate_single_static_html' ) ) {
+							$cache->invalidate_single_static_html( $post_id );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Handle `_wppo_delay_disabled` meta writes for the per-page kill-switch.
+		 *
+		 * Wired to `added_post_meta` / `updated_post_meta` / `deleted_post_meta`
+		 * in `setup_hooks()` so programmatic meta changes (REST, WP-CLI, imports)
+		 * purge the single URL just like the metabox save path. Only reacts to
+		 * the `_wppo_delay_disabled` key; everything else is ignored. Fail-open:
+		 * detection or purge failures never fatal the meta write.
+		 *
+		 * @since NEXT
+		 * @param int    $meta_id  Meta row ID (unused, required by hook signature).
+		 * @param int    $post_id  Post ID the meta belongs to.
+		 * @param string $meta_key Meta key that was written.
+		 * @return void
+		 */
+		public function on_delay_kill_switch_meta_changed( $meta_id, $post_id, $meta_key ): void {
+			try {
+				if ( '_wppo_delay_disabled' !== (string) $meta_key ) {
+					return;
+				}
+				self::invalidate_delay_kill_switch_cache( (int) $post_id );
+			} catch ( \Throwable $e ) {
+				unset( $e );
 			}
 		}
 
@@ -3514,7 +3637,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// cart-fragments/checkout handles unless explicitly disabled.
 			// Missing key backfills to on (per-site settings, multisite-safe).
 			$commerce_on = ! isset( $this->options['file_optimisation']['delayJSCommercePreset'] )
-				|| ! empty( $this->options['file_optimisation']['delayJSCommercePreset'] );
+			|| ! empty( $this->options['file_optimisation']['delayJSCommercePreset'] );
 			if ( $commerce_on ) {
 				$preset = array_merge( $preset, self::get_delay_js_commerce_exclusions() );
 			}
@@ -3522,10 +3645,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// runtime handles plus slider runtimes (#988) unless explicitly disabled.
 			// Missing key backfills to on (per-site settings, multisite-safe).
 			$builder_on = ! isset( $this->options['file_optimisation']['delayJSBuilderPreset'] )
-				|| ! empty( $this->options['file_optimisation']['delayJSBuilderPreset'] );
+			|| ! empty( $this->options['file_optimisation']['delayJSBuilderPreset'] );
 			if ( $builder_on ) {
 				$preset = array_merge( $preset, self::get_delay_js_builder_exclusions(), self::get_delay_js_slider_exclusions() );
 			}
+			// Breaker presets ship deduped via array_unique (#1037) so builder +
+			// commerce + user excludes never double-process; string-only values.
+			$preset = array_values(
+				array_unique(
+					array_filter(
+						array_map( 'strval', (array) $preset ),
+						static function ( $val ): bool {
+							return '' !== $val;
+						}
+					)
+				)
+			);
 			/**
 			 * Filters delay JS preset exclusions.
 			 *
@@ -3535,7 +3670,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_exclusions' ) ) {
 				return $preset;
 			}
-			return (array) apply_filters( 'wppo_delay_js_exclusions', $preset );
+			$filtered = array_values(
+				array_unique(
+					array_filter(
+						array_map( 'strval', (array) apply_filters( 'wppo_delay_js_exclusions', $preset ) ),
+						static function ( $val ): bool {
+							return '' !== $val;
+						}
+					)
+				)
+			);
+			return $filtered;
 		}
 
 		/**
@@ -5068,8 +5213,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return $tag;
 			}
 
-			$css_minifier = new Minify\CSS( $local_path, Util::min_cache_dir( 'css' ) );
-			$cached_file  = $css_minifier->minify();
+			// Fail-open safe-mode (#1037): any engine throwable degrades to the
+			// pristine tag — engine failure never fatals or white-screens.
+			try {
+				$css_minifier = new Minify\CSS( $local_path, Util::min_cache_dir( 'css' ) );
+				$cached_file  = $css_minifier->minify();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $tag;
+			}
 
 			if ( $cached_file ) {
 				$basename         = basename( $cached_file );
@@ -5080,7 +5232,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					return $tag;
 				}
 
-				$file_version = filemtime( $cached_file_path );
+				try {
+					$file_version = filemtime( $cached_file_path );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return $tag;
+				}
 				if ( false === $file_version ) {
 					return $tag;
 				}
@@ -5135,8 +5292,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return $tag;
 			}
 
-			$js_minifier = new Minify\JS( $local_path, Util::min_cache_dir( 'js' ) );
-			$cached_file = $js_minifier->minify();
+			// Fail-open safe-mode (#1037): any engine throwable degrades to the
+			// pristine tag — engine failure never fatals or white-screens.
+			try {
+				$js_minifier = new Minify\JS( $local_path, Util::min_cache_dir( 'js' ) );
+				$cached_file = $js_minifier->minify();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $tag;
+			}
 
 			if ( $cached_file ) {
 				$basename         = basename( $cached_file );
@@ -5147,7 +5311,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					return $tag;
 				}
 
-				$file_version = filemtime( $cached_file_path );
+				try {
+					$file_version = filemtime( $cached_file_path );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return $tag;
+				}
 				if ( false === $file_version ) {
 					return $tag;
 				}

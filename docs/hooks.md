@@ -1041,6 +1041,14 @@ Filters the delay-JS commerce preset exclusions (jQuery, cart-fragments, checkou
 
 ---
 
+### `wppo_delay_js_builder_exclusions`
+Filters the delay-JS builder preset exclusions (Elementor, Divi, Bricks, WPBakery, Oxygen, block interactivity runtimes). Merged via `array_unique` with the commerce/slider presets and user excludes. @since NEXT.
+
+**Parameters:**
+- `$preset` *(string[])* — Builder preset exclusion patterns.
+
+---
+
 ### `wppo_delay_js_slider_exclusions`
 Filters the delay-JS slider preset exclusions (revslider, swiper, slick, etc.). @since NEXT.
 

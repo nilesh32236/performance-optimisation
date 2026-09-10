@@ -2785,6 +2785,68 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Invalidate the static HTML cache for a single post URL only.
+		 *
+		 * Used by the per-page delay kill-switch (#1037) so toggling
+		 * `_wppo_delay_disabled` takes effect on that URL without a full purge
+		 * and without the home/archive fan-out of
+		 * {@see invalidate_dynamic_static_html()}: only the post permalink's
+		 * `index.html` (+ gzip/brotli variants, role variants, no-cache marker,
+		 * and css/used-css sidecars) is deleted. Multisite-safe: per-site
+		 * `get_permalink()` plus domain-based `get_file_path()`, so no
+		 * cross-site leakage. Fail-open: any failure is swallowed — callers must
+		 * never fatal a meta save. No new WP/PHP APIs; safe on WP 6.2+ / PHP 8.2+.
+		 *
+		 * @since NEXT
+		 * @param int $page_id Post ID whose single URL cache must be purged.
+		 * @return void
+		 */
+		public function invalidate_single_static_html( int $page_id ): void {
+			try {
+				if ( $page_id <= 0 ) {
+					return;
+				}
+				$permalink = function_exists( 'get_permalink' ) ? get_permalink( $page_id ) : '';
+				if ( ! is_string( $permalink ) || '' === $permalink || is_wp_error( $permalink ) ) {
+					return;
+				}
+				$path = function_exists( 'wp_make_link_relative' ) ? wp_make_link_relative( $permalink ) : (string) wp_parse_url( $permalink, PHP_URL_PATH );
+				if ( ! is_string( $path ) || '' === trim( $path ) ) {
+					return;
+				}
+				$url_path = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( trim( (string) $path, '/' ) ) : trim( (string) $path, '/' );
+				if ( false !== strpos( $url_path, "\0" ) || false !== strpos( $url_path, '..' ) ) {
+					return;
+				}
+
+				$html_file_path = $this->get_file_path( $url_path, 'html' );
+				if ( '' !== $html_file_path ) {
+					$norm            = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $html_file_path ) : $html_file_path;
+					$cache_root_norm = '' !== $this->cache_root_dir && function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $this->cache_root_dir ) : $this->cache_root_dir;
+					$abspath_norm    = defined( 'ABSPATH' ) && function_exists( 'wp_normalize_path' ) ? wp_normalize_path( ABSPATH ) : ( defined( 'ABSPATH' ) ? ABSPATH : '' );
+					if ( ( '' === $cache_root_norm || 0 === strpos( $norm, $cache_root_norm ) )
+					&& ( '' === $abspath_norm || 0 === strpos( $norm, $abspath_norm ) ) ) {
+						$this->delete_cache_files( $html_file_path );
+						$this->delete_role_variant_files( dirname( $html_file_path ) );
+						$this->delete_no_cache_marker( $html_file_path );
+					}
+				}
+				$css_file_path = $this->get_file_path( $url_path, 'css' );
+				if ( '' !== $css_file_path ) {
+					$this->delete_cache_files( $css_file_path );
+				}
+				$used_css_path = $this->get_file_path( $url_path, 'used-css' );
+				if ( '' !== $used_css_path ) {
+					$this->delete_cache_files( $used_css_path );
+				}
+
+				self::bump_stats_cache();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
 		 * Surgically invalidate cache for a WooCommerce product, order, or coupon.
 		 *
 		 * Purges only the object's own permalink path (+ css/used-css sidecars)
