@@ -273,7 +273,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['image_optimisation']['lazyLoadImages'] ) ) {
 				$this->options['image_optimisation']['lazyLoadImages'] = false;
 			}
-			if ( ! isset( $this->options['image_optimisation']['avifFirst'] ) ) {
+if ( ! isset( $this->options['image_optimisation']['avifFirst'] ) ) {
 				$this->options['image_optimisation']['avifFirst'] = true;
 			}
 			if ( ! isset( $this->options['image_optimisation']['smartQuality'] ) ) {
@@ -281,6 +281,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 			if ( ! isset( $this->options['image_optimisation']['skipSmallThresholdBytes'] ) ) {
 				$this->options['image_optimisation']['skipSmallThresholdBytes'] = 5120;
+			}
+			if ( ! isset( $this->options['image_optimisation']['lcpHeroPreload'] ) ) {
+				$this->options['image_optimisation']['lcpHeroPreload'] = true;
+			}
+			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
+				$this->options['file_optimisation'] = array();
+			}
+			if ( ! isset( $this->options['file_optimisation']['delayJSSafeMode'] ) ) {
+				$this->options['file_optimisation']['delayJSSafeMode'] = true;
 			}
 
 			if ( ! isset( $this->options['llms_txt'] ) || ! is_array( $this->options['llms_txt'] ) ) {
@@ -2390,10 +2399,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return $tag;
 			}
 
-			if ( ! empty( $this->options['file_optimisation']['delayJS'] ) ) {
+if ( ! empty( $this->options['file_optimisation']['delayJS'] ) ) {
 				// Woo / builder-context guardrail (#932): fail open to un-delayed
 				// scripts, never fatal. See is_delay_excluded_context().
-				if ( self::is_delay_excluded_context() ) {
+				if ( self::is_delay_excluded_context() || $this->is_delay_js_safe_context() ) {
 					return $tag;
 				}
 				// Per-page kill-switch (#966): `_wppo_delay_disabled` meta.
@@ -2904,7 +2913,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Get curated delay JS preset exclusions (jquery, recaptcha, stripe, analytics, etc.).
 		 *
-		 * Filterable via wppo_delay_js_exclusions. Preset prevents breakage on 10% sites.
+		 * Safe-by-default: WooCommerce, Elementor, and form plugins are always
+		 * excluded so checkout and forms never break. Filterable via
+		 * wppo_delay_js_exclusions. Preset prevents breakage on 10% sites.
 		 *
 		 * @since NEXT
 		 * @return string[]
@@ -2931,7 +2942,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'linkedin',
 				'twitter',
 				'paypal',
-				// Woo-critical handles (#932): stay un-delayed by default even
+// Woo-critical handles (#932): stay un-delayed by default even
 				// outside is_cart()/is_checkout() contexts (e.g. mini-cart
 				// fragments on other pages). Deduped via array_unique at merge.
 				'wc-cart-fragments',
@@ -2939,6 +2950,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'woocommerce',
 				'wc-add-to-cart',
 				'wc-single-product',
+				// WooCommerce safe list.
+				'woocommerce',
+				'wc-',
+				'cart-fragments',
+				'wc-cart',
+				// Elementor safe list.
+				'elementor',
+				'elementor-frontend',
+				'elementor-pro',
+				// Form plugins safe list.
+				'contact-form-7',
+				'wpcf7',
+				'gravityforms',
+				'gform',
+				'wpforms',
+				'ninja-forms',
+				'fluentform',
 			);
 			// Builder safe preset (#966): safe-by-default on; merges builder
 			// runtime handles unless explicitly disabled. Missing key backfills
@@ -2954,10 +2982,73 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			 * @since NEXT
 			 * @param string[] $preset Preset exclusions.
 			 */
-			if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) ) {
-				return (array) apply_filters( 'wppo_delay_js_exclusions', $preset );
+			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_exclusions' ) ) {
+				return $preset;
 			}
-			return $preset;
+			return (array) apply_filters( 'wppo_delay_js_exclusions', $preset );
+		}
+
+		/**
+		 * Whether Delay-JS must be skipped for the current request (fail-open safe context).
+		 *
+		 * Returns true (serve undeferred) on WooCommerce dynamic pages
+		 * (cart/checkout/account/endpoints) or when a known form shortcode/block
+		 * is present in the current post content. Any detection failure fails
+		 * open to safe (no delay) so interactivity is never broken.
+		 *
+		 * @since NEXT
+		 * @return bool True when Delay-JS must be skipped.
+		 */
+		public function is_delay_js_safe_context(): bool {
+			try {
+				// Explicit opt-out (delayJSSafeMode=false) skips all checks and
+				// returns false (delay allowed) — safe mode off means no
+				// protection is applied. An unset key preserves the legacy
+				// behavior of running the checks.
+				$safe_mode = $this->options['file_optimisation']['delayJSSafeMode'] ?? null;
+				if ( false !== $safe_mode ) {
+					if ( function_exists( 'is_cart' ) && is_cart() ) {
+						return true;
+					}
+					if ( function_exists( 'is_checkout' ) && is_checkout() ) {
+						return true;
+					}
+					if ( function_exists( 'is_account_page' ) && is_account_page() ) {
+						return true;
+					}
+					if ( function_exists( 'is_wc_endpoint_url' ) && is_wc_endpoint_url() ) {
+						return true;
+					}
+					if ( function_exists( 'get_the_ID' ) ) {
+						$post_id = get_the_ID();
+						if ( ! empty( $post_id ) ) {
+							$shortcodes = array( 'contact-form-7', 'gravityform', 'wpforms', 'ninja_forms', 'fluentform' );
+							foreach ( $shortcodes as $shortcode ) {
+								if ( function_exists( 'has_shortcode' ) ) {
+									$post_content = '';
+									if ( function_exists( 'get_post_field' ) ) {
+										$post_content = (string) get_post_field( 'post_content', $post_id );
+									}
+									if ( '' !== $post_content && has_shortcode( $post_content, $shortcode ) ) {
+										return true;
+									}
+								}
+							}
+							if ( function_exists( 'has_block' ) ) {
+								$blocks = array( 'contact-form-7/contact-form-selector', 'gravityforms/form', 'wpforms/form-selector', 'ninja-forms/form', 'fluentfom/gutenblock', 'elementor-widget/form' );
+								foreach ( $blocks as $block ) {
+									if ( has_block( $block, $post_id ) ) {
+										return true;
+									}
+								}
+							}
+						}
+					}
+				}
+			} catch ( \Throwable $e ) {
+				return true;
+			}
+			return false;
 		}
 
 		/**
@@ -4170,6 +4261,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'ajaxUrl'       => admin_url( 'admin-ajax.php' ),
 				'nonce'         => wp_create_nonce( 'wp_rest' ),
 				'nonce_refresh' => wp_create_nonce( 'wppo_nonce_refresh' ),
+				'translations'  => array(
+					'cacheCleared' => __( 'Cache cleared successfully.', 'performance-optimisation' ),
+					'clearFailed'  => __( 'Failed to clear cache.', 'performance-optimisation' ),
+					'clearRetry'   => __( 'Failed to clear cache. Please try again.', 'performance-optimisation' ),
+					'pageCleared'  => __( 'Page cache cleared successfully.', 'performance-optimisation' ),
+					'pageFailed'   => __( 'Failed to clear page cache.', 'performance-optimisation' ),
+					'pageRetry'    => __( 'Failed to clear page cache. Please try again.', 'performance-optimisation' ),
+					'dismiss'      => __( 'Dismiss', 'performance-optimisation' ),
+				),
 			);
 
 			wp_add_inline_script(
@@ -4177,6 +4277,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'const wppoObject = ' . wp_json_encode( $data ) . ';',
 				'before'
 			);
+
+			// Best-effort only: the admin-bar bundle declares no wp-i18n
+			// dependency, so window.wp.i18n is typically absent on the
+			// frontend. The inline wppoObject.translations map above is the
+			// authoritative source; src/main.js consults it first.
+			wp_set_script_translations( 'wppo-admin-bar-script', 'performance-optimisation' );
 		}
 	}
 }
