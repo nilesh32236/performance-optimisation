@@ -123,12 +123,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		 * @return array
 		 */
 		public static function get_mappings( array $options = array() ): array {
-			$use_cache = empty( $options ) && ! has_filter( 'wppo_cdn_mapping' ) && ! has_filter( 'wppo_cdn_mapping_hosts' ) && ! has_filter( 'wppo_cdn_url' ) && ! has_filter( 'wppo_cdn_auto_filetypes' );
-			$blog_id   = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
-			if ( $use_cache ) {
-				if ( array_key_exists( $blog_id, self::$mappings_cache ) ) {
-					return self::$mappings_cache[ $blog_id ];
-				}
+			$uses_default = empty( $options );
+			$use_cache    = $uses_default && ! has_filter( 'wppo_cdn_mapping' ) && ! has_filter( 'wppo_cdn_mapping_hosts' ) && ! has_filter( 'wppo_cdn_url' ) && ! has_filter( 'wppo_cdn_auto_filetypes' );
+			$blog_id      = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
+			if ( $use_cache && array_key_exists( $blog_id, self::$mappings_cache ) ) {
+				return self::$mappings_cache[ $blog_id ];
+			}
+			if ( $uses_default ) {
+				// Always hydrate settings when no explicit options were passed,
+				// even when filters are registered (filter-present runs skip the
+				// memo but must still read the stored mappings).
 				$options = Util::get_settings();
 			}
 			$mappings = $options['file_optimisation']['cdnMapping'] ?? array();

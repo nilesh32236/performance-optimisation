@@ -49,7 +49,12 @@ const DEFAULT_CLIENT_SIDE_MIME_TYPES = [
  * @return {number} Coerced integer >= 0.
  */
 const coerceLongestEdge = ( value, fallback ) => {
-	if ( Array.isArray( value ) ) {
+	if (
+		Array.isArray( value ) ||
+		value === '' ||
+		value === null ||
+		value === undefined
+	) {
 		return fallback;
 	}
 	const num = Number( value );

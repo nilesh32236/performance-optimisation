@@ -295,7 +295,7 @@ class CssCombineFallbackTest extends \PHPUnit\Framework\TestCase {
 		// rel="stylesheet", so assert on the original href instead.
 		$without_noscript = preg_replace( '#<noscript>.*?</noscript>#s', '', $result );
 		$this->assertIsString( $without_noscript );
-		$this->assertStringNotContainsString( '<link rel="stylesheet" href="' . $src . '"', $without_noscript );
+		$this->assertStringNotContainsString( '<link rel="stylesheet" href="' . $src . '"', $without_noscript ); // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet
 	}
 
 	/**

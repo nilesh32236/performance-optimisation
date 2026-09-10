@@ -15,6 +15,7 @@ const TTL_MS = 60000;
 let cachedAt = 0;
 let cachedData = null;
 let inflight = null;
+let inflightSignal = null;
 let generation = 0;
 
 /**
@@ -26,11 +27,15 @@ let generation = 0;
  */
 export const getDbCounts = async ( signal ) => {
 	const hasSignal = signal !== undefined && signal !== null;
+	const ownerSignal = signal ?? null;
 	const now = Date.now();
 	if ( cachedData && now - cachedAt < TTL_MS ) {
 		return { ...cachedData };
 	}
-	if ( inflight ) {
+	// Only coalesce onto an in-flight request created by the same caller
+	// signal (or by another signal-less caller). A different AbortSignal must
+	// not adopt — and then be rejected by — another component's request.
+	if ( inflight && inflightSignal === ownerSignal ) {
 		return inflight.then( ( data ) => ( { ...data } ) );
 	}
 	const requestGeneration = generation;
@@ -49,10 +54,15 @@ export const getDbCounts = async ( signal ) => {
 		throw new Error( response?.message || 'Failed to load counts.' );
 	} );
 	inflight = request.finally( () => {
-		if ( generation === requestGeneration ) {
+		if (
+			generation === requestGeneration &&
+			inflightSignal === ownerSignal
+		) {
 			inflight = null;
+			inflightSignal = null;
 		}
 	} );
+	inflightSignal = ownerSignal;
 	return inflight;
 };
 
@@ -67,4 +77,5 @@ export const clearDbCountsCache = () => {
 	cachedAt = 0;
 	generation++;
 	inflight = null;
+	inflightSignal = null;
 };

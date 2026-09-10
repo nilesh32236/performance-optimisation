@@ -4522,43 +4522,43 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! is_array( $urls ) ) {
 				return $rules;
 			}
-		$urls = array_values( array_filter( $urls, 'is_string' ) );
-		if ( ! empty( $covered ) ) {
-			$urls = array_values( array_diff( $urls, $covered ) );
-		}
-		// Exclude generic-list URLs already targeted by the archive
-		// document rule's href_matches pattern, so a user-configured
-		// high-value URL equal to the first post does not appear in both
-		// the list rule and the document rule.
-		if ( is_array( $archive_rule ) ) {
-			$document_paths = $this->collect_speculation_document_paths( $archive_rule );
-			if ( ! empty( $document_paths ) ) {
-				$urls = array_values(
-					array_filter(
-						$urls,
-						static function ( $url ) use ( $document_paths ) {
-							$path = function_exists( 'wp_parse_url' ) ? wp_parse_url( (string) $url, PHP_URL_PATH ) : parse_url( (string) $url, PHP_URL_PATH );
-							if ( ! is_string( $path ) || '' === $path ) {
+			$urls = array_values( array_filter( $urls, 'is_string' ) );
+			if ( ! empty( $covered ) ) {
+				$urls = array_values( array_diff( $urls, $covered ) );
+			}
+			// Exclude generic-list URLs already targeted by the archive
+			// document rule's href_matches pattern, so a user-configured
+			// high-value URL equal to the first post does not appear in both
+			// the list rule and the document rule.
+			if ( is_array( $archive_rule ) ) {
+				$document_paths = $this->collect_speculation_document_paths( $archive_rule );
+				if ( ! empty( $document_paths ) ) {
+					$urls = array_values(
+						array_filter(
+							$urls,
+							static function ( $url ) use ( $document_paths ) {
+								$path = wp_parse_url( (string) $url, PHP_URL_PATH );
+								if ( ! is_string( $path ) || '' === $path ) {
+									return true;
+								}
+								$normalized = rtrim( untrailingslashit( $path ), '/' );
+								if ( '' === $normalized ) {
+									$normalized = '/';
+								}
+								foreach ( $document_paths as $document_path ) {
+									if ( $normalized === $document_path ) {
+										return false;
+									}
+								}
 								return true;
 							}
-							$normalized = rtrim( untrailingslashit( $path ), '/' );
-							if ( '' === $normalized ) {
-								$normalized = '/';
-							}
-							foreach ( $document_paths as $document_path ) {
-								if ( $normalized === $document_path ) {
-									return false;
-								}
-							}
-							return true;
-						}
-					)
-				);
+						)
+					);
+				}
 			}
-		}
-		// Dedupe against list-source URLs already present (e.g. an
-		// earlier contributor) so this method never re-adds them.
-		$urls = $this->dedupe_speculation_urls_against_rules( $urls, $rules );
+			// Dedupe against list-source URLs already present (e.g. an
+			// earlier contributor) so this method never re-adds them.
+			$urls = $this->dedupe_speculation_urls_against_rules( $urls, $rules );
 
 			$preload_settings = $this->options['preload_settings'] ?? array();
 			$eagerness        = $preload_settings['speculationEagerness'] ?? 'conservative';

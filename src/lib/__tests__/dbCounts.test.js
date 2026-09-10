@@ -114,4 +114,33 @@ describe( 'dbCounts memoization (lib/dbCounts.js)', () => {
 		expect( fresh.posts ).toBe( 7 );
 		expect( apiCall ).toHaveBeenCalledTimes( 2 );
 	} );
+
+	it( 'does not coalesce two different abort signals onto one request', async () => {
+		let resolveFirst;
+		apiCall.mockImplementationOnce(
+			() =>
+				new Promise( ( resolve ) => {
+					resolveFirst = resolve;
+				} )
+		);
+
+		const first = new AbortController();
+		const second = new AbortController();
+
+		const p1 = getDbCounts( first.signal );
+
+		// A different-signal caller must not adopt the first request: its
+		// abort must not reject an unrelated component's fetch.
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { posts: 42 },
+		} );
+		const p2 = getDbCounts( second.signal );
+
+		expect( apiCall ).toHaveBeenCalledTimes( 2 );
+
+		resolveFirst( { success: true, data: { posts: 1 } } );
+		await p1;
+		expect( await p2 ).toEqual( { posts: 42 } );
+	} );
 } );
