@@ -444,8 +444,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			}
 			set_transient( $lock_key, 1, MINUTE_IN_SECONDS );
 
+			// Load both aggregates once per learn run so the AI fallback to
+			// the heuristic path does not deserialize the large options
+			// twice in one run.
+			$rum    = get_option( RUM::OPTION, array() );
+			$trends = get_option( Pagespeed::TREND_OPTION, array() );
+			if ( ! is_array( $rum ) ) {
+				$rum = array();
+			}
+			if ( ! is_array( $trends ) ) {
+				$trends = array();
+			}
+
 			if ( self::is_wp_ai_client_enabled() && function_exists( 'wp_ai_client' ) ) {
-				$ai_model = self::learn_via_ai_client();
+				$ai_model = self::learn_via_ai_client( $rum, $trends );
 				if ( is_array( $ai_model ) && ! empty( $ai_model ) ) {
 					$ai_model['source']     = 'ai_client';
 					$ai_model['updated_at'] = time();
@@ -484,7 +496,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				}
 			}
 
-			$model               = self::heuristic_learn();
+			$model               = self::heuristic_learn( $rum, $trends );
 			$model['source']     = 'heuristic';
 			$model['updated_at'] = time();
 			self::update_model( $model );
@@ -494,10 +506,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		/**
 		 * Attempt learning via WP 7.0 AI Client when available.
 		 *
+		 * @param array|null $rum Optional pre-loaded RUM aggregate (loaded once per learn run).
+		 * @param array|null $trends Optional pre-loaded trends aggregate.
 		 * @return array|null Model or null on fallback.
 		 * @since NEXT
 		 */
-		private static function learn_via_ai_client(): ?array {
+		private static function learn_via_ai_client( ?array $rum = null, ?array $trends = null ): ?array {
 			if ( ! self::is_wp_ai_client_enabled() ) {
 				return null;
 			}
@@ -509,10 +523,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				if ( ! is_object( $client ) || ! method_exists( $client, 'prompt' ) ) {
 					return null;
 				}
-				$rum    = get_option( RUM::OPTION, array() );
-				$trends = get_option( Pagespeed::TREND_OPTION, array() );
-				$prompt = 'Given RUM aggregates and trends, suggest top 2 prefetch URLs, least-used scripts to exclude, and speculation eagerness (conservative|moderate|eager) as JSON.';
-				$result = $client->prompt( $prompt . ' RUM:' . wp_json_encode( $rum ) . ' Trends:' . wp_json_encode( $trends ) ); // phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.option_option -- AI model needs cross-signal input.
+				if ( null === $rum ) {
+					$rum = get_option( RUM::OPTION, array() ); // phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.option_option -- AI model needs cross-signal input.
+					if ( ! is_array( $rum ) ) {
+						$rum = array();
+					}
+				}
+				if ( null === $trends ) {
+					$trends = get_option( Pagespeed::TREND_OPTION, array() ); // phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.option_option -- AI model needs cross-signal input.
+					if ( ! is_array( $trends ) ) {
+						$trends = array();
+					}
+				}
+				// Send a summarized projection (top paths/segments) instead
+				// of the raw aggregates so a ~480KB option is not duplicated
+				// in memory via wp_json_encode on the learn path.
+				$summary = self::summarize_aggregates_for_prompt( $rum, $trends );
+				$prompt  = 'Given RUM aggregates and trends, suggest top 2 prefetch URLs, least-used scripts to exclude, and speculation eagerness (conservative|moderate|eager) as JSON.';
+				$result  = $client->prompt( $prompt . ' RUM:' . wp_json_encode( $summary['rum'] ) . ' Trends:' . wp_json_encode( $summary['trends'] ) ); // phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.option_option -- AI model needs cross-signal input.
 				if ( is_array( $result ) ) {
 					return $result;
 				}
@@ -593,14 +621,104 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		}
 
 		/**
+		 * Summarize large aggregates into a bounded prompt projection.
+		 *
+		 * Keeps only the slowest/most-sampled paths (top 10) with averaged
+		 * LCP/TTFB and sample counts, plus the latest trends snapshot per
+		 * key (capped at 10 keys), so the model prompt stays small.
+		 *
+		 * @since NEXT
+		 * @param array $rum RUM aggregate.
+		 * @param array $trends Trends aggregate.
+		 * @return array{rum:array,trends:array} Bounded summary.
+		 */
+		private static function summarize_aggregates_for_prompt( array $rum, array $trends ): array {
+			$scores = array();
+			foreach ( $rum as $paths ) {
+				if ( ! is_array( $paths ) ) {
+					continue;
+				}
+				foreach ( $paths as $path => $metrics ) {
+					if ( ! is_array( $metrics ) ) {
+						continue;
+					}
+					$lcp_n    = isset( $metrics['lcp']['n'] ) ? (int) $metrics['lcp']['n'] : 0;
+					$lcp_sum  = isset( $metrics['lcp']['sum'] ) ? (float) $metrics['lcp']['sum'] : 0;
+					$ttfb_n   = isset( $metrics['ttfb']['n'] ) ? (int) $metrics['ttfb']['n'] : 0;
+					$ttfb_sum = isset( $metrics['ttfb']['sum'] ) ? (float) $metrics['ttfb']['sum'] : 0;
+					$avg_lcp  = $lcp_n > 0 ? $lcp_sum / $lcp_n : 0;
+					$avg_ttfb = $ttfb_n > 0 ? $ttfb_sum / $ttfb_n : 0;
+					$path_key = is_string( $path ) ? substr( $path, 0, 128 ) : '';
+					if ( '' === $path_key ) {
+						continue;
+					}
+					if ( ! isset( $scores[ $path_key ] ) ) {
+						$scores[ $path_key ] = array(
+							'path'     => $path_key,
+							'avg_lcp'  => 0,
+							'avg_ttfb' => 0,
+							'samples'  => 0,
+						);
+					}
+					$scores[ $path_key ]['avg_lcp']  = max( $scores[ $path_key ]['avg_lcp'], $avg_lcp );
+					$scores[ $path_key ]['avg_ttfb'] = max( $scores[ $path_key ]['avg_ttfb'], $avg_ttfb );
+					$scores[ $path_key ]['samples'] += max( $lcp_n, $ttfb_n );
+				}
+			}
+			usort(
+				$scores,
+				static function ( $a, $b ) {
+					$by_samples = $b['samples'] <=> $a['samples'];
+					if ( 0 !== $by_samples ) {
+						return $by_samples;
+					}
+					return $b['avg_lcp'] <=> $a['avg_lcp'];
+				}
+			);
+			$rum_summary = array_slice( array_values( $scores ), 0, 10 );
+
+			$trends_summary = array();
+			$count          = 0;
+			foreach ( $trends as $key => $snapshots ) {
+				if ( $count >= 10 ) {
+					break;
+				}
+				if ( ! is_array( $snapshots ) || empty( $snapshots ) ) {
+					continue;
+				}
+				$last = end( $snapshots );
+				if ( ! is_array( $last ) ) {
+					continue;
+				}
+				$trends_summary[] = array(
+					'performance' => isset( $last['performance'] ) ? (int) $last['performance'] : 0,
+					'lcp'         => isset( $last['lcp'] ) ? (float) $last['lcp'] : null,
+					'cls'         => isset( $last['cls'] ) ? (float) $last['cls'] : null,
+				);
+				++$count;
+			}
+
+			return array(
+				'rum'    => $rum_summary,
+				'trends' => $trends_summary,
+			);
+		}
+
+		/**
 		 * Heuristic fallback learning.
 		 *
+		 * @param array|null $rum Optional pre-loaded RUM aggregate.
+		 * @param array|null $trends Optional pre-loaded trends aggregate.
 		 * @return array
 		 * @since NEXT
 		 */
-		private static function heuristic_learn(): array {
-			$rum    = get_option( RUM::OPTION, array() );
-			$trends = get_option( Pagespeed::TREND_OPTION, array() );
+		private static function heuristic_learn( ?array $rum = null, ?array $trends = null ): array {
+			if ( null === $rum ) {
+				$rum = get_option( RUM::OPTION, array() );
+			}
+			if ( null === $trends ) {
+				$trends = get_option( Pagespeed::TREND_OPTION, array() );
+			}
 			if ( ! is_array( $rum ) ) {
 				$rum = array();
 			}

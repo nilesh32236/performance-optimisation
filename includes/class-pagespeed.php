@@ -230,11 +230,38 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			$response = self::request_pagespeed_api( $query_url, $timeout );
 
 			if ( is_wp_error( $response ) ) {
-				$clean_error = sanitize_text_field( str_replace( ABSPATH, '', $response->get_error_message() ) );
-				// Translators: %s is the error message from the PageSpeed API.
-				Log::add( sprintf( __( 'PageSpeed API error: %s', 'performance-optimisation' ), $clean_error ) );
-				self::store_failure( $url, $strategy, $clean_error );
-				return;
+				// Free the worker slot instead of sleep()+retry inline: yield
+				// with a delayed single action, keeping at most one retry.
+				$already_retried = ! empty( $args['retry'] );
+				if ( ! $already_retried && function_exists( 'as_schedule_single_action' ) ) {
+					$delay      = self::get_retry_delay();
+					$retry_args = array(
+						array(
+							'url'      => $url,
+							'strategy' => $strategy,
+							'retry'    => 1,
+						),
+					);
+					if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( self::AS_HOOK, $retry_args, self::AS_GROUP ) ) {
+						return;
+					}
+					as_schedule_single_action( time() + $delay, self::AS_HOOK, $retry_args, self::AS_GROUP );
+					/* translators: %d is the retry delay in seconds. */
+					Log::add( sprintf( __( 'PageSpeed transport error; retry re-queued in %d seconds.', 'performance-optimisation' ), $delay ) );
+					return;
+				}
+				if ( ! $already_retried && ! function_exists( 'as_schedule_single_action' ) ) {
+					// No scheduler (e.g. unit tests): one immediate retry
+					// without blocking sleep.
+					$response = self::request_pagespeed_api( $query_url, $timeout );
+				}
+				if ( is_wp_error( $response ) ) {
+					$clean_error = sanitize_text_field( str_replace( ABSPATH, '', $response->get_error_message() ) );
+					// Translators: %s is the error message from the PageSpeed API.
+					Log::add( sprintf( __( 'PageSpeed API error: %s', 'performance-optimisation' ), $clean_error ) );
+					self::store_failure( $url, $strategy, $clean_error );
+					return;
+				}
 			}
 
 			$http_code = (int) wp_remote_retrieve_response_code( $response );
@@ -315,11 +342,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * @return void
 		 */
 		/**
-		 * Perform the PageSpeed API request with a single retry on transport error.
+		 * Perform the PageSpeed API request (single attempt, no blocking retry).
 		 *
-		 * One retry with a short backoff covers transient transport failures
-		 * (timeout, DNS). HTTP-level and API-level errors are handled by the
-		 * caller and are not retried (audit #888 finding 19).
+		 * A transport failure is returned to the caller so run_scan() can
+		 * re-queue with as_schedule_single_action() and free the Action
+		 * Scheduler worker slot instead of blocking it with sleep().
 		 *
 		 * @since NEXT
 		 * @param string $query_url Fully built API URL.
@@ -332,22 +359,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 				'sslverify' => true,
 			);
 
-			$response = wp_remote_get( $query_url, $args );
+			return wp_remote_get( $query_url, $args );
+		}
 
-			if ( is_wp_error( $response ) ) {
-				/**
-				 * Filters the backoff delay (seconds) before the single PageSpeed retry.
-				 *
-				 * @since NEXT
-				 * @param int $retry_after Delay in seconds.
-				 */
-				$retry_after = (int) apply_filters( 'wppo_pagespeed_retry_delay', 2 );
-				$retry_after = max( 1, min( 10, $retry_after ) );
-				sleep( $retry_after );
-				$response = wp_remote_get( $query_url, $args );
-			}
-
-			return $response;
+		/**
+		 * Get the re-queue delay (seconds) after a transport failure.
+		 *
+		 * @since NEXT
+		 * @return int Delay clamped to 1-10 seconds.
+		 */
+		private static function get_retry_delay(): int {
+			/**
+			 * Filters the backoff delay (seconds) before the PageSpeed retry.
+			 *
+			 * @since NEXT
+			 * @param int $retry_after Delay in seconds.
+			 */
+			$retry_after = (int) apply_filters( 'wppo_pagespeed_retry_delay', 2 );
+			return max( 1, min( 10, $retry_after ) );
 		}
 
 		/**
@@ -537,6 +566,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		public static function get_trends(): array {
 			$trends = get_option( self::TREND_OPTION, array() );
 			return is_array( $trends ) ? $trends : array();
+		}
+
+		/**
+		 * Migrate the trends option to non-autoloading.
+		 *
+		 * Rows created by older plugin versions defaulted to autoload=yes and
+		 * keep loading on every WordPress request via alloptions. Mirrors
+		 * Img_Converter::migrate_img_info_autoload().
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function migrate_trends_autoload(): void {
+			if ( function_exists( 'wp_set_option_autoload' ) ) {
+				wp_set_option_autoload( self::TREND_OPTION, false );
+			} else {
+				global $wpdb;
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+				$wpdb->update(
+					$wpdb->options,
+					array( 'autoload' => 'no' ),
+					array( 'option_name' => self::TREND_OPTION )
+				);
+				wp_cache_delete( self::TREND_OPTION, 'options' );
+				wp_cache_delete( 'alloptions', 'options' );
+			}
 		}
 
 		/**

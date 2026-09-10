@@ -95,6 +95,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 			self::maybe_seed_settings();
 			self::create_activity_log_table();
 			Img_Converter::migrate_img_info_autoload();
+			RUM::migrate_rum_autoload();
+			Pagespeed::migrate_trends_autoload();
 			self::maybe_run_upgrades( ! $has_activation_time );
 		}
 
@@ -151,6 +153,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				return;
 			}
 
+			// One-time backfill: large aggregate options created by older
+			// releases defaulted to autoload=yes. Flip them to autoload=false
+			// once so they stop loading via alloptions on every request.
+			self::maybe_migrate_option_autoload();
+
 			// One-time eviction: legacy unsalted keys can only exist once, on
 			// installs that predate the release shipping this fix. Gate on a fixed
 			// version floor so future version bumps never re-flush the shared cache.
@@ -168,6 +175,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 
 			Log::add( __( 'Plugin upgraded — legacy cache keys flushed.', 'performance-optimisation' ) );
 			update_option( self::VERSION_OPTION, WPPO_VERSION, false );
+		}
+
+		/**
+		 * One-time backfill flipping large aggregate options to autoload=false.
+		 *
+		 * Rows created by older releases defaulted to autoload=yes and keep
+		 * loading via alloptions on every request. Guarded by a flag option
+		 * so the DB writes run once, not on every admin_init.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function maybe_migrate_option_autoload(): void {
+			if ( get_option( 'wppo_autoload_migrated', false ) ) {
+				return;
+			}
+			Img_Converter::migrate_img_info_autoload();
+			RUM::migrate_rum_autoload();
+			Pagespeed::migrate_trends_autoload();
+			update_option( 'wppo_autoload_migrated', 1, false );
 		}
 
 		/**

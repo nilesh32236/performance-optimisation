@@ -892,13 +892,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 */
 		public static function execute_get_autoloaded_options( array $input = array() ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			global $wpdb;
-			$autoloaded    = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->options} WHERE autoload = 'yes'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Auditing query, not cached.
-			$autoload_size = (int) $wpdb->get_var( "SELECT SUM(LENGTH(option_value)) FROM {$wpdb->options} WHERE autoload = 'yes'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Auditing query, not cached.
-			return array(
+			// Cache the two scalars: the underlying table changes slowly and
+			// each call otherwise re-scans wp_options twice.
+			$cache_key = Util::transient_key( 'wppo_abilities_autoloaded' );
+			$cached    = get_transient( $cache_key );
+			if ( is_array( $cached ) && isset( $cached['autoloaded_count'], $cached['autoloaded_size'] ) ) {
+				return array(
+					'autoloaded_count'   => (int) $cached['autoloaded_count'],
+					'autoloaded_size'    => (int) $cached['autoloaded_size'],
+					'autoloaded_size_mb' => round( (int) $cached['autoloaded_size'] / ( 1024 * 1024 ), 2 ),
+				);
+			}
+			$autoloaded    = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->options} WHERE autoload = 'yes'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Auditing query, results cached in transient below.
+			$autoload_size = (int) $wpdb->get_var( "SELECT SUM(LENGTH(option_value)) FROM {$wpdb->options} WHERE autoload = 'yes'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Auditing query, results cached in transient below.
+			$result        = array(
 				'autoloaded_count'   => $autoloaded,
 				'autoloaded_size'    => $autoload_size,
 				'autoloaded_size_mb' => round( $autoload_size / ( 1024 * 1024 ), 2 ),
 			);
+			set_transient( $cache_key, $result, 10 * MINUTE_IN_SECONDS );
+			return $result;
 		}
 
 		/**

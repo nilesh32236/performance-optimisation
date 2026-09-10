@@ -158,6 +158,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		public const FIELD_LCP_STALE_TTL = 86400;
 
 		/**
+		 * Per-request memo for the RUM aggregate option.
+		 *
+		 * The get_field_lcp_url() hot path runs on the frontend output
+		 * is called twice per page view (Image_Optimisation). Without a memo
+		 * each call deserializes the full wppo_web_vitals_rum aggregate
+		 * (bounded only by MAX_OPTION_BYTES). Memoizing collapses both
+		 * lookups to a single get_option() per request.
+		 *
+		 * @since NEXT
+		 * @var array|null
+		 */
+		private static ?array $field_lcp_aggregate = null;
+
+		/**
+		 * Whether the aggregate memo has been populated this request.
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static bool $field_lcp_loaded = false;
+
+		/**
+		 * Per-request memo for resolved field-LCP results, keyed by
+		 * normalized path + sample gate.
+		 *
+		 * @since NEXT
+		 * @var array<string, array|null>
+		 */
+		private static array $field_lcp_result_memo = array();
+
+		/**
 		 * Flush when queue reaches this size.
 		 *
 		 * @var int
@@ -173,6 +204,86 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		public static function is_enabled(): bool {
 			$options = Util::get_settings();
 			return ! empty( $options['performance_audit']['rum_enabled'] );
+		}
+
+		/**
+		 * Clear the per-request field-LCP memo.
+		 *
+		 * Called automatically on update/add/delete of the RUM aggregate
+		 * option; exposed publicly so tests can reset isolation between
+		 * cases that mutate the option store directly.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function clear_field_lcp_cache(): void {
+			self::$field_lcp_aggregate   = null;
+			self::$field_lcp_loaded      = false;
+			self::$field_lcp_result_memo = array();
+		}
+
+		/**
+		 * Get the RUM aggregate with a per-request memo.
+		 *
+		 * @since NEXT
+		 * @return array Aggregate data (empty array when missing/invalid).
+		 */
+		private static function get_memoized_aggregate(): array {
+			if ( self::$field_lcp_loaded && is_array( self::$field_lcp_aggregate ) ) {
+				return self::$field_lcp_aggregate;
+			}
+			self::ensure_field_lcp_cache_hook();
+			$all = get_option( self::OPTION, array() );
+			if ( ! is_array( $all ) ) {
+				$all = array();
+			}
+			self::$field_lcp_aggregate = $all;
+			self::$field_lcp_loaded    = true;
+			return $all;
+		}
+
+		/**
+		 * Register invalidation hooks for the RUM aggregate memo (once per request).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private static function ensure_field_lcp_cache_hook(): void {
+			static $hooked = false;
+			if ( $hooked ) {
+				return;
+			}
+			$hooked = true;
+			add_action( 'update_option_' . self::OPTION, array( self::class, 'clear_field_lcp_cache' ) );
+			add_action( 'add_option_' . self::OPTION, array( self::class, 'clear_field_lcp_cache' ) );
+			add_action( 'delete_option_' . self::OPTION, array( self::class, 'clear_field_lcp_cache' ) );
+		}
+
+		/**
+		 * Migrate the RUM aggregate option to non-autoloading.
+		 *
+		 * Rows created by older plugin versions defaulted to autoload=yes and
+		 * keep loading on every WordPress request via alloptions. Mirrors
+		 * Img_Converter::migrate_img_info_autoload().
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function migrate_rum_autoload(): void {
+			if ( function_exists( 'wp_set_option_autoload' ) ) {
+				wp_set_option_autoload( self::OPTION, false );
+			} else {
+				global $wpdb;
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+				$wpdb->update(
+					$wpdb->options,
+					array( 'autoload' => 'no' ),
+					array( 'option_name' => self::OPTION )
+				);
+				wp_cache_delete( self::OPTION, 'options' );
+				wp_cache_delete( 'alloptions', 'options' );
+			}
+			self::clear_field_lcp_cache();
 		}
 
 		/**
@@ -237,6 +348,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		public static function get_data(): array {
 			// Opportunistically flush queued beacons before reading.
 			self::flush_queue();
+			self::clear_field_lcp_cache();
 			$data = get_option( self::OPTION, array() );
 			return is_array( $data ) ? $data : array();
 		}
@@ -846,6 +958,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				}
 
 				update_option( self::OPTION, $all, false );
+				self::clear_field_lcp_cache();
 			} finally {
 				delete_transient( $lock_key );
 			}
@@ -881,7 +994,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				if ( $min < 1 ) {
 					$min = self::FIELD_LCP_DEFAULT_MIN_SAMPLES;
 				}
-				$all = get_option( self::OPTION, array() );
+				// Per-request memo: the frontend calls this twice per page
+				// view, so collapse to one get_option() deserialization.
+				$memo_key = $normalized_path . '|' . $min;
+				if ( array_key_exists( $memo_key, self::$field_lcp_result_memo ) ) {
+					return self::$field_lcp_result_memo[ $memo_key ];
+				}
+				$all = self::get_memoized_aggregate();
 				if ( ! is_array( $all ) || empty( $all ) ) {
 					return null;
 				}
@@ -939,6 +1058,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					}
 				}
 				if ( empty( $best ) ) {
+					self::$field_lcp_result_memo[ $memo_key ] = null;
 					return null;
 				}
 				$top = null;
@@ -948,12 +1068,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					}
 				}
 				if ( null === $top || $top['n'] < $min ) {
+					self::$field_lcp_result_memo[ $memo_key ] = null;
 					return null;
 				}
 				if ( $top['lastSeen'] <= 0 || ( $now - $top['lastSeen'] ) > self::FIELD_LCP_STALE_TTL ) {
+					self::$field_lcp_result_memo[ $memo_key ] = null;
 					return null;
 				}
 				unset( $top['_raw_n'] );
+				self::$field_lcp_result_memo[ $memo_key ] = $top;
 				return $top;
 			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
 				return null;

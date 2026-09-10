@@ -489,6 +489,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return self::$ccss_content_cache[ $cache_key ];
 			}
 
+			// Size guard: a corrupted or adversarially large cache file must
+			// not be buffered entirely into memory. Treat over-cap files as
+			// a cache miss (same 1MB cap pattern as System_Info/Object_Cache).
+			if ( false === $filesize || $filesize > 1048576 ) {
+				self::$ccss_content_cache[ $cache_key ] = null;
+				return null;
+			}
+
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local cache file outside the WP filesystem abstraction.
 			$content = file_get_contents( $file );
 			// An empty file is a failed generation: treat it as missing so the
