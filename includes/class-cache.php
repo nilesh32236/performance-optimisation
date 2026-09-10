@@ -2230,8 +2230,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( $variant ) {
 				$suffix .= "-{$variant}";
 			}
-			$resolved = "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $this->url_path ? "index{$suffix}.{$type}" : "{$this->url_path}/index{$suffix}.{$type}" );
-			if ( ! $this->is_path_contained( $resolved ) ) {
+			if ( ! preg_match( '/^[a-z0-9]+$/i', (string) $type ) ) {
+				$this->log_traversal_probe( (string) $type );
+				return '';
+			}
+			$filename = "index{$suffix}.{$type}";
+			$resolved = Util::sanitize_cache_path( $this->cache_root_dir, $this->domain, $this->url_path, $filename );
+			if ( '' === $resolved ) {
 				$this->log_traversal_probe( $this->url_path );
 				return '';
 			}
@@ -2267,15 +2272,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$this->log_traversal_probe( $variant );
 				return '';
 			}
+			if ( ! preg_match( '/^[a-z0-9]+$/i', (string) $type ) ) {
+				$this->log_traversal_probe( (string) $type );
+				return '';
+			}
 			$suffix   = $variant ? "-{$variant}" : '';
-			$relative = ( '' === $this->url_path ? "index{$suffix}.{$type}" : "{$this->url_path}/index{$suffix}.{$type}" );
+			$filename = "index{$suffix}.{$type}";
 			// Containment parity with get_cache_file_path(): refuse when the
 			// resolved filesystem path would escape the cache root/domain.
-			$resolved = "{$this->cache_root_dir}/{$this->domain}/{$relative}";
-			if ( ! $this->is_path_contained( $resolved ) ) {
+			$resolved = Util::sanitize_cache_path( $this->cache_root_dir, $this->domain, $this->url_path, $filename );
+			if ( '' === $resolved ) {
 				$this->log_traversal_probe( $this->url_path );
 				return '';
 			}
+			$relative = ( '' === $this->url_path ? $filename : "{$this->url_path}/{$filename}" );
 			return "{$this->cache_root_url}/{$this->domain}/{$relative}";
 		}
 
@@ -3089,13 +3099,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		private function get_file_path( ?string $url_path = null, string $type = 'html' ): string {
 			$raw_input = (string) $url_path;
-			$url_path  = self::sanitize_cache_url_path( $url_path );
 
 			if ( '' === $this->cache_root_dir || '' === $this->domain ) {
 				return '';
 			}
 
-			if ( '' === $url_path && '' !== trim( $raw_input ) ) {
+			if ( 'used-css' === $type ) {
+				$filename = 'used-css.css';
+			} else {
+				if ( ! preg_match( '/^[a-z0-9]+$/i', (string) $type ) ) {
+					$this->log_traversal_probe( $raw_input );
+					return '';
+				}
+				$filename = "index.{$type}";
+			}
+
+			// Single auditable containment point: host normalization, path
+			// sanitization, filename allowlist, and dual-prefix containment
+			// all live in Util::sanitize_cache_path().
+			$resolved = Util::sanitize_cache_path( $this->cache_root_dir, $this->domain, $raw_input, $filename );
+
+			if ( '' === $resolved ) {
 				// Distinguish the benign homepage ('/', '') from a rejected
 				// hostile input: only log when the raw path component is
 				// non-empty after trimming slashes and whitespace.
@@ -3109,17 +3133,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				}
 				if ( '' !== trim( trim( (string) $raw_component ), '/' ) ) {
 					$this->log_traversal_probe( $raw_input );
-					return ''; // Return empty string to prevent deletion or creation outside cache root.
 				}
-			}
-
-			$filename = 'used-css' === $type ? 'used-css.css' : "index.{$type}";
-
-			$resolved = "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $url_path ? $filename : "{$url_path}/{$filename}" );
-
-			if ( ! $this->is_path_contained( $resolved ) ) {
-				$this->log_traversal_probe( $raw_input );
-				return '';
+				return ''; // Return empty string to prevent deletion or creation outside cache root.
 			}
 
 			return $resolved;

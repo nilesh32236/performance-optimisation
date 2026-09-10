@@ -930,17 +930,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			if ( '' === $this->cache_root_dir || '' === $this->domain ) {
 				return '';
 			}
-			$path = $this->get_url_path( $url );
-			if ( '' === $path && $this->is_raw_path_non_blank( $url ) ) {
+			// Single auditable containment point: host normalization, path
+			// sanitization, filename allowlist, and dual-prefix containment
+			// all live in Util::sanitize_cache_path().
+			$candidate = Util::sanitize_cache_path( $this->cache_root_dir, $this->domain, $url, self::USED_CSS_FILENAME );
+			if ( '' === $candidate ) {
 				// Distinguish the benign homepage ('/', '') from a rejected
 				// hostile input: never map a probe to the homepage file —
 				// refuse and log so callers fail open to unoptimized output.
-				$this->log_traversal_probe( $url );
-				return '';
-			}
-			$path_suffix = '' !== $path ? "/{$path}" : '';
-			$candidate   = "{$this->cache_root_dir}/{$this->domain}{$path_suffix}/" . self::USED_CSS_FILENAME;
-			if ( ! $this->is_path_contained( $candidate ) ) {
+				if ( '' === $url && ! $this->is_raw_path_non_blank( $url ) ) {
+					return '';
+				}
 				$this->log_traversal_probe( $url );
 				return '';
 			}
@@ -961,20 +961,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			if ( '' === $this->cache_root_dir || '' === $this->cache_root_url || '' === $this->domain ) {
 				return '';
 			}
-			$path = $this->get_url_path( $url );
-			if ( '' === $path && $this->is_raw_path_non_blank( $url ) ) {
-				$this->log_traversal_probe( $url );
-				return '';
-			}
-			$path_suffix = '' !== $path ? "/{$path}" : '';
 			// Containment parity with get_used_css_path(): resolve the
-			// filesystem candidate through the same dual-prefix check so the
+			// filesystem candidate through the same central helper so the
 			// URL and path surfaces refuse the same hostile inputs.
-			$candidate = "{$this->cache_root_dir}/{$this->domain}{$path_suffix}/" . self::USED_CSS_FILENAME;
-			if ( ! $this->is_path_contained( $candidate ) ) {
+			$candidate = Util::sanitize_cache_path( $this->cache_root_dir, $this->domain, $url, self::USED_CSS_FILENAME );
+			if ( '' === $candidate ) {
+				if ( '' === $url && ! $this->is_raw_path_non_blank( $url ) ) {
+					return '';
+				}
 				$this->log_traversal_probe( $url );
 				return '';
 			}
+			$path        = $this->get_url_path( $url );
+			$path_suffix = '' !== $path ? "/{$path}" : '';
 			return "{$this->cache_root_url}/{$this->domain}{$path_suffix}/" . self::USED_CSS_FILENAME;
 		}
 
