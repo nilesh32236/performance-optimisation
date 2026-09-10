@@ -529,12 +529,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			if ( ! defined( 'ABSPATH' ) || ! defined( 'WP_CONTENT_DIR' ) ) {
 				return false;
 			}
-			$abspath   = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( ABSPATH ) : str_replace( '\\', '/', ABSPATH );
-			$content   = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( WP_CONTENT_DIR ) : str_replace( '\\', '/', WP_CONTENT_DIR );
-			$abspath   = rtrim( $abspath, '/' ) . '/';
-			$content   = rtrim( $content, '/' ) . '/';
+			$abspath = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( ABSPATH ) : str_replace( '\\', '/', ABSPATH );
+			$content = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( WP_CONTENT_DIR ) : str_replace( '\\', '/', WP_CONTENT_DIR );
+			$abspath = rtrim( $abspath, '/' ) . '/';
+			$content = rtrim( $content, '/' ) . '/';
+			$roots   = array( $abspath, $content );
+			// Canonicalize roots too: on hosts with a symlinked docroot
+			// (e.g. /var/www/html -> /data/www) a realpath-resolved source
+			// would otherwise fail against the lexical roots.
+			foreach ( array( ABSPATH, WP_CONTENT_DIR ) as $root ) {
+				$real_root = realpath( $root );
+				if ( false !== $real_root ) {
+					$norm_root = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $real_root ) : str_replace( '\\', '/', $real_root );
+					$roots[]   = rtrim( $norm_root, '/' ) . '/';
+				}
+			}
 			$candidate = rtrim( $normalized, '/' );
-			return 0 === strpos( $candidate . '/', $abspath ) || 0 === strpos( $candidate . '/', $content );
+			foreach ( $roots as $root ) {
+				if ( 0 === strpos( $candidate . '/', $root ) ) {
+					return true;
+				}
+			}
+			return false;
 		}
 
 		/**
@@ -570,10 +586,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				$blog_id            = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
 				static $upload_dirs = array();
 				if ( ! isset( $upload_dirs[ $blog_id ] ) ) {
-					$dir                     = wp_upload_dir();
-					$base                    = isset( $dir['basedir'] ) ? (string) $dir['basedir'] : '';
-					$base                    = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $base ) : str_replace( '\\', '/', $base );
-					$upload_dirs[ $blog_id ] = '' !== $base ? rtrim( $base, '/' ) . '/' : '';
+					$dir  = wp_upload_dir();
+					$base = isset( $dir['basedir'] ) ? (string) $dir['basedir'] : '';
+					$base = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $base ) : str_replace( '\\', '/', $base );
+					// Only cache non-empty basedirs: a transient
+					// wp_upload_dir() failure must not poison the rest of
+					// the request; retry on the next call instead.
+					if ( '' !== $base ) {
+						$upload_dirs[ $blog_id ] = rtrim( $base, '/' ) . '/';
+					} else {
+						return false;
+					}
 				}
 				if ( '' !== $upload_dirs[ $blog_id ] && 0 === strpos( $candidate, $upload_dirs[ $blog_id ] ) ) {
 					return true;
@@ -636,26 +659,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				$estimated = (float) $width * (float) $height * (float) $channels;
 				return $estimated > ( (float) $limit * 0.5 );
 			}
-			return ( $width * $height ) > $this->get_max_source_pixels();
+			// Channels-consistent fallback: the limited path budgets
+			// w*h*channels bytes, so scale the pixel cap by 4 (channels is
+			// always 4, conservative for GD truecolor) to enforce the same
+			// budget when memory_limit is unlimited/unknown.
+			return ( (float) $width * (float) $height * (float) $channels ) > ( (float) $this->get_max_source_pixels() * 4 );
 		}
 
-		/**
-		 * Map a GD/Imagick image type to its decode channel count.
-		 *
-		 * GD `imagecreatefrom*()` allocates a truecolor (4 bytes/pixel)
-		 * bitmap regardless of source type, so every raster type uses the
-		 * conservative 4-channel estimate to avoid underestimating decode
-		 * memory near the budget limit.
-		 *
-		 * @since NEXT
-		 *
-		 * @param int $image_type One of the `IMAGETYPE_*` constants (or 0 when unknown).
-		 * @return int Channel count (always 4, conservative for GD truecolor).
-		 */
-		private function get_source_channels( int $image_type ): int {
-			unset( $image_type );
-			return 4;
-		}
+	/**
+	 * Decode channel count for the pixel-budget estimate.
+	 *
+	 * GD `imagecreatefrom*()` allocates a truecolor (4 bytes/pixel)
+	 * bitmap regardless of source type, so the conservative 4-channel
+	 * estimate is used for every raster type to avoid underestimating
+	 * decode memory near the budget limit.
+	 *
+	 * @since NEXT
+	 *
+	 * @return int Channel count (always 4, conservative for GD truecolor).
+	 */
+	private function get_source_channels(): int {
+		return 4;
+	}
 
 		/**
 		 * Downscale a decoded GD image when its longest edge exceeds the cap.
@@ -965,7 +990,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			// sources skip conversion fail-open: the original is served
 			// unoptimised and the queue entry is marked `skipped`, never
 			// `failed` and never fatal.
-			$channels = $this->get_source_channels( (int) ( $image_info[2] ?? 0 ) );
+			$channels = $this->get_source_channels();
 			if ( $this->exceeds_pixel_budget( $check_w, $check_h, $channels ) ) {
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
@@ -1141,15 +1166,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 						try {
 
-							if ( file_exists( $webp_path ) ) {
-								$this->update_conversion_status( $source_image, 'completed', 'webp' );
-								return true;
-							}
-							// Write-target containment: a passthrough/empty
-							// get_img_path() value must never reach Imagick.
+							// Write-target containment first: a passthrough/empty
+							// get_img_path() value must never reach Imagick, and
+							// existence alone must never confer `completed`
+							// status on an ungated target.
 							if ( ! self::is_safe_write_path( $webp_path ) ) {
 								$this->update_conversion_status( $source_image, 'failed', $format );
 								return false;
+							}
+							if ( file_exists( $webp_path ) ) {
+								$this->update_conversion_status( $source_image, 'completed', 'webp' );
+								return true;
 							}
 							// Initialize Imagick and read the image file.
 							// Do not hard-clamp Imagick depth to 8-bit — core's
@@ -1735,7 +1762,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			);
 
 			if ( $is_already_local ) {
-				if ( false !== strpos( $normalized_source, '..' ) ) {
+				// Segment-only traversal check (after URL-decoding) so
+				// legitimate names like `my..photo.jpg` keep working while
+				// `a/../b` and encoded variants are refused.
+				$decoded_local = str_replace( '\\', '/', rawurldecode( $normalized_source ) );
+				if ( 1 === preg_match( '#(^|/)\.\.(/|$)#', $decoded_local ) || 1 === preg_match( '#(^|/)\.\.(/|$)#', $normalized_source ) ) {
 					return '';
 				}
 				$local_path = $normalized_source;
@@ -1775,8 +1806,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 						$relative_path = $source_image;
 					}
 
-					// Security: Block directory traversal.
-					if ( false !== strpos( rawurldecode( $relative_path ), '..' ) ) {
+					// Security: block path-segment traversal (`..` as a full
+					// segment after URL-decoding) so `my..photo.jpg` stays valid.
+					$decoded_rel = str_replace( '\\', '/', rawurldecode( $relative_path ) );
+					if ( 1 === preg_match( '#(^|/)\.\.(/|$)#', $decoded_rel ) ) {
 						return $source_image;
 					}
 
@@ -2152,7 +2185,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			// convert_image()): skip the decode entirely on huge sources so
 			// the upload request can never fatal on small hosts. Fail-open:
 			// no placeholder stored, original upload unaffected.
-			$upload_channels = $this->get_source_channels( (int) ( $image_info[2] ?? 0 ) );
+			$upload_channels = $this->get_source_channels();
 			if ( $this->exceeds_pixel_budget( (int) $image_info[0], (int) $image_info[1], $upload_channels ) ) {
 				return;
 			}

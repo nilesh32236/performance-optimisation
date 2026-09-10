@@ -793,7 +793,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					continue;
 				}
 				$resolved = realpath( $source_path );
-				if ( false === $resolved || 0 !== strpos( wp_normalize_path( $resolved ), $normalized_abspath ) ) {
+				if ( false === $resolved ) {
+					return $this->send_response( null, false, 400, __( 'Invalid image path provided.', 'performance-optimisation' ) );
+				}
+				$resolved_norm = wp_normalize_path( $resolved );
+				$content_base  = trailingslashit( wp_normalize_path( WP_CONTENT_DIR ) );
+				$root_ok       = 0 === strpos( $resolved_norm, $normalized_abspath ) || 0 === strpos( $resolved_norm, $content_base );
+				if ( ! $root_ok ) {
+					$abspath_real = realpath( ABSPATH );
+					if ( false !== $abspath_real ) {
+						$root_ok = 0 === strpos( $resolved_norm, trailingslashit( wp_normalize_path( $abspath_real ) ) );
+					}
+				}
+				if ( ! $root_ok ) {
+					$content_real = realpath( WP_CONTENT_DIR );
+					if ( false !== $content_real ) {
+						$root_ok = 0 === strpos( $resolved_norm, trailingslashit( wp_normalize_path( $content_real ) ) );
+					}
+				}
+				if ( ! $root_ok ) {
 					return $this->send_response( null, false, 400, __( 'Invalid image path provided.', 'performance-optimisation' ) );
 				}
 			}
@@ -912,7 +930,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		public function delete_optimised_image(): \WP_REST_Response {
 			// Defense-in-depth capability re-check on the delete trigger
 			// (the route permission_callback already requires
-			// manage_options). Authors without upload_files are denied.
+			// manage_options). Guarded so unit stubs cannot fatal.
 			if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) ) {
 				return $this->send_response( null, false, 403, __( 'You are not allowed to delete optimized images.', 'performance-optimisation' ) );
 			}
