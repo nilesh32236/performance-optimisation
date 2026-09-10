@@ -2429,15 +2429,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			// Collect registered module ids, tolerating core version differences.
+			// Prefer the public get_print_queue() API; fall back to reading the
+			// registered store via reflection because WP_Script_Modules::$registered
+			// is private in core and isset( $modules->registered ) from outside is
+			// always false on production (direct access would fatal on magic-less
+			// objects, so never touch ->registered directly).
 			$ids = array();
 			if ( method_exists( $modules, 'get_print_queue' ) ) {
 				$ids = (array) $modules->get_print_queue();
 			}
-			if ( empty( $ids ) && isset( $modules->registered ) ) {
-				$ids = array_keys( (array) $modules->registered );
-			}
-			if ( empty( $ids ) && isset( $modules->all ) ) {
-				$ids = array_keys( (array) $modules->all );
+			if ( empty( $ids ) ) {
+				$ids = $this->get_registered_module_ids( $modules );
 			}
 
 			foreach ( $ids as $id ) {
@@ -2452,26 +2454,109 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// fetchpriority. Core defaults gaps to 'auto' (see
 					// WP_Script_Modules::register), so only 'auto'/missing/empty
 					// counts as a gap; 'high' (LCP-critical) and explicit 'low'
-					// are left untouched. Inspects the public $registered store
-					// directly because core exposes no single-module getter.
-					// Fail-open: any unreadable shape falls through to 'low'.
-					$existing = null;
-					if ( isset( $modules->registered ) ) {
-						$registered = (array) $modules->registered;
-						if ( array_key_exists( (string) $id, $registered ) ) {
-							$entry = $registered[ (string) $id ];
-							if ( is_array( $entry ) && array_key_exists( 'fetchpriority', $entry ) ) {
-								$existing = $entry['fetchpriority'];
-							} elseif ( is_object( $entry ) && isset( $entry->fetchpriority ) ) {
-								$existing = $entry->fetchpriority;
-							}
-						}
-					}
+					// are left untouched. Reads via the public get_registered()
+					// getter when available (WP 7.0+) with a reflection fallback
+					// for the private 6.9 store. Fail-open: any unreadable shape
+					// falls through to 'low'. This matches the classic-script
+					// path in add_defer_strategy(), where 'auto' is likewise
+					// treated as a gap.
+					$existing = $this->get_module_fetchpriority( $modules, (string) $id );
 					if ( is_string( $existing ) && '' !== trim( $existing ) && 'auto' !== strtolower( trim( $existing ) ) ) {
 						continue;
 					}
 					$modules->set_fetchpriority( (string) $id, 'low' );
 				}
+			}
+		}
+
+		/**
+		 * Read a script module's fetchpriority without touching private state directly.
+		 *
+		 * Uses the public get_registered() getter when available, otherwise reads
+		 * the private $registered store via reflection. Returns null when the
+		 * module is unregistered, carries no fetchpriority key, or the store is
+		 * unreadable (fail-open: callers treat null as a gap and write 'low').
+		 * Never accesses $modules->registered directly: that property is private
+		 * in core, so isset()/direct reads from outside are always false and
+		 * would silently overwrite explicit values in production.
+		 *
+		 * @since NEXT
+		 *
+		 * @param object $modules Script modules instance from wp_script_modules().
+		 * @param string $id      Module id.
+		 * @return mixed Fetchpriority value, or null when missing/unreadable.
+		 */
+		private function get_module_fetchpriority( $modules, string $id ) {
+			if ( method_exists( $modules, 'get_registered' ) ) {
+				$entry = $modules->get_registered( $id );
+				if ( is_array( $entry ) && array_key_exists( 'fetchpriority', $entry ) ) {
+					return $entry['fetchpriority'];
+				}
+				if ( is_object( $entry ) && isset( $entry->fetchpriority ) ) {
+					return $entry->fetchpriority;
+				}
+				return null;
+			}
+			$registered = $this->read_private_module_store( $modules, 'registered' );
+			if ( is_array( $registered ) && array_key_exists( $id, $registered ) ) {
+				$entry = $registered[ $id ];
+				if ( is_array( $entry ) && array_key_exists( 'fetchpriority', $entry ) ) {
+					return $entry['fetchpriority'];
+				}
+				if ( is_object( $entry ) && isset( $entry->fetchpriority ) ) {
+					return $entry->fetchpriority;
+				}
+			}
+			return null;
+		}
+
+		/**
+		 * Collect registered module ids without touching private state directly.
+		 *
+		 * Reflection fallback for environments where get_print_queue() is empty or
+		 * unavailable; reads the private $registered (then $all) store. Returns an
+		 * empty array when the store is unreadable.
+		 *
+		 * @since NEXT
+		 *
+		 * @param object $modules Script modules instance from wp_script_modules().
+		 * @return string[] Module ids.
+		 */
+		private function get_registered_module_ids( $modules ): array {
+			foreach ( array( 'registered', 'all' ) as $property ) {
+				$store = $this->read_private_module_store( $modules, $property );
+				if ( is_array( $store ) && ! empty( $store ) ) {
+					return array_map( 'strval', array_keys( $store ) );
+				}
+			}
+			return array();
+		}
+
+		/**
+		 * Read a (possibly private) property from the script-modules instance.
+		 *
+		 * Returns null when the property does not exist or is unreadable instead
+		 * of raising. Public properties are read directly; non-public ones go
+		 * through reflection with setAccessible().
+		 *
+		 * @since NEXT
+		 *
+		 * @param object $modules  Script modules instance.
+		 * @param string $property Property name.
+		 * @return mixed Property value, or null when unreadable.
+		 */
+		private function read_private_module_store( $modules, string $property ) {
+			try {
+				$reflection = new \ReflectionObject( $modules );
+				if ( ! $reflection->hasProperty( $property ) ) {
+					return null;
+				}
+				$prop = $reflection->getProperty( $property );
+				$prop->setAccessible( true );
+				return $prop->getValue( $modules );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return null;
 			}
 		}
 
@@ -2637,10 +2722,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// Pre-release-inclusive '6.9-alpha' floor matches setup_hooks() so
 					// alpha/beta/RC builds already carrying the API are covered.
 					// Fill-gaps-only: never overwrite an explicit fetchpriority value
-					// (e.g. an LCP-critical handle filtered to 'high').
+					// (e.g. an LCP-critical handle filtered to 'high'). Core
+					// defaults module gaps to 'auto', and 'auto' is
+					// indistinguishable from "defer to browser" here, so
+					// 'auto'/missing/empty counts as a gap in both this path and
+					// apply_module_loading_strategies(); 'high' and explicit 'low'
+					// are left untouched.
 					if ( $is_wp69_plus && function_exists( 'wp_script_add_data' ) ) {
 						$existing_fetchpriority = method_exists( $wp_scripts, 'get_data' ) ? $wp_scripts->get_data( $handle, 'fetchpriority' ) : false;
-						if ( empty( $existing_fetchpriority ) ) {
+						$is_gap                 = empty( $existing_fetchpriority ) || ( is_string( $existing_fetchpriority ) && 'auto' === strtolower( trim( $existing_fetchpriority ) ) );
+						if ( $is_gap ) {
 							/**
 							 * Filters fetchpriority for each deferred handle.
 							 *
@@ -2738,8 +2829,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 				if ( ! $this->is_delay_excluded_handle( $handle ) ) {
 					// Fill-gaps-only: never emit a duplicate fetchpriority attribute
-					// when core or an earlier filter already stamped one.
-					if ( false === stripos( (string) $tag, 'fetchpriority=' ) ) {
+					// when core or an earlier filter already stamped one. Anchored
+					// on a whitespace boundary so data-*fetchpriority attributes
+					// (e.g. data-wp-fetchpriority=, which core emits alongside the
+					// real attribute) never count as a real fetchpriority.
+					if ( ! preg_match( '/\sfetchpriority\s*=/i', (string) $tag ) ) {
 						$tag = str_replace( '<script ', '<script fetchpriority="low" ', $tag );
 					}
 					$tag = str_replace( ' src', ' wppo-src', $tag );
@@ -2749,8 +2843,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						$tag
 					) ?? $tag;
 
-					// Determine delay strategy for this handle.
-					$strategy = $this->get_delay_strategy_for_handle( $handle );
+						// Determine delay strategy for this handle.
+						$strategy = $this->get_delay_strategy_for_handle( $handle );
 					if ( 'interaction' !== $strategy ) {
 						$tag = str_replace(
 							'<script ',
@@ -2759,8 +2853,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						);
 					}
 
-					// Determine priority for this handle.
-					$priority = $this->get_delay_priority_for_handle( $handle );
+						// Determine priority for this handle.
+						$priority = $this->get_delay_priority_for_handle( $handle );
 					if ( 'normal' !== $priority ) {
 						$tag = str_replace(
 							'<script ',
@@ -3663,7 +3757,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return string Modified script tag with fetchpriority="low".
 		 */
 		public function add_fetchpriority_to_deferred( $tag, $handle ): string {
-			if ( isset( $this->deferred_handles[ $handle ] ) && false === strpos( $tag, 'fetchpriority=' ) ) {
+			if ( isset( $this->deferred_handles[ $handle ] ) && ! preg_match( '/\sfetchpriority\s*=/i', (string) $tag ) ) {
 				$tag = str_replace( '<script ', '<script fetchpriority="low" ', $tag );
 			}
 			return $tag;

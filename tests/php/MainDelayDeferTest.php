@@ -897,11 +897,12 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	private function make_fake_modules(): object {
 		return new class() {
 			/**
-			 * Registered modules (public property, mirrors core).
+			 * Registered modules (private store, mirrors core where
+			 * WP_Script_Modules::$registered is private).
 			 *
 			 * @var array
 			 */
-			public $registered = array(
+			private $store = array(
 				'interactive' => array(),
 				'my-mod'      => array(),
 			);
@@ -912,6 +913,36 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 			 * @var string[]
 			 */
 			public $calls = array();
+
+			/**
+			 * Return the print queue (mirrors core public API).
+			 *
+			 * @return string[]
+			 */
+			public function get_print_queue() {
+				return array_keys( $this->store );
+			}
+
+			/**
+			 * Return a single registered module (mirrors core getter).
+			 *
+			 * @param string $id Module id.
+			 * @return array|null
+			 */
+			public function get_registered( $id ) {
+				return $this->store[ $id ] ?? null;
+			}
+
+			/**
+			 * Test helper to seed a registered entry.
+			 *
+			 * @param string $id    Module id.
+			 * @param array  $entry Registered entry.
+			 * @return void
+			 */
+			public function set_registered_entry( $id, array $entry ): void {
+				$this->store[ $id ] = $entry;
+			}
 
 			/**
 			 * Record set_in_footer.
@@ -1341,7 +1372,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		);
 		$fake = $this->make_fake_modules();
 		// Simulate core/another plugin stamping an LCP-critical module high.
-		$fake->registered['my-mod'] = array( 'fetchpriority' => 'high' );
+		$fake->set_registered_entry( 'my-mod', array( 'fetchpriority' => 'high' ) );
 		$this->stub_script_modules( $fake );
 
 		$main->apply_module_loading_strategies();
@@ -1364,6 +1395,34 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 				'delayJS' => true,
 			)
 		);
+		// Guard against superglobal leakage and process-persistent Brain
+		// Monkey stubs from earlier guard tests: without the pins below, a
+		// stale is_cart()/is_wc_endpoint_url() declaration throws
+		// MissingFunctionExpectations, which is_delay_js_safe_context()
+		// fails open on — returning the tag unmodified so this test would
+		// pass vacuously without exercising the rewrite.
+		$this->reset_delay_guard_superglobals();
+		Functions\when( 'is_cart' )->justReturn( false );
+		Functions\when( 'is_checkout' )->justReturn( false );
+		Functions\when( 'is_account_page' )->justReturn( false );
+		Functions\when( 'is_wc_endpoint_url' )->justReturn( false );
+		Functions\when( 'get_the_ID' )->justReturn( 0 );
+		// Other suites sharing the process (e.g. LiteSpeedIntegrationTest)
+		// can leave LiteSpeed_Integration statics cached as "disable
+		// optimizer", which would return the tag unmodified and let this
+		// test pass vacuously. Reset + pin the decision filter false.
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook, $value ) {
+				if ( 'wppo_litespeed_should_disable_optimizer' === $hook ) {
+					return false;
+				}
+				return $value;
+			}
+		);
+		Functions\when( 'has_filter' )->justReturn( false );
+		if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'reset_cache' ) ) {
+			\PerformanceOptimise\Inc\LiteSpeed_Integration::reset_cache();
+		}
 
 		$main = new Main();
 
@@ -1371,9 +1430,184 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		$tag    = '<script fetchpriority="high" src="https://example.com/my-custom-script.js" type="text/javascript"></script>';
 		$result = $main->add_defer_attribute( $tag, 'my-custom-script' );
 
+		$this->assertStringContainsString( 'wppo-src', $result, 'The tag must go through the Delay-JS rewrite for this assertion to be meaningful.' );
 		$this->assertSame( 1, substr_count( strtolower( $result ), 'fetchpriority=' ), 'The rewritten tag must carry exactly one fetchpriority attribute.' );
 		$this->assertStringContainsString( 'fetchpriority="high"', $result, 'The explicit fetchpriority value must be preserved.' );
 		$this->assertStringNotContainsString( 'fetchpriority="low"', $result );
+
+		$this->reset_delay_guard_superglobals();
+	}
+
+	/**
+	 * Test that a data-*fetchpriority attribute alone does not suppress the
+	 * real fetchpriority injection (issue #1019 review).
+	 *
+	 * Core emits data-wp-fetchpriority= alongside the real attribute; the
+	 * duplicate guard must only match a real attribute boundary.
+	 *
+	 * @since NEXT
+	 */
+	public function test_add_defer_attribute_ignores_data_fetchpriority(): void {
+		$this->stub_main_construction(
+			array(
+				'deferJS' => false,
+				'delayJS' => true,
+			)
+		);
+		// Same stale-stub guard as test_add_defer_attribute_skips_duplicate_fetchpriority.
+		$this->reset_delay_guard_superglobals();
+		Functions\when( 'is_cart' )->justReturn( false );
+		Functions\when( 'is_checkout' )->justReturn( false );
+		Functions\when( 'is_account_page' )->justReturn( false );
+		Functions\when( 'is_wc_endpoint_url' )->justReturn( false );
+		Functions\when( 'get_the_ID' )->justReturn( 0 );
+		// Same LiteSpeed static-cache guard (see above).
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook, $value ) {
+				if ( 'wppo_litespeed_should_disable_optimizer' === $hook ) {
+					return false;
+				}
+				return $value;
+			}
+		);
+		Functions\when( 'has_filter' )->justReturn( false );
+		if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'reset_cache' ) ) {
+			\PerformanceOptimise\Inc\LiteSpeed_Integration::reset_cache();
+		}
+
+		$main = new Main();
+
+		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for add_defer_attribute() tests.
+		$tag    = '<script data-wp-fetchpriority="high" src="https://example.com/my-custom-script.js" type="text/javascript"></script>';
+		$result = $main->add_defer_attribute( $tag, 'my-custom-script' );
+
+		$this->assertMatchesRegularExpression( '/\sfetchpriority="low"/i', $result, 'A data-* attribute must not suppress the real fetchpriority injection.' );
+		$this->assertStringContainsString( 'data-wp-fetchpriority="high"', $result );
+
+		$this->reset_delay_guard_superglobals();
+	}
+
+	/**
+	 * Test that an explicit 'auto' classic fetchpriority is treated as a gap
+	 * (consistent with the module path, issue #1019 review).
+	 *
+	 * @since NEXT
+	 */
+	public function test_add_defer_strategy_treats_auto_as_gap(): void {
+		$this->stub_main_construction(
+			array(
+				'deferJS'        => true,
+				'delayJS'        => false,
+				'excludeDeferJS' => '',
+			)
+		);
+		$GLOBALS['wp_version'] = '6.9';
+		Functions\when( 'get_bloginfo' )->justReturn( '6.9' );
+
+		$main = $this->make_main(
+			array(
+				'file_optimisation' => array(
+					'deferJS'        => true,
+					'excludeDeferJS' => '',
+				),
+			)
+		);
+
+		$exclude_prop = new \ReflectionProperty( Main::class, 'exclude_defer_js' );
+		$exclude_prop->setAccessible( true );
+		$exclude_prop->setValue( $main, array() );
+
+		$GLOBALS['wp_scripts'] = $this->make_fake_wp_scripts();
+		$fake_scripts          = $GLOBALS['wp_scripts'];
+		$fake_scripts->add_data( 'third-party-analytics', 'fetchpriority', 'auto' );
+
+		$recorded = array();
+		$this->stub_defer_strategy_env( $recorded );
+
+		$main->add_defer_strategy();
+
+		$this->assertSame( 'low', $fake_scripts->data['third-party-analytics']['fetchpriority'] ?? null, "'auto' must be treated as a gap and upgraded to low." );
+	}
+
+	/**
+	 * Test that the module gap check works through reflection when the
+	 * public get_registered() getter is absent (WP 6.9 private store).
+	 *
+	 * The legacy double below exposes no public $registered and no
+	 * get_registered(); the implementation must still observe the explicit
+	 * 'high' via reflection instead of failing open to 'low'.
+	 *
+	 * @since NEXT
+	 */
+	public function test_apply_module_loading_strategies_reflection_fallback(): void {
+		$main = $this->make_main(
+			array(
+				'file_optimisation' => array(
+					'deferJS'        => true,
+					'excludeDeferJS' => '',
+				),
+			)
+		);
+		$fake = new class() {
+			/**
+			 * Private store (core-shaped, no public access, no getter).
+			 *
+			 * @var array
+			 */
+			private $registered = array(
+				'legacy-high' => array( 'fetchpriority' => 'high' ),
+				'legacy-gap'  => array(),
+			);
+
+			/**
+			 * Recorded calls.
+			 *
+			 * @var string[]
+			 */
+			public $calls = array();
+
+			/**
+			 * Return the print queue.
+			 *
+			 * @return string[]
+			 */
+			public function get_print_queue() {
+				return array( 'legacy-high', 'legacy-gap' );
+			}
+
+			/**
+			 * Record set_in_footer.
+			 *
+			 * @param string $id        Module id.
+			 * @param bool   $in_footer Whether in footer.
+			 * @return true
+			 */
+			public function set_in_footer( $id, $in_footer ) {
+				$this->calls[] = 'footer:' . $id . ':' . ( $in_footer ? 'true' : 'false' );
+				return true;
+			}
+
+			/**
+			 * Record set_fetchpriority.
+			 *
+			 * @param string $id       Module id.
+			 * @param string $priority Priority.
+			 * @return true
+			 */
+			public function set_fetchpriority( $id, $priority ) {
+				$this->calls[] = 'priority:' . $id . ':' . $priority;
+				return true;
+			}
+		};
+		$this->stub_script_modules( $fake );
+
+		$main->apply_module_loading_strategies();
+
+		$this->assertContains( 'footer:legacy-high:true', $fake->calls );
+		$this->assertNotContains( 'priority:legacy-high:low', $fake->calls, 'Reflection must observe the explicit high and skip the write.' );
+		$this->assertContains( 'priority:legacy-gap:low', $fake->calls, 'Gap modules still receive low.' );
+		// No public $registered may be read from outside (core keeps it private).
+		$this->assertFalse( isset( $fake->registered ), 'The legacy double must not expose a public $registered property.' );
 	}
 }
 
@@ -1391,17 +1625,37 @@ if ( ! class_exists( 'WP_Script_Modules' ) ) {
 	 * Core is not loaded here; apply_module_loading_strategies() guards on
 	 * class_exists( 'WP_Script_Modules' ), so the probe needs a target. The
 	 * fake modules instance used by the tests is an anonymous class carrying
-	 * the same public $registered store plus the set_* methods.
+	 * the same private store shape as core plus the get_registered() /
+	 * get_print_queue() getters and the set_* methods.
 	 *
 	 * @package PerformanceOptimise\Tests
 	 */
 	class WP_Script_Modules {
 		/**
-		 * Registered modules.
+		 * Registered modules (private in core).
 		 *
 		 * @var array
 		 */
-		public $registered = array();
+		private $registered = array();
+
+		/**
+		 * Return the print queue.
+		 *
+		 * @return string[]
+		 */
+		public function get_print_queue() {
+			return array_keys( $this->registered );
+		}
+
+		/**
+		 * Return a single registered module.
+		 *
+		 * @param string $id Module id.
+		 * @return array|null
+		 */
+		public function get_registered( $id ) {
+			return $this->registered[ $id ] ?? null;
+		}
 	}
 }
 
