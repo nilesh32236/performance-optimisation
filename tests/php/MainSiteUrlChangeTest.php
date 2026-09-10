@@ -185,22 +185,40 @@ class WPPO_SiteUrl_FS_Mock {
 	public $put_contents = '';
 
 	/**
+	 * Contents keyed by put_contents() path, modelling the atomic
+	 * tmp-plus-rename write flow (reads see prior writes).
+	 *
+	 * @var array
+	 */
+	public $put_paths = array();
+
+	/**
 	 * Simulate file existence.
 	 *
-	 * @param string $path File path (unused).
+	 * Paths previously written via put_contents() (and not deleted) read
+	 * back, so the atomic-write verification passes.
+	 *
+	 * @param string $path File path.
 	 * @return bool
 	 */
 	public function exists( $path ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+		if ( isset( $this->put_paths[ $path ] ) ) {
+			return true;
+		}
 		return $this->file_exists;
 	}
 
 	/**
-	 * Return the configured file contents.
+	 * Return the configured file contents, or the last contents written to
+	 * the requested path.
 	 *
-	 * @param string $path File path (unused).
+	 * @param string $path File path.
 	 * @return string
 	 */
-	public function get_contents( $path ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+	public function get_contents( $path ) {
+		if ( isset( $this->put_paths[ $path ] ) ) {
+			return $this->put_paths[ $path ];
+		}
 		return $this->contents;
 	}
 
@@ -213,8 +231,25 @@ class WPPO_SiteUrl_FS_Mock {
 	 * @return true
 	 */
 	public function put_contents( $path, $contents, $chmod = 0 ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found, Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-		$this->put_called   = true;
-		$this->put_contents = $contents;
+		$this->put_called         = true;
+		$this->put_contents       = $contents;
+		$this->put_paths[ $path ] = $contents;
+		return true;
+	}
+
+	/**
+	 * Record a rename of the tmp sibling onto the final path.
+	 *
+	 * @param string $src       Source path.
+	 * @param string $dst       Destination path.
+	 * @param bool   $overwrite Overwrite flag (unused).
+	 * @return true
+	 */
+	public function move( $src, $dst, $overwrite = false ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		if ( isset( $this->put_paths[ $src ] ) ) {
+			$this->put_paths[ $dst ] = $this->put_paths[ $src ];
+			unset( $this->put_paths[ $src ] );
+		}
 		return true;
 	}
 
@@ -225,6 +260,7 @@ class WPPO_SiteUrl_FS_Mock {
 	 * @return true
 	 */
 	public function delete( $path ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+		unset( $this->put_paths[ $path ] );
 		return true;
 	}
 }

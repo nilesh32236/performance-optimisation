@@ -372,6 +372,19 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	 * and the idle timeout falls back to 3000.
 	 */
 	public function test_inp_preset_off_falls_back_to_interaction(): void {
+		$this->stub_main_construction(
+			array(
+				'delayJS' => true,
+			)
+		);
+
+		$main = new Main();
+
+		$this->assertSame( 'interaction', $this->invoke_private_method( $main, 'get_delay_strategy_for_handle', 'totally-unrelated-handle' ) );
+		$this->assertSame( 3000, $this->read_private_prop( $main, 'delay_js_idle_timeout' ) );
+	}
+
+	/**
 	 * Test that the Delay-JS preset exclusions are safe by default (Woo, Elementor, forms).
 	 *
 	 * @since NEXT
@@ -385,8 +398,11 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 
 		$main = new Main();
 
-		$this->assertSame( 'interaction', $this->invoke_private_method( $main, 'get_delay_strategy_for_handle', 'totally-unrelated-handle' ) );
-		$this->assertSame( 3000, $this->read_private_prop( $main, 'delay_js_idle_timeout' ) );
+		$preset = $this->invoke_private_method( $main, 'get_delay_js_preset_exclusions' );
+
+		foreach ( array( 'woocommerce', 'wc-checkout', 'cart-fragments', 'elementor', 'elementor-frontend', 'contact-form-7', 'wpcf7', 'gravityforms', 'gform', 'wpforms', 'ninja-forms', 'fluentform', 'jquery', 'stripe' ) as $entry ) {
+			$this->assertContains( $entry, $preset );
+		}
 	}
 
 	/**
@@ -442,11 +458,24 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	 * fails open (un-delayed tag, never fatal).
 	 */
 	public function test_delay_excluded_context_on_cart_returns_tag_unmodified(): void {
-		$preset = $this->invoke_private_method( $main, 'get_delay_js_preset_exclusions' );
+		$this->stub_main_construction(
+			array(
+				'delayJS' => true,
+			)
+		);
+		$this->reset_delay_guard_superglobals();
+		$this->stub_guard_request_env();
+		Functions\when( 'is_cart' )->justReturn( true );
 
-		foreach ( array( 'woocommerce', 'wc-checkout', 'cart-fragments', 'elementor', 'elementor-frontend', 'contact-form-7', 'wpcf7', 'gravityforms', 'gform', 'wpforms', 'ninja-forms', 'fluentform', 'jquery', 'stripe' ) as $entry ) {
-			$this->assertContains( $entry, $preset );
-		}
+		$main = new Main();
+
+		$this->assertTrue( $main->is_delay_excluded_context() );
+
+		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for add_defer_attribute() tests.
+		$tag = '<script src="https://example.com/app.js" type="text/javascript"></script>';
+		$this->assertSame( $tag, $main->add_defer_attribute( $tag, 'app' ) );
+
+		$this->reset_delay_guard_superglobals();
 	}
 
 	/**
@@ -483,19 +512,20 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	 */
 	#[\PHPUnit\Framework\Attributes\DataProvider( 'woo_tag_provider' )]
 	public function test_delay_excluded_context_on_woo_tags( string $tag_function ): void {
-
-		// Pin all safe-context conditionals false: earlier suites leave
-		// stale Brain Monkey function definitions behind, so absence of a
-		// mock cannot be relied on for determinism here.
-		Functions\when( 'is_cart' )->justReturn( false );
-		Functions\when( 'is_checkout' )->justReturn( false );
-		Functions\when( 'is_account_page' )->justReturn( false );
-		Functions\when( 'is_wc_endpoint_url' )->justReturn( false );
-		Functions\when( 'get_the_ID' )->justReturn( 0 );
+		$this->stub_main_construction(
+			array(
+				'delayJS' => true,
+			)
+		);
+		$this->reset_delay_guard_superglobals();
+		$this->stub_guard_request_env();
+		Functions\when( $tag_function )->justReturn( true );
 
 		$main = new Main();
 
-		$this->assertFalse( $main->is_delay_js_safe_context() );
+		$this->assertTrue( $main->is_delay_excluded_context(), "Expected {$tag_function}() to mark an excluded delay context." );
+
+		$this->reset_delay_guard_superglobals();
 	}
 
 	/**
@@ -560,15 +590,26 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 				'delayJS' => true,
 			)
 		);
-		$this->reset_delay_guard_superglobals();
-		$this->stub_guard_request_env();
-		Functions\when( $tag_function )->justReturn( true );
+
+		Functions\when( 'is_cart' )->justReturn( false );
+		Functions\when( 'is_checkout' )->justReturn( false );
+		Functions\when( 'is_account_page' )->justReturn( false );
+		Functions\when( 'is_wc_endpoint_url' )->justReturn( false );
+		Functions\when( 'get_the_ID' )->justReturn( 42 );
+		Functions\when( 'has_shortcode' )->alias(
+			static function ( $content, $shortcode ) {
+				return 'contact-form-7' === $shortcode && false !== strpos( $content, '[contact-form-7]' );
+			}
+		);
+		Functions\when( 'get_post_field' )->alias(
+			static function ( $field ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+				return 'post_content' === $field ? '[contact-form-7]' : '';
+			}
+		);
 
 		$main = new Main();
 
-		$this->assertTrue( $main->is_delay_excluded_context(), "Expected {$tag_function}() to mark an excluded delay context." );
-
-		$this->reset_delay_guard_superglobals();
+		$this->assertTrue( $main->is_delay_js_safe_context() );
 	}
 
 	/**
@@ -600,6 +641,12 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		$this->reset_delay_guard_superglobals();
 		$this->stub_guard_request_env();
 		$_SERVER['REQUEST_URI'] = $request_uri;
+
+		// Pin is_wc_endpoint_url false: earlier tests declare it process-wide
+		// via Brain Monkey, and a stale declaration without an expectation
+		// throws MissingFunctionExpectations, which the guardrail (correctly)
+		// fails open on — flipping the `false` fixtures to true.
+		Functions\when( 'is_wc_endpoint_url' )->justReturn( false );
 
 		$main = new Main();
 
@@ -771,22 +818,6 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		$this->assertStringContainsString( 'wppo/javascript', $delayed->get_minified_html() );
 
 		$this->reset_delay_guard_superglobals();
-		Functions\when( 'is_wc_endpoint_url' )->justReturn( false );
-		Functions\when( 'get_the_ID' )->justReturn( 42 );
-		Functions\when( 'has_shortcode' )->alias(
-			static function ( $content, $shortcode ) {
-				return 'contact-form-7' === $shortcode && false !== strpos( $content, '[contact-form-7]' );
-			}
-		);
-		Functions\when( 'get_post_field' )->alias(
-			static function ( $field ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-				return 'post_content' === $field ? '[contact-form-7]' : '';
-			}
-		);
-
-		$main = new Main();
-
-		$this->assertTrue( $main->is_delay_js_safe_context() );
 	}
 
 	/**
