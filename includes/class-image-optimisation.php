@@ -155,6 +155,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private static array $img_size_cache = array();
 
 		/**
+		 * Per-request random namespace for noscript placeholder tokens.
+		 *
+		 * In-memory only (never persisted to `wppo_settings`), so it is
+		 * multisite-safe by construction: each request/instance mints its own
+		 * namespace and only tokens carrying it can be restored.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		private string $noscript_namespace = '';
+
+		/**
 		 * Clear the per-request runtime caches (file_exists + image sizes).
 		 *
 		 * Called on switch_blog (absolute paths from another site must not be
@@ -317,6 +329,179 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Get (and lazily mint) the per-request noscript token namespace.
+		 *
+		 * Uses cryptographically random hex via `random_bytes()` when available,
+		 * falling back to `wp_generate_password()` (sanitized to alphanumerics)
+		 * and finally to a `uniqid()`/`wp_rand()` token. Never fatals: any
+		 * failure degrades to a static fallback namespace (fail-open).
+		 *
+		 * @since NEXT
+		 * @return string Non-empty namespace string.
+		 */
+		private function get_noscript_namespace(): string {
+			if ( '' !== $this->noscript_namespace ) {
+				return $this->noscript_namespace;
+			}
+
+			try {
+				if ( function_exists( 'random_bytes' ) ) {
+					$bytes = random_bytes( 8 );
+					if ( is_string( $bytes ) && '' !== $bytes ) {
+						$this->noscript_namespace = 'wppo' . bin2hex( $bytes );
+						return $this->noscript_namespace;
+					}
+				}
+
+				if ( function_exists( 'wp_generate_password' ) ) {
+					$generated = wp_generate_password( 16, false );
+					if ( is_string( $generated ) && '' !== $generated ) {
+						$sanitized = preg_replace( '/[^A-Za-z0-9]/', '', $generated );
+						if ( is_string( $sanitized ) && '' !== $sanitized ) {
+							$this->noscript_namespace = 'wppo' . $sanitized;
+							return $this->noscript_namespace;
+						}
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
+			// Legacy fallback (fail-open, never fatal): wp_rand() when available,
+			// otherwise uniqid() + microtime() entropy. No mt_rand() (discouraged).
+			if ( function_exists( 'wp_rand' ) ) {
+				$suffix = (string) wp_rand( 1000, 9999 );
+			} else {
+				$suffix = str_replace( '.', '', (string) microtime( true ) );
+			}
+			$this->noscript_namespace = 'wppo' . str_replace( '.', '', uniqid( '', true ) ) . $suffix;
+			$this->noscript_namespace = (string) preg_replace( '/[^A-Za-z0-9]/', '', $this->noscript_namespace );
+			if ( '' === $this->noscript_namespace ) {
+				$this->noscript_namespace = 'wppofallback';
+			}
+
+			return $this->noscript_namespace;
+		}
+
+		/**
+		 * Resolve a single noscript placeholder token against the allowlist.
+		 *
+		 * Strict restore discipline (CVE-2026-3220 shape): the token must be an
+		 * exact key of `$noscript_tokens`, carry this request's namespace
+		 * (constant-time comparison), and reference a bounds-checked index. Any
+		 * anomaly returns null so the caller emits the node unmodified
+		 * (fail-open).
+		 *
+		 * @since NEXT
+		 * @param string $token           The matched placeholder comment.
+		 * @param array  $noscript_tokens The exact-token allowlist (token => HTML).
+		 * @return string|null Restored HTML, or null on anomaly.
+		 */
+		private function resolve_noscript_token( string $token, array $noscript_tokens ): ?string {
+			if ( ! isset( $noscript_tokens[ $token ] ) || ! is_string( $noscript_tokens[ $token ] ) ) {
+				return null;
+			}
+
+			if ( 1 !== preg_match( '/^<!--WPPO_NOSCRIPT_([A-Za-z0-9]+)_(\d+)-->$/', $token, $matches ) ) {
+				return null;
+			}
+
+			$namespace          = $matches[1];
+			$index_raw          = $matches[2];
+			$namespace_expected = $this->noscript_namespace;
+
+			if ( '' === $namespace_expected || '' === $namespace ) {
+				return null;
+			}
+
+			if ( strlen( $namespace ) !== strlen( $namespace_expected ) ) {
+				return null;
+			}
+
+			if ( function_exists( 'hash_equals' ) ) {
+				if ( ! hash_equals( $namespace_expected, $namespace ) ) {
+					return null;
+				}
+			} elseif ( $namespace !== $namespace_expected ) {
+				return null;
+			}
+
+			if ( ! ctype_digit( $index_raw ) ) {
+				return null;
+			}
+
+			$index = (int) $index_raw;
+			if ( $index < 0 || $index >= count( $noscript_tokens ) ) {
+				return null;
+			}
+
+			return $noscript_tokens[ $token ];
+		}
+
+		/**
+		 * Restore stashed `<noscript>` blocks via strict allowlist lookup.
+		 *
+		 * Unknown, foreign-namespace, or out-of-range tokens pass through
+		 * unmodified (fail-open) so attacker-controlled markup shaped like a
+		 * token stays inert. PCRE failure degrades to the unmodified buffer.
+		 *
+		 * @since NEXT
+		 * @param string $buffer          The HTML buffer containing tokens.
+		 * @param array  $noscript_tokens The exact-token allowlist (token => HTML).
+		 * @return string Buffer with known tokens restored.
+		 */
+		private function restore_noscript_tokens( string $buffer, array $noscript_tokens ): string {
+			if ( array() === $noscript_tokens ) {
+				return $buffer;
+			}
+
+			$restored = preg_replace_callback(
+				'/<!--WPPO_NOSCRIPT_[A-Za-z0-9_-]+_\d+-->/',
+				function ( $matches ) use ( $noscript_tokens ) {
+					$resolved = $this->resolve_noscript_token( $matches[0], $noscript_tokens );
+					return null !== $resolved ? $resolved : $matches[0];
+				},
+				$buffer
+			);
+
+			return null !== $restored ? $restored : $buffer;
+		}
+
+		/**
+		 * Whether a lazy `data-src` value is safe to rewrite with a placeholder.
+		 *
+		 * Fail-open ownership gate: hostile placeholder-shaped input (empty,
+		 * oversized, markup-bearing, or dangerous-scheme `data-src`) is not a
+		 * locally generated lazy node and must be emitted unmodified without
+		 * any placeholder rewrite.
+		 *
+		 * @since NEXT
+		 * @param string $data_src The `data-src` URL of the image.
+		 * @return bool True when the node may receive a placeholder `src`.
+		 */
+		private function is_valid_lazy_placeholder_candidate( string $data_src ): bool {
+			$data_src = trim( $data_src );
+			if ( '' === $data_src ) {
+				return false;
+			}
+			if ( strlen( $data_src ) > 2048 ) {
+				return false;
+			}
+			if ( str_contains( $data_src, '<' ) || str_contains( $data_src, '>' ) ) {
+				return false;
+			}
+			$lower = strtolower( ltrim( $data_src ) );
+			if (
+				str_starts_with( $lower, 'javascript:' )
+				|| str_starts_with( $lower, 'vbscript:' )
+				|| str_starts_with( $lower, 'data:text/html' )
+			) {
+				return false;
+			}
+			return true;
+		}
+
+		/**
 		 * Post-processes the serialized buffer to inject placeholders into lazy-loaded images
 		 * that have data-src but no src attribute. Called after the WP_HTML_Tag_Processor pass.
 		 *
@@ -328,6 +513,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * (`IMG_SIZE_CACHE_LIMIT` / `FILE_EXISTS_CACHE_LIMIT`). Merging into a single
 		 * pass would conflate concerns and break the dimensions→auto-sizes ordering
 		 * dependency. The three-pass cost is linear and acceptable (see audit D-14).
+		 *
+		 * Anomaly gate: candidate nodes failing {@see is_valid_lazy_placeholder_candidate()}
+		 * are emitted unmodified without any lazy/placeholder rewrite (fail-open).
 		 *
 		 * @since NEXT
 		 *
@@ -354,7 +542,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					if ( preg_match( '#\ssrc=#i', $img_tag ) ) {
 						return $img_tag;
 					}
-					$data_src    = $matches[1];
+					$data_src = $matches[1];
+					// Fail-open: hostile placeholder-shaped input is emitted
+					// unmodified without any lazy/placeholder rewrite.
+					if ( ! $this->is_valid_lazy_placeholder_candidate( $data_src ) ) {
+						return $img_tag;
+					}
 					$placeholder = $this->get_placeholder_src_for_image( $img_tag, $data_src );
 					if ( ! empty( $placeholder['src'] ) ) {
 						$extra_attrs = '';
@@ -404,8 +597,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$data_src = $processor->get_attribute( 'data-src' );
 					$src      = $processor->get_attribute( 'src' );
 					if ( null !== $data_src && null === $src ) {
-						$tok_html    = $processor->serialize_token();
-						$decoded     = (string) $data_src;
+						$tok_html = $processor->serialize_token();
+						$decoded  = (string) $data_src;
+						// Fail-open: hostile placeholder-shaped input is emitted
+						// unmodified without any lazy/placeholder rewrite.
+						if ( ! $this->is_valid_lazy_placeholder_candidate( $decoded ) ) {
+							$out .= $tok_html;
+							continue;
+						}
 						$placeholder = $this->get_placeholder_src_for_image( $tok_html, $decoded );
 						if ( ! empty( $placeholder['src'] ) ) {
 							$processor->set_attribute( 'src', $placeholder['src'] );
@@ -3448,16 +3647,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				);
 			}
 
-			$noscript_tokens = array();
-			$buffer          = preg_replace_callback(
+			$noscript_tokens    = array();
+			$noscript_namespace = $this->get_noscript_namespace();
+			$extracted          = preg_replace_callback(
 				'#<noscript>.*?</noscript>#is',
-				function ( $m ) use ( &$noscript_tokens ) {
-					$token                     = '<!--WPPO_NOSCRIPT_' . count( $noscript_tokens ) . '-->';
+				function ( $m ) use ( &$noscript_tokens, $noscript_namespace ) {
+					$token                     = '<!--WPPO_NOSCRIPT_' . $noscript_namespace . '_' . count( $noscript_tokens ) . '-->';
 					$noscript_tokens[ $token ] = $m[0];
 					return $token;
 				},
 				$buffer
 			);
+			// PCRE failure: degrade to the unmodified buffer, never fatal.
+			if ( null !== $extracted ) {
+				$buffer = $extracted;
+			}
 
 			if ( ! empty( $image_optimisation['lazyLoadImages'] ) ) {
 				$exclude_imgs = $this->exclude_lazy_imgs;
@@ -3733,7 +3937,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 			}
 
-			$buffer = strtr( $buffer, $noscript_tokens );
+			$buffer = $this->restore_noscript_tokens( $buffer, $noscript_tokens );
 			return $buffer;
 		}
 
