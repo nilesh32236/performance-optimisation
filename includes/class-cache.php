@@ -335,8 +335,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$this->request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
 			$url_path          = wp_normalize_path( trim( rawurldecode( (string) wp_parse_url( $this->request_uri, PHP_URL_PATH ) ), '/' ) );
 
-			// Reject directory traversal.
-			if ( strpos( $url_path, '..' ) !== false ) {
+			// Reject directory traversal and null-byte probes (serve uncached).
+			if ( false !== strpos( $url_path, "\0" ) || false !== strpos( $url_path, '..' ) ) {
 				$url_path = '';
 			}
 
@@ -1738,7 +1738,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$this->no_cache_marker_written = true;
 
 			$html_file_path = $this->get_cache_file_path( 'html' );
-			$marker_path    = trailingslashit( dirname( $html_file_path ) ) . '.wppo-no-cache';
+			if ( '' === $html_file_path ) {
+				return;
+			}
+			$marker_path = trailingslashit( dirname( $html_file_path ) ) . '.wppo-no-cache';
+			if ( ! $this->is_path_contained( $marker_path ) ) {
+				$this->log_traversal_probe( $this->url_path );
+				return;
+			}
 
 			$fs = $this->get_filesystem();
 			if ( ! $fs ) {
@@ -1935,7 +1942,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$parsed_path    = wp_parse_url( $this->request_uri, PHP_URL_PATH );
 			$local_url_path = wp_normalize_path( trim( rawurldecode( (string) $parsed_path ), '/' ) );
 
-			if ( strpos( $local_url_path, '..' ) !== false ) {
+			if ( false !== strpos( $local_url_path, "\0" ) || false !== strpos( $local_url_path, '..' ) ) {
 				return true;
 			}
 
@@ -1993,14 +2000,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		private function get_cache_file_path( $type = 'html', string $role_hash = '', string $variant = '' ): string {
-			if ( '' === $this->cache_root_dir ) {
+			if ( '' === $this->cache_root_dir || '' === $this->domain ) {
+				return '';
+			}
+			if ( false !== strpos( $this->url_path, "\0" ) || false !== strpos( $this->url_path, '..' ) ) {
 				return '';
 			}
 			$suffix = $role_hash ? "-{$role_hash}" : '';
 			if ( $variant ) {
 				$suffix .= "-{$variant}";
 			}
-			return "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $this->url_path ? "index{$suffix}.{$type}" : "{$this->url_path}/index{$suffix}.{$type}" );
+			$resolved = "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $this->url_path ? "index{$suffix}.{$type}" : "{$this->url_path}/index{$suffix}.{$type}" );
+			if ( ! $this->is_path_contained( $resolved ) ) {
+				$this->log_traversal_probe( $this->url_path );
+				return '';
+			}
+			return $resolved;
 		}
 
 		/**
@@ -2041,7 +2056,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		private function prepare_cache_dir(): bool {
-			return Util::prepare_cache_dir( "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $this->url_path ? '' : "/{$this->url_path}" ) );
+			$target = "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $this->url_path ? '' : "/{$this->url_path}" );
+			if ( ! $this->is_path_contained( trailingslashit( $target ) ) ) {
+				$this->log_traversal_probe( $this->url_path );
+				return false;
+			}
+			return Util::prepare_cache_dir( $target );
 		}
 
 		/**
@@ -2086,6 +2106,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since NEXT
 		 */
 		private function save_cache_files( $buffer, $file_path, $type = 'html' ): void {
+			if ( '' === (string) $file_path || ! $this->is_path_contained( (string) $file_path ) ) {
+				$this->log_traversal_probe( (string) $file_path );
+				return;
+			}
 
 			// Only evaluate the storage decision for HTML writes so the DONOTCACHEPAGE
 			// side effects never fire for CSS/JS file saves.
@@ -2176,6 +2200,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since NEXT
 		 */
 		private function save_processed_buffer( string $buffer, string $file_path ): void {
+			if ( '' === $file_path || ! $this->is_path_contained( $file_path ) ) {
+				$this->log_traversal_probe( $file_path );
+				return;
+			}
 			if ( ! $this->get_filesystem() || ! $this->prepare_cache_dir() ) {
 				return;
 			}
@@ -2235,7 +2263,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return false;
 			}
 
-			if ( empty( $this->domain ) || strpos( $this->url_path, '..' ) !== false ) {
+			if ( empty( $this->domain ) || false !== strpos( $this->url_path, "\0" ) || false !== strpos( $this->url_path, '..' ) ) {
 				// Prevent empty domain caching which could occur after traversal sanitation.
 				return false;
 			}
@@ -2374,12 +2402,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			 */
 			$urls = (array) apply_filters( 'wppo_invalidation_urls', $urls, $page_id );
 
-			// Sanitize: normalize, reject traversal, dedupe.
+			// Sanitize: normalize, reject traversal and null bytes, dedupe.
 			$sanitized = array();
 			foreach ( $urls as $u ) {
 				$u = is_string( $u ) ? $u : (string) $u;
 				$u = wp_normalize_path( trim( $u, '/' ) );
-				if ( '' !== $u && strpos( $u, '..' ) !== false ) {
+				if ( '' !== $u && ( false !== strpos( $u, "\0" ) || false !== strpos( $u, '..' ) ) ) {
 					continue;
 				}
 				$sanitized[] = $u;
@@ -2512,16 +2540,189 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 1.1.1
 		 */
-		private function get_file_path( ?string $url_path = null, string $type = 'html' ): string {
-			$url_path = wp_normalize_path( trim( (string) $url_path, '/' ) );
+		/**
+		 * Whether a traversal probe has been logged this request.
+		 *
+		 * Rate-limits activity-log writes so a hostile crawler cannot flood
+		 * the log table with one entry per request path probe.
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static bool $traversal_probe_logged = false;
 
-			if ( strpos( $url_path, '..' ) !== false ) {
-				return ''; // Return empty string to prevent deletion or creation outside cache root.
+		/**
+		 * Sanitize a URL path for cache file mapping.
+		 *
+		 * Uses only the PHP_URL_PATH component, applies exactly one
+		 * rawurldecode pass (single-decode semantics: `%252e` stays encoded
+		 * on disk and is never re-decoded), then rejects null bytes, any
+		 * remaining `..` segments, and Windows drive prefixes. Returns an
+		 * empty string for hostile or empty input.
+		 *
+		 * @since NEXT
+		 * @param string|null $url_path Raw URL path or URL.
+		 * @return string Sanitized relative path or empty string.
+		 */
+		private static function sanitize_cache_url_path( ?string $url_path ): string {
+			$raw_input = (string) $url_path;
+
+			// Reject Windows drive prefixes and UNC roots before URL parsing
+			// (parse_url() would otherwise strip `C:` as a scheme and hide
+			// the absolute-path smuggling attempt).
+			$trimmed_raw = ltrim( $raw_input );
+			if ( '' !== $trimmed_raw && ( preg_match( '#^[a-zA-Z]:#', $trimmed_raw ) || 0 === strpos( $trimmed_raw, '\\\\' ) ) ) {
+				return '';
+			}
+
+			if ( function_exists( 'wp_parse_url' ) ) {
+				$parsed = wp_parse_url( $raw_input, PHP_URL_PATH );
+			} else {
+				$parsed = parse_url( $raw_input, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
+			}
+
+			$path_component = ( null === $parsed || false === $parsed ) ? $raw_input : (string) $parsed;
+
+			$decoded = function_exists( 'rawurldecode' ) ? rawurldecode( $path_component ) : $path_component;
+
+			if ( false !== strpos( $decoded, "\0" ) ) {
+				return '';
+			}
+
+			if ( function_exists( 'wp_normalize_path' ) ) {
+				$normalized = wp_normalize_path( trim( $decoded, '/' ) );
+			} else {
+				$normalized = str_replace( '\\', '/', trim( $decoded, '/' ) );
+			}
+
+			if ( false !== strpos( $normalized, "\0" ) || false !== strpos( $normalized, '..' ) ) {
+				return '';
+			}
+
+			if ( '' !== $normalized && preg_match( '#^[a-zA-Z]:#', $normalized ) ) {
+				return '';
+			}
+
+			return $normalized;
+		}
+
+		/**
+		 * Whether an absolute path stays inside the cache tree.
+		 *
+		 * Dual-prefix containment: the normalized path must start with both
+		 * the cache root and the per-domain directory (trailing-slash aware
+		 * so `wppo-evil` never prefix-matches `wppo`). Empty root or domain
+		 * fails closed.
+		 *
+		 * @since NEXT
+		 * @param string $path Absolute file or directory path.
+		 * @return bool True when contained.
+		 */
+		private function is_path_contained( string $path ): bool {
+			if ( '' === $this->cache_root_dir || '' === $this->domain ) {
+				return false;
+			}
+
+			if ( function_exists( 'wp_normalize_path' ) ) {
+				$norm = wp_normalize_path( $path );
+				$root = wp_normalize_path( $this->cache_root_dir );
+			} else {
+				$norm = str_replace( '\\', '/', $path );
+				$root = str_replace( '\\', '/', $this->cache_root_dir );
+			}
+
+			$root       = rtrim( $root, '/' ) . '/';
+			$domain_dir = $root . trim( $this->domain, '/' ) . '/';
+
+			return 0 === strpos( $norm, $root ) && 0 === strpos( $norm, $domain_dir );
+		}
+
+		/**
+		 * Log a blocked cache path traversal probe (once per request).
+		 *
+		 * Never throws: failures degrade silently to serving uncached.
+		 *
+		 * @since NEXT
+		 * @param string $raw_input The hostile input that was rejected.
+		 * @return void
+		 */
+		private function log_traversal_probe( string $raw_input ): void {
+			if ( self::$traversal_probe_logged ) {
+				return;
+			}
+			self::$traversal_probe_logged = true;
+
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
+					return;
+				}
+				$snippet = str_replace( "\0", '', (string) $raw_input );
+				if ( function_exists( 'sanitize_text_field' ) ) {
+					$snippet = sanitize_text_field( $snippet );
+				}
+				$snippet = substr( $snippet, 0, 200 );
+				$message = function_exists( '__' ) ? __( 'Blocked cache path traversal probe.', 'performance-optimisation' ) : 'Blocked cache path traversal probe.';
+				if ( '' !== $snippet ) {
+					$message .= ' ' . $snippet;
+				}
+				Log::add( $message );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Get the file path for a specific page.
+		 *
+		 * Hardened against cache-key path traversal (CVE-2026-3129 follow-up):
+		 * only the PHP_URL_PATH component is used, exactly one rawurldecode
+		 * pass is applied, and null bytes plus `..` segments are rejected.
+		 * The resolved path must pass dual-prefix containment before it is
+		 * returned; otherwise an empty string is returned and the probe is
+		 * logged so the request is served uncached.
+		 *
+		 * @param string|null $url_path The URL path (optional).
+		 * @param string      $type The file type (default: 'html').
+		 * @return string The file path.
+		 *
+		 * @since 1.1.1
+		 */
+		private function get_file_path( ?string $url_path = null, string $type = 'html' ): string {
+			$raw_input = (string) $url_path;
+			$url_path  = self::sanitize_cache_url_path( $url_path );
+
+			if ( '' === $this->cache_root_dir || '' === $this->domain ) {
+				return '';
+			}
+
+			if ( '' === $url_path && '' !== trim( $raw_input ) ) {
+				// Distinguish the benign homepage ('/', '') from a rejected
+				// hostile input: only log when the raw path component is
+				// non-empty after trimming slashes and whitespace.
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$raw_component = wp_parse_url( $raw_input, PHP_URL_PATH );
+				} else {
+					$raw_component = parse_url( $raw_input, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
+				}
+				if ( null === $raw_component || false === $raw_component ) {
+					$raw_component = $raw_input;
+				}
+				if ( '' !== trim( trim( (string) $raw_component ), '/' ) ) {
+					$this->log_traversal_probe( $raw_input );
+					return ''; // Return empty string to prevent deletion or creation outside cache root.
+				}
 			}
 
 			$filename = 'used-css' === $type ? 'used-css.css' : "index.{$type}";
 
-			return "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $url_path ? $filename : "{$url_path}/{$filename}" );
+			$resolved = "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $url_path ? $filename : "{$url_path}/{$filename}" );
+
+			if ( ! $this->is_path_contained( $resolved ) ) {
+				$this->log_traversal_probe( $raw_input );
+				return '';
+			}
+
+			return $resolved;
 		}
 
 		/**
@@ -2545,7 +2746,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.9.0
 		 */
 		private function delete_no_cache_marker( string $html_file_path ): void {
-			$this->delete_cache_files( trailingslashit( dirname( $html_file_path ) ) . '.wppo-no-cache' );
+			$marker = trailingslashit( dirname( $html_file_path ) ) . '.wppo-no-cache';
+			if ( ! $this->is_path_contained( $marker ) ) {
+				$this->log_traversal_probe( $html_file_path );
+				return;
+			}
+			$this->delete_cache_files( $marker );
 		}
 
 		/**
@@ -2557,6 +2763,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.1.0
 		 */
 		private function delete_cache_files( $file_path ): bool {
+			if ( '' === (string) $file_path || ! $this->is_path_contained( (string) $file_path ) ) {
+				$this->log_traversal_probe( (string) $file_path );
+				return false;
+			}
 			$gzip_file_path = $file_path . '.gz';
 			$br_file_path   = $file_path . '.br';
 
@@ -2579,6 +2789,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.9.0
 		 */
 		private function delete_role_variant_files( string $dir ): void {
+			if ( '' === $dir || ! $this->is_path_contained( trailingslashit( $dir ) ) ) {
+				$this->log_traversal_probe( $dir );
+				return;
+			}
 			$fs = $this->get_filesystem();
 			if ( ! $fs || ! $fs->is_dir( $dir ) ) {
 				return;
@@ -2625,9 +2839,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			if ( $url_path ) {
-				$url_path = wp_normalize_path( $url_path );
+				$raw_clear_path = (string) $url_path;
+				$url_path       = wp_normalize_path( $raw_clear_path );
 
-				if ( strpos( $url_path, '..' ) !== false ) {
+				if ( false !== strpos( $url_path, "\0" ) || false !== strpos( $url_path, '..' ) ) {
 					return false;
 				}
 
@@ -2636,6 +2851,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$used_css_path  = $instance->get_file_path( $url_path, 'used-css' );
 
 				if ( empty( $html_file_path ) || empty( $css_file_path ) || empty( $used_css_path ) ) {
+					return false;
+				}
+
+				if ( ! $instance->is_path_contained( $html_file_path ) || ! $instance->is_path_contained( $css_file_path ) || ! $instance->is_path_contained( $used_css_path ) ) {
+					$instance->log_traversal_probe( $raw_clear_path );
 					return false;
 				}
 
