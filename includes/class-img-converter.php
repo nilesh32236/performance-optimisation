@@ -494,6 +494,163 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		}
 
 		/**
+		 * Check whether an absolute filesystem path stays inside the plugin's read allowlist.
+		 *
+		 * Normalizes with `wp_normalize_path()` when available, rejects NUL
+		 * bytes and URL-encoded/parent traversal, then requires containment
+		 * inside `ABSPATH` (outer bound) or `WP_CONTENT_DIR`. Never returns
+		 * true for relative paths, URLs, or empty strings. Multisite-safe:
+		 * uses only constants, no per-site state.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $path Absolute filesystem path to check.
+		 * @return bool True when the path is inside the allowlist.
+		 */
+		public static function is_path_in_allowlist( string $path ): bool {
+			if ( '' === $path || false !== strpos( $path, "\0" ) ) {
+				return false;
+			}
+			// Reject URL-encoded traversal (`%2e%2e`, `%2f`) before normalization.
+			if ( false !== strpos( rawurldecode( $path ), '..' ) ) {
+				return false;
+			}
+			$normalized = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $path ) : str_replace( '\\', '/', $path );
+			if ( false !== strpos( $normalized, '..' ) ) {
+				return false;
+			}
+			// Only absolute filesystem paths qualify — never URLs or relative paths.
+			if ( false !== strpos( $normalized, '://' ) ) {
+				return false;
+			}
+			if ( ! defined( 'ABSPATH' ) || ! defined( 'WP_CONTENT_DIR' ) ) {
+				return false;
+			}
+			$abspath   = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( ABSPATH ) : str_replace( '\\', '/', ABSPATH );
+			$content   = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( WP_CONTENT_DIR ) : str_replace( '\\', '/', WP_CONTENT_DIR );
+			$abspath   = rtrim( $abspath, '/' ) . '/';
+			$content   = rtrim( $content, '/' ) . '/';
+			$candidate = rtrim( $normalized, '/' );
+			return 0 === strpos( $candidate . '/', $abspath ) || 0 === strpos( $candidate . '/', $content );
+		}
+
+		/**
+		 * Check whether a path is safe to unlink (strict delete allowlist).
+		 *
+		 * Delete targets must live inside the per-site uploads directory
+		 * (blog-aware via `get_current_blog_id()`, guarded) or the plugin's
+		 * `wppo` output directory under `WP_CONTENT_DIR`. Anything else —
+		 * including other `ABSPATH` locations — is refused so a traversal or
+		 * passthrough value from `get_img_path()` can never reach
+		 * `wp_delete_file()`.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $path Absolute filesystem path proposed for deletion.
+		 * @return bool True when deletion is allowed.
+		 */
+		public static function is_safe_delete_path( string $path ): bool {
+			if ( ! self::is_path_in_allowlist( $path ) ) {
+				return false;
+			}
+			$normalized = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $path ) : str_replace( '\\', '/', $path );
+			$candidate  = rtrim( $normalized, '/' ) . '/';
+			if ( ! defined( 'WP_CONTENT_DIR' ) ) {
+				return false;
+			}
+			$content = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( WP_CONTENT_DIR ) : str_replace( '\\', '/', WP_CONTENT_DIR );
+			$wppo    = rtrim( $content, '/' ) . '/wppo/';
+			if ( 0 === strpos( $candidate, $wppo ) ) {
+				return true;
+			}
+			if ( function_exists( 'wp_upload_dir' ) ) {
+				$blog_id            = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
+				static $upload_dirs = array();
+				if ( ! isset( $upload_dirs[ $blog_id ] ) ) {
+					$dir                     = wp_upload_dir();
+					$base                    = isset( $dir['basedir'] ) ? (string) $dir['basedir'] : '';
+					$base                    = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $base ) : str_replace( '\\', '/', $base );
+					$upload_dirs[ $blog_id ] = '' !== $base ? rtrim( $base, '/' ) . '/' : '';
+				}
+				if ( '' !== $upload_dirs[ $blog_id ] && 0 === strpos( $candidate, $upload_dirs[ $blog_id ] ) ) {
+					return true;
+				}
+				// Converted outputs rewritten under `wppo/` keep the uploads
+				// sub-path (e.g. `wppo/uploads/2024/01/a.webp`); the prefix
+				// check above already covers them.
+			}
+			return false;
+		}
+
+		/**
+		 * Check whether a conversion output path is safe to write.
+		 *
+		 * Write targets must stay inside the read allowlist (`ABSPATH` /
+		 * `WP_CONTENT_DIR` bound) so a passthrough value from
+		 * `get_img_path()` (off-site URL returned unchanged, or `''` for a
+		 * local `..` traversal) can never reach the GD/Imagick encoders.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $path Absolute filesystem path proposed for writing.
+		 * @return bool True when writing is allowed.
+		 */
+		public static function is_safe_write_path( string $path ): bool {
+			if ( '' === $path ) {
+				return false;
+			}
+			return self::is_path_in_allowlist( $path );
+		}
+
+		/**
+		 * Channels-aware pre-decode pixel-budget check against the PHP memory limit.
+		 *
+		 * Estimates `width * height * channels` bytes (1 byte per channel)
+		 * and refuses when it exceeds half the PHP `memory_limit`, leaving
+		 * headroom for the GD bitmap plus encoder overhead. Falls back to the
+		 * `wppo_max_source_pixels` budget when the limit is unlimited or
+		 * unknown. Fail-open direction: oversize returns true (caller skips
+		 * the decode and serves the original), never fatal.
+		 *
+		 * @since NEXT
+		 *
+		 * @param int $width    Source width in pixels.
+		 * @param int $height   Source height in pixels.
+		 * @param int $channels Channel count (clamped to 1-4, default 4).
+		 * @return bool True when the image exceeds the budget and must be skipped.
+		 */
+		public function exceeds_pixel_budget( int $width, int $height, int $channels = 4 ): bool {
+			if ( $width <= 0 || $height <= 0 ) {
+				return true;
+			}
+			$channels = max( 1, min( 4, $channels ) );
+			$limit    = $this->get_php_memory_limit_bytes();
+			if ( $limit > 0 ) {
+				$estimated = (float) $width * (float) $height * (float) $channels;
+				return $estimated > ( (float) $limit * 0.5 );
+			}
+			return ( $width * $height ) > $this->get_max_source_pixels();
+		}
+
+		/**
+		 * Map a GD/Imagick image type to its decode channel count.
+		 *
+		 * JPEG decodes to 3 channels; every other raster type (PNG/WebP/GIF/
+		 * AVIF) may carry alpha, so 4 is the safe conservative estimate.
+		 *
+		 * @since NEXT
+		 *
+		 * @param int $image_type One of the `IMAGETYPE_*` constants (or 0 when unknown).
+		 * @return int Channel count (3 for JPEG, 4 otherwise).
+		 */
+		private function get_source_channels( int $image_type ): int {
+			if ( defined( 'IMAGETYPE_JPEG' ) && IMAGETYPE_JPEG === $image_type ) {
+				return 3;
+			}
+			return 4;
+		}
+
+		/**
 		 * Downscale a decoded GD image when its longest edge exceeds the cap.
 		 *
 		 * Fail-open: returns the original resource unchanged when the cap is
@@ -657,6 +814,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 */
 		public function convert_image( string $source_image, string $format = 'webp', int $quality = -1 ): bool {
 
+			// Allowlist containment: refuse traversal/passthrough sources before
+			// any filesystem, GD, or Imagick work. Fail-open: mark failed, keep
+			// the original file untouched.
+			if ( '' === $source_image || ! self::is_path_in_allowlist( $source_image ) ) {
+				$this->update_conversion_status( $source_image, 'failed', $format );
+				return false;
+			}
+
 			if ( ! in_array( $format, $this->available_format, true ) ) {
 				$this->update_conversion_status( $source_image, 'failed', $format );
 				return false;
@@ -774,14 +939,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			$check_w = (int) $image_info[0];
 			$check_h = (int) $image_info[1];
 
-			// Guard 1: pre-decode raw pixel budget.
-			$max_source_pixels = $this->get_max_source_pixels();
-			if ( ( $check_w * $check_h ) > $max_source_pixels ) {
+			// Guard 1: pre-decode channels-aware pixel budget vs the PHP
+			// memory limit (e.g. a 40MP upload on a 256M host). Oversize
+			// sources skip conversion fail-open: the original is served
+			// unoptimised and the queue entry is marked `skipped`, never
+			// `failed` and never fatal.
+			$channels = $this->get_source_channels( (int) ( $image_info[2] ?? 0 ) );
+			if ( $this->exceeds_pixel_budget( $check_w, $check_h, $channels ) ) {
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 					error_log( 'WPPO Error: Source image pixel count exceeds the pre-decode memory budget' );
 				}
-				$this->update_conversion_status( $source_image, 'failed', $format );
+				$this->update_conversion_status( $source_image, 'skipped', $format );
 				return false;
 			}
 
@@ -874,6 +1043,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 								}
 
 								$avif_path = $this->get_img_path( $source_image, 'avif' );
+								if ( ! self::is_safe_write_path( $avif_path ) ) {
+									if ( null !== $image && ( is_resource( $image ) || $image instanceof \GdImage ) ) {
+										Util::destroy_gd_image( $image );
+									}
+									$this->update_conversion_status( $source_image, 'failed', $format );
+									return false;
+								}
 								if ( ! Util::prepare_cache_dir( dirname( $avif_path ) ) ) {
 									if ( null !== $image && ( is_resource( $image ) || $image instanceof \GdImage ) ) {
 										Util::destroy_gd_image( $image );
@@ -948,12 +1124,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 								$this->update_conversion_status( $source_image, 'completed', 'webp' );
 								return true;
 							}
+							// Write-target containment: a passthrough/empty
+							// get_img_path() value must never reach Imagick.
+							if ( ! self::is_safe_write_path( $webp_path ) ) {
+								$this->update_conversion_status( $source_image, 'failed', $format );
+								return false;
+							}
 							// Initialize Imagick and read the image file.
 							// Do not hard-clamp Imagick depth to 8-bit — core's
 							// image_max_bit_depth filter (WP 6.8+, Trac #62285)
 							// preserves HDR up to 12-bit by default.
 							$imagick = new \Imagick();
 							$imagick->setResourceLimit( \Imagick::RESOURCETYPE_MEMORY, 256 * 1024 * 1024 );
+							// Bound the decoded area to the same pre-decode pixel
+							// budget so multi-frame GIFs cannot OOM the worker.
+							// Guarded for Imagick builds without the AREA type.
+							try {
+								if ( defined( 'Imagick::RESOURCETYPE_AREA' ) && method_exists( $imagick, 'setResourceLimit' ) ) {
+									$imagick->setResourceLimit( \Imagick::RESOURCETYPE_AREA, $this->get_max_source_pixels() );
+								}
+							} catch ( \Throwable $area_limit_error ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: area cap is best-effort hardening.
+							}
 							$imagick->readImage( $source_image );
 
 							// Longest-edge cap for the GIF-via-Imagick path
@@ -1036,7 +1227,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 								$imagick->clear();
 							}
 							$this->update_conversion_status( $source_image, 'failed', $format );
-							wp_delete_file( $webp_path );
+							// Strict delete containment: only unlink when the
+							// target is inside the uploads/wppo allowlist, so a
+							// traversal or passthrough path can never delete
+							// outside it. Fail-open keeps the file intact.
+							if ( self::is_safe_delete_path( $webp_path ) && function_exists( 'wp_delete_file' ) ) {
+								wp_delete_file( $webp_path );
+							}
 							return false;
 						}
 					default:
@@ -1072,7 +1269,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				if ( in_array( $encode_format, array( 'avif', 'both' ), true ) && ( $avif_first || 'webp' !== $encode_format ) ) {
 					$avif_path = $this->get_img_path( $source_image, 'avif' );
 
-					if ( ! file_exists( $avif_path ) ) {
+					if ( ! self::is_safe_write_path( $avif_path ) ) {
+						$success = false;
+						$this->update_conversion_status( $source_image, 'failed', 'avif' );
+					} elseif ( ! file_exists( $avif_path ) ) {
 						if ( ! $avif_encoder || ! function_exists( 'imageavif' ) || ! Util::prepare_cache_dir( dirname( $avif_path ) ) || ! imageavif( $image, $avif_path, $avif_quality ?? $quality ) ) {
 							$success = false;
 							$this->update_conversion_status( $source_image, 'failed', 'avif' );
@@ -1087,7 +1287,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				if ( in_array( $encode_format, array( 'webp', 'both' ), true ) ) {
 					$webp_path = $this->get_img_path( $source_image, 'webp' );
 
-					if ( ! file_exists( $webp_path ) ) {
+					if ( ! self::is_safe_write_path( $webp_path ) ) {
+						$success = false;
+						$this->update_conversion_status( $source_image, 'failed', 'webp' );
+					} elseif ( ! file_exists( $webp_path ) ) {
 						if ( ! function_exists( 'imagewebp' ) || ! Util::prepare_cache_dir( dirname( $webp_path ) ) || ! imagewebp( $image, $webp_path, $webp_quality ?? $quality ) ) {
 							$success = false;
 							$this->update_conversion_status( $source_image, 'failed', 'webp' );
@@ -1355,12 +1558,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * also purged here so CDN/Edge purgers (CDN_Purger, Edge_Purger) do not
 		 * retain stale placeholder references for the original file.
 		 *
+		 * Only the plugin's own `wppo_img_info` buckets are ever mutated, and
+		 * only through the explicit `$allowed_keys` allowlist below. This
+		 * method never calls `delete_post_meta()` / `update_post_meta()` and
+		 * explicitly skips any underscore-prefixed key, so protected `_wp_*`
+		 * attachment meta is provably untouched.
+		 *
 		 * @since NEXT
 		 *
 		 * @param int $post_id The attachment ID.
 		 * @return void
 		 */
 		public static function clean_placeholder_on_delete( int $post_id ): void {
+			if ( $post_id <= 0 ) {
+				return;
+			}
+			if ( ! function_exists( 'get_attached_file' ) ) {
+				return;
+			}
 			$file_path = get_attached_file( $post_id );
 			if ( ! $file_path ) {
 				return;
@@ -1370,7 +1585,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			$rel_paths[] = $main_rel;
 
 			// Also clean up resized versions from attachment metadata.
-			$metadata = wp_get_attachment_metadata( $post_id );
+			// Guarded for WP 6.2 compat: without the core helper there is no
+			// metadata to expand, and the main file entry above still cleans.
+			$metadata = function_exists( 'wp_get_attachment_metadata' ) ? wp_get_attachment_metadata( $post_id ) : false;
 			if ( isset( $metadata['sizes'] ) && is_array( $metadata['sizes'] ) ) {
 				$dir = dirname( $file_path );
 				foreach ( $metadata['sizes'] as $size_data ) {
@@ -1410,9 +1627,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 			// Read the latest state via get_img_info() which may include
 			// deferred-but-not-yet-committed entries from the current request.
-			$img_info = self::get_img_info();
-			$changed  = false;
-			foreach ( array( 'dominant_color', 'lqip' ) as $key ) {
+			// Underscore-meta guard: only the plugin's own non-underscored
+			// buckets are pruned; any current or future `_wp_*` / `_`-prefixed
+			// key is skipped, and postmeta APIs are never called here.
+			$allowed_keys = array( 'dominant_color', 'lqip' );
+			$img_info     = self::get_img_info();
+			$changed      = false;
+			foreach ( $allowed_keys as $key ) {
+				if ( ! is_string( $key ) || '' === $key || '_' === $key[0] ) {
+					continue;
+				}
 				foreach ( $rel_paths as $rel ) {
 					if ( isset( $img_info[ $key ][ $rel ] ) ) {
 						unset( $img_info[ $key ][ $rel ] );
@@ -1894,6 +2118,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			$image_info = @getimagesize( $file );
 
 			if ( empty( $image_info ) ) {
+				return;
+			}
+
+			// Pixel-budget OOM guard (same channels-aware budget as
+			// convert_image()): skip the decode entirely on huge sources so
+			// the upload request can never fatal on small hosts. Fail-open:
+			// no placeholder stored, original upload unaffected.
+			$upload_channels = $this->get_source_channels( (int) ( $image_info[2] ?? 0 ) );
+			if ( $this->exceeds_pixel_budget( (int) $image_info[0], (int) $image_info[1], $upload_channels ) ) {
 				return;
 			}
 

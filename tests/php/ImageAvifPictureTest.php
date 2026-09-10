@@ -173,7 +173,9 @@ class ImageAvifPictureTest extends \PHPUnit\Framework\TestCase {
 	 * Convert_image() must skip tiny files, keep the original, and record skipped status.
 	 */
 	public function test_convert_image_skips_small_files(): void {
-		$dir = sys_get_temp_dir() . '/wppo-avif-convert';
+		// Fixture lives inside the uploads allowlist: convert_image()
+		// refuses sources outside ABSPATH/WP_CONTENT_DIR (#1035).
+		$dir = rtrim( WP_CONTENT_DIR, '/' ) . '/uploads/wppo-avif-convert';
 		if ( ! is_dir( $dir ) ) {
 			mkdir( $dir, 0755, true ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
 		}
@@ -198,6 +200,10 @@ class ImageAvifPictureTest extends \PHPUnit\Framework\TestCase {
 		$this->assertContains( $full_rel, $info['skipped']['webp'] ?? array() );
 
 		wp_delete_file( $tiny );
+		$converted = Img_Converter::get_img_path( $tiny, 'webp' );
+		if ( '' !== $converted && file_exists( $converted ) ) {
+			wp_delete_file( $converted );
+		}
 	}
 
 	/**
