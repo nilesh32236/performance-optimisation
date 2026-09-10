@@ -637,19 +637,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				// paths) are dropped until both the bucket count and the
 				// serialized size stay under budget, regardless of traffic.
 				while ( ! empty( $all ) ) {
-					$encoded     = wp_json_encode( $all );
 					$total_paths = 0;
 					foreach ( $all as $day_bucket ) {
 						$total_paths += count( is_array( $day_bucket ) ? $day_bucket : array() );
 					}
 
 					$under_path_budget = $total_paths <= self::MAX_TOTAL_PATHS;
+					if ( ! $under_path_budget ) {
+						$oldest_day_key = array_key_first( $all );
+						if ( null === $oldest_day_key ) {
+							break;
+						}
+
+						if ( 1 === count( $all ) && is_array( $all[ $oldest_day_key ] ) ) {
+							// Never drop the only day entirely — halve it and stop.
+							// Defensive: a single day is already bounded by
+							// MAX_PATHS_PER_DAY paths, so the byte budget should
+							// hold; this keeps a pathological day from being
+							// discarded wholesale before the loop stops.
+							$half = array_slice( $all[ $oldest_day_key ], (int) ( count( $all[ $oldest_day_key ] ) / 2 ) );
+							if ( ! empty( $half ) ) {
+								$all[ $oldest_day_key ] = $half;
+							}
+							break;
+						}
+						unset( $all[ $oldest_day_key ] );
+						continue;
+					}
+
+					$encoded = wp_json_encode( $all );
 					// A failed encode is treated as over budget so the loop
 					// makes progress (drops the oldest day) instead of
 					// persisting potentially oversized data.
 					$under_byte_budget = false !== $encoded && strlen( (string) $encoded ) <= self::MAX_OPTION_BYTES;
 
-					if ( $under_path_budget && $under_byte_budget ) {
+					if ( $under_byte_budget ) {
 						break;
 					}
 

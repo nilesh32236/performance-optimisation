@@ -736,44 +736,142 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		}
 
 		/**
-		 * Get most-frequently disabled assets from postmeta.
+		 * Per-request memo of disabled-asset aggregates keyed by meta key (audit #982).
 		 *
-		 * @param string $meta_key The meta key to query.
-		 * @return string[]
 		 * @since NEXT
+		 * @var array<string, string[]>
 		 */
-		private static function get_disabled_assets( string $meta_key ): array {
-			global $wpdb;
-			if ( ! isset( $wpdb ) || ! is_object( $wpdb ) || ! method_exists( $wpdb, 'get_col' ) ) {
-				return array();
-			}
+		private static array $disabled_assets_cache = array();
+
+		/**
+		 * Reset the per-request disabled-asset memo (for testing).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_disabled_assets_cache(): void {
+			self::$disabled_assets_cache = array();
+		}
+
+		/**
+		 * Rank serialized handle lists into top-3 handles by frequency.
+		 *
+		 * @since NEXT
+		 * @param array $rows Raw meta_value strings.
+		 * @return string[]
+		 */
+		private static function top_disabled_handles( array $rows ): array {
 			$disabled = array();
-			try {
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-				$rows = $wpdb->get_col( $wpdb->prepare( "SELECT meta_value FROM {$wpdb->postmeta} WHERE meta_key = %s LIMIT 500", $meta_key ) );
-				if ( ! is_array( $rows ) ) {
-					return array();
+			foreach ( $rows as $row ) {
+				$val = maybe_unserialize( $row );
+				if ( ! is_array( $val ) ) {
+					continue;
 				}
-				foreach ( $rows as $row ) {
-					$val = maybe_unserialize( $row );
-					if ( ! is_array( $val ) ) {
+				foreach ( $val as $handle ) {
+					$handle = sanitize_text_field( (string) $handle );
+					if ( '' === $handle ) {
 						continue;
 					}
-					foreach ( $val as $handle ) {
-						$handle = sanitize_text_field( (string) $handle );
-						if ( '' === $handle ) {
-							continue;
-						}
-						$disabled[ $handle ] = ( $disabled[ $handle ] ?? 0 ) + 1;
-					}
+					$disabled[ $handle ] = ( $disabled[ $handle ] ?? 0 ) + 1;
 				}
-			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
 			}
 			if ( empty( $disabled ) ) {
 				return array();
 			}
 			arsort( $disabled );
 			return array_slice( array_keys( $disabled ), 0, 3 );
+		}
+
+		/**
+		 * Get most-frequently disabled assets from postmeta.
+		 *
+		 * Both known keys are fetched in a single UNION ALL round-trip and
+		 * memoized per request (audit #982).
+		 *
+		 * @param string $meta_key The meta key to query.
+		 * @return string[]
+		 * @since NEXT
+		 */
+		private static function get_disabled_assets( string $meta_key ): array {
+			if ( array_key_exists( $meta_key, self::$disabled_assets_cache ) ) {
+				return self::$disabled_assets_cache[ $meta_key ];
+			}
+			global $wpdb;
+			if ( ! isset( $wpdb ) || ! is_object( $wpdb ) || ! method_exists( $wpdb, 'prepare' ) ) {
+				self::$disabled_assets_cache[ $meta_key ] = array();
+				return array();
+			}
+			$keys      = array( '_wppo_disabled_scripts', '_wppo_disabled_styles' );
+			$extra_key = ! in_array( $meta_key, $keys, true ) ? $meta_key : '';
+			$grouped   = array();
+			foreach ( $keys as $k ) {
+				$grouped[ $k ] = array();
+			}
+			// Single round-trip for both known keys (UNION ALL of two LIMIT
+			// 500 selects preserves the original per-key LIMIT semantics).
+			if ( method_exists( $wpdb, 'get_results' ) ) {
+				try {
+					// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+					$rows = $wpdb->get_results(
+						$wpdb->prepare(
+							"(SELECT meta_key, meta_value FROM {$wpdb->postmeta} WHERE meta_key = %s LIMIT 500) UNION ALL (SELECT meta_key, meta_value FROM {$wpdb->postmeta} WHERE meta_key = %s LIMIT 500)",
+							$keys[0],
+							$keys[1]
+						),
+						ARRAY_A
+					);
+					if ( is_array( $rows ) ) {
+						foreach ( $rows as $row ) {
+							$k = is_array( $row ) ? ( $row['meta_key'] ?? '' ) : '';
+							if ( ! array_key_exists( $k, $grouped ) ) {
+								continue;
+							}
+							if ( count( $grouped[ $k ] ) >= 500 ) {
+								continue;
+							}
+							$grouped[ $k ][] = $row['meta_value'];
+						}
+					}
+				} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+				}
+			}
+			// Fallback when get_results() is unavailable (e.g. partial $wpdb
+			// doubles in tests): per-key get_col() with identical semantics.
+			if ( ! method_exists( $wpdb, 'get_results' ) && method_exists( $wpdb, 'get_col' ) ) {
+				foreach ( $keys as $k ) {
+					try {
+						// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+						$single = $wpdb->get_col( $wpdb->prepare( "SELECT meta_value FROM {$wpdb->postmeta} WHERE meta_key = %s LIMIT 500", $k ) );
+						if ( is_array( $single ) ) {
+							$grouped[ $k ] = $single;
+						}
+					} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+					}
+				}
+			}
+			foreach ( $grouped as $k => $values ) {
+				self::$disabled_assets_cache[ $k ] = self::top_disabled_handles( $values );
+			}
+			// Defensive fallback for unknown keys: single-key query, same
+			// LIMIT 500 + ranking semantics as before.
+			if ( '' !== $extra_key && ! array_key_exists( $extra_key, self::$disabled_assets_cache ) ) {
+				$extra_rows = array();
+				if ( method_exists( $wpdb, 'get_col' ) ) {
+					try {
+						// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+						$extra = $wpdb->get_col( $wpdb->prepare( "SELECT meta_value FROM {$wpdb->postmeta} WHERE meta_key = %s LIMIT 500", $extra_key ) );
+						if ( is_array( $extra ) ) {
+							$extra_rows = $extra;
+						}
+					} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+					}
+				}
+				self::$disabled_assets_cache[ $extra_key ] = self::top_disabled_handles( $extra_rows );
+			}
+			if ( ! array_key_exists( $meta_key, self::$disabled_assets_cache ) ) {
+				self::$disabled_assets_cache[ $meta_key ] = array();
+			}
+			return self::$disabled_assets_cache[ $meta_key ];
 		}
 
 		/**

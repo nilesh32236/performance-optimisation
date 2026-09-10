@@ -397,6 +397,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 						)
 					);
 					if ( is_array( $post_ids ) ) {
+						if ( ! empty( $post_ids ) && function_exists( '_prime_post_caches' ) ) {
+							_prime_post_caches( $post_ids );
+						}
 						foreach ( $post_ids as $pid ) {
 							$perm = function_exists( 'get_permalink' ) ? get_permalink( $pid ) : '';
 							if ( ! empty( $perm ) && ! in_array( $perm, $urls, true ) ) {

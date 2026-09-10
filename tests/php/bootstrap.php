@@ -228,6 +228,9 @@ trait WPPO_Test_Bootstrap {
 		if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			\PerformanceOptimise\Inc\LiteSpeed_Crawler::reset_cache();
 		}
+		if ( class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) && method_exists( 'PerformanceOptimise\Inc\AI_Adaptive', 'reset_disabled_assets_cache' ) ) {
+			\PerformanceOptimise\Inc\AI_Adaptive::reset_disabled_assets_cache();
+		}
 
 		// Pre-register frequently used WP functions to avoid "Cannot redeclare"
 		// PHP fatal errors when multiple test classes share one process.

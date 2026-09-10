@@ -2119,7 +2119,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'version'                              => WPPO_VERSION,
 					'settings'                             => $safe_options,
 					'show_welcome'                         => ! (bool) get_user_meta( get_current_user_id(), 'wppo_welcome_dismissed', true ),
-					'image_info'                           => $this->sanitize_image_info_for_client( get_option( 'wppo_img_info', array() ) ),
+					'image_info'                           => $this->sanitize_image_info_for_client( class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ? Img_Converter::get_img_info() : get_option( 'wppo_img_info', array() ) ),
 					'cache_size'                           => $cache_size,
 					'total_js_css'                         => $total_js_css,
 					// Read-only WP 7.1+ client-side media processing state. Evaluated

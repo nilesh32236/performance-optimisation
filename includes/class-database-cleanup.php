@@ -1627,7 +1627,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			$time = time();
 
 			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-			$transient_count = 0;
+			// Single UNION ALL round-trip (audit #982): the 9 sequential
+			// COUNT(*)s above used to run one query per cleanup type on TTL
+			// miss. Predicates are verbatim copies of the originals (including
+			// the `comment_type != 'note'` exclusion from issue #884, the
+			// transient CONCAT self-JOIN, and the multisite
+			// `_site_transient_` skip). The 'expired_transients' label may
+			// appear twice (one row per prefix) — rows are summed per key.
+			$selects = array();
+
+			$selects[] = "SELECT 'revisions' AS k, COUNT(*) AS c FROM $wpdb->posts WHERE post_type = 'revision'";
+			$selects[] = "SELECT 'auto_drafts' AS k, COUNT(*) AS c FROM $wpdb->posts WHERE post_status = 'auto-draft'";
+			$selects[] = "SELECT 'trashed_posts' AS k, COUNT(*) AS c FROM $wpdb->posts WHERE post_status = 'trash'";
+			// Exclude WP 6.9+ Notes (`comment_type='note'`) so counts match what
+			// clean_spam_comments()/clean_trashed_comments() would actually delete (issue #884).
+			$selects[] = "SELECT 'spam_comments' AS k, COUNT(*) AS c FROM $wpdb->comments WHERE comment_approved = 'spam' AND COALESCE( comment_type, '' ) != 'note'";
+			$selects[] = "SELECT 'trashed_comments' AS k, COUNT(*) AS c FROM $wpdb->comments WHERE comment_approved = 'trash' AND COALESCE( comment_type, '' ) != 'note'";
+
 			foreach ( array( '_transient_', '_site_transient_' ) as $prefix ) {
 				$is_multisite = false;
 				if ( function_exists( 'is_multisite' ) ) {
@@ -1640,49 +1656,67 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				if ( '_site_transient_' === $prefix && $is_multisite ) {
 					continue;
 				}
-				$timeout_prefix   = $prefix . 'timeout_';
-				$transient_count += (int) $wpdb->get_var(
-					$wpdb->prepare(
-						"SELECT COUNT(*) FROM $wpdb->options a
+				$timeout_prefix = $prefix . 'timeout_';
+				$selects[]      = $wpdb->prepare(
+					"SELECT 'expired_transients' AS k, COUNT(*) AS c FROM $wpdb->options a
 						INNER JOIN $wpdb->options b ON b.option_name = CONCAT( %s, SUBSTRING( a.option_name, %d ) )
 						WHERE a.option_name LIKE %s
 						AND a.option_name NOT LIKE %s
 						AND b.option_value < %d",
-						$timeout_prefix,
-						strlen( $prefix ) + 1,
-						$wpdb->esc_like( $prefix ) . '%',
-						$wpdb->esc_like( $timeout_prefix ) . '%',
-						$time
-					)
+					$timeout_prefix,
+					strlen( $prefix ) + 1,
+					$wpdb->esc_like( $prefix ) . '%',
+					$wpdb->esc_like( $timeout_prefix ) . '%',
+					$time
 				);
 			}
 
-			$counts = array(
-				'revisions'          => (int) $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->posts WHERE post_type = 'revision'" ),
-				'auto_drafts'        => (int) $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->posts WHERE post_status = 'auto-draft'" ),
-				'trashed_posts'      => (int) $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->posts WHERE post_status = 'trash'" ),
-				// Exclude WP 6.9+ Notes (`comment_type='note'`) so counts match what
-				// clean_spam_comments()/clean_trashed_comments() would actually delete (issue #884).
-				'spam_comments'      => (int) $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->comments WHERE comment_approved = 'spam' AND COALESCE( comment_type, '' ) != 'note'" ),
-				'trashed_comments'   => (int) $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->comments WHERE comment_approved = 'trash' AND COALESCE( comment_type, '' ) != 'note'" ),
-				'expired_transients' => $transient_count,
-				'orphan_postmeta'    => (int) $wpdb->get_var(
-					"SELECT COUNT(*) FROM $wpdb->postmeta pm
+			$selects[] = "SELECT 'orphan_postmeta' AS k, COUNT(*) AS c FROM $wpdb->postmeta pm
 					LEFT JOIN $wpdb->posts p ON p.ID = pm.post_id
-					WHERE p.ID IS NULL"
-				),
-				'unattached_media'   => (int) $wpdb->get_var(
-					"SELECT COUNT(*) FROM $wpdb->posts
+					WHERE p.ID IS NULL";
+			$selects[] = "SELECT 'unattached_media' AS k, COUNT(*) AS c FROM $wpdb->posts
 					WHERE post_type = 'attachment'
 					AND post_parent = 0
-					AND post_status = 'inherit'"
-				),
-				'oembed_cache'       => (int) $wpdb->get_var(
-					$wpdb->prepare(
-						"SELECT COUNT(*) FROM $wpdb->options WHERE option_name LIKE %s",
-						$wpdb->esc_like( '_oembed_' ) . '%'
-					)
-				),
+					AND post_status = 'inherit'";
+			$selects[] = $wpdb->prepare(
+				"SELECT 'oembed_cache' AS k, COUNT(*) AS c FROM $wpdb->options WHERE option_name LIKE %s",
+				$wpdb->esc_like( '_oembed_' ) . '%'
+			);
+
+			$sql  = implode( ' UNION ALL ', $selects );
+			$rows = $wpdb->get_results( $sql, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Each fragment with placeholders is prepared above; the rest are static.
+
+			$totals = array(
+				'revisions'          => 0,
+				'auto_drafts'        => 0,
+				'trashed_posts'      => 0,
+				'spam_comments'      => 0,
+				'trashed_comments'   => 0,
+				'expired_transients' => 0,
+				'orphan_postmeta'    => 0,
+				'unattached_media'   => 0,
+				'oembed_cache'       => 0,
+			);
+			if ( is_array( $rows ) ) {
+				foreach ( $rows as $row ) {
+					$k = is_array( $row ) ? ( $row['k'] ?? '' ) : '';
+					$c = is_array( $row ) ? (int) ( $row['c'] ?? 0 ) : 0;
+					if ( array_key_exists( $k, $totals ) ) {
+						$totals[ $k ] += $c;
+					}
+				}
+			}
+
+			$counts = array(
+				'revisions'          => (int) $totals['revisions'],
+				'auto_drafts'        => (int) $totals['auto_drafts'],
+				'trashed_posts'      => (int) $totals['trashed_posts'],
+				'spam_comments'      => (int) $totals['spam_comments'],
+				'trashed_comments'   => (int) $totals['trashed_comments'],
+				'expired_transients' => (int) $totals['expired_transients'],
+				'orphan_postmeta'    => (int) $totals['orphan_postmeta'],
+				'unattached_media'   => (int) $totals['unattached_media'],
+				'oembed_cache'       => (int) $totals['oembed_cache'],
 			);
 			// phpcs:enable
 
