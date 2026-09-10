@@ -1327,6 +1327,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( $ok && class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::is_litespeed() ) {
 					Log::add( __( 'Server rules updated on LiteSpeed — restart OpenLiteSpeed if changes do not appear immediately.', 'performance-optimisation' ) );
 				}
+				if ( ! $ok ) {
+					// Failed refresh leaves the prior file intact (atomic
+					// backup/restore inside update_rules()) — surface an
+					// admin notice so the failure is visible, mirroring the
+					// enable/disable branch above.
+					add_action(
+						'admin_notices',
+						function () {
+							// role="alert" + aria-live="assertive" so screen readers announce
+							// the failure immediately, matching the React NoticeBanner ARIA
+							// contract used across the SPA.
+							echo '<div class="notice notice-error is-dismissible" role="alert" aria-live="assertive"><p>' . esc_html__( 'Performance Optimisation: Failed to update .htaccess rules. Please check file permissions.', 'performance-optimisation' ) . '</p></div>';
+						}
+					);
+				}
 			}
 
 			// Clear Google Fonts cache when the setting toggles.
