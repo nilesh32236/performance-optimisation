@@ -359,6 +359,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['file_optimisation']['ccssMaxSize'] ) ) {
 				$this->options['file_optimisation']['ccssMaxSize'] = 20480;
 			}
+			// Existing installs whose stored settings predate the
+			// ccssSafelistExtra key (issue #1038) inherit the empty default
+			// in-memory here (no database write on front-end requests); the
+			// persisted value is backfilled once by
+			// maybe_migrate_ccss_safelist() on admin_init. Empty keeps the
+			// current extraction behaviour verbatim (fail-open).
+			if ( ! isset( $this->options['file_optimisation']['ccssSafelistExtra'] ) ) {
+				$this->options['file_optimisation']['ccssSafelistExtra'] = '';
+			}
 
 			$this->includes();
 			$this->image_optimisation = new Image_Optimisation( $this->options );
@@ -543,6 +552,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 			add_action( 'admin_init', array( $this, 'maybe_migrate_block_assets_setting' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_ccss_max_size' ) );
+			add_action( 'admin_init', array( $this, 'maybe_migrate_ccss_safelist' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_image_alt_edge_defaults' ) );
 			// One-time activity-log notice on admin_init.
 			if ( isset( $this->options['file_optimisation']['removeQueryStrings'] ) ) {
@@ -1081,6 +1091,49 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$this->options['file_optimisation']['ccssMaxSize'] = 20480;
 
 			Log::add( __( 'Added default Critical CSS size cap (20 KB).', 'performance-optimisation' ) );
+		}
+
+		/**
+		 * One-time backfill for the Critical CSS user safelist (issue #1038).
+		 *
+		 * Runs on `admin_init` (not the constructor) so a cacheable front-end
+		 * request never triggers a settings write. Only installs whose stored
+		 * settings predate the `ccssSafelistExtra` key (key absent) are
+		 * backfilled with the empty default; any stored explicit value is
+		 * preserved verbatim, and fresh installs with no stored option are
+		 * skipped because the constructor defaults already match. The check is
+		 * idempotent (key presence is the marker), so no extra option row is
+		 * needed. In-memory options are synced too so the current request
+		 * observes the backfilled value. Uses per-site `get_option()` so
+		 * multisite sites migrate independently with no cross-site leakage.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public function maybe_migrate_ccss_safelist(): void {
+			// allowlist(settings-read-guard): deliberate direct read — must distinguish
+			// "no stored row" (false) from "stored array", which Util::get_settings()
+			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
+			$stored = get_option( 'wppo_settings' );
+			if ( ! is_array( $stored ) ) {
+				return;
+			}
+
+			$file = isset( $stored['file_optimisation'] ) && is_array( $stored['file_optimisation'] ) ? $stored['file_optimisation'] : array();
+
+			if ( array_key_exists( 'ccssSafelistExtra', $file ) ) {
+				return;
+			}
+
+			$stored['file_optimisation'] = $file + array( 'ccssSafelistExtra' => '' );
+			update_option( 'wppo_settings', $stored );
+
+			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
+				$this->options['file_optimisation'] = array();
+			}
+			$this->options['file_optimisation']['ccssSafelistExtra'] = '';
+
+			Log::add( __( 'Added default Critical CSS safelist (empty, current behaviour kept).', 'performance-optimisation' ) );
 		}
 
 		/**

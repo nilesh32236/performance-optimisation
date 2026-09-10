@@ -1238,6 +1238,16 @@ Filters sanitized inline Critical CSS before it is written/inlined. @since NEXT.
 
 ---
 
+### `wppo_ccss_safelist`
+Filters the Critical CSS user safelist (selectors always kept in Critical CSS, e.g. hidden or JS-injected selectors). Backed by the additive `file_optimisation.ccssSafelistExtra` setting (one selector per line, default empty = current behaviour). @since NEXT.
+
+**Parameters:**
+- `$list` *(string[])* — Safelisted selectors.
+
+**Checksum auto-regen:** source-CSS checksums stored at generation time trigger regeneration when stylesheet content changes even if mtime is preserved; oversize Critical CSS is served from a per-template file instead of inline (20 KB `ccssMaxSize` cap). Unlisted dynamic content stays deferred by design.
+
+---
+
 ### `wppo_crawler_use_nproc`
 Filters whether `nproc` may be probed (via `shell_exec`) as a fallback for CPU-count detection. Default `false`. @since NEXT.
 

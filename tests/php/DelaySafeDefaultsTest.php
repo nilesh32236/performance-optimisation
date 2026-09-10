@@ -407,7 +407,7 @@ class DelaySafeDefaultsTest extends \PHPUnit\Framework\TestCase {
 	public function test_unused_css_extra_safelist_merge(): void {
 		Functions\when( 'has_filter' )->justReturn( false );
 		$css = $this->make_used_css(
-			array( 'file_optimisation' => array( 'unusedCSSSafelistExtra' => ".my-custom-keep-\n.my-other-thing" ) ),
+			array( 'file_optimisation' => array( 'unusedCSSSafelistExtra' => ".my-custom-keep-\n.my-other-thing-" ) ),
 			array()
 		);
 
@@ -423,7 +423,7 @@ class DelaySafeDefaultsTest extends \PHPUnit\Framework\TestCase {
 		$safe_prop->setAccessible( true );
 		$merged = $safe_prop->getValue( $css );
 		$this->assertContains( '.my-custom-keep-', $merged );
-		$this->assertContains( '.my-other-thing', $merged );
+		$this->assertContains( '.my-other-thing-', $merged );
 	}
 
 	/**

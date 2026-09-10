@@ -625,7 +625,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( '_' === substr( $safe, -1 ) && 0 === strpos( $selector, $safe ) ) {
 					return true;
 				}
-				if ( '*' === substr( $safe, -1 ) && 0 === strpos( $selector, substr( $safe, 0, -1 ) ) ) {
+				// Wildcard entries match by non-empty prefix only: a bare '*'
+				// entry (the universal selector, kept via the exact match
+				// above) must not match every selector through an empty
+				// stem, which would silently disable all purging (issue
+				// #1038). Fail-open direction is preserved by the visual
+				// regression guard, not by keeping everything.
+				$stem = '*' === substr( $safe, -1 ) ? substr( $safe, 0, -1 ) : '';
+				if ( '' !== $stem && 0 === strpos( $selector, $stem ) ) {
 					return true;
 				}
 			}
@@ -1200,6 +1207,158 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		}
 
 		/**
+		 * Content checksum of CSS source (issue #1038).
+		 *
+		 * Pure local string hash — never fetches remotely. Used to detect
+		 * stylesheet edits that preserve mtime (deploy sync, minify rebuild
+		 * in the same second) so stale used-CSS regenerates.
+		 *
+		 * @param string $css CSS content.
+		 * @return string MD5 checksum, or '' for empty input.
+		 * @since NEXT
+		 */
+		public function compute_css_checksum( string $css ): string {
+			if ( '' === $css ) {
+				return '';
+			}
+			if ( function_exists( 'wp_hash' ) ) {
+				return (string) wp_hash( $css );
+			}
+			return md5( $css );
+		}
+
+		/**
+		 * Sidecar path holding the source checksum for a used-CSS file.
+		 *
+		 * Lives next to the domain-based used-CSS file, so it inherits the
+		 * same multisite-safe namespacing (per-site settings, domain-based
+		 * cache paths, blog-aware keys).
+		 *
+		 * @param string $used_css_path Used-CSS file path.
+		 * @return string Checksum sidecar path, or '' when refused.
+		 * @since NEXT
+		 */
+		private function get_checksum_path( string $used_css_path ): string {
+			if ( '' === $used_css_path ) {
+				return '';
+			}
+			$candidate = $used_css_path . '.sha256';
+			if ( ! $this->is_path_contained( $candidate ) ) {
+				return '';
+			}
+			return $candidate;
+		}
+
+		/**
+		 * Combined checksum of the locally-available queued stylesheets.
+		 *
+		 * Reads local files only via `Util::get_local_path()` — never
+		 * fetches remotely. Fail-open: any unreadable input yields '' (no
+		 * checksum signal, the mtime verdict stands).
+		 *
+		 * @return string Combined checksum, or '' when unavailable.
+		 * @since NEXT
+		 */
+		public function compute_local_source_checksum(): string {
+			global $wp_styles;
+			if ( ! $wp_styles || empty( $wp_styles->queue ) ) {
+				return '';
+			}
+			try {
+				$combined = '';
+				foreach ( $wp_styles->queue as $handle ) {
+					if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
+						continue;
+					}
+					$src = $wp_styles->registered[ $handle ]->src;
+					if ( empty( $src ) ) {
+						continue;
+					}
+					$local_path = Util::get_local_path( (string) $src );
+					if ( '' === $local_path || ! file_exists( $local_path ) ) {
+						continue;
+					}
+					// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local cache-freshness read only, never remote.
+					$content = file_get_contents( $local_path );
+					if ( ! is_string( $content ) || '' === $content ) {
+						continue;
+					}
+					$combined .= $content . "\n";
+				}
+				return $this->compute_css_checksum( $combined );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Whether the cached used-CSS is stale by content checksum.
+		 *
+		 * Compares the locally-computed source checksum against the sidecar
+		 * stored at generation time. Fail-open: missing sidecar, missing
+		 * checksum signal, or any read error reports fresh (the mtime
+		 * verdict stands) — never fatal, pristine buffer preserved.
+		 *
+		 * @param string $used_css_path Used-CSS file path.
+		 * @return bool True when the source changed since generation.
+		 * @since NEXT
+		 */
+		private function is_checksum_stale( string $used_css_path ): bool {
+			try {
+				$checksum_path = $this->get_checksum_path( $used_css_path );
+				if ( '' === $checksum_path || ! file_exists( $checksum_path ) ) {
+					return false;
+				}
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local cache-freshness read only, never remote.
+				$stored = file_get_contents( $checksum_path );
+				if ( ! is_string( $stored ) || '' === trim( $stored ) ) {
+					return false;
+				}
+				$current = $this->compute_local_source_checksum();
+				if ( '' === $current ) {
+					return false;
+				}
+				return ! hash_equals( trim( $stored ), $current );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Persist the source checksum sidecar after a successful generation.
+		 *
+		 * Local file write only — no remote fetch. Fail-open: any failure
+		 * is silent; the next request simply falls back to mtime freshness.
+		 *
+		 * @param string $used_css_path Used-CSS file path.
+		 * @return void
+		 * @since NEXT
+		 */
+		private function persist_source_checksum( string $used_css_path ): void {
+			try {
+				$checksum_path = $this->get_checksum_path( $used_css_path );
+				if ( '' === $checksum_path ) {
+					return;
+				}
+				$checksum = $this->compute_local_source_checksum();
+				if ( '' === $checksum ) {
+					return;
+				}
+				$fs = Util::init_filesystem();
+				if ( $fs ) {
+					$fs->put_contents( $checksum_path, $checksum, FS_CHMOD_FILE );
+				} else {
+					// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Local checksum sidecar fallback.
+					file_put_contents( $checksum_path, $checksum );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
 		 * Delete used-CSS files. If URL is provided, delete per-page; otherwise delete all.
 		 *
 		 * @param string|null $url Optional URL to delete specific page used-CSS.
@@ -1228,6 +1387,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				$fs = Util::init_filesystem();
 				if ( ! $fs ) {
 					return false;
+				}
+				// Drop the checksum sidecar alongside the variant so a
+				// re-generation re-baselines instead of comparing against a
+				// checksum for deleted output (issue #1038).
+				$checksum_path = $this->get_checksum_path( $file_path );
+				if ( '' !== $checksum_path && $fs->exists( $checksum_path ) ) {
+					$fs->delete( $checksum_path );
 				}
 				if ( $fs->exists( $file_path ) ) {
 					return $fs->delete( $file_path );
@@ -1268,7 +1434,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					$full_path = trailingslashit( $current ) . $name;
 					if ( ! empty( $entry['type'] ) && 'd' === $entry['type'] ) {
 						$dir_queue[] = $full_path;
-					} elseif ( self::USED_CSS_FILENAME === $name ) {
+					} elseif ( self::USED_CSS_FILENAME === $name || self::USED_CSS_FILENAME . '.sha256' === $name ) {
 						if ( ! $fs->delete( $full_path ) ) {
 							$success = false;
 						}
@@ -1982,6 +2148,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 						}
 					}
 
+					// Checksum freshness (issue #1038): content edits that
+					// preserve mtime (deploy sync, same-second minify
+					// rebuild) still trigger regeneration. Local file reads
+					// only — never fetches remotely. Fail-open: no checksum
+					// signal keeps the mtime verdict.
+					if ( $fresh && $this->is_checksum_stale( $used_css_path ) ) {
+						$fresh = false;
+					}
+
 					if ( $fresh ) {
 						// Defense in depth: re-verify payload before strip/inject.
 						if ( $this->is_safe_fallback_enabled() && ! $this->is_used_css_valid( $used_css_path ) ) {
@@ -2014,6 +2189,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			}
 
 			$saved = $this->save_used_css( $purged_css, $current_url );
+			if ( $saved ) {
+				// Baseline the source checksum so later requests detect
+				// content edits that preserve mtime (issue #1038). Local
+				// writes only — never fetches remotely; failures fall back
+				// to mtime freshness silently.
+				$this->persist_source_checksum( $used_css_path );
+			}
 			if ( ! $saved ) {
 				if ( $this->is_safe_fallback_enabled() ) {
 					$this->log_used_css_fallback( 'save_failed', array_keys( $css_assets ) );

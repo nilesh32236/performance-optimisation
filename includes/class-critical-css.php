@@ -298,6 +298,253 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
+		 * User safelist of selectors always kept in Critical CSS (issue #1038).
+		 *
+		 * Reads the additive `file_optimisation.ccssSafelistExtra` setting
+		 * (one selector per line, default empty = current behaviour). Local
+		 * reads only — never fetches remotely. Per-site settings make this
+		 * multisite-safe by construction.
+		 *
+		 * @return string[] Safelisted selectors, trimmed and de-duplicated.
+		 * @since NEXT
+		 */
+		public static function get_ccss_safelist(): array {
+			$options = Util::get_settings();
+			$raw     = $options['file_optimisation']['ccssSafelistExtra'] ?? '';
+			if ( is_array( $raw ) ) {
+				$raw = implode( "\n", $raw );
+			}
+			$list = Util::process_urls( (string) $raw );
+
+			/**
+			 * Filters the Critical CSS user safelist.
+			 *
+			 * @param string[] $list Safelisted selectors.
+			 * @since NEXT
+			 */
+			if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_ccss_safelist' ) ) {
+				$filtered = apply_filters( 'wppo_ccss_safelist', $list );
+				if ( is_array( $filtered ) ) {
+					$list = array_values( array_filter( array_unique( array_map( 'trim', $filtered ) ) ) );
+				}
+			}
+
+			return $list;
+		}
+
+		/**
+		 * Whether a selector matches the Critical CSS user safelist.
+		 *
+		 * Mirrors the Used_CSS safelist semantics: exact match wins;
+		 * attribute entries (leading `[`) match by attribute-name substring
+		 * so compound selectors stay kept; trailing `-`, `_`, or `*`
+		 * entries match by prefix. Otherwise a case-insensitive substring
+		 * match keeps hidden/dynamic selectors (e.g. `.modal-open`,
+		 * `.sub-menu`) that the static above-fold walk never sees.
+		 * Fail-open: an empty safelist never matches.
+		 *
+		 * Local string comparison only — no remote fetch.
+		 *
+		 * @param string $selector CSS selector string (may be a group).
+		 * @return bool True when safelisted.
+		 * @since NEXT
+		 */
+		public static function matches_ccss_safelist( string $selector ): bool {
+			$selector = trim( $selector );
+			if ( '' === $selector ) {
+				return false;
+			}
+
+			$list = self::get_ccss_safelist();
+			if ( empty( $list ) ) {
+				return false;
+			}
+
+			foreach ( $list as $safe ) {
+				$safe = trim( (string) $safe );
+				if ( '' === $safe ) {
+					continue;
+				}
+				if ( $selector === $safe ) {
+					return true;
+				}
+				if ( '[' === $safe[0] ) {
+					$attr_name = preg_replace( '/[\]=~|^$*"\'].*$/', '', $safe );
+					$attr_name = ltrim( trim( (string) $attr_name ), '[' );
+					if ( '' !== $attr_name && false !== stripos( $selector, $attr_name ) ) {
+						return true;
+					}
+					continue;
+				}
+				$last = substr( $safe, -1 );
+				if ( ( '-' === $last || '_' === $last ) && 0 === strpos( $selector, $safe ) ) {
+					return true;
+				}
+				// Wildcard entries match by non-empty prefix only: a bare
+				// '*' covers just the universal selector (exact match above),
+				// never every rule.
+				$stem = '*' === $last ? substr( $safe, 0, -1 ) : '';
+				if ( '' !== $stem && 0 === strpos( $selector, $stem ) ) {
+					return true;
+				}
+				if ( false !== stripos( $selector, $safe ) ) {
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		/**
+		 * Content checksum of CSS source (issue #1038).
+		 *
+		 * Pure local string hash — never fetches remotely. Used to detect
+		 * stylesheet edits that preserve mtime (deploy sync, minify rebuild
+		 * in the same second) so stale CCSS / used-CSS regenerates.
+		 *
+		 * @param string $css CSS content.
+		 * @return string MD5 checksum, or '' for empty input.
+		 * @since NEXT
+		 */
+		public static function compute_css_checksum( string $css ): string {
+			if ( '' === $css ) {
+				return '';
+			}
+			if ( function_exists( 'wp_hash' ) ) {
+				return (string) wp_hash( $css );
+			}
+			return md5( $css );
+		}
+
+		/**
+		 * Multisite-aware transient key for a template's source checksum.
+		 *
+		 * Blog-ID prefixing via `Util::transient_key()` keeps per-site
+		 * checksums isolated on multisite networks with a shared object
+		 * cache backend.
+		 *
+		 * @param string $template_hash Template hash.
+		 * @return string Transient key.
+		 * @since NEXT
+		 */
+		private static function get_source_checksum_key( string $template_hash ): string {
+			return Util::transient_key( 'wppo_ccss_checksum_' . $template_hash );
+		}
+
+		/**
+		 * Whether stored source checksum differs (stale CCSS, issue #1038).
+		 *
+		 * Compares the checksum of locally-available source CSS against the
+		 * stored checksum. Local reads only — no remote fetch. Fail-open:
+		 * missing stored checksum or unavailable transient API reports stale
+		 * only when there is stored output to compare against; an empty
+		 * checksum input never reports stale.
+		 *
+		 * @param string $template_hash Template hash.
+		 * @param string $source_css    Locally-available source CSS content.
+		 * @return bool True when the source changed since generation.
+		 * @since NEXT
+		 */
+		public static function is_source_checksum_stale( string $template_hash, string $source_css ): bool {
+			if ( '' === $template_hash || '' === $source_css ) {
+				return false;
+			}
+			if ( ! function_exists( 'get_transient' ) ) {
+				return false;
+			}
+			$stored = get_transient( self::get_source_checksum_key( $template_hash ) );
+			if ( ! is_string( $stored ) || '' === $stored ) {
+				return false;
+			}
+			return ! hash_equals( $stored, self::compute_css_checksum( $source_css ) );
+		}
+
+		/**
+		 * Persist the source checksum after a successful generation.
+		 *
+		 * Local transient write only — no remote fetch. Fail-open: missing
+		 * transient API is a no-op.
+		 *
+		 * @param string $template_hash Template hash.
+		 * @param string $source_css    Source CSS content that was generated from.
+		 * @return void
+		 * @since NEXT
+		 */
+		public static function store_source_checksum( string $template_hash, string $source_css ): void {
+			if ( '' === $template_hash || '' === $source_css ) {
+				return;
+			}
+			if ( ! function_exists( 'set_transient' ) ) {
+				return;
+			}
+			$ttl = function_exists( 'apply_filters' ) ? (int) apply_filters( 'wppo_ccss_checksum_ttl', WEEK_IN_SECONDS ) : WEEK_IN_SECONDS;
+			if ( $ttl <= 0 ) {
+				$ttl = WEEK_IN_SECONDS;
+			}
+			set_transient( self::get_source_checksum_key( $template_hash ), self::compute_css_checksum( $source_css ), $ttl );
+		}
+
+		/**
+		 * Checksum-triggered refresh from locally-available CSS (issue #1038).
+		 *
+		 * Re-extracts above-fold CSS from the given source entirely locally
+		 * (no remote fetch) and compares its checksum against the checksum
+		 * stored at generation time. On mismatch the stored variant is
+		 * deleted so the next `inline_ccss()` hit re-queues background
+		 * generation through the existing path; the oversize file-first
+		 * delivery and 20 KB inline cap in `inline_ccss()` are untouched, so
+		 * the cap stays honored. Fail-open: any error returns false and the
+		 * pristine stored variant is left in place (never fatal).
+		 *
+		 * @param string $template_hash Template hash.
+		 * @param string $source_css    Locally-available source CSS content.
+		 * @return bool True when the stored variant was dropped as stale.
+		 * @since NEXT
+		 */
+		public static function maybe_refresh_from_local_css( string $template_hash, string $source_css ): bool {
+			if ( '' === $template_hash || '' === $source_css ) {
+				return false;
+			}
+			try {
+				$extracted = self::extract_above_fold_css( $source_css );
+				if ( '' === $extracted ) {
+					return false;
+				}
+				if ( ! function_exists( 'get_transient' ) || ! function_exists( 'delete_transient' ) ) {
+					return false;
+				}
+				$key    = self::get_source_checksum_key( $template_hash );
+				$stored = get_transient( $key );
+				if ( ! is_string( $stored ) || '' === $stored ) {
+					self::store_source_checksum( $template_hash, $extracted );
+					return false;
+				}
+				if ( hash_equals( $stored, self::compute_css_checksum( $extracted ) ) ) {
+					return false;
+				}
+				$file = self::get_ccss_file( $template_hash );
+				if ( '' !== $file && file_exists( $file ) ) {
+					$filesystem = Util::init_filesystem();
+					if ( $filesystem ) {
+						$filesystem->delete( $file );
+					} else {
+						// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Local cache invalidation fallback.
+						unlink( $file );
+					}
+				}
+				delete_transient( $key );
+				self::invalidate_ccss_memo( $template_hash );
+				if ( function_exists( 'clearstatcache' ) ) {
+					clearstatcache( true, $file );
+				}
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
 		 * Read core's `styles_inline_size_limit` budget.
 		 *
 		 * Mirrors the version-dependent default in Cache::get_styles_inline_limit():
@@ -1171,9 +1418,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					--$depth;
 					$buffer .= $char;
 					if ( 0 === $depth && $in_rule ) {
-						// Complete rule block.
+						// Complete rule block. The selector is stored with
+						// its declarations (issue #1038): without it the
+						// output is invalid CSS that browsers ignore.
 						if ( '' !== $selector && self::matches_above_fold( $selector ) ) {
-							$critical_parts[] = $buffer;
+							$critical_parts[] = $selector . $buffer;
 						}
 						$buffer   = '';
 						$selector = '';
@@ -1279,6 +1528,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return false;
 			}
 
+			// User safelist (issue #1038): hidden/dynamic selectors are
+			// always kept. Empty safelist keeps current behaviour verbatim.
+			if ( self::matches_ccss_safelist( $selector ) ) {
+				return true;
+			}
+
 			// Remove pseudo-classes and pseudo-elements for matching.
 			$clean = preg_replace( '/::?[\w-]+(\([^)]*\))?/', '', $selector );
 			$clean = preg_replace( '/\[[^\]]*\]/', '', $clean );
@@ -1362,6 +1617,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 				file_put_contents( self::get_ccss_file( $template_hash ), $critical_css );
 			}
+
+			// Baseline the source checksum so later local-source comparisons
+			// (maybe_refresh_from_local_css) detect stylesheet edits that
+			// preserve mtime. Local transient write only — no remote fetch.
+			self::store_source_checksum( $template_hash, $critical_css );
 
 			// The memo must reflect the fresh file within this request too;
 			// clear PHP's stat cache so file_exists/mtime are not stale. Only

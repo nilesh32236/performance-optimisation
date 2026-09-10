@@ -88,6 +88,7 @@ const FileOptimization = ( {
 		enableServerRules: false,
 		criticalCSS: false,
 		ccssMaxSize: options.ccssMaxSize || 20480,
+		ccssSafelistExtra: options.ccssSafelistExtra || '',
 		hostGoogleFontsLocally: false,
 		fontMetricFallback: false,
 		cdnURL: '',
@@ -152,6 +153,10 @@ const FileOptimization = ( {
 		typeof options.usedCSSExcludeUrls === 'string'
 			? options.usedCSSExcludeUrls
 			: '';
+	defaultSettings.ccssSafelistExtra =
+		typeof options.ccssSafelistExtra === 'string'
+			? options.ccssSafelistExtra
+			: '';
 
 	const [ settings, setSettings ] = useState( defaultSettings );
 	const [ isLoading, setIsLoading ] = useState( false );
@@ -171,6 +176,10 @@ const FileOptimization = ( {
 			usedCSSExcludeUrls:
 				typeof options.usedCSSExcludeUrls === 'string'
 					? options.usedCSSExcludeUrls
+					: '',
+			ccssSafelistExtra:
+				typeof options.ccssSafelistExtra === 'string'
+					? options.ccssSafelistExtra
 					: '',
 		} );
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -204,6 +213,7 @@ const FileOptimization = ( {
 		options.enableServerRules,
 		options.criticalCSS,
 		options.ccssMaxSize,
+		options.ccssSafelistExtra,
 		options.hostGoogleFontsLocally,
 		options.fontMetricFallback,
 		options.cdnURL,
@@ -283,6 +293,7 @@ const FileOptimization = ( {
 		options.enableServerRules,
 		options.criticalCSS,
 		options.ccssMaxSize,
+		options.ccssSafelistExtra,
 		options.hostGoogleFontsLocally,
 		options.fontMetricFallback,
 		options.cdnURL,
@@ -1110,6 +1121,43 @@ const FileOptimization = ( {
 											>
 												{ __(
 													'Inline output above this size is served from a per-template file with cache busting instead (default: 20480).',
+													'performance-optimisation'
+												) }
+											</p>
+										</div>
+										<div className="wppo-field wppo-mt-16">
+											<label
+												className="wppo-field-label"
+												htmlFor="ccssSafelistExtra"
+											>
+												{ __(
+													'Critical CSS Safelist',
+													'performance-optimisation'
+												) }
+											</label>
+											<textarea
+												className="wppo-textarea wppo-textarea--mono"
+												id="ccssSafelistExtra"
+												name="ccssSafelistExtra"
+												rows="3"
+												placeholder={ __(
+													'e.g. .modal-open',
+													'performance-optimisation'
+												) }
+												value={
+													settings.ccssSafelistExtra
+												}
+												onChange={ handleChange(
+													setSettings
+												) }
+												aria-describedby="ccssSafelistExtra-desc"
+											/>
+											<p
+												id="ccssSafelistExtra-desc"
+												className="wppo-text-muted wppo-mt-8 wppo-text-small"
+											>
+												{ __(
+													'One selector per line — always kept in Critical CSS, even when not above the fold. Use for hidden or JS-injected selectors. Empty keeps current behaviour.',
 													'performance-optimisation'
 												) }
 											</p>
