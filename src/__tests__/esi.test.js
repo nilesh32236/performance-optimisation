@@ -150,6 +150,33 @@ describe( 'ESI placeholder hydration (esi.js)', () => {
 		expect( els.length ).toBe( 0 );
 	} );
 
+	it( 'fans one grouped fetch out to every duplicate placeholder', async () => {
+		document.body.innerHTML =
+			'<div data-wppo-esi="cart" data-nonce="same"></div><div data-wppo-esi="cart" data-nonce="same"></div>';
+		global.fetch.mockResolvedValue( {
+			ok: true,
+			json: async () => ( {
+				success: true,
+				data: { html: '<span>cart(3)</span>' },
+			} ),
+		} );
+
+		hydrateESIPlaceholders();
+
+		await new Promise( ( r ) => setTimeout( r, 0 ) );
+		await new Promise( ( r ) => setTimeout( r, 10 ) );
+
+		// Deduplicated: one request for the shared block + nonce group.
+		expect( global.fetch ).toHaveBeenCalledTimes( 1 );
+		const divs = document.querySelectorAll( 'div' );
+		expect( divs.length ).toBe( 2 );
+		// Both placeholders receive content — clones precede consumption
+		// of the original fragment.
+		divs.forEach( ( div ) => {
+			expect( div.innerHTML ).toBe( '<span>cart(3)</span>' );
+		} );
+	} );
+
 	it( 'does nothing when no placeholders', () => {
 		document.body.innerHTML = '<div>no esi here</div>';
 		global.fetch.mockResolvedValue( {
@@ -229,5 +256,24 @@ describe( 'sanitizeEsiFragment (defense-in-depth DOM sanitizer)', () => {
 	it( 'handles empty and non-string input', () => {
 		expect( sanitizeEsiFragment( '' ).childNodes.length ).toBe( 0 );
 		expect( sanitizeEsiFragment( null ).childNodes.length ).toBe( 0 );
+	} );
+
+	it( 'drops oversized fragments fail-closed instead of inserting them unscrubbed', () => {
+		const warnSpy = jest
+			.spyOn( console, 'warn' )
+			.mockImplementation( () => {} );
+		try {
+			// 501 nodes exceeds MAX_ESI_NODES; the on* handler must not
+			// survive via a fail-open fast path.
+			const html =
+				'<img src="https://example.com/i.png" onerror="alert(1)">'.repeat(
+					501
+				);
+			const frag = sanitizeEsiFragment( html );
+			expect( frag.childNodes.length ).toBe( 0 );
+			expect( warnSpy ).toHaveBeenCalled();
+		} finally {
+			warnSpy.mockRestore();
+		}
 	} );
 } );

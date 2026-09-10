@@ -58,6 +58,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		private string $html_min_base_url = '';
 
 		/**
+		 * Per-request random namespace for preserved-script placeholder tokens.
+		 *
+		 * In-memory only (never persisted to `wppo_settings`), so it is
+		 * multisite-safe by construction: each request/instance mints its own
+		 * namespace and only tokens carrying it can be restored.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		private string $preserve_namespace = '';
+
+		/**
 		 * The resulting minified HTML content after processing.
 		 *
 		 * @since 1.0.0
@@ -137,6 +149,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			if ( $builder_on && class_exists( Main::class ) && method_exists( Main::class, 'get_delay_js_builder_exclusions' ) ) {
 				try {
 					$this->exclude_delay_js = array_merge( $this->exclude_delay_js, Main::get_delay_js_builder_exclusions() );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				if ( method_exists( Main::class, 'get_delay_js_slider_exclusions' ) ) {
+					try {
+						$this->exclude_delay_js = array_merge( $this->exclude_delay_js, Main::get_delay_js_slider_exclusions() );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+			}
+			// Commerce safe preset (#988): mirror Main::get_delay_js_commerce_exclusions()
+			// via the shared static helper so the lists never drift. Safe-by-default
+			// on; missing key backfills to on.
+			$commerce_on = ! isset( $this->options['file_optimisation']['delayJSCommercePreset'] )
+				|| ! empty( $this->options['file_optimisation']['delayJSCommercePreset'] );
+			if ( $commerce_on && class_exists( Main::class ) && method_exists( Main::class, 'get_delay_js_commerce_exclusions' ) ) {
+				try {
+					$this->exclude_delay_js = array_merge( $this->exclude_delay_js, Main::get_delay_js_commerce_exclusions() );
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
@@ -311,6 +342,81 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		}
 
 		/**
+		 * Get (and lazily mint) the per-request preserve namespace.
+		 *
+		 * Uses cryptographically random hex via `random_bytes()` when available,
+		 * falling back to `wp_generate_password()` (sanitized to alphanumerics)
+		 * and finally to a `uniqid()`/`wp_rand()` token. Never fatals: any
+		 * failure degrades to a static fallback namespace (fail-open).
+		 *
+		 * @since NEXT
+		 * @return string Non-empty namespace string.
+		 */
+		private function get_preserve_namespace(): string {
+			if ( '' !== $this->preserve_namespace ) {
+				return $this->preserve_namespace;
+			}
+
+			$this->preserve_namespace = Util::mint_placeholder_namespace();
+
+			return $this->preserve_namespace;
+		}
+
+		/**
+		 * Resolve a single preserved-script placeholder token against the allowlist.
+		 *
+		 * Strict restore discipline (CVE-2026-3220 shape): the token must carry
+		 * this request's namespace (constant-time comparison) and a numeric
+		 * index within bounds of `$scripts`. Any anomaly returns null so the
+		 * caller emits the node unmodified (fail-open).
+		 *
+		 * @since NEXT
+		 * @param string $token   The matched placeholder tag.
+		 * @param array  $scripts The preserved scripts allowlist.
+		 * @return string|null Restored script HTML, or null on anomaly.
+		 */
+		private function resolve_preserved_script( string $token, array $scripts ): ?string {
+			if ( 1 !== preg_match( '~^<script\s+data-wppo-preserve=(["\'])([A-Za-z0-9_-]+)-(\d+)\1\s*></script>$~i', $token, $matches ) ) {
+				return null;
+			}
+
+			$namespace          = $matches[2];
+			$index_raw          = $matches[3];
+			$namespace_expected = $this->preserve_namespace;
+
+			if ( '' === $namespace_expected || '' === $namespace ) {
+				return null;
+			}
+
+			if ( strlen( $namespace ) !== strlen( $namespace_expected ) ) {
+				return null;
+			}
+
+			if ( function_exists( 'hash_equals' ) ) {
+				if ( ! hash_equals( $namespace_expected, $namespace ) ) {
+					return null;
+				}
+			} elseif ( $namespace !== $namespace_expected ) {
+				return null;
+			}
+
+			if ( ! ctype_digit( $index_raw ) ) {
+				return null;
+			}
+
+			$index = (int) $index_raw;
+			if ( $index < 0 || $index >= count( $scripts ) ) {
+				return null;
+			}
+
+			if ( ! isset( $scripts[ $index ] ) || ! is_string( $scripts[ $index ] ) ) {
+				return null;
+			}
+
+			return $scripts[ $index ];
+		}
+
+		/**
 		 * Extract the script type from attributes string.
 		 *
 		 * @param string $attributes The script attributes string.
@@ -352,11 +458,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 * @since 1.0.0
 		 */
 		private function extract_and_preserve_scripts_template( $html ) {
-			$scripts = array();
+			$scripts   = array();
+			$namespace = $this->get_preserve_namespace();
 
-			$html = preg_replace_callback(
+			$extracted = preg_replace_callback(
 				'#<script\b([^>]*)>(.*?)</script>#is',
-				function ( $matches ) use ( &$scripts ) {
+				function ( $matches ) use ( &$scripts, $namespace ) {
 					$attributes = $matches[1];
 
 					$type = $this->get_script_type( $attributes );
@@ -366,7 +473,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 						$exclude_types = array( 'text/javascript', 'application/ld+json', 'module', 'importmap' );
 						if ( ! in_array( $type, $exclude_types, true ) ) {
 							$scripts[] = $matches[0];
-							return '<script data-wppo-preserve="' . ( count( $scripts ) - 1 ) . '"></script>';
+							return '<script data-wppo-preserve="' . $namespace . '-' . ( count( $scripts ) - 1 ) . '"></script>';
 						}
 					}
 
@@ -374,6 +481,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				},
 				$html
 			);
+
+			// PCRE failure: keep the original HTML rather than assigning null
+			// (which would break downstream string handling). Mirrors the
+			// noscript extraction guard.
+			if ( null !== $extracted ) {
+				$html = $extracted;
+			}
 
 			return array( $html, $scripts );
 		}
@@ -387,11 +501,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 * @since 1.0.0
 		 */
 		private function restore_preserved_scripts_template( $html, $scripts ) {
-			foreach ( $scripts as $index => $script ) {
-				$html = str_replace( '<script data-wppo-preserve="' . ( $index ) . '"></script>', $script, $html );
+			if ( ! is_string( $html ) || empty( $scripts ) ) {
+				return $html;
 			}
 
-			return $html;
+			$restored = preg_replace_callback(
+				'~<script\s+data-wppo-preserve=(["\'])[^"\']*\1\s*></script>~i',
+				function ( $matches ) use ( $scripts ) {
+					$resolved = $this->resolve_preserved_script( $matches[0], $scripts );
+					// Fail-open: attacker-controlled or out-of-range tokens are
+					// emitted unmodified so they stay inert.
+					return null !== $resolved ? $resolved : $matches[0];
+				},
+				$html
+			);
+
+			// PCRE failure: degrade to unoptimised markup, never fatal.
+			return null !== $restored ? $restored : $html;
 		}
 
 		/**

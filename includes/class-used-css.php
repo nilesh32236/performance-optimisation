@@ -164,6 +164,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		private bool $host_mismatch = false;
 
 		/**
+		 * Whether a traversal probe has been logged this request.
+		 *
+		 * Rate-limits activity-log writes so a hostile crawler cannot flood
+		 * the log table with one entry per request path probe. Mirrors
+		 * Cache::$traversal_probe_logged.
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static bool $traversal_probe_logged = false;
+
+		/**
 		 * Constructor.
 		 *
 		 * @param array $options Plugin options.
@@ -905,49 +917,196 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		/**
 		 * Get the used-CSS cache file path for a URL.
 		 *
+		 * Dual-prefix containment-checked: returns an empty string (and logs
+		 * a traversal probe) when the resolved path would escape the cache
+		 * root or the per-domain directory, so callers fail open to
+		 * unoptimized output instead of writing outside the cache tree.
+		 *
 		 * @param string $url The page URL.
-		 * @return string The filesystem path.
+		 * @return string The filesystem path, or '' when refused.
 		 * @since 1.9.0
 		 */
 		public function get_used_css_path( string $url = '' ): string {
-			$path        = $this->get_url_path( $url );
+			if ( '' === $this->cache_root_dir || '' === $this->domain ) {
+				return '';
+			}
+			$path = $this->get_url_path( $url );
+			if ( '' === $path && $this->is_raw_path_non_blank( $url ) ) {
+				// Distinguish the benign homepage ('/', '') from a rejected
+				// hostile input: never map a probe to the homepage file —
+				// refuse and log so callers fail open to unoptimized output.
+				$this->log_traversal_probe( $url );
+				return '';
+			}
 			$path_suffix = '' !== $path ? "/{$path}" : '';
-			return "{$this->cache_root_dir}/{$this->domain}{$path_suffix}/" . self::USED_CSS_FILENAME;
+			$candidate   = "{$this->cache_root_dir}/{$this->domain}{$path_suffix}/" . self::USED_CSS_FILENAME;
+			if ( ! $this->is_path_contained( $candidate ) ) {
+				$this->log_traversal_probe( $url );
+				return '';
+			}
+			return $candidate;
 		}
 
 		/**
 		 * Get the used-CSS cache file URL for a URL.
 		 *
+		 * Returns an empty string for hostile inputs (never maps a probe to
+		 * the homepage file) so callers fail open to original stylesheets.
+		 *
 		 * @param string $url The page URL.
-		 * @return string The public URL.
+		 * @return string The public URL, or '' when refused.
 		 * @since 1.9.0
 		 */
 		public function get_used_css_url( string $url = '' ): string {
-			$path        = $this->get_url_path( $url );
+			if ( '' === $this->cache_root_dir || '' === $this->cache_root_url || '' === $this->domain ) {
+				return '';
+			}
+			$path = $this->get_url_path( $url );
+			if ( '' === $path && $this->is_raw_path_non_blank( $url ) ) {
+				$this->log_traversal_probe( $url );
+				return '';
+			}
 			$path_suffix = '' !== $path ? "/{$path}" : '';
+			// Containment parity with get_used_css_path(): resolve the
+			// filesystem candidate through the same dual-prefix check so the
+			// URL and path surfaces refuse the same hostile inputs.
+			$candidate = "{$this->cache_root_dir}/{$this->domain}{$path_suffix}/" . self::USED_CSS_FILENAME;
+			if ( ! $this->is_path_contained( $candidate ) ) {
+				$this->log_traversal_probe( $url );
+				return '';
+			}
 			return "{$this->cache_root_url}/{$this->domain}{$path_suffix}/" . self::USED_CSS_FILENAME;
 		}
 
 		/**
 		 * Get the normalized URL path for cache storage.
 		 *
+		 * Delegates to the shared {@see Util::sanitize_cache_url_path()}
+		 * helper (single controlled decode pass, null-byte + dotdot +
+		 * drive/UNC rejection, PHP_URL_PATH extraction) so the used-CSS
+		 * surface normalizes identically to the static HTML cache.
+		 *
 		 * @param string $url The page URL.
-		 * @return string Normalized path.
+		 * @return string Normalized path, or '' when refused/empty.
 		 * @since 1.9.0
 		 */
 		private function get_url_path( string $url = '' ): string {
 			if ( '' === $url ) {
 				$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
-				$url_path    = wp_normalize_path( trim( rawurldecode( (string) wp_parse_url( $request_uri, PHP_URL_PATH ) ), '/' ) );
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$raw = wp_parse_url( $request_uri, PHP_URL_PATH );
+				} else {
+					$raw = parse_url( $request_uri, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
+				}
+				if ( null === $raw || false === $raw ) {
+					$raw = $request_uri;
+				}
+				return Util::sanitize_cache_url_path( (string) $raw );
+			}
+
+			return Util::sanitize_cache_url_path( $url );
+		}
+
+		/**
+		 * Whether the raw path component behind a sanitized-'' result is non-blank.
+		 *
+		 * Distinguishes the benign homepage (`/`, `''`) from a rejected
+		 * hostile input (dot-dot, encoded sequences, null bytes, drive/UNC
+		 * prefixes): only the latter counts as a traversal probe. Mirrors
+		 * the homepage distinction in Cache::get_file_path().
+		 *
+		 * @since NEXT
+		 * @param string $url The original URL ('' = current REQUEST_URI).
+		 * @return bool True when the raw path component is non-blank.
+		 */
+		private function is_raw_path_non_blank( string $url ): bool {
+			$raw = $url;
+			if ( '' === $raw ) {
+				$raw = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
+			}
+			if ( function_exists( 'wp_parse_url' ) ) {
+				$component = wp_parse_url( $raw, PHP_URL_PATH );
 			} else {
-				$url_path = wp_normalize_path( trim( rawurldecode( (string) wp_parse_url( $url, PHP_URL_PATH ) ), '/' ) );
+				$component = parse_url( $raw, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
+			}
+			if ( null === $component || false === $component ) {
+				$component = $raw;
+			}
+			return '' !== trim( trim( (string) $component ), '/' );
+		}
+
+		/**
+		 * Whether an absolute path stays inside the used-CSS cache tree.
+		 *
+		 * Dual-prefix containment: the normalized path must start with both
+		 * the cache root and the per-domain directory (trailing-slash aware
+		 * so `wppo-evil` never prefix-matches `wppo`). Empty root or domain
+		 * fails closed. Mirrors Cache::is_path_contained().
+		 *
+		 * @since NEXT
+		 * @param string $path Absolute file or directory path.
+		 * @return bool True when contained.
+		 */
+		private function is_path_contained( string $path ): bool {
+			if ( '' === $this->cache_root_dir || '' === $this->domain ) {
+				return false;
 			}
 
-			if ( false !== strpos( $url_path, '..' ) ) {
-				$url_path = '';
+			if ( function_exists( 'wp_normalize_path' ) ) {
+				$norm = wp_normalize_path( $path );
+				$root = wp_normalize_path( $this->cache_root_dir );
+			} else {
+				$norm = str_replace( '\\', '/', $path );
+				$root = str_replace( '\\', '/', $this->cache_root_dir );
 			}
 
-			return $url_path;
+			$root       = rtrim( $root, '/' ) . '/';
+			$domain_dir = $root . trim( $this->domain, '/' ) . '/';
+
+			return 0 === strpos( $norm, $root ) && 0 === strpos( $norm, $domain_dir );
+		}
+
+		/**
+		 * Log a blocked used-CSS path traversal probe (once per request).
+		 *
+		 * Never throws: failures degrade silently to serving unoptimized
+		 * output. Mirrors Cache::log_traversal_probe().
+		 *
+		 * @since NEXT
+		 * @param string $raw_input The hostile input that was rejected.
+		 * @return void
+		 */
+		private function log_traversal_probe( string $raw_input ): void {
+			if ( self::$traversal_probe_logged ) {
+				return;
+			}
+			self::$traversal_probe_logged = true;
+
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
+					return;
+				}
+				// Privacy: never log query strings or fragments (tokens, PII).
+				$path_only = function_exists( 'wp_parse_url' ) ? wp_parse_url( (string) $raw_input, PHP_URL_PATH ) : parse_url( (string) $raw_input, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url unavailable.
+				if ( is_string( $path_only ) ) {
+					$log_input = $path_only;
+				} else {
+					$parts     = preg_split( '/[?#]/', (string) $raw_input, 2 );
+					$log_input = is_array( $parts ) ? (string) $parts[0] : (string) $raw_input;
+				}
+				$snippet = str_replace( "\0", '', $log_input );
+				if ( function_exists( 'sanitize_text_field' ) ) {
+					$snippet = sanitize_text_field( $snippet );
+				}
+				$snippet = function_exists( 'mb_substr' ) ? mb_substr( $snippet, 0, 200, 'UTF-8' ) : substr( $snippet, 0, 200 );
+				$message = function_exists( '__' ) ? __( 'Blocked used-CSS path traversal probe.', 'performance-optimisation' ) : 'Blocked used-CSS path traversal probe.';
+				if ( '' !== $snippet ) {
+					$message .= ' ' . $snippet;
+				}
+				Log::add( $message );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 
 		/**
@@ -999,7 +1158,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			}
 
 			$file_path = $this->get_used_css_path( $url );
-			$dir_path  = dirname( $file_path );
+			if ( '' === $file_path ) {
+				// Traversal probe or empty domain/root: refuse the write and
+				// serve the unoptimized buffer (fail-open, never fatal).
+				// get_used_css_path() already logged the probe.
+				return false;
+			}
+			$dir_path = dirname( $file_path );
+
+			// Dual-prefix containment on both the file and its directory
+			// before any mkdir/write, so a crafted path can never escape
+			// the cache root or clobber sensitive files.
+			if ( ! $this->is_path_contained( $file_path ) || ! $this->is_path_contained( trailingslashit( $dir_path ) ) ) {
+				$this->log_traversal_probe( $url );
+				return false;
+			}
 
 			$fs = Util::init_filesystem();
 			if ( ! $fs ) {
@@ -1035,11 +1208,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 */
 		public function delete_used_css( $url = null ): bool {
 			if ( null !== $url ) {
+				$file_path = $this->get_used_css_path( (string) $url );
+				// Refuse deletes for hostile paths (fail-open: nothing
+				// deleted, probe already logged by get_used_css_path()).
+				// Only log here for non-hostile empty resolutions (empty
+				// domain/root): hostile paths were already logged, and
+				// blank raw paths are not attack probes.
+				if ( '' === $file_path || ! $this->is_path_contained( $file_path ) ) {
+					$raw_path = function_exists( 'wp_parse_url' ) ? wp_parse_url( (string) $url, PHP_URL_PATH ) : parse_url( (string) $url, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url unavailable.
+					if ( ! is_string( $raw_path ) ) {
+						$split    = preg_split( '/[?#]/', (string) $url, 2 );
+						$raw_path = is_array( $split ) ? (string) $split[0] : (string) $url;
+					}
+					if ( '' !== trim( (string) $raw_path ) ) {
+						$this->log_traversal_probe( (string) $url );
+					}
+					return false;
+				}
 				$fs = Util::init_filesystem();
 				if ( ! $fs ) {
 					return false;
 				}
-				$file_path = $this->get_used_css_path( $url );
 				if ( $fs->exists( $file_path ) ) {
 					return $fs->delete( $file_path );
 				}
@@ -1383,6 +1572,66 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		}
 
 		/**
+		 * Strip stylesheet <link> tags for the given quoted srcs (order-agnostic, bounded).
+		 *
+		 * Two-pass href-first then rel-first removal with bounded lazy
+		 * quantifiers so large bundles cannot trigger catastrophic
+		 * backtracking. Each pass is guarded by a null / preg_last_error()
+		 * check; on anomaly the caller must fail open (leave CSS loading
+		 * normally). Matches real-world <link> tags (far shorter than the
+		 * bounds) identically to the previous unbounded pattern.
+		 *
+		 * The rel matcher is intentionally tolerant: it allows whitespace
+		 * around `=` and space-separated rel tokens (e.g. `rel="alternate
+		 * stylesheet"` or `rel = "stylesheet"`), while still requiring the
+		 * token `stylesheet` so same-URL `preload`/`preconnect` hints are
+		 * never stripped.
+		 *
+		 * @since NEXT
+		 * @param string $buffer      The HTML buffer.
+		 * @param array  $quoted_srcs preg_quote()d src URLs (delimiter '/').
+		 * @return array|null Array [ string $stripped, int $strip_count ] or null on PCRE error.
+		 */
+		private function strip_stylesheet_links( string $buffer, array $quoted_srcs ): ?array {
+			if ( empty( $quoted_srcs ) ) {
+				return array( $buffer, 0 );
+			}
+
+			$alternation = implode( '|', $quoted_srcs );
+
+			// Bounded lazy quantifiers cap backtracking; tag body bound of
+			// 2000 and query-string bound of 500 far exceed real <link> tags.
+			// Pass 1: href-first (<link ... href="URL" ... rel="stylesheet" ...>).
+			$pattern_href_first = '/<link[^>]{0,2000}?href\s*=\s*[\'"](?:' . $alternation . ')(?:\?[^\'"]{0,500})?[\'"][^>]{0,2000}?rel\s*=\s*[\'"][^\'"]*stylesheet[^\'"]*[\'"][^>]{0,2000}?\/?>\s*/i';
+			// Pass 2: rel-first (<link ... rel="stylesheet" ... href="URL" ...>).
+			$pattern_rel_first = '/<link[^>]{0,2000}?rel\s*=\s*[\'"][^\'"]*stylesheet[^\'"]*[\'"][^>]{0,2000}?href\s*=\s*[\'"](?:' . $alternation . ')(?:\?[^\'"]{0,500})?[\'"][^>]{0,2000}?\/?>\s*/i';
+
+			$total_count = 0;
+
+			$count_href_first = 0;
+			$after_href_first = preg_replace( $pattern_href_first, '', $buffer, -1, $count_href_first );
+			if ( null === $after_href_first ) {
+				return null;
+			}
+			if ( PREG_NO_ERROR !== preg_last_error() ) {
+				return null;
+			}
+			$total_count += $count_href_first;
+
+			$count_rel_first = 0;
+			$after_rel_first = preg_replace( $pattern_rel_first, '', $after_href_first, -1, $count_rel_first );
+			if ( null === $after_rel_first ) {
+				return null;
+			}
+			if ( PREG_NO_ERROR !== preg_last_error() ) {
+				return null;
+			}
+			$total_count += $count_rel_first;
+
+			return array( $after_rel_first, $total_count );
+		}
+
+		/**
 		 * Inject used-CSS into the buffer: remove original <link> stylesheets
 		 * and insert the used-CSS file with a <noscript> fallback.
 		 *
@@ -1438,7 +1687,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				return $original_buffer;
 			}
 
-			// Remove original <link> tags via single-pass alternation regex.
+			// Remove original <link> tags via two-pass order-agnostic bounded
+			// regex (href-first then rel-first) with a backtrack guard.
 			// Note: On WP 6.9+, small block styles inlined as <style id="wp-block-*-inline-css">
 			// blocks (added when a block renders) are intentionally left in place; only
 			// <link> tags are stripped. This is a pre-existing limitation, not a regression.
@@ -1446,21 +1696,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			foreach ( array_keys( $removal_urls ) as $url ) {
 				$quoted_srcs[] = preg_quote( $url, '/' );
 			}
-			$strip_count = 0;
-			$stripped    = preg_replace(
-				'/<link[^>]*rel=[\'"]stylesheet[\'"][^>]*href=[\'"](' . implode( '|', $quoted_srcs ) . ')(?:\?[^\'"]*)?[\'"][^>]*\/?>\s*/i',
-				'',
-				$buffer,
-				-1,
-				$strip_count
-			);
+			$strip_result = $this->strip_stylesheet_links( $buffer, $quoted_srcs );
 
-			if ( null === $stripped ) {
+			if ( null === $strip_result ) {
 				if ( $this->is_safe_fallback_enabled() ) {
 					$this->log_used_css_fallback( 'preg_error', $handles );
 				}
 				return $original_buffer;
 			}
+
+			list( $stripped, $strip_count ) = $strip_result;
 
 			if ( $this->is_safe_fallback_enabled() && 0 === $strip_count ) {
 				$this->log_used_css_fallback( 'no_match', $handles );
@@ -1679,6 +1924,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'is_delay_excluded_context' ) ) {
 				try {
 					if ( Main::is_delay_excluded_context() ) {
+						return $buffer;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return $buffer;
+				}
+			}
+			// Per-URL + per-page used-CSS disable (#988): skip purging on listed
+			// URLs or when `_wppo_used_css_disabled` is set, without disabling
+			// the plugin. Fail-open: a matcher error returns the unoptimised
+			// buffer (same direction as the delay-guard block above) instead of
+			// falling through to purge CSS.
+			if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'is_used_css_excluded_for_url' ) ) {
+				try {
+					if ( Main::is_used_css_excluded_for_url() ) {
 						return $buffer;
 					}
 				} catch ( \Throwable $e ) {

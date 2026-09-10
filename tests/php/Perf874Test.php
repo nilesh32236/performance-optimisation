@@ -309,13 +309,25 @@ class Perf874Test extends \PHPUnit\Framework\TestCase {
 		$this->install_stubs();
 
 		$this->options['wppo_settings'] = array(
-			'litespeed_integration' => array( 'crawler' => array( 'concurrency' => 4 ) ),
+			'litespeed_integration' => array(
+				'crawler' => array(
+					// Neutralise the load-adaptive throttle so the settings-derived
+					// value is deterministic on busy CI/dev machines.
+					'concurrency' => 4,
+					'loadLimit'   => 1.0E9,
+				),
+			),
 		);
 		$this->assertSame( 4, LiteSpeed_Crawler::get_concurrency() );
 
 		// Re-stub mid-test; only a reset may expose the new value.
 		$this->options['wppo_settings'] = array(
-			'litespeed_integration' => array( 'crawler' => array( 'concurrency' => 2 ) ),
+			'litespeed_integration' => array(
+				'crawler' => array(
+					'concurrency' => 2,
+					'loadLimit'   => 1.0E9,
+				),
+			),
 		);
 		LiteSpeed_Crawler::reset_cache();
 		$this->assertSame( 2, LiteSpeed_Crawler::get_concurrency() );

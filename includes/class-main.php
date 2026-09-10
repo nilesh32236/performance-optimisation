@@ -285,6 +285,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['image_optimisation']['lcpHeroPreload'] ) ) {
 				$this->options['image_optimisation']['lcpHeroPreload'] = true;
 			}
+			if ( ! isset( $this->options['image_optimisation']['autoAltText'] ) ) {
+				$this->options['image_optimisation']['autoAltText'] = false;
+			}
+			if ( ! isset( $this->options['image_optimisation']['maxLongestEdgePx'] ) ) {
+				$this->options['image_optimisation']['maxLongestEdgePx'] = 2560;
+			}
 			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
 				$this->options['file_optimisation'] = array();
 			}
@@ -331,6 +337,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 			if ( ! isset( $this->options['ai_adaptive']['use_wp_ai_client'] ) ) {
 				$this->options['ai_adaptive']['use_wp_ai_client'] = false;
+			}
+			if ( ! isset( $this->options['ai_adaptive']['field_lcp_min_samples'] ) ) {
+				$this->options['ai_adaptive']['field_lcp_min_samples'] = 20;
 			}
 
 			if ( ! isset( $this->options['edge_cache'] ) || ! is_array( $this->options['edge_cache'] ) ) {
@@ -534,6 +543,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 			add_action( 'admin_init', array( $this, 'maybe_migrate_block_assets_setting' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_ccss_max_size' ) );
+			add_action( 'admin_init', array( $this, 'maybe_migrate_image_alt_edge_defaults' ) );
 			// One-time activity-log notice on admin_init.
 			if ( isset( $this->options['file_optimisation']['removeQueryStrings'] ) ) {
 				add_action( 'admin_init', array( $this, 'maybe_notify_remove_query_strings_removal' ) );
@@ -1074,6 +1084,61 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * One-time backfill for the missing-alt autofill toggle and the
+		 * longest-edge downscale cap (issue #985).
+		 *
+		 * Runs on `admin_init` (not the constructor) so a cacheable front-end
+		 * request never triggers a settings write. Only installs whose stored
+		 * settings predate the `autoAltText` / `maxLongestEdgePx` keys (key
+		 * absent) are backfilled with the fail-open defaults (`false` /
+		 * `2560`); any stored explicit value is preserved verbatim, and fresh
+		 * installs with no stored option are skipped because the constructor
+		 * defaults already match. The check is idempotent (key presence is
+		 * the marker), so no extra option row is needed. In-memory options
+		 * are synced too so the current request observes the backfilled
+		 * values. Uses per-site `get_option()` so multisite sites migrate
+		 * independently with no cross-site leakage.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public function maybe_migrate_image_alt_edge_defaults(): void {
+			// allowlist(settings-read-guard): deliberate direct read — must distinguish
+			// "no stored row" (false) from "stored array", which Util::get_settings()
+			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
+			$stored = get_option( 'wppo_settings' );
+			if ( ! is_array( $stored ) ) {
+				return;
+			}
+
+			$image = isset( $stored['image_optimisation'] ) && is_array( $stored['image_optimisation'] ) ? $stored['image_optimisation'] : array();
+
+			$changed = false;
+			if ( ! array_key_exists( 'autoAltText', $image ) ) {
+				$image['autoAltText'] = false;
+				$changed              = true;
+			}
+			if ( ! array_key_exists( 'maxLongestEdgePx', $image ) ) {
+				$image['maxLongestEdgePx'] = 2560;
+				$changed                   = true;
+			}
+
+			if ( ! $changed ) {
+				return;
+			}
+
+			$stored['image_optimisation'] = $image;
+			update_option( 'wppo_settings', $stored );
+
+			if ( ! isset( $this->options['image_optimisation'] ) || ! is_array( $this->options['image_optimisation'] ) ) {
+				$this->options['image_optimisation'] = array();
+			}
+			$this->options['image_optimisation'] = array_merge( $this->options['image_optimisation'], $image );
+
+			Log::add( __( 'Added default image alt autofill and longest-edge cap settings.', 'performance-optimisation' ) );
+		}
+
+		/**
 		 * One-time notice for the removed removeQueryStrings path (#925).
 		 *
 		 * The legacy `file_optimisation.removeQueryStrings` option is ignored
@@ -1308,21 +1373,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					update_option( 'wppo_settings', $value );
 					add_action( 'update_option_wppo_settings', array( __CLASS__, 'on_settings_update' ), 10, 2 );
 
-					add_action(
-						'admin_notices',
-						function () {
-							// role="alert" + aria-live="assertive" so screen readers announce
-							// the failure immediately, matching the React NoticeBanner ARIA
-							// contract used across the SPA.
-							echo '<div class="notice notice-error is-dismissible" role="alert" aria-live="assertive"><p>' . esc_html__( 'Performance Optimisation: Failed to update .htaccess rules. Please check file permissions.', 'performance-optimisation' ) . '</p></div>';
-						}
-					);
+					add_action( 'admin_notices', array( __CLASS__, 'render_htaccess_failure_notice' ) );
 				}
 			} elseif ( $nextgen_changed && $new_enable ) {
 				// Next-gen toggle changed while server rules remain enabled — refresh htaccess to add/remove next-gen block.
 				$ok = Htaccess_Handler::update_rules( true );
 				if ( $ok && class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::is_litespeed() ) {
 					Log::add( __( 'Server rules updated on LiteSpeed — restart OpenLiteSpeed if changes do not appear immediately.', 'performance-optimisation' ) );
+				}
+				if ( ! $ok ) {
+					// Failed refresh leaves the prior file intact (atomic
+					// backup/restore inside update_rules()) — surface an
+					// admin notice so the failure is visible, mirroring the
+					// enable/disable branch above.
+					add_action( 'admin_notices', array( __CLASS__, 'render_htaccess_failure_notice' ) );
 				}
 			}
 
@@ -1332,6 +1396,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( $old_gf !== $new_gf ) {
 				Google_Fonts::clear_font_cache();
 			}
+		}
+
+		/**
+		 * Render the admin notice for a failed .htaccess rules update.
+		 *
+		 * Shared by the enable/disable and next-gen-refresh branches so the
+		 * message and ARIA contract cannot drift. `role="alert"` +
+		 * `aria-live="assertive"` announce the failure immediately, matching
+		 * the React NoticeBanner contract used across the SPA.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function render_htaccess_failure_notice(): void {
+			echo '<div class="notice notice-error is-dismissible" role="alert" aria-live="assertive"><p>' . esc_html__( 'Performance Optimisation: Failed to update .htaccess rules. Please check file permissions.', 'performance-optimisation' ) . '</p></div>';
 		}
 
 		/**
@@ -2108,6 +2187,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				unset( $safe_options['object_cache']['password'] );
 			}
 
+			// Resolve + sanitize image info once, outside the wp_localize_script
+			// array, so the class_exists fallback stays scannable.
+			$image_info = class_exists( 'PerformanceOptimise\Inc\Img_Converter' )
+				? Img_Converter::get_img_info()
+				: get_option( 'wppo_img_info', array() );
+			$image_info = $this->sanitize_image_info_for_client( (array) $image_info );
+
 			wp_localize_script(
 				'performance-optimisation-script',
 				'wppoSettings',
@@ -2119,7 +2205,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'version'                              => WPPO_VERSION,
 					'settings'                             => $safe_options,
 					'show_welcome'                         => ! (bool) get_user_meta( get_current_user_id(), 'wppo_welcome_dismissed', true ),
-					'image_info'                           => $this->sanitize_image_info_for_client( get_option( 'wppo_img_info', array() ) ),
+					'image_info'                           => $image_info,
 					'cache_size'                           => $cache_size,
 					'total_js_css'                         => $total_js_css,
 					// Read-only WP 7.1+ client-side media processing state. Evaluated
@@ -2876,6 +2962,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					return true;
 				}
 
+				// Per-URL delay disable (#988): skip delay on listed URLs only,
+				// without disabling the plugin. Fail-open: matcher errors never exclude.
+				try {
+					$delay_exclude_list = '';
+					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+						$delay_settings     = Util::get_settings();
+						$delay_exclude_list = isset( $delay_settings['file_optimisation']['delayJSExcludeUrls'] ) ? (string) $delay_settings['file_optimisation']['delayJSExcludeUrls'] : '';
+					}
+					if ( '' !== trim( $delay_exclude_list ) && self::is_url_excluded_by_list( $delay_exclude_list ) ) {
+						return true;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+
 				// Builder preview/edit contexts only (never blanket-disable rendered frontend).
 				// Elementor.
 				if ( isset( $_GET['elementor-preview'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
@@ -3132,6 +3233,198 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Curated commerce Delay JS exclusions (issue #988).
+		 *
+		 * The jQuery plus cart-fragments/checkout handles stay un-delayed when
+		 * the commerce preset is on so carts and checkouts never break.
+		 * Filterable via wppo_delay_js_commerce_exclusions.
+		 *
+		 * @since NEXT
+		 * @return string[]
+		 */
+		public static function get_delay_js_commerce_exclusions(): array {
+			$preset = array(
+				'jquery',
+				'jquery-core',
+				'jquery-migrate',
+				'wc-cart-fragments',
+				'wc-checkout',
+				'woocommerce',
+				'wc-add-to-cart',
+				'wc-single-product',
+				'cart-fragments',
+				'wc-cart',
+				'wc-blocks',
+				'wc-store',
+				'wc-order-attribution',
+				'wc-jquery-blockui',
+				'wc-address-i18n',
+				'wc-enhanced-select',
+				'wc-password-strength-meter',
+				'wc-geolocation',
+			);
+			/**
+			 * Filters delay JS commerce preset exclusions.
+			 *
+			 * @since NEXT
+			 * @param string[] $preset Commerce preset exclusions.
+			 */
+			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_commerce_exclusions' ) ) {
+				return $preset;
+			}
+			return (array) apply_filters( 'wppo_delay_js_commerce_exclusions', $preset );
+		}
+
+		/**
+		 * Curated slider Delay JS exclusions (issue #988).
+		 *
+		 * Slider runtimes stay un-delayed with the builder preset so hero
+		 * sliders keep working. Filterable via wppo_delay_js_slider_exclusions.
+		 *
+		 * @since NEXT
+		 * @return string[]
+		 */
+		public static function get_delay_js_slider_exclusions(): array {
+			$preset = array(
+				'revslider',
+				'rs6',
+				'rs-module',
+				'rev-slider',
+				'smart-slider',
+				'metaslider',
+				'soliloquy',
+				'swiper',
+				'slick',
+				'owl-carousel',
+				'splide',
+				'bxslider',
+			);
+			/**
+			 * Filters delay JS slider preset exclusions.
+			 *
+			 * @since NEXT
+			 * @param string[] $preset Slider preset exclusions.
+			 */
+			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_slider_exclusions' ) ) {
+				return $preset;
+			}
+			return (array) apply_filters( 'wppo_delay_js_slider_exclusions', $preset );
+		}
+
+		/**
+		 * Whether the current URL matches a newline-separated exclusion list (issue #988).
+		 *
+		 * Each non-empty line is a case-insensitive URL-substring match, or a
+		 * regex when wrapped in valid delimiters (e.g. `#...#`). Fail-open:
+		 * any detection failure returns false (no exclusion).
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $url_list Newline-separated exclusion list.
+		 * @return bool True when the current request URL is excluded.
+		 */
+		public static function is_url_excluded_by_list( string $url_list ): bool {
+			try {
+				$url_list = trim( $url_list );
+				if ( '' === $url_list ) {
+					return false;
+				}
+				$raw_uri     = isset( $_SERVER['REQUEST_URI'] ) ? wp_unslash( $_SERVER['REQUEST_URI'] ) : '/'; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Unslashed here; read-only routing check, no output.
+				$request_uri = sanitize_text_field( (string) $raw_uri );
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$path = (string) wp_parse_url( $request_uri, PHP_URL_PATH );
+				} else {
+					// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for wp_parse_url(); WP 6.2+ always provides it.
+					$qpos = strpos( $request_uri, '?' );
+					$path = false === $qpos ? $request_uri : substr( $request_uri, 0, $qpos );
+				}
+				$haystack = strtolower( $request_uri . ' ' . $path );
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'process_urls' ) ) {
+					$lines = Util::process_urls( $url_list );
+				} else {
+					$lines = array_values( array_filter( array_map( 'trim', explode( "\n", $url_list ) ) ) );
+				}
+				foreach ( $lines as $line ) {
+					$line = trim( (string) $line );
+					if ( '' === $line ) {
+						continue;
+					}
+					// Regex-per-line when wrapped in valid delimiters; invalid regex fails open to substring.
+					if ( strlen( $line ) > 2 && '#' === $line[0] && false !== strrpos( $line, '#', 1 ) ) {
+						$valid = false;
+						set_error_handler( static function () {} ); // phpcs:ignore -- Suppress warnings from user-supplied regex validation.
+						try {
+							$valid = false !== preg_match( $line, '' );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$valid = false;
+						}
+						restore_error_handler();
+						if ( $valid ) {
+							set_error_handler( static function () {} ); // phpcs:ignore -- Suppress warnings from user-supplied regex matching.
+							try {
+								$matched = preg_match( $line . 'i', $request_uri );
+							} catch ( \Throwable $e ) {
+								unset( $e );
+								$matched = false;
+							}
+							restore_error_handler();
+							if ( 1 === $matched ) {
+								return true;
+							}
+							continue;
+						}
+					}
+					if ( false !== stripos( $haystack, strtolower( $line ) ) ) {
+						return true;
+					}
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Whether used CSS must be skipped for the current URL (issue #988).
+		 *
+		 * Checks the per-URL `usedCSSExcludeUrls` list plus the `_wppo_used_css_disabled`
+		 * per-page kill-switch. Fail-open: any detection failure returns false.
+		 *
+		 * @since NEXT
+		 * @return bool True when used CSS must be skipped.
+		 */
+		public static function is_used_css_excluded_for_url(): bool {
+			try {
+				$list = '';
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					$settings = Util::get_settings();
+					$list     = isset( $settings['file_optimisation']['usedCSSExcludeUrls'] ) ? (string) $settings['file_optimisation']['usedCSSExcludeUrls'] : '';
+				}
+				if ( '' !== trim( $list ) && self::is_url_excluded_by_list( $list ) ) {
+					return true;
+				}
+				if ( function_exists( 'is_singular' ) && function_exists( 'get_the_ID' ) && function_exists( 'get_post_meta' ) ) {
+					try {
+						if ( is_singular() ) {
+							$post_id = (int) get_the_ID();
+							if ( $post_id > 0 && ! empty( get_post_meta( $post_id, '_wppo_used_css_disabled', true ) ) ) {
+								return true;
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
 		 * Whether Delay JS is disabled for a singular page (issue #966).
 		 *
 		 * Reads the `_wppo_delay_disabled` post-meta kill-switch. Fail-open:
@@ -3186,9 +3479,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		private function get_delay_js_preset_exclusions(): array {
 			$preset = array(
-				'jquery',
-				'jquery-core',
-				'jquery-migrate',
 				'recaptcha',
 				'google-recaptcha',
 				'grecaptcha',
@@ -3206,22 +3496,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'linkedin',
 				'twitter',
 				'paypal',
-				// Woo-critical handles (#932): stay un-delayed by default even
-				// outside is_cart()/is_checkout() contexts (e.g. mini-cart
-				// fragments on other pages). Deduped via array_unique at merge.
-				'wc-cart-fragments',
-				'wc-checkout',
-				'woocommerce',
-				'wc-add-to-cart',
-				'wc-single-product',
-				// WooCommerce safe list.
-				'wc-',
-				'cart-fragments',
-				'wc-cart',
-				// Elementor safe list.
-				'elementor',
-				'elementor-frontend',
-				'elementor-pro',
 				// Form plugins safe list.
 				'contact-form-7',
 				'wpcf7',
@@ -3230,14 +3504,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'wpforms',
 				'ninja-forms',
 				'fluentform',
+				// Elementor base handles stay global so builder pages never break
+				// even when the builder preset toggle is off.
+				'elementor',
+				'elementor-frontend',
+				'elementor-pro',
 			);
+			// Commerce safe preset (#988): safe-by-default on; merges jQuery +
+			// cart-fragments/checkout handles unless explicitly disabled.
+			// Missing key backfills to on (per-site settings, multisite-safe).
+			$commerce_on = ! isset( $this->options['file_optimisation']['delayJSCommercePreset'] )
+				|| ! empty( $this->options['file_optimisation']['delayJSCommercePreset'] );
+			if ( $commerce_on ) {
+				$preset = array_merge( $preset, self::get_delay_js_commerce_exclusions() );
+			}
 			// Builder safe preset (#966): safe-by-default on; merges builder
-			// runtime handles unless explicitly disabled. Missing key backfills
-			// to on (per-site settings, multisite-safe).
+			// runtime handles plus slider runtimes (#988) unless explicitly disabled.
+			// Missing key backfills to on (per-site settings, multisite-safe).
 			$builder_on = ! isset( $this->options['file_optimisation']['delayJSBuilderPreset'] )
 				|| ! empty( $this->options['file_optimisation']['delayJSBuilderPreset'] );
 			if ( $builder_on ) {
-				$preset = array_merge( $preset, self::get_delay_js_builder_exclusions() );
+				$preset = array_merge( $preset, self::get_delay_js_builder_exclusions(), self::get_delay_js_slider_exclusions() );
 			}
 			/**
 			 * Filters delay JS preset exclusions.
@@ -3335,6 +3622,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 		/**
 		 * Adds preload, prefetch, and preconnect links to optimize resource loading.
+		 *
+		 * Image preloads delegate to `Image_Optimisation::preload_images()`,
+		 * which emits exactly one `<link rel="preload" as="image"
+		 * fetchpriority="high">` per URL for the single RUM-field →
+		 * PageSpeed LCP candidate (issue #991; Optimization Detective stays
+		 * Priority 0), deduped by normalized URL + query + media with a
+		 * per-request emitted guard, and excludes that candidate from lazy
+		 * load (gated on the LCP toggles, with normalized size-variant
+		 * matching). Core 6.9 `fetchpriority` stamping is never
+		 * double-applied (the stamp path only fills gaps via
+		 * `function_exists()`-guarded core calls). Manual preload-image meta
+		 * and the hero fallback remain when no RUM or PageSpeed candidate
+		 * resolves (fail-open).
+		 *
+		 * Runs on `wp_head` priority 1, before core resource-hints at
+		 * priority 2.
 		 *
 		 * @since 1.0.0
 		 */
@@ -3473,6 +3776,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * Backward compatible: on WP <6.8 `wp_get_speculation_rules()` does not exist,
 		 * so this method is a no-op and no filter is registered (legacy path).
+		 * Fail-open: pre-6.8 output degrades to unoptimised (no speculation
+		 * block is printed by this plugin on 6.2-6.7); invalid URLs are
+		 * skipped individually and logged-in visitors are always excluded.
 		 *
 		 * @since NEXT
 		 *
@@ -3483,8 +3789,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// per WP 7.1 spec (IO-001); wp_get_speculation_rules_configuration() is the
 			// same 6.8 introduction, but wp_get_speculation_rules is the canonical
 			// presence check for the <script type="speculationrules"> emitter.
-			// Keep backward compat for WP <6.8 (no-op).
+			// Keep backward compat for WP <6.8 (no-op, fail-open to unoptimised).
 			if ( ! function_exists( 'wp_get_speculation_rules' ) ) {
+				return;
+			}
+
+			// Belt-and-braces version guard so WP 6.2-6.7 never registers core
+			// filters even if a backported helper exists. Fail-open: read-only,
+			// never fatal.
+			try {
+				if ( isset( $GLOBALS['wp_version'] ) ) {
+					$wp_version = (string) $GLOBALS['wp_version'];
+				} elseif ( function_exists( 'get_bloginfo' ) ) {
+					$wp_version = (string) get_bloginfo( 'version' );
+				} else {
+					$wp_version = '6.8';
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$wp_version = '6.8';
+			}
+			if ( version_compare( $wp_version, '6.8', '<' ) ) {
 				return;
 			}
 
@@ -3662,7 +3987,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Collect high-value same-site URLs for the speculation list rule.
 		 *
-		 * Source: home URL first, then `performance_audit.high_value_urls`.
+		 * Source: home URL first, then `performance_audit.high_value_urls`,
+		 * then RUM top URLs (real-visit winners via {@see get_rum_top_urls()}).
 		 * Each candidate is normalized via `esc_url_raw(trim())`, deduped,
 		 * same-site validated, and capped (keeps the ~1KB footprint).
 		 * Invalid URLs are skipped individually (fail-open); an empty array
@@ -3709,6 +4035,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 			}
 
+			// RUM field-data winners fill the remaining budget (no extra cron
+			// load: one opportunistic get_option read with fail-open empty).
+			foreach ( $this->get_rum_top_urls() as $rum_url ) {
+				$candidates[] = $rum_url;
+			}
+
 			$urls = array();
 			foreach ( $candidates as $candidate ) {
 				if ( ! is_string( $candidate ) ) {
@@ -3734,11 +4066,280 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Top RUM (real-visit) URLs by visit volume.
+		 *
+		 * Reads the `wppo_web_vitals_rum` per-day/per-path aggregates via
+		 * `RUM::get_data()` (one opportunistic option read, no extra cron
+		 * load), sums sample counts (`max(lcp.n, ttfb.n, ...)`) per
+		 * normalized path across days, and resolves the winners to absolute
+		 * same-site URLs. Candidates are validated with
+		 * {@see is_speculation_list_url_valid()} (cart/checkout/account,
+		 * query strings, cross-site excluded) and capped so home +
+		 * high-value + RUM total stays within the 10-URL budget.
+		 *
+		 * Fail-open: any throwable, missing class, or empty RUM returns an
+		 * empty array — never fatal, never white-screen.
+		 *
+		 * @since NEXT
+		 *
+		 * @return string[] Validated absolute RUM winner URLs (possibly empty).
+		 */
+		private function get_rum_top_urls(): array {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'get_data' ) ) {
+					return array();
+				}
+				$rum = RUM::get_data();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+
+			if ( ! is_array( $rum ) || empty( $rum ) ) {
+				return array();
+			}
+
+			try {
+				$counts = array();
+				foreach ( $rum as $paths ) {
+					if ( ! is_array( $paths ) ) {
+						continue;
+					}
+					foreach ( $paths as $path => $metrics ) {
+						if ( ! is_string( $path ) || '' === $path || ! is_array( $metrics ) ) {
+							continue;
+						}
+						// RUM buckets store query-less normalized paths already;
+						// skip anything carrying a query/fragment defensively.
+						if ( false !== strpos( $path, '?' ) || false !== strpos( $path, '#' ) ) {
+							continue;
+						}
+						$count = 0;
+						foreach ( $metrics as $metric => $aggregate ) {
+							if ( 'lcpUrls' === $metric || ! is_array( $aggregate ) ) {
+								continue;
+							}
+							$n = isset( $aggregate['n'] ) ? (int) $aggregate['n'] : 0;
+							if ( $n > $count ) {
+								$count = $n;
+							}
+						}
+						if ( $count <= 0 ) {
+							continue;
+						}
+						$normalized = class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'normalize_rum_path' )
+							? Util::normalize_rum_path( $path )
+							: $path;
+						if ( '/' === $normalized ) {
+							continue;
+						}
+						if ( ! isset( $counts[ $normalized ] ) ) {
+							$counts[ $normalized ] = 0;
+						}
+						$counts[ $normalized ] += $count;
+					}
+				}
+
+				if ( empty( $counts ) ) {
+					return array();
+				}
+
+				arsort( $counts );
+
+				$urls = array();
+				foreach ( array_keys( $counts ) as $top_path ) {
+					// Canonical pretty-permalink form carries a trailing
+					// slash (RUM normalization strips it); restored here so
+					// winners match the home/high-value URL style.
+					if ( '/' !== substr( $top_path, -1 ) ) {
+						$top_path .= '/';
+					}
+					$absolute = Util::cached_home_url( $top_path );
+					$clean    = function_exists( 'esc_url_raw' ) ? esc_url_raw( $absolute ) : $absolute;
+					if ( ! is_string( $clean ) || '' === $clean ) {
+						continue;
+					}
+					if ( in_array( $clean, $urls, true ) ) {
+						continue;
+					}
+					if ( ! $this->is_speculation_list_url_valid( $clean ) ) {
+						continue;
+					}
+					$urls[] = $clean;
+					if ( count( $urls ) >= 10 ) {
+						break;
+					}
+				}
+
+				return $urls;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
+		 * Whether speculation output is suppressed for the current visitor.
+		 *
+		 * Logged-in users stay excluded (mirrors the `null` config
+		 * passthrough in {@see filter_speculation_rules_configuration()}).
+		 * Fail-open: any throwable means "not suppressed".
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when rules must not be emitted.
+		 */
+		private function is_speculation_suppressed_for_visitor(): bool {
+			try {
+				return function_exists( 'is_user_logged_in' ) && is_user_logged_in();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Eager prerender list rule for the home link on singular views.
+		 *
+		 * Returns a `{"source":"list"}` rule with `eager` eagerness for the
+		 * home URL only when the current view is singular (and the home URL
+		 * is present/valid). Returns null otherwise (non-singular, no home
+		 * link, logged-in visitor, document rules toggled off, or any
+		 * failure) — fail-open to "emit nothing", never fatal.
+		 *
+		 * @since NEXT
+		 *
+		 * @return array<string,mixed>|null The singular rule, or null.
+		 */
+		private function get_singular_home_link_rule(): ?array {
+			try {
+				if ( $this->is_speculation_suppressed_for_visitor() ) {
+					return null;
+				}
+
+				$document_rules = $this->options['preload_settings']['speculationDocumentRules'] ?? true;
+				if ( ! $document_rules ) {
+					return null;
+				}
+
+				if ( ! function_exists( 'is_singular' ) || ! is_singular() ) {
+					return null;
+				}
+
+				$home = Util::cached_home_url( '/' );
+				if ( ! is_string( $home ) || '' === $home ) {
+					return null;
+				}
+				$clean = function_exists( 'esc_url_raw' ) ? esc_url_raw( $home ) : $home;
+				if ( '' === $clean || ! $this->is_speculation_list_url_valid( $clean ) ) {
+					return null;
+				}
+
+				return array(
+					'source'    => 'list',
+					'urls'      => array( $clean ),
+					'eagerness' => 'eager',
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return null;
+			}
+		}
+
+		/**
+		 * Document rule targeting the first post on archive views.
+		 *
+		 * Reads the first post URL from the main query (`$wp_query->posts`
+		 * via `get_permalink()`, all guarded) and emits a
+		 * `{"source":"document"}` rule whose `where` clause pairs an
+		 * `href_matches` pattern for that post path with a first-post
+		 * `selector_matches`. Returns null when not an archive, when no
+		 * first post resolves, for logged-in visitors, when document rules
+		 * are toggled off, or on any failure (fail-open, never fatal).
+		 *
+		 * @since NEXT
+		 *
+		 * @return array<string,mixed>|null The archive document rule, or null.
+		 */
+		private function get_archive_first_post_rule(): ?array {
+			try {
+				if ( $this->is_speculation_suppressed_for_visitor() ) {
+					return null;
+				}
+
+				$document_rules = $this->options['preload_settings']['speculationDocumentRules'] ?? true;
+				if ( ! $document_rules ) {
+					return null;
+				}
+
+				$is_archive_view = ( function_exists( 'is_archive' ) && is_archive() )
+					|| ( function_exists( 'is_home' ) && is_home() );
+				if ( ! $is_archive_view ) {
+					return null;
+				}
+
+				$first_post_url = null;
+				global $wp_query;
+				if ( isset( $wp_query->posts ) && is_array( $wp_query->posts ) && ! empty( $wp_query->posts ) ) {
+					$first = $wp_query->posts[0];
+					if ( function_exists( 'get_permalink' ) ) {
+						$permalink = get_permalink( $first );
+						if ( is_string( $permalink ) && '' !== $permalink ) {
+							$first_post_url = $permalink;
+						}
+					}
+				}
+				if ( ! is_string( $first_post_url ) || '' === $first_post_url ) {
+					return null;
+				}
+
+				$clean = function_exists( 'esc_url_raw' ) ? esc_url_raw( $first_post_url ) : $first_post_url;
+				if ( '' === $clean || ! $this->is_speculation_list_url_valid( $clean ) ) {
+					return null;
+				}
+
+				$path = null;
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$path = wp_parse_url( $clean, PHP_URL_PATH );
+				}
+				if ( ! is_string( $path ) || '' === $path ) {
+					return null;
+				}
+				$href_pattern = rtrim( $path, '/' ) . '/*';
+				if ( '/' === $path ) {
+					return null;
+				}
+
+				$preload_settings = $this->options['preload_settings'] ?? array();
+				$eagerness        = $preload_settings['speculationEagerness'] ?? 'conservative';
+				if ( ! in_array( $eagerness, array( 'conservative', 'moderate', 'eager' ), true ) ) {
+					$eagerness = 'conservative';
+				}
+
+				return array(
+					'source'    => 'document',
+					'where'     => array(
+						'and' => array(
+							array( 'href_matches' => $href_pattern ),
+							array( 'selector_matches' => 'main article:first-of-type a, article.post:first-of-type a, .post:first-of-type a' ),
+						),
+					),
+					'eagerness' => $eagerness,
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return null;
+			}
+		}
+
+		/**
 		 * Validate a single speculation list URL.
 		 *
 		 * Same-site (host must match home host, preventing multisite
 		 * cross-site leakage), http(s) only, and rejects admin, login,
-		 * REST, and commerce (cart/checkout/account) paths.
+		 * REST, commerce (cart/checkout/account) paths, and any URL
+		 * carrying a query string or fragment (mirroring core's
+		 * `?`-URL exclusion).
 		 *
 		 * @since NEXT
 		 *
@@ -3749,6 +4350,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$parts = wp_parse_url( $url );
 			if ( ! is_array( $parts ) || empty( $parts['host'] ) ) {
 				return false;
+			}
+
+			// Query strings and fragments are never speculated: core excludes
+			// `?`-URLs by default and dynamic/action URLs must stay excluded.
+			// Each invalid URL is skipped individually (fail-open).
+			try {
+				$query = wp_parse_url( $url, PHP_URL_QUERY );
+				if ( is_string( $query ) && '' !== $query ) {
+					return false;
+				}
+				$fragment = wp_parse_url( $url, PHP_URL_FRAGMENT );
+				if ( is_string( $fragment ) && '' !== $fragment ) {
+					return false;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				// Fall back to string checks when wp_parse_url with component fails.
+				if ( false !== strpos( $url, '?' ) || false !== strpos( $url, '#' ) ) {
+					return false;
+				}
 			}
 
 			$scheme = strtolower( (string) ( $parts['scheme'] ?? '' ) );
@@ -3832,7 +4453,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * Runs on WP 6.8+ only (registered inside the `wp_get_speculation_rules`
 		 * guard in {@see add_speculation_rules()}). Null/non-array config is
-		 * returned untouched; speculation is never auto-enabled.
+		 * returned untouched; speculation is never auto-enabled. Logged-in
+		 * visitors are always excluded (input returned unchanged).
+		 *
+		 * Emits a single core `speculationrules` block contribution: the
+		 * high-value/RUM list rule plus contextual rules — an eager
+		 * prerender list rule for the home link on singular views
+		 * ({@see get_singular_home_link_rule()}) and a first-post selector
+		 * document rule on archive views
+		 * ({@see get_archive_first_post_rule()}). URLs are deduped across
+		 * all emitted entries (and against pre-existing list rules) so no
+		 * URL is speculated twice.
 		 *
 		 * @since NEXT
 		 *
@@ -3848,22 +4479,86 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return $rules;
 			}
 
+			if ( $this->is_speculation_suppressed_for_visitor() ) {
+				return $rules;
+			}
+
+			$singular_rule = $this->get_singular_home_link_rule();
+			$archive_rule  = $this->get_archive_first_post_rule();
+
+			// Collect list-source URLs already present (e.g. an earlier
+			// contributor) so this method never re-adds them anywhere.
+			$pre_existing = $this->collect_speculation_list_urls( $rules );
+
+			// The singular eager rule must not duplicate a URL already
+			// covered by a pre-existing list rule; drop it when empty.
+			if ( is_array( $singular_rule ) && ! empty( $singular_rule['urls'] ) && is_array( $singular_rule['urls'] ) ) {
+				$singular_rule['urls'] = array_values( array_diff( $singular_rule['urls'], $pre_existing ) );
+				if ( empty( $singular_rule['urls'] ) ) {
+					$singular_rule = null;
+				}
+			}
+
+			// URLs already covered by the contextual rules are removed from
+			// the generic list so the single block carries no duplicates.
+			$covered = array();
+			if ( is_array( $singular_rule ) && ! empty( $singular_rule['urls'] ) && is_array( $singular_rule['urls'] ) ) {
+				foreach ( $singular_rule['urls'] as $covered_url ) {
+					if ( is_string( $covered_url ) && '' !== $covered_url ) {
+						$covered[] = $covered_url;
+					}
+				}
+			}
+
 			$urls = $this->get_speculation_list_urls();
 
 			/**
 			 * Filters the high-value speculation list URLs.
 			 *
 			 * @since NEXT
-			 * @param string[] $urls Validated list URLs.
+			 * @param string[] $urls Validated list URLs (home + high-value + RUM winners).
 			 */
 			$urls = apply_filters( 'wppo_speculation_list_urls', $urls );
 			if ( ! is_array( $urls ) ) {
 				return $rules;
 			}
 			$urls = array_values( array_filter( $urls, 'is_string' ) );
-			if ( empty( $urls ) ) {
-				return $rules;
+			if ( ! empty( $covered ) ) {
+				$urls = array_values( array_diff( $urls, $covered ) );
 			}
+			// Exclude generic-list URLs already targeted by the archive
+			// document rule's href_matches pattern, so a user-configured
+			// high-value URL equal to the first post does not appear in both
+			// the list rule and the document rule.
+			if ( is_array( $archive_rule ) ) {
+				$document_paths = $this->collect_speculation_document_paths( $archive_rule );
+				if ( ! empty( $document_paths ) ) {
+					$urls = array_values(
+						array_filter(
+							$urls,
+							static function ( $url ) use ( $document_paths ) {
+								$path = wp_parse_url( (string) $url, PHP_URL_PATH );
+								if ( ! is_string( $path ) || '' === $path ) {
+									return true;
+								}
+								$normalized = rtrim( untrailingslashit( $path ), '/' );
+								if ( '' === $normalized ) {
+									$normalized = '/';
+								}
+								foreach ( $document_paths as $document_path ) {
+									if ( $normalized === $document_path ) {
+										return false;
+									}
+								}
+								return true;
+							}
+						)
+					);
+				}
+			}
+			// Dedupe against list-source URLs already present (e.g. an
+			// earlier contributor) so this method never re-adds them.
+			$urls = $this->dedupe_speculation_urls_against_rules( $urls, $rules );
 
 			$preload_settings = $this->options['preload_settings'] ?? array();
 			$eagerness        = $preload_settings['speculationEagerness'] ?? 'conservative';
@@ -3875,11 +4570,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$eagerness = 'conservative';
 			}
 
-			$rules[] = array(
-				'source'    => 'list',
-				'urls'      => array_values( $urls ),
-				'eagerness' => $eagerness,
-			);
+			$new_rules = array();
+			if ( ! empty( $urls ) ) {
+				$new_rules[] = array(
+					'source'    => 'list',
+					'urls'      => array_values( $urls ),
+					'eagerness' => $eagerness,
+				);
+			}
+			if ( is_array( $singular_rule ) ) {
+				$new_rules[] = $singular_rule;
+			}
+			if ( is_array( $archive_rule ) ) {
+				/**
+				 * Filters the archive first-post document rule before it is appended.
+				 *
+				 * @since NEXT
+				 * @param array $archive_rule The archive document rule.
+				 */
+				$archive_rule = apply_filters( 'wppo_speculation_document_rule', $archive_rule );
+				if ( is_array( $archive_rule ) ) {
+					$new_rules[] = $archive_rule;
+				}
+			}
+
+			if ( empty( $new_rules ) ) {
+				return $rules;
+			}
+
+			foreach ( $new_rules as $new_rule ) {
+				$rules[] = $new_rule;
+			}
 
 			/**
 			 * Filters the speculation rules after the high-value list rule is appended.
@@ -3889,6 +4610,86 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			 * @param string[] $urls  List URLs that were appended.
 			 */
 			return apply_filters( 'wppo_speculation_list_rules', $rules, $urls );
+		}
+
+		/**
+		 * Collect URLs already covered by list-source rules.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $rules Existing speculation rules.
+		 * @return string[] List-source URLs already present.
+		 */
+		private function collect_speculation_list_urls( array $rules ): array {
+			$existing = array();
+			foreach ( $rules as $rule ) {
+				if ( ! is_array( $rule ) || ( $rule['source'] ?? '' ) !== 'list' ) {
+					continue;
+				}
+				$rule_urls = $rule['urls'] ?? array();
+				if ( ! is_array( $rule_urls ) ) {
+					continue;
+				}
+				foreach ( $rule_urls as $existing_url ) {
+					if ( is_string( $existing_url ) && '' !== $existing_url ) {
+						$existing[] = $existing_url;
+					}
+				}
+			}
+			return $existing;
+		}
+
+		/**
+		 * Remove URLs already covered by an existing list-source rule.
+		 *
+		 * Mirrors `AI_Adaptive::dedupe_against_existing_lists()` so this
+		 * method's contribution and the priority-20 AI rule can never
+		 * re-add the same URL (single block, no duplicates).
+		 *
+		 * @since NEXT
+		 *
+		 * @param string[] $urls  Candidate list URLs.
+		 * @param array    $rules Existing speculation rules.
+		 * @return string[] Deduped URLs.
+		 */
+		private function dedupe_speculation_urls_against_rules( array $urls, array $rules ): array {
+			$existing = $this->collect_speculation_list_urls( $rules );
+			if ( empty( $existing ) ) {
+				return array_values( $urls );
+			}
+			return array_values( array_diff( $urls, $existing ) );
+		}
+
+		/**
+		 * Collect normalized target paths from a document-source rule.
+		 *
+		 * Reduces each `href_matches` pattern (e.g. `/first-post/*`) to its
+		 * path prefix so generic-list URLs can be compared on the same basis.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $document_rule Document-source rule.
+		 * @return string[] Normalized paths (e.g. `/first-post`).
+		 */
+		private function collect_speculation_document_paths( array $document_rule ): array {
+			$paths = array();
+			$where = $document_rule['where'] ?? null;
+			if ( ! is_array( $where ) ) {
+				return $paths;
+			}
+			$and = $where['and'] ?? array();
+			if ( ! is_array( $and ) ) {
+				return $paths;
+			}
+			foreach ( $and as $condition ) {
+				if ( ! is_array( $condition ) || empty( $condition['href_matches'] ) || ! is_string( $condition['href_matches'] ) ) {
+					continue;
+				}
+				$trimmed = rtrim( $condition['href_matches'], '*' );
+				$trimmed = rtrim( untrailingslashit( $trimmed ), '/' );
+				$paths[] = '' === $trimmed ? '/' : $trimmed;
+			}
+			return $paths;
 		}
 
 		/**

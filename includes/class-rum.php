@@ -105,6 +105,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		public const MAX_LCP_URLS_PER_PATH = 10;
 
 		/**
+		 * Maximum device × template segments tracked per path bucket.
+		 *
+		 * Bounds the `lcpSeg` map added for field-LCP p75 routing
+		 * (issue #986) so the aggregate option stays within its byte budget.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const MAX_LCP_SEGMENTS_PER_PATH = 6;
+
+		/**
+		 * Maximum LCP samples retained per device × template segment.
+		 *
+		 * Capped reservoir (most-recent values) used solely for p75
+		 * computation; oldest values are dropped first.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const MAX_LCP_SAMPLES_PER_SEGMENT = 100;
+
+		/**
 		 * Maximum length (chars) accepted for an LCP element URL.
 		 *
 		 * @since NEXT
@@ -298,6 +320,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				'path'   => $path,
 			);
 
+			// Optional template dimension for device × template p75 routing
+			// (issue #986). Additive only: omitted when undetectable so the
+			// beacon contract stays backward compatible.
+			$template = self::detect_template_slug();
+			if ( '' !== $template ) {
+				$config['template'] = $template;
+			}
+
 			// JSON_HEX_* flags escape <, >, ', " and & so a crafted REQUEST_URI
 			// path can never split out of the <script> element (audit #888
 			// finding 9). wp_print_inline_script_tag() handles the surrounding
@@ -308,6 +338,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			) . ';';
 
 			wp_print_inline_script_tag( $javascript, array( 'id' => 'wppo-rum-config' ) );
+		}
+
+		/**
+		 * Detect the current template slug for RUM segmentation.
+		 *
+		 * Fail-open: returns '' when undetectable so the beacon field is
+		 * omitted and aggregation falls back to the `unknown` bucket.
+		 *
+		 * @since NEXT
+		 * @return string Template slug (max 64 chars) or ''.
+		 */
+		private static function detect_template_slug(): string {
+			try {
+				$slug = '';
+				if ( function_exists( 'get_page_template_slug' ) ) {
+					$queried = function_exists( 'get_queried_object_id' ) ? get_queried_object_id() : 0;
+					$slug    = (string) get_page_template_slug( $queried ? $queried : null );
+				}
+				if ( '' === $slug && function_exists( 'get_page_template' ) ) {
+					$tpl = (string) get_page_template();
+					if ( '' !== $tpl ) {
+						$slug = (string) basename( $tpl, '.php' );
+					}
+				}
+				if ( '' === $slug ) {
+					return '';
+				}
+				$slug = function_exists( 'sanitize_text_field' ) ? sanitize_text_field( $slug ) : $slug;
+				$slug = strtolower( substr( $slug, 0, 64 ) );
+				$slug = (string) preg_replace( '/[^a-z0-9_-]/', '', $slug );
+				return substr( $slug, 0, 64 );
+			} catch ( \Throwable $e ) {
+				return '';
+			}
 		}
 
 		/**
@@ -435,6 +499,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					$sample['lcpUrl'] = $lcp_url;
 				}
 			}
+
+			// Optional device × template segmentation (issue #986). Fail-open:
+			// missing/invalid values fall back to `unknown` and never reject
+			// the sample — the numeric path above is unchanged.
+			$device = 'unknown';
+			if ( isset( $params['device'] ) && is_string( $params['device'] ) ) {
+				$candidate = strtolower( trim( substr( $params['device'], 0, 16 ) ) );
+				if ( 'mobile' === $candidate || 'desktop' === $candidate ) {
+					$device = $candidate;
+				}
+			}
+			$sample['device'] = $device;
+
+			$template = 'unknown';
+			if ( isset( $params['template'] ) && is_string( $params['template'] ) ) {
+				$raw = function_exists( 'sanitize_text_field' ) ? sanitize_text_field( $params['template'] ) : $params['template'];
+				$raw = strtolower( trim( substr( $raw, 0, 64 ) ) );
+				$raw = function_exists( 'preg_replace' ) ? (string) preg_replace( '/[^a-z0-9_-]/', '', $raw ) : $raw;
+				if ( '' !== $raw ) {
+					$template = substr( $raw, 0, 64 );
+				}
+			}
+			$sample['template'] = $template;
 
 			return $sample;
 		}
@@ -612,6 +699,69 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 						}
 					}
 
+					// Device × template LCP segments (issue #986): bounded per-path
+					// `lcpSeg` map keyed `{device}|{template}` holding n/sum/
+					// min/max plus a capped most-recent reservoir for p75.
+					// Evicts the lowest-n segment when over budget. Reuses the
+					// existing option byte-budget loop below so the size cap
+					// still holds; no new option or transient names.
+					if ( isset( $sample['lcp'] ) ) {
+						$lcp_value = (float) $sample['lcp'];
+						// Re-sanitize even though the beacon sanitizes at
+						// intake: the queue transient is user-writable, so
+						// allowlist the device and text-sanitize the template
+						// before either is persisted into the aggregate option.
+						$raw_device = isset( $sample['device'] ) && is_string( $sample['device'] ) ? sanitize_text_field( $sample['device'] ) : '';
+						$device     = strtolower( trim( $raw_device ) );
+						if ( 'mobile' !== $device && 'desktop' !== $device ) {
+							$device = 'unknown';
+						}
+						$raw_template = isset( $sample['template'] ) && is_string( $sample['template'] ) ? sanitize_text_field( $sample['template'] ) : '';
+						$template     = '' !== trim( $raw_template ) ? substr( $raw_template, 0, 64 ) : 'unknown';
+						$seg_key      = $device . '|' . $template;
+						if ( ! isset( $bucket['lcpSeg'] ) || ! is_array( $bucket['lcpSeg'] ) ) {
+							$bucket['lcpSeg'] = array();
+						}
+						if ( ! isset( $bucket['lcpSeg'][ $seg_key ] ) || ! is_array( $bucket['lcpSeg'][ $seg_key ] ) ) {
+							$bucket['lcpSeg'][ $seg_key ] = array(
+								'device'   => $device,
+								'template' => $template,
+								'n'        => 0,
+								'sum'      => 0.0,
+								'min'      => $lcp_value,
+								'max'      => $lcp_value,
+								'samples'  => array(),
+							);
+						}
+						++$bucket['lcpSeg'][ $seg_key ]['n'];
+						$bucket['lcpSeg'][ $seg_key ]['sum'] += $lcp_value;
+						$bucket['lcpSeg'][ $seg_key ]['min']  = min( $bucket['lcpSeg'][ $seg_key ]['min'], $lcp_value );
+						$bucket['lcpSeg'][ $seg_key ]['max']  = max( $bucket['lcpSeg'][ $seg_key ]['max'], $lcp_value );
+						$samples                              = isset( $bucket['lcpSeg'][ $seg_key ]['samples'] ) && is_array( $bucket['lcpSeg'][ $seg_key ]['samples'] ) ? $bucket['lcpSeg'][ $seg_key ]['samples'] : array();
+						$samples[]                            = $lcp_value;
+						if ( count( $samples ) > self::MAX_LCP_SAMPLES_PER_SEGMENT ) {
+							$samples = array_slice( $samples, -self::MAX_LCP_SAMPLES_PER_SEGMENT );
+						}
+						$bucket['lcpSeg'][ $seg_key ]['samples'] = array_values( $samples );
+						$lcp_seg_count                           = count( $bucket['lcpSeg'] );
+						while ( $lcp_seg_count > self::MAX_LCP_SEGMENTS_PER_PATH ) {
+							$evict_key = null;
+							$evict_n   = null;
+							foreach ( $bucket['lcpSeg'] as $key => $entry ) {
+								$entry_n = isset( $entry['n'] ) ? (int) $entry['n'] : 0;
+								if ( null === $evict_key || $entry_n < $evict_n ) {
+									$evict_key = $key;
+									$evict_n   = $entry_n;
+								}
+							}
+							if ( null === $evict_key ) {
+								break;
+							}
+							unset( $bucket['lcpSeg'][ $evict_key ] );
+							--$lcp_seg_count;
+						}
+					}
+
 					$day[ $path ] = $bucket;
 
 					// Bound paths per day.
@@ -637,19 +787,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				// paths) are dropped until both the bucket count and the
 				// serialized size stay under budget, regardless of traffic.
 				while ( ! empty( $all ) ) {
-					$encoded     = wp_json_encode( $all );
 					$total_paths = 0;
 					foreach ( $all as $day_bucket ) {
 						$total_paths += count( is_array( $day_bucket ) ? $day_bucket : array() );
 					}
 
 					$under_path_budget = $total_paths <= self::MAX_TOTAL_PATHS;
+					if ( ! $under_path_budget ) {
+						$oldest_day_key = array_key_first( $all );
+						if ( null === $oldest_day_key ) {
+							break;
+						}
+
+						if ( 1 === count( $all ) && is_array( $all[ $oldest_day_key ] ) ) {
+							// Never drop the only day entirely — halve it and stop.
+							// Defensive: a single day is already bounded by
+							// MAX_PATHS_PER_DAY paths, so the byte budget should
+							// hold; this keeps a pathological day from being
+							// discarded wholesale before the loop stops.
+							$half = array_slice( $all[ $oldest_day_key ], (int) ( count( $all[ $oldest_day_key ] ) / 2 ) );
+							if ( ! empty( $half ) ) {
+								$all[ $oldest_day_key ] = $half;
+							}
+							break;
+						}
+						unset( $all[ $oldest_day_key ] );
+						continue;
+					}
+
+					$encoded = wp_json_encode( $all );
 					// A failed encode is treated as over budget so the loop
 					// makes progress (drops the oldest day) instead of
 					// persisting potentially oversized data.
 					$under_byte_budget = false !== $encoded && strlen( (string) $encoded ) <= self::MAX_OPTION_BYTES;
 
-					if ( $under_path_budget && $under_byte_budget ) {
+					if ( $under_byte_budget ) {
 						break;
 					}
 
@@ -785,6 +957,336 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				return $top;
 			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
 				return null;
+			}
+		}
+
+		/**
+		 * Get the single LCP preload candidate for a page path.
+		 *
+		 * Field-measured RUM data wins when it passes the sample gate
+		 * (see {@see get_field_lcp_url()}); otherwise the stored PageSpeed
+		 * candidate for the same page is returned (synthesized as
+		 * `array{url,n:0,lastSeen:now}` so callers share one shape).
+		 * The `$path` governs both lookups: the singular-post-meta and
+		 * front-page-option PageSpeed tiers are current-request context and
+		 * are only consulted when `$path` is null, while the transient tier
+		 * resolves by the given path (see {@see get_stored_pagespeed_lcp_url()}).
+		 * Returns null when neither resolves so callers fall through to the
+		 * manual preload-image meta / hero path. Fail-open: any failure
+		 * returns null, never fatal.
+		 *
+		 * @since NEXT
+		 * @param string|null $path Page path (e.g. "/about/"). Defaults to the current request path.
+		 * @return array{url:string,n:int,lastSeen:int}|null Single LCP candidate or null.
+		 */
+		public static function get_lcp_preload_candidate( ?string $path = null ): ?array {
+			try {
+				if ( null === $path ) {
+					$path = self::resolve_current_path();
+				}
+				$field = self::get_field_lcp_url( $path );
+				if ( is_array( $field ) && ! empty( $field['url'] ) && is_string( $field['url'] ) ) {
+					return $field;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			try {
+				$fallback = self::get_stored_pagespeed_lcp_url( $path );
+				if ( '' !== $fallback ) {
+					return array(
+						'url'      => $fallback,
+						'n'        => 0,
+						'lastSeen' => time(),
+					);
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return null;
+		}
+
+		/**
+		 * Resolve the current page path the same way the preload pipeline does.
+		 *
+		 * Prefers `Util::get_current_url()` (the source `get_current_lcp_url()`
+		 * derives its path from) and falls back to null so
+		 * `get_field_lcp_url()` resolves `$_SERVER['REQUEST_URI']` itself.
+		 * Fail-open: any failure returns null.
+		 *
+		 * @since NEXT
+		 * @return string|null Current page path or null when unresolvable.
+		 */
+		private static function resolve_current_path(): ?string {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && function_exists( 'wp_parse_url' ) ) {
+					$parsed = wp_parse_url( \PerformanceOptimise\Inc\Util::get_current_url(), PHP_URL_PATH );
+					if ( is_string( $parsed ) && '' !== $parsed ) {
+						return substr( $parsed, 0, 512 );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return null;
+		}
+
+		/**
+		 * Read-only lookup of the stored PageSpeed LCP candidate for a page.
+		 *
+		 * Single shared implementation of the PageSpeed priorities used by
+		 * both `get_lcp_preload_candidate()` and
+		 * `Image_Optimisation::get_current_lcp_url()` (singular post meta
+		 * `_wppo_lcp_image_url_{mobile,desktop}`, then front-page option
+		 * `wppo_front_page_lcp_{...}`, then the transient keyed by strategy
+		 * + URL hash) so strategy order and key formats cannot drift apart.
+		 * The post-meta and front-page tiers describe the current request and
+		 * are only consulted when `$path` is null; the transient tier always
+		 * applies, resolving the URL hash from the current URL by default or
+		 * from `home_url() + $path` for an explicit path (which therefore
+		 * never mixes two different pages). Multisite-safe via
+		 * `Util::transient_key()` (blog-aware keys, no cross-site leakage).
+		 * Every WP API is guarded so unit contexts without WP fail open to
+		 * an empty string.
+		 *
+		 * @since NEXT
+		 * @param string|null $path Page path (e.g. "/about/"). Defaults to the current request URL.
+		 * @return string The PageSpeed LCP image URL, or empty string when none is stored.
+		 */
+		public static function get_stored_pagespeed_lcp_url( ?string $path = null ): string {
+			try {
+				$strategies = array( 'mobile', 'desktop' );
+
+				// Priority 1: Singular post — check post meta (mobile first, then desktop).
+				// Current-request context only: an explicit path cannot be mapped to a post ID.
+				if ( null === $path && function_exists( 'is_singular' ) && function_exists( 'get_the_ID' ) && function_exists( 'get_post_meta' ) ) {
+					try {
+						if ( is_singular() ) {
+							$post_id = get_the_ID();
+							if ( ! empty( $post_id ) ) {
+								foreach ( $strategies as $strategy ) {
+									$meta_lcp = get_post_meta( $post_id, '_wppo_lcp_image_url_' . $strategy, true );
+									if ( ! empty( $meta_lcp ) && is_string( $meta_lcp ) ) {
+										return $meta_lcp;
+									}
+								}
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+
+				// Priority 2: Front page — check option (mobile first, then desktop).
+				// Current-request context only, for the same reason as Priority 1.
+				if ( null === $path && function_exists( 'is_front_page' ) && function_exists( 'get_option' ) ) {
+					try {
+						if ( is_front_page() ) {
+							foreach ( $strategies as $strategy ) {
+								$front_lcp = get_option( 'wppo_front_page_lcp_' . $strategy, '' );
+								if ( ! empty( $front_lcp ) && is_string( $front_lcp ) ) {
+									return $front_lcp;
+								}
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+
+				// Priority 3: Transient keyed by strategy + URL hash.
+				if ( ! function_exists( 'get_transient' ) ) {
+					return '';
+				}
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
+					return '';
+				}
+				if ( ! function_exists( 'untrailingslashit' ) || ! function_exists( 'esc_url_raw' ) ) {
+					return '';
+				}
+				try {
+					if ( null === $path ) {
+						$lookup_url = untrailingslashit( esc_url_raw( \PerformanceOptimise\Inc\Util::get_current_url() ) );
+					} else {
+						$norm_path  = \PerformanceOptimise\Inc\Util::normalize_rum_path( $path );
+						$lookup_url = untrailingslashit( esc_url_raw( \PerformanceOptimise\Inc\Util::cached_home_url() . $norm_path ) );
+					}
+				} catch ( \Throwable $e ) {
+					return '';
+				}
+				if ( '' === $lookup_url ) {
+					return '';
+				}
+				foreach ( $strategies as $strategy ) {
+					$transient_key = \PerformanceOptimise\Inc\Util::transient_key( 'wppo_lcp_url_' . $strategy . '_' . md5( $lookup_url ) );
+					try {
+						$transient = get_transient( $transient_key );
+					} catch ( \Throwable $e ) {
+						continue;
+					}
+					if ( ! empty( $transient ) && is_string( $transient ) ) {
+						return $transient;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return '';
+		}
+
+		/**
+		 * Resolve the field-LCP minimum-sample threshold for auto-tune.
+		 *
+		 * Prefers the additive `ai_adaptive.field_lcp_min_samples` setting,
+		 * falls back to the legacy `image_optimisation.fieldLcpMinSamples`
+		 * for backward compatibility, then to FIELD_LCP_DEFAULT_MIN_SAMPLES.
+		 *
+		 * Pure read path: no option or transient writes.
+		 *
+		 * @since NEXT
+		 * @return int Minimum samples (>=1).
+		 */
+		public static function get_field_lcp_min_samples(): int {
+			try {
+				$options = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::get_settings() : array();
+				if ( isset( $options['ai_adaptive']['field_lcp_min_samples'] ) ) {
+					$min = (int) $options['ai_adaptive']['field_lcp_min_samples'];
+					if ( $min >= 1 ) {
+						return $min;
+					}
+				}
+				if ( isset( $options['image_optimisation']['fieldLcpMinSamples'] ) ) {
+					$min = (int) $options['image_optimisation']['fieldLcpMinSamples'];
+					if ( $min >= 1 ) {
+						return $min;
+					}
+				}
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+			}
+			return self::FIELD_LCP_DEFAULT_MIN_SAMPLES;
+		}
+
+		/**
+		 * Compute the p75 of a numeric sample list.
+		 *
+		 * Nearest-rank method: sort ascending, pick index ceil(0.75*n)-1.
+		 *
+		 * @since NEXT
+		 * @param float[] $samples Numeric samples.
+		 * @return float p75 value or 0.0 when empty.
+		 */
+		public static function compute_p75( array $samples ): float {
+			$values = array_values( array_filter( $samples, 'is_numeric' ) );
+			$count  = count( $values );
+			if ( 0 === $count ) {
+				return 0.0;
+			}
+			$values = array_map( 'floatval', $values );
+			sort( $values, SORT_NUMERIC );
+			$rank = (int) ceil( 0.75 * $count ) - 1;
+			$rank = max( 0, min( $count - 1, $rank ) );
+			return (float) $values[ $rank ];
+		}
+
+		/**
+		 * Get field LCP p75 segmented by device × template (read-only).
+		 *
+		 * Pure read path for AI-Adaptive auto-tune (issue #986): reads the
+		 * aggregate option only via get_option() — never flushes the queue
+		 * and never calls update_option/set_transient, so the frontend
+		 * incurs no new writes. Segments across all retained days are merged
+		 * by `{path}|{device}|{template}`; only segments with n >=
+		 * $min_samples are returned. Fail-open: any failure returns array().
+		 *
+		 * @since NEXT
+		 * @param int|null $min_samples Minimum samples per segment. Null resolves via get_field_lcp_min_samples().
+		 * @return array[] Rows of array(path,device,template,n,p75).
+		 */
+		public static function get_field_lcp_p75_by_segment( ?int $min_samples = null ): array {
+			try {
+				$min = null === $min_samples ? self::get_field_lcp_min_samples() : (int) $min_samples;
+				if ( $min < 1 ) {
+					$min = self::FIELD_LCP_DEFAULT_MIN_SAMPLES;
+				}
+				if ( ! function_exists( 'get_option' ) ) {
+					return array();
+				}
+				$all = get_option( self::OPTION, array() );
+				if ( ! is_array( $all ) || empty( $all ) ) {
+					return array();
+				}
+				$merged = array();
+				foreach ( $all as $day_bucket ) {
+					if ( ! is_array( $day_bucket ) ) {
+						continue;
+					}
+					foreach ( $day_bucket as $bucket_path => $bucket ) {
+						if ( ! is_array( $bucket ) || ! isset( $bucket['lcpSeg'] ) || ! is_array( $bucket['lcpSeg'] ) ) {
+							continue;
+						}
+						$path = (string) $bucket_path;
+						foreach ( $bucket['lcpSeg'] as $seg ) {
+							if ( ! is_array( $seg ) ) {
+								continue;
+							}
+							$device   = isset( $seg['device'] ) && is_string( $seg['device'] ) ? $seg['device'] : 'unknown';
+							$template = isset( $seg['template'] ) && is_string( $seg['template'] ) && '' !== $seg['template'] ? $seg['template'] : 'unknown';
+							$key      = $path . '|' . $device . '|' . $template;
+							if ( ! isset( $merged[ $key ] ) ) {
+								$merged[ $key ] = array(
+									'path'     => $path,
+									'device'   => $device,
+									'template' => $template,
+									'n'        => 0,
+									'samples'  => array(),
+								);
+							}
+							$merged[ $key ]['n'] += isset( $seg['n'] ) ? (int) $seg['n'] : 0;
+							$samples              = isset( $seg['samples'] ) && is_array( $seg['samples'] ) ? $seg['samples'] : array();
+							foreach ( $samples as $value ) {
+								if ( is_numeric( $value ) ) {
+									$merged[ $key ]['samples'][] = (float) $value;
+								}
+							}
+						}
+					}
+				}
+				$rows = array();
+				foreach ( $merged as $entry ) {
+					$n = (int) $entry['n'];
+					// p75 is computed from the capped reservoir, not the
+					// unbounded accumulator: never qualify or report more
+					// observations than actually back the p75 value.
+					$sample_count = count( $entry['samples'] );
+					if ( $sample_count < $n ) {
+						$n = $sample_count;
+					}
+					if ( $n < $min ) {
+						continue;
+					}
+					$p75    = self::compute_p75( $entry['samples'] );
+					$rows[] = array(
+						'path'     => $entry['path'],
+						'device'   => $entry['device'],
+						'template' => $entry['template'],
+						'n'        => $n,
+						'p75'      => $p75,
+					);
+				}
+				usort(
+					$rows,
+					static function ( $a, $b ) {
+						$pa = isset( $a['p75'] ) ? (float) $a['p75'] : 0.0;
+						$pb = isset( $b['p75'] ) ? (float) $b['p75'] : 0.0;
+						if ( $pa === $pb ) {
+							return 0;
+						}
+						return $pa > $pb ? -1 : 1;
+					}
+				);
+				return $rows;
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+				return array();
 			}
 		}
 	}

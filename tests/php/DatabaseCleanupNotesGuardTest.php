@@ -106,6 +106,30 @@ class DatabaseCleanupNotesGuardTest extends \PHPUnit\Framework\TestCase {
 			}
 
 			/**
+			 * Records the batched UNION ALL counts query and returns zero rows.
+			 *
+			 * Get_counts() batches all COUNT(*)s into a single UNION ALL
+			 * query with k/c label columns (audit #982).
+			 *
+			 * @param string $query  SQL query.
+			 * @param mixed  $output Output type (unused).
+			 * @return array<int, array<string, mixed>>
+			 */
+			public function get_results( $query = null, $output = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+				$this->recorded[] = (string) $query;
+				return array(
+					array(
+						'k' => 'spam_comments',
+						'c' => 0,
+					),
+					array(
+						'k' => 'trashed_comments',
+						'c' => 0,
+					),
+				);
+			}
+
+			/**
 			 * Simulate a successful single-row DELETE.
 			 *
 			 * @param string $query SQL query.
@@ -208,9 +232,11 @@ class DatabaseCleanupNotesGuardTest extends \PHPUnit\Framework\TestCase {
 				}
 			)
 		);
-		$this->assertCount( 2, $count_queries, 'Exactly one spam and one trash comment count query expected.' );
+		$this->assertCount( 1, $count_queries, 'Spam/trash comment counts are batched into a single UNION ALL query (audit #982).' );
 		foreach ( $count_queries as $count_query ) {
-			$this->assertStringContainsString( "COALESCE( comment_type, '' ) != 'note'", $count_query, 'Comment counts must exclude WP 6.9+ Notes with the same predicate as cleanup (issue #884).' );
+			$this->assertStringContainsString( "comment_approved = 'spam'", $count_query );
+			$this->assertStringContainsString( "comment_approved = 'trash'", $count_query );
+			$this->assertSame( 2, substr_count( $count_query, "COALESCE( comment_type, '' ) != 'note'" ), 'Comment counts must exclude WP 6.9+ Notes with the same predicate as cleanup (issue #884).' );
 		}
 	}
 }

@@ -41,6 +41,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		private static array $regex_cache = array();
 
 		/**
+		 * Per-request memo of the default get_mappings() result, keyed by blog ID.
+		 *
+		 * Only used when $options is empty (request-stable settings path).
+		 * Explicit-$options calls bypass the cache. Reset via reset_cache().
+		 * Bypassed entirely when a mapping filter is present so dynamic /
+		 * conditional filters are never frozen for the rest of the request.
+		 *
+		 * @since NEXT
+		 * @var array<int|string, array>
+		 */
+		private static array $mappings_cache = array();
+
+		/**
 		 * Whether bypass constant is active.
 		 *
 		 * Mirrors LSCWP cdn.cls.php:106.
@@ -110,7 +123,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		 * @return array
 		 */
 		public static function get_mappings( array $options = array() ): array {
-			if ( empty( $options ) ) {
+			$uses_default = empty( $options );
+			$use_cache    = $uses_default && ! has_filter( 'wppo_cdn_mapping' ) && ! has_filter( 'wppo_cdn_mapping_hosts' ) && ! has_filter( 'wppo_cdn_url' ) && ! has_filter( 'wppo_cdn_auto_filetypes' );
+			$blog_id      = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
+			if ( $use_cache && array_key_exists( $blog_id, self::$mappings_cache ) ) {
+				return self::$mappings_cache[ $blog_id ];
+			}
+			if ( $uses_default ) {
+				// Always hydrate settings when no explicit options were passed,
+				// even when filters are registered (filter-present runs skip the
+				// memo but must still read the stored mappings).
 				$options = Util::get_settings();
 			}
 			$mappings = $options['file_optimisation']['cdnMapping'] ?? array();
@@ -176,10 +198,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 				 * @param array $normalized CDN mappings.
 				 */
 				$normalized = (array) apply_filters( 'wppo_cdn_mapping', $normalized );
+				if ( $use_cache ) {
+					self::$mappings_cache[ $blog_id ] = $normalized;
+				}
 				return $normalized;
 			}
 			$cdn_url = $options['file_optimisation']['cdnURL'] ?? '';
 			if ( empty( $cdn_url ) ) {
+				if ( $use_cache ) {
+					self::$mappings_cache[ $blog_id ] = array();
+				}
 				return array();
 			}
 			$cdn_url = rtrim( (string) $cdn_url, '/' );
@@ -197,6 +225,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 			);
 			$single  = (array) apply_filters( 'wppo_cdn_mapping_hosts', $single );
 			$single  = (array) apply_filters( 'wppo_cdn_mapping', $single );
+			if ( $use_cache ) {
+				self::$mappings_cache[ $blog_id ] = $single;
+			}
 			return $single;
 		}
 
@@ -348,11 +379,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		/**
 		 * Rewrite single URL.
 		 *
+		 * Added optional $mappings pass-down so bulk callers
+		 * (e.g. rewrite_srcset()) can resolve mappings once.
+		 *
 		 * @since NEXT
-		 * @param string $url URL.
+		 * @param string     $url      URL.
+		 * @param array|null $mappings Optional pre-resolved mappings from get_mappings().
 		 * @return string Rewritten or original.
 		 */
-		public static function rewrite_url( string $url ): string {
+		public static function rewrite_url( string $url, ?array $mappings = null ): string {
 			if ( '' === $url ) {
 				return $url;
 			}
@@ -365,7 +400,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && ! LiteSpeed_Integration::can_apply_cdn() ) {
 				return $url;
 			}
-			$mappings = self::get_mappings();
+			if ( null === $mappings ) {
+				$mappings = self::get_mappings();
+			}
 			if ( empty( $mappings ) ) {
 				return $url;
 			}
@@ -392,20 +429,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		/**
 		 * Rewrite srcset array (wp_calculate_image_srcset format).
 		 *
+		 * Added optional $mappings pass-down; resolves once per
+		 * call instead of once per srcset candidate.
+		 *
 		 * @since NEXT
-		 * @param array $sources Srcset sources.
+		 * @param array      $sources  Srcset sources.
+		 * @param array|null $mappings Optional pre-resolved mappings from get_mappings().
 		 * @return array
 		 */
-		public static function rewrite_srcset( array $sources ): array {
+		public static function rewrite_srcset( array $sources, ?array $mappings = null ): array {
 			if ( defined( 'LITESPEED_BYPASS_CDN' ) && LITESPEED_BYPASS_CDN ) {
 				return $sources;
 			}
 			if ( is_admin() ) {
 				return $sources;
 			}
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && ! LiteSpeed_Integration::can_apply_cdn() ) {
+				return $sources;
+			}
+			if ( ! apply_filters( 'wppo_litespeed_can_cdn', true ) ) {
+				return $sources;
+			}
+			if ( has_filter( 'litespeed_can_cdn' ) && ! apply_filters( 'litespeed_can_cdn', true ) ) {
+				return $sources;
+			}
+			if ( null === $mappings ) {
+				$mappings = self::get_mappings();
+			}
+			if ( empty( $mappings ) ) {
+				return $sources;
+			}
 			foreach ( $sources as $w => $data ) {
 				if ( isset( $data['url'] ) ) {
-					$sources[ $w ]['url'] = self::rewrite_url( $data['url'] );
+					$sources[ $w ]['url'] = self::rewrite_url( $data['url'], $mappings );
 				}
 			}
 			return $sources;
@@ -654,6 +710,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		public static function reset_cache(): void {
 			self::$buffer_rewritten = false;
 			self::$regex_cache      = array();
+			self::$mappings_cache   = array();
 		}
 	}
 }

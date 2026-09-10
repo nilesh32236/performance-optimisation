@@ -129,6 +129,26 @@ const SCRIPT_ATTR_ALLOWLIST = new Set( [
 const SCRIPT_ATTR_PREFIX_ALLOWLIST = [ 'data-', 'aria-' ];
 
 /**
+ * Compiled-once pattern for url(...) targets in lazy background values.
+ * Module scope so it is not reallocated per isSafeBackgroundValue call.
+ * Global flag is stateful — reset lastIndex before each exec loop.
+ *
+ * @since NEXT
+ * @type {RegExp}
+ */
+const BACKGROUND_URL_PATTERN = /url\(\s*(['"]?)(.*?)\1\s*\)/g;
+
+/**
+ * Number of elements currently under IntersectionObserver observation.
+ * Gates checkCleanup so completion does not cost a full DOM scan per
+ * intersection on image-heavy pages.
+ *
+ * @since NEXT
+ * @type {number}
+ */
+let pendingLazyCount = 0;
+
+/**
  * Base allowlist of remote hosts permitted for deferred external scripts, in
  * addition to same-origin. Covers common analytics/marketing/utility CDNs so
  * default delay-JS behaviour is preserved; anything else must be allowlisted
@@ -530,10 +550,10 @@ const isSafeBackgroundValue = ( value ) => {
 		return true;
 	}
 	// Extract url(...) targets and validate each one.
-	const urlPattern = /url\(\s*(['"]?)(.*?)\1\s*\)/g;
+	BACKGROUND_URL_PATTERN.lastIndex = 0;
 	let match;
 	let found = false;
-	while ( ( match = urlPattern.exec( normalised ) ) !== null ) {
+	while ( ( match = BACKGROUND_URL_PATTERN.exec( normalised ) ) !== null ) {
 		found = true;
 		const target = match[ 2 ].trim();
 		if ( ! target ) {
@@ -948,6 +968,7 @@ let backgroundObserver = null;
  * @since NEXT
  */
 const teardownLazyload = () => {
+	pendingLazyCount = 0;
 	if ( window.wppoSafetyScanId ) {
 		clearInterval( window.wppoSafetyScanId );
 		window.wppoSafetyScanId = null;
@@ -1042,9 +1063,56 @@ const restoreSizes = ( el ) => {
 };
 
 /**
+ * Release counter slots for observed elements removed from the DOM without
+ * ever intersecting.
+ *
+ * Elements removed before entering the viewport never fire the
+ * IntersectionObserver callback, so pendingLazyCount would otherwise leak
+ * and gate checkCleanup (and observer teardown) forever.
+ *
+ * @since NEXT
+ * @param {NodeList} removedNodes Nodes removed from the DOM.
+ */
+const releaseRemovedLazyNodes = ( removedNodes ) => {
+	if ( ! removedNodes || 0 === removedNodes.length ) {
+		return;
+	}
+	const selector = getLazySelector();
+	removedNodes.forEach( ( node ) => {
+		if ( ! node || 1 !== node.nodeType ) {
+			return;
+		}
+		const candidates = [];
+		if ( 'function' === typeof node.matches && node.matches( selector ) ) {
+			candidates.push( node );
+		}
+		if ( 'function' === typeof node.querySelectorAll ) {
+			node.querySelectorAll( selector ).forEach( ( child ) => {
+				candidates.push( child );
+			} );
+		}
+		candidates.forEach( ( el ) => {
+			if ( observedElements.has( el ) ) {
+				observedElements.delete( el );
+				if ( globalObserver ) {
+					globalObserver.unobserve( el );
+				}
+				pendingLazyCount = Math.max( 0, pendingLazyCount - 1 );
+			}
+		} );
+	} );
+};
+
+/**
  * Check if all lazy-loadable elements have been processed, and clean up observers if so.
+ *
+ * Gated on pendingLazyCount so per-intersection calls are O(1); the
+ * full-DOM verification scan runs only once the counter drains to zero.
  */
 const checkCleanup = () => {
+	if ( pendingLazyCount > 0 ) {
+		return;
+	}
 	const remaining = document.querySelectorAll( getLazySelector() );
 	if ( remaining.length === 0 ) {
 		if ( window.wppoSafetyScanId ) {
@@ -1164,6 +1232,7 @@ const observeElement = ( el ) => {
 	) {
 		observedElements.add( el );
 		globalObserver.observe( el );
+		pendingLazyCount++;
 	}
 };
 
@@ -1314,6 +1383,15 @@ const loadImages = () => {
 							}
 
 							globalObserver.unobserve( el );
+							// Drop the element from the observed set so a
+							// later removal does not decrement the counter
+							// a second time (releaseRemovedLazyNodes only
+							// reconciles elements that never intersected).
+							observedElements.delete( el );
+							pendingLazyCount = Math.max(
+								0,
+								pendingLazyCount - 1
+							);
 							checkCleanup();
 						}
 					} );
@@ -1327,20 +1405,44 @@ const loadImages = () => {
 				if ( window.wppoSafetyScanId ) {
 					return;
 				}
+				let ticks = 0;
+				let emptyStreak = 0;
+				const MAX_TICKS = 30;
 				window.wppoSafetyScanId = setInterval( () => {
+					if ( document.hidden ) {
+						return;
+					}
+					ticks++;
 					const elements = document.querySelectorAll(
 						getLazySelector()
 					);
 					if ( elements.length === 0 ) {
+						// Fallback reconciliation: removed-without-intersecting
+						// nodes are released via the MutationObserver above, but
+						// if any slot leaked (e.g. observer installed late),
+						// a zero-match DOM proves nothing is pending.
+						pendingLazyCount = 0;
+						checkCleanup();
 						clearInterval( window.wppoSafetyScanId );
 						window.wppoSafetyScanId = null;
 						return;
 					}
+					let newlyObserved = 0;
 					elements.forEach( ( el ) => {
 						if ( ! observedElements.has( el ) ) {
 							observeElement( el );
+							newlyObserved++;
 						}
 					} );
+					if ( 0 === newlyObserved ) {
+						emptyStreak++;
+					} else {
+						emptyStreak = 0;
+					}
+					if ( ticks >= MAX_TICKS || emptyStreak >= 2 ) {
+						clearInterval( window.wppoSafetyScanId );
+						window.wppoSafetyScanId = null;
+					}
 				}, 10000 );
 			};
 
@@ -1353,6 +1455,7 @@ const loadImages = () => {
 			mutationObserver = new MutationObserver( ( mutations ) => {
 				const selector = getLazySelector();
 				mutations.forEach( ( mutation ) => {
+					releaseRemovedLazyNodes( mutation.removedNodes );
 					mutation.addedNodes.forEach( ( node ) => {
 						if ( 1 !== node.nodeType ) {
 							return;
@@ -1364,21 +1467,26 @@ const loadImages = () => {
 						) {
 							observeElement( node );
 						}
-						node.querySelectorAll( selector ).forEach(
-							( child ) => {
-								observeElement( child );
-							}
-						);
-						if (
-							node.matches( selector ) ||
-							node.querySelector( selector )
-						) {
+						const kids = node.querySelectorAll( selector );
+						kids.forEach( ( child ) => {
+							observeElement( child );
+						} );
+						// Single-pass: reuse matches/query results instead of
+						// re-querying the DOM for the safety-scan decision.
+						const matchesSelf =
+							'function' === typeof node.matches &&
+							node.matches( selector );
+						if ( matchesSelf || kids.length > 0 ) {
 							startSafetyScan();
 						}
-						if (
-							node.matches( '.wppo-video-placeholder' ) ||
-							node.querySelector( '.wppo-video-placeholder' )
-						) {
+						const videoPlaceholder =
+							'function' === typeof node.matches &&
+							node.matches( '.wppo-video-placeholder' )
+								? node
+								: node.querySelector(
+										'.wppo-video-placeholder'
+								  );
+						if ( videoPlaceholder ) {
 							initVideoPlaceholders();
 						}
 					} );

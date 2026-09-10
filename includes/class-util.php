@@ -177,6 +177,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'delayJSINPPreset'             => false,
 					'delayJSExternalOnly'          => false,
 					'delayJSBuilderPreset'         => true,
+					'delayJSCommercePreset'        => true,
+					'delayJSExcludeUrls'           => '',
+					'usedCSSExcludeUrls'           => '',
 					'delayJSIdleList'              => '',
 					'delayJSViewportList'          => '',
 					'delayJSPriority'              => '',
@@ -215,13 +218,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'fontMetricFallback'           => false,
 				),
 				'preload_settings'      => array(
-					'enablePreloadCache'     => false,
-					'excludePreloadCache'    => "my-account/(.*)\ncart/(.*)\ncheckout/(.*)",
-					'enableSpeculationRules' => false,
-					'speculationMode'        => 'prefetch',
-					'speculationEagerness'   => 'conservative',
-					'speculationExcludeUrls' => '',
-					'preloadSitemap'         => false,
+					'enablePreloadCache'       => false,
+					'excludePreloadCache'      => "my-account/(.*)\ncart/(.*)\ncheckout/(.*)",
+					'enableSpeculationRules'   => false,
+					'speculationMode'          => 'prefetch',
+					'speculationEagerness'     => 'conservative',
+					'speculationExcludeUrls'   => '',
+					'speculationDocumentRules' => true,
+					'preloadSitemap'           => false,
 				),
 				'image_optimisation'    => array(
 					'lazyLoadImages'             => false,
@@ -239,6 +243,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'fieldLcpOverride'           => false,
 					'fieldLcpMinSamples'         => 20,
 					'cssHeroPreload'             => false,
+					'autoAltText'                => false,
+					'maxLongestEdgePx'           => 2560,
 				),
 				'performance_audit'     => array(
 					'pagespeed_api_key'     => '',
@@ -285,8 +291,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'enabled' => false,
 				),
 				'ai_adaptive'           => array(
-					'enabled'          => false,
-					'use_wp_ai_client' => false,
+					'enabled'               => false,
+					'use_wp_ai_client'      => false,
+					'field_lcp_min_samples' => 20,
 				),
 				'edge_cache'            => array(
 					'enabled' => false,
@@ -1241,9 +1248,62 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 
 			$host = strtolower( $parts['host'] ?? '' );
 			$path = $parts['path'];
-			$path = (string) preg_replace( '#-(?:\d+x\d+|scaled|e\d+)(?=\.[A-Za-z0-9]+)$#', '', $path );
+			// The `$` anchor lives inside the lookahead so the suffix only
+			// strips immediately before the file extension at end of path
+			// (a trailing `$` outside the lookahead could never match).
+			$path = (string) preg_replace( '#-(?:\d+x\d+|scaled|e\d+)(?=\.[A-Za-z0-9]+$)#', '', $path );
 
 			return $host . $path;
+		}
+
+		/**
+		 * Mint a per-request placeholder token namespace.
+		 *
+		 * Shared by the noscript placeholder pipeline
+		 * (Image_Optimisation::get_noscript_namespace()) and the preserved-script
+		 * pipeline (Minify\HTML::get_preserve_namespace()) so the entropy and
+		 * fallback chain cannot drift between the two callers.
+		 *
+		 * Uses cryptographically random hex via `random_bytes()` when available,
+		 * falling back to `wp_generate_password()` (sanitized to alphanumerics)
+		 * and finally to a `uniqid()`/`wp_rand()` token. Never fatals: any
+		 * failure degrades to a static fallback namespace (fail-open).
+		 *
+		 * @since NEXT
+		 * @return string Non-empty namespace string.
+		 */
+		public static function mint_placeholder_namespace(): string {
+			try {
+				if ( function_exists( 'random_bytes' ) ) {
+					$bytes = random_bytes( 8 );
+					if ( is_string( $bytes ) && '' !== $bytes ) {
+						return 'wppo' . bin2hex( $bytes );
+					}
+				}
+
+				if ( function_exists( 'wp_generate_password' ) ) {
+					$generated = wp_generate_password( 16, false );
+					if ( is_string( $generated ) && '' !== $generated ) {
+						$sanitized = preg_replace( '/[^A-Za-z0-9]/', '', $generated );
+						if ( is_string( $sanitized ) && '' !== $sanitized ) {
+							return 'wppo' . $sanitized;
+						}
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
+			// Legacy fallback (fail-open, never fatal): wp_rand() when available,
+			// otherwise uniqid() + microtime() entropy. No mt_rand() (discouraged).
+			if ( function_exists( 'wp_rand' ) ) {
+				$suffix = (string) wp_rand( 1000, 9999 );
+			} else {
+				$suffix = str_replace( '.', '', (string) microtime( true ) );
+			}
+			$namespace = 'wppo' . str_replace( '.', '', uniqid( '', true ) ) . $suffix;
+			$namespace = (string) preg_replace( '/[^A-Za-z0-9]/', '', $namespace );
+			return '' === $namespace ? 'wppofallback' : $namespace;
 		}
 
 		/**
@@ -1469,6 +1529,74 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				return '';
 			}
 			return self::normalize_cache_host( $host );
+		}
+
+		/**
+		 * Sanitize a URL path for cache file mapping.
+		 *
+		 * Shared encoded-sequence normalization for every file-writing
+		 * surface (static HTML cache in {@see Cache}, per-page used-CSS in
+		 * {@see Used_CSS}): only the PHP_URL_PATH component is used, exactly
+		 * one rawurldecode pass is applied (single-decode semantics —
+		 * `%252e` stays literal on disk and is never re-decoded, while
+		 * single-encoded `%2e%2e` / `%00` decode once and are then rejected),
+		 * and null bytes, remaining `..` segments, plus Windows drive (`C:`)
+		 * and UNC (`\\`) prefixes are rejected. Returns an empty string for
+		 * hostile or empty input; callers fail open (serve dynamic/uncached
+		 * and log a traversal probe) when the raw input was non-blank.
+		 *
+		 * Pure static helper: no I/O, no settings reads. Multisite-safe.
+		 *
+		 * @param string|null $url_path Raw URL path or URL.
+		 * @return string Sanitized relative path or empty string.
+		 * @since NEXT
+		 */
+		public static function sanitize_cache_url_path( ?string $url_path ): string {
+			$raw_input = (string) $url_path;
+
+			// Reject Windows drive prefixes and UNC roots before URL parsing
+			// (parse_url() would otherwise strip `C:` as a scheme and hide
+			// the absolute-path smuggling attempt).
+			$trimmed_raw = ltrim( $raw_input );
+			if ( '' !== $trimmed_raw && ( preg_match( '#^[a-zA-Z]:#', $trimmed_raw ) || 0 === strpos( $trimmed_raw, '\\\\' ) ) ) {
+				return '';
+			}
+
+			if ( function_exists( 'wp_parse_url' ) ) {
+				$parsed = wp_parse_url( $raw_input, PHP_URL_PATH );
+			} else {
+				$parsed = parse_url( $raw_input, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
+			}
+
+			// No path component (e.g. 'https://example.com?x=1'): refuse rather
+			// than falling back to the raw input, which would let query text
+			// influence the mapped cache directory.
+			if ( null === $parsed || false === $parsed ) {
+				return '';
+			}
+			$path_component = (string) $parsed;
+
+			$decoded = function_exists( 'rawurldecode' ) ? rawurldecode( $path_component ) : $path_component;
+
+			if ( false !== strpos( $decoded, "\0" ) ) {
+				return '';
+			}
+
+			if ( function_exists( 'wp_normalize_path' ) ) {
+				$normalized = wp_normalize_path( trim( $decoded, '/' ) );
+			} else {
+				$normalized = str_replace( '\\', '/', trim( $decoded, '/' ) );
+			}
+
+			if ( false !== strpos( $normalized, "\0" ) || false !== strpos( $normalized, '..' ) ) {
+				return '';
+			}
+
+			if ( '' !== $normalized && preg_match( '#^[a-zA-Z]:#', $normalized ) ) {
+				return '';
+			}
+
+			return $normalized;
 		}
 
 		/**
@@ -1913,7 +2041,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					continue;
 				}
 
-				if ( in_array( $safe_key, array( 'delayJSBuilderPreset', 'unusedCSSRegressionGuard' ), true ) && ! is_array( $value ) ) {
+				if ( in_array( $safe_key, array( 'delayJSBuilderPreset', 'delayJSCommercePreset', 'unusedCSSRegressionGuard' ), true ) && ! is_array( $value ) ) {
 					if ( is_bool( $value ) ) {
 						$sanitized[ $safe_key ] = $value;
 					} else {
@@ -1934,6 +2062,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 
 				// Unused-CSS extra safelist (issue #966) — one selector per line.
 				if ( 'unusedCSSSafelistExtra' === $safe_key && ! is_array( $value ) ) {
+					$sanitized[ $safe_key ] = sanitize_textarea_field( (string) $value );
+					continue;
+				}
+
+				// Max longest edge cap (issue #985 follow-up) — int >= 0.
+				// A cleared numeric field submits '' (or non-numeric text),
+				// which must fall back to the 2560 default rather than
+				// silently becoming 0/disabled at read time. Negatives clamp
+				// to 0 (disabled).
+				if ( 'maxLongestEdgePx' === $safe_key ) {
+					if ( is_array( $value ) || '' === $value || null === $value || ! is_numeric( $value ) ) {
+						$sanitized[ $safe_key ] = 2560;
+					} else {
+						$edge                   = (int) $value;
+						$sanitized[ $safe_key ] = $edge < 0 ? 0 : $edge;
+					}
+					continue;
+				}
+
+				// Newline/regex URL lists must use the textarea sanitizer, not
+				// the generic `url` branch (esc_url_raw would collapse the
+				// multiple lines). Pinned explicitly so a future reorder of the
+				// generic branches cannot corrupt these lists.
+				if ( in_array( $safe_key, array( 'delayJSExcludeUrls', 'usedCSSExcludeUrls' ), true ) && ! is_array( $value ) ) {
 					$sanitized[ $safe_key ] = sanitize_textarea_field( (string) $value );
 					continue;
 				}

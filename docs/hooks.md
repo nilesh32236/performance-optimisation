@@ -787,12 +787,22 @@ Filters AI-injected speculation rules. @since NEXT.
 ---
 
 ### `wppo_speculation_list_urls`
-Filters the high-value speculation list URLs (home + `performance_audit.high_value_urls`, same-site validated, capped at 10). @since NEXT.
+Filters the high-value speculation list URLs (home + `performance_audit.high_value_urls` + RUM top URLs, same-site validated, cart/checkout/account/query-string/fragment excluded, capped at 10). @since NEXT.
 
 Emitted as a `{"source":"list"}` rule via the `wp_speculation_rules` filter (WP 6.8+) when `preload_settings.enableSpeculationRules` is on. Return an empty array to suppress the list rule.
 
 **Parameters:**
 - `$urls` *(string[])* — Validated list URLs.
+
+---
+
+### `wppo_speculation_document_rule`
+Filters the archive first-post document rule before it is appended. @since NEXT.
+
+Emitted as a `{"source":"document"}` rule (first-post `href_matches` + first-post `selector_matches`) via the `wp_speculation_rules` filter (WP 6.8+) on archive views when `preload_settings.enableSpeculationRules` is on and `preload_settings.speculationDocumentRules` is not `false`. Return a non-array to suppress the document rule.
+
+**Parameters:**
+- `$archive_rule` *(array)* — The archive document rule.
 
 ---
 
@@ -1023,6 +1033,22 @@ Filters the delay-JS exclusion preset list itself. @since NEXT.
 
 ---
 
+### `wppo_delay_js_commerce_exclusions`
+Filters the delay-JS commerce preset exclusions (jQuery, cart-fragments, checkout). @since NEXT.
+
+**Parameters:**
+- `$preset` *(string[])* — Commerce preset exclusion patterns.
+
+---
+
+### `wppo_delay_js_slider_exclusions`
+Filters the delay-JS slider preset exclusions (revslider, swiper, slick, etc.). @since NEXT.
+
+**Parameters:**
+- `$preset` *(string[])* — Slider preset exclusion patterns.
+
+---
+
 ### `wppo_htaccess_cache_vary_rules`
 Filters the `.htaccess` cache-vary rules block before writing. @since NEXT.
 
@@ -1104,6 +1130,55 @@ Filters whether gain-map (HDR) images are converted. Return truthy to allow; def
 
 **Parameters:**
 - `$allow` *(bool)* — Default `false`.
+
+---
+
+### `wppo_skip_small_threshold_bytes`
+Filters the byte threshold at or under which source images skip conversion (tiny files cost more CPU than they save). Default `5120`. @since NEXT.
+
+**Parameters:**
+- `$threshold` *(int)* — Threshold in bytes (>= 0).
+
+---
+
+### `wppo_auto_alt_enabled`
+Filters whether missing-alt autofill is enabled. When truthy, `<img>` tags with no `alt` attribute get a deterministic derived alt (sanitized filename, falling back to the parent post title); existing `alt` attributes — including decorative `alt=""` — are never touched. Runs as a standalone buffer pass when lazy-loading is disabled, so the toggle works independently of `lazyLoadImages`. Data-URI images are included in both the Tag Processor and regex paths (derived from the parent title/filter when no filename exists). @since NEXT.
+
+**Parameters:**
+- `$enabled` *(bool)* — Default from the `image_optimisation.autoAltText` setting (`false`).
+
+---
+
+### `wppo_auto_alt_text`
+Filters the derived alt text for an image missing an `alt` attribute. Return a non-empty string to override, or an empty string to leave the tag untouched. No external HTTP is performed. @since NEXT.
+
+**Parameters:**
+- `$alt` *(string)* — The derived alt text (may be empty).
+- `$src` *(string)* — The image `src` URL.
+
+**Example:**
+
+```php
+add_filter( 'wppo_auto_alt_text', function ( $alt, $src ) {
+    return '' !== $alt ? $alt : 'Site photo';
+}, 10, 2 );
+```
+
+---
+
+### `wppo_max_longest_edge_px`
+Filters the longest-edge downscale cap in pixels applied when converting uploads to WebP/AVIF. Oversized sources are downscaled in-memory so generated outputs never exceed this edge; the original upload file is never modified, and a downscale that would not shrink output keeps the original. Applies to the JPEG/PNG GD path, the WebP-source AVIF path, and the GIF-via-Imagick path (coalesced-frame thumbnail); the 5000px dimension guard is evaluated against post-cap dimensions so cappable images convert instead of failing. Raw source pixel dimensions are still bounded before decode by a separate memory-budget guard, filterable via `wppo_max_source_pixels` (defaults to a PHP-memory-derived budget, clamped to 4,000,000–80,000,000 pixels), so decompression bombs cannot reach full GD decode. `0` disables the cap. @since NEXT.
+
+**Parameters:**
+- `$cap` *(int)* — Cap in pixels. Default from the `image_optimisation.maxLongestEdgePx` setting (`2560`).
+
+**Example:**
+
+```php
+add_filter( 'wppo_max_longest_edge_px', function () {
+    return 1920;
+} );
+```
 
 ---
 

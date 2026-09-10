@@ -1149,4 +1149,208 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		$this->assertNotContains( $full_rel, $info['skipped']['avif'] ?? array() );
 		$this->assertContains( $full_rel, $info['failed']['avif'] ?? array() );
 	}
+
+	/**
+	 * Longest-edge cap defaults to 2560, is filter-overridable, and clamps negatives.
+	 *
+	 * @since NEXT
+	 */
+	public function test_longest_edge_cap_default_filter_and_clamp(): void {
+		$converter = $this->make_converter();
+		$this->assertSame( 2560, $converter->get_longest_edge_cap() );
+
+		$disabled = $this->make_converter( array( 'maxLongestEdgePx' => 0 ) );
+		$this->assertSame( 0, $disabled->get_longest_edge_cap() );
+
+		$negative = $this->make_converter( array( 'maxLongestEdgePx' => -5 ) );
+		$this->assertSame( 0, $negative->get_longest_edge_cap() );
+
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook_name, $value ) {
+				if ( 'wppo_max_longest_edge_px' === $hook_name ) {
+					return 1920;
+				}
+				return $value;
+			}
+		);
+		$this->assertSame( 1920, $converter->get_longest_edge_cap() );
+
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook_name, $value ) {
+				if ( 'wppo_max_longest_edge_px' === $hook_name ) {
+					return -10;
+				}
+				return $value;
+			}
+		);
+		$this->assertSame( 0, $converter->get_longest_edge_cap() );
+
+		// A non-scalar filter return falls back to the 2560 default instead of
+		// coercing an array to 0/1.
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook_name, $value ) {
+				if ( 'wppo_max_longest_edge_px' === $hook_name ) {
+					return array( 1920 );
+				}
+				return $value;
+			}
+		);
+		$this->assertSame( 2560, $converter->get_longest_edge_cap() );
+	}
+
+	/**
+	 * A negative option cap is clamped to 0 by get_longest_edge_cap() itself.
+	 *
+	 * The constructor stores options verbatim (no sanitizer), so this exercises
+	 * the explicit `cap < 0 => 0` branch rather than a pre-clamped value.
+	 *
+	 * @since NEXT
+	 */
+	public function test_longest_edge_cap_clamps_negative_option(): void {
+		$converter = $this->make_converter( array( 'maxLongestEdgePx' => -5 ) );
+
+		// Prove the raw option is still negative (the branch is reachable).
+		$options_prop = new \ReflectionProperty( Img_Converter::class, 'options' );
+		$options_prop->setAccessible( true );
+		$raw = $options_prop->getValue( $converter )['image_optimisation']['maxLongestEdgePx'];
+		$this->assertSame( -5, $raw );
+
+		$this->assertSame( 0, $converter->get_longest_edge_cap() );
+
+		// Extreme negative magnitude also clamps (no int overflow surprises).
+		$this->assertSame(
+			0,
+			$this->make_converter( array( 'maxLongestEdgePx' => PHP_INT_MIN ) )->get_longest_edge_cap()
+		);
+	}
+
+	/**
+	 * The get_max_source_pixels() budget honors the wppo_max_source_pixels
+	 * filter and returns a positive memory-derived value by default.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_max_source_pixels_filter_and_default(): void {
+		$converter = $this->make_converter();
+
+		// Default: a positive int (memory-derived or the 5000x5000 fallback).
+		$default = $converter->get_max_source_pixels();
+		$this->assertIsInt( $default );
+		$this->assertGreaterThan( 0, $default );
+
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook_name, $value ) {
+				if ( 'wppo_max_source_pixels' === $hook_name ) {
+					return 1234567;
+				}
+				return $value;
+			}
+		);
+		$this->assertSame( 1234567, $converter->get_max_source_pixels() );
+	}
+
+	/**
+	 * Downscale shrinks oversized resources, keeps small ones, and fails open.
+	 *
+	 * @since NEXT
+	 */
+	public function test_maybe_downscale_gd_image(): void {
+		if ( ! function_exists( 'imagecreatetruecolor' ) ) {
+			$this->markTestSkipped( 'GD support is required.' );
+		}
+
+		$converter = $this->make_converter( array( 'maxLongestEdgePx' => 32 ) );
+
+		$image  = imagecreatetruecolor( 64, 48 );
+		$result = $converter->maybe_downscale_gd_image( $image, 64, 48 );
+		$this->assertNotSame( $image, $result );
+		$this->assertSame( 32, imagesx( $result ) );
+		$this->assertSame( 24, imagesy( $result ) );
+		Util::destroy_gd_image( $image );
+		Util::destroy_gd_image( $result );
+
+		// Already within the cap: original resource retained.
+		$small = imagecreatetruecolor( 16, 12 );
+		$this->assertSame( $small, $converter->maybe_downscale_gd_image( $small, 16, 12 ) );
+		Util::destroy_gd_image( $small );
+
+		// Invalid dimensions fail open to the original resource.
+		$odd = imagecreatetruecolor( 8, 8 );
+		$this->assertSame( $odd, $converter->maybe_downscale_gd_image( $odd, 0, 0 ) );
+		Util::destroy_gd_image( $odd );
+
+		// Cap disabled (0): original resource retained.
+		$off     = $this->make_converter( array( 'maxLongestEdgePx' => 0 ) );
+		$big_img = imagecreatetruecolor( 64, 48 );
+		$this->assertSame( $big_img, $off->maybe_downscale_gd_image( $big_img, 64, 48 ) );
+		Util::destroy_gd_image( $big_img );
+	}
+
+	/**
+	 * End-to-end: oversized source converts to a capped WebP; original kept.
+	 *
+	 * @since NEXT
+	 */
+	public function test_convert_image_downscales_oversized_output_to_cap(): void {
+		if ( ! function_exists( 'imagewebp' ) ) {
+			$this->markTestSkipped( 'GD WebP support is required.' );
+		}
+
+		$path  = $this->uploads_dir . '/oversized-cap.png';
+		$image = imagecreatetruecolor( 1200, 900 );
+		$color = imagecolorallocate( $image, 200, 100, 50 );
+		imagefill( $image, 0, 0, $color );
+		imagepng( $image, $path );
+		Util::destroy_gd_image( $image );
+
+		$this->prepare_wppo_output_dir();
+
+		// Narrow override: force only the `wp_image_quality` core-handles probe
+		// false, and restore the real builtin right after convert_image() so
+		// function_exists() is not intercepted for the rest of the test. Brain
+		// Monkey's Functions\when() discards Patchwork's handle, so the raw
+		// handle is captured here and expired in the finally block.
+		$function_exists_handle = \Patchwork\redefine(
+			'function_exists',
+			static function ( $function_name ) {
+				return 'wp_image_quality' !== $function_name;
+			}
+		);
+
+		$converter = $this->make_converter(
+			array(
+				'conversionFormat'        => 'webp',
+				'skipSmallThresholdBytes' => 0,
+				'maxLongestEdgePx'        => 600,
+			)
+		);
+		try {
+			$result = $converter->convert_image( $path, 'webp' );
+			\Patchwork\restore( $function_exists_handle );
+
+			$this->assertTrue( $result );
+
+			// Original upload file is never modified.
+			$orig = getimagesize( $path );
+			$this->assertSame( 1200, $orig[0] );
+			$this->assertSame( 900, $orig[1] );
+
+			$webp_path = Img_Converter::get_img_path( $path, 'webp' );
+			$this->assertFileExists( $webp_path );
+			$out = getimagesize( $webp_path );
+			$this->assertSame( 600, $out[0] );
+			$this->assertSame( 450, $out[1] );
+		} finally {
+			\Patchwork\restore( $function_exists_handle );
+			if ( file_exists( $path ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+				unlink( $path );
+			}
+			$webp_path = Img_Converter::get_img_path( $path, 'webp' );
+			if ( file_exists( $webp_path ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+				unlink( $webp_path );
+			}
+		}
+	}
 }

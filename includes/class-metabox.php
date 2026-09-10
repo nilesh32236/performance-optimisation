@@ -117,12 +117,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		public function render_asset_manager_metabox( $post ) {
 			wp_nonce_field( 'wppo_save_asset_manager', 'wppo_asset_manager_nonce' );
 
-			$disabled_scripts = get_post_meta( $post->ID, '_wppo_disabled_scripts', true );
-			$disabled_styles  = get_post_meta( $post->ID, '_wppo_disabled_styles', true );
-			$delay_strategies = get_post_meta( $post->ID, '_wppo_delay_strategies', true );
-			$delay_priorities = get_post_meta( $post->ID, '_wppo_delay_priorities', true );
-			$delay_disabled   = get_post_meta( $post->ID, '_wppo_delay_disabled', true );
-			$delay_notes      = get_post_meta( $post->ID, '_wppo_delay_notes', true );
+			$disabled_scripts  = get_post_meta( $post->ID, '_wppo_disabled_scripts', true );
+			$disabled_styles   = get_post_meta( $post->ID, '_wppo_disabled_styles', true );
+			$delay_strategies  = get_post_meta( $post->ID, '_wppo_delay_strategies', true );
+			$delay_priorities  = get_post_meta( $post->ID, '_wppo_delay_priorities', true );
+			$delay_disabled    = get_post_meta( $post->ID, '_wppo_delay_disabled', true );
+			$used_css_disabled = get_post_meta( $post->ID, '_wppo_used_css_disabled', true );
+			$delay_notes       = get_post_meta( $post->ID, '_wppo_delay_notes', true );
 
 			$disabled_scripts = is_array( $disabled_scripts ) ? $disabled_scripts : array();
 			$disabled_styles  = is_array( $disabled_styles ) ? $disabled_styles : array();
@@ -145,6 +146,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 							<?php checked( ! empty( $delay_disabled ) ); ?>
 						/>
 						<?php esc_html_e( 'Disable Delay JS on this page', 'performance-optimisation' ); ?>
+					</label>
+				</p>
+				<p>
+					<label for="wppo_used_css_disabled">
+						<input
+							type="checkbox"
+							id="wppo_used_css_disabled"
+							name="wppo_used_css_disabled"
+							value="1"
+							<?php checked( ! empty( $used_css_disabled ) ); ?>
+						/>
+						<?php esc_html_e( 'Disable Used CSS on this page', 'performance-optimisation' ); ?>
 					</label>
 				</p>
 				<p>
@@ -413,6 +426,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 				update_post_meta( $post_id, '_wppo_delay_disabled', '1' );
 			} else {
 				delete_post_meta( $post_id, '_wppo_delay_disabled' );
+			}
+
+			// Per-page Used CSS kill-switch (#988). Checkbox-only (no JS).
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_asset_manager_nonce.
+			$used_css_disabled = isset( $_POST['wppo_used_css_disabled'] ) && ! empty( $_POST['wppo_used_css_disabled'] );
+			if ( $used_css_disabled ) {
+				update_post_meta( $post_id, '_wppo_used_css_disabled', '1' );
+			} else {
+				delete_post_meta( $post_id, '_wppo_used_css_disabled' );
 			}
 
 	// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_asset_manager_nonce.

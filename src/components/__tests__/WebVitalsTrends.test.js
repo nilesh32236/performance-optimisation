@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 // eslint-disable-next-line import/no-extraneous-dependencies -- React is required for JSX rendering in tests
 import React from 'react';
@@ -68,7 +68,8 @@ describe( 'WebVitalsTrends Component', () => {
 
 		expect( fetchWebVitalsTrends ).toHaveBeenCalledWith(
 			'https://example.com/',
-			''
+			'',
+			expect.any( AbortSignal )
 		);
 	} );
 
@@ -116,5 +117,40 @@ describe( 'WebVitalsTrends Component', () => {
 			)
 		).toBeInTheDocument();
 		expect( fetchWebVitalsTrends ).not.toHaveBeenCalled();
+	} );
+
+	it( 'aborts the in-flight request on unmount without updating state', async () => {
+		let resolveFetch;
+		fetchWebVitalsTrends.mockImplementationOnce(
+			() =>
+				new Promise( ( resolve ) => {
+					resolveFetch = resolve;
+				} )
+		);
+
+		const { unmount } = render(
+			<WebVitalsTrends url="https://example.com/" />
+		);
+
+		await waitFor( () =>
+			expect( fetchWebVitalsTrends ).toHaveBeenCalled()
+		);
+		const signal = fetchWebVitalsTrends.mock.calls[ 0 ][ 2 ];
+		expect( signal ).toBeInstanceOf( AbortSignal );
+
+		unmount();
+		expect( signal.aborted ).toBe( true );
+
+		const errorSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
+		try {
+			await act( async () => {
+				resolveFetch( { success: true, data: { trends: {} } } );
+			} );
+			expect( errorSpy ).not.toHaveBeenCalled();
+		} finally {
+			errorSpy.mockRestore();
+		}
 	} );
 } );

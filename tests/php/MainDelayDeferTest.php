@@ -406,6 +406,57 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that the commerce/slider presets use scoped handles, not over-broad
+	 * bare `wc-`/`rs-` substrings (issue #994 review).
+	 *
+	 * The inline delay matcher does a raw substring match over tag attributes
+	 * and content, so a bare two-character prefix would wrongly exclude
+	 * unrelated markup such as `showcase-`. The scoped replacements keep the
+	 * real handles (and their dash/word-boundary variants) covered.
+	 *
+	 * @since NEXT
+	 */
+	public function test_delay_js_presets_use_scoped_prefixes(): void {
+		Functions\when( 'has_filter' )->justReturn( false );
+
+		$commerce = Main::get_delay_js_commerce_exclusions();
+		$this->assertNotContains( 'wc-', $commerce );
+		foreach ( array( 'wc-cart-fragments', 'wc-checkout', 'wc-add-to-cart', 'wc-single-product', 'wc-order-attribution', 'wc-jquery-blockui' ) as $entry ) {
+			$this->assertContains( $entry, $commerce );
+		}
+
+		$slider = Main::get_delay_js_slider_exclusions();
+		$this->assertNotContains( 'rs-', $slider );
+		foreach ( array( 'revslider', 'rev-slider', 'rs6', 'rs-module' ) as $entry ) {
+			$this->assertContains( $entry, $slider );
+		}
+	}
+
+	/**
+	 * Test that the scoped preset handles still match their dash/word-boundary
+	 * variants through is_delay_excluded_handle().
+	 *
+	 * @since NEXT
+	 */
+	public function test_delay_js_scoped_preset_handles_match_variants(): void {
+		$this->stub_main_construction(
+			array(
+				'delayJS' => true,
+			)
+		);
+
+		$main = new Main();
+
+		$this->assertTrue( $this->invoke_private_method( $main, 'is_delay_excluded_handle', 'wc-cart-fragments' ) );
+		$this->assertTrue( $this->invoke_private_method( $main, 'is_delay_excluded_handle', 'wc-order-attribution' ) );
+		$this->assertTrue( $this->invoke_private_method( $main, 'is_delay_excluded_handle', 'rs6' ) );
+		$this->assertTrue( $this->invoke_private_method( $main, 'is_delay_excluded_handle', 'rs-module-main' ) );
+		// Bare-substring handles must NOT match the scoped presets.
+		$this->assertFalse( $this->invoke_private_method( $main, 'is_delay_excluded_handle', 'showcase-widget' ) );
+		$this->assertFalse( $this->invoke_private_method( $main, 'is_delay_excluded_handle', 'my-rs-plugin' ) );
+	}
+
+	/**
 	 * Test that an explicit non-interaction default wins over the preset and
 	 * manual idle/viewport lists still take per-handle precedence (Option A
 	 * in-memory override semantics, issue #932).

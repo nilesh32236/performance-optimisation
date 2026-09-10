@@ -115,17 +115,40 @@ const ObjectCache = ( { options = {} } ) => {
 	const [ confirmDisable, setConfirmDisable ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
 
-	const fetchStatus = useCallback( async () => {
-		try {
-			const res = await apiCall( 'object_cache', { action: 'status' } );
-			if ( res.success ) {
-				setCacheStatus( ( prev ) => ( {
-					...res.data,
-					statusLoaded: true,
-					supported_compressors: res.data.supported_compressors ??
-						prev.supported_compressors ?? { none: true },
-				} ) );
-			} else {
+	const fetchStatus = useCallback(
+		async ( signal ) => {
+			try {
+				const res = await apiCall(
+					'object_cache',
+					{ action: 'status' },
+					'POST',
+					signal
+				);
+				if ( signal?.aborted ) {
+					return;
+				}
+				if ( res.success ) {
+					setCacheStatus( ( prev ) => ( {
+						...res.data,
+						statusLoaded: true,
+						supported_compressors: res.data
+							?.supported_compressors ??
+							prev.supported_compressors ?? { none: true },
+					} ) );
+				} else {
+					setCacheStatus( ( prev ) => ( {
+						...prev,
+						statusLoaded: true,
+						supported_compressors: prev.supported_compressors ?? {
+							none: true,
+						},
+					} ) );
+				}
+			} catch ( error ) {
+				if ( signal?.aborted || error?.name === 'AbortError' ) {
+					return;
+				}
+				console.error( 'Error fetching cache status', error );
 				setCacheStatus( ( prev ) => ( {
 					...prev,
 					statusLoaded: true,
@@ -133,29 +156,23 @@ const ObjectCache = ( { options = {} } ) => {
 						none: true,
 					},
 				} ) );
+				notify( {
+					type: 'error',
+					message: __(
+						'Failed to check cache status.',
+						'performance-optimisation'
+					),
+					durationMs: 5000,
+				} );
 			}
-		} catch ( error ) {
-			console.error( 'Error fetching cache status', error );
-			setCacheStatus( ( prev ) => ( {
-				...prev,
-				statusLoaded: true,
-				supported_compressors: prev.supported_compressors ?? {
-					none: true,
-				},
-			} ) );
-			notify( {
-				type: 'error',
-				message: __(
-					'Failed to check cache status.',
-					'performance-optimisation'
-				),
-				durationMs: 5000,
-			} );
-		}
-	}, [ notify ] );
+		},
+		[ notify ]
+	);
 
 	useEffect( () => {
-		fetchStatus();
+		const controller = new AbortController();
+		fetchStatus( controller.signal );
+		return () => controller.abort();
 	}, [ fetchStatus ] );
 
 	const handleSubmit = async ( e ) => {

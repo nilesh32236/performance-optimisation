@@ -6,6 +6,7 @@ import {
 	useMemo,
 } from '@wordpress/element';
 import { apiCall } from '../lib/apiRequest';
+import { getDbCounts } from '../lib/dbCounts';
 import useNotice from '../lib/useNotice';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import ConfirmDialog from './common/ConfirmDialog';
@@ -218,6 +219,7 @@ const Dashboard = ( {
 	const [ bgJobsQueued, setBgJobsQueued ] = useState( 0 );
 	const [ imgSavings, setImgSavings ] = useState( null );
 	const pollingRef = useRef( null );
+	const pollAbortRef = useRef( null );
 	const pollRetryRef = useRef( 0 );
 	const submittingRef = useRef( false );
 	const [ confirmRemove, setConfirmRemove ] = useState( false );
@@ -238,34 +240,41 @@ const Dashboard = ( {
 		} ) );
 	}, [] );
 
-	const fetchDbCounts = useCallback( async () => {
-		handleLoading( 'db_counts', true );
-		try {
-			const response = await apiCall(
-				'database_cleanup_counts',
-				{},
-				'GET'
-			);
-			if ( response.success && response.data ) {
-				updateState( { dbCounts: response.data } );
+	const fetchDbCounts = useCallback(
+		async ( signal ) => {
+			handleLoading( 'db_counts', true );
+			try {
+				const data = await getDbCounts( signal );
+				if ( signal?.aborted ) {
+					return;
+				}
+				updateState( { dbCounts: data } );
+			} catch ( error ) {
+				if ( error?.name === 'AbortError' || signal?.aborted ) {
+					return;
+				}
+				console.error( 'Error fetching db counts:', error );
+				notify( {
+					type: 'error',
+					message: __(
+						'Failed to load database counts.',
+						'performance-optimisation'
+					),
+					durationMs: 5000,
+				} );
+			} finally {
+				if ( ! signal?.aborted ) {
+					handleLoading( 'db_counts', false );
+				}
 			}
-		} catch ( error ) {
-			console.error( 'Error fetching db counts:', error );
-			notify( {
-				type: 'error',
-				message: __(
-					'Failed to load database counts.',
-					'performance-optimisation'
-				),
-				durationMs: 5000,
-			} );
-		} finally {
-			handleLoading( 'db_counts', false );
-		}
-	}, [ handleLoading, updateState, notify ] );
+		},
+		[ handleLoading, updateState, notify ]
+	);
 
 	useEffect( () => {
-		fetchDbCounts();
+		const controller = new AbortController();
+		fetchDbCounts( controller.signal );
+		return () => controller.abort();
 	}, [ fetchDbCounts ] );
 
 	const dbOverheadCount = useMemo( () => {
@@ -277,8 +286,24 @@ const Dashboard = ( {
 
 	const pollJobStatus = useCallback( async () => {
 		const currentTimeout = pollingRef.current;
+		// Polls are strictly sequential: the next tick is only scheduled
+		// after the previous await settles, so there is no overlapping
+		// in-flight request to abort here. A fresh controller per tick lets
+		// the unmount cleanup cancel the current poll.
+		pollAbortRef.current = new AbortController();
+		const signal = pollAbortRef.current.signal;
 		try {
-			const response = await apiCall( 'image_job_status', {}, 'GET' );
+			const response = await apiCall(
+				'image_job_status',
+				{},
+				'GET',
+				signal
+			);
+			// The unmount/stop cleanup may have aborted this tick while the
+			// request was in flight — bail before any setState/notify.
+			if ( signal.aborted ) {
+				return;
+			}
 			pollRetryRef.current = 0;
 			if ( response.success && response.data ) {
 				const { queued_jobs: queuedJobs } = response.data;
@@ -317,6 +342,9 @@ const Dashboard = ( {
 				}
 			}
 		} catch ( error ) {
+			if ( signal.aborted || error?.name === 'AbortError' ) {
+				return;
+			}
 			console.error( 'Error polling job status:', error );
 			pollRetryRef.current++;
 			if ( pollRetryRef.current >= 5 ) {
@@ -350,6 +378,9 @@ const Dashboard = ( {
 		return () => {
 			if ( pollingRef.current ) {
 				clearTimeout( pollingRef.current );
+			}
+			if ( pollAbortRef.current ) {
+				pollAbortRef.current.abort();
 			}
 		};
 	}, [] );

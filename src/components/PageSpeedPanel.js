@@ -120,12 +120,17 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 	const [ strategy, setStrategy ] = useState( 'mobile' );
 	const pollRef = useRef( null );
 	const pollCountRef = useRef( 0 );
+	const pollSignalRef = useRef( null );
 	const submittingRef = useRef( false );
 
 	const stopPolling = useCallback( () => {
 		if ( pollRef.current ) {
 			clearTimeout( pollRef.current );
 			pollRef.current = null;
+		}
+		if ( pollSignalRef.current ) {
+			pollSignalRef.current.abort();
+			pollSignalRef.current = null;
 		}
 		pollCountRef.current = 0;
 	}, [] );
@@ -153,37 +158,54 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 
 				if ( pollCountRef.current > MAX_POLL_ATTEMPTS ) {
 					stopPolling();
-					setPending( false );
-					setScanning( false );
-					notify( {
-						type: 'error',
-						message: __(
-							'PageSpeed scan timed out. Please try again.',
-							'performance-optimisation'
-						),
-					} );
-					return;
-				}
-
-				try {
-					const response = await getPagespeedResults(
-						scanUrl,
-						scanStrategy
-					);
-
-					if ( ! response.success ) {
-						stopPolling();
+					if ( isMounted.current ) {
 						setPending( false );
 						setScanning( false );
 						notify( {
 							type: 'error',
-							message:
-								response.message ||
-								__(
-									'PageSpeed scan failed. Please try again.',
-									'performance-optimisation'
-								),
+							message: __(
+								'PageSpeed scan timed out. Please try again.',
+								'performance-optimisation'
+							),
 						} );
+					}
+					return;
+				}
+
+				let signal = null;
+				try {
+					// Polls are strictly sequential: the next tick is only
+					// scheduled after the previous await settles, so the
+					// previous controller (if any) is already settled and
+					// needs no abort here. A fresh controller per tick keeps
+					// stopPolling()/unmount able to cancel the in-flight poll.
+					pollSignalRef.current = new AbortController();
+					signal = pollSignalRef.current.signal;
+					const response = await getPagespeedResults(
+						scanUrl,
+						scanStrategy,
+						signal
+					);
+					if ( signal.aborted ) {
+						pollSignalRef.current = null;
+						return;
+					}
+
+					if ( ! response.success ) {
+						stopPolling();
+						if ( isMounted.current ) {
+							setPending( false );
+							setScanning( false );
+							notify( {
+								type: 'error',
+								message:
+									response.message ||
+									__(
+										'PageSpeed scan failed. Please try again.',
+										'performance-optimisation'
+									),
+							} );
+						}
 						return;
 					}
 
@@ -211,16 +233,25 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 						}
 					}
 				} catch ( err ) {
+					if ( err?.name === 'AbortError' ) {
+						pollSignalRef.current = null;
+						return;
+					}
+					if ( signal && signal.aborted ) {
+						return;
+					}
 					stopPolling();
-					setPending( false );
-					setScanning( false );
-					notify( {
-						type: 'error',
-						message: __(
-							'PageSpeed scan failed.',
-							'performance-optimisation'
-						),
-					} );
+					if ( isMounted.current ) {
+						setPending( false );
+						setScanning( false );
+						notify( {
+							type: 'error',
+							message: __(
+								'PageSpeed scan failed.',
+								'performance-optimisation'
+							),
+						} );
+					}
 					console.error( 'PageSpeed poll error:', err );
 				}
 			};
@@ -244,6 +275,10 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 		try {
 			const response = await queuePagespeedScan( url, strategy );
 
+			if ( ! isMounted.current ) {
+				submittingRef.current = false;
+				return;
+			}
 			if ( ! response.success ) {
 				setScanning( false );
 				submittingRef.current = false;
@@ -264,8 +299,11 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 			submittingRef.current = false;
 			pollForResults( url, strategy );
 		} catch ( err ) {
-			setScanning( false );
 			submittingRef.current = false;
+			if ( ! isMounted.current ) {
+				return;
+			}
+			setScanning( false );
 			notify( {
 				type: 'error',
 				message: __(

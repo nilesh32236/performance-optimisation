@@ -104,6 +104,7 @@ jest.mock(
 
 import Dashboard from '../Dashboard';
 import { apiCall, fetchWebVitalsTrends } from '../../lib/apiRequest';
+import { clearDbCountsCache } from '../../lib/dbCounts';
 
 /**
  * Wait for the mount-time database_cleanup_counts call to start AND for the
@@ -115,7 +116,8 @@ const flushDashboardMount = async () => {
 		expect( apiCall ).toHaveBeenCalledWith(
 			'database_cleanup_counts',
 			{},
-			'GET'
+			'GET',
+			expect.any( AbortSignal )
 		);
 	} );
 	await act( async () => {} );
@@ -135,6 +137,7 @@ describe( 'Dashboard', () => {
 			},
 		};
 		jest.clearAllMocks();
+		clearDbCountsCache();
 		// Persistent default so the mount-time database_cleanup_counts call
 		// always resolves; action-specific responses queue via mockResolvedValueOnce.
 		apiCall.mockResolvedValue( { success: true, data: {} } );
@@ -237,7 +240,8 @@ describe( 'Dashboard', () => {
 				expect( apiCall ).toHaveBeenCalledWith(
 					'image_job_status',
 					{},
-					'GET'
+					'GET',
+					expect.any( AbortSignal )
 				);
 				expect(
 					screen.getByText( 'Image optimisation completed.' )
@@ -350,6 +354,12 @@ describe( 'Dashboard', () => {
 				'image_job_status',
 				{},
 				'GET'
+			);
+			expect( apiCall ).not.toHaveBeenCalledWith(
+				'image_job_status',
+				{},
+				'GET',
+				expect.any( AbortSignal )
 			);
 		} finally {
 			jest.useRealTimers();
@@ -556,5 +566,62 @@ describe( 'Dashboard', () => {
 		expect(
 			screen.getByText( 'Optimized images removed.' )
 		).toBeInTheDocument();
+	} );
+
+	it( 'aborts the in-flight db-counts request on unmount without notifying', async () => {
+		const consoleSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
+		try {
+			apiCall.mockImplementationOnce(
+				( action, payload, method, signal ) => {
+					if ( 'database_cleanup_counts' !== action ) {
+						return Promise.resolve( { success: true, data: {} } );
+					}
+					return new Promise( ( resolve, reject ) => {
+						if ( signal ) {
+							signal.addEventListener( 'abort', () => {
+								const abortError = new Error( 'Aborted' );
+								abortError.name = 'AbortError';
+								reject( abortError );
+							} );
+						}
+					} );
+				}
+			);
+
+			const { unmount } = render(
+				<Dashboard activities={ [] } onNavigate={ jest.fn() } />
+			);
+
+			await waitFor( () =>
+				expect( apiCall ).toHaveBeenCalledWith(
+					'database_cleanup_counts',
+					{},
+					'GET',
+					expect.any( AbortSignal )
+				)
+			);
+
+			const countsCall = apiCall.mock.calls.find(
+				( [ action ] ) => 'database_cleanup_counts' === action
+			);
+			const signal = countsCall[ 3 ];
+			expect( signal ).toBeInstanceOf( AbortSignal );
+
+			unmount();
+			expect( signal.aborted ).toBe( true );
+
+			await act( async () => {} );
+
+			// No error notification path taken: nothing logged and the
+			// aborted fetch never resolves into state. (No DOM assertion
+			// here: after unmount() the tree is gone, so queryByText
+			// would pass vacuously even if notify() had fired.)
+			expect( consoleSpy ).not.toHaveBeenCalled();
+		} finally {
+			consoleSpy.mockRestore();
+			apiCall.mockReset();
+		}
 	} );
 } );

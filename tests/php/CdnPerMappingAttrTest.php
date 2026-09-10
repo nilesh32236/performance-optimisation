@@ -147,4 +147,40 @@ class CdnPerMappingAttrTest extends \PHPUnit\Framework\TestCase {
 		$this->assertNotNull( $match_href );
 		$this->assertSame( 'src', $match_href['mapping']['cdn_attr'] );
 	}
+
+	/**
+	 * Regression: when any CDN mapping filter is registered the per-request memo
+	 * is skipped, but get_mappings() must still hydrate the stored settings.
+	 * Previously the settings read lived inside the memo branch, so a
+	 * filter-present call returned an empty mapping set and disabled the CDN.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_mappings_reads_settings_when_filter_registered(): void {
+		Functions\when( 'apply_filters' )->returnArg( 2 );
+		Functions\when( 'has_filter' )->alias(
+			static function ( $tag ) {
+				return 'wppo_cdn_mapping' === $tag;
+			}
+		);
+		Functions\when( 'get_option' )->justReturn(
+			array(
+				'file_optimisation' => array(
+					'cdnMapping' => array(
+						array( 'cdn_url' => 'https://cdn.example.com' ),
+					),
+				),
+			)
+		);
+
+		// Not order-dependent: reset both shared memos so the stored-settings
+		// hydration is asserted from a clean slate.
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		CDN::reset_cache();
+
+		$mappings = CDN::get_mappings();
+
+		$this->assertNotEmpty( $mappings );
+		$this->assertSame( 'https://cdn.example.com', $mappings[0]['cdn_url'] );
+	}
 }

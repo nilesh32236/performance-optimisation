@@ -43,7 +43,8 @@ describe( 'AutoloadedOptions', () => {
 		expect( apiCall ).toHaveBeenCalledWith(
 			'autoloaded_options?limit=20',
 			{},
-			'GET'
+			'GET',
+			expect.any( AbortSignal )
 		);
 	} );
 

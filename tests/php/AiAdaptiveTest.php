@@ -818,6 +818,147 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Seed RUM aggregates with a device × template LCP segment.
+	 *
+	 * The global-average path stays conservative (per-path averages of 1000ms)
+	 * so any eagerness upgrade is attributable to the segmented p75 routing.
+	 *
+	 * @since NEXT
+	 *
+	 * @param int $segment_n Segment sample count.
+	 * @return void
+	 */
+	private function seed_segmented_rum( int $segment_n ): void {
+		$today                                   = gmdate( 'Y-m-d' );
+		$this->options['wppo_web_vitals_rum']    = array(
+			$today => array(
+				'/fast/' => array(
+					'lcp' => array(
+						'n'   => 100,
+						'sum' => 100000,
+						'min' => 1000,
+						'max' => 1000,
+					),
+				),
+				'/slow/' => array(
+					'lcp'    => array(
+						'n'   => 5,
+						'sum' => 5000,
+						'min' => 1000,
+						'max' => 1000,
+					),
+					'lcpSeg' => array(
+						'mobile|single' => array(
+							'device'   => 'mobile',
+							'template' => 'single',
+							'n'        => $segment_n,
+							'sum'      => (float) $segment_n * 4000.0,
+							'min'      => 4000.0,
+							'max'      => 4000.0,
+							'samples'  => array_fill( 0, $segment_n, 4000.0 ),
+						),
+					),
+				),
+			),
+		);
+		$this->options['wppo_web_vitals_trends'] = array();
+		$this->options['wppo_settings']          = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		Util::clear_settings_cache();
+	}
+
+	/**
+	 * Test below-threshold segments keep provisional copy with no eagerness upgrade.
+	 *
+	 * Given <20 samples the heuristic uses the global-average path unchanged.
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_learn_below_threshold_stays_provisional_without_upgrade(): void {
+		$this->install_stubs();
+		$this->seed_segmented_rum( 12 );
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$model = AI_Adaptive::learn();
+		$this->assertSame( 'conservative', $model['eagerness'] );
+		$this->assertTrue( $model['field_lcp_provisional'] );
+		$this->assertSame( 12, $model['field_lcp_samples'] );
+
+		$suggestions = AI_Adaptive::get_suggestions();
+		$field       = $this->find_suggestion( $suggestions, 'ai_field_lcp_tune' );
+		$this->assertNotNull( $field );
+		$this->assertStringContainsString( 'provisional', $field['value'] );
+		$this->assertStringContainsString( '12/20', $field['value'] );
+		$this->assertStringContainsString( 'provisional', $field['description'] );
+		// No eagerness upgrade: no eagerness suggestion at conservative.
+		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' ) );
+	}
+
+	/**
+	 * Test at-threshold segments route device + template + p75 into the suggestion.
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_learn_at_threshold_routes_segmented_p75(): void {
+		$this->install_stubs();
+		$this->seed_segmented_rum( 20 );
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$model = AI_Adaptive::learn();
+		$this->assertSame( 'eager', $model['eagerness'] );
+		$this->assertFalse( $model['field_lcp_provisional'] );
+		$this->assertSame( 'mobile', $model['field_lcp_segment']['device'] );
+		$this->assertSame( 'single', $model['field_lcp_segment']['template'] );
+		$this->assertSame( 4000.0, $model['field_lcp_p75'] );
+
+		$suggestions = AI_Adaptive::get_suggestions();
+		$eagerness   = $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' );
+		$this->assertNotNull( $eagerness );
+		$this->assertStringContainsString( 'mobile', $eagerness['value'] );
+		$this->assertStringContainsString( 'single', $eagerness['value'] );
+		$this->assertStringContainsString( 'p75', $eagerness['value'] );
+		$field = $this->find_suggestion( $suggestions, 'ai_field_lcp_tune' );
+		$this->assertNotNull( $field );
+		$this->assertStringContainsString( 'mobile', $field['value'] );
+		$this->assertStringContainsString( 'single', $field['value'] );
+		$this->assertStringContainsString( 'p75', $field['value'] );
+	}
+
+	/**
+	 * Test empty RUM data falls back to the global path without errors.
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_learn_with_empty_rum_falls_back_to_global_path(): void {
+		$this->install_stubs();
+		$this->options['wppo_web_vitals_rum']    = array();
+		$this->options['wppo_web_vitals_trends'] = array();
+		$this->options['wppo_settings']          = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		Util::clear_settings_cache();
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$model = AI_Adaptive::learn();
+		$this->assertSame( 'conservative', $model['eagerness'] );
+		$this->assertTrue( $model['field_lcp_provisional'] );
+
+		$suggestions = AI_Adaptive::get_suggestions();
+		$field       = $this->find_suggestion( $suggestions, 'ai_field_lcp_tune' );
+		$this->assertNotNull( $field );
+		$this->assertStringContainsString( 'provisional', $field['value'] );
+	}
+
+	/**
 	 * Test commerce exclude paths derive from WooCommerce URLs when available.
 	 *
 	 * Runs last: covering the Woo-presence branch requires eval-declaring the

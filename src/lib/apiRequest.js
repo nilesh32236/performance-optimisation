@@ -278,17 +278,20 @@ export const queuePagespeedScan = ( url, strategy = 'mobile' ) => {
  * has not yet completed.
  *
  * @since 1.6.0
- * @param {string} url      The scanned URL.
- * @param {string} strategy 'mobile' or 'desktop'.
+ * @since NEXT Accepts an optional AbortSignal for request cancellation.
+ * @param {string}      url      The scanned URL.
+ * @param {string}      strategy 'mobile' or 'desktop'.
+ * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
  * @return {Promise<Object>} Resolved result data or not_ready status.
  */
-export const getPagespeedResults = ( url, strategy = 'mobile' ) => {
+export const getPagespeedResults = ( url, strategy = 'mobile', signal ) => {
 	return apiCall(
 		`pagespeed_results?url=${ encodeURIComponent(
 			url
 		) }&strategy=${ encodeURIComponent( strategy ) }`,
 		{},
-		'GET'
+		'GET',
+		signal
 	);
 };
 
@@ -298,11 +301,13 @@ export const getPagespeedResults = ( url, strategy = 'mobile' ) => {
  * Optionally scopes to a URL and strategy via query params.
  *
  * @since 2.14.0
- * @param {string} url      The scanned URL.
- * @param {string} strategy 'mobile', 'desktop' or ''.
+ * @since NEXT Accepts an optional AbortSignal for request cancellation.
+ * @param {string}      url      The scanned URL.
+ * @param {string}      strategy 'mobile', 'desktop' or ''.
+ * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
  * @return {Promise<Object>} Resolved trends data.
  */
-export const fetchWebVitalsTrends = ( url = '', strategy = '' ) => {
+export const fetchWebVitalsTrends = ( url = '', strategy = '', signal ) => {
 	const params = new URLSearchParams();
 	if ( url ) {
 		params.set( 'url', url );
@@ -311,7 +316,12 @@ export const fetchWebVitalsTrends = ( url = '', strategy = '' ) => {
 		params.set( 'strategy', strategy );
 	}
 	const qs = params.toString();
-	return apiCall( `web_vitals_trends${ qs ? `?${ qs }` : '' }`, {}, 'GET' );
+	return apiCall(
+		`web_vitals_trends${ qs ? `?${ qs }` : '' }`,
+		{},
+		'GET',
+		signal
+	);
 };
 
 /**

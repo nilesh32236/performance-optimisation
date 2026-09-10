@@ -142,6 +142,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private const FILE_EXISTS_CACHE_LIMIT = 500;
 
 		/**
+		 * Per-request record of emitted preload links (normalized URL + query + media).
+		 *
+		 * `get_all_preload_data()` dedups within one call, but `wp_head` may
+		 * invoke `preload_images()` more than once per request; this guard
+		 * keeps the single `<link rel="preload" as="image"
+		 * fetchpriority="high">` per LCP URL invariant (issue #991) across
+		 * repeated calls. Reset with {@see clear_runtime_caches()} (e.g. on
+		 * switch_blog) and in tests. Long-lived processes (CLI/cron) that
+		 * generate multiple pages in one process must call
+		 * {@see clear_runtime_caches()} between pages, otherwise a hero URL
+		 * repeated on a later page is skipped as already emitted.
+		 *
+		 * @var array<string,bool>
+		 * @since NEXT
+		 */
+		private static array $preload_emitted = array();
+
+		/**
 		 * In-request LRU map for getimagesize results (see
 		 * {@see get_cached_image_size()}).
 		 *
@@ -153,6 +171,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since NEXT
 		 */
 		private static array $img_size_cache = array();
+
+		/**
+		 * Per-request random namespace for noscript placeholder tokens.
+		 *
+		 * In-memory only (never persisted to `wppo_settings`), so it is
+		 * multisite-safe by construction: each request/instance mints its own
+		 * namespace and only tokens carrying it can be restored.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		private string $noscript_namespace = '';
+
+		/**
+		 * Memoized LCP-candidate URL excluded from lazy load for this instance.
+		 *
+		 * `preload_images()` and `add_delay_load_img()` each resolve RUM /
+		 * PageSpeed state once per page; this memo (see
+		 * {@see get_lazy_lcp_exclusion_url()}) keeps repeated lazy rewrites on
+		 * the same instance from re-scanning the RUM aggregate and transients.
+		 * Per-instance (not static): instances are constructed per request with
+		 * one site's options, so a memoized URL can never leak across sites or
+		 * option sets. Long-lived processes that reuse one instance across
+		 * pages should construct a fresh instance per page instead.
+		 *
+		 * @var string|null Null until resolved, then the candidate URL or ''.
+		 * @since NEXT
+		 */
+		private ?string $lazy_lcp_exclusion_url = null;
 
 		/**
 		 * Clear the per-request runtime caches (file_exists + image sizes).
@@ -169,6 +216,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		public static function clear_runtime_caches(): void {
 			self::$file_exists_cache = array();
 			self::$img_size_cache    = array();
+			self::$preload_emitted   = array();
 		}
 
 		/**
@@ -298,12 +346,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Preloads images for optimization.
 		 *
+		 * Emits exactly one `<link rel="preload" as="image"
+		 * fetchpriority="high">` per URL: `get_all_preload_data()` dedups by
+		 * normalized URL + query + media within one call (so the single
+		 * RUM-field → PageSpeed LCP candidate, manual meta, front-page and
+		 * post-type items collapse to one tag, while `?v=` variants stay
+		 * distinct), and the per-request `$preload_emitted` guard below skips
+		 * repeats across repeated `wp_head` invocations.
+		 *
+		 * No-duplicate note (issue #991): core 6.9 stamps `fetchpriority` on
+		 * the `<img>` node itself via `wp_get_loading_optimization_attributes()`
+		 * — a separate concern from this early `<link>` hint. The stamp is
+		 * never double-applied (see `prioritize_lcp_image()` and
+		 * `set_loading_optimization_attributes()`, which only fill gaps via
+		 * `function_exists()`-guarded core calls), so this hint and core's
+		 * node stamp coexist without fighting.
+		 *
 		 * @since 1.0.0
 		 */
 		public function preload_images() {
 			$preload_data = $this->get_all_preload_data();
 
 			foreach ( $preload_data as $data ) {
+				if ( ! is_array( $data ) || empty( $data['url'] ) || ! is_string( $data['url'] ) ) {
+					continue;
+				}
+				$emitted_key = $this->get_preload_dedup_key( $data['url'], (string) ( $data['media'] ?? '' ) );
+				if ( isset( self::$preload_emitted[ $emitted_key ] ) ) {
+					continue;
+				}
+				self::$preload_emitted[ $emitted_key ] = true;
 				Util::generate_preload_link(
 					$data['url'],
 					'preload',
@@ -314,6 +386,153 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$data['priority'] ?? 'high'
 				);
 			}
+		}
+
+		/**
+		 * Get (and lazily mint) the per-request noscript token namespace.
+		 *
+		 * Uses cryptographically random hex via `random_bytes()` when available,
+		 * falling back to `wp_generate_password()` (sanitized to alphanumerics)
+		 * and finally to a `uniqid()`/`wp_rand()` token. Never fatals: any
+		 * failure degrades to a static fallback namespace (fail-open).
+		 *
+		 * @since NEXT
+		 * @return string Non-empty namespace string.
+		 */
+		private function get_noscript_namespace(): string {
+			if ( '' !== $this->noscript_namespace ) {
+				return $this->noscript_namespace;
+			}
+
+			$this->noscript_namespace = Util::mint_placeholder_namespace();
+
+			return $this->noscript_namespace;
+		}
+
+		/**
+		 * Resolve a single noscript placeholder token against the allowlist.
+		 *
+		 * Strict restore discipline (CVE-2026-3220 shape): the token must be an
+		 * exact key of `$noscript_tokens`, carry this request's namespace
+		 * (constant-time comparison), and reference a bounds-checked index. Any
+		 * anomaly returns null so the caller emits the node unmodified
+		 * (fail-open).
+		 *
+		 * @since NEXT
+		 * @param string $token           The matched placeholder comment.
+		 * @param array  $noscript_tokens The exact-token allowlist (token => HTML).
+		 * @return string|null Restored HTML, or null on anomaly.
+		 */
+		private function resolve_noscript_token( string $token, array $noscript_tokens ): ?string {
+			if ( ! isset( $noscript_tokens[ $token ] ) || ! is_string( $noscript_tokens[ $token ] ) ) {
+				return null;
+			}
+
+			if ( 1 !== preg_match( '/^<!--WPPO_NOSCRIPT_([A-Za-z0-9]+)_(\d+)-->$/', $token, $matches ) ) {
+				return null;
+			}
+
+			$namespace          = $matches[1];
+			$index_raw          = $matches[2];
+			$namespace_expected = $this->noscript_namespace;
+
+			if ( '' === $namespace_expected || '' === $namespace ) {
+				return null;
+			}
+
+			if ( strlen( $namespace ) !== strlen( $namespace_expected ) ) {
+				return null;
+			}
+
+			if ( function_exists( 'hash_equals' ) ) {
+				if ( ! hash_equals( $namespace_expected, $namespace ) ) {
+					return null;
+				}
+			} elseif ( $namespace !== $namespace_expected ) {
+				return null;
+			}
+
+			if ( ! ctype_digit( $index_raw ) ) {
+				return null;
+			}
+
+			$index = (int) $index_raw;
+			if ( $index < 0 || $index >= count( $noscript_tokens ) ) {
+				return null;
+			}
+
+			return $noscript_tokens[ $token ];
+		}
+
+		/**
+		 * Restore stashed `<noscript>` blocks via strict allowlist lookup.
+		 *
+		 * Unknown, foreign-namespace, or out-of-range tokens pass through
+		 * unmodified (fail-open) so attacker-controlled markup shaped like a
+		 * token stays inert. PCRE failure degrades to the unmodified buffer.
+		 *
+		 * @since NEXT
+		 * @param string $buffer          The HTML buffer containing tokens.
+		 * @param array  $noscript_tokens The exact-token allowlist (token => HTML).
+		 * @return string Buffer with known tokens restored.
+		 */
+		private function restore_noscript_tokens( string $buffer, array $noscript_tokens ): string {
+			if ( array() === $noscript_tokens ) {
+				return $buffer;
+			}
+
+			$restored = preg_replace_callback(
+				'/<!--WPPO_NOSCRIPT_[A-Za-z0-9_-]+_\d+-->/',
+				function ( $matches ) use ( $noscript_tokens ) {
+					$resolved = $this->resolve_noscript_token( $matches[0], $noscript_tokens );
+					return null !== $resolved ? $resolved : $matches[0];
+				},
+				$buffer
+			);
+
+			return null !== $restored ? $restored : $buffer;
+		}
+
+		/**
+		 * Whether a lazy `data-src` value is safe to rewrite with a placeholder.
+		 *
+		 * Fail-open ownership gate: hostile placeholder-shaped input (empty,
+		 * oversized, markup-bearing, or dangerous-scheme `data-src`) is not a
+		 * locally generated lazy node and must be emitted unmodified without
+		 * any placeholder rewrite.
+		 *
+		 * @since NEXT
+		 * @param string $data_src The `data-src` URL of the image.
+		 * @return bool True when the node may receive a placeholder `src`.
+		 */
+		private function is_valid_lazy_placeholder_candidate( string $data_src ): bool {
+			$data_src = trim( $data_src );
+			if ( '' === $data_src ) {
+				return false;
+			}
+			if ( strlen( $data_src ) > 2048 ) {
+				return false;
+			}
+			if ( str_contains( $data_src, '<' ) || str_contains( $data_src, '>' ) ) {
+				return false;
+			}
+			$lower = strtolower( ltrim( $data_src ) );
+			if (
+				str_starts_with( $lower, 'javascript:' )
+				|| str_starts_with( $lower, 'vbscript:' )
+			) {
+				return false;
+			}
+			// Only a small allowlist of raster image data URLs may receive a
+			// placeholder rewrite. Every other data: payload (text/html,
+			// image/svg+xml which can carry script, application/xhtml+xml,
+			// …) is refused and emitted unmodified (fail-open).
+			if ( str_starts_with( $lower, 'data:' ) ) {
+				// Require a `;`/`,` delimiter after the subtype so a
+				// prefix-only match like `data:image/pngevil` is rejected.
+				return 1 === preg_match( '#^data:image/(?:png|jpe?g|gif|webp|avif)[;,]#i', $lower );
+			}
+			return true;
 		}
 
 		/**
@@ -328,6 +547,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * (`IMG_SIZE_CACHE_LIMIT` / `FILE_EXISTS_CACHE_LIMIT`). Merging into a single
 		 * pass would conflate concerns and break the dimensions→auto-sizes ordering
 		 * dependency. The three-pass cost is linear and acceptable (see audit D-14).
+		 *
+		 * Anomaly gate: candidate nodes failing {@see is_valid_lazy_placeholder_candidate()}
+		 * are emitted unmodified without any lazy/placeholder rewrite (fail-open).
 		 *
 		 * @since NEXT
 		 *
@@ -354,7 +576,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					if ( preg_match( '#\ssrc=#i', $img_tag ) ) {
 						return $img_tag;
 					}
-					$data_src    = $matches[1];
+					$data_src = $matches[1];
+					// Fail-open: hostile placeholder-shaped input is emitted
+					// unmodified without any lazy/placeholder rewrite.
+					if ( ! $this->is_valid_lazy_placeholder_candidate( $data_src ) ) {
+						return $img_tag;
+					}
 					$placeholder = $this->get_placeholder_src_for_image( $img_tag, $data_src );
 					if ( ! empty( $placeholder['src'] ) ) {
 						$extra_attrs = '';
@@ -404,8 +631,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$data_src = $processor->get_attribute( 'data-src' );
 					$src      = $processor->get_attribute( 'src' );
 					if ( null !== $data_src && null === $src ) {
-						$tok_html    = $processor->serialize_token();
-						$decoded     = (string) $data_src;
+						$tok_html = $processor->serialize_token();
+						$decoded  = (string) $data_src;
+						// Fail-open: hostile placeholder-shaped input is emitted
+						// unmodified without any lazy/placeholder rewrite.
+						if ( ! $this->is_valid_lazy_placeholder_candidate( $decoded ) ) {
+							$out .= $tok_html;
+							continue;
+						}
 						$placeholder = $this->get_placeholder_src_for_image( $tok_html, $decoded );
 						if ( ! empty( $placeholder['src'] ) ) {
 							$processor->set_attribute( 'src', $placeholder['src'] );
@@ -1362,24 +1595,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$this->get_post_type_preload_data( $image_optimisation )
 			);
 
-			// Deduplicate by normalized URL + media (issue #935): the
+			// Deduplicate by normalized URL + query + media (issue #935): the
 			// field-measured LCP URL may equal a manually configured preload
 			// as an absolute URL vs a relative URL (or http vs https), but
-			// exactly one link tag must be emitted per resource.
+			// exactly one link tag must be emitted per resource (query-string
+			// versions still count as distinct resources).
 			$seen   = array();
 			$unique = array();
 			foreach ( $merged as $item ) {
 				if ( ! is_array( $item ) || empty( $item['url'] ) ) {
 					continue;
 				}
-				$normalized = '';
-				try {
-					$normalized = $this->normalize_image_url( (string) $item['url'] );
-				} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
-					$normalized = '';
-				}
-				$dedup_url = ( '' !== $normalized ) ? $normalized : (string) $item['url'];
-				$key       = $dedup_url . '|' . ( $item['media'] ?? '' );
+				$key = $this->get_preload_dedup_key( (string) $item['url'], (string) ( $item['media'] ?? '' ) );
 				if ( isset( $seen[ $key ] ) ) {
 					continue;
 				}
@@ -1391,10 +1618,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
-		 * Retrieves auto-detected LCP image preload data from PageSpeed scan results.
+		 * Retrieves the single auto-detected LCP image preload item.
 		 *
-		 * Checks the current page's stored LCP image URL (from PageSpeed scan) and
-		 * returns a preload item if found. The toggle autoPreloadLCP must be enabled.
+		 * Source order for the one LCP candidate (issue #991): Optimization
+		 * Detective stays Priority 0, then the single RUM-field → PageSpeed
+		 * candidate from `RUM::get_lcp_preload_candidate()` when the
+		 * `fieldLcpOverride` toggle is on, else the legacy
+		 * `get_current_lcp_url()` chain. Returns zero or one item via
+		 * `prepare_preload_item()` so "once per URL" holds; the item
+		 * participates in the normalized-URL + query + media dedup in
+		 * `get_all_preload_data()`. The toggle autoPreloadLCP must be enabled.
 		 *
 		 * @since NEXT
 		 * @return array List of preload items (zero or one item).
@@ -1403,6 +1636,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$image_optimisation = $this->options['image_optimisation'] ?? array();
 			if ( empty( $image_optimisation['autoPreloadLCP'] ) ) {
 				return array();
+			}
+
+			// Priority 0: Optimization Detective — must stay ahead of RUM.
+			if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
+				try {
+					$od_url = \PerformanceOptimise\Inc\OD_Bridge::get_lcp_url();
+					if ( '' !== $od_url ) {
+						return array( $this->prepare_preload_item( $od_url ) );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			// Single RUM-field → PageSpeed candidate when the field path applies.
+			if ( ! empty( $image_optimisation['fieldLcpOverride'] ) && class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_lcp_preload_candidate' ) ) {
+				try {
+					$candidate = \PerformanceOptimise\Inc\RUM::get_lcp_preload_candidate();
+					if ( is_array( $candidate ) && ! empty( $candidate['url'] ) && is_string( $candidate['url'] ) ) {
+						return array( $this->prepare_preload_item( $candidate['url'] ) );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 			}
 
 			$lcp_url = $this->get_current_lcp_url();
@@ -1422,6 +1679,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * 1. Singular post meta (`_wppo_lcp_image_url_{strategy}`).
 		 * 2. Front-page option (`wppo_front_page_lcp_{strategy}`).
 		 * 3. Transient keyed by strategy + current URL hash (`wppo_lcp_url_{strategy}_{md5}`).
+		 *
+		 * Tiers 1-3 are read via the shared
+		 * `RUM::get_stored_pagespeed_lcp_url()` helper so strategy order and
+		 * key formats stay in sync with the preload candidate path.
 		 *
 		 * When the `fieldLcpOverride` toggle is enabled, field-measured RUM data
 		 * (issue #935) is consulted between Optimization Detective and the
@@ -1470,56 +1731,77 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 			}
 
-			$strategies = array( 'mobile', 'desktop' );
-
-			// Priority 1: Singular post — check post meta (mobile first, then desktop).
-			// Guarded by function_exists() so unit contexts without WP fail open.
-			if ( function_exists( 'is_singular' ) && is_singular() ) {
-				$post_id = function_exists( 'get_the_ID' ) ? get_the_ID() : 0;
-				if ( ! empty( $post_id ) && function_exists( 'get_post_meta' ) ) {
-					foreach ( $strategies as $strategy ) {
-						$meta_lcp = get_post_meta( $post_id, '_wppo_lcp_image_url_' . $strategy, true );
-						if ( ! empty( $meta_lcp ) && is_string( $meta_lcp ) ) {
-							return $meta_lcp;
-						}
+			// Priorities 1-3: delegate to the shared read-only PageSpeed
+			// lookup so this chain and the preload candidate path cannot
+			// drift apart. Fail-open: any failure inside returns ''.
+			if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_stored_pagespeed_lcp_url' ) ) {
+				try {
+					return \PerformanceOptimise\Inc\RUM::get_stored_pagespeed_lcp_url();
+				} catch ( \Throwable $e ) {
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+						error_log( 'WPPO Image optimisation PageSpeed LCP error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 					}
-				}
-			}
-
-			// Priority 2: Front page — check option (mobile first, then desktop).
-			if ( function_exists( 'is_front_page' ) && is_front_page() ) {
-				if ( function_exists( 'get_option' ) ) {
-					foreach ( $strategies as $strategy ) {
-						$front_lcp = get_option( 'wppo_front_page_lcp_' . $strategy, '' );
-						if ( ! empty( $front_lcp ) && is_string( $front_lcp ) ) {
-							return $front_lcp;
-						}
-					}
-				}
-			}
-
-			// Priority 3: Check transient keyed by strategy + current URL hash.
-			// Fail-open: Util::get_current_url() needs WP URL helpers that may be
-			// unavailable (e.g. unit contexts); any failure returns ''.
-			if ( ! function_exists( 'get_transient' ) ) {
-				return '';
-			}
-			try {
-				if ( ! function_exists( 'untrailingslashit' ) || ! function_exists( 'esc_url_raw' ) ) {
-					return '';
-				}
-				$current_url = untrailingslashit( esc_url_raw( Util::get_current_url() ) );
-			} catch ( \Throwable $e ) {
-				return '';
-			}
-			foreach ( $strategies as $strategy ) {
-				$transient = get_transient( Util::transient_key( 'wppo_lcp_url_' . $strategy . '_' . md5( $current_url ) ) );
-				if ( ! empty( $transient ) && is_string( $transient ) ) {
-					return $transient;
 				}
 			}
 
 			return '';
+		}
+
+		/**
+		 * Resolve the LCP-candidate URL excluded from lazy load (memoized per instance).
+		 *
+		 * Gated on the LCP toggles so default lazy behaviour is unchanged when
+		 * all LCP features are off: the field-measured branch needs
+		 * `fieldLcpOverride`, the stored-PageSpeed branch (shared read-only
+		 * lookup, no new scans) needs `autoPreloadLCP` or `prioritizeLCP`.
+		 * Returns an empty string when no branch applies or nothing resolves.
+		 * Fail-open: any failure returns an empty string, never fatal.
+		 *
+		 * @since NEXT
+		 * @param array $image_optimisation Image optimisation settings.
+		 * @return string The candidate URL, or empty string when none applies.
+		 */
+		private function get_lazy_lcp_exclusion_url( array $image_optimisation ): string {
+			if ( null !== $this->lazy_lcp_exclusion_url ) {
+				return $this->lazy_lcp_exclusion_url;
+			}
+			$this->lazy_lcp_exclusion_url = '';
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
+					return '';
+				}
+				if ( ! empty( $image_optimisation['fieldLcpOverride'] ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_field_lcp_url' ) ) {
+					try {
+						// Resolve the path exactly like get_current_lcp_url() so
+						// the lookup hits the same normalized RUM bucket the
+						// beacon store side wrote.
+						$parsed_path = function_exists( 'wp_parse_url' ) ? wp_parse_url( Util::get_current_url(), PHP_URL_PATH ) : '/';
+						$raw_path    = is_string( $parsed_path ) && '' !== $parsed_path ? $parsed_path : '/';
+						$field_path  = Util::normalize_rum_path( $raw_path );
+						$field       = \PerformanceOptimise\Inc\RUM::get_field_lcp_url( $field_path );
+						if ( is_array( $field ) && ! empty( $field['url'] ) && is_string( $field['url'] ) ) {
+							$this->lazy_lcp_exclusion_url = $field['url'];
+							return $this->lazy_lcp_exclusion_url;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( ( ! empty( $image_optimisation['autoPreloadLCP'] ) || ! empty( $image_optimisation['prioritizeLCPImages'] ) )
+				&& method_exists( 'PerformanceOptimise\Inc\RUM', 'get_stored_pagespeed_lcp_url' ) ) {
+					try {
+						$stored = \PerformanceOptimise\Inc\RUM::get_stored_pagespeed_lcp_url();
+						if ( '' !== $stored ) {
+							$this->lazy_lcp_exclusion_url = $stored;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $this->lazy_lcp_exclusion_url;
 		}
 
 		/**
@@ -1915,6 +2197,242 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Whether missing-alt autofill is enabled.
+		 *
+		 * Off by default (fail-open): when disabled `process_img_tag()`
+		 * returns byte-identical HTML with respect to `alt`. The value is
+		 * filterable via `wppo_auto_alt_enabled` for host-level overrides.
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when missing `alt` attributes should be derived.
+		 */
+		public function is_auto_alt_enabled(): bool {
+			$enabled = ! empty( $this->options['image_optimisation']['autoAltText'] );
+			if ( function_exists( 'apply_filters' ) ) {
+				/**
+				 * Filter whether missing-alt autofill is enabled.
+				 *
+				 * @since NEXT
+				 * @param bool $enabled Whether autofill is enabled.
+				 */
+				$enabled = (bool) apply_filters( 'wppo_auto_alt_enabled', $enabled );
+			}
+
+			return $enabled;
+		}
+
+		/**
+		 * Derive a human-readable alt candidate from an image URL filename.
+		 *
+		 * Deterministic and offline: basename → strip `-{width}x{height}`
+		 * thumbnail suffix → replace `-/_/+/.` with spaces → collapse
+		 * whitespace → title-case. Returns an empty string when no usable
+		 * filename remains (e.g. `data:` URIs, query-only URLs). Makes no
+		 * external HTTP requests and no database queries.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $src The image `src` URL.
+		 * @return string The filename-derived alt, or empty string.
+		 */
+		private function filename_to_alt( string $src ): string {
+			if ( '' === $src || 1 === preg_match( '#^data:image/#i', $src ) ) {
+				return '';
+			}
+
+			$path = $src;
+			if ( function_exists( 'wp_parse_url' ) ) {
+				$parsed = wp_parse_url( $src, PHP_URL_PATH );
+				if ( is_string( $parsed ) && '' !== $parsed ) {
+					$path = $parsed;
+				}
+			} else {
+				// Legacy fallback (pre-4.4 cores): strip query/fragment manually.
+				$fragment_pos = strpos( $path, '#' );
+				if ( false !== $fragment_pos ) {
+					$path = substr( $path, 0, $fragment_pos );
+				}
+				$query_pos = strpos( $path, '?' );
+				if ( false !== $query_pos ) {
+					$path = substr( $path, 0, $query_pos );
+				}
+			}
+
+			$base = basename( (string) $path );
+			if ( '' === $base ) {
+				return '';
+			}
+
+			$filename = pathinfo( $base, PATHINFO_FILENAME );
+			if ( ! is_string( $filename ) || '' === $filename ) {
+				return '';
+			}
+
+			// Strip WordPress thumbnail dimension suffixes (e.g. `-300x200`).
+			$filename = (string) preg_replace( '/-\d+x\d+$/', '', $filename );
+			$filename = str_replace( array( '-', '_', '+', '.' ), ' ', $filename );
+			$filename = trim( (string) preg_replace( '/\s+/', ' ', $filename ) );
+			if ( '' === $filename ) {
+				return '';
+			}
+
+			if ( function_exists( 'sanitize_text_field' ) ) {
+				$filename = sanitize_text_field( $filename );
+				$filename = trim( $filename );
+				if ( '' === $filename ) {
+					return '';
+				}
+			}
+
+			if ( function_exists( 'mb_substr' ) ) {
+				$filename = mb_substr( $filename, 0, 125 );
+			} else {
+				$filename = substr( $filename, 0, 125 );
+			}
+			$filename = trim( $filename );
+			if ( '' === $filename ) {
+				return '';
+			}
+
+			if ( function_exists( 'mb_convert_case' ) ) {
+				return mb_convert_case( mb_strtolower( $filename, 'UTF-8' ), MB_CASE_TITLE, 'UTF-8' );
+			}
+
+			return ucwords( strtolower( $filename ) );
+		}
+
+		/**
+		 * Derive a deterministic alt for an image `src`.
+		 *
+		 * Primary source is the sanitized filename (`filename_to_alt()`);
+		 * when that yields nothing, falls back to the title of the image
+		 * attachment's parent post (resolved from `$src`, not global loop
+		 * context, and cached per request so each unique src is looked up at
+		 * most once). The result is filterable via `wppo_auto_alt_text` and
+		 * always sanitized, trimmed, and capped at 125 chars. Never performs
+		 * external HTTP; the title lookup runs only when the filename path
+		 * produced nothing. Fail-open: any failure returns an empty string
+		 * (caller then leaves the tag untouched).
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $src The image `src` URL.
+		 * @return string The derived alt, or empty string when none applies.
+		 */
+		public function get_derived_alt( string $src ): string {
+			$alt = $this->filename_to_alt( $src );
+
+			if ( '' === $alt && function_exists( 'wp_get_post_parent_id' ) && function_exists( 'get_the_title' ) && function_exists( 'attachment_url_to_postid' ) ) {
+				try {
+					static $parent_title_cache = array();
+					if ( ! array_key_exists( $src, $parent_title_cache ) ) {
+						// Resolve the image's own attachment so the fallback title
+						// comes from the attachment's parent post, not the global
+						// post loop context (which describes the rendered page).
+						$attachment_id = (int) attachment_url_to_postid( $src );
+						$parent_id     = $attachment_id > 0 ? (int) wp_get_post_parent_id( $attachment_id ) : 0;
+						$title         = $parent_id > 0 ? get_the_title( $parent_id ) : '';
+						if ( function_exists( 'sanitize_text_field' ) ) {
+							$title = sanitize_text_field( (string) $title );
+						}
+						$parent_title_cache[ $src ] = is_string( $title ) ? trim( $title ) : '';
+					}
+					if ( '' !== $parent_title_cache[ $src ] ) {
+						$alt = $parent_title_cache[ $src ];
+					}
+				} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: fall through with empty alt.
+				}
+			}
+
+			if ( function_exists( 'apply_filters' ) ) {
+				/**
+				 * Filter the derived alt text for images missing an alt attribute.
+				 *
+				 * @since NEXT
+				 * @param string $alt The derived alt text (may be empty).
+				 * @param string $src The image `src` URL.
+				 */
+				$filtered = apply_filters( 'wppo_auto_alt_text', $alt, $src );
+				if ( is_string( $filtered ) ) {
+					$alt = $filtered;
+				}
+			}
+
+			// Normalize filter output identically to the filename path:
+			// sanitize, trim (rejecting whitespace-only), and cap at 125 chars
+			// so an unbounded/blank filter return cannot bypass the length cap
+			// or emit alt="   ".
+			if ( function_exists( 'sanitize_text_field' ) ) {
+				$alt = sanitize_text_field( $alt );
+			}
+			if ( function_exists( 'mb_substr' ) ) {
+				$alt = mb_substr( $alt, 0, 125 );
+			} else {
+				$alt = substr( $alt, 0, 125 );
+			}
+
+			return trim( $alt );
+		}
+
+		/**
+		 * Autofill a missing `alt` via Tag Processor (fail-open, byte-identical when off).
+		 *
+		 * Only fills when the toggle is on AND the tag has no `alt` attribute
+		 * at all (`get_attribute()` returns `null`). An explicit empty
+		 * `alt=""` is treated as an intentional decorative image and left
+		 * untouched. Tag Processor escapes the value on serialize.
+		 *
+		 * @since NEXT
+		 *
+		 * @param \WP_HTML_Tag_Processor $tags         Processor positioned on the `<img>` tag.
+		 * @param string                 $original_src The original image `src` value.
+		 * @return void
+		 */
+		private function maybe_autofill_alt_processor( $tags, string $original_src ): void {
+			if ( ! $this->is_auto_alt_enabled() ) {
+				return;
+			}
+			if ( null !== $tags->get_attribute( 'alt' ) ) {
+				return;
+			}
+			$derived = $this->get_derived_alt( $original_src );
+			if ( '' !== $derived ) {
+				$tags->set_attribute( 'alt', $derived );
+			}
+		}
+
+		/**
+		 * Autofill a missing `alt` via regex fallback (fail-open, byte-identical when off).
+		 *
+		 * Presence check is `#(?<![\w-])alt\s*=#i`, so both `alt="x"` and decorative
+		 * `alt=""` are preserved verbatim while hyphenated `data-alt` attributes
+		 * do not count as an `alt`. Escapes at emit because the regex
+		 * path concatenates raw strings.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $img_tag      The original `<img>` tag HTML.
+		 * @param string $original_src The original image `src` value.
+		 * @return string The tag with a derived `alt`, or unchanged.
+		 */
+		private function maybe_autofill_alt_regex( string $img_tag, string $original_src ): string {
+			if ( ! $this->is_auto_alt_enabled() ) {
+				return $img_tag;
+			}
+			if ( 1 === preg_match( '#(?<![\w-])alt\s*=#i', $img_tag ) ) {
+				return $img_tag;
+			}
+			$derived = $this->get_derived_alt( $original_src );
+			if ( '' === $derived ) {
+				return $img_tag;
+			}
+			$escaped  = function_exists( 'esc_attr' ) ? esc_attr( $derived ) : htmlspecialchars( $derived, ENT_QUOTES, 'UTF-8' );
+			$replaced = preg_replace( '#<img\b#i', '<img alt="' . $escaped . '"', $img_tag, 1 );
+			return null === $replaced ? $img_tag : $replaced;
+		}
+
+		/**
 		 * Optimize an <img> tag for lazy loading, placeholders, dimensions, and performance attributes.
 		 *
 		 * If the image URL matches any exclusion substring, ensures the tag has `decoding="sync"` and
@@ -1934,7 +2452,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			if ( class_exists( 'WP_HTML_Tag_Processor' ) ) {
 				if ( ! empty( $exclude_imgs ) ) {
 					foreach ( $exclude_imgs as $exclude_img ) {
-						if ( false !== strpos( $original_src, $exclude_img ) ) {
+						if ( '' !== $exclude_img && false !== strpos( $original_src, $exclude_img ) ) {
 							$tags = new \WP_HTML_Tag_Processor( $img_tag );
 							if ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
 								$this->set_loading_optimization_attributes(
@@ -1944,6 +2462,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 										'decoding'      => 'sync',
 									)
 								);
+								$this->maybe_autofill_alt_processor( $tags, $original_src );
 								return $tags->get_updated_html();
 							}
 							return $img_tag;
@@ -2079,12 +2598,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					}
 				}
 
+				$this->maybe_autofill_alt_processor( $tags, $original_src );
+
 				return $tags->get_updated_html();
 			} else {
 				// Regex Fallback (Original logic restored from git history).
 				if ( ! empty( $exclude_imgs ) ) {
 					foreach ( $exclude_imgs as $exclude_img ) {
-						if ( false !== strpos( $original_src, $exclude_img ) ) {
+						if ( '' !== $exclude_img && false !== strpos( $original_src, $exclude_img ) ) {
 							if ( function_exists( 'wp_get_loading_optimization_attributes' ) ) {
 								$tag_attr = array( 'src' => $original_src );
 								if ( preg_match( '/\bwidth=(["\'])(\d+)\1/i', $img_tag, $m ) ) {
@@ -2122,7 +2643,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 								}
 							}
 
-							return $img_tag;
+							return $this->maybe_autofill_alt_regex( $img_tag, $original_src );
 						}
 					}
 				}
@@ -2133,9 +2654,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( false === strpos( $img_tag, 'data-src' ) ) {
 					$original_src_decoded = htmlspecialchars_decode( $original_src, ENT_QUOTES );
 
-					// Skip base64 images to avoid rewriting them.
+					// Skip base64 images to avoid rewriting them (alt autofill still applies so both paths agree).
 					if ( preg_match( '#^data:image/#i', $original_src_decoded ) ) {
-						return $img_tag;
+						return $this->maybe_autofill_alt_regex( $img_tag, $original_src );
 					}
 
 					if ( $use_native_lazy || 1 === preg_match( '/\bloading=["\']lazy["\']/i', $img_tag ) ) {
@@ -2279,7 +2800,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					}
 				}
 
-				return $img_tag;
+				return $this->maybe_autofill_alt_regex( $img_tag, $original_src );
 			}
 		}
 
@@ -2404,7 +2925,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		public function process_iframe_tag( $iframe_tag, $original_src, $exclude_imgs ) {
 			if ( ! empty( $exclude_imgs ) ) {
 				foreach ( $exclude_imgs as $exclude_img ) {
-					if ( false !== strpos( $original_src, $exclude_img ) ) {
+					if ( '' !== $exclude_img && false !== strpos( $original_src, $exclude_img ) ) {
 						return $iframe_tag;
 					}
 				}
@@ -2647,7 +3168,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			// No runtime change until the core API lands.
 			$should_exclude = false;
 			foreach ( $exclude_imgs as $exclude_img ) {
-				if ( false !== strpos( $original_src, $exclude_img ) ) {
+				if ( '' !== $exclude_img && false !== strpos( $original_src, $exclude_img ) ) {
 					$should_exclude = true;
 					break;
 				}
@@ -3277,9 +3798,53 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$path = $parts['path'];
 
 			// Strip WordPress size suffixes, e.g. -1024x1024, -scaled, -e1234567890123.
-			$path = (string) preg_replace( '#-(?:\d+x\d+|scaled|e\d+)(?=\.[A-Za-z0-9]+)$#', '', $path );
+			// The `$` anchor lives inside the lookahead so the suffix only
+			// strips immediately before the file extension at end of path
+			// (a trailing `$` outside the lookahead could never match).
+			$path = (string) preg_replace( '#-(?:\d+x\d+|scaled|e\d+)(?=\.[A-Za-z0-9]+$)#', '', $path );
 
 			return $host . $path;
+		}
+
+		/**
+		 * Build the dedup key for a preload item (normalized URL + query + media).
+		 *
+		 * `normalize_image_url()` deliberately drops the scheme and query
+		 * string for LCP matching, but `img.jpg?v=1` and `img.jpg?v=2` are
+		 * distinct preload resources, so the raw query string is re-attached
+		 * here: versioned duplicates each emit their own hint instead of
+		 * collapsing to one. The normalized base also strips WordPress size
+		 * suffixes, so responsive variants of the same image
+		 * (`hero-1024x768.jpg`) intentionally collapse to a single preload
+		 * hint alongside the full-size original (`hero.jpg`). Fail-open: any
+		 * parse failure falls back to the normalized URL + media key.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $url   The raw preload URL.
+		 * @param string $media The preload media attribute.
+		 * @return string The dedup key.
+		 */
+		private function get_preload_dedup_key( string $url, string $media ): string {
+			$normalized = '';
+			try {
+				$normalized = $this->normalize_image_url( $url );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			$base  = ( '' !== $normalized ) ? $normalized : $url;
+			$query = '';
+			try {
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$parsed = wp_parse_url( $url, PHP_URL_QUERY );
+					if ( is_string( $parsed ) && '' !== $parsed ) {
+						$query = '?' . substr( $parsed, 0, 512 );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $base . $query . '|' . $media;
 		}
 
 		/**
@@ -3448,16 +4013,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				);
 			}
 
-			$noscript_tokens = array();
-			$buffer          = preg_replace_callback(
+			$noscript_tokens    = array();
+			$noscript_namespace = $this->get_noscript_namespace();
+			$extracted          = preg_replace_callback(
 				'#<noscript>.*?</noscript>#is',
-				function ( $m ) use ( &$noscript_tokens ) {
-					$token                     = '<!--WPPO_NOSCRIPT_' . count( $noscript_tokens ) . '-->';
+				function ( $m ) use ( &$noscript_tokens, $noscript_namespace ) {
+					$token                     = '<!--WPPO_NOSCRIPT_' . $noscript_namespace . '_' . count( $noscript_tokens ) . '-->';
 					$noscript_tokens[ $token ] = $m[0];
 					return $token;
 				},
 				$buffer
 			);
+			// PCRE failure: degrade to the unmodified buffer, never fatal.
+			if ( null !== $extracted ) {
+				$buffer = $extracted;
+			}
 
 			if ( ! empty( $image_optimisation['lazyLoadImages'] ) ) {
 				$exclude_imgs = $this->exclude_lazy_imgs;
@@ -3516,6 +4086,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					}
 				}
 
+				// Automatic LCP-candidate lazy exclusion (issue #991): the
+				// single RUM-field → PageSpeed candidate is never lazy-loaded.
+				// Gated on the LCP toggles (see get_lazy_lcp_exclusion_url())
+				// so default lazy behaviour is unchanged when all LCP features
+				// are off, and memoized per instance so the RUM aggregate and
+				// transients are not re-scanned on top of preload_images().
+				// Fail-open: any detection failure leaves the exclusion list
+				// untouched.
+				$candidate_lcp_normalized = '';
+				try {
+					$candidate_url = $this->get_lazy_lcp_exclusion_url( $image_optimisation );
+					if ( '' !== $candidate_url ) {
+						if ( ! in_array( $candidate_url, $exclude_imgs, true ) ) {
+							$exclude_imgs[] = $candidate_url;
+						}
+						$candidate_lcp_normalized = Util::normalize_url( $candidate_url );
+						if ( '' !== $candidate_lcp_normalized && ! in_array( $candidate_lcp_normalized, $exclude_imgs, true ) ) {
+							$exclude_imgs[] = $candidate_lcp_normalized;
+						}
+						$exclude_imgs = array_unique( $exclude_imgs );
+					}
+				} catch ( \Throwable $e ) {
+					do_action( 'wppo_debug_log', 'WPPO LCP candidate exclusion failed: ' . $e->getMessage(), array( 'exception' => $e ) );
+				}
+
 				$img_counter = 0;
 
 				$use_native_lazy    = ! empty( $image_optimisation['lazyLoadNative'] );
@@ -3539,12 +4134,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							}
 
 							$should_exclude = false;
-							// OD LCP normalized match: covers http/https and size-suffix variants.
-							if ( '' !== $od_lcp_normalized && Util::normalize_url( $src ) === $od_lcp_normalized ) {
-								$should_exclude = true;
-							} else {
+							// Normalized LCP matches (OD + RUM-field/PageSpeed
+							// candidate): normalized-to-normalized equality covers
+							// http/https and WordPress size-suffix variants
+							// (e.g. hero-300x200.jpg matches candidate hero.jpg),
+							// which substring matching alone would miss.
+							if ( '' !== $od_lcp_normalized || '' !== $candidate_lcp_normalized ) {
+								try {
+									$src_normalized = Util::normalize_url( (string) $src );
+									if ( ( '' !== $od_lcp_normalized && $src_normalized === $od_lcp_normalized )
+									|| ( '' !== $candidate_lcp_normalized && $src_normalized === $candidate_lcp_normalized ) ) {
+										$should_exclude = true;
+									}
+								} catch ( \Throwable $e ) {
+									unset( $e );
+								}
+							}
+							if ( ! $should_exclude ) {
 								foreach ( $exclude_imgs as $exclude_img ) {
-									if ( false !== strpos( $src, $exclude_img ) ) {
+									if ( '' !== $exclude_img && false !== strpos( $src, $exclude_img ) ) {
 										$should_exclude = true;
 										break;
 									}
@@ -3559,6 +4167,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 										'decoding'      => 'sync',
 									)
 								);
+								$this->maybe_autofill_alt_processor( $wppo_tags, (string) $src );
 								continue;
 							}
 
@@ -3569,6 +4178,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							$original_src_decoded = htmlspecialchars_decode( $src, ENT_QUOTES );
 
 							if ( preg_match( '#^data:image/#i', $original_src_decoded ) ) {
+								$this->maybe_autofill_alt_processor( $wppo_tags, $original_src_decoded );
 								continue;
 							}
 
@@ -3731,10 +4341,77 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						$buffer = $this->post_process_auto_sizes( $buffer );
 					}
 				}
+			} elseif ( $this->is_auto_alt_enabled() ) {
+				// Standalone alt-autofill pass (issue #985 follow-up): when
+				// lazy-loading is off, `process_img_tag()` is never reached,
+				// so enabling `autoAltText` alone would silently do nothing.
+				// This lightweight pass fills only missing `alt` attributes
+				// and leaves everything else byte-identical.
+				$buffer = $this->autofill_alt_in_buffer( $buffer );
 			}
 
-			$buffer = strtr( $buffer, $noscript_tokens );
+			$buffer = $this->restore_noscript_tokens( $buffer, $noscript_tokens );
 			return $buffer;
+		}
+
+		/**
+		 * Autofill missing `alt` attributes across a full HTML buffer.
+		 *
+		 * Standalone pass used when lazy-loading is disabled but
+		 * `autoAltText` is enabled. Uses `WP_HTML_Tag_Processor` when
+		 * available, otherwise a regex fallback. Fail-open: returns the
+		 * buffer unchanged when disabled or on any processing failure.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $buffer The HTML buffer to process.
+		 * @return string The buffer with missing `alt` attributes filled.
+		 */
+		private function autofill_alt_in_buffer( string $buffer ): string {
+			if ( ! $this->is_auto_alt_enabled() ) {
+				return $buffer;
+			}
+			try {
+				if ( class_exists( 'WP_HTML_Tag_Processor' ) ) {
+					$tags = new \WP_HTML_Tag_Processor( $buffer );
+					while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
+						$src = $tags->get_attribute( 'src' );
+						if ( null === $src ) {
+							$src = $tags->get_attribute( 'data-src' );
+						}
+						if ( null === $src || '' === $src ) {
+							continue;
+						}
+						$this->maybe_autofill_alt_processor( $tags, (string) $src );
+					}
+					$updated = $tags->get_updated_html();
+					if ( is_string( $updated ) ) {
+						return $updated;
+					}
+					return $buffer;
+				}
+				$result = preg_replace_callback(
+					'#<img\b[^>]*>#i',
+					function ( $matches ) {
+						$tag = $matches[0];
+						$src = '';
+						// Match quoted OR unquoted src values (e.g. src=foo.jpg),
+						// so the standalone auto-alt pass covers <img src=...>.
+						if ( preg_match( '#(?<![\w-])src\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))#is', $tag, $m ) ) {
+							$raw = ( isset( $m[3] ) && '' !== $m[3] ) ? $m[3] : ( $m[2] ?? '' );
+							$src = htmlspecialchars_decode( $raw, ENT_QUOTES );
+						}
+						if ( '' === $src ) {
+							return $tag;
+						}
+						return $this->maybe_autofill_alt_regex( $tag, $src );
+					},
+					$buffer
+				);
+				return is_string( $result ) ? $result : $buffer;
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: keep the original buffer.
+				return $buffer;
+			}
 		}
 
 		/**

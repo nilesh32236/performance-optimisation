@@ -189,10 +189,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 					$multisite = false;
 				}
 			}
+			$permalink_structure = get_option( 'permalink_structure' );
 			return array(
 				'version'             => get_bloginfo( 'version' ),
 				'environment_type'    => wp_get_environment_type(),
-				'permalink_structure' => get_option( 'permalink_structure' ) ? get_option( 'permalink_structure' ) : __( 'Default', 'performance-optimisation' ),
+				'permalink_structure' => $permalink_structure ? $permalink_structure : __( 'Default', 'performance-optimisation' ),
 				'using_https'         => (bool) is_ssl(),
 				'multisite'           => (bool) $multisite,
 			);

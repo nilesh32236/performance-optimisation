@@ -132,6 +132,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private string $url_path;
 
 		/**
+		 * Whether the request URL path was rejected as a traversal probe.
+		 *
+		 * Set when the raw path component sanitizes to '' while non-blank
+		 * (dot-dot, encoded sequences, null bytes, drive/UNC prefixes) or
+		 * when the request-target is absolute-form. While true the request
+		 * is served dynamic/uncached and {@see get_cache_file_path()}
+		 * refuses to build a path (fail-open, never mapping the probe to
+		 * the homepage `index.html`).
+		 *
+		 * @var bool
+		 * @since NEXT
+		 */
+		private bool $path_rejected = false;
+
+		/**
 		 * Whether the inline-CSS budget prediction drifted from core this request.
 		 *
 		 * Set when {@see core_will_inline()} finds its legacy accounting disagrees
@@ -348,10 +363,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			$this->request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
-			$url_path          = wp_normalize_path( trim( rawurldecode( (string) wp_parse_url( $this->request_uri, PHP_URL_PATH ) ), '/' ) );
 
-			// Reject directory traversal and null-byte probes (serve uncached).
-			if ( false !== strpos( $url_path, "\0" ) || false !== strpos( $url_path, '..' ) ) {
+			// Normalize encoded sequences through the shared helper (single
+			// controlled decode pass, null-byte + dotdot + drive/UNC
+			// rejection, PHP_URL_PATH extraction). Absolute-form
+			// request-targets (`GET https://host/path`, protocol-relative
+			// `//host/path`, drive `C:\x`, UNC `\\host`) are refused outright: only the authority part
+			// (before `?`/`#`) is inspected so query strings carrying URLs
+			// never false-positive. Hostile input sets path_rejected so the
+			// probe is never silently mapped to the homepage index.html.
+			// The split uses strcspn() (no process-global strtok() state).
+			$uri_target         = substr( $this->request_uri, 0, strcspn( $this->request_uri, '?#' ) );
+			$uri_target_trimmed = ltrim( $uri_target );
+			$is_absolute_form   = (bool) preg_match( '#^[a-zA-Z][a-zA-Z0-9+.-]*://#', $uri_target_trimmed ) || 0 === strpos( $uri_target_trimmed, '//' );
+
+			// Reject drive/UNC-prefixed targets before URL parsing strips
+			// the evidence (parse_url() reads `C:` as a scheme and hides
+			// the absolute-path smuggling attempt).
+			$is_drive_or_unc = (bool) preg_match( '#^[a-zA-Z]:#', $uri_target_trimmed ) || 0 === strpos( $uri_target_trimmed, '\\\\' );
+
+			if ( function_exists( 'wp_parse_url' ) ) {
+				$raw_component = wp_parse_url( $this->request_uri, PHP_URL_PATH );
+			} else {
+				$raw_component = parse_url( $this->request_uri, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
+			}
+			if ( null === $raw_component || false === $raw_component ) {
+				$raw_component = $this->request_uri;
+			}
+
+			$url_path = Util::sanitize_cache_url_path( (string) $raw_component );
+
+			if ( $is_absolute_form || $is_drive_or_unc || ( '' === $url_path && '' !== trim( trim( (string) $raw_component ), '/' ) ) ) {
+				$this->path_rejected = true;
+				// Log only the target before `?`/`#`: the full REQUEST_URI can
+				// carry tokens/PII (reset keys, nonces, emails) that must not
+				// persist in the activity-log table.
+				$this->log_traversal_probe( $uri_target );
 				$url_path = '';
 			}
 
@@ -2146,7 +2193,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( '' === $this->cache_root_dir || '' === $this->domain ) {
 				return '';
 			}
+			// A path rejected at construction time never maps to a file:
+			// serve dynamic/uncached instead of the homepage index.html.
+			if ( $this->path_rejected ) {
+				return '';
+			}
 			if ( false !== strpos( $this->url_path, "\0" ) || false !== strpos( $this->url_path, '..' ) ) {
+				$this->log_traversal_probe( $this->url_path );
+				return '';
+			}
+			// Role-hash / variant suffixes are interpolated into the file
+			// name: allowlist them so a crafted suffix can never inject
+			// separators or traversal sequences into the resolved path.
+			if ( '' !== $role_hash && ! preg_match( '/^[a-z0-9-]{1,32}$/i', $role_hash ) ) {
+				$this->log_traversal_probe( $role_hash );
+				return '';
+			}
+			if ( '' !== $variant && ! preg_match( '/^[a-z0-9-]{1,32}$/i', $variant ) ) {
+				$this->log_traversal_probe( $variant );
 				return '';
 			}
 			$suffix = $role_hash ? "-{$role_hash}" : '';
@@ -2171,11 +2235,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		public function get_cache_file_url( $type = 'html', string $variant = '' ): string {
-			if ( '' === $this->cache_root_url ) {
+			if ( '' === $this->cache_root_url || '' === $this->cache_root_dir || '' === $this->domain ) {
 				return '';
 			}
-			$suffix = $variant ? "-{$variant}" : '';
-			return "{$this->cache_root_url}/{$this->domain}/" . ( '' === $this->url_path ? "index{$suffix}.{$type}" : "{$this->url_path}/index{$suffix}.{$type}" );
+			// A path rejected at construction time never maps to a file URL:
+			// callers fall open instead of emitting the homepage URL.
+			if ( $this->path_rejected ) {
+				return '';
+			}
+			if ( false !== strpos( $this->url_path, "\0" ) || false !== strpos( $this->url_path, '..' ) ) {
+				$this->log_traversal_probe( $this->url_path );
+				return '';
+			}
+			// Variant suffix is interpolated into the public URL: allowlist it
+			// exactly like get_cache_file_path() so a crafted suffix can never
+			// inject separators/traversal into the emitted URL.
+			if ( '' !== $variant && ! preg_match( '/^[a-z0-9-]{1,32}$/i', $variant ) ) {
+				$this->log_traversal_probe( $variant );
+				return '';
+			}
+			$suffix   = $variant ? "-{$variant}" : '';
+			$relative = ( '' === $this->url_path ? "index{$suffix}.{$type}" : "{$this->url_path}/index{$suffix}.{$type}" );
+			// Containment parity with get_cache_file_path(): refuse when the
+			// resolved filesystem path would escape the cache root/domain.
+			$resolved = "{$this->cache_root_dir}/{$this->domain}/{$relative}";
+			if ( ! $this->is_path_contained( $resolved ) ) {
+				$this->log_traversal_probe( $this->url_path );
+				return '';
+			}
+			return "{$this->cache_root_url}/{$this->domain}/{$relative}";
 		}
 
 		/**
@@ -2406,9 +2494,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return false;
 			}
 
-			if ( empty( $this->domain ) || $this->host_mismatch || false !== strpos( $this->url_path, "\0" ) || false !== strpos( $this->url_path, '..' ) ) {
+			if ( empty( $this->domain ) || $this->host_mismatch || $this->path_rejected || false !== strpos( $this->url_path, "\0" ) || false !== strpos( $this->url_path, '..' ) ) {
 				// Prevent empty domain caching which could occur after traversal sanitation.
-				// A Host mismatch is served uncached and never stored under the forged host.
+				// A Host mismatch or a rejected (traversal/absolute-form) path is
+				// served uncached and never stored under the forged host.
 				return false;
 			}
 
@@ -2898,50 +2987,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * remaining `..` segments, and Windows drive prefixes. Returns an
 		 * empty string for hostile or empty input.
 		 *
+		 * Delegates to the shared {@see Util::sanitize_cache_url_path()}
+		 * helper so every file-writing surface normalizes identically.
+		 *
 		 * @since NEXT
 		 * @param string|null $url_path Raw URL path or URL.
 		 * @return string Sanitized relative path or empty string.
 		 */
 		private static function sanitize_cache_url_path( ?string $url_path ): string {
-			$raw_input = (string) $url_path;
-
-			// Reject Windows drive prefixes and UNC roots before URL parsing
-			// (parse_url() would otherwise strip `C:` as a scheme and hide
-			// the absolute-path smuggling attempt).
-			$trimmed_raw = ltrim( $raw_input );
-			if ( '' !== $trimmed_raw && ( preg_match( '#^[a-zA-Z]:#', $trimmed_raw ) || 0 === strpos( $trimmed_raw, '\\\\' ) ) ) {
-				return '';
-			}
-
-			if ( function_exists( 'wp_parse_url' ) ) {
-				$parsed = wp_parse_url( $raw_input, PHP_URL_PATH );
-			} else {
-				$parsed = parse_url( $raw_input, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
-			}
-
-			$path_component = ( null === $parsed || false === $parsed ) ? $raw_input : (string) $parsed;
-
-			$decoded = function_exists( 'rawurldecode' ) ? rawurldecode( $path_component ) : $path_component;
-
-			if ( false !== strpos( $decoded, "\0" ) ) {
-				return '';
-			}
-
-			if ( function_exists( 'wp_normalize_path' ) ) {
-				$normalized = wp_normalize_path( trim( $decoded, '/' ) );
-			} else {
-				$normalized = str_replace( '\\', '/', trim( $decoded, '/' ) );
-			}
-
-			if ( false !== strpos( $normalized, "\0" ) || false !== strpos( $normalized, '..' ) ) {
-				return '';
-			}
-
-			if ( '' !== $normalized && preg_match( '#^[a-zA-Z]:#', $normalized ) ) {
-				return '';
-			}
-
-			return $normalized;
+			return Util::sanitize_cache_url_path( $url_path );
 		}
 
 		/**

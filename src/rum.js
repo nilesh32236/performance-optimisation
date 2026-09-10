@@ -9,6 +9,39 @@
  * The collector is a plain ES module (no dependencies) so it can be served
  * from the static build directory on cached pages.
  */
+
+/**
+ * Classify a device as mobile/desktop from its physical screen width.
+ *
+ * Resize-stable: the physical screen width does not change when a desktop
+ * user narrows their browser window, so a narrowed desktop is not
+ * misclassified as mobile. The viewport width is used only when the screen
+ * width is unavailable. Tablets in the ~768–1024px band bucket as mobile
+ * (coarse 1024px tradeoff documented; narrow the cutoff to 768px only if
+ * tablet traffic should count as desktop).
+ *
+ * @since NEXT
+ * @param {number} screenWidth   `window.screen.width` (0 when unavailable).
+ * @param {number} viewportWidth `window.innerWidth` (0 when unavailable).
+ * @return {boolean|null} True when mobile, false when desktop, null when unknown.
+ */
+export const classifyDeviceWidth = ( screenWidth, viewportWidth ) => {
+	const screen = Number( screenWidth );
+	let width = 0;
+	if ( Number.isFinite( screen ) && screen > 0 ) {
+		width = screen;
+	} else {
+		const viewport = Number( viewportWidth );
+		if ( Number.isFinite( viewport ) && viewport > 0 ) {
+			width = viewport;
+		}
+	}
+	if ( width <= 0 ) {
+		return null;
+	}
+	return width <= 1024;
+};
+
 ( function () {
 	if (
 		! window.wppoRum ||
@@ -73,10 +106,55 @@
 		}
 		disconnectObservers();
 
+		// Field LCP device × template segmentation (issue #986): attach
+		// optional device/template dimensions fail-open. Detection failures
+		// omit the fields; the numeric path is unchanged.
+		const extra = {};
+		try {
+			let isMobile = null;
+			if (
+				typeof navigator !== 'undefined' &&
+				navigator.userAgentData &&
+				typeof navigator.userAgentData.mobile === 'boolean'
+			) {
+				isMobile = navigator.userAgentData.mobile;
+			} else if (
+				typeof window.screen !== 'undefined' &&
+				window.screen
+			) {
+				// Physical screen width is resize-stable; fall back to the
+				// viewport only when screen width is unavailable. Tablets in
+				// the ~768–1024px band bucket as mobile.
+				isMobile = classifyDeviceWidth(
+					window.screen.width || 0,
+					window.innerWidth || 0
+				);
+			}
+			if ( isMobile === true ) {
+				extra.device = 'mobile';
+			} else if ( isMobile === false ) {
+				extra.device = 'desktop';
+			}
+		} catch {
+			// Device detection unavailable; field omitted.
+		}
+		try {
+			if (
+				config.template &&
+				typeof config.template === 'string' &&
+				config.template.length > 0
+			) {
+				extra.template = config.template.slice( 0, 64 );
+			}
+		} catch {
+			// Template passthrough unavailable; field omitted.
+		}
+
 		const payload = JSON.stringify( {
 			token: config.token,
 			path: config.path,
 			...values,
+			...extra,
 		} );
 
 		if ( navigator.sendBeacon ) {

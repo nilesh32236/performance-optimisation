@@ -46,11 +46,14 @@ const WebVitalsRum = () => {
 	const [ loading, setLoading ] = useState( true );
 	const [ error, setError ] = useState( null );
 
-	const load = useCallback( async () => {
+	const load = useCallback( async ( signal ) => {
 		setLoading( true );
 		setError( null );
 		try {
-			const response = await apiCall( 'rum_data', {}, 'GET' );
+			const response = await apiCall( 'rum_data', {}, 'GET', signal );
+			if ( signal?.aborted ) {
+				return;
+			}
 			if ( response.success && response.data ) {
 				const rows = Object.entries( response.data )
 					.sort( ( [ a ], [ b ] ) => a.localeCompare( b ) )
@@ -70,6 +73,9 @@ const WebVitalsRum = () => {
 				);
 			}
 		} catch ( loadError ) {
+			if ( signal?.aborted || loadError?.name === 'AbortError' ) {
+				return;
+			}
 			setError(
 				__(
 					'Failed to load real-user data.',
@@ -78,12 +84,16 @@ const WebVitalsRum = () => {
 			);
 			console.error( 'Error fetching RUM data:', loadError );
 		} finally {
-			setLoading( false );
+			if ( ! signal?.aborted ) {
+				setLoading( false );
+			}
 		}
 	}, [] );
 
 	useEffect( () => {
-		load();
+		const controller = new AbortController();
+		load( controller.signal );
+		return () => controller.abort();
 	}, [ load ] );
 
 	const fmtMs = ( value ) =>

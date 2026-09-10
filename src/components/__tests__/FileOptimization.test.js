@@ -956,6 +956,77 @@ describe( 'FileOptimization Component', () => {
 		).not.toBeDisabled();
 	} );
 
+	it( 'checks commerce safe preset by default and textarea change flows into the save payload', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			message: 'Settings updated successfully.',
+		} );
+
+		render(
+			<FileOptimization
+				options={ { delayJS: true } }
+				serverRules={ {} }
+			/>
+		);
+
+		const scriptsTab = screen.getByRole( 'tab', { name: /Scripts/i } );
+		fireEvent.click( scriptsTab );
+
+		expect(
+			screen.getByLabelText( /Commerce safe preset/i )
+		).toBeChecked();
+
+		const textarea = screen.getByLabelText(
+			/Disable Delay JS on these URLs/i
+		);
+		fireEvent.change( textarea, {
+			target: { value: 'https://example.com/checkout/' },
+		} );
+
+		const submitButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+		await act( async () => {
+			fireEvent.click( submitButton );
+		} );
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				expect.objectContaining( {
+					tab: 'file_optimisation',
+					settings: expect.objectContaining( {
+						delayJSExcludeUrls: 'https://example.com/checkout/',
+					} ),
+				} )
+			);
+		} );
+	} );
+
+	it( 'shows the aggressive-mode banner only when a safe preset is off', () => {
+		render(
+			<FileOptimization
+				options={ {
+					delayJS: true,
+					delayJSCommercePreset: true,
+					delayJSBuilderPreset: true,
+				} }
+				serverRules={ {} }
+			/>
+		);
+
+		const scriptsTab = screen.getByRole( 'tab', { name: /Scripts/i } );
+		fireEvent.click( scriptsTab );
+
+		expect(
+			screen.queryByText( /Aggressive mode/i )
+		).not.toBeInTheDocument();
+
+		fireEvent.click( screen.getByLabelText( /Commerce safe preset/i ) );
+
+		expect( screen.getByText( /Aggressive mode/i ) ).toBeInTheDocument();
+	} );
+
 	it( 'Network tab renders LiteSpeed (Apache-compatible) when server_type=litespeed and shows Cache-Vary', () => {
 		global.wppoSettings.litespeed = {
 			detected: true,

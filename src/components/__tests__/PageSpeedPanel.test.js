@@ -475,4 +475,95 @@ describe( 'PageSpeedPanel Component', () => {
 		unmount();
 		expect( true ).toBe( true );
 	} );
+
+	it( 'aborts the in-flight poll on unmount without notifying', async () => {
+		queuePagespeedScan.mockResolvedValueOnce( {
+			success: true,
+			data: { job_id: 123 },
+		} );
+		let resolvePoll;
+		getPagespeedResults.mockImplementationOnce(
+			() =>
+				new Promise( ( resolve ) => {
+					resolvePoll = resolve;
+				} )
+		);
+
+		const errorSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
+		try {
+			const { unmount } = render( <PageSpeedPanel url={ defaultUrl } /> );
+			fireEvent.click(
+				screen.getByRole( 'button', {
+					name: /Run PageSpeed Scan/i,
+				} )
+			);
+
+			// Resolve the queue call so polling starts.
+			await act( async () => {} );
+			// Fire the first poll tick.
+			await act( async () => {
+				jest.advanceTimersByTime( 5000 );
+			} );
+			await waitFor( () =>
+				expect( getPagespeedResults ).toHaveBeenCalled()
+			);
+
+			const signal = getPagespeedResults.mock.calls[ 0 ][ 2 ];
+			expect( signal ).toBeInstanceOf( AbortSignal );
+
+			unmount();
+			expect( signal.aborted ).toBe( true );
+
+			// Late poll resolution must stay silent: no error notice,
+			// no console output, no further polling.
+			await act( async () => {
+				resolvePoll( {
+					success: true,
+					data: { status: 'not_ready' },
+				} );
+			} );
+			expect( errorSpy ).not.toHaveBeenCalled();
+			expect( getPagespeedResults ).toHaveBeenCalledTimes( 1 );
+		} finally {
+			errorSpy.mockRestore();
+			getPagespeedResults.mockReset();
+		}
+	} );
+
+	it( 'swallows AbortError from a poll without notifying', async () => {
+		queuePagespeedScan.mockResolvedValueOnce( {
+			success: true,
+			data: { job_id: 123 },
+		} );
+		const abortError = new Error( 'The operation was aborted.' );
+		abortError.name = 'AbortError';
+		getPagespeedResults.mockRejectedValueOnce( abortError );
+
+		const errorSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
+		try {
+			render( <PageSpeedPanel url={ defaultUrl } /> );
+			fireEvent.click(
+				screen.getByRole( 'button', {
+					name: /Run PageSpeed Scan/i,
+				} )
+			);
+
+			await act( async () => {} );
+			await act( async () => {
+				jest.advanceTimersByTime( 5000 );
+			} );
+			await act( async () => {} );
+
+			expect(
+				screen.queryByText( 'PageSpeed scan failed.' )
+			).not.toBeInTheDocument();
+			expect( errorSpy ).not.toHaveBeenCalled();
+		} finally {
+			errorSpy.mockRestore();
+		}
+	} );
 } );

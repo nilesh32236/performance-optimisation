@@ -37,6 +37,38 @@ const DEFAULT_CLIENT_SIDE_MIME_TYPES = [
 	'image/avif',
 ];
 
+/**
+ * Coerce the longest-edge cap to a non-negative integer.
+ *
+ * Mirrors the PHP sanitizer (2560 default, 0 disables): negatives,
+ * fractions, '' or non-numeric payloads never stay in state.
+ *
+ * @since NEXT
+ * @param {*}      value    Raw option value.
+ * @param {number} fallback Fallback when unparseable.
+ * @return {number} Coerced integer >= 0.
+ */
+const coerceLongestEdge = ( value, fallback ) => {
+	if (
+		Array.isArray( value ) ||
+		typeof value === 'boolean' ||
+		value === null ||
+		value === undefined
+	) {
+		return fallback;
+	}
+	// Mirror PHP is_numeric(): whitespace-only strings are not numeric, and
+	// Number('   ') would otherwise coerce to 0 instead of the 2560 fallback.
+	if ( typeof value === 'string' && value.trim() === '' ) {
+		return fallback;
+	}
+	const num = Number( value );
+	if ( ! Number.isFinite( num ) ) {
+		return fallback;
+	}
+	return Math.max( 0, Math.trunc( num ) );
+};
+
 const ImageOptimization = ( { options = {} } ) => {
 	const defaultSettings = {
 		lazyLoadImages: false,
@@ -62,6 +94,8 @@ const ImageOptimization = ( { options = {} } ) => {
 		excludeSize: '',
 		autoPreloadLCP: false,
 		prioritizeLCPImages: false,
+		autoAltText: false,
+		maxLongestEdgePx: 2560,
 		clientSideMimeTypeOverride: false,
 		clientSideMimeTypes: DEFAULT_CLIENT_SIDE_MIME_TYPES,
 		forceServerSideConversion: false,
@@ -70,6 +104,13 @@ const ImageOptimization = ( { options = {} } ) => {
 			options.placeholderType ??
 			( options.replacePlaceholderWithSVG ? 'svg' : 'none' ),
 	};
+
+	// Coerce AFTER the spread so a corrupt non-numeric payload cannot flow
+	// into state via the ...options override above (PHP sanitizes to 2560/0).
+	defaultSettings.maxLongestEdgePx = coerceLongestEdge(
+		options.maxLongestEdgePx,
+		2560
+	);
 
 	const [ settings, setSettings ] = useState( defaultSettings );
 
@@ -80,6 +121,10 @@ const ImageOptimization = ( { options = {} } ) => {
 		setSettings( ( prev ) => ( {
 			...prev,
 			...options,
+			maxLongestEdgePx: coerceLongestEdge(
+				options.maxLongestEdgePx,
+				prev.maxLongestEdgePx ?? 2560
+			),
 			placeholderType:
 				options.placeholderType ??
 				( options.replacePlaceholderWithSVG ? 'svg' : 'none' ),
@@ -119,6 +164,8 @@ const ImageOptimization = ( { options = {} } ) => {
 		options.excludeSize,
 		options.autoPreloadLCP,
 		options.prioritizeLCPImages,
+		options.autoAltText,
+		options.maxLongestEdgePx,
 		options.clientSideMimeTypeOverride,
 		options.clientSideMimeTypes,
 		options.forceServerSideConversion,
@@ -134,6 +181,10 @@ const ImageOptimization = ( { options = {} } ) => {
 		setBaseline( {
 			...defaultSettings,
 			...options,
+			maxLongestEdgePx: coerceLongestEdge(
+				options.maxLongestEdgePx,
+				defaultSettings.maxLongestEdgePx ?? 2560
+			),
 			placeholderType:
 				options.placeholderType ??
 				( options.replacePlaceholderWithSVG ? 'svg' : 'none' ),
@@ -173,6 +224,8 @@ const ImageOptimization = ( { options = {} } ) => {
 		options.excludeSize,
 		options.autoPreloadLCP,
 		options.prioritizeLCPImages,
+		options.autoAltText,
+		options.maxLongestEdgePx,
 		options.clientSideMimeTypeOverride,
 		options.clientSideMimeTypes,
 		options.forceServerSideConversion,
@@ -489,6 +542,20 @@ const ImageOptimization = ( { options = {} } ) => {
 							) }
 							name="wrapInPicture"
 							checked={ settings.wrapInPicture }
+							onChange={ handleChange( setSettings ) }
+						/>
+
+						<SwitchField
+							label={ __(
+								'Auto-fill Missing Alt Text',
+								'performance-optimisation'
+							) }
+							description={ __(
+								'Automatically generate alt text for images missing it, derived from the file name. Existing alt attributes are never changed. Improves accessibility and SEO with no extra requests.',
+								'performance-optimisation'
+							) }
+							name="autoAltText"
+							checked={ settings.autoAltText }
 							onChange={ handleChange( setSettings ) }
 						/>
 					</div>
@@ -835,6 +902,38 @@ const ImageOptimization = ( { options = {} } ) => {
 							>
 								{ __(
 									'Comma-separated image width values (pixels). Images with these widths in srcset will be skipped.',
+									'performance-optimisation'
+								) }
+							</p>
+						</div>
+						<div className="wppo-field">
+							<label
+								className="wppo-field-label"
+								htmlFor="maxLongestEdgePx"
+							>
+								{ __(
+									'Max Longest Edge (px)',
+									'performance-optimisation'
+								) }
+							</label>
+							<input
+								className="wppo-input"
+								id="maxLongestEdgePx"
+								type="number"
+								inputMode="numeric"
+								min="0"
+								step="1"
+								name="maxLongestEdgePx"
+								value={ settings.maxLongestEdgePx }
+								onChange={ handleChange( setSettings ) }
+								aria-describedby="maxLongestEdgePx-desc"
+							/>
+							<p
+								id="maxLongestEdgePx-desc"
+								className="wppo-text-muted wppo-mt-10 wppo-text-small"
+							>
+								{ __(
+									'Converted WebP/AVIF outputs are downscaled so the longest edge never exceeds this value. The original upload is kept untouched. Set to 0 to disable.',
 									'performance-optimisation'
 								) }
 							</p>
