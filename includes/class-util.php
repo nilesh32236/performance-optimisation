@@ -112,6 +112,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			'wppo_img_scan_cursor_max',
 			'wppo_litespeed_purge_queue',
 			'wppo_autoload_remediated',
+			'wppo_autoload_migrated',
 		);
 
 		/**

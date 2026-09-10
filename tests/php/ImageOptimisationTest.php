@@ -1141,6 +1141,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$wp->request = 'hero-page';
 
 		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		\PerformanceOptimise\Inc\RUM::clear_field_lcp_cache();
 	}
 
 	/**

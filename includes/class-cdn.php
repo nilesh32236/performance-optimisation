@@ -176,7 +176,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 				 * @param array $normalized CDN mappings.
 				 */
 				$normalized = (array) apply_filters( 'wppo_cdn_mapping', $normalized );
-				return $normalized;
+				return array_map( array( self::class, 'precompute_mapping' ), $normalized );
 			}
 			$cdn_url = $options['file_optimisation']['cdnURL'] ?? '';
 			if ( empty( $cdn_url ) ) {
@@ -197,7 +197,55 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 			);
 			$single  = (array) apply_filters( 'wppo_cdn_mapping_hosts', $single );
 			$single  = (array) apply_filters( 'wppo_cdn_mapping', $single );
-			return $single;
+			return array_map( array( self::class, 'precompute_mapping' ), $single );
+		}
+
+		/**
+		 * Precompute normalized mapping parts once per mapping.
+		 *
+		 * The find_cdn_match() hot path runs per attribute per asset inside
+		 * output-buffer rewrite path; deriving exploded ori_dir /
+		 * include_dirs arrays and the lowercased filetype allowlist on every
+		 * call repeats identical string surgery ~120x per page. Computed here
+		 * once (get_mappings() is already per-request memoized upstream) and
+		 * consumed via the `_ori_dir_parts`, `_include_dirs_regex`, and
+		 * `_allowed_filetypes` keys, with a raw-mapping fallback in
+		 * find_cdn_match() for direct callers.
+		 *
+		 * @since NEXT
+		 * @param mixed $mapping Raw mapping entry.
+		 * @return array Mapping with precomputed keys.
+		 */
+		private static function precompute_mapping( $mapping ): array {
+			if ( ! is_array( $mapping ) ) {
+				return array();
+			}
+			$ori_dir                   = isset( $mapping['ori_dir'] ) ? (string) $mapping['ori_dir'] : '';
+			$mapping['_ori_dir_parts'] = '' !== $ori_dir ? array_values( array_filter( array_map( 'trim', explode( '|', $ori_dir ) ) ) ) : array();
+
+			$dirs = isset( $mapping['include_dirs'] ) ? (string) $mapping['include_dirs'] : 'wp-content|wp-includes';
+			if ( '' !== $dirs ) {
+				$dir_parts   = array_values( array_filter( array_map( 'trim', explode( '|', $dirs ) ) ) );
+				$regex_parts = array();
+				foreach ( $dir_parts as $dp ) {
+					$regex_parts[] = self::wildcard2regex( $dp );
+				}
+				$mapping['_include_dirs_regex'] = implode( '|', array_filter( $regex_parts ) );
+			} else {
+				$mapping['_include_dirs_regex'] = '';
+			}
+
+			$types = isset( $mapping['include_filetypes'] ) ? (string) $mapping['include_filetypes'] : '';
+			if ( '' !== $types ) {
+				$allowed                       = array_map( 'trim', explode( ',', strtolower( $types ) ) );
+				$allowed                       = array_filter( $allowed );
+				$allowed                       = array_map( static fn( $t ) => ltrim( $t, '.' ), $allowed );
+				$mapping['_allowed_filetypes'] = array_values( $allowed );
+			} else {
+				$mapping['_allowed_filetypes'] = array();
+			}
+
+			return $mapping;
 		}
 
 		/**
@@ -252,11 +300,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 				} elseif ( 0 !== strpos( $url, $site_url ) ) {
 						continue;
 				}
-				// ori_dir guard via wildcard2regex.
+				// ori_dir guard via wildcard2regex (precomputed parts when available).
 				$ori_dir = $m['ori_dir'] ?? '';
 				if ( '' !== $ori_dir ) {
-					$path    = wp_parse_url( $url, PHP_URL_PATH ) ?? '';
-					$parts   = array_filter( array_map( 'trim', explode( '|', $ori_dir ) ) );
+					$path  = wp_parse_url( $url, PHP_URL_PATH ) ?? '';
+					$parts = $m['_ori_dir_parts'] ?? null;
+					if ( ! is_array( $parts ) ) {
+						$parts = array_filter( array_map( 'trim', explode( '|', $ori_dir ) ) );
+					}
 					$matched = false;
 					foreach ( $parts as $part ) {
 						$regex = self::wildcard2regex( $part );
@@ -272,26 +323,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 						continue;
 					}
 				}
-				// include_dirs check with wildcard2regex expansion.
-				$dirs = $m['include_dirs'] ?? 'wp-content|wp-includes';
-				if ( '' !== $dirs ) {
-					$dir_parts   = array_filter( array_map( 'trim', explode( '|', $dirs ) ) );
-					$regex_parts = array();
-					foreach ( $dir_parts as $dp ) {
-						$regex_parts[] = self::wildcard2regex( $dp );
-					}
-					$dirs_regex = implode( '|', array_filter( $regex_parts ) );
+				// include_dirs check with wildcard2regex expansion (precomputed regex when available).
+				if ( array_key_exists( '_include_dirs_regex', $m ) ) {
+					$dirs_regex = (string) $m['_include_dirs_regex'];
 					if ( '' !== $dirs_regex && ! preg_match( '#/(?:' . $dirs_regex . ')/#i', $url ) ) {
 						continue;
 					}
+				} else {
+					$dirs = $m['include_dirs'] ?? 'wp-content|wp-includes';
+					if ( '' !== $dirs ) {
+						$dir_parts   = array_filter( array_map( 'trim', explode( '|', $dirs ) ) );
+						$regex_parts = array();
+						foreach ( $dir_parts as $dp ) {
+							$regex_parts[] = self::wildcard2regex( $dp );
+						}
+						$dirs_regex = implode( '|', array_filter( $regex_parts ) );
+						if ( '' !== $dirs_regex && ! preg_match( '#/(?:' . $dirs_regex . ')/#i', $url ) ) {
+							continue;
+						}
+					}
 				}
-				// include_filetypes.
+				// include_filetypes (precomputed allowlist when available).
 				$types = $m['include_filetypes'] ?? '';
 				if ( '' !== $types ) {
 					$ext     = strtolower( pathinfo( wp_parse_url( $url, PHP_URL_PATH ) ?? '', PATHINFO_EXTENSION ) );
-					$allowed = array_map( 'trim', explode( ',', strtolower( $types ) ) );
-					$allowed = array_filter( $allowed );
-					$allowed = array_map( fn( $t ) => ltrim( $t, '.' ), $allowed );
+					$allowed = $m['_allowed_filetypes'] ?? null;
+					if ( ! is_array( $allowed ) ) {
+						$allowed = array_map( 'trim', explode( ',', strtolower( $types ) ) );
+						$allowed = array_filter( $allowed );
+						$allowed = array_map( fn( $t ) => ltrim( $t, '.' ), $allowed );
+					}
 					if ( '' !== $ext && ! in_array( $ext, $allowed, true ) ) {
 						continue;
 					}

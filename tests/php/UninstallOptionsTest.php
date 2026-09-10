@@ -63,6 +63,7 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 		'wppo_litespeed_purge_queue',
 		// Issue #934 autoload remediation priors.
 		'wppo_autoload_remediated',
+		'wppo_autoload_migrated',
 	);
 
 	/**

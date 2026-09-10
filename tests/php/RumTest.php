@@ -35,6 +35,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	 * Install get_option/update_option/transient/wp_hash stubs.
 	 */
 	private function install_stubs(): void {
+		RUM::clear_field_lcp_cache();
 		Functions\stubs(
 			array(
 				'get_option',
@@ -523,6 +524,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 		$this->assertNull( RUM::get_field_lcp_url( '/hero' ) );
 
 		$this->options[ RUM::OPTION ][ $today ]['/hero']['lcpUrls']['example.com/wp-content/uploads/hero.jpg']['n'] = 20;
+		RUM::clear_field_lcp_cache();
 
 		$field = RUM::get_field_lcp_url( '/hero' );
 		$this->assertIsArray( $field );
