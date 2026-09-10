@@ -123,6 +123,10 @@ class WooSafeModeTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'is_cart' )->justReturn( false );
 		Functions\when( 'is_checkout' )->justReturn( false );
 		Functions\when( 'is_account_page' )->justReturn( false );
+		// Pin the endpoint tag false: suites earlier in the process declare
+		// is_wc_endpoint_url() via Brain Monkey, and a call without an
+		// expectation throws, which Cache::is_woo_excluded() fails open on.
+		Functions\when( 'is_wc_endpoint_url' )->justReturn( false );
 	}
 
 	/**

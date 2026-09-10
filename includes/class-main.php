@@ -273,7 +273,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['image_optimisation']['lazyLoadImages'] ) ) {
 				$this->options['image_optimisation']['lazyLoadImages'] = false;
 			}
-if ( ! isset( $this->options['image_optimisation']['avifFirst'] ) ) {
+			if ( ! isset( $this->options['image_optimisation']['avifFirst'] ) ) {
 				$this->options['image_optimisation']['avifFirst'] = true;
 			}
 			if ( ! isset( $this->options['image_optimisation']['smartQuality'] ) ) {
@@ -2584,7 +2584,7 @@ if ( ! isset( $this->options['image_optimisation']['avifFirst'] ) ) {
 				return $tag;
 			}
 
-if ( ! empty( $this->options['file_optimisation']['delayJS'] ) ) {
+			if ( ! empty( $this->options['file_optimisation']['delayJS'] ) ) {
 				// Woo / builder-context guardrail (#932): fail open to un-delayed
 				// scripts, never fatal. See is_delay_excluded_context().
 				if ( self::is_delay_excluded_context() || $this->is_delay_js_safe_context() ) {
@@ -3206,7 +3206,7 @@ if ( ! empty( $this->options['file_optimisation']['delayJS'] ) ) {
 				'linkedin',
 				'twitter',
 				'paypal',
-// Woo-critical handles (#932): stay un-delayed by default even
+				// Woo-critical handles (#932): stay un-delayed by default even
 				// outside is_cart()/is_checkout() contexts (e.g. mini-cart
 				// fragments on other pages). Deduped via array_unique at merge.
 				'wc-cart-fragments',
@@ -3215,7 +3215,6 @@ if ( ! empty( $this->options['file_optimisation']['delayJS'] ) ) {
 				'wc-add-to-cart',
 				'wc-single-product',
 				// WooCommerce safe list.
-				'woocommerce',
 				'wc-',
 				'cart-fragments',
 				'wc-cart',

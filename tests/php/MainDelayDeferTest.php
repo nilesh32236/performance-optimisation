@@ -1,4 +1,4 @@
-<?php
+<?php // phpcs:ignore WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName -- PHPUnit requires *Test.php names.
 /**
  * Tests for Main defer/delay JS exclusion reconciliation.
  *
@@ -28,7 +28,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	 *
 	 * @return void
 	 */
-	protected function tearDown(): void {
+	protected function tearDown(): void { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid -- PHPUnit requires tearDown().
 		unset( $GLOBALS['wp_version'], $GLOBALS['wp_scripts'] );
 		$this->wppoTearDown();
 	}
@@ -372,6 +372,19 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	 * and the idle timeout falls back to 3000.
 	 */
 	public function test_inp_preset_off_falls_back_to_interaction(): void {
+		$this->stub_main_construction(
+			array(
+				'delayJS' => true,
+			)
+		);
+
+		$main = new Main();
+
+		$this->assertSame( 'interaction', $this->invoke_private_method( $main, 'get_delay_strategy_for_handle', 'totally-unrelated-handle' ) );
+		$this->assertSame( 3000, $this->read_private_prop( $main, 'delay_js_idle_timeout' ) );
+	}
+
+	/**
 	 * Test that the Delay-JS preset exclusions are safe by default (Woo, Elementor, forms).
 	 *
 	 * @since NEXT
@@ -385,8 +398,11 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 
 		$main = new Main();
 
-		$this->assertSame( 'interaction', $this->invoke_private_method( $main, 'get_delay_strategy_for_handle', 'totally-unrelated-handle' ) );
-		$this->assertSame( 3000, $this->read_private_prop( $main, 'delay_js_idle_timeout' ) );
+		$preset = $this->invoke_private_method( $main, 'get_delay_js_preset_exclusions' );
+
+		foreach ( array( 'woocommerce', 'wc-checkout', 'cart-fragments', 'elementor', 'elementor-frontend', 'contact-form-7', 'wpcf7', 'gravityforms', 'gform', 'wpforms', 'ninja-forms', 'fluentform', 'jquery', 'stripe' ) as $entry ) {
+			$this->assertContains( $entry, $preset );
+		}
 	}
 
 	/**
@@ -442,20 +458,6 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	 * fails open (un-delayed tag, never fatal).
 	 */
 	public function test_delay_excluded_context_on_cart_returns_tag_unmodified(): void {
-		$preset = $this->invoke_private_method( $main, 'get_delay_js_preset_exclusions' );
-
-		foreach ( array( 'woocommerce', 'wc-checkout', 'cart-fragments', 'elementor', 'elementor-frontend', 'contact-form-7', 'wpcf7', 'gravityforms', 'gform', 'wpforms', 'ninja-forms', 'fluentform', 'jquery', 'stripe' ) as $entry ) {
-			$this->assertContains( $entry, $preset );
-		}
-	}
-
-	/**
-	 * Test that is_delay_js_safe_context() returns false (delay allowed)
-	 * when no safe signals are present.
-	 *
-	 * @since NEXT
-	 */
-	public function test_delay_js_safe_context_returns_false_when_no_safe_signals(): void {
 		$this->stub_main_construction(
 			array(
 				'delayJS' => true,
@@ -477,12 +479,17 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Test that checkout and account pages are excluded delay contexts.
+	 * Test that is_delay_js_safe_context() returns false (delay allowed)
+	 * when no safe signals are present.
 	 *
-	 * @param string $tag_function Woo conditional tag returning true.
+	 * @since NEXT
 	 */
-	#[\PHPUnit\Framework\Attributes\DataProvider( 'woo_tag_provider' )]
-	public function test_delay_excluded_context_on_woo_tags( string $tag_function ): void {
+	public function test_delay_js_safe_context_returns_false_when_no_safe_signals(): void {
+		$this->stub_main_construction(
+			array(
+				'delayJS' => true,
+			)
+		);
 
 		// Pin all safe-context conditionals false: earlier suites leave
 		// stale Brain Monkey function definitions behind, so absence of a
@@ -496,6 +503,29 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		$main = new Main();
 
 		$this->assertFalse( $main->is_delay_js_safe_context() );
+	}
+
+	/**
+	 * Test that checkout and account pages are excluded delay contexts.
+	 *
+	 * @param string $tag_function Woo conditional tag returning true.
+	 */
+	#[\PHPUnit\Framework\Attributes\DataProvider( 'woo_tag_provider' )]
+	public function test_delay_excluded_context_on_woo_tags( string $tag_function ): void {
+		$this->stub_main_construction(
+			array(
+				'delayJS' => true,
+			)
+		);
+		$this->reset_delay_guard_superglobals();
+		$this->stub_guard_request_env();
+		Functions\when( $tag_function )->justReturn( true );
+
+		$main = new Main();
+
+		$this->assertTrue( $main->is_delay_excluded_context(), "Expected {$tag_function}() to mark an excluded delay context." );
+
+		$this->reset_delay_guard_superglobals();
 	}
 
 	/**
@@ -560,15 +590,26 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 				'delayJS' => true,
 			)
 		);
-		$this->reset_delay_guard_superglobals();
-		$this->stub_guard_request_env();
-		Functions\when( $tag_function )->justReturn( true );
+
+		Functions\when( 'is_cart' )->justReturn( false );
+		Functions\when( 'is_checkout' )->justReturn( false );
+		Functions\when( 'is_account_page' )->justReturn( false );
+		Functions\when( 'is_wc_endpoint_url' )->justReturn( false );
+		Functions\when( 'get_the_ID' )->justReturn( 42 );
+		Functions\when( 'has_shortcode' )->alias(
+			static function ( $content, $shortcode ) {
+				return 'contact-form-7' === $shortcode && false !== strpos( $content, '[contact-form-7]' );
+			}
+		);
+		Functions\when( 'get_post_field' )->alias(
+			static function ( $field ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+				return 'post_content' === $field ? '[contact-form-7]' : '';
+			}
+		);
 
 		$main = new Main();
 
-		$this->assertTrue( $main->is_delay_excluded_context(), "Expected {$tag_function}() to mark an excluded delay context." );
-
-		$this->reset_delay_guard_superglobals();
+		$this->assertTrue( $main->is_delay_js_safe_context() );
 	}
 
 	/**
@@ -599,6 +640,10 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		);
 		$this->reset_delay_guard_superglobals();
 		$this->stub_guard_request_env();
+		// Pin the endpoint tag false: tests earlier in the process declare
+		// is_wc_endpoint_url() via Brain Monkey, and a call without an
+		// expectation throws, which the guardrail correctly fails open on.
+		Functions\when( 'is_wc_endpoint_url' )->justReturn( false );
 		$_SERVER['REQUEST_URI'] = $request_uri;
 
 		$main = new Main();
@@ -636,6 +681,9 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		);
 		$this->reset_delay_guard_superglobals();
 		$this->stub_guard_request_env();
+		// Pin the endpoint tag false so the /wc-ajax/ path assertion below is
+		// exercised deterministically (see path_fallback test).
+		Functions\when( 'is_wc_endpoint_url' )->justReturn( false );
 
 		$main = new Main();
 
@@ -771,22 +819,6 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		$this->assertStringContainsString( 'wppo/javascript', $delayed->get_minified_html() );
 
 		$this->reset_delay_guard_superglobals();
-		Functions\when( 'is_wc_endpoint_url' )->justReturn( false );
-		Functions\when( 'get_the_ID' )->justReturn( 42 );
-		Functions\when( 'has_shortcode' )->alias(
-			static function ( $content, $shortcode ) {
-				return 'contact-form-7' === $shortcode && false !== strpos( $content, '[contact-form-7]' );
-			}
-		);
-		Functions\when( 'get_post_field' )->alias(
-			static function ( $field ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-				return 'post_content' === $field ? '[contact-form-7]' : '';
-			}
-		);
-
-		$main = new Main();
-
-		$this->assertTrue( $main->is_delay_js_safe_context() );
 	}
 
 	/**
@@ -864,7 +896,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	private function stub_script_modules( object $fake ): void {
 		// WP 6.9+ gate for fetchpriority/in_footer (apply_module_loading_strategies).
 		// @since NEXT.
-		$GLOBALS['wp_version'] = '6.9';
+		$GLOBALS['wp_version'] = '6.9'; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- version-gated test fixture.
 		Functions\when( 'get_bloginfo' )->justReturn( '6.9' );
 		Functions\when( 'wp_script_modules' )->justReturn( $fake );
 		Functions\when( 'function_exists' )->alias(
@@ -1077,7 +1109,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 				'excludeDeferJS' => '',
 			)
 		);
-		$GLOBALS['wp_version'] = '6.9';
+		$GLOBALS['wp_version'] = '6.9'; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- version-gated test fixture.
 		Functions\when( 'get_bloginfo' )->justReturn( '6.9' );
 
 		$main = $this->make_main(
@@ -1094,7 +1126,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		$exclude_prop->setAccessible( true );
 		$exclude_prop->setValue( $main, array() );
 
-		$GLOBALS['wp_scripts'] = $this->make_fake_wp_scripts();
+		$GLOBALS['wp_scripts'] = $this->make_fake_wp_scripts(); // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- version-gated test fixture.
 
 		$recorded = array();
 		$this->stub_defer_strategy_env( $recorded );
@@ -1132,7 +1164,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 				'excludeDeferJS' => '',
 			)
 		);
-		$GLOBALS['wp_version'] = '6.9';
+		$GLOBALS['wp_version'] = '6.9'; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- version-gated test fixture.
 		Functions\when( 'get_bloginfo' )->justReturn( '6.9' );
 
 		$main = $this->make_main(
@@ -1148,7 +1180,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		$exclude_prop->setAccessible( true );
 		$exclude_prop->setValue( $main, array() );
 
-		$GLOBALS['wp_scripts'] = $this->make_fake_wp_scripts();
+		$GLOBALS['wp_scripts'] = $this->make_fake_wp_scripts(); // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- version-gated test fixture.
 		$fake_scripts          = $GLOBALS['wp_scripts'];
 
 		$recorded = array();

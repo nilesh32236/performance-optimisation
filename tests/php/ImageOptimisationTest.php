@@ -1,4 +1,4 @@
-<?php
+<?php // phpcs:ignore WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName -- PHPUnit requires *Test.php names.
 /**
  * Tests for Image_Optimisation class.
  *
@@ -1244,11 +1244,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	 * @since NEXT
 	 */
 	public function test_css_hero_emits_exactly_one_preload_link(): void {
-	 * Test that a stored LCP URL gets a companion preload link, fetchpriority high, and is never lazy.
-	 *
-	 * @since NEXT
-	 */
-	public function test_hero_lcp_emits_preload_and_never_lazy(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
 		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
 		Functions\when( 'is_admin' )->justReturn( false );
@@ -1276,7 +1271,35 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Test that an img hero emits zero CSS preload links.
+	 * Test that a stored LCP URL gets a companion preload link, fetchpriority high, and is never lazy.
+	 *
+	 * @since NEXT
+	 */
+	public function test_hero_lcp_emits_preload_and_never_lazy(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+		Functions\when( 'esc_attr' )->returnArg();
+		Functions\when( 'esc_url' )->returnArg();
+		Functions\when( 'wp_kses' )->returnArg();
+		$this->stub_lcp_resolution( 'https://example.com/wp-content/uploads/hero.jpg' );
+
+		$image_opt = $this->make_lcp_enabled_instance();
+
+		$html   = '<html><head></head><body><img src="https://example.com/wp-content/uploads/hero.jpg" loading="lazy" /></body></html>';
+		$result = $image_opt->prioritize_lcp_in_buffer( $html, $html );
+
+		$this->assertStringContainsString( 'fetchpriority="high"', $result );
+		$this->assertStringContainsString( 'data-wppo-hero', $result );
+		$this->assertStringContainsString( 'rel="preload"', $result );
+		$this->assertStringNotContainsString( 'loading="lazy"', $result );
+	}
+
+	/**
+	 * Test that an img hero is covered by the img companion path only: the
+	 * CSS hero pass no-ops when an <img> matches the LCP URL, so exactly one
+	 * preload link (the img companion) is emitted, never a CSS duplicate.
 	 *
 	 * @since NEXT
 	 */
@@ -1302,8 +1325,11 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$html   = '<html><head><title>T</title></head><body><img src="https://example.com/wp-content/uploads/hero.jpg" /></body></html>';
 		$result = $image_opt->prioritize_lcp_in_buffer( $html, $html );
 
-		$this->assertSame( 0, substr_count( $result, 'rel="preload"' ) );
-		$this->assertSame( 1, substr_count( $result, 'fetchpriority="high"' ) );
+		$this->assertSame( 1, substr_count( $result, 'rel="preload"' ) );
+		// fetchpriority high appears on both the hero <img> stamp and the
+		// companion preload link.
+		$this->assertStringContainsString( 'fetchpriority="high"', $result );
+		$this->assertStringContainsString( 'data-wppo-hero', $result );
 	}
 
 	/**
@@ -1328,19 +1354,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$result = $image_opt->prioritize_lcp_in_buffer( $html, $html );
 
 		$this->assertStringContainsString( 'fetchpriority="high"', $result );
-		$this->assertStringNotContainsString( 'loading="lazy"', $result );
-	}
-		Functions\when( 'wp_kses' )->returnArg();
-		$this->stub_lcp_resolution( 'https://example.com/wp-content/uploads/hero.jpg' );
-
-		$image_opt = $this->make_lcp_enabled_instance();
-
-		$html   = '<html><head></head><body><img src="https://example.com/wp-content/uploads/hero.jpg" loading="lazy" /></body></html>';
-		$result = $image_opt->prioritize_lcp_in_buffer( $html, $html );
-
-		$this->assertStringContainsString( 'fetchpriority="high"', $result );
-		$this->assertStringContainsString( 'data-wppo-hero', $result );
-		$this->assertStringContainsString( 'rel="preload"', $result );
 		$this->assertStringNotContainsString( 'loading="lazy"', $result );
 	}
 
