@@ -1,4 +1,4 @@
-<?php // phpcs:ignore WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName -- PHPUnit requires *Test.php names.
+<?php
 /**
  * Tests for Image_Optimisation class.
  *
@@ -1297,9 +1297,13 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Test that an img hero is covered by the img companion path only: the
-	 * CSS hero pass no-ops when an <img> matches the LCP URL, so exactly one
-	 * preload link (the img companion) is emitted, never a CSS duplicate.
+	 * Test that the CSS-hero pass emits nothing when a matching img hero
+	 * exists (the img preload path covers it).
+	 *
+	 * The companion hero preload is disabled via lcpHeroPreload so the
+	 * assertion isolates the CSS pass: the fixture carries both a CSS
+	 * background hero and a matching img, so without the img-match skip
+	 * the CSS pass would emit exactly one preload link.
 	 *
 	 * @since NEXT
 	 */
@@ -1320,16 +1324,14 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$options = $this->default_options;
 		$options['image_optimisation']['prioritizeLCPImages'] = true;
 		$options['image_optimisation']['cssHeroPreload']      = true;
+		$options['image_optimisation']['lcpHeroPreload']      = false;
 		$image_opt = new Image_Optimisation( $options );
 
-		$html   = '<html><head><title>T</title></head><body><img src="https://example.com/wp-content/uploads/hero.jpg" /></body></html>';
+		$html   = '<html><head><title>T</title></head><body><div class="hero" style="background-image: url(\'https://example.com/wp-content/uploads/hero.jpg\');">Hi</div><img src="https://example.com/wp-content/uploads/hero.jpg" /></body></html>';
 		$result = $image_opt->prioritize_lcp_in_buffer( $html, $html );
 
-		$this->assertSame( 1, substr_count( $result, 'rel="preload"' ) );
-		// fetchpriority high appears on both the hero <img> stamp and the
-		// companion preload link.
-		$this->assertStringContainsString( 'fetchpriority="high"', $result );
-		$this->assertStringContainsString( 'data-wppo-hero', $result );
+		$this->assertSame( 0, substr_count( $result, 'rel="preload"' ) );
+		$this->assertSame( 1, substr_count( $result, 'fetchpriority="high"' ) );
 	}
 
 	/**

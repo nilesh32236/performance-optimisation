@@ -1,4 +1,4 @@
-<?php // phpcs:ignore WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName -- PHPUnit requires *Test.php names.
+<?php
 /**
  * Tests for Main defer/delay JS exclusion reconciliation.
  *
@@ -28,7 +28,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	 *
 	 * @return void
 	 */
-	protected function tearDown(): void { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid -- PHPUnit requires tearDown().
+	protected function tearDown(): void {
 		unset( $GLOBALS['wp_version'], $GLOBALS['wp_scripts'] );
 		$this->wppoTearDown();
 	}
@@ -490,10 +490,8 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 				'delayJS' => true,
 			)
 		);
-
-		// Pin all safe-context conditionals false: earlier suites leave
-		// stale Brain Monkey function definitions behind, so absence of a
-		// mock cannot be relied on for determinism here.
+		$this->reset_delay_guard_superglobals();
+		$this->stub_guard_request_env();
 		Functions\when( 'is_cart' )->justReturn( false );
 		Functions\when( 'is_checkout' )->justReturn( false );
 		Functions\when( 'is_account_page' )->justReturn( false );
@@ -502,7 +500,10 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 
 		$main = new Main();
 
+		$this->assertFalse( $main->is_delay_excluded_context() );
 		$this->assertFalse( $main->is_delay_js_safe_context() );
+
+		$this->reset_delay_guard_superglobals();
 	}
 
 	/**
@@ -640,11 +641,13 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		);
 		$this->reset_delay_guard_superglobals();
 		$this->stub_guard_request_env();
-		// Pin the endpoint tag false: tests earlier in the process declare
-		// is_wc_endpoint_url() via Brain Monkey, and a call without an
-		// expectation throws, which the guardrail correctly fails open on.
-		Functions\when( 'is_wc_endpoint_url' )->justReturn( false );
 		$_SERVER['REQUEST_URI'] = $request_uri;
+
+		// Pin is_wc_endpoint_url false: earlier tests declare it process-wide
+		// via Brain Monkey, and a stale declaration without an expectation
+		// throws MissingFunctionExpectations, which the guardrail (correctly)
+		// fails open on — flipping the `false` fixtures to true.
+		Functions\when( 'is_wc_endpoint_url' )->justReturn( false );
 
 		$main = new Main();
 
@@ -681,9 +684,6 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		);
 		$this->reset_delay_guard_superglobals();
 		$this->stub_guard_request_env();
-		// Pin the endpoint tag false so the /wc-ajax/ path assertion below is
-		// exercised deterministically (see path_fallback test).
-		Functions\when( 'is_wc_endpoint_url' )->justReturn( false );
 
 		$main = new Main();
 
@@ -896,7 +896,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	private function stub_script_modules( object $fake ): void {
 		// WP 6.9+ gate for fetchpriority/in_footer (apply_module_loading_strategies).
 		// @since NEXT.
-		$GLOBALS['wp_version'] = '6.9'; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- version-gated test fixture.
+		$GLOBALS['wp_version'] = '6.9';
 		Functions\when( 'get_bloginfo' )->justReturn( '6.9' );
 		Functions\when( 'wp_script_modules' )->justReturn( $fake );
 		Functions\when( 'function_exists' )->alias(
@@ -1109,7 +1109,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 				'excludeDeferJS' => '',
 			)
 		);
-		$GLOBALS['wp_version'] = '6.9'; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- version-gated test fixture.
+		$GLOBALS['wp_version'] = '6.9';
 		Functions\when( 'get_bloginfo' )->justReturn( '6.9' );
 
 		$main = $this->make_main(
@@ -1126,7 +1126,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		$exclude_prop->setAccessible( true );
 		$exclude_prop->setValue( $main, array() );
 
-		$GLOBALS['wp_scripts'] = $this->make_fake_wp_scripts(); // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- version-gated test fixture.
+		$GLOBALS['wp_scripts'] = $this->make_fake_wp_scripts();
 
 		$recorded = array();
 		$this->stub_defer_strategy_env( $recorded );
@@ -1164,7 +1164,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 				'excludeDeferJS' => '',
 			)
 		);
-		$GLOBALS['wp_version'] = '6.9'; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- version-gated test fixture.
+		$GLOBALS['wp_version'] = '6.9';
 		Functions\when( 'get_bloginfo' )->justReturn( '6.9' );
 
 		$main = $this->make_main(
@@ -1180,7 +1180,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		$exclude_prop->setAccessible( true );
 		$exclude_prop->setValue( $main, array() );
 
-		$GLOBALS['wp_scripts'] = $this->make_fake_wp_scripts(); // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- version-gated test fixture.
+		$GLOBALS['wp_scripts'] = $this->make_fake_wp_scripts();
 		$fake_scripts          = $GLOBALS['wp_scripts'];
 
 		$recorded = array();
