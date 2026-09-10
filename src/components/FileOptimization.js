@@ -544,6 +544,49 @@ const FileOptimization = ( {
 		}
 	};
 
+	const handlePurgeUsedCssCache = async () => {
+		setIsLoading( true );
+		dismiss();
+		try {
+			const res = await apiCall( 'purge_used_css_cache' );
+			if ( res.success ) {
+				notify( {
+					type: 'success',
+					message:
+						res.message ||
+						__(
+							'Page cache and used CSS purged.',
+							'performance-optimisation'
+						),
+					durationMs: 3000,
+				} );
+			} else {
+				notify( {
+					type: 'error',
+					message:
+						res.message ||
+						__(
+							'Failed to purge page cache and used CSS.',
+							'performance-optimisation'
+						),
+					durationMs: 3000,
+				} );
+			}
+		} catch ( err ) {
+			console.error( 'Failed to purge page cache and used CSS.', err );
+			notify( {
+				type: 'error',
+				message: __(
+					'An unexpected error occurred.',
+					'performance-optimisation'
+				),
+				durationMs: 3000,
+			} );
+		} finally {
+			setIsLoading( false );
+		}
+	};
+
 	const handleSubmit = async ( e ) => {
 		if ( e ) {
 			e.preventDefault();
@@ -1007,6 +1050,12 @@ const FileOptimization = ( {
 												</p>
 											</>
 										) }
+										<div className="wppo-notice wppo-notice--info wppo-mt-12">
+											{ __(
+												'Smoke test: verify key pages in a logged-out (incognito) window after enabling — used CSS is generated from the logged-out view.',
+												'performance-optimisation'
+											) }
+										</div>
 										<button
 											className="wppo-button wppo-button--secondary wppo-mt-12"
 											onClick={ handleRegenerateUsedCSS }
@@ -1015,6 +1064,17 @@ const FileOptimization = ( {
 										>
 											{ __(
 												'Regenerate Used CSS',
+												'performance-optimisation'
+											) }
+										</button>
+										<button
+											className="wppo-button wppo-button--secondary wppo-mt-12"
+											onClick={ handlePurgeUsedCssCache }
+											type="button"
+											disabled={ isLoading }
+										>
+											{ __(
+												'Purge Page Cache + Used CSS',
 												'performance-optimisation'
 											) }
 										</button>

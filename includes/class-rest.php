@@ -196,6 +196,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+				'purge_used_css_cache'      => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'purge_used_css_cache' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
 				'regenerate_ccss'           => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'regenerate_ccss' ),
@@ -1788,10 +1794,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				true,
 				202,
 				sprintf(
-					/* translators: %d: Number of queued jobs */
+				/* translators: %d: Number of queued jobs */
 					__( 'Queued %d used-CSS regeneration jobs.', 'performance-optimisation' ),
 					$queued
 				)
+			);
+		}
+
+		/**
+		 * Purge page cache and used CSS together via a single action (issue #1023).
+		 *
+		 * Shared purge path: delegates to Used_CSS::purge_coupled() which makes
+		 * a guarded call into the Cache layer. Accepts an optional `path` for a
+		 * single-page coupled purge; empty purges all.
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		public function purge_used_css_cache( \WP_REST_Request $request ): \WP_REST_Response {
+			$params   = $request->get_params();
+			$path     = isset( $params['path'] ) ? sanitize_text_field( $params['path'] ) : null;
+			$url_path = ( null === $path || '' === $path ) ? null : wp_normalize_path( $path );
+
+			if ( null !== $url_path && false !== strpos( $url_path, '..' ) ) {
+				return $this->send_response( null, false, 400, __( 'Invalid path provided.', 'performance-optimisation' ) );
+			}
+
+			$result = Used_CSS::purge_coupled( $url_path );
+
+			Log::add( __( 'Coupled purge: page cache and used CSS purged.', 'performance-optimisation' ) );
+
+			return $this->send_response(
+				array(
+					'page_cache' => ! empty( $result['page_cache'] ),
+					'used_css'   => ! empty( $result['used_css'] ),
+				),
+				true,
+				200,
+				__( 'Page cache and used CSS purged.', 'performance-optimisation' )
 			);
 		}
 

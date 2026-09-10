@@ -246,6 +246,39 @@ add_filter( 'wppo_builder_purge_map', function( $map ) {
 
 ---
 
+### `wppo_used_css_safelist`
+Filters the used-CSS safelist (issue #1023). The merged built-in (Elementor + popup presets) + user safelist is passed through this filter when a listener is registered (`has_filter`-guarded). Return the list to keep. @since NEXT.
+
+**Parameters:**
+- `$safelist` *(string[])* — Merged safelist selectors.
+
+**Example:**
+```php
+add_filter( 'wppo_used_css_safelist', function( $safelist ) {
+    $safelist[] = '.my-popup-';
+    return $safelist;
+} );
+```
+
+---
+
+### `wppo_builder_drift_requeue`
+Fires after builder-drift detection requeues used-CSS regeneration (issue #1023). Emitted by `Builder_Purge_Watcher::on_builder_drift()` (no args, Elementor CSS regen) and `Builder_Purge_Watcher::on_builder_drift_save( $post_id )` (editor save). @since NEXT.
+
+**Parameters:**
+- `$post_id` *(int, optional)* — Post ID saved in the builder (only for the editor-save variant).
+
+**Example:**
+```php
+add_action( 'wppo_builder_drift_requeue', function( $post_id = 0 ) {
+    if ( $post_id ) {
+        error_log( "Used CSS requeued for post {$post_id} after builder drift." );
+    }
+}, 10, 1 );
+```
+
+---
+
 ### `wppo_exclude_delay_js`
 Filters the list of script handles or URL substrings excluded from JavaScript delay loading.
 

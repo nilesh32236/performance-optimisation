@@ -97,13 +97,80 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		);
 
 		/**
-		 * Register the upgrader hook.
+		 * Register the upgrader hook plus builder-drift hooks.
+		 *
+		 * Drift hooks (issue #1023) listen to Elementor asset-regen signals
+		 * so editing in a builder requeues used-CSS regeneration instead of
+		 * leaving stale used CSS until manual regen/cron.
 		 *
 		 * @since NEXT
 		 * @return void
 		 */
 		public function register(): void {
 			add_action( 'upgrader_process_complete', array( $this, 'on_builder_update' ), 10, 2 );
+			add_action( 'elementor/core/files/clear_cache', array( $this, 'on_builder_drift' ), 10, 0 );
+			add_action( 'elementor/editor/after_save', array( $this, 'on_builder_drift_save' ), 10, 2 );
+		}
+
+		/**
+		 * Handle Elementor asset-regen signals: purge derived caches + requeue used CSS.
+		 *
+		 * Fires on elementor/core/files/clear_cache (CSS regen). Guarded so a
+		 * builder failure can never break the request; fail-open keeps full CSS.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public function on_builder_drift(): void {
+			try {
+				$this->purge_wppo_derived_caches();
+				if ( function_exists( 'do_action' ) ) {
+					/**
+					 * Fires after builder-drift requeue (issue #1023).
+					 *
+					 * @since NEXT
+					 */
+					do_action( 'wppo_builder_drift_requeue' );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Handle Elementor editor saves: drift-check the saved post's used CSS.
+		 *
+		 * @since NEXT
+		 * @param int   $post_id Post ID saved in the editor.
+		 * @param mixed $editor_data Editor data (unused).
+		 * @return void
+		 */
+		public function on_builder_drift_save( $post_id, $editor_data ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- Signature must match the elementor/editor/after_save action.
+			unset( $editor_data );
+			try {
+				$post_id = (int) $post_id;
+				if ( $post_id <= 0 ) {
+					return;
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
+					$drifted = Used_CSS::maybe_requeue_on_builder_drift( $post_id );
+					if ( ! $drifted ) {
+						Used_CSS::requeue_for_post( $post_id );
+					}
+				}
+				if ( function_exists( 'do_action' ) ) {
+					/**
+					 * Fires after builder-drift requeue for a saved post (issue #1023).
+					 *
+					 * @since NEXT
+					 *
+					 * @param int $post_id Post ID saved in the builder.
+					 */
+					do_action( 'wppo_builder_drift_requeue', $post_id );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 
 		/**
