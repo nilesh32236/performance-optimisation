@@ -1116,7 +1116,7 @@ Filters the byte threshold at or under which source images skip conversion (tiny
 ---
 
 ### `wppo_auto_alt_enabled`
-Filters whether missing-alt autofill is enabled. When truthy, `<img>` tags with no `alt` attribute get a deterministic derived alt (sanitized filename, falling back to the parent post title); existing `alt` attributes — including decorative `alt=""` — are never touched. @since NEXT.
+Filters whether missing-alt autofill is enabled. When truthy, `<img>` tags with no `alt` attribute get a deterministic derived alt (sanitized filename, falling back to the parent post title); existing `alt` attributes — including decorative `alt=""` — are never touched. Runs as a standalone buffer pass when lazy-loading is disabled, so the toggle works independently of `lazyLoadImages`. Data-URI images are included in both the Tag Processor and regex paths (derived from the parent title/filter when no filename exists). @since NEXT.
 
 **Parameters:**
 - `$enabled` *(bool)* — Default from the `image_optimisation.autoAltText` setting (`false`).
@@ -1141,7 +1141,7 @@ add_filter( 'wppo_auto_alt_text', function ( $alt, $src ) {
 ---
 
 ### `wppo_max_longest_edge_px`
-Filters the longest-edge downscale cap in pixels applied when converting uploads to WebP/AVIF. Oversized sources are downscaled in-memory so generated outputs never exceed this edge; the original upload file is never modified, and a downscale that would not shrink output keeps the original. `0` disables the cap. @since NEXT.
+Filters the longest-edge downscale cap in pixels applied when converting uploads to WebP/AVIF. Oversized sources are downscaled in-memory so generated outputs never exceed this edge; the original upload file is never modified, and a downscale that would not shrink output keeps the original. Applies to the JPEG/PNG GD path, the WebP-source AVIF path, and the GIF-via-Imagick path (coalesced-frame thumbnail); the 5000px dimension guard is evaluated against post-cap dimensions so cappable images convert instead of failing. `0` disables the cap. @since NEXT.
 
 **Parameters:**
 - `$cap` *(int)* — Cap in pixels. Default from the `image_optimisation.maxLongestEdgePx` setting (`2560`).

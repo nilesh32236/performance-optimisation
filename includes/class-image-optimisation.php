@@ -2008,8 +2008,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			} else {
 				$filename = substr( $filename, 0, 125 );
 			}
+			$filename = trim( $filename );
+			if ( '' === $filename ) {
+				return '';
+			}
 
-			return ucwords( $filename );
+			if ( function_exists( 'mb_convert_case' ) ) {
+				return mb_convert_case( mb_strtolower( $filename, 'UTF-8' ), MB_CASE_TITLE, 'UTF-8' );
+			}
+
+			return ucwords( strtolower( $filename ) );
 		}
 
 		/**
@@ -2035,9 +2043,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				try {
 					$parent_id = wp_get_post_parent_id();
 					if ( ! empty( $parent_id ) ) {
-						$title = get_the_title( $parent_id );
-						if ( is_string( $title ) && '' !== trim( $title ) ) {
-							$alt = trim( $title );
+						static $title_cache = array();
+						if ( ! array_key_exists( $parent_id, $title_cache ) ) {
+							$title                     = get_the_title( $parent_id );
+							$title_cache[ $parent_id ] = is_string( $title ) ? $title : '';
+						}
+						$cached = $title_cache[ $parent_id ];
+						if ( '' !== trim( $cached ) ) {
+							$alt = trim( $cached );
 							if ( function_exists( 'sanitize_text_field' ) ) {
 								$alt = trim( sanitize_text_field( $alt ) );
 							}
@@ -2094,8 +2107,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Autofill a missing `alt` via regex fallback (fail-open, byte-identical when off).
 		 *
-		 * Presence check is `#\balt\s*=#i`, so both `alt="x"` and decorative
-		 * `alt=""` are preserved verbatim. Escapes at emit because the regex
+		 * Presence check is `#(?<![\w-])alt\s*=#i`, so both `alt="x"` and decorative
+		 * `alt=""` are preserved verbatim while hyphenated `data-alt` attributes
+		 * do not count as an `alt`. Escapes at emit because the regex
 		 * path concatenates raw strings.
 		 *
 		 * @since NEXT
@@ -2108,7 +2122,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			if ( ! $this->is_auto_alt_enabled() ) {
 				return $img_tag;
 			}
-			if ( 1 === preg_match( '#\balt\s*=#i', $img_tag ) ) {
+			if ( 1 === preg_match( '#(?<![\w-])alt\s*=#i', $img_tag ) ) {
 				return $img_tag;
 			}
 			$derived = $this->get_derived_alt( $original_src );
@@ -2342,9 +2356,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( false === strpos( $img_tag, 'data-src' ) ) {
 					$original_src_decoded = htmlspecialchars_decode( $original_src, ENT_QUOTES );
 
-					// Skip base64 images to avoid rewriting them.
+					// Skip base64 images to avoid rewriting them (alt autofill still applies so both paths agree).
 					if ( preg_match( '#^data:image/#i', $original_src_decoded ) ) {
-						return $img_tag;
+						return $this->maybe_autofill_alt_regex( $img_tag, $original_src );
 					}
 
 					if ( $use_native_lazy || 1 === preg_match( '/\bloading=["\']lazy["\']/i', $img_tag ) ) {
@@ -3768,6 +3782,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 										'decoding'      => 'sync',
 									)
 								);
+								$this->maybe_autofill_alt_processor( $wppo_tags, (string) $src );
 								continue;
 							}
 
@@ -3778,6 +3793,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							$original_src_decoded = htmlspecialchars_decode( $src, ENT_QUOTES );
 
 							if ( preg_match( '#^data:image/#i', $original_src_decoded ) ) {
+								$this->maybe_autofill_alt_processor( $wppo_tags, $original_src_decoded );
 								continue;
 							}
 
@@ -3940,10 +3956,74 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						$buffer = $this->post_process_auto_sizes( $buffer );
 					}
 				}
+			} elseif ( $this->is_auto_alt_enabled() ) {
+				// Standalone alt-autofill pass (issue #985 follow-up): when
+				// lazy-loading is off, `process_img_tag()` is never reached,
+				// so enabling `autoAltText` alone would silently do nothing.
+				// This lightweight pass fills only missing `alt` attributes
+				// and leaves everything else byte-identical.
+				$buffer = $this->autofill_alt_in_buffer( $buffer );
 			}
 
 			$buffer = strtr( $buffer, $noscript_tokens );
 			return $buffer;
+		}
+
+		/**
+		 * Autofill missing `alt` attributes across a full HTML buffer.
+		 *
+		 * Standalone pass used when lazy-loading is disabled but
+		 * `autoAltText` is enabled. Uses `WP_HTML_Tag_Processor` when
+		 * available, otherwise a regex fallback. Fail-open: returns the
+		 * buffer unchanged when disabled or on any processing failure.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $buffer The HTML buffer to process.
+		 * @return string The buffer with missing `alt` attributes filled.
+		 */
+		private function autofill_alt_in_buffer( string $buffer ): string {
+			if ( ! $this->is_auto_alt_enabled() ) {
+				return $buffer;
+			}
+			try {
+				if ( class_exists( 'WP_HTML_Tag_Processor' ) ) {
+					$tags = new \WP_HTML_Tag_Processor( $buffer );
+					while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
+						$src = $tags->get_attribute( 'src' );
+						if ( null === $src ) {
+							$src = $tags->get_attribute( 'data-src' );
+						}
+						if ( null === $src || '' === $src ) {
+							continue;
+						}
+						$this->maybe_autofill_alt_processor( $tags, (string) $src );
+					}
+					$updated = $tags->get_updated_html();
+					if ( is_string( $updated ) ) {
+						return $updated;
+					}
+					return $buffer;
+				}
+				$result = preg_replace_callback(
+					'#<img\b[^>]*>#i',
+					function ( $matches ) {
+						$tag = $matches[0];
+						$src = '';
+						if ( preg_match( '#(?<![\w-])src\s*=\s*(["\'])(.*?)\1#is', $tag, $m ) ) {
+							$src = htmlspecialchars_decode( $m[2], ENT_QUOTES );
+						}
+						if ( '' === $src ) {
+							return $tag;
+						}
+						return $this->maybe_autofill_alt_regex( $tag, $src );
+					},
+					$buffer
+				);
+				return is_string( $result ) ? $result : $buffer;
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: keep the original buffer.
+				return $buffer;
+			}
 		}
 
 		/**

@@ -874,6 +874,8 @@ const ImageOptimization = ( { options = {} } ) => {
 								id="maxLongestEdgePx"
 								type="number"
 								inputMode="numeric"
+								min="0"
+								step="1"
 								name="maxLongestEdgePx"
 								value={ settings.maxLongestEdgePx }
 								onChange={ handleChange( setSettings ) }

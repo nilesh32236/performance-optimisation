@@ -1162,6 +1162,9 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		$disabled = $this->make_converter( array( 'maxLongestEdgePx' => 0 ) );
 		$this->assertSame( 0, $disabled->get_longest_edge_cap() );
 
+		$negative = $this->make_converter( array( 'maxLongestEdgePx' => -5 ) );
+		$this->assertSame( 0, $negative->get_longest_edge_cap() );
+
 		Functions\when( 'apply_filters' )->alias(
 			static function ( $hook_name, $value ) {
 				if ( 'wppo_max_longest_edge_px' === $hook_name ) {
@@ -1171,6 +1174,16 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 			}
 		);
 		$this->assertSame( 1920, $converter->get_longest_edge_cap() );
+
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook_name, $value ) {
+				if ( 'wppo_max_longest_edge_px' === $hook_name ) {
+					return -10;
+				}
+				return $value;
+			}
+		);
+		$this->assertSame( 0, $converter->get_longest_edge_cap() );
 	}
 
 	/**

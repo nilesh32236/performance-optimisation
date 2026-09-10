@@ -414,9 +414,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * disabled, the image already fits, or any scaling step fails
 		 * (missing `imagescale()`, allocation failure, exception). Only ever
 		 * shrinks — never enlarges — so the original is inherently retained
-		 * whenever downscaling would not reduce dimensions. Requires PHP
-		 * 8.2+ GD semantics; guarded by `function_exists()` with an
-		 * `imagecopyresampled()` fallback path. No external HTTP, no DB.
+		 * whenever downscaling would not reduce dimensions. Uses
+		 * `imagescale()` when available with an `imagecopyresampled()`
+		 * fallback path. No external HTTP, no DB.
 		 *
 		 * @since NEXT
 		 *
@@ -444,7 +444,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					return $image;
 				}
 
-				if ( function_exists( 'imagescale' ) && version_compare( PHP_VERSION, '8.2', '>=' ) ) {
+				if ( function_exists( 'imagescale' ) ) {
 					// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- imagescale() emits warnings on allocation failure; fail-open keeps the original.
 					$scaled = @imagescale( $image, $new_width, $new_height );
 					if ( false !== $scaled ) {
@@ -677,7 +677,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				return false;
 			}
 
-			// Security Fix: Prevent Dimension memory crash limits.
+			// Security Fix: Prevent Dimension memory crash limits. The
+			// longest-edge cap (issue #985) is applied to the comparison first,
+			// so images that would shrink to the cap are converted instead of
+			// failing: only fail when the post-cap dimensions still exceed max.
 			$max_dims = apply_filters(
 				'wppo_max_dimensions',
 				array(
@@ -685,7 +688,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					'height' => 5000,
 				)
 			);
-			if ( $image_info[0] > $max_dims['width'] || $image_info[1] > $max_dims['height'] ) {
+			$check_w  = (int) $image_info[0];
+			$check_h  = (int) $image_info[1];
+			$cap      = $this->get_longest_edge_cap();
+			if ( $cap > 0 ) {
+				$longest = max( $check_w, $check_h );
+				if ( $longest > $cap ) {
+					$scale   = $cap / $longest;
+					$check_w = max( 1, (int) round( $check_w * $scale ) );
+					$check_h = max( 1, (int) round( $check_h * $scale ) );
+				}
+			}
+			if ( $check_w > $max_dims['width'] || $check_h > $max_dims['height'] ) {
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 					error_log( 'WPPO Error: Image dimensions exceed maximum allowed' );
@@ -744,6 +758,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 								if ( ! $image ) {
 									$this->update_conversion_status( $source_image, 'failed', $format );
 									return false;
+								}
+
+								// Longest-edge cap also applies to the WebP-source
+								// AVIF path (issue #985 follow-up): shrink the
+								// in-memory GD resource so the AVIF output
+								// respects the cap; fail-open keeps original.
+								$downscaled = $this->maybe_downscale_gd_image( $image, (int) $image_info[0], (int) $image_info[1] );
+								if ( $downscaled !== $image ) {
+									Util::destroy_gd_image( $image );
+									$image = $downscaled;
 								}
 
 								$avif_path = $this->get_img_path( $source_image, 'avif' );
@@ -815,6 +839,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 							$imagick = new \Imagick();
 							$imagick->setResourceLimit( \Imagick::RESOURCETYPE_MEMORY, 256 * 1024 * 1024 );
 							$imagick->readImage( $source_image );
+
+							// Longest-edge cap for the GIF-via-Imagick path
+							// (issue #985 follow-up): shrink coalesced frames
+							// so the WebP output respects the cap. Fail-open:
+							// any failure keeps the original frames.
+							try {
+								$edge_cap = $this->get_longest_edge_cap();
+								if ( $edge_cap > 0 ) {
+									$gif_w       = $imagick->getImageWidth();
+									$gif_h       = $imagick->getImageHeight();
+									$gif_longest = max( (int) $gif_w, (int) $gif_h );
+									if ( $gif_longest > $edge_cap ) {
+										$imagick = $imagick->coalesceImages();
+										foreach ( $imagick as $frame ) {
+											$frame->thumbnailImage( $edge_cap, $edge_cap, true );
+										}
+										$imagick = $imagick->deconstructImages();
+									}
+								}
+							} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: keep original frames on any resize failure.
+							}
 
 							// Check if the image has transparency (alpha channel).
 							$alpha_channel    = $imagick->getImageAlphaChannel();
