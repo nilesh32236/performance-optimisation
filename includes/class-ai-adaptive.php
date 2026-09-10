@@ -110,58 +110,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @since NEXT
 		 */
 		public static function is_commerce_or_auth_context(): bool {
-			$is_commerce = false;
-
-			// WooCommerce active (plugin present, even outside shop pages — conservative cap).
-			try {
-				if ( class_exists( 'WooCommerce' ) || function_exists( 'WC' ) || function_exists( 'wc_get_checkout_url' ) ) {
-					$is_commerce = true;
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-
-			if ( ! $is_commerce && function_exists( 'is_cart' ) ) {
-				try {
-					$is_commerce = (bool) is_cart();
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-			}
-
-			if ( ! $is_commerce && function_exists( 'is_checkout' ) ) {
-				try {
-					$is_commerce = (bool) is_checkout();
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-			}
-
-			if ( ! $is_commerce && function_exists( 'is_account_page' ) ) {
-				try {
-					$is_commerce = (bool) is_account_page();
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-			}
-
-			if ( ! $is_commerce && function_exists( 'is_user_logged_in' ) ) {
-				try {
-					// Frontend visitors only: learn()/get_suggestions() execute in
-					// wp-admin/REST/cron/CLI where a logged-in admin is always
-					// present, which would otherwise cap every site site-wide.
-					if ( self::is_frontend_context() ) {
-						$is_commerce = (bool) is_user_logged_in();
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-			}
-
-			// Active cart session on any page (read-only heuristic, no nonce needed).
-			if ( ! $is_commerce && ( ! empty( $_COOKIE['woocommerce_items_in_cart'] ) || ! empty( $_COOKIE['woocommerce_cart_hash'] ) ) ) {
-				$is_commerce = true;
-			}
+			$is_commerce = self::detect_commerce_or_auth_context();
 
 			/**
 			 * Filters whether the current request is a commerce/auth context for AI speculation guardrails.
@@ -172,6 +121,73 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			 * @param bool $is_commerce Whether a commerce/auth context was detected.
 			 */
 			return (bool) apply_filters( 'wppo_ai_adaptive_commerce_context', $is_commerce );
+		}
+
+		/**
+		 * Internal helper to detect commerce or auth context using early returns.
+		 *
+		 * @return bool True when a commerce/auth context is detected.
+		 * @since NEXT
+		 */
+		private static function detect_commerce_or_auth_context(): bool {
+			// WooCommerce active (plugin present, even outside shop pages — conservative cap).
+			try {
+				if ( class_exists( 'WooCommerce' ) || function_exists( 'WC' ) || function_exists( 'wc_get_checkout_url' ) ) {
+					return true;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
+			if ( function_exists( 'is_cart' ) ) {
+				try {
+					if ( is_cart() ) {
+						return true;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			if ( function_exists( 'is_checkout' ) ) {
+				try {
+					if ( is_checkout() ) {
+						return true;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			if ( function_exists( 'is_account_page' ) ) {
+				try {
+					if ( is_account_page() ) {
+						return true;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			if ( function_exists( 'is_user_logged_in' ) ) {
+				try {
+					// Frontend visitors only: learn()/get_suggestions() execute in
+					// wp-admin/REST/cron/CLI where a logged-in admin is always
+					// present, which would otherwise cap every site site-wide.
+					if ( self::is_frontend_context() && is_user_logged_in() ) {
+						return true;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			// Active cart session on any page (read-only heuristic, no nonce needed).
+			if ( ! empty( $_COOKIE['woocommerce_items_in_cart'] ) || ! empty( $_COOKIE['woocommerce_cart_hash'] ) ) {
+				return true;
+			}
+
+			return false;
 		}
 
 		/**
