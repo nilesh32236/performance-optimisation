@@ -699,4 +699,63 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertNull( RUM::get_lcp_preload_candidate( '/hero' ) );
 	}
+
+	/**
+	 * Test that an explicit path threads through to the PageSpeed transient
+	 * tier instead of mixing the field path with current-request context.
+	 *
+	 * The singular-post-meta tier must not win for an explicit path, and the
+	 * transient lookup must use the home_url + path hash for that path.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_stored_pagespeed_lcp_url_threads_explicit_path(): void {
+		$this->install_stubs();
+		Functions\when( 'is_singular' )->justReturn( true );
+		Functions\when( 'get_the_ID' )->justReturn( 42 );
+		Functions\when( 'get_post_meta' )->justReturn( 'https://example.com/wp-content/uploads/post-meta.jpg' );
+		Functions\when( 'is_front_page' )->justReturn( false );
+		Functions\when( 'untrailingslashit' )->returnArg();
+		Functions\when( 'add_query_arg' )->justReturn( '/about/' );
+		Functions\when( 'home_url' )->justReturn( 'https://example.com' );
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+
+		$seen_keys = array();
+		Functions\when( 'get_transient' )->alias(
+			static function ( $key ) use ( &$seen_keys ) {
+				$seen_keys[] = $key;
+				return 'https://example.com/wp-content/uploads/path-hero.jpg';
+			}
+		);
+		Util::clear_settings_cache();
+
+		$this->assertSame(
+			'https://example.com/wp-content/uploads/path-hero.jpg',
+			RUM::get_stored_pagespeed_lcp_url( '/about' )
+		);
+		// The transient tier resolved by the explicit path, not the
+		// current-request post meta (which would have returned post-meta.jpg).
+		$expected_key = 'wppo_lcp_url_mobile_' . md5( 'https://example.com/about' );
+		$this->assertContains( $expected_key, $seen_keys );
+	}
+
+	/**
+	 * Test that a null path still consults the current-request post-meta tier.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_stored_pagespeed_lcp_url_uses_post_meta_for_current_request(): void {
+		$this->install_stubs();
+		Functions\when( 'is_singular' )->justReturn( true );
+		Functions\when( 'get_the_ID' )->justReturn( 42 );
+		Functions\when( 'get_post_meta' )->justReturn( 'https://example.com/wp-content/uploads/post-meta.jpg' );
+		Functions\when( 'is_front_page' )->justReturn( false );
+
+		$this->assertSame(
+			'https://example.com/wp-content/uploads/post-meta.jpg',
+			RUM::get_stored_pagespeed_lcp_url()
+		);
+	}
 }

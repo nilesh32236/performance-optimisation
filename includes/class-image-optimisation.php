@@ -142,14 +142,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private const FILE_EXISTS_CACHE_LIMIT = 500;
 
 		/**
-		 * Per-request record of emitted preload links (normalized URL + media).
+		 * Per-request record of emitted preload links (normalized URL + query + media).
 		 *
 		 * `get_all_preload_data()` dedups within one call, but `wp_head` may
 		 * invoke `preload_images()` more than once per request; this guard
 		 * keeps the single `<link rel="preload" as="image"
 		 * fetchpriority="high">` per LCP URL invariant (issue #991) across
 		 * repeated calls. Reset with {@see clear_runtime_caches()} (e.g. on
-		 * switch_blog) and in tests.
+		 * switch_blog) and in tests. Long-lived processes (CLI/cron) that
+		 * generate multiple pages in one process must call
+		 * {@see clear_runtime_caches()} between pages, otherwise a hero URL
+		 * repeated on a later page is skipped as already emitted.
 		 *
 		 * @var array<string,bool>
 		 * @since NEXT
@@ -168,6 +171,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since NEXT
 		 */
 		private static array $img_size_cache = array();
+
+		/**
+		 * Memoized LCP-candidate URL excluded from lazy load for this instance.
+		 *
+		 * `preload_images()` and `add_delay_load_img()` each resolve RUM /
+		 * PageSpeed state once per page; this memo (see
+		 * {@see get_lazy_lcp_exclusion_url()}) keeps repeated lazy rewrites on
+		 * the same instance from re-scanning the RUM aggregate and transients.
+		 * Per-instance (not static): instances are constructed per request with
+		 * one site's options, so a memoized URL can never leak across sites or
+		 * option sets. Long-lived processes that reuse one instance across
+		 * pages should construct a fresh instance per page instead.
+		 *
+		 * @var string|null Null until resolved, then the candidate URL or ''.
+		 * @since NEXT
+		 */
+		private ?string $lazy_lcp_exclusion_url = null;
 
 		/**
 		 * Clear the per-request runtime caches (file_exists + image sizes).
@@ -316,10 +336,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * Emits exactly one `<link rel="preload" as="image"
 		 * fetchpriority="high">` per URL: `get_all_preload_data()` dedups by
-		 * normalized URL + media within one call (so the single RUM-field →
-		 * PageSpeed LCP candidate, manual meta, front-page and post-type items
-		 * collapse to one tag), and the per-request `$preload_emitted` guard
-		 * below skips repeats across repeated `wp_head` invocations.
+		 * normalized URL + query + media within one call (so the single
+		 * RUM-field → PageSpeed LCP candidate, manual meta, front-page and
+		 * post-type items collapse to one tag, while `?v=` variants stay
+		 * distinct), and the per-request `$preload_emitted` guard below skips
+		 * repeats across repeated `wp_head` invocations.
 		 *
 		 * No-duplicate note (issue #991): core 6.9 stamps `fetchpriority` on
 		 * the `<img>` node itself via `wp_get_loading_optimization_attributes()`
@@ -338,14 +359,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( ! is_array( $data ) || empty( $data['url'] ) || ! is_string( $data['url'] ) ) {
 					continue;
 				}
-				$normalized = '';
-				try {
-					$normalized = $this->normalize_image_url( $data['url'] );
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-				$dedup_url   = ( '' !== $normalized ) ? $normalized : $data['url'];
-				$emitted_key = $dedup_url . '|' . ( $data['media'] ?? '' );
+				$emitted_key = $this->get_preload_dedup_key( $data['url'], (string) ( $data['media'] ?? '' ) );
 				if ( isset( self::$preload_emitted[ $emitted_key ] ) ) {
 					continue;
 				}
@@ -1408,24 +1422,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$this->get_post_type_preload_data( $image_optimisation )
 			);
 
-			// Deduplicate by normalized URL + media (issue #935): the
+			// Deduplicate by normalized URL + query + media (issue #935): the
 			// field-measured LCP URL may equal a manually configured preload
 			// as an absolute URL vs a relative URL (or http vs https), but
-			// exactly one link tag must be emitted per resource.
+			// exactly one link tag must be emitted per resource (query-string
+			// versions still count as distinct resources).
 			$seen   = array();
 			$unique = array();
 			foreach ( $merged as $item ) {
 				if ( ! is_array( $item ) || empty( $item['url'] ) ) {
 					continue;
 				}
-				$normalized = '';
-				try {
-					$normalized = $this->normalize_image_url( (string) $item['url'] );
-				} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
-					$normalized = '';
-				}
-				$dedup_url = ( '' !== $normalized ) ? $normalized : (string) $item['url'];
-				$key       = $dedup_url . '|' . ( $item['media'] ?? '' );
+				$key = $this->get_preload_dedup_key( (string) $item['url'], (string) ( $item['media'] ?? '' ) );
 				if ( isset( $seen[ $key ] ) ) {
 					continue;
 				}
@@ -1445,7 +1453,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * `fieldLcpOverride` toggle is on, else the legacy
 		 * `get_current_lcp_url()` chain. Returns zero or one item via
 		 * `prepare_preload_item()` so "once per URL" holds; the item
-		 * participates in the normalized-URL + media dedup in
+		 * participates in the normalized-URL + query + media dedup in
 		 * `get_all_preload_data()`. The toggle autoPreloadLCP must be enabled.
 		 *
 		 * @since NEXT
@@ -1499,6 +1507,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * 2. Front-page option (`wppo_front_page_lcp_{strategy}`).
 		 * 3. Transient keyed by strategy + current URL hash (`wppo_lcp_url_{strategy}_{md5}`).
 		 *
+		 * Tiers 1-3 are read via the shared
+		 * `RUM::get_stored_pagespeed_lcp_url()` helper so strategy order and
+		 * key formats stay in sync with the preload candidate path.
+		 *
 		 * When the `fieldLcpOverride` toggle is enabled, field-measured RUM data
 		 * (issue #935) is consulted between Optimization Detective and the
 		 * PageSpeed chain: the top real-user LCP URL for the current path wins
@@ -1546,56 +1558,77 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 			}
 
-			$strategies = array( 'mobile', 'desktop' );
-
-			// Priority 1: Singular post — check post meta (mobile first, then desktop).
-			// Guarded by function_exists() so unit contexts without WP fail open.
-			if ( function_exists( 'is_singular' ) && is_singular() ) {
-				$post_id = function_exists( 'get_the_ID' ) ? get_the_ID() : 0;
-				if ( ! empty( $post_id ) && function_exists( 'get_post_meta' ) ) {
-					foreach ( $strategies as $strategy ) {
-						$meta_lcp = get_post_meta( $post_id, '_wppo_lcp_image_url_' . $strategy, true );
-						if ( ! empty( $meta_lcp ) && is_string( $meta_lcp ) ) {
-							return $meta_lcp;
-						}
+			// Priorities 1-3: delegate to the shared read-only PageSpeed
+			// lookup so this chain and the preload candidate path cannot
+			// drift apart. Fail-open: any failure inside returns ''.
+			if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_stored_pagespeed_lcp_url' ) ) {
+				try {
+					return \PerformanceOptimise\Inc\RUM::get_stored_pagespeed_lcp_url();
+				} catch ( \Throwable $e ) {
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+						error_log( 'WPPO Image optimisation PageSpeed LCP error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 					}
-				}
-			}
-
-			// Priority 2: Front page — check option (mobile first, then desktop).
-			if ( function_exists( 'is_front_page' ) && is_front_page() ) {
-				if ( function_exists( 'get_option' ) ) {
-					foreach ( $strategies as $strategy ) {
-						$front_lcp = get_option( 'wppo_front_page_lcp_' . $strategy, '' );
-						if ( ! empty( $front_lcp ) && is_string( $front_lcp ) ) {
-							return $front_lcp;
-						}
-					}
-				}
-			}
-
-			// Priority 3: Check transient keyed by strategy + current URL hash.
-			// Fail-open: Util::get_current_url() needs WP URL helpers that may be
-			// unavailable (e.g. unit contexts); any failure returns ''.
-			if ( ! function_exists( 'get_transient' ) ) {
-				return '';
-			}
-			try {
-				if ( ! function_exists( 'untrailingslashit' ) || ! function_exists( 'esc_url_raw' ) ) {
-					return '';
-				}
-				$current_url = untrailingslashit( esc_url_raw( Util::get_current_url() ) );
-			} catch ( \Throwable $e ) {
-				return '';
-			}
-			foreach ( $strategies as $strategy ) {
-				$transient = get_transient( Util::transient_key( 'wppo_lcp_url_' . $strategy . '_' . md5( $current_url ) ) );
-				if ( ! empty( $transient ) && is_string( $transient ) ) {
-					return $transient;
 				}
 			}
 
 			return '';
+		}
+
+		/**
+		 * Resolve the LCP-candidate URL excluded from lazy load (memoized per instance).
+		 *
+		 * Gated on the LCP toggles so default lazy behaviour is unchanged when
+		 * all LCP features are off: the field-measured branch needs
+		 * `fieldLcpOverride`, the stored-PageSpeed branch (shared read-only
+		 * lookup, no new scans) needs `autoPreloadLCP` or `prioritizeLCP`.
+		 * Returns an empty string when no branch applies or nothing resolves.
+		 * Fail-open: any failure returns an empty string, never fatal.
+		 *
+		 * @since NEXT
+		 * @param array $image_optimisation Image optimisation settings.
+		 * @return string The candidate URL, or empty string when none applies.
+		 */
+		private function get_lazy_lcp_exclusion_url( array $image_optimisation ): string {
+			if ( null !== $this->lazy_lcp_exclusion_url ) {
+				return $this->lazy_lcp_exclusion_url;
+			}
+			$this->lazy_lcp_exclusion_url = '';
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
+					return '';
+				}
+				if ( ! empty( $image_optimisation['fieldLcpOverride'] ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_field_lcp_url' ) ) {
+					try {
+						// Resolve the path exactly like get_current_lcp_url() so
+						// the lookup hits the same normalized RUM bucket the
+						// beacon store side wrote.
+						$parsed_path = function_exists( 'wp_parse_url' ) ? wp_parse_url( Util::get_current_url(), PHP_URL_PATH ) : '/';
+						$raw_path    = is_string( $parsed_path ) && '' !== $parsed_path ? $parsed_path : '/';
+						$field_path  = Util::normalize_rum_path( $raw_path );
+						$field       = \PerformanceOptimise\Inc\RUM::get_field_lcp_url( $field_path );
+						if ( is_array( $field ) && ! empty( $field['url'] ) && is_string( $field['url'] ) ) {
+							$this->lazy_lcp_exclusion_url = $field['url'];
+							return $this->lazy_lcp_exclusion_url;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( ( ! empty( $image_optimisation['autoPreloadLCP'] ) || ! empty( $image_optimisation['prioritizeLCPImages'] ) )
+				&& method_exists( 'PerformanceOptimise\Inc\RUM', 'get_stored_pagespeed_lcp_url' ) ) {
+					try {
+						$stored = \PerformanceOptimise\Inc\RUM::get_stored_pagespeed_lcp_url();
+						if ( '' !== $stored ) {
+							$this->lazy_lcp_exclusion_url = $stored;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $this->lazy_lcp_exclusion_url;
 		}
 
 		/**
@@ -3353,9 +3386,50 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$path = $parts['path'];
 
 			// Strip WordPress size suffixes, e.g. -1024x1024, -scaled, -e1234567890123.
-			$path = (string) preg_replace( '#-(?:\d+x\d+|scaled|e\d+)(?=\.[A-Za-z0-9]+)$#', '', $path );
+			// The `$` anchor lives inside the lookahead so the suffix only
+			// strips immediately before the file extension at end of path
+			// (a trailing `$` outside the lookahead could never match).
+			$path = (string) preg_replace( '#-(?:\d+x\d+|scaled|e\d+)(?=\.[A-Za-z0-9]+$)#', '', $path );
 
 			return $host . $path;
+		}
+
+		/**
+		 * Build the dedup key for a preload item (normalized URL + query + media).
+		 *
+		 * `normalize_image_url()` deliberately drops the scheme and query
+		 * string for LCP matching, but `img.jpg?v=1` and `img.jpg?v=2` are
+		 * distinct preload resources, so the raw query string is re-attached
+		 * here: versioned duplicates each emit their own hint instead of
+		 * collapsing to one. Fail-open: any parse failure falls back to the
+		 * normalized URL + media key.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $url   The raw preload URL.
+		 * @param string $media The preload media attribute.
+		 * @return string The dedup key.
+		 */
+		private function get_preload_dedup_key( string $url, string $media ): string {
+			$normalized = '';
+			try {
+				$normalized = $this->normalize_image_url( $url );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			$base  = ( '' !== $normalized ) ? $normalized : $url;
+			$query = '';
+			try {
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$parsed = wp_parse_url( $url, PHP_URL_QUERY );
+					if ( is_string( $parsed ) && '' !== $parsed ) {
+						$query = '?' . substr( $parsed, 0, 512 );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $base . $query . '|' . $media;
 		}
 
 		/**
@@ -3593,24 +3667,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 
 				// Automatic LCP-candidate lazy exclusion (issue #991): the
-				// single RUM-field → PageSpeed candidate is never lazy-loaded,
-				// even when both LCP toggles are off (a field-measured hero
-				// must not get loading=lazy / data-src swapping). Fail-open:
-				// any detection failure leaves the exclusion list untouched.
+				// single RUM-field → PageSpeed candidate is never lazy-loaded.
+				// Gated on the LCP toggles (see get_lazy_lcp_exclusion_url())
+				// so default lazy behaviour is unchanged when all LCP features
+				// are off, and memoized per instance so the RUM aggregate and
+				// transients are not re-scanned on top of preload_images().
+				// Fail-open: any detection failure leaves the exclusion list
+				// untouched.
+				$candidate_lcp_normalized = '';
 				try {
-					if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_lcp_preload_candidate' ) ) {
-						$candidate = \PerformanceOptimise\Inc\RUM::get_lcp_preload_candidate();
-						if ( is_array( $candidate ) && ! empty( $candidate['url'] ) && is_string( $candidate['url'] ) ) {
-							$candidate_url = $candidate['url'];
-							if ( ! in_array( $candidate_url, $exclude_imgs, true ) ) {
-								$exclude_imgs[] = $candidate_url;
-							}
-							$candidate_normalized = Util::normalize_url( $candidate_url );
-							if ( '' !== $candidate_normalized && ! in_array( $candidate_normalized, $exclude_imgs, true ) ) {
-								$exclude_imgs[] = $candidate_normalized;
-							}
-							$exclude_imgs = array_unique( $exclude_imgs );
+					$candidate_url = $this->get_lazy_lcp_exclusion_url( $image_optimisation );
+					if ( '' !== $candidate_url ) {
+						if ( ! in_array( $candidate_url, $exclude_imgs, true ) ) {
+							$exclude_imgs[] = $candidate_url;
 						}
+						$candidate_lcp_normalized = Util::normalize_url( $candidate_url );
+						if ( '' !== $candidate_lcp_normalized && ! in_array( $candidate_lcp_normalized, $exclude_imgs, true ) ) {
+							$exclude_imgs[] = $candidate_lcp_normalized;
+						}
+						$exclude_imgs = array_unique( $exclude_imgs );
 					}
 				} catch ( \Throwable $e ) {
 					do_action( 'wppo_debug_log', 'WPPO LCP candidate exclusion failed: ' . $e->getMessage(), array( 'exception' => $e ) );
@@ -3639,12 +3714,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							}
 
 							$should_exclude = false;
-							// OD LCP normalized match: covers http/https and size-suffix variants.
-							if ( '' !== $od_lcp_normalized && Util::normalize_url( $src ) === $od_lcp_normalized ) {
-								$should_exclude = true;
-							} else {
+							// Normalized LCP matches (OD + RUM-field/PageSpeed
+							// candidate): normalized-to-normalized equality covers
+							// http/https and WordPress size-suffix variants
+							// (e.g. hero-300x200.jpg matches candidate hero.jpg),
+							// which substring matching alone would miss.
+							if ( '' !== $od_lcp_normalized || '' !== $candidate_lcp_normalized ) {
+								try {
+									$src_normalized = Util::normalize_url( (string) $src );
+									if ( ( '' !== $od_lcp_normalized && $src_normalized === $od_lcp_normalized )
+									|| ( '' !== $candidate_lcp_normalized && $src_normalized === $candidate_lcp_normalized ) ) {
+										$should_exclude = true;
+									}
+								} catch ( \Throwable $e ) {
+									unset( $e );
+								}
+							}
+							if ( ! $should_exclude ) {
 								foreach ( $exclude_imgs as $exclude_img ) {
-									if ( false !== strpos( $src, $exclude_img ) ) {
+									if ( '' !== $exclude_img && false !== strpos( $src, $exclude_img ) ) {
 										$should_exclude = true;
 										break;
 									}

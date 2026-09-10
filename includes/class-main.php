@@ -3340,12 +3340,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * which emits exactly one `<link rel="preload" as="image"
 		 * fetchpriority="high">` per URL for the single RUM-field →
 		 * PageSpeed LCP candidate (issue #991; Optimization Detective stays
-		 * Priority 0), deduped by normalized URL + media with a per-request
-		 * emitted guard, and excludes that candidate from lazy load. Core 6.9
-		 * `fetchpriority` stamping is never double-applied (the stamp path
-		 * only fills gaps via `function_exists()`-guarded core calls). Manual
-		 * preload-image meta and the hero fallback remain when no RUM or
-		 * PageSpeed candidate resolves (fail-open).
+		 * Priority 0), deduped by normalized URL + query + media with a
+		 * per-request emitted guard, and excludes that candidate from lazy
+		 * load (gated on the LCP toggles, with normalized size-variant
+		 * matching). Core 6.9 `fetchpriority` stamping is never
+		 * double-applied (the stamp path only fills gaps via
+		 * `function_exists()`-guarded core calls). Manual preload-image meta
+		 * and the hero fallback remain when no RUM or PageSpeed candidate
+		 * resolves (fail-open).
 		 *
 		 * Runs on `wp_head` priority 1, before core resource-hints at
 		 * priority 2.

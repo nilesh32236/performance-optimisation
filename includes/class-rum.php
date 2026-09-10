@@ -793,8 +793,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 *
 		 * Field-measured RUM data wins when it passes the sample gate
 		 * (see {@see get_field_lcp_url()}); otherwise the stored PageSpeed
-		 * candidate for the current page is returned (synthesized as
+		 * candidate for the same page is returned (synthesized as
 		 * `array{url,n:0,lastSeen:now}` so callers share one shape).
+		 * The `$path` governs both lookups: the singular-post-meta and
+		 * front-page-option PageSpeed tiers are current-request context and
+		 * are only consulted when `$path` is null, while the transient tier
+		 * resolves by the given path (see {@see get_stored_pagespeed_lcp_url()}).
 		 * Returns null when neither resolves so callers fall through to the
 		 * manual preload-image meta / hero path. Fail-open: any failure
 		 * returns null, never fatal.
@@ -816,7 +820,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				unset( $e );
 			}
 			try {
-				$fallback = self::get_pagespeed_lcp_candidate();
+				$fallback = self::get_stored_pagespeed_lcp_url( $path );
 				if ( '' !== $fallback ) {
 					return array(
 						'url'      => $fallback,
@@ -856,25 +860,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		}
 
 		/**
-		 * Read-only lookup of the stored PageSpeed LCP candidate for the current page.
+		 * Read-only lookup of the stored PageSpeed LCP candidate for a page.
 		 *
-		 * Mirrors the PageSpeed priorities of the preload pipeline
-		 * (singular post meta `_wppo_lcp_image_url_{mobile,desktop}`, then
-		 * front-page option `wppo_front_page_lcp_{...}`, then the transient
-		 * keyed by strategy + current URL hash) without duplicating storage
-		 * logic. Multisite-safe via `Util::transient_key()` (blog-aware keys,
-		 * no cross-site leakage). Every WP API is guarded so unit contexts
-		 * without WP fail open to an empty string.
+		 * Single shared implementation of the PageSpeed priorities used by
+		 * both `get_lcp_preload_candidate()` and
+		 * `Image_Optimisation::get_current_lcp_url()` (singular post meta
+		 * `_wppo_lcp_image_url_{mobile,desktop}`, then front-page option
+		 * `wppo_front_page_lcp_{...}`, then the transient keyed by strategy
+		 * + URL hash) so strategy order and key formats cannot drift apart.
+		 * The post-meta and front-page tiers describe the current request and
+		 * are only consulted when `$path` is null; the transient tier always
+		 * applies, resolving the URL hash from the current URL by default or
+		 * from `home_url() + $path` for an explicit path (which therefore
+		 * never mixes two different pages). Multisite-safe via
+		 * `Util::transient_key()` (blog-aware keys, no cross-site leakage).
+		 * Every WP API is guarded so unit contexts without WP fail open to
+		 * an empty string.
 		 *
 		 * @since NEXT
+		 * @param string|null $path Page path (e.g. "/about/"). Defaults to the current request URL.
 		 * @return string The PageSpeed LCP image URL, or empty string when none is stored.
 		 */
-		private static function get_pagespeed_lcp_candidate(): string {
+		public static function get_stored_pagespeed_lcp_url( ?string $path = null ): string {
 			try {
 				$strategies = array( 'mobile', 'desktop' );
 
 				// Priority 1: Singular post — check post meta (mobile first, then desktop).
-				if ( function_exists( 'is_singular' ) && function_exists( 'get_the_ID' ) && function_exists( 'get_post_meta' ) ) {
+				// Current-request context only: an explicit path cannot be mapped to a post ID.
+				if ( null === $path && function_exists( 'is_singular' ) && function_exists( 'get_the_ID' ) && function_exists( 'get_post_meta' ) ) {
 					try {
 						if ( is_singular() ) {
 							$post_id = get_the_ID();
@@ -893,7 +906,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				}
 
 				// Priority 2: Front page — check option (mobile first, then desktop).
-				if ( function_exists( 'is_front_page' ) && function_exists( 'get_option' ) ) {
+				// Current-request context only, for the same reason as Priority 1.
+				if ( null === $path && function_exists( 'is_front_page' ) && function_exists( 'get_option' ) ) {
 					try {
 						if ( is_front_page() ) {
 							foreach ( $strategies as $strategy ) {
@@ -908,7 +922,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					}
 				}
 
-				// Priority 3: Transient keyed by strategy + current URL hash.
+				// Priority 3: Transient keyed by strategy + URL hash.
 				if ( ! function_exists( 'get_transient' ) ) {
 					return '';
 				}
@@ -919,12 +933,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					return '';
 				}
 				try {
-					$current_url = untrailingslashit( esc_url_raw( \PerformanceOptimise\Inc\Util::get_current_url() ) );
+					if ( null === $path ) {
+						$lookup_url = untrailingslashit( esc_url_raw( \PerformanceOptimise\Inc\Util::get_current_url() ) );
+					} else {
+						$norm_path  = \PerformanceOptimise\Inc\Util::normalize_rum_path( $path );
+						$lookup_url = untrailingslashit( esc_url_raw( \PerformanceOptimise\Inc\Util::cached_home_url() . $norm_path ) );
+					}
 				} catch ( \Throwable $e ) {
 					return '';
 				}
+				if ( '' === $lookup_url ) {
+					return '';
+				}
 				foreach ( $strategies as $strategy ) {
-					$transient_key = \PerformanceOptimise\Inc\Util::transient_key( 'wppo_lcp_url_' . $strategy . '_' . md5( $current_url ) );
+					$transient_key = \PerformanceOptimise\Inc\Util::transient_key( 'wppo_lcp_url_' . $strategy . '_' . md5( $lookup_url ) );
 					try {
 						$transient = get_transient( $transient_key );
 					} catch ( \Throwable $e ) {

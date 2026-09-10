@@ -1433,11 +1433,48 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 
 	/**
 	 * Test that the field-measured LCP candidate is excluded from lazy load
-	 * even when both LCP toggles are off.
+	 * when the fieldLcpOverride toggle is on.
 	 *
 	 * @since NEXT
 	 */
-	public function test_field_lcp_candidate_excluded_from_lazy_without_toggles(): void {
+	public function test_field_lcp_candidate_excluded_from_lazy_with_field_override(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'get_the_ID' )->justReturn( 0 );
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'esc_attr' )->returnArg();
+		Functions\when( 'esc_url' )->returnArg();
+		Functions\when( 'wp_kses' )->returnArg( 1 );
+		$this->stub_field_lcp_environment(
+			array( 'image_optimisation' => array( 'fieldLcpMinSamples' => 20 ) ),
+			$this->make_rum_aggregate( '/hero-page/', 'https://example.com/wp-content/uploads/field.jpg', 20, time() ),
+			''
+		);
+		$_SERVER['REQUEST_URI'] = '/hero-page/';
+
+		$options = $this->default_options;
+		$options['image_optimisation']['lazyLoadNative']   = false;
+		$options['image_optimisation']['placeholderType']  = 'none';
+		$options['image_optimisation']['fieldLcpOverride'] = true;
+		$image_opt = new Image_Optimisation( $options );
+
+		$html   = '<img src="https://example.com/wp-content/uploads/field.jpg" alt="hero"/><img src="https://example.com/below.jpg" alt="below"/>';
+		$result = $image_opt->add_delay_load_img( $html );
+
+		// The LCP candidate keeps its src (never data-src swapped).
+		$this->assertStringContainsString( 'src="https://example.com/wp-content/uploads/field.jpg"', $result );
+		$this->assertStringNotContainsString( 'data-src="https://example.com/wp-content/uploads/field.jpg"', $result );
+		// The below-fold image is still lazy-loaded.
+		$this->assertStringContainsString( 'data-src="https://example.com/below.jpg"', $result );
+	}
+
+	/**
+	 * Test that the field-measured LCP candidate is still lazy-loaded when
+	 * all LCP toggles are off (gated exclusion preserves default behaviour).
+	 *
+	 * @since NEXT
+	 */
+	public function test_field_lcp_candidate_lazy_loaded_when_toggles_off(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
 		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
 		Functions\when( 'get_the_ID' )->justReturn( 0 );
@@ -1457,13 +1494,70 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$options['image_optimisation']['placeholderType'] = 'none';
 		$image_opt                                        = new Image_Optimisation( $options );
 
-		$html   = '<img src="https://example.com/wp-content/uploads/field.jpg" alt="hero"/><img src="https://example.com/below.jpg" alt="below"/>';
+		$html   = '<img src="https://example.com/wp-content/uploads/field.jpg" alt="hero"/>';
 		$result = $image_opt->add_delay_load_img( $html );
 
-		// The LCP candidate keeps its src (never data-src swapped).
-		$this->assertStringContainsString( 'src="https://example.com/wp-content/uploads/field.jpg"', $result );
-		$this->assertStringNotContainsString( 'data-src="https://example.com/wp-content/uploads/field.jpg"', $result );
-		// The below-fold image is still lazy-loaded.
-		$this->assertStringContainsString( 'data-src="https://example.com/below.jpg"', $result );
+		// No LCP toggle is on, so the field hero follows the default lazy path.
+		$this->assertStringContainsString( 'data-src="https://example.com/wp-content/uploads/field.jpg"', $result );
+	}
+
+	/**
+	 * Test that a WordPress size variant of the LCP candidate is excluded
+	 * from lazy load via normalized matching.
+	 *
+	 * @since NEXT
+	 */
+	public function test_field_lcp_candidate_size_variant_excluded_from_lazy(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'get_the_ID' )->justReturn( 0 );
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'esc_attr' )->returnArg();
+		Functions\when( 'esc_url' )->returnArg();
+		Functions\when( 'wp_kses' )->returnArg( 1 );
+		$this->stub_field_lcp_environment(
+			array( 'image_optimisation' => array( 'fieldLcpMinSamples' => 20 ) ),
+			$this->make_rum_aggregate( '/hero-page/', 'https://example.com/wp-content/uploads/field.jpg', 20, time() ),
+			''
+		);
+		$_SERVER['REQUEST_URI'] = '/hero-page/';
+
+		$options = $this->default_options;
+		$options['image_optimisation']['lazyLoadNative']   = false;
+		$options['image_optimisation']['placeholderType']  = 'none';
+		$options['image_optimisation']['fieldLcpOverride'] = true;
+		$image_opt = new Image_Optimisation( $options );
+
+		$html   = '<img src="https://example.com/wp-content/uploads/field-300x200.jpg" alt="hero"/>';
+		$result = $image_opt->add_delay_load_img( $html );
+
+		// The size variant normalizes to the candidate, so it stays eager.
+		$this->assertStringContainsString( 'src="https://example.com/wp-content/uploads/field-300x200.jpg"', $result );
+		$this->assertStringNotContainsString( 'data-src="https://example.com/wp-content/uploads/field-300x200.jpg"', $result );
+	}
+
+	/**
+	 * Test that preload dedup keys keep query-string versions distinct while
+	 * collapsing scheme/relative variants of the same resource.
+	 *
+	 * @since NEXT
+	 */
+	public function test_preload_dedup_key_distinguishes_query_versions(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'home_url' )->justReturn( 'https://example.com' );
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+
+		$image_opt  = new Image_Optimisation( $this->default_options );
+		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'get_preload_dedup_key' );
+		$reflection->setAccessible( true );
+
+		$plain = $reflection->invoke( $image_opt, 'https://example.com/wp-content/uploads/hero.jpg', '' );
+		$https = $reflection->invoke( $image_opt, 'https://example.com/wp-content/uploads/hero.jpg', '' );
+		$v1    = $reflection->invoke( $image_opt, 'https://example.com/wp-content/uploads/hero.jpg?v=1', '' );
+		$v2    = $reflection->invoke( $image_opt, 'https://example.com/wp-content/uploads/hero.jpg?v=2', '' );
+
+		$this->assertSame( $plain, $https );
+		$this->assertNotSame( $v1, $v2 );
+		$this->assertNotSame( $plain, $v1 );
 	}
 }
