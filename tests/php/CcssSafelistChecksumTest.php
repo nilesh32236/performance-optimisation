@@ -1,6 +1,6 @@
 <?php
 /**
- * Tests for the Used/CSS user safelist + checksum auto-regen (issue #1038).
+ * Tests for the Used CSS and Critical CSS user safelist + checksum auto-regen (issue #1038).
  *
  * Covers the Critical CSS user safelist (`ccssSafelistExtra`), the
  * content-checksum helpers on both engines, the checksum-triggered refresh
@@ -48,8 +48,9 @@ class CcssSafelistChecksumTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Stub the WP functions used by the new helpers.
 	 *
-	 * Note: this setUp shadows the trait's setUp, so it replicates the
-	 * Brain Monkey bootstrap explicitly (see UsedCssHostTest).
+	 * Note: this setUp shadows the trait's setUp, so it mirrors the trait
+	 * bootstrap explicitly (see UsedCssHostTest): common stubs plus the
+	 * per-test cache resets the trait performs.
 	 *
 	 * @return void
 	 */
@@ -57,25 +58,32 @@ class CcssSafelistChecksumTest extends \PHPUnit\Framework\TestCase {
 		parent::setUp();
 		\Brain\Monkey\setUp();
 		$this->register_common_function_stubs();
+		Util::reset_cached_home_urls();
 		Util::clear_settings_cache();
+		Util::clear_permalink_cache();
+		if ( class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
+			\PerformanceOptimise\Inc\Critical_CSS::reset_ccss_memo();
+		}
+		if ( class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
+			\PerformanceOptimise\Inc\CDN::reset_cache();
+		}
+		if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
+			\PerformanceOptimise\Inc\LiteSpeed_Crawler::reset_cache();
+		}
+		if ( class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) && method_exists( 'PerformanceOptimise\Inc\AI_Adaptive', 'reset_disabled_assets_cache' ) ) {
+			\PerformanceOptimise\Inc\AI_Adaptive::reset_disabled_assets_cache();
+		}
 
 		$this->option_map    = array();
 		$this->transient_map = array();
 		$this->http_calls    = 0;
 
-		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
-		Functions\when( 'wp_normalize_path' )->alias(
-			static function ( $path ) {
-				$path = str_replace( '\\', '/', (string) $path );
-				return preg_replace( '|(?<=.)/+|', '/', $path );
-			}
-		);
-		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
 		Functions\when( 'apply_filters' )->returnArg( 2 );
 		Functions\when( 'add_action' )->justReturn( true );
+		Functions\when( 'untrailingslashit' )->returnArg();
+		Functions\when( 'trailingslashit' )->returnArg();
 		Functions\when( 'has_filter' )->justReturn( false );
 		Functions\when( 'is_multisite' )->justReturn( false );
-		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
 		Functions\when( 'is_front_page' )->justReturn( true );
 		Functions\when( 'is_home' )->justReturn( false );
 		Functions\when( 'is_singular' )->justReturn( false );
@@ -138,6 +146,9 @@ class CcssSafelistChecksumTest extends \PHPUnit\Framework\TestCase {
 	 */
 	protected function tearDown(): void {
 		unset( $GLOBALS['wp_styles'] );
+		if ( class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
+			\PerformanceOptimise\Inc\Critical_CSS::reset_ccss_memo();
+		}
 		\Brain\Monkey\tearDown();
 		if ( class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			\PerformanceOptimise\Inc\Main::reset_instance();
@@ -245,11 +256,16 @@ class CcssSafelistChecksumTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * The refresh helper uses local reads only and drops stale variants.
 	 *
+	 * Uses a unique hash per run so parallel runs or leftover files from a
+	 * prior aborted run cannot collide; CCSS memo is reset around the
+	 * file-drop assertion.
+	 *
 	 * @return void
 	 */
 	public function test_refresh_from_local_css_drops_stale_without_remote_fetch(): void {
-		$hash = 'safelistrefreshlocal00001';
-		$dir  = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/ccss' );
+		$hash = 'safelistrefresh' . substr( md5( uniqid( 'wppo', true ) ), 0, 8 );
+		Critical_CSS::reset_ccss_memo();
+		$dir = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/ccss' );
 		if ( ! is_dir( $dir ) ) {
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
 			mkdir( $dir, 0775, true );
@@ -259,8 +275,11 @@ class CcssSafelistChecksumTest extends \PHPUnit\Framework\TestCase {
 		file_put_contents( $file, 'body{margin:0}' );
 
 		try {
-			// Baseline the checksum for the original source.
-			Critical_CSS::store_source_checksum( $hash, $this->invoke_private( 'extract_above_fold_css', 'body{margin:0}' ) );
+			// Baseline the checksum for the original source in the canonical
+			// (minified) domain that maybe_refresh_from_local_css() hashes.
+			$baseline = $this->invoke_private( 'extract_above_fold_css', 'body{margin:0}' );
+			$minifier = new \MatthiasMullie\Minify\CSS( $baseline );
+			Critical_CSS::store_source_checksum( $hash, $minifier->minify() );
 
 			// Unchanged source: fresh, file kept.
 			$this->assertFalse( Critical_CSS::maybe_refresh_from_local_css( $hash, 'body{margin:0}' ) );
@@ -273,6 +292,7 @@ class CcssSafelistChecksumTest extends \PHPUnit\Framework\TestCase {
 			// No remote fetch happened anywhere in the helper path.
 			$this->assertSame( 0, $this->http_calls );
 		} finally {
+			Critical_CSS::reset_ccss_memo();
 			if ( file_exists( $file ) ) {
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
 				unlink( $file );
@@ -281,11 +301,15 @@ class CcssSafelistChecksumTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Safelisted output still honours the 20 KB inline cap.
+	 * The truncate_to_cap() helper cuts at a rule boundary under the cap.
+	 *
+	 * Helper-scope coverage for the cap boundary: safelisted output flowing
+	 * through inline_ccss() file-first + 20 KB cap delivery is exercised by
+	 * the production path, not asserted here.
 	 *
 	 * @return void
 	 */
-	public function test_safelisted_output_honours_inline_cap(): void {
+	public function test_truncate_to_cap_boundary(): void {
 		$rule = '.modal-open{display:block}';
 		$big  = str_repeat( $rule, 2000 );
 
@@ -339,5 +363,139 @@ class CcssSafelistChecksumTest extends \PHPUnit\Framework\TestCase {
 		$GLOBALS['wp_styles'] = null;
 		$this->assertSame( '', $used_css->compute_local_source_checksum() );
 		$this->assertSame( 0, $this->http_calls );
+	}
+
+	/**
+	 * A single-character safelist entry keeps only its exact selector.
+	 *
+	 * Guards the substring-fallback narrowing: 'p' must not keep every
+	 * rule via stripos, while the exact 'p' selector still matches.
+	 *
+	 * @return void
+	 */
+	public function test_short_safelist_entry_does_not_keep_everything(): void {
+		$this->option_map['wppo_settings'] = array(
+			'file_optimisation' => array(
+				'ccssSafelistExtra' => 'p',
+			),
+		);
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+
+		$this->assertTrue( Critical_CSS::matches_ccss_safelist( 'p' ) );
+		$this->assertFalse( Critical_CSS::matches_ccss_safelist( '.random-widget-xyz' ) );
+		$this->assertFalse( Critical_CSS::matches_ccss_safelist( '.page-title' ) );
+	}
+
+	/**
+	 * Rogue filter output degrades to ignored entries instead of a fatal.
+	 *
+	 * @return void
+	 */
+	public function test_ccss_safelist_filter_ignores_non_string_entries(): void {
+		Functions\when( 'has_filter' )->alias(
+			static function ( $hook ) {
+				return 'wppo_ccss_safelist' === $hook;
+			}
+		);
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook, $value ) {
+				if ( 'wppo_ccss_safelist' === $hook ) {
+					return array( ' .keep-me ', array( 'nested' ), 123, null, new \stdClass() );
+				}
+				return $value;
+			}
+		);
+
+		$this->assertSame( array( '.keep-me' ), Critical_CSS::get_ccss_safelist() );
+		$this->assertTrue( Critical_CSS::matches_ccss_safelist( '.keep-me' ) );
+		$this->assertFalse( Critical_CSS::matches_ccss_safelist( '.random-widget-xyz' ) );
+	}
+
+	/**
+	 * Used-CSS checksum sidecar lifecycle: persist, fresh, then stale.
+	 *
+	 * Stages a real local stylesheet under ABSPATH plus a wp_styles queue
+	 * entry, persists the sidecar via reflection, and asserts the
+	 * fresh-vs-stale verdicts (no remote fetch anywhere).
+	 *
+	 * @return void
+	 */
+	public function test_used_css_checksum_sidecar_lifecycle(): void {
+		$css_dir  = WP_CONTENT_DIR . '/themes/wppo-safelist-fixture';
+		$css_file = $css_dir . '/style.css';
+		if ( ! is_dir( $css_dir ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
+			mkdir( $css_dir, 0775, true );
+		}
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+		file_put_contents( $css_file, 'a{color:red}' );
+
+		$used_css             = new Used_CSS( array() );
+		$styles               = new \stdClass();
+		$entry                = new \stdClass();
+		$entry->src           = 'http://example.com/wp-content/themes/wppo-safelist-fixture/style.css';
+		$styles->queue        = array( 'wppo-fixture-style' );
+		$styles->registered   = array( 'wppo-fixture-style' => $entry );
+		$GLOBALS['wp_styles'] = $styles;
+
+		$used_css_path = $used_css->get_used_css_path( 'http://example.com/safelist-sidecar-page/' );
+
+		$get_checksum = new \ReflectionMethod( Used_CSS::class, 'get_checksum_path' );
+		$get_checksum->setAccessible( true );
+		$is_stale = new \ReflectionMethod( Used_CSS::class, 'is_checksum_stale' );
+		$is_stale->setAccessible( true );
+		$persist = new \ReflectionMethod( Used_CSS::class, 'persist_source_checksum' );
+		$persist->setAccessible( true );
+
+		try {
+			$this->assertNotSame( '', $used_css_path );
+
+			// The page cache directory does not exist yet: create it so the
+			// sidecar fallback write (WP_Filesystem unavailable in tests)
+			// has a directory to land in.
+			$page_dir = dirname( $used_css_path );
+			if ( ! is_dir( $page_dir ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
+				mkdir( $page_dir, 0775, true );
+			}
+
+			// No sidecar yet: fail-open fresh (mtime verdict stands).
+			$this->assertFalse( $is_stale->invoke( $used_css, $used_css_path ) );
+
+			$persist->invoke( $used_css, $used_css_path );
+			$sidecar = $get_checksum->invoke( $used_css, $used_css_path );
+			$this->assertNotSame( '', $sidecar );
+			$this->assertFileExists( $sidecar );
+
+			// Baseline matches: fresh.
+			$used_css->reset_source_checksum_memo();
+			$this->assertFalse( $is_stale->invoke( $used_css, $used_css_path ) );
+
+			// Content edit (mtime may be preserved on deploy sync): stale.
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+			file_put_contents( $css_file, 'a{color:blue}' );
+			$used_css->reset_source_checksum_memo();
+			$this->assertTrue( $is_stale->invoke( $used_css, $used_css_path ) );
+
+			$this->assertSame( 0, $this->http_calls );
+		} finally {
+			unset( $GLOBALS['wp_styles'] );
+			if ( isset( $sidecar ) && is_string( $sidecar ) && file_exists( $sidecar ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+				unlink( $sidecar );
+			}
+			if ( file_exists( $css_file ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+				unlink( $css_file );
+			}
+			if ( is_dir( $css_dir ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Test fixture cleanup.
+				rmdir( $css_dir );
+			}
+			if ( isset( $page_dir ) && is_dir( $page_dir ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Test fixture cleanup.
+				rmdir( $page_dir );
+			}
+		}
 	}
 }

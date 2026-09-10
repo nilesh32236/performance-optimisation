@@ -176,6 +176,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		private static bool $traversal_probe_logged = false;
 
 		/**
+		 * Memoized local-source checksum for this instance (issue #1038).
+		 *
+		 * The freshness probe runs full-content local reads; memoizing per
+		 * instance keeps repeated cache-hit calls to a single capped pass.
+		 *
+		 * @since NEXT
+		 * @var string|null Null when not yet computed.
+		 */
+		private ?string $source_checksum_memo = null;
+
+		/**
 		 * Constructor.
 		 *
 		 * @param array $options Plugin options.
@@ -1207,24 +1218,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		}
 
 		/**
-		 * Content checksum of CSS source (issue #1038).
+		 * Stable content hash of CSS source (issue #1038).
 		 *
 		 * Pure local string hash — never fetches remotely. Used to detect
 		 * stylesheet edits that preserve mtime (deploy sync, minify rebuild
-		 * in the same second) so stale used-CSS regenerates.
+		 * in the same second) so stale used-CSS regenerates. SHA-256 is
+		 * stable across installs and salt rotations, matching the `.sha256`
+		 * sidecar extension.
 		 *
 		 * @param string $css CSS content.
-		 * @return string MD5 checksum, or '' for empty input.
+		 * @return string SHA-256 checksum, or '' for empty input.
 		 * @since NEXT
 		 */
 		public function compute_css_checksum( string $css ): string {
 			if ( '' === $css ) {
 				return '';
 			}
-			if ( function_exists( 'wp_hash' ) ) {
-				return (string) wp_hash( $css );
-			}
-			return md5( $css );
+			return hash( 'sha256', $css );
 		}
 
 		/**
@@ -1253,20 +1263,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * Combined checksum of the locally-available queued stylesheets.
 		 *
 		 * Reads local files only via `Util::get_local_path()` — never
-		 * fetches remotely. Fail-open: any unreadable input yields '' (no
-		 * checksum signal, the mtime verdict stands).
+		 * fetches remotely. Bounded and order-stable: handles are sorted
+		 * (queue reorder alone never triggers regen), hashed incrementally
+		 * (no unbounded concatenation), capped at 20 files / 512 KB per
+		 * file / 2 MB total — exceeding a cap yields '' (no checksum signal,
+		 * the mtime verdict stands). The verdict is memoized per instance so
+		 * repeated cache-hit calls cost one pass. Fail-open: any unreadable
+		 * input yields ''.
 		 *
 		 * @return string Combined checksum, or '' when unavailable.
 		 * @since NEXT
 		 */
 		public function compute_local_source_checksum(): string {
+			if ( null !== $this->source_checksum_memo ) {
+				return $this->source_checksum_memo;
+			}
 			global $wp_styles;
 			if ( ! $wp_styles || empty( $wp_styles->queue ) ) {
+				$this->source_checksum_memo = '';
 				return '';
 			}
 			try {
-				$combined = '';
-				foreach ( $wp_styles->queue as $handle ) {
+				$handles = array_values( array_unique( array_map( 'strval', (array) $wp_styles->queue ) ) );
+				sort( $handles );
+				$ctx   = hash_init( 'sha256' );
+				$count = 0;
+				$total = 0;
+				foreach ( $handles as $handle ) {
+					if ( $count >= 20 || $total >= 2097152 ) {
+						break;
+					}
 					if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
 						continue;
 					}
@@ -1278,18 +1304,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					if ( '' === $local_path || ! file_exists( $local_path ) ) {
 						continue;
 					}
+					$size = filesize( $local_path );
+					if ( false === $size || $size <= 0 || $size > 524288 ) {
+						continue;
+					}
 					// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local cache-freshness read only, never remote.
 					$content = file_get_contents( $local_path );
 					if ( ! is_string( $content ) || '' === $content ) {
 						continue;
 					}
-					$combined .= $content . "\n";
+					hash_update( $ctx, substr( $content, 0, 524288 ) . "\n" );
+					$total += min( strlen( $content ), 524288 ) + 1;
+					++$count;
 				}
-				return $this->compute_css_checksum( $combined );
+				if ( 0 === $count ) {
+					$this->source_checksum_memo = '';
+					return '';
+				}
+				$this->source_checksum_memo = hash_final( $ctx );
+				return $this->source_checksum_memo;
 			} catch ( \Throwable $e ) {
 				unset( $e );
+				$this->source_checksum_memo = '';
 				return '';
 			}
+		}
+
+		/**
+		 * Reset the memoized local-source checksum.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public function reset_source_checksum_memo(): void {
+			$this->source_checksum_memo = null;
 		}
 
 		/**

@@ -88,7 +88,10 @@ const FileOptimization = ( {
 		enableServerRules: false,
 		criticalCSS: false,
 		ccssMaxSize: options.ccssMaxSize || 20480,
-		ccssSafelistExtra: options.ccssSafelistExtra || '',
+		ccssSafelistExtra:
+			typeof options.ccssSafelistExtra === 'string'
+				? options.ccssSafelistExtra
+				: '',
 		hostGoogleFontsLocally: false,
 		fontMetricFallback: false,
 		cdnURL: '',
@@ -261,7 +264,21 @@ const FileOptimization = ( {
 		if ( ! options || Object.keys( options ).length === 0 ) {
 			return;
 		}
-		setSettings( ( prev ) => ( { ...prev, ...options } ) );
+		setSettings( ( prev ) => {
+			const next = { ...prev, ...options };
+			// String-guard textarea-backed keys so a corrupted non-string
+			// payload cannot reach a controlled textarea value.
+			if ( typeof next.delayJSExcludeUrls !== 'string' ) {
+				next.delayJSExcludeUrls = '';
+			}
+			if ( typeof next.usedCSSExcludeUrls !== 'string' ) {
+				next.usedCSSExcludeUrls = '';
+			}
+			if ( typeof next.ccssSafelistExtra !== 'string' ) {
+				next.ccssSafelistExtra = '';
+			}
+			return next;
+		} );
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [
 		options.minifyJS,
@@ -1145,7 +1162,10 @@ const FileOptimization = ( {
 													'performance-optimisation'
 												) }
 												value={
-													settings.ccssSafelistExtra
+													typeof settings.ccssSafelistExtra ===
+													'string'
+														? settings.ccssSafelistExtra
+														: ''
 												}
 												onChange={ handleChange(
 													setSettings
