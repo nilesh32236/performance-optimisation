@@ -285,7 +285,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'enabled' => false,
 				),
 				'ai_adaptive'           => array(
-					'enabled' => false,
+					'enabled'          => false,
+					'use_wp_ai_client' => false,
 				),
 				'edge_cache'            => array(
 					'enabled' => false,

@@ -79,7 +79,19 @@ const SuggestionIcon = ( { status } ) => {
  * @param {string} unit  Unit label.
  * @return {string} Formatted display string.
  */
-const formatValue = ( value, unit ) => {
+export const formatValue = ( value, unit ) => {
+	if ( value === null || value === undefined ) {
+		return '—';
+	}
+	if ( unit === 'list' ) {
+		if ( Array.isArray( value ) ) {
+			return value.join( ', ' );
+		}
+		return String( value );
+	}
+	if ( unit === 'string' ) {
+		return String( value );
+	}
 	if ( unit === 'boolean' ) {
 		return value === 'pass'
 			? __( 'Passing', 'performance-optimisation' )

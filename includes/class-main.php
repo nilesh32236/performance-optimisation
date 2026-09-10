@@ -329,6 +329,9 @@ if ( ! isset( $this->options['image_optimisation']['avifFirst'] ) ) {
 			if ( ! isset( $this->options['ai_adaptive']['enabled'] ) ) {
 				$this->options['ai_adaptive']['enabled'] = false;
 			}
+			if ( ! isset( $this->options['ai_adaptive']['use_wp_ai_client'] ) ) {
+				$this->options['ai_adaptive']['use_wp_ai_client'] = false;
+			}
 
 			if ( ! isset( $this->options['edge_cache'] ) || ! is_array( $this->options['edge_cache'] ) ) {
 				$this->options['edge_cache'] = array();
