@@ -1995,6 +1995,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							} elseif ( null === $tags->get_attribute( 'fetchpriority' ) ) {
 								$tags->set_attribute( 'fetchpriority', 'low' );
 							}
+							// Stored-XSS note (issue #967): passed raw on purpose —
+							// WP_HTML_Tag_Processor escapes attribute values on
+							// get_updated_html(), so pre-escaping here would
+							// double-encode. The client additionally validates
+							// data-src via isSafeSubresourceUrl before restoring.
 							$tags->set_attribute( 'data-src', $original_src_decoded );
 
 							// WP_HTML_Tag_Processor blocks data: URIs in src for security.
@@ -2003,9 +2008,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 								$placeholder = $this->get_placeholder_src_for_image( $img_tag, $original_src_decoded );
 								if ( ! empty( $placeholder['src'] ) ) {
 									$serialized = $tags->get_updated_html();
-									$img_tag    = preg_replace(
+									// Stored-XSS hardening (issue #967): the placeholder is
+									// re-emitted via raw string concatenation (Tag
+									// Processor blocks data: URIs in src), so escape
+									// at emit — set_attribute() paths below are
+									// escaped by Tag Processor on serialize and
+									// must stay raw to avoid double-encoding.
+									$placeholder_src = function_exists( 'esc_attr' ) ? esc_attr( $placeholder['src'] ) : $placeholder['src'];
+									$img_tag         = preg_replace(
 										'#(?<!data-)src=(["\'])[^"\']*\1#i',
-										'src="' . $placeholder['src'] . '"',
+										'src="' . $placeholder_src . '"',
 										$serialized,
 										1
 									);
@@ -2324,7 +2336,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$video_type             = false !== strpos( $original_src, 'youtube-nocookie.com' ) ? 'youtube-nocookie' : 'youtube';
 			$thumbnail_url          = 'https://img.youtube.com/vi/' . $video_id . '/maxresdefault.jpg';
 			$fallback_thumbnail_url = 'https://img.youtube.com/vi/' . $video_id . '/hqdefault.jpg';
-			$noscript_iframe        = '<noscript>' . $iframe_tag . '</noscript>';
+			// Stored-XSS note (issue #967): the noscript fallback re-emits the
+			// source-buffer iframe tag verbatim (not a stored setting) so
+			// no-JS visitors keep a working embed; all generated wrapper
+			// attributes above/below are esc_url/esc_attr escaped.
+			$noscript_iframe = '<noscript>' . $iframe_tag . '</noscript>';
 
 			$play_button = '<button type="button" class="wppo-video-play-btn" aria-label="' . esc_attr__( 'Play video', 'performance-optimisation' ) . '">
 				<svg aria-hidden="true" focusable="false" width="68" height="48" viewBox="0 0 68 48">
@@ -2335,7 +2351,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 			$play_button = apply_filters( 'wppo_video_play_button_html', $play_button, $video_id, $video_type );
 
-			$attrs_to_store = array( 'id', 'class', 'width', 'height', 'sandbox', 'referrerpolicy', 'title', 'style', 'name', 'frameborder', 'allow', 'allowfullscreen' );
+			// Stored attrs mirror the client IFRAME_ATTR_ALLOWLIST exactly:
+			// src/width/height/style are owned by the placeholder (the client
+			// sets its own geometry and fullscreen defaults), so storing them
+			// would only ship dead payload bytes the client never restores.
+			$attrs_to_store = array( 'id', 'class', 'sandbox', 'referrerpolicy', 'title', 'name', 'frameborder', 'allow', 'allowfullscreen' );
 			$stored_attrs   = array();
 
 			if ( class_exists( 'WP_HTML_Tag_Processor' ) ) {
@@ -2420,6 +2440,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			if ( class_exists( 'WP_HTML_Tag_Processor' ) ) {
 				$tags = new \WP_HTML_Tag_Processor( $iframe_tag );
 				if ( $tags->next_tag( array( 'tag_name' => 'iframe' ) ) ) {
+					// Stored-XSS note (issue #967): passed raw on purpose —
+					// Tag Processor escapes on get_updated_html(); the client
+					// validates data-src via isSafeSubresourceUrl before
+					// restoring it into a live iframe src.
 					$tags->set_attribute( 'data-src', $original_src );
 					$tags->remove_attribute( 'src' );
 					$tags->add_class( 'wppo-lazyload' );
@@ -2427,11 +2451,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 			} else {
 				// Regex fallback.
-				// Replace src with data-src using regex to handle cases where src might be the first attribute or have different spacing.
-				$iframe_tag = preg_replace( '/\bsrc=["\']([^"\']+)["\']/i', 'data-src="$1"', $iframe_tag );
+				// Replace src with data-src. Stored-XSS hardening (issue #967):
+				// escape the captured value at emit so a hostile stored src
+				// (e.g. 'x" onload="alert(1)') can never break out of markup.
+				// The Tag-Processor path above needs no escaping here because
+				// set_attribute() escapes on get_updated_html().
+				$iframe_tag = (string) preg_replace_callback(
+					'/\bsrc=["\']([^"\']+)["\']/i',
+					static function ( $matches ) {
+						// Decode first (mirrors the img regex-fallback path),
+						// then escape at emit so the round-trip is exact and a
+						// hostile stored src can never break out of markup.
+						$value = htmlspecialchars_decode( $matches[1], ENT_QUOTES );
+						$value = function_exists( 'esc_attr' ) ? esc_attr( $value ) : $value;
+						return 'data-src="' . $value . '"';
+					},
+					$iframe_tag
+				);
 
 				if ( preg_match( '/class=["\']([^"\']+)["\']/', $iframe_tag, $class_matches ) ) {
-					$iframe_tag = str_replace( $class_matches[0], 'class="' . $class_matches[1] . ' wppo-lazyload"', $iframe_tag );
+					$class_value   = htmlspecialchars_decode( $class_matches[1], ENT_QUOTES );
+					$class_escaped = function_exists( 'esc_attr' ) ? esc_attr( $class_value ) : $class_value;
+					$iframe_tag    = str_replace( $class_matches[0], 'class="' . $class_escaped . ' wppo-lazyload"', $iframe_tag );
 				} else {
 					$iframe_tag = preg_replace( '/<iframe\b/i', '<iframe class="wppo-lazyload"', $iframe_tag );
 				}

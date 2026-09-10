@@ -378,7 +378,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 				add_action(
 					'wp_footer',
 					static function () use ( $js ) {
-						echo '<script id="wppo-bfcache-invalidation">' . $js . '</script>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+						// Stored-XSS note (issue #967): $js is a static literal
+						// with zero interpolation — both dynamic values are
+						// embedded as JSON_HEX_* tag-safe JSON above, so the
+						// legacy pre-6.0 fallback needs no escaper.
+						echo '<script id="wppo-bfcache-invalidation">' . $js . '</script>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Static literal; dynamic values embedded as JSON_HEX_* tag-safe JSON.
 					},
 					20
 				);
