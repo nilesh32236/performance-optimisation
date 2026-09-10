@@ -1686,11 +1686,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			$sql  = implode( ' UNION ALL ', $selects );
 			$rows = $wpdb->get_results( $sql, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Each fragment with placeholders is prepared above; the rest are static.
 
-			// Distinguish a DB failure (false/null) from a legitimately empty
-			// result (array()). On failure the all-zero counts are returned for
-			// this request but NOT cached, so a transient error is retried on
-			// the next request instead of serving stale zeros for 5 minutes.
-			$query_failed = ! is_array( $rows );
+			// Distinguish a DB failure (false/null, or a drop-in that reports
+			// via $wpdb->last_error while returning an empty array) from a
+			// legitimately empty result (array()). On failure the all-zero
+			// counts are returned for this request but NOT cached, so a
+			// transient error is retried on the next request instead of
+			// serving stale zeros for 5 minutes.
+			$query_failed = ! is_array( $rows ) || ( '' !== trim( (string) ( $wpdb->last_error ?? '' ) ) );
 
 			$totals = array(
 				'revisions'          => 0,

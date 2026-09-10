@@ -64,8 +64,14 @@ const FileOptimization = ( {
 			options.delayJSCommercePreset !== undefined
 				? options.delayJSCommercePreset
 				: true,
-		delayJSExcludeUrls: options.delayJSExcludeUrls || '',
-		usedCSSExcludeUrls: options.usedCSSExcludeUrls || '',
+		delayJSExcludeUrls:
+			typeof options.delayJSExcludeUrls === 'string'
+				? options.delayJSExcludeUrls
+				: '',
+		usedCSSExcludeUrls:
+			typeof options.usedCSSExcludeUrls === 'string'
+				? options.usedCSSExcludeUrls
+				: '',
 		delayJSIdleList: options.delayJSIdleList || '',
 		delayJSViewportList: options.delayJSViewportList || '',
 		delayJSPriority: options.delayJSPriority || '',
@@ -121,6 +127,18 @@ const FileOptimization = ( {
 		...options,
 	};
 
+	// String-guard textarea-backed keys AFTER the spread so a non-string
+	// truthy payload (e.g. array from corrupted settings) cannot flow into
+	// a controlled textarea value via the ...options override above.
+	defaultSettings.delayJSExcludeUrls =
+		typeof options.delayJSExcludeUrls === 'string'
+			? options.delayJSExcludeUrls
+			: '';
+	defaultSettings.usedCSSExcludeUrls =
+		typeof options.usedCSSExcludeUrls === 'string'
+			? options.usedCSSExcludeUrls
+			: '';
+
 	const [ settings, setSettings ] = useState( defaultSettings );
 	const [ isLoading, setIsLoading ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
@@ -129,7 +147,18 @@ const FileOptimization = ( {
 	// Baseline is intentionally derived per-key (not per-object-identity)
 	// so parent re-renders with an identical payload do not reset the form.
 	useEffect( () => {
-		setBaseline( { ...defaultSettings, ...options } );
+		setBaseline( {
+			...defaultSettings,
+			...options,
+			delayJSExcludeUrls:
+				typeof options.delayJSExcludeUrls === 'string'
+					? options.delayJSExcludeUrls
+					: '',
+			usedCSSExcludeUrls:
+				typeof options.usedCSSExcludeUrls === 'string'
+					? options.usedCSSExcludeUrls
+					: '',
+		} );
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [
 		options.minifyJS,

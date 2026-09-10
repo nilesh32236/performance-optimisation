@@ -376,7 +376,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 * @return string|null Restored script HTML, or null on anomaly.
 		 */
 		private function resolve_preserved_script( string $token, array $scripts ): ?string {
-			if ( 1 !== preg_match( '~^<script\s+data-wppo-preserve=(["\'])([A-Za-z0-9_-]+)-(\d+)\1\s*></script>$~', $token, $matches ) ) {
+			if ( 1 !== preg_match( '~^<script\s+data-wppo-preserve=(["\'])([A-Za-z0-9_-]+)-(\d+)\1\s*></script>$~i', $token, $matches ) ) {
 				return null;
 			}
 

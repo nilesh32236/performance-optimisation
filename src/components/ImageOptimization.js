@@ -37,6 +37,28 @@ const DEFAULT_CLIENT_SIDE_MIME_TYPES = [
 	'image/avif',
 ];
 
+/**
+ * Coerce the longest-edge cap to a non-negative integer.
+ *
+ * Mirrors the PHP sanitizer (2560 default, 0 disables): negatives,
+ * fractions, '' or non-numeric payloads never stay in state.
+ *
+ * @since NEXT
+ * @param {*}      value    Raw option value.
+ * @param {number} fallback Fallback when unparseable.
+ * @return {number} Coerced integer >= 0.
+ */
+const coerceLongestEdge = ( value, fallback ) => {
+	if ( Array.isArray( value ) ) {
+		return fallback;
+	}
+	const num = Number( value );
+	if ( ! Number.isFinite( num ) ) {
+		return fallback;
+	}
+	return Math.max( 0, Math.trunc( num ) );
+};
+
 const ImageOptimization = ( { options = {} } ) => {
 	const defaultSettings = {
 		lazyLoadImages: false,
@@ -73,6 +95,13 @@ const ImageOptimization = ( { options = {} } ) => {
 			( options.replacePlaceholderWithSVG ? 'svg' : 'none' ),
 	};
 
+	// Coerce AFTER the spread so a corrupt non-numeric payload cannot flow
+	// into state via the ...options override above (PHP sanitizes to 2560/0).
+	defaultSettings.maxLongestEdgePx = coerceLongestEdge(
+		options.maxLongestEdgePx,
+		2560
+	);
+
 	const [ settings, setSettings ] = useState( defaultSettings );
 
 	useEffect( () => {
@@ -82,6 +111,10 @@ const ImageOptimization = ( { options = {} } ) => {
 		setSettings( ( prev ) => ( {
 			...prev,
 			...options,
+			maxLongestEdgePx: coerceLongestEdge(
+				options.maxLongestEdgePx,
+				prev.maxLongestEdgePx ?? 2560
+			),
 			placeholderType:
 				options.placeholderType ??
 				( options.replacePlaceholderWithSVG ? 'svg' : 'none' ),
@@ -138,6 +171,10 @@ const ImageOptimization = ( { options = {} } ) => {
 		setBaseline( {
 			...defaultSettings,
 			...options,
+			maxLongestEdgePx: coerceLongestEdge(
+				options.maxLongestEdgePx,
+				defaultSettings.maxLongestEdgePx ?? 2560
+			),
 			placeholderType:
 				options.placeholderType ??
 				( options.replacePlaceholderWithSVG ? 'svg' : 'none' ),

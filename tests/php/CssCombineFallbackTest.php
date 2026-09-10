@@ -289,6 +289,13 @@ class CssCombineFallbackTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertStringContainsString( 'wppo-used-css', $result );
 		$this->assertStringContainsString( 'rel="preload"', $result );
+		// The live same-URL stylesheet tag is stripped (the <noscript>
+		// fallback still carries the URL; strip it before asserting the
+		// live markup). The injected wppo-used-css link itself carries
+		// rel="stylesheet", so assert on the original href instead.
+		$without_noscript = preg_replace( '#<noscript>.*?</noscript>#s', '', $result );
+		$this->assertIsString( $without_noscript );
+		$this->assertStringNotContainsString( '<link rel="stylesheet" href="' . $src . '"', $without_noscript );
 	}
 
 	/**
@@ -340,6 +347,7 @@ class CssCombineFallbackTest extends \PHPUnit\Framework\TestCase {
 		// The stylesheet tag itself is gone (the <noscript> fallback still
 		// carries the URL; strip it before asserting the live markup).
 		$without_noscript = preg_replace( '#<noscript>.*?</noscript>#s', '', $result );
+		$this->assertIsString( $without_noscript );
 		$this->assertStringNotContainsString( '<link rel="stylesheet" href="' . $src . '" media="all">', $without_noscript ); // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet
 	}
 

@@ -170,6 +170,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 					return;
 				}
 
+				let signal = null;
 				try {
 					// Polls are strictly sequential: the next tick is only
 					// scheduled after the previous await settles, so the
@@ -177,13 +178,14 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 					// needs no abort here. A fresh controller per tick keeps
 					// stopPolling()/unmount able to cancel the in-flight poll.
 					pollSignalRef.current = new AbortController();
-					const signal = pollSignalRef.current.signal;
+					signal = pollSignalRef.current.signal;
 					const response = await getPagespeedResults(
 						scanUrl,
 						scanStrategy,
 						signal
 					);
 					if ( signal.aborted ) {
+						pollSignalRef.current = null;
 						return;
 					}
 
@@ -230,10 +232,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 					if ( err?.name === 'AbortError' ) {
 						return;
 					}
-					if (
-						pollSignalRef.current &&
-						pollSignalRef.current.signal.aborted
-					) {
+					if ( signal && signal.aborted ) {
 						return;
 					}
 					stopPolling();
@@ -269,6 +268,10 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 		try {
 			const response = await queuePagespeedScan( url, strategy );
 
+			if ( ! isMounted.current ) {
+				submittingRef.current = false;
+				return;
+			}
 			if ( ! response.success ) {
 				setScanning( false );
 				submittingRef.current = false;
@@ -289,8 +292,11 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 			submittingRef.current = false;
 			pollForResults( url, strategy );
 		} catch ( err ) {
-			setScanning( false );
 			submittingRef.current = false;
+			if ( ! isMounted.current ) {
+				return;
+			}
+			setScanning( false );
 			notify( {
 				type: 'error',
 				message: __(

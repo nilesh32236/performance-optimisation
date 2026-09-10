@@ -4,6 +4,7 @@ import {
 	useEffect,
 	useCallback,
 	useContext,
+	useRef,
 } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
@@ -174,6 +175,9 @@ const DatabaseCleanup = ( { options = {} } ) => {
 			setLoadingCounts( true );
 			try {
 				const data = await getDbCounts( signal );
+				if ( signal?.aborted ) {
+					return;
+				}
 				setCounts( data );
 			} catch ( error ) {
 				if ( error?.name === 'AbortError' || signal?.aborted ) {
@@ -185,10 +189,12 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				);
 				notify( {
 					type: 'error',
-					message: __(
-						'Failed to load counts.',
-						'performance-optimisation'
-					),
+					message:
+						error?.message ||
+						__(
+							'Failed to load counts.',
+							'performance-optimisation'
+						),
 					durationMs: 5000,
 				} );
 			} finally {
@@ -200,11 +206,20 @@ const DatabaseCleanup = ( { options = {} } ) => {
 		[ notify ]
 	);
 
+	const refetchControllerRef = useRef( null );
 	useEffect( () => {
 		const controller = new AbortController();
 		fetchCounts( controller.signal );
 		return () => controller.abort();
 	}, [ fetchCounts ] );
+	useEffect( () => {
+		return () => {
+			if ( refetchControllerRef.current ) {
+				refetchControllerRef.current.abort();
+				refetchControllerRef.current = null;
+			}
+		};
+	}, [] );
 
 	const onSubmitSettings = async ( e ) => {
 		if ( e ) {
@@ -262,9 +277,17 @@ const DatabaseCleanup = ( { options = {} } ) => {
 					durationMs: 5000,
 				} );
 				// Cleanup changed the counts — invalidate the shared cache
-				// so the refetch below hits the network.
+				// so the refetch below hits the network. Tracked with its
+				// own controller so unmount mid-refetch aborts silently
+				// instead of setting state after unmount.
 				clearDbCountsCache();
-				fetchCounts();
+				if ( refetchControllerRef.current ) {
+					refetchControllerRef.current.abort();
+				}
+				refetchControllerRef.current = new AbortController();
+				fetchCounts( refetchControllerRef.current.signal ).catch(
+					() => {}
+				);
 			} else {
 				const failures = response.data?.failures;
 				let errorMsg =
@@ -284,7 +307,13 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				} );
 				if ( response.data?.deleted > 0 ) {
 					clearDbCountsCache();
-					fetchCounts();
+					if ( refetchControllerRef.current ) {
+						refetchControllerRef.current.abort();
+					}
+					refetchControllerRef.current = new AbortController();
+					fetchCounts( refetchControllerRef.current.signal ).catch(
+						() => {}
+					);
 				}
 			}
 		} catch ( error ) {

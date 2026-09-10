@@ -7,7 +7,7 @@ jest.mock( '../apiRequest', () => ( {
 
 describe( 'dbCounts memoization (lib/dbCounts.js)', () => {
 	beforeEach( () => {
-		jest.clearAllMocks();
+		jest.resetAllMocks();
 		clearDbCountsCache();
 	} );
 

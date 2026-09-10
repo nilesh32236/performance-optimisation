@@ -41,7 +41,7 @@ export const getDbCounts = async ( signal ) => {
 	).then( ( response ) => {
 		if ( response && response.success && response.data ) {
 			if ( requestGeneration === generation ) {
-				cachedData = response.data;
+				cachedData = { ...response.data };
 				cachedAt = Date.now();
 			}
 			return { ...response.data };

@@ -8,14 +8,15 @@
  *
  * The collector is a plain ES module (no dependencies) so it can be served
  * from the static build directory on cached pages.
- */
-/**
+ *
  * Classify a device as mobile/desktop from its physical screen width.
  *
  * Resize-stable: the physical screen width does not change when a desktop
  * user narrows their browser window, so a narrowed desktop is not
  * misclassified as mobile. The viewport width is used only when the screen
- * width is unavailable. Tablets in the ~768–1024px band bucket as mobile.
+ * width is unavailable. Tablets in the ~768–1024px band bucket as mobile
+ * (coarse 1024px tradeoff documented; narrow the cutoff to 768px only if
+ * tablet traffic should count as desktop).
  *
  * @since NEXT
  * @param {number} screenWidth   `window.screen.width` (0 when unavailable).
@@ -23,7 +24,16 @@
  * @return {boolean|null} True when mobile, false when desktop, null when unknown.
  */
 export const classifyDeviceWidth = ( screenWidth, viewportWidth ) => {
-	const width = screenWidth > 0 ? screenWidth : viewportWidth || 0;
+	const screen = Number( screenWidth );
+	let width = 0;
+	if ( Number.isFinite( screen ) && screen > 0 ) {
+		width = screen;
+	} else {
+		const viewport = Number( viewportWidth );
+		if ( Number.isFinite( viewport ) && viewport > 0 ) {
+			width = viewport;
+		}
+	}
 	if ( width <= 0 ) {
 		return null;
 	}

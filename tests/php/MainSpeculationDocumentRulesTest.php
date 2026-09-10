@@ -7,6 +7,7 @@
  * rule, logged-in suppression, and single-block no-duplicate output.
  *
  * @package PerformanceOptimise\Tests
+ * @since NEXT
  */
 
 use PerformanceOptimise\Inc\Main;
@@ -17,6 +18,7 @@ use Brain\Monkey\Functions;
  * Tests RUM-driven eager list + document speculation rules.
  *
  * @package PerformanceOptimise\Tests
+ * @since NEXT
  */
 class MainSpeculationDocumentRulesTest extends \PHPUnit\Framework\TestCase {
 	use WPPO_Test_Bootstrap;
@@ -373,7 +375,9 @@ class MainSpeculationDocumentRulesTest extends \PHPUnit\Framework\TestCase {
 	 * @return void
 	 */
 	public function test_no_duplicate_across_list_and_document_sources(): void {
-		$this->install_stubs( $this->default_settings() );
+		$settings = $this->default_settings();
+		$settings['performance_audit']['high_value_urls'] = array( 'http://example.com/first-post/' );
+		$this->install_stubs( $settings );
 		Functions\when( 'is_archive' )->justReturn( true );
 		Functions\when( 'get_permalink' )->alias(
 			static function ( $post ) {

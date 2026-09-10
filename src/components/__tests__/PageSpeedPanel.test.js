@@ -482,7 +482,7 @@ describe( 'PageSpeedPanel Component', () => {
 			data: { job_id: 123 },
 		} );
 		let resolvePoll;
-		getPagespeedResults.mockImplementation(
+		getPagespeedResults.mockImplementationOnce(
 			() =>
 				new Promise( ( resolve ) => {
 					resolvePoll = resolve;
@@ -528,6 +528,7 @@ describe( 'PageSpeedPanel Component', () => {
 			expect( getPagespeedResults ).toHaveBeenCalledTimes( 1 );
 		} finally {
 			errorSpy.mockRestore();
+			getPagespeedResults.mockReset();
 		}
 	} );
 

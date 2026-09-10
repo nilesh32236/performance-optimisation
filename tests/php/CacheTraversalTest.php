@@ -27,6 +27,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
  * In-memory $wpdb recorder for traversal-probe Log::add() assertions.
  *
  * @package PerformanceOptimise\Tests
+ * @since NEXT
  */
 class WPPO_Traversal_Wpdb_Recorder {
 
@@ -68,6 +69,7 @@ class WPPO_Traversal_Wpdb_Recorder {
  * method_exists(), which fails for __call-based mocks.
  *
  * @package PerformanceOptimise\Tests
+ * @since NEXT
  */
 class WPPO_Traversal_Fake_Fs {
 
@@ -127,6 +129,7 @@ class WPPO_Traversal_Fake_Fs {
  * Traversal hardening tests.
  *
  * @package PerformanceOptimise\Tests
+ * @since NEXT
  */
 class CacheTraversalTest extends \PHPUnit\Framework\TestCase {
 	use WPPO_Test_Bootstrap;
@@ -153,6 +156,27 @@ class CacheTraversalTest extends \PHPUnit\Framework\TestCase {
 	private $wpdb_backup = null;
 
 	/**
+	 * Whether a $wpdb instance existed before the test.
+	 *
+	 * @var bool
+	 */
+	private $wpdb_had_instance = false;
+
+	/**
+	 * Previous $wp_filesystem instance to restore in tearDown.
+	 *
+	 * @var mixed
+	 */
+	private $filesystem_backup = null;
+
+	/**
+	 * Whether $wp_filesystem existed before the test.
+	 *
+	 * @var bool
+	 */
+	private $filesystem_had_instance = false;
+
+	/**
 	 * Back up superglobals and install common stubs.
 	 */
 	protected function setUp(): void {
@@ -166,6 +190,8 @@ class CacheTraversalTest extends \PHPUnit\Framework\TestCase {
 		$this->server_backup['REQUEST_URI'] = isset( $_SERVER['REQUEST_URI'] ) ? $_SERVER['REQUEST_URI'] : null;
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Test-only superglobal backup/restore.
 		$this->server_backup['QUERY_STRING'] = isset( $_SERVER['QUERY_STRING'] ) ? $_SERVER['QUERY_STRING'] : null;
+		$this->filesystem_backup             = isset( $GLOBALS['wp_filesystem'] ) ? $GLOBALS['wp_filesystem'] : null;
+		$this->filesystem_had_instance       = isset( $GLOBALS['wp_filesystem'] );
 
 		Functions\when( 'get_option' )->justReturn( array() );
 		Functions\when( 'update_option' )->justReturn( true );
@@ -194,8 +220,22 @@ class CacheTraversalTest extends \PHPUnit\Framework\TestCase {
 			$_SERVER['QUERY_STRING'] = $this->server_backup['QUERY_STRING'];
 		}
 		if ( null !== $this->wpdb_recorder ) {
-			$GLOBALS['wpdb'] = $this->wpdb_backup;
+			if ( $this->wpdb_had_instance ) {
+				$GLOBALS['wpdb'] = $this->wpdb_backup;
+			} else {
+				unset( $GLOBALS['wpdb'] );
+			}
+			$this->wpdb_recorder     = null;
+			$this->wpdb_backup       = null;
+			$this->wpdb_had_instance = false;
 		}
+		if ( $this->filesystem_had_instance ) {
+			$GLOBALS['wp_filesystem'] = $this->filesystem_backup;
+		} else {
+			unset( $GLOBALS['wp_filesystem'] );
+		}
+		$this->filesystem_backup       = null;
+		$this->filesystem_had_instance = false;
 		$this->reset_traversal_flags();
 		\Brain\Monkey\tearDown();
 		parent::tearDown();
@@ -206,10 +246,29 @@ class CacheTraversalTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function reset_traversal_flags(): void {
 		foreach ( array( Cache::class, Used_CSS::class ) as $class ) {
+			if ( ! ( new \ReflectionClass( $class ) )->hasProperty( 'traversal_probe_logged' ) ) {
+				continue;
+			}
 			$prop = new \ReflectionProperty( $class, 'traversal_probe_logged' );
 			$prop->setAccessible( true );
 			$prop->setValue( null, false );
 		}
+	}
+
+	/**
+	 * Whether a request target uses the absolute-form (absolute URL, UNC,
+	 * drive prefix or protocol-relative) that must always be refused.
+	 *
+	 * Shared by the hostile-matrix tests so the harness cannot drift from
+	 * the production heuristic in Util::sanitize_cache_url_path().
+	 *
+	 * @since NEXT
+	 * @param string $payload Request target payload.
+	 * @return bool
+	 */
+	private function is_absolute_form_target( string $payload ): bool {
+		$trimmed = ltrim( $payload );
+		return false !== strpos( $payload, '://' ) || 0 === strpos( $trimmed, '//' ) || 0 === strpos( $trimmed, '\\\\' ) || (bool) preg_match( '#^[a-zA-Z]:#', $trimmed );
 	}
 
 	/**
@@ -218,9 +277,10 @@ class CacheTraversalTest extends \PHPUnit\Framework\TestCase {
 	 * @return WPPO_Traversal_Wpdb_Recorder The recorder.
 	 */
 	private function use_recorder_wpdb(): WPPO_Traversal_Wpdb_Recorder {
-		$this->wpdb_backup   = $GLOBALS['wpdb'];
-		$this->wpdb_recorder = new WPPO_Traversal_Wpdb_Recorder();
-		$GLOBALS['wpdb']     = $this->wpdb_recorder;
+		$this->wpdb_had_instance = isset( $GLOBALS['wpdb'] );
+		$this->wpdb_backup       = $this->wpdb_had_instance ? $GLOBALS['wpdb'] : null;
+		$this->wpdb_recorder     = new WPPO_Traversal_Wpdb_Recorder();
+		$GLOBALS['wpdb']         = $this->wpdb_recorder;
 		return $this->wpdb_recorder;
 	}
 
@@ -355,7 +415,7 @@ class CacheTraversalTest extends \PHPUnit\Framework\TestCase {
 		$recorder = $this->use_recorder_wpdb();
 		$uri      = '/' . ltrim( $payload, '/' );
 		// Absolute-URL-looking payloads are sent as-is (absolute-form target).
-		if ( false !== strpos( $payload, '://' ) || 0 === strpos( ltrim( $payload ), '//' ) || 0 === strpos( ltrim( $payload ), '\\\\' ) || preg_match( '#^[a-zA-Z]:#', ltrim( $payload ) ) ) {
+		if ( $this->is_absolute_form_target( $payload ) ) {
 			$uri = $payload;
 		}
 
@@ -379,7 +439,11 @@ class CacheTraversalTest extends \PHPUnit\Framework\TestCase {
 			$this->assertTrue( $this->read_prop( $cache, 'path_rejected' ), "Failed for URI: {$uri}" );
 			$this->assertSame( '', $this->cache_file_path( $cache ), "Failed for URI: {$uri}" );
 			$this->assertTrue( $this->probe_logged( $recorder, 'Blocked cache path traversal probe' ), "Failed for URI: {$uri}" );
-			$GLOBALS['wpdb']     = $this->wpdb_backup;
+			if ( $this->wpdb_had_instance ) {
+				$GLOBALS['wpdb'] = $this->wpdb_backup;
+			} else {
+				unset( $GLOBALS['wpdb'] );
+			}
 			$this->wpdb_recorder = null;
 		}
 	}
@@ -426,7 +490,7 @@ class CacheTraversalTest extends \PHPUnit\Framework\TestCase {
 		$used_css               = new Used_CSS();
 
 		$url = 'http://example.com/' . ltrim( $payload, '/' );
-		if ( false !== strpos( $payload, '://' ) || preg_match( '#^[a-zA-Z]:#', ltrim( $payload ) ) || 0 === strpos( ltrim( $payload ), '\\\\' ) ) {
+		if ( $this->is_absolute_form_target( $payload ) ) {
 			$url = $payload;
 		}
 

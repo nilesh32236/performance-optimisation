@@ -64,7 +64,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		private static array $ccss_content_cache = array();
 
 		/**
-		 * Per-request sample-URL memo keyed by template (audit #982).
+		 * Per-request sample-URL memo keyed by "{blog_id}:{template}" so a
+		 * switch_to_blog() mid-request cannot serve the previous blog's URL.
 		 * Reset via reset_ccss_memo().
 		 *
 		 * @since NEXT
@@ -570,15 +571,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since NEXT
 		 */
 		private static function get_sample_url( string $template ): string|false {
-			if ( array_key_exists( $template, self::$sample_url_cache ) ) {
-				return self::$sample_url_cache[ $template ];
+			$blog_id   = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
+			$cache_key = $blog_id . ':' . $template;
+			if ( array_key_exists( $cache_key, self::$sample_url_cache ) ) {
+				return self::$sample_url_cache[ $cache_key ];
 			}
 			switch ( $template ) {
 				case 'home':
-					self::$sample_url_cache[ $template ] = Util::cached_home_url( '/' );
+					self::$sample_url_cache[ $cache_key ] = Util::cached_home_url( '/' );
 					break;
 				case 'single':
-					$posts                               = get_posts(
+					$posts                                = get_posts(
 						array(
 							'numberposts'  => 1,
 							'post_status'  => 'publish',
@@ -586,10 +589,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 							'fields'       => 'ids',
 						)
 					);
-					self::$sample_url_cache[ $template ] = ! empty( $posts ) ? get_permalink( $posts[0] ) : false;
+					self::$sample_url_cache[ $cache_key ] = ! empty( $posts ) ? get_permalink( $posts[0] ) : false;
 					break;
 				case 'page':
-					$pages                               = get_posts(
+					$pages                                = get_posts(
 						array(
 							'post_type'    => 'page',
 							'numberposts'  => 1,
@@ -598,7 +601,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 							'fields'       => 'ids',
 						)
 					);
-					self::$sample_url_cache[ $template ] = ! empty( $pages ) ? get_permalink( $pages[0] ) : Util::cached_home_url( '/' );
+					self::$sample_url_cache[ $cache_key ] = ! empty( $pages ) ? get_permalink( $pages[0] ) : Util::cached_home_url( '/' );
 					break;
 				case 'archive':
 					$archives = get_posts(
@@ -614,16 +617,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 						$year  = get_the_time( 'Y' );
 						$month = get_the_time( 'm' );
 						wp_reset_postdata();
-						self::$sample_url_cache[ $template ] = get_month_link( $year, $month );
+						self::$sample_url_cache[ $cache_key ] = get_month_link( $year, $month );
 					} else {
-						self::$sample_url_cache[ $template ] = false;
+						self::$sample_url_cache[ $cache_key ] = false;
 					}
 					break;
 				default:
-					self::$sample_url_cache[ $template ] = Util::cached_home_url( '/' );
+					self::$sample_url_cache[ $cache_key ] = Util::cached_home_url( '/' );
 					break;
 			}
-			return self::$sample_url_cache[ $template ];
+			return self::$sample_url_cache[ $cache_key ];
 		}
 
 		/**

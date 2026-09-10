@@ -1568,7 +1568,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				$parsed = parse_url( $raw_input, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
 			}
 
-			$path_component = ( null === $parsed || false === $parsed ) ? $raw_input : (string) $parsed;
+			// No path component (e.g. 'https://example.com?x=1'): refuse rather
+			// than falling back to the raw input, which would let query text
+			// influence the mapped cache directory.
+			if ( null === $parsed || false === $parsed ) {
+				return '';
+			}
+			$path_component = (string) $parsed;
 
 			$decoded = function_exists( 'rawurldecode' ) ? rawurldecode( $path_component ) : $path_component;
 

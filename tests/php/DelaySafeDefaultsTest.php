@@ -448,6 +448,8 @@ class DelaySafeDefaultsTest extends \PHPUnit\Framework\TestCase {
 	 *
 	 * Guards the review fix: arrays previously bypassed the cap branch and were
 	 * persisted as arrays; they must become 2560, never an array or 0.
+	 *
+	 * @since NEXT
 	 */
 	public function test_util_max_longest_edge_px_array_coerces_to_int_default(): void {
 		Functions\when( 'has_filter' )->justReturn( false );
@@ -475,6 +477,8 @@ class DelaySafeDefaultsTest extends \PHPUnit\Framework\TestCase {
 	 *
 	 * Pins the ordering dependency: the generic `url` branch (esc_url_raw)
 	 * would otherwise corrupt a multi-line/regex exclusion list.
+	 *
+	 * @since NEXT
 	 */
 	public function test_util_exclude_url_lists_keep_newlines(): void {
 		Functions\when( 'has_filter' )->justReturn( false );

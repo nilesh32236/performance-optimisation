@@ -1264,9 +1264,17 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 
 		$this->prepare_wppo_output_dir();
 
+		// Blast radius note: stubbing the builtin function_exists intercepts
+		// every unqualified function_exists() call in the Img_Converter
+		// namespace for the duration of this test; Brain Monkey resets the
+		// stub in tearDown. Only the wp_image_quality probe is faked, all
+		// other names fall through to the real PHP builtin.
 		Functions\when( 'function_exists' )->alias(
 			static function ( $function_name ) {
-				return 'wp_image_quality' !== $function_name;
+				if ( 'wp_image_quality' === $function_name ) {
+					return false;
+				}
+				return \function_exists( $function_name );
 			}
 		);
 
@@ -1277,19 +1285,31 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 				'maxLongestEdgePx'        => 600,
 			)
 		);
-		$result    = $converter->convert_image( $path, 'webp' );
+		try {
+			$result = $converter->convert_image( $path, 'webp' );
 
-		$this->assertTrue( $result );
+			$this->assertTrue( $result );
 
-		// Original upload file is never modified.
-		$orig = getimagesize( $path );
-		$this->assertSame( 1200, $orig[0] );
-		$this->assertSame( 900, $orig[1] );
+			// Original upload file is never modified.
+			$orig = getimagesize( $path );
+			$this->assertSame( 1200, $orig[0] );
+			$this->assertSame( 900, $orig[1] );
 
-		$webp_path = Img_Converter::get_img_path( $path, 'webp' );
-		$this->assertFileExists( $webp_path );
-		$out = getimagesize( $webp_path );
-		$this->assertSame( 600, $out[0] );
-		$this->assertSame( 450, $out[1] );
+			$webp_path = Img_Converter::get_img_path( $path, 'webp' );
+			$this->assertFileExists( $webp_path );
+			$out = getimagesize( $webp_path );
+			$this->assertSame( 600, $out[0] );
+			$this->assertSame( 450, $out[1] );
+		} finally {
+			if ( file_exists( $path ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+				unlink( $path );
+			}
+			$webp_path = Img_Converter::get_img_path( $path, 'webp' );
+			if ( file_exists( $webp_path ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+				unlink( $webp_path );
+			}
+		}
 	}
 }

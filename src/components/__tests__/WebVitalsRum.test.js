@@ -118,7 +118,7 @@ describe( 'WebVitalsRum', () => {
 	it( 'swallows AbortError without showing an error', async () => {
 		const abortError = new Error( 'The operation was aborted.' );
 		abortError.name = 'AbortError';
-		apiCall.mockRejectedValue( abortError );
+		apiCall.mockRejectedValueOnce( abortError );
 		const errorSpy = jest
 			.spyOn( console, 'error' )
 			.mockImplementation( () => {} );

@@ -451,6 +451,9 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		$this->assertTrue( $this->invoke_private_method( $main, 'is_delay_excluded_handle', 'wc-order-attribution' ) );
 		$this->assertTrue( $this->invoke_private_method( $main, 'is_delay_excluded_handle', 'rs6' ) );
 		$this->assertTrue( $this->invoke_private_method( $main, 'is_delay_excluded_handle', 'rs-module-main' ) );
+		// Bare-substring handles must NOT match the scoped presets.
+		$this->assertFalse( $this->invoke_private_method( $main, 'is_delay_excluded_handle', 'showcase-widget' ) );
+		$this->assertFalse( $this->invoke_private_method( $main, 'is_delay_excluded_handle', 'my-rs-plugin' ) );
 	}
 
 	/**

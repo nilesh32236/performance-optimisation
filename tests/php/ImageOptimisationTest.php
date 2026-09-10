@@ -15,7 +15,9 @@ use Brain\Monkey\Functions;
  * @package PerformanceOptimise\Tests
  */
 class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
-	use WPPO_Test_Bootstrap;
+	use WPPO_Test_Bootstrap {
+		tearDown as protected wppoTearDown;
+	}
 
 	/**
 	 * Default options for testing.
@@ -25,12 +27,30 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	private array $default_options;
 
 	/**
+	 * Backed-up REQUEST_URI so LCP tests cannot leak a stale URI.
+	 *
+	 * @var string|null
+	 */
+	private $request_uri_backup = null;
+
+	/**
+	 * Whether REQUEST_URI existed before the test.
+	 *
+	 * @var bool
+	 */
+	private bool $request_uri_had_value = false;
+
+	/**
 	 * Set up test environment.
 	 */
 	protected function setUp(): void {
 		parent::setUp();
 		\Brain\Monkey\setUp();
-		$this->default_options = array(
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Test-only superglobal backup/restore.
+		$this->request_uri_had_value = isset( $_SERVER['REQUEST_URI'] );
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Test-only superglobal backup/restore.
+		$this->request_uri_backup = $this->request_uri_had_value ? $_SERVER['REQUEST_URI'] : null;
+		$this->default_options    = array(
 			'image_optimisation' => array(
 				'lazyLoadImages'  => true,
 				'lazyLoadVideos'  => true,
@@ -51,6 +71,18 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 				return ! empty( $GLOBALS['wp_filter'][ $hook_name ] );
 			}
 		);
+	}
+
+	/**
+	 * Restore REQUEST_URI and run the shared bootstrap teardown.
+	 */
+	protected function tearDown(): void {
+		if ( $this->request_uri_had_value ) {
+			$_SERVER['REQUEST_URI'] = $this->request_uri_backup;
+		} else {
+			unset( $_SERVER['REQUEST_URI'] );
+		}
+		$this->wppoTearDown();
 	}
 
 	/**
@@ -1551,12 +1583,16 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'get_preload_dedup_key' );
 		$reflection->setAccessible( true );
 
-		$plain = $reflection->invoke( $image_opt, 'https://example.com/wp-content/uploads/hero.jpg', '' );
+		$http  = $reflection->invoke( $image_opt, 'http://example.com/wp-content/uploads/hero.jpg', '' );
 		$https = $reflection->invoke( $image_opt, 'https://example.com/wp-content/uploads/hero.jpg', '' );
+		$proto = $reflection->invoke( $image_opt, '//example.com/wp-content/uploads/hero.jpg', '' );
+		$plain = $reflection->invoke( $image_opt, 'https://example.com/wp-content/uploads/hero.jpg', '' );
 		$v1    = $reflection->invoke( $image_opt, 'https://example.com/wp-content/uploads/hero.jpg?v=1', '' );
 		$v2    = $reflection->invoke( $image_opt, 'https://example.com/wp-content/uploads/hero.jpg?v=2', '' );
 
 		$this->assertSame( $plain, $https );
+		$this->assertSame( $http, $https );
+		$this->assertSame( $proto, $https );
 		$this->assertNotSame( $v1, $v2 );
 		$this->assertNotSame( $plain, $v1 );
 	}
@@ -1578,6 +1614,9 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'esc_attr' )->returnArg();
 		Functions\when( 'sanitize_text_field' )->returnArg();
 		Functions\when( 'apply_filters' )->returnArg( 2 );
+		// Defined once per process: after the first definition the core
+		// function_exists() fail-open path is no longer exercisable in this
+		// PHPUnit process (documented limitation).
 		if ( ! function_exists( 'wp_get_loading_optimization_attributes' ) ) {
 			eval( 'function wp_get_loading_optimization_attributes($tag,$attrs,$ctx){ return array("loading"=>"lazy","fetchpriority"=>"low"); }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged
 		}

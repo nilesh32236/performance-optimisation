@@ -649,20 +649,22 @@ describe( 'DatabaseCleanup Component', () => {
 			.spyOn( console, 'error' )
 			.mockImplementation( () => {} );
 		try {
-			apiCall.mockImplementation( ( action, payload, method, signal ) => {
-				if ( 'database_cleanup_counts' !== action ) {
-					return Promise.resolve( { success: true, data: {} } );
-				}
-				return new Promise( ( resolve, reject ) => {
-					if ( signal ) {
-						signal.addEventListener( 'abort', () => {
-							const abortError = new Error( 'Aborted' );
-							abortError.name = 'AbortError';
-							reject( abortError );
-						} );
+			apiCall.mockImplementationOnce(
+				( action, payload, method, signal ) => {
+					if ( 'database_cleanup_counts' !== action ) {
+						return Promise.resolve( { success: true, data: {} } );
 					}
-				} );
-			} );
+					return new Promise( ( resolve, reject ) => {
+						if ( signal ) {
+							signal.addEventListener( 'abort', () => {
+								const abortError = new Error( 'Aborted' );
+								abortError.name = 'AbortError';
+								reject( abortError );
+							} );
+						}
+					} );
+				}
+			);
 
 			const { unmount } = render( <DatabaseCleanup /> );
 
@@ -686,12 +688,14 @@ describe( 'DatabaseCleanup Component', () => {
 
 			await act( async () => {} );
 
+			// No error notification path taken: nothing logged and the
+			// aborted fetch never resolves into state. (No DOM assertion
+			// here: after unmount() the tree is gone, so queryByText
+			// would pass vacuously even if notify() had fired.)
 			expect( consoleSpy ).not.toHaveBeenCalled();
-			expect(
-				screen.queryByText( 'Failed to load counts.' )
-			).not.toBeInTheDocument();
 		} finally {
 			consoleSpy.mockRestore();
+			apiCall.mockReset();
 		}
 	} );
 } );

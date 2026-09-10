@@ -23,7 +23,9 @@ use Brain\Monkey\Functions;
  * @since NEXT
  */
 class MinifyPlaceholderTest extends \PHPUnit\Framework\TestCase {
-	use WPPO_Test_Bootstrap;
+	use WPPO_Test_Bootstrap {
+		tearDown as protected wppoTearDown;
+	}
 
 	/**
 	 * Reset the HTML-processor memo so processor availability cannot leak
@@ -31,7 +33,7 @@ class MinifyPlaceholderTest extends \PHPUnit\Framework\TestCase {
 	 */
 	protected function tearDown(): void {
 		Util::reset_html_processor_memo();
-		parent::tearDown();
+		$this->wppoTearDown();
 	}
 
 	/**
@@ -294,7 +296,6 @@ class MinifyPlaceholderTest extends \PHPUnit\Framework\TestCase {
 		$img = '<img data-src="javascript:alert(1)" alt="x">';
 		$out = $this->invoke_private( $instance, 'post_process_placeholders', $img, true );
 
-		$this->assertStringNotContainsString( '<img src=', $out );
-		$this->assertStringContainsString( 'javascript:alert(1)', $out );
+		$this->assertSame( $img, $out );
 	}
 }

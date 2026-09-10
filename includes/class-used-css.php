@@ -1086,11 +1086,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 					return;
 				}
-				$snippet = str_replace( "\0", '', (string) $raw_input );
+				// Privacy: never log query strings or fragments (tokens, PII).
+				$path_only = function_exists( 'wp_parse_url' ) ? wp_parse_url( (string) $raw_input, PHP_URL_PATH ) : parse_url( (string) $raw_input, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url unavailable.
+				if ( is_string( $path_only ) ) {
+					$log_input = $path_only;
+				} else {
+					$parts     = preg_split( '/[?#]/', (string) $raw_input, 2 );
+					$log_input = is_array( $parts ) ? (string) $parts[0] : (string) $raw_input;
+				}
+				$snippet = str_replace( "\0", '', $log_input );
 				if ( function_exists( 'sanitize_text_field' ) ) {
 					$snippet = sanitize_text_field( $snippet );
 				}
-				$snippet = substr( $snippet, 0, 200 );
+				$snippet = function_exists( 'mb_substr' ) ? mb_substr( $snippet, 0, 200, 'UTF-8' ) : substr( $snippet, 0, 200 );
 				$message = function_exists( '__' ) ? __( 'Blocked used-CSS path traversal probe.', 'performance-optimisation' ) : 'Blocked used-CSS path traversal probe.';
 				if ( '' !== $snippet ) {
 					$message .= ' ' . $snippet;
@@ -1203,8 +1211,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				$file_path = $this->get_used_css_path( (string) $url );
 				// Refuse deletes for hostile paths (fail-open: nothing
 				// deleted, probe already logged by get_used_css_path()).
+				// Only log here for non-hostile empty resolutions (empty
+				// domain/root): hostile paths were already logged, and
+				// blank raw paths are not attack probes.
 				if ( '' === $file_path || ! $this->is_path_contained( $file_path ) ) {
-					if ( '' !== (string) $url ) {
+					$raw_path = function_exists( 'wp_parse_url' ) ? wp_parse_url( (string) $url, PHP_URL_PATH ) : parse_url( (string) $url, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url unavailable.
+					if ( ! is_string( $raw_path ) ) {
+						$split    = preg_split( '/[?#]/', (string) $url, 2 );
+						$raw_path = is_array( $split ) ? (string) $split[0] : (string) $url;
+					}
+					if ( '' !== trim( (string) $raw_path ) ) {
 						$this->log_traversal_probe( (string) $url );
 					}
 					return false;

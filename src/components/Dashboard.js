@@ -245,6 +245,9 @@ const Dashboard = ( {
 			handleLoading( 'db_counts', true );
 			try {
 				const data = await getDbCounts( signal );
+				if ( signal?.aborted ) {
+					return;
+				}
 				updateState( { dbCounts: data } );
 			} catch ( error ) {
 				if ( error?.name === 'AbortError' || signal?.aborted ) {
