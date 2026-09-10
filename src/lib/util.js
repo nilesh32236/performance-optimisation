@@ -18,25 +18,6 @@ export const DELAY_IDLE_TIMEOUT_MIN = 500;
  */
 export const DELAY_IDLE_TIMEOUT_MAX = 20000;
 /**
- * Deprecated aliases kept for backward compatibility.
- *
- * @since NEXT
- */
-export const DELAY_JITTER_DEFAULT = DELAY_IDLE_TIMEOUT_DEFAULT;
-/**
- * Deprecated aliases kept for backward compatibility.
- *
- * @since NEXT
- */
-export const DELAY_JITTER_MIN = DELAY_IDLE_TIMEOUT_MIN;
-/**
- * Deprecated aliases kept for backward compatibility.
- *
- * @since NEXT
- */
-export const DELAY_JITTER_MAX = DELAY_IDLE_TIMEOUT_MAX;
-
-/**
  * Generic form change handler for settings tabs.
  *
  * Updates the named field in the settings state. Checkbox inputs store

@@ -183,7 +183,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (3
 - Globals (ESLint): `wppoSettings`, `wppoObject`, `ScrollTrigger`, `jQuery`, `alert`
 - `console.log` is error-level; only `console.error` and `console.warn` allowed
 - CSS: custom SCSS design system with `.wppo-` prefix, BEM-like naming, CSS custom properties, no Tailwind/CSS-in-JS
-- SCSS breakpoints: `sm` (640px), `md` (768px), `lg` (992px), `xl` (1200px) via `respond-to()` mixin
+- SCSS breakpoints: `xs` (400px), `sm` (640px), `md` (768px), `lg` (992px), `xl` (1200px) via `respond-to()` mixin
 - All translatable strings come from `wppoSettings.translations` with English fallback
 
 ## PHP conventions
