@@ -507,13 +507,64 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Single source of truth for the separate-assets state shared by the
 		 * combined-CSS cache filename variant and every combine/preload loop. The
 		 * 6.9+ gate keeps pre-6.9 cores (which have no such function) on the
-		 * legacy monolith path.
+		 * legacy monolith path, including cores with a backported
+		 * `wp_should_load_separate_core_block_assets()` symbol. An absent
+		 * `$wp_version` assumes the newest core, matching
+		 * {@see get_styles_inline_limit()}.
 		 *
 		 * @return bool True when core loads separate core block assets on demand.
 		 * @since NEXT
 		 */
 		private function block_assets_are_separate(): bool {
-			return function_exists( 'wp_should_load_separate_core_block_assets' ) && wp_should_load_separate_core_block_assets();
+			if ( isset( $GLOBALS['wp_version'] ) && version_compare( $GLOBALS['wp_version'], '6.9-alpha', '<' ) ) {
+				return false;
+			}
+			if ( ! function_exists( 'wp_should_load_separate_core_block_assets' ) ) {
+				return false;
+			}
+			try {
+				return (bool) wp_should_load_separate_core_block_assets();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Whether core 6.9+ block-style hoisting owns block styles on this request.
+		 *
+		 * True only when the version-gated separate-assets state is on: core
+		 * hoists on-demand block styles itself (classic-theme on-demand loader
+		 * `wp_load_classic_theme_block_styles_on_demand()` plus the
+		 * `wp_should_output_buffer_template_for_enhancement()` template-enhancement
+		 * buffer on 6.9+), so the combine pipeline must still minify eligible
+		 * non-block handles but let core hoist — never pull `wp-block-*`
+		 * handles into the combined file. Fail-open: any missing symbol or
+		 * detection exception returns false (legacy combine behavior, never fatal).
+		 *
+		 * @return bool True when core owns block-style hoisting on this request.
+		 * @since NEXT
+		 */
+		private function is_core_block_hoisting_active(): bool {
+			// Version gate first: pre-6.9 cores stay on the legacy path even
+			// when the separate-assets symbol was backported.
+			if ( isset( $GLOBALS['wp_version'] ) && version_compare( $GLOBALS['wp_version'], '6.9-alpha', '<' ) ) {
+				return false;
+			}
+			try {
+				if ( ! function_exists( 'wp_should_load_separate_core_block_assets' ) || ! wp_should_load_separate_core_block_assets() ) {
+					return false;
+				}
+				// When the 6.9+ template-enhancement buffer is active, core
+				// definitively owns hoisting — record the state, same outcome.
+				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && wp_should_output_buffer_template_for_enhancement() ) {
+					return true;
+				}
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
 		}
 
 		/**
@@ -533,6 +584,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		private function is_core_block_asset( $handle, bool $separate_block_assets ): bool {
 			return $separate_block_assets && str_starts_with( (string) $handle, 'wp-block-' );
+		}
+
+		/**
+		 * Whether a handle is already owned by core output and must never be combined.
+		 *
+		 * Single dedupe assertion for the combine pipeline: true when core will
+		 * inline the handle under its `styles_inline_size_limit` budget
+		 * ({@see core_will_inline()}) or when core 6.9+ hoisting owns the block
+		 * handle ({@see is_core_block_asset()}). Every combine/preload loop
+		 * funnels through this so no scattered skip site can emit duplicate
+		 * style output for the same handle.
+		 *
+		 * @param string $handle                The registered style handle.
+		 * @param bool   $separate_block_assets Whether core loads separate block assets.
+		 * @return bool True when the handle must stay out of the combined file.
+		 * @since NEXT
+		 */
+		private function is_duplicate_of_core_output( $handle, bool $separate_block_assets ): bool {
+			if ( $this->is_core_block_asset( $handle, $separate_block_assets ) ) {
+				return true;
+			}
+			return $this->core_will_inline( $handle );
 		}
 
 		/**
@@ -594,14 +667,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// would force the wp-block-library monolith (or per-block styles for
 			// blocks not even on the page) back into the head and fight core's
 			// conditional loading. Belt-and-suspenders: these handles are normally
-			// not in the queue on 6.9 anyway.
+			// not in the queue on 6.9 anyway. When core hoisting is active the
+			// pipeline still minifies eligible non-block handles below but lets
+			// core hoist block styles (yield where core wins; combine is the
+			// fallback, not a competitor). The `should_load_separate_core_block_assets`
+			// opt-out filter is honoured via block_assets_are_separate(): an
+			// explicit opt-out restores the legacy monolith path.
 			$separate_block_assets = $this->block_assets_are_separate();
+			$core_hoisting         = $this->is_core_block_hoisting_active();
 
 			// The effective separate-assets state is baked into the combined-CSS
 			// cache filename, so a 6.8 -> 6.9 upgrade (which flips separate block
 			// assets on by default for classic themes) cannot keep serving a stale
 			// combined monolith built while wp-block-library was still in the queue.
-			$css_variant = $separate_block_assets ? 'separate' : '';
+			// Core hoisting implies the separate variant (same handle set).
+			$css_variant = ( $separate_block_assets || $core_hoisting ) ? 'separate' : '';
 
 			// The set of handles this request would pull into the combined file. The
 			// same skip rules are applied below during generation so the two branches
@@ -865,7 +945,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * core inlines itself, core block-asset styles under the 6.9+ separate-assets
 		 * mode, handles excluded from combining, and non-'all' media styles stay out
 		 * of the combined file. Used both to build the file and to detect when a
-		 * previously cached file is stale.
+		 * previously cached file is stale. Classic themes stay on the combine path
+		 * (only block themes short-circuit via the inline budget); on 6.9+
+		 * classic themes the hoisting-aware dedupe below keeps `wp-block-*`
+		 * handles out of the combined file so no duplicate output or FOUC occurs
+		 * while non-block CSS still benefits from combining.
 		 *
 		 * @since 1.9.0
 		 *
@@ -885,11 +969,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				}
 				$style_data = $wp_styles->registered[ $handle ];
 
-				if ( $this->core_will_inline( $handle ) ) {
-					continue;
-				}
-
-				if ( $this->is_core_block_asset( $handle, $separate_block_assets ) ) {
+				// Single dedupe assertion: never emit combined output for a
+				// handle core already hoisted/inlined (block hoisting + the
+				// cumulative styles_inline_size_limit budget).
+				if ( $this->is_duplicate_of_core_output( $handle, $separate_block_assets ) ) {
 					continue;
 				}
 
@@ -1430,6 +1513,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			if ( ! function_exists( 'wp_is_block_theme' ) || ! wp_is_block_theme() ) {
+				// Classic themes intentionally stay on the combine path: core
+				// 6.9 on-demand hoisting owns only `wp-block-*` handles (excluded
+				// from $eligible_handles via the dedupe above), while the
+				// remaining theme CSS still benefits from combining. No FOUC:
+				// the combined file holds only non-block handles core never emits.
 				return false;
 			}
 			$limit = $this->get_styles_inline_limit();
