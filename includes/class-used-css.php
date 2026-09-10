@@ -1048,22 +1048,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @return bool True when contained.
 		 */
 		private function is_path_contained( string $path ): bool {
-			if ( '' === $this->cache_root_dir || '' === $this->domain ) {
-				return false;
-			}
-
-			if ( function_exists( 'wp_normalize_path' ) ) {
-				$norm = wp_normalize_path( $path );
-				$root = wp_normalize_path( $this->cache_root_dir );
-			} else {
-				$norm = str_replace( '\\', '/', $path );
-				$root = str_replace( '\\', '/', $this->cache_root_dir );
-			}
-
-			$root       = rtrim( $root, '/' ) . '/';
-			$domain_dir = $root . trim( $this->domain, '/' ) . '/';
-
-			return 0 === strpos( $norm, $root ) && 0 === strpos( $norm, $domain_dir );
+			// Centralized dual-prefix containment lives in
+			// Util::is_cache_path_contained(); this wrapper only binds the
+			// per-instance root/domain so every call site shares one audit point.
+			return Util::is_cache_path_contained( $this->cache_root_dir, $this->domain, $path );
 		}
 
 		/**
@@ -1183,20 +1171,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				return false;
 			}
 
-			// Atomic write: write to a temporary file, then rename to prevent
-			// concurrent requests from producing truncated/interleaved output.
-			$tmp_path = $file_path . '.tmp.' . wp_rand();
-			$written  = $fs->put_contents( $tmp_path, $css, FS_CHMOD_FILE );
-			if ( ! $written ) {
-				$fs->delete( $tmp_path );
-				return false;
-			}
-			$moved = $fs->move( $tmp_path, $file_path, true );
-			if ( ! $moved ) {
-				$fs->delete( $tmp_path );
-				return false;
-			}
-			return true;
+			// Atomic write via the shared tmp+rename helper (unique tmp
+			// name, no non-atomic fallback) so interrupted writes never
+			// leave partial CSS behind.
+			return Util::atomic_file_put_contents( $fs, $file_path, $css );
 		}
 
 		/**
