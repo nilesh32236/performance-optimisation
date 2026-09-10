@@ -3215,7 +3215,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'wc-add-to-cart',
 				'wc-single-product',
 				// WooCommerce safe list.
-				'woocommerce',
 				'wc-',
 				'cart-fragments',
 				'wc-cart',
