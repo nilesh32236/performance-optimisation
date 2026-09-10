@@ -3564,10 +3564,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return $stats;
 			}
 
-			// Cache miss: compute both together and store atomically.
-			$total_size            = $instance->calculate_directory_size( $cache_dir );
+			// Cache miss: compute size and page count in a single recursive
+			// walk so large caches pay one filesystem enumeration, not two.
+			$dir_stats             = $instance->calculate_directory_stats( $cache_dir );
+			$total_size            = $dir_stats['size'];
 			$stats['size']         = size_format( $total_size );
-			$stats['cached_pages'] = $instance->count_cached_pages( $cache_dir );
+			$stats['cached_pages'] = $dir_stats['count'];
 			self::store_cache_stats(
 				array(
 					'size'  => $stats['size'],
@@ -3607,15 +3609,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
-		 * Calculate the size of a directory.
+		 * Calculate directory size and cached-page count in a single walk.
 		 *
-		 * @param string $directory The path to the directory whose size is to be calculated.
+		 * Single recursive `$fs->dirlist()` traversal returning both
+		 * aggregates so callers do not enumerate large static caches twice.
+		 * Reuses the `size` already reported by `dirlist()` when available
+		 * instead of issuing a second `size()` stat per file.
+		 *
+		 * @param string $directory The path to the directory to scan.
 		 * @param int    $depth     Recursion depth guard.
-		 * @return int The total size of the directory in bytes.
+		 * @return array{size:int,count:int} Total bytes and index.html count.
 		 *
-		 * @since 1.0.0
+		 * @since NEXT
 		 */
-		private function calculate_directory_size( string $directory, int $depth = 0 ): int {
+		private function calculate_directory_stats( string $directory, int $depth = 0 ): array {
+			$empty = array(
+				'size'  => 0,
+				'count' => 0,
+			);
 			// Guard against unbounded recursion on very large caches (10k+ pages).
 			if ( $depth > 20 ) {
 				if ( ! self::$depth_warning_logged && defined( 'WP_DEBUG' ) && WP_DEBUG ) {
@@ -3625,31 +3636,60 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					// anomalies (symlink loops) are server-ops signal. Fires once per
 					// request, strictly WP_DEBUG-gated.
 					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-					error_log( 'WPPO: calculate_directory_size depth cap (20) hit at ' . $directory . ' — stats may be under-reported due to deep nesting or symlink loop.' );
+					error_log( 'WPPO: calculate_directory_stats depth cap (20) hit at ' . $directory . ' — stats may be under-reported due to deep nesting or symlink loop.' );
 				}
-				return 0;
+				return $empty;
 			}
-			$total_size = 0;
-			$fs         = $this->get_filesystem();
+			$fs = $this->get_filesystem();
 
 			if ( ! $fs ) {
-				return $total_size;
+				return $empty;
 			}
 
 			$files = $fs->dirlist( $directory );
 
 			if ( ! $files ) {
-				return $total_size;
+				return $empty;
 			}
 
+			$size  = 0;
+			$count = 0;
 			foreach ( $files as $file ) {
-				$file_path   = trailingslashit( $directory ) . $file['name'];
-				$total_size += ( 'd' === $file['type'] )
-					? $this->calculate_directory_size( $file_path, $depth + 1 )
-					: $fs->size( $file_path );
+				$file_path = trailingslashit( $directory ) . $file['name'];
+				if ( 'd' === $file['type'] ) {
+					$child  = $this->calculate_directory_stats( $file_path, $depth + 1 );
+					$size  += $child['size'];
+					$count += $child['count'];
+					continue;
+				}
+				if ( isset( $file['size'] ) && is_numeric( $file['size'] ) && (int) $file['size'] >= 0 ) {
+					$size += (int) $file['size'];
+				} else {
+					$size += (int) $fs->size( $file_path );
+				}
+				if ( 'index.html' === $file['name'] ) {
+					++$count;
+				}
 			}
 
-			return $total_size;
+			return array(
+				'size'  => $size,
+				'count' => $count,
+			);
+		}
+
+		/**
+		 * Calculate the size of a directory.
+		 *
+		 * @param string $directory The path to the directory whose size is to be calculated.
+		 * @param int    $depth     Recursion depth guard.
+		 * @return int The total size of the directory in bytes.
+		 *
+		 * @since 1.0.0
+		 */
+		private function calculate_directory_size( string $directory, int $depth = 0 ): int {
+			$stats = $this->calculate_directory_stats( $directory, $depth );
+			return $stats['size'];
 		}
 
 		/**
@@ -3662,36 +3702,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.9.0
 		 */
 		private function count_cached_pages( string $directory, int $depth = 0 ): int {
-			if ( $depth > 20 ) {
-				if ( ! self::$depth_warning_logged && defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-					self::$depth_warning_logged = true;
-					// error_log (not Log::add()) is intentional: same rationale as in
-					// calculate_directory_size() — stats-time DB writes are undesirable.
-					// Fires once per request, strictly WP_DEBUG-gated.
-					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-					error_log( 'WPPO: count_cached_pages depth cap (20) hit at ' . $directory . ' — stats may be under-reported due to deep nesting or symlink loop.' );
-				}
-				return 0;
-			}
-			$fs = $this->get_filesystem();
-
-			if ( ! $fs ) {
-				return 0;
-			}
-
-			$files = $fs->dirlist( $directory );
-			if ( ! $files ) {
-				return 0;
-			}
-			$count = 0;
-			foreach ( $files as $file ) {
-				if ( 'd' === $file['type'] ) {
-					$count += $this->count_cached_pages( trailingslashit( $directory ) . $file['name'], $depth + 1 );
-				} elseif ( 'index.html' === $file['name'] ) {
-					++$count;
-				}
-			}
-			return $count;
+			$stats = $this->calculate_directory_stats( $directory, $depth );
+			return $stats['count'];
 		}
 
 		/**

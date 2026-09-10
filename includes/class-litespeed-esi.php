@@ -347,7 +347,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			// Store 12h transient blog-prefixed.
 			$transient_key = Util::transient_key( 'wppo_esi_nonce_' . md5( $nonce . $block ) );
 			set_transient( $transient_key, $nonce, 12 * HOUR_IN_SECONDS );
-			// Also store wildcard allowlist key for esi_nonces.
+			// Also store wildcard allowlist key for wppo_esi_nonces.
 			$wildcard_key = Util::transient_key( 'wppo_esi_nonce_' . $block );
 			set_transient( $wildcard_key, 1, 12 * HOUR_IN_SECONDS );
 
@@ -758,8 +758,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			$nonce = function_exists( 'wp_create_nonce' ) ? wp_create_nonce( 'wppo_esi' ) : md5( wp_salt() . 'wppo_esi' );
 			$key   = Util::transient_key( 'wppo_esi_nonce_' . md5( $nonce ) );
 			set_transient( $key, $nonce, 12 * HOUR_IN_SECONDS );
-			// Wildcard allowlist transient for ESI.
-			$wildcard = Util::transient_key( 'esi_nonces' );
+			// Wildcard allowlist transient for ESI (wppo_-prefixed to avoid
+			// collisions with other plugins on shared object-cache backends).
+			$wildcard = Util::transient_key( 'wppo_esi_nonces' );
 			$existing = get_transient( $wildcard );
 			if ( ! is_array( $existing ) ) {
 				$existing = array();

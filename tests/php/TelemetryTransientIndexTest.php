@@ -119,10 +119,11 @@ class TelemetryTransientIndexTest extends \PHPUnit\Framework\TestCase {
 		$this->install_option_stubs();
 
 		// Inject the concurrent write on every read after the first — i.e. it
-		// lands between our initial read and the write (fresh re-read) and stays
-		// present for the verify read. This keeps the simulation correct even if
-		// the implementation adds or removes a get_option call.
-		$this->inject_on_read = 2;
+		// lands between our initial read and the merge re-read (the window
+		// the re-read-before-write merge guards) and stays present for the
+		// verify read. This keeps the simulation correct even if the
+		// implementation skips the verify read on the no-contention path.
+		$this->inject_on_read = 1;
 		$this->foreign        = array(
 			'wppo_concurrent_scan_key' => time() + HOUR_IN_SECONDS,
 		);
@@ -140,7 +141,7 @@ class TelemetryTransientIndexTest extends \PHPUnit\Framework\TestCase {
 	public function test_own_key_wins_on_conflict(): void {
 		$this->install_option_stubs();
 
-		$this->inject_on_read = 2;
+		$this->inject_on_read = 1;
 		$this->foreign        = array(
 			'wppo_telemetry_scan_abc' => 12345, // Stale expiry for OUR key.
 		);
@@ -184,5 +185,17 @@ class TelemetryTransientIndexTest extends \PHPUnit\Framework\TestCase {
 		$index = $this->options['wppo_transient_index'];
 		$this->assertLessThanOrEqual( 200, count( $index ) );
 		$this->assertArrayHasKey( 'wppo_new_key', $index, 'The just-registered key must survive the cap.' );
+	}
+
+	/**
+	 * The common no-contention path skips the verify re-read (2 reads, not 3).
+	 */
+	public function test_clean_path_skips_verify_read(): void {
+		$this->install_option_stubs();
+
+		Telemetry::register_transient_key( 'wppo_telemetry_scan_clean' );
+
+		$this->assertSame( 2, $this->reads, 'Clean path should read the index twice (initial + merge), not three times.' );
+		$this->assertArrayHasKey( 'wppo_telemetry_scan_clean', $this->options['wppo_transient_index'] );
 	}
 }
