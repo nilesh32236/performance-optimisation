@@ -313,6 +313,93 @@ class AdvancedCacheHandlerTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that create bakes the canonical host into the drop-in with a
+	 * Host-mismatch early return, and builds the cache path from it.
+	 */
+	public function test_create_pins_dropin_to_canonical_host(): void {
+		$fs                       = new WPPO_AdvancedCache_FS_Mock();
+		$fs->file_exists          = false;
+		$GLOBALS['wp_filesystem'] = $fs;
+
+		Functions\when( 'wp_normalize_path' )->returnArg();
+		Functions\when( 'home_url' )->justReturn( 'https://example.com' );
+		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'absint' )->alias(
+			static function ( $value ) {
+				return abs( (int) $value );
+			}
+		);
+
+		$this->assertTrue( Advanced_Cache_Handler::create() );
+
+		$this->assertStringContainsString( "\$canonical_host = 'example.com';", $fs->put_contents );
+		$this->assertStringContainsString( '$request_host !== $canonical_host', $fs->put_contents );
+		$this->assertStringContainsString( '\'/cache/wppo/\' . $canonical_host . $request_uri', $fs->put_contents );
+		$this->assertStringNotContainsString( '\'/cache/wppo/\' . $site_domain . $request_uri', $fs->put_contents );
+	}
+
+	/**
+	 * Test that the generated drop-in normalizes the request host with
+	 * idn_to_ascii() before the port-strip, so IDN (punycode) request hosts
+	 * compare equal to the baked canonical host instead of always mismatching.
+	 */
+	public function test_create_dropin_normalizes_request_host_with_idn(): void {
+		$fs                       = new WPPO_AdvancedCache_FS_Mock();
+		$fs->file_exists          = false;
+		$GLOBALS['wp_filesystem'] = $fs;
+
+		Functions\when( 'wp_normalize_path' )->returnArg();
+		Functions\when( 'home_url' )->justReturn( 'https://example.com' );
+		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'absint' )->alias(
+			static function ( $value ) {
+				return abs( (int) $value );
+			}
+		);
+
+		$this->assertTrue( Advanced_Cache_Handler::create() );
+
+		$this->assertStringContainsString( 'idn_to_ascii', $fs->put_contents );
+		$this->assertStringContainsString( '$request_base', $fs->put_contents );
+		// Bracketed-IPv6 unwrap mirrors Util::normalize_cache_host() so
+		// '[::1]:8080' normalizes instead of mismatching in the drop-in.
+		$this->assertStringContainsString( 'strpos( $request_base', $fs->put_contents );
+		// Trailing garbage after ']' (e.g. '[::1]evil') is rejected like
+		// Util::normalize_cache_host() instead of unwrapping to '::1'.
+		$this->assertStringContainsString( '$request_rest', $fs->put_contents );
+	}
+
+	/**
+	 * Test that the generated drop-in does not re-strip the port when
+	 * deriving $request_host, so multi-colon hosts match Util output.
+	 *
+	 * A second explode(':', ...)[0] would reduce 'example.com:8080:evil' to
+	 * 'example.com' (guard bypass: forged host served cached canonical
+	 * content) and truncate genuine unbracketed IPv6 canonicals such as
+	 * '2001:db8::1' (permanent drop-in miss). Port stripping already happens
+	 * when building $request_base.
+	 */
+	public function test_create_dropin_request_host_preserves_multi_colon(): void {
+		$fs                       = new WPPO_AdvancedCache_FS_Mock();
+		$fs->file_exists          = false;
+		$GLOBALS['wp_filesystem'] = $fs;
+
+		Functions\when( 'wp_normalize_path' )->returnArg();
+		Functions\when( 'home_url' )->justReturn( 'https://example.com' );
+		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'absint' )->alias(
+			static function ( $value ) {
+				return abs( (int) $value );
+			}
+		);
+
+		$this->assertTrue( Advanced_Cache_Handler::create() );
+
+		$this->assertStringContainsString( "\$request_host  = strtolower( preg_replace( '/[^a-z0-9.:-]+/i', '', \$request_base ) );", $fs->put_contents );
+		$this->assertStringNotContainsString( 'explode( \':\', strtolower( preg_replace', $fs->put_contents );
+	}
+
+	/**
 	 * Test that create leaves a foreign drop-in untouched.
 	 */
 	public function test_create_skips_foreign_dropin(): void {

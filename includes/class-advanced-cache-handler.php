@@ -191,6 +191,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			$fallback_hash = $site_host ? md5( $site_host ) : md5( $site_url );
 			$cookie_hash   = defined( 'COOKIEHASH' ) ? COOKIEHASH : $fallback_hash;
 
+			// Canonical host pinned into the drop-in (Host-header cache-poisoning
+			// guard, @since NEXT): the pre-boot serve path below only ever reads
+			// cache/wppo/<canonical-host>/, so a forged Host header is served
+			// uncached (falls through to WordPress) and can never create or
+			// serve a poisoned file. Empty canonical fails open to uncached.
+			//
+			// Known tradeoff: a single canonical host is baked at create() time
+			// because the pre-boot drop-in has no blog context. On multisite or
+			// domain-mapped networks with several valid hosts, non-primary hosts
+			// fail open (served uncached) rather than served from their own tree.
+			// Per-Host trees were inherently multisite-safe but also inherently
+			// poisonable, so fail-open is the safe direction; a future
+			// enhancement could bake an allowlist of network hosts instead of
+			// strict equality.
+			$canonical_host = Util::get_canonical_host();
+			if ( '' === $canonical_host && is_string( $site_host ) && '' !== $site_host ) {
+				$canonical_host = Util::normalize_cache_host( $site_host );
+			}
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_var_export -- var_export produces a correctly escaped single-quoted PHP literal for the generated drop-in.
+			$canonical_host_escaped = var_export( $canonical_host, true );
+
 			// Cache life in hours baked into the drop-in; 0 = never expire.
 			// NOTE: create() runs in plugin context so Util::get_settings() is fine
 			// here, but the generated drop-in string below serves cached pages
@@ -242,14 +263,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'}' . PHP_EOL . PHP_EOL .
 
 			'$site_url       = ' . $site_url_escaped . ';' . PHP_EOL .
+			'$canonical_host = ' . $canonical_host_escaped . ';' . PHP_EOL .
 			'$raw_domain    = isset( $_SERVER[\'HTTP_HOST\'] ) ? (string) $_SERVER[\'HTTP_HOST\'] : \'\';' . PHP_EOL .
+			'$request_base   = $raw_domain;' . PHP_EOL .
+			'if ( isset( $request_base[0] ) && \'[\' === $request_base[0] ) { $bracket_end = strpos( $request_base, \']\' ); if ( false === $bracket_end ) { $request_base = \'\'; } else { $request_rest = substr( $request_base, $bracket_end + 1 ); if ( \'\' !== $request_rest && \':\' !== $request_rest[0] ) { $request_base = \'\'; } else { $request_base = substr( $request_base, 1, $bracket_end - 1 ); } } } elseif ( substr_count( $request_base, \':\' ) <= 1 ) { $request_base = explode( \':\', $request_base, 2 )[0]; }' . PHP_EOL .
+			'$idn_host       = function_exists( \'idn_to_ascii\' ) ? @idn_to_ascii( $request_base, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46 ) : false;' . PHP_EOL .
+			'$request_base   = ( is_string( $idn_host ) && \'\' !== $idn_host ) ? $idn_host : $request_base;' . PHP_EOL .
 			'$site_domain   = strtolower( preg_replace( \'/[^a-z0-9.:-]+/i\', \'\', $raw_domain ) );' . PHP_EOL .
+			'$request_host  = strtolower( preg_replace( \'/[^a-z0-9.:-]+/i\', \'\', $request_base ) );' . PHP_EOL .
 			'$request_uri   = isset( $_SERVER[\'REQUEST_URI\'] ) ? (string) parse_url( $_SERVER[\'REQUEST_URI\'], PHP_URL_PATH ) : \'\';' . PHP_EOL .
 			'$request_uri   = rawurldecode( $request_uri );' . PHP_EOL .
 			'$request_uri   = function_exists( \'wp_normalize_path\' ) ? wp_normalize_path( $request_uri ) : str_replace( \'\\\\\', \'/\', $request_uri );' . PHP_EOL .
 			'$cache_life    = ' . $cache_life . ';' . PHP_EOL . PHP_EOL .
 
-			'if ( \'\' === $site_domain || false !== strpos( $site_domain, ".." ) || false !== strpos( $request_uri, ".." ) || false !== strpos( $request_uri, "\0" ) || false !== strpos( $site_domain, "\0" ) ) {' . PHP_EOL .
+			'if ( \'\' === $site_domain || \'\' === $canonical_host || \'\' === $request_host || $request_host !== $canonical_host || strpos( $site_domain, \'..\' ) !== false || strpos( $request_uri, \'..\' ) !== false || strpos( $request_uri, "\0" ) !== false || strpos( $site_domain, "\0" ) !== false ) {' . PHP_EOL .
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
 
@@ -304,7 +331,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'	$request_uri .= \'/\';' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
 
-			'$file_path      = WP_CONTENT_DIR . \'/cache/wppo/\' . $site_domain . $request_uri . \'index.html\';' . PHP_EOL .
+			'$file_path      = WP_CONTENT_DIR . \'/cache/wppo/\' . $canonical_host . $request_uri . \'index.html\';' . PHP_EOL .
 			'$file_path      = str_replace( \'\\\\\', \'/\', $file_path );' . PHP_EOL .
 			'$file_path      = preg_replace( \'#/+#\', \'/\', $file_path );' . PHP_EOL .
 			'$file_path      = rtrim( $file_path, \'/\' );' . PHP_EOL .

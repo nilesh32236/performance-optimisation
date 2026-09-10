@@ -1361,6 +1361,116 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Normalize a raw host value into a safe cache-key domain.
+		 *
+		 * Lowercases, converts IDN to ASCII, strips any port, and applies the
+		 * same allowlist/traversal validation used by the cache constructors so
+		 * the canonicalization rule lives in one place. Returns an empty string
+		 * when the value is missing or invalid (fail-open signal: callers fall
+		 * back to legacy behaviour instead of writing under a forged host).
+		 *
+		 * @param string $raw_host Raw host value (e.g. $_SERVER['HTTP_HOST'] or a home_url() host).
+		 * @return string Normalized lowercase host, or '' when invalid.
+		 * @since NEXT
+		 */
+		public static function normalize_cache_host( string $raw_host ): string {
+			$domain = trim( $raw_host );
+			if ( '' === $domain ) {
+				return '';
+			}
+
+			// Strip any port BEFORE IDN conversion: UTS46 rejects
+			// 'münchen.de:8080' as a whole, so converting first would fail
+			// and force a fail-open '' for IDN hosts with explicit ports.
+			// Bracketed IPv6 literals ('[::1]:8080') are unwrapped first;
+			// unbracketed multi-colon values are IPv6 literals (no port).
+			if ( str_starts_with( $domain, '[' ) ) {
+				$bracket_end = strpos( $domain, ']' );
+				if ( false === $bracket_end ) {
+					return '';
+				}
+				// Reject trailing garbage after the bracket (e.g. '[::1]evil'):
+				// only '' or a ':port' suffix is a well-formed bracketed host.
+				$rest = substr( $domain, $bracket_end + 1 );
+				if ( '' !== $rest && ':' !== substr( $rest, 0, 1 ) ) {
+					return '';
+				}
+				$host = substr( $domain, 1, $bracket_end - 1 );
+			} elseif ( substr_count( $domain, ':' ) > 1 ) {
+				$host = $domain;
+			} else {
+				$host = explode( ':', $domain, 2 )[0];
+			}
+			if ( '' === $host ) {
+				return '';
+			}
+
+			if ( function_exists( 'idn_to_ascii' ) ) {
+				try {
+					$converted = idn_to_ascii( $host, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46 );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$converted = false;
+				}
+				if ( false !== $converted && is_string( $converted ) && '' !== $converted ) {
+					$host = $converted;
+				}
+			}
+
+			$valid = ! (
+			strpos( $host, '..' ) !== false ||
+			strpos( $host, '/' ) !== false ||
+			strpos( $host, '\\' ) !== false ||
+			! preg_match( '/^[a-z0-9\.\-:]+$/i', $host )
+			);
+
+			if ( ! $valid ) {
+				return '';
+			}
+
+			return strtolower( $host );
+		}
+
+		/**
+		 * Resolve the canonical host for cache keying from home_url().
+		 *
+		 * The static HTML cache tree (and the used-CSS cache dir) must be keyed
+		 * by the canonical home host so a forged Host header can never create
+		 * or serve a poisoned cache file (Host-header cache poisoning to stored
+		 * XSS). Multisite-safe: home_url() is already blog-aware. Returns an
+		 * empty string when home_url() is unavailable (early boot, CLI) so
+		 * callers can fall back to the legacy Host-derived domain instead of
+		 * fataling.
+		 *
+		 * @return string Canonical lowercase host, or '' when it cannot be resolved.
+		 * @since NEXT
+		 */
+		public static function get_canonical_host(): string {
+			if ( ! function_exists( 'home_url' ) || ! function_exists( 'wp_parse_url' ) ) {
+				return '';
+			}
+			try {
+				$home = home_url();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+			if ( ! is_string( $home ) || '' === $home ) {
+				return '';
+			}
+			try {
+				$host = wp_parse_url( $home, PHP_URL_HOST );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+			if ( ! is_string( $host ) || '' === $host ) {
+				return '';
+			}
+			return self::normalize_cache_host( $host );
+		}
+
+		/**
 		 * Qualify a transient key with the current blog ID on multisite.
 		 *
 		 * Prevents transient key collisions when a shared object cache backend

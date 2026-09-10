@@ -141,10 +141,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		/**
 		 * Domain name.
 		 *
+		 * Pinned to the canonical home host (see {@see Util::get_canonical_host()})
+		 * so a forged Host header can never divert used-CSS reads/writes into a
+		 * poisoned directory. Falls back to the legacy Host-derived value only
+		 * when the canonical host cannot be resolved (early boot, CLI).
+		 *
 		 * @var string
 		 * @since 1.9.0
 		 */
 		private string $domain;
+
+		/**
+		 * Whether the request Host header differs from the canonical home host.
+		 *
+		 * When true, used-CSS writes are refused (fail-open: the page is served
+		 * without used-CSS optimisation) so forged hosts can never poison the
+		 * canonical cache files.
+		 *
+		 * @var bool
+		 * @since NEXT
+		 */
+		private bool $host_mismatch = false;
 
 		/**
 		 * Constructor.
@@ -155,30 +172,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		public function __construct( array $options = array() ) {
 			$this->options = ! empty( $options ) ? $options : Util::get_settings();
 
-			$domain = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
+			$raw_host     = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
+			$request_host = Util::normalize_cache_host( $raw_host );
+			$canonical    = Util::get_canonical_host();
 
-			if ( function_exists( 'idn_to_ascii' ) ) {
-				$converted = idn_to_ascii( $domain, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46 );
-				if ( false !== $converted ) {
-					$domain = $converted;
-				}
+			if ( '' !== $canonical ) {
+				// Pin to the canonical home host by construction; a forged Host
+				// header can never create its own used-CSS cache tree. An
+				// absent/blank request host (CLI/cron, e.g. process_background()
+				// under Action Scheduler) carries no forgery signal and must not
+				// block canonical writes; a presented-but-invalid host that
+				// normalizes to '' (e.g. 'evil!/..') is still a mismatch.
+				$this->domain        = $canonical;
+				$raw_trimmed         = trim( (string) $raw_host );
+				$this->host_mismatch = ( '' === $request_host ? '' !== $raw_trimmed : $request_host !== $canonical );
+			} else {
+				// Canonical host unavailable (early boot, CLI): legacy
+				// Host-derived behaviour so nothing fatals.
+				$this->domain        = $request_host;
+				$this->host_mismatch = false;
 			}
-
-			$host = explode( ':', $domain, 2 )[0];
-
-			$valid_domain = ! (
-				false !== strpos( $host, '..' ) ||
-				false !== strpos( $host, '/' ) ||
-				false !== strpos( $host, '\\' ) ||
-				! preg_match( '/^[a-z0-9\.\-]+$/i', $host )
-			);
-
-			$this->domain = $valid_domain ? strtolower( $host ) : '';
 
 			$this->cache_root_dir = wp_normalize_path( WP_CONTENT_DIR . self::CACHE_ROOT_DIR );
 			$this->cache_root_url = WP_CONTENT_URL . self::CACHE_ROOT_DIR;
 
 			$this->init_safelist();
+		}
+
+		/**
+		 * Whether the request Host header mismatched the canonical home host.
+		 *
+		 * @return bool True when the request host differs from the canonical host.
+		 * @since NEXT
+		 */
+		public function is_host_mismatched(): bool {
+			return $this->host_mismatch;
 		}
 
 		/**
@@ -933,6 +961,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		public function save_used_css( string $css, string $url = '' ): bool {
 			if ( empty( $css ) ) {
 				return false;
+			}
+
+			// Host-header poisoning guard: never persist derived CSS when the
+			// request host mismatched the canonical host (fail-open: the page
+			// is served without used-CSS optimisation instead).
+			if ( $this->host_mismatch ) {
+				return false;
+			}
+
+			// Refuse writes when no domain resolved (canonical unavailable and no
+			// request host, e.g. early boot/CLI): writing under a host-less dir
+			// (cache/wppo//<path>/) would collide across multisite blogs instead
+			// of namespacing per site. Mirrors Cache::maybe_store_cache().
+			//
+			// @since NEXT Empty-domain refusal.
+			if ( '' === $this->domain ) {
+				return false;
+			}
+
+			// A forged host embedded in the explicit $url (e.g. via a filtered
+			// permalink) is not covered by the ambient Host check above: refuse
+			// when the URL host is present and differs from the canonical domain.
+			// An absolute-looking $url whose host normalizes to '' (invalid host
+			// such as 'evil..com') is refused as well instead of being treated
+			// as a relative URL; relative URLs carry no host and still pass.
+			if ( '' !== $url && '' !== $this->domain && function_exists( 'wp_parse_url' ) ) {
+				$url_host_raw = wp_parse_url( $url, PHP_URL_HOST );
+				if ( is_string( $url_host_raw ) && '' !== $url_host_raw ) {
+					$url_host = Util::normalize_cache_host( $url_host_raw );
+					if ( $url_host !== $this->domain ) {
+						return false;
+					}
+				} elseif ( false !== strpos( $url, '://' ) || str_starts_with( ltrim( $url ), '//' ) ) {
+					return false;
+				}
 			}
 
 			$file_path = $this->get_used_css_path( $url );

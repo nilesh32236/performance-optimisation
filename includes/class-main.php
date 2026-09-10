@@ -899,6 +899,11 @@ if ( ! isset( $this->options['image_optimisation']['avifFirst'] ) ) {
 			add_action( 'update_option_permalink_structure', array( __CLASS__, 'clear_all_cache' ) );
 			add_action( 'switch_theme', array( __CLASS__, 'clear_all_cache' ) );
 			add_action( 'update_option_wppo_settings', array( __CLASS__, 'on_settings_update' ), 10, 2 );
+			// The canonical host is baked into advanced-cache.php at create()
+			// time; re-bake it when the home/site URL changes (domain migration)
+			// so the drop-in does not silently run uncached on a stale host.
+			add_action( 'update_option_home', array( __CLASS__, 'on_site_url_change' ), 10, 3 );
+			add_action( 'update_option_siteurl', array( __CLASS__, 'on_site_url_change' ), 10, 3 );
 			add_action( 'activated_plugin', array( __CLASS__, 'clear_all_cache' ) );
 			add_action( 'deactivated_plugin', array( __CLASS__, 'clear_all_cache' ) );
 
@@ -1336,6 +1341,44 @@ if ( ! isset( $this->options['image_optimisation']['avifFirst'] ) ) {
 		 */
 		public static function clear_all_cache() {
 			Cache::clear_cache();
+		}
+
+		/**
+		 * Regenerate the advanced-cache.php drop-in when the home or site URL
+		 * changes (domain migration).
+		 *
+		 * The canonical host is baked into the drop-in at create() time; without
+		 * a re-bake every request would mismatch the stale host and silently
+		 * run uncached. No cache clear here — the old-domain files are keyed
+		 * under a different host directory and simply stop being served.
+		 *
+		 * @param mixed  $old_value Previous option value.
+		 * @param mixed  $value     New option value.
+		 * @param string $option    Option name.
+		 * @return bool True when the drop-in is left in a correct state, false on
+		 *              filesystem failure. Skipped (unchanged value, or
+		 *              scheme/path-only change with an identical host) returns true.
+		 * @since NEXT
+		 */
+		public static function on_site_url_change( $old_value = null, $value = null, $option = '' ): bool {
+			if ( $old_value === $value ) {
+				return true;
+			}
+			// Skip needless identical rewrites: a scheme- or path-only change
+			// (http->https, trailing slash) leaves the canonical host
+			// identical, so the baked drop-in is already correct.
+			if ( function_exists( 'wp_parse_url' ) ) {
+				$old_host = Util::normalize_cache_host( (string) wp_parse_url( (string) $old_value, PHP_URL_HOST ) );
+				$new_host = Util::normalize_cache_host( (string) wp_parse_url( (string) $value, PHP_URL_HOST ) );
+				if ( '' !== $old_host && $old_host === $new_host ) {
+					return true;
+				}
+			}
+			if ( ! Advanced_Cache_Handler::create() ) {
+				do_action( 'wppo_debug_log', 'WPPO advanced-cache.php drop-in regeneration failed after ' . $option . ' change' );
+				return false;
+			}
+			return true;
 		}
 
 		/**
