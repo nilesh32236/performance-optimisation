@@ -121,6 +121,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 			$disabled_styles  = get_post_meta( $post->ID, '_wppo_disabled_styles', true );
 			$delay_strategies = get_post_meta( $post->ID, '_wppo_delay_strategies', true );
 			$delay_priorities = get_post_meta( $post->ID, '_wppo_delay_priorities', true );
+			$delay_disabled   = get_post_meta( $post->ID, '_wppo_delay_disabled', true );
+			$delay_notes      = get_post_meta( $post->ID, '_wppo_delay_notes', true );
 
 			$disabled_scripts = is_array( $disabled_scripts ) ? $disabled_scripts : array();
 			$disabled_styles  = is_array( $disabled_styles ) ? $disabled_styles : array();
@@ -132,6 +134,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 			$protected_css = Asset_Manager::get_protected_styles();
 			?>
 			<div class="wppo-asset-manager">
+				<h4><?php esc_html_e( 'Delay JS Overrides', 'performance-optimisation' ); ?></h4>
+				<p>
+					<label for="wppo_delay_disabled">
+						<input
+							type="checkbox"
+							id="wppo_delay_disabled"
+							name="wppo_delay_disabled"
+							value="1"
+							<?php checked( ! empty( $delay_disabled ) ); ?>
+						/>
+						<?php esc_html_e( 'Disable Delay JS on this page', 'performance-optimisation' ); ?>
+					</label>
+				</p>
+				<p>
+					<label for="wppo_delay_notes"><?php esc_html_e( 'Delay notes (reason / retest date):', 'performance-optimisation' ); ?></label>
+					<textarea id="wppo_delay_notes" name="wppo_delay_notes" rows="2" style="width: 100%;" maxlength="2000" placeholder="<?php esc_attr_e( 'e.g. Hero slider broke with delay; retest after theme update.', 'performance-optimisation' ); ?>"><?php echo esc_textarea( is_string( $delay_notes ) ? $delay_notes : '' ); ?></textarea>
+				</p>
 				<?php if ( false === $assets || ( empty( $assets['scripts'] ) && empty( $assets['styles'] ) ) ) : ?>
 					<p class="description">
 						<?php
@@ -385,6 +404,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 			$raw_priorities     = $this->get_raw_post_array( 'wppo_delay_priorities' );
 			$allowed_priorities = array( '', 'high', 'normal', 'low' );
 			update_post_meta( $post_id, '_wppo_delay_priorities', $this->process_delay_setting( $raw_priorities, $valid_scripts, $allowed_priorities ) );
+
+			// Per-page Delay JS kill-switch + notes (issue #966). Checkbox-only
+			// (no JS); notes capped at 2000 chars, informational only.
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_asset_manager_nonce.
+			$delay_disabled = isset( $_POST['wppo_delay_disabled'] ) && ! empty( $_POST['wppo_delay_disabled'] );
+			if ( $delay_disabled ) {
+				update_post_meta( $post_id, '_wppo_delay_disabled', '1' );
+			} else {
+				delete_post_meta( $post_id, '_wppo_delay_disabled' );
+			}
+
+	// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_asset_manager_nonce.
+			$raw_notes = $this->get_raw_post_string( 'wppo_delay_notes' );
+			$notes     = is_string( $raw_notes ) ? sanitize_textarea_field( $raw_notes ) : '';
+			if ( function_exists( 'mb_strlen' ) && function_exists( 'mb_substr' ) ) {
+				if ( mb_strlen( $notes, 'UTF-8' ) > 2000 ) {
+					$notes = mb_substr( $notes, 0, 2000, 'UTF-8' );
+				}
+			} elseif ( strlen( $notes ) > 2000 ) {
+				$notes = substr( $notes, 0, 2000 );
+			}
+			if ( '' === $notes ) {
+				delete_post_meta( $post_id, '_wppo_delay_notes' );
+			} else {
+				update_post_meta( $post_id, '_wppo_delay_notes', $notes );
+			}
 		}
 
 		/**
@@ -397,6 +442,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		private function get_raw_post_array( string $key ): array {
 			// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 			return isset( $_POST[ $key ] ) && is_array( $_POST[ $key ] ) ? wp_unslash( $_POST[ $key ] ) : array();
+		}
+
+		/**
+		 * Safely retrieves an unslashed scalar string from $_POST.
+		 *
+		 * The caller is responsible for sanitizing the return value.
+		 *
+		 * @param string $key The $_POST key to check.
+		 * @return string The raw unslashed string, or an empty string if invalid.
+		 * @since NEXT
+		 */
+		private function get_raw_post_string( string $key ): string {
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			$raw = isset( $_POST[ $key ] ) ? wp_unslash( $_POST[ $key ] ) : '';
+			return is_string( $raw ) ? $raw : '';
 		}
 
 		/**
