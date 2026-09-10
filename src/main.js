@@ -1,4 +1,13 @@
 document.addEventListener( 'DOMContentLoaded', function () {
+	// Degrade silently when the script is enqueued without localization
+	// (mirrors the wppoSettings guard in src/lib/apiRequest.js).
+	if (
+		typeof wppoObject === 'undefined' ||
+		! wppoObject ||
+		! wppoObject.apiUrl
+	) {
+		return;
+	}
 	// Keep in sync with src/lib/apiRequest.js: refreshNonce() + apiCall() retry-on-403 logic.
 	// This entry is intentionally standalone (admin-bar, enqueued on every admin page via
 	// wppoObject) and does not import the SPA's apiRequest module to avoid bundle coupling.

@@ -50,13 +50,133 @@ const validateImportData = ( data ) => {
 	if ( keys.length === 0 ) {
 		return false;
 	}
-	return keys.every(
-		( key ) =>
-			ALLOWED_IMPORT_KEYS.includes( key ) &&
-			typeof data[ key ] === 'object' &&
-			data[ key ] !== null &&
-			! Array.isArray( data[ key ] )
-	);
+	if ( keys.length > MAX_IMPORT_TOP_KEYS ) {
+		return false;
+	}
+	return keys.every( ( key ) => {
+		if (
+			! ALLOWED_IMPORT_KEYS.includes( key ) ||
+			typeof data[ key ] !== 'object' ||
+			data[ key ] === null ||
+			Array.isArray( data[ key ] )
+		) {
+			return false;
+		}
+		return isValidImportValue( data[ key ], 1 );
+	} );
+};
+
+/**
+ * Maximum accepted settings-file size (512KB). Real exports are <100KB;
+ * larger files risk freezing the admin UI during parse.
+ *
+ * @since NEXT
+ */
+const MAX_IMPORT_BYTES = 512 * 1024;
+
+/**
+ * Maximum nesting depth accepted in an imported settings file.
+ *
+ * @since NEXT
+ */
+const MAX_IMPORT_DEPTH = 10;
+
+/**
+ * Maximum top-level keys accepted in an imported settings file.
+ *
+ * @since NEXT
+ */
+const MAX_IMPORT_TOP_KEYS = 1000;
+
+/**
+ * Pattern matching nested secret keys redacted on export (Redis password,
+ * Cloudflare/Bunny tokens, nonces, generic *key/*token/*secret/password).
+ *
+ * @since NEXT
+ */
+const SECRET_KEY_PATTERN =
+	/(password|passwd|secret|api[_-]?key|api[_-]?token|auth[_-]?token|cloudflare|bunny|token|nonce)$/i;
+
+/**
+ * Deep-clone an object while masking every nested key matching
+ * SECRET_KEY_PATTERN with 'REDACTED'.
+ *
+ * @since NEXT
+ * @param {*} value Value to redact.
+ * @return {*} Redacted clone.
+ */
+const redactSecrets = ( value ) => {
+	if ( Array.isArray( value ) ) {
+		return value.map( redactSecrets );
+	}
+	if ( value && typeof value === 'object' ) {
+		const out = {};
+		Object.entries( value ).forEach( ( [ key, val ] ) => {
+			if (
+				SECRET_KEY_PATTERN.test( key ) &&
+				typeof val === 'string' &&
+				val
+			) {
+				out[ key ] = 'REDACTED';
+			} else {
+				out[ key ] = redactSecrets( val );
+			}
+		} );
+		return out;
+	}
+	return value;
+};
+
+/**
+ * Recursively validate an imported settings value: only plain objects,
+ * strings, numbers, booleans, null and arrays of leaves are allowed.
+ * Rejects excessive depth, oversized strings and non-plain values.
+ * Server-side allowlist + PHP sanitization remains authoritative.
+ *
+ * @since NEXT
+ * @param {*}      value Value to check.
+ * @param {number} depth Current depth.
+ * @return {boolean} True when the value is safe to forward to the server.
+ */
+const isValidImportValue = ( value, depth ) => {
+	if ( depth > MAX_IMPORT_DEPTH ) {
+		return false;
+	}
+	if ( value === null ) {
+		return true;
+	}
+	const type = typeof value;
+	if ( type === 'string' ) {
+		return value.length <= MAX_IMPORT_BYTES;
+	}
+	if ( type === 'number' || type === 'boolean' ) {
+		return true;
+	}
+	if ( Array.isArray( value ) ) {
+		if ( value.length > MAX_IMPORT_TOP_KEYS ) {
+			return false;
+		}
+		return value.every( ( item ) => {
+			if ( item !== null && typeof item === 'object' ) {
+				return false;
+			}
+			return isValidImportValue( item, depth + 1 );
+		} );
+	}
+	if ( type === 'object' ) {
+		const proto = Object.getPrototypeOf( value );
+		if ( proto !== Object.prototype && proto !== null ) {
+			return false;
+		}
+		const keys = Object.keys( value );
+		if ( keys.length > MAX_IMPORT_TOP_KEYS ) {
+			return false;
+		}
+		return keys.every( ( key ) =>
+			isValidImportValue( value[ key ], depth + 1 )
+		);
+	}
+	return false;
 };
 
 const PluginSetting = ( { options } ) => {
@@ -334,11 +454,12 @@ const PluginSetting = ( { options } ) => {
 	};
 
 	const exportSettings = () => {
-		// Security: redact sensitive API keys from export.
-		const safeOptions = JSON.parse( JSON.stringify( options ) );
-		if ( safeOptions.performance_audit?.pagespeed_api_key ) {
-			safeOptions.performance_audit.pagespeed_api_key = 'REDACTED';
-		}
+		// Security: redact all nested secrets (API keys, passwords, tokens)
+		// before writing the export to disk. Server-side sanitization is
+		// authoritative; this is defense-in-depth for the plaintext file.
+		const safeOptions = redactSecrets(
+			JSON.parse( JSON.stringify( options ) )
+		);
 
 		const blob = new Blob( [ JSON.stringify( safeOptions, null, 2 ) ], {
 			type: 'application/json',
@@ -378,6 +499,22 @@ const PluginSetting = ( { options } ) => {
 		}
 
 		setIsImporting( true );
+
+		// Client-side size guard: reject oversized files before reading so a
+		// large/malicious file cannot freeze the admin UI. Server-side
+		// allowlist + sanitization remains authoritative.
+		if ( selectedFile.size && selectedFile.size > MAX_IMPORT_BYTES ) {
+			notifyImport( {
+				type: 'error',
+				message: __(
+					'Invalid settings file. The file must contain valid plugin settings.',
+					'performance-optimisation'
+				),
+			} );
+			setIsImporting( false );
+			resetFileInput();
+			return;
+		}
 
 		const reader = new FileReader();
 
@@ -992,6 +1129,15 @@ const PluginSetting = ( { options } ) => {
 			/>
 		</div>
 	);
+};
+
+export {
+	validateImportData,
+	redactSecrets,
+	isValidImportValue,
+	MAX_IMPORT_BYTES,
+	MAX_IMPORT_DEPTH,
+	SECRET_KEY_PATTERN,
 };
 
 export default PluginSetting;

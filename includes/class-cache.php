@@ -1227,7 +1227,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		private function get_styles_inline_limit(): int {
 			$default = 40000;
-			if ( isset( $GLOBALS['wp_version'] ) && version_compare( $GLOBALS['wp_version'], '6.9', '<' ) ) {
+			if ( isset( $GLOBALS['wp_version'] ) && version_compare( $GLOBALS['wp_version'], '6.9-alpha', '<' ) ) {
 				$default = 20000;
 			}
 
@@ -1432,6 +1432,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * Creates a static HTML version of the page if not logged in and not a 404 page.
 		 *
+		 * Tracked by #829: do not remove until minimum supported WP is raised
+		 * to 6.9 (`Requires at least: 6.9`).
+		 *
 		 * Buffer lifecycle guarantees (audit #888 finding 6):
 		 * - the ob callback is Throwable-safe and always returns a string (the
 		 *   original buffer on failure), so the page can never lose output and
@@ -1464,7 +1467,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return;
 			}
 
-			// TODO(#553): remove when minimum supported WP is raised to 6.9.
+			// TODO(#553, #829): remove when minimum supported WP is raised to 6.9.
+			// Blocked until `Requires at least: 6.9` — keep the legacy fallback.
 			if ( ! $this->is_cache_allowed_for_current_user() || $this->is_not_cacheable() ) {
 				return;
 			}

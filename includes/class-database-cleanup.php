@@ -672,7 +672,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * @since NEXT
 		 *
 		 * @param int $limit Maximum number of options to return.
-		 * @return array<int, array{option_name:string,size:int}> Sorted by size.
+		 * @return array<int, array{option_name:string,size:int,autoload:string}> Sorted by size.
 		 */
 		public static function get_autoloaded_options( int $limit = 20 ): array {
 			global $wpdb;
@@ -683,7 +683,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Read-only diagnostic query.
 			$rows = $wpdb->get_results(
 				$wpdb->prepare(
-					"SELECT option_name, LENGTH(option_value) AS opt_size FROM {$wpdb->options} WHERE autoload IN ($placeholders) ORDER BY opt_size DESC LIMIT " . (int) $limit, // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+					"SELECT option_name, autoload, LENGTH(option_value) AS opt_size FROM {$wpdb->options} WHERE autoload IN ($placeholders) ORDER BY opt_size DESC LIMIT " . (int) $limit, // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
 					...$autoload_values
 				),
 				ARRAY_A
@@ -702,10 +702,710 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				$result[] = array(
 					'option_name' => $name,
 					'size'        => (int) ( $row['opt_size'] ?? 0 ),
+					'autoload'    => isset( $row['autoload'] ) ? (string) $row['autoload'] : '',
 				);
 			}
 
 			return $result;
+		}
+
+		/**
+		 * Option name storing prior autoload values for remediated options.
+		 *
+		 * Maps option_name => prior autoload value so every flip is revertible.
+		 * Site-specific via get_option/update_option (multisite-safe).
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		public const REMEDIATED_OPTION = 'wppo_autoload_remediated';
+
+		/**
+		 * Default minimum option size (bytes) for autoload remediation candidacy.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const AUTOLOAD_SIZE_THRESHOLD = 1024;
+
+		/**
+		 * Maximum number of options a single remediation pass will touch.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const AUTOLOAD_REMEDIATION_LIMIT = 100;
+
+		/**
+		 * Minimum remediation threshold in bytes (100 B).
+		 *
+		 * Shared by settings validation, the clamp helper, and the REST layer
+		 * so direct PHP calls cannot bypass the bounds.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const AUTOLOAD_THRESHOLD_MIN = 100;
+
+		/**
+		 * Maximum remediation threshold in bytes (10 MB).
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const AUTOLOAD_THRESHOLD_MAX = 10485760;
+
+		/**
+		 * Maximum number of candidates a single remediation pass will consider.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const AUTOLOAD_LIMIT_MAX = 500;
+
+		/**
+		 * Maximum number of expired-transient rows a single export will return.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const EXPORT_LIMIT_MAX = 2000;
+
+		/**
+		 * Core option names that must never have their autoload value flipped.
+		 *
+		 * Filterable via `wppo_core_autoload_options`.
+		 *
+		 * @since NEXT
+		 * @return string[]
+		 */
+		public static function get_core_autoload_options(): array {
+			$core = array(
+				'siteurl',
+				'home',
+				'blogname',
+				'blogdescription',
+				'users_can_register',
+				'admin_email',
+				'start_of_week',
+				'blog_charset',
+				'date_format',
+				'time_format',
+				'default_category',
+				'template',
+				'stylesheet',
+				'posts_per_page',
+				'posts_per_rss',
+				'show_on_front',
+				'page_on_front',
+				'page_for_posts',
+				'default_post_format',
+				'default_comments_page',
+				'comment_moderation',
+				'comment_max_links',
+				'moderation_keys',
+				'disallowed_keys',
+				'gmt_offset',
+				'timezone_string',
+				'rewrite_rules',
+				'active_plugins',
+				'sidebars_widgets',
+				'widget_text',
+				'cron',
+				'db_version',
+				'permalink_structure',
+				'category_base',
+				'tag_base',
+				'wp_user_roles',
+				'default_role',
+				'comments_notify',
+				'moderation_notify',
+				'comment_registration',
+				'require_name_email',
+				'comment_order',
+				'close_comments_for_old_posts',
+				'close_comments_days_old',
+				'thread_comments',
+				'thread_comments_depth',
+				'page_comments',
+				'comments_per_page',
+				'default_comments_per_page',
+				'comment_whitelist',
+				'comment_previously_approved',
+				'comment_agent_blacklist',
+				'sticky_posts',
+				'upload_path',
+				'upload_url_path',
+				'uploads_use_yearmonth_folders',
+				'thumbnail_size_w',
+				'thumbnail_size_h',
+				'thumbnail_crop',
+				'medium_size_w',
+				'medium_size_h',
+				'large_size_w',
+				'large_size_h',
+				'image_default_link_type',
+				'image_default_size',
+				'image_default_align',
+				'mailserver_url',
+				'mailserver_port',
+				'mailserver_login',
+				'mailserver_pass',
+				'default_email_category',
+				'ping_sites',
+				'blog_public',
+				'default_link_category',
+				'show_avatars',
+				'avatar_rating',
+				'avatar_default',
+				'use_smilies',
+				'use_balanceTags',
+				'links_updated_date_format',
+				'links_recently_updated_prepend',
+				'links_recently_updated_append',
+				'links_recently_updated_time',
+			);
+			/**
+			 * Filters the core option names excluded from autoload remediation.
+			 *
+			 * @since NEXT
+			 * @param string[] $core Core option names.
+			 */
+			$filtered = apply_filters( 'wppo_core_autoload_options', $core );
+			return is_array( $filtered ) ? array_values( array_unique( array_map( 'strval', $filtered ) ) ) : $core;
+		}
+
+		/**
+		 * Whether the runtime supports flipping autoload values (WP 6.6+).
+		 *
+		 * WP 6.6 introduced wp_set_option_autoload() and the `auto-on` value.
+		 * On older cores remediation is unavailable (fail-open: dry run still
+		 * reports, apply leaves values unchanged).
+		 *
+		 * @since NEXT
+		 * @return bool
+		 */
+		public static function is_autoload_remediation_supported(): bool {
+			if ( ! function_exists( 'wp_set_option_autoload' ) ) {
+				return false;
+			}
+			if ( function_exists( 'get_bloginfo' ) ) {
+				try {
+					$version = (string) get_bloginfo( 'version' );
+				} catch ( \Throwable $e ) {
+					return false;
+				}
+				if ( '' !== $version && version_compare( $version, '6.6', '<' ) ) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		/**
+		 * Resolve the remediation size threshold from settings with bounds.
+		 *
+		 * Additive `database_cleanup.autoloadThreshold` key (default 1024,
+		 * clamped to 100 .. 10MB) so existing installs migrate without change.
+		 *
+		 * @since NEXT
+		 * @param mixed $settings Optional settings array or null to load from option.
+		 * @return int Threshold in bytes.
+		 */
+		public static function get_autoload_remediation_threshold( $settings = null ): int {
+			if ( null === $settings ) {
+				$settings = Util::get_settings();
+				$settings = $settings['database_cleanup'] ?? array();
+				if ( ! is_array( $settings ) ) {
+					$settings = array();
+				}
+			}
+			$threshold = isset( $settings['autoloadThreshold'] ) ? (int) $settings['autoloadThreshold'] : self::AUTOLOAD_SIZE_THRESHOLD;
+			return max( self::AUTOLOAD_THRESHOLD_MIN, min( self::AUTOLOAD_THRESHOLD_MAX, $threshold ) );
+		}
+
+		/**
+		 * Get the total bytes currently held by autoloaded options.
+		 *
+		 * @since NEXT
+		 * @return int Total bytes, or 0 on error.
+		 */
+		public static function get_autoload_total_bytes(): int {
+			global $wpdb;
+			$autoload_values = self::get_autoloadable_values();
+			$placeholders    = implode( ',', array_fill( 0, count( $autoload_values ), '%s' ) );
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Read-only diagnostic query.
+			$total = $wpdb->get_var(
+				$wpdb->prepare(
+					"SELECT SUM(LENGTH(option_value)) FROM {$wpdb->options} WHERE autoload IN ($placeholders)", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+					...$autoload_values
+				)
+			);
+			return null === $total ? 0 : (int) $total;
+		}
+
+		/**
+		 * List non-core autoloaded options at or above the size threshold.
+		 *
+		 * Excludes core options, transients/timeouts (handled by the
+		 * expired-transient purge), oEmbed cache entries, and the plugin's own
+		 * `wppo_*` options (e.g. wppo_settings must stay autoloaded).
+		 *
+		 * @since NEXT
+		 * @param int $threshold Minimum option size in bytes.
+		 * @param int $limit     Maximum number of candidates to return.
+		 * @return array<int, array{option_name:string,size:int,autoload:string}> Sorted by size desc.
+		 */
+		public static function get_autoload_candidates( int $threshold = self::AUTOLOAD_SIZE_THRESHOLD, int $limit = self::AUTOLOAD_REMEDIATION_LIMIT ): array {
+			global $wpdb;
+			$threshold = max( 1, $threshold );
+			$limit     = max( 1, min( self::AUTOLOAD_LIMIT_MAX, $limit ) );
+
+			$autoload_values = self::get_autoloadable_values();
+			$placeholders    = implode( ',', array_fill( 0, count( $autoload_values ), '%s' ) );
+
+			// Fetch a wider window than $limit: PHP-side exclusions below (core,
+			// transients, oEmbed, wppo_*, already-remediated) would otherwise
+			// silently hide candidates sitting below the SQL LIMIT cutoff.
+			$fetch = max( $limit * 5, $limit + 100 );
+
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Read-only diagnostic query.
+			$rows = $wpdb->get_results(
+				$wpdb->prepare(
+					"SELECT option_name, autoload, LENGTH(option_value) AS opt_size FROM {$wpdb->options} WHERE autoload IN ($placeholders) AND LENGTH(option_value) >= %d ORDER BY opt_size DESC LIMIT " . (int) $fetch, // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+					...array_merge( $autoload_values, array( $threshold ) )
+				),
+				ARRAY_A
+			);
+
+			if ( ! is_array( $rows ) ) {
+				return array();
+			}
+
+			$core       = array_flip( self::get_core_autoload_options() );
+			$result     = array();
+			$remediated = self::get_remediated_options();
+			foreach ( $rows as $row ) {
+				$name = isset( $row['option_name'] ) ? (string) $row['option_name'] : '';
+				if ( '' === $name ) {
+					continue;
+				}
+				if ( isset( $core[ $name ] ) ) {
+					continue;
+				}
+				if ( 0 === strpos( $name, '_transient_' ) || 0 === strpos( $name, '_site_transient_' ) ) {
+					continue;
+				}
+				if ( 0 === strpos( $name, '_oembed_' ) ) {
+					continue;
+				}
+				if ( 0 === strpos( $name, 'wppo_' ) ) {
+					continue;
+				}
+				if ( isset( $remediated[ $name ] ) ) {
+					continue;
+				}
+				$result[] = array(
+					'option_name' => $name,
+					'size'        => (int) ( $row['opt_size'] ?? 0 ),
+					'autoload'    => isset( $row['autoload'] ) ? (string) $row['autoload'] : '',
+				);
+			}
+
+			return array_slice( $result, 0, $limit );
+		}
+
+		/**
+		 * Clamp a caller-supplied remediation threshold to the supported range.
+		 *
+		 * Matches the settings clamp (100 B .. 10 MB) so direct PHP calls cannot
+		 * bypass the bounds enforced by settings validation and the REST layer.
+		 *
+		 * @since NEXT
+		 * @param int $threshold Threshold in bytes.
+		 * @return int Clamped threshold in bytes.
+		 */
+		private static function clamp_autoload_threshold( int $threshold ): int {
+			return max( self::AUTOLOAD_THRESHOLD_MIN, min( self::AUTOLOAD_THRESHOLD_MAX, $threshold ) );
+		}
+
+		/**
+		 * Build a dry-run remediation report without changing anything.
+		 *
+		 * @since NEXT
+		 * @param int|null $threshold Optional threshold override (bytes).
+		 * @param int      $limit     Maximum number of candidates.
+		 * @return array{threshold:int,supported:bool,total_autoload_bytes:int,count:int,bytes_saved:int,options:array}
+		 */
+		public static function plan_autoload_remediation( ?int $threshold = null, int $limit = self::AUTOLOAD_REMEDIATION_LIMIT ): array {
+			$threshold  = null === $threshold ? self::get_autoload_remediation_threshold() : self::clamp_autoload_threshold( $threshold );
+			$candidates = self::get_autoload_candidates( $threshold, $limit );
+			$saved      = 0;
+			foreach ( $candidates as $candidate ) {
+				$saved += (int) $candidate['size'];
+			}
+			return array(
+				'threshold'            => $threshold,
+				'supported'            => self::is_autoload_remediation_supported(),
+				'total_autoload_bytes' => self::get_autoload_total_bytes(),
+				'count'                => count( $candidates ),
+				'bytes_saved'          => $saved,
+				'options'              => $candidates,
+			);
+		}
+
+		/**
+		 * Get stored prior autoload values for remediated options.
+		 *
+		 * @since NEXT
+		 * @return array<string,string> Map of option_name => prior autoload value.
+		 */
+		public static function get_remediated_options(): array {
+			$stored = get_option( self::REMEDIATED_OPTION, array() );
+			return is_array( $stored ) ? $stored : array();
+		}
+
+		/**
+		 * Flip one option's autoload value off, guarded for WP 6.6+ with legacy fallback.
+		 *
+		 * Uses wp_set_option_autoload() when available; otherwise falls back to
+		 * a direct options-table update. Any failure returns false and leaves
+		 * the value unchanged (fail-open, never fatal).
+		 *
+		 * @since NEXT
+		 * @param string $option_name Option name.
+		 * @param string $autoload_off Value disabling autoload ('off' on WP 6.6+, 'no' legacy).
+		 * @return bool True on success, false on failure.
+		 */
+		private static function set_option_autoload_off( string $option_name, string $autoload_off = 'no' ): bool {
+			try {
+				if ( function_exists( 'wp_set_option_autoload' ) ) {
+					$result = wp_set_option_autoload( $option_name, false );
+					return (bool) $result;
+				}
+				global $wpdb;
+				if ( ! isset( $wpdb->options ) ) {
+					return false;
+				}
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Autoload flip fallback for WP < 6.6.
+				$result = $wpdb->update(
+					$wpdb->options,
+					array( 'autoload' => $autoload_off ),
+					array( 'option_name' => $option_name ),
+					array( '%s' ),
+					array( '%s' )
+				);
+				return false !== $result;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Restore one option's prior autoload value, guarded like the flip path.
+		 *
+		 * Restores the exact stored prior string (e.g. `yes` vs `auto` vs
+		 * `auto-on` on WP 6.6+) via a direct options-table update after the
+		 * `wp_set_option_autoload()` bool flip, so revert restores the exact
+		 * flavor rather than just autoload-on semantics. Falls back to a
+		 * direct update on WP < 6.6. Any failure returns false (fail-open).
+		 *
+		 * @since NEXT
+		 * @param string $option_name Option name.
+		 * @param string $prior       Prior autoload value to restore.
+		 * @return bool True on success, false on failure.
+		 */
+		private static function restore_option_autoload( string $option_name, string $prior ): bool {
+			$allowed_priors = array( 'yes', 'no', 'on', 'off', 'auto', 'auto-on', 'auto-off' );
+			try {
+				if ( function_exists( 'wp_set_option_autoload' ) ) {
+					$autoload = in_array( $prior, self::get_autoloadable_values(), true );
+					$result   = wp_set_option_autoload( $option_name, $autoload );
+					if ( ! $result ) {
+						return false;
+					}
+					// wp_set_option_autoload() only flips on/off, losing the exact
+					// 6.6+ flavor (yes vs auto vs auto-on). Restore the exact
+					// prior string when it is a known value.
+					if ( in_array( $prior, $allowed_priors, true ) ) {
+						global $wpdb;
+						if ( ! isset( $wpdb->options ) ) {
+							return true;
+						}
+						// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Exact-flavor restore after the core bool flip.
+						$updated = $wpdb->update(
+							$wpdb->options,
+							array( 'autoload' => $prior ),
+							array( 'option_name' => $option_name ),
+							array( '%s' ),
+							array( '%s' )
+						);
+						return false !== $updated;
+					}
+					return true;
+				}
+				global $wpdb;
+				if ( ! isset( $wpdb->options ) ) {
+					return false;
+				}
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Autoload restore fallback for WP < 6.6.
+				$result = $wpdb->update(
+					$wpdb->options,
+					array( 'autoload' => $prior ),
+					array( 'option_name' => $option_name ),
+					array( '%s' ),
+					array( '%s' )
+				);
+				return false !== $result;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Apply one-click autoload remediation: flip candidates to autoload off, one at a time.
+		 *
+		 * Only non-core options at or above the threshold are flipped. Each
+		 * option's prior autoload value is stored for per-option revert. On
+		 * WP < 6.6 the legacy fallback leaves values at autoload yes
+		 * (fail-open to current behavior, never fatal) and reports
+		 * `supported: false` with zero applied.
+		 *
+		 * @since NEXT
+		 * @param int|null $threshold Optional threshold override (bytes).
+		 * @param int      $limit     Maximum number of options to flip.
+		 * @return array{threshold:int,supported:bool,applied:array,failed:array,bytes_saved:int,total_autoload_bytes:int}
+		 */
+		public static function remediate_autoload( ?int $threshold = null, int $limit = self::AUTOLOAD_REMEDIATION_LIMIT ): array {
+			$threshold = null === $threshold ? self::get_autoload_remediation_threshold() : self::clamp_autoload_threshold( $threshold );
+			$limit     = max( 1, min( self::AUTOLOAD_LIMIT_MAX, $limit ) );
+			$result    = array(
+				'threshold'            => $threshold,
+				'supported'            => self::is_autoload_remediation_supported(),
+				'applied'              => array(),
+				'failed'               => array(),
+				'bytes_saved'          => 0,
+				'total_autoload_bytes' => self::get_autoload_total_bytes(),
+			);
+
+			$candidates = self::get_autoload_candidates( $threshold, $limit );
+			if ( empty( $candidates ) ) {
+				return $result;
+			}
+
+			$legacy_fallback = ! function_exists( 'wp_set_option_autoload' );
+			if ( $legacy_fallback ) {
+				// Legacy fallback keeps autoload yes: report candidates as failed
+				// (unsupported) without touching anything.
+				foreach ( $candidates as $candidate ) {
+					$result['failed'][] = $candidate['option_name'];
+				}
+				return $result;
+			}
+
+			$priors = self::get_remediated_options();
+			$saved  = 0;
+			// Hoist the core list once: get_core_autoload_options() fires a filter.
+			$core_options = array_flip( self::get_core_autoload_options() );
+			foreach ( $candidates as $candidate ) {
+				$name = $candidate['option_name'];
+				// Re-check core exclusion at apply time (filter may have changed).
+				if ( isset( $core_options[ $name ] ) ) {
+					$result['failed'][] = $name;
+					continue;
+				}
+				$prior = '' !== $candidate['autoload'] ? $candidate['autoload'] : 'yes';
+				if ( self::set_option_autoload_off( $name ) ) {
+					$priors[ $name ]     = $prior;
+					$result['applied'][] = array(
+						'option_name' => $name,
+						'size'        => (int) $candidate['size'],
+						'prior'       => $prior,
+					);
+					$saved              += (int) $candidate['size'];
+				} else {
+					$result['failed'][] = $name;
+				}
+			}
+
+			if ( ! empty( $result['applied'] ) ) {
+				update_option( self::REMEDIATED_OPTION, $priors, false );
+				self::invalidate_counts_cache();
+			}
+			$result['bytes_saved']          = $saved;
+			$result['total_autoload_bytes'] = self::get_autoload_total_bytes();
+
+			if ( ! empty( $result['applied'] ) ) {
+				Log::add(
+					sprintf(
+						/* translators: %d: Number of options remediated */
+						__( 'Autoload remediation: %d options set to autoload off.', 'performance-optimisation' ),
+						count( $result['applied'] )
+					)
+				);
+			}
+
+			return $result;
+		}
+
+		/**
+		 * Revert a single remediated option to its prior autoload value.
+		 *
+		 * @since NEXT
+		 * @param string $option_name Option name to revert.
+		 * @return bool|WP_Error True on success, WP_Error when unknown/failed.
+		 */
+		public static function revert_autoload_option( string $option_name ) {
+			$option_name = sanitize_text_field( $option_name );
+			if ( '' === $option_name ) {
+				return new WP_Error( 'wppo_invalid_option', __( 'Invalid option name.', 'performance-optimisation' ) );
+			}
+			$priors = self::get_remediated_options();
+			if ( ! isset( $priors[ $option_name ] ) ) {
+				return new WP_Error( 'wppo_unknown_option', __( 'Option was not remediated by this plugin.', 'performance-optimisation' ) );
+			}
+			$prior = (string) $priors[ $option_name ];
+			if ( ! self::restore_option_autoload( $option_name, $prior ) ) {
+				return new WP_Error( 'wppo_revert_failed', __( 'Failed to restore autoload value.', 'performance-optimisation' ) );
+			}
+			unset( $priors[ $option_name ] );
+			update_option( self::REMEDIATED_OPTION, $priors, false );
+			self::invalidate_counts_cache();
+			Log::add(
+				sprintf(
+					/* translators: %s: Option name */
+					__( 'Autoload remediation reverted for %s.', 'performance-optimisation' ),
+					$option_name
+				)
+			);
+			return true;
+		}
+
+		/**
+		 * Revert all remediated options to their prior autoload values.
+		 *
+		 * Fail-open per option: failures are collected and reported while
+		 * successful reverts are still persisted.
+		 *
+		 * @since NEXT
+		 * @return array{reverted:string[],failed:string[]}
+		 */
+		public static function revert_autoload_all(): array {
+			$priors   = self::get_remediated_options();
+			$reverted = array();
+			$failed   = array();
+			foreach ( $priors as $name => $prior ) {
+				if ( self::restore_option_autoload( (string) $name, (string) $prior ) ) {
+					$reverted[] = (string) $name;
+				} else {
+					$failed[] = (string) $name;
+				}
+			}
+			if ( ! empty( $reverted ) ) {
+				$remaining = array_diff_key( $priors, array_flip( $reverted ) );
+				update_option( self::REMEDIATED_OPTION, $remaining, false );
+				self::invalidate_counts_cache();
+			}
+			if ( ! empty( $reverted ) ) {
+				Log::add(
+					sprintf(
+						/* translators: %d: Number of options reverted */
+						__( 'Autoload remediation reverted for %d options.', 'performance-optimisation' ),
+						count( $reverted )
+					)
+				);
+			}
+			return array(
+				'reverted' => $reverted,
+				'failed'   => $failed,
+			);
+		}
+
+		/**
+		 * Export expired transients for pre-run review (read-only, expired rows only).
+		 *
+		 * Mirrors the expired-only predicate of clean_expired_transients() so
+		 * the export shows exactly what a purge would delete.
+		 *
+		 * @since NEXT
+		 * @param int $limit Maximum number of rows to export.
+		 * @return array<int, array{option_name:string,timeout_option:string,expired_at:int,size:int}>
+		 */
+		public static function export_expired_transients( int $limit = 500 ): array {
+			global $wpdb;
+			$limit = max( 1, min( self::EXPORT_LIMIT_MAX, $limit ) );
+			$time  = time();
+			$rows  = array();
+
+			$transient_keys = array(
+				'_transient_'      => '_transient_timeout_',
+				'_site_transient_' => '_site_transient_timeout_',
+			);
+
+			foreach ( $transient_keys as $prefix => $timeout_prefix ) {
+				$is_multisite = false;
+				if ( function_exists( 'is_multisite' ) ) {
+					try {
+						$is_multisite = is_multisite();
+					} catch ( \Throwable $e ) {
+						$is_multisite = false;
+					}
+				}
+				if ( '_site_transient_' === $prefix && $is_multisite ) {
+					continue;
+				}
+
+				// Split the per-family limit so the first family cannot starve the
+				// second: each query only asks for the rows still needed to fill
+				// $limit, and the combined list is capped in PHP as a backstop.
+				$remaining = $limit - count( $rows );
+				if ( $remaining <= 0 ) {
+					break;
+				}
+
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Read-only pre-run export.
+				$batch = $wpdb->get_results(
+					$wpdb->prepare(
+						"SELECT a.option_name, b.option_name AS timeout_name, b.option_value AS timeout_value, LENGTH(a.option_value) AS opt_size FROM $wpdb->options a
+						INNER JOIN $wpdb->options b ON b.option_name = CONCAT( %s, SUBSTRING( a.option_name, %d ) )
+						WHERE a.option_name LIKE %s
+						AND a.option_name NOT LIKE %s
+						AND b.option_value < %d
+						LIMIT %d",
+						$timeout_prefix,
+						strlen( $prefix ) + 1,
+						$wpdb->esc_like( $prefix ) . '%',
+						$wpdb->esc_like( $timeout_prefix ) . '%',
+						$time,
+						$remaining
+					),
+					ARRAY_A
+				);
+
+				if ( ! is_array( $batch ) ) {
+					continue;
+				}
+
+				foreach ( $batch as $row ) {
+					$name = isset( $row['option_name'] ) ? (string) $row['option_name'] : '';
+					if ( '' === $name ) {
+						continue;
+					}
+					$rows[] = array(
+						'option_name'    => $name,
+						'timeout_option' => isset( $row['timeout_name'] ) ? (string) $row['timeout_name'] : '',
+						'expired_at'     => (int) ( $row['timeout_value'] ?? 0 ),
+						'size'           => (int) ( $row['opt_size'] ?? 0 ),
+					);
+					if ( count( $rows ) >= $limit ) {
+						break 2;
+					}
+				}
+			}
+
+			return $rows;
 		}
 
 		/**

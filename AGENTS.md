@@ -75,7 +75,7 @@ Frontend lazy loading: `src/lazyload.js` (vanilla JS, not React) — Intersectio
 Admin bar cache clearing: `src/main.js` — two buttons ("Clear All Cache", "Clear This Page") with automatic nonce refresh on 403.
 
 ### REST API
-Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (28 routes). All require `manage_options` capability + `X-WP-Nonce` except `rum_collect` (public, token + IP rate-limited). The authoritative 28-route table lives in `.agents/AGENTS.md`; the summary table below lists the most-used routes.
+Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (30 routes). All require `manage_options` capability + `X-WP-Nonce` except `rum_collect` (public, token + IP rate-limited). The authoritative 30-route table lives in `.agents/AGENTS.md`; the summary table below lists the most-used routes.
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -103,6 +103,8 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (2
 | `rum_collect` | POST | Real-user Web Vitals beacon (public, token + IP rate-limited) |
 | `rum_data` | GET | Aggregated real-user Web Vitals |
 | `autoloaded_options` | GET | Largest autoloaded options (option-bloat audit) |
+| `autoload_remediate` | POST | Autoload-bloat remediation (dry_run/apply/revert/revert_all) |
+| `expired_transients_export` | GET | Expired transients pre-run export (read-only JSON) |
 
 ### PHP backend
 42 class files in `includes/` (+ `includes/minify/` wrappers and `includes/redis-connect-helper.php`). The authoritative per-class responsibility table lives in `.agents/AGENTS.md`; the summary table below covers the core classes:

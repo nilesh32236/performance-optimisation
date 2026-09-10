@@ -1355,12 +1355,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private function get_all_preload_data(): array {
 			$image_optimisation = $this->options['image_optimisation'] ?? array();
 
-			return array_merge(
+			$merged = array_merge(
 				$this->get_front_page_preload_data( $image_optimisation ),
 				$this->get_auto_lcp_preload_data(),
 				$this->get_meta_preload_data(),
 				$this->get_post_type_preload_data( $image_optimisation )
 			);
+
+			// Deduplicate by normalized URL + media (issue #935): the
+			// field-measured LCP URL may equal a manually configured preload
+			// as an absolute URL vs a relative URL (or http vs https), but
+			// exactly one link tag must be emitted per resource.
+			$seen   = array();
+			$unique = array();
+			foreach ( $merged as $item ) {
+				if ( ! is_array( $item ) || empty( $item['url'] ) ) {
+					continue;
+				}
+				$normalized = '';
+				try {
+					$normalized = $this->normalize_image_url( (string) $item['url'] );
+				} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+					$normalized = '';
+				}
+				$dedup_url = ( '' !== $normalized ) ? $normalized : (string) $item['url'];
+				$key       = $dedup_url . '|' . ( $item['media'] ?? '' );
+				if ( isset( $seen[ $key ] ) ) {
+					continue;
+				}
+				$seen[ $key ] = true;
+				$unique[]     = $item;
+			}
+
+			return $unique;
 		}
 
 		/**
@@ -1396,6 +1423,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * 2. Front-page option (`wppo_front_page_lcp_{strategy}`).
 		 * 3. Transient keyed by strategy + current URL hash (`wppo_lcp_url_{strategy}_{md5}`).
 		 *
+		 * When the `fieldLcpOverride` toggle is enabled, field-measured RUM data
+		 * (issue #935) is consulted between Optimization Detective and the
+		 * PageSpeed chain: the top real-user LCP URL for the current path wins
+		 * only after enough samples (default 20) and while fresh (<24h).
+		 *
 		 * @since NEXT
 		 * @return string The LCP image URL, or empty string when none is stored.
 		 */
@@ -1414,31 +1446,72 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 			}
 
+			// Priority 0b: Field-measured LCP (issue #935) - real-user LCP element
+			// URLs collected by the RUM beacon override the PageSpeed heuristic
+			// only after enough samples (default 20); a stale override (>24h)
+			// self-corrects back to the heuristic inside RUM::get_field_lcp_url().
+			if ( ! empty( ( $this->options['image_optimisation'] ?? array() )['fieldLcpOverride'] ) ) {
+				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_field_lcp_url' ) ) {
+					try {
+						$parsed_path = function_exists( 'wp_parse_url' ) ? wp_parse_url( Util::get_current_url(), PHP_URL_PATH ) : '/';
+						$raw_path    = is_string( $parsed_path ) && '' !== $parsed_path ? $parsed_path : '/';
+						// Normalized identically to the RUM store side so
+						// '/hero-page' matches a stored '/hero-page/' bucket.
+						$field_path = Util::normalize_rum_path( $raw_path );
+						$field      = \PerformanceOptimise\Inc\RUM::get_field_lcp_url( $field_path );
+						if ( is_array( $field ) && ! empty( $field['url'] ) && is_string( $field['url'] ) ) {
+							return $field['url'];
+						}
+					} catch ( \Throwable $e ) {
+						if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+							error_log( 'WPPO Image optimisation field LCP error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+						}
+					}
+				}
+			}
+
 			$strategies = array( 'mobile', 'desktop' );
 
 			// Priority 1: Singular post — check post meta (mobile first, then desktop).
-			if ( is_singular() ) {
-				$post_id = get_the_ID();
-				foreach ( $strategies as $strategy ) {
-					$meta_lcp = get_post_meta( $post_id, '_wppo_lcp_image_url_' . $strategy, true );
-					if ( ! empty( $meta_lcp ) && is_string( $meta_lcp ) ) {
-						return $meta_lcp;
+			// Guarded by function_exists() so unit contexts without WP fail open.
+			if ( function_exists( 'is_singular' ) && is_singular() ) {
+				$post_id = function_exists( 'get_the_ID' ) ? get_the_ID() : 0;
+				if ( ! empty( $post_id ) && function_exists( 'get_post_meta' ) ) {
+					foreach ( $strategies as $strategy ) {
+						$meta_lcp = get_post_meta( $post_id, '_wppo_lcp_image_url_' . $strategy, true );
+						if ( ! empty( $meta_lcp ) && is_string( $meta_lcp ) ) {
+							return $meta_lcp;
+						}
 					}
 				}
 			}
 
 			// Priority 2: Front page — check option (mobile first, then desktop).
-			if ( is_front_page() ) {
-				foreach ( $strategies as $strategy ) {
-					$front_lcp = get_option( 'wppo_front_page_lcp_' . $strategy, '' );
-					if ( ! empty( $front_lcp ) && is_string( $front_lcp ) ) {
-						return $front_lcp;
+			if ( function_exists( 'is_front_page' ) && is_front_page() ) {
+				if ( function_exists( 'get_option' ) ) {
+					foreach ( $strategies as $strategy ) {
+						$front_lcp = get_option( 'wppo_front_page_lcp_' . $strategy, '' );
+						if ( ! empty( $front_lcp ) && is_string( $front_lcp ) ) {
+							return $front_lcp;
+						}
 					}
 				}
 			}
 
 			// Priority 3: Check transient keyed by strategy + current URL hash.
-			$current_url = untrailingslashit( esc_url_raw( Util::get_current_url() ) );
+			// Fail-open: Util::get_current_url() needs WP URL helpers that may be
+			// unavailable (e.g. unit contexts); any failure returns ''.
+			if ( ! function_exists( 'get_transient' ) ) {
+				return '';
+			}
+			try {
+				if ( ! function_exists( 'untrailingslashit' ) || ! function_exists( 'esc_url_raw' ) ) {
+					return '';
+				}
+				$current_url = untrailingslashit( esc_url_raw( Util::get_current_url() ) );
+			} catch ( \Throwable $e ) {
+				return '';
+			}
 			foreach ( $strategies as $strategy ) {
 				$transient = get_transient( Util::transient_key( 'wppo_lcp_url_' . $strategy . '_' . md5( $current_url ) ) );
 				if ( ! empty( $transient ) && is_string( $transient ) ) {
@@ -2368,6 +2441,149 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Whether the current request advertises AVIF support via Accept header.
+		 *
+		 * Fail-open contract lives with the caller: when false, AVIF sources
+		 * are omitted and WebP/original delivery is used instead.
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when the request Accept header allows image/avif.
+		 */
+		public function client_accepts_avif(): bool {
+			if ( ! isset( $_SERVER['HTTP_ACCEPT'] ) ) {
+				return false;
+			}
+			if ( ! function_exists( 'wp_unslash' ) || ! function_exists( 'sanitize_text_field' ) ) {
+				return false;
+			}
+			$http_accept = sanitize_text_field( wp_unslash( $_SERVER['HTTP_ACCEPT'] ) );
+			return false !== strpos( $http_accept, 'image/avif' );
+		}
+
+		/**
+		 * Build AVIF-first <source> tags for a <picture> wrapper.
+		 *
+		 * Emits `<source type="image/avif">` first, `<source type="image/webp">`
+		 * second, and falls back to a single original-MIME source when no
+		 * converted file exists (fail-open, never fatal). The AVIF source is
+		 * only emitted when the request Accept header allows AVIF and the
+		 * converted `.avif` file exists; the fallback `<img>` (with
+		 * width/height intact) is left to the caller. The original source
+		 * file is never deleted, so delivery stays restorable.
+		 *
+		 * Shared by the TagProcessor and regex-fallback wrap paths.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $original_src   Original image URL.
+		 * @param string $srcset         Raw srcset value from the processed img (may be empty).
+		 * @param string $sizes          Raw sizes value from the processed img (may be empty).
+		 * @param bool   $is_lazy        Whether lazy attributes (data-srcset/data-sizes) are in use.
+		 * @param bool   $should_exclude Whether the image is excluded from conversion.
+		 * @return string One or more <source> tags.
+		 */
+		public function build_avif_first_sources( string $original_src, string $srcset = '', string $sizes = '', bool $is_lazy = false, bool $should_exclude = false ): string {
+			$srcset_attr = $is_lazy ? 'data-srcset' : 'srcset';
+			$sizes_attr  = $is_lazy ? 'data-sizes' : 'sizes';
+			$orig_mime   = Util::get_image_mime_type( $original_src );
+
+			if ( $should_exclude || empty( $this->options['image_optimisation']['convertImg'] ) ) {
+				if ( '' !== $srcset ) {
+					$tag = '<source type="' . $orig_mime . '" ' . $srcset_attr . '="' . esc_attr( $srcset ) . '"';
+					if ( '' !== $sizes ) {
+						$tag .= ' ' . $sizes_attr . '="' . esc_attr( $sizes ) . '"';
+					}
+					return $tag . '>';
+				}
+				return '<source type="' . $orig_mime . '" ' . $srcset_attr . '="' . esc_attr( $original_src ) . '">';
+			}
+
+			$img_converter     = $this->get_img_converter();
+			$conversion_format = method_exists( $img_converter, 'get_format' ) ? $img_converter->get_format() : 'webp';
+			$avif_first        = ! empty( $this->options['image_optimisation']['avifFirst'] ?? true );
+			$accepts_avif      = $this->client_accepts_avif();
+
+			$candidates = array();
+			if ( '' !== $srcset ) {
+				foreach ( explode( ',', $srcset ) as $item ) {
+					$parts = array_pad( preg_split( '/\s+/', trim( $item ), 2 ), 2, '' );
+					if ( '' !== $parts[0] ) {
+						$candidates[] = array(
+							'url'        => $parts[0],
+							'descriptor' => $parts[1],
+						);
+					}
+				}
+			}
+			if ( empty( $candidates ) ) {
+				$candidates[] = array(
+					'url'        => $original_src,
+					'descriptor' => '',
+				);
+			}
+
+			$sources = '';
+
+			if ( $avif_first && in_array( $conversion_format, array( 'avif', 'both' ), true ) && $accepts_avif ) {
+				$avif_items = array();
+				$has_avif   = false;
+				foreach ( $candidates as $candidate ) {
+					$converted_path = $img_converter->get_img_path( $candidate['url'], 'avif' );
+					if ( '' !== $converted_path && $this->cached_file_exists( $converted_path ) ) {
+						$converted_url = $img_converter->get_img_url( $candidate['url'], 'avif' );
+						$avif_items[]  = $converted_url . ( '' !== $candidate['descriptor'] ? ' ' . $candidate['descriptor'] : '' );
+						$has_avif      = true;
+					} else {
+						$avif_items[] = $candidate['url'] . ( '' !== $candidate['descriptor'] ? ' ' . $candidate['descriptor'] : '' );
+					}
+				}
+				if ( $has_avif ) {
+					$sources .= '<source type="image/avif" ' . $srcset_attr . '="' . esc_attr( implode( ', ', $avif_items ) ) . '"';
+					if ( '' !== $sizes ) {
+						$sources .= ' ' . $sizes_attr . '="' . esc_attr( $sizes ) . '"';
+					}
+					$sources .= '>';
+				}
+			}
+
+			if ( in_array( $conversion_format, array( 'webp', 'both' ), true ) ) {
+				$webp_items = array();
+				$has_webp   = false;
+				foreach ( $candidates as $candidate ) {
+					$converted_path = $img_converter->get_img_path( $candidate['url'], 'webp' );
+					if ( '' !== $converted_path && $this->cached_file_exists( $converted_path ) ) {
+						$converted_url = $img_converter->get_img_url( $candidate['url'] );
+						$webp_items[]  = $converted_url . ( '' !== $candidate['descriptor'] ? ' ' . $candidate['descriptor'] : '' );
+						$has_webp      = true;
+					} else {
+						$webp_items[] = $candidate['url'] . ( '' !== $candidate['descriptor'] ? ' ' . $candidate['descriptor'] : '' );
+					}
+				}
+				if ( $has_webp ) {
+					$sources .= '<source type="image/webp" ' . $srcset_attr . '="' . esc_attr( implode( ', ', $webp_items ) ) . '"';
+					if ( '' !== $sizes ) {
+						$sources .= ' ' . $sizes_attr . '="' . esc_attr( $sizes ) . '"';
+					}
+					$sources .= '>';
+				}
+			}
+
+			if ( '' === $sources ) {
+				if ( '' !== $srcset ) {
+					$tag = '<source type="' . $orig_mime . '" ' . $srcset_attr . '="' . esc_attr( $srcset ) . '"';
+					if ( '' !== $sizes ) {
+						$tag .= ' ' . $sizes_attr . '="' . esc_attr( $sizes ) . '"';
+					}
+					return $tag . '>';
+				}
+				return '<source type="' . $orig_mime . '" ' . $srcset_attr . '="' . esc_attr( $original_src ) . '">';
+			}
+
+			return $sources;
+		}
+
+		/**
 		 * Wraps an image in a <picture> element or updates an existing <picture> by adding appropriate <source>
 		 * attributes for optimized delivery and lazy-loading based on current options and exclusions.
 		 *
@@ -2514,27 +2730,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							$srcset = $tags->get_attribute( 'data-srcset' ) ?? $tags->get_attribute( 'srcset' );
 							$sizes  = $tags->get_attribute( 'data-sizes' ) ?? $tags->get_attribute( 'sizes' );
 
-							$is_lazy     = null !== $tags->get_attribute( 'data-src' );
-							$srcset_attr = $is_lazy ? 'data-srcset' : 'srcset';
-							$sizes_attr  = $is_lazy ? 'data-sizes' : 'sizes';
-							$source_tag  = '<source type="' . Util::get_image_mime_type( $original_src ) . '"';
-
-							if ( ! $should_exclude ) {
-								if ( ! empty( $srcset ) || ! empty( $sizes ) ) {
-									if ( ! empty( $srcset ) ) {
-										$source_tag .= ' ' . $srcset_attr . '="' . esc_attr( $srcset ) . '"';
-									}
-
-									if ( ! empty( $sizes ) ) {
-										$source_tag .= ' ' . $sizes_attr . '="' . esc_attr( $sizes ) . '"';
-									}
-									$source_tag .= '>';
-								} else {
-									$source_tag .= ' ' . $srcset_attr . '="' . esc_attr( $original_src ) . '">';
-								}
-							} else {
-								$source_tag .= '>';
-							}
+							$is_lazy = null !== $tags->get_attribute( 'data-src' );
+							// AVIF-first <picture> output: AVIF source, WebP source, original <img> fallback.
+							$source_tag = $this->build_avif_first_sources( $original_src, (string) ( $srcset ?? '' ), (string) ( $sizes ?? '' ), $is_lazy, $should_exclude );
 
 							// Hybrid wrapping: Processed <img> tag is wrapped inside <picture>.
 							$img_tag = '<picture>' . $source_tag . $img_tag . '</picture>';
@@ -2596,27 +2794,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							$sizes = $sizes_matches[1];
 						}
 
-						$is_lazy     = (bool) strpos( $img_tag, 'data-src' );
-						$srcset_attr = $is_lazy ? 'data-srcset' : 'srcset';
-						$sizes_attr  = $is_lazy ? 'data-sizes' : 'sizes';
-						$source_tag  = '<source type="' . Util::get_image_mime_type( $original_src ) . '"';
-
-						if ( ! $should_exclude ) {
-							if ( ! empty( $srcset ) || ! empty( $sizes ) ) {
-								if ( ! empty( $srcset ) ) {
-									$source_tag .= ' ' . $srcset_attr . '="' . esc_attr( $srcset ) . '"';
-								}
-
-								if ( ! empty( $sizes ) ) {
-									$source_tag .= ' ' . $sizes_attr . '="' . esc_attr( $sizes ) . '"';
-								}
-								$source_tag .= '>';
-							} else {
-								$source_tag .= ' ' . $srcset_attr . '="' . esc_attr( $original_src ) . '">';
-							}
-						} else {
-							$source_tag .= '>';
-						}
+						$is_lazy = (bool) strpos( $img_tag, 'data-src' );
+						// AVIF-first <picture> output: AVIF source, WebP source, original <img> fallback.
+						$source_tag = $this->build_avif_first_sources( $original_src, (string) $srcset, (string) $sizes, $is_lazy, $should_exclude );
 
 						// Wrap <img> tag inside <picture>.
 						$img_tag = '<picture>' . $source_tag . $img_tag . '</picture>';
@@ -2663,6 +2843,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * 2. Sets `fetchpriority="high"` on the detected LCP <img> unless the
 		 *    attribute already exists, preserving core's own loading-optimization
 		 *    decisions and the plugin's existing excludeFirstImages handling.
+		 *    The matched node never keeps `loading="lazy"` alongside
+		 *    `fetchpriority="high"`.
+		 * 3. When the `cssHeroPreload` toggle is enabled and the LCP target is
+		 *    a CSS background hero (no matching <img>), injects exactly one
+		 *    `<link rel="preload" as="image">` tag before `</head>`.
 		 *
 		 * Uses `WP_HTML_Processor::serialize_token()` (public since WP 6.9) when
 		 * available, falling back to `WP_HTML_Tag_Processor` on older versions.
@@ -2685,8 +2870,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 			$this->lcp_priority_applied = true;
 
-			$image_optimisation = $this->options['image_optimisation'] ?? array();
-			if ( empty( $image_optimisation['prioritizeLCPImages'] ) ) {
+			$image_optimisation  = $this->options['image_optimisation'] ?? array();
+			$prioritize_enabled  = ! empty( $image_optimisation['prioritizeLCPImages'] );
+			$css_preload_enabled = ! empty( $image_optimisation['cssHeroPreload'] );
+			if ( ! $prioritize_enabled && ! $css_preload_enabled ) {
 				return $filtered_output;
 			}
 			if ( is_admin() || empty( $filtered_output ) || ! is_string( $filtered_output ) ) {
@@ -2697,7 +2884,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			if ( ! Util::is_cache_eligible_for_current_user( $this->options['cache_settings'] ?? array() ) ) {
 				return $filtered_output;
 			}
-			if ( ! class_exists( 'WP_HTML_Tag_Processor' ) || false === strpos( $filtered_output, '<img' ) ) {
+			// CSS-hero pages may contain no <img> tags at all; let those through
+			// to Pass C when the CSS hero preload is enabled.
+			$css_hero_eligible = $css_preload_enabled && false !== stripos( $filtered_output, 'background' );
+			if ( ! class_exists( 'WP_HTML_Tag_Processor' ) || ( false === stripos( $filtered_output, '<img' ) && ! $css_hero_eligible ) ) {
 				return $filtered_output;
 			}
 
@@ -2706,11 +2896,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			// It must always return a string or the page output would be lost/corrupted
 			// (audit #888 finding 12 — balanced buffer lifecycle).
 			try {
-				// Pass A: un-lazy-load the first N above-the-fold images.
-				$buffer = $this->unlazyload_first_images( $filtered_output, $image_optimisation );
+				$buffer = $filtered_output;
 
-				// Pass B: stamp fetchpriority="high" on the detected LCP image.
-				$buffer = $this->prioritize_lcp_image( $buffer );
+				// Resolve the LCP URL once per buffer so Pass B and Pass C
+				// share it instead of re-reading options and the RUM
+				// aggregate option on every request.
+				$lcp_url = $prioritize_enabled ? $this->get_current_lcp_url() : '';
+				if ( $prioritize_enabled ) {
+					// Pass A: un-lazy-load the first N above-the-fold images.
+					$buffer = $this->unlazyload_first_images( $buffer, $image_optimisation );
+
+					// Pass B: stamp fetchpriority="high" on the detected LCP image.
+					// The stamp always removes loading="lazy" from the same node,
+					// so fetchpriority="high" and loading="lazy" never combine.
+					$buffer = $this->prioritize_lcp_image( $buffer, $lcp_url );
+				}
+
+				// Pass C: CSS background hero (issue #935) — exactly one preload
+				// link when the hero is a CSS background; no-ops unless the
+				// cssHeroPreload toggle is enabled.
+				$buffer = $this->maybe_inject_css_hero_preload( $buffer, ( $prioritize_enabled ? $lcp_url : null ) );
+
+				// Pass C: hero fallback + companion preload link (fail-open, never lazy).
+				$buffer = $this->maybe_preload_hero_image( $buffer, $image_optimisation );
 
 				return $buffer;
 			} catch ( \Throwable $e ) {
@@ -2771,12 +2979,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @since NEXT
 		 *
-		 * @param string $buffer The HTML buffer.
+		 * @param string      $buffer  The HTML buffer.
+		 * @param string|null $lcp_url Optional pre-resolved LCP URL. When null the
+		 *                             URL is resolved via get_current_lcp_url().
 		 * @return string The buffer with fetchpriority="high" on the LCP image.
 		 */
-		private function prioritize_lcp_image( string $buffer ): string {
-			$lcp_url = $this->get_current_lcp_url();
-			if ( empty( $lcp_url ) || false === strpos( $buffer, '<img' ) ) {
+		private function prioritize_lcp_image( string $buffer, ?string $lcp_url = null ): string {
+			if ( null === $lcp_url ) {
+				$lcp_url = $this->get_current_lcp_url();
+			}
+			if ( empty( $lcp_url ) || false === stripos( $buffer, '<img' ) ) {
 				return $buffer;
 			}
 
@@ -2829,6 +3041,116 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 
 			return $stamped ? $tags->get_updated_html() : $buffer;
+		}
+
+		/**
+		 * Hero fallback: ensure the first-viewport image preloads with fetchpriority=high and is never lazy.
+		 *
+		 * When stored LCP data exists the companion preload link is emitted for
+		 * it; when detection fails the first <img src> in the buffer is treated
+		 * as the hero (eager, fetchpriority high, never data-src lazy). Core's
+		 * wp_get_loading_optimization_attributes() decision is honoured — gaps
+		 * are only filled. Fail-open: any failure returns the buffer unchanged.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $buffer             The HTML buffer.
+		 * @param array  $image_optimisation Image optimisation settings.
+		 * @return string The buffer with hero preload link injected.
+		 */
+		private function maybe_preload_hero_image( string $buffer, array $image_optimisation ): string {
+			try {
+				if ( isset( $image_optimisation['lcpHeroPreload'] ) && empty( $image_optimisation['lcpHeroPreload'] ) ) {
+					return $buffer;
+				}
+				if ( false === strpos( $buffer, '<img' ) ) {
+					return $buffer;
+				}
+
+				$lcp_url = $this->get_current_lcp_url();
+				if ( '' === $lcp_url ) {
+					$lcp_url = $this->get_first_image_src_in_buffer( $buffer );
+				}
+				if ( '' === $lcp_url ) {
+					return $buffer;
+				}
+
+				// Never lazy: strip loading=lazy + stamp fetchpriority high on the hero tag only when absent.
+				$tags    = new \WP_HTML_Tag_Processor( $buffer );
+				$changed = false;
+				while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
+					if ( $this->tag_matches_lcp_url( $tags, $lcp_url ) ) {
+						if ( 'lazy' === $tags->get_attribute( 'loading' ) ) {
+							$tags->remove_attribute( 'loading' );
+							$changed = true;
+						}
+						if ( null === $tags->get_attribute( 'fetchpriority' ) ) {
+							$tags->set_attribute( 'fetchpriority', 'high' );
+							$changed = true;
+						}
+						if ( null === $tags->get_attribute( 'data-wppo-hero' ) ) {
+							$tags->set_attribute( 'data-wppo-hero', '1' );
+							$changed = true;
+						}
+						break;
+					}
+				}
+				if ( $changed ) {
+					$buffer = $tags->get_updated_html();
+				}
+
+				// Companion preload link (fetchpriority=high). Skip when already present.
+				if ( false !== strpos( $buffer, $lcp_url ) && false !== strpos( $buffer, 'rel="preload"' ) && false !== strpos( $buffer, esc_attr( $lcp_url ) ) ) {
+					return $buffer;
+				}
+				$link_tag = Util::get_preload_link(
+					$lcp_url,
+					'preload',
+					'image',
+					false,
+					Util::get_image_mime_type( $lcp_url ),
+					'',
+					'high'
+				);
+				if ( '' === $link_tag ) {
+					return $buffer;
+				}
+				if ( false !== stripos( $buffer, '</head>' ) ) {
+					$buffer = (string) preg_replace( '#</head>#i', $link_tag . "\n</head>", $buffer, 1 );
+				} else {
+					$buffer = $link_tag . "\n" . $buffer;
+				}
+				return $buffer;
+			} catch ( \Throwable $e ) {
+				return $buffer;
+			}
+		}
+
+		/**
+		 * Get the first <img src> URL in the buffer (hero fallback).
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $buffer The HTML buffer.
+		 * @return string First image src, or empty string when none found.
+		 */
+		private function get_first_image_src_in_buffer( string $buffer ): string {
+			try {
+				$tags = new \WP_HTML_Tag_Processor( $buffer );
+				while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
+					$src = $tags->get_attribute( 'src' );
+					if ( is_string( $src ) && '' !== $src ) {
+						return $src;
+					}
+					$data_src = $tags->get_attribute( 'data-src' );
+					if ( is_string( $data_src ) && '' !== $data_src ) {
+						return $data_src;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				return '';
+			}
+			return '';
 		}
 
 		/**
@@ -2920,6 +3242,139 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Extract the first CSS background-image hero URL from an HTML buffer.
+		 *
+		 * Scans inline style attributes only (including the background
+		 * shorthand) for the first url() candidate, skipping data:, blob:,
+		 * and javascript: URIs and elements already deferred for lazy
+		 * backgrounds (data-wppo-bg). Heroes set via <style> blocks,
+		 * external stylesheets, or CSS classes are not detected. Relative
+		 * URLs are resolved against the home URL so they compare against
+		 * the LCP URL. Any scan failure returns an empty string (fail-open
+		 * to heuristic).
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $buffer The HTML buffer.
+		 * @return string The hero background image URL, or empty string.
+		 */
+		private function get_css_hero_url_from_buffer( string $buffer ): string {
+			if ( '' === $buffer || ! class_exists( 'WP_HTML_Tag_Processor' ) || false === stripos( $buffer, 'background' ) ) {
+				return '';
+			}
+			try {
+				$tags = new \WP_HTML_Tag_Processor( $buffer );
+				while ( $tags->next_tag() ) {
+					if ( null !== $tags->get_attribute( 'data-wppo-bg' ) ) {
+						continue;
+					}
+					$style = $tags->get_attribute( 'style' );
+					if ( ! is_string( $style ) || '' === $style || false === stripos( $style, 'background' ) ) {
+						continue;
+					}
+					$bg_url = '';
+					if ( preg_match( '#background(?:-image)?\s*:[^;]*?url\(\s*[\'"]?([^\'")]+)[\'"]?\s*\)#i', $style, $m ) ) {
+						$bg_url = trim( $m[1] );
+					}
+					if ( '' === $bg_url || 0 === stripos( $bg_url, 'data:' ) || 0 === stripos( $bg_url, 'blob:' ) || 0 === stripos( $bg_url, 'javascript:' ) ) {
+						continue;
+					}
+					if ( 0 === strpos( $bg_url, '//' ) ) {
+						$bg_url = 'https:' . $bg_url;
+					} elseif ( 0 === strpos( $bg_url, '/' ) || false === strpos( $bg_url, '://' ) ) {
+						$bg_url = Util::cached_home_url() . '/' . ltrim( $bg_url, '/' );
+					}
+					return $bg_url;
+				}
+			} catch ( \Throwable $e ) {
+				return '';
+			}
+			return '';
+		}
+
+		/**
+		 * Whether any img element in the buffer references the given LCP URL.
+		 *
+		 * Used to choose between the img preload path and the CSS-hero
+		 * preload path so exactly one preload link is ever emitted.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $buffer  The HTML buffer.
+		 * @param string $lcp_url The detected LCP image URL.
+		 * @return bool True when an img matches the LCP URL.
+		 */
+		private function buffer_has_matching_img( string $buffer, string $lcp_url ): bool {
+			if ( '' === $lcp_url || false === strpos( $buffer, '<img' ) || ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
+				return false;
+			}
+			try {
+				$tags = new \WP_HTML_Tag_Processor( $buffer );
+				while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
+					if ( $this->tag_matches_lcp_url( $tags, $lcp_url ) ) {
+						return true;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				return false;
+			}
+			return false;
+		}
+
+		/**
+		 * Inject exactly one CSS-hero preload link into the buffer head.
+		 *
+		 * When the resolved LCP target has no matching img in the buffer but
+		 * matches the first inline CSS background hero, a single preload link
+		 * (as image with fetchpriority high) is injected before the head close.
+		 * Emits nothing when an img hero matches (covered by the img preload
+		 * path), when the hero is unrelated to the LCP target, or when an
+		 * equivalent preload link already exists.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $buffer The HTML buffer.
+		 * @return string The buffer with at most one added preload link.
+		 */
+		private function maybe_inject_css_hero_preload( string $buffer ): string {
+			$image_optimisation = $this->options['image_optimisation'] ?? array();
+			if ( empty( $image_optimisation['cssHeroPreload'] ) ) {
+				return $buffer;
+			}
+			$lcp_url = $this->get_current_lcp_url();
+			if ( empty( $lcp_url ) ) {
+				return $buffer;
+			}
+			if ( $this->buffer_has_matching_img( $buffer, $lcp_url ) ) {
+				return $buffer;
+			}
+			$hero_url = $this->get_css_hero_url_from_buffer( $buffer );
+			if ( '' === $hero_url ) {
+				return $buffer;
+			}
+			if ( $this->normalize_image_url( $hero_url ) !== $this->normalize_image_url( $lcp_url ) ) {
+				return $buffer;
+			}
+			$needle = $this->normalize_image_url( $lcp_url );
+			if ( preg_match_all( '#<link[^>]*rel=["\']preload["\'][^>]*>#i', $buffer, $links ) ) {
+				foreach ( $links[0] as $link ) {
+					if ( preg_match( '#href=["\']([^"\']+)["\']#i', $link, $hm ) && $this->normalize_image_url( $hm[1] ) === $needle ) {
+						return $buffer;
+					}
+				}
+			}
+			$link_tag = Util::get_preload_link( $lcp_url, 'preload', 'image', false, Util::get_image_mime_type( $lcp_url ), '', 'high' );
+			if ( '' === $link_tag ) {
+				return $buffer;
+			}
+			$head_pos = stripos( $buffer, '</head>' );
+			if ( false !== $head_pos ) {
+				return substr( $buffer, 0, $head_pos ) . $link_tag . chr( 10 ) . substr( $buffer, $head_pos );
+			}
+			return $link_tag . chr( 10 ) . $buffer;
+		}
+
+		/**
 		 * Transforms <picture>, <img>, and <iframe> elements in the provided HTML to enable lazy loading and delayed loading based on the image_optimisation options.
 		 *
 		 * Applies exclusions derived from the options (including preload-selected images and the first N images specified by `excludeFirstImages`) and rewrites matched tags to use data-* attributes and lazy classes when appropriate.
@@ -2988,6 +3443,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 							error_log( 'WPPO Image optimisation OD error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 						}
+					}
+				}
+
+				// Stored LCP + hero fallback (LCP-aware lazy-load, @since NEXT).
+				// Gated on the LCP feature toggles so default lazy behaviour is
+				// unchanged when LCP prioritization is off (backward compat):
+				// the stored LCP URL (PageSpeed/post-meta/transient) and, when
+				// no stored URL resolves, the first <img src> (hero) are merged
+				// into the never-lazy exclusion list. Fail-open: any detection
+				// failure leaves the exclusion list untouched.
+				$stored_lcp   = '';
+				$hero_enabled = ( ! isset( $image_optimisation['lcpHeroPreload'] ) || ! empty( $image_optimisation['lcpHeroPreload'] ) )
+					&& ( ! empty( $image_optimisation['prioritizeLCPImages'] ) || ! empty( $image_optimisation['autoPreloadLCP'] ) );
+				if ( $hero_enabled ) {
+					try {
+						$stored_lcp = $this->get_current_lcp_url();
+						if ( '' !== $stored_lcp && ! in_array( $stored_lcp, $exclude_imgs, true ) ) {
+							$exclude_imgs[] = $stored_lcp;
+							$exclude_imgs   = array_unique( $exclude_imgs );
+						}
+						if ( '' === $stored_lcp ) {
+							$first_src = $this->get_first_image_src_in_buffer( $buffer );
+							if ( '' !== $first_src && ! in_array( $first_src, $exclude_imgs, true ) ) {
+								$exclude_imgs[] = $first_src;
+								$exclude_imgs   = array_unique( $exclude_imgs );
+							}
+						}
+					} catch ( \Throwable $e ) {
+						do_action( 'wppo_debug_log', 'WPPO hero exclusion failed: ' . $e->getMessage(), array( 'exception' => $e ) );
 					}
 				}
 
@@ -3358,7 +3842,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 			$exclude_count = $this->get_effective_exclude_first_images_count( $image_optimisation );
 			$bg_counter    = 0;
-			$tags          = new \WP_HTML_Tag_Processor( $buffer );
+
+			// Resolved LCP hero background (issue #935): when the CSS hero preload
+			// is enabled, the hero keeps its inline background-image so the
+			// preloaded hero is never deferred behind an intersection observer.
+			$lcp_hero_normalized = '';
+			if ( ! empty( $image_optimisation['cssHeroPreload'] ) ) {
+				try {
+					$lcp_hero_url = $this->get_current_lcp_url();
+					if ( '' !== $lcp_hero_url ) {
+						$lcp_hero_normalized = $this->normalize_image_url( $lcp_hero_url );
+					}
+				} catch ( \Throwable $e ) {
+					$lcp_hero_normalized = '';
+				}
+			}
+
+			$tags = new \WP_HTML_Tag_Processor( $buffer );
 
 			while ( $tags->next_tag() ) {
 				$style = $tags->get_attribute( 'style' );
@@ -3375,6 +3875,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$bg_value = trim( $matches[1] );
 				if ( '' === $bg_value || false !== stripos( $bg_value, 'data:' ) ) {
 					continue;
+				}
+
+				if ( '' !== $lcp_hero_normalized && preg_match( '#url\(\s*[\'"]?([^\'")]+)[\'"]?\s*\)#i', $bg_value, $url_match ) ) {
+					$bg_candidate = trim( $url_match[1] );
+					if ( '' !== $bg_candidate && 0 !== stripos( $bg_candidate, 'data:' ) && $this->normalize_image_url( $bg_candidate ) === $lcp_hero_normalized ) {
+						continue;
+					}
 				}
 
 				// Never defer the first N backgrounds (likely above-the-fold / hero).

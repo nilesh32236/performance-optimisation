@@ -24,6 +24,10 @@
  *    `object`, `embed`, …), event-handler (`on*`) attributes and
  *    `javascript:`/`vbscript:`/`data:`/`blob:` URLs, and inserts the result
  *    via `el.replaceChildren()` — raw `innerHTML` assignment is never used.
+ *    Inline `<style>` elements and `style=""` attributes are also removed —
+ *    inline styles cannot run script in modern browsers but permit CSS-based
+ *    UI redress or selector-based exfiltration if a fragment source is ever
+ *    compromised.
  *
  * @since NEXT
  */
@@ -71,12 +75,19 @@ export const sanitizeEsiFragment = ( html ) => {
 	const frag = template.content;
 
 	// Remove script-capable elements outright. Forms/inputs are kept —
-	// cart and admin-bar fragments legitimately contain them.
+	// cart and admin-bar fragments legitimately contain them. Styles are
+	// removed too (server-side wp_kses is authoritative; fragments do not
+	// need inline styles).
 	frag.querySelectorAll(
-		'script, iframe, frame, frameset, object, embed, link, meta, base'
+		'script, iframe, frame, frameset, object, embed, link, meta, base, style'
 	).forEach( ( node ) => node.remove() );
 
 	frag.querySelectorAll( '*' ).forEach( ( node ) => {
+		// Strip inline styles outright — simplest and safest since wp_kses
+		// is authoritative and fragments do not need them.
+		if ( node.hasAttribute( 'style' ) ) {
+			node.removeAttribute( 'style' );
+		}
 		Array.from( node.attributes ).forEach( ( attr ) => {
 			const name = ( attr.name || '' ).toLowerCase();
 

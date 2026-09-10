@@ -166,12 +166,19 @@ const ObjectCache = ( { options = {} } ) => {
 		dismiss();
 
 		try {
+			// Avoid retransmitting the stored password on plain saves: send
+			// the password only when the field is non-empty/changed, and
+			// clear it from state after a successful save. Credential flows
+			// (enable/ping/authenticate) use handleAction instead.
+			const { password, ...rest } = settings;
+			const payload = password ? settings : { ...rest, password: '' };
 			const res = await apiCall( 'update_settings', {
 				tab: 'object_cache',
-				settings,
+				settings: payload,
 			} );
 			if ( res.success ) {
-				setBaseline( { ...settings } );
+				setSettings( ( prev ) => ( { ...prev, password: '' } ) );
+				setBaseline( ( prev ) => ( { ...prev, password: '' } ) );
 				setIsDirty( false );
 				notify( {
 					type: 'success',

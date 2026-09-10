@@ -177,15 +177,64 @@ export const fetchRecentActivities = ( page = 1, signal ) => {
 };
 
 /**
+ * Validate a scan URL client-side before it reaches the resource-intensive
+ * performance_scan / pagespeed_scan endpoints. Requires an absolute http(s)
+ * URL and, when wppoSettings.homeUrl is available, same-origin with the site.
+ * Server-side host allowlisting + per-user/IP rate limiting remains
+ * authoritative.
+ *
+ * @since NEXT
+ * @param {string} url Raw scan URL.
+ * @return {boolean} True when the URL is safe to forward to the server.
+ */
+export const isValidScanUrl = ( url ) => {
+	if ( ! url || typeof url !== 'string' ) {
+		return false;
+	}
+	let parsed;
+	try {
+		// Absolute URLs only — no base, so relative paths and protocol-
+		// relative values are rejected.
+		parsed = new URL( url );
+	} catch {
+		return false;
+	}
+	if ( 'http:' !== parsed.protocol && 'https:' !== parsed.protocol ) {
+		return false;
+	}
+	try {
+		if (
+			typeof wppoSettings !== 'undefined' &&
+			wppoSettings &&
+			wppoSettings.homeUrl
+		) {
+			const home = new URL( wppoSettings.homeUrl );
+			if ( parsed.origin !== home.origin ) {
+				return false;
+			}
+		}
+	} catch {
+		return false;
+	}
+	return true;
+};
+
+/**
  * Run a local telemetry scan on the given URL.
  *
  * @since 1.5.0
+ * @since NEXT Scan URL is validated client-side (http(s), same-origin) before the request.
  * @param {string}      url      The URL to scan.
  * @param {boolean}     force    Whether to force the scan.
  * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
  * @return {Promise<Object>} Resolved scan result data.
  */
 export const runPerformanceScan = ( url, force = false, signal ) => {
+	if ( ! isValidScanUrl( url ) ) {
+		return Promise.reject(
+			new Error( 'Invalid scan URL: must be a same-origin http(s) URL.' )
+		);
+	}
 	return apiCall( 'performance_scan', { url, force }, 'POST', signal );
 };
 
@@ -203,11 +252,22 @@ export const fetchSystemInfo = () => {
  * Queue a Google PageSpeed Insights scan as a background job.
  *
  * @since 1.6.0
+ * @since NEXT Scan URL and strategy are validated client-side before the request.
  * @param {string} url      The URL to scan.
  * @param {string} strategy 'mobile' or 'desktop'.
  * @return {Promise<Object>} Resolved response with job_id.
  */
 export const queuePagespeedScan = ( url, strategy = 'mobile' ) => {
+	if ( ! isValidScanUrl( url ) ) {
+		return Promise.reject(
+			new Error( 'Invalid scan URL: must be a same-origin http(s) URL.' )
+		);
+	}
+	if ( 'mobile' !== strategy && 'desktop' !== strategy ) {
+		return Promise.reject(
+			new Error( "Invalid strategy: must be 'mobile' or 'desktop'." )
+		);
+	}
 	return apiCall( 'pagespeed_scan', { url, strategy } );
 };
 

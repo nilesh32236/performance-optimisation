@@ -45,13 +45,13 @@ const FileOptimization = ( {
 		excludeCSS: '',
 		combineCSS: false,
 		excludeCombineCSS: '',
-		removeQueryStrings: false,
 		minifyHTML: false,
 		deferJS: false,
 		excludeDeferJS: '',
 		delayJS: false,
 		excludeDelayJS: '',
 		delayJSDefaultStrategy: options.delayJSDefaultStrategy || 'interaction',
+		delayJSINPPreset: options.delayJSINPPreset || false,
 		delayJSIdleList: options.delayJSIdleList || '',
 		delayJSViewportList: options.delayJSViewportList || '',
 		delayJSPriority: options.delayJSPriority || '',
@@ -61,6 +61,7 @@ const FileOptimization = ( {
 		removeCssJsHandle: '',
 		enableServerRules: false,
 		criticalCSS: false,
+		ccssMaxSize: options.ccssMaxSize || 20480,
 		hostGoogleFontsLocally: false,
 		fontMetricFallback: false,
 		cdnURL: '',
@@ -171,6 +172,33 @@ const FileOptimization = ( {
 	useEffect( () => {
 		setSettings( ( prev ) => ( { ...prev, ...options } ) );
 	}, [ options ] );
+
+	// INP-first preset (#932): one-click idle + viewport delay with 60s
+	// heartbeat. Enabling fills delayJS/strategy/heartbeat client-side (only
+	// when still on their defaults); disabling leaves manual values intact so
+	// the interaction-only default + manual lists act as fallback.
+	const handleINPPresetToggle = ( e ) => {
+		const checked = e.target.checked;
+		setSettings( ( prev ) => {
+			const next = { ...prev, delayJSINPPreset: checked };
+			if ( checked ) {
+				next.delayJS = true;
+				if (
+					! prev.delayJSDefaultStrategy ||
+					'interaction' === prev.delayJSDefaultStrategy
+				) {
+					next.delayJSDefaultStrategy = 'idle';
+				}
+				if (
+					! prev.heartbeatControl ||
+					'default' === prev.heartbeatControl
+				) {
+					next.heartbeatControl = '60s';
+				}
+			}
+			return next;
+		} );
+	};
 
 	// LiteSpeed integration (Phase 1 — safe coexistence).
 	const litespeedInfo =
@@ -775,6 +803,41 @@ const FileOptimization = ( {
 								</Tooltip>
 								{ settings.criticalCSS && (
 									<>
+										<div className="wppo-field wppo-mt-16">
+											<label
+												className="wppo-field-label"
+												htmlFor="ccssMaxSize"
+											>
+												{ __(
+													'Critical CSS Max Size (bytes)',
+													'performance-optimisation'
+												) }
+											</label>
+											<input
+												className="wppo-input"
+												type="number"
+												inputMode="numeric"
+												id="ccssMaxSize"
+												name="ccssMaxSize"
+												min="1024"
+												max="102400"
+												step="1024"
+												value={ settings.ccssMaxSize }
+												onChange={ handleChange(
+													setSettings
+												) }
+												aria-describedby="ccssMaxSize-desc"
+											/>
+											<p
+												id="ccssMaxSize-desc"
+												className="wppo-text-muted wppo-mt-8 wppo-text-small"
+											>
+												{ __(
+													'Inline output above this size is served from a per-template file with cache busting instead (default: 20480).',
+													'performance-optimisation'
+												) }
+											</p>
+										</div>
 										{ ccssError && (
 											<div className="wppo-notice wppo-notice--error">
 												<span>
@@ -924,50 +987,6 @@ const FileOptimization = ( {
 										) }
 										name="minifyInlineJS"
 										checked={ settings.minifyInlineJS }
-										onChange={ handleChange( setSettings ) }
-										disabled={ optimizerDisabled }
-									/>
-								</Tooltip>
-							</div>
-						</FeatureCard>
-
-						<FeatureCard
-							title={ __(
-								'Legacy Options (Deprecated)',
-								'performance-optimisation'
-							) }
-							icon={
-								<FontAwesomeIcon
-									icon={ faExclamationTriangle }
-								/>
-							}
-						>
-							<div className="wppo-notice wppo-notice--warning wppo-mb-16">
-								<FontAwesomeIcon
-									icon={ faExclamationTriangle }
-								/>{ ' ' }
-								{ __(
-									'These options are deprecated and will be removed in a future release. They are kept for backward compatibility only — leave them off on new sites.',
-									'performance-optimisation'
-								) }
-							</div>
-							<div className="wppo-field-group">
-								<Tooltip
-									content={
-										optimizerDisabled ? pausedTooltip : ''
-									}
-								>
-									<SwitchField
-										label={ __(
-											'Remove Query Strings From Static Resources (Legacy)',
-											'performance-optimisation'
-										) }
-										description={ __(
-											'Deprecated: ?ver= query strings ARE the cache-busting mechanism — stripping them risks serving stale CSS/JS after updates. Modern caching relies on fingerprinting with long immutable TTLs (already set by Enable Server Rules). Only enable for a proxy/CDN that cannot cache URLs with query strings.',
-											'performance-optimisation'
-										) }
-										name="removeQueryStrings"
-										checked={ settings.removeQueryStrings }
 										onChange={ handleChange( setSettings ) }
 										disabled={ optimizerDisabled }
 									/>
@@ -1143,6 +1162,24 @@ const FileOptimization = ( {
 									) }
 									{ settings.delayJS && (
 										<>
+											<SwitchField
+												label={ __(
+													'INP-first preset: idle + viewport with 60s heartbeat',
+													'performance-optimisation'
+												) }
+												description={ __(
+													'One-click preset for better responsiveness. Cart, checkout, and builder previews stay excluded automatically.',
+													'performance-optimisation'
+												) }
+												name="delayJSINPPreset"
+												checked={
+													settings.delayJSINPPreset
+												}
+												onChange={
+													handleINPPresetToggle
+												}
+												disabled={ optimizerDisabled }
+											/>
 											<div className="wppo-field">
 												<label
 													className="wppo-field-label"
@@ -1378,6 +1415,14 @@ const FileOptimization = ( {
 												<span>
 													{ __(
 														'Delaying scripts can break immediate functionality. Test carefully.',
+														'performance-optimisation'
+													) }
+												</span>
+											</div>
+											<div className="wppo-notice wppo-notice--info wppo-mt-16">
+												<span>
+													{ __(
+														'Safe mode: WooCommerce, Elementor and form scripts are auto-excluded, and Delay-JS is skipped on cart, checkout and form pages. Customize via the wppo_delay_js_exclusions filter.',
 														'performance-optimisation'
 													) }
 												</span>

@@ -51,6 +51,14 @@ class DefaultsParityTest extends \PHPUnit\Framework\TestCase {
 		// WooCommerce safe mode default (issue #922) must be enabled + boolean.
 		$this->assertArrayHasKey( 'wooSafeMode', $defaults['cache_settings'] );
 		$this->assertTrue( $defaults['cache_settings']['wooSafeMode'] );
+
+		// AVIF-first picture output defaults (issue #931): additive keys only.
+		$this->assertArrayHasKey( 'avifFirst', $defaults['image_optimisation'] );
+		$this->assertTrue( $defaults['image_optimisation']['avifFirst'] );
+		$this->assertArrayHasKey( 'smartQuality', $defaults['image_optimisation'] );
+		$this->assertTrue( $defaults['image_optimisation']['smartQuality'] );
+		$this->assertArrayHasKey( 'skipSmallThresholdBytes', $defaults['image_optimisation'] );
+		$this->assertSame( 5120, $defaults['image_optimisation']['skipSmallThresholdBytes'] );
 	}
 
 	/**

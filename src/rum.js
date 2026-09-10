@@ -116,9 +116,25 @@
 		try {
 			lcpObserver = new PerformanceObserver( ( list ) => {
 				const entries = list.getEntries();
-				values.lcp = Math.round(
-					entries[ entries.length - 1 ].startTime
-				);
+				const last = entries[ entries.length - 1 ];
+				values.lcp = Math.round( last.startTime );
+				// Field-measured LCP element URL (issue #935): overrides the
+				// PageSpeed lab heuristic only after enough samples. Fail-open:
+				// text LCP entries have no URL, so the field is omitted and the
+				// numeric path is unchanged.
+				const lcpUrl =
+					last && typeof last.url === 'string' ? last.url : '';
+				if (
+					lcpUrl &&
+					lcpUrl.length <= 2048 &&
+					( lcpUrl.indexOf( 'http://' ) === 0 ||
+						lcpUrl.indexOf( 'https://' ) === 0 ||
+						lcpUrl.charAt( 0 ) === '/' )
+				) {
+					values.lcpUrl = lcpUrl.slice( 0, 2048 );
+				} else {
+					delete values.lcpUrl;
+				}
 			} );
 			lcpObserver.observe( {
 				type: 'largest-contentful-paint',

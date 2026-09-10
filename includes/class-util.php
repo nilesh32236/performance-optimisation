@@ -111,6 +111,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			'wppo_img_scan_cursor',
 			'wppo_img_scan_cursor_max',
 			'wppo_litespeed_purge_queue',
+			'wppo_autoload_remediated',
 		);
 
 		/**
@@ -141,8 +142,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Single source of truth for Main::__construct() defaults,
 		 * Activate::maybe_seed_settings(), and
 		 * WPPO_CLI_Command::get_default_settings() to fix 7-tab drift
-		 * (CLI:451 vs Main:240). Covers all allowed tabs; database_cleanup
-		 * and object_cache are empty (no defaults) for BC.
+		 * (CLI:451 vs Main:240). Covers all allowed tabs; object_cache stays
+		 * empty (no defaults) for BC, database_cleanup carries only the
+		 * additive autoloadThreshold default (issue #934).
 		 *
 		 * @since NEXT
 		 * @return array<string, array<string, mixed>> Default settings keyed by tab.
@@ -164,10 +166,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'removeUnusedCSS'            => false,
 					'excludeUnusedCSS'           => '',
 					'criticalCSS'                => false,
+					'ccssMaxSize'                => 20480,
 					'hostGoogleFontsLocally'     => false,
 					'blockAssetsOnDemand'        => function_exists( 'wp_load_classic_theme_block_styles_on_demand' ),
 					'loadAllCoreBlockAssets'     => false,
 					'delayJSDefaultStrategy'     => 'interaction',
+					'delayJSINPPreset'           => false,
 					'delayJSIdleList'            => '',
 					'delayJSViewportList'        => '',
 					'delayJSPriority'            => '',
@@ -177,6 +181,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'minifyCSS'                  => false,
 					'deferJS'                    => false,
 					'delayJS'                    => false,
+					'delayJSSafeMode'            => true,
 					'combineCSS'                 => false,
 					'excludeJS'                  => '',
 					'excludeCSS'                 => '',
@@ -186,8 +191,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'minifyInlineCSS'            => false,
 					'minifyInlineJS'             => false,
 					'removeHTMLComments'         => true,
-					// Deprecated NEXT (#904): legacy toggle, default off. See Main::strip_static_query_strings().
-					'removeQueryStrings'         => false,
 					'disableRestApiLinks'        => false,
 					'disableRssFeeds'            => false,
 					'disableShortlinks'          => false,
@@ -221,9 +224,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'placeholderType'            => 'svg',
 					'autoPreloadLCP'             => false,
 					'prioritizeLCPImages'        => false,
+					'lcpHeroPreload'             => true,
 					'clientSideMimeTypeOverride' => false,
 					'clientSideMimeTypes'        => array(),
 					'lazyLoadBackgroundImages'   => false,
+					'avifFirst'                  => true,
+					'smartQuality'               => true,
+					'skipSmallThresholdBytes'    => 5120,
+					'fieldLcpOverride'           => false,
+					'fieldLcpMinSamples'         => 20,
+					'cssHeroPreload'             => false,
 				),
 				'performance_audit'     => array(
 					'pagespeed_api_key'     => '',
@@ -233,7 +243,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'auto_rescan'           => '',
 					'rum_enabled'           => false,
 				),
-				'database_cleanup'      => array(),
+				'database_cleanup'      => array(
+					'autoloadThreshold' => 1024,
+				),
 				'object_cache'          => array(),
 				'litespeed_integration' => array(
 					'mode'                 => 'auto',
@@ -998,6 +1010,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Normalize a RUM page path for storage and lookup.
+		 *
+		 * Both the beacon store path (RUM::print_config/sanitize_sample) and
+		 * the field-LCP lookup path (Image_Optimisation::get_current_lcp_url)
+		 * must agree, otherwise the override silently never fires: the
+		 * lookup strips the trailing slash via get_current_url() while the
+		 * stored beacon path kept it verbatim. Trims the trailing slash
+		 * (keeping '/' for the root) and ensures a leading slash.
+		 *
+		 * @since NEXT
+		 * @param string $path Raw page path.
+		 * @return string Normalized path (e.g. '/hero-page', '/').
+		 */
+		public static function normalize_rum_path( string $path ): string {
+			$path = trim( $path );
+			if ( '' === $path ) {
+				return '/';
+			}
+			if ( '/' !== substr( $path, 0, 1 ) ) {
+				$path = '/' . $path;
+			}
+			if ( '/' !== $path ) {
+				$path = rtrim( $path, '/' );
+				if ( '' === $path ) {
+					return '/';
+				}
+			}
+			return $path;
+		}
+
+		/**
 		 * Normalize a URL for LCP matching.
 		 *
 		 * Resolves protocol-relative and root-relative URLs against home_url(),
@@ -1567,6 +1610,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					continue;
 				}
 
+				// INP-first delay preset (issue #932) — normalize malformed import
+				// shapes (0/1, '0'/'1', 'false'/'true') to bool. Unrecognized
+				// values fail safe to false (preset off, existing behavior).
+				if ( 'delayJSINPPreset' === $safe_key && ! is_array( $value ) ) {
+					if ( is_bool( $value ) ) {
+						$sanitized[ $safe_key ] = $value;
+					} else {
+						$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+						$sanitized[ $safe_key ] = null === $bool ? false : $bool;
+					}
+					continue;
+				}
+
 				if ( is_array( $value ) ) {
 					$sanitized[ $safe_key ] = self::sanitize_settings_recursively( $value );
 				} elseif ( is_bool( $value ) ) {
@@ -1791,6 +1847,89 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					$count
 				)
 			);
+		}
+
+		/**
+		 * Whether the current runtime deprecates explicit handle-close calls (PHP 8.5+).
+		 *
+		 * PHP 8.5 deprecates the former resource-teardown no-ops `curl_close()`,
+		 * `curl_share_close()`, `finfo_close()`, `xml_parser_free()` and
+		 * `imagedestroy()` (see wiki.php.net/rfc/deprecations_php_8_5): on 8.5+
+		 * handles are released by dropping the reference instead of calling the
+		 * close function. Below 8.5 the legacy close path is kept unchanged.
+		 *
+		 * The optional $php_version parameter exists so PHPUnit (Brain Monkey)
+		 * can exercise both sides of the gate without redefining PHP_VERSION.
+		 *
+		 * @since NEXT
+		 * @param string|null $php_version Optional version string for testing; defaults to PHP_VERSION.
+		 * @return bool True on PHP 8.5+, false below.
+		 */
+		public static function is_php85_or_greater( ?string $php_version = null ): bool {
+			$version = $php_version ?? PHP_VERSION;
+			return version_compare( $version, '8.5', '>=' );
+		}
+
+		/**
+		 * Release a cURL handle without triggering the PHP 8.5 deprecation.
+		 *
+		 * On PHP 8.5+ the handle reference is dropped (null + unset) instead of
+		 * calling `curl_close()`; below 8.5 the legacy `curl_close()` path runs
+		 * unchanged. Fail-open: when `curl_close()` is unavailable the reference
+		 * is dropped on every runtime. Multisite-safe: no option/cache changes.
+		 *
+		 * Note: the handle is passed by reference and nulled (not only unset)
+		 * because `unset()` of a by-reference parameter would leave the caller's
+		 * variable untouched; assigning null releases the CurlHandle object in
+		 * the caller scope on every supported runtime.
+		 *
+		 * @since NEXT
+		 * @param mixed       $ch          cURL handle to release (nulled in the caller scope).
+		 * @param string|null $php_version Optional version override for testing; defaults to PHP_VERSION.
+		 * @return void
+		 */
+		public static function close_curl_handle( &$ch, ?string $php_version = null ): void {
+			if ( self::is_php85_or_greater( $php_version ) ) {
+				$ch = null;
+				unset( $ch );
+				return;
+			}
+			if ( function_exists( 'curl_close' ) ) {
+				// phpcs:ignore Generic.PHP.DeprecatedFunctions.Deprecated,WordPress.WP.AlternativeFunctions.curl_curl_close -- legacy close path below PHP 8.5 only.
+				curl_close( $ch );
+				return;
+			}
+			$ch = null;
+			unset( $ch );
+		}
+
+		/**
+		 * Release a GD image without triggering the PHP 8.5 deprecation.
+		 *
+		 * On PHP 8.5+ the image reference is dropped (null + unset) instead of
+		 * calling `imagedestroy()`; below 8.5 the legacy `imagedestroy()` path
+		 * runs unchanged. Fail-open: when `imagedestroy()` is unavailable the
+		 * reference is dropped on every runtime. Multisite-safe: no
+		 * option/cache changes.
+		 *
+		 * @since NEXT
+		 * @param mixed       $image       GD image to release (nulled in the caller scope).
+		 * @param string|null $php_version Optional version override for testing; defaults to PHP_VERSION.
+		 * @return void
+		 */
+		public static function destroy_gd_image( &$image, ?string $php_version = null ): void {
+			if ( self::is_php85_or_greater( $php_version ) ) {
+				$image = null;
+				unset( $image );
+				return;
+			}
+			if ( function_exists( 'imagedestroy' ) ) {
+				// phpcs:ignore Generic.PHP.DeprecatedFunctions.Deprecated -- legacy destroy path below PHP 8.5 only.
+				imagedestroy( $image );
+				return;
+			}
+			$image = null;
+			unset( $image );
 		}
 	}
 }

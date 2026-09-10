@@ -105,6 +105,11 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 		// Stub defaults to empty (non-LS host, no LSCache) so minify_css proceeds as before.
 		Functions\when( 'get_option' )->justReturn( array() );
 		Functions\when( 'get_site_option' )->justReturn( array() );
+		// Issue #937: the minify path now defers to core's on-demand block loader
+		// via is_core_block_asset_skipped(). Default to separate-assets off so the
+		// existing minify tests exercise the legacy rewrite path; the on-demand
+		// skip is covered by dedicated tests below (per-test when() reconfigures).
+		Functions\when( 'wp_should_load_separate_core_block_assets' )->justReturn( false );
 
 		// Clear LiteSpeed per-request static caches for isolation (prevents
 		// cross-test pollution via $cached_is_lscache_active etc.).
@@ -379,6 +384,10 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_minify_queued_styles_skips_non_all_media(): void {
 		Functions\expect( 'function_exists' )->with( 'wp_maybe_inline_styles' )->once()->andReturnTrue();
+		// Issue #937: minify_queued_styles() now probes the separate-assets gate
+		// per handle; the gate reports off (setUp stub) so the print-media style
+		// still reaches the media check below.
+		Functions\expect( 'function_exists' )->with( 'wp_should_load_separate_core_block_assets' )->once()->andReturnTrue();
 		Functions\expect( 'apply_filters' )->with( 'wppo_exclude_minification', \Mockery::type( 'bool' ), \Mockery::any(), \Mockery::any(), \Mockery::any() )->never();
 
 		global $wp_styles;
@@ -1015,5 +1024,88 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 		unlink( $cached_file );
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir,WordPress.PHP.NoSilencedErrors.Discouraged -- Cleanup of temp test fixture dir.
 		@rmdir( $source_dir );
+	}
+
+	/**
+	 * Test that core block assets are skipped by the helper when core loads
+	 * them on demand, while non-block handles are never skipped (issue #937).
+	 */
+	public function test_is_core_block_asset_skipped_when_separate(): void {
+		Functions\when( 'wp_should_load_separate_core_block_assets' )->justReturn( true );
+
+		$main = $this->make_main();
+
+		$this->assertTrue( $this->invoke_private( $main, 'is_core_block_asset_skipped', array( 'wp-block-library' ) ) );
+		$this->assertTrue( $this->invoke_private( $main, 'is_core_block_asset_skipped', array( 'wp-block-cover' ) ) );
+		$this->assertFalse( $this->invoke_private( $main, 'is_core_block_asset_skipped', array( 'theme-style' ) ) );
+	}
+
+	/**
+	 * Test that nothing is skipped when core reports separate loading off
+	 * (issue #937 legacy path keeps minifying every handle).
+	 */
+	public function test_is_core_block_asset_skipped_when_not_separate(): void {
+		Functions\when( 'wp_should_load_separate_core_block_assets' )->justReturn( false );
+
+		$main = $this->make_main();
+
+		$this->assertFalse( $this->invoke_private( $main, 'is_core_block_asset_skipped', array( 'wp-block-library' ) ) );
+	}
+
+	/**
+	 * Test that nothing is skipped on pre-6.9 cores without the separate
+	 * loading function (issue #937 fail-open to current behavior).
+	 */
+	public function test_is_core_block_asset_skipped_on_pre_69(): void {
+		Functions\expect( 'function_exists' )->with( 'wp_should_load_separate_core_block_assets' )->andReturn( false );
+
+		$main = $this->make_main();
+
+		$this->assertFalse( $this->invoke_private( $main, 'is_core_block_asset_skipped', array( 'wp-block-library' ) ) );
+	}
+
+	/**
+	 * Test that minify_queued_styles leaves core block assets untouched when
+	 * core loads them on demand (issue #937: no duplicate combined library,
+	 * no rewritten src for core-owned styles).
+	 */
+	public function test_minify_queued_styles_skips_core_block_assets_when_separate(): void {
+		Functions\when( 'wp_should_load_separate_core_block_assets' )->justReturn( true );
+		Functions\expect( 'wp_style_add_data' )->never();
+
+		global $wp_styles;
+		$wp_styles = $this->make_wp_styles(
+			array(
+				'wp-block-library' => (object) array(
+					'src'   => 'http://example.com/wp-includes/css/dist/block-library/style.css',
+					'args'  => 'all',
+					'extra' => array(),
+				),
+			),
+			array( 'wp-block-library' ),
+			false
+		);
+
+		$main = $this->make_main();
+
+		$this->assertNull( $main->minify_queued_styles() );
+		$this->assertSame( 'http://example.com/wp-includes/css/dist/block-library/style.css', $wp_styles->registered['wp-block-library']->src );
+	}
+
+	/**
+	 * Test that minify_css leaves core block assets untouched when core loads
+	 * them on demand (issue #937: the tag-time rewrite yields to core too).
+	 */
+	public function test_minify_css_skips_core_block_assets_when_separate(): void {
+		Functions\when( 'wp_should_load_separate_core_block_assets' )->justReturn( true );
+
+		global $wp_styles;
+		$wp_styles = $this->make_wp_styles( array(), array(), false );
+
+		$main = $this->make_main();
+		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- Static fixture HTML for minify_css() tests.
+		$tag = '<link rel="stylesheet" id="wp-block-library-css" href="http://example.com/wp-includes/css/dist/block-library/style.css" />';
+
+		$this->assertSame( $tag, $main->minify_css( $tag, 'wp-block-library', 'http://example.com/wp-includes/css/dist/block-library/style.css' ) );
 	}
 }

@@ -349,6 +349,115 @@ const isSafeVideoEmbedUrl = ( src ) => {
 };
 
 /**
+ * Validate a generic lazy subresource URL (iframe data-src, video data-src /
+ * data-poster, source data-src, img data-wppo-fallback) before it is assigned
+ * to a live sink. The URL must parse, use http(s), and be same-origin or
+ * cross-origin https. Rejects javascript:/vbscript:/data:/blob: outright so
+ * attacker-controlled data-* attributes promoted by the MutationObserver
+ * cannot become stored XSS (iframe javascript: executes script).
+ *
+ * Unlike isSafeVideoEmbedUrl (host-allowlisted embeds), this is intentionally
+ * generic so legitimate non-video iframes (maps, forms, widgets) keep working.
+ *
+ * @since NEXT
+ * @param {string} src Raw data-* attribute value.
+ * @return {boolean} True when the URL is safe to assign to src/poster.
+ */
+const isSafeSubresourceUrl = ( src ) => {
+	if ( ! src || typeof src !== 'string' ) {
+		return false;
+	}
+	// Normalise whitespace/C0 controls first (browsers ignore them when
+	// parsing schemes: "java\tscript:", "  javascript:").
+	const normalised = String( src ).replace( /[\u0000-\u0020]/g, '' );
+	if ( ! normalised ) {
+		return false;
+	}
+	let url;
+	try {
+		url = new URL( normalised, window.location.origin );
+	} catch {
+		return false;
+	}
+	if ( 'http:' !== url.protocol && 'https:' !== url.protocol ) {
+		return false;
+	}
+	if ( url.origin === window.location.origin ) {
+		return true;
+	}
+	// Cross-origin subresources must be https (no mixed active content);
+	// http is tolerated only for same-origin dev/staging origins.
+	return 'https:' === url.protocol;
+};
+
+/**
+ * Validate a lazy CSS background value from data-wppo-bg before it is
+ * assigned to el.style.backgroundImage. Property assignment cannot run
+ * script, but an attacker-controlled attribute could force arbitrary
+ * cross-origin loads (tracking beacon) or malformed CSS.
+ *
+ * Accepts only url(...) with http(s)/same-origin or data:image/* payloads;
+ * rejects javascript:/vbscript:/expression()/behavior/-moz-binding and
+ * control characters.
+ *
+ * @since NEXT
+ * @param {string} value Raw data-wppo-bg attribute value.
+ * @return {boolean} True when the value is safe to assign.
+ */
+const isSafeBackgroundValue = ( value ) => {
+	if ( ! value || typeof value !== 'string' ) {
+		return false;
+	}
+	const normalised = String( value )
+		.toLowerCase()
+		.replace( /[\u0000-\u001f\u007f]/g, '' );
+	if (
+		normalised.includes( 'javascript:' ) ||
+		normalised.includes( 'vbscript:' ) ||
+		normalised.includes( 'expression(' ) ||
+		normalised.includes( 'behavior' ) ||
+		normalised.includes( '-moz-binding' )
+	) {
+		return false;
+	}
+	// Only url(...) payloads are expected; plain colour/gradient values from
+	// PHP are safe to pass through when they contain no url( at all.
+	if ( ! normalised.includes( 'url(' ) ) {
+		return true;
+	}
+	// Extract url(...) targets and validate each one.
+	const urlPattern = /url\(\s*(['"]?)(.*?)\1\s*\)/g;
+	let match;
+	let found = false;
+	while ( ( match = urlPattern.exec( normalised ) ) !== null ) {
+		found = true;
+		const target = match[ 2 ].trim();
+		if ( ! target ) {
+			return false;
+		}
+		if ( target.startsWith( 'data:image/' ) ) {
+			continue;
+		}
+		let url;
+		try {
+			url = new URL( target, window.location.origin );
+		} catch {
+			return false;
+		}
+		if ( 'http:' !== url.protocol && 'https:' !== url.protocol ) {
+			return false;
+		}
+		if (
+			url.origin !== window.location.origin &&
+			'https:' !== url.protocol
+		) {
+			return false;
+		}
+	}
+	return found;
+};
+
+/**
  * Copy allowlisted attributes from the placeholder script to the replacement.
  * Event-handler (`on*`) attributes are never copied — the allowlist is the
  * only path from placeholder to live element.
@@ -854,6 +963,50 @@ const checkCleanup = () => {
 };
 
 /**
+ * Whether an element is the LCP hero and must never be lazy-loaded.
+ *
+ * Fail-open redundancy: PHP is authoritative; JS just refuses to lazy-load
+ * a hero PHP missed (fetchpriority=high, data-wppo-hero/data-wppo-lcp, or
+ * loading=eager). Such images keep src/srcset intact and are never observed.
+ *
+ * @since NEXT
+ * @param {Element} el The DOM element.
+ * @return {boolean} True when the element is a hero image.
+ */
+const isHeroImage = ( el ) => {
+	if ( ! el || el.tagName !== 'IMG' ) {
+		return false;
+	}
+	return (
+		el.getAttribute( 'fetchpriority' ) === 'high' ||
+		el.hasAttribute( 'data-wppo-hero' ) ||
+		el.hasAttribute( 'data-wppo-lcp' ) ||
+		el.getAttribute( 'loading' ) === 'eager'
+	);
+};
+
+/**
+ * Eagerly restore a hero image that PHP missed (leave src/srcset intact,
+ * drop data-* placeholders) so it is never lazy-loaded.
+ *
+ * @since NEXT
+ * @param {Element} el The hero IMG element.
+ */
+const restoreHeroImage = ( el ) => {
+	if ( el.hasAttribute( 'data-src' ) ) {
+		el.src = el.getAttribute( 'data-src' );
+		el.removeAttribute( 'data-src' );
+	}
+	if ( el.hasAttribute( 'data-srcset' ) ) {
+		el.srcset = el.getAttribute( 'data-srcset' );
+		el.removeAttribute( 'data-srcset' );
+	}
+	if ( el.getAttribute( 'loading' ) === 'lazy' ) {
+		el.removeAttribute( 'loading' );
+	}
+};
+
+/**
  * Register an element for lazy-load observation if it has data-* attributes.
  *
  * @since 1.0.0
@@ -868,6 +1021,13 @@ const observeElement = ( el ) => {
 		return;
 	}
 
+	// LCP hero guard: never observe a hero image; restore it eagerly instead.
+	if ( isHeroImage( el ) ) {
+		restoreHeroImage( el );
+		observedElements.add( el );
+		return;
+	}
+
 	// When native lazy is supported, restore iframes immediately instead of observing.
 	if (
 		USE_NATIVE_LAZY &&
@@ -877,7 +1037,14 @@ const observeElement = ( el ) => {
 		const src = el.getAttribute( 'data-src' );
 		el.setAttribute( 'loading', 'lazy' );
 		if ( src ) {
-			el.src = src;
+			if ( ! isSafeSubresourceUrl( src ) ) {
+				console.warn(
+					'WPPO: blocked lazy iframe src (scheme/origin not allowed):',
+					src
+				);
+			} else {
+				el.src = src;
+			}
 		}
 		el.removeAttribute( 'data-src' );
 		observedElements.add( el );
@@ -914,7 +1081,14 @@ const loadImages = () => {
 			const src = iframe.getAttribute( 'data-src' );
 			iframe.setAttribute( 'loading', 'lazy' );
 			if ( src ) {
-				iframe.src = src;
+				if ( ! isSafeSubresourceUrl( src ) ) {
+					console.warn(
+						'WPPO: blocked lazy iframe src (scheme/origin not allowed):',
+						src
+					);
+				} else {
+					iframe.src = src;
+				}
 			}
 			iframe.removeAttribute( 'data-src' );
 		} );
@@ -974,24 +1148,59 @@ const loadImages = () => {
 									const iframeSrc =
 										el.getAttribute( 'data-src' );
 									if ( iframeSrc ) {
-										el.src = iframeSrc;
+										if (
+											! isSafeSubresourceUrl( iframeSrc )
+										) {
+											console.warn(
+												'WPPO: blocked lazy iframe src (scheme/origin not allowed):',
+												iframeSrc
+											);
+										} else {
+											el.src = iframeSrc;
+										}
 									}
 									el.removeAttribute( 'data-src' );
 								}
 							} else if ( el.tagName === 'VIDEO' ) {
 								if ( el.hasAttribute( 'data-src' ) ) {
-									el.src = el.getAttribute( 'data-src' );
+									const videoSrc =
+										el.getAttribute( 'data-src' );
+									if ( isSafeSubresourceUrl( videoSrc ) ) {
+										el.src = videoSrc;
+									} else {
+										console.warn(
+											'WPPO: blocked lazy video src (scheme/origin not allowed):',
+											videoSrc
+										);
+									}
 									el.removeAttribute( 'data-src' );
 								}
 								if ( el.hasAttribute( 'data-poster' ) ) {
-									el.poster =
+									const poster =
 										el.getAttribute( 'data-poster' );
+									if ( isSafeSubresourceUrl( poster ) ) {
+										el.poster = poster;
+									} else {
+										console.warn(
+											'WPPO: blocked lazy video poster (scheme/origin not allowed):',
+											poster
+										);
+									}
 									el.removeAttribute( 'data-poster' );
 								}
 								el.querySelectorAll(
 									'source[data-src]'
 								).forEach( ( s ) => {
-									s.src = s.getAttribute( 'data-src' );
+									const sourceSrc =
+										s.getAttribute( 'data-src' );
+									if ( isSafeSubresourceUrl( sourceSrc ) ) {
+										s.src = sourceSrc;
+									} else {
+										console.warn(
+											'WPPO: blocked lazy source src (scheme/origin not allowed):',
+											sourceSrc
+										);
+									}
 									s.removeAttribute( 'data-src' );
 								} );
 								el.load();
@@ -1099,21 +1308,55 @@ const loadImages = () => {
 					getLazySelector()
 				);
 				lazyElements.forEach( ( el ) => {
+					// LCP hero guard (scroll fallback): restore eagerly, never lazy-load.
+					if ( isHeroImage( el ) ) {
+						restoreHeroImage( el );
+						return;
+					}
 					if ( isElementInViewport( el ) ) {
 						if ( el.tagName === 'VIDEO' ) {
 							if ( el.hasAttribute( 'data-poster' ) ) {
-								el.poster = el.getAttribute( 'data-poster' );
+								const fallbackPoster =
+									el.getAttribute( 'data-poster' );
+								if ( isSafeSubresourceUrl( fallbackPoster ) ) {
+									el.poster = fallbackPoster;
+								} else {
+									console.warn(
+										'WPPO: blocked lazy video poster (scheme/origin not allowed):',
+										fallbackPoster
+									);
+								}
 								el.removeAttribute( 'data-poster' );
 							}
 							if ( el.hasAttribute( 'data-src' ) ) {
-								el.src = el.getAttribute( 'data-src' );
+								const fallbackVideoSrc =
+									el.getAttribute( 'data-src' );
+								if (
+									isSafeSubresourceUrl( fallbackVideoSrc )
+								) {
+									el.src = fallbackVideoSrc;
+								} else {
+									console.warn(
+										'WPPO: blocked lazy video src (scheme/origin not allowed):',
+										fallbackVideoSrc
+									);
+								}
 								el.removeAttribute( 'data-src' );
 							}
 							el.querySelectorAll(
 								'source[data-src], source[data-srcset]'
 							).forEach( ( s ) => {
 								if ( s.hasAttribute( 'data-src' ) ) {
-									s.src = s.getAttribute( 'data-src' );
+									const fbSourceSrc =
+										s.getAttribute( 'data-src' );
+									if ( isSafeSubresourceUrl( fbSourceSrc ) ) {
+										s.src = fbSourceSrc;
+									} else {
+										console.warn(
+											'WPPO: blocked lazy source src (scheme/origin not allowed):',
+											fbSourceSrc
+										);
+									}
 									s.removeAttribute( 'data-src' );
 								}
 								if ( s.hasAttribute( 'data-srcset' ) ) {
@@ -1211,8 +1454,16 @@ const initVideoPlaceholders = () => {
 					e.target.tagName === 'IMG' &&
 					e.target.hasAttribute( 'data-wppo-fallback' )
 				) {
-					e.target.src =
+					const fallback =
 						e.target.getAttribute( 'data-wppo-fallback' );
+					if ( isSafeSubresourceUrl( fallback ) ) {
+						e.target.src = fallback;
+					} else {
+						console.warn(
+							'WPPO: blocked image fallback src (scheme/origin not allowed):',
+							fallback
+						);
+					}
 					e.target.removeAttribute( 'data-wppo-fallback' );
 				}
 			},
@@ -1332,7 +1583,14 @@ const loadBackgrounds = () => {
 	const restoreBackground = ( el ) => {
 		const background = el.getAttribute( 'data-wppo-bg' );
 		if ( background ) {
-			el.style.backgroundImage = background;
+			if ( isSafeBackgroundValue( background ) ) {
+				el.style.backgroundImage = background;
+			} else {
+				console.warn(
+					'WPPO: blocked lazy background value (unsupported URL/scheme):',
+					background
+				);
+			}
 		}
 		el.classList.remove( 'wppo-lazy-bg' );
 		el.removeAttribute( 'data-wppo-bg' );

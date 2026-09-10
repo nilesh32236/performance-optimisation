@@ -164,7 +164,7 @@ Plus `expires { enableExpires 1 }` + `tuning { gzipStaticCompressLevel, brStatic
 | Defer JS (<6.3) | `add_defer_attribute_legacy()` | Inserts ` defer` before `src` |
 | Delay JS | `add_defer_attribute()` `script_loader_tag:10` | Rewrites `src→wppo-src`, `type→wppo/javascript wppo-type=text/javascript`, `data-wppo-delay-strategy=interaction/idle/viewport`, `data-wppo-delay-priority`, restored by `src/lazyload.js` on user interaction |
 | Script modules | `apply_module_loading_strategies()` | Forces `in_footer + low` via `wp_script_modules()` |
-| Query strings | `strip_static_query_strings()` `script/style_loader_src` | Removes `?ver` unless plugin cache URL |
+| Query strings | Removed (#925) — `?ver` always preserved | `?ver=` is the cache-busting mechanism; no stripping path remains |
 | Woo CSS/JS | `remove_woocommerce_scripts()` `wp_enqueue_scripts:999` | Dequeues unless `excludeUrlToKeepJSCSS` matches |
 | Google Fonts | `Google_Fonts::process_style_tag()` + buffer | Downloads `woff2` via Chrome 120 UA to `cache/wppo/fonts/`, injects `font-display:swap` |
 
