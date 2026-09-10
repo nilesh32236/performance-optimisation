@@ -207,9 +207,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			$tmp_file     = '';
 
 			try {
+				// Unique tmp suffix: wide rand range plus pid/uniqid so two
+				// concurrent create() calls cannot pick the same tmp name.
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.rand_mt_rand -- Fallback only when wp_rand() is unavailable (WP < 6.2 compat); uniqueness is all that is needed for the tmp suffix.
-				$rand_suffix = function_exists( 'wp_rand' ) ? wp_rand() : mt_rand();
-				$tmp_file    = $handler_file . '.tmp.' . $rand_suffix;
+				$rand_suffix = mt_rand( 1000000, 9999999 );
+				if ( function_exists( 'wp_rand' ) ) {
+					try {
+						$rand_suffix = wp_rand( 1000000, 9999999 );
+					} catch ( \Throwable $ignored_rand ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Keep the mt_rand() fallback when the wp_rand() stub is unavailable.
+					}
+				}
+				$pid_part  = function_exists( 'getmypid' ) ? (int) getmypid() : 0;
+				$uniq_part = substr( md5( uniqid( (string) microtime( true ), true ) ), 0, 8 );
+				$tmp_file  = $handler_file . '.tmp.' . $rand_suffix . '-' . $pid_part . '-' . $uniq_part;
 
 				$written = $wp_filesystem->put_contents( $tmp_file, $handler_code, $chmod_file );
 				if ( ! $written ) {
@@ -272,9 +282,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 				}
 
 				$final_contents = $wp_filesystem->get_contents( $handler_file );
-				if ( ! is_string( $final_contents ) || false === strpos( $final_contents, self::DROPIN_MARKER ) ) {
+				if ( ! is_string( $final_contents ) || false === strpos( $final_contents, self::DROPIN_MARKER ) || 0 !== strpos( ltrim( $final_contents ), '<?php' ) ) {
+					$restored = false;
 					if ( method_exists( $wp_filesystem, 'copy' ) && method_exists( $wp_filesystem, 'exists' ) && $wp_filesystem->exists( $backup_file ) ) {
-						$wp_filesystem->copy( $backup_file, $handler_file, true, $chmod_file );
+						$restored = (bool) $wp_filesystem->copy( $backup_file, $handler_file, true, $chmod_file );
+					}
+					if ( ! $restored && method_exists( $wp_filesystem, 'delete' ) ) {
+						$wp_filesystem->delete( $handler_file );
 					}
 					self::log_dropin_issue( __( 'Could not verify advanced-cache.php after write; previous backup restored where available.', 'performance-optimisation' ) );
 					return false;
@@ -556,7 +570,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 		/**
 		 * Removes the advanced-cache.php file.
 		 *
-		 * Deletes the advanced-cache.php file if it exists.
+		 * Deletes the advanced-cache.php file if it exists, along with the
+		 * `.wppo-backup` sibling and any orphaned `.tmp.*` siblings from
+		 * crashed atomic writes, so no stale artifacts are left behind.
 		 *
 		 * @return void
 		 * @since 1.0.0
@@ -571,6 +587,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			}
 
 			if ( ! $wp_filesystem->exists( $handler_file ) ) {
+				self::cleanup_dropin_artifacts();
 				return;
 			}
 
@@ -580,11 +597,57 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 
 			$deleted = (bool) $wp_filesystem->delete( $handler_file );
 
+			if ( $deleted ) {
+				self::cleanup_dropin_artifacts();
+			}
+
 			// The drop-in changed — System Info's cached ownership verdict is
 			// stale (audit #888 finding 25). Only flush on a successful delete,
 			// mirroring create().
 			if ( $deleted && class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 				System_Info::flush_dropin_cache();
+			}
+		}
+
+		/**
+		 * Delete the backup sibling and any orphaned tmp siblings.
+		 *
+		 * Best-effort only: failures are ignored so remove() never fails
+		 * because of stale artifacts.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private static function cleanup_dropin_artifacts(): void {
+			global $wp_filesystem;
+
+			if ( ! is_object( $wp_filesystem ) || ! method_exists( $wp_filesystem, 'delete' ) ) {
+				return;
+			}
+
+			try {
+				$wp_filesystem->delete( self::get_dropin_backup_path() );
+
+				if ( ! method_exists( $wp_filesystem, 'dirlist' ) || ! method_exists( $wp_filesystem, 'exists' ) ) {
+					return;
+				}
+
+				$content_dir = wp_normalize_path( WP_CONTENT_DIR );
+				if ( ! $wp_filesystem->exists( $content_dir ) ) {
+					return;
+				}
+
+				$listing = $wp_filesystem->dirlist( $content_dir );
+				if ( ! is_array( $listing ) ) {
+					return;
+				}
+
+				foreach ( $listing as $name => $info ) {
+					if ( 0 === strpos( (string) $name, 'advanced-cache.php.tmp.' ) ) {
+						$wp_filesystem->delete( $content_dir . '/' . $name );
+					}
+				}
+			} catch ( \Throwable $ignored ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Best-effort artifact cleanup must never throw.
 			}
 		}
 	}
