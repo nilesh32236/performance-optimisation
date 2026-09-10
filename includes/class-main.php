@@ -341,6 +341,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['ai_adaptive']['field_lcp_min_samples'] ) ) {
 				$this->options['ai_adaptive']['field_lcp_min_samples'] = 20;
 			}
+			if ( ! isset( $this->options['ai_adaptive']['dismissed_suggestions'] ) || ! is_array( $this->options['ai_adaptive']['dismissed_suggestions'] ) ) {
+				$this->options['ai_adaptive']['dismissed_suggestions'] = array();
+			}
 
 			if ( ! isset( $this->options['edge_cache'] ) || ! is_array( $this->options['edge_cache'] ) ) {
 				$this->options['edge_cache'] = array();

@@ -68,11 +68,13 @@ class DefaultsParityTest extends \PHPUnit\Framework\TestCase {
 
 		// AI Adaptive WP-client opt-in (issue #964): additive keys only, off by default.
 		// Field-LCP min samples (issue #986): additive key, 20 by default.
+		// Dismissed suggestions (issue #1036): additive key, empty by default.
 		$this->assertSame(
 			array(
 				'enabled'               => false,
 				'use_wp_ai_client'      => false,
 				'field_lcp_min_samples' => 20,
+				'dismissed_suggestions' => array(),
 			),
 			$defaults['ai_adaptive']
 		);

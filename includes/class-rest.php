@@ -641,6 +641,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$sanitized_settings['auto_rescan'] = $options['performance_audit']['auto_rescan'];
 			}
 
+			// Preserve dismissed AI suggestions when the request omits them
+			// (issue #1036): AiPanel save posts only the toggles, while the
+			// dismiss action posts the full list — a toggle save must not
+			// wipe prior dismissals.
+			if ( 'ai_adaptive' === $tab && ! isset( $params['settings']['dismissed_suggestions'] ) && isset( $options['ai_adaptive']['dismissed_suggestions'] ) ) {
+				$dismissed = $options['ai_adaptive']['dismissed_suggestions'];
+				if ( is_array( $dismissed ) ) {
+					$sanitized_dismissed = array();
+					foreach ( $dismissed as $metric ) {
+						if ( is_string( $metric ) && '' !== trim( $metric ) ) {
+							$sanitized_dismissed[] = sanitize_text_field( $metric );
+						}
+					}
+					$sanitized_settings['dismissed_suggestions'] = array_values( array_unique( $sanitized_dismissed ) );
+				}
+			}
+
 			$options[ $tab ] = $sanitized_settings;
 
 			update_option( 'wppo_settings', $options );
