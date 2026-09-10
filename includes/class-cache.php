@@ -372,9 +372,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// (before `?`/`#`) is inspected so query strings carrying URLs
 			// never false-positive. Hostile input sets path_rejected so the
 			// probe is never silently mapped to the homepage index.html.
-			// Pure split (no process-global strtok() tokenizer state): inspect
-			// only the authority part before `?`/`#` so query strings carrying
-			// URLs never false-positive.
+			// The split uses strcspn() (no process-global strtok() state).
 			$uri_target         = substr( $this->request_uri, 0, strcspn( $this->request_uri, '?#' ) );
 			$uri_target_trimmed = ltrim( $uri_target );
 			$is_absolute_form   = (bool) preg_match( '#^[a-zA-Z][a-zA-Z0-9+.-]*://#', $uri_target_trimmed ) || 0 === strpos( $uri_target_trimmed, '//' );
