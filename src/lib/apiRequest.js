@@ -262,10 +262,12 @@ export const runPerformanceScan = ( url, force = false, signal ) => {
  * Fetch system information (PHP, DB, WordPress, server, cache).
  *
  * @since 1.5.0
+ * @since NEXT Accepts an optional AbortSignal for request cancellation.
+ * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
  * @return {Promise<Object>} Resolved system info data.
  */
-export const fetchSystemInfo = () => {
-	return apiCall( 'system_info', {}, 'GET' );
+export const fetchSystemInfo = ( signal ) => {
+	return apiCall( 'system_info', {}, 'GET', signal );
 };
 
 /**

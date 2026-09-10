@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faBrain } from '@fortawesome/free-solid-svg-icons';
 import { apiCall } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
@@ -30,31 +32,68 @@ const AiPanel = () => {
 	const [ suggestions, setSuggestions ] = useState( [] );
 	const { notice, notify, dismiss } = useNotice();
 
-	const fetchModel = useCallback( async () => {
-		try {
-			const res = await apiCall( 'ai_model', {}, 'GET' );
-			if ( res.success ) {
-				setModel( res.data );
+	const fetchModel = useCallback(
+		async ( signal ) => {
+			try {
+				const res = await apiCall( 'ai_model', {}, 'GET', signal );
+				if ( res.success && ! signal?.aborted ) {
+					setModel( res.data );
+				}
+			} catch ( err ) {
+				if ( err?.name === 'AbortError' || signal?.aborted ) {
+					return;
+				}
+				console.error( 'Failed to load AI model.', err );
+				notify( {
+					type: 'error',
+					message: __(
+						'Failed to load AI model.',
+						'performance-optimisation'
+					),
+				} );
 			}
-		} catch {
-			// ignore
-		}
-	}, [] );
+		},
+		[ notify ]
+	);
 
-	const fetchSuggestions = useCallback( async () => {
-		try {
-			const res = await apiCall( 'ai_suggestions', {}, 'GET' );
-			if ( res.success && res.data?.suggestions ) {
-				setSuggestions( res.data.suggestions );
+	const fetchSuggestions = useCallback(
+		async ( signal ) => {
+			try {
+				const res = await apiCall(
+					'ai_suggestions',
+					{},
+					'GET',
+					signal
+				);
+				if (
+					res.success &&
+					res.data?.suggestions &&
+					! signal?.aborted
+				) {
+					setSuggestions( res.data.suggestions );
+				}
+			} catch ( err ) {
+				if ( err?.name === 'AbortError' || signal?.aborted ) {
+					return;
+				}
+				console.error( 'Failed to load AI suggestions.', err );
+				notify( {
+					type: 'error',
+					message: __(
+						'Failed to load AI suggestions.',
+						'performance-optimisation'
+					),
+				} );
 			}
-		} catch {
-			// ignore
-		}
-	}, [] );
+		},
+		[ notify ]
+	);
 
 	useEffect( () => {
-		fetchModel();
-		fetchSuggestions();
+		const controller = new AbortController();
+		fetchModel( controller.signal );
+		fetchSuggestions( controller.signal );
+		return () => controller.abort();
 	}, [ fetchModel, fetchSuggestions ] );
 
 	const handleSave = async () => {
@@ -203,7 +242,7 @@ const AiPanel = () => {
 	return (
 		<FeatureCard
 			title={ __( 'AI Adaptive', 'performance-optimisation' ) }
-			icon={ <i className="fas fa-brain"></i> }
+			icon={ <FontAwesomeIcon icon={ faBrain } aria-hidden="true" /> }
 		>
 			{ notice && (
 				<NoticeBanner
@@ -277,7 +316,9 @@ const AiPanel = () => {
 					</h4>
 					{ suggestions.map( ( s ) => (
 						<div
-							key={ s.metric }
+							key={ `${ s.metric }::${ s.status }::${
+								s.fix_action || ''
+							}::${ s.description || '' }` }
 							className="wppo-suggestion-card wppo-suggestion-card--needs_improvement"
 						>
 							<div className="wppo-suggestion-card__header">

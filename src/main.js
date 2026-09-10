@@ -8,9 +8,13 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	) {
 		return;
 	}
-	// Keep in sync with src/lib/apiRequest.js: refreshNonce() + apiCall() retry-on-403 logic.
+	// Keep in sync with src/lib/apiRequest.js: refreshNonce() + apiCall() retry logic.
 	// This entry is intentionally standalone (admin-bar, enqueued on every admin page via
 	// wppoObject) and does not import the SPA's apiRequest module to avoid bundle coupling.
+	// Sync note: apiCall() retries when the JSON payload carries rest_forbidden /
+	// rest_cookie_invalid_nonce / rest_cookie_nonce_invalid (even on HTTP 200);
+	// postJsonRequest() below mirrors that payload-code check in addition to the
+	// HTTP-403 check. When changing retry behaviour, update both copies.
 
 	let pendingRefresh = null;
 	const fallbackTimers = new Set();
@@ -49,7 +53,29 @@ document.addEventListener( 'DOMContentLoaded', function () {
 					}
 					throw new Error( 'Network response was not ok' );
 				}
-				return response.json();
+				return response.json().then( ( data ) => {
+					// Mirror apiCall(): retry when the payload carries an
+					// auth-error code even though the HTTP status was OK.
+					if (
+						data &&
+						( data.code === 'rest_forbidden' ||
+							data.code === 'rest_cookie_invalid_nonce' ||
+							data.code === 'rest_cookie_nonce_invalid' ) &&
+						! isRetry
+					) {
+						return refreshNonce().then( ( success ) => {
+							if ( success ) {
+								return postJsonRequest(
+									endpointPath,
+									payload,
+									true
+								);
+							}
+							return data;
+						} );
+					}
+					return data;
+				} );
 			} )
 			.catch( ( error ) => {
 				console.error( `Error calling ${ endpointPath }: `, error );

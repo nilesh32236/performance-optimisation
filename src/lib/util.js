@@ -1,3 +1,5 @@
+import { __, sprintf } from '@wordpress/i18n';
+
 /**
  * Default idle timeout (ms) applied when the delayJSIdleTimeout field is
  * empty, non-numeric, non-finite or non-positive.
@@ -70,4 +72,48 @@ export const handleChange = ( setSettings ) => ( e ) => {
 		...prevState,
 		[ name ]: nextValue,
 	} ) );
+};
+
+/**
+ * Format a byte count as a localised human-readable size string.
+ *
+ * Single shared implementation (replaces the per-component copies in
+ * AutoloadedOptions, PerformanceAudit and ImageOptimizationCard). Units are
+ * passed through __() and composed via sprintf() so translators can reorder
+ * words and localise the unit.
+ *
+ * @since NEXT
+ * @param {number} bytes Byte count.
+ * @return {string} Formatted size (e.g. "1.5 KB").
+ */
+export const formatBytes = ( bytes ) => {
+	const num = Number( bytes );
+	if ( ! Number.isFinite( num ) || num <= 0 ) {
+		return sprintf(
+			/* translators: 1: size value, 2: unit. */
+			__( '%1$s %2$s', 'performance-optimisation' ),
+			'0',
+			__( 'B', 'performance-optimisation' )
+		);
+	}
+	const units = [
+		__( 'B', 'performance-optimisation' ),
+		__( 'KB', 'performance-optimisation' ),
+		__( 'MB', 'performance-optimisation' ),
+		__( 'GB', 'performance-optimisation' ),
+	];
+	const index = Math.min(
+		Math.floor( Math.log( num ) / Math.log( 1024 ) ),
+		units.length - 1
+	);
+	const value =
+		index === 0
+			? String( Math.round( num ) )
+			: ( num / 1024 ** index ).toFixed( 1 );
+	return sprintf(
+		/* translators: 1: size value, 2: unit. */
+		__( '%1$s %2$s', 'performance-optimisation' ),
+		value,
+		units[ index ]
+	);
 };

@@ -1,4 +1,4 @@
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 import { useState } from '@wordpress/element';
 import {
 	faCheckCircle,
@@ -10,6 +10,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import useNotice from '../lib/useNotice';
 import NoticeBanner from './common/NoticeBanner';
+import { formatBytes } from '../lib/util';
 
 const STATUS_CONFIG = {
 	ready: {
@@ -100,14 +101,27 @@ const CriticalCssPanel = ( { status = {}, onRegenerate } ) => {
 									{ label }
 									{ null !== size && size > 0 && (
 										<span className="wppo-text-muted">
-											{ ` — ${ Math.round(
-												size / 1024
-											) } KB` }
-											{ truncated &&
-												` (${ __(
-													'capped',
-													'performance-optimisation'
-												) })` }
+											{ truncated
+												? sprintf(
+														/* translators: 1: file size, 2: "capped" label. */
+														__(
+															'— %1$s (%2$s)',
+															'performance-optimisation'
+														),
+														formatBytes( size ),
+														__(
+															'capped',
+															'performance-optimisation'
+														)
+												  )
+												: sprintf(
+														/* translators: %s: file size. */
+														__(
+															'— %s',
+															'performance-optimisation'
+														),
+														formatBytes( size )
+												  ) }
 										</span>
 									) }
 								</span>

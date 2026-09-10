@@ -991,12 +991,50 @@ const observedElements = new WeakSet();
 let backgroundObserver = null;
 
 /**
- * Teardown lazyload observers and safety interval (pagehide/unload).
- * Idempotent — safe to call multiple times. Exposed for tests/SPA.
+ * Module-local handle for the safety-scan interval.
+ *
+ * The id is mirrored to window.wppoSafetyScanId for backward compatibility
+ * (tests and any inline snippets reference it). The module-local binding is
+ * the source of truth so a second copy of this module executing on the same
+ * page cannot collide with — or clear — this copy's interval via the shared
+ * window property: each copy only clears the interval it created.
+ *
+ * @type {number|null}
+ */
+let safetyScanId = null;
+
+/**
+ * Clear the safety-scan interval owned by this module copy.
+ *
+ * Only this copy's own interval is cleared; the shared window mirror is
+ * released solely when it points at our interval, so a second copy of this
+ * module on the same page never stops another copy's scan.
+ */
+const clearSafetyScan = () => {
+	if ( safetyScanId !== null ) {
+		clearInterval( safetyScanId );
+		if ( window.wppoSafetyScanId === safetyScanId ) {
+			window.wppoSafetyScanId = null;
+		}
+		safetyScanId = null;
+	}
+};
+
+/**
+ * Teardown lazyload observers and safety interval.
+ *
+ * Idempotent — safe to call multiple times. Runs automatically on
+ * pagehide/beforeunload and is exposed as window.wppoLazyloadTeardown for
+ * tests and SPA-style teardown (call it before removing this module's script
+ * element dynamically; nothing observes script-element removal automatically).
+ *
  * @since NEXT
  */
 const teardownLazyload = () => {
 	pendingLazyCount = 0;
+	clearSafetyScan();
+	// Release any legacy mirror (e.g. set by tests or an older copy) so
+	// teardown stays idempotent and leak-free.
 	if ( window.wppoSafetyScanId ) {
 		clearInterval( window.wppoSafetyScanId );
 		window.wppoSafetyScanId = null;
@@ -1143,10 +1181,7 @@ const checkCleanup = () => {
 	}
 	const remaining = document.querySelectorAll( getLazySelector() );
 	if ( remaining.length === 0 ) {
-		if ( window.wppoSafetyScanId ) {
-			clearInterval( window.wppoSafetyScanId );
-			window.wppoSafetyScanId = null;
-		}
+		clearSafetyScan();
 		if ( mutationObserver ) {
 			mutationObserver.disconnect();
 			mutationObserver = null;
@@ -1430,13 +1465,13 @@ const loadImages = () => {
 			);
 
 			const startSafetyScan = () => {
-				if ( window.wppoSafetyScanId ) {
+				if ( safetyScanId !== null || window.wppoSafetyScanId ) {
 					return;
 				}
 				let ticks = 0;
 				let emptyStreak = 0;
 				const MAX_TICKS = 30;
-				window.wppoSafetyScanId = setInterval( () => {
+				safetyScanId = setInterval( () => {
 					if ( document.hidden ) {
 						return;
 					}
@@ -1451,8 +1486,7 @@ const loadImages = () => {
 						// a zero-match DOM proves nothing is pending.
 						pendingLazyCount = 0;
 						checkCleanup();
-						clearInterval( window.wppoSafetyScanId );
-						window.wppoSafetyScanId = null;
+						clearSafetyScan();
 						return;
 					}
 					let newlyObserved = 0;
@@ -1468,10 +1502,12 @@ const loadImages = () => {
 						emptyStreak = 0;
 					}
 					if ( ticks >= MAX_TICKS || emptyStreak >= 2 ) {
-						clearInterval( window.wppoSafetyScanId );
-						window.wppoSafetyScanId = null;
+						clearSafetyScan();
 					}
 				}, 10000 );
+				// Backward-compat mirror for tests/inline snippets; the
+				// module-local binding above remains the source of truth.
+				window.wppoSafetyScanId = safetyScanId;
 			};
 
 			// Guard against re-entry: a re-executed module must not create a
