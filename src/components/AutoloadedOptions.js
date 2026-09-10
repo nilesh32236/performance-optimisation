@@ -18,6 +18,7 @@ import { __, sprintf } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faDatabase, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import { apiCall } from '../lib/apiRequest';
+import { formatBytes } from '../lib/util';
 import useNotice from '../lib/useNotice';
 import NoticeBanner from './common/NoticeBanner';
 import FeatureCard from './common/FeatureCard';
@@ -335,19 +336,6 @@ const AutoloadedOptions = () => {
 		}
 	}, [ notify, load ] );
 
-	const formatSize = ( bytes ) => {
-		if ( bytes < 1024 ) {
-			return `${ bytes } B`;
-		}
-		if ( bytes < 1048576 ) {
-			return `${ ( bytes / 1024 ).toFixed( 1 ) } KB`;
-		}
-		if ( bytes < 1073741824 ) {
-			return `${ ( bytes / 1048576 ).toFixed( 1 ) } MB`;
-		}
-		return `${ ( bytes / 1073741824 ).toFixed( 1 ) } GB`;
-	};
-
 	const remediatedNames = Object.keys( remediated );
 
 	let body = null;
@@ -367,7 +355,7 @@ const AutoloadedOptions = () => {
 					<li key={ option.option_name }>
 						<code>{ option.option_name }</code>
 						<span className="wppo-text-muted">
-							{ formatSize( option.size ) }
+							{ formatBytes( option.size ) }
 						</span>
 					</li>
 				) ) }
@@ -489,7 +477,7 @@ const AutoloadedOptions = () => {
 									'performance-optimisation'
 								),
 								appliedSummary.applied.length || 0,
-								formatSize( appliedSummary.bytes_saved || 0 )
+								formatBytes( appliedSummary.bytes_saved || 0 )
 							) }
 						</p>
 					</div>
@@ -504,7 +492,7 @@ const AutoloadedOptions = () => {
 									'performance-optimisation'
 								),
 								report.count || 0,
-								formatSize( report.bytes_saved || 0 )
+								formatBytes( report.bytes_saved || 0 )
 							) }
 						</p>
 						{ report.options?.length > 0 && (
@@ -513,7 +501,7 @@ const AutoloadedOptions = () => {
 									<li key={ option.option_name }>
 										<code>{ option.option_name }</code>
 										<span className="wppo-text-muted">
-											{ formatSize( option.size ) }
+											{ formatBytes( option.size ) }
 										</span>
 									</li>
 								) ) }

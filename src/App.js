@@ -518,7 +518,17 @@ const App = () => {
 						className="wppo-sidebar-overlay"
 						onClick={ toggleMobileMenu }
 						onKeyDown={ ( e ) => {
-							if ( e.key === 'Enter' || e.key === ' ' ) {
+							// Native-button parity: activate on Enter keydown,
+							// suppress the Space-keydown page scroll.
+							if ( e.key === ' ' ) {
+								e.preventDefault();
+							} else if ( e.key === 'Enter' ) {
+								toggleMobileMenu();
+							}
+						} }
+						onKeyUp={ ( e ) => {
+							if ( e.key === ' ' ) {
+								e.preventDefault();
 								toggleMobileMenu();
 							}
 						} }

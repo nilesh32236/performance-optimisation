@@ -18,6 +18,7 @@ import {
 	faLightbulb,
 } from '@fortawesome/free-solid-svg-icons';
 import { runPerformanceScan, fetchSuggestions } from '../lib/apiRequest';
+import { formatBytes } from '../lib/util';
 import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
 import StatusBadge from './common/StatusBadge';
@@ -135,25 +136,6 @@ const numericStatus = ( value, good, poor ) => {
  * @return {string} 'good' or 'poor'.
  */
 const boolStatus = ( passing ) => ( passing ? 'good' : 'poor' );
-
-/**
- * Format bytes into a human-readable string.
- *
- * @param {number} bytes Raw byte count.
- * @return {string} Formatted size string.
- */
-const formatBytes = ( bytes ) => {
-	if ( ! bytes || bytes === 0 ) {
-		return '0 B';
-	}
-	if ( bytes < 1024 ) {
-		return `${ bytes } B`;
-	}
-	if ( bytes < 1024 * 1024 ) {
-		return `${ ( bytes / 1024 ).toFixed( 1 ) } KB`;
-	}
-	return `${ ( bytes / ( 1024 * 1024 ) ).toFixed( 2 ) } MB`;
-};
 
 /**
  * A single row in the results table with optional tooltip.

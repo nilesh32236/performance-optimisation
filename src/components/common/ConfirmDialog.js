@@ -40,15 +40,22 @@ const ConfirmDialog = ( {
 				onCancel();
 			}
 
-			// Focus trap — guarded for single-element dialogs.
+			// Focus trap — cycles even with a single focusable element so Tab
+			// cannot escape the modal in single-control edge cases (e.g. a
+			// disabled button leaving one tab stop).
 			if ( e.key === 'Tab' && dialogRef.current ) {
 				const focusable = focusableRef.current;
-				if ( focusable.length < 2 ) {
+				if ( focusable.length === 0 ) {
 					return;
 				}
 				const first = focusable[ 0 ];
 				const last = focusable[ focusable.length - 1 ];
 				if ( ! first || ! last ) {
+					return;
+				}
+				if ( focusable.length === 1 ) {
+					e.preventDefault();
+					first.focus();
 					return;
 				}
 

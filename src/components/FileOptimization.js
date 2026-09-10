@@ -189,6 +189,8 @@ const FileOptimization = ( {
 		options.excludeDelayJS,
 		options.delayJSCommercePreset,
 		options.delayJSBuilderPreset,
+		options.delayJSINPPreset,
+		options.delayJSExternalOnly,
 		options.delayJSExcludeUrls,
 		options.usedCSSExcludeUrls,
 		options.delayJSDefaultStrategy,
@@ -201,12 +203,16 @@ const FileOptimization = ( {
 		options.removeCssJsHandle,
 		options.enableServerRules,
 		options.criticalCSS,
+		options.ccssMaxSize,
 		options.hostGoogleFontsLocally,
 		options.fontMetricFallback,
 		options.cdnURL,
 		options.cdnMapping,
 		options.removeUnusedCSS,
 		options.excludeUnusedCSS,
+		options.unusedCSSSafelistExtra,
+		options.unusedCSSRegressionGuard,
+		options.unusedCSSRegressionThreshold,
 		options.disableEmojis,
 		options.disableEmbeds,
 		options.disableDashicons,
@@ -236,10 +242,83 @@ const FileOptimization = ( {
 	] );
 	useUnsavedChanges( settings, baseline );
 
-	// H-01: sync local state when parent props change after mount.
+	// Sync local state when parent props change after mount.
+	// Per-key deps (not object identity) plus an empty-options guard so
+	// parent re-renders with an identical payload — or a replacement of the
+	// global settings object while the user is editing — do not merge saved
+	// values over in-progress edits. Mirrors PreloadSettings/ImageOptimization.
 	useEffect( () => {
+		if ( ! options || Object.keys( options ).length === 0 ) {
+			return;
+		}
 		setSettings( ( prev ) => ( { ...prev, ...options } ) );
-	}, [ options ] );
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [
+		options.minifyJS,
+		options.excludeJS,
+		options.minifyCSS,
+		options.excludeCSS,
+		options.combineCSS,
+		options.excludeCombineCSS,
+		options.removeQueryStrings,
+		options.minifyHTML,
+		options.deferJS,
+		options.excludeDeferJS,
+		options.delayJS,
+		options.excludeDelayJS,
+		options.delayJSCommercePreset,
+		options.delayJSBuilderPreset,
+		options.delayJSINPPreset,
+		options.delayJSExternalOnly,
+		options.delayJSExcludeUrls,
+		options.usedCSSExcludeUrls,
+		options.delayJSDefaultStrategy,
+		options.delayJSIdleList,
+		options.delayJSViewportList,
+		options.delayJSPriority,
+		options.delayJSIdleTimeout,
+		options.removeWooCSSJS,
+		options.excludeUrlToKeepJSCSS,
+		options.removeCssJsHandle,
+		options.enableServerRules,
+		options.criticalCSS,
+		options.ccssMaxSize,
+		options.hostGoogleFontsLocally,
+		options.fontMetricFallback,
+		options.cdnURL,
+		options.cdnMapping,
+		options.removeUnusedCSS,
+		options.excludeUnusedCSS,
+		options.unusedCSSSafelistExtra,
+		options.unusedCSSRegressionGuard,
+		options.unusedCSSRegressionThreshold,
+		options.disableEmojis,
+		options.disableEmbeds,
+		options.disableDashicons,
+		options.disableXMLRPC,
+		options.disableRestApiLinks,
+		options.disableRssFeeds,
+		options.disableShortlinks,
+		options.disableGeneratorTag,
+		options.disableJQueryMigrate,
+		options.disablePasswordStrength,
+		options.disableSelfPingbacks,
+		options.disableRSD,
+		options.disableWLWManifest,
+		options.disableGlobalStyles,
+		options.disableClassicThemeStyles,
+		options.disableWooCartFragments,
+		options.disableRecentCommentsStyle,
+		options.disableCommentReply,
+		options.disableOEmbedDiscovery,
+		options.disableBlockWidgets,
+		options.blockAssetsOnDemand,
+		options.loadAllCoreBlockAssets,
+		options.heartbeatControl,
+		options.minifyInlineCSS,
+		options.minifyInlineJS,
+		options.removeHTMLComments,
+	] );
 
 	// INP-first preset (#932): one-click idle + viewport delay with 60s
 	// heartbeat. Enabling fills delayJS/strategy/heartbeat client-side (only

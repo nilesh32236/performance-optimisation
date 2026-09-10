@@ -133,6 +133,32 @@ export const formatValue = ( value, unit ) => {
 };
 
 /**
+ * Build a stable key for a suggestion card.
+ *
+ * Suggestion objects carry no unique id (metric, status, fix_action,
+ * description — see SuggestionCard above), so compose those fields into a
+ * composite key instead of using the array index (which remounts cards and
+ * loses internal state on filter/reorder).
+ *
+ * @since NEXT
+ * @param {Object}        suggestion Suggestion object.
+ * @param {number|string} [index]    Optional list index appended to disambiguate
+ *                                   duplicates sharing all four fields.
+ * @return {string} Stable composite key.
+ */
+export const suggestionKey = ( suggestion, index = null ) => {
+	if ( ! suggestion ) {
+		return `empty::${ index ?? '' }`;
+	}
+	const base = `${ suggestion.metric ?? '' }::${ suggestion.status ?? '' }::${
+		suggestion.fix_action ?? ''
+	}::${ suggestion.description ?? '' }`;
+	return index === null || index === undefined
+		? base
+		: `${ base }::${ index }`;
+};
+
+/**
  * A single suggestion card.
  *
  * @param {Object}   props
@@ -260,7 +286,7 @@ const SuggestionsPanel = ( { suggestions, onNavigate } ) => {
 				{ /* Issues first */ }
 				{ issues.map( ( suggestion, index ) => (
 					<SuggestionCard
-						key={ `${ suggestion.metric }-${ index }` }
+						key={ suggestionKey( suggestion, `issue-${ index }` ) }
 						suggestion={ suggestion }
 						onNavigate={ onNavigate }
 					/>
@@ -269,7 +295,10 @@ const SuggestionsPanel = ( { suggestions, onNavigate } ) => {
 				{ /* Passing items below */ }
 				{ passing.map( ( suggestion, index ) => (
 					<SuggestionCard
-						key={ `${ suggestion.metric }-${ index }` }
+						key={ suggestionKey(
+							suggestion,
+							`passing-${ index }`
+						) }
 						suggestion={ suggestion }
 						onNavigate={ onNavigate }
 					/>

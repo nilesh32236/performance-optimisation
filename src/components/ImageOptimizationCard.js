@@ -8,25 +8,8 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faImages, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
+import { formatBytes } from '../lib/util';
 import { __ } from '@wordpress/i18n';
-
-/**
- * Format a byte count as a human-readable size string.
- *
- * @param {number} bytes Byte count.
- * @return {string} Formatted size (e.g. "1.5 MB").
- */
-const formatBytes = ( bytes ) => {
-	if ( ! bytes || bytes <= 0 ) {
-		return '0 B';
-	}
-	const units = [ 'B', 'KB', 'MB', 'GB' ];
-	const index = Math.min(
-		Math.floor( Math.log( bytes ) / Math.log( 1024 ) ),
-		units.length - 1
-	);
-	return `${ ( bytes / 1024 ** index ).toFixed( 1 ) } ${ units[ index ] }`;
-};
 
 const ImageOptimizationCard = ( {
 	completed = {},
