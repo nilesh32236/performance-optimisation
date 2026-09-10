@@ -2211,6 +2211,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( $this->path_rejected ) {
 				return '';
 			}
+			// Defense-in-depth literal check: url_path is already sanitized
+			// at construction, and sanitize_cache_path() below is the real
+			// gate (it also refuses encoded vectors this check cannot see).
+			// Kept so a future construction-path regression still fails
+			// closed here instead of reaching the filesystem.
 			if ( false !== strpos( $this->url_path, "\0" ) || false !== strpos( $this->url_path, '..' ) ) {
 				$this->log_traversal_probe( $this->url_path );
 				return '';
@@ -2261,6 +2266,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( $this->path_rejected ) {
 				return '';
 			}
+			// Defense-in-depth literal check (see get_cache_file_path()):
+			// url_path is already sanitized at construction and
+			// sanitize_cache_path() below is the real gate for encoded
+			// vectors; kept so a construction-path regression still fails
+			// closed here instead of emitting a URL for an escaped path.
 			if ( false !== strpos( $this->url_path, "\0" ) || false !== strpos( $this->url_path, '..' ) ) {
 				$this->log_traversal_probe( $this->url_path );
 				return '';
@@ -2666,7 +2676,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// dot-dot/drive/UNC rejection) so encoded vectors a literal
 			// `..`/`\0` check would miss are dropped before any delete.
 			// '' is the benign homepage and is kept; a hostile input that
-			// sanitizes to '' is skipped.
+			// sanitizes to '' is skipped. The sanitized entries pass through
+			// get_file_path() (a second sanitize pass); that double-sanitize
+			// is fail-closed — the first pass output can only decode to a
+			// benign literal or refuse (see clear_cache()).
 			$sanitized = array();
 			foreach ( $urls as $u ) {
 				$u              = is_string( $u ) ? $u : (string) $u;
@@ -3260,6 +3273,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				// `..`/`\0` check missed are refused here instead of reaching
 				// the filesystem. A benign homepage ('/') still sanitizes to
 				// '' and proceeds; a hostile input fails closed.
+				// Note: the sanitized result is passed through get_file_path()
+				// (which runs sanitize_cache_path() → sanitize_cache_url_path()
+				// a second time). The double-sanitize is fail-closed by design:
+				// the first pass output is already free of `..`/NUL/drive/UNC,
+				// so the second rawurldecode pass can at most yield a benign
+				// literal (e.g. `%252e` → `%2e` → `.`) or refuse to ''.
 				$sanitized_clear = Util::sanitize_cache_url_path( $raw_clear_path );
 				if ( '' === $sanitized_clear ) {
 					if ( function_exists( 'wp_parse_url' ) ) {

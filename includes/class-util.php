@@ -1619,12 +1619,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			if ( '' === $cache_root_dir || '' === $domain || '' === $path ) {
 				return false;
 			}
+			// Fail closed on its own: a future direct caller passing
+			// unsanitized input must never prefix-match through. Null bytes
+			// and dot-dot segments are refused before the prefix check;
+			// current callers only ever pass sanitizer-built paths, so this
+			// is defense-in-depth with no benign behavior change.
+			if ( false !== strpos( $path, "\0" ) ) {
+				return false;
+			}
 			if ( function_exists( 'wp_normalize_path' ) ) {
 				$norm = wp_normalize_path( $path );
 				$root = wp_normalize_path( $cache_root_dir );
 			} else {
 				$norm = str_replace( '\\', '/', $path );
 				$root = str_replace( '\\', '/', $cache_root_dir );
+			}
+			if ( false !== strpos( $norm, "\0" ) || false !== strpos( $norm, '..' ) ) {
+				return false;
 			}
 			$root       = rtrim( $root, '/' ) . '/';
 			$domain_dir = $root . trim( $domain, '/' ) . '/';
@@ -1640,10 +1651,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * {@see sanitize_cache_url_path()} (single-decode semantics —
 		 * `%252e` stays literal, single-encoded `%2e%2e` / `%00` decode once
 		 * and are rejected), refuses absolute-form inputs (scheme `://`,
-		 * protocol-relative `//host`, drive `C:`, UNC `\\`) and foreign-host
-		 * absolute URLs, allowlists the file name, then enforces dual-prefix
-		 * containment before returning. Returns an empty string on any
-		 * failure; callers fail open (serve dynamic/uncached, log a probe).
+		 * protocol-relative `//host`, drive `C:`, UNC `\\`, detected on the
+		 * authority part before `?`/`#` so query strings carrying URLs never
+		 * false-positive) and foreign-host absolute URLs, allowlists the file
+		 * name, then enforces dual-prefix containment before returning.
+		 * Returns an empty string on any failure; callers fail open (serve
+		 * dynamic/uncached, log a probe).
 		 *
 		 * Pure static helper: no I/O, no settings reads. Multisite-safe: the
 		 * per-site canonical domain is passed explicitly, so a secondary
@@ -1672,7 +1685,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			}
 			$raw_input = (string) $url_path_or_url;
 			$trimmed   = ltrim( $raw_input );
-			if ( '' !== $trimmed && ( false !== strpos( $trimmed, '://' ) || 0 === strpos( $trimmed, '//' ) || 0 === strpos( $trimmed, '\\\\' ) || (bool) preg_match( '#^[a-zA-Z]:#', $trimmed ) ) ) {
+			// Inspect only the authority part (before `?`/`#`), matching the
+			// Cache constructor: a benign relative path whose query/fragment
+			// carries a URL (e.g. `/search?redirect=https://other`) must not
+			// be misread as an absolute-form target. The split uses strcspn()
+			// (no process-global strtok() state).
+			$authority = substr( $trimmed, 0, strcspn( $trimmed, '?#' ) );
+			if ( '' !== $authority && ( false !== strpos( $authority, '://' ) || 0 === strpos( $authority, '//' ) || 0 === strpos( $authority, '\\\\' ) || (bool) preg_match( '#^[a-zA-Z]:#', $authority ) ) ) {
 				// Absolute-form target: only same-host absolute URLs may map
 				// to a path; drive/UNC/protocol-relative/foreign-host inputs
 				// are refused outright.

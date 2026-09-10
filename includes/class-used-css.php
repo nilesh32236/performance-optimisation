@@ -930,15 +930,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			if ( '' === $this->cache_root_dir || '' === $this->domain ) {
 				return '';
 			}
+			// Default-'' means the current page: resolve through REQUEST_URI
+			// first so per-page sidecars never collide on the homepage file.
+			// A hostile REQUEST_URI that sanitizes to '' is a probe, not the
+			// homepage — refuse before sanitize_cache_path() maps '' to the
+			// homepage file.
+			$effective = ( '' === $url ) ? $this->get_url_path( $url ) : $url;
+			if ( '' === $url && '' === $effective && $this->is_raw_path_non_blank( $url ) ) {
+				$this->log_traversal_probe( $url );
+				return '';
+			}
 			// Single auditable containment point: host normalization, path
 			// sanitization, filename allowlist, and dual-prefix containment
 			// all live in Util::sanitize_cache_path().
-			$candidate = Util::sanitize_cache_path( $this->cache_root_dir, $this->domain, $url, self::USED_CSS_FILENAME );
+			$candidate = Util::sanitize_cache_path( $this->cache_root_dir, $this->domain, $effective, self::USED_CSS_FILENAME );
 			if ( '' === $candidate ) {
 				// Distinguish the benign homepage ('/', '') from a rejected
 				// hostile input: never map a probe to the homepage file —
 				// refuse and log so callers fail open to unoptimized output.
-				if ( '' === $url && ! $this->is_raw_path_non_blank( $url ) ) {
+				if ( '' === $effective && ! $this->is_raw_path_non_blank( $url ) ) {
 					return '';
 				}
 				$this->log_traversal_probe( $url );
@@ -961,18 +971,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			if ( '' === $this->cache_root_dir || '' === $this->cache_root_url || '' === $this->domain ) {
 				return '';
 			}
+			// Same effective-path resolution as get_used_css_path(): the
+			// containment candidate and the emitted URL derive from the same
+			// path so default-'' calls agree instead of checking the homepage
+			// while emitting the REQUEST_URI path.
+			$effective = ( '' === $url ) ? $this->get_url_path( $url ) : $url;
+			if ( '' === $url && '' === $effective && $this->is_raw_path_non_blank( $url ) ) {
+				$this->log_traversal_probe( $url );
+				return '';
+			}
 			// Containment parity with get_used_css_path(): resolve the
 			// filesystem candidate through the same central helper so the
 			// URL and path surfaces refuse the same hostile inputs.
-			$candidate = Util::sanitize_cache_path( $this->cache_root_dir, $this->domain, $url, self::USED_CSS_FILENAME );
+			$candidate = Util::sanitize_cache_path( $this->cache_root_dir, $this->domain, $effective, self::USED_CSS_FILENAME );
 			if ( '' === $candidate ) {
-				if ( '' === $url && ! $this->is_raw_path_non_blank( $url ) ) {
+				if ( '' === $effective && ! $this->is_raw_path_non_blank( $url ) ) {
 					return '';
 				}
 				$this->log_traversal_probe( $url );
 				return '';
 			}
-			$path        = $this->get_url_path( $url );
+			$path        = ( '' === $url ) ? $effective : $this->get_url_path( $url );
 			$path_suffix = '' !== $path ? "/{$path}" : '';
 			return "{$this->cache_root_url}/{$this->domain}{$path_suffix}/" . self::USED_CSS_FILENAME;
 		}
