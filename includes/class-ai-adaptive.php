@@ -1205,7 +1205,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				// recompute the full RUM + trends deserialization, postmeta
 				// UNION query and segmented scans on every invocation.
 				// (No per-process static memo: statics leak across unit
-				// tests sharing one PHP process.)
+				// tests sharing one PHP process.).
 				$model = self::heuristic_learn();
 				if ( ! empty( $model ) ) {
 					try {
