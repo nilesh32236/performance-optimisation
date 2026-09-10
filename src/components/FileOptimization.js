@@ -2312,14 +2312,18 @@ const FileOptimization = ( {
 											className="wppo-mt-12 wppo-file-opt-card"
 										>
 											<div className="wppo-field">
-												<span className="wppo-field-label">
+												<label
+													className="wppo-field-label"
+													htmlFor={ `wppo-cdn-url-${ idx }` }
+												>
 													{ __(
 														'CDN URL',
 														'performance-optimisation'
 													) }
-												</span>
+												</label>
 												<input
 													className="wppo-input"
+													id={ `wppo-cdn-url-${ idx }` }
 													type="url"
 													placeholder="https://cdn.example.com"
 													value={
@@ -2349,14 +2353,18 @@ const FileOptimization = ( {
 												/>
 											</div>
 											<div className="wppo-field wppo-mt-8">
-												<span className="wppo-field-label">
+												<label
+													className="wppo-field-label"
+													htmlFor={ `wppo-cdn-ori-${ idx }` }
+												>
 													{ __(
 														'Origin URL (ori)',
 														'performance-optimisation'
 													) }
-												</span>
+												</label>
 												<input
 													className="wppo-input"
+													id={ `wppo-cdn-ori-${ idx }` }
 													type="url"
 													placeholder="https://example.com"
 													value={ entry.ori || '' }
@@ -2384,14 +2392,18 @@ const FileOptimization = ( {
 												/>
 											</div>
 											<div className="wppo-field wppo-mt-8">
-												<span className="wppo-field-label">
+												<label
+													className="wppo-field-label"
+													htmlFor={ `wppo-cdn-ori-dir-${ idx }` }
+												>
 													{ __(
 														'Origin Dir (ori_dir) — wildcard * allowed, pipe-separated',
 														'performance-optimisation'
 													) }
-												</span>
+												</label>
 												<input
 													className="wppo-input"
+													id={ `wppo-cdn-ori-dir-${ idx }` }
 													type="text"
 													placeholder="wp-content|wp-includes"
 													value={
@@ -2421,14 +2433,18 @@ const FileOptimization = ( {
 												/>
 											</div>
 											<div className="wppo-field wppo-mt-8">
-												<span className="wppo-field-label">
+												<label
+													className="wppo-field-label"
+													htmlFor={ `wppo-cdn-include-dirs-${ idx }` }
+												>
 													{ __(
 														'Include Dirs',
 														'performance-optimisation'
 													) }
-												</span>
+												</label>
 												<input
 													className="wppo-input"
+													id={ `wppo-cdn-include-dirs-${ idx }` }
 													type="text"
 													placeholder="wp-content|wp-includes"
 													value={
@@ -2459,14 +2475,18 @@ const FileOptimization = ( {
 												/>
 											</div>
 											<div className="wppo-field wppo-mt-8">
-												<span className="wppo-field-label">
+												<label
+													className="wppo-field-label"
+													htmlFor={ `wppo-cdn-include-filetypes-${ idx }` }
+												>
 													{ __(
 														'Include Filetypes (comma-separated)',
 														'performance-optimisation'
 													) }
-												</span>
+												</label>
 												<input
 													className="wppo-input"
+													id={ `wppo-cdn-include-filetypes-${ idx }` }
 													type="text"
 													placeholder="jpg,png,css,js"
 													value={
@@ -2498,14 +2518,18 @@ const FileOptimization = ( {
 												/>
 											</div>
 											<div className="wppo-field wppo-mt-8">
-												<span className="wppo-field-label">
+												<label
+													className="wppo-field-label"
+													htmlFor={ `wppo-cdn-attr-${ idx }` }
+												>
 													{ __(
 														'CDN Attr allowlist (cdn_attr) — e.g. src,href,srcset',
 														'performance-optimisation'
 													) }
-												</span>
+												</label>
 												<input
 													className="wppo-input"
+													id={ `wppo-cdn-attr-${ idx }` }
 													type="text"
 													placeholder="src,href,srcset"
 													value={

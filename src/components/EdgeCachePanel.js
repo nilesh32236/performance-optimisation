@@ -61,14 +61,22 @@ const EdgeCachePanel = () => {
 	const handleSave = useCallback( async () => {
 		setSaving( true );
 		dismiss();
+		const parsedTtl = parseInt( ttl, 10 );
+		const clampedTtl = Number.isFinite( parsedTtl )
+			? Math.max( 60, parsedTtl )
+			: 300;
+		const parsedSwr = parseInt( swr, 10 );
+		const clampedSwr = Number.isFinite( parsedSwr )
+			? Math.max( 0, parsedSwr )
+			: 86400;
 		try {
 			const response = await apiCall( 'update_settings', {
 				tab: 'edge_cache',
 				settings: {
 					enabled,
 					provider,
-					ttl: parseInt( ttl, 10 ) || 300,
-					staleWhileRevalidate: parseInt( swr, 10 ) || 86400,
+					ttl: clampedTtl,
+					staleWhileRevalidate: clampedSwr,
 					cloudflareZoneId: cfZone,
 					bunnyPullZoneId: bunnyZone,
 				},
@@ -83,8 +91,8 @@ const EdgeCachePanel = () => {
 						edge_cache: Object.freeze( {
 							enabled,
 							provider,
-							ttl: parseInt( ttl, 10 ) || 300,
-							staleWhileRevalidate: parseInt( swr, 10 ) || 86400,
+							ttl: clampedTtl,
+							staleWhileRevalidate: clampedSwr,
 							cloudflareZoneId: cfZone,
 							bunnyPullZoneId: bunnyZone,
 						} ),
