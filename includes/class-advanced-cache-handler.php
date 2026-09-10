@@ -258,7 +258,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'$canonical_host = ' . $canonical_host_escaped . ';' . PHP_EOL .
 			'$raw_domain    = isset( $_SERVER[\'HTTP_HOST\'] ) ? (string) $_SERVER[\'HTTP_HOST\'] : \'\';' . PHP_EOL .
 			'$request_base   = $raw_domain;' . PHP_EOL .
-			'if ( isset( $request_base[0] ) && \'[\' === $request_base[0] ) { $bracket_end = strpos( $request_base, \']\' ); $request_base = ( false !== $bracket_end ) ? substr( $request_base, 1, $bracket_end - 1 ) : \'\'; } elseif ( substr_count( $request_base, \':\' ) <= 1 ) { $request_base = explode( \':\', $request_base, 2 )[0]; }' . PHP_EOL .
+			'if ( isset( $request_base[0] ) && \'[\' === $request_base[0] ) { $bracket_end = strpos( $request_base, \']\' ); if ( false === $bracket_end ) { $request_base = \'\'; } else { $request_rest = substr( $request_base, $bracket_end + 1 ); if ( \'\' !== $request_rest && \':\' !== $request_rest[0] ) { $request_base = \'\'; } else { $request_base = substr( $request_base, 1, $bracket_end - 1 ); } } } elseif ( substr_count( $request_base, \':\' ) <= 1 ) { $request_base = explode( \':\', $request_base, 2 )[0]; }' . PHP_EOL .
 			'$idn_host       = function_exists( \'idn_to_ascii\' ) ? @idn_to_ascii( $request_base, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46 ) : false;' . PHP_EOL .
 			'$request_base   = ( is_string( $idn_host ) && \'\' !== $idn_host ) ? $idn_host : $request_base;' . PHP_EOL .
 			'$site_domain   = strtolower( preg_replace( \'/[^a-z0-9.:-]+/i\', \'\', $raw_domain ) );' . PHP_EOL .

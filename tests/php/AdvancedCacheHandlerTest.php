@@ -359,6 +359,9 @@ class AdvancedCacheHandlerTest extends \PHPUnit\Framework\TestCase {
 		// Bracketed-IPv6 unwrap mirrors Util::normalize_cache_host() so
 		// '[::1]:8080' normalizes instead of mismatching in the drop-in.
 		$this->assertStringContainsString( 'strpos( $request_base', $fs->put_contents );
+		// Trailing garbage after ']' (e.g. '[::1]evil') is rejected like
+		// Util::normalize_cache_host() instead of unwrapping to '::1'.
+		$this->assertStringContainsString( '$request_rest', $fs->put_contents );
 	}
 
 	/**

@@ -319,12 +319,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( '' !== $canonical ) {
 				// Pin the cache key to the canonical home host by construction:
 				// a forged Host header can never create its own cache tree.
-				// An empty request host (CLI/cron, no forgery signal) is not a
-				// mismatch so background contexts can still read/write the
-				// canonical tree.
+				// An absent/blank request host (CLI/cron, no forgery signal) is
+				// not a mismatch so background contexts can still read/write
+				// the canonical tree; a presented-but-invalid host that
+				// normalizes to '' (e.g. 'evil!/..') is still a mismatch so it
+				// cannot poison the canonical file.
 				$domain              = $canonical;
 				$valid_domain        = true;
-				$this->host_mismatch = ( '' !== $request_host && $request_host !== $canonical );
+				$raw_trimmed         = trim( (string) $raw_host );
+				$this->host_mismatch = ( '' === $request_host ? '' !== $raw_trimmed : $request_host !== $canonical );
 			} else {
 				// Canonical host unavailable (early boot, CLI): legacy
 				// Host-derived behaviour so nothing fatals.

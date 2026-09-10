@@ -63,12 +63,17 @@ class MainSiteUrlChangeTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Reset Brain Monkey and the per-test filesystem mock so the
 	 * $GLOBALS['wp_filesystem'] assignment does not leak into later tests in
-	 * the same process.
+	 * the same process. Mirrors the trait teardown (Main singleton reset)
+	 * plus the Util settings memo clear from setUp().
 	 */
 	protected function tearDown(): void {
 		unset( $GLOBALS['wp_filesystem'] );
 		$this->fired_actions = array();
 		\Brain\Monkey\tearDown();
+		if ( class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
+			\PerformanceOptimise\Inc\Main::reset_instance();
+		}
+		Util::clear_settings_cache();
 		parent::tearDown();
 	}
 

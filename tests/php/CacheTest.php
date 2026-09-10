@@ -77,9 +77,53 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Test-only superglobal backup/restore.
 		$backup_host = isset( $_SERVER['HTTP_HOST'] ) ? $_SERVER['HTTP_HOST'] : null;
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Test-only superglobal backup/restore.
-		$backup_uri  = isset( $_SERVER['REQUEST_URI'] ) ? $_SERVER['REQUEST_URI'] : null;
+		$backup_uri = isset( $_SERVER['REQUEST_URI'] ) ? $_SERVER['REQUEST_URI'] : null;
 		try {
 			$_SERVER['HTTP_HOST']   = 'evil.com';
+			$_SERVER['REQUEST_URI'] = '/test-page/';
+			unset( $_SERVER['QUERY_STRING'] );
+			Functions\when( 'get_option' )->justReturn( array() );
+
+			$cache = new Cache();
+
+			$domain_prop = new \ReflectionProperty( Cache::class, 'domain' );
+			$domain_prop->setAccessible( true );
+			$this->assertSame( 'example.com', $domain_prop->getValue( $cache ) );
+			$this->assertTrue( $cache->is_host_mismatched() );
+
+			$not_cacheable = new ReflectionMethod( Cache::class, 'is_not_cacheable' );
+			$not_cacheable->setAccessible( true );
+			$this->assertTrue( $not_cacheable->invoke( $cache ) );
+
+			$store = new ReflectionMethod( Cache::class, 'maybe_store_cache' );
+			$store->setAccessible( true );
+			$this->assertFalse( $store->invoke( $cache ) );
+		} finally {
+			if ( null === $backup_host ) {
+				unset( $_SERVER['HTTP_HOST'] );
+			} else {
+				$_SERVER['HTTP_HOST'] = $backup_host;
+			}
+			if ( null === $backup_uri ) {
+				unset( $_SERVER['REQUEST_URI'] );
+			} else {
+				$_SERVER['REQUEST_URI'] = $backup_uri;
+			}
+		}
+	}
+
+	/**
+	 * Test that a presented-but-invalid Host (normalizes to '') still counts
+	 * as a mismatch instead of being treated as benign CLI absence, so it
+	 * can never poison the canonical cache file.
+	 */
+	public function test_invalid_host_normalizing_to_empty_is_mismatch(): void {
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Test-only superglobal backup/restore.
+		$backup_host = isset( $_SERVER['HTTP_HOST'] ) ? $_SERVER['HTTP_HOST'] : null;
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Test-only superglobal backup/restore.
+		$backup_uri = isset( $_SERVER['REQUEST_URI'] ) ? $_SERVER['REQUEST_URI'] : null;
+		try {
+			$_SERVER['HTTP_HOST']   = 'evil!/..';
 			$_SERVER['REQUEST_URI'] = '/test-page/';
 			unset( $_SERVER['QUERY_STRING'] );
 			Functions\when( 'get_option' )->justReturn( array() );

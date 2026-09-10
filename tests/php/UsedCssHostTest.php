@@ -36,12 +36,12 @@ class UsedCssHostTest extends \PHPUnit\Framework\TestCase {
 		$this->register_common_function_stubs();
 		Util::clear_settings_cache();
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Test-only superglobal backup/restore.
-		$this->server_backup['HTTP_HOST']   = isset( $_SERVER['HTTP_HOST'] ) ? $_SERVER['HTTP_HOST'] : null;
+		$this->server_backup['HTTP_HOST'] = isset( $_SERVER['HTTP_HOST'] ) ? $_SERVER['HTTP_HOST'] : null;
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Test-only superglobal backup/restore.
 		$this->server_backup['REQUEST_URI'] = isset( $_SERVER['REQUEST_URI'] ) ? $_SERVER['REQUEST_URI'] : null;
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Test-only superglobal backup/restore.
-		$this->server_backup['GET']         = $_GET;
-		$this->server_backup['COOKIE']      = $_COOKIE;
+		$this->server_backup['GET']    = $_GET;
+		$this->server_backup['COOKIE'] = $_COOKIE;
 	}
 
 	/**
@@ -80,6 +80,67 @@ class UsedCssHostTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 'example.com', $domain_prop->getValue( $used_css ) );
 		$this->assertTrue( $used_css->is_host_mismatched() );
 		$this->assertFalse( $used_css->save_used_css( '.a{color:red}', 'http://example.com/test-page/' ) );
+
+		// Observable security property: the cache path is keyed by the
+		// canonical host, never by the forged ambient host.
+		$path = $used_css->get_used_css_path( 'http://example.com/test-page/' );
+		$this->assertStringContainsString( 'example.com', $path );
+		$this->assertStringNotContainsString( 'evil.com', $path );
+	}
+
+	/**
+	 * Test that a presented-but-invalid Host (normalizes to '') still counts
+	 * as a mismatch instead of being treated as benign CLI absence.
+	 */
+	public function test_invalid_host_normalizing_to_empty_is_mismatch(): void {
+		$_SERVER['HTTP_HOST']   = 'evil!/..';
+		$_SERVER['REQUEST_URI'] = '/test-page/';
+		Functions\when( 'get_option' )->justReturn( array() );
+
+		$used_css = new Used_CSS();
+
+		$domain_prop = new \ReflectionProperty( Used_CSS::class, 'domain' );
+		$domain_prop->setAccessible( true );
+		$this->assertSame( 'example.com', $domain_prop->getValue( $used_css ) );
+		$this->assertTrue( $used_css->is_host_mismatched() );
+		$this->assertFalse( $used_css->save_used_css( '.a{color:red}', 'http://example.com/test-page/' ) );
+	}
+
+	/**
+	 * Test that an absent Host header (CLI/cron, e.g. Action Scheduler
+	 * background generation) is not a mismatch and keeps the canonical pin.
+	 */
+	public function test_absent_host_has_no_mismatch(): void {
+		unset( $_SERVER['HTTP_HOST'] );
+		$_SERVER['REQUEST_URI'] = '/test-page/';
+		Functions\when( 'get_option' )->justReturn( array() );
+
+		$used_css = new Used_CSS();
+
+		$domain_prop = new \ReflectionProperty( Used_CSS::class, 'domain' );
+		$domain_prop->setAccessible( true );
+		$this->assertSame( 'example.com', $domain_prop->getValue( $used_css ) );
+		$this->assertFalse( $used_css->is_host_mismatched() );
+	}
+
+	/**
+	 * Test that writes are refused when no domain resolved (canonical
+	 * unavailable and no request host): persisting under a host-less dir
+	 * would collide across multisite blogs instead of namespacing per site.
+	 */
+	public function test_empty_domain_refuses_save(): void {
+		unset( $_SERVER['HTTP_HOST'] );
+		$_SERVER['REQUEST_URI'] = '/test-page/';
+		Functions\when( 'home_url' )->justReturn( '' );
+		Functions\when( 'get_option' )->justReturn( array() );
+
+		$used_css = new Used_CSS();
+
+		$domain_prop = new \ReflectionProperty( Used_CSS::class, 'domain' );
+		$domain_prop->setAccessible( true );
+		$this->assertSame( '', $domain_prop->getValue( $used_css ) );
+		$this->assertFalse( $used_css->is_host_mismatched() );
+		$this->assertFalse( $used_css->save_used_css( '.a{color:red}', 'http://example.com/test-page/' ) );
 	}
 
 	/**
@@ -95,6 +156,10 @@ class UsedCssHostTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertFalse( $used_css->is_host_mismatched() );
 		$this->assertFalse( $used_css->save_used_css( '.a{color:red}', 'http://evil.com/test-page/' ) );
+		// An absolute-looking $url whose host is invalid (normalizes to '')
+		// is refused as well instead of being treated as a relative URL.
+		$this->assertFalse( $used_css->save_used_css( '.a{color:red}', 'http://evil..com/test-page/' ) );
+		$this->assertFalse( $used_css->save_used_css( '.a{color:red}', 'http:///test-page/' ) );
 	}
 
 	/**
