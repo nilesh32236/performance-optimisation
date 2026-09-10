@@ -1383,6 +1383,66 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		}
 
 		/**
+		 * Strip stylesheet <link> tags for the given quoted srcs (order-agnostic, bounded).
+		 *
+		 * Two-pass href-first then rel-first removal with bounded lazy
+		 * quantifiers so large bundles cannot trigger catastrophic
+		 * backtracking. Each pass is guarded by a null / preg_last_error()
+		 * check; on anomaly the caller must fail open (leave CSS loading
+		 * normally). Matches real-world <link> tags (far shorter than the
+		 * bounds) identically to the previous unbounded pattern.
+		 *
+		 * The rel matcher is intentionally tolerant: it allows whitespace
+		 * around `=` and space-separated rel tokens (e.g. `rel="alternate
+		 * stylesheet"` or `rel = "stylesheet"`), while still requiring the
+		 * token `stylesheet` so same-URL `preload`/`preconnect` hints are
+		 * never stripped.
+		 *
+		 * @since NEXT
+		 * @param string $buffer      The HTML buffer.
+		 * @param array  $quoted_srcs preg_quote()d src URLs (delimiter '/').
+		 * @return array|null Array [ string $stripped, int $strip_count ] or null on PCRE error.
+		 */
+		private function strip_stylesheet_links( string $buffer, array $quoted_srcs ): ?array {
+			if ( empty( $quoted_srcs ) ) {
+				return array( $buffer, 0 );
+			}
+
+			$alternation = implode( '|', $quoted_srcs );
+
+			// Bounded lazy quantifiers cap backtracking; tag body bound of
+			// 2000 and query-string bound of 500 far exceed real <link> tags.
+			// Pass 1: href-first (<link ... href="URL" ... rel="stylesheet" ...>).
+			$pattern_href_first = '/<link[^>]{0,2000}?href\s*=\s*[\'"](?:' . $alternation . ')(?:\?[^\'"]{0,500})?[\'"][^>]{0,2000}?rel\s*=\s*[\'"][^\'"]*stylesheet[^\'"]*[\'"][^>]{0,2000}?\/?>\s*/i';
+			// Pass 2: rel-first (<link ... rel="stylesheet" ... href="URL" ...>).
+			$pattern_rel_first = '/<link[^>]{0,2000}?rel\s*=\s*[\'"][^\'"]*stylesheet[^\'"]*[\'"][^>]{0,2000}?href\s*=\s*[\'"](?:' . $alternation . ')(?:\?[^\'"]{0,500})?[\'"][^>]{0,2000}?\/?>\s*/i';
+
+			$total_count = 0;
+
+			$count_href_first = 0;
+			$after_href_first = preg_replace( $pattern_href_first, '', $buffer, -1, $count_href_first );
+			if ( null === $after_href_first ) {
+				return null;
+			}
+			if ( PREG_NO_ERROR !== preg_last_error() ) {
+				return null;
+			}
+			$total_count += $count_href_first;
+
+			$count_rel_first = 0;
+			$after_rel_first = preg_replace( $pattern_rel_first, '', $after_href_first, -1, $count_rel_first );
+			if ( null === $after_rel_first ) {
+				return null;
+			}
+			if ( PREG_NO_ERROR !== preg_last_error() ) {
+				return null;
+			}
+			$total_count += $count_rel_first;
+
+			return array( $after_rel_first, $total_count );
+		}
+
+		/**
 		 * Inject used-CSS into the buffer: remove original <link> stylesheets
 		 * and insert the used-CSS file with a <noscript> fallback.
 		 *
@@ -1438,7 +1498,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				return $original_buffer;
 			}
 
-			// Remove original <link> tags via single-pass alternation regex.
+			// Remove original <link> tags via two-pass order-agnostic bounded
+			// regex (href-first then rel-first) with a backtrack guard.
 			// Note: On WP 6.9+, small block styles inlined as <style id="wp-block-*-inline-css">
 			// blocks (added when a block renders) are intentionally left in place; only
 			// <link> tags are stripped. This is a pre-existing limitation, not a regression.
@@ -1446,21 +1507,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			foreach ( array_keys( $removal_urls ) as $url ) {
 				$quoted_srcs[] = preg_quote( $url, '/' );
 			}
-			$strip_count = 0;
-			$stripped    = preg_replace(
-				'/<link[^>]*rel=[\'"]stylesheet[\'"][^>]*href=[\'"](' . implode( '|', $quoted_srcs ) . ')(?:\?[^\'"]*)?[\'"][^>]*\/?>\s*/i',
-				'',
-				$buffer,
-				-1,
-				$strip_count
-			);
+			$strip_result = $this->strip_stylesheet_links( $buffer, $quoted_srcs );
 
-			if ( null === $stripped ) {
+			if ( null === $strip_result ) {
 				if ( $this->is_safe_fallback_enabled() ) {
 					$this->log_used_css_fallback( 'preg_error', $handles );
 				}
 				return $original_buffer;
 			}
+
+			list( $stripped, $strip_count ) = $strip_result;
 
 			if ( $this->is_safe_fallback_enabled() && 0 === $strip_count ) {
 				$this->log_used_css_fallback( 'no_match', $handles );
