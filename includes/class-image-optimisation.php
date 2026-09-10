@@ -2450,7 +2450,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			if ( class_exists( 'WP_HTML_Tag_Processor' ) ) {
 				if ( ! empty( $exclude_imgs ) ) {
 					foreach ( $exclude_imgs as $exclude_img ) {
-						if ( false !== strpos( $original_src, $exclude_img ) ) {
+						if ( '' !== $exclude_img && false !== strpos( $original_src, $exclude_img ) ) {
 							$tags = new \WP_HTML_Tag_Processor( $img_tag );
 							if ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
 								$this->set_loading_optimization_attributes(
@@ -2603,7 +2603,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				// Regex Fallback (Original logic restored from git history).
 				if ( ! empty( $exclude_imgs ) ) {
 					foreach ( $exclude_imgs as $exclude_img ) {
-						if ( false !== strpos( $original_src, $exclude_img ) ) {
+						if ( '' !== $exclude_img && false !== strpos( $original_src, $exclude_img ) ) {
 							if ( function_exists( 'wp_get_loading_optimization_attributes' ) ) {
 								$tag_attr = array( 'src' => $original_src );
 								if ( preg_match( '/\bwidth=(["\'])(\d+)\1/i', $img_tag, $m ) ) {
@@ -2923,7 +2923,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		public function process_iframe_tag( $iframe_tag, $original_src, $exclude_imgs ) {
 			if ( ! empty( $exclude_imgs ) ) {
 				foreach ( $exclude_imgs as $exclude_img ) {
-					if ( false !== strpos( $original_src, $exclude_img ) ) {
+					if ( '' !== $exclude_img && false !== strpos( $original_src, $exclude_img ) ) {
 						return $iframe_tag;
 					}
 				}
@@ -3166,7 +3166,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			// No runtime change until the core API lands.
 			$should_exclude = false;
 			foreach ( $exclude_imgs as $exclude_img ) {
-				if ( false !== strpos( $original_src, $exclude_img ) ) {
+				if ( '' !== $exclude_img && false !== strpos( $original_src, $exclude_img ) ) {
 					$should_exclude = true;
 					break;
 				}
@@ -4390,8 +4390,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					function ( $matches ) {
 						$tag = $matches[0];
 						$src = '';
-						if ( preg_match( '#(?<![\w-])src\s*=\s*(["\'])(.*?)\1#is', $tag, $m ) ) {
-							$src = htmlspecialchars_decode( $m[2], ENT_QUOTES );
+						// Match quoted OR unquoted src values (e.g. src=foo.jpg),
+						// so the standalone auto-alt pass covers <img src=...>.
+						if ( preg_match( '#(?<![\w-])src\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))#is', $tag, $m ) ) {
+							$raw = ( isset( $m[3] ) && '' !== $m[3] ) ? $m[3] : ( $m[2] ?? '' );
+							$src = htmlspecialchars_decode( $raw, ENT_QUOTES );
 						}
 						if ( '' === $src ) {
 							return $tag;

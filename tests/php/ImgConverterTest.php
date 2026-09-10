@@ -1213,6 +1213,31 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * The get_max_source_pixels() budget honors the wppo_max_source_pixels
+	 * filter and returns a positive memory-derived value by default.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_max_source_pixels_filter_and_default(): void {
+		$converter = $this->make_converter();
+
+		// Default: a positive int (memory-derived or the 5000x5000 fallback).
+		$default = $converter->get_max_source_pixels();
+		$this->assertIsInt( $default );
+		$this->assertGreaterThan( 0, $default );
+
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook_name, $value ) {
+				if ( 'wppo_max_source_pixels' === $hook_name ) {
+					return 1234567;
+				}
+				return $value;
+			}
+		);
+		$this->assertSame( 1234567, $converter->get_max_source_pixels() );
+	}
+
+	/**
 	 * Downscale shrinks oversized resources, keeps small ones, and fails open.
 	 *
 	 * @since NEXT

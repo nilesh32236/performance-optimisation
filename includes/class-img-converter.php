@@ -408,6 +408,70 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		}
 
 		/**
+		 * Maximum source pixel count decodable before GD risks a fatal OOM.
+		 *
+		 * GD loads full-resolution pixels before any downscale, so this bounds
+		 * decompression bombs independently of the longest-edge cap. The
+		 * default is derived from the PHP memory limit (roughly 5 bytes per
+		 * pixel, half the limit reserved for the decoded image).
+		 *
+		 * @since NEXT
+		 *
+		 * @return int Pixel budget (>= 1).
+		 */
+		public function get_max_source_pixels(): int {
+			/**
+			 * Filter the pre-decode source pixel budget.
+			 *
+			 * @since NEXT
+			 *
+			 * @param int $pixels Maximum decodable source pixels. `0` uses the memory-derived default.
+			 */
+			$override = (int) apply_filters( 'wppo_max_source_pixels', 0 );
+			if ( $override > 0 ) {
+				return $override;
+			}
+
+			$limit = $this->get_php_memory_limit_bytes();
+			if ( $limit <= 0 ) {
+				return 5000 * 5000;
+			}
+
+			$budget = (int) ( ( $limit * 0.5 ) / 5 );
+			return max( 4000000, min( $budget, 80000000 ) );
+		}
+
+		/**
+		 * Parse PHP's memory_limit into bytes.
+		 *
+		 * @since NEXT
+		 *
+		 * @return int Bytes, or `0` when unlimited or unknown.
+		 */
+		protected function get_php_memory_limit_bytes(): int {
+			$raw = trim( (string) ini_get( 'memory_limit' ) );
+			if ( '' === $raw || '-1' === $raw ) {
+				return 0;
+			}
+			// `is_callable()` (not just `function_exists()`) so a broad test
+			// stub that reports the helper as present cannot trigger a fatal
+			// call to an undefined function; real WP satisfies both.
+			if ( function_exists( 'wp_convert_hr_to_bytes' ) && is_callable( 'wp_convert_hr_to_bytes' ) ) {
+				return max( 0, (int) wp_convert_hr_to_bytes( $raw ) );
+			}
+			$unit   = strtolower( substr( $raw, -1 ) );
+			$number = (int) $raw;
+			if ( 'g' === $unit ) {
+				$number *= 1024 * 1024 * 1024;
+			} elseif ( 'm' === $unit ) {
+				$number *= 1024 * 1024;
+			} elseif ( 'k' === $unit ) {
+				$number *= 1024;
+			}
+			return $number > 0 ? $number : 0;
+		}
+
+		/**
 		 * Downscale a decoded GD image when its longest edge exceeds the cap.
 		 *
 		 * Fail-open: returns the original resource unchanged when the cap is
@@ -678,10 +742,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				return false;
 			}
 
-			// Security Fix: Prevent Dimension memory crash limits. The
-			// longest-edge cap (issue #985) is applied to the comparison first,
-			// so images that would shrink to the cap are converted instead of
-			// failing: only fail when the post-cap dimensions still exceed max.
+			// Two-tier guard against dimension-based memory exhaustion:
+			// Guard 1 bounds the RAW source pixel count against a
+			// memory-derived budget before any GD decode, so a decompression
+			// bomb cannot reach imagecreatefrom*(). Guard 2 keeps the
+			// wppo_max_dimensions policy, compared against the cap-scaled
+			// dimensions so an image that would shrink to the longest-edge cap
+			// is still converted (issue #985).
+			$check_w = (int) $image_info[0];
+			$check_h = (int) $image_info[1];
+
+			// Guard 1: pre-decode raw pixel budget.
+			$max_source_pixels = $this->get_max_source_pixels();
+			if ( ( $check_w * $check_h ) > $max_source_pixels ) {
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					error_log( 'WPPO Error: Source image pixel count exceeds the pre-decode memory budget' );
+				}
+				$this->update_conversion_status( $source_image, 'failed', $format );
+				return false;
+			}
+
+			// Guard 2: cap-scaled wppo_max_dimensions policy.
 			$max_dims = apply_filters(
 				'wppo_max_dimensions',
 				array(
@@ -689,8 +771,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					'height' => 5000,
 				)
 			);
-			$check_w  = (int) $image_info[0];
-			$check_h  = (int) $image_info[1];
 			$cap      = $this->get_longest_edge_cap();
 			if ( $cap > 0 ) {
 				$longest = max( $check_w, $check_h );
