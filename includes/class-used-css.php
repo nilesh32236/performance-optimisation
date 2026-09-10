@@ -101,6 +101,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			'.admin-bar-',
 			'.dashicons-',
 			'.customize-',
+			// Builder / JS-state selectors (issue #966): builders inject
+			// dynamic classes at runtime that the static DOM walk never sees.
+			// Prefix entries ending in '-' or '*' match via prefix in
+			// is_selector_used(); attribute entries (e.g. [data-elementor-type])
+			// match by attribute-name substring so compound selectors stay kept.
+			'.elementor-',
+			'.e-con*',
+			'.et_*',
+			'.et_pb_*',
+			'.et-pb-',
+			'.bricks-',
+			'.brx-',
+			'.vc_*',
+			'.wpb_*',
+			'.oxygen-',
+			'.oxy-',
+			'.no-js',
+			'.js-enabled',
+			'[data-elementor-type]',
 		);
 
 		/**
@@ -122,10 +141,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		/**
 		 * Domain name.
 		 *
+		 * Pinned to the canonical home host (see {@see Util::get_canonical_host()})
+		 * so a forged Host header can never divert used-CSS reads/writes into a
+		 * poisoned directory. Falls back to the legacy Host-derived value only
+		 * when the canonical host cannot be resolved (early boot, CLI).
+		 *
 		 * @var string
 		 * @since 1.9.0
 		 */
 		private string $domain;
+
+		/**
+		 * Whether the request Host header differs from the canonical home host.
+		 *
+		 * When true, used-CSS writes are refused (fail-open: the page is served
+		 * without used-CSS optimisation) so forged hosts can never poison the
+		 * canonical cache files.
+		 *
+		 * @var bool
+		 * @since NEXT
+		 */
+		private bool $host_mismatch = false;
 
 		/**
 		 * Constructor.
@@ -136,30 +172,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		public function __construct( array $options = array() ) {
 			$this->options = ! empty( $options ) ? $options : Util::get_settings();
 
-			$domain = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
+			$raw_host     = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
+			$request_host = Util::normalize_cache_host( $raw_host );
+			$canonical    = Util::get_canonical_host();
 
-			if ( function_exists( 'idn_to_ascii' ) ) {
-				$converted = idn_to_ascii( $domain, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46 );
-				if ( false !== $converted ) {
-					$domain = $converted;
-				}
+			if ( '' !== $canonical ) {
+				// Pin to the canonical home host by construction; a forged Host
+				// header can never create its own used-CSS cache tree. An
+				// absent/blank request host (CLI/cron, e.g. process_background()
+				// under Action Scheduler) carries no forgery signal and must not
+				// block canonical writes; a presented-but-invalid host that
+				// normalizes to '' (e.g. 'evil!/..') is still a mismatch.
+				$this->domain        = $canonical;
+				$raw_trimmed         = trim( (string) $raw_host );
+				$this->host_mismatch = ( '' === $request_host ? '' !== $raw_trimmed : $request_host !== $canonical );
+			} else {
+				// Canonical host unavailable (early boot, CLI): legacy
+				// Host-derived behaviour so nothing fatals.
+				$this->domain        = $request_host;
+				$this->host_mismatch = false;
 			}
-
-			$host = explode( ':', $domain, 2 )[0];
-
-			$valid_domain = ! (
-				false !== strpos( $host, '..' ) ||
-				false !== strpos( $host, '/' ) ||
-				false !== strpos( $host, '\\' ) ||
-				! preg_match( '/^[a-z0-9\.\-]+$/i', $host )
-			);
-
-			$this->domain = $valid_domain ? strtolower( $host ) : '';
 
 			$this->cache_root_dir = wp_normalize_path( WP_CONTENT_DIR . self::CACHE_ROOT_DIR );
 			$this->cache_root_url = WP_CONTENT_URL . self::CACHE_ROOT_DIR;
 
 			$this->init_safelist();
+		}
+
+		/**
+		 * Whether the request Host header mismatched the canonical home host.
+		 *
+		 * @return bool True when the request host differs from the canonical host.
+		 * @since NEXT
+		 */
+		public function is_host_mismatched(): bool {
+			return $this->host_mismatch;
 		}
 
 		/**
@@ -174,6 +221,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 
 			if ( ! empty( $file_opts['excludeUnusedCSS'] ) ) {
 				$user_list = Util::process_urls( $file_opts['excludeUnusedCSS'] );
+			}
+
+			// Extra safelist (issue #966): additive user textarea merged
+			// alongside the legacy excludeUnusedCSS list.
+			if ( ! empty( $file_opts['unusedCSSSafelistExtra'] ) ) {
+				$extra     = Util::process_urls( $file_opts['unusedCSSSafelistExtra'] );
+				$user_list = array_merge( $user_list, $extra );
 			}
 
 			$this->safelist = array_merge( $this->built_in_safelist, $user_list );
@@ -540,7 +594,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			}
 
 			foreach ( $this->safelist as $safe ) {
+				if ( '' !== $safe && '[' === $safe[0] ) {
+					// Attribute safelist (e.g. [data-elementor-type]): match by
+					// attribute-name substring so compound selectors like
+					// div[data-elementor-type] or [data-elementor-type="x"] stay
+					// kept. Bare [data-*]/[aria-*] selectors are additionally
+					// conserved by matches_simple_selector().
+					$attr_name = preg_replace( '/[\]=~|^$*"\'].*$/', '', $safe );
+					$attr_name = ltrim( trim( (string) $attr_name ), '[' );
+					if ( '' !== $attr_name && false !== stripos( $selector, $attr_name ) ) {
+						return true;
+					}
+					continue;
+				}
 				if ( '-' === substr( $safe, -1 ) && 0 === strpos( $selector, $safe ) ) {
+					return true;
+				}
+				if ( '_' === substr( $safe, -1 ) && 0 === strpos( $selector, $safe ) ) {
 					return true;
 				}
 				if ( '*' === substr( $safe, -1 ) && 0 === strpos( $selector, substr( $safe, 0, -1 ) ) ) {
@@ -819,7 +889,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 
 			$parsed = $this->parse_css( $combined_css );
 
-			return $this->purge_css( $parsed, $used_selectors );
+			$purged = $this->purge_css( $parsed, $used_selectors );
+
+			// Visual regression guard (issue #966): an over-aggressive purge
+			// (retained-bytes ratio below threshold, or tiny output from a
+			// large input) fails back to the full stylesheet, never fatal.
+			if ( $this->is_regression_guard_tripped( $combined_css, $purged ) ) {
+				$this->log_used_css_fallback( 'regression_guard', array_keys( $css_assets ) );
+				return $combined_css;
+			}
+
+			return $purged;
 		}
 
 		/**
@@ -881,6 +961,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		public function save_used_css( string $css, string $url = '' ): bool {
 			if ( empty( $css ) ) {
 				return false;
+			}
+
+			// Host-header poisoning guard: never persist derived CSS when the
+			// request host mismatched the canonical host (fail-open: the page
+			// is served without used-CSS optimisation instead).
+			if ( $this->host_mismatch ) {
+				return false;
+			}
+
+			// Refuse writes when no domain resolved (canonical unavailable and no
+			// request host, e.g. early boot/CLI): writing under a host-less dir
+			// (cache/wppo//<path>/) would collide across multisite blogs instead
+			// of namespacing per site. Mirrors Cache::maybe_store_cache().
+			//
+			// @since NEXT Empty-domain refusal.
+			if ( '' === $this->domain ) {
+				return false;
+			}
+
+			// A forged host embedded in the explicit $url (e.g. via a filtered
+			// permalink) is not covered by the ambient Host check above: refuse
+			// when the URL host is present and differs from the canonical domain.
+			// An absolute-looking $url whose host normalizes to '' (invalid host
+			// such as 'evil..com') is refused as well instead of being treated
+			// as a relative URL; relative URLs carry no host and still pass.
+			if ( '' !== $url && '' !== $this->domain && function_exists( 'wp_parse_url' ) ) {
+				$url_host_raw = wp_parse_url( $url, PHP_URL_HOST );
+				if ( is_string( $url_host_raw ) && '' !== $url_host_raw ) {
+					$url_host = Util::normalize_cache_host( $url_host_raw );
+					if ( $url_host !== $this->domain ) {
+						return false;
+					}
+				} elseif ( false !== strpos( $url, '://' ) || str_starts_with( ltrim( $url ), '//' ) ) {
+					return false;
+				}
 			}
 
 			$file_path = $this->get_used_css_path( $url );
@@ -1418,6 +1533,77 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		}
 
 		/**
+		 * Whether the visual regression guard is enabled (issue #966).
+		 *
+		 * Safe-by-default on; a missing key backfills to on so old installs
+		 * get the fail-open guard without a storage migration (per-site
+		 * settings, multisite-safe).
+		 *
+		 * @since NEXT
+		 * @return bool
+		 */
+		public function is_regression_guard_enabled(): bool {
+			$file_opts = $this->options['file_optimisation'] ?? array();
+			if ( ! array_key_exists( 'unusedCSSRegressionGuard', $file_opts ) ) {
+				return true;
+			}
+			return ! empty( $file_opts['unusedCSSRegressionGuard'] );
+		}
+
+		/**
+		 * Retained-% threshold below which trimming is deemed a mismatch.
+		 *
+		 * Clamped to 5-50; unrecognized values fail safe to 20.
+		 *
+		 * @since NEXT
+		 * @return int
+		 */
+		public function get_regression_threshold(): int {
+			$file_opts = $this->options['file_optimisation'] ?? array();
+			$raw       = $file_opts['unusedCSSRegressionThreshold'] ?? 20;
+			$threshold = is_numeric( $raw ) ? (int) $raw : 20;
+			if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_unused_css_regression_threshold' ) ) {
+				$threshold = (int) apply_filters( 'wppo_unused_css_regression_threshold', $threshold );
+			}
+			if ( $threshold < 5 || $threshold > 50 ) {
+				return 20;
+			}
+			return $threshold;
+		}
+
+		/**
+		 * Whether purged output trips the visual regression guard.
+		 *
+		 * Trips when the retained-bytes ratio falls below the configured
+		 * threshold, or when a large input (>10 KB) purges to <1 KB. Empty
+		 * inputs never trip (callers handle empties separately).
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $combined_css Full combined stylesheet.
+		 * @param string $purged_css   Purged output.
+		 * @return bool True when the guard trips (serve the full stylesheet).
+		 */
+		public function is_regression_guard_tripped( string $combined_css, string $purged_css ): bool {
+			if ( ! $this->is_regression_guard_enabled() ) {
+				return false;
+			}
+			$input_len = strlen( $combined_css );
+			if ( 0 === $input_len ) {
+				return false;
+			}
+			if ( '' === trim( $purged_css ) ) {
+				return true;
+			}
+			$output_len = strlen( $purged_css );
+			if ( $input_len > 10240 && $output_len < 1024 ) {
+				return true;
+			}
+			$retained = ( $output_len / $input_len ) * 100;
+			return $retained < $this->get_regression_threshold();
+		}
+
+		/**
 		 * Whether the safe CSS combine fallback is enabled.
 		 *
 		 * @since NEXT
@@ -1471,10 +1657,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				return $buffer;
 			}
 
+			// Feature flag first: skip all Woo/DONOTCACHEPAGE detection work
+			// (REQUEST_URI parsing, WC conditionals) when remove-unused-CSS is
+			// off. The Woo early return below intentionally reuses Main's delay
+			// guard (same slug list + endpoint semantics) so checkout keeps full
+			// styles; blast radius: future delay-only changes also alter CSS
+			// purging on Woo-dynamic pages (fail-safe direction).
 			$file_opts = $this->options['file_optimisation'] ?? array();
 
 			if ( empty( $file_opts['removeUnusedCSS'] ) ) {
 				return $buffer;
+			}
+
+			// WooCommerce dynamic pages (issue #962): cart / checkout /
+			// account, Store API, and endpoints stay excluded from
+			// remove-unused-CSS so checkout keeps full styles.
+			// DONOTCACHEPAGE pages opt out too.
+			if ( defined( 'DONOTCACHEPAGE' ) && DONOTCACHEPAGE ) {
+				return $buffer;
+			}
+			if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'is_delay_excluded_context' ) ) {
+				try {
+					if ( Main::is_delay_excluded_context() ) {
+						return $buffer;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return $buffer;
+				}
 			}
 
 			global $wp_styles;

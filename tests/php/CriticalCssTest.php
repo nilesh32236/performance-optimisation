@@ -328,6 +328,166 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Payload matrix (issue #967): comment, expression, and URL vectors are
+	 * neutralized and no raw angle bracket survives.
+	 *
+	 * @return void
+	 */
+	public function test_sanitize_inline_css_neutralizes_extended_vectors(): void {
+		$vectors = array(
+			'.x{background:url(x)}<!--injected-->',
+			'.x{width:expression(alert(1))}',
+			'.x{width:EXPRESSION (alert(1))}',
+			'.x{background:url(javascript:alert(1))}',
+			'.x{background:url(JAVASCRIPT :alert(1))}',
+			'.x{background:url(vbscript:msgbox(1))}',
+			'.x{behavior:url(x.htc)}',
+			'.x{behaviour:url(x.htc)}',
+			'.x{-moz-binding:url(x.xml)}',
+		);
+
+		foreach ( $vectors as $input ) {
+			$sanitized = $this->invoke_private( 'sanitize_inline_css', $input );
+
+			$this->assertDoesNotMatchRegularExpression( '/<\/style/i', $sanitized, "Unsafe token survives for input: {$input}" );
+			$this->assertDoesNotMatchRegularExpression( '/<script/i', $sanitized, "Unsafe token survives for input: {$input}" );
+			$this->assertStringNotContainsString( '<!--', $sanitized, "Unsafe token survives for input: {$input}" );
+			$this->assertStringNotContainsString( '-->', $sanitized, "Unsafe token survives for input: {$input}" );
+			$this->assertDoesNotMatchRegularExpression( '/expression\s*\(/i', $sanitized, "Unsafe token survives for input: {$input}" );
+			$this->assertDoesNotMatchRegularExpression( '/javascript\s*:/i', $sanitized, "Unsafe token survives for input: {$input}" );
+			$this->assertDoesNotMatchRegularExpression( '/vbscript\s*:/i', $sanitized, "Unsafe token survives for input: {$input}" );
+			$this->assertDoesNotMatchRegularExpression( '/behaviou?r/i', $sanitized, "Unsafe token survives for input: {$input}" );
+			$this->assertDoesNotMatchRegularExpression( '/-moz-binding/i', $sanitized, "Unsafe token survives for input: {$input}" );
+			$this->assertDoesNotMatchRegularExpression( '/</', $sanitized, "Raw angle bracket survives for input: {$input}" );
+		}
+	}
+
+	/**
+	 * Numeric/hex-entity payloads (issue #967 regression test): encoded
+	 * angle brackets are decoded first, then neutralized — no entity
+	 * remnant or executable token survives.
+	 *
+	 * @return void
+	 */
+	public function test_sanitize_inline_css_neutralizes_numeric_entity_payloads(): void {
+		$vectors = array(
+			'.x{content:"a"}/*&#60;script&#62;alert(1)&#60;/script&#62;*/',
+			'.x{content:"a"}/*&#x3c;script&#x3e;alert(1)&#x3c;/script&#x3e;*/',
+			'.x{content:"a"}/*&#X3C;SCRIPT&#X3E;alert(1)*/',
+			'.x{content:"a"}/*&lt;script&gt;alert(1)&lt;/script&gt;*/',
+			'.x{content:"a"}/*&amp;lt;script&amp;gt;alert(1)*/',
+			'.x{content:"a"}/*&amp;amp;lt;script&amp;amp;gt;alert(1)*/',
+		);
+
+		foreach ( $vectors as $input ) {
+			$sanitized = $this->invoke_private( 'sanitize_inline_css', $input );
+
+			$this->assertDoesNotMatchRegularExpression( '/<\/style/i', $sanitized, "Unsafe token survives for input: {$input}" );
+			$this->assertDoesNotMatchRegularExpression( '/<script/i', $sanitized, "Unsafe token survives for input: {$input}" );
+			$this->assertDoesNotMatchRegularExpression( '/</', $sanitized, "Raw angle bracket survives for input: {$input}" );
+			$this->assertStringNotContainsString( '&#', $sanitized, "Entity remnant survives for input: {$input}" );
+			$this->assertStringNotContainsString( '&lt', $sanitized, "Entity remnant survives for input: {$input}" );
+			$this->assertStringNotContainsString( '&gt', $sanitized, "Entity remnant survives for input: {$input}" );
+		}
+	}
+
+	/**
+	 * The sanitizer neutralizes breakout tokens even when no
+	 * wppo_ccss_sanitize_inline listener is registered (has_filter guard).
+	 *
+	 * @return void
+	 */
+	public function test_sanitize_inline_css_neutralizes_without_filter_listener(): void {
+		Functions\when( 'has_filter' )->justReturn( false );
+
+		$sanitized = $this->invoke_private( 'sanitize_inline_css', '.x{}/*</STYLE><SCRIPT>alert(1)</SCRIPT><!--*/' );
+
+		$this->assertDoesNotMatchRegularExpression( '/<\/style/i', $sanitized );
+		$this->assertDoesNotMatchRegularExpression( '/<script/i', $sanitized );
+		$this->assertStringNotContainsString( '<!--', $sanitized );
+	}
+
+	/**
+	 * When a wppo_ccss_sanitize_inline listener exists, its return value is
+	 * re-sanitized (guarded apply_filters path): benign values pass through
+	 * while hostile tokens reintroduced by hooked code are neutralized.
+	 *
+	 * @return void
+	 */
+	public function test_sanitize_inline_css_applies_filter_when_listener_exists(): void {
+		Functions\when( 'has_filter' )->justReturn( true );
+		$this->filter_overrides['wppo_ccss_sanitize_inline'] = 'body{color:red}';
+
+		$sanitized = $this->invoke_private( 'sanitize_inline_css', '.x{}/*</style>*/' );
+
+		$this->assertSame( 'body{color:red}', $sanitized );
+	}
+
+	/**
+	 * A hostile wppo_ccss_sanitize_inline return value is re-sanitized so
+	 * hooked code cannot reintroduce breakout tokens past the sanitizer.
+	 *
+	 * @return void
+	 */
+	public function test_sanitize_inline_css_resanitizes_hostile_filter_output(): void {
+		Functions\when( 'has_filter' )->justReturn( true );
+		$this->filter_overrides['wppo_ccss_sanitize_inline'] = '.x{}/*</style><script>alert(1)</script>*/';
+
+		$sanitized = $this->invoke_private( 'sanitize_inline_css', 'body{color:red}' );
+
+		$this->assertDoesNotMatchRegularExpression( '/<\/style/i', $sanitized );
+		$this->assertDoesNotMatchRegularExpression( '/<script/i', $sanitized );
+		$this->assertDoesNotMatchRegularExpression( '/</', $sanitized );
+	}
+
+	/**
+	 * Benign selectors containing behavior/behaviour substrings (e.g.
+	 * .behavior-badge) survive sanitization and pass the pre-cache gate:
+	 * only property-position occurrences (followed by a colon) are
+	 * neutralized or flagged.
+	 *
+	 * @return void
+	 */
+	public function test_behavior_substring_selectors_survive_sanitizer_and_gate(): void {
+		$css = '.behavior-badge{color:red}#behaviour-list{margin:0}';
+
+		$this->assertSame( $css, $this->invoke_private( 'sanitize_inline_css', $css ) );
+		$this->assertFalse( $this->invoke_private( 'contains_unsafe_css_tokens', $css ) );
+		$this->assertFalse( $this->invoke_private( 'contains_unsafe_css_tokens', '.behavior-chart{display:block}' ) );
+		$this->assertTrue( $this->invoke_private( 'contains_unsafe_css_tokens', '.x{behavior:url(x.htc)}' ) );
+	}
+
+	/**
+	 * The pre-cache gate (issue #967) flags hostile vectors decoded from
+	 * entities, and passes clean CSS through.
+	 *
+	 * @return void
+	 */
+	public function test_contains_unsafe_css_tokens_flags_hostile_vectors(): void {
+		$hostile = array(
+			'.x{}/*</style>*/',
+			'.x{}/*<ScRiPt>alert(1)*/',
+			'.x{}/*<!--*/',
+			'.x{}/*-->*/',
+			'.x{width:expression(alert(1))}',
+			'.x{background:url(javascript:alert(1))}',
+			'.x{background:url(vbscript:x)}',
+			'.x{behavior:url(x.htc)}',
+			'.x{-moz-binding:url(x.xml)}',
+			'.x{}/*&#60;script&#62;*/',
+			'.x{}/*&#x3c;script&#x3e;*/',
+			'.x{}/*&lt;script&gt;*/',
+		);
+
+		foreach ( $hostile as $input ) {
+			$this->assertTrue( $this->invoke_private( 'contains_unsafe_css_tokens', $input ), "Gate missed hostile input: {$input}" );
+		}
+
+		$this->assertFalse( $this->invoke_private( 'contains_unsafe_css_tokens', 'body{color:#fff;background:url(a.png)}' ) );
+		$this->assertFalse( $this->invoke_private( 'contains_unsafe_css_tokens', '.a:before{content:"<b>"}' ) );
+	}
+
+	/**
 	 * Under-cap CSS passes through truncate_to_cap() byte-for-byte.
 	 *
 	 * @return void

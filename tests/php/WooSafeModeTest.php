@@ -283,4 +283,152 @@ class WooSafeModeTest extends \PHPUnit\Framework\TestCase {
 		$cache   = $this->make_cache( $options, '/' );
 		$this->assertTrue( $this->invoke_private( $cache, 'maybe_store_cache' ) );
 	}
+
+	/**
+	 * Stub Woo page resolution for a custom nested slug (shop/basket).
+	 */
+	private function stub_custom_woo_slug(): void {
+		Functions\when( 'wc_get_page_id' )->alias(
+			static function ( $key ) {
+				$pages = array(
+					'cart'      => 10,
+					'checkout'  => 0,
+					'myaccount' => 0,
+					'shop'      => 0,
+				);
+				return isset( $pages[ $key ] ) ? $pages[ $key ] : 0;
+			}
+		);
+		Functions\when( 'get_permalink' )->alias(
+			static function ( $post_id ) {
+				return 10 === (int) $post_id ? 'http://example.com/shop/basket/' : 'http://example.com/?p=' . (int) $post_id;
+			}
+		);
+		Functions\when( 'get_post_field' )->alias(
+			static function ( $field, $post_id ) {
+				return 10 === (int) $post_id ? 'basket' : '';
+			}
+		);
+		Functions\when( 'is_wc_endpoint_url' )->justReturn( false );
+	}
+
+	/**
+	 * Custom nested Woo slugs from Util::get_woo_excluded_paths() are excluded
+	 * (issue #962): /shop/basket/ matches, /basketball/ does not (segment).
+	 */
+	public function test_custom_nested_woo_slug_is_excluded(): void {
+		$this->stub_front_end_guests();
+		$this->stub_custom_woo_slug();
+
+		$cache = $this->make_cache( array(), '/shop/basket/' );
+		$this->assertTrue( $this->invoke_private( $cache, 'is_woo_excluded' ) );
+		$this->assertTrue( $this->invoke_private( $cache, 'is_not_cacheable' ) );
+
+		$cache = $this->make_cache( array(), '/shop/basket/page/2/' );
+		$this->assertTrue( $this->invoke_private( $cache, 'is_woo_excluded' ) );
+
+		$cache = $this->make_cache( array(), '/basketball/' );
+		$this->assertFalse( $this->invoke_private( $cache, 'is_woo_excluded' ) );
+	}
+
+	/**
+	 * Store API routes are never cacheable (issue #962), at serve and store time.
+	 */
+	public function test_store_api_routes_are_never_cacheable(): void {
+		$this->stub_front_end_guests();
+		Functions\when( 'is_wc_endpoint_url' )->justReturn( false );
+
+		foreach ( array( '/wp-json/wc/store/v1/cart', '/wc/store/v1/checkout', '/wp-json/wcstore/v1/cart' ) as $uri ) {
+			$cache = $this->make_cache( array(), $uri );
+			$this->assertTrue( $this->invoke_private( $cache, 'is_woo_excluded' ), 'Expected excluded: ' . $uri );
+			$this->assertTrue( $this->invoke_private( $cache, 'is_not_cacheable' ), 'Expected not cacheable: ' . $uri );
+			$this->assertFalse( $this->invoke_private( $cache, 'maybe_store_cache' ), 'Expected no store: ' . $uri );
+		}
+	}
+
+	/**
+	 * Store API stays uncacheable even when safe mode is off (issue #962).
+	 */
+	public function test_store_api_excluded_when_safe_mode_off(): void {
+		$this->stub_front_end_guests();
+		Functions\when( 'is_wc_endpoint_url' )->justReturn( false );
+
+		$options = array( 'cache_settings' => array( 'wooSafeMode' => false ) );
+		$cache   = $this->make_cache( $options, '/wp-json/wc/store/v1/cart' );
+		$this->assertTrue( $this->invoke_private( $cache, 'is_woo_excluded' ) );
+		$this->assertFalse( $this->invoke_private( $cache, 'maybe_store_cache' ) );
+	}
+
+	/**
+	 * Woo endpoint URLs (order-pay, view-order, …) are excluded (issue #962).
+	 */
+	public function test_wc_endpoint_url_is_excluded(): void {
+		$this->stub_front_end_guests();
+		Functions\when( 'is_wc_endpoint_url' )->justReturn( true );
+
+		$cache = $this->make_cache( array(), '/checkout/order-pay/123/' );
+		$this->assertTrue( $this->invoke_private( $cache, 'is_woo_excluded' ) );
+		$this->assertTrue( $this->invoke_private( $cache, 'is_not_cacheable' ) );
+	}
+
+	/**
+	 * Util::is_woo_safe_mode_enabled(): absent key = enabled, false = disabled.
+	 */
+	public function test_woo_safe_mode_enabled_helper(): void {
+		$this->assertTrue( \PerformanceOptimise\Inc\Util::is_woo_safe_mode_enabled( array() ) );
+		$this->assertTrue( \PerformanceOptimise\Inc\Util::is_woo_safe_mode_enabled( array( 'cache_settings' => array( 'wooSafeMode' => true ) ) ) );
+		$this->assertFalse( \PerformanceOptimise\Inc\Util::is_woo_safe_mode_enabled( array( 'cache_settings' => array( 'wooSafeMode' => false ) ) ) );
+		$this->assertTrue( \PerformanceOptimise\Inc\Util::is_woo_store_api_path( '/wp-json/wc/store/v1/cart' ) );
+		$this->assertFalse( \PerformanceOptimise\Inc\Util::is_woo_store_api_path( '/shop/' ) );
+	}
+
+	/**
+	 * Surgical Woo purge (issue #962): product invalidation collects only the
+	 * product permalink (+ archives), never the home page, and the filter
+	 * receives the kind.
+	 */
+	public function test_invalidate_woo_object_collects_surgical_urls(): void {
+		$this->stub_front_end_guests();
+		Functions\when( 'is_wc_endpoint_url' )->justReturn( false );
+		Functions\when( 'get_permalink' )->alias(
+			static function ( $post_id ) {
+				return 99 === (int) $post_id ? 'http://example.com/product/hoodie/' : 'http://example.com/?p=' . (int) $post_id;
+			}
+		);
+		Functions\when( 'wp_make_link_relative' )->alias(
+			static function ( $url ) {
+				$path = wp_parse_url( (string) $url, PHP_URL_PATH );
+				return is_string( $path ) ? $path : '';
+			}
+		);
+		Functions\when( 'is_wp_error' )->justReturn( false );
+		Functions\when( 'get_object_taxonomies' )->justReturn( array() );
+		Functions\when( 'wc_get_page_id' )->justReturn( 0 );
+		Functions\when( 'wp_next_scheduled' )->justReturn( true );
+
+		$GLOBALS['wppo_test_woo_urls'] = null;
+		$GLOBALS['wppo_test_woo_kind'] = null;
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $tag, $value, ...$args ) {
+				if ( 'wppo_woo_invalidation_urls' === $tag ) {
+					$GLOBALS['wppo_test_woo_urls'] = $value;
+					$GLOBALS['wppo_test_woo_kind'] = $args[1] ?? null;
+				}
+				if ( 'wppo_should_cache_request' === $tag ) {
+					return true;
+				}
+				return $value;
+			}
+		);
+
+		$cache = $this->make_cache( array(), '/' );
+		$cache->invalidate_woo_object( 99, 'product' );
+
+		$this->assertSame( 'product', $GLOBALS['wppo_test_woo_kind'] );
+		$this->assertIsArray( $GLOBALS['wppo_test_woo_urls'] );
+		$this->assertContains( '/product/hoodie/', $GLOBALS['wppo_test_woo_urls'] );
+		$this->assertNotContains( '/', $GLOBALS['wppo_test_woo_urls'] );
+
+		unset( $GLOBALS['wppo_test_woo_urls'], $GLOBALS['wppo_test_woo_kind'] );
+	}
 }

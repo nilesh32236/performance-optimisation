@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect, useContext } from '@wordpress/element';
+import { useState, useRef, useEffect, useMemo } from '@wordpress/element';
 import { apiCall, fetchRecentActivities } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
-import UnsavedChangesContext from '../lib/UnsavedChangesContext';
+import useUnsavedChanges from '../lib/useUnsavedChanges';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -182,7 +182,6 @@ const isValidImportValue = ( value, depth ) => {
 const PluginSetting = ( { options } ) => {
 	const [ selectedFile, setSelectedFile ] = useState( null );
 	const [ isImporting, setIsImporting ] = useState( false );
-	const { setIsDirty } = useContext( UnsavedChangesContext );
 	const {
 		notice: importNotice,
 		notify: notifyImport,
@@ -248,28 +247,23 @@ const PluginSetting = ( { options } ) => {
 			? storedAudit.high_value_urls.join( '\n' )
 			: '',
 	} );
-	useEffect( () => {
-		const current = {
+	const currentMonitoringSettings = useMemo(
+		() => ( {
 			newApiKey,
 			autoRescan,
 			serverTimingEnabled,
 			rumEnabled,
 			highValueUrls,
-		};
-		const dirty = JSON.stringify( current ) !== JSON.stringify( baseline );
-		setIsDirty( dirty );
-	}, [
-		newApiKey,
-		autoRescan,
-		serverTimingEnabled,
-		rumEnabled,
-		highValueUrls,
-		baseline,
-		setIsDirty,
-	] );
-	useEffect( () => {
-		return () => setIsDirty( false );
-	}, [ setIsDirty ] );
+		} ),
+		[
+			newApiKey,
+			autoRescan,
+			serverTimingEnabled,
+			rumEnabled,
+			highValueUrls,
+		]
+	);
+	useUnsavedChanges( currentMonitoringSettings, baseline );
 
 	const saveMonitoring = async () => {
 		setSavingMonitoring( true );

@@ -1,6 +1,6 @@
 import { useState } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
-import { apiCall } from '../lib/apiRequest';
+import { apiCall, getWppoSettings } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
@@ -20,7 +20,7 @@ const STEPS = [
 			payload: { enableCache: true },
 		},
 		isEnabled: () =>
-			wppoSettings?.settings?.cache_settings?.enableCache ?? false,
+			getWppoSettings()?.settings?.cache_settings?.enableCache ?? false,
 	},
 	{
 		number: 2,
@@ -35,8 +35,10 @@ const STEPS = [
 			payload: { minifyJS: true, minifyCSS: true },
 		},
 		isEnabled: () =>
-			( wppoSettings?.settings?.file_optimisation?.minifyJS ?? false ) &&
-			( wppoSettings?.settings?.file_optimisation?.minifyCSS ?? false ),
+			( getWppoSettings()?.settings?.file_optimisation?.minifyJS ??
+				false ) &&
+			( getWppoSettings()?.settings?.file_optimisation?.minifyCSS ??
+				false ),
 	},
 	{
 		number: 3,
@@ -51,13 +53,14 @@ const STEPS = [
 			payload: { lazyLoadImages: true },
 		},
 		isEnabled: () =>
-			wppoSettings?.settings?.image_optimisation?.lazyLoadImages ?? false,
+			getWppoSettings()?.settings?.image_optimisation?.lazyLoadImages ??
+			false,
 	},
 ];
 
 const WelcomePanel = () => {
 	const [ visible, setVisible ] = useState(
-		wppoSettings?.show_welcome ?? false
+		getWppoSettings()?.show_welcome ?? false
 	);
 	const [ activatingStep, setActivatingStep ] = useState( null );
 	const [ dismissing, setDismissing ] = useState( false );

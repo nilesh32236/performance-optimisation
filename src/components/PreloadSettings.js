@@ -3,6 +3,7 @@ import { useState, useEffect, useContext } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
+import useUnsavedChanges from '../lib/useUnsavedChanges';
 import UnsavedChangesContext from '../lib/UnsavedChangesContext';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import SwitchField from './common/SwitchField';
@@ -43,6 +44,8 @@ const PreloadSettings = ( { options = {} } ) => {
 	const { setIsDirty } = useContext( UnsavedChangesContext );
 	const [ baseline, setBaseline ] = useState( defaultSettings );
 	// Keep baseline in sync with incoming options on mount / prop change.
+	// Per-key deps (not object identity) so parent re-renders with an
+	// identical payload do not reset the baseline.
 	useEffect( () => {
 		setBaseline( { ...defaultSettings, ...options } );
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -63,19 +66,16 @@ const PreloadSettings = ( { options = {} } ) => {
 		options.speculationEagerness,
 		options.speculationExcludeUrls,
 	] );
-	useEffect( () => {
-		const dirty = JSON.stringify( settings ) !== JSON.stringify( baseline );
-		setIsDirty( dirty );
-	}, [ settings, baseline, setIsDirty ] );
-	useEffect( () => {
-		return () => setIsDirty( false );
-	}, [ setIsDirty ] );
+	useUnsavedChanges( settings, baseline );
 
 	useEffect( () => {
 		if ( ! options || Object.keys( options ).length === 0 ) {
 			return;
 		}
 		setSettings( ( prev ) => ( { ...prev, ...options } ) );
+		// Per-key deps (not object identity) so parent re-renders with an
+		// identical payload do not reset the form.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [
 		options.enablePreloadCache,
 		options.excludePreloadCache,

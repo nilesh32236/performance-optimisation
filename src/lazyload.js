@@ -246,6 +246,110 @@ const IFRAME_ATTR_ALLOWLIST = new Set( [
 ] );
 
 /**
+ * Safe `allow` (Permissions-Policy) tokens for restored iframes. A tampered
+ * data-wppo-iframe-attrs payload must not escalate capabilities (e.g.
+ * `allow="camera; microphone"`), so unknown tokens are stripped and the
+ * attribute is dropped when nothing safe remains.
+ *
+ * @since NEXT
+ * @type {Set<string>}
+ */
+const IFRAME_ALLOW_TOKENS = new Set( [
+	'accelerometer',
+	'autoplay',
+	'clipboard-write',
+	'encrypted-media',
+	'fullscreen',
+	'gyroscope',
+	'picture-in-picture',
+	'web-share',
+] );
+
+/**
+ * Safe `sandbox` tokens for restored iframes. Top-navigation tokens are
+ * deliberately excluded so a tampered payload cannot let the iframe break
+ * out of its frame.
+ *
+ * @since NEXT
+ * @type {Set<string>}
+ */
+const IFRAME_SANDBOX_TOKENS = new Set( [
+	'allow-downloads',
+	'allow-forms',
+	'allow-modals',
+	'allow-orientation-lock',
+	'allow-pointer-lock',
+	'allow-popups',
+	'allow-popups-to-escape-sandbox',
+	'allow-presentation',
+	'allow-same-origin',
+	'allow-scripts',
+] );
+
+/**
+ * Valid `referrerpolicy` values for restored iframes.
+ *
+ * @since NEXT
+ * @type {Set<string>}
+ */
+const IFRAME_REFERRERPOLICY_TOKENS = new Set( [
+	'no-referrer',
+	'no-referrer-when-downgrade',
+	'origin',
+	'origin-when-cross-origin',
+	'same-origin',
+	'strict-origin',
+	'strict-origin-when-cross-origin',
+	'unsafe-url',
+] );
+
+/**
+ * Sanitize a stored `allow` value: keep only known-safe Permissions-Policy
+ * tokens, return '' when nothing safe remains.
+ *
+ * @since NEXT
+ * @param {string} value Raw allow attribute value.
+ * @return {string} Sanitized value ('' when unsafe/empty).
+ */
+const sanitizeIframeAllow = ( value ) => {
+	const tokens = String( value )
+		.split( ';' )
+		.map( ( token ) => token.trim().toLowerCase() )
+		.filter(
+			( token ) =>
+				token &&
+				/^[a-z-]+$/.test( token ) &&
+				IFRAME_ALLOW_TOKENS.has( token )
+		);
+	return tokens.join( '; ' );
+};
+
+/**
+ * Sanitize a stored `sandbox` value: keep only known-safe tokens (never
+ * top-navigation). Returns null when a non-empty value has no safe token
+ * left; an empty input stays empty (fully sandboxed, strictest).
+ *
+ * @since NEXT
+ * @param {string} value Raw sandbox attribute value.
+ * @return {string|null} Sanitized value, or null to skip the attribute.
+ */
+const sanitizeIframeSandbox = ( value ) => {
+	const raw = String( value ).trim().toLowerCase();
+	if ( ! raw ) {
+		return '';
+	}
+	const tokens = raw
+		.split( /\s+/ )
+		.filter(
+			( token ) =>
+				token &&
+				/^[a-z-]+$/.test( token ) &&
+				IFRAME_SANDBOX_TOKENS.has( token )
+		);
+	return tokens.length ? tokens.join( ' ' ) : null;
+};
+
+/**
  * Whether a host matches the allowlist (exact or subdomain, case-insensitive).
  *
  * @since NEXT
@@ -963,6 +1067,50 @@ const checkCleanup = () => {
 };
 
 /**
+ * Whether an element is the LCP hero and must never be lazy-loaded.
+ *
+ * Fail-open redundancy: PHP is authoritative; JS just refuses to lazy-load
+ * a hero PHP missed (fetchpriority=high, data-wppo-hero/data-wppo-lcp, or
+ * loading=eager). Such images keep src/srcset intact and are never observed.
+ *
+ * @since NEXT
+ * @param {Element} el The DOM element.
+ * @return {boolean} True when the element is a hero image.
+ */
+const isHeroImage = ( el ) => {
+	if ( ! el || el.tagName !== 'IMG' ) {
+		return false;
+	}
+	return (
+		el.getAttribute( 'fetchpriority' ) === 'high' ||
+		el.hasAttribute( 'data-wppo-hero' ) ||
+		el.hasAttribute( 'data-wppo-lcp' ) ||
+		el.getAttribute( 'loading' ) === 'eager'
+	);
+};
+
+/**
+ * Eagerly restore a hero image that PHP missed (leave src/srcset intact,
+ * drop data-* placeholders) so it is never lazy-loaded.
+ *
+ * @since NEXT
+ * @param {Element} el The hero IMG element.
+ */
+const restoreHeroImage = ( el ) => {
+	if ( el.hasAttribute( 'data-src' ) ) {
+		el.src = el.getAttribute( 'data-src' );
+		el.removeAttribute( 'data-src' );
+	}
+	if ( el.hasAttribute( 'data-srcset' ) ) {
+		el.srcset = el.getAttribute( 'data-srcset' );
+		el.removeAttribute( 'data-srcset' );
+	}
+	if ( el.getAttribute( 'loading' ) === 'lazy' ) {
+		el.removeAttribute( 'loading' );
+	}
+};
+
+/**
  * Register an element for lazy-load observation if it has data-* attributes.
  *
  * @since 1.0.0
@@ -974,6 +1122,13 @@ const observeElement = ( el ) => {
 	}
 
 	if ( observedElements.has( el ) ) {
+		return;
+	}
+
+	// LCP hero guard: never observe a hero image; restore it eagerly instead.
+	if ( isHeroImage( el ) ) {
+		restoreHeroImage( el );
+		observedElements.add( el );
 		return;
 	}
 
@@ -1257,6 +1412,11 @@ const loadImages = () => {
 					getLazySelector()
 				);
 				lazyElements.forEach( ( el ) => {
+					// LCP hero guard (scroll fallback): restore eagerly, never lazy-load.
+					if ( isHeroImage( el ) ) {
+						restoreHeroImage( el );
+						return;
+					}
 					if ( isElementInViewport( el ) ) {
 						if ( el.tagName === 'VIDEO' ) {
 							if ( el.hasAttribute( 'data-poster' ) ) {
@@ -1467,16 +1627,73 @@ const initVideoPlaceholders = () => {
 			// only — src/width/height/style are set by this code, and a
 			// tampered payload must not be able to escalate iframe
 			// capabilities (e.g. overwrite allow/sandbox/referrerpolicy) or
-			// smuggle event handlers.
+			// smuggle event handlers. Stored-XSS hardening (issue #967): the
+			// on* denylist + attribute-name shape check are defense-in-depth
+			// on top of the allowlist, and values must be strings.
 			const attrsJson = el.getAttribute( 'data-wppo-iframe-attrs' );
 			if ( attrsJson ) {
 				try {
 					const attrs = JSON.parse( attrsJson );
 					Object.entries( attrs ).forEach( ( [ k, v ] ) => {
-						const name = String( k ).toLowerCase();
-						if ( IFRAME_ATTR_ALLOWLIST.has( name ) ) {
-							iframe.setAttribute( k, v );
+						if ( typeof v !== 'string' ) {
+							return;
 						}
+						const name = String( k ).toLowerCase();
+						if ( ! /^[a-z][a-z0-9-]*$/.test( name ) ) {
+							return;
+						}
+						if ( name.startsWith( 'on' ) ) {
+							return;
+						}
+						if ( ! IFRAME_ATTR_ALLOWLIST.has( name ) ) {
+							return;
+						}
+						// Capability-bearing attributes are value-checked so a
+						// tampered payload cannot escalate iframe privileges.
+						if ( 'allow' === name ) {
+							const safe = sanitizeIframeAllow( v );
+							if ( ! safe ) {
+								return;
+							}
+							iframe.setAttribute( name, safe );
+							return;
+						}
+						if ( 'sandbox' === name ) {
+							const safe = sanitizeIframeSandbox( v );
+							if ( null === safe ) {
+								return;
+							}
+							iframe.setAttribute( name, safe );
+							return;
+						}
+						if ( 'allowfullscreen' === name ) {
+							if (
+								! /^(|true|allowfullscreen)$/i.test( v.trim() )
+							) {
+								return;
+							}
+							iframe.setAttribute( name, '' );
+							return;
+						}
+						if ( 'referrerpolicy' === name ) {
+							if (
+								! IFRAME_REFERRERPOLICY_TOKENS.has(
+									v.trim().toLowerCase()
+								)
+							) {
+								return;
+							}
+							iframe.setAttribute( name, v.trim().toLowerCase() );
+							return;
+						}
+						if ( 'frameborder' === name ) {
+							if ( ! /^(0|1)$/.test( v.trim() ) ) {
+								return;
+							}
+							iframe.setAttribute( name, v.trim() );
+							return;
+						}
+						iframe.setAttribute( name, v );
 					} );
 				} catch ( _err ) {
 					console.warn( 'WPPO: invalid iframe attrs JSON', _err );

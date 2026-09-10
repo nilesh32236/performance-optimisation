@@ -10,6 +10,7 @@ import { apiCall } from '../../lib/apiRequest';
 
 jest.mock( '../../lib/apiRequest', () => ( {
 	apiCall: jest.fn(),
+	getWppoSettings: () => global.wppoSettings ?? {},
 } ) );
 
 describe( 'WelcomePanel', () => {

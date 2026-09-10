@@ -460,6 +460,11 @@ class WPPO_WcAjax_FS_Guard {
 /**
  * Filesystem double that captures drop-in writes.
  *
+ * Emulates just enough of the atomic tmp-plus-rename write path for
+ * Advanced_Cache_Handler::create(): tmp writes are stored per-path so the
+ * post-write marker verification reads back what was written, and move()
+ * promotes the tmp file to its destination.
+ *
  * @package PerformanceOptimise\Tests
  */
 class WPPO_WcAjax_FS_Capture {
@@ -471,47 +476,92 @@ class WPPO_WcAjax_FS_Capture {
 	public $put_contents = '';
 
 	/**
-	 * Simulate file existence (no drop-in present).
+	 * Contents keyed by put_contents() path.
 	 *
-	 * @param string $path File path (unused).
+	 * @var array
+	 */
+	public $put_paths = array();
+
+	/**
+	 * Simulate file existence (no drop-in present until moved).
+	 *
+	 * @param string $path File path.
 	 * @return bool
 	 */
-	public function exists( $path ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+	public function exists( $path ) {
+		if ( false !== strpos( (string) $path, '.tmp.' ) ) {
+			return isset( $this->put_paths[ $path ] );
+		}
+		if ( '.wppo-backup' === substr( (string) $path, -13 ) ) {
+			return isset( $this->put_paths[ $path ] );
+		}
+		foreach ( $this->put_paths as $written_path => $ignored ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Key iteration only.
+			if ( false === strpos( (string) $written_path, '.tmp.' ) ) {
+				return true;
+			}
+		}
 		return false;
 	}
 
 	/**
-	 * Simulate file read.
+	 * Simulate file read (returns what was written per path).
 	 *
-	 * @param string $path File path (unused).
+	 * @param string $path File path.
 	 * @return string
 	 */
-	public function get_contents( $path ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+	public function get_contents( $path ) {
+		if ( isset( $this->put_paths[ $path ] ) ) {
+			return $this->put_paths[ $path ];
+		}
+		foreach ( $this->put_paths as $written_path => $contents ) {
+			if ( false === strpos( (string) $written_path, '.tmp.' ) && false === strpos( (string) $path, '.tmp.' ) ) {
+				return $contents;
+			}
+		}
 		return '';
 	}
 
 	/**
 	 * Capture a write call.
 	 *
-	 * @param string $path     File path (unused).
+	 * @param string $path     File path.
 	 * @param string $contents Contents to write.
 	 * @param int    $mode     Mode (unused).
 	 * @return bool
 	 */
-	public function put_contents( $path, $contents, $mode = 0 ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found, Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-		$this->put_contents = $contents;
+	public function put_contents( $path, $contents, $mode = 0 ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		$this->put_contents       = $contents;
+		$this->put_paths[ $path ] = $contents;
 		return true;
+	}
+
+	/**
+	 * Promote a tmp file to its destination.
+	 *
+	 * @param string $source      Source.
+	 * @param string $destination Destination.
+	 * @param bool   $overwrite   Overwrite (unused).
+	 * @return bool
+	 */
+	public function move( $source, $destination, $overwrite = false ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		if ( isset( $this->put_paths[ $source ] ) ) {
+			$this->put_paths[ $destination ] = $this->put_paths[ $source ];
+			unset( $this->put_paths[ $source ] );
+			return true;
+		}
+		return false;
 	}
 
 	/**
 	 * Simulate delete.
 	 *
-	 * @param string $path      Path (unused).
+	 * @param string $path      Path.
 	 * @param bool   $recursive Recursive (unused).
 	 * @param string $type      Type (unused).
 	 * @return bool
 	 */
 	public function delete( $path, $recursive = false, $type = false ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found, Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		unset( $this->put_paths[ $path ] );
 		return true;
 	}
 }

@@ -152,6 +152,168 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 		}
 
 		/**
+		 * Path to the backup copy of our drop-in kept alongside advanced-cache.php.
+		 *
+		 * The backup lives in the same directory so tmp, final, and backup are
+		 * always on the same filesystem and the rename stays atomic.
+		 *
+		 * @since NEXT
+		 * @return string Backup file path.
+		 */
+		public static function get_dropin_backup_path(): string {
+			return self::get_dropin_path() . '.wppo-backup';
+		}
+
+		/**
+		 * Atomically write the drop-in via tmp-plus-rename with backup and verification.
+		 *
+		 * Writes the generated code to a uniquely named temp sibling, verifies the
+		 * marker and PHP open tag, re-checks drop-in ownership immediately before
+		 * the rename, keeps one backup copy of the previous working file, renames
+		 * atomically, then verifies the final file. On any failure the old file
+		 * (or no file) survives and no half-written file is left in place, so the
+		 * site fails open with caching bypassed.
+		 *
+		 * @since NEXT
+		 * @param string $handler_code Generated drop-in code.
+		 * @return bool True on success (or when a foreign drop-in is left untouched), false on failure.
+		 */
+		private static function atomic_write_dropin( string $handler_code ): bool {
+			global $wp_filesystem;
+
+			if ( false === strpos( $handler_code, self::DROPIN_MARKER ) ) {
+				self::log_dropin_issue( __( 'Could not write advanced-cache.php: generated code is missing the drop-in marker.', 'performance-optimisation' ) );
+				return false;
+			}
+
+			if ( 0 !== strpos( ltrim( $handler_code ), '<?php' ) ) {
+				self::log_dropin_issue( __( 'Could not write advanced-cache.php: generated code is missing the PHP open tag.', 'performance-optimisation' ) );
+				return false;
+			}
+
+			if ( ! is_object( $wp_filesystem ) ) {
+				self::log_dropin_issue( __( 'Could not write advanced-cache.php: WP_Filesystem unavailable.', 'performance-optimisation' ) );
+				return false;
+			}
+
+			if ( ! method_exists( $wp_filesystem, 'put_contents' ) || ! method_exists( $wp_filesystem, 'get_contents' ) || ! method_exists( $wp_filesystem, 'exists' ) ) {
+				self::log_dropin_issue( __( 'Could not write advanced-cache.php: filesystem API incomplete.', 'performance-optimisation' ) );
+				return false;
+			}
+
+			$handler_file = self::get_dropin_path();
+			$backup_file  = self::get_dropin_backup_path();
+			$chmod_file   = defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644;
+			$tmp_file     = '';
+
+			try {
+				// Unique tmp suffix: wide rand range plus pid/uniqid so two
+				// concurrent create() calls cannot pick the same tmp name.
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.rand_mt_rand -- Fallback only when wp_rand() is unavailable (WP < 6.2 compat); uniqueness is all that is needed for the tmp suffix.
+				$rand_suffix = mt_rand( 1000000, 9999999 );
+				if ( function_exists( 'wp_rand' ) ) {
+					try {
+						$rand_suffix = wp_rand( 1000000, 9999999 );
+					} catch ( \Throwable $ignored_rand ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Keep the mt_rand() fallback when the wp_rand() stub is unavailable.
+					}
+				}
+				$pid_part  = function_exists( 'getmypid' ) ? (int) getmypid() : 0;
+				$uniq_part = substr( md5( uniqid( (string) microtime( true ), true ) ), 0, 8 );
+				$tmp_file  = $handler_file . '.tmp.' . $rand_suffix . '-' . $pid_part . '-' . $uniq_part;
+
+				$written = $wp_filesystem->put_contents( $tmp_file, $handler_code, $chmod_file );
+				if ( ! $written ) {
+					if ( method_exists( $wp_filesystem, 'delete' ) ) {
+						$wp_filesystem->delete( $tmp_file );
+					}
+					self::log_dropin_issue( __( 'Could not write advanced-cache.php: temporary file write failed, previous file kept.', 'performance-optimisation' ) );
+					return false;
+				}
+
+				$tmp_contents = $wp_filesystem->get_contents( $tmp_file );
+				if ( ! is_string( $tmp_contents ) || false === strpos( $tmp_contents, self::DROPIN_MARKER ) || 0 !== strpos( ltrim( $tmp_contents ), '<?php' ) ) {
+					if ( method_exists( $wp_filesystem, 'delete' ) ) {
+						$wp_filesystem->delete( $tmp_file );
+					}
+					self::log_dropin_issue( __( 'Could not write advanced-cache.php: temporary file verification failed, previous file kept.', 'performance-optimisation' ) );
+					return false;
+				}
+
+				// Ownership may have changed while we wrote tmp; never overwrite a foreign drop-in.
+				if ( $wp_filesystem->exists( $handler_file ) && ! self::is_our_dropin() ) {
+					if ( method_exists( $wp_filesystem, 'delete' ) ) {
+						$wp_filesystem->delete( $tmp_file );
+					}
+					self::log_dropin_issue( __( 'Skipped writing advanced-cache.php: a foreign drop-in appeared during the write.', 'performance-optimisation' ) );
+					return true;
+				}
+
+				// Best-effort backup of the previous working file; a failed backup must not block the rename.
+				if ( $wp_filesystem->exists( $handler_file ) && self::is_our_dropin() && method_exists( $wp_filesystem, 'copy' ) ) {
+					$backed_up = $wp_filesystem->copy( $handler_file, $backup_file, true, $chmod_file );
+					if ( ! $backed_up ) {
+						self::log_dropin_issue( __( 'Could not back up advanced-cache.php before replacing it.', 'performance-optimisation' ) );
+					}
+				}
+
+				$moved = false;
+				if ( method_exists( $wp_filesystem, 'move' ) ) {
+					$moved = (bool) $wp_filesystem->move( $tmp_file, $handler_file, true );
+				}
+
+				if ( ! $moved ) {
+					if ( method_exists( $wp_filesystem, 'copy' ) ) {
+						$copied = (bool) $wp_filesystem->copy( $tmp_file, $handler_file, true, $chmod_file );
+						if ( $copied ) {
+							if ( method_exists( $wp_filesystem, 'delete' ) ) {
+								$wp_filesystem->delete( $tmp_file );
+							}
+							$moved = true;
+						}
+					}
+
+					if ( ! $moved ) {
+						if ( method_exists( $wp_filesystem, 'delete' ) ) {
+							$wp_filesystem->delete( $tmp_file );
+						}
+						self::log_dropin_issue( __( 'Could not write advanced-cache.php: rename failed, previous file kept.', 'performance-optimisation' ) );
+						return false;
+					}
+				}
+
+				$final_contents = $wp_filesystem->get_contents( $handler_file );
+				if ( ! is_string( $final_contents ) || false === strpos( $final_contents, self::DROPIN_MARKER ) || 0 !== strpos( ltrim( $final_contents ), '<?php' ) ) {
+					$restored = false;
+					if ( method_exists( $wp_filesystem, 'copy' ) && method_exists( $wp_filesystem, 'exists' ) && $wp_filesystem->exists( $backup_file ) ) {
+						$restored = (bool) $wp_filesystem->copy( $backup_file, $handler_file, true, $chmod_file );
+					}
+					if ( ! $restored && method_exists( $wp_filesystem, 'delete' ) ) {
+						$wp_filesystem->delete( $handler_file );
+					}
+					self::log_dropin_issue( __( 'Could not verify advanced-cache.php after write; previous backup restored where available.', 'performance-optimisation' ) );
+					return false;
+				}
+
+				return true;
+			} catch ( \Throwable $e ) {
+				if ( '' !== $tmp_file && is_object( $wp_filesystem ) && method_exists( $wp_filesystem, 'delete' ) ) {
+					try {
+						$wp_filesystem->delete( $tmp_file );
+					} catch ( \Throwable $ignored ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Best-effort tmp cleanup must never throw.
+					}
+				}
+				self::log_dropin_issue(
+					sprintf(
+						/* translators: %s: error message */
+						__( 'Could not write advanced-cache.php: %s', 'performance-optimisation' ),
+						sanitize_text_field( $e->getMessage() )
+					)
+				);
+				return false;
+			}
+		}
+
+		/**
 		 * Creates the advanced-cache.php file.
 		 *
 		 * Generates the file to serve cached content, including gzip versions, and ensures required directories exist.
@@ -191,6 +353,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			$fallback_hash = $site_host ? md5( $site_host ) : md5( $site_url );
 			$cookie_hash   = defined( 'COOKIEHASH' ) ? COOKIEHASH : $fallback_hash;
 
+			// Canonical host pinned into the drop-in (Host-header cache-poisoning
+			// guard, @since NEXT): the pre-boot serve path below only ever reads
+			// cache/wppo/<canonical-host>/, so a forged Host header is served
+			// uncached (falls through to WordPress) and can never create or
+			// serve a poisoned file. Empty canonical fails open to uncached.
+			//
+			// Known tradeoff: a single canonical host is baked at create() time
+			// because the pre-boot drop-in has no blog context. On multisite or
+			// domain-mapped networks with several valid hosts, non-primary hosts
+			// fail open (served uncached) rather than served from their own tree.
+			// Per-Host trees were inherently multisite-safe but also inherently
+			// poisonable, so fail-open is the safe direction; a future
+			// enhancement could bake an allowlist of network hosts instead of
+			// strict equality.
+			$canonical_host = Util::get_canonical_host();
+			if ( '' === $canonical_host && is_string( $site_host ) && '' !== $site_host ) {
+				$canonical_host = Util::normalize_cache_host( $site_host );
+			}
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_var_export -- var_export produces a correctly escaped single-quoted PHP literal for the generated drop-in.
+			$canonical_host_escaped = var_export( $canonical_host, true );
+
 			// Cache life in hours baked into the drop-in; 0 = never expire.
 			// NOTE: create() runs in plugin context so Util::get_settings() is fine
 			// here, but the generated drop-in string below serves cached pages
@@ -206,7 +389,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			// Semantics mirror Cache::is_woo_excluded(): an absent key defaults to
 			// enabled (fail-safe), and malformed values normalize to enabled.
 			$woo_safe_mode = true;
-			if ( isset( $wppo_options['cache_settings']['wooSafeMode'] ) ) {
+			if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_safe_mode_enabled' ) ) {
+				try {
+					$woo_safe_mode = \PerformanceOptimise\Inc\Util::is_woo_safe_mode_enabled( is_array( $wppo_options ) ? $wppo_options : null );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$woo_safe_mode = true;
+				}
+			} elseif ( isset( $wppo_options['cache_settings']['wooSafeMode'] ) ) {
 				$parsed_mode   = filter_var( $wppo_options['cache_settings']['wooSafeMode'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
 				$woo_safe_mode = null === $parsed_mode ? true : $parsed_mode;
 			}
@@ -219,7 +409,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			if ( $woo_safe_mode ) {
 				foreach ( Util::get_woo_excluded_paths() as $woo_path ) {
 					$woo_path = strtolower( trim( (string) $woo_path, '/' ) );
-					$woo_path = preg_replace( '/[^a-z0-9\-_\/]/', '', $woo_path );
+					$woo_path = (string) preg_replace( '/[\x00-\x1F\x7F]/u', '', $woo_path );
+					$woo_path = trim( $woo_path, '/' );
 					if ( '' !== $woo_path && ! in_array( $woo_path, $woo_uri_segments, true ) ) {
 						$woo_uri_segments[] = $woo_path;
 					}
@@ -234,14 +425,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'}' . PHP_EOL . PHP_EOL .
 
 			'$site_url       = ' . $site_url_escaped . ';' . PHP_EOL .
+			'$canonical_host = ' . $canonical_host_escaped . ';' . PHP_EOL .
 			'$raw_domain    = isset( $_SERVER[\'HTTP_HOST\'] ) ? (string) $_SERVER[\'HTTP_HOST\'] : \'\';' . PHP_EOL .
+			'$request_base   = $raw_domain;' . PHP_EOL .
+			'if ( isset( $request_base[0] ) && \'[\' === $request_base[0] ) { $bracket_end = strpos( $request_base, \']\' ); if ( false === $bracket_end ) { $request_base = \'\'; } else { $request_rest = substr( $request_base, $bracket_end + 1 ); if ( \'\' !== $request_rest && \':\' !== $request_rest[0] ) { $request_base = \'\'; } else { $request_base = substr( $request_base, 1, $bracket_end - 1 ); } } } elseif ( substr_count( $request_base, \':\' ) <= 1 ) { $request_base = explode( \':\', $request_base, 2 )[0]; }' . PHP_EOL .
+			'$idn_host       = function_exists( \'idn_to_ascii\' ) ? @idn_to_ascii( $request_base, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46 ) : false;' . PHP_EOL .
+			'$request_base   = ( is_string( $idn_host ) && \'\' !== $idn_host ) ? $idn_host : $request_base;' . PHP_EOL .
 			'$site_domain   = strtolower( preg_replace( \'/[^a-z0-9.:-]+/i\', \'\', $raw_domain ) );' . PHP_EOL .
+			'$request_host  = strtolower( preg_replace( \'/[^a-z0-9.:-]+/i\', \'\', $request_base ) );' . PHP_EOL .
 			'$request_uri   = isset( $_SERVER[\'REQUEST_URI\'] ) ? (string) parse_url( $_SERVER[\'REQUEST_URI\'], PHP_URL_PATH ) : \'\';' . PHP_EOL .
 			'$request_uri   = rawurldecode( $request_uri );' . PHP_EOL .
 			'$request_uri   = function_exists( \'wp_normalize_path\' ) ? wp_normalize_path( $request_uri ) : str_replace( \'\\\\\', \'/\', $request_uri );' . PHP_EOL .
 			'$cache_life    = ' . $cache_life . ';' . PHP_EOL . PHP_EOL .
 
-			'if ( \'\' === $site_domain || strpos( $site_domain, \'..\' ) !== false || strpos( $request_uri, \'..\' ) !== false ) {' . PHP_EOL .
+			'if ( \'\' === $site_domain || \'\' === $canonical_host || \'\' === $request_host || $request_host !== $canonical_host || strpos( $site_domain, \'..\' ) !== false || strpos( $request_uri, \'..\' ) !== false || strpos( $request_uri, "\0" ) !== false || strpos( $site_domain, "\0" ) !== false ) {' . PHP_EOL .
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
 
@@ -274,6 +471,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 				: PHP_EOL // Keeps the blank-line separator consistent below.
 			) .
 
+			'// WooCommerce Store API routes are dynamic JSON and must never be served from the static cache (issue #962).' . PHP_EOL .
+			'// Unconditional on safe mode, mirroring wc-ajax: wc/store, wcstore, wp-json/wc/store, wp-json/wcstore,' . PHP_EOL .
+			'// plus the plain-permalink ?rest_route=/wc/store/... form (path is "/" there, so the' . PHP_EOL .
+			'// path-only regex would miss it — mirrors the QUERY_STRING guard above).' . PHP_EOL .
+			'if ( preg_match( \'#(^|/)(?:wc/store|wcstore|wp-json/wc/store|wp-json/wcstore)(/|$)#i\', $request_uri ) ) {' . PHP_EOL .
+			'	return;' . PHP_EOL .
+			'}' . PHP_EOL .
+			'if ( isset( $_GET[\'rest_route\'] ) && is_string( $_GET[\'rest_route\'] ) && preg_match( \'#(^|/)(?:wc/store|wcstore|wp-json/wc/store|wp-json/wcstore)(/|$)#i\', \'/\' . ltrim( $_GET[\'rest_route\'], \'/\' ) ) ) {' . PHP_EOL .
+			'	return;' . PHP_EOL .
+			'}' . PHP_EOL .
+			'if ( ! empty( $_SERVER[\'QUERY_STRING\'] ) && preg_match( \'#rest_route=[^&]*(?:wc/store|wcstore)#i\', rawurldecode( $_SERVER[\'QUERY_STRING\'] ) ) ) {' . PHP_EOL .
+			'	return;' . PHP_EOL .
+			'}' . PHP_EOL . PHP_EOL .
+
 			'if ( preg_match( \'#^/(?:' . $woo_uri_pattern . ')(?:/|$)#i\', $request_uri ) || preg_match( \'/(?:sitemap[^\/]*\.xml|wp-sitemap[^\/]*\.xml|\.xml)$/i\', $request_uri ) ) {' . PHP_EOL .
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
@@ -282,10 +493,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'	$request_uri .= \'/\';' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
 
-			'$file_path      = WP_CONTENT_DIR . \'/cache/wppo/\' . $site_domain . $request_uri . \'index.html\';' . PHP_EOL .
+			'$file_path      = WP_CONTENT_DIR . \'/cache/wppo/\' . $canonical_host . $request_uri . \'index.html\';' . PHP_EOL .
 			'$file_path      = str_replace( \'\\\\\', \'/\', $file_path );' . PHP_EOL .
 			'$file_path      = preg_replace( \'#/+#\', \'/\', $file_path );' . PHP_EOL .
 			'$file_path      = rtrim( $file_path, \'/\' );' . PHP_EOL .
+			'$cache_base     = str_replace( \'\\\\\', \'/\', WP_CONTENT_DIR . \'/cache/wppo/\' . $site_domain . \'/\' );' . PHP_EOL .
+			'if ( \'\' === $site_domain || 0 !== strpos( $file_path, $cache_base ) ) {' . PHP_EOL .
+			'	return;' . PHP_EOL .
+			'}' . PHP_EOL .
 			'$gzip_file_path = $file_path . \'.gz\';' . PHP_EOL .
 			'$brotli_file_path = $file_path . \'.br\';' . PHP_EOL .
 			'$accept_encoding = isset( $_SERVER[\'HTTP_ACCEPT_ENCODING\'] ) ? (string) $_SERVER[\'HTTP_ACCEPT_ENCODING\'] : \'\';' . PHP_EOL . PHP_EOL .
@@ -392,9 +607,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'	}' . PHP_EOL .
 			'}' . PHP_EOL;
 
-			// Write the handler file in the wp-content directory as advanced-cache.php.
-			$chmod_file = defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644;
-			$written    = (bool) $wp_filesystem->put_contents( wp_normalize_path( WP_CONTENT_DIR . '/advanced-cache.php' ), $handler_code, $chmod_file );
+			// Write the handler file atomically: tmp-plus-rename with backup and
+			// post-write marker verification, so a crash never leaves a truncated drop-in.
+			$written = self::atomic_write_dropin( $handler_code );
 
 			// The drop-in changed — System Info's cached ownership verdict is
 			// stale (audit #888 finding 25).
@@ -408,7 +623,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 		/**
 		 * Removes the advanced-cache.php file.
 		 *
-		 * Deletes the advanced-cache.php file if it exists.
+		 * Deletes the advanced-cache.php file if it exists, along with the
+		 * `.wppo-backup` sibling and any orphaned `.tmp.*` siblings from
+		 * crashed atomic writes, so no stale artifacts are left behind.
 		 *
 		 * @return void
 		 * @since 1.0.0
@@ -423,6 +640,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			}
 
 			if ( ! $wp_filesystem->exists( $handler_file ) ) {
+				self::cleanup_dropin_artifacts();
 				return;
 			}
 
@@ -432,11 +650,57 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 
 			$deleted = (bool) $wp_filesystem->delete( $handler_file );
 
+			if ( $deleted ) {
+				self::cleanup_dropin_artifacts();
+			}
+
 			// The drop-in changed — System Info's cached ownership verdict is
 			// stale (audit #888 finding 25). Only flush on a successful delete,
 			// mirroring create().
 			if ( $deleted && class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 				System_Info::flush_dropin_cache();
+			}
+		}
+
+		/**
+		 * Delete the backup sibling and any orphaned tmp siblings.
+		 *
+		 * Best-effort only: failures are ignored so remove() never fails
+		 * because of stale artifacts.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private static function cleanup_dropin_artifacts(): void {
+			global $wp_filesystem;
+
+			if ( ! is_object( $wp_filesystem ) || ! method_exists( $wp_filesystem, 'delete' ) ) {
+				return;
+			}
+
+			try {
+				$wp_filesystem->delete( self::get_dropin_backup_path() );
+
+				if ( ! method_exists( $wp_filesystem, 'dirlist' ) || ! method_exists( $wp_filesystem, 'exists' ) ) {
+					return;
+				}
+
+				$content_dir = wp_normalize_path( WP_CONTENT_DIR );
+				if ( ! $wp_filesystem->exists( $content_dir ) ) {
+					return;
+				}
+
+				$listing = $wp_filesystem->dirlist( $content_dir );
+				if ( ! is_array( $listing ) ) {
+					return;
+				}
+
+				foreach ( $listing as $name => $info ) {
+					if ( 0 === strpos( (string) $name, 'advanced-cache.php.tmp.' ) ) {
+						$wp_filesystem->delete( $content_dir . '/' . $name );
+					}
+				}
+			} catch ( \Throwable $ignored ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Best-effort artifact cleanup must never throw.
 			}
 		}
 	}
