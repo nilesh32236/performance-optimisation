@@ -1392,6 +1392,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * normally). Matches real-world <link> tags (far shorter than the
 		 * bounds) identically to the previous unbounded pattern.
 		 *
+		 * The rel matcher is intentionally tolerant: it allows whitespace
+		 * around `=` and space-separated rel tokens (e.g. `rel="alternate
+		 * stylesheet"` or `rel = "stylesheet"`), while still requiring the
+		 * token `stylesheet` so same-URL `preload`/`preconnect` hints are
+		 * never stripped.
+		 *
 		 * @since NEXT
 		 * @param string $buffer      The HTML buffer.
 		 * @param array  $quoted_srcs preg_quote()d src URLs (delimiter '/').
@@ -1406,16 +1412,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 
 			// Bounded lazy quantifiers cap backtracking; tag body bound of
 			// 2000 and query-string bound of 500 far exceed real <link> tags.
-			// The version_compare() branch documents PHP 8.2+ compatibility:
-			// preg_replace()/preg_last_error() exist since PHP 4/5, so both
-			// branches run the same removal; the legacy branch simply skips
-			// the preg_last_error() call when unavailable.
-			$use_error_guard = function_exists( 'preg_last_error' ) && version_compare( PHP_VERSION, '5.2', '>=' );
-
 			// Pass 1: href-first (<link ... href="URL" ... rel="stylesheet" ...>).
-			$pattern_href_first = '/<link[^>]{0,2000}?href=[\'"](' . $alternation . ')(?:\?[^\'"]{0,500})?[\'"][^>]{0,2000}?rel=[\'"]stylesheet[\'"][^>]{0,2000}?\/?>\s*/i';
+			$pattern_href_first = '/<link[^>]{0,2000}?href\s*=\s*[\'"](?:' . $alternation . ')(?:\?[^\'"]{0,500})?[\'"][^>]{0,2000}?rel\s*=\s*[\'"][^\'"]*stylesheet[^\'"]*[\'"][^>]{0,2000}?\/?>\s*/i';
 			// Pass 2: rel-first (<link ... rel="stylesheet" ... href="URL" ...>).
-			$pattern_rel_first = '/<link[^>]{0,2000}?rel=[\'"]stylesheet[\'"][^>]{0,2000}?href=[\'"](' . $alternation . ')(?:\?[^\'"]{0,500})?[\'"][^>]{0,2000}?\/?>\s*/i';
+			$pattern_rel_first = '/<link[^>]{0,2000}?rel\s*=\s*[\'"][^\'"]*stylesheet[^\'"]*[\'"][^>]{0,2000}?href\s*=\s*[\'"](?:' . $alternation . ')(?:\?[^\'"]{0,500})?[\'"][^>]{0,2000}?\/?>\s*/i';
 
 			$total_count = 0;
 
@@ -1424,7 +1424,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			if ( null === $after_href_first ) {
 				return null;
 			}
-			if ( $use_error_guard && PREG_NO_ERROR !== preg_last_error() ) {
+			if ( PREG_NO_ERROR !== preg_last_error() ) {
 				return null;
 			}
 			$total_count += $count_href_first;
@@ -1434,7 +1434,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			if ( null === $after_rel_first ) {
 				return null;
 			}
-			if ( $use_error_guard && PREG_NO_ERROR !== preg_last_error() ) {
+			if ( PREG_NO_ERROR !== preg_last_error() ) {
 				return null;
 			}
 			$total_count += $count_rel_first;
