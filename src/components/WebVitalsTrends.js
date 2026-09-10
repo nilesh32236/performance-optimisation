@@ -137,42 +137,61 @@ const WebVitalsTrends = ( { url = '' } ) => {
 	const [ loading, setLoading ] = useState( true );
 	const [ error, setError ] = useState( null );
 
-	const loadTrends = useCallback( async () => {
-		if ( ! url ) {
-			// Without a known URL the request would return every history and
-			// TrendSeries would mislabel them; show an explicit empty state.
-			setTrends( null );
-			setError( null );
-			setLoading( false );
-			return;
-		}
-		setLoading( true );
-		setError( null );
-		try {
-			const response = await fetchWebVitalsTrends( url, '' );
-			if ( response.success ) {
-				setTrends( response.data?.trends ?? {} );
-			} else {
-				setError(
-					response.message ||
-						__(
-							'Failed to load trend data.',
-							'performance-optimisation'
-						)
-				);
+	const loadTrends = useCallback(
+		async ( signal ) => {
+			if ( ! url ) {
+				// Without a known URL the request would return every history and
+				// TrendSeries would mislabel them; show an explicit empty state.
+				if ( signal?.aborted ) {
+					return;
+				}
+				setTrends( null );
+				setError( null );
+				setLoading( false );
+				return;
 			}
-		} catch ( err ) {
-			setError(
-				__( 'Failed to load trend data.', 'performance-optimisation' )
-			);
-			console.error( 'Web Vitals trends load error:', err );
-		} finally {
-			setLoading( false );
-		}
-	}, [ url ] );
+			setLoading( true );
+			setError( null );
+			try {
+				const response = await fetchWebVitalsTrends( url, '', signal );
+				if ( signal?.aborted ) {
+					return;
+				}
+				if ( response.success ) {
+					setTrends( response.data?.trends ?? {} );
+				} else {
+					setError(
+						response.message ||
+							__(
+								'Failed to load trend data.',
+								'performance-optimisation'
+							)
+					);
+				}
+			} catch ( err ) {
+				if ( signal?.aborted || err?.name === 'AbortError' ) {
+					return;
+				}
+				setError(
+					__(
+						'Failed to load trend data.',
+						'performance-optimisation'
+					)
+				);
+				console.error( 'Web Vitals trends load error:', err );
+			} finally {
+				if ( ! signal?.aborted ) {
+					setLoading( false );
+				}
+			}
+		},
+		[ url ]
+	);
 
 	useEffect( () => {
-		loadTrends();
+		const controller = new AbortController();
+		loadTrends( controller.signal );
+		return () => controller.abort();
 	}, [ loadTrends ] );
 
 	return (

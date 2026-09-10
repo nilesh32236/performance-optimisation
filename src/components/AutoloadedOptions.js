@@ -38,46 +38,63 @@ const AutoloadedOptions = () => {
 	const [ reverting, setReverting ] = useState( {} );
 	const { notice, notify, dismiss } = useNotice();
 
-	const load = useCallback( async () => {
-		setLoading( true );
-		dismiss();
-		try {
-			const response = await apiCall(
-				'autoloaded_options?limit=20',
-				{},
-				'GET'
-			);
-			if ( response.success && response.data?.options ) {
-				setOptions( response.data.options );
-			} else {
+	const load = useCallback(
+		async ( signal ) => {
+			setLoading( true );
+			dismiss();
+			try {
+				const response = await apiCall(
+					'autoloaded_options?limit=20',
+					{},
+					'GET',
+					signal
+				);
+				if ( signal?.aborted ) {
+					return;
+				}
+				if ( response.success && response.data?.options ) {
+					setOptions( response.data.options );
+				} else {
+					notify( {
+						type: 'error',
+						message:
+							response.message ||
+							__(
+								'Failed to load autoloaded options.',
+								'performance-optimisation'
+							),
+						durationMs: 5000,
+					} );
+				}
+			} catch ( loadError ) {
+				if ( signal?.aborted || loadError?.name === 'AbortError' ) {
+					return;
+				}
 				notify( {
 					type: 'error',
-					message:
-						response.message ||
-						__(
-							'Failed to load autoloaded options.',
-							'performance-optimisation'
-						),
+					message: __(
+						'Failed to load autoloaded options.',
+						'performance-optimisation'
+					),
 					durationMs: 5000,
 				} );
+				console.error(
+					'Error fetching autoloaded options:',
+					loadError
+				);
+			} finally {
+				if ( ! signal?.aborted ) {
+					setLoading( false );
+				}
 			}
-		} catch ( loadError ) {
-			notify( {
-				type: 'error',
-				message: __(
-					'Failed to load autoloaded options.',
-					'performance-optimisation'
-				),
-				durationMs: 5000,
-			} );
-			console.error( 'Error fetching autoloaded options:', loadError );
-		} finally {
-			setLoading( false );
-		}
-	}, [ notify, dismiss ] );
+		},
+		[ notify, dismiss ]
+	);
 
 	useEffect( () => {
-		load();
+		const controller = new AbortController();
+		load( controller.signal );
+		return () => controller.abort();
 	}, [ load ] );
 
 	const runDryRun = useCallback( async () => {

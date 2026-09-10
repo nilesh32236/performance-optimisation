@@ -104,6 +104,7 @@ jest.mock(
 
 import Dashboard from '../Dashboard';
 import { apiCall, fetchWebVitalsTrends } from '../../lib/apiRequest';
+import { clearDbCountsCache } from '../../lib/dbCounts';
 
 /**
  * Wait for the mount-time database_cleanup_counts call to start AND for the
@@ -135,6 +136,7 @@ describe( 'Dashboard', () => {
 			},
 		};
 		jest.clearAllMocks();
+		clearDbCountsCache();
 		// Persistent default so the mount-time database_cleanup_counts call
 		// always resolves; action-specific responses queue via mockResolvedValueOnce.
 		apiCall.mockResolvedValue( { success: true, data: {} } );
@@ -237,7 +239,8 @@ describe( 'Dashboard', () => {
 				expect( apiCall ).toHaveBeenCalledWith(
 					'image_job_status',
 					{},
-					'GET'
+					'GET',
+					expect.any( AbortSignal )
 				);
 				expect(
 					screen.getByText( 'Image optimisation completed.' )
@@ -350,6 +353,12 @@ describe( 'Dashboard', () => {
 				'image_job_status',
 				{},
 				'GET'
+			);
+			expect( apiCall ).not.toHaveBeenCalledWith(
+				'image_job_status',
+				{},
+				'GET',
+				expect.any( AbortSignal )
 			);
 		} finally {
 			jest.useRealTimers();

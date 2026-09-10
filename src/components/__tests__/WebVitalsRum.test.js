@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 // eslint-disable-next-line import/no-extraneous-dependencies -- React is required for JSX rendering in tests
 import React from 'react';
@@ -82,5 +82,59 @@ describe( 'WebVitalsRum', () => {
 		).not.toBeInTheDocument();
 
 		errorSpy.mockRestore();
+	} );
+
+	it( 'aborts the in-flight request on unmount without updating state', async () => {
+		let resolveFetch;
+		apiCall.mockImplementation(
+			() =>
+				new Promise( ( resolve ) => {
+					resolveFetch = resolve;
+				} )
+		);
+
+		const { unmount } = render( <WebVitalsRum /> );
+
+		await waitFor( () => expect( apiCall ).toHaveBeenCalled() );
+		const signal = apiCall.mock.calls[ 0 ][ 3 ];
+		expect( signal ).toBeInstanceOf( AbortSignal );
+
+		unmount();
+		expect( signal.aborted ).toBe( true );
+
+		const errorSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
+		try {
+			await act( async () => {
+				resolveFetch( { success: true, data: {} } );
+			} );
+			expect( errorSpy ).not.toHaveBeenCalled();
+		} finally {
+			errorSpy.mockRestore();
+		}
+	} );
+
+	it( 'swallows AbortError without showing an error', async () => {
+		const abortError = new Error( 'The operation was aborted.' );
+		abortError.name = 'AbortError';
+		apiCall.mockRejectedValue( abortError );
+		const errorSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
+
+		try {
+			render( <WebVitalsRum /> );
+
+			await waitFor( () => expect( apiCall ).toHaveBeenCalled() );
+			await act( async () => {} );
+
+			expect(
+				screen.queryByText( 'Failed to load real-user data.' )
+			).not.toBeInTheDocument();
+			expect( errorSpy ).not.toHaveBeenCalled();
+		} finally {
+			errorSpy.mockRestore();
+		}
 	} );
 } );

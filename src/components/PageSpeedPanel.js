@@ -120,12 +120,17 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 	const [ strategy, setStrategy ] = useState( 'mobile' );
 	const pollRef = useRef( null );
 	const pollCountRef = useRef( 0 );
+	const pollSignalRef = useRef( null );
 	const submittingRef = useRef( false );
 
 	const stopPolling = useCallback( () => {
 		if ( pollRef.current ) {
 			clearTimeout( pollRef.current );
 			pollRef.current = null;
+		}
+		if ( pollSignalRef.current ) {
+			pollSignalRef.current.abort();
+			pollSignalRef.current = null;
 		}
 		pollCountRef.current = 0;
 	}, [] );
@@ -166,10 +171,21 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 				}
 
 				try {
+					// Polls are strictly sequential: the next tick is only
+					// scheduled after the previous await settles, so the
+					// previous controller (if any) is already settled and
+					// needs no abort here. A fresh controller per tick keeps
+					// stopPolling()/unmount able to cancel the in-flight poll.
+					pollSignalRef.current = new AbortController();
+					const signal = pollSignalRef.current.signal;
 					const response = await getPagespeedResults(
 						scanUrl,
-						scanStrategy
+						scanStrategy,
+						signal
 					);
+					if ( signal.aborted ) {
+						return;
+					}
 
 					if ( ! response.success ) {
 						stopPolling();
@@ -211,6 +227,15 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 						}
 					}
 				} catch ( err ) {
+					if ( err?.name === 'AbortError' ) {
+						return;
+					}
+					if (
+						pollSignalRef.current &&
+						pollSignalRef.current.signal.aborted
+					) {
+						return;
+					}
 					stopPolling();
 					setPending( false );
 					setScanning( false );

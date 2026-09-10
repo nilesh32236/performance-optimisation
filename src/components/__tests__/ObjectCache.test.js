@@ -226,7 +226,9 @@ describe( 'ObjectCache Component', () => {
 		await waitFor( () =>
 			expect( apiCall ).toHaveBeenCalledWith(
 				'object_cache',
-				expect.objectContaining( { action: 'status' } )
+				expect.objectContaining( { action: 'status' } ),
+				'POST',
+				expect.any( AbortSignal )
 			)
 		);
 
