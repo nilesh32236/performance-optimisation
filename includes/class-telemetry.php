@@ -1032,6 +1032,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 *
 		 * @since  1.5.0
 		 * @since NEXT Added re-read-before-write merge with bounded retry.
+		 * @since NEXT Skip the verify re-read on the first attempt when the
+		 *             merge observed no concurrent changes (2 reads instead of 3
+		 *             on the common no-contention path).
 		 * @param  string $key The transient key to register.
 		 * @return void
 		 */
@@ -1054,10 +1057,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				// process registered in the meantime so concurrent scans cannot
 				// overwrite each other's index entries. When a key exists in
 				// both maps the fresher (larger) expiry wins.
-				$fresh = self::read_transient_index();
+				$fresh         = self::read_transient_index();
+				$no_contention = true;
 				foreach ( $fresh as $stored_key => $stored_expiry ) {
 					if ( ! array_key_exists( $stored_key, $index ) || $stored_expiry > $index[ $stored_key ] ) {
 						$index[ $stored_key ] = $stored_expiry;
+						$no_contention        = false;
 					}
 				}
 				$index = self::prune_transient_index( $index, $now );
@@ -1066,6 +1071,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				$index[ $key ] = $expiry;
 
 				update_option( 'wppo_transient_index', $index, false );
+
+				// Fast path: when the merge re-read found no concurrent
+				// changes on the first attempt, skip the verify re-read and
+				// its option deserialization — no contention was observed, so
+				// a torn write is unlikely. Any later attempt (a previous
+				// verify failed) or an attempt that merged concurrent keys
+				// still verifies below.
+				if ( 0 === $attempt && $no_contention ) {
+					return;
+				}
 
 				// Verify our key survived the write — a concurrent writer that
 				// raced between the merge-read and the write could have
