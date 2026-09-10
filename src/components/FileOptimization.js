@@ -25,6 +25,12 @@ import NoticeBanner from './common/NoticeBanner';
 
 import CriticalCssPanel from './CriticalCssPanel';
 
+let cdnRowCounter = 0;
+const cdnRowId = () => {
+	cdnRowCounter += 1;
+	return `cdn-${ Date.now() }-${ cdnRowCounter }`;
+};
+
 const FileOptimization = ( {
 	options = {},
 	serverRules = null,
@@ -127,6 +133,14 @@ const FileOptimization = ( {
 		...options,
 	};
 
+	// Backfill stable row ids so CDN-mapping rows keep identity across
+	// add/remove (index keys would reuse the wrong input state/focus).
+	defaultSettings.cdnMapping = ( defaultSettings.cdnMapping || [] ).map(
+		( entry ) => ( {
+			...entry,
+			id: entry.id ?? cdnRowId(),
+		} )
+	);
 	// String-guard textarea-backed keys AFTER the spread so a non-string
 	// truthy payload (e.g. array from corrupted settings) cannot flow into
 	// a controlled textarea value via the ...options override above.
@@ -2308,7 +2322,7 @@ const FileOptimization = ( {
 								{ ( settings.cdnMapping || [] ).map(
 									( entry, idx ) => (
 										<div
-											key={ idx }
+											key={ entry.id ?? idx }
 											className="wppo-mt-12 wppo-file-opt-card"
 										>
 											<div className="wppo-field">
@@ -2594,6 +2608,7 @@ const FileOptimization = ( {
 														[] ),
 												];
 												m.push( {
+													id: cdnRowId(),
 													cdn_url: '',
 													ori: '',
 													ori_dir: '',

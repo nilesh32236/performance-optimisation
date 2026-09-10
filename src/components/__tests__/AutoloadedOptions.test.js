@@ -204,11 +204,17 @@ describe( 'AutoloadedOptions', () => {
 
 		await waitFor( () =>
 			expect(
-				screen.getByRole( 'button', { name: 'Revert' } )
+				screen.getByRole( 'button', {
+					name: 'Revert autoload for big_plugin_blob',
+				} )
 			).toBeInTheDocument()
 		);
 
-		fireEvent.click( screen.getByRole( 'button', { name: 'Revert' } ) );
+		fireEvent.click(
+			screen.getByRole( 'button', {
+				name: 'Revert autoload for big_plugin_blob',
+			} )
+		);
 
 		await waitFor( () =>
 			expect(
@@ -464,13 +470,19 @@ describe( 'AutoloadedOptions', () => {
 
 		await waitFor( () =>
 			expect(
-				screen.getByRole( 'button', { name: 'Revert' } )
+				screen.getByRole( 'button', {
+					name: 'Revert autoload for evil; DROP TABLE x',
+				} )
 			).toBeInTheDocument()
 		);
 
 		const callsBefore = apiCall.mock.calls.length;
 
-		fireEvent.click( screen.getByRole( 'button', { name: 'Revert' } ) );
+		fireEvent.click(
+			screen.getByRole( 'button', {
+				name: 'Revert autoload for evil; DROP TABLE x',
+			} )
+		);
 
 		await waitFor( () =>
 			expect(

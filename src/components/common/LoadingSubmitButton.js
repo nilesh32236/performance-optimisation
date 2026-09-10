@@ -28,11 +28,11 @@ const LoadingSubmitButton = ( {
 
 	return (
 		<button
+			{ ...rest }
 			type={ type }
 			className={ className }
 			disabled={ isDisabled }
 			aria-busy={ isLoading }
-			{ ...rest }
 		>
 			{ isLoading && (
 				<FontAwesomeIcon

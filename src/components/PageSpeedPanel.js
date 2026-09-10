@@ -369,6 +369,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 						}` }
 						onClick={ () => setStrategy( 'mobile' ) }
 						disabled={ scanning || pending }
+						aria-pressed={ strategy === 'mobile' }
 					>
 						<FontAwesomeIcon icon={ faMobileAlt } />
 						{ __( 'Mobile', 'performance-optimisation' ) }
@@ -382,6 +383,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 						}` }
 						onClick={ () => setStrategy( 'desktop' ) }
 						disabled={ scanning || pending }
+						aria-pressed={ strategy === 'desktop' }
 					>
 						<FontAwesomeIcon icon={ faDesktop } />
 						{ __( 'Desktop', 'performance-optimisation' ) }

@@ -36,7 +36,7 @@ const NoticeBanner = ( {
 			aria-live={ type === 'error' ? 'assertive' : 'polite' }
 		>
 			<div className="wppo-notice__content">
-				<FontAwesomeIcon icon={ icon } />
+				<FontAwesomeIcon icon={ icon } aria-hidden="true" />
 				<span>{ message }</span>
 			</div>
 			{ onDismiss && (
@@ -46,7 +46,7 @@ const NoticeBanner = ( {
 					onClick={ onDismiss }
 					aria-label={ __( 'Dismiss', 'performance-optimisation' ) }
 				>
-					<FontAwesomeIcon icon={ faTimes } />
+					<FontAwesomeIcon icon={ faTimes } aria-hidden="true" />
 				</button>
 			) }
 		</div>

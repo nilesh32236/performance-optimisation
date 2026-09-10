@@ -859,6 +859,8 @@ const observeViewportScripts = () => {
 		return;
 	}
 
+	let pendingViewportCount = viewportScripts.length;
+
 	const observer = new IntersectionObserver(
 		( entries ) => {
 			const toLoad = [];
@@ -870,9 +872,16 @@ const observeViewportScripts = () => {
 				}
 			} );
 			if ( toLoad.length > 0 ) {
-				loadScriptsByPriority( toLoad ).catch( ( err ) =>
-					console.error( 'Error loading viewport scripts:', err )
-				);
+				pendingViewportCount -= toLoad.length;
+				loadScriptsByPriority( toLoad )
+					.catch( ( err ) =>
+						console.error( 'Error loading viewport scripts:', err )
+					)
+					.finally( () => {
+						if ( pendingViewportCount <= 0 ) {
+							observer.disconnect();
+						}
+					} );
 			}
 		},
 		{ rootMargin: '200px' }

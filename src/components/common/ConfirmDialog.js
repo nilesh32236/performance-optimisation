@@ -75,7 +75,7 @@ const ConfirmDialog = ( {
 		if ( isOpen && dialogRef.current ) {
 			focusableRef.current = Array.from(
 				dialogRef.current.querySelectorAll(
-					'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+					'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 				)
 			);
 		} else {
@@ -154,7 +154,10 @@ const ConfirmDialog = ( {
 				onClick={ ( e ) => e.stopPropagation() }
 			>
 				<h3 id="wppo-dialog-title">
-					<FontAwesomeIcon icon={ faExclamationTriangle } />
+					<FontAwesomeIcon
+						icon={ faExclamationTriangle }
+						aria-hidden="true"
+					/>
 					{ title }
 				</h3>
 				<p>{ message }</p>

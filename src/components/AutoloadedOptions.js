@@ -538,6 +538,14 @@ const AutoloadedOptions = () => {
 										className="wppo-button wppo-button--secondary wppo-button--sm"
 										onClick={ () => revertOption( name ) }
 										isLoading={ reverting[ name ] }
+										aria-label={ sprintf(
+											// translators: %s is the option name.
+											__(
+												'Revert autoload for %s',
+												'performance-optimisation'
+											),
+											name
+										) }
 										label={ __(
 											'Revert',
 											'performance-optimisation'

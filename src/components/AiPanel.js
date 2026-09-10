@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from '@wordpress/element';
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 import { apiCall } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
@@ -297,6 +297,14 @@ const AiPanel = () => {
 										type="button"
 										className="wppo-button wppo-button--sm wppo-button--primary"
 										onClick={ () => handleApply( s ) }
+										aria-label={ sprintf(
+											// translators: %s is the suggestion description.
+											__(
+												'Apply: %s',
+												'performance-optimisation'
+											),
+											s.description
+										) }
 									>
 										{ __(
 											'Apply',
