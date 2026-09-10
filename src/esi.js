@@ -59,8 +59,9 @@ const ESI_URL_ATTRS = new Set( [
  * Maximum fragment nodes sanitized in detail before bailing out.
  *
  * Fragments are small by contract (cart/admin-bar widgets); an oversized
- * fragment indicates tampering or a server bug, so detailed per-attribute
- * scrubbing is skipped to bound CPU on the hot hydration path.
+ * fragment indicates tampering or a server bug, so the fragment is dropped
+ * (fail-closed) to bound CPU on the hot hydration path and to avoid
+ * inserting an unscrubbed fragment.
  *
  * @since NEXT
  * @type {number}
@@ -97,10 +98,10 @@ export const sanitizeEsiFragment = ( html ) => {
 	const all = frag.querySelectorAll( '*' );
 	if ( all.length > MAX_ESI_NODES ) {
 		console.warn(
-			'WPPO ESI fragment exceeds sane node count; skipping detailed sanitization',
+			'WPPO ESI fragment exceeds sane node count; dropping fragment',
 			all.length
 		);
-		return frag;
+		return document.createDocumentFragment();
 	}
 
 	all.forEach( ( node ) => {
@@ -289,37 +290,46 @@ export const hydrateESIPlaceholders = () => {
 			}
 			groups.get( key ).targets.push( el );
 		} );
-		groups.forEach( async ( { block, nonce, targets } ) => {
-			try {
-				const res = await fetch( buildEsiUrl(), {
-					method: 'POST',
-					credentials: 'same-origin',
-					headers: {
-						'Content-Type': 'application/x-www-form-urlencoded',
-						'X-Requested-With': 'XMLHttpRequest',
-					},
-					body: buildEsiBody( block, nonce ),
-				} );
-				if ( ! res.ok ) {
-					return;
+		Promise.all(
+			[ ...groups.values() ].map( async ( { block, nonce, targets } ) => {
+				try {
+					const res = await fetch( buildEsiUrl(), {
+						method: 'POST',
+						credentials: 'same-origin',
+						headers: {
+							'Content-Type': 'application/x-www-form-urlencoded',
+							'X-Requested-With': 'XMLHttpRequest',
+						},
+						body: buildEsiBody( block, nonce ),
+					} );
+					if ( ! res.ok ) {
+						return;
+					}
+					const data = await res.json();
+					const html =
+						data && data.data && data.data.html
+							? data.data.html
+							: data.html || '';
+					if ( ! html ) {
+						return;
+					}
+					const frag = sanitizeEsiFragment( html );
+					targets.forEach( ( el, index ) => {
+						// Clone before consuming: replaceChildren() moves
+						// children out of frag, so every target but the last
+						// gets a clone and the last consumes the original.
+						const piece =
+							index === targets.length - 1
+								? frag
+								: frag.cloneNode( true );
+						applyFragmentToElement( el, piece );
+					} );
+				} catch ( err ) {
+					console.warn( 'WPPO ESI hydrate failed', err );
 				}
-				const data = await res.json();
-				const html =
-					data && data.data && data.data.html
-						? data.data.html
-						: data.html || '';
-				if ( ! html ) {
-					return;
-				}
-				const frag = sanitizeEsiFragment( html );
-				targets.forEach( ( el, index ) => {
-					// First element consumes the original; extras get clones.
-					const piece = 0 === index ? frag : frag.cloneNode( true );
-					applyFragmentToElement( el, piece );
-				} );
-			} catch ( err ) {
-				console.warn( 'WPPO ESI hydrate failed', err );
-			}
+			} )
+		).catch( ( err ) => {
+			console.warn( 'WPPO ESI hydrate failed', err );
 		} );
 	};
 	if ( typeof window !== 'undefined' && 'requestAnimationFrame' in window ) {

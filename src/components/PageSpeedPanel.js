@@ -171,9 +171,11 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 				}
 
 				try {
-					if ( pollSignalRef.current ) {
-						pollSignalRef.current.abort();
-					}
+					// Polls are strictly sequential: the next tick is only
+					// scheduled after the previous await settles, so the
+					// previous controller (if any) is already settled and
+					// needs no abort here. A fresh controller per tick keeps
+					// stopPolling()/unmount able to cancel the in-flight poll.
 					pollSignalRef.current = new AbortController();
 					const signal = pollSignalRef.current.signal;
 					const response = await getPagespeedResults(

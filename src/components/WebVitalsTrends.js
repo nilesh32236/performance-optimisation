@@ -142,6 +142,9 @@ const WebVitalsTrends = ( { url = '' } ) => {
 			if ( ! url ) {
 				// Without a known URL the request would return every history and
 				// TrendSeries would mislabel them; show an explicit empty state.
+				if ( signal?.aborted ) {
+					return;
+				}
 				setTrends( null );
 				setError( null );
 				setLoading( false );

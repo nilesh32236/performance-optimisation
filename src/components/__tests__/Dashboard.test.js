@@ -354,6 +354,12 @@ describe( 'Dashboard', () => {
 				{},
 				'GET'
 			);
+			expect( apiCall ).not.toHaveBeenCalledWith(
+				'image_job_status',
+				{},
+				'GET',
+				expect.any( AbortSignal )
+			);
 		} finally {
 			jest.useRealTimers();
 		}

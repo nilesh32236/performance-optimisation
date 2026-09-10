@@ -1063,6 +1063,47 @@ const restoreSizes = ( el ) => {
 };
 
 /**
+ * Release counter slots for observed elements removed from the DOM without
+ * ever intersecting.
+ *
+ * Elements removed before entering the viewport never fire the
+ * IntersectionObserver callback, so pendingLazyCount would otherwise leak
+ * and gate checkCleanup (and observer teardown) forever.
+ *
+ * @since NEXT
+ * @param {NodeList} removedNodes Nodes removed from the DOM.
+ */
+const releaseRemovedLazyNodes = ( removedNodes ) => {
+	if ( ! removedNodes || 0 === removedNodes.length ) {
+		return;
+	}
+	const selector = getLazySelector();
+	removedNodes.forEach( ( node ) => {
+		if ( ! node || 1 !== node.nodeType ) {
+			return;
+		}
+		const candidates = [];
+		if ( 'function' === typeof node.matches && node.matches( selector ) ) {
+			candidates.push( node );
+		}
+		if ( 'function' === typeof node.querySelectorAll ) {
+			node.querySelectorAll( selector ).forEach( ( child ) => {
+				candidates.push( child );
+			} );
+		}
+		candidates.forEach( ( el ) => {
+			if ( observedElements.has( el ) ) {
+				observedElements.delete( el );
+				if ( globalObserver ) {
+					globalObserver.unobserve( el );
+				}
+				pendingLazyCount = Math.max( 0, pendingLazyCount - 1 );
+			}
+		} );
+	} );
+};
+
+/**
  * Check if all lazy-loadable elements have been processed, and clean up observers if so.
  *
  * Gated on pendingLazyCount so per-intersection calls are O(1); the
@@ -1371,6 +1412,12 @@ const loadImages = () => {
 						getLazySelector()
 					);
 					if ( elements.length === 0 ) {
+						// Fallback reconciliation: removed-without-intersecting
+						// nodes are released via the MutationObserver above, but
+						// if any slot leaked (e.g. observer installed late),
+						// a zero-match DOM proves nothing is pending.
+						pendingLazyCount = 0;
+						checkCleanup();
 						clearInterval( window.wppoSafetyScanId );
 						window.wppoSafetyScanId = null;
 						return;
@@ -1403,6 +1450,7 @@ const loadImages = () => {
 			mutationObserver = new MutationObserver( ( mutations ) => {
 				const selector = getLazySelector();
 				mutations.forEach( ( mutation ) => {
+					releaseRemovedLazyNodes( mutation.removedNodes );
 					mutation.addedNodes.forEach( ( node ) => {
 						if ( 1 !== node.nodeType ) {
 							return;
