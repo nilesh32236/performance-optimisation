@@ -436,4 +436,93 @@ class WooSafeModeTest extends \PHPUnit\Framework\TestCase {
 
 		unset( $GLOBALS['wppo_test_woo_urls'], $GLOBALS['wppo_test_woo_kind'] );
 	}
+
+	/**
+	 * Stub the home-URL helpers consumed by Util::woo_cache_self_test().
+	 */
+	private function stub_self_test_urls(): void {
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'untrailingslashit' )->alias(
+			static function ( $url ) {
+				return rtrim( (string) $url, '/' );
+			}
+		);
+	}
+
+	/**
+	 * Self-test passes for canonical dynamic paths when safe mode is on (issue #1020).
+	 */
+	public function test_woo_cache_self_test_passes_for_dynamic_paths(): void {
+		$this->stub_front_end_guests();
+		$this->stub_self_test_urls();
+
+		$result = \PerformanceOptimise\Inc\Util::woo_cache_self_test();
+
+		$this->assertTrue( $result['runnable'] );
+		$this->assertTrue( $result['woo_active'] );
+		$this->assertTrue( $result['safe_mode'] );
+		$this->assertTrue( $result['donotcachepage_honored'] );
+		$this->assertSame( array( 'cart', 'checkout', 'my-account' ), $result['excluded_paths'] );
+		$this->assertTrue( $result['all_pass'] );
+		$this->assertCount( 4, $result['checks'] );
+
+		foreach ( $result['checks'] as $check ) {
+			$this->assertTrue( $check['is_dynamic'] );
+			$this->assertFalse( $check['cacheable'] );
+			$this->assertTrue( $check['donotcachepage_honored'] );
+			$this->assertTrue( $check['pass'] );
+			$this->assertArrayNotHasKey( 'error', $check );
+		}
+	}
+
+	/**
+	 * Self-test fails closed to uncached visibility when safe mode is off (issue #1020).
+	 *
+	 * Page probes become cacheable (pass=false) while the Store API probe
+	 * stays uncacheable even with the toggle off.
+	 */
+	public function test_woo_cache_self_test_safe_mode_off_marks_pages_cacheable(): void {
+		$this->stub_front_end_guests();
+		$this->stub_self_test_urls();
+		Functions\when( 'get_option' )->justReturn( array( 'cache_settings' => array( 'wooSafeMode' => false ) ) );
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+
+		$result = \PerformanceOptimise\Inc\Util::woo_cache_self_test();
+
+		$this->assertTrue( $result['runnable'] );
+		$this->assertFalse( $result['safe_mode'] );
+		$this->assertFalse( $result['all_pass'] );
+
+		$by_path = array();
+		foreach ( $result['checks'] as $check ) {
+			$by_path[ $check['path'] ] = $check;
+		}
+
+		$this->assertTrue( $by_path['/cart/']['cacheable'] );
+		$this->assertFalse( $by_path['/cart/']['pass'] );
+		$this->assertFalse( $by_path['/wp-json/wc/store/v1/cart/']['cacheable'] );
+		$this->assertTrue( $by_path['/wp-json/wc/store/v1/cart/']['pass'] );
+	}
+
+	/**
+	 * Self-test includes resolved custom Woo slugs as probes (issue #1020).
+	 */
+	public function test_woo_cache_self_test_includes_custom_slug(): void {
+		$this->stub_front_end_guests();
+		$this->stub_self_test_urls();
+		$this->stub_custom_woo_slug();
+
+		$result = \PerformanceOptimise\Inc\Util::woo_cache_self_test();
+
+		$this->assertContains( 'shop/basket', $result['excluded_paths'] );
+
+		$by_path = array();
+		foreach ( $result['checks'] as $check ) {
+			$by_path[ $check['path'] ] = $check;
+		}
+
+		$this->assertArrayHasKey( '/shop/basket/', $by_path );
+		$this->assertTrue( $by_path['/shop/basket/']['pass'] );
+		$this->assertTrue( $result['all_pass'] );
+	}
 }

@@ -568,6 +568,148 @@ describe( 'Dashboard', () => {
 		).toBeInTheDocument();
 	} );
 
+	it( 'saves the Woo safe-mode toggle with page cache settings', async () => {
+		global.wppoSettings.settings.cache_settings = {
+			enableCache: true,
+			wooSafeMode: false,
+		};
+		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+		await flushDashboardMount();
+
+		// Toggle is visible and reflects the stored state.
+		const toggle = screen.getByLabelText( 'WooCommerce safe mode' );
+		expect( toggle ).not.toBeChecked();
+		fireEvent.click( toggle );
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Save Page Cache Settings/i } )
+		);
+
+		await waitFor( () =>
+			expect( apiCall ).toHaveBeenCalledWith( 'update_settings', {
+				tab: 'cache_settings',
+				settings: expect.objectContaining( { wooSafeMode: true } ),
+			} )
+		);
+	} );
+
+	it( 'runs the Woo cache self-test and renders per-URL pass/fail', async () => {
+		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+		await flushDashboardMount();
+
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				woo_active: true,
+				safe_mode: true,
+				runnable: true,
+				excluded_paths: [ 'cart', 'checkout', 'my-account' ],
+				donotcachepage_honored: true,
+				all_pass: true,
+				checks: [
+					{
+						url: 'http://example.com/cart/',
+						path: '/cart/',
+						is_dynamic: true,
+						cacheable: false,
+						donotcachepage_honored: true,
+						pass: true,
+					},
+					{
+						url: 'http://example.com/checkout/',
+						path: '/checkout/',
+						is_dynamic: true,
+						cacheable: false,
+						donotcachepage_honored: true,
+						pass: true,
+					},
+				],
+			},
+		} );
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Run Woo Cache Self-Test/i } )
+		);
+
+		await waitFor( () =>
+			expect( apiCall ).toHaveBeenCalledWith(
+				'woo_cache_self_test',
+				{},
+				'GET'
+			)
+		);
+		expect( screen.getByText( '/cart/' ) ).toBeInTheDocument();
+		expect( screen.getByText( '/checkout/' ) ).toBeInTheDocument();
+		expect( screen.getAllByText( 'Bypassed (pass)' ) ).toHaveLength( 2 );
+		expect(
+			screen.getByText(
+				'WooCommerce self-test passed: cart, checkout and account pages bypass the cache.'
+			)
+		).toBeInTheDocument();
+	} );
+
+	it( 'shows a read-only notice when WooCommerce is inactive', async () => {
+		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+		await flushDashboardMount();
+
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				woo_active: false,
+				safe_mode: true,
+				runnable: true,
+				excluded_paths: [ 'cart', 'checkout', 'my-account' ],
+				donotcachepage_honored: true,
+				all_pass: true,
+				checks: [],
+			},
+		} );
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Run Woo Cache Self-Test/i } )
+		);
+
+		await waitFor( () =>
+			expect(
+				screen.getByText(
+					'WooCommerce is not active — showing default exclusion paths read-only. Dynamic pages fail open to uncached.'
+				)
+			).toBeInTheDocument()
+		);
+	} );
+
+	it( 'notifies on self-test failure', async () => {
+		const consoleSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
+		try {
+			render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+			await flushDashboardMount();
+
+			apiCall.mockRejectedValueOnce( new Error( 'network error' ) );
+
+			fireEvent.click(
+				screen.getByRole( 'button', {
+					name: /Run Woo Cache Self-Test/i,
+				} )
+			);
+
+			await waitFor( () =>
+				expect(
+					screen.getByText(
+						'Failed to run the WooCommerce self-test.'
+					)
+				).toBeInTheDocument()
+			);
+		} finally {
+			consoleSpy.mockRestore();
+		}
+	} );
+
 	it( 'aborts the in-flight db-counts request on unmount without notifying', async () => {
 		const consoleSpy = jest
 			.spyOn( console, 'error' )

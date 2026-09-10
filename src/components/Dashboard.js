@@ -154,6 +154,11 @@ const Dashboard = ( {
 	const [ ttlProduct, setTtlProduct ] = useState(
 		cacheSettings.ttlOverrides?.product ?? ''
 	);
+	const [ wooSafeMode, setWooSafeMode ] = useState(
+		cacheSettings.wooSafeMode ?? true
+	);
+	const [ wooSelfTest, setWooSelfTest ] = useState( null );
+	const [ wooSelfTestLoading, setWooSelfTestLoading ] = useState( false );
 	const [ loggedInCacheEnabled, setLoggedInCacheEnabled ] = useState(
 		!! cacheSettings.enableLoggedInCache
 	);
@@ -191,6 +196,7 @@ const Dashboard = ( {
 		setTtlPost( ov?.post ?? '' );
 		setTtlPage( ov?.page ?? '' );
 		setTtlProduct( ov?.product ?? '' );
+		setWooSafeMode( cacheSettings.wooSafeMode ?? true );
 		setLoggedInCacheEnabled( !! cacheSettings.enableLoggedInCache );
 		setLoggedInCacheRoles(
 			Array.isArray( cacheSettings.loggedInCacheRoles )
@@ -210,6 +216,7 @@ const Dashboard = ( {
 		cacheSettings.ttlOverrides,
 		cacheSettings.enableLoggedInCache,
 		cacheSettings.loggedInCacheRoles,
+		cacheSettings.wooSafeMode,
 		cacheSettings.cdnPurgeService,
 		cacheSettings.cloudflareZoneId,
 		cacheSettings.varnishPurgeUrls,
@@ -588,6 +595,7 @@ const Dashboard = ( {
 				enableCache: pageCacheEnabled,
 				cacheLife,
 				ttlOverrides: overrides,
+				wooSafeMode,
 			},
 		} )
 			.then( ( response ) => {
@@ -619,9 +627,53 @@ const Dashboard = ( {
 		ttlPost,
 		ttlPage,
 		ttlProduct,
+		wooSafeMode,
 		cacheSettings,
 		notify,
 	] );
+
+	const runWooCacheSelfTest = useCallback( () => {
+		setWooSelfTestLoading( true );
+		apiCall( 'woo_cache_self_test', {}, 'GET' )
+			.then( ( response ) => {
+				if ( response.success && response.data ) {
+					setWooSelfTest( response.data );
+					notify( {
+						type: response.data.all_pass ? 'success' : 'warning',
+						message: response.data.all_pass
+							? __(
+									'WooCommerce self-test passed: cart, checkout and account pages bypass the cache.',
+									'performance-optimisation'
+							  )
+							: __(
+									'WooCommerce self-test found a cacheable dynamic route. Check safe mode and the results below.',
+									'performance-optimisation'
+							  ),
+						durationMs: 5000,
+					} );
+				} else {
+					notify( {
+						type: 'error',
+						message: __(
+							'Failed to run the WooCommerce self-test.',
+							'performance-optimisation'
+						),
+						durationMs: 5000,
+					} );
+				}
+			} )
+			.catch( () =>
+				notify( {
+					type: 'error',
+					message: __(
+						'Failed to run the WooCommerce self-test.',
+						'performance-optimisation'
+					),
+					durationMs: 5000,
+				} )
+			)
+			.finally( () => setWooSelfTestLoading( false ) );
+	}, [ notify ] );
 
 	const saveLoggedInCacheSettings = useCallback( () => {
 		setSavingLoggedInCache( true );
@@ -1275,6 +1327,99 @@ const Dashboard = ( {
 						) }
 					</p>
 				</div>
+				<SwitchField
+					label={ __(
+						'WooCommerce safe mode',
+						'performance-optimisation'
+					) }
+					description={ __(
+						'Always bypass the static cache for cart, checkout, account pages and Store API routes. Custom Woo slugs stay excluded even without WooCommerce conditional tags.',
+						'performance-optimisation'
+					) }
+					name="wooSafeMode"
+					checked={ wooSafeMode }
+					onChange={ ( e ) => setWooSafeMode( e.target.checked ) }
+				/>
+				<div className="wppo-field">
+					<button
+						type="button"
+						className="wppo-button wppo-button--secondary"
+						onClick={ runWooCacheSelfTest }
+						disabled={ wooSelfTestLoading }
+					>
+						{ wooSelfTestLoading
+							? __( 'Running…', 'performance-optimisation' )
+							: __(
+									'Run Woo Cache Self-Test',
+									'performance-optimisation'
+							  ) }
+					</button>
+					<p className="wppo-text-muted wppo-text-small">
+						{ __(
+							'Proves in one click that cart, checkout and account pages bypass the static cache with DONOTCACHEPAGE honored.',
+							'performance-optimisation'
+						) }
+					</p>
+				</div>
+				{ wooSelfTest && (
+					<div
+						className="wppo-field"
+						role="status"
+						aria-live="polite"
+					>
+						{ ! wooSelfTest.runnable && (
+							<p className="wppo-text-muted wppo-text-small">
+								{ __(
+									'The self-test could not run. Default exclusion paths are shown read-only; dynamic pages fail open to uncached.',
+									'performance-optimisation'
+								) }
+							</p>
+						) }
+						{ wooSelfTest.runnable && ! wooSelfTest.woo_active && (
+							<p className="wppo-text-muted wppo-text-small">
+								{ __(
+									'WooCommerce is not active — showing default exclusion paths read-only. Dynamic pages fail open to uncached.',
+									'performance-optimisation'
+								) }
+							</p>
+						) }
+						<p className="wppo-text-muted wppo-text-small">
+							{ __( 'Safe mode:', 'performance-optimisation' ) }{ ' ' }
+							{ wooSelfTest.safe_mode
+								? __( 'On', 'performance-optimisation' )
+								: __( 'Off', 'performance-optimisation' ) }
+							{ ' • ' }
+							{ __(
+								'Excluded paths:',
+								'performance-optimisation'
+							) }{ ' ' }
+							{ Array.isArray( wooSelfTest.excluded_paths )
+								? wooSelfTest.excluded_paths.join( ', ' )
+								: '' }
+						</p>
+						{ Array.isArray( wooSelfTest.checks ) && (
+							<ul className="wppo-woo-self-test">
+								{ wooSelfTest.checks.map( ( check ) => (
+									<li key={ check.path }>
+										<span>{ check.path }</span>
+										{ ' — ' }
+										<span>
+											{ check.pass
+												? __(
+														'Bypassed (pass)',
+														'performance-optimisation'
+												  )
+												: __(
+														'Cacheable (fail)',
+														'performance-optimisation'
+												  ) }
+										</span>
+									</li>
+								) ) }
+							</ul>
+						) }
+					</div>
+				) }
 				<div className="wppo-feature-card__footer">
 					<LoadingSubmitButton
 						className="wppo-button wppo-button--primary"

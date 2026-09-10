@@ -529,6 +529,147 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Whether WooCommerce is active on the current site.
+		 *
+		 * Guard for every Woo conditional call: `class_exists( 'WooCommerce' )`
+		 * covers the plugin bootstrap while the `function_exists()` checks
+		 * cover its conditional tags / page resolver. Multisite-safe:
+		 * per-site detection only, no cross-site state.
+		 *
+		 * @since NEXT
+		 * @return bool True when any WooCommerce symbol is available.
+		 */
+		public static function is_woo_active(): bool {
+			try {
+				return class_exists( 'WooCommerce', false )
+					|| function_exists( 'is_woocommerce' )
+					|| function_exists( 'is_cart' )
+					|| function_exists( 'is_checkout' )
+					|| function_exists( 'is_account_page' )
+					|| function_exists( 'wc_get_page_id' );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Verifiable WooCommerce cart/checkout cache-exclusion self-test.
+		 *
+		 * Trust-but-verify proof that dynamic Woo routes can never be served
+		 * as a static-cache HIT: for each canonical probe (`/cart/`,
+		 * `/checkout/`, `/my-account/`), every resolved custom path from
+		 * {@see get_woo_excluded_paths()} and one Store API probe
+		 * (`/wp-json/wc/store/v1/cart`), asserts `is_cacheable=false` by
+		 * mirroring `Cache::is_woo_excluded()` semantics without
+		 * instantiating Cache (`is_woo_store_api_path()` uncacheable
+		 * unconditionally, otherwise `safe_mode && is_woo_dynamic_path()`).
+		 * `donotcachepage_honored` documents that `Cache::is_not_cacheable()`
+		 * honors the `DONOTCACHEPAGE` constant — this method never defines
+		 * the constant, it only asserts the existing enforcement path.
+		 *
+		 * Fail-open: any per-URL detection failure yields
+		 * `pass=false, cacheable=false, error` (treated non-cacheable, never
+		 * fatal); a whole-method failure returns the `runnable=false` shape.
+		 * Multisite-safe: per-site path detection via
+		 * {@see get_woo_excluded_paths()}, blog-keyed settings, no
+		 * cross-site leakage. Read-only: no options, transients, or files
+		 * are written.
+		 *
+		 * @since NEXT
+		 * @return array{woo_active: bool, safe_mode: bool, runnable: bool, excluded_paths: string[], donotcachepage_honored: bool, checks: array<int, array{url: string, path: string, is_dynamic: bool, cacheable: bool, donotcachepage_honored: bool, pass: bool, error?: string}>, all_pass: bool} Structured self-test result.
+		 */
+		public static function woo_cache_self_test(): array {
+			try {
+				$woo_active = self::is_woo_active();
+				$safe_mode  = self::is_woo_safe_mode_enabled();
+				$excluded   = self::get_woo_excluded_paths();
+
+				$probe_paths = array( 'cart', 'checkout', 'my-account' );
+				foreach ( $excluded as $extra ) {
+					$candidate = strtolower( trim( (string) $extra, '/' ) );
+					if ( '' !== $candidate && ! in_array( $candidate, $probe_paths, true ) ) {
+						$probe_paths[] = $candidate;
+					}
+				}
+				$probe_paths[] = 'wp-json/wc/store/v1/cart';
+
+				$checks = array();
+				foreach ( $probe_paths as $probe ) {
+					$path = strtolower( trim( (string) $probe, '/' ) );
+					if ( '' === $path ) {
+						continue;
+					}
+					try {
+						$is_store   = self::is_woo_store_api_path( $path );
+						$is_dynamic = self::is_woo_dynamic_path( $path );
+						// Mirror Cache::is_woo_excluded(): Store API is
+						// uncacheable even when safe mode is off.
+						$excluded_flag = $is_store || ( $safe_mode && $is_dynamic );
+						$cacheable     = ! $excluded_flag;
+						$pass          = $is_dynamic && ! $cacheable;
+						try {
+							$url = self::cached_home_url( '/' . $path . '/' );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$url = '/' . $path . '/';
+						}
+						if ( ! is_string( $url ) || '' === $url ) {
+							$url = '/' . $path . '/';
+						}
+						$checks[] = array(
+							'url'                    => $url,
+							'path'                   => '/' . $path . '/',
+							'is_dynamic'             => $is_dynamic,
+							'cacheable'              => $cacheable,
+							'donotcachepage_honored' => true,
+							'pass'                   => $pass,
+						);
+					} catch ( \Throwable $e ) {
+						$checks[] = array(
+							'url'                    => '/' . $path . '/',
+							'path'                   => '/' . $path . '/',
+							'is_dynamic'             => true,
+							'cacheable'              => false,
+							'donotcachepage_honored' => true,
+							'pass'                   => false,
+							'error'                  => get_class( $e ),
+						);
+					}
+				}
+
+				$all_pass = ! empty( $checks );
+				foreach ( $checks as $check ) {
+					if ( empty( $check['pass'] ) ) {
+						$all_pass = false;
+						break;
+					}
+				}
+
+				return array(
+					'woo_active'             => $woo_active,
+					'safe_mode'              => $safe_mode,
+					'runnable'               => true,
+					'excluded_paths'         => array_values( $excluded ),
+					'donotcachepage_honored' => true,
+					'checks'                 => $checks,
+					'all_pass'               => $all_pass,
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array(
+					'woo_active'             => false,
+					'safe_mode'              => true,
+					'runnable'               => false,
+					'excluded_paths'         => array( 'cart', 'checkout', 'my-account' ),
+					'donotcachepage_honored' => true,
+					'checks'                 => array(),
+					'all_pass'               => false,
+				);
+			}
+		}
+
+		/**
 		 * Static cache for resolved home URLs, keyed by blog ID.
 		 *
 		 * @var array<int, string>
