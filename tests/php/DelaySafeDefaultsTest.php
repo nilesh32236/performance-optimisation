@@ -445,6 +445,10 @@ class DelaySafeDefaultsTest extends \PHPUnit\Framework\TestCase {
 
 	/**
 	 * With the builder preset off, builder handles delay again.
+	 *
+	 * Uses a builder-runtimes-only handle: `elementor-frontend` also lives
+	 * in the always-on base safelist (#927), so it stays excluded even with
+	 * the preset off; `bricks-scripts` is gated solely by the preset.
 	 */
 	public function test_external_delay_preset_off_delays_builder_handles(): void {
 		$this->stub_main_construction(
@@ -456,6 +460,11 @@ class DelaySafeDefaultsTest extends \PHPUnit\Framework\TestCase {
 		$this->reset_delay_guard_superglobals();
 		Functions\when( 'wp_unslash' )->returnArg();
 		Functions\when( 'sanitize_text_field' )->returnArg();
+		// Pin get_the_ID: the kill-switch tests declare it process-wide via
+		// Brain Monkey, and a stale declaration without an expectation throws
+		// MissingFunctionExpectations, which is_delay_js_safe_context()
+		// (correctly) fails open on — skipping delay for the wrong reason.
+		Functions\when( 'get_the_ID' )->justReturn( 0 );
 
 		$main = new Main();
 
@@ -463,7 +472,7 @@ class DelaySafeDefaultsTest extends \PHPUnit\Framework\TestCase {
 		$tag = '<script src="https://example.com/app.js" type="text/javascript"></script>';
 		// phpcs:enable WordPress.WP.EnqueuedResources.NonEnqueuedScript
 
-		$this->assertStringContainsString( 'wppo-src', $main->add_defer_attribute( $tag, 'elementor-frontend' ) );
+		$this->assertStringContainsString( 'wppo-src', $main->add_defer_attribute( $tag, 'bricks-scripts' ) );
 
 		$this->reset_delay_guard_superglobals();
 	}

@@ -1244,11 +1244,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	 * @since NEXT
 	 */
 	public function test_css_hero_emits_exactly_one_preload_link(): void {
-	 * Test that a stored LCP URL gets a companion preload link, fetchpriority high, and is never lazy.
-	 *
-	 * @since NEXT
-	 */
-	public function test_hero_lcp_emits_preload_and_never_lazy(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
 		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
 		Functions\when( 'is_admin' )->justReturn( false );
@@ -1276,7 +1271,39 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Test that an img hero emits zero CSS preload links.
+	 * Test that a stored LCP URL gets a companion preload link, fetchpriority high, and is never lazy.
+	 *
+	 * @since NEXT
+	 */
+	public function test_hero_lcp_emits_preload_and_never_lazy(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+		Functions\when( 'esc_attr' )->returnArg();
+		Functions\when( 'esc_url' )->returnArg();
+		Functions\when( 'wp_kses' )->returnArg();
+		$this->stub_lcp_resolution( 'https://example.com/wp-content/uploads/hero.jpg' );
+
+		$image_opt = $this->make_lcp_enabled_instance();
+
+		$html   = '<html><head></head><body><img src="https://example.com/wp-content/uploads/hero.jpg" loading="lazy" /></body></html>';
+		$result = $image_opt->prioritize_lcp_in_buffer( $html, $html );
+
+		$this->assertStringContainsString( 'fetchpriority="high"', $result );
+		$this->assertStringContainsString( 'data-wppo-hero', $result );
+		$this->assertStringContainsString( 'rel="preload"', $result );
+		$this->assertStringNotContainsString( 'loading="lazy"', $result );
+	}
+
+	/**
+	 * Test that the CSS-hero pass emits nothing when a matching img hero
+	 * exists (the img preload path covers it).
+	 *
+	 * The companion hero preload is disabled via lcpHeroPreload so the
+	 * assertion isolates the CSS pass: the fixture carries both a CSS
+	 * background hero and a matching img, so without the img-match skip
+	 * the CSS pass would emit exactly one preload link.
 	 *
 	 * @since NEXT
 	 */
@@ -1297,9 +1324,10 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$options = $this->default_options;
 		$options['image_optimisation']['prioritizeLCPImages'] = true;
 		$options['image_optimisation']['cssHeroPreload']      = true;
+		$options['image_optimisation']['lcpHeroPreload']      = false;
 		$image_opt = new Image_Optimisation( $options );
 
-		$html   = '<html><head><title>T</title></head><body><img src="https://example.com/wp-content/uploads/hero.jpg" /></body></html>';
+		$html   = '<html><head><title>T</title></head><body><div class="hero" style="background-image: url(\'https://example.com/wp-content/uploads/hero.jpg\');">Hi</div><img src="https://example.com/wp-content/uploads/hero.jpg" /></body></html>';
 		$result = $image_opt->prioritize_lcp_in_buffer( $html, $html );
 
 		$this->assertSame( 0, substr_count( $result, 'rel="preload"' ) );
@@ -1328,19 +1356,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$result = $image_opt->prioritize_lcp_in_buffer( $html, $html );
 
 		$this->assertStringContainsString( 'fetchpriority="high"', $result );
-		$this->assertStringNotContainsString( 'loading="lazy"', $result );
-	}
-		Functions\when( 'wp_kses' )->returnArg();
-		$this->stub_lcp_resolution( 'https://example.com/wp-content/uploads/hero.jpg' );
-
-		$image_opt = $this->make_lcp_enabled_instance();
-
-		$html   = '<html><head></head><body><img src="https://example.com/wp-content/uploads/hero.jpg" loading="lazy" /></body></html>';
-		$result = $image_opt->prioritize_lcp_in_buffer( $html, $html );
-
-		$this->assertStringContainsString( 'fetchpriority="high"', $result );
-		$this->assertStringContainsString( 'data-wppo-hero', $result );
-		$this->assertStringContainsString( 'rel="preload"', $result );
 		$this->assertStringNotContainsString( 'loading="lazy"', $result );
 	}
 
