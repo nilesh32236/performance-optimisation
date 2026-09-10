@@ -262,7 +262,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'$idn_host       = function_exists( \'idn_to_ascii\' ) ? @idn_to_ascii( $request_base, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46 ) : false;' . PHP_EOL .
 			'$request_base   = ( is_string( $idn_host ) && \'\' !== $idn_host ) ? $idn_host : $request_base;' . PHP_EOL .
 			'$site_domain   = strtolower( preg_replace( \'/[^a-z0-9.:-]+/i\', \'\', $raw_domain ) );' . PHP_EOL .
-			'$request_host  = strtolower( explode( \':\', strtolower( preg_replace( \'/[^a-z0-9.:-]+/i\', \'\', $request_base ) ), 2 )[0] );' . PHP_EOL .
+			'$request_host  = strtolower( preg_replace( \'/[^a-z0-9.:-]+/i\', \'\', $request_base ) );' . PHP_EOL .
 			'$request_uri   = isset( $_SERVER[\'REQUEST_URI\'] ) ? (string) parse_url( $_SERVER[\'REQUEST_URI\'], PHP_URL_PATH ) : \'\';' . PHP_EOL .
 			'$request_uri   = rawurldecode( $request_uri );' . PHP_EOL .
 			'$request_uri   = function_exists( \'wp_normalize_path\' ) ? wp_normalize_path( $request_uri ) : str_replace( \'\\\\\', \'/\', $request_uri );' . PHP_EOL .
