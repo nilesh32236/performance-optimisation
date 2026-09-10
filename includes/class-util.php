@@ -1257,6 +1257,56 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Mint a per-request placeholder token namespace.
+		 *
+		 * Shared by the noscript placeholder pipeline
+		 * (Image_Optimisation::get_noscript_namespace()) and the preserved-script
+		 * pipeline (Minify\HTML::get_preserve_namespace()) so the entropy and
+		 * fallback chain cannot drift between the two callers.
+		 *
+		 * Uses cryptographically random hex via `random_bytes()` when available,
+		 * falling back to `wp_generate_password()` (sanitized to alphanumerics)
+		 * and finally to a `uniqid()`/`wp_rand()` token. Never fatals: any
+		 * failure degrades to a static fallback namespace (fail-open).
+		 *
+		 * @since NEXT
+		 * @return string Non-empty namespace string.
+		 */
+		public static function mint_placeholder_namespace(): string {
+			try {
+				if ( function_exists( 'random_bytes' ) ) {
+					$bytes = random_bytes( 8 );
+					if ( is_string( $bytes ) && '' !== $bytes ) {
+						return 'wppo' . bin2hex( $bytes );
+					}
+				}
+
+				if ( function_exists( 'wp_generate_password' ) ) {
+					$generated = wp_generate_password( 16, false );
+					if ( is_string( $generated ) && '' !== $generated ) {
+						$sanitized = preg_replace( '/[^A-Za-z0-9]/', '', $generated );
+						if ( is_string( $sanitized ) && '' !== $sanitized ) {
+							return 'wppo' . $sanitized;
+						}
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
+			// Legacy fallback (fail-open, never fatal): wp_rand() when available,
+			// otherwise uniqid() + microtime() entropy. No mt_rand() (discouraged).
+			if ( function_exists( 'wp_rand' ) ) {
+				$suffix = (string) wp_rand( 1000, 9999 );
+			} else {
+				$suffix = str_replace( '.', '', (string) microtime( true ) );
+			}
+			$namespace = 'wppo' . str_replace( '.', '', uniqid( '', true ) ) . $suffix;
+			$namespace = (string) preg_replace( '/[^A-Za-z0-9]/', '', $namespace );
+			return '' === $namespace ? 'wppofallback' : $namespace;
+		}
+
+		/**
 		 * Base (shared) minify cache directory.
 		 *
 		 * Minified JS/CSS files are namespaced per site (see {@see min_cache_dir()}),
@@ -2015,13 +2065,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				// which must fall back to the 2560 default rather than
 				// silently becoming 0/disabled at read time. Negatives clamp
 				// to 0 (disabled).
-				if ( 'maxLongestEdgePx' === $safe_key && ! is_array( $value ) ) {
-					if ( '' === $value || null === $value || ! is_numeric( $value ) ) {
+				if ( 'maxLongestEdgePx' === $safe_key ) {
+					if ( is_array( $value ) || '' === $value || null === $value || ! is_numeric( $value ) ) {
 						$sanitized[ $safe_key ] = 2560;
 					} else {
 						$edge                   = (int) $value;
 						$sanitized[ $safe_key ] = $edge < 0 ? 0 : $edge;
 					}
+					continue;
+				}
+
+				// Newline/regex URL lists must use the textarea sanitizer, not
+				// the generic `url` branch (esc_url_raw would collapse the
+				// multiple lines). Pinned explicitly so a future reorder of the
+				// generic branches cannot corrupt these lists.
+				if ( in_array( $safe_key, array( 'delayJSExcludeUrls', 'usedCSSExcludeUrls' ), true ) && ! is_array( $value ) ) {
+					$sanitized[ $safe_key ] = sanitize_textarea_field( (string) $value );
 					continue;
 				}
 

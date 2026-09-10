@@ -169,31 +169,41 @@ const DatabaseCleanup = ( { options = {} } ) => {
 		label: '',
 	} );
 
-	const fetchCounts = useCallback( async () => {
-		setLoadingCounts( true );
-		try {
-			const data = await getDbCounts();
-			setCounts( data );
-		} catch ( error ) {
-			if ( error?.name === 'AbortError' ) {
-				return;
+	const fetchCounts = useCallback(
+		async ( signal ) => {
+			setLoadingCounts( true );
+			try {
+				const data = await getDbCounts( signal );
+				setCounts( data );
+			} catch ( error ) {
+				if ( error?.name === 'AbortError' || signal?.aborted ) {
+					return;
+				}
+				console.error(
+					'Error fetching database cleanup counts:',
+					error
+				);
+				notify( {
+					type: 'error',
+					message: __(
+						'Failed to load counts.',
+						'performance-optimisation'
+					),
+					durationMs: 5000,
+				} );
+			} finally {
+				if ( ! signal?.aborted ) {
+					setLoadingCounts( false );
+				}
 			}
-			console.error( 'Error fetching database cleanup counts:', error );
-			notify( {
-				type: 'error',
-				message: __(
-					'Failed to load counts.',
-					'performance-optimisation'
-				),
-				durationMs: 5000,
-			} );
-		} finally {
-			setLoadingCounts( false );
-		}
-	}, [ notify ] );
+		},
+		[ notify ]
+	);
 
 	useEffect( () => {
-		fetchCounts();
+		const controller = new AbortController();
+		fetchCounts( controller.signal );
+		return () => controller.abort();
 	}, [ fetchCounts ] );
 
 	const onSubmitSettings = async ( e ) => {

@@ -27,29 +27,35 @@ describe( 'dbCounts memoization (lib/dbCounts.js)', () => {
 		expect( apiCall ).toHaveBeenCalledTimes( 1 );
 	} );
 
-	it( 'forwards an AbortSignal as the 4th arg and bypasses the cache', async () => {
+	it( 'forwards an AbortSignal as the 4th arg on a cache miss', async () => {
 		apiCall.mockResolvedValue( {
 			success: true,
 			data: { posts: 1 },
 		} );
 		const controller = new AbortController();
 
-		await getDbCounts();
 		await getDbCounts( controller.signal );
 
-		expect( apiCall ).toHaveBeenNthCalledWith(
-			1,
-			'database_cleanup_counts',
-			{},
-			'GET'
-		);
-		expect( apiCall ).toHaveBeenNthCalledWith(
-			2,
+		expect( apiCall ).toHaveBeenCalledWith(
 			'database_cleanup_counts',
 			{},
 			'GET',
 			controller.signal
 		);
+	} );
+
+	it( 'reuses the cached value even when a signal is provided', async () => {
+		apiCall.mockResolvedValue( {
+			success: true,
+			data: { posts: 4 },
+		} );
+		const controller = new AbortController();
+
+		const first = await getDbCounts();
+		const withSignal = await getDbCounts( controller.signal );
+
+		expect( apiCall ).toHaveBeenCalledTimes( 1 );
+		expect( withSignal ).toEqual( first );
 	} );
 
 	it( 'treats explicit null like undefined for the 3-arg call shape', async () => {

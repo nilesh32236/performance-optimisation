@@ -1187,6 +1187,32 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * A negative option cap is clamped to 0 by get_longest_edge_cap() itself.
+	 *
+	 * The constructor stores options verbatim (no sanitizer), so this exercises
+	 * the explicit `cap < 0 => 0` branch rather than a pre-clamped value.
+	 *
+	 * @since NEXT
+	 */
+	public function test_longest_edge_cap_clamps_negative_option(): void {
+		$converter = $this->make_converter( array( 'maxLongestEdgePx' => -5 ) );
+
+		// Prove the raw option is still negative (the branch is reachable).
+		$options_prop = new \ReflectionProperty( Img_Converter::class, 'options' );
+		$options_prop->setAccessible( true );
+		$raw = $options_prop->getValue( $converter )['image_optimisation']['maxLongestEdgePx'];
+		$this->assertSame( -5, $raw );
+
+		$this->assertSame( 0, $converter->get_longest_edge_cap() );
+
+		// Extreme negative magnitude also clamps (no int overflow surprises).
+		$this->assertSame(
+			0,
+			$this->make_converter( array( 'maxLongestEdgePx' => PHP_INT_MIN ) )->get_longest_edge_cap()
+		);
+	}
+
+	/**
 	 * Downscale shrinks oversized resources, keeps small ones, and fails open.
 	 *
 	 * @since NEXT

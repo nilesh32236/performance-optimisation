@@ -240,31 +240,38 @@ const Dashboard = ( {
 		} ) );
 	}, [] );
 
-	const fetchDbCounts = useCallback( async () => {
-		handleLoading( 'db_counts', true );
-		try {
-			const data = await getDbCounts();
-			updateState( { dbCounts: data } );
-		} catch ( error ) {
-			if ( error?.name === 'AbortError' ) {
-				return;
+	const fetchDbCounts = useCallback(
+		async ( signal ) => {
+			handleLoading( 'db_counts', true );
+			try {
+				const data = await getDbCounts( signal );
+				updateState( { dbCounts: data } );
+			} catch ( error ) {
+				if ( error?.name === 'AbortError' || signal?.aborted ) {
+					return;
+				}
+				console.error( 'Error fetching db counts:', error );
+				notify( {
+					type: 'error',
+					message: __(
+						'Failed to load database counts.',
+						'performance-optimisation'
+					),
+					durationMs: 5000,
+				} );
+			} finally {
+				if ( ! signal?.aborted ) {
+					handleLoading( 'db_counts', false );
+				}
 			}
-			console.error( 'Error fetching db counts:', error );
-			notify( {
-				type: 'error',
-				message: __(
-					'Failed to load database counts.',
-					'performance-optimisation'
-				),
-				durationMs: 5000,
-			} );
-		} finally {
-			handleLoading( 'db_counts', false );
-		}
-	}, [ handleLoading, updateState, notify ] );
+		},
+		[ handleLoading, updateState, notify ]
+	);
 
 	useEffect( () => {
-		fetchDbCounts();
+		const controller = new AbortController();
+		fetchDbCounts( controller.signal );
+		return () => controller.abort();
 	}, [ fetchDbCounts ] );
 
 	const dbOverheadCount = useMemo( () => {
@@ -276,9 +283,10 @@ const Dashboard = ( {
 
 	const pollJobStatus = useCallback( async () => {
 		const currentTimeout = pollingRef.current;
-		if ( pollAbortRef.current ) {
-			pollAbortRef.current.abort();
-		}
+		// Polls are strictly sequential: the next tick is only scheduled
+		// after the previous await settles, so there is no overlapping
+		// in-flight request to abort here. A fresh controller per tick lets
+		// the unmount cleanup cancel the current poll.
 		pollAbortRef.current = new AbortController();
 		const signal = pollAbortRef.current.signal;
 		try {

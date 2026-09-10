@@ -1383,6 +1383,11 @@ const loadImages = () => {
 							}
 
 							globalObserver.unobserve( el );
+							// Drop the element from the observed set so a
+							// later removal does not decrement the counter
+							// a second time (releaseRemovedLazyNodes only
+							// reconciles elements that never intersected).
+							observedElements.delete( el );
 							pendingLazyCount = Math.max(
 								0,
 								pendingLazyCount - 1

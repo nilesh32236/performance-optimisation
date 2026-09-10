@@ -185,7 +185,7 @@ export const buildEsiBody = ( block, nonce ) => {
  *
  * @since NEXT
  * @param {HTMLElement}      el   Placeholder element.
- * @param {DocumentFragment} frag Sanitized fragment (consumed by the first caller; clone for fan-out).
+ * @param {DocumentFragment} frag Sanitized fragment (consumed by the last target; clone for fan-out).
  * @return {void}
  */
 const applyFragmentToElement = ( el, frag ) => {

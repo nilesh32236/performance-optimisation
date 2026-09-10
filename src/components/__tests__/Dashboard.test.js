@@ -116,7 +116,8 @@ const flushDashboardMount = async () => {
 		expect( apiCall ).toHaveBeenCalledWith(
 			'database_cleanup_counts',
 			{},
-			'GET'
+			'GET',
+			expect.any( AbortSignal )
 		);
 	} );
 	await act( async () => {} );
@@ -565,5 +566,58 @@ describe( 'Dashboard', () => {
 		expect(
 			screen.getByText( 'Optimized images removed.' )
 		).toBeInTheDocument();
+	} );
+
+	it( 'aborts the in-flight db-counts request on unmount without notifying', async () => {
+		const consoleSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
+		try {
+			apiCall.mockImplementation( ( action, payload, method, signal ) => {
+				if ( 'database_cleanup_counts' !== action ) {
+					return Promise.resolve( { success: true, data: {} } );
+				}
+				return new Promise( ( resolve, reject ) => {
+					if ( signal ) {
+						signal.addEventListener( 'abort', () => {
+							const abortError = new Error( 'Aborted' );
+							abortError.name = 'AbortError';
+							reject( abortError );
+						} );
+					}
+				} );
+			} );
+
+			const { unmount } = render(
+				<Dashboard activities={ [] } onNavigate={ jest.fn() } />
+			);
+
+			await waitFor( () =>
+				expect( apiCall ).toHaveBeenCalledWith(
+					'database_cleanup_counts',
+					{},
+					'GET',
+					expect.any( AbortSignal )
+				)
+			);
+
+			const countsCall = apiCall.mock.calls.find(
+				( [ action ] ) => 'database_cleanup_counts' === action
+			);
+			const signal = countsCall[ 3 ];
+			expect( signal ).toBeInstanceOf( AbortSignal );
+
+			unmount();
+			expect( signal.aborted ).toBe( true );
+
+			await act( async () => {} );
+
+			expect( consoleSpy ).not.toHaveBeenCalled();
+			expect(
+				screen.queryByText( 'Failed to load database counts.' )
+			).not.toBeInTheDocument();
+		} finally {
+			consoleSpy.mockRestore();
+		}
 	} );
 } );

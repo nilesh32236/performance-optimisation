@@ -27,10 +27,10 @@ let generation = 0;
 export const getDbCounts = async ( signal ) => {
 	const hasSignal = signal !== undefined && signal !== null;
 	const now = Date.now();
-	if ( cachedData && now - cachedAt < TTL_MS && ! hasSignal ) {
+	if ( cachedData && now - cachedAt < TTL_MS ) {
 		return { ...cachedData };
 	}
-	if ( inflight && ! hasSignal ) {
+	if ( inflight ) {
 		return inflight.then( ( data ) => ( { ...data } ) );
 	}
 	const requestGeneration = generation;
@@ -41,26 +41,19 @@ export const getDbCounts = async ( signal ) => {
 	).then( ( response ) => {
 		if ( response && response.success && response.data ) {
 			if ( requestGeneration === generation ) {
-				if ( ! hasSignal && ! signal?.aborted ) {
-					cachedData = response.data;
-					cachedAt = Date.now();
-				}
+				cachedData = response.data;
+				cachedAt = Date.now();
 			}
 			return { ...response.data };
 		}
 		throw new Error( response?.message || 'Failed to load counts.' );
 	} );
-	if ( ! hasSignal ) {
-		inflight = request.finally( () => {
-			// Only release our own slot: an older request settling after
-			// a clear + refetch must not drop the newer in-flight promise.
-			if ( generation === requestGeneration ) {
-				inflight = null;
-			}
-		} );
-		return inflight;
-	}
-	return request;
+	inflight = request.finally( () => {
+		if ( generation === requestGeneration ) {
+			inflight = null;
+		}
+	} );
+	return inflight;
 };
 
 /**

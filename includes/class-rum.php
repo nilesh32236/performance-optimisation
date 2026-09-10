@@ -707,12 +707,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					// still holds; no new option or transient names.
 					if ( isset( $sample['lcp'] ) ) {
 						$lcp_value = (float) $sample['lcp'];
-						$device    = isset( $sample['device'] ) && is_string( $sample['device'] ) ? $sample['device'] : 'unknown';
+						// Re-sanitize even though the beacon sanitizes at
+						// intake: the queue transient is user-writable, so
+						// allowlist the device and text-sanitize the template
+						// before either is persisted into the aggregate option.
+						$raw_device = isset( $sample['device'] ) && is_string( $sample['device'] ) ? sanitize_text_field( $sample['device'] ) : '';
+						$device     = strtolower( trim( $raw_device ) );
 						if ( 'mobile' !== $device && 'desktop' !== $device ) {
 							$device = 'unknown';
 						}
-						$template = isset( $sample['template'] ) && is_string( $sample['template'] ) && '' !== $sample['template'] ? substr( $sample['template'], 0, 64 ) : 'unknown';
-						$seg_key  = $device . '|' . $template;
+						$raw_template = isset( $sample['template'] ) && is_string( $sample['template'] ) ? sanitize_text_field( $sample['template'] ) : '';
+						$template     = '' !== trim( $raw_template ) ? substr( $raw_template, 0, 64 ) : 'unknown';
+						$seg_key      = $device . '|' . $template;
 						if ( ! isset( $bucket['lcpSeg'] ) || ! is_array( $bucket['lcpSeg'] ) ) {
 							$bucket['lcpSeg'] = array();
 						}
@@ -1248,6 +1254,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				$rows = array();
 				foreach ( $merged as $entry ) {
 					$n = (int) $entry['n'];
+					// p75 is computed from the capped reservoir, not the
+					// unbounded accumulator: never qualify or report more
+					// observations than actually back the p75 value.
+					$sample_count = count( $entry['samples'] );
+					if ( $sample_count < $n ) {
+						$n = $sample_count;
+					}
 					if ( $n < $min ) {
 						continue;
 					}

@@ -587,11 +587,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @return string e.g. "3.8s".
 		 */
 		private static function format_p75_seconds( float $p75_ms ): string {
-			$seconds = $p75_ms / 1000.0;
-			if ( $seconds >= 10 ) {
-				return sprintf( '%.1fs', $seconds );
-			}
-			return sprintf( '%.1fs', round( $seconds, 1 ) );
+			// `%.1f` already rounds to one decimal, so the previous
+			// `$seconds >= 10` branch returned the identical string.
+			return sprintf( '%.1fs', $p75_ms / 1000.0 );
 		}
 
 		/**

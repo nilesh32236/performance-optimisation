@@ -9,6 +9,27 @@
  * The collector is a plain ES module (no dependencies) so it can be served
  * from the static build directory on cached pages.
  */
+/**
+ * Classify a device as mobile/desktop from its physical screen width.
+ *
+ * Resize-stable: the physical screen width does not change when a desktop
+ * user narrows their browser window, so a narrowed desktop is not
+ * misclassified as mobile. The viewport width is used only when the screen
+ * width is unavailable. Tablets in the ~768–1024px band bucket as mobile.
+ *
+ * @since NEXT
+ * @param {number} screenWidth   `window.screen.width` (0 when unavailable).
+ * @param {number} viewportWidth `window.innerWidth` (0 when unavailable).
+ * @return {boolean|null} True when mobile, false when desktop, null when unknown.
+ */
+export const classifyDeviceWidth = ( screenWidth, viewportWidth ) => {
+	const width = screenWidth > 0 ? screenWidth : viewportWidth || 0;
+	if ( width <= 0 ) {
+		return null;
+	}
+	return width <= 1024;
+};
+
 ( function () {
 	if (
 		! window.wppoRum ||
@@ -88,12 +109,13 @@
 				typeof window.screen !== 'undefined' &&
 				window.screen
 			) {
-				const width =
-					window.screen.width ||
-					( window.innerWidth ? window.innerWidth : 0 );
-				if ( width > 0 ) {
-					isMobile = width < 768;
-				}
+				// Physical screen width is resize-stable; fall back to the
+				// viewport only when screen width is unavailable. Tablets in
+				// the ~768–1024px band bucket as mobile.
+				isMobile = classifyDeviceWidth(
+					window.screen.width || 0,
+					window.innerWidth || 0
+				);
 			}
 			if ( isMobile === true ) {
 				extra.device = 'mobile';

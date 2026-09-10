@@ -372,10 +372,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// (before `?`/`#`) is inspected so query strings carrying URLs
 			// never false-positive. Hostile input sets path_rejected so the
 			// probe is never silently mapped to the homepage index.html.
-			$uri_target = strtok( $this->request_uri, '?#' );
-			if ( ! is_string( $uri_target ) ) {
-				$uri_target = $this->request_uri;
-			}
+			// Pure split (no process-global strtok() tokenizer state): inspect
+			// only the authority part before `?`/`#` so query strings carrying
+			// URLs never false-positive.
+			$uri_target         = substr( $this->request_uri, 0, strcspn( $this->request_uri, '?#' ) );
 			$uri_target_trimmed = ltrim( $uri_target );
 			$is_absolute_form   = (bool) preg_match( '#^[a-zA-Z][a-zA-Z0-9+.-]*://#', $uri_target_trimmed ) || 0 === strpos( $uri_target_trimmed, '//' );
 
@@ -397,7 +397,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			if ( $is_absolute_form || $is_drive_or_unc || ( '' === $url_path && '' !== trim( trim( (string) $raw_component ), '/' ) ) ) {
 				$this->path_rejected = true;
-				$this->log_traversal_probe( $this->request_uri );
+				// Log only the target before `?`/`#`: the full REQUEST_URI can
+				// carry tokens/PII (reset keys, nonces, emails) that must not
+				// persist in the activity-log table.
+				$this->log_traversal_probe( $uri_target );
 				$url_path = '';
 			}
 
@@ -2234,11 +2237,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		public function get_cache_file_url( $type = 'html', string $variant = '' ): string {
-			if ( '' === $this->cache_root_url ) {
+			if ( '' === $this->cache_root_url || '' === $this->cache_root_dir || '' === $this->domain ) {
 				return '';
 			}
-			$suffix = $variant ? "-{$variant}" : '';
-			return "{$this->cache_root_url}/{$this->domain}/" . ( '' === $this->url_path ? "index{$suffix}.{$type}" : "{$this->url_path}/index{$suffix}.{$type}" );
+			// A path rejected at construction time never maps to a file URL:
+			// callers fall open instead of emitting the homepage URL.
+			if ( $this->path_rejected ) {
+				return '';
+			}
+			if ( false !== strpos( $this->url_path, "\0" ) || false !== strpos( $this->url_path, '..' ) ) {
+				$this->log_traversal_probe( $this->url_path );
+				return '';
+			}
+			// Variant suffix is interpolated into the public URL: allowlist it
+			// exactly like get_cache_file_path() so a crafted suffix can never
+			// inject separators/traversal into the emitted URL.
+			if ( '' !== $variant && ! preg_match( '/^[a-z0-9-]{1,32}$/i', $variant ) ) {
+				$this->log_traversal_probe( $variant );
+				return '';
+			}
+			$suffix   = $variant ? "-{$variant}" : '';
+			$relative = ( '' === $this->url_path ? "index{$suffix}.{$type}" : "{$this->url_path}/index{$suffix}.{$type}" );
+			// Containment parity with get_cache_file_path(): refuse when the
+			// resolved filesystem path would escape the cache root/domain.
+			$resolved = "{$this->cache_root_dir}/{$this->domain}/{$relative}";
+			if ( ! $this->is_path_contained( $resolved ) ) {
+				$this->log_traversal_probe( $this->url_path );
+				return '';
+			}
+			return "{$this->cache_root_url}/{$this->domain}/{$relative}";
 		}
 
 		/**

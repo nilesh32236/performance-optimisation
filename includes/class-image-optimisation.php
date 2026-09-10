@@ -404,41 +404,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return $this->noscript_namespace;
 			}
 
-			try {
-				if ( function_exists( 'random_bytes' ) ) {
-					$bytes = random_bytes( 8 );
-					if ( is_string( $bytes ) && '' !== $bytes ) {
-						$this->noscript_namespace = 'wppo' . bin2hex( $bytes );
-						return $this->noscript_namespace;
-					}
-				}
-
-				if ( function_exists( 'wp_generate_password' ) ) {
-					$generated = wp_generate_password( 16, false );
-					if ( is_string( $generated ) && '' !== $generated ) {
-						$sanitized = preg_replace( '/[^A-Za-z0-9]/', '', $generated );
-						if ( is_string( $sanitized ) && '' !== $sanitized ) {
-							$this->noscript_namespace = 'wppo' . $sanitized;
-							return $this->noscript_namespace;
-						}
-					}
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-
-			// Legacy fallback (fail-open, never fatal): wp_rand() when available,
-			// otherwise uniqid() + microtime() entropy. No mt_rand() (discouraged).
-			if ( function_exists( 'wp_rand' ) ) {
-				$suffix = (string) wp_rand( 1000, 9999 );
-			} else {
-				$suffix = str_replace( '.', '', (string) microtime( true ) );
-			}
-			$this->noscript_namespace = 'wppo' . str_replace( '.', '', uniqid( '', true ) ) . $suffix;
-			$this->noscript_namespace = (string) preg_replace( '/[^A-Za-z0-9]/', '', $this->noscript_namespace );
-			if ( '' === $this->noscript_namespace ) {
-				$this->noscript_namespace = 'wppofallback';
-			}
+			$this->noscript_namespace = Util::mint_placeholder_namespace();
 
 			return $this->noscript_namespace;
 		}
@@ -554,9 +520,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			if (
 				str_starts_with( $lower, 'javascript:' )
 				|| str_starts_with( $lower, 'vbscript:' )
-				|| str_starts_with( $lower, 'data:text/html' )
 			) {
 				return false;
+			}
+			// Only a small allowlist of raster image data URLs may receive a
+			// placeholder rewrite. Every other data: payload (text/html,
+			// image/svg+xml which can carry script, application/xhtml+xml,
+			// …) is refused and emitted unmodified (fail-open).
+			if ( str_starts_with( $lower, 'data:' ) ) {
+				return 1 === preg_match( '#^data:image/(?:png|jpe?g|gif|webp|avif)[;,]?#', $lower );
 			}
 			return true;
 		}
@@ -2332,9 +2304,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Derive a deterministic alt for an image `src`.
 		 *
 		 * Primary source is the sanitized filename (`filename_to_alt()`);
-		 * when that yields nothing, falls back to the current post's parent
-		 * title (global loop context only, guarded by `function_exists()`).
-		 * The result is filterable via `wppo_auto_alt_text`. Never performs
+		 * when that yields nothing, falls back to the title of the image
+		 * attachment's parent post (resolved from `$src`, not global loop
+		 * context, and cached per request so each unique src is looked up at
+		 * most once). The result is filterable via `wppo_auto_alt_text` and
+		 * always sanitized, trimmed, and capped at 125 chars. Never performs
 		 * external HTTP; the title lookup runs only when the filename path
 		 * produced nothing. Fail-open: any failure returns an empty string
 		 * (caller then leaves the tag untouched).
@@ -2347,22 +2321,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		public function get_derived_alt( string $src ): string {
 			$alt = $this->filename_to_alt( $src );
 
-			if ( '' === $alt && function_exists( 'wp_get_post_parent_id' ) && function_exists( 'get_the_title' ) ) {
+			if ( '' === $alt && function_exists( 'wp_get_post_parent_id' ) && function_exists( 'get_the_title' ) && function_exists( 'attachment_url_to_postid' ) ) {
 				try {
-					$parent_id = wp_get_post_parent_id();
-					if ( ! empty( $parent_id ) ) {
-						static $title_cache = array();
-						if ( ! array_key_exists( $parent_id, $title_cache ) ) {
-							$title                     = get_the_title( $parent_id );
-							$title_cache[ $parent_id ] = is_string( $title ) ? $title : '';
+					static $parent_title_cache = array();
+					if ( ! array_key_exists( $src, $parent_title_cache ) ) {
+						// Resolve the image's own attachment so the fallback title
+						// comes from the attachment's parent post, not the global
+						// post loop context (which describes the rendered page).
+						$attachment_id = (int) attachment_url_to_postid( $src );
+						$parent_id     = $attachment_id > 0 ? (int) wp_get_post_parent_id( $attachment_id ) : 0;
+						$title         = $parent_id > 0 ? get_the_title( $parent_id ) : '';
+						if ( function_exists( 'sanitize_text_field' ) ) {
+							$title = sanitize_text_field( (string) $title );
 						}
-						$cached = $title_cache[ $parent_id ];
-						if ( '' !== trim( $cached ) ) {
-							$alt = trim( $cached );
-							if ( function_exists( 'sanitize_text_field' ) ) {
-								$alt = trim( sanitize_text_field( $alt ) );
-							}
-						}
+						$parent_title_cache[ $src ] = is_string( $title ) ? trim( $title ) : '';
+					}
+					if ( '' !== $parent_title_cache[ $src ] ) {
+						$alt = $parent_title_cache[ $src ];
 					}
 				} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: fall through with empty alt.
 				}
@@ -2382,7 +2357,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 			}
 
-			return $alt;
+			// Normalize filter output identically to the filename path:
+			// sanitize, trim (rejecting whitespace-only), and cap at 125 chars
+			// so an unbounded/blank filter return cannot bypass the length cap
+			// or emit alt="   ".
+			if ( function_exists( 'sanitize_text_field' ) ) {
+				$alt = sanitize_text_field( $alt );
+			}
+			if ( function_exists( 'mb_substr' ) ) {
+				$alt = mb_substr( $alt, 0, 125 );
+			} else {
+				$alt = substr( $alt, 0, 125 );
+			}
+
+			return trim( $alt );
 		}
 
 		/**

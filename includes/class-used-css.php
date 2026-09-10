@@ -958,12 +958,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @since 1.9.0
 		 */
 		public function get_used_css_url( string $url = '' ): string {
+			if ( '' === $this->cache_root_dir || '' === $this->cache_root_url || '' === $this->domain ) {
+				return '';
+			}
 			$path = $this->get_url_path( $url );
 			if ( '' === $path && $this->is_raw_path_non_blank( $url ) ) {
 				$this->log_traversal_probe( $url );
 				return '';
 			}
 			$path_suffix = '' !== $path ? "/{$path}" : '';
+			// Containment parity with get_used_css_path(): resolve the
+			// filesystem candidate through the same dual-prefix check so the
+			// URL and path surfaces refuse the same hostile inputs.
+			$candidate = "{$this->cache_root_dir}/{$this->domain}{$path_suffix}/" . self::USED_CSS_FILENAME;
+			if ( ! $this->is_path_contained( $candidate ) ) {
+				$this->log_traversal_probe( $url );
+				return '';
+			}
 			return "{$this->cache_root_url}/{$this->domain}{$path_suffix}/" . self::USED_CSS_FILENAME;
 		}
 
@@ -1906,7 +1917,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			}
 			// Per-URL + per-page used-CSS disable (#988): skip purging on listed
 			// URLs or when `_wppo_used_css_disabled` is set, without disabling
-			// the plugin. Fail-open: matcher errors fall through to full styles.
+			// the plugin. Fail-open: a matcher error returns the unoptimised
+			// buffer (same direction as the delay-guard block above) instead of
+			// falling through to purge CSS.
 			if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'is_used_css_excluded_for_url' ) ) {
 				try {
 					if ( Main::is_used_css_excluded_for_url() ) {
@@ -1914,6 +1927,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
+					return $buffer;
 				}
 			}
 

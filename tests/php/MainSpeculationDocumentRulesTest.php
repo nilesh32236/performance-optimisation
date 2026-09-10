@@ -91,6 +91,55 @@ class MainSpeculationDocumentRulesTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Collect normalized target paths from list rules and document rules.
+	 *
+	 * The previous no-duplicate collector only looked at list-source `urls`
+	 * arrays, so a URL that also appeared as the archive document rule's
+	 * `href_matches` pattern was invisible. This walks both sources and reduces
+	 * each entry to a path (absolute list URLs via `wp_parse_url()`, document
+	 * patterns with the trailing `*` stripped) so the two can be compared on the
+	 * same basis.
+	 *
+	 * @param array $rules Speculation rules.
+	 * @return string[] Normalized target paths.
+	 */
+	private function collect_rule_target_paths( array $rules ): array {
+		$targets = array();
+
+		foreach ( $rules as $rule ) {
+			if ( ! is_array( $rule ) ) {
+				continue;
+			}
+			$source = $rule['source'] ?? '';
+
+			if ( 'list' === $source && ! empty( $rule['urls'] ) && is_array( $rule['urls'] ) ) {
+				foreach ( $rule['urls'] as $url ) {
+					if ( ! is_string( $url ) || '' === $url ) {
+						continue;
+					}
+					$path      = wp_parse_url( $url, PHP_URL_PATH );
+					$targets[] = untrailingslashit( is_string( $path ) && '' !== $path ? $path : $url );
+				}
+			}
+
+			if ( 'document' === $source && isset( $rule['where'] ) && is_array( $rule['where'] ) ) {
+				$and = $rule['where']['and'] ?? array();
+				if ( ! is_array( $and ) ) {
+					continue;
+				}
+				foreach ( $and as $condition ) {
+					if ( ! is_array( $condition ) || empty( $condition['href_matches'] ) || ! is_string( $condition['href_matches'] ) ) {
+						continue;
+					}
+					$targets[] = untrailingslashit( rtrim( $condition['href_matches'], '*' ) );
+				}
+			}
+		}
+
+		return array_values( $targets );
+	}
+
+	/**
 	 * Default settings: speculation on.
 	 *
 	 * @return array
@@ -302,6 +351,70 @@ class MainSpeculationDocumentRulesTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertSame( $all_urls, array_unique( $all_urls ) );
 		$this->assertContains( 'http://example.com/', $all_urls );
+
+		// Also collect document-source targets (none on a singular view) so
+		// the assertion covers both contribution kinds.
+		$target_paths = $this->collect_rule_target_paths( $rules );
+		$this->assertSame( $target_paths, array_unique( $target_paths ) );
+	}
+
+	/**
+	 * No target duplicates across the generic list and the archive document rule.
+	 *
+	 * Strengthens the list-only collector above: the archive document rule
+	 * carries an `href_matches` pattern rather than a `urls` array, so this
+	 * extracts that path too and asserts the plugin-generated generic list
+	 * (home + RUM) does not target the same path as the archive first-post
+	 * document rule. The two rule kinds are independent speculation semantics
+	 * (a list prefetches the URL itself; a document rule matches in-page links),
+	 * so a user-configured high-value URL that equals the first post is out of
+	 * scope for this invariant.
+	 *
+	 * @return void
+	 */
+	public function test_no_duplicate_across_list_and_document_sources(): void {
+		$this->install_stubs( $this->default_settings() );
+		Functions\when( 'is_archive' )->justReturn( true );
+		Functions\when( 'get_permalink' )->alias(
+			static function ( $post ) {
+				unset( $post );
+				return 'http://example.com/first-post/';
+			}
+		);
+		$GLOBALS['wp_query'] = (object) array( 'posts' => array( (object) array( 'ID' => 1 ) ) );
+
+		try {
+			$main  = $this->make_main( $this->default_settings()['preload_settings'] );
+			$rules = $main->filter_speculation_list_rules( array() );
+		} finally {
+			unset( $GLOBALS['wp_query'] );
+		}
+
+		// The document rule carries the archive first-post href_matches.
+		$document_rules = array_values(
+			array_filter(
+				$rules,
+				static function ( $rule ) {
+					return is_array( $rule ) && ( $rule['source'] ?? '' ) === 'document';
+				}
+			)
+		);
+		$this->assertCount( 1, $document_rules );
+		$this->assertSame( '/first-post/*', $document_rules[0]['where']['and'][0]['href_matches'] );
+
+		// The generic list rule is still emitted alongside it.
+		$list_urls = array();
+		foreach ( $rules as $rule ) {
+			if ( is_array( $rule ) && ( $rule['source'] ?? '' ) === 'list' && ! empty( $rule['urls'] ) && is_array( $rule['urls'] ) ) {
+				$list_urls = array_merge( $list_urls, $rule['urls'] );
+			}
+		}
+		$this->assertContains( 'http://example.com/', $list_urls );
+
+		// No path is targeted by both a list rule and the document rule.
+		$target_paths = $this->collect_rule_target_paths( $rules );
+		$this->assertSame( $target_paths, array_unique( $target_paths ) );
+		$this->assertContains( '/first-post', $target_paths );
 	}
 
 	/**
@@ -322,5 +435,23 @@ class MainSpeculationDocumentRulesTest extends \PHPUnit\Framework\TestCase {
 			$this->assertNotSame( 'eager', $rule['eagerness'] ?? null );
 			$this->assertNotSame( 'document', $rule['source'] ?? null );
 		}
+
+		// Suppressing contextual rules must NOT suppress the generic list:
+		// the home URL is still emitted as a list-source rule.
+		$list_rules = array_values(
+			array_filter(
+				$rules,
+				static function ( $rule ) {
+					return is_array( $rule ) && ( $rule['source'] ?? '' ) === 'list' && ! empty( $rule['urls'] ) && is_array( $rule['urls'] );
+				}
+			)
+		);
+		$this->assertNotEmpty( $list_rules );
+
+		$list_urls = array();
+		foreach ( $list_rules as $rule ) {
+			$list_urls = array_merge( $list_urls, $rule['urls'] );
+		}
+		$this->assertContains( 'http://example.com/', $list_urls );
 	}
 }

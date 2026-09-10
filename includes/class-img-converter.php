@@ -445,12 +445,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				}
 
 				if ( function_exists( 'imagescale' ) ) {
-					// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- imagescale() emits warnings on allocation failure; fail-open keeps the original.
+					// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- imagescale() emits warnings on allocation failure; fall through to the resample path.
 					$scaled = @imagescale( $image, $new_width, $new_height );
 					if ( false !== $scaled ) {
 						return $scaled;
 					}
-					return $image;
+					// Allocation failure: fall through to imagecopyresampled()
+					// (which may still succeed) instead of returning early.
 				}
 
 				if ( ! function_exists( 'imagecreatetruecolor' ) || ! function_exists( 'imagecopyresampled' ) ) {

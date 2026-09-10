@@ -292,6 +292,58 @@ class CssCombineFallbackTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that href-first tags with whitespace around `=` and a multi-token
+	 * rel (e.g. `rel="alternate stylesheet"`) are still stripped.
+	 */
+	public function test_inject_used_css_strips_whitespace_and_multi_token_rel(): void {
+		$src = 'http://example.com/wp-content/themes/t/style.css';
+
+		$buffer = '<html><head><link href = "' . $src . '" rel = "alternate stylesheet" media="all"></head><body></body></html>'; // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet
+		$result = $this->invoke_inject_used_css( $src, $buffer );
+
+		$this->assertStringContainsString( 'wppo-used-css', $result );
+		// Original tag stripped; src survives once in the <noscript> fallback.
+		$this->assertSame( 1, substr_count( $result, $src ) );
+		$this->assertStringNotContainsString( 'alternate stylesheet', $result );
+	}
+
+	/**
+	 * Test that rel-first tags with whitespace around `=` and a trailing rel
+	 * token are still stripped.
+	 */
+	public function test_inject_used_css_strips_rel_first_whitespace_and_extra_token(): void {
+		$src = 'http://example.com/wp-content/themes/t/style.css';
+
+		$buffer = '<html><head><link rel = "stylesheet alternate" href = "' . $src . '" media="all"></head><body></body></html>'; // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet
+		$result = $this->invoke_inject_used_css( $src, $buffer );
+
+		$this->assertStringContainsString( 'wppo-used-css', $result );
+		$this->assertSame( 1, substr_count( $result, $src ) );
+		$this->assertStringNotContainsString( 'stylesheet alternate', $result );
+	}
+
+	/**
+	 * Test that a same-URL hint whose rel never contains the `stylesheet` token
+	 * (e.g. `rel="preconnect"`) survives stripping.
+	 */
+	public function test_inject_used_css_preserves_preconnect_without_stylesheet_token(): void {
+		$src = 'http://example.com/wp-content/themes/t/style.css';
+
+		$buffer  = '<html><head>';
+		$buffer .= '<link rel="preconnect" href="' . $src . '" crossorigin>'; // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet
+		$buffer .= '<link rel="stylesheet" href="' . $src . '" media="all">'; // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet
+		$buffer .= '</head><body></body></html>';
+		$result  = $this->invoke_inject_used_css( $src, $buffer );
+
+		$this->assertStringContainsString( 'wppo-used-css', $result );
+		$this->assertStringContainsString( 'rel="preconnect"', $result );
+		// The stylesheet tag itself is gone (the <noscript> fallback still
+		// carries the URL; strip it before asserting the live markup).
+		$without_noscript = preg_replace( '#<noscript>.*?</noscript>#s', '', $result );
+		$this->assertStringNotContainsString( '<link rel="stylesheet" href="' . $src . '" media="all">', $without_noscript ); // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet
+	}
+
+	/**
 	 * Test that the safe fallback is enabled by default.
 	 */
 	public function test_safe_fallback_enabled_by_default(): void {

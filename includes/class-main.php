@@ -1373,15 +1373,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					update_option( 'wppo_settings', $value );
 					add_action( 'update_option_wppo_settings', array( __CLASS__, 'on_settings_update' ), 10, 2 );
 
-					add_action(
-						'admin_notices',
-						function () {
-							// role="alert" + aria-live="assertive" so screen readers announce
-							// the failure immediately, matching the React NoticeBanner ARIA
-							// contract used across the SPA.
-							echo '<div class="notice notice-error is-dismissible" role="alert" aria-live="assertive"><p>' . esc_html__( 'Performance Optimisation: Failed to update .htaccess rules. Please check file permissions.', 'performance-optimisation' ) . '</p></div>';
-						}
-					);
+					add_action( 'admin_notices', array( __CLASS__, 'render_htaccess_failure_notice' ) );
 				}
 			} elseif ( $nextgen_changed && $new_enable ) {
 				// Next-gen toggle changed while server rules remain enabled — refresh htaccess to add/remove next-gen block.
@@ -1394,15 +1386,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// backup/restore inside update_rules()) — surface an
 					// admin notice so the failure is visible, mirroring the
 					// enable/disable branch above.
-					add_action(
-						'admin_notices',
-						function () {
-							// role="alert" + aria-live="assertive" so screen readers announce
-							// the failure immediately, matching the React NoticeBanner ARIA
-							// contract used across the SPA.
-							echo '<div class="notice notice-error is-dismissible" role="alert" aria-live="assertive"><p>' . esc_html__( 'Performance Optimisation: Failed to update .htaccess rules. Please check file permissions.', 'performance-optimisation' ) . '</p></div>';
-						}
-					);
+					add_action( 'admin_notices', array( __CLASS__, 'render_htaccess_failure_notice' ) );
 				}
 			}
 
@@ -1412,6 +1396,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( $old_gf !== $new_gf ) {
 				Google_Fonts::clear_font_cache();
 			}
+		}
+
+		/**
+		 * Render the admin notice for a failed .htaccess rules update.
+		 *
+		 * Shared by the enable/disable and next-gen-refresh branches so the
+		 * message and ARIA contract cannot drift. `role="alert"` +
+		 * `aria-live="assertive"` announce the failure immediately, matching
+		 * the React NoticeBanner contract used across the SPA.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function render_htaccess_failure_notice(): void {
+			echo '<div class="notice notice-error is-dismissible" role="alert" aria-live="assertive"><p>' . esc_html__( 'Performance Optimisation: Failed to update .htaccess rules. Please check file permissions.', 'performance-optimisation' ) . '</p></div>';
 		}
 
 		/**
@@ -2188,6 +2187,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				unset( $safe_options['object_cache']['password'] );
 			}
 
+			// Resolve + sanitize image info once, outside the wp_localize_script
+			// array, so the class_exists fallback stays scannable.
+			$image_info = class_exists( 'PerformanceOptimise\Inc\Img_Converter' )
+				? Img_Converter::get_img_info()
+				: get_option( 'wppo_img_info', array() );
+			$image_info = $this->sanitize_image_info_for_client( (array) $image_info );
+
 			wp_localize_script(
 				'performance-optimisation-script',
 				'wppoSettings',
@@ -2199,7 +2205,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'version'                              => WPPO_VERSION,
 					'settings'                             => $safe_options,
 					'show_welcome'                         => ! (bool) get_user_meta( get_current_user_id(), 'wppo_welcome_dismissed', true ),
-					'image_info'                           => $this->sanitize_image_info_for_client( class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ? Img_Converter::get_img_info() : get_option( 'wppo_img_info', array() ) ),
+					'image_info'                           => $image_info,
 					'cache_size'                           => $cache_size,
 					'total_js_css'                         => $total_js_css,
 					// Read-only WP 7.1+ client-side media processing state. Evaluated
@@ -3246,11 +3252,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'woocommerce',
 				'wc-add-to-cart',
 				'wc-single-product',
-				'wc-',
 				'cart-fragments',
 				'wc-cart',
 				'wc-blocks',
 				'wc-store',
+				'wc-order-attribution',
+				'wc-jquery-blockui',
+				'wc-address-i18n',
+				'wc-enhanced-select',
+				'wc-password-strength-meter',
+				'wc-geolocation',
 			);
 			/**
 			 * Filters delay JS commerce preset exclusions.
@@ -3276,7 +3287,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		public static function get_delay_js_slider_exclusions(): array {
 			$preset = array(
 				'revslider',
-				'rs-',
+				'rs6',
+				'rs-module',
 				'rev-slider',
 				'smart-slider',
 				'metaslider',

@@ -444,6 +444,56 @@ class DelaySafeDefaultsTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * An array value for maxLongestEdgePx coerces to the int default.
+	 *
+	 * Guards the review fix: arrays previously bypassed the cap branch and were
+	 * persisted as arrays; they must become 2560, never an array or 0.
+	 */
+	public function test_util_max_longest_edge_px_array_coerces_to_int_default(): void {
+		Functions\when( 'has_filter' )->justReturn( false );
+
+		$clean = \PerformanceOptimise\Inc\Util::sanitize_settings_recursively(
+			array( 'maxLongestEdgePx' => array( 1000, 2000 ) )
+		);
+		$this->assertSame( 2560, $clean['maxLongestEdgePx'] );
+		$this->assertIsInt( $clean['maxLongestEdgePx'] );
+
+		// Scalar values continue to pass through with the negative clamp.
+		$negative = \PerformanceOptimise\Inc\Util::sanitize_settings_recursively(
+			array( 'maxLongestEdgePx' => -5 )
+		);
+		$this->assertSame( 0, $negative['maxLongestEdgePx'] );
+
+		$blank = \PerformanceOptimise\Inc\Util::sanitize_settings_recursively(
+			array( 'maxLongestEdgePx' => '' )
+		);
+		$this->assertSame( 2560, $blank['maxLongestEdgePx'] );
+	}
+
+	/**
+	 * Newline URL-list keys use the textarea sanitizer explicitly.
+	 *
+	 * Pins the ordering dependency: the generic `url` branch (esc_url_raw)
+	 * would otherwise corrupt a multi-line/regex exclusion list.
+	 */
+	public function test_util_exclude_url_lists_keep_newlines(): void {
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'sanitize_textarea_field' )->returnArg();
+		Functions\when( 'sanitize_text_field' )->returnArg();
+
+		$list  = "cart/(.*)\ncheckout/(.*)";
+		$clean = \PerformanceOptimise\Inc\Util::sanitize_settings_recursively(
+			array(
+				'delayJSExcludeUrls' => $list,
+				'usedCSSExcludeUrls' => $list,
+			)
+		);
+
+		$this->assertSame( $list, $clean['delayJSExcludeUrls'] );
+		$this->assertSame( $list, $clean['usedCSSExcludeUrls'] );
+	}
+
+	/**
 	 * With the builder preset off, builder handles delay again.
 	 *
 	 * Uses a builder-runtimes-only handle: `elementor-frontend` also lives

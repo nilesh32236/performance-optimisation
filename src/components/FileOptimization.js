@@ -1446,8 +1446,12 @@ const FileOptimization = ( {
 													onChange={ handleChange(
 														setSettings
 													) }
+													aria-describedby="delayJSExcludeUrls-desc"
 												/>
-												<p className="wppo-text-muted wppo-text-small wppo-mt-8">
+												<p
+													id="delayJSExcludeUrls-desc"
+													className="wppo-text-muted wppo-text-small wppo-mt-8"
+												>
 													{ __(
 														'One per line — URL substring or #regex#. Delay is skipped on matching URLs only.',
 														'performance-optimisation'

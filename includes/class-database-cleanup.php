@@ -1627,13 +1627,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			$time = time();
 
 			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-			// Single UNION ALL round-trip (audit #982): the 9 sequential
-			// COUNT(*)s above used to run one query per cleanup type on TTL
-			// miss. Predicates are verbatim copies of the originals (including
-			// the `comment_type != 'note'` exclusion from issue #884, the
-			// transient CONCAT self-JOIN, and the multisite
-			// `_site_transient_` skip). The 'expired_transients' label may
-			// appear twice (one row per prefix) — rows are summed per key.
+			// Single UNION ALL round-trip (audit #982): this previously ran
+			// one query per cleanup type on a TTL miss. Predicates are verbatim
+			// copies of the originals (including the `comment_type != 'note'`
+			// exclusion from issue #884, the transient CONCAT self-JOIN, and
+			// the multisite `_site_transient_` skip). The 'expired_transients'
+			// label may appear twice (one row per prefix) — rows are summed
+			// per key.
 			$selects = array();
 
 			$selects[] = "SELECT 'revisions' AS k, COUNT(*) AS c FROM $wpdb->posts WHERE post_type = 'revision'";
@@ -1686,6 +1686,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			$sql  = implode( ' UNION ALL ', $selects );
 			$rows = $wpdb->get_results( $sql, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Each fragment with placeholders is prepared above; the rest are static.
 
+			// Distinguish a DB failure (false/null) from a legitimately empty
+			// result (array()). On failure the all-zero counts are returned for
+			// this request but NOT cached, so a transient error is retried on
+			// the next request instead of serving stale zeros for 5 minutes.
+			$query_failed = ! is_array( $rows );
+
 			$totals = array(
 				'revisions'          => 0,
 				'auto_drafts'        => 0,
@@ -1719,6 +1725,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				'oembed_cache'       => (int) $totals['oembed_cache'],
 			);
 			// phpcs:enable
+
+			// Skip the cache write on a failed query so zeros are never served
+			// from a 5-minute cache after a transient DB error.
+			if ( $query_failed ) {
+				return $counts;
+			}
 
 			if ( $has_salted ) {
 				wp_cache_set_salted( 'wppo_db_cleanup_counts', $counts, 'wppo', Util::cache_salt( self::SALT_KEY ), 5 * MINUTE_IN_SECONDS );

@@ -357,41 +357,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				return $this->preserve_namespace;
 			}
 
-			try {
-				if ( function_exists( 'random_bytes' ) ) {
-					$bytes = random_bytes( 8 );
-					if ( is_string( $bytes ) && '' !== $bytes ) {
-						$this->preserve_namespace = 'wppo' . bin2hex( $bytes );
-						return $this->preserve_namespace;
-					}
-				}
-
-				if ( function_exists( 'wp_generate_password' ) ) {
-					$generated = wp_generate_password( 16, false );
-					if ( is_string( $generated ) && '' !== $generated ) {
-						$sanitized = preg_replace( '/[^A-Za-z0-9]/', '', $generated );
-						if ( is_string( $sanitized ) && '' !== $sanitized ) {
-							$this->preserve_namespace = 'wppo' . $sanitized;
-							return $this->preserve_namespace;
-						}
-					}
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-
-			// Legacy fallback (fail-open, never fatal): wp_rand() when available,
-			// otherwise uniqid() + microtime() entropy. No mt_rand() (discouraged).
-			if ( function_exists( 'wp_rand' ) ) {
-				$suffix = (string) wp_rand( 1000, 9999 );
-			} else {
-				$suffix = str_replace( '.', '', (string) microtime( true ) );
-			}
-			$this->preserve_namespace = 'wppo' . str_replace( '.', '', uniqid( '', true ) ) . $suffix;
-			$this->preserve_namespace = (string) preg_replace( '/[^A-Za-z0-9]/', '', $this->preserve_namespace );
-			if ( '' === $this->preserve_namespace ) {
-				$this->preserve_namespace = 'wppofallback';
-			}
+			$this->preserve_namespace = Util::mint_placeholder_namespace();
 
 			return $this->preserve_namespace;
 		}
@@ -495,7 +461,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			$scripts   = array();
 			$namespace = $this->get_preserve_namespace();
 
-			$html = preg_replace_callback(
+			$extracted = preg_replace_callback(
 				'#<script\b([^>]*)>(.*?)</script>#is',
 				function ( $matches ) use ( &$scripts, $namespace ) {
 					$attributes = $matches[1];
@@ -516,6 +482,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				$html
 			);
 
+			// PCRE failure: keep the original HTML rather than assigning null
+			// (which would break downstream string handling). Mirrors the
+			// noscript extraction guard.
+			if ( null !== $extracted ) {
+				$html = $extracted;
+			}
+
 			return array( $html, $scripts );
 		}
 
@@ -533,7 +506,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			}
 
 			$restored = preg_replace_callback(
-				'~<script\s+data-wppo-preserve=(["\'])[^"\']*\1\s*></script>~',
+				'~<script\s+data-wppo-preserve=(["\'])[^"\']*\1\s*></script>~i',
 				function ( $matches ) use ( $scripts ) {
 					$resolved = $this->resolve_preserved_script( $matches[0], $scripts );
 					// Fail-open: attacker-controlled or out-of-range tokens are
