@@ -1472,6 +1472,68 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Sanitize a URL path for cache file mapping.
+		 *
+		 * Shared encoded-sequence normalization for every file-writing
+		 * surface (static HTML cache in {@see Cache}, per-page used-CSS in
+		 * {@see Used_CSS}): only the PHP_URL_PATH component is used, exactly
+		 * one rawurldecode pass is applied (single-decode semantics —
+		 * `%252e` stays literal on disk and is never re-decoded, while
+		 * single-encoded `%2e%2e` / `%00` decode once and are then rejected),
+		 * and null bytes, remaining `..` segments, plus Windows drive (`C:`)
+		 * and UNC (`\\`) prefixes are rejected. Returns an empty string for
+		 * hostile or empty input; callers fail open (serve dynamic/uncached
+		 * and log a traversal probe) when the raw input was non-blank.
+		 *
+		 * Pure static helper: no I/O, no settings reads. Multisite-safe.
+		 *
+		 * @param string|null $url_path Raw URL path or URL.
+		 * @return string Sanitized relative path or empty string.
+		 * @since NEXT
+		 */
+		public static function sanitize_cache_url_path( ?string $url_path ): string {
+			$raw_input = (string) $url_path;
+
+			// Reject Windows drive prefixes and UNC roots before URL parsing
+			// (parse_url() would otherwise strip `C:` as a scheme and hide
+			// the absolute-path smuggling attempt).
+			$trimmed_raw = ltrim( $raw_input );
+			if ( '' !== $trimmed_raw && ( preg_match( '#^[a-zA-Z]:#', $trimmed_raw ) || 0 === strpos( $trimmed_raw, '\\\\' ) ) ) {
+				return '';
+			}
+
+			if ( function_exists( 'wp_parse_url' ) ) {
+				$parsed = wp_parse_url( $raw_input, PHP_URL_PATH );
+			} else {
+				$parsed = parse_url( $raw_input, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
+			}
+
+			$path_component = ( null === $parsed || false === $parsed ) ? $raw_input : (string) $parsed;
+
+			$decoded = function_exists( 'rawurldecode' ) ? rawurldecode( $path_component ) : $path_component;
+
+			if ( false !== strpos( $decoded, "\0" ) ) {
+				return '';
+			}
+
+			if ( function_exists( 'wp_normalize_path' ) ) {
+				$normalized = wp_normalize_path( trim( $decoded, '/' ) );
+			} else {
+				$normalized = str_replace( '\\', '/', trim( $decoded, '/' ) );
+			}
+
+			if ( false !== strpos( $normalized, "\0" ) || false !== strpos( $normalized, '..' ) ) {
+				return '';
+			}
+
+			if ( '' !== $normalized && preg_match( '#^[a-zA-Z]:#', $normalized ) ) {
+				return '';
+			}
+
+			return $normalized;
+		}
+
+		/**
 		 * Qualify a transient key with the current blog ID on multisite.
 		 *
 		 * Prevents transient key collisions when a shared object cache backend

@@ -164,6 +164,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		private bool $host_mismatch = false;
 
 		/**
+		 * Whether a traversal probe has been logged this request.
+		 *
+		 * Rate-limits activity-log writes so a hostile crawler cannot flood
+		 * the log table with one entry per request path probe. Mirrors
+		 * Cache::$traversal_probe_logged.
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static bool $traversal_probe_logged = false;
+
+		/**
 		 * Constructor.
 		 *
 		 * @param array $options Plugin options.
@@ -905,25 +917,52 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		/**
 		 * Get the used-CSS cache file path for a URL.
 		 *
+		 * Dual-prefix containment-checked: returns an empty string (and logs
+		 * a traversal probe) when the resolved path would escape the cache
+		 * root or the per-domain directory, so callers fail open to
+		 * unoptimized output instead of writing outside the cache tree.
+		 *
 		 * @param string $url The page URL.
-		 * @return string The filesystem path.
+		 * @return string The filesystem path, or '' when refused.
 		 * @since 1.9.0
 		 */
 		public function get_used_css_path( string $url = '' ): string {
-			$path        = $this->get_url_path( $url );
+			if ( '' === $this->cache_root_dir || '' === $this->domain ) {
+				return '';
+			}
+			$path = $this->get_url_path( $url );
+			if ( '' === $path && $this->is_raw_path_non_blank( $url ) ) {
+				// Distinguish the benign homepage ('/', '') from a rejected
+				// hostile input: never map a probe to the homepage file —
+				// refuse and log so callers fail open to unoptimized output.
+				$this->log_traversal_probe( $url );
+				return '';
+			}
 			$path_suffix = '' !== $path ? "/{$path}" : '';
-			return "{$this->cache_root_dir}/{$this->domain}{$path_suffix}/" . self::USED_CSS_FILENAME;
+			$candidate   = "{$this->cache_root_dir}/{$this->domain}{$path_suffix}/" . self::USED_CSS_FILENAME;
+			if ( ! $this->is_path_contained( $candidate ) ) {
+				$this->log_traversal_probe( $url );
+				return '';
+			}
+			return $candidate;
 		}
 
 		/**
 		 * Get the used-CSS cache file URL for a URL.
 		 *
+		 * Returns an empty string for hostile inputs (never maps a probe to
+		 * the homepage file) so callers fail open to original stylesheets.
+		 *
 		 * @param string $url The page URL.
-		 * @return string The public URL.
+		 * @return string The public URL, or '' when refused.
 		 * @since 1.9.0
 		 */
 		public function get_used_css_url( string $url = '' ): string {
-			$path        = $this->get_url_path( $url );
+			$path = $this->get_url_path( $url );
+			if ( '' === $path && $this->is_raw_path_non_blank( $url ) ) {
+				$this->log_traversal_probe( $url );
+				return '';
+			}
 			$path_suffix = '' !== $path ? "/{$path}" : '';
 			return "{$this->cache_root_url}/{$this->domain}{$path_suffix}/" . self::USED_CSS_FILENAME;
 		}
@@ -931,23 +970,124 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		/**
 		 * Get the normalized URL path for cache storage.
 		 *
+		 * Delegates to the shared {@see Util::sanitize_cache_url_path()}
+		 * helper (single controlled decode pass, null-byte + dotdot +
+		 * drive/UNC rejection, PHP_URL_PATH extraction) so the used-CSS
+		 * surface normalizes identically to the static HTML cache.
+		 *
 		 * @param string $url The page URL.
-		 * @return string Normalized path.
+		 * @return string Normalized path, or '' when refused/empty.
 		 * @since 1.9.0
 		 */
 		private function get_url_path( string $url = '' ): string {
 			if ( '' === $url ) {
 				$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
-				$url_path    = wp_normalize_path( trim( rawurldecode( (string) wp_parse_url( $request_uri, PHP_URL_PATH ) ), '/' ) );
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$raw = wp_parse_url( $request_uri, PHP_URL_PATH );
+				} else {
+					$raw = parse_url( $request_uri, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
+				}
+				if ( null === $raw || false === $raw ) {
+					$raw = $request_uri;
+				}
+				return Util::sanitize_cache_url_path( (string) $raw );
+			}
+
+			return Util::sanitize_cache_url_path( $url );
+		}
+
+		/**
+		 * Whether the raw path component behind a sanitized-'' result is non-blank.
+		 *
+		 * Distinguishes the benign homepage (`/`, `''`) from a rejected
+		 * hostile input (dot-dot, encoded sequences, null bytes, drive/UNC
+		 * prefixes): only the latter counts as a traversal probe. Mirrors
+		 * the homepage distinction in Cache::get_file_path().
+		 *
+		 * @since NEXT
+		 * @param string $url The original URL ('' = current REQUEST_URI).
+		 * @return bool True when the raw path component is non-blank.
+		 */
+		private function is_raw_path_non_blank( string $url ): bool {
+			$raw = $url;
+			if ( '' === $raw ) {
+				$raw = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
+			}
+			if ( function_exists( 'wp_parse_url' ) ) {
+				$component = wp_parse_url( $raw, PHP_URL_PATH );
 			} else {
-				$url_path = wp_normalize_path( trim( rawurldecode( (string) wp_parse_url( $url, PHP_URL_PATH ) ), '/' ) );
+				$component = parse_url( $raw, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
+			}
+			if ( null === $component || false === $component ) {
+				$component = $raw;
+			}
+			return '' !== trim( trim( (string) $component ), '/' );
+		}
+
+		/**
+		 * Whether an absolute path stays inside the used-CSS cache tree.
+		 *
+		 * Dual-prefix containment: the normalized path must start with both
+		 * the cache root and the per-domain directory (trailing-slash aware
+		 * so `wppo-evil` never prefix-matches `wppo`). Empty root or domain
+		 * fails closed. Mirrors Cache::is_path_contained().
+		 *
+		 * @since NEXT
+		 * @param string $path Absolute file or directory path.
+		 * @return bool True when contained.
+		 */
+		private function is_path_contained( string $path ): bool {
+			if ( '' === $this->cache_root_dir || '' === $this->domain ) {
+				return false;
 			}
 
-			if ( false !== strpos( $url_path, '..' ) ) {
-				$url_path = '';
+			if ( function_exists( 'wp_normalize_path' ) ) {
+				$norm = wp_normalize_path( $path );
+				$root = wp_normalize_path( $this->cache_root_dir );
+			} else {
+				$norm = str_replace( '\\', '/', $path );
+				$root = str_replace( '\\', '/', $this->cache_root_dir );
 			}
 
-			return $url_path;
+			$root       = rtrim( $root, '/' ) . '/';
+			$domain_dir = $root . trim( $this->domain, '/' ) . '/';
+
+			return 0 === strpos( $norm, $root ) && 0 === strpos( $norm, $domain_dir );
+		}
+
+		/**
+		 * Log a blocked used-CSS path traversal probe (once per request).
+		 *
+		 * Never throws: failures degrade silently to serving unoptimized
+		 * output. Mirrors Cache::log_traversal_probe().
+		 *
+		 * @since NEXT
+		 * @param string $raw_input The hostile input that was rejected.
+		 * @return void
+		 */
+		private function log_traversal_probe( string $raw_input ): void {
+			if ( self::$traversal_probe_logged ) {
+				return;
+			}
+			self::$traversal_probe_logged = true;
+
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
+					return;
+				}
+				$snippet = str_replace( "\0", '', (string) $raw_input );
+				if ( function_exists( 'sanitize_text_field' ) ) {
+					$snippet = sanitize_text_field( $snippet );
+				}
+				$snippet = substr( $snippet, 0, 200 );
+				$message = function_exists( '__' ) ? __( 'Blocked used-CSS path traversal probe.', 'performance-optimisation' ) : 'Blocked used-CSS path traversal probe.';
+				if ( '' !== $snippet ) {
+					$message .= ' ' . $snippet;
+				}
+				Log::add( $message );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 
 		/**
@@ -999,7 +1139,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			}
 
 			$file_path = $this->get_used_css_path( $url );
-			$dir_path  = dirname( $file_path );
+			if ( '' === $file_path ) {
+				// Traversal probe or empty domain/root: refuse the write and
+				// serve the unoptimized buffer (fail-open, never fatal).
+				// get_used_css_path() already logged the probe.
+				return false;
+			}
+			$dir_path = dirname( $file_path );
+
+			// Dual-prefix containment on both the file and its directory
+			// before any mkdir/write, so a crafted path can never escape
+			// the cache root or clobber sensitive files.
+			if ( ! $this->is_path_contained( $file_path ) || ! $this->is_path_contained( trailingslashit( $dir_path ) ) ) {
+				$this->log_traversal_probe( $url );
+				return false;
+			}
 
 			$fs = Util::init_filesystem();
 			if ( ! $fs ) {
@@ -1035,11 +1189,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 */
 		public function delete_used_css( $url = null ): bool {
 			if ( null !== $url ) {
+				$file_path = $this->get_used_css_path( (string) $url );
+				// Refuse deletes for hostile paths (fail-open: nothing
+				// deleted, probe already logged by get_used_css_path()).
+				if ( '' === $file_path || ! $this->is_path_contained( $file_path ) ) {
+					if ( '' !== (string) $url ) {
+						$this->log_traversal_probe( (string) $url );
+					}
+					return false;
+				}
 				$fs = Util::init_filesystem();
 				if ( ! $fs ) {
 					return false;
 				}
-				$file_path = $this->get_used_css_path( $url );
 				if ( $fs->exists( $file_path ) ) {
 					return $fs->delete( $file_path );
 				}
