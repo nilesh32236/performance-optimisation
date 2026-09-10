@@ -787,12 +787,22 @@ Filters AI-injected speculation rules. @since NEXT.
 ---
 
 ### `wppo_speculation_list_urls`
-Filters the high-value speculation list URLs (home + `performance_audit.high_value_urls`, same-site validated, capped at 10). @since NEXT.
+Filters the high-value speculation list URLs (home + `performance_audit.high_value_urls` + RUM top URLs, same-site validated, cart/checkout/account/query-string/fragment excluded, capped at 10). @since NEXT.
 
 Emitted as a `{"source":"list"}` rule via the `wp_speculation_rules` filter (WP 6.8+) when `preload_settings.enableSpeculationRules` is on. Return an empty array to suppress the list rule.
 
 **Parameters:**
 - `$urls` *(string[])* — Validated list URLs.
+
+---
+
+### `wppo_speculation_document_rule`
+Filters the archive first-post document rule before it is appended. @since NEXT.
+
+Emitted as a `{"source":"document"}` rule (first-post `href_matches` + first-post `selector_matches`) via the `wp_speculation_rules` filter (WP 6.8+) on archive views when `preload_settings.enableSpeculationRules` is on and `preload_settings.speculationDocumentRules` is not `false`. Return a non-array to suppress the document rule.
+
+**Parameters:**
+- `$archive_rule` *(array)* — The archive document rule.
 
 ---
 

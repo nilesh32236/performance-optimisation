@@ -3668,6 +3668,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * Backward compatible: on WP <6.8 `wp_get_speculation_rules()` does not exist,
 		 * so this method is a no-op and no filter is registered (legacy path).
+		 * Fail-open: pre-6.8 output degrades to unoptimised (no speculation
+		 * block is printed by this plugin on 6.2-6.7); invalid URLs are
+		 * skipped individually and logged-in visitors are always excluded.
 		 *
 		 * @since NEXT
 		 *
@@ -3678,8 +3681,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// per WP 7.1 spec (IO-001); wp_get_speculation_rules_configuration() is the
 			// same 6.8 introduction, but wp_get_speculation_rules is the canonical
 			// presence check for the <script type="speculationrules"> emitter.
-			// Keep backward compat for WP <6.8 (no-op).
+			// Keep backward compat for WP <6.8 (no-op, fail-open to unoptimised).
 			if ( ! function_exists( 'wp_get_speculation_rules' ) ) {
+				return;
+			}
+
+			// Belt-and-braces version guard so WP 6.2-6.7 never registers core
+			// filters even if a backported helper exists. Fail-open: read-only,
+			// never fatal.
+			try {
+				if ( isset( $GLOBALS['wp_version'] ) ) {
+					$wp_version = (string) $GLOBALS['wp_version'];
+				} elseif ( function_exists( 'get_bloginfo' ) ) {
+					$wp_version = (string) get_bloginfo( 'version' );
+				} else {
+					$wp_version = '6.8';
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$wp_version = '6.8';
+			}
+			if ( version_compare( $wp_version, '6.8', '<' ) ) {
 				return;
 			}
 
@@ -3857,7 +3879,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Collect high-value same-site URLs for the speculation list rule.
 		 *
-		 * Source: home URL first, then `performance_audit.high_value_urls`.
+		 * Source: home URL first, then `performance_audit.high_value_urls`,
+		 * then RUM top URLs (real-visit winners via {@see get_rum_top_urls()}).
 		 * Each candidate is normalized via `esc_url_raw(trim())`, deduped,
 		 * same-site validated, and capped (keeps the ~1KB footprint).
 		 * Invalid URLs are skipped individually (fail-open); an empty array
@@ -3904,6 +3927,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 			}
 
+			// RUM field-data winners fill the remaining budget (no extra cron
+			// load: one opportunistic get_option read with fail-open empty).
+			foreach ( $this->get_rum_top_urls() as $rum_url ) {
+				$candidates[] = $rum_url;
+			}
+
 			$urls = array();
 			foreach ( $candidates as $candidate ) {
 				if ( ! is_string( $candidate ) ) {
@@ -3929,11 +3958,280 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Top RUM (real-visit) URLs by visit volume.
+		 *
+		 * Reads the `wppo_web_vitals_rum` per-day/per-path aggregates via
+		 * `RUM::get_data()` (one opportunistic option read, no extra cron
+		 * load), sums sample counts (`max(lcp.n, ttfb.n, ...)`) per
+		 * normalized path across days, and resolves the winners to absolute
+		 * same-site URLs. Candidates are validated with
+		 * {@see is_speculation_list_url_valid()} (cart/checkout/account,
+		 * query strings, cross-site excluded) and capped so home +
+		 * high-value + RUM total stays within the 10-URL budget.
+		 *
+		 * Fail-open: any throwable, missing class, or empty RUM returns an
+		 * empty array — never fatal, never white-screen.
+		 *
+		 * @since NEXT
+		 *
+		 * @return string[] Validated absolute RUM winner URLs (possibly empty).
+		 */
+		private function get_rum_top_urls(): array {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'get_data' ) ) {
+					return array();
+				}
+				$rum = RUM::get_data();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+
+			if ( ! is_array( $rum ) || empty( $rum ) ) {
+				return array();
+			}
+
+			try {
+				$counts = array();
+				foreach ( $rum as $paths ) {
+					if ( ! is_array( $paths ) ) {
+						continue;
+					}
+					foreach ( $paths as $path => $metrics ) {
+						if ( ! is_string( $path ) || '' === $path || ! is_array( $metrics ) ) {
+							continue;
+						}
+						// RUM buckets store query-less normalized paths already;
+						// skip anything carrying a query/fragment defensively.
+						if ( false !== strpos( $path, '?' ) || false !== strpos( $path, '#' ) ) {
+							continue;
+						}
+						$count = 0;
+						foreach ( $metrics as $metric => $aggregate ) {
+							if ( 'lcpUrls' === $metric || ! is_array( $aggregate ) ) {
+								continue;
+							}
+							$n = isset( $aggregate['n'] ) ? (int) $aggregate['n'] : 0;
+							if ( $n > $count ) {
+								$count = $n;
+							}
+						}
+						if ( $count <= 0 ) {
+							continue;
+						}
+						$normalized = class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'normalize_rum_path' )
+							? Util::normalize_rum_path( $path )
+							: $path;
+						if ( '/' === $normalized ) {
+							continue;
+						}
+						if ( ! isset( $counts[ $normalized ] ) ) {
+							$counts[ $normalized ] = 0;
+						}
+						$counts[ $normalized ] += $count;
+					}
+				}
+
+				if ( empty( $counts ) ) {
+					return array();
+				}
+
+				arsort( $counts );
+
+				$urls = array();
+				foreach ( array_keys( $counts ) as $top_path ) {
+					// Canonical pretty-permalink form carries a trailing
+					// slash (RUM normalization strips it); restored here so
+					// winners match the home/high-value URL style.
+					if ( '/' !== substr( $top_path, -1 ) ) {
+						$top_path .= '/';
+					}
+					$absolute = Util::cached_home_url( $top_path );
+					$clean    = function_exists( 'esc_url_raw' ) ? esc_url_raw( $absolute ) : $absolute;
+					if ( ! is_string( $clean ) || '' === $clean ) {
+						continue;
+					}
+					if ( in_array( $clean, $urls, true ) ) {
+						continue;
+					}
+					if ( ! $this->is_speculation_list_url_valid( $clean ) ) {
+						continue;
+					}
+					$urls[] = $clean;
+					if ( count( $urls ) >= 10 ) {
+						break;
+					}
+				}
+
+				return $urls;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
+		 * Whether speculation output is suppressed for the current visitor.
+		 *
+		 * Logged-in users stay excluded (mirrors the `null` config
+		 * passthrough in {@see filter_speculation_rules_configuration()}).
+		 * Fail-open: any throwable means "not suppressed".
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when rules must not be emitted.
+		 */
+		private function is_speculation_suppressed_for_visitor(): bool {
+			try {
+				return function_exists( 'is_user_logged_in' ) && is_user_logged_in();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Eager prerender list rule for the home link on singular views.
+		 *
+		 * Returns a `{"source":"list"}` rule with `eager` eagerness for the
+		 * home URL only when the current view is singular (and the home URL
+		 * is present/valid). Returns null otherwise (non-singular, no home
+		 * link, logged-in visitor, document rules toggled off, or any
+		 * failure) — fail-open to "emit nothing", never fatal.
+		 *
+		 * @since NEXT
+		 *
+		 * @return array<string,mixed>|null The singular rule, or null.
+		 */
+		private function get_singular_home_link_rule(): ?array {
+			try {
+				if ( $this->is_speculation_suppressed_for_visitor() ) {
+					return null;
+				}
+
+				$document_rules = $this->options['preload_settings']['speculationDocumentRules'] ?? true;
+				if ( ! $document_rules ) {
+					return null;
+				}
+
+				if ( ! function_exists( 'is_singular' ) || ! is_singular() ) {
+					return null;
+				}
+
+				$home = Util::cached_home_url( '/' );
+				if ( ! is_string( $home ) || '' === $home ) {
+					return null;
+				}
+				$clean = function_exists( 'esc_url_raw' ) ? esc_url_raw( $home ) : $home;
+				if ( '' === $clean || ! $this->is_speculation_list_url_valid( $clean ) ) {
+					return null;
+				}
+
+				return array(
+					'source'    => 'list',
+					'urls'      => array( $clean ),
+					'eagerness' => 'eager',
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return null;
+			}
+		}
+
+		/**
+		 * Document rule targeting the first post on archive views.
+		 *
+		 * Reads the first post URL from the main query (`$wp_query->posts`
+		 * via `get_permalink()`, all guarded) and emits a
+		 * `{"source":"document"}` rule whose `where` clause pairs an
+		 * `href_matches` pattern for that post path with a first-post
+		 * `selector_matches`. Returns null when not an archive, when no
+		 * first post resolves, for logged-in visitors, when document rules
+		 * are toggled off, or on any failure (fail-open, never fatal).
+		 *
+		 * @since NEXT
+		 *
+		 * @return array<string,mixed>|null The archive document rule, or null.
+		 */
+		private function get_archive_first_post_rule(): ?array {
+			try {
+				if ( $this->is_speculation_suppressed_for_visitor() ) {
+					return null;
+				}
+
+				$document_rules = $this->options['preload_settings']['speculationDocumentRules'] ?? true;
+				if ( ! $document_rules ) {
+					return null;
+				}
+
+				$is_archive_view = ( function_exists( 'is_archive' ) && is_archive() )
+					|| ( function_exists( 'is_home' ) && is_home() );
+				if ( ! $is_archive_view ) {
+					return null;
+				}
+
+				$first_post_url = null;
+				global $wp_query;
+				if ( isset( $wp_query->posts ) && is_array( $wp_query->posts ) && ! empty( $wp_query->posts ) ) {
+					$first = $wp_query->posts[0];
+					if ( function_exists( 'get_permalink' ) ) {
+						$permalink = get_permalink( $first );
+						if ( is_string( $permalink ) && '' !== $permalink ) {
+							$first_post_url = $permalink;
+						}
+					}
+				}
+				if ( ! is_string( $first_post_url ) || '' === $first_post_url ) {
+					return null;
+				}
+
+				$clean = function_exists( 'esc_url_raw' ) ? esc_url_raw( $first_post_url ) : $first_post_url;
+				if ( '' === $clean || ! $this->is_speculation_list_url_valid( $clean ) ) {
+					return null;
+				}
+
+				$path = null;
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$path = wp_parse_url( $clean, PHP_URL_PATH );
+				}
+				if ( ! is_string( $path ) || '' === $path ) {
+					return null;
+				}
+				$href_pattern = rtrim( $path, '/' ) . '/*';
+				if ( '/' === $path ) {
+					return null;
+				}
+
+				$preload_settings = $this->options['preload_settings'] ?? array();
+				$eagerness        = $preload_settings['speculationEagerness'] ?? 'conservative';
+				if ( ! in_array( $eagerness, array( 'conservative', 'moderate', 'eager' ), true ) ) {
+					$eagerness = 'conservative';
+				}
+
+				return array(
+					'source'    => 'document',
+					'where'     => array(
+						'and' => array(
+							array( 'href_matches' => $href_pattern ),
+							array( 'selector_matches' => 'main article:first-of-type a, article.post:first-of-type a, .post:first-of-type a' ),
+						),
+					),
+					'eagerness' => $eagerness,
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return null;
+			}
+		}
+
+		/**
 		 * Validate a single speculation list URL.
 		 *
 		 * Same-site (host must match home host, preventing multisite
 		 * cross-site leakage), http(s) only, and rejects admin, login,
-		 * REST, and commerce (cart/checkout/account) paths.
+		 * REST, commerce (cart/checkout/account) paths, and any URL
+		 * carrying a query string or fragment (mirroring core's
+		 * `?`-URL exclusion).
 		 *
 		 * @since NEXT
 		 *
@@ -3944,6 +4242,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$parts = wp_parse_url( $url );
 			if ( ! is_array( $parts ) || empty( $parts['host'] ) ) {
 				return false;
+			}
+
+			// Query strings and fragments are never speculated: core excludes
+			// `?`-URLs by default and dynamic/action URLs must stay excluded.
+			// Each invalid URL is skipped individually (fail-open).
+			try {
+				$query = wp_parse_url( $url, PHP_URL_QUERY );
+				if ( is_string( $query ) && '' !== $query ) {
+					return false;
+				}
+				$fragment = wp_parse_url( $url, PHP_URL_FRAGMENT );
+				if ( is_string( $fragment ) && '' !== $fragment ) {
+					return false;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				// Fall back to string checks when wp_parse_url with component fails.
+				if ( false !== strpos( $url, '?' ) || false !== strpos( $url, '#' ) ) {
+					return false;
+				}
 			}
 
 			$scheme = strtolower( (string) ( $parts['scheme'] ?? '' ) );
@@ -4027,7 +4345,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * Runs on WP 6.8+ only (registered inside the `wp_get_speculation_rules`
 		 * guard in {@see add_speculation_rules()}). Null/non-array config is
-		 * returned untouched; speculation is never auto-enabled.
+		 * returned untouched; speculation is never auto-enabled. Logged-in
+		 * visitors are always excluded (input returned unchanged).
+		 *
+		 * Emits a single core `speculationrules` block contribution: the
+		 * high-value/RUM list rule plus contextual rules — an eager
+		 * prerender list rule for the home link on singular views
+		 * ({@see get_singular_home_link_rule()}) and a first-post selector
+		 * document rule on archive views
+		 * ({@see get_archive_first_post_rule()}). URLs are deduped across
+		 * all emitted entries (and against pre-existing list rules) so no
+		 * URL is speculated twice.
 		 *
 		 * @since NEXT
 		 *
@@ -4043,22 +4371,56 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return $rules;
 			}
 
+			if ( $this->is_speculation_suppressed_for_visitor() ) {
+				return $rules;
+			}
+
+			$singular_rule = $this->get_singular_home_link_rule();
+			$archive_rule  = $this->get_archive_first_post_rule();
+
+			// Collect list-source URLs already present (e.g. an earlier
+			// contributor) so this method never re-adds them anywhere.
+			$pre_existing = $this->collect_speculation_list_urls( $rules );
+
+			// The singular eager rule must not duplicate a URL already
+			// covered by a pre-existing list rule; drop it when empty.
+			if ( is_array( $singular_rule ) && ! empty( $singular_rule['urls'] ) && is_array( $singular_rule['urls'] ) ) {
+				$singular_rule['urls'] = array_values( array_diff( $singular_rule['urls'], $pre_existing ) );
+				if ( empty( $singular_rule['urls'] ) ) {
+					$singular_rule = null;
+				}
+			}
+
+			// URLs already covered by the contextual rules are removed from
+			// the generic list so the single block carries no duplicates.
+			$covered = array();
+			if ( is_array( $singular_rule ) && ! empty( $singular_rule['urls'] ) && is_array( $singular_rule['urls'] ) ) {
+				foreach ( $singular_rule['urls'] as $covered_url ) {
+					if ( is_string( $covered_url ) && '' !== $covered_url ) {
+						$covered[] = $covered_url;
+					}
+				}
+			}
+
 			$urls = $this->get_speculation_list_urls();
 
 			/**
 			 * Filters the high-value speculation list URLs.
 			 *
 			 * @since NEXT
-			 * @param string[] $urls Validated list URLs.
+			 * @param string[] $urls Validated list URLs (home + high-value + RUM winners).
 			 */
 			$urls = apply_filters( 'wppo_speculation_list_urls', $urls );
 			if ( ! is_array( $urls ) ) {
 				return $rules;
 			}
 			$urls = array_values( array_filter( $urls, 'is_string' ) );
-			if ( empty( $urls ) ) {
-				return $rules;
+			if ( ! empty( $covered ) ) {
+				$urls = array_values( array_diff( $urls, $covered ) );
 			}
+			// Dedupe against list-source URLs already present (e.g. an
+			// earlier contributor) so this method never re-adds them.
+			$urls = $this->dedupe_speculation_urls_against_rules( $urls, $rules );
 
 			$preload_settings = $this->options['preload_settings'] ?? array();
 			$eagerness        = $preload_settings['speculationEagerness'] ?? 'conservative';
@@ -4070,11 +4432,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$eagerness = 'conservative';
 			}
 
-			$rules[] = array(
-				'source'    => 'list',
-				'urls'      => array_values( $urls ),
-				'eagerness' => $eagerness,
-			);
+			$new_rules = array();
+			if ( ! empty( $urls ) ) {
+				$new_rules[] = array(
+					'source'    => 'list',
+					'urls'      => array_values( $urls ),
+					'eagerness' => $eagerness,
+				);
+			}
+			if ( is_array( $singular_rule ) ) {
+				$new_rules[] = $singular_rule;
+			}
+			if ( is_array( $archive_rule ) ) {
+				/**
+				 * Filters the archive first-post document rule before it is appended.
+				 *
+				 * @since NEXT
+				 * @param array $archive_rule The archive document rule.
+				 */
+				$archive_rule = apply_filters( 'wppo_speculation_document_rule', $archive_rule );
+				if ( is_array( $archive_rule ) ) {
+					$new_rules[] = $archive_rule;
+				}
+			}
+
+			if ( empty( $new_rules ) ) {
+				return $rules;
+			}
+
+			foreach ( $new_rules as $new_rule ) {
+				$rules[] = $new_rule;
+			}
 
 			/**
 			 * Filters the speculation rules after the high-value list rule is appended.
@@ -4084,6 +4472,54 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			 * @param string[] $urls  List URLs that were appended.
 			 */
 			return apply_filters( 'wppo_speculation_list_rules', $rules, $urls );
+		}
+
+		/**
+		 * Collect URLs already covered by list-source rules.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $rules Existing speculation rules.
+		 * @return string[] List-source URLs already present.
+		 */
+		private function collect_speculation_list_urls( array $rules ): array {
+			$existing = array();
+			foreach ( $rules as $rule ) {
+				if ( ! is_array( $rule ) || ( $rule['source'] ?? '' ) !== 'list' ) {
+					continue;
+				}
+				$rule_urls = $rule['urls'] ?? array();
+				if ( ! is_array( $rule_urls ) ) {
+					continue;
+				}
+				foreach ( $rule_urls as $existing_url ) {
+					if ( is_string( $existing_url ) && '' !== $existing_url ) {
+						$existing[] = $existing_url;
+					}
+				}
+			}
+			return $existing;
+		}
+
+		/**
+		 * Remove URLs already covered by an existing list-source rule.
+		 *
+		 * Mirrors `AI_Adaptive::dedupe_against_existing_lists()` so this
+		 * method's contribution and the priority-20 AI rule can never
+		 * re-add the same URL (single block, no duplicates).
+		 *
+		 * @since NEXT
+		 *
+		 * @param string[] $urls  Candidate list URLs.
+		 * @param array    $rules Existing speculation rules.
+		 * @return string[] Deduped URLs.
+		 */
+		private function dedupe_speculation_urls_against_rules( array $urls, array $rules ): array {
+			$existing = $this->collect_speculation_list_urls( $rules );
+			if ( empty( $existing ) ) {
+				return array_values( $urls );
+			}
+			return array_values( array_diff( $urls, $existing ) );
 		}
 
 		/**
