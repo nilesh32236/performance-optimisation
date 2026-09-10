@@ -511,12 +511,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			if ( '' === $path || false !== strpos( $path, "\0" ) ) {
 				return false;
 			}
-			// Reject URL-encoded traversal (`%2e%2e`, `%2f`) before normalization.
-			if ( false !== strpos( rawurldecode( $path ), '..' ) ) {
+			// Reject path-segment traversal (`..` as a full segment) after
+			// URL-decoding, so legitimate names like `my..photo.jpg` keep
+			// working while `a/../b`, `../x`, `%2e%2e/` are refused.
+			$decoded = str_replace( '\\', '/', rawurldecode( $path ) );
+			if ( 1 === preg_match( '#(^|/)\.\.(/|$)#', $decoded ) ) {
 				return false;
 			}
 			$normalized = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $path ) : str_replace( '\\', '/', $path );
-			if ( false !== strpos( $normalized, '..' ) ) {
+			if ( 1 === preg_match( '#(^|/)\.\.(/|$)#', $normalized ) ) {
 				return false;
 			}
 			// Only absolute filesystem paths qualify — never URLs or relative paths.
@@ -585,10 +588,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		/**
 		 * Check whether a conversion output path is safe to write.
 		 *
-		 * Write targets must stay inside the read allowlist (`ABSPATH` /
-		 * `WP_CONTENT_DIR` bound) so a passthrough value from
-		 * `get_img_path()` (off-site URL returned unchanged, or `''` for a
-		 * local `..` traversal) can never reach the GD/Imagick encoders.
+		 * Write targets must stay inside the strict delete set (per-site
+		 * uploads directory or `WP_CONTENT_DIR/wppo`) so a passthrough
+		 * value from `get_img_path()` (off-site URL returned unchanged, or
+		 * `''` for a local `..` traversal) can never make the GD/Imagick
+		 * encoders write into `wp-admin`, themes, or plugins.
 		 *
 		 * @since NEXT
 		 *
@@ -599,7 +603,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			if ( '' === $path ) {
 				return false;
 			}
-			return self::is_path_in_allowlist( $path );
+			return self::is_safe_delete_path( $path );
 		}
 
 		/**
@@ -621,7 +625,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 */
 		public function exceeds_pixel_budget( int $width, int $height, int $channels = 4 ): bool {
 			if ( $width <= 0 || $height <= 0 ) {
-				return true;
+				// Corrupt headers (non-positive dimensions) are not an
+				// oversize skip: return false so the caller falls through
+				// to the normal `failed` path instead of `skipped`.
+				return false;
 			}
 			$channels = max( 1, min( 4, $channels ) );
 			$limit    = $this->get_php_memory_limit_bytes();
@@ -635,18 +642,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		/**
 		 * Map a GD/Imagick image type to its decode channel count.
 		 *
-		 * JPEG decodes to 3 channels; every other raster type (PNG/WebP/GIF/
-		 * AVIF) may carry alpha, so 4 is the safe conservative estimate.
+		 * GD `imagecreatefrom*()` allocates a truecolor (4 bytes/pixel)
+		 * bitmap regardless of source type, so every raster type uses the
+		 * conservative 4-channel estimate to avoid underestimating decode
+		 * memory near the budget limit.
 		 *
 		 * @since NEXT
 		 *
 		 * @param int $image_type One of the `IMAGETYPE_*` constants (or 0 when unknown).
-		 * @return int Channel count (3 for JPEG, 4 otherwise).
+		 * @return int Channel count (always 4, conservative for GD truecolor).
 		 */
 		private function get_source_channels( int $image_type ): int {
-			if ( defined( 'IMAGETYPE_JPEG' ) && IMAGETYPE_JPEG === $image_type ) {
-				return 3;
-			}
+			unset( $image_type );
 			return 4;
 		}
 
@@ -815,10 +822,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		public function convert_image( string $source_image, string $format = 'webp', int $quality = -1 ): bool {
 
 			// Allowlist containment: refuse traversal/passthrough sources before
-			// any filesystem, GD, or Imagick work. Fail-open: mark failed, keep
-			// the original file untouched.
+			// any filesystem, GD, or Imagick work. Fail-open with no status
+			// write so an attacker-controlled string can never pollute
+			// `wppo_img_info` as an option key (option bloat / key injection).
 			if ( '' === $source_image || ! self::is_path_in_allowlist( $source_image ) ) {
-				$this->update_conversion_status( $source_image, 'failed', $format );
 				return false;
 			}
 
@@ -900,6 +907,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			if ( ! file_exists( $source_image ) || ! is_readable( $source_image ) ) {
 				$this->update_conversion_status( $source_image, 'failed', $format );
 				return false;
+			}
+
+			// Symlink canonicalization: a symlink inside uploads pointing
+			// outside (e.g. `uploads/evil-link` -> `/etc`) passes the
+			// lexical gate, so resolve with `realpath()` and re-assert
+			// containment before any decode. Fail-open with no status
+			// write on mismatch, keeping `wppo_img_info` unpolluted.
+			$real_source = realpath( $source_image );
+			if ( false !== $real_source ) {
+				$resolved_source = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $real_source ) : str_replace( '\\', '/', $real_source );
+				if ( ! self::is_path_in_allowlist( $resolved_source ) ) {
+					return false;
+				}
+				$source_image = $resolved_source;
 			}
 
 			// Skip-small threshold: tiny files cost more CPU than they save in
@@ -1135,15 +1156,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 							// image_max_bit_depth filter (WP 6.8+, Trac #62285)
 							// preserves HDR up to 12-bit by default.
 							$imagick = new \Imagick();
-							$imagick->setResourceLimit( \Imagick::RESOURCETYPE_MEMORY, 256 * 1024 * 1024 );
-							// Bound the decoded area to the same pre-decode pixel
+							// Bound decoded memory + area to the pre-decode pixel
 							// budget so multi-frame GIFs cannot OOM the worker.
-							// Guarded for Imagick builds without the AREA type.
+							// Both calls are guarded together: on Imagick builds
+							// without setResourceLimit the caps are best-effort
+							// no-ops and the read below still runs fail-open.
 							try {
-								if ( defined( 'Imagick::RESOURCETYPE_AREA' ) && method_exists( $imagick, 'setResourceLimit' ) ) {
-									$imagick->setResourceLimit( \Imagick::RESOURCETYPE_AREA, $this->get_max_source_pixels() );
+								if ( method_exists( $imagick, 'setResourceLimit' ) ) {
+									if ( defined( 'Imagick::RESOURCETYPE_MEMORY' ) ) {
+										$imagick->setResourceLimit( \Imagick::RESOURCETYPE_MEMORY, 256 * 1024 * 1024 );
+									}
+									if ( defined( 'Imagick::RESOURCETYPE_AREA' ) ) {
+										$imagick->setResourceLimit( \Imagick::RESOURCETYPE_AREA, $this->get_max_source_pixels() );
+									}
 								}
-							} catch ( \Throwable $area_limit_error ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: area cap is best-effort hardening.
+							} catch ( \Throwable $area_limit_error ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: resource caps are best-effort hardening.
 							}
 							$imagick->readImage( $source_image );
 

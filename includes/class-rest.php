@@ -703,6 +703,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		}
 
 		/**
+		 * Resolve a client- or DB-supplied image path to an absolute source path.
+		 *
+		 * DB-backed pending values are already absolute; relative client
+		 * values are resolved under `ABSPATH`. Uses the same
+		 * `ltrim()` + allowlist construction as the validator so the
+		 * enqueue/sync loops can never double-prefix an absolute value.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $img_path           Raw path from the request or DB queue.
+		 * @param string $normalized_abspath Trailingslashed `ABSPATH`.
+		 * @return string Absolute candidate source path.
+		 */
+		private function resolve_optimise_source_path( string $img_path, string $normalized_abspath ): string {
+			$candidate = wp_normalize_path( $img_path );
+			if ( method_exists( 'PerformanceOptimise\Inc\Img_Converter', 'is_path_in_allowlist' ) && Img_Converter::is_path_in_allowlist( $candidate ) ) {
+				return $candidate;
+			}
+			return $normalized_abspath . ltrim( $candidate, '/' );
+		}
+
+		/**
 		 * Optimizes the images and converts them to WebP or AVIF format.
 		 *
 		 * Uses Action Scheduler for background processing when available,
@@ -717,7 +739,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// trigger path (the route permission_callback already requires
 			// manage_options). Guarded so unit stubs without the pluggable
 			// helper cannot fatal.
-			if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) && ! current_user_can( 'upload_files' ) ) {
+			if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) ) {
 				return $this->send_response( null, false, 403, __( 'You are not allowed to optimize images.', 'performance-optimisation' ) );
 			}
 
@@ -754,10 +776,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// rejected with the file intact, never converted.
 			$normalized_abspath = trailingslashit( wp_normalize_path( ABSPATH ) );
 			foreach ( array_merge( $webp_images, $avif_images ) as $img_path ) {
-				if ( false !== strpos( $img_path, "\0" ) || false !== strpos( rawurldecode( $img_path ), '..' ) ) {
+				if ( false !== strpos( $img_path, "\0" ) ) {
 					return $this->send_response( null, false, 400, __( 'Invalid image path provided.', 'performance-optimisation' ) );
 				}
-				$source_path = $normalized_abspath . ltrim( $img_path, '/' );
+				// Segment-only traversal check: `..` as a full path segment
+				// (after URL-decoding), so `my..photo.jpg` stays valid.
+				$decoded_segments = str_replace( '\\', '/', rawurldecode( $img_path ) );
+				if ( 1 === preg_match( '#(^|/)\.\.(/|$)#', $decoded_segments ) ) {
+					return $this->send_response( null, false, 400, __( 'Invalid image path provided.', 'performance-optimisation' ) );
+				}
+				$source_path = $this->resolve_optimise_source_path( $img_path, $normalized_abspath );
 				if ( method_exists( 'PerformanceOptimise\Inc\Img_Converter', 'is_path_in_allowlist' ) && ! Img_Converter::is_path_in_allowlist( $source_path ) ) {
 					return $this->send_response( null, false, 400, __( 'Invalid image path provided.', 'performance-optimisation' ) );
 				}
@@ -776,7 +804,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			if ( $use_action_scheduler ) {
 				// Schedule background jobs via Action Scheduler with deduplication.
 				foreach ( $webp_images as $webp_image ) {
-					$source_path = wp_normalize_path( ABSPATH . $webp_image );
+					$source_path = $this->resolve_optimise_source_path( $webp_image, $normalized_abspath );
 
 					if ( file_exists( $source_path ) ) {
 						$args = array(
@@ -798,7 +826,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				}
 
 				foreach ( $avif_images as $avif_image ) {
-					$source_path = wp_normalize_path( ABSPATH . $avif_image );
+					$source_path = $this->resolve_optimise_source_path( $avif_image, $normalized_abspath );
 
 					if ( file_exists( $source_path ) ) {
 						$args = array(
@@ -845,7 +873,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$img_converter = new Img_Converter( $options );
 
 			foreach ( $webp_images as $webp_image ) {
-				$source_path = wp_normalize_path( ABSPATH . $webp_image );
+				$source_path = $this->resolve_optimise_source_path( $webp_image, $normalized_abspath );
 
 				if ( file_exists( $source_path ) ) {
 					$img_converter->convert_image( $source_path, 'webp' );
@@ -853,7 +881,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			foreach ( $avif_images as $avif_image ) {
-				$source_path = wp_normalize_path( ABSPATH . $avif_image );
+				$source_path = $this->resolve_optimise_source_path( $avif_image, $normalized_abspath );
 
 				if ( file_exists( $source_path ) ) {
 					$img_converter->convert_image( $source_path, 'avif' );
@@ -885,7 +913,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// Defense-in-depth capability re-check on the delete trigger
 			// (the route permission_callback already requires
 			// manage_options). Authors without upload_files are denied.
-			if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) && ! current_user_can( 'upload_files' ) ) {
+			if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) ) {
 				return $this->send_response( null, false, 403, __( 'You are not allowed to delete optimized images.', 'performance-optimisation' ) );
 			}
 

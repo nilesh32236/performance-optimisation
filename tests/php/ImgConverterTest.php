@@ -1364,6 +1364,8 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	public function test_is_path_in_allowlist_rejects_traversal(): void {
 		$this->assertTrue( Img_Converter::is_path_in_allowlist( $this->uploads_dir . '/allowlist.png' ) );
 		$this->assertTrue( Img_Converter::is_path_in_allowlist( rtrim( WP_CONTENT_DIR, '/' ) . '/wppo/uploads/2026/08/allowlist.webp' ) );
+		// Dotted filenames without a `..` segment stay valid.
+		$this->assertTrue( Img_Converter::is_path_in_allowlist( $this->uploads_dir . '/my..photo.jpg' ) );
 
 		$this->assertFalse( Img_Converter::is_path_in_allowlist( '' ) );
 		$this->assertFalse( Img_Converter::is_path_in_allowlist( $this->uploads_dir . '/../secret.png' ) );
@@ -1397,8 +1399,8 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 
 	/**
 	 * Channels-aware pixel budget: 40MP exceeds the fallback budget while
-	 * a normal 12MP image fits, and invalid dimensions fail closed to
-	 * skip (#1035).
+	 * a normal 12MP image fits, and corrupt (non-positive) dimensions are
+	 * NOT an oversize skip so the caller records `failed` (#1035).
 	 *
 	 * @since NEXT
 	 */
@@ -1409,8 +1411,8 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 			$converter = $this->make_converter();
 			$this->assertTrue( $converter->exceeds_pixel_budget( 8000, 5000, 4 ), '40MP exceeds the fallback budget' );
 			$this->assertFalse( $converter->exceeds_pixel_budget( 4000, 3000, 3 ), '12MP fits the fallback budget' );
-			$this->assertTrue( $converter->exceeds_pixel_budget( 0, 100 ), 'Invalid dimensions fail closed to skip' );
-			$this->assertTrue( $converter->exceeds_pixel_budget( -5, 100 ), 'Negative dimensions fail closed to skip' );
+			$this->assertFalse( $converter->exceeds_pixel_budget( 0, 100 ), 'Corrupt zero dims are not an oversize skip' );
+			$this->assertFalse( $converter->exceeds_pixel_budget( -5, 100 ), 'Negative dims are not an oversize skip' );
 		} finally {
 			if ( false !== $previous ) {
 				// phpcs:ignore WordPress.PHP.IniSet.memory_limit_Disallowed -- Test restores the original memory limit.
