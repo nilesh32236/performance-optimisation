@@ -4,6 +4,7 @@ import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 import { modeLabel } from '../lib/litespeed';
 import useNotice from '../lib/useNotice';
+import useUnsavedChanges from '../lib/useUnsavedChanges';
 import UnsavedChangesContext from '../lib/UnsavedChangesContext';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -104,17 +105,68 @@ const FileOptimization = ( {
 	const { notice, notify, dismiss } = useNotice();
 	const { setIsDirty } = useContext( UnsavedChangesContext );
 	const [ baseline, setBaseline ] = useState( defaultSettings );
+	// Baseline is intentionally derived per-key (not per-object-identity)
+	// so parent re-renders with an identical payload do not reset the form.
 	useEffect( () => {
 		setBaseline( { ...defaultSettings, ...options } );
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [ JSON.stringify( options ) ] );
-	useEffect( () => {
-		const dirty = JSON.stringify( settings ) !== JSON.stringify( baseline );
-		setIsDirty( dirty );
-	}, [ settings, baseline, setIsDirty ] );
-	useEffect( () => {
-		return () => setIsDirty( false );
-	}, [ setIsDirty ] );
+	}, [
+		options.minifyJS,
+		options.excludeJS,
+		options.minifyCSS,
+		options.excludeCSS,
+		options.combineCSS,
+		options.excludeCombineCSS,
+		options.removeQueryStrings,
+		options.minifyHTML,
+		options.deferJS,
+		options.excludeDeferJS,
+		options.delayJS,
+		options.excludeDelayJS,
+		options.delayJSDefaultStrategy,
+		options.delayJSIdleList,
+		options.delayJSViewportList,
+		options.delayJSPriority,
+		options.delayJSIdleTimeout,
+		options.removeWooCSSJS,
+		options.excludeUrlToKeepJSCSS,
+		options.removeCssJsHandle,
+		options.enableServerRules,
+		options.criticalCSS,
+		options.hostGoogleFontsLocally,
+		options.fontMetricFallback,
+		options.cdnURL,
+		options.cdnMapping,
+		options.removeUnusedCSS,
+		options.excludeUnusedCSS,
+		options.disableEmojis,
+		options.disableEmbeds,
+		options.disableDashicons,
+		options.disableXMLRPC,
+		options.disableRestApiLinks,
+		options.disableRssFeeds,
+		options.disableShortlinks,
+		options.disableGeneratorTag,
+		options.disableJQueryMigrate,
+		options.disablePasswordStrength,
+		options.disableSelfPingbacks,
+		options.disableRSD,
+		options.disableWLWManifest,
+		options.disableGlobalStyles,
+		options.disableClassicThemeStyles,
+		options.disableWooCartFragments,
+		options.disableRecentCommentsStyle,
+		options.disableCommentReply,
+		options.disableOEmbedDiscovery,
+		options.disableBlockWidgets,
+		options.blockAssetsOnDemand,
+		options.loadAllCoreBlockAssets,
+		options.heartbeatControl,
+		options.minifyInlineCSS,
+		options.minifyInlineJS,
+		options.removeHTMLComments,
+	] );
+	useUnsavedChanges( settings, baseline );
 
 	// H-01: sync local state when parent props change after mount.
 	useEffect( () => {
