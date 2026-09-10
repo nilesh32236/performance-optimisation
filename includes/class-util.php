@@ -1221,6 +1221,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				if ( false === $bracket_end ) {
 					return '';
 				}
+				// Reject trailing garbage after the bracket (e.g. '[::1]evil'):
+				// only '' or a ':port' suffix is a well-formed bracketed host.
+				$rest = substr( $domain, $bracket_end + 1 );
+				if ( '' !== $rest && ':' !== substr( $rest, 0, 1 ) ) {
+					return '';
+				}
 				$host = substr( $domain, 1, $bracket_end - 1 );
 			} elseif ( substr_count( $domain, ':' ) > 1 ) {
 				$host = $domain;

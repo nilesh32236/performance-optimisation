@@ -916,6 +916,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				return false;
 			}
 
+			// Refuse writes when no domain resolved (canonical unavailable and no
+			// request host, e.g. early boot/CLI): writing under a host-less dir
+			// (cache/wppo//<path>/) would collide across multisite blogs instead
+			// of namespacing per site. Mirrors Cache::maybe_store_cache().
+			//
+			// @since NEXT Empty-domain refusal.
+			if ( '' === $this->domain ) {
+				return false;
+			}
+
 			// A forged host embedded in the explicit $url (e.g. via a filtered
 			// permalink) is not covered by the ambient Host check above: refuse
 			// when the URL host is present and differs from the canonical domain.

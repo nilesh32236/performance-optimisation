@@ -356,6 +356,9 @@ class AdvancedCacheHandlerTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertStringContainsString( 'idn_to_ascii', $fs->put_contents );
 		$this->assertStringContainsString( '$request_base', $fs->put_contents );
+		// Bracketed-IPv6 unwrap mirrors Util::normalize_cache_host() so
+		// '[::1]:8080' normalizes instead of mismatching in the drop-in.
+		$this->assertStringContainsString( 'strpos( $request_base', $fs->put_contents );
 	}
 
 	/**

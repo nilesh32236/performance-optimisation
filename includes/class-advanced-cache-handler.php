@@ -196,6 +196,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			// cache/wppo/<canonical-host>/, so a forged Host header is served
 			// uncached (falls through to WordPress) and can never create or
 			// serve a poisoned file. Empty canonical fails open to uncached.
+			//
+			// Known tradeoff: a single canonical host is baked at create() time
+			// because the pre-boot drop-in has no blog context. On multisite or
+			// domain-mapped networks with several valid hosts, non-primary hosts
+			// fail open (served uncached) rather than served from their own tree.
+			// Per-Host trees were inherently multisite-safe but also inherently
+			// poisonable, so fail-open is the safe direction; a future
+			// enhancement could bake an allowlist of network hosts instead of
+			// strict equality.
 			$canonical_host = Util::get_canonical_host();
 			if ( '' === $canonical_host && is_string( $site_host ) && '' !== $site_host ) {
 				$canonical_host = Util::normalize_cache_host( $site_host );
@@ -248,7 +257,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'$site_url       = ' . $site_url_escaped . ';' . PHP_EOL .
 			'$canonical_host = ' . $canonical_host_escaped . ';' . PHP_EOL .
 			'$raw_domain    = isset( $_SERVER[\'HTTP_HOST\'] ) ? (string) $_SERVER[\'HTTP_HOST\'] : \'\';' . PHP_EOL .
-			'$request_base   = explode( \':\', $raw_domain, 2 )[0];' . PHP_EOL .
+			'$request_base   = $raw_domain;' . PHP_EOL .
+			'if ( isset( $request_base[0] ) && \'[\' === $request_base[0] ) { $bracket_end = strpos( $request_base, \']\' ); $request_base = ( false !== $bracket_end ) ? substr( $request_base, 1, $bracket_end - 1 ) : \'\'; } elseif ( substr_count( $request_base, \':\' ) <= 1 ) { $request_base = explode( \':\', $request_base, 2 )[0]; }' . PHP_EOL .
 			'$idn_host       = function_exists( \'idn_to_ascii\' ) ? @idn_to_ascii( $request_base, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46 ) : false;' . PHP_EOL .
 			'$request_base   = ( is_string( $idn_host ) && \'\' !== $idn_host ) ? $idn_host : $request_base;' . PHP_EOL .
 			'$site_domain   = strtolower( preg_replace( \'/[^a-z0-9.:-]+/i\', \'\', $raw_domain ) );' . PHP_EOL .
