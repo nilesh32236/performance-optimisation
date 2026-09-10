@@ -399,6 +399,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				$cap = apply_filters( 'wppo_max_longest_edge_px', $cap );
 			}
 
+			// Guard against non-scalar options/filter returns (an array would
+			// coerce to 0/1 and silently disable or over-clamp the cap).
+			if ( ! is_scalar( $cap ) ) {
+				$cap = 2560;
+			}
+
 			$cap = (int) $cap;
 			if ( $cap < 0 ) {
 				$cap = 0;
@@ -853,6 +859,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 								$avif_path = $this->get_img_path( $source_image, 'avif' );
 								if ( ! Util::prepare_cache_dir( dirname( $avif_path ) ) ) {
+									if ( null !== $image && ( is_resource( $image ) || $image instanceof \GdImage ) ) {
+										Util::destroy_gd_image( $image );
+									}
 									$this->update_conversion_status( $source_image, 'failed', $format );
 									return false;
 								}
@@ -860,6 +869,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 								if ( imageavif( $image, $avif_path, $avif_quality ?? $quality ) ) {
 									$this->update_conversion_status( $source_image, 'completed', 'avif' );
 								} else {
+									if ( null !== $image && ( is_resource( $image ) || $image instanceof \GdImage ) ) {
+										Util::destroy_gd_image( $image );
+									}
 									$this->update_conversion_status( $source_image, 'failed', $format );
 									return false;
 								}
@@ -891,6 +903,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 								$this->store_placeholder_data( $rel_path, $dominant_color, $lqip );
 								Util::destroy_gd_image( $webp_gd );
 							}
+						}
+
+						// Destroy the decoded WebP GD handle on the AVIF path
+						// (the generic path cleans up after encoding; this early
+						// return must not leak it).
+						if ( null !== $image && ( is_resource( $image ) || $image instanceof \GdImage ) ) {
+							Util::destroy_gd_image( $image );
 						}
 
 						return true;
@@ -932,11 +951,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 									$gif_h       = $imagick->getImageHeight();
 									$gif_longest = max( (int) $gif_w, (int) $gif_h );
 									if ( $gif_longest > $edge_cap ) {
-										$imagick = $imagick->coalesceImages();
+										// coalesceImages()/deconstructImages() each
+										// return a NEW Imagick; clear the prior handle
+										// before reassigning so it is not leaked.
+										$coalesced = $imagick->coalesceImages();
+										$imagick->clear();
+										$imagick = $coalesced;
 										foreach ( $imagick as $frame ) {
 											$frame->thumbnailImage( $edge_cap, $edge_cap, true );
 										}
-										$imagick = $imagick->deconstructImages();
+										$deconstructed = $imagick->deconstructImages();
+										$imagick->clear();
+										$imagick = $deconstructed;
 									}
 								}
 							} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: keep original frames on any resize failure.

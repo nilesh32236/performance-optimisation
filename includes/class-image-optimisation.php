@@ -528,7 +528,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			// image/svg+xml which can carry script, application/xhtml+xml,
 			// …) is refused and emitted unmodified (fail-open).
 			if ( str_starts_with( $lower, 'data:' ) ) {
-				return 1 === preg_match( '#^data:image/(?:png|jpe?g|gif|webp|avif)[;,]?#', $lower );
+				// Require a `;`/`,` delimiter after the subtype so a
+				// prefix-only match like `data:image/pngevil` is rejected.
+				return 1 === preg_match( '#^data:image/(?:png|jpe?g|gif|webp|avif)[;,]#i', $lower );
 			}
 			return true;
 		}
@@ -3811,8 +3813,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * string for LCP matching, but `img.jpg?v=1` and `img.jpg?v=2` are
 		 * distinct preload resources, so the raw query string is re-attached
 		 * here: versioned duplicates each emit their own hint instead of
-		 * collapsing to one. Fail-open: any parse failure falls back to the
-		 * normalized URL + media key.
+		 * collapsing to one. The normalized base also strips WordPress size
+		 * suffixes, so responsive variants of the same image
+		 * (`hero-1024x768.jpg`) intentionally collapse to a single preload
+		 * hint alongside the full-size original (`hero.jpg`). Fail-open: any
+		 * parse failure falls back to the normalized URL + media key.
 		 *
 		 * @since NEXT
 		 *

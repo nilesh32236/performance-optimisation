@@ -1184,6 +1184,18 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 			}
 		);
 		$this->assertSame( 0, $converter->get_longest_edge_cap() );
+
+		// A non-scalar filter return falls back to the 2560 default instead of
+		// coercing an array to 0/1.
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook_name, $value ) {
+				if ( 'wppo_max_longest_edge_px' === $hook_name ) {
+					return array( 1920 );
+				}
+				return $value;
+			}
+		);
+		$this->assertSame( 2560, $converter->get_longest_edge_cap() );
 	}
 
 	/**

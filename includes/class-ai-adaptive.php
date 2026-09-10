@@ -693,62 +693,67 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			$field_lcp_p75         = 0.0;
 			$field_lcp_samples     = 0;
 			$field_lcp_min         = self::field_lcp_min_samples();
-			try {
-				$observed = self::segmented_field_lcp( 1 );
-				$max_n    = 0;
-				foreach ( $observed as $row ) {
-					if ( is_array( $row ) && isset( $row['n'] ) ) {
-						$max_n = max( $max_n, (int) $row['n'] );
-					}
-				}
-				$field_lcp_samples = $max_n;
-				$qualified         = array();
-				foreach ( $observed as $row ) {
-					if ( is_array( $row ) && isset( $row['n'] ) && (int) $row['n'] >= $field_lcp_min ) {
-						$qualified[] = $row;
-					}
-				}
-				if ( ! empty( $qualified ) ) {
-					usort(
-						$qualified,
-						static function ( $a, $b ) {
-							$pa = isset( $a['p75'] ) ? (float) $a['p75'] : 0.0;
-							$pb = isset( $b['p75'] ) ? (float) $b['p75'] : 0.0;
-							if ( $pa === $pb ) {
-								return 0;
-							}
-							return $pa > $pb ? -1 : 1;
+			// Upgrade-only: when the global-average path already sits at the top
+			// of the eagerness ladder (`eager`), the segmented lookup can never
+			// raise it, so skip the full RUM option scan entirely.
+			if ( 'eager' !== $eagerness ) {
+				try {
+					$observed = self::segmented_field_lcp( 1 );
+					$max_n    = 0;
+					foreach ( $observed as $row ) {
+						if ( is_array( $row ) && isset( $row['n'] ) ) {
+							$max_n = max( $max_n, (int) $row['n'] );
 						}
-					);
-					$slowest           = $qualified[0];
-					$segment_p75       = isset( $slowest['p75'] ) ? (float) $slowest['p75'] : 0.0;
-					$segment_eagerness = 'conservative';
-					if ( $segment_p75 > 3500 ) {
-						$segment_eagerness = 'eager';
-					} elseif ( $segment_p75 > 2500 ) {
-						$segment_eagerness = 'moderate';
 					}
-					// Upgrade-only: the segment may raise eagerness above the
-					// global-average result, never lower it.
-					$ladder = array(
-						'conservative' => 0,
-						'moderate'     => 1,
-						'eager'        => 2,
-					);
-					if ( ( $ladder[ $segment_eagerness ] ?? 0 ) > ( $ladder[ $eagerness ] ?? 0 ) ) {
-						$eagerness = $segment_eagerness;
+					$field_lcp_samples = $max_n;
+					$qualified         = array();
+					foreach ( $observed as $row ) {
+						if ( is_array( $row ) && isset( $row['n'] ) && (int) $row['n'] >= $field_lcp_min ) {
+							$qualified[] = $row;
+						}
 					}
-					$field_lcp_provisional = false;
-					$field_lcp_segment     = array(
-						'path'     => isset( $slowest['path'] ) ? (string) $slowest['path'] : '',
-						'device'   => isset( $slowest['device'] ) ? (string) $slowest['device'] : 'unknown',
-						'template' => isset( $slowest['template'] ) ? (string) $slowest['template'] : 'unknown',
-					);
-					$field_lcp_p75         = $segment_p75;
-					$field_lcp_samples     = isset( $slowest['n'] ) ? (int) $slowest['n'] : $max_n;
+					if ( ! empty( $qualified ) ) {
+						usort(
+							$qualified,
+							static function ( $a, $b ) {
+								$pa = isset( $a['p75'] ) ? (float) $a['p75'] : 0.0;
+								$pb = isset( $b['p75'] ) ? (float) $b['p75'] : 0.0;
+								if ( $pa === $pb ) {
+									return 0;
+								}
+								return $pa > $pb ? -1 : 1;
+							}
+						);
+						$slowest           = $qualified[0];
+						$segment_p75       = isset( $slowest['p75'] ) ? (float) $slowest['p75'] : 0.0;
+						$segment_eagerness = 'conservative';
+						if ( $segment_p75 > 3500 ) {
+							$segment_eagerness = 'eager';
+						} elseif ( $segment_p75 > 2500 ) {
+							$segment_eagerness = 'moderate';
+						}
+						// Upgrade-only: the segment may raise eagerness above the
+						// global-average result, never lower it.
+						$ladder = array(
+							'conservative' => 0,
+							'moderate'     => 1,
+							'eager'        => 2,
+						);
+						if ( ( $ladder[ $segment_eagerness ] ?? 0 ) > ( $ladder[ $eagerness ] ?? 0 ) ) {
+							$eagerness = $segment_eagerness;
+						}
+						$field_lcp_provisional = false;
+						$field_lcp_segment     = array(
+							'path'     => isset( $slowest['path'] ) ? (string) $slowest['path'] : '',
+							'device'   => isset( $slowest['device'] ) ? (string) $slowest['device'] : 'unknown',
+							'template' => isset( $slowest['template'] ) ? (string) $slowest['template'] : 'unknown',
+						);
+						$field_lcp_p75         = $segment_p75;
+						$field_lcp_samples     = isset( $slowest['n'] ) ? (int) $slowest['n'] : $max_n;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
 				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
 			}
 
 			// Allow filter for eagerness.

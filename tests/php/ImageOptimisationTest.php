@@ -816,6 +816,35 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that the lazy-placeholder data: allowlist requires a delimiter.
+	 *
+	 * A prefix-only subtype (data:image/pngevil) must be rejected while real
+	 * raster image data URLs with a `;`/`,` delimiter are accepted.
+	 *
+	 * @since NEXT
+	 */
+	public function test_is_valid_lazy_placeholder_candidate_data_allowlist(): void {
+		$image_opt  = new Image_Optimisation( $this->default_options );
+		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'is_valid_lazy_placeholder_candidate' );
+		$reflection->setAccessible( true );
+
+		// Safe raster image data URLs (with delimiter) are accepted.
+		$this->assertTrue( $reflection->invoke( $image_opt, 'data:image/png;base64,AAAA' ) );
+		$this->assertTrue( $reflection->invoke( $image_opt, 'data:image/jpeg,AAAA' ) );
+		$this->assertTrue( $reflection->invoke( $image_opt, 'data:image/webp;base64,AAAA' ) );
+
+		// Prefix look-alike subtype without a delimiter is rejected.
+		$this->assertFalse( $reflection->invoke( $image_opt, 'data:image/pngevil' ) );
+
+		// Non-image / script-capable data payloads are rejected.
+		$this->assertFalse( $reflection->invoke( $image_opt, 'data:image/svg+xml,AAAA' ) );
+		$this->assertFalse( $reflection->invoke( $image_opt, 'data:text/html,AAAA' ) );
+
+		// Normal http(s) URLs remain accepted.
+		$this->assertTrue( $reflection->invoke( $image_opt, 'https://example.com/a.png' ) );
+	}
+
+	/**
 	 * Test that an inline background-image is converted to a lazy data attribute.
 	 */
 	public function test_add_delay_load_backgrounds_rewrites_inline_background(): void {
