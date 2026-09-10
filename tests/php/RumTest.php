@@ -592,4 +592,170 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 1, $data[ $today ]['/hero']['lcp']['n'] );
 		$this->assertArrayNotHasKey( 'lcpUrls', $data[ $today ]['/hero'] );
 	}
+
+	/**
+	 * Stub the WP functions used to resolve the PageSpeed fallback candidate.
+	 *
+	 * @param string $heuristic_url LCP URL the transient lookup should return.
+	 */
+	private function stub_pagespeed_candidate_environment( string $heuristic_url ): void {
+		Functions\when( 'is_singular' )->justReturn( false );
+		Functions\when( 'is_front_page' )->justReturn( false );
+		Functions\when( 'untrailingslashit' )->returnArg();
+		Functions\when( 'add_query_arg' )->justReturn( '/hero-page/' );
+		Functions\when( 'home_url' )->justReturn( 'https://example.com' );
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		Functions\when( 'get_transient' )->justReturn( $heuristic_url );
+		Util::clear_settings_cache();
+	}
+
+	/**
+	 * Build a RUM aggregate with a single LCP URL entry for a path.
+	 *
+	 * @param string $path      Page path.
+	 * @param string $url       Raw LCP element URL.
+	 * @param int    $samples   Observation count.
+	 * @param int    $last_seen Last-seen timestamp.
+	 * @return array Aggregate option value.
+	 */
+	private function make_candidate_aggregate( string $path, string $url, int $samples, int $last_seen ): array {
+		return array(
+			gmdate( 'Y-m-d' ) => array(
+				$path => array(
+					'lcpUrls' => array(
+						'entry' => array(
+							'url'      => $url,
+							'n'        => $samples,
+							'lastSeen' => $last_seen,
+						),
+					),
+				),
+			),
+		);
+	}
+
+	/**
+	 * Test that the preload candidate returns the field URL once the sample gate passes.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_lcp_preload_candidate_returns_field_url_when_gated(): void {
+		$this->install_stubs();
+		$this->stub_pagespeed_candidate_environment( 'https://example.com/wp-content/uploads/heuristic.jpg' );
+		$this->options['wppo_settings'] = array(
+			'performance_audit'  => array( 'rum_enabled' => true ),
+			'image_optimisation' => array( 'fieldLcpMinSamples' => 20 ),
+		);
+		Util::clear_settings_cache();
+		$this->options[ RUM::OPTION ] = $this->make_candidate_aggregate( '/hero', 'https://example.com/wp-content/uploads/field.jpg', 20, time() );
+
+		$candidate = RUM::get_lcp_preload_candidate( '/hero' );
+
+		$this->assertIsArray( $candidate );
+		$this->assertSame( 'https://example.com/wp-content/uploads/field.jpg', $candidate['url'] );
+		$this->assertSame( 20, $candidate['n'] );
+	}
+
+	/**
+	 * Test that the preload candidate falls back to the PageSpeed URL when samples are insufficient.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_lcp_preload_candidate_falls_back_to_pagespeed_when_under_threshold(): void {
+		$this->install_stubs();
+		$this->stub_pagespeed_candidate_environment( 'https://example.com/wp-content/uploads/heuristic.jpg' );
+		$this->options['wppo_settings'] = array(
+			'performance_audit'  => array( 'rum_enabled' => true ),
+			'image_optimisation' => array( 'fieldLcpMinSamples' => 20 ),
+		);
+		Util::clear_settings_cache();
+		$this->options[ RUM::OPTION ] = $this->make_candidate_aggregate( '/hero', 'https://example.com/wp-content/uploads/field.jpg', 5, time() );
+
+		$candidate = RUM::get_lcp_preload_candidate( '/hero' );
+
+		$this->assertIsArray( $candidate );
+		$this->assertSame( 'https://example.com/wp-content/uploads/heuristic.jpg', $candidate['url'] );
+		$this->assertSame( 0, $candidate['n'] );
+	}
+
+	/**
+	 * Test that the preload candidate returns null when neither field nor PageSpeed data exists.
+	 *
+	 * Callers fall through to the manual preload-image meta / hero path.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_lcp_preload_candidate_returns_null_when_no_data(): void {
+		$this->install_stubs();
+		$this->stub_pagespeed_candidate_environment( '' );
+		$this->options['wppo_settings'] = array(
+			'performance_audit'  => array( 'rum_enabled' => true ),
+			'image_optimisation' => array( 'fieldLcpMinSamples' => 20 ),
+		);
+		Util::clear_settings_cache();
+		$this->options[ RUM::OPTION ] = array();
+
+		$this->assertNull( RUM::get_lcp_preload_candidate( '/hero' ) );
+	}
+
+	/**
+	 * Test that an explicit path threads through to the PageSpeed transient
+	 * tier instead of mixing the field path with current-request context.
+	 *
+	 * The singular-post-meta tier must not win for an explicit path, and the
+	 * transient lookup must use the home_url + path hash for that path.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_stored_pagespeed_lcp_url_threads_explicit_path(): void {
+		$this->install_stubs();
+		Functions\when( 'is_singular' )->justReturn( true );
+		Functions\when( 'get_the_ID' )->justReturn( 42 );
+		Functions\when( 'get_post_meta' )->justReturn( 'https://example.com/wp-content/uploads/post-meta.jpg' );
+		Functions\when( 'is_front_page' )->justReturn( false );
+		Functions\when( 'untrailingslashit' )->returnArg();
+		Functions\when( 'add_query_arg' )->justReturn( '/about/' );
+		Functions\when( 'home_url' )->justReturn( 'https://example.com' );
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+
+		$seen_keys = array();
+		Functions\when( 'get_transient' )->alias(
+			static function ( $key ) use ( &$seen_keys ) {
+				$seen_keys[] = $key;
+				return 'https://example.com/wp-content/uploads/path-hero.jpg';
+			}
+		);
+		Util::clear_settings_cache();
+
+		$this->assertSame(
+			'https://example.com/wp-content/uploads/path-hero.jpg',
+			RUM::get_stored_pagespeed_lcp_url( '/about' )
+		);
+		// The transient tier resolved by the explicit path, not the
+		// current-request post meta (which would have returned post-meta.jpg).
+		$expected_key = 'wppo_lcp_url_mobile_' . md5( 'https://example.com/about' );
+		$this->assertContains( $expected_key, $seen_keys );
+	}
+
+	/**
+	 * Test that a null path still consults the current-request post-meta tier.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_stored_pagespeed_lcp_url_uses_post_meta_for_current_request(): void {
+		$this->install_stubs();
+		Functions\when( 'is_singular' )->justReturn( true );
+		Functions\when( 'get_the_ID' )->justReturn( 42 );
+		Functions\when( 'get_post_meta' )->justReturn( 'https://example.com/wp-content/uploads/post-meta.jpg' );
+		Functions\when( 'is_front_page' )->justReturn( false );
+
+		$this->assertSame(
+			'https://example.com/wp-content/uploads/post-meta.jpg',
+			RUM::get_stored_pagespeed_lcp_url()
+		);
+	}
 }

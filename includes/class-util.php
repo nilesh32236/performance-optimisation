@@ -1245,7 +1245,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 
 			$host = strtolower( $parts['host'] ?? '' );
 			$path = $parts['path'];
-			$path = (string) preg_replace( '#-(?:\d+x\d+|scaled|e\d+)(?=\.[A-Za-z0-9]+)$#', '', $path );
+			// The `$` anchor lives inside the lookahead so the suffix only
+			// strips immediately before the file extension at end of path
+			// (a trailing `$` outside the lookahead could never match).
+			$path = (string) preg_replace( '#-(?:\d+x\d+|scaled|e\d+)(?=\.[A-Za-z0-9]+$)#', '', $path );
 
 			return $host . $path;
 		}
