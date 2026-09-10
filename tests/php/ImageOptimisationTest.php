@@ -1384,4 +1384,86 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		// The below-fold image keeps its lazy loading.
 		$this->assertStringContainsString( '<img src="https://example.com/second.jpg" loading="lazy"', $result );
 	}
+
+	/**
+	 * Test that the RUM-field LCP candidate emits exactly one image preload
+	 * with fetchpriority high, and that a repeated call emits nothing.
+	 *
+	 * @since NEXT
+	 */
+	public function test_auto_lcp_preload_emits_single_preload_with_fetchpriority_high(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'wp_doing_ajax' )->justReturn( false );
+		Functions\when( 'wp_doing_cron' )->justReturn( false );
+		Functions\when( 'wp_is_json_request' )->justReturn( false );
+		Functions\when( 'esc_attr' )->returnArg();
+		Functions\when( 'esc_url' )->returnArg();
+		Functions\when( 'wp_kses' )->returnArg( 1 );
+		Functions\when( 'get_the_ID' )->justReturn( 0 );
+		$this->stub_field_lcp_environment(
+			array( 'image_optimisation' => array( 'fieldLcpMinSamples' => 20 ) ),
+			$this->make_rum_aggregate( '/hero-page/', 'https://example.com/wp-content/uploads/field.jpg', 20, time() ),
+			'https://example.com/wp-content/uploads/heuristic.jpg'
+		);
+		$_SERVER['REQUEST_URI'] = '/hero-page/';
+
+		$options = $this->default_options;
+		$options['image_optimisation']['autoPreloadLCP']   = true;
+		$options['image_optimisation']['fieldLcpOverride'] = true;
+		$image_opt = new Image_Optimisation( $options );
+
+		ob_start();
+		$image_opt->preload_images();
+		$first = (string) ob_get_clean();
+
+		$this->assertSame( 1, substr_count( $first, 'rel="preload"' ) );
+		$this->assertStringContainsString( 'as="image"', $first );
+		$this->assertStringContainsString( 'fetchpriority="high"', $first );
+		$this->assertStringContainsString( 'https://example.com/wp-content/uploads/field.jpg', $first );
+
+		// Per-request guard: a second wp_head invocation must not duplicate the hint.
+		ob_start();
+		$image_opt->preload_images();
+		$second = (string) ob_get_clean();
+
+		$this->assertSame( 0, substr_count( $second, 'rel="preload"' ) );
+	}
+
+	/**
+	 * Test that the field-measured LCP candidate is excluded from lazy load
+	 * even when both LCP toggles are off.
+	 *
+	 * @since NEXT
+	 */
+	public function test_field_lcp_candidate_excluded_from_lazy_without_toggles(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'get_the_ID' )->justReturn( 0 );
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'esc_attr' )->returnArg();
+		Functions\when( 'esc_url' )->returnArg();
+		Functions\when( 'wp_kses' )->returnArg( 1 );
+		$this->stub_field_lcp_environment(
+			array( 'image_optimisation' => array( 'fieldLcpMinSamples' => 20 ) ),
+			$this->make_rum_aggregate( '/hero-page/', 'https://example.com/wp-content/uploads/field.jpg', 20, time() ),
+			''
+		);
+		$_SERVER['REQUEST_URI'] = '/hero-page/';
+
+		$options = $this->default_options;
+		$options['image_optimisation']['lazyLoadNative']  = false;
+		$options['image_optimisation']['placeholderType'] = 'none';
+		$image_opt                                        = new Image_Optimisation( $options );
+
+		$html   = '<img src="https://example.com/wp-content/uploads/field.jpg" alt="hero"/><img src="https://example.com/below.jpg" alt="below"/>';
+		$result = $image_opt->add_delay_load_img( $html );
+
+		// The LCP candidate keeps its src (never data-src swapped).
+		$this->assertStringContainsString( 'src="https://example.com/wp-content/uploads/field.jpg"', $result );
+		$this->assertStringNotContainsString( 'data-src="https://example.com/wp-content/uploads/field.jpg"', $result );
+		// The below-fold image is still lazy-loaded.
+		$this->assertStringContainsString( 'data-src="https://example.com/below.jpg"', $result );
+	}
 }

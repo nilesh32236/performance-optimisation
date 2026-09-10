@@ -787,5 +787,157 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				return null;
 			}
 		}
+
+		/**
+		 * Get the single LCP preload candidate for a page path.
+		 *
+		 * Field-measured RUM data wins when it passes the sample gate
+		 * (see {@see get_field_lcp_url()}); otherwise the stored PageSpeed
+		 * candidate for the current page is returned (synthesized as
+		 * `array{url,n:0,lastSeen:now}` so callers share one shape).
+		 * Returns null when neither resolves so callers fall through to the
+		 * manual preload-image meta / hero path. Fail-open: any failure
+		 * returns null, never fatal.
+		 *
+		 * @since NEXT
+		 * @param string|null $path Page path (e.g. "/about/"). Defaults to the current request path.
+		 * @return array{url:string,n:int,lastSeen:int}|null Single LCP candidate or null.
+		 */
+		public static function get_lcp_preload_candidate( ?string $path = null ): ?array {
+			try {
+				if ( null === $path ) {
+					$path = self::resolve_current_path();
+				}
+				$field = self::get_field_lcp_url( $path );
+				if ( is_array( $field ) && ! empty( $field['url'] ) && is_string( $field['url'] ) ) {
+					return $field;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			try {
+				$fallback = self::get_pagespeed_lcp_candidate();
+				if ( '' !== $fallback ) {
+					return array(
+						'url'      => $fallback,
+						'n'        => 0,
+						'lastSeen' => time(),
+					);
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return null;
+		}
+
+		/**
+		 * Resolve the current page path the same way the preload pipeline does.
+		 *
+		 * Prefers `Util::get_current_url()` (the source `get_current_lcp_url()`
+		 * derives its path from) and falls back to null so
+		 * `get_field_lcp_url()` resolves `$_SERVER['REQUEST_URI']` itself.
+		 * Fail-open: any failure returns null.
+		 *
+		 * @since NEXT
+		 * @return string|null Current page path or null when unresolvable.
+		 */
+		private static function resolve_current_path(): ?string {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && function_exists( 'wp_parse_url' ) ) {
+					$parsed = wp_parse_url( \PerformanceOptimise\Inc\Util::get_current_url(), PHP_URL_PATH );
+					if ( is_string( $parsed ) && '' !== $parsed ) {
+						return substr( $parsed, 0, 512 );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return null;
+		}
+
+		/**
+		 * Read-only lookup of the stored PageSpeed LCP candidate for the current page.
+		 *
+		 * Mirrors the PageSpeed priorities of the preload pipeline
+		 * (singular post meta `_wppo_lcp_image_url_{mobile,desktop}`, then
+		 * front-page option `wppo_front_page_lcp_{...}`, then the transient
+		 * keyed by strategy + current URL hash) without duplicating storage
+		 * logic. Multisite-safe via `Util::transient_key()` (blog-aware keys,
+		 * no cross-site leakage). Every WP API is guarded so unit contexts
+		 * without WP fail open to an empty string.
+		 *
+		 * @since NEXT
+		 * @return string The PageSpeed LCP image URL, or empty string when none is stored.
+		 */
+		private static function get_pagespeed_lcp_candidate(): string {
+			try {
+				$strategies = array( 'mobile', 'desktop' );
+
+				// Priority 1: Singular post — check post meta (mobile first, then desktop).
+				if ( function_exists( 'is_singular' ) && function_exists( 'get_the_ID' ) && function_exists( 'get_post_meta' ) ) {
+					try {
+						if ( is_singular() ) {
+							$post_id = get_the_ID();
+							if ( ! empty( $post_id ) ) {
+								foreach ( $strategies as $strategy ) {
+									$meta_lcp = get_post_meta( $post_id, '_wppo_lcp_image_url_' . $strategy, true );
+									if ( ! empty( $meta_lcp ) && is_string( $meta_lcp ) ) {
+										return $meta_lcp;
+									}
+								}
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+
+				// Priority 2: Front page — check option (mobile first, then desktop).
+				if ( function_exists( 'is_front_page' ) && function_exists( 'get_option' ) ) {
+					try {
+						if ( is_front_page() ) {
+							foreach ( $strategies as $strategy ) {
+								$front_lcp = get_option( 'wppo_front_page_lcp_' . $strategy, '' );
+								if ( ! empty( $front_lcp ) && is_string( $front_lcp ) ) {
+									return $front_lcp;
+								}
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+
+				// Priority 3: Transient keyed by strategy + current URL hash.
+				if ( ! function_exists( 'get_transient' ) ) {
+					return '';
+				}
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
+					return '';
+				}
+				if ( ! function_exists( 'untrailingslashit' ) || ! function_exists( 'esc_url_raw' ) ) {
+					return '';
+				}
+				try {
+					$current_url = untrailingslashit( esc_url_raw( \PerformanceOptimise\Inc\Util::get_current_url() ) );
+				} catch ( \Throwable $e ) {
+					return '';
+				}
+				foreach ( $strategies as $strategy ) {
+					$transient_key = \PerformanceOptimise\Inc\Util::transient_key( 'wppo_lcp_url_' . $strategy . '_' . md5( $current_url ) );
+					try {
+						$transient = get_transient( $transient_key );
+					} catch ( \Throwable $e ) {
+						continue;
+					}
+					if ( ! empty( $transient ) && is_string( $transient ) ) {
+						return $transient;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return '';
+		}
 	}
 }
