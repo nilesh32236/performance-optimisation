@@ -394,6 +394,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 							'fields'         => 'ids',
 							'orderby'        => 'date',
 							'order'          => 'DESC',
+							'no_found_rows'  => true,
 						)
 					);
 					if ( is_array( $post_ids ) ) {

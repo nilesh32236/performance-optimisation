@@ -530,6 +530,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					_prime_post_caches( array_map( 'intval', $query_batch_posts ), false, false );
 				}
 
+				// Snapshot the cron array once per batch so the per-ID check
+				// below is an in-memory lookup instead of up to 200 full
+				// cron-array scans (one wp_next_scheduled() per ID).
+				$scheduled_pages = $this->get_scheduled_args_set( 'wppo_generate_static_page' );
+
 				foreach ( $query_batch_posts as $page_id ) {
 					$page_url = Util::memoized_permalink( (int) $page_id );
 
@@ -544,8 +549,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 						continue;
 					}
 
-					if ( ! wp_next_scheduled( 'wppo_generate_static_page', array( $page_id ) ) ) {
-						wp_schedule_single_event( time() + wp_rand( 0, 1800 ), 'wppo_generate_static_page', array( $page_id ) );
+					if ( $this->is_hook_arg_scheduled( 'wppo_generate_static_page', array( $page_id ), $scheduled_pages ) ) {
+						continue;
+					}
+					wp_schedule_single_event( time() + wp_rand( 0, 1800 ), 'wppo_generate_static_page', array( $page_id ) );
+					if ( is_array( $scheduled_pages ) ) {
+						$scheduled_pages[ wp_json_encode( array( $page_id ) ) ] = true;
 					}
 				}
 
@@ -593,6 +602,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				unset( $e );
 			}
 
+			// Snapshot scheduled URL args once so the per-URL check below is
+			// an in-memory lookup instead of up to 500 cron-array scans.
+			$scheduled_urls = $this->get_scheduled_args_set( 'wppo_generate_static_url' );
+
 			foreach ( $sitemap_urls as $url ) {
 				if ( Util::is_url_excluded( $url, $exclude_urls ) ) {
 					continue;
@@ -604,8 +617,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					continue;
 				}
 
-				if ( ! wp_next_scheduled( 'wppo_generate_static_url', array( $url ) ) ) {
-					wp_schedule_single_event( time() + wp_rand( 0, 1800 ), 'wppo_generate_static_url', array( $url ) );
+				if ( $this->is_hook_arg_scheduled( 'wppo_generate_static_url', array( $url ), $scheduled_urls ) ) {
+					continue;
+				}
+				wp_schedule_single_event( time() + wp_rand( 0, 1800 ), 'wppo_generate_static_url', array( $url ) );
+				if ( is_array( $scheduled_urls ) ) {
+					$scheduled_urls[ wp_json_encode( array( $url ) ) ] = true;
 				}
 			}
 		}
@@ -667,6 +684,78 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return true;
+			}
+			return false;
+		}
+
+		/**
+		 * Snapshot scheduled args for a cron hook into an in-memory set.
+		 *
+		 * Reads the full cron array once via `_get_cron_array()` and indexes
+		 * entries for `$hook` by JSON-encoded args. Returns null when the
+		 * cron API is unavailable so callers fall back to wp_next_scheduled().
+		 *
+		 * @since NEXT
+		 * @param string $hook Cron hook name.
+		 * @return array<string, bool>|null Args set, or null on fallback.
+		 */
+		private function get_scheduled_args_set( string $hook ): ?array {
+			try {
+				if ( ! function_exists( '_get_cron_array' ) ) {
+					return null;
+				}
+				$crons = _get_cron_array();
+				if ( ! is_array( $crons ) || empty( $crons ) ) {
+					return array();
+				}
+				$set = array();
+				foreach ( $crons as $timestamp => $hooks ) {
+					if ( ! is_array( $hooks ) || ! isset( $hooks[ $hook ] ) || ! is_array( $hooks[ $hook ] ) ) {
+						continue;
+					}
+					foreach ( $hooks[ $hook ] as $entry ) {
+						$args = isset( $entry['args'] ) ? $entry['args'] : null;
+						if ( function_exists( 'wp_json_encode' ) ) {
+							$set[ wp_json_encode( $args ) ] = true;
+						} else {
+							$set[ (string) wp_json_encode( $args ) ] = true;
+						}
+					}
+				}
+				return $set;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return null;
+			}
+		}
+
+		/**
+		 * Whether a hook+args event is already scheduled.
+		 *
+		 * Uses the in-memory snapshot when available; falls back to
+		 * wp_next_scheduled() otherwise.
+		 *
+		 * @since NEXT
+		 * @param string                   $hook Hook name.
+		 * @param array                    $args Event args.
+		 * @param array<string, bool>|null $scheduled In-memory snapshot (null = fallback).
+		 * @return bool True when already scheduled.
+		 */
+		private function is_hook_arg_scheduled( string $hook, array $args, ?array $scheduled ): bool {
+			if ( is_array( $scheduled ) ) {
+				try {
+					$key = function_exists( 'wp_json_encode' ) ? wp_json_encode( $args ) : (string) json_encode( $args ); // phpcs:ignore WordPress.WP.AlternativeFunctions.json_encode_json_encode -- fallback when wp_json_encode() unavailable.
+					return isset( $scheduled[ (string) $key ] );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			if ( function_exists( 'wp_next_scheduled' ) ) {
+				try {
+					return (bool) wp_next_scheduled( $hook, $args );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 			}
 			return false;
 		}
@@ -1042,6 +1131,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				global $wp_filesystem;
 				$file_path      = "{$cache_dir}/index.html";
 				$gzip_file_path = "{$file_path}.gz";
+				$br_file_path   = "{$file_path}.br";
 
 				if ( $wp_filesystem->exists( $file_path ) ) {
 					$wp_filesystem->delete( $file_path );
@@ -1050,6 +1140,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				if ( $wp_filesystem->exists( $gzip_file_path ) ) {
 					$wp_filesystem->delete( $gzip_file_path );
 				}
+
+				if ( $wp_filesystem->exists( $br_file_path ) ) {
+					$wp_filesystem->delete( $br_file_path );
+				}
+
+				// Remove logged-in role-variant copies (index-{hash}.html
+				// plus compressed variants), mirroring
+				// Cache::delete_role_variant_files().
+				if ( $wp_filesystem->is_dir( $cache_dir ) ) {
+					$files = $wp_filesystem->dirlist( $cache_dir );
+					if ( is_array( $files ) ) {
+						foreach ( $files as $file ) {
+							if ( ! isset( $file['name'] ) || ! preg_match( '/^index-[a-f0-9]{12}\.html(\.gz|\.br)?$/', $file['name'] ) ) {
+								continue;
+							}
+							$wp_filesystem->delete( trailingslashit( $cache_dir ) . $file['name'] );
+						}
+					}
+				}
+			}
+
+			if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
+				Cache::bump_stats_cache();
 			}
 		}
 

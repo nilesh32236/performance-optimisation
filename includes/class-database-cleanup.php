@@ -610,7 +610,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		public static function clean_unattached_media() {
 			global $wpdb;
 			$deleted = 0;
-			$batch   = 500;
+			$batch   = 100;
+			// Time-box a single invocation so huge unattached-media backlogs
+			// cannot exceed cron wall-clock limits; remaining items are
+			// picked up on the next scheduled run.
+			$budget = (int) apply_filters( 'wppo_unattached_media_time_budget', 20 );
+			if ( $budget < 1 ) {
+				$budget = 20;
+			}
+			$deadline = microtime( true ) + $budget;
 
 			do {
 				$wpdb->last_error = '';
@@ -638,6 +646,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				// Use the WordPress API so physical files, intermediate sizes, backups
 				// and attachment deletion hooks are handled, not just the DB rows.
 				foreach ( $ids as $id ) {
+					if ( microtime( true ) >= $deadline ) {
+						break 2;
+					}
 					if ( false !== wp_delete_attachment( (int) $id, true ) ) {
 						++$deleted;
 					}

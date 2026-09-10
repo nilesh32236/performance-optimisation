@@ -1496,6 +1496,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$css_file = Util::get_local_path( $url );
 			$fs       = $this->get_filesystem();
 			if ( $fs ) {
+				// Stat first so a single huge theme CSS file is not fully
+				// buffered per handle in the combine loop.
+				$max_bytes = (int) apply_filters( 'wppo_max_css_bytes', 2 * 1024 * 1024 );
+				if ( $max_bytes > 0 ) {
+					try {
+						$size = $fs->size( $css_file );
+						if ( false !== $size && (int) $size > $max_bytes ) {
+							return false;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
 				$css_content = $fs->get_contents( $css_file );
 
 				if ( false !== $css_content ) {

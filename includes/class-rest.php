@@ -645,6 +645,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			update_option( 'wppo_settings', $options );
 
+			if ( class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
+				Telemetry::invalidate_audit_cache();
+			}
+
 			$this->remove_sensitive_settings_from_response( $options );
 
 			return $this->send_response( $options );
@@ -939,6 +943,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				return $this->send_response( null, false, 500, __( 'Failed to update settings', 'performance-optimisation' ) );
 			}
 
+			if ( class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
+				Telemetry::invalidate_audit_cache();
+			}
+
 			$response_settings = $merged_settings;
 			$this->remove_sensitive_settings_from_response( $response_settings );
 
@@ -1117,6 +1125,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function get_image_job_status( \WP_REST_Request $_request ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			// Cache the payload briefly so SPA polling does not hammer the
+			// Action Scheduler store tables on every request.
+			$status_key = Util::transient_key( 'wppo_image_job_status' );
+			$cached     = get_transient( $status_key );
+			if ( is_array( $cached ) ) {
+				return $this->send_response( $cached );
+			}
 			$img_info = Img_Converter::get_img_info();
 
 			$status = array(
@@ -1135,12 +1150,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			);
 
 			// Check if Action Scheduler is active and get job counts.
+			// Bound the query so SPA polling does not recount the full set.
 			if ( function_exists( 'as_get_scheduled_actions' ) ) {
 				$pending_jobs = as_get_scheduled_actions(
 					array(
-						'hook'   => 'wppo_convert_image_background',
-						'status' => \ActionScheduler_Store::STATUS_PENDING,
-						'group'  => 'performance_optimisation',
+						'hook'     => 'wppo_convert_image_background',
+						'status'   => \ActionScheduler_Store::STATUS_PENDING,
+						'group'    => 'performance_optimisation',
+						'per_page' => 100,
 					),
 					'ARRAY_A'
 				);
@@ -1152,6 +1169,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			// Aggregate original-vs-optimised sizes for the dashboard report.
 			$status['savings'] = Img_Converter::get_savings_summary();
+
+			set_transient( $status_key, $status, 30 );
 
 			return $this->send_response( $status );
 		}
@@ -1682,7 +1701,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$url    = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : Util::cached_home_url( '/' );
 
 			$transient_key = Util::transient_key( 'wppo_audit_' . md5( $url ) );
-			$telemetry     = get_transient( $transient_key );
+			// Mirror Telemetry::scan() read path: the salted object-cache
+			// layer is authoritative when a persistent cache exists.
+			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
+				$telemetry = wp_cache_get_salted( $transient_key, 'wppo', Util::cache_salt( 'wppo_audit_salt' ) );
+				if ( false === $telemetry ) {
+					$telemetry = get_transient( $transient_key );
+				}
+			} else {
+				$telemetry = get_transient( $transient_key );
+			}
 
 			if ( false === $telemetry ) {
 				return $this->send_response(
@@ -1721,9 +1749,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			if ( $post_id ) {
+				$job_args = array( 'post_id' => $post_id );
+				if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' ) ) {
+					return $this->send_response(
+						array(
+							'mode'    => 'single',
+							'post_id' => $post_id,
+						),
+						true,
+						202,
+						__( 'Used CSS regeneration already queued.', 'performance-optimisation' )
+					);
+				}
 				as_enqueue_async_action(
 					'wppo_used_css_generate',
-					array( 'post_id' => $post_id ),
+					$job_args,
 					'performance_optimisation'
 				);
 				return $this->send_response(

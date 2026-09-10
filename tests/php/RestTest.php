@@ -378,7 +378,11 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 		$captured = array();
 		Functions\when( 'update_option' )->alias(
 			static function ( $name, $value ) use ( &$captured ) {
-				$captured = $value;
+				// Only capture the settings write; update_settings() also
+				// invalidates the telemetry audit cache (wppo_audit_salt).
+				if ( 'wppo_settings' === $name ) {
+					$captured = $value;
+				}
 				return true;
 			}
 		);
@@ -416,7 +420,11 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 		$captured = array();
 		Functions\when( 'update_option' )->alias(
 			static function ( $name, $value ) use ( &$captured ) {
-				$captured = $value;
+				// Only capture the settings write; update_settings() also
+				// invalidates the telemetry audit cache (wppo_audit_salt).
+				if ( 'wppo_settings' === $name ) {
+					$captured = $value;
+				}
 				return true;
 			}
 		);
@@ -452,7 +460,11 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 		$captured = array();
 		Functions\when( 'update_option' )->alias(
 			static function ( $name, $value ) use ( &$captured ) {
-				$captured = $value;
+				// Only capture the settings write; update_settings() also
+				// invalidates the telemetry audit cache (wppo_audit_salt).
+				if ( 'wppo_settings' === $name ) {
+					$captured = $value;
+				}
 				return true;
 			}
 		);
