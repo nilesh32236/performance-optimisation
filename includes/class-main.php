@@ -1323,15 +1323,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * run uncached. No cache clear here — the old-domain files are keyed
 		 * under a different host directory and simply stop being served.
 		 *
-		 * @param mixed  $old_value Previous option value (unused).
-		 * @param mixed  $value     New option value (unused).
-		 * @param string $option    Option name (unused).
-		 * @return void
+		 * @param mixed  $old_value Previous option value.
+		 * @param mixed  $value     New option value.
+		 * @param string $option    Option name.
+		 * @return bool True when the drop-in is left in a correct state, false on
+		 *              filesystem failure. Skipped (unchanged value) returns true.
 		 * @since NEXT
 		 */
-		public static function on_site_url_change( $old_value = null, $value = null, $option = '' ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found,Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-			unset( $old_value, $value, $option );
-			Advanced_Cache_Handler::create();
+		public static function on_site_url_change( $old_value = null, $value = null, $option = '' ): bool {
+			if ( $old_value === $value ) {
+				return true;
+			}
+			if ( ! Advanced_Cache_Handler::create() ) {
+				do_action( 'wppo_debug_log', 'WPPO advanced-cache.php drop-in regeneration failed after ' . $option . ' change' );
+				return false;
+			}
+			return true;
 		}
 
 		/**

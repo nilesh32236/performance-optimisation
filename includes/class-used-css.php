@@ -159,9 +159,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 
 			if ( '' !== $canonical ) {
 				// Pin to the canonical home host by construction; a forged Host
-				// header can never create its own used-CSS cache tree.
+				// header can never create its own used-CSS cache tree. An empty
+				// request host (CLI/cron, e.g. process_background() under Action
+				// Scheduler) carries no forgery signal and must not block
+				// canonical writes.
 				$this->domain        = $canonical;
-				$this->host_mismatch = ( $request_host !== $canonical );
+				$this->host_mismatch = ( '' !== $request_host && $request_host !== $canonical );
 			} else {
 				// Canonical host unavailable (early boot, CLI): legacy
 				// Host-derived behaviour so nothing fatals.
@@ -911,6 +914,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			// is served without used-CSS optimisation instead).
 			if ( $this->host_mismatch ) {
 				return false;
+			}
+
+			// A forged host embedded in the explicit $url (e.g. via a filtered
+			// permalink) is not covered by the ambient Host check above: refuse
+			// when the URL host is present and differs from the canonical domain.
+			if ( '' !== $url && '' !== $this->domain && function_exists( 'wp_parse_url' ) ) {
+				$url_host_raw = wp_parse_url( $url, PHP_URL_HOST );
+				if ( is_string( $url_host_raw ) && '' !== $url_host_raw ) {
+					$url_host = Util::normalize_cache_host( $url_host_raw );
+					if ( '' !== $url_host && $url_host !== $this->domain ) {
+						return false;
+					}
+				}
 			}
 
 			$file_path = $this->get_used_css_path( $url );

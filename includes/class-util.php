@@ -1214,7 +1214,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			// Strip any port BEFORE IDN conversion: UTS46 rejects
 			// 'münchen.de:8080' as a whole, so converting first would fail
 			// and force a fail-open '' for IDN hosts with explicit ports.
-			$host = explode( ':', $domain, 2 )[0];
+			// Bracketed IPv6 literals ('[::1]:8080') are unwrapped first;
+			// unbracketed multi-colon values are IPv6 literals (no port).
+			if ( str_starts_with( $domain, '[' ) ) {
+				$bracket_end = strpos( $domain, ']' );
+				if ( false === $bracket_end ) {
+					return '';
+				}
+				$host = substr( $domain, 1, $bracket_end - 1 );
+			} elseif ( substr_count( $domain, ':' ) > 1 ) {
+				$host = $domain;
+			} else {
+				$host = explode( ':', $domain, 2 )[0];
+			}
 			if ( '' === $host ) {
 				return '';
 			}
@@ -1232,10 +1244,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			}
 
 			$valid = ! (
-				strpos( $host, '..' ) !== false ||
-				strpos( $host, '/' ) !== false ||
-				strpos( $host, '\\' ) !== false ||
-				! preg_match( '/^[a-z0-9\.\-]+$/i', $host )
+			strpos( $host, '..' ) !== false ||
+			strpos( $host, '/' ) !== false ||
+			strpos( $host, '\\' ) !== false ||
+			! preg_match( '/^[a-z0-9\.\-:]+$/i', $host )
 			);
 
 			if ( ! $valid ) {

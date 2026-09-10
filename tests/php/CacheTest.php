@@ -97,7 +97,15 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 
 	/**
 	 * Test that a matching Host header keeps the request cacheable.
+	 *
+	 * Runs in a separate process: DONOTCACHEPAGE is a process-global
+	 * constant that earlier suites (e.g. BufferCharacterizationTest) may
+	 * define, which would force is_not_cacheable()/maybe_store_cache() to
+	 * refuse and weaken this control to a bare assertion count. Isolation
+	 * guarantees the positive cacheability assertions always execute.
 	 */
+	#[\PHPUnit\Framework\Attributes\RunInSeparateProcess]
+	#[\PHPUnit\Framework\Attributes\PreserveGlobalState( false )]
 	public function test_constructor_matching_host_stays_cacheable(): void {
 		$_SERVER['HTTP_HOST']   = 'example.com';
 		$_SERVER['REQUEST_URI'] = '/test-page/';
@@ -133,20 +141,13 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 		$domain_prop->setAccessible( true );
 		$this->assertSame( 'example.com', $domain_prop->getValue( $cache ) );
 
-		// Positive cacheability depends on process-global state that earlier
-		// suites may pollute (BufferCharacterizationTest defines
-		// DONOTCACHEPAGE=true in-process); only assert it when clean.
-		if ( ! defined( 'DONOTCACHEPAGE' ) || ! DONOTCACHEPAGE ) {
-			$not_cacheable = new ReflectionMethod( Cache::class, 'is_not_cacheable' );
-			$not_cacheable->setAccessible( true );
-			$this->assertFalse( $not_cacheable->invoke( $cache ) );
+		$not_cacheable = new ReflectionMethod( Cache::class, 'is_not_cacheable' );
+		$not_cacheable->setAccessible( true );
+		$this->assertFalse( $not_cacheable->invoke( $cache ) );
 
-			$store = new ReflectionMethod( Cache::class, 'maybe_store_cache' );
-			$store->setAccessible( true );
-			$this->assertTrue( $store->invoke( $cache ) );
-		} else {
-			$this->addToAssertionCount( 1 );
-		}
+		$store = new ReflectionMethod( Cache::class, 'maybe_store_cache' );
+		$store->setAccessible( true );
+		$this->assertTrue( $store->invoke( $cache ) );
 	}
 
 	/**
