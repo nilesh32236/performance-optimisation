@@ -141,13 +141,22 @@ export const formatValue = ( value, unit ) => {
  * loses internal state on filter/reorder).
  *
  * @since NEXT
- * @param {Object} suggestion Suggestion object.
+ * @param {Object}        suggestion Suggestion object.
+ * @param {number|string} [index]    Optional list index appended to disambiguate
+ *                                   duplicates sharing all four fields.
  * @return {string} Stable composite key.
  */
-export const suggestionKey = ( suggestion ) =>
-	`${ suggestion.metric }::${ suggestion.status }::${
-		suggestion.fix_action || ''
-	}::${ suggestion.description || '' }`;
+export const suggestionKey = ( suggestion, index = null ) => {
+	if ( ! suggestion ) {
+		return `empty::${ index ?? '' }`;
+	}
+	const base = `${ suggestion.metric ?? '' }::${ suggestion.status ?? '' }::${
+		suggestion.fix_action ?? ''
+	}::${ suggestion.description ?? '' }`;
+	return index === null || index === undefined
+		? base
+		: `${ base }::${ index }`;
+};
 
 /**
  * A single suggestion card.
@@ -275,18 +284,21 @@ const SuggestionsPanel = ( { suggestions, onNavigate } ) => {
 				aria-label={ __( 'Suggestions', 'performance-optimisation' ) }
 			>
 				{ /* Issues first */ }
-				{ issues.map( ( suggestion ) => (
+				{ issues.map( ( suggestion, index ) => (
 					<SuggestionCard
-						key={ suggestionKey( suggestion ) }
+						key={ suggestionKey( suggestion, `issue-${ index }` ) }
 						suggestion={ suggestion }
 						onNavigate={ onNavigate }
 					/>
 				) ) }
 
 				{ /* Passing items below */ }
-				{ passing.map( ( suggestion ) => (
+				{ passing.map( ( suggestion, index ) => (
 					<SuggestionCard
-						key={ suggestionKey( suggestion ) }
+						key={ suggestionKey(
+							suggestion,
+							`passing-${ index }`
+						) }
 						suggestion={ suggestion }
 						onNavigate={ onNavigate }
 					/>

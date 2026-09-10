@@ -2,7 +2,7 @@
  * Tests for lib/util helpers.
  */
 
-import { handleChange } from '../util';
+import { handleChange, formatBytes } from '../util';
 
 describe( 'handleChange', () => {
 	it( 'updates a text field value by name', () => {
@@ -107,5 +107,31 @@ describe( 'handleChange', () => {
 		it( 'keeps in-range values as numbers', () => {
 			expect( dispatch( '5000' ) ).toBe( 5000 );
 		} );
+	} );
+} );
+
+describe( 'formatBytes', () => {
+	it( 'formats zero, negative and non-numeric input as "0 B"', () => {
+		expect( formatBytes( 0 ) ).toBe( '0 B' );
+		expect( formatBytes( -10 ) ).toBe( '0 B' );
+		expect( formatBytes( NaN ) ).toBe( '0 B' );
+		expect( formatBytes( undefined ) ).toBe( '0 B' );
+	} );
+
+	it( 'formats byte counts below 1 KB', () => {
+		expect( formatBytes( 10 ) ).toBe( '10 B' );
+		expect( formatBytes( 0.5 ) ).toBe( '1 B' );
+	} );
+
+	it( 'formats KB and MB boundaries with one decimal', () => {
+		expect( formatBytes( 1024 ) ).toBe( '1.0 KB' );
+		expect( formatBytes( 5000 ) ).toBe( '4.9 KB' );
+		expect( formatBytes( 1024 * 1024 ) ).toBe( '1.0 MB' );
+		expect( formatBytes( 2 * 1024 * 1024 ) ).toBe( '2.0 MB' );
+	} );
+
+	it( 'formats GB values and coerces numeric strings', () => {
+		expect( formatBytes( 1024 ** 3 ) ).toBe( '1.0 GB' );
+		expect( formatBytes( '2048' ) ).toBe( '2.0 KB' );
 	} );
 } );

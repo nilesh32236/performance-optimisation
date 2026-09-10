@@ -53,8 +53,8 @@ const ConfirmDialog = ( {
 				if ( ! first || ! last ) {
 					return;
 				}
-				e.preventDefault();
 				if ( focusable.length === 1 ) {
+					e.preventDefault();
 					first.focus();
 					return;
 				}

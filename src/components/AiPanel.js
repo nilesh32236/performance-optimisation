@@ -3,6 +3,7 @@ import { __, sprintf } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faBrain } from '@fortawesome/free-solid-svg-icons';
 import { apiCall } from '../lib/apiRequest';
+import { suggestionKey } from './SuggestionsPanel';
 import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
 import SwitchField from './common/SwitchField';
@@ -314,11 +315,9 @@ const AiPanel = () => {
 					<h4>
 						{ __( 'AI Suggestions', 'performance-optimisation' ) }
 					</h4>
-					{ suggestions.map( ( s ) => (
+					{ suggestions.map( ( s, index ) => (
 						<div
-							key={ `${ s.metric }::${ s.status }::${
-								s.fix_action || ''
-							}::${ s.description || '' }` }
+							key={ suggestionKey( s, `ai-${ index }` ) }
 							className="wppo-suggestion-card wppo-suggestion-card--needs_improvement"
 						>
 							<div className="wppo-suggestion-card__header">

@@ -71,7 +71,9 @@ document.addEventListener( 'DOMContentLoaded', function () {
 									true
 								);
 							}
-							return data;
+							// Mirror apiCall(): a failed nonce refresh throws
+							// rather than resolving with the auth-error payload.
+							throw new Error( 'Failed to refresh nonce' );
 						} );
 					}
 					return data;

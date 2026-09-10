@@ -102,9 +102,12 @@ export const formatBytes = ( bytes ) => {
 		__( 'MB', 'performance-optimisation' ),
 		__( 'GB', 'performance-optimisation' ),
 	];
-	const index = Math.min(
-		Math.floor( Math.log( num ) / Math.log( 1024 ) ),
-		units.length - 1
+	const index = Math.max(
+		0,
+		Math.min(
+			Math.floor( Math.log( num ) / Math.log( 1024 ) ),
+			units.length - 1
+		)
 	);
 	const value =
 		index === 0

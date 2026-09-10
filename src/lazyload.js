@@ -999,7 +999,7 @@ let backgroundObserver = null;
  * page cannot collide with — or clear — this copy's interval via the shared
  * window property: each copy only clears the interval it created.
  *
- * @type {number|null}
+ * @type {ReturnType<typeof setInterval>|null}
  */
 let safetyScanId = null;
 
@@ -1465,7 +1465,12 @@ const loadImages = () => {
 			);
 
 			const startSafetyScan = () => {
-				if ( safetyScanId !== null || window.wppoSafetyScanId ) {
+				// Guard only on this copy's own handle so a second copy of
+				// this module on the same page still scans its own elements.
+				// Each copy owns a separate interval; clearing stays isolated
+				// via clearSafetyScan() (window.wppoSafetyScanId is only a
+				// backward-compat mirror, never a startup gate).
+				if ( safetyScanId !== null ) {
 					return;
 				}
 				let ticks = 0;

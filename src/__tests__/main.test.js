@@ -227,6 +227,67 @@ describe( 'Admin Bar (main.js)', () => {
 		).toBe( 'Dismiss' );
 	} );
 
+	it( 'retries after a rest_forbidden payload code and shows success', async () => {
+		global.fetch
+			.mockResolvedValueOnce( {
+				ok: true,
+				json: jest
+					.fn()
+					.mockResolvedValueOnce( { code: 'rest_forbidden' } ),
+			} )
+			.mockResolvedValueOnce( {
+				ok: true,
+				json: jest.fn().mockResolvedValueOnce( {
+					success: true,
+					data: { nonce: 'refreshed' },
+				} ),
+			} )
+			.mockResolvedValueOnce( {
+				ok: true,
+				json: jest.fn().mockResolvedValueOnce( { success: true } ),
+			} );
+
+		const clearAllCacheBtn = document.querySelector(
+			'#wp-admin-bar-wppo_clear_all .ab-item'
+		);
+		clearAllCacheBtn.click();
+
+		await new Promise( ( r ) => setTimeout( r, 100 ) );
+
+		expect( global.fetch ).toHaveBeenCalledWith(
+			'http://test.com/wp-admin/admin-ajax.php',
+			expect.objectContaining( { method: 'POST' } )
+		);
+		const notice = document.querySelector( '.wppo-admin-notice' );
+		expect( notice ).toHaveTextContent( 'Cache cleared successfully.' );
+	} );
+
+	it( 'throws on payload-path refresh failure instead of resolving auth error', async () => {
+		global.fetch
+			.mockResolvedValueOnce( {
+				ok: true,
+				json: jest
+					.fn()
+					.mockResolvedValueOnce( { code: 'rest_forbidden' } ),
+			} )
+			.mockResolvedValueOnce( {
+				ok: true,
+				json: jest.fn().mockResolvedValueOnce( { success: false } ),
+			} );
+
+		const clearAllCacheBtn = document.querySelector(
+			'#wp-admin-bar-wppo_clear_all .ab-item'
+		);
+		clearAllCacheBtn.click();
+
+		await new Promise( ( r ) => setTimeout( r, 100 ) );
+
+		const notice = document.querySelector( '.wppo-admin-notice' );
+		expect( notice ).toHaveTextContent(
+			'Failed to clear cache. Please try again.'
+		);
+	} );
+
 	it( 'prevents default on admin bar link click', async () => {
 		global.fetch.mockResolvedValueOnce( {
 			ok: true,

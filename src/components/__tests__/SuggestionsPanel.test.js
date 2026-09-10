@@ -2,7 +2,10 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 // eslint-disable-next-line import/no-extraneous-dependencies -- React is required for JSX rendering in tests
 import React from 'react';
-import SuggestionsPanel, { formatValue } from '../SuggestionsPanel';
+import SuggestionsPanel, {
+	formatValue,
+	suggestionKey,
+} from '../SuggestionsPanel';
 
 describe( 'SuggestionsPanel Component', () => {
 	const onNavigate = jest.fn();
@@ -265,5 +268,36 @@ describe( 'formatValue', () => {
 		);
 		expect( screen.getByText( 'a.js, b.js' ) ).toBeInTheDocument();
 		expect( screen.getByText( 'moderate' ) ).toBeInTheDocument();
+	} );
+} );
+
+describe( 'suggestionKey', () => {
+	it( 'builds a composite key without an index', () => {
+		expect(
+			suggestionKey( {
+				metric: 'enable_gzip',
+				status: 'poor',
+				fix_action: 'enable_server_rules',
+				description: 'Enable Gzip',
+			} )
+		).toBe( 'enable_gzip::poor::enable_server_rules::Enable Gzip' );
+	} );
+
+	it( 'guards nullish input instead of throwing', () => {
+		expect( () => suggestionKey( null ) ).not.toThrow();
+		expect( () => suggestionKey( undefined ) ).not.toThrow();
+		expect( suggestionKey( null, 'issue-0' ) ).toBe( 'empty::issue-0' );
+	} );
+
+	it( 'disambiguates duplicates sharing all four fields', () => {
+		const dup = {
+			metric: 'use_cache',
+			status: 'poor',
+			fix_action: 'enable_server_rules',
+			description: 'Enable caching',
+		};
+		const first = suggestionKey( dup, 'issue-0' );
+		const second = suggestionKey( dup, 'issue-1' );
+		expect( first ).not.toBe( second );
 	} );
 } );
