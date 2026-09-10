@@ -66,6 +66,31 @@ class UsedCssSafeDefaultsTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Compound selectors keep popup rules even when the token is not leading.
+	 *
+	 * Uses the presets without the bare '*' built-in entry so the per-part
+	 * prefix check is genuinely exercised (with the full safelist the '*'
+	 * entry keeps every selector by pre-existing semantics).
+	 */
+	public function test_compound_popup_selector_is_kept_by_default(): void {
+		$instance  = ( new \ReflectionClass( Used_CSS::class ) )->newInstanceWithoutConstructor();
+		$safe_prop = new \ReflectionProperty( Used_CSS::class, 'safelist' );
+		$safe_prop->setAccessible( true );
+		$safe_prop->setValue( $instance, Used_CSS::get_safelist_presets() );
+		$used = array(
+			'tags'    => array(),
+			'classes' => array(),
+			'ids'     => array(),
+			'attrs'   => array(),
+		);
+		$this->assertTrue( $instance->is_selector_used( '.foo .popup-bar', $used ) );
+		$this->assertTrue( $instance->is_selector_used( 'div.modal-dialog', $used ) );
+		$this->assertTrue( $instance->is_selector_used( 'div.elementor-popup-modal', $used ) );
+		$this->assertTrue( $instance->is_selector_used( 'button.mfp-close', $used ) );
+		$this->assertFalse( $instance->is_selector_used( '.totally-unrelated-widget', $used ) );
+	}
+
+	/**
 	 * The wppo_used_css_safelist filter can extend the safelist.
 	 */
 	public function test_safelist_filter_extends_kept_selectors(): void {

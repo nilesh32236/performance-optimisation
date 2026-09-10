@@ -235,9 +235,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		/**
 		 * Safelist presets shipped safe-by-default (Elementor + popup selectors).
 		 *
-		 * Prefix entries ending in '-' or '*' match via prefix in
+		 * This is the popup/Elementor subset of the built-in safelist below:
+		 * prefix entries ending in '-' or '*' match via prefix in
 		 * {@see is_selector_used()}; attribute entries match by attribute-name
 		 * substring. Filterable via the `wppo_used_css_safelist` filter.
+		 * init_safelist() merges these presets together with the built-in list
+		 * (deduplicated), so the two sources cannot drift.
 		 *
 		 * @return string[]
 		 * @since NEXT
@@ -280,7 +283,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				$user_list = array_merge( $user_list, $extra );
 			}
 
-			$this->safelist = array_merge( $this->built_in_safelist, $user_list );
+			$this->safelist = array_merge( self::get_safelist_presets(), $this->built_in_safelist, $user_list );
 			$this->safelist = array_unique( array_filter( $this->safelist ) );
 
 			if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_used_css_safelist' ) ) {
@@ -674,14 +677,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					}
 					continue;
 				}
-				if ( '-' === substr( $safe, -1 ) && 0 === strpos( $selector, $safe ) ) {
-					return true;
-				}
-				if ( '_' === substr( $safe, -1 ) && 0 === strpos( $selector, $safe ) ) {
-					return true;
-				}
-				if ( '*' === substr( $safe, -1 ) && 0 === strpos( $selector, substr( $safe, 0, -1 ) ) ) {
-					return true;
+				$last_char = substr( $safe, -1 );
+				if ( '-' === $last_char || '_' === $last_char || '*' === $last_char ) {
+					$prefix = '*' === $last_char ? substr( $safe, 0, -1 ) : $safe;
+					// Note: a bare '*' entry yields an empty prefix, and
+					// strpos( $selector, '' ) === 0 keeps every selector
+					// (pre-existing semantics, covered by
+					// DelaySafeDefaultsTest::test_unused_css_extra_safelist_merge).
+					if ( 0 === strpos( $selector, $prefix ) ) {
+						return true;
+					}
+					// Compound/descendant selectors (issue #1023): a popup token
+					// buried inside a wrapper, portal, or tag-qualified part
+					// (e.g. '.foo .popup-bar', 'div.modal-dialog',
+					// 'div.elementor-popup-modal', 'button.mfp-close') must keep
+					// the rule even though the full string does not start with
+					// the prefix. Fail-safe direction: keeping extra CSS can
+					// never break styling.
+					foreach ( $this->extract_simple_selectors( $selector ) as $part ) {
+						if ( 0 === strpos( $part, $prefix ) || false !== stripos( $part, $prefix ) ) {
+							return true;
+						}
+					}
 				}
 			}
 

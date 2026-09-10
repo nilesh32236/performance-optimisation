@@ -97,6 +97,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		);
 
 		/**
+		 * Re-entrancy guard for the drift fan-out (issue #1023).
+		 *
+		 * The regeneration fan-out fires elementor/core/files/clear_cache,
+		 * which this watcher also listens to via on_builder_drift(). The flag is
+		 * set around the fan-out do_action() so the upgrader path cannot re-enter
+		 * on_builder_drift() and purge/queue twice.
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static bool $drift_suspended = false;
+
+		/**
+		 * Per-request dedupe for the drift signal (issue #1023).
+		 *
+		 * Elementor/core/files/clear_cache can fire several times per request
+		 * during editing; the full derived-cache purge below runs at most once
+		 * per request so a hot signal cannot stampede the cache.
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static bool $drift_handled_this_request = false;
+
+		/**
 		 * Register the upgrader hook plus builder-drift hooks.
 		 *
 		 * Drift hooks (issue #1023) listen to Elementor asset-regen signals
@@ -115,13 +140,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		/**
 		 * Handle Elementor asset-regen signals: purge derived caches + requeue used CSS.
 		 *
-		 * Fires on elementor/core/files/clear_cache (CSS regen). Guarded so a
+		 * Fires on elementor/core/files/clear_cache (CSS regen). This is a
+		 * full-site purge (page cache + all used CSS + queued regeneration of
+		 * up to 200 posts) because the signal carries no post context, so it
+		 * runs at most once per request (per-request dedupe) and is skipped
+		 * while the upgrader fan-out is firing (re-entrancy guard) — the
+		 * upgrader path already purges via purge_for_builders(). Guarded so a
 		 * builder failure can never break the request; fail-open keeps full CSS.
 		 *
 		 * @since NEXT
 		 * @return void
 		 */
 		public function on_builder_drift(): void {
+			if ( self::$drift_suspended || self::$drift_handled_this_request ) {
+				return;
+			}
+			if ( function_exists( 'doing_action' ) && doing_action( 'upgrader_process_complete' ) ) {
+				return;
+			}
+			self::$drift_handled_this_request = true;
 			try {
 				$this->purge_wppo_derived_caches();
 				if ( function_exists( 'do_action' ) ) {
@@ -138,7 +175,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		}
 
 		/**
-		 * Handle Elementor editor saves: drift-check the saved post's used CSS.
+		 * Handle Elementor editor saves: requeue the saved post's used CSS.
+		 *
+		 * An explicit editor save always requeues (no mtime drift check): the
+		 * save itself proves the markup changed, the sidecar may not exist yet
+		 * for new posts, and the mtime comparison in
+		 * Used_CSS::maybe_requeue_on_builder_drift() is reserved for the
+		 * post-less elementor/core/files/clear_cache signal handled by
+		 * on_builder_drift(). The wppo_builder_drift_requeue action fires only
+		 * when a job was actually queued (or already scheduled).
 		 *
 		 * @since NEXT
 		 * @param int   $post_id Post ID saved in the editor.
@@ -152,11 +197,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 				if ( $post_id <= 0 ) {
 					return;
 				}
+				$queued = false;
 				if ( class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
-					$drifted = Used_CSS::maybe_requeue_on_builder_drift( $post_id );
-					if ( ! $drifted ) {
-						Used_CSS::requeue_for_post( $post_id );
-					}
+					$queued = Used_CSS::requeue_for_post( $post_id );
+				}
+				if ( ! $queued ) {
+					return;
 				}
 				if ( function_exists( 'do_action' ) ) {
 					/**
@@ -505,6 +551,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * Each hook fires only when a listener is registered (has_action
 		 * guard) so unknown or removed hooks are strict no-ops; everything
 		 * runs guarded so a builder failure can never break the upgrader.
+		 * The drift fan-out is suspended around do_action() (see
+		 * self::$drift_suspended) so firing elementor/core/files/clear_cache
+		 * here cannot re-enter on_builder_drift() and double-purge.
 		 *
 		 * @since NEXT
 		 * @param string[] $matched Matched builder keys.
@@ -525,9 +574,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 					}
 					try {
 						if ( has_action( $hook ) ) {
-							do_action( $hook );
+							self::$drift_suspended = true;
+							try {
+								do_action( $hook );
+							} finally {
+								self::$drift_suspended = false;
+							}
 						}
 					} catch ( \Throwable $e ) {
+						self::$drift_suspended = false;
 						unset( $e );
 					}
 				}

@@ -263,7 +263,7 @@ add_filter( 'wppo_used_css_safelist', function( $safelist ) {
 ---
 
 ### `wppo_builder_drift_requeue`
-Fires after builder-drift detection requeues used-CSS regeneration (issue #1023). Emitted by `Builder_Purge_Watcher::on_builder_drift()` (no args, Elementor CSS regen) and `Builder_Purge_Watcher::on_builder_drift_save( $post_id )` (editor save). @since NEXT.
+Fires after builder-drift detection requeues used-CSS regeneration (issue #1023). Emitted by `Builder_Purge_Watcher::on_builder_drift()` (no args, Elementor CSS regen; full-site purge, at most once per request) and `Builder_Purge_Watcher::on_builder_drift_save( $post_id )` (explicit editor save, always requeues without an mtime check since the save itself proves the markup changed; fires only when a job was queued). @since NEXT.
 
 **Parameters:**
 - `$post_id` *(int, optional)* — Post ID saved in the builder (only for the editor-save variant).
