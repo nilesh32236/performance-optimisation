@@ -8,6 +8,7 @@ import {
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
+import useUnsavedChanges from '../lib/useUnsavedChanges';
 import UnsavedChangesContext from '../lib/UnsavedChangesContext';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -95,13 +96,7 @@ const ObjectCache = ( { options = {} } ) => {
 		options.persistent,
 		options.compression,
 	] );
-	useEffect( () => {
-		const dirty = JSON.stringify( settings ) !== JSON.stringify( baseline );
-		setIsDirty( dirty );
-	}, [ settings, baseline, setIsDirty ] );
-	useEffect( () => {
-		return () => setIsDirty( false );
-	}, [ setIsDirty ] );
+	useUnsavedChanges( settings, baseline );
 	const [ activeAction, setActiveAction ] = useState( null );
 	const isActionLoading = Boolean( activeAction );
 	const [ cacheStatus, setCacheStatus ] = useState( {

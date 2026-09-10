@@ -3,6 +3,7 @@ import { __ } from '@wordpress/i18n';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
+import useUnsavedChanges from '../lib/useUnsavedChanges';
 import UnsavedChangesContext from '../lib/UnsavedChangesContext';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import SwitchField from './common/SwitchField';
@@ -92,6 +93,9 @@ const ImageOptimization = ( { options = {} } ) => {
 				? options.availablePostTypes
 				: prev.availablePostTypes,
 		} ) );
+		// Baseline is intentionally derived per-key (not per-object-identity)
+		// so parent re-renders with an identical payload do not reset the form.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [
 		options.lazyLoadImages,
 		options.lazyLoadNative,
@@ -143,6 +147,8 @@ const ImageOptimization = ( { options = {} } ) => {
 				? options.availablePostTypes
 				: defaultSettings.availablePostTypes,
 		} );
+		// Baseline is intentionally derived per-key (not per-object-identity)
+		// so parent re-renders with an identical payload do not reset the form.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [
 		options.lazyLoadImages,
@@ -173,13 +179,7 @@ const ImageOptimization = ( { options = {} } ) => {
 		options.placeholderType,
 		options.replacePlaceholderWithSVG,
 	] );
-	useEffect( () => {
-		const dirty = JSON.stringify( settings ) !== JSON.stringify( baseline );
-		setIsDirty( dirty );
-	}, [ settings, baseline, setIsDirty ] );
-	useEffect( () => {
-		return () => setIsDirty( false );
-	}, [ setIsDirty ] );
+	useUnsavedChanges( settings, baseline );
 	const mimeList = Array.isArray( settings.clientSideMimeTypes )
 		? settings.clientSideMimeTypes
 		: [];
@@ -356,22 +356,14 @@ const ImageOptimization = ( { options = {} } ) => {
 									</p>
 								</div>
 								<SwitchField
-									label={
-										wppoSettings?.translations
-											?.lazyLoadNative ||
-										__(
-											'Use Native Lazy Loading',
-											'performance-optimisation'
-										)
-									}
-									description={
-										wppoSettings?.translations
-											?.lazyLoadNativeDesc ||
-										__(
-											'Use the browser\'s native loading="lazy" attribute instead of JavaScript-based IntersectionObserver. On by default; disable to fall back to the legacy JS lazy loader. Supported in all modern browsers and reduces JS overhead.',
-											'performance-optimisation'
-										)
-									}
+									label={ __(
+										'Use Native Lazy Loading',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Use the browser\'s native loading="lazy" attribute instead of JavaScript-based IntersectionObserver. On by default; disable to fall back to the legacy JS lazy loader. Supported in all modern browsers and reduces JS overhead.',
+										'performance-optimisation'
+									) }
 									name="lazyLoadNative"
 									checked={ settings.lazyLoadNative }
 									onChange={ handleChange( setSettings ) }
@@ -396,12 +388,10 @@ const ImageOptimization = ( { options = {} } ) => {
 										className="wppo-field-label"
 										htmlFor="placeholderType"
 									>
-										{ wppoSettings?.translations
-											?.placeholderType ||
-											__(
-												'Placeholder Type',
-												'performance-optimisation'
-											) }
+										{ __(
+											'Placeholder Type',
+											'performance-optimisation'
+										) }
 									</label>
 									<select
 										className="wppo-select"
@@ -411,36 +401,28 @@ const ImageOptimization = ( { options = {} } ) => {
 										onChange={ handleChange( setSettings ) }
 									>
 										<option value="none">
-											{ wppoSettings?.translations
-												?.placeholderNone ||
-												__(
-													'None',
-													'performance-optimisation'
-												) }
+											{ __(
+												'None',
+												'performance-optimisation'
+											) }
 										</option>
 										<option value="svg">
-											{ wppoSettings?.translations
-												?.placeholderSvg ||
-												__(
-													'SVG Placeholder (Lightweight)',
-													'performance-optimisation'
-												) }
+											{ __(
+												'SVG Placeholder (Lightweight)',
+												'performance-optimisation'
+											) }
 										</option>
 										<option value="dominant_color">
-											{ wppoSettings?.translations
-												?.placeholderDominantColor ||
-												__(
-													'Dominant Color (Extracted from Image)',
-													'performance-optimisation'
-												) }
+											{ __(
+												'Dominant Color (Extracted from Image)',
+												'performance-optimisation'
+											) }
 										</option>
 										<option value="lqip">
-											{ wppoSettings?.translations
-												?.placeholderLqip ||
-												__(
-													'LQIP (Blur Preview)',
-													'performance-optimisation'
-												) }
+											{ __(
+												'LQIP (Blur Preview)',
+												'performance-optimisation'
+											) }
 										</option>
 									</select>
 									<div className="wppo-help-box wppo-mt-10 wppo-text-small wppo-text-muted">
@@ -451,60 +433,46 @@ const ImageOptimization = ( { options = {} } ) => {
 											) }
 											:
 										</strong>{ ' ' }
-										{ wppoSettings?.translations
-											?.placeholderNoneDesc ||
-											__(
-												'The src attribute is removed until the image is in view.',
-												'performance-optimisation'
-											) }
+										{ __(
+											'The src attribute is removed until the image is in view.',
+											'performance-optimisation'
+										) }
 										<br />
 										<strong>
-											{ wppoSettings?.translations
-												?.placeholderSvgLabel ||
-												__(
-													'SVG',
-													'performance-optimisation'
-												) }
-											:
-										</strong>{ ' ' }
-										{ wppoSettings?.translations
-											?.placeholderSvgDesc ||
-											__(
-												'Lightweight inline SVG while the real image loads. Prevents layout shift.',
+											{ __(
+												'SVG',
 												'performance-optimisation'
 											) }
+											:
+										</strong>{ ' ' }
+										{ __(
+											'Lightweight inline SVG while the real image loads. Prevents layout shift.',
+											'performance-optimisation'
+										) }
 										<br />
 										<strong>
-											{ wppoSettings?.translations
-												?.placeholderDominantColorLabel ||
-												__(
-													'Dominant Color',
-													'performance-optimisation'
-												) }
-											:
-										</strong>{ ' ' }
-										{ wppoSettings?.translations
-											?.placeholderDominantColorDesc ||
-											__(
-												'Extracted during image conversion. Smooth background-color fade transition.',
+											{ __(
+												'Dominant Color',
 												'performance-optimisation'
 											) }
+											:
+										</strong>{ ' ' }
+										{ __(
+											'Extracted during image conversion. Smooth background-color fade transition.',
+											'performance-optimisation'
+										) }
 										<br />
 										<strong>
-											{ wppoSettings?.translations
-												?.placeholderLqipLabel ||
-												__(
-													'LQIP',
-													'performance-optimisation'
-												) }
-											:
-										</strong>{ ' ' }
-										{ wppoSettings?.translations
-											?.placeholderLqipDesc ||
-											__(
-												'20×20 blurred preview. Images must be re-optimized for LQIP to take effect.',
+											{ __(
+												'LQIP',
 												'performance-optimisation'
 											) }
+											:
+										</strong>{ ' ' }
+										{ __(
+											'20×20 blurred preview. Images must be re-optimized for LQIP to take effect.',
+											'performance-optimisation'
+										) }
 									</div>
 								</div>
 							</div>
@@ -548,22 +516,14 @@ const ImageOptimization = ( { options = {} } ) => {
 						{ settings.lazyLoadVideos && (
 							<div className="wppo-field-nest">
 								<SwitchField
-									label={
-										wppoSettings?.translations
-											?.videoPlaceholder ||
-										__(
-											'Video Placeholder',
-											'performance-optimisation'
-										)
-									}
-									description={
-										wppoSettings?.translations
-											?.videoPlaceholderDesc ||
-										__(
-											'Replace YouTube embeds with lightweight thumbnail previews. The actual video player loads only when the user clicks the play button, saving up to 800KB per embed.',
-											'performance-optimisation'
-										)
-									}
+									label={ __(
+										'Video Placeholder',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Replace YouTube embeds with lightweight thumbnail previews. The actual video player loads only when the user clicks the play button, saving up to 800KB per embed.',
+										'performance-optimisation'
+									) }
 									name="enableVideoPlaceholder"
 									checked={ settings.enableVideoPlaceholder }
 									onChange={ handleChange( setSettings ) }

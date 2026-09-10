@@ -227,7 +227,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			// Semantics mirror Cache::is_woo_excluded(): an absent key defaults to
 			// enabled (fail-safe), and malformed values normalize to enabled.
 			$woo_safe_mode = true;
-			if ( isset( $wppo_options['cache_settings']['wooSafeMode'] ) ) {
+			if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_safe_mode_enabled' ) ) {
+				try {
+					$woo_safe_mode = \PerformanceOptimise\Inc\Util::is_woo_safe_mode_enabled( is_array( $wppo_options ) ? $wppo_options : null );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$woo_safe_mode = true;
+				}
+			} elseif ( isset( $wppo_options['cache_settings']['wooSafeMode'] ) ) {
 				$parsed_mode   = filter_var( $wppo_options['cache_settings']['wooSafeMode'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
 				$woo_safe_mode = null === $parsed_mode ? true : $parsed_mode;
 			}
@@ -240,7 +247,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			if ( $woo_safe_mode ) {
 				foreach ( Util::get_woo_excluded_paths() as $woo_path ) {
 					$woo_path = strtolower( trim( (string) $woo_path, '/' ) );
-					$woo_path = preg_replace( '/[^a-z0-9\-_\/]/', '', $woo_path );
+					$woo_path = (string) preg_replace( '/[\x00-\x1F\x7F]/u', '', $woo_path );
+					$woo_path = trim( $woo_path, '/' );
 					if ( '' !== $woo_path && ! in_array( $woo_path, $woo_uri_segments, true ) ) {
 						$woo_uri_segments[] = $woo_path;
 					}
@@ -268,7 +276,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'$request_uri   = function_exists( \'wp_normalize_path\' ) ? wp_normalize_path( $request_uri ) : str_replace( \'\\\\\', \'/\', $request_uri );' . PHP_EOL .
 			'$cache_life    = ' . $cache_life . ';' . PHP_EOL . PHP_EOL .
 
-			'if ( \'\' === $site_domain || \'\' === $canonical_host || \'\' === $request_host || $request_host !== $canonical_host || strpos( $site_domain, \'..\' ) !== false || strpos( $request_uri, \'..\' ) !== false ) {' . PHP_EOL .
+			'if ( \'\' === $site_domain || \'\' === $canonical_host || \'\' === $request_host || $request_host !== $canonical_host || strpos( $site_domain, \'..\' ) !== false || strpos( $request_uri, \'..\' ) !== false || strpos( $request_uri, "\0" ) !== false || strpos( $site_domain, "\0" ) !== false ) {' . PHP_EOL .
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
 
@@ -301,6 +309,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 				: PHP_EOL // Keeps the blank-line separator consistent below.
 			) .
 
+			'// WooCommerce Store API routes are dynamic JSON and must never be served from the static cache (issue #962).' . PHP_EOL .
+			'// Unconditional on safe mode, mirroring wc-ajax: wc/store, wcstore, wp-json/wc/store, wp-json/wcstore,' . PHP_EOL .
+			'// plus the plain-permalink ?rest_route=/wc/store/... form (path is "/" there, so the' . PHP_EOL .
+			'// path-only regex would miss it — mirrors the QUERY_STRING guard above).' . PHP_EOL .
+			'if ( preg_match( \'#(^|/)(?:wc/store|wcstore|wp-json/wc/store|wp-json/wcstore)(/|$)#i\', $request_uri ) ) {' . PHP_EOL .
+			'	return;' . PHP_EOL .
+			'}' . PHP_EOL .
+			'if ( isset( $_GET[\'rest_route\'] ) && is_string( $_GET[\'rest_route\'] ) && preg_match( \'#(^|/)(?:wc/store|wcstore|wp-json/wc/store|wp-json/wcstore)(/|$)#i\', \'/\' . ltrim( $_GET[\'rest_route\'], \'/\' ) ) ) {' . PHP_EOL .
+			'	return;' . PHP_EOL .
+			'}' . PHP_EOL .
+			'if ( ! empty( $_SERVER[\'QUERY_STRING\'] ) && preg_match( \'#rest_route=[^&]*(?:wc/store|wcstore)#i\', rawurldecode( $_SERVER[\'QUERY_STRING\'] ) ) ) {' . PHP_EOL .
+			'	return;' . PHP_EOL .
+			'}' . PHP_EOL . PHP_EOL .
+
 			'if ( preg_match( \'#^/(?:' . $woo_uri_pattern . ')(?:/|$)#i\', $request_uri ) || preg_match( \'/(?:sitemap[^\/]*\.xml|wp-sitemap[^\/]*\.xml|\.xml)$/i\', $request_uri ) ) {' . PHP_EOL .
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
@@ -313,6 +335,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'$file_path      = str_replace( \'\\\\\', \'/\', $file_path );' . PHP_EOL .
 			'$file_path      = preg_replace( \'#/+#\', \'/\', $file_path );' . PHP_EOL .
 			'$file_path      = rtrim( $file_path, \'/\' );' . PHP_EOL .
+			'$cache_base     = str_replace( \'\\\\\', \'/\', WP_CONTENT_DIR . \'/cache/wppo/\' . $site_domain . \'/\' );' . PHP_EOL .
+			'if ( \'\' === $site_domain || 0 !== strpos( $file_path, $cache_base ) ) {' . PHP_EOL .
+			'	return;' . PHP_EOL .
+			'}' . PHP_EOL .
 			'$gzip_file_path = $file_path . \'.gz\';' . PHP_EOL .
 			'$brotli_file_path = $file_path . \'.br\';' . PHP_EOL .
 			'$accept_encoding = isset( $_SERVER[\'HTTP_ACCEPT_ENCODING\'] ) ? (string) $_SERVER[\'HTTP_ACCEPT_ENCODING\'] : \'\';' . PHP_EOL . PHP_EOL .

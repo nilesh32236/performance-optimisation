@@ -270,6 +270,9 @@ class AdvancedCacheHandlerTest extends \PHPUnit\Framework\TestCase {
 		$this->assertStringContainsString( 'wp_woocommerce_session_', $fs->put_contents );
 		// add-to-cart guards are baked in.
 		$this->assertStringContainsString( 'add-to-cart', $fs->put_contents );
+		// Store API guard is baked in unconditionally (issue #962).
+		$this->assertStringContainsString( 'wp-json/wc/store', $fs->put_contents );
+		$this->assertStringContainsString( 'wc/store', $fs->put_contents );
 	}
 
 	/**
@@ -305,6 +308,8 @@ class AdvancedCacheHandlerTest extends \PHPUnit\Framework\TestCase {
 		$this->assertStringNotContainsString( 'foreach ( (array) $_COOKIE as $k => $v )', $fs->put_contents );
 		// The pre-#922 default URI guard is still baked in.
 		$this->assertStringContainsString( '#^/(?:cart|checkout|my\-account)(?:/|$)#i', $fs->put_contents );
+		// The Store API guard stays unconditional even with safe mode off (issue #962).
+		$this->assertStringContainsString( 'wp-json/wc/store', $fs->put_contents );
 	}
 
 	/**

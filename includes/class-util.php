@@ -160,53 +160,59 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'wooSafeMode'         => true,
 				),
 				'file_optimisation'     => array(
-					'enableServerRules'          => false,
-					'cdnURL'                     => '',
-					'cdnMapping'                 => array(),
-					'removeUnusedCSS'            => false,
-					'excludeUnusedCSS'           => '',
-					'criticalCSS'                => false,
-					'ccssMaxSize'                => 20480,
-					'hostGoogleFontsLocally'     => false,
-					'blockAssetsOnDemand'        => function_exists( 'wp_load_classic_theme_block_styles_on_demand' ),
-					'loadAllCoreBlockAssets'     => false,
-					'delayJSDefaultStrategy'     => 'interaction',
-					'delayJSINPPreset'           => false,
-					'delayJSIdleList'            => '',
-					'delayJSViewportList'        => '',
-					'delayJSPriority'            => '',
-					'delayJSIdleTimeout'         => 3000,
-					'minifyHTML'                 => false,
-					'minifyJS'                   => false,
-					'minifyCSS'                  => false,
-					'deferJS'                    => false,
-					'delayJS'                    => false,
-					'combineCSS'                 => false,
-					'excludeJS'                  => '',
-					'excludeCSS'                 => '',
-					'excludeDeferJS'             => '',
-					'excludeDelayJS'             => '',
-					'excludeCombineCSS'          => '',
-					'minifyInlineCSS'            => false,
-					'minifyInlineJS'             => false,
-					'removeHTMLComments'         => true,
-					'disableRestApiLinks'        => false,
-					'disableRssFeeds'            => false,
-					'disableShortlinks'          => false,
-					'disableGeneratorTag'        => false,
-					'disableJQueryMigrate'       => false,
-					'disablePasswordStrength'    => false,
-					'disableSelfPingbacks'       => false,
-					'disableRSD'                 => false,
-					'disableWLWManifest'         => false,
-					'disableGlobalStyles'        => false,
-					'disableClassicThemeStyles'  => false,
-					'disableWooCartFragments'    => false,
-					'disableRecentCommentsStyle' => false,
-					'disableCommentReply'        => false,
-					'disableOEmbedDiscovery'     => false,
-					'disableBlockWidgets'        => false,
-					'fontMetricFallback'         => false,
+					'enableServerRules'            => false,
+					'cdnURL'                       => '',
+					'cdnMapping'                   => array(),
+					'removeUnusedCSS'              => false,
+					'excludeUnusedCSS'             => '',
+					'unusedCSSSafelistExtra'       => '',
+					'unusedCSSRegressionGuard'     => true,
+					'unusedCSSRegressionThreshold' => 20,
+					'criticalCSS'                  => false,
+					'ccssMaxSize'                  => 20480,
+					'hostGoogleFontsLocally'       => false,
+					'blockAssetsOnDemand'          => function_exists( 'wp_load_classic_theme_block_styles_on_demand' ),
+					'loadAllCoreBlockAssets'       => false,
+					'delayJSDefaultStrategy'       => 'interaction',
+					'delayJSINPPreset'             => false,
+					'delayJSExternalOnly'          => false,
+					'delayJSBuilderPreset'         => true,
+					'delayJSIdleList'              => '',
+					'delayJSViewportList'          => '',
+					'delayJSPriority'              => '',
+					'delayJSIdleTimeout'           => 3000,
+					'minifyHTML'                   => false,
+					'minifyJS'                     => false,
+					'minifyCSS'                    => false,
+					'deferJS'                      => false,
+					'delayJS'                      => false,
+					'delayJSSafeMode'              => true,
+					'combineCSS'                   => false,
+					'excludeJS'                    => '',
+					'excludeCSS'                   => '',
+					'excludeDeferJS'               => '',
+					'excludeDelayJS'               => '',
+					'excludeCombineCSS'            => '',
+					'minifyInlineCSS'              => false,
+					'minifyInlineJS'               => false,
+					'removeHTMLComments'           => true,
+					'disableRestApiLinks'          => false,
+					'disableRssFeeds'              => false,
+					'disableShortlinks'            => false,
+					'disableGeneratorTag'          => false,
+					'disableJQueryMigrate'         => false,
+					'disablePasswordStrength'      => false,
+					'disableSelfPingbacks'         => false,
+					'disableRSD'                   => false,
+					'disableWLWManifest'           => false,
+					'disableGlobalStyles'          => false,
+					'disableClassicThemeStyles'    => false,
+					'disableWooCartFragments'      => false,
+					'disableRecentCommentsStyle'   => false,
+					'disableCommentReply'          => false,
+					'disableOEmbedDiscovery'       => false,
+					'disableBlockWidgets'          => false,
+					'fontMetricFallback'           => false,
 				),
 				'preload_settings'      => array(
 					'enablePreloadCache'     => false,
@@ -223,6 +229,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'placeholderType'            => 'svg',
 					'autoPreloadLCP'             => false,
 					'prioritizeLCPImages'        => false,
+					'lcpHeroPreload'             => true,
 					'clientSideMimeTypeOverride' => false,
 					'clientSideMimeTypes'        => array(),
 					'lazyLoadBackgroundImages'   => false,
@@ -287,6 +294,161 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Whether WooCommerce safe mode is enabled.
+		 *
+		 * Single toggle for all Woo dynamic-page guards (cache, delay,
+		 * used-CSS, preload). Absent key defaults to enabled (fail-safe);
+		 * explicit false disables. Malformed values normalize to enabled.
+		 *
+		 * @since NEXT
+		 * @param array|null $settings Optional settings array (defaults to get_settings()).
+		 * @return bool True when safe mode is enabled.
+		 */
+		public static function is_woo_safe_mode_enabled( ?array $settings = null ): bool {
+			try {
+				if ( null === $settings ) {
+					$settings = self::get_settings();
+				}
+				if ( ! isset( $settings['cache_settings']['wooSafeMode'] ) ) {
+					return true;
+				}
+				$value = $settings['cache_settings']['wooSafeMode'];
+				if ( ! is_scalar( $value ) && null !== $value ) {
+					return true;
+				}
+				$parsed = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+				return null === $parsed ? true : $parsed;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
+		 * Whether a normalized request path is a WooCommerce Store API route.
+		 *
+		 * Matches `wc/store`, `wcstore`, `wp-json/wc/store*`, and
+		 * `wp-json/wcstore*` as path segments (case-insensitive), plus the
+		 * plain-permalink `?rest_route=/wc/store/...` form (pass the
+		 * `rest_route` query value directly — it normalizes to the same
+		 * Store API path). Store API responses are dynamic JSON and must
+		 * never be cached, delayed, or preloaded — unconditional on
+		 * safe-mode toggle.
+		 *
+		 * @since NEXT
+		 * @param string $path Request path (leading slash optional) or a `rest_route` value.
+		 * @return bool True when the path is a Store API route.
+		 */
+		public static function is_woo_store_api_path( string $path ): bool {
+			$normalized = strtolower( trim( (string) $path, '/' ) );
+			if ( '' === $normalized ) {
+				return false;
+			}
+			// Plain permalinks pass rest_route=/wc/store/... as the path or
+			// query value — strip a leading rest_route= wrapper if present.
+			if ( 0 === strpos( $normalized, 'rest_route=' ) ) {
+				$normalized = trim( substr( $normalized, strlen( 'rest_route=' ) ), '/' );
+			}
+			// URL-encoded rest_route values (e.g. %2Fwc%2Fstore%2Fv1%2Fcart).
+			if ( false !== strpos( $normalized, '%' ) ) {
+				$decoded = strtolower( trim( (string) rawurldecode( $normalized ), '/' ) );
+				if ( '' !== $decoded ) {
+					$normalized = $decoded;
+				}
+			}
+			if ( '' === $normalized ) {
+				return false;
+			}
+			return (bool) preg_match( '#(^|/)(?:wc/store|wcstore|wp-json/wc/store|wp-json/wcstore)(/|$)#i', '/' . $normalized );
+		}
+
+		/**
+		 * Whether the current request targets a WooCommerce Store API route.
+		 *
+		 * Checks the request path plus the plain-permalink `rest_route` query
+		 * parameter and raw `QUERY_STRING` so `?rest_route=/wc/store/v1/cart`
+		 * (path `/`) is treated as Store API across all layers. Fail-open:
+		 * detection failure returns true (treated as dynamic).
+		 *
+		 * @since NEXT
+		 * @param string      $path         Request path (leading slash optional).
+		 * @param string|null $query_string Optional raw query string (defaults to `$_SERVER['QUERY_STRING']`).
+		 * @param string|null $rest_route   Optional `rest_route` value (defaults to `$_GET['rest_route']`).
+		 * @return bool True when the request is a Store API request.
+		 */
+		public static function is_woo_store_api_request( string $path = '', ?string $query_string = null, ?string $rest_route = null ): bool {
+			try {
+				if ( '' !== $path && self::is_woo_store_api_path( $path ) ) {
+					return true;
+				}
+				if ( null === $rest_route ) {
+					$rest_route = isset( $_GET['rest_route'] ) ? sanitize_text_field( wp_unslash( $_GET['rest_route'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
+					if ( '' === $rest_route ) {
+						$rest_route = null;
+					}
+				}
+				if ( is_string( $rest_route ) && '' !== $rest_route && self::is_woo_store_api_path( $rest_route ) ) {
+					return true;
+				}
+				if ( null === $query_string ) {
+					$query_string = isset( $_SERVER['QUERY_STRING'] ) ? sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Unslashed before sanitizing; read-only routing check, no output.
+				}
+				if ( is_string( $query_string ) && '' !== $query_string && preg_match( '#rest_route=[^&]*(?:wc/store|wcstore)#i', rawurldecode( $query_string ) ) ) {
+					return true;
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
+		 * Whether a request path belongs to a WooCommerce dynamic page.
+		 *
+		 * Matches every path from {@see get_woo_excluded_paths()} as a full
+		 * path segment anywhere in the request path (covers nested
+		 * `shop/basket` and subdirectory / multisite prefixes such as
+		 * `/subsite/cart`; intentionally fail-safe — a non-Woo page like
+		 * `/blog/checkout/` is also treated as dynamic rather than risk
+		 * caching checkout content) plus Store API routes. Fail-open: any
+		 * detection failure returns true (treated as dynamic, never fatal).
+		 *
+		 * @since NEXT
+		 * @param string $path Request path (leading slash optional).
+		 * @return bool True when the path is Woo-dynamic.
+		 */
+		public static function is_woo_dynamic_path( string $path ): bool {
+			try {
+				if ( self::is_woo_store_api_path( $path ) ) {
+					return true;
+				}
+				$normalized = strtolower( trim( (string) $path, '/' ) );
+				if ( '' === $normalized ) {
+					return false;
+				}
+				foreach ( self::get_woo_excluded_paths() as $excluded ) {
+					$candidate = strtolower( trim( (string) $excluded, '/' ) );
+					if ( '' === $candidate ) {
+						continue;
+					}
+					// Anywhere-segment fail-safe semantics: match the candidate as a
+					// full path segment anywhere in the request path (covers nested
+					// shop/basket and subdirectory / multisite prefixes such as
+					// /subsite/cart; a non-Woo page containing the segment is also
+					// treated as dynamic).
+					if ( (bool) preg_match( '#/(?:' . preg_quote( $candidate, '#' ) . ')(/|$)#i', '/' . $normalized ) ) {
+						return true;
+					}
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
 		 * Relative paths treated as WooCommerce endpoints for static-cache bypass.
 		 *
 		 * Defaults cover stock permalinks (`cart`, `checkout`, `my-account`). When
@@ -330,7 +492,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 						array_filter(
 							array_map(
 								static function ( $segment ) {
-									return preg_replace( '/[^a-z0-9\-_]/', '', strtolower( (string) $segment ) );
+									$segment = strtolower( trim( (string) $segment ) );
+									// Keep unicode letters/numbers so translated
+									// slugs match exactly as resolved; strip only
+									// control characters. Matches the raw request
+									// path comparison in is_woo_dynamic_path().
+									$segment = (string) preg_replace( '/[\x00-\x1F\x7F]/u', '', $segment );
+									return trim( $segment, '/' );
 								},
 								explode( '/', $path )
 							)
@@ -1728,6 +1896,44 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 						$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
 						$sanitized[ $safe_key ] = null === $bool ? false : $bool;
 					}
+					continue;
+				}
+
+				// Safe-default delay keys (issue #966) — external-only defaults
+				// off (fail-safe: delay everything unless asked), builder preset
+				// defaults on (fail-safe: never delay builder runtimes).
+				if ( in_array( $safe_key, array( 'delayJSExternalOnly' ), true ) && ! is_array( $value ) ) {
+					if ( is_bool( $value ) ) {
+						$sanitized[ $safe_key ] = $value;
+					} else {
+						$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+						$sanitized[ $safe_key ] = null === $bool ? false : $bool;
+					}
+					continue;
+				}
+
+				if ( in_array( $safe_key, array( 'delayJSBuilderPreset', 'unusedCSSRegressionGuard' ), true ) && ! is_array( $value ) ) {
+					if ( is_bool( $value ) ) {
+						$sanitized[ $safe_key ] = $value;
+					} else {
+						$bool = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+						// Fail-safe: preset/guard default on; unrecognized values stay on.
+						$sanitized[ $safe_key ] = null === $bool ? true : $bool;
+					}
+					continue;
+				}
+
+				// Unused-CSS regression threshold (issue #966) — int clamped to
+				// 5-50 (% retained). Unrecognized values fail safe to 20.
+				if ( 'unusedCSSRegressionThreshold' === $safe_key && ! is_array( $value ) ) {
+					$threshold              = is_numeric( $value ) ? (int) $value : 20;
+					$sanitized[ $safe_key ] = ( $threshold >= 5 && $threshold <= 50 ) ? $threshold : 20;
+					continue;
+				}
+
+				// Unused-CSS extra safelist (issue #966) — one selector per line.
+				if ( 'unusedCSSSafelistExtra' === $safe_key && ! is_array( $value ) ) {
+					$sanitized[ $safe_key ] = sanitize_textarea_field( (string) $value );
 					continue;
 				}
 
