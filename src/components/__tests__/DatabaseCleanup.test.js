@@ -16,11 +16,13 @@ jest.mock( '../../lib/apiRequest', () => ( {
 } ) );
 
 import { apiCall } from '../../lib/apiRequest';
+import { clearDbCountsCache } from '../../lib/dbCounts';
 
 describe( 'DatabaseCleanup Component', () => {
 	beforeEach( () => {
 		global.wppoSettings = {};
 		jest.clearAllMocks();
+		clearDbCountsCache();
 	} );
 
 	it( 'cancels cleanup when cancel button is clicked in dialog', async () => {

@@ -68,7 +68,8 @@ describe( 'WebVitalsTrends Component', () => {
 
 		expect( fetchWebVitalsTrends ).toHaveBeenCalledWith(
 			'https://example.com/',
-			''
+			'',
+			expect.anything()
 		);
 	} );
 

@@ -56,6 +56,18 @@ const ESI_URL_ATTRS = new Set( [
 ] );
 
 /**
+ * Maximum fragment nodes sanitized in detail before bailing out.
+ *
+ * Fragments are small by contract (cart/admin-bar widgets); an oversized
+ * fragment indicates tampering or a server bug, so detailed per-attribute
+ * scrubbing is skipped to bound CPU on the hot hydration path.
+ *
+ * @since NEXT
+ * @type {number}
+ */
+export const MAX_ESI_NODES = 500;
+
+/**
  * Client-side defense-in-depth sanitizer for ESI fragment HTML.
  *
  * The authoritative sanitization happens server-side (wp_kses allowlist — see
@@ -82,7 +94,16 @@ export const sanitizeEsiFragment = ( html ) => {
 		'script, iframe, frame, frameset, object, embed, link, meta, base, style'
 	).forEach( ( node ) => node.remove() );
 
-	frag.querySelectorAll( '*' ).forEach( ( node ) => {
+	const all = frag.querySelectorAll( '*' );
+	if ( all.length > MAX_ESI_NODES ) {
+		console.warn(
+			'WPPO ESI fragment exceeds sane node count; skipping detailed sanitization',
+			all.length
+		);
+		return frag;
+	}
+
+	all.forEach( ( node ) => {
 		// Strip inline styles outright — simplest and safest since wp_kses
 		// is authoritative and fragments do not need them.
 		if ( node.hasAttribute( 'style' ) ) {
@@ -158,20 +179,61 @@ export const buildEsiBody = ( block, nonce ) => {
 };
 
 /**
+ * Apply an already-sanitized fragment to a placeholder element and clear
+ * placeholder attributes.
+ *
+ * @since NEXT
+ * @param {HTMLElement}      el   Placeholder element.
+ * @param {DocumentFragment} frag Sanitized fragment (consumed by the first caller; clone for fan-out).
+ * @return {void}
+ */
+const applyFragmentToElement = ( el, frag ) => {
+	el.replaceChildren( frag );
+	el.removeAttribute( 'data-wppo-esi' );
+	// Do not leave the spent nonce in the markup: it is no longer
+	// needed and prevents re-hydration with a stale value.
+	el.removeAttribute( 'data-nonce' );
+	el.removeAttribute( 'data-wppo-nonce' );
+	// The placeholder announced itself as a busy live region while the
+	// fragment loaded (audit #888 finding 7); the hydrated fragment
+	// carries its own semantics, so drop the loading-state ARIA attrs.
+	el.removeAttribute( 'role' );
+	el.removeAttribute( 'aria-live' );
+	el.removeAttribute( 'aria-busy' );
+	el.removeAttribute( 'aria-label' );
+};
+
+/**
+ * Read the block name and nonce for a placeholder element.
+ *
+ * @since NEXT
+ * @param {HTMLElement} el Placeholder element.
+ * @return {{block: string, nonce: string}|null} Block info, or null when no block.
+ */
+const readBlockInfo = ( el ) => {
+	const block = el.getAttribute( 'data-wppo-esi' );
+	if ( ! block ) {
+		return null;
+	}
+	const nonce =
+		el.getAttribute( 'data-nonce' ) ||
+		el.getAttribute( 'data-wppo-nonce' ) ||
+		'';
+	return { block, nonce };
+};
+
+/**
  * Hydrate a single placeholder element.
  *
  * @param {HTMLElement} el Placeholder element.
  * @return {Promise<void>}
  */
 export const hydrateElement = async ( el ) => {
-	const block = el.getAttribute( 'data-wppo-esi' );
-	if ( ! block ) {
+	const info = readBlockInfo( el );
+	if ( ! info ) {
 		return;
 	}
-	const nonce =
-		el.getAttribute( 'data-nonce' ) ||
-		el.getAttribute( 'data-wppo-nonce' ) ||
-		'';
+	const { block, nonce } = info;
 	try {
 		const res = await fetch( buildEsiUrl(), {
 			method: 'POST',
@@ -193,19 +255,7 @@ export const hydrateElement = async ( el ) => {
 		if ( html ) {
 			// Server-sanitized per the wp_kses contract (file header); this
 			// client-side pass is defense-in-depth before DOM insertion.
-			el.replaceChildren( sanitizeEsiFragment( html ) );
-			el.removeAttribute( 'data-wppo-esi' );
-			// Do not leave the spent nonce in the markup: it is no longer
-			// needed and prevents re-hydration with a stale value.
-			el.removeAttribute( 'data-nonce' );
-			el.removeAttribute( 'data-wppo-nonce' );
-			// The placeholder announced itself as a busy live region while the
-			// fragment loaded (audit #888 finding 7); the hydrated fragment
-			// carries its own semantics, so drop the loading-state ARIA attrs.
-			el.removeAttribute( 'role' );
-			el.removeAttribute( 'aria-live' );
-			el.removeAttribute( 'aria-busy' );
-			el.removeAttribute( 'aria-label' );
+			applyFragmentToElement( el, sanitizeEsiFragment( html ) );
 		}
 	} catch ( err ) {
 		console.warn( 'WPPO ESI hydrate failed', err );
@@ -215,6 +265,10 @@ export const hydrateElement = async ( el ) => {
 /**
  * Hydrate all placeholders on the page, batched via requestAnimationFrame.
  *
+ * Placeholders sharing the same block + nonce share a single in-flight
+ * fetch; the sanitized fragment is fanned out (cloned per extra element)
+ * so N identical blocks produce one network request.
+ *
  * @return {void}
  */
 export const hydrateESIPlaceholders = () => {
@@ -223,8 +277,49 @@ export const hydrateESIPlaceholders = () => {
 		return;
 	}
 	const run = () => {
+		const groups = new Map();
 		els.forEach( ( el ) => {
-			hydrateElement( el );
+			const info = readBlockInfo( el );
+			if ( ! info ) {
+				return;
+			}
+			const key = `${ info.block }\0${ info.nonce }`;
+			if ( ! groups.has( key ) ) {
+				groups.set( key, { ...info, targets: [] } );
+			}
+			groups.get( key ).targets.push( el );
+		} );
+		groups.forEach( async ( { block, nonce, targets } ) => {
+			try {
+				const res = await fetch( buildEsiUrl(), {
+					method: 'POST',
+					credentials: 'same-origin',
+					headers: {
+						'Content-Type': 'application/x-www-form-urlencoded',
+						'X-Requested-With': 'XMLHttpRequest',
+					},
+					body: buildEsiBody( block, nonce ),
+				} );
+				if ( ! res.ok ) {
+					return;
+				}
+				const data = await res.json();
+				const html =
+					data && data.data && data.data.html
+						? data.data.html
+						: data.html || '';
+				if ( ! html ) {
+					return;
+				}
+				const frag = sanitizeEsiFragment( html );
+				targets.forEach( ( el, index ) => {
+					// First element consumes the original; extras get clones.
+					const piece = 0 === index ? frag : frag.cloneNode( true );
+					applyFragmentToElement( el, piece );
+				} );
+			} catch ( err ) {
+				console.warn( 'WPPO ESI hydrate failed', err );
+			}
 		} );
 	};
 	if ( typeof window !== 'undefined' && 'requestAnimationFrame' in window ) {

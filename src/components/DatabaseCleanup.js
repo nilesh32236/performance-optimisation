@@ -7,6 +7,7 @@ import {
 } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
+import { getDbCounts, clearDbCountsCache } from '../lib/dbCounts';
 import useNotice from '../lib/useNotice';
 import useUnsavedChanges from '../lib/useUnsavedChanges';
 import UnsavedChangesContext from '../lib/UnsavedChangesContext';
@@ -171,26 +172,12 @@ const DatabaseCleanup = ( { options = {} } ) => {
 	const fetchCounts = useCallback( async () => {
 		setLoadingCounts( true );
 		try {
-			const response = await apiCall(
-				'database_cleanup_counts',
-				{},
-				'GET'
-			);
-			if ( response.success && response.data ) {
-				setCounts( response.data );
-			} else {
-				notify( {
-					type: 'error',
-					message:
-						response.message ||
-						__(
-							'Failed to load counts.',
-							'performance-optimisation'
-						),
-					durationMs: 5000,
-				} );
-			}
+			const data = await getDbCounts();
+			setCounts( data );
 		} catch ( error ) {
+			if ( error?.name === 'AbortError' ) {
+				return;
+			}
 			console.error( 'Error fetching database cleanup counts:', error );
 			notify( {
 				type: 'error',
@@ -264,6 +251,9 @@ const DatabaseCleanup = ( { options = {} } ) => {
 					),
 					durationMs: 5000,
 				} );
+				// Cleanup changed the counts — invalidate the shared cache
+				// so the refetch below hits the network.
+				clearDbCountsCache();
 				fetchCounts();
 			} else {
 				const failures = response.data?.failures;
@@ -283,6 +273,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 					durationMs: 5000,
 				} );
 				if ( response.data?.deleted > 0 ) {
+					clearDbCountsCache();
 					fetchCounts();
 				}
 			}
