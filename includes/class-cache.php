@@ -1483,6 +1483,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Fetches CSS content from a remote URL or local path.
 		 *
+		 * Files larger than the `wppo_max_css_bytes` filter cap (default 2MB)
+		 * are skipped (returns false; the handle keeps its original
+		 * stylesheet) and the skip is logged. Documented in docs/hooks.md.
+		 *
 		 * @param string $url The URL of the CSS file.
 		 * @return string|false The CSS content or false if fetching fails.
 		 *
@@ -1499,10 +1503,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				// Stat first so a single huge theme CSS file is not fully
 				// buffered per handle in the combine loop.
 				$max_bytes = (int) apply_filters( 'wppo_max_css_bytes', 2 * 1024 * 1024 );
-				if ( $max_bytes > 0 ) {
+				if ( $max_bytes > 0 && '' !== $css_file ) {
 					try {
 						$size = $fs->size( $css_file );
 						if ( false !== $size && (int) $size > $max_bytes ) {
+							if ( class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
+								try {
+									Log::add( sprintf( 'Skipped oversize CSS in combine (%s, %d bytes > %d byte cap).', $url, (int) $size, $max_bytes ) );
+								} catch ( \Throwable $e ) {
+									unset( $e );
+								}
+							}
 							return false;
 						}
 					} catch ( \Throwable $e ) {

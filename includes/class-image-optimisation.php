@@ -173,6 +173,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private static array $img_size_cache = array();
 
 		/**
+		 * Request-static memo of the persistent derived-alt map (single fetch per request).
+		 *
+		 * @var array<string,string>|null Null until first read.
+		 * @since NEXT
+		 */
+		private static $derived_alt_req_map = null;
+
+		/**
+		 * Pending merged derived-alt map snapshot for the shutdown flush.
+		 *
+		 * @var array<string,string>
+		 * @since NEXT
+		 */
+		private static $derived_alt_pending = array();
+
+		/**
 		 * Per-request random namespace for noscript placeholder tokens.
 		 *
 		 * In-memory only (never persisted to `wppo_settings`), so it is
@@ -214,9 +230,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return void
 		 */
 		public static function clear_runtime_caches(): void {
-			self::$file_exists_cache = array();
-			self::$img_size_cache    = array();
-			self::$preload_emitted   = array();
+			self::$file_exists_cache     = array();
+			self::$img_size_cache        = array();
+			self::$preload_emitted       = array();
+			self::$derived_alt_req_map   = null;
+			self::$derived_alt_pending   = array();
 		}
 
 		/**
@@ -2305,46 +2323,76 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Read the bounded persistent src-to-title map for derived alt text.
 		 *
+		 * Fetched at most once per request (request-static memo) so a page
+		 * with N filename-empty images pays a single transient read.
+		 *
 		 * @since NEXT
 		 * @return array<string, string>
 		 */
 		private static function get_derived_alt_map(): array {
+			if ( null !== self::$derived_alt_req_map ) {
+				return self::$derived_alt_req_map;
+			}
 			try {
 				if ( function_exists( 'wp_cache_get' ) ) {
 					$hit = wp_cache_get( Util::transient_key( 'wppo_derived_alt_map' ), 'wppo' );
 					if ( is_array( $hit ) ) {
-						return $hit;
+						self::$derived_alt_req_map = $hit;
+						return self::$derived_alt_req_map;
 					}
 				}
 				if ( function_exists( 'get_transient' ) ) {
-					$map = get_transient( Util::transient_key( 'wppo_derived_alt_map' ) );
-					return is_array( $map ) ? $map : array();
+					$fetched = get_transient( Util::transient_key( 'wppo_derived_alt_map' ) );
+					if ( is_array( $fetched ) ) {
+						self::$derived_alt_req_map = $fetched;
+					} else {
+						self::$derived_alt_req_map = array();
+					}
+					return self::$derived_alt_req_map;
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
-			return array();
+			self::$derived_alt_req_map = array();
+			return self::$derived_alt_req_map;
 		}
 
 		/**
-		 * Store one src-to-title entry in the bounded persistent map.
+		 * Normalize an image src into a bounded persistent map key.
 		 *
-		 * Capped at 200 entries (drop-oldest) with a day TTL so the map
-		 * cannot grow unbounded.
+		 * Lowercases + strips query/fragment so relative/absolute variants
+		 * and cache-busting params share one entry; md5-hashes to bound key
+		 * length (long URLs would otherwise bloat the serialized transient
+		 * past memcached limits).
 		 *
 		 * @since NEXT
-		 * @param string $src   Image src URL.
-		 * @param string $title Resolved title (may be '').
+		 * @param string $src Image src URL.
+		 * @return string Map key.
+		 */
+		private static function derived_alt_map_key( string $src ): string {
+			$norm = strtok( $src, '?#' );
+			if ( ! is_string( $norm ) || '' === $norm ) {
+				$norm = $src;
+			}
+			return 'alt:' . md5( strtolower( $norm ) );
+		}
+
+		/**
+		 * Flush a merged derived-alt map to persistence (shutdown handler).
+		 *
+		 * Single write per request carrying all entries buffered during
+		 * frontend filtering, avoiding per-image read-modify-write
+		 * amplification on sites without a persistent object cache.
+		 * Best-effort: concurrent requests may each persist their own
+		 * snapshot (last-writer-wins); loss only forces a recompute.
+		 *
+		 * @since NEXT
+		 * @param array<string, string> $map Merged map to persist.
 		 * @return void
 		 */
-		private static function set_derived_alt_map_entry( string $src, string $title ): void {
+		private static function flush_derived_alt_map( array $map ): void {
 			try {
-				$key         = Util::transient_key( 'wppo_derived_alt_map' );
-				$map         = self::get_derived_alt_map();
-				$map[ $src ] = $title;
-				if ( count( $map ) > 200 ) {
-					$map = array_slice( $map, -200, 200, true );
-				}
+				$key = Util::transient_key( 'wppo_derived_alt_map' );
 				if ( function_exists( 'wp_cache_set' ) ) {
 					wp_cache_set( $key, $map, 'wppo', DAY_IN_SECONDS );
 				}
@@ -2354,6 +2402,97 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
+		}
+
+		/**
+		 * Store one src-to-title entry in the bounded persistent map.
+		 *
+		 * Capped at 200 entries (drop-oldest) with a day TTL so the map
+		 * cannot grow unbounded. Empty (negative) titles are never
+		 * persisted so corrected attachment titles do not stay stale for a
+		 * day. Frontend filtering stays read-only during the request: the
+		 * entry updates the request-static memo immediately and the merged
+		 * map is written once on shutdown instead of once per image.
+		 *
+		 * @since NEXT
+		 * @param string $src   Image src URL.
+		 * @param string $title Resolved title (may be '').
+		 * @return void
+		 */
+		private static function set_derived_alt_map_entry( string $src, string $title ): void {
+			if ( '' === $title ) {
+				return;
+			}
+			try {
+				$map_key         = self::derived_alt_map_key( $src );
+				$map             = self::get_derived_alt_map();
+				$map[ $map_key ] = $title;
+				if ( count( $map ) > 200 ) {
+					$map = array_slice( $map, -200, 200, true );
+				}
+				self::$derived_alt_req_map = $map;
+				self::$derived_alt_pending = $map;
+				if ( function_exists( 'wp_cache_set' ) ) {
+					wp_cache_set( Util::transient_key( 'wppo_derived_alt_map' ), $map, 'wppo', DAY_IN_SECONDS );
+				}
+				self::schedule_derived_alt_flush();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Schedule a single shutdown write of the merged alt map.
+		 *
+		 * Hooks once per request; the shutdown callback re-reads the latest
+		 * pending snapshot so every buffered entry is carried in one write.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private static function schedule_derived_alt_flush(): void {
+			static $hooked = false;
+			if ( $hooked ) {
+				return;
+			}
+			$hooked = true;
+			if ( function_exists( 'add_action' ) ) {
+				try {
+					add_action(
+						'shutdown',
+						static function () {
+							$pending = \PerformanceOptimise\Inc\Image_Optimisation::get_pending_derived_alt_map();
+							if ( ! empty( $pending ) ) {
+								\PerformanceOptimise\Inc\Image_Optimisation::flush_derived_alt_map( $pending );
+							}
+						},
+						20
+					);
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+		}
+
+		/**
+		 * Get the pending merged alt map for the shutdown flush.
+		 *
+		 * @since NEXT
+		 * @return array<string, string>
+		 */
+		public static function get_pending_derived_alt_map(): array {
+			return self::$derived_alt_pending;
+		}
+
+		/**
+		 * Reset derived-alt request caches (tests + long-lived processes).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_derived_alt_cache(): void {
+			self::$derived_alt_req_map = null;
+			self::$derived_alt_pending = array();
 		}
 
 		/**
@@ -2383,8 +2522,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					if ( ! array_key_exists( $src, $parent_title_cache ) ) {
 						// Check the bounded persistent map first so repeat page
 						// views do not re-run attachment lookups per image.
+						// The map is fetched once per request; keys are hashed
+						// + normalized (legacy raw-src keys still honoured).
 						$persistent = self::get_derived_alt_map();
-						if ( array_key_exists( $src, $persistent ) ) {
+						$map_key    = self::derived_alt_map_key( $src );
+						if ( array_key_exists( $map_key, $persistent ) ) {
+							$parent_title_cache[ $src ] = $persistent[ $map_key ];
+						} elseif ( array_key_exists( $src, $persistent ) ) {
 							$parent_title_cache[ $src ] = $persistent[ $src ];
 						} else {
 							// Resolve the image's own attachment so the fallback title

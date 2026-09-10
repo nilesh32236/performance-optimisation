@@ -645,13 +645,68 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			update_option( 'wppo_settings', $options );
 
-			if ( class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
-				Telemetry::invalidate_audit_cache();
-			}
+			self::maybe_invalidate_audit_cache( $tab );
 
 			$this->remove_sensitive_settings_from_response( $options );
 
 			return $this->send_response( $options );
+		}
+
+		/**
+		 * Tabs whose settings can change telemetry scan output.
+		 *
+		 * Only these tabs bust the audit cache on save/import so unrelated
+		 * tab saves (e.g. object_cache, database_cleanup) do not force an
+		 * avoidable rescan.
+		 *
+		 * @since NEXT
+		 * @var string[]
+		 */
+		private const AUDIT_AFFECTING_TABS = array(
+			'performance_audit',
+			'file_optimisation',
+			'image_optimisation',
+			'preload_settings',
+			'cache_settings',
+		);
+
+		/**
+		 * Invalidate the audit cache when an audit-affecting tab changed.
+		 *
+		 * @since NEXT
+		 * @param string|string[] $tabs Saved tab slug(s).
+		 * @return void
+		 */
+		public static function maybe_invalidate_audit_cache( $tabs ): void {
+			$tabs = is_array( $tabs ) ? $tabs : array( $tabs );
+			foreach ( $tabs as $tab ) {
+				if ( in_array( (string) $tab, self::AUDIT_AFFECTING_TABS, true ) ) {
+					if ( class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
+						Telemetry::invalidate_audit_cache();
+					}
+					return;
+				}
+			}
+		}
+
+		/**
+		 * Delete the cached image-job-status payload.
+		 *
+		 * Called when image work changes state (enqueue/complete/fail) so
+		 * SPA polling never serves the 30s-cached payload across a state
+		 * transition. Fail-open: never throws.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function invalidate_image_job_status(): void {
+			try {
+				if ( function_exists( 'delete_transient' ) ) {
+					delete_transient( Util::transient_key( 'wppo_image_job_status' ) );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 
 		/**
@@ -808,6 +863,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					)
 				);
 
+				self::invalidate_image_job_status();
+
 				return $this->send_response(
 					array(
 						'background'  => true,
@@ -842,6 +899,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			Cache::clear_cache();
+
+			self::invalidate_image_job_status();
 
 			$response  = Img_Converter::get_img_info();
 			$sanitized = array();
@@ -943,9 +1002,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				return $this->send_response( null, false, 500, __( 'Failed to update settings', 'performance-optimisation' ) );
 			}
 
-			if ( class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
-				Telemetry::invalidate_audit_cache();
-			}
+			self::maybe_invalidate_audit_cache( array_keys( $sanitized_settings ) );
 
 			$response_settings = $merged_settings;
 			$this->remove_sensitive_settings_from_response( $response_settings );
@@ -1120,6 +1177,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Returns the status of background image optimization jobs.
 		 *
+		 * The payload is cached for 30s to protect the Action Scheduler
+		 * store tables from SPA polling; the transient is invalidated on
+		 * every enqueue/complete/fail transition (see
+		 * invalidate_image_job_status()), so staleness only applies to
+		 * passive polling with no state change.
+		 *
 		 * @param \WP_REST_Request $_request The request object.
 		 * @since 1.1.0
 		 * @return \WP_REST_Response The response object.
@@ -1150,19 +1213,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			);
 
 			// Check if Action Scheduler is active and get job counts.
-			// Bound the query so SPA polling does not recount the full set.
+			// Use a count query so deep queues are reported exactly instead
+			// of counting a capped page (previously per_page=100).
 			if ( function_exists( 'as_get_scheduled_actions' ) ) {
-				$pending_jobs = as_get_scheduled_actions(
-					array(
-						'hook'     => 'wppo_convert_image_background',
-						'status'   => \ActionScheduler_Store::STATUS_PENDING,
-						'group'    => 'performance_optimisation',
-						'per_page' => 100,
-					),
-					'ARRAY_A'
+				$count_args = array(
+					'hook'   => 'wppo_convert_image_background',
+					'status' => \ActionScheduler_Store::STATUS_PENDING,
+					'group'  => 'performance_optimisation',
 				);
+				$queued     = null;
+				try {
+					if ( class_exists( 'ActionScheduler' ) && method_exists( 'ActionScheduler', 'store' ) ) {
+						$store  = \ActionScheduler::store();
+						$queued = $store->query_actions( $count_args, 'count' );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$queued = null;
+				}
+				if ( ! is_numeric( $queued ) ) {
+					$pending_jobs = as_get_scheduled_actions(
+						array_merge( $count_args, array( 'per_page' => 100 ) ),
+						'ARRAY_A'
+					);
+					$queued       = count( $pending_jobs );
+				}
 
-				$status['queued_jobs'] = count( $pending_jobs );
+				$status['queued_jobs'] = (int) $queued;
 			} else {
 				$status['queued_jobs'] = 0;
 			}

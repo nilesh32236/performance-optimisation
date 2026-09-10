@@ -39,6 +39,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		private const LEARN_LOCK = 'wppo_ai_learn_lock';
 
 		/**
+		 * Per-request memo of the cold-start heuristic model for get_suggestions().
+		 *
+		 * Keeps the GET/read path free of DB writes; reset via
+		 * clear_suggestions_cache() (mirrors RUM::clear_field_lcp_cache()).
+		 *
+		 * @var array|null
+		 */
+		private static $suggestions_memo = null;
+
+		/**
 		 * Whether AI adaptive optimization is enabled.
 		 *
 		 * Gated by wppo_settings[ai_adaptive][enabled] (false default)
@@ -80,6 +90,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 */
 		public static function update_model( array $model ): void {
 			update_option( self::OPTION, $model, false );
+		}
+
+		/**
+		 * Clear the per-request suggestions memo.
+		 *
+		 * Exposed publicly so tests can reset isolation between cases that
+		 * mutate the option store directly (mirrors RUM::clear_field_lcp_cache()).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function clear_suggestions_cache(): void {
+			self::$suggestions_memo = null;
 		}
 
 		/**
@@ -1201,19 +1224,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		public static function get_suggestions(): array {
 			$model = self::get_model();
 			if ( empty( $model ) ) {
-				// Persist the computed model so repeated renders do not
-				// recompute the full RUM + trends deserialization, postmeta
-				// UNION query and segmented scans on every invocation.
-				// (No per-process static memo: statics leak across unit
-				// tests sharing one PHP process.)
-				$model = self::heuristic_learn();
-				if ( ! empty( $model ) ) {
-					try {
-						self::update_model( $model );
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
+				// Read-only cold start: compute in memory and memoize per
+				// request. Persistence stays on the sanctioned learn() path
+				// (throttle + source/updated_at stamps + schema allowlist).
+				if ( null === self::$suggestions_memo ) {
+					self::$suggestions_memo = self::heuristic_learn();
 				}
+				$model = self::$suggestions_memo;
 			}
 			$suggestions = array();
 
@@ -1280,6 +1297,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 						if ( is_array( $row ) && isset( $row['n'] ) && (int) $row['n'] >= $field_min ) {
 							$qualified[] = $row;
 						}
+					}
+					// Re-sort p75-desc locally: do not rely on the upstream
+					// RUM ordering contract (mirrors heuristic_learn()).
+					if ( ! empty( $qualified ) ) {
+						usort(
+							$qualified,
+							static function ( $a, $b ) {
+								return ( (float) ( $b['p75'] ?? 0 ) ) <=> ( (float) ( $a['p75'] ?? 0 ) );
+							}
+						);
 					}
 					if ( ! empty( $qualified ) && is_array( $qualified[0] ) ) {
 						$top               = $qualified[0];

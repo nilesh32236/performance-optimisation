@@ -920,11 +920,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 *
 		 * Hooked to save_post/delete_post/permalink_structure_changed so
 		 * permalink changes cannot serve stale post-ID resolutions.
+		 * Autosaves and revisions are ignored so busy editorial sites do
+		 * not flush the 200-entry map on every keystroke.
 		 *
 		 * @since NEXT
+		 * @param int|null $post_id Optional post ID passed by save_post/delete_post.
 		 * @return void
 		 */
-		public static function invalidate_uri_post_map(): void {
+		public static function invalidate_uri_post_map( $post_id = null ): void {
+			try {
+				if ( null !== $post_id ) {
+					if ( function_exists( 'wp_is_post_autosave' ) && wp_is_post_autosave( (int) $post_id ) ) {
+						return;
+					}
+					if ( function_exists( 'wp_is_post_revision' ) && wp_is_post_revision( (int) $post_id ) ) {
+						return;
+					}
+				} elseif ( function_exists( 'get_the_ID' ) ) {
+					// Permalink-structure hook passes no ID; fall back to the
+					// loop ID only for autosave detection, never block the flush.
+					try {
+						$loop_id = (int) get_the_ID();
+						if ( $loop_id > 0 ) {
+							if ( function_exists( 'wp_is_post_autosave' ) && wp_is_post_autosave( $loop_id ) ) {
+								return;
+							}
+							if ( function_exists( 'wp_is_post_revision' ) && wp_is_post_revision( $loop_id ) ) {
+								return;
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 			self::$uri_post_memo = array();
 			try {
 				if ( function_exists( 'delete_transient' ) ) {
@@ -999,17 +1030,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		}
 
 		/**
+		 * Normalize a request URI into a stable map key.
+		 *
+		 * Strips query strings/fragments (utm_, fbclid, pagination params)
+		 * so each variant does not churn the bounded 200-entry map.
+		 *
+		 * @since NEXT
+		 * @param string $uri Request URI.
+		 * @return string Normalized path (at least '/').
+		 */
+		private static function normalize_uri_key( string $uri ): string {
+			$path = strtok( $uri, '?#' );
+			if ( ! is_string( $path ) || '' === $path ) {
+				return '/';
+			}
+			return $path;
+		}
+
+		/**
 		 * Resolve a URI to a post ID using per-request + persistent caches.
 		 *
 		 * The persistent map is a bounded (200-entry, 12h TTL) transient
 		 * namespaced via Util::transient_key(). Negative results are cached
 		 * too so unknown URIs do not re-hit url_to_postid() every request.
+		 * URIs are normalized (query/fragment stripped) before lookup.
 		 *
 		 * @since NEXT
 		 * @param string $uri Request URI.
 		 * @return int Post ID (0 when unresolvable).
 		 */
 		private static function cached_uri_to_post_id( string $uri ): int {
+			$uri = self::normalize_uri_key( $uri );
 			if ( isset( self::$uri_post_memo[ $uri ] ) ) {
 				return self::$uri_post_memo[ $uri ];
 			}
@@ -1032,12 +1083,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Store a URI-to-post-ID resolution in per-request + persistent caches.
 		 *
+		 * Best-effort by design: the transient read-modify-write is
+		 * unsynchronized, so concurrent requests may overwrite each other's
+		 * entries (last-writer-wins). Loss is harmless — it only forces a
+		 * url_to_postid() recompute on the next miss. URIs are normalized
+		 * (query/fragment stripped) before storing.
+		 *
 		 * @since NEXT
 		 * @param string $uri Request URI.
 		 * @param int    $post_id Resolved post ID (0 for negative).
 		 * @return void
 		 */
 		private static function store_uri_to_post_id( string $uri, int $post_id ): void {
+			$uri                         = self::normalize_uri_key( $uri );
 			self::$uri_post_memo[ $uri ] = $post_id;
 			try {
 				if ( ! function_exists( 'get_transient' ) || ! function_exists( 'set_transient' ) ) {

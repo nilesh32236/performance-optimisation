@@ -1166,6 +1166,22 @@ add_filter( 'wppo_auto_alt_text', function ( $alt, $src ) {
 
 ---
 
+### `wppo_max_css_bytes`
+Filters the per-file size cap in bytes for CSS combining. Files larger than the cap are skipped (the handle keeps its original stylesheet) and the skip is logged to the activity log. `0` disables the cap. @since NEXT.
+
+**Parameters:**
+- `$cap` *(int)* — Cap in bytes. Default `2097152` (2MB).
+
+**Example:**
+
+```php
+add_filter( 'wppo_max_css_bytes', function () {
+    return 1024 * 1024;
+} );
+```
+
+---
+
 ### `wppo_max_longest_edge_px`
 Filters the longest-edge downscale cap in pixels applied when converting uploads to WebP/AVIF. Oversized sources are downscaled in-memory so generated outputs never exceed this edge; the original upload file is never modified, and a downscale that would not shrink output keeps the original. Applies to the JPEG/PNG GD path, the WebP-source AVIF path, and the GIF-via-Imagick path (coalesced-frame thumbnail); the 5000px dimension guard is evaluated against post-cap dimensions so cappable images convert instead of failing. Raw source pixel dimensions are still bounded before decode by a separate memory-budget guard, filterable via `wppo_max_source_pixels` (defaults to a PHP-memory-derived budget, clamped to 4,000,000–80,000,000 pixels), so decompression bombs cannot reach full GD decode. `0` disables the cap. @since NEXT.
 

@@ -286,7 +286,7 @@ class EdgeCacheTest extends \PHPUnit\Framework\TestCase {
 	 *
 	 * @return void
 	 */
-	public function test_purge_single_page_does_not_hit_edge(): void {
+	public function test_purge_single_page_issues_scoped_cloudflare_purge(): void {
 		$this->install_stubs();
 		$this->options['wppo_settings'] = array(
 			'edge_cache' => array(

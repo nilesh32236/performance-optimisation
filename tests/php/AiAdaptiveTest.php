@@ -39,6 +39,9 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		// RUM field-LCP aggregate is memoized per request; reset between
 		// tests sharing one PHP process so per-test option stubs apply.
 		RUM::clear_field_lcp_cache();
+		// Suggestions cold-start memo likewise leaks across tests in one
+		// process now that get_suggestions() is read-only.
+		AI_Adaptive::clear_suggestions_cache();
 		Functions\stubs(
 			array(
 				'get_option',

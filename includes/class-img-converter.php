@@ -286,13 +286,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * The AVIF conversion path only boots when this returns true: GD
 		 * `imageavif()` (PHP 8.2+) or Imagick with AVIF delegate support.
 		 * All callers fail open to WebP, else the original, when false.
+		 * Result is memoized per process; pass `$reset = true` in tests to
+		 * clear the memo between cases that stub encoders differently.
 		 *
 		 * @since NEXT
 		 *
+		 * @param bool $reset Clear the per-process memo before probing.
 		 * @return bool True when AVIF encoding is supported.
 		 */
-		public static function is_avif_encoder_available(): bool {
+		public static function is_avif_encoder_available( bool $reset = false ): bool {
 			static $memo = null;
+			if ( $reset ) {
+				$memo = null;
+			}
 			if ( null !== $memo ) {
 				return $memo;
 			}
@@ -2111,6 +2117,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					return $img_info;
 				}
 			);
+			// Image work changed state: drop the cached job-status payload
+			// so SPA polling cannot serve stale pending/queued/savings.
+			try {
+				if ( function_exists( 'delete_transient' ) && class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
+					delete_transient( \PerformanceOptimise\Inc\Util::transient_key( 'wppo_image_job_status' ) );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 
 		/**
@@ -2265,8 +2280,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 			// Prime post + postmeta caches for the batch so the per-ID
 			// get_attached_file() calls below do not each issue post and
-			// postmeta lookups.
-			$prime_ids = array_map( 'intval', (array) $all_ids );
+			// postmeta lookups. Non-positive IDs are filtered so no useless
+			// cache queries are issued for invalid entries.
+			$prime_ids = array_values( array_filter( array_map( 'intval', (array) $all_ids ), static fn ( $id ) => $id > 0 ) );
 			if ( ! empty( $prime_ids ) ) {
 				try {
 					if ( function_exists( '_prime_post_caches' ) ) {

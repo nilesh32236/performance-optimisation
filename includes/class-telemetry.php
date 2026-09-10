@@ -720,12 +720,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 						}
 						// Persist per-URL content-length in a bounded short-TTL
 						// transient so repeat scans do not re-issue HEADs.
+						// Registered in the transient index for bulk deletion.
 						$persist_key = Util::transient_key( 'wppo_head_len_' . md5( $url ) );
 						try {
 							$persisted = get_transient( $persist_key );
-							if ( is_int( $persisted ) && $persisted >= 0 ) {
-								$head_cache[ $url ] = $persisted;
-								return $persisted;
+							if ( is_numeric( $persisted ) && (int) $persisted >= 0 ) {
+								$head_cache[ $url ] = (int) $persisted;
+								return (int) $persisted;
 							}
 						} catch ( \Throwable $e ) {
 							unset( $e );
@@ -737,6 +738,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 								$head_cache[ $url ] = (int) $len;
 								try {
 									set_transient( $persist_key, (int) $len, HOUR_IN_SECONDS );
+									self::register_transient_key( $persist_key );
 								} catch ( \Throwable $e ) {
 									unset( $e );
 								}
@@ -745,7 +747,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 						}
 						$head_cache[ $url ] = 0;
 						try {
-							set_transient( $persist_key, 0, HOUR_IN_SECONDS );
+							// Misses/failures cache briefly (10 min) so a
+							// transient glitch does not zero totals for an hour.
+							set_transient( $persist_key, 0, 10 * MINUTE_IN_SECONDS );
+							self::register_transient_key( $persist_key );
 						} catch ( \Throwable $e ) {
 							unset( $e );
 						}
@@ -918,7 +923,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 			}
 
 			try {
-				set_transient( $cache_key, array( 'exists' => $result ), DAY_IN_SECONDS );
+				// Cache successes for a day; a failed fetch (network/DNS
+				// blip) caches briefly so one error cannot report a
+				// day-long false negative.
+				set_transient( $cache_key, array( 'exists' => $result ), $result ? DAY_IN_SECONDS : HOUR_IN_SECONDS );
+				self::register_transient_key( $cache_key );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
@@ -1001,8 +1010,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 			// registered wppo_audit_* keys so settings changes do not leave
 			// stale audit data cached up to the 1h TTL.
 			try {
-				$index = get_option( 'wppo_transient_index', array() );
-				if ( is_array( $index ) && ! empty( $index ) ) {
+				$index = self::read_transient_index();
+				if ( ! empty( $index ) ) {
 					foreach ( $index as $stored_key => $expiry ) {
 						if ( false !== strpos( (string) $stored_key, 'wppo_audit_' ) ) {
 							delete_transient( (string) $stored_key );
