@@ -1686,6 +1686,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					return $buffer;
 				}
 			}
+			// Per-URL + per-page used-CSS disable (#988): skip purging on listed
+			// URLs or when `_wppo_used_css_disabled` is set, without disabling
+			// the plugin. Fail-open: matcher errors fall through to full styles.
+			if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'is_used_css_excluded_for_url' ) ) {
+				try {
+					if ( Main::is_used_css_excluded_for_url() ) {
+						return $buffer;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
 
 			global $wp_styles;
 			$current_url   = Util::cached_home_url( isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '' );

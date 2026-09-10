@@ -1023,6 +1023,22 @@ Filters the delay-JS exclusion preset list itself. @since NEXT.
 
 ---
 
+### `wppo_delay_js_commerce_exclusions`
+Filters the delay-JS commerce preset exclusions (jQuery, cart-fragments, checkout). @since NEXT.
+
+**Parameters:**
+- `$preset` *(string[])* — Commerce preset exclusion patterns.
+
+---
+
+### `wppo_delay_js_slider_exclusions`
+Filters the delay-JS slider preset exclusions (revslider, swiper, slick, etc.). @since NEXT.
+
+**Parameters:**
+- `$preset` *(string[])* — Slider preset exclusion patterns.
+
+---
+
 ### `wppo_htaccess_cache_vary_rules`
 Filters the `.htaccess` cache-vary rules block before writing. @since NEXT.
 
