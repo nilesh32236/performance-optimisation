@@ -1,3 +1,4 @@
+import { useId } from '@wordpress/element';
 import { ToggleControl } from '@wordpress/components';
 
 /**
@@ -33,12 +34,17 @@ const SwitchField = ( {
 		} );
 	};
 
+	const labelId = useId();
+
 	return (
 		<div className="wppo-switch-field">
 			{ ( showLabel || description ) && (
 				<div className="wppo-switch-field__info">
 					{ showLabel && (
-						<span className="wppo-switch-field__label">
+						<span
+							className="wppo-switch-field__label"
+							id={ labelId }
+						>
 							{ label }
 						</span>
 					) }
@@ -47,16 +53,15 @@ const SwitchField = ( {
 					) }
 				</div>
 			) }
-			<span role="switch" aria-checked={ checked }>
-				<ToggleControl
-					__nextHasNoMarginBottom
-					checked={ checked }
-					onChange={ handleToggle }
-					label={ label }
-					hideLabelFromVision={ true }
-					disabled={ disabled }
-				/>
-			</span>
+			<ToggleControl
+				__nextHasNoMarginBottom
+				checked={ checked }
+				onChange={ handleToggle }
+				label={ label }
+				hideLabelFromVision={ true }
+				disabled={ disabled }
+				{ ...( showLabel ? { 'aria-labelledby': labelId } : {} ) }
+			/>
 		</div>
 	);
 };

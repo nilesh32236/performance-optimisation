@@ -234,22 +234,33 @@ const DatabaseCleanup = ( { options = {} } ) => {
 			if ( res && res.success !== false ) {
 				setBaseline( { ...settings } );
 				setIsDirty( false );
+				notify( {
+					type: 'success',
+					message: __(
+						'Settings saved successfully.',
+						'performance-optimisation'
+					),
+					durationMs: 5000,
+				} );
+			} else {
+				notify( {
+					type: 'error',
+					message:
+						res?.message ||
+						__(
+							'Error saving settings.',
+							'performance-optimisation'
+						),
+					durationMs: 5000,
+				} );
 			}
-			notify( {
-				type: 'success',
-				message: __(
-					'Settings saved successfully.',
-					'performance-optimisation'
-				),
-				durationMs: 5000,
-			} );
-		} catch {
+		} catch ( err ) {
+			console.error( 'Error saving settings:', err );
 			notify( {
 				type: 'error',
-				message: __(
-					'Error saving settings.',
-					'performance-optimisation'
-				),
+				message:
+					err?.message ||
+					__( 'Error saving settings.', 'performance-optimisation' ),
 				durationMs: 5000,
 			} );
 		} finally {
@@ -774,25 +785,21 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				onCancel={ () =>
 					setConfirmDialog( { ...confirmDialog, isOpen: false } )
 				}
-				title={
-					__( 'Confirm', 'performance-optimisation' ) +
-					` ${ confirmDialog.label }`
-				}
-				message={
+				title={ sprintf(
+					// translators: %s is the cleanup type label.
+					__( 'Confirm %s', 'performance-optimisation' ),
+					confirmDialog.label
+				) }
+				message={ sprintf(
+					// translators: %s is the cleanup type label (lowercased unless it is the 'all' aggregate).
 					__(
-						'This action will permanently delete',
+						'This action will permanently delete %s from your database. Proceed?',
 						'performance-optimisation'
-					) +
-					` ${
-						confirmDialog.type === 'all'
-							? __( 'overhead items', 'performance-optimisation' )
-							: confirmDialog.label.toLowerCase()
-					} ` +
-					__(
-						'from your database. Proceed?',
-						'performance-optimisation'
-					)
-				}
+					),
+					confirmDialog.type === 'all'
+						? __( 'overhead items', 'performance-optimisation' )
+						: confirmDialog.label.toLowerCase()
+				) }
 				confirmLabel={ __( 'Delete', 'performance-optimisation' ) }
 				variant="danger"
 			/>

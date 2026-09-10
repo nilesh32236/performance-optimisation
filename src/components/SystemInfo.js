@@ -26,7 +26,9 @@ import { __ } from '@wordpress/i18n';
  */
 const InfoRow = ( { label, value } ) => (
 	<tr className="wppo-sysinfo-table__row">
-		<td className="wppo-sysinfo-table__label">{ label }</td>
+		<th scope="row" className="wppo-sysinfo-table__label">
+			{ label }
+		</th>
 		<td className="wppo-sysinfo-table__value">
 			{ value !== null && value !== undefined && value !== ''
 				? String( value )
@@ -51,7 +53,7 @@ const InfoTable = ( { title, data, labels = {} } ) => {
 	return (
 		<div className="wppo-sysinfo-section">
 			<h4 className="wppo-sysinfo-section__title">{ title }</h4>
-			<table className="wppo-sysinfo-table">
+			<table className="wppo-sysinfo-table" aria-label={ title }>
 				<tbody>
 					{ Object.entries( data ).map( ( [ key, value ] ) => (
 						<InfoRow

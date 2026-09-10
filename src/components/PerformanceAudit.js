@@ -308,10 +308,11 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 		const abortController = abortControllerRef.current;
 
 		let scanResult = null;
+		const scannedUrl = url;
 
 		try {
 			const response = await runPerformanceScan(
-				url,
+				scannedUrl,
 				force,
 				abortController.signal
 			);
@@ -326,7 +327,7 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 				// Phase 2 — notify parent of the scanned URL so PageSpeedPanel
 				// can use the same URL without the user having to re-enter it.
 				if ( onUrlChange ) {
-					onUrlChange( url );
+					onUrlChange( scannedUrl );
 				}
 			} else if ( ! abortController.signal.aborted ) {
 				notify( {
@@ -360,7 +361,7 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 		if ( onSuggestionsReady && scanResult ) {
 			try {
 				const sugResp = await fetchSuggestions(
-					url,
+					scannedUrl,
 					abortController.signal
 				);
 				if (

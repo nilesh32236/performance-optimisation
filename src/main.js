@@ -13,7 +13,7 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	// wppoObject) and does not import the SPA's apiRequest module to avoid bundle coupling.
 
 	let pendingRefresh = null;
-	let fallbackTimer = null;
+	const fallbackTimers = new Set();
 
 	/**
 	 * Shared helper for POST JSON requests.
@@ -182,43 +182,45 @@ document.addEventListener( 'DOMContentLoaded', function () {
 		}
 
 		if ( ! dispatched ) {
-			if ( fallbackTimer ) {
-				clearTimeout( fallbackTimer );
-				fallbackTimer = null;
-			}
 			const noticeEl = document.createElement( 'div' );
 			noticeEl.className = `notice notice-${ type } is-dismissible wppo-admin-notice`;
 			noticeEl.setAttribute( 'role', 'alert' );
 			noticeEl.textContent = message;
+			let timer = null;
+			const clearTimer = () => {
+				if ( timer ) {
+					clearTimeout( timer );
+					fallbackTimers.delete( timer );
+					timer = null;
+				}
+			};
+			const dismissNotice = () => {
+				clearTimer();
+				noticeEl.remove();
+			};
 			const dismissBtn = document.createElement( 'button' );
 			dismissBtn.className = 'notice-dismiss';
 			dismissBtn.setAttribute(
 				'aria-label',
 				getNoticeString( 'dismiss', 'Dismiss' )
 			);
-			dismissBtn.addEventListener( 'click', () => {
-				if ( fallbackTimer ) {
-					clearTimeout( fallbackTimer );
-					fallbackTimer = null;
-				}
-				noticeEl.remove();
-			} );
+			dismissBtn.addEventListener( 'click', dismissNotice );
 			noticeEl.appendChild( dismissBtn );
 			const target =
 				document.getElementById( 'wpbody-content' ) || document.body;
 			target.insertBefore( noticeEl, target.firstChild );
-			fallbackTimer = setTimeout( () => {
+			timer = setTimeout( () => {
+				fallbackTimers.delete( timer );
+				timer = null;
 				noticeEl.remove();
-				fallbackTimer = null;
 			}, 5000 );
+			fallbackTimers.add( timer );
 		}
 	};
 
 	window.addEventListener( 'pagehide', () => {
-		if ( fallbackTimer ) {
-			clearTimeout( fallbackTimer );
-			fallbackTimer = null;
-		}
+		fallbackTimers.forEach( ( timer ) => clearTimeout( timer ) );
+		fallbackTimers.clear();
 	} );
 
 	const clearAllCacheBtn = document.querySelector(

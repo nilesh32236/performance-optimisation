@@ -96,4 +96,42 @@ describe( 'Tooltip', () => {
 			'wppo-tooltip-container--visible'
 		);
 	} );
+
+	it( 'exposes button semantics and keyboard toggle for the icon-only trigger', () => {
+		const { container } = render( <Tooltip content="Icon tooltip" /> );
+		const tooltipContainer = container.querySelector(
+			'.wppo-tooltip-container'
+		);
+
+		expect( tooltipContainer ).toHaveAttribute( 'role', 'button' );
+		expect( tooltipContainer ).toHaveAttribute( 'tabindex', '0' );
+		expect( tooltipContainer ).toHaveAttribute( 'aria-expanded', 'false' );
+		expect( tooltipContainer ).toHaveAttribute( 'aria-describedby' );
+
+		fireEvent.keyDown( tooltipContainer, { key: 'Enter' } );
+		expect( tooltipContainer ).toHaveAttribute( 'aria-expanded', 'true' );
+		expect( tooltipContainer ).toHaveClass(
+			'wppo-tooltip-container--visible'
+		);
+
+		fireEvent.keyDown( tooltipContainer, { key: ' ' } );
+		expect( tooltipContainer ).toHaveAttribute( 'aria-expanded', 'false' );
+	} );
+
+	it( 'wires aria-describedby for wrapped triggers without nesting button roles', () => {
+		const { container } = render(
+			<Tooltip content="Wrapped tooltip">
+				<button>Hover Me</button>
+			</Tooltip>
+		);
+		const tooltipContainer = container.querySelector(
+			'.wppo-tooltip-container'
+		);
+
+		expect( tooltipContainer ).toHaveAttribute( 'aria-describedby' );
+		expect( tooltipContainer ).not.toHaveAttribute( 'role' );
+		expect(
+			screen.getByRole( 'button', { name: /Hover Me/i } )
+		).toBeInTheDocument();
+	} );
 } );

@@ -839,8 +839,14 @@ const Dashboard = ( {
 							}` }
 						>
 							{ lscacheActive
-								? 'LSCache Active'
-								: 'LSCache Inactive' }
+								? __(
+										'LSCache Active',
+										'performance-optimisation'
+								  )
+								: __(
+										'LSCache Inactive',
+										'performance-optimisation'
+								  ) }
 						</span>
 					</span>
 					{ lscacheActive && effectiveMode === 'litespeed' && (

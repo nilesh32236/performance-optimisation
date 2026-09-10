@@ -28,6 +28,13 @@ const Tooltip = ( { content, children } ) => {
 		if ( e.key === 'Escape' || e.key === 'Esc' ) {
 			setVisible( false );
 		}
+		// Keyboard toggle is scoped to the icon-only trigger, which owns
+		// the button role below. In wrapped mode the children provide
+		// their own semantics, so bubbled Enter/Space must not toggle.
+		if ( ! hasChildren && ( e.key === 'Enter' || e.key === ' ' ) ) {
+			e.preventDefault();
+			setVisible( ( v ) => ! v );
+		}
 	};
 
 	const handleBlur = ( e ) => {
@@ -51,7 +58,7 @@ const Tooltip = ( { content, children } ) => {
 	};
 
 	return (
-		// eslint-disable-next-line jsx-a11y/no-static-element-interactions
+		// eslint-disable-next-line jsx-a11y/no-static-element-interactions -- wrapped mode deliberately carries no role (children own their semantics); the icon-only branch sets role="button" via spread below.
 		<span
 			className={ `wppo-tooltip-container${
 				hasChildren
@@ -59,8 +66,13 @@ const Tooltip = ( { content, children } ) => {
 					: ' wppo-tooltip-container--icon'
 			}${ visible ? ' wppo-tooltip-container--visible' : '' }` }
 			{ ...( hasChildren
-				? {}
-				: { tabIndex: '0', 'aria-describedby': id } ) }
+				? { 'aria-describedby': id }
+				: {
+						role: 'button',
+						tabIndex: '0',
+						'aria-expanded': visible,
+						'aria-describedby': id,
+				  } ) }
 			onFocus={ () => setVisible( true ) }
 			onBlur={ handleBlur }
 			onMouseEnter={ () => setVisible( true ) }

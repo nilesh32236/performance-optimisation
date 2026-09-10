@@ -287,6 +287,9 @@ const App = () => {
 			if ( e.key !== 'Tab' ) {
 				return;
 			}
+			if ( ! first || ! last ) {
+				return;
+			}
 			if ( e.shiftKey && doc.activeElement === first ) {
 				e.preventDefault();
 				last.focus();

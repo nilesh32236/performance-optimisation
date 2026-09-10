@@ -149,9 +149,7 @@ describe( 'DatabaseCleanup Component', () => {
 		fireEvent.click( saveButton );
 
 		await waitFor( () => {
-			expect(
-				screen.getByText( 'Error saving settings.' )
-			).toBeInTheDocument();
+			expect( screen.getByText( 'Save Error' ) ).toBeInTheDocument();
 		} );
 	} );
 

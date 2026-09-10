@@ -208,10 +208,25 @@ const PluginSetting = ( { options } ) => {
 	const [ confirmImport, setConfirmImport ] = useState( false );
 	const fileInputRef = useRef( null );
 	const cancelledRef = useRef( false );
+	const readerRef = useRef( null );
 
 	useEffect( () => {
 		return () => {
 			cancelledRef.current = true;
+			if (
+				readerRef.current &&
+				readerRef.current.readyState ===
+					( typeof FileReader !== 'undefined'
+						? FileReader.LOADING
+						: 1 )
+			) {
+				try {
+					readerRef.current.abort();
+				} catch {
+					// Ignore abort errors during unmount.
+				}
+			}
+			readerRef.current = null;
 		};
 	}, [] );
 
@@ -541,8 +556,10 @@ const PluginSetting = ( { options } ) => {
 		}
 
 		const reader = new FileReader();
+		readerRef.current = reader;
 
 		reader.onerror = () => {
+			readerRef.current = null;
 			if ( cancelledRef.current ) {
 				return;
 			}
@@ -555,6 +572,7 @@ const PluginSetting = ( { options } ) => {
 		};
 
 		reader.onabort = () => {
+			readerRef.current = null;
 			if ( cancelledRef.current ) {
 				return;
 			}
@@ -567,6 +585,7 @@ const PluginSetting = ( { options } ) => {
 		};
 
 		reader.onload = ( e ) => {
+			readerRef.current = null;
 			if ( cancelledRef.current ) {
 				return;
 			}
