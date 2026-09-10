@@ -243,6 +243,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'fieldLcpOverride'           => false,
 					'fieldLcpMinSamples'         => 20,
 					'cssHeroPreload'             => false,
+					'autoAltText'                => false,
+					'maxLongestEdgePx'           => 2560,
 				),
 				'performance_audit'     => array(
 					'pagespeed_api_key'     => '',
@@ -2005,6 +2007,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				// Unused-CSS extra safelist (issue #966) — one selector per line.
 				if ( 'unusedCSSSafelistExtra' === $safe_key && ! is_array( $value ) ) {
 					$sanitized[ $safe_key ] = sanitize_textarea_field( (string) $value );
+					continue;
+				}
+
+				// Max longest edge cap (issue #985 follow-up) — int >= 0.
+				// A cleared numeric field submits '' (or non-numeric text),
+				// which must fall back to the 2560 default rather than
+				// silently becoming 0/disabled at read time. Negatives clamp
+				// to 0 (disabled).
+				if ( 'maxLongestEdgePx' === $safe_key && ! is_array( $value ) ) {
+					if ( '' === $value || null === $value || ! is_numeric( $value ) ) {
+						$sanitized[ $safe_key ] = 2560;
+					} else {
+						$edge                   = (int) $value;
+						$sanitized[ $safe_key ] = $edge < 0 ? 0 : $edge;
+					}
 					continue;
 				}
 

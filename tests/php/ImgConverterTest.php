@@ -1149,4 +1149,121 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		$this->assertNotContains( $full_rel, $info['skipped']['avif'] ?? array() );
 		$this->assertContains( $full_rel, $info['failed']['avif'] ?? array() );
 	}
+
+	/**
+	 * Longest-edge cap defaults to 2560, is filter-overridable, and clamps negatives.
+	 *
+	 * @since NEXT
+	 */
+	public function test_longest_edge_cap_default_filter_and_clamp(): void {
+		$converter = $this->make_converter();
+		$this->assertSame( 2560, $converter->get_longest_edge_cap() );
+
+		$disabled = $this->make_converter( array( 'maxLongestEdgePx' => 0 ) );
+		$this->assertSame( 0, $disabled->get_longest_edge_cap() );
+
+		$negative = $this->make_converter( array( 'maxLongestEdgePx' => -5 ) );
+		$this->assertSame( 0, $negative->get_longest_edge_cap() );
+
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook_name, $value ) {
+				if ( 'wppo_max_longest_edge_px' === $hook_name ) {
+					return 1920;
+				}
+				return $value;
+			}
+		);
+		$this->assertSame( 1920, $converter->get_longest_edge_cap() );
+
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook_name, $value ) {
+				if ( 'wppo_max_longest_edge_px' === $hook_name ) {
+					return -10;
+				}
+				return $value;
+			}
+		);
+		$this->assertSame( 0, $converter->get_longest_edge_cap() );
+	}
+
+	/**
+	 * Downscale shrinks oversized resources, keeps small ones, and fails open.
+	 *
+	 * @since NEXT
+	 */
+	public function test_maybe_downscale_gd_image(): void {
+		$converter = $this->make_converter( array( 'maxLongestEdgePx' => 32 ) );
+
+		$image  = imagecreatetruecolor( 64, 48 );
+		$result = $converter->maybe_downscale_gd_image( $image, 64, 48 );
+		$this->assertNotSame( $image, $result );
+		$this->assertSame( 32, imagesx( $result ) );
+		$this->assertSame( 24, imagesy( $result ) );
+		Util::destroy_gd_image( $image );
+		Util::destroy_gd_image( $result );
+
+		// Already within the cap: original resource retained.
+		$small = imagecreatetruecolor( 16, 12 );
+		$this->assertSame( $small, $converter->maybe_downscale_gd_image( $small, 16, 12 ) );
+		Util::destroy_gd_image( $small );
+
+		// Invalid dimensions fail open to the original resource.
+		$odd = imagecreatetruecolor( 8, 8 );
+		$this->assertSame( $odd, $converter->maybe_downscale_gd_image( $odd, 0, 0 ) );
+		Util::destroy_gd_image( $odd );
+
+		// Cap disabled (0): original resource retained.
+		$off     = $this->make_converter( array( 'maxLongestEdgePx' => 0 ) );
+		$big_img = imagecreatetruecolor( 64, 48 );
+		$this->assertSame( $big_img, $off->maybe_downscale_gd_image( $big_img, 64, 48 ) );
+		Util::destroy_gd_image( $big_img );
+	}
+
+	/**
+	 * End-to-end: oversized source converts to a capped WebP; original kept.
+	 *
+	 * @since NEXT
+	 */
+	public function test_convert_image_downscales_oversized_output_to_cap(): void {
+		if ( ! function_exists( 'imagewebp' ) ) {
+			$this->markTestSkipped( 'GD WebP support is required.' );
+		}
+
+		$path  = $this->uploads_dir . '/oversized-cap.png';
+		$image = imagecreatetruecolor( 1200, 900 );
+		$color = imagecolorallocate( $image, 200, 100, 50 );
+		imagefill( $image, 0, 0, $color );
+		imagepng( $image, $path );
+		Util::destroy_gd_image( $image );
+
+		$this->prepare_wppo_output_dir();
+
+		Functions\when( 'function_exists' )->alias(
+			static function ( $function_name ) {
+				return 'wp_image_quality' !== $function_name;
+			}
+		);
+
+		$converter = $this->make_converter(
+			array(
+				'conversionFormat'        => 'webp',
+				'skipSmallThresholdBytes' => 0,
+				'maxLongestEdgePx'        => 600,
+			)
+		);
+		$result    = $converter->convert_image( $path, 'webp' );
+
+		$this->assertTrue( $result );
+
+		// Original upload file is never modified.
+		$orig = getimagesize( $path );
+		$this->assertSame( 1200, $orig[0] );
+		$this->assertSame( 900, $orig[1] );
+
+		$webp_path = Img_Converter::get_img_path( $path, 'webp' );
+		$this->assertFileExists( $webp_path );
+		$out = getimagesize( $webp_path );
+		$this->assertSame( 600, $out[0] );
+		$this->assertSame( 450, $out[1] );
+	}
 }

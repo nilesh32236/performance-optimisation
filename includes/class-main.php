@@ -285,6 +285,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['image_optimisation']['lcpHeroPreload'] ) ) {
 				$this->options['image_optimisation']['lcpHeroPreload'] = true;
 			}
+			if ( ! isset( $this->options['image_optimisation']['autoAltText'] ) ) {
+				$this->options['image_optimisation']['autoAltText'] = false;
+			}
+			if ( ! isset( $this->options['image_optimisation']['maxLongestEdgePx'] ) ) {
+				$this->options['image_optimisation']['maxLongestEdgePx'] = 2560;
+			}
 			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
 				$this->options['file_optimisation'] = array();
 			}
@@ -537,6 +543,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 			add_action( 'admin_init', array( $this, 'maybe_migrate_block_assets_setting' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_ccss_max_size' ) );
+			add_action( 'admin_init', array( $this, 'maybe_migrate_image_alt_edge_defaults' ) );
 			// One-time activity-log notice on admin_init.
 			if ( isset( $this->options['file_optimisation']['removeQueryStrings'] ) ) {
 				add_action( 'admin_init', array( $this, 'maybe_notify_remove_query_strings_removal' ) );
@@ -1074,6 +1081,61 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$this->options['file_optimisation']['ccssMaxSize'] = 20480;
 
 			Log::add( __( 'Added default Critical CSS size cap (20 KB).', 'performance-optimisation' ) );
+		}
+
+		/**
+		 * One-time backfill for the missing-alt autofill toggle and the
+		 * longest-edge downscale cap (issue #985).
+		 *
+		 * Runs on `admin_init` (not the constructor) so a cacheable front-end
+		 * request never triggers a settings write. Only installs whose stored
+		 * settings predate the `autoAltText` / `maxLongestEdgePx` keys (key
+		 * absent) are backfilled with the fail-open defaults (`false` /
+		 * `2560`); any stored explicit value is preserved verbatim, and fresh
+		 * installs with no stored option are skipped because the constructor
+		 * defaults already match. The check is idempotent (key presence is
+		 * the marker), so no extra option row is needed. In-memory options
+		 * are synced too so the current request observes the backfilled
+		 * values. Uses per-site `get_option()` so multisite sites migrate
+		 * independently with no cross-site leakage.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public function maybe_migrate_image_alt_edge_defaults(): void {
+			// allowlist(settings-read-guard): deliberate direct read — must distinguish
+			// "no stored row" (false) from "stored array", which Util::get_settings()
+			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
+			$stored = get_option( 'wppo_settings' );
+			if ( ! is_array( $stored ) ) {
+				return;
+			}
+
+			$image = isset( $stored['image_optimisation'] ) && is_array( $stored['image_optimisation'] ) ? $stored['image_optimisation'] : array();
+
+			$changed = false;
+			if ( ! array_key_exists( 'autoAltText', $image ) ) {
+				$image['autoAltText'] = false;
+				$changed              = true;
+			}
+			if ( ! array_key_exists( 'maxLongestEdgePx', $image ) ) {
+				$image['maxLongestEdgePx'] = 2560;
+				$changed                   = true;
+			}
+
+			if ( ! $changed ) {
+				return;
+			}
+
+			$stored['image_optimisation'] = $image;
+			update_option( 'wppo_settings', $stored );
+
+			if ( ! isset( $this->options['image_optimisation'] ) || ! is_array( $this->options['image_optimisation'] ) ) {
+				$this->options['image_optimisation'] = array();
+			}
+			$this->options['image_optimisation'] = array_merge( $this->options['image_optimisation'], $image );
+
+			Log::add( __( 'Added default image alt autofill and longest-edge cap settings.', 'performance-optimisation' ) );
 		}
 
 		/**
