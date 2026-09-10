@@ -327,4 +327,20 @@ class ImageAvifPictureTest extends \PHPUnit\Framework\TestCase {
 		$this->assertNotFalse( $webp_pos, 'WebP rewrite must be present' );
 		$this->assertLessThan( $webp_pos, $avif_pos, 'AVIF rewrite must precede WebP rewrite' );
 	}
+
+	/**
+	 * Picture/lazy rewriting must leave alt text byte-identical.
+	 */
+	public function test_process_img_tag_preserves_alt_text(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+
+		$optimisation = new Image_Optimisation( $this->options );
+
+		$alt     = 'A hero image &mdash; deja vu';
+		$img_tag = '<img src="http://example.com/wp-content/uploads/2026/08/photo.jpg" alt="' . $alt . '" width="1200" height="800"/>';
+		$result  = $optimisation->process_img_tag( $img_tag, 'http://example.com/wp-content/uploads/2026/08/photo.jpg', array() );
+
+		$this->assertStringContainsString( 'alt="' . $alt . '"', $result );
+		$this->assertSame( 1, substr_count( $result, 'alt="' ) );
+	}
 }

@@ -796,6 +796,30 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that resolve_output_format() defers to core's built-in defaults
+	 * even with no `image_editor_output_format` filter registered: core
+	 * ships an HEIC -> JPEG default mapping, so an HEIC source resolves to
+	 * 'none' (core owns the output) while unmapped sources keep the
+	 * requested format unchanged.
+	 */
+	public function test_resolve_output_format_falls_back_without_core_filter(): void {
+		Functions\when( 'wp_get_image_editor_output_format' )->alias(
+			static function ( $filename, $mime_type ) {
+				return 'image/heic' === $mime_type ? array( 'image/heic' => 'image/jpeg' ) : array();
+			}
+		);
+
+		$method = new ReflectionMethod( Img_Converter::class, 'resolve_output_format' );
+		$method->setAccessible( true );
+		$converter = $this->make_converter();
+
+		$this->assertSame( 'none', $method->invoke( $converter, '/srv/wp-content/uploads/2026/08/photo.heic', 'webp' ) );
+		$this->assertSame( 'none', $method->invoke( $converter, '/srv/wp-content/uploads/2026/08/photo.heic', 'avif' ) );
+		$this->assertSame( 'webp', $method->invoke( $converter, '/srv/wp-content/uploads/2026/08/photo.jpg', 'webp' ) );
+		$this->assertSame( 'avif', $method->invoke( $converter, '/srv/wp-content/uploads/2026/08/photo.png', 'avif' ) );
+	}
+
+	/**
 	 * Test that convert_image() honors core's image_editor_output_format
 	 * mapping: when core maps the source MIME to WebP while the plugin was
 	 * requested to convert to AVIF, the method produces a WebP file, marks the
@@ -1083,5 +1107,46 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		$full_rel = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $file ) );
 		$info     = Img_Converter::get_img_info();
 		$this->assertContains( $full_rel, $info['skipped']['webp'] ?? array() );
+	}
+
+	/**
+	 * Test that the `wppo_convert_gain_map_images` filter opts gain-map
+	 * sources back into conversion: with the filter returning true the
+	 * gain-map skip is bypassed and the (unparseable fixture) conversion
+	 * fails instead of being recorded as skipped.
+	 */
+	public function test_convert_image_gain_map_opt_in_flips_skip(): void {
+		$file = $this->uploads_dir . '/ultrahdr-optin.jpg';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+		file_put_contents(
+			$file,
+			"\xFF\xD8\xFF\xE0" . str_repeat( "\x00", 16 )
+				. 'xmpmeta hdrgm:GainMapMin="0.0" hdrgm:GainMapMax="1.0"'
+				. str_repeat( "\x00", 16 ) . "\xFF\xD9"
+		);
+
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook_name, $value ) {
+				if ( 'wppo_convert_gain_map_images' === $hook_name ) {
+					return true;
+				}
+				return $value;
+			}
+		);
+
+		$converter = $this->make_converter(
+			array(
+				'conversionFormat'        => 'avif',
+				'skipSmallThresholdBytes' => 0,
+			)
+		);
+		$result    = $converter->convert_image( $file, 'avif' );
+
+		$this->assertFalse( $result );
+
+		$full_rel = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $file ) );
+		$info     = Img_Converter::get_img_info();
+		$this->assertNotContains( $full_rel, $info['skipped']['avif'] ?? array() );
+		$this->assertContains( $full_rel, $info['failed']['avif'] ?? array() );
 	}
 }
