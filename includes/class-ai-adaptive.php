@@ -650,7 +650,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * Stored additively in `wppo_settings[ai_adaptive][dismissed_suggestions]`
 		 * (array of metric strings). Dismissing is read-only w.r.t. frontend
-		 * behavior: it only hides the suggestion card until RUM state changes.
+		 * behavior: it only hides the suggestion card until cleared from settings.
 		 * Local-only: no remote calls, no PII. Fail-open: any failure returns array().
 		 *
 		 * @since NEXT
@@ -1672,12 +1672,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 						$delay_device   = ( is_array( $delay_segment ) && isset( $delay_segment['device'] ) ) ? (string) $delay_segment['device'] : 'unknown';
 						$delay_template = ( is_array( $delay_segment ) && isset( $delay_segment['template'] ) ) ? (string) $delay_segment['template'] : 'unknown';
 						// Anchor the copy on the crossed signal (prefer INP).
-						$delay_anchor_p75 = (float) $delay_inp > self::INP_P75_DELAY_THRESHOLD_MS ? (float) $delay_inp : (float) $delay_lcp;
-						/* translators: %1$s level, %2$s device, %3$s template, %4$s p75 seconds. */
-						$delay_value = sprintf( __( '%1$s · %2$s · %3$s · INP p75 %4$s', 'performance-optimisation' ), $delay_level, $delay_device, $delay_template, self::format_p75_seconds( (float) $delay_anchor_p75 ) );
-						/* translators: %1$s device, %2$s template, %3$s p75 seconds, %4$d sample count. */
-						$delay_description = sprintf( __( 'AI: Delay JavaScript suggestion for %1$s/%2$s (INP p75 %3$s, %4$d samples)', 'performance-optimisation' ), $delay_device, $delay_template, self::format_p75_seconds( (float) $delay_anchor_p75 ), (int) $delay_samples );
-						$suggestions[]     = array(
+						$crossed_inp      = (float) $delay_inp > self::INP_P75_DELAY_THRESHOLD_MS;
+						$delay_anchor_p75 = $crossed_inp ? (float) $delay_inp : (float) $delay_lcp;
+						if ( $crossed_inp ) {
+							/* translators: %1$s level, %2$s device, %3$s template, %4$s p75 seconds. */
+							$delay_value = sprintf( __( '%1$s · %2$s · %3$s · INP p75 %4$s', 'performance-optimisation' ), $delay_level, $delay_device, $delay_template, self::format_p75_seconds( (float) $delay_anchor_p75 ) );
+							/* translators: %1$s device, %2$s template, %3$s p75 seconds, %4$d sample count. */
+							$delay_description = sprintf( __( 'AI: Delay JavaScript suggestion for %1$s/%2$s (INP p75 %3$s, %4$d samples)', 'performance-optimisation' ), $delay_device, $delay_template, self::format_p75_seconds( (float) $delay_anchor_p75 ), (int) $delay_samples );
+						} else {
+							/* translators: %1$s level, %2$s device, %3$s template, %4$s p75 seconds. */
+							$delay_value = sprintf( __( '%1$s · %2$s · %3$s · LCP p75 %4$s', 'performance-optimisation' ), $delay_level, $delay_device, $delay_template, self::format_p75_seconds( (float) $delay_anchor_p75 ) );
+							/* translators: %1$s device, %2$s template, %3$s p75 seconds, %4$d sample count. */
+							$delay_description = sprintf( __( 'AI: Delay JavaScript suggestion for %1$s/%2$s (LCP p75 %3$s, %4$d samples)', 'performance-optimisation' ), $delay_device, $delay_template, self::format_p75_seconds( (float) $delay_anchor_p75 ), (int) $delay_samples );
+						}
+						$suggestions[] = array(
 							'metric'      => 'ai_delay_js',
 							'value'       => $delay_value,
 							'unit'        => 'string',
