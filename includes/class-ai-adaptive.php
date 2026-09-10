@@ -1201,7 +1201,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		public static function get_suggestions(): array {
 			$model = self::get_model();
 			if ( empty( $model ) ) {
+				// Persist the computed model so repeated renders do not
+				// recompute the full RUM + trends deserialization, postmeta
+				// UNION query and segmented scans on every invocation.
+				// (No per-process static memo: statics leak across unit
+				// tests sharing one PHP process.)
 				$model = self::heuristic_learn();
+				if ( ! empty( $model ) ) {
+					try {
+						self::update_model( $model );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
 			}
 			$suggestions = array();
 
@@ -1254,9 +1266,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			}
 			if ( null === $field_segment || $field_provisional ) {
 				try {
-					$live = self::segmented_field_lcp( $field_min );
-					if ( ! empty( $live ) && is_array( $live[0] ) ) {
-						$top               = $live[0];
+					// Single full-aggregate scan (min=1); filter the qualified
+					// rows in memory instead of issuing a second scan.
+					$observed = self::segmented_field_lcp( 1 );
+					$max_n    = 0;
+					foreach ( $observed as $row ) {
+						if ( is_array( $row ) && isset( $row['n'] ) ) {
+							$max_n = max( $max_n, (int) $row['n'] );
+						}
+					}
+					$qualified = array();
+					foreach ( $observed as $row ) {
+						if ( is_array( $row ) && isset( $row['n'] ) && (int) $row['n'] >= $field_min ) {
+							$qualified[] = $row;
+						}
+					}
+					if ( ! empty( $qualified ) && is_array( $qualified[0] ) ) {
+						$top               = $qualified[0];
 						$field_segment     = array(
 							'path'     => isset( $top['path'] ) ? (string) $top['path'] : '',
 							'device'   => isset( $top['device'] ) ? (string) $top['device'] : 'unknown',
@@ -1266,13 +1292,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 						$field_samples     = isset( $top['n'] ) ? (int) $top['n'] : 0;
 						$field_provisional = false;
 					} else {
-						$observed = self::segmented_field_lcp( 1 );
-						$max_n    = 0;
-						foreach ( $observed as $row ) {
-							if ( is_array( $row ) && isset( $row['n'] ) ) {
-								$max_n = max( $max_n, (int) $row['n'] );
-							}
-						}
 						$field_samples     = max( $field_samples, $max_n );
 						$field_provisional = true;
 					}

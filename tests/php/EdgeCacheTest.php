@@ -279,7 +279,10 @@ class EdgeCacheTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Single page purge does not hit edge (all-or-nothing).
+	 * Single page purge issues a URL-scoped Cloudflare purge (purge_files).
+	 *
+	 * Bunny pull zones are all-or-nothing (purgeCache only), so single-page
+	 * clears leave Bunny untouched by design.
 	 *
 	 * @return void
 	 */
@@ -294,7 +297,11 @@ class EdgeCacheTest extends \PHPUnit\Framework\TestCase {
 		Util::clear_settings_cache();
 		$result = Edge_Purger::purge_all( 'single_page', '/about/' );
 		$this->assertTrue( $result );
-		$this->assertCount( 0, $this->requests );
+		$this->assertCount( 1, $this->requests );
+		$this->assertStringContainsString( 'z123', $this->requests[0]['url'] );
+		$body = json_decode( $this->requests[0]['args']['body'], true );
+		$this->assertSame( array( 'http://example.com/about/' ), $body['files'] );
+		$this->assertStringNotContainsString( 'bunny', $this->requests[0]['url'] );
 	}
 
 	/**

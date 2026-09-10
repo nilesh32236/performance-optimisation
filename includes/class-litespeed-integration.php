@@ -181,6 +181,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		private static ?bool $cached_can_cdn = null;
 
 		/**
+		 * Per-request URI-to-post-ID memo for get_litespeed_ttl().
+		 *
+		 * @since NEXT
+		 * @var array<string, int>
+		 */
+		private static array $uri_post_memo = array();
+
+		/**
 		 * Whether Phase 3 hooks (send_headers, vary) are registered.
 		 *
 		 * Prevents double-registration when init() is called multiple times.
@@ -725,6 +733,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * @return void
 		 */
 		public static function flush_tag_queue(): void {
+			// Check the purge lock BEFORE deleting any queued tags so an
+			// active lock never silently drops already-fetched tags (stale
+			// edge cache with no retry).
+			if ( self::has_purge_lock() ) {
+				return;
+			}
 			$key     = Util::transient_key( self::TAG_QUEUE );
 			$tags    = get_transient( $key );
 			$db_key  = Util::option_key( self::DB_QUEUE );
@@ -742,6 +756,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				return;
 			}
 			if ( self::has_purge_lock() ) {
+				// Lock raced in after the check above: re-queue merged tags
+				// so they are not lost.
+				self::write_db_queue( $db_key, $tags );
 				return;
 			}
 			self::set_purge_lock();
@@ -891,6 +908,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			// LS-320 — _lscache_vary cookie seeding for LSWS vary handshake.
 			add_action( 'init', array( self::class, 'seed_lscache_vary_cookie' ), 1 );
 			add_action( 'wp_logout', array( self::class, 'clear_lscache_vary_cookie' ) );
+
+			// Invalidate the URI-to-post-ID map when permalinks may change.
+			add_action( 'save_post', array( self::class, 'invalidate_uri_post_map' ) );
+			add_action( 'delete_post', array( self::class, 'invalidate_uri_post_map' ) );
+			add_action( 'permalink_structure_changed', array( self::class, 'invalidate_uri_post_map' ) );
+		}
+
+		/**
+		 * Invalidate the URI-to-post-ID persistent map.
+		 *
+		 * Hooked to save_post/delete_post/permalink_structure_changed so
+		 * permalink changes cannot serve stale post-ID resolutions.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function invalidate_uri_post_map(): void {
+			self::$uri_post_memo = array();
+			try {
+				if ( function_exists( 'delete_transient' ) ) {
+					delete_transient( Util::transient_key( 'wppo_ls_uri_post_map' ) );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 
 		/**
@@ -957,6 +999,66 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		}
 
 		/**
+		 * Resolve a URI to a post ID using per-request + persistent caches.
+		 *
+		 * The persistent map is a bounded (200-entry, 12h TTL) transient
+		 * namespaced via Util::transient_key(). Negative results are cached
+		 * too so unknown URIs do not re-hit url_to_postid() every request.
+		 *
+		 * @since NEXT
+		 * @param string $uri Request URI.
+		 * @return int Post ID (0 when unresolvable).
+		 */
+		private static function cached_uri_to_post_id( string $uri ): int {
+			if ( isset( self::$uri_post_memo[ $uri ] ) ) {
+				return self::$uri_post_memo[ $uri ];
+			}
+			try {
+				$key = Util::transient_key( 'wppo_ls_uri_post_map' );
+				if ( function_exists( 'get_transient' ) ) {
+					$map = get_transient( $key );
+					if ( is_array( $map ) && isset( $map[ $uri ] ) ) {
+						$pid                         = (int) $map[ $uri ];
+						self::$uri_post_memo[ $uri ] = $pid;
+						return $pid;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return 0;
+		}
+
+		/**
+		 * Store a URI-to-post-ID resolution in per-request + persistent caches.
+		 *
+		 * @since NEXT
+		 * @param string $uri Request URI.
+		 * @param int    $post_id Resolved post ID (0 for negative).
+		 * @return void
+		 */
+		private static function store_uri_to_post_id( string $uri, int $post_id ): void {
+			self::$uri_post_memo[ $uri ] = $post_id;
+			try {
+				if ( ! function_exists( 'get_transient' ) || ! function_exists( 'set_transient' ) ) {
+					return;
+				}
+				$key = Util::transient_key( 'wppo_ls_uri_post_map' );
+				$map = get_transient( $key );
+				if ( ! is_array( $map ) ) {
+					$map = array();
+				}
+				$map[ $uri ] = $post_id;
+				if ( count( $map ) > 200 ) {
+					$map = array_slice( $map, -200, 200, true );
+				}
+				set_transient( $key, $map, 12 * HOUR_IN_SECONDS );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
 		 * Get LiteSpeed cache TTL in seconds mapped from cacheLife hours with per-context overrides.
 		 *
 		 * Maps `cache_settings.cacheLife` (hours: 0/1/6/12/24/48/168) to LS
@@ -965,9 +1067,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * as an explicit policy change, documented here and in Cache.
 		 *
 		 * Per-context overrides (LSCWP control.cls.php:514 parity):
-		 * - feed / REST / 404 \u2192 0 (no-cache)
-		 * - private (commenter/postpass or logged-in) \u2192 1800 (30 min)
-		 * - front (is_front_page / is_home) \u2192 604800 (1 week)
+		 * - feed / REST / 404 → 0 (no-cache)
+		 * - private (commenter/postpass or logged-in) → 1800 (30 min)
+		 * - front (is_front_page / is_home) → 604800 (1 week)
 		 *
 		 * Result is cached per request; filterable via `wppo_litespeed_ttl`.
 		 *
@@ -995,12 +1097,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			$resolved_post_id = $post_id;
 			if ( null === $resolved_post_id ) {
 				$pid = 0;
-				if ( function_exists( 'url_to_postid' ) && function_exists( 'home_url' ) ) {
+				// Prefer the already-resolved queried object later in the
+				// request: free and exact for the current URI.
+				if ( null === $uri && function_exists( 'get_queried_object_id' ) && function_exists( 'did_action' ) ) {
+					try {
+						if ( did_action( 'wp' ) ) {
+							$qid = (int) get_queried_object_id();
+							if ( $qid > 0 ) {
+								$pid = $qid;
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( $pid <= 0 ) {
+					$pid = self::cached_uri_to_post_id( $resolved_uri );
+				}
+				if ( 0 === $pid && function_exists( 'url_to_postid' ) && function_exists( 'home_url' ) ) {
 					try {
 						$pid = (int) url_to_postid( home_url( $resolved_uri ) );
 					} catch ( \Throwable $e ) {
 						$pid = 0;
 					}
+					self::store_uri_to_post_id( $resolved_uri, $pid );
 				}
 				if ( $pid > 0 ) {
 					$resolved_post_id = $pid;
@@ -2276,6 +2396,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			self::$cached_nextgen           = null;
 			self::$cached_brotli            = null;
 			self::$cached_can_cdn           = null;
+			self::$uri_post_memo            = array();
 			self::$hooks_registered         = false;
 			self::$queue_shutdown_hooked    = false;
 

@@ -2303,6 +2303,60 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Read the bounded persistent src-to-title map for derived alt text.
+		 *
+		 * @since NEXT
+		 * @return array<string, string>
+		 */
+		private static function get_derived_alt_map(): array {
+			try {
+				if ( function_exists( 'wp_cache_get' ) ) {
+					$hit = wp_cache_get( Util::transient_key( 'wppo_derived_alt_map' ), 'wppo' );
+					if ( is_array( $hit ) ) {
+						return $hit;
+					}
+				}
+				if ( function_exists( 'get_transient' ) ) {
+					$map = get_transient( Util::transient_key( 'wppo_derived_alt_map' ) );
+					return is_array( $map ) ? $map : array();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return array();
+		}
+
+		/**
+		 * Store one src-to-title entry in the bounded persistent map.
+		 *
+		 * Capped at 200 entries (drop-oldest) with a day TTL so the map
+		 * cannot grow unbounded.
+		 *
+		 * @since NEXT
+		 * @param string $src   Image src URL.
+		 * @param string $title Resolved title (may be '').
+		 * @return void
+		 */
+		private static function set_derived_alt_map_entry( string $src, string $title ): void {
+			try {
+				$key         = Util::transient_key( 'wppo_derived_alt_map' );
+				$map         = self::get_derived_alt_map();
+				$map[ $src ] = $title;
+				if ( count( $map ) > 200 ) {
+					$map = array_slice( $map, -200, 200, true );
+				}
+				if ( function_exists( 'wp_cache_set' ) ) {
+					wp_cache_set( $key, $map, 'wppo', DAY_IN_SECONDS );
+				}
+				if ( function_exists( 'set_transient' ) ) {
+					set_transient( $key, $map, DAY_IN_SECONDS );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
 		 * Derive a deterministic alt for an image `src`.
 		 *
 		 * Primary source is the sanitized filename (`filename_to_alt()`);
@@ -2327,16 +2381,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				try {
 					static $parent_title_cache = array();
 					if ( ! array_key_exists( $src, $parent_title_cache ) ) {
-						// Resolve the image's own attachment so the fallback title
-						// comes from the attachment's parent post, not the global
-						// post loop context (which describes the rendered page).
-						$attachment_id = (int) attachment_url_to_postid( $src );
-						$parent_id     = $attachment_id > 0 ? (int) wp_get_post_parent_id( $attachment_id ) : 0;
-						$title         = $parent_id > 0 ? get_the_title( $parent_id ) : '';
-						if ( function_exists( 'sanitize_text_field' ) ) {
-							$title = sanitize_text_field( (string) $title );
+						// Check the bounded persistent map first so repeat page
+						// views do not re-run attachment lookups per image.
+						$persistent = self::get_derived_alt_map();
+						if ( array_key_exists( $src, $persistent ) ) {
+							$parent_title_cache[ $src ] = $persistent[ $src ];
+						} else {
+							// Resolve the image's own attachment so the fallback title
+							// comes from the attachment's parent post, not the global
+							// post loop context (which describes the rendered page).
+							$attachment_id = (int) attachment_url_to_postid( $src );
+							$parent_id     = $attachment_id > 0 ? (int) wp_get_post_parent_id( $attachment_id ) : 0;
+							$title         = $parent_id > 0 ? get_the_title( $parent_id ) : '';
+							if ( function_exists( 'sanitize_text_field' ) ) {
+								$title = sanitize_text_field( (string) $title );
+							}
+							$parent_title_cache[ $src ] = is_string( $title ) ? trim( $title ) : '';
+							self::set_derived_alt_map_entry( $src, $parent_title_cache[ $src ] );
 						}
-						$parent_title_cache[ $src ] = is_string( $title ) ? trim( $title ) : '';
 					}
 					if ( '' !== $parent_title_cache[ $src ] ) {
 						$alt = $parent_title_cache[ $src ];

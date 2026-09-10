@@ -6,6 +6,7 @@
  */
 
 use PerformanceOptimise\Inc\AI_Adaptive;
+use PerformanceOptimise\Inc\RUM;
 use PerformanceOptimise\Inc\Util;
 use Brain\Monkey\Functions;
 
@@ -35,6 +36,9 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * @return void
 	 */
 	private function install_stubs(): void {
+		// RUM field-LCP aggregate is memoized per request; reset between
+		// tests sharing one PHP process so per-test option stubs apply.
+		RUM::clear_field_lcp_cache();
 		Functions\stubs(
 			array(
 				'get_option',
