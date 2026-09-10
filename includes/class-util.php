@@ -239,6 +239,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'fieldLcpOverride'           => false,
 					'fieldLcpMinSamples'         => 20,
 					'cssHeroPreload'             => false,
+					'autoAltText'                => false,
+					'maxLongestEdgePx'           => 2560,
 				),
 				'performance_audit'     => array(
 					'pagespeed_api_key'     => '',

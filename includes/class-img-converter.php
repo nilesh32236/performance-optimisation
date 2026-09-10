@@ -375,6 +375,119 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		}
 
 		/**
+		 * Resolve the longest-edge downscale cap in pixels.
+		 *
+		 * Oversized uploads are downscaled in-memory so the generated
+		 * `wppo/` WebP/AVIF outputs never exceed this edge; the original
+		 * upload file is never modified. `0` disables the cap (fail-open
+		 * default path keeps full-size output). Filterable via
+		 * `wppo_max_longest_edge_px`. Defaults to 2560 px.
+		 *
+		 * @since NEXT
+		 *
+		 * @return int Cap in pixels (>= 0). `0` means disabled.
+		 */
+		public function get_longest_edge_cap(): int {
+			$cap = $this->options['image_optimisation']['maxLongestEdgePx'] ?? 2560;
+			if ( function_exists( 'apply_filters' ) ) {
+				/**
+				 * Filter the longest-edge downscale cap in pixels.
+				 *
+				 * @since NEXT
+				 * @param int $cap Cap in pixels. `0` disables downscaling.
+				 */
+				$cap = apply_filters( 'wppo_max_longest_edge_px', $cap );
+			}
+
+			$cap = (int) $cap;
+			if ( $cap < 0 ) {
+				$cap = 0;
+			}
+
+			return $cap;
+		}
+
+		/**
+		 * Downscale a decoded GD image when its longest edge exceeds the cap.
+		 *
+		 * Fail-open: returns the original resource unchanged when the cap is
+		 * disabled, the image already fits, or any scaling step fails
+		 * (missing `imagescale()`, allocation failure, exception). Only ever
+		 * shrinks — never enlarges — so the original is inherently retained
+		 * whenever downscaling would not reduce dimensions. Requires PHP
+		 * 8.2+ GD semantics; guarded by `function_exists()` with an
+		 * `imagecopyresampled()` fallback path. No external HTTP, no DB.
+		 *
+		 * @since NEXT
+		 *
+		 * @param resource|\GdImage $image  Decoded GD image resource.
+		 * @param int               $width  Source width in pixels.
+		 * @param int               $height Source height in pixels.
+		 * @return resource|\GdImage Scaled image when it shrinks output, else the original.
+		 */
+		public function maybe_downscale_gd_image( $image, int $width, int $height ) {
+			try {
+				$cap = $this->get_longest_edge_cap();
+				if ( $cap <= 0 || $width <= 0 || $height <= 0 ) {
+					return $image;
+				}
+
+				$longest = max( $width, $height );
+				if ( $longest <= $cap ) {
+					return $image;
+				}
+
+				$scale      = $cap / $longest;
+				$new_width  = max( 1, (int) round( $width * $scale ) );
+				$new_height = max( 1, (int) round( $height * $scale ) );
+				if ( $new_width >= $width && $new_height >= $height ) {
+					return $image;
+				}
+
+				if ( function_exists( 'imagescale' ) && version_compare( PHP_VERSION, '8.2', '>=' ) ) {
+					// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- imagescale() emits warnings on allocation failure; fail-open keeps the original.
+					$scaled = @imagescale( $image, $new_width, $new_height );
+					if ( false !== $scaled ) {
+						return $scaled;
+					}
+					return $image;
+				}
+
+				if ( ! function_exists( 'imagecreatetruecolor' ) || ! function_exists( 'imagecopyresampled' ) ) {
+					return $image;
+				}
+
+				$dst = imagecreatetruecolor( $new_width, $new_height );
+				if ( false === $dst ) {
+					return $image;
+				}
+
+				if ( function_exists( 'imagealphablending' ) ) {
+					imagealphablending( $dst, false );
+				}
+				if ( function_exists( 'imagesavealpha' ) ) {
+					imagesavealpha( $dst, true );
+				}
+
+				if ( function_exists( 'imagecolortransparent' ) && function_exists( 'imagecolorallocatealpha' ) ) {
+					$transparent = imagecolorallocatealpha( $dst, 0, 0, 0, 127 );
+					if ( false !== $transparent ) {
+						imagefill( $dst, 0, 0, $transparent );
+					}
+				}
+
+				if ( imagecopyresampled( $dst, $image, 0, 0, 0, 0, $new_width, $new_height, $width, $height ) ) {
+					return $dst;
+				}
+
+				Util::destroy_gd_image( $dst );
+				return $image;
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: keep the original resource on any scaling failure.
+				return $image;
+			}
+		}
+
+		/**
 		 * Resolve the smart encode quality for an output MIME type.
 		 *
 		 * Wraps resolve_encode_quality(): when the `smartQuality` setting is
@@ -761,6 +874,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					default:
 						$this->update_conversion_status( $source_image, 'failed', $format );
 						return false; // Unsupported format.
+				}
+
+				// Longest-edge cap (issue #985): downscale oversized GD resources
+				// in-memory so generated `wppo/` outputs respect the cap. The
+				// original upload file is never modified; on any scaling failure
+				// the original resource is kept (fail-open, never fatal).
+				if ( null !== $image && ( is_resource( $image ) || $image instanceof \GdImage ) ) {
+					$downscaled = $this->maybe_downscale_gd_image( $image, (int) $image_info[0], (int) $image_info[1] );
+					if ( $downscaled !== $image ) {
+						Util::destroy_gd_image( $image );
+						$image = $downscaled;
+					}
 				}
 
 				$success = true;

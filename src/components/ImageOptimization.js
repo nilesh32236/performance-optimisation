@@ -62,6 +62,8 @@ const ImageOptimization = ( { options = {} } ) => {
 		excludeSize: '',
 		autoPreloadLCP: false,
 		prioritizeLCPImages: false,
+		autoAltText: false,
+		maxLongestEdgePx: 2560,
 		clientSideMimeTypeOverride: false,
 		clientSideMimeTypes: DEFAULT_CLIENT_SIDE_MIME_TYPES,
 		forceServerSideConversion: false,
@@ -119,6 +121,8 @@ const ImageOptimization = ( { options = {} } ) => {
 		options.excludeSize,
 		options.autoPreloadLCP,
 		options.prioritizeLCPImages,
+		options.autoAltText,
+		options.maxLongestEdgePx,
 		options.clientSideMimeTypeOverride,
 		options.clientSideMimeTypes,
 		options.forceServerSideConversion,
@@ -173,6 +177,8 @@ const ImageOptimization = ( { options = {} } ) => {
 		options.excludeSize,
 		options.autoPreloadLCP,
 		options.prioritizeLCPImages,
+		options.autoAltText,
+		options.maxLongestEdgePx,
 		options.clientSideMimeTypeOverride,
 		options.clientSideMimeTypes,
 		options.forceServerSideConversion,
@@ -489,6 +495,20 @@ const ImageOptimization = ( { options = {} } ) => {
 							) }
 							name="wrapInPicture"
 							checked={ settings.wrapInPicture }
+							onChange={ handleChange( setSettings ) }
+						/>
+
+						<SwitchField
+							label={ __(
+								'Auto-fill Missing Alt Text',
+								'performance-optimisation'
+							) }
+							description={ __(
+								'Automatically generate alt text for images missing it, derived from the file name. Existing alt attributes are never changed. Improves accessibility and SEO with no extra requests.',
+								'performance-optimisation'
+							) }
+							name="autoAltText"
+							checked={ settings.autoAltText }
 							onChange={ handleChange( setSettings ) }
 						/>
 					</div>
@@ -835,6 +855,36 @@ const ImageOptimization = ( { options = {} } ) => {
 							>
 								{ __(
 									'Comma-separated image width values (pixels). Images with these widths in srcset will be skipped.',
+									'performance-optimisation'
+								) }
+							</p>
+						</div>
+						<div className="wppo-field">
+							<label
+								className="wppo-field-label"
+								htmlFor="maxLongestEdgePx"
+							>
+								{ __(
+									'Max Longest Edge (px)',
+									'performance-optimisation'
+								) }
+							</label>
+							<input
+								className="wppo-input"
+								id="maxLongestEdgePx"
+								type="number"
+								inputMode="numeric"
+								name="maxLongestEdgePx"
+								value={ settings.maxLongestEdgePx }
+								onChange={ handleChange( setSettings ) }
+								aria-describedby="maxLongestEdgePx-desc"
+							/>
+							<p
+								id="maxLongestEdgePx-desc"
+								className="wppo-text-muted wppo-mt-10 wppo-text-small"
+							>
+								{ __(
+									'Converted WebP/AVIF outputs are downscaled so the longest edge never exceeds this value. The original upload is kept untouched. Set to 0 to disable.',
 									'performance-optimisation'
 								) }
 							</p>

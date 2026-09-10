@@ -60,6 +60,12 @@ class DefaultsParityTest extends \PHPUnit\Framework\TestCase {
 		$this->assertArrayHasKey( 'skipSmallThresholdBytes', $defaults['image_optimisation'] );
 		$this->assertSame( 5120, $defaults['image_optimisation']['skipSmallThresholdBytes'] );
 
+		// Missing-alt autofill + longest-edge cap (issue #985): additive keys only.
+		$this->assertArrayHasKey( 'autoAltText', $defaults['image_optimisation'] );
+		$this->assertFalse( $defaults['image_optimisation']['autoAltText'] );
+		$this->assertArrayHasKey( 'maxLongestEdgePx', $defaults['image_optimisation'] );
+		$this->assertSame( 2560, $defaults['image_optimisation']['maxLongestEdgePx'] );
+
 		// AI Adaptive WP-client opt-in (issue #964): additive keys only, off by default.
 		$this->assertSame(
 			array(

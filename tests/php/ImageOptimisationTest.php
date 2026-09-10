@@ -1384,4 +1384,113 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		// The below-fold image keeps its lazy loading.
 		$this->assertStringContainsString( '<img src="https://example.com/second.jpg" loading="lazy"', $result );
 	}
+
+	/**
+	 * Stub the WP functions shared by the missing-alt autofill tests.
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	private function stub_auto_alt_functions(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'is_multisite' )->justReturn( false );
+		Functions\when( 'esc_attr' )->returnArg();
+		Functions\when( 'sanitize_text_field' )->returnArg();
+		Functions\when( 'apply_filters' )->returnArg( 2 );
+		if ( ! function_exists( 'wp_get_loading_optimization_attributes' ) ) {
+			eval( 'function wp_get_loading_optimization_attributes($tag,$attrs,$ctx){ return array("loading"=>"lazy","fetchpriority"=>"low"); }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged
+		}
+	}
+
+	/**
+	 * Build an Image_Optimisation instance with the alt toggle forced on/off.
+	 *
+	 * @since NEXT
+	 *
+	 * @param bool $enabled Whether autoAltText is enabled.
+	 * @return Image_Optimisation
+	 */
+	private function make_auto_alt_instance( bool $enabled ): Image_Optimisation {
+		$options                       = $this->default_options;
+		$options['image_optimisation'] = array_merge(
+			$options['image_optimisation'],
+			array(
+				'autoAltText'     => $enabled,
+				'placeholderType' => 'none',
+			)
+		);
+
+		return new Image_Optimisation( $options );
+	}
+
+	/**
+	 * Existing alt attributes must stay byte-identical when autofill is on.
+	 *
+	 * @since NEXT
+	 */
+	public function test_auto_alt_preserves_existing_alt(): void {
+		$this->stub_auto_alt_functions();
+		$image_opt = $this->make_auto_alt_instance( true );
+
+		$img_tag = '<img src="https://example.com/sunset-photo.jpg" alt="Custom alt"/>';
+		$result  = $image_opt->process_img_tag( $img_tag, 'https://example.com/sunset-photo.jpg', array() );
+
+		$this->assertStringContainsString( 'alt="Custom alt"', $result );
+		$this->assertSame( 1, substr_count( $result, 'alt=' ) );
+	}
+
+	/**
+	 * Decorative empty alt="" must be preserved, never overwritten.
+	 *
+	 * @since NEXT
+	 */
+	public function test_auto_alt_preserves_decorative_empty_alt(): void {
+		$this->stub_auto_alt_functions();
+		$image_opt = $this->make_auto_alt_instance( true );
+
+		$img_tag = '<img src="https://example.com/sunset-photo.jpg" alt=""/>';
+		$result  = $image_opt->process_img_tag( $img_tag, 'https://example.com/sunset-photo.jpg', array() );
+
+		$this->assertStringContainsString( 'alt=""', $result );
+		$this->assertSame( 1, substr_count( $result, 'alt=' ) );
+	}
+
+	/**
+	 * Missing alt is derived deterministically from the filename.
+	 *
+	 * @since NEXT
+	 */
+	public function test_auto_alt_derives_from_filename_deterministically(): void {
+		$this->stub_auto_alt_functions();
+		$image_opt = $this->make_auto_alt_instance( true );
+
+		$img_tag = '<img src="https://example.com/my-sunset_photo.jpg"/>';
+		$result  = $image_opt->process_img_tag( $img_tag, 'https://example.com/my-sunset_photo.jpg', array() );
+		$result2 = $image_opt->process_img_tag( $img_tag, 'https://example.com/my-sunset_photo.jpg', array() );
+
+		$this->assertStringContainsString( 'alt="My Sunset Photo"', $result );
+		$this->assertSame( $result, $result2, 'Same input must always yield the same alt' );
+		$this->assertSame( 'My Sunset Photo', $image_opt->get_derived_alt( 'https://example.com/my-sunset_photo.jpg' ) );
+	}
+
+	/**
+	 * Toggle-off must leave the tag byte-identical (regex helper, fail-open).
+	 *
+	 * @since NEXT
+	 */
+	public function test_auto_alt_toggle_off_is_byte_identical(): void {
+		$this->stub_auto_alt_functions();
+		$image_opt = $this->make_auto_alt_instance( false );
+
+		$method = new ReflectionMethod( Image_Optimisation::class, 'maybe_autofill_alt_regex' );
+		$method->setAccessible( true );
+
+		$img_tag = '<img src="https://example.com/my-sunset_photo.jpg"/>';
+		$this->assertSame( $img_tag, $method->invoke( $image_opt, $img_tag, 'https://example.com/my-sunset_photo.jpg' ) );
+	}
 }

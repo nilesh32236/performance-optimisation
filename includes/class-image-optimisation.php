@@ -1915,6 +1915,212 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Whether missing-alt autofill is enabled.
+		 *
+		 * Off by default (fail-open): when disabled `process_img_tag()`
+		 * returns byte-identical HTML with respect to `alt`. The value is
+		 * filterable via `wppo_auto_alt_enabled` for host-level overrides.
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when missing `alt` attributes should be derived.
+		 */
+		public function is_auto_alt_enabled(): bool {
+			$enabled = ! empty( $this->options['image_optimisation']['autoAltText'] );
+			if ( function_exists( 'apply_filters' ) ) {
+				/**
+				 * Filter whether missing-alt autofill is enabled.
+				 *
+				 * @since NEXT
+				 * @param bool $enabled Whether autofill is enabled.
+				 */
+				$enabled = (bool) apply_filters( 'wppo_auto_alt_enabled', $enabled );
+			}
+
+			return $enabled;
+		}
+
+		/**
+		 * Derive a human-readable alt candidate from an image URL filename.
+		 *
+		 * Deterministic and offline: basename → strip `-{width}x{height}`
+		 * thumbnail suffix → replace `-/_/+/.` with spaces → collapse
+		 * whitespace → title-case. Returns an empty string when no usable
+		 * filename remains (e.g. `data:` URIs, query-only URLs). Makes no
+		 * external HTTP requests and no database queries.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $src The image `src` URL.
+		 * @return string The filename-derived alt, or empty string.
+		 */
+		private function filename_to_alt( string $src ): string {
+			if ( '' === $src || 1 === preg_match( '#^data:image/#i', $src ) ) {
+				return '';
+			}
+
+			$path = $src;
+			if ( function_exists( 'wp_parse_url' ) ) {
+				$parsed = wp_parse_url( $src, PHP_URL_PATH );
+				if ( is_string( $parsed ) && '' !== $parsed ) {
+					$path = $parsed;
+				}
+			} else {
+				// Legacy fallback (pre-4.4 cores): strip query/fragment manually.
+				$fragment_pos = strpos( $path, '#' );
+				if ( false !== $fragment_pos ) {
+					$path = substr( $path, 0, $fragment_pos );
+				}
+				$query_pos = strpos( $path, '?' );
+				if ( false !== $query_pos ) {
+					$path = substr( $path, 0, $query_pos );
+				}
+			}
+
+			$base = basename( (string) $path );
+			if ( '' === $base ) {
+				return '';
+			}
+
+			$filename = pathinfo( $base, PATHINFO_FILENAME );
+			if ( ! is_string( $filename ) || '' === $filename ) {
+				return '';
+			}
+
+			// Strip WordPress thumbnail dimension suffixes (e.g. `-300x200`).
+			$filename = (string) preg_replace( '/-\d+x\d+$/', '', $filename );
+			$filename = str_replace( array( '-', '_', '+', '.' ), ' ', $filename );
+			$filename = trim( (string) preg_replace( '/\s+/', ' ', $filename ) );
+			if ( '' === $filename ) {
+				return '';
+			}
+
+			if ( function_exists( 'sanitize_text_field' ) ) {
+				$filename = sanitize_text_field( $filename );
+				$filename = trim( $filename );
+				if ( '' === $filename ) {
+					return '';
+				}
+			}
+
+			if ( function_exists( 'mb_substr' ) ) {
+				$filename = mb_substr( $filename, 0, 125 );
+			} else {
+				$filename = substr( $filename, 0, 125 );
+			}
+
+			return ucwords( $filename );
+		}
+
+		/**
+		 * Derive a deterministic alt for an image `src`.
+		 *
+		 * Primary source is the sanitized filename (`filename_to_alt()`);
+		 * when that yields nothing, falls back to the current post's parent
+		 * title (global loop context only, guarded by `function_exists()`).
+		 * The result is filterable via `wppo_auto_alt_text`. Never performs
+		 * external HTTP; the title lookup runs only when the filename path
+		 * produced nothing. Fail-open: any failure returns an empty string
+		 * (caller then leaves the tag untouched).
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $src The image `src` URL.
+		 * @return string The derived alt, or empty string when none applies.
+		 */
+		public function get_derived_alt( string $src ): string {
+			$alt = $this->filename_to_alt( $src );
+
+			if ( '' === $alt && function_exists( 'wp_get_post_parent_id' ) && function_exists( 'get_the_title' ) ) {
+				try {
+					$parent_id = wp_get_post_parent_id();
+					if ( ! empty( $parent_id ) ) {
+						$title = get_the_title( $parent_id );
+						if ( is_string( $title ) && '' !== trim( $title ) ) {
+							$alt = trim( $title );
+							if ( function_exists( 'sanitize_text_field' ) ) {
+								$alt = trim( sanitize_text_field( $alt ) );
+							}
+						}
+					}
+				} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: fall through with empty alt.
+				}
+			}
+
+			if ( function_exists( 'apply_filters' ) ) {
+				/**
+				 * Filter the derived alt text for images missing an alt attribute.
+				 *
+				 * @since NEXT
+				 * @param string $alt The derived alt text (may be empty).
+				 * @param string $src The image `src` URL.
+				 */
+				$filtered = apply_filters( 'wppo_auto_alt_text', $alt, $src );
+				if ( is_string( $filtered ) ) {
+					$alt = $filtered;
+				}
+			}
+
+			return $alt;
+		}
+
+		/**
+		 * Autofill a missing `alt` via Tag Processor (fail-open, byte-identical when off).
+		 *
+		 * Only fills when the toggle is on AND the tag has no `alt` attribute
+		 * at all (`get_attribute()` returns `null`). An explicit empty
+		 * `alt=""` is treated as an intentional decorative image and left
+		 * untouched. Tag Processor escapes the value on serialize.
+		 *
+		 * @since NEXT
+		 *
+		 * @param \WP_HTML_Tag_Processor $tags         Processor positioned on the `<img>` tag.
+		 * @param string                 $original_src The original image `src` value.
+		 * @return void
+		 */
+		private function maybe_autofill_alt_processor( $tags, string $original_src ): void {
+			if ( ! $this->is_auto_alt_enabled() ) {
+				return;
+			}
+			if ( null !== $tags->get_attribute( 'alt' ) ) {
+				return;
+			}
+			$derived = $this->get_derived_alt( $original_src );
+			if ( '' !== $derived ) {
+				$tags->set_attribute( 'alt', $derived );
+			}
+		}
+
+		/**
+		 * Autofill a missing `alt` via regex fallback (fail-open, byte-identical when off).
+		 *
+		 * Presence check is `#\balt\s*=#i`, so both `alt="x"` and decorative
+		 * `alt=""` are preserved verbatim. Escapes at emit because the regex
+		 * path concatenates raw strings.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $img_tag      The original `<img>` tag HTML.
+		 * @param string $original_src The original image `src` value.
+		 * @return string The tag with a derived `alt`, or unchanged.
+		 */
+		private function maybe_autofill_alt_regex( string $img_tag, string $original_src ): string {
+			if ( ! $this->is_auto_alt_enabled() ) {
+				return $img_tag;
+			}
+			if ( 1 === preg_match( '#\balt\s*=#i', $img_tag ) ) {
+				return $img_tag;
+			}
+			$derived = $this->get_derived_alt( $original_src );
+			if ( '' === $derived ) {
+				return $img_tag;
+			}
+			$escaped  = function_exists( 'esc_attr' ) ? esc_attr( $derived ) : htmlspecialchars( $derived, ENT_QUOTES, 'UTF-8' );
+			$replaced = preg_replace( '#<img\b#i', '<img alt="' . $escaped . '"', $img_tag, 1 );
+			return null === $replaced ? $img_tag : $replaced;
+		}
+
+		/**
 		 * Optimize an <img> tag for lazy loading, placeholders, dimensions, and performance attributes.
 		 *
 		 * If the image URL matches any exclusion substring, ensures the tag has `decoding="sync"` and
@@ -1944,6 +2150,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 										'decoding'      => 'sync',
 									)
 								);
+								$this->maybe_autofill_alt_processor( $tags, $original_src );
 								return $tags->get_updated_html();
 							}
 							return $img_tag;
@@ -2079,6 +2286,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					}
 				}
 
+				$this->maybe_autofill_alt_processor( $tags, $original_src );
+
 				return $tags->get_updated_html();
 			} else {
 				// Regex Fallback (Original logic restored from git history).
@@ -2122,7 +2331,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 								}
 							}
 
-							return $img_tag;
+							return $this->maybe_autofill_alt_regex( $img_tag, $original_src );
 						}
 					}
 				}
@@ -2279,7 +2488,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					}
 				}
 
-				return $img_tag;
+				return $this->maybe_autofill_alt_regex( $img_tag, $original_src );
 			}
 		}
 
