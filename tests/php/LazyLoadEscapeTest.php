@@ -164,7 +164,10 @@ class LazyLoadEscapeTest extends \PHPUnit\Framework\TestCase {
 		$this->assertArrayNotHasKey( 'onload', $stored );
 		$this->assertArrayNotHasKey( 'onerror', $stored );
 		$this->assertArrayNotHasKey( 'src', $stored );
-		$this->assertSame( '560', (string) ( $stored['width'] ?? '' ) );
+		// width/height/style are owned by the placeholder and never stored.
+		$this->assertArrayNotHasKey( 'width', $stored );
+		$this->assertArrayNotHasKey( 'height', $stored );
+		$this->assertArrayNotHasKey( 'style', $stored );
 		$this->assertSame( 't', (string) ( $stored['title'] ?? '' ) );
 	}
 

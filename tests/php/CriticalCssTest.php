@@ -409,7 +409,8 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 
 	/**
 	 * When a wppo_ccss_sanitize_inline listener exists, its return value is
-	 * used (guarded apply_filters path).
+	 * re-sanitized (guarded apply_filters path): benign values pass through
+	 * while hostile tokens reintroduced by hooked code are neutralized.
 	 *
 	 * @return void
 	 */
@@ -420,6 +421,40 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 		$sanitized = $this->invoke_private( 'sanitize_inline_css', '.x{}/*</style>*/' );
 
 		$this->assertSame( 'body{color:red}', $sanitized );
+	}
+
+	/**
+	 * A hostile wppo_ccss_sanitize_inline return value is re-sanitized so
+	 * hooked code cannot reintroduce breakout tokens past the sanitizer.
+	 *
+	 * @return void
+	 */
+	public function test_sanitize_inline_css_resanitizes_hostile_filter_output(): void {
+		Functions\when( 'has_filter' )->justReturn( true );
+		$this->filter_overrides['wppo_ccss_sanitize_inline'] = '.x{}/*</style><script>alert(1)</script>*/';
+
+		$sanitized = $this->invoke_private( 'sanitize_inline_css', 'body{color:red}' );
+
+		$this->assertDoesNotMatchRegularExpression( '/<\/style/i', $sanitized );
+		$this->assertDoesNotMatchRegularExpression( '/<script/i', $sanitized );
+		$this->assertDoesNotMatchRegularExpression( '/</', $sanitized );
+	}
+
+	/**
+	 * Benign selectors containing behavior/behaviour substrings (e.g.
+	 * .behavior-badge) survive sanitization and pass the pre-cache gate:
+	 * only property-position occurrences (followed by a colon) are
+	 * neutralized or flagged.
+	 *
+	 * @return void
+	 */
+	public function test_behavior_substring_selectors_survive_sanitizer_and_gate(): void {
+		$css = '.behavior-badge{color:red}#behaviour-list{margin:0}';
+
+		$this->assertSame( $css, $this->invoke_private( 'sanitize_inline_css', $css ) );
+		$this->assertFalse( $this->invoke_private( 'contains_unsafe_css_tokens', $css ) );
+		$this->assertFalse( $this->invoke_private( 'contains_unsafe_css_tokens', '.behavior-chart{display:block}' ) );
+		$this->assertTrue( $this->invoke_private( 'contains_unsafe_css_tokens', '.x{behavior:url(x.htc)}' ) );
 	}
 
 	/**

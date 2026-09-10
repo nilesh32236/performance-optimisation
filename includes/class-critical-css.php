@@ -912,27 +912,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 */
 		private static function contains_unsafe_css_tokens( string $css ): bool {
 			$decoded = self::decode_css_entities( $css );
-			return (bool) preg_match( '/<\/style|<script|<!--|-->|expression\s*\(|javascript\s*:|vbscript\s*:|behaviou?r|-moz-binding|&(lt|gt|amp|quot|#\d+|#x[0-9a-f]+);?/i', $decoded );
+			// Note: behaviou?r only matches in property position (followed
+			// by a colon) so benign selectors like .behavior-badge pass.
+			return (bool) preg_match( '/<\/style|<script|<!--|-->|expression\s*\(|javascript\s*:|vbscript\s*:|behaviou?r(?=\s*:)|-moz-binding|&(lt|gt|amp|quot|#\d+|#x[0-9a-f]+);?/i', $decoded );
 		}
 
 		/**
 		 * Sanitize generated critical CSS for safe output inside a <style> tag.
 		 *
-		 * Neutralizes the `</style>` raw-text terminator plus `script`,
-		 * comment (`<!--`/`-->`), and CSS expression vectors
-		 * (`expression()`, `javascript:`/`vbscript:` URLs, `behaviour`,
-		 * `-moz-binding`) case-insensitively, decodes numeric/hex entities
-		 * first so encoded payloads cannot smuggle `<` past the encoder,
-		 * then encodes any remaining `<` as the equivalent CSS escape so
-		 * stored CSS can never break out of the style element. Fail-closed:
-		 * a sanitizer error drops the block (returns '') so output degrades
-		 * to unoptimized markup, never script execution.
+		 * Token-breaking worker shared by sanitize_inline_css() (applied
+		 * both before and after the `wppo_ccss_sanitize_inline` filter so
+		 * hooked code cannot reintroduce breakout tokens). Neutralizes the
+		 * `</style>` raw-text terminator plus `script`, comment
+		 * (`<!--`/`-->`), and CSS expression vectors (`expression()`,
+		 * `javascript:`/`vbscript:` URLs, the `behavior` / `behaviour`
+		 * property in property position only, `-moz-binding`)
+		 * case-insensitively, decodes numeric/hex entities first so encoded
+		 * payloads cannot smuggle `<` past the encoder, then encodes any
+		 * remaining `<` as the equivalent CSS escape so stored CSS can never
+		 * break out of the style element. Fail-closed: a sanitizer error
+		 * drops the block (returns '') so output degrades to unoptimized
+		 * markup, never script execution.
 		 *
 		 * @param string $css Raw critical CSS.
 		 * @return string Sanitized critical CSS.
 		 * @since NEXT
 		 */
-		private static function sanitize_inline_css( string $css ): string {
+		private static function sanitize_inline_css_tokens( string $css ): string {
 			try {
 				$css = self::decode_css_entities( $css );
 				$css = str_ireplace( '</style', '<\/style', $css );
@@ -951,8 +957,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					},
 					$css
 				);
-				$css = str_ireplace( 'behaviour', 'behaviou\r', $css );
-				$css = str_ireplace( 'behavior', 'behavio\r', $css );
+				// Scope behavior/behaviour to property position (followed by
+				// a colon) so benign selectors like .behavior-badge or
+				// #behaviour-list keep working. A callback emits the
+				// backslash literally instead of a PCRE backreference.
+				$css = (string) preg_replace_callback(
+					'/behaviou?r(?=\s*:)/i',
+					static function (): string {
+						return 'behavio\\r';
+					},
+					$css
+				);
 				$css = str_ireplace( '-moz-binding', '-moz-bindin\g', $css );
 
 				// Neutralize entity remnants that survived decoding (e.g.
@@ -974,14 +989,48 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return '';
 			}
 
+			return $css;
+		}
+
+		/**
+		 * Sanitize generated critical CSS for safe output inside a <style> tag.
+		 *
+		 * Neutralizes the `</style>` raw-text terminator plus `script`,
+		 * comment (`<!--`/`-->`), and CSS expression vectors
+		 * (`expression()`, `javascript:`/`vbscript:` URLs, the `behavior` /
+		 * `behaviour` property, `-moz-binding`) case-insensitively, decodes
+		 * numeric/hex entities first so encoded payloads cannot smuggle `<`
+		 * past the encoder, then encodes any remaining `<` as the equivalent
+		 * CSS escape so stored CSS can never break out of the style element.
+		 * Fail-closed: a sanitizer error drops the block (returns '') so
+		 * output degrades to unoptimized markup, never script execution.
+		 *
+		 * Filter output is re-sanitized: `wppo_ccss_sanitize_inline` is a
+		 * trusted-code-only hook, and a hooked callback must not be able to
+		 * reintroduce `</style>`/`<script>` past the sanitizer and gate.
+		 *
+		 * @param string $css Raw critical CSS.
+		 * @return string Sanitized critical CSS.
+		 * @since NEXT
+		 */
+		private static function sanitize_inline_css( string $css ): string {
+			$css = self::sanitize_inline_css_tokens( $css );
+
 			/**
 			 * Filters the inline critical CSS right before output.
+			 *
+			 * The return value is passed through the sanitizer again, so
+			 * hooked code cannot reintroduce breakout tokens.
 			 *
 			 * @param string $css Sanitized critical CSS.
 			 * @since NEXT
 			 */
 			if ( function_exists( 'has_filter' ) && has_filter( 'wppo_ccss_sanitize_inline' ) ) {
-				return apply_filters( 'wppo_ccss_sanitize_inline', $css );
+				$filtered = apply_filters( 'wppo_ccss_sanitize_inline', $css );
+				if ( ! is_string( $filtered ) ) {
+					return $css;
+				}
+				return self::sanitize_inline_css_tokens( $filtered );
 			}
 			return $css;
 		}

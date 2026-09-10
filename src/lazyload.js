@@ -246,6 +246,110 @@ const IFRAME_ATTR_ALLOWLIST = new Set( [
 ] );
 
 /**
+ * Safe `allow` (Permissions-Policy) tokens for restored iframes. A tampered
+ * data-wppo-iframe-attrs payload must not escalate capabilities (e.g.
+ * `allow="camera; microphone"`), so unknown tokens are stripped and the
+ * attribute is dropped when nothing safe remains.
+ *
+ * @since NEXT
+ * @type {Set<string>}
+ */
+const IFRAME_ALLOW_TOKENS = new Set( [
+	'accelerometer',
+	'autoplay',
+	'clipboard-write',
+	'encrypted-media',
+	'fullscreen',
+	'gyroscope',
+	'picture-in-picture',
+	'web-share',
+] );
+
+/**
+ * Safe `sandbox` tokens for restored iframes. Top-navigation tokens are
+ * deliberately excluded so a tampered payload cannot let the iframe break
+ * out of its frame.
+ *
+ * @since NEXT
+ * @type {Set<string>}
+ */
+const IFRAME_SANDBOX_TOKENS = new Set( [
+	'allow-downloads',
+	'allow-forms',
+	'allow-modals',
+	'allow-orientation-lock',
+	'allow-pointer-lock',
+	'allow-popups',
+	'allow-popups-to-escape-sandbox',
+	'allow-presentation',
+	'allow-same-origin',
+	'allow-scripts',
+] );
+
+/**
+ * Valid `referrerpolicy` values for restored iframes.
+ *
+ * @since NEXT
+ * @type {Set<string>}
+ */
+const IFRAME_REFERRERPOLICY_TOKENS = new Set( [
+	'no-referrer',
+	'no-referrer-when-downgrade',
+	'origin',
+	'origin-when-cross-origin',
+	'same-origin',
+	'strict-origin',
+	'strict-origin-when-cross-origin',
+	'unsafe-url',
+] );
+
+/**
+ * Sanitize a stored `allow` value: keep only known-safe Permissions-Policy
+ * tokens, return '' when nothing safe remains.
+ *
+ * @since NEXT
+ * @param {string} value Raw allow attribute value.
+ * @return {string} Sanitized value ('' when unsafe/empty).
+ */
+const sanitizeIframeAllow = ( value ) => {
+	const tokens = String( value )
+		.split( ';' )
+		.map( ( token ) => token.trim().toLowerCase() )
+		.filter(
+			( token ) =>
+				token &&
+				/^[a-z-]+$/.test( token ) &&
+				IFRAME_ALLOW_TOKENS.has( token )
+		);
+	return tokens.join( '; ' );
+};
+
+/**
+ * Sanitize a stored `sandbox` value: keep only known-safe tokens (never
+ * top-navigation). Returns null when a non-empty value has no safe token
+ * left; an empty input stays empty (fully sandboxed, strictest).
+ *
+ * @since NEXT
+ * @param {string} value Raw sandbox attribute value.
+ * @return {string|null} Sanitized value, or null to skip the attribute.
+ */
+const sanitizeIframeSandbox = ( value ) => {
+	const raw = String( value ).trim().toLowerCase();
+	if ( ! raw ) {
+		return '';
+	}
+	const tokens = raw
+		.split( /\s+/ )
+		.filter(
+			( token ) =>
+				token &&
+				/^[a-z-]+$/.test( token ) &&
+				IFRAME_SANDBOX_TOKENS.has( token )
+		);
+	return tokens.length ? tokens.join( ' ' ) : null;
+};
+
+/**
  * Whether a host matches the allowlist (exact or subdomain, case-insensitive).
  *
  * @since NEXT
@@ -1485,9 +1589,55 @@ const initVideoPlaceholders = () => {
 						if ( name.startsWith( 'on' ) ) {
 							return;
 						}
-						if ( IFRAME_ATTR_ALLOWLIST.has( name ) ) {
-							iframe.setAttribute( name, v );
+						if ( ! IFRAME_ATTR_ALLOWLIST.has( name ) ) {
+							return;
 						}
+						// Capability-bearing attributes are value-checked so a
+						// tampered payload cannot escalate iframe privileges.
+						if ( 'allow' === name ) {
+							const safe = sanitizeIframeAllow( v );
+							if ( ! safe ) {
+								return;
+							}
+							iframe.setAttribute( name, safe );
+							return;
+						}
+						if ( 'sandbox' === name ) {
+							const safe = sanitizeIframeSandbox( v );
+							if ( null === safe ) {
+								return;
+							}
+							iframe.setAttribute( name, safe );
+							return;
+						}
+						if ( 'allowfullscreen' === name ) {
+							if (
+								! /^(|true|allowfullscreen)$/i.test( v.trim() )
+							) {
+								return;
+							}
+							iframe.setAttribute( name, '' );
+							return;
+						}
+						if ( 'referrerpolicy' === name ) {
+							if (
+								! IFRAME_REFERRERPOLICY_TOKENS.has(
+									v.trim().toLowerCase()
+								)
+							) {
+								return;
+							}
+							iframe.setAttribute( name, v.trim().toLowerCase() );
+							return;
+						}
+						if ( 'frameborder' === name ) {
+							if ( ! /^(0|1)$/.test( v.trim() ) ) {
+								return;
+							}
+							iframe.setAttribute( name, v.trim() );
+							return;
+						}
+						iframe.setAttribute( name, v );
 					} );
 				} catch ( _err ) {
 					console.warn( 'WPPO: invalid iframe attrs JSON', _err );
