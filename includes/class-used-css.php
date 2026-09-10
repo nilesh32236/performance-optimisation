@@ -1497,7 +1497,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 */
 		public function get_regression_threshold(): int {
 			$file_opts = $this->options['file_optimisation'] ?? array();
-			$threshold = isset( $file_opts['unusedCSSRegressionThreshold'] ) ? (int) $file_opts['unusedCSSRegressionThreshold'] : 20;
+			$raw       = $file_opts['unusedCSSRegressionThreshold'] ?? 20;
+			$threshold = is_numeric( $raw ) ? (int) $raw : 20;
 			if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_unused_css_regression_threshold' ) ) {
 				$threshold = (int) apply_filters( 'wppo_unused_css_regression_threshold', $threshold );
 			}

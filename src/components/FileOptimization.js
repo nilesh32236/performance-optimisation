@@ -81,7 +81,7 @@ const FileOptimization = ( {
 				? options.unusedCSSRegressionGuard
 				: true,
 		unusedCSSRegressionThreshold:
-			options.unusedCSSRegressionThreshold || 20,
+			options.unusedCSSRegressionThreshold ?? 20,
 		disableEmojis: false,
 		disableEmbeds: false,
 		disableDashicons: false,

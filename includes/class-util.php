@@ -1653,7 +1653,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				// Unused-CSS regression threshold (issue #966) — int clamped to
 				// 5-50 (% retained). Unrecognized values fail safe to 20.
 				if ( 'unusedCSSRegressionThreshold' === $safe_key && ! is_array( $value ) ) {
-					$threshold              = (int) $value;
+					$threshold              = is_numeric( $value ) ? (int) $value : 20;
 					$sanitized[ $safe_key ] = ( $threshold >= 5 && $threshold <= 50 ) ? $threshold : 20;
 					continue;
 				}

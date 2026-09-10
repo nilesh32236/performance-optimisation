@@ -479,12 +479,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			}
 
 			if ( ! empty( $this->options['file_optimisation']['delayJS'] ) && ! self::is_delay_excluded_context() ) {
+				// Per-page kill-switch (#966) and external-only mode only skip
+				// the delay rewrite below; inline-JS minification still runs.
+				$skip_delay = false;
 
 				// Per-page kill-switch (#966): skip inline delay for this page.
 				if ( class_exists( Main::class ) && method_exists( Main::class, 'is_delay_disabled_for_page' ) ) {
 					try {
 						if ( Main::is_delay_disabled_for_page() ) {
-							return '<script' . $attributes . '>' . $content . '</script>';
+							$skip_delay = true;
 						}
 					} catch ( \Throwable $e ) {
 						unset( $e );
@@ -493,15 +496,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 
 				// External-scripts-only mode (#966): inline scripts (no src
 				// attribute) stay un-delayed; only external scripts delay.
-				// Fail-open: leave the tag untouched.
-				if ( ! empty( $this->options['file_optimisation']['delayJSExternalOnly'] ) ) {
+				// Fail-open: leave the tag untouched by the delay rewrite.
+				if ( ! $skip_delay && ! empty( $this->options['file_optimisation']['delayJSExternalOnly'] ) ) {
 					if ( ! preg_match( '/\ssrc\s*=/i', ' ' . (string) $attributes ) ) {
-						return '<script' . $attributes . '>' . $content . '</script>';
+						$skip_delay = true;
 					}
 				}
 
-				$should_exclude = false;
-				if ( ! empty( $this->exclude_delay_js ) ) {
+				$should_exclude = $skip_delay;
+				if ( ! $skip_delay && ! empty( $this->exclude_delay_js ) ) {
 					foreach ( $this->exclude_delay_js as $exclude ) {
 						if (
 						false !== strpos( $attributes, trim( $exclude ) ) ||

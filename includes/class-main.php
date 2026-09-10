@@ -2814,10 +2814,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * Builder runtimes must stay un-delayed by default — delaying them
 		 * breaks Elementor/Divi/Bricks/WPBakery/Oxygen rendering and the
-		 * block-interactivity runtime. Matched via is_delay_excluded_handle()
-		 * (exact, dash/underscore variants, pure prefixes, word-boundary
-		 * fallback) by callers. Shared with Minify\HTML so the
-		 * external and inline delay paths never drift.
+		 * block-interactivity runtime. Only the exclusion list is shared with
+		 * Minify\HTML so the lists cannot drift; matching semantics differ by
+		 * design. The external path matches handles via
+		 * is_delay_excluded_handle() (exact, dash/underscore variants, pure
+		 * prefixes, word-boundary fallback) while the inline path intentionally
+		 * over-matches by substring over attributes+content (fail-open
+		 * direction), so over/under-exclusion can still diverge.
 		 *
 		 * @since NEXT
 		 * @return string[]

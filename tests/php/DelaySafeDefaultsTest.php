@@ -49,7 +49,6 @@ class DelaySafeDefaultsTest extends \PHPUnit\Framework\TestCase {
 	private function default_safelist(): array {
 		return array(
 			'.elementor-',
-			'.e-con',
 			'.e-con*',
 			'.et_*',
 			'.et_pb_*',
@@ -178,22 +177,24 @@ class DelaySafeDefaultsTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Kill-switch returns true when the meta is set, false otherwise.
 	 *
-	 * Distinct post IDs per branch: is_delay_disabled_for_page() caches
-	 * per post ID for the request.
+	 * Distinct, highly unique post IDs per branch:
+	 * is_delay_disabled_for_page() caches per post ID in a static request
+	 * cache that persists process-wide and is never reset, so IDs must not
+	 * collide with any other suite.
 	 */
 	public function test_delay_kill_switch_meta_branches(): void {
 		Functions\when( 'is_singular' )->justReturn( true );
 		Functions\when( 'get_post_meta' )->alias(
 			static function ( $post_id, $key ) {
-				if ( 9101 === $post_id && '_wppo_delay_disabled' === $key ) {
+				if ( 910101 === $post_id && '_wppo_delay_disabled' === $key ) {
 					return '1';
 				}
 				return '';
 			}
 		);
 
-		$this->assertTrue( Main::is_delay_disabled_for_page( 9101 ) );
-		$this->assertFalse( Main::is_delay_disabled_for_page( 9102 ) );
+		$this->assertTrue( Main::is_delay_disabled_for_page( 910101 ) );
+		$this->assertFalse( Main::is_delay_disabled_for_page( 910102 ) );
 	}
 
 	/**
@@ -310,6 +311,225 @@ class DelaySafeDefaultsTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertStringContainsString( 'wppo-src', $main->add_defer_attribute( $external, 'my-app-script' ) );
 		$this->assertSame( $data_src, $main->add_defer_attribute( $data_src, 'my-app-script' ) );
+
+		$this->reset_delay_guard_superglobals();
+	}
+
+	/**
+	 * Fixture mirror must stay in parity with the production built-in safelist.
+	 *
+	 * The default_safelist() helper hand-mirrors the builder entries, so pin
+	 * it against the real Used_CSS built-in list — the matching tests would
+	 * otherwise still pass if the production list drifts or drops an entry.
+	 */
+	public function test_safelist_fixture_matches_production_builtin(): void {
+		$instance = ( new \ReflectionClass( Used_CSS::class ) )->newInstanceWithoutConstructor();
+		$prop     = new \ReflectionProperty( Used_CSS::class, 'built_in_safelist' );
+		$prop->setAccessible( true );
+		$builtin = $prop->getValue( $instance );
+
+		foreach ( $this->default_safelist() as $entry ) {
+			$this->assertContains( $entry, $builtin, "Fixture entry {$entry} missing from production built-in safelist." );
+		}
+	}
+
+	/**
+	 * Threshold boundaries: exact 5/50 limits stay valid, retained exactly at
+	 * the threshold does not trip (strict <), whitespace-only output trips,
+	 * and trailing-junk strings fail safe to 20.
+	 */
+	public function test_regression_threshold_exact_boundaries(): void {
+		Functions\when( 'has_filter' )->justReturn( false );
+
+		$min = $this->make_used_css( array( 'file_optimisation' => array( 'unusedCSSRegressionThreshold' => 5 ) ), array() );
+		$this->assertSame( 5, $min->get_regression_threshold() );
+
+		$max = $this->make_used_css( array( 'file_optimisation' => array( 'unusedCSSRegressionThreshold' => 50 ) ), array() );
+		$this->assertSame( 50, $max->get_regression_threshold() );
+
+		$junk = $this->make_used_css( array( 'file_optimisation' => array( 'unusedCSSRegressionThreshold' => '30abc' ) ), array() );
+		$this->assertSame( 20, $junk->get_regression_threshold() );
+
+		$css      = $this->make_used_css( array( 'file_optimisation' => array( 'unusedCSSRegressionThreshold' => 20 ) ), array() );
+		$combined = str_repeat( 'a', 1000 );
+		// Retained exactly at the threshold (20%) must not trip.
+		$this->assertFalse( $css->is_regression_guard_tripped( $combined, str_repeat( 'b', 200 ) ) );
+		// Whitespace-only purged output trips.
+		$this->assertTrue( $css->is_regression_guard_tripped( $combined, "  \n\t  " ) );
+	}
+
+	/**
+	 * The wppo_unused_css_regression_threshold filter overrides the stored value.
+	 */
+	public function test_regression_threshold_filter_override(): void {
+		Functions\when( 'has_filter' )->alias(
+			static function ( $hook ) {
+				return 'wppo_unused_css_regression_threshold' === $hook;
+			}
+		);
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook, $value ) {
+				return 'wppo_unused_css_regression_threshold' === $hook ? 50 : $value;
+			}
+		);
+
+		$css = $this->make_used_css( array( 'file_optimisation' => array( 'unusedCSSRegressionThreshold' => 20 ) ), array() );
+		$this->assertSame( 50, $css->get_regression_threshold() );
+	}
+
+	/**
+	 * Kill-switch post_id=0 resolves via get_the_ID, and non-singular
+	 * requests fail open without a meta lookup.
+	 *
+	 * Uses highly unique IDs: is_delay_disabled_for_page() caches per post ID
+	 * in a static request cache that persists process-wide and is never reset.
+	 */
+	public function test_delay_kill_switch_post_id_zero_and_non_singular(): void {
+		Functions\when( 'is_singular' )->justReturn( true );
+		Functions\when( 'get_the_ID' )->justReturn( 935101 );
+		Functions\when( 'get_post_meta' )->alias(
+			static function ( $post_id, $key ) {
+				if ( 935101 === $post_id && '_wppo_delay_disabled' === $key ) {
+					return '1';
+				}
+				return '';
+			}
+		);
+		$this->assertTrue( Main::is_delay_disabled_for_page( 0 ) );
+
+		Functions\when( 'is_singular' )->justReturn( false );
+		$this->assertFalse( Main::is_delay_disabled_for_page( 0 ) );
+	}
+
+	/**
+	 * Extra safelist merges via init_safelist() and takes effect.
+	 */
+	public function test_unused_css_extra_safelist_merge(): void {
+		Functions\when( 'has_filter' )->justReturn( false );
+		$css = $this->make_used_css(
+			array( 'file_optimisation' => array( 'unusedCSSSafelistExtra' => ".my-custom-keep-\n.my-other-thing" ) ),
+			array()
+		);
+
+		$init = new \ReflectionMethod( Used_CSS::class, 'init_safelist' );
+		$init->setAccessible( true );
+		$init->invoke( $css );
+
+		$this->assertTrue( $css->is_selector_used( '.my-custom-keep-widget', $this->empty_used() ) );
+		$this->assertTrue( $css->is_selector_used( '.my-other-thing-card', $this->empty_used() ) );
+
+		// The extra entries must have landed in the merged safelist.
+		$safe_prop = new \ReflectionProperty( Used_CSS::class, 'safelist' );
+		$safe_prop->setAccessible( true );
+		$merged = $safe_prop->getValue( $css );
+		$this->assertContains( '.my-custom-keep-', $merged );
+		$this->assertContains( '.my-other-thing', $merged );
+	}
+
+	/**
+	 * Threshold sanitization rejects trailing-junk strings instead of
+	 * accepting the (int) cast prefix.
+	 */
+	public function test_util_threshold_sanitization_rejects_junk(): void {
+		Functions\when( 'has_filter' )->justReturn( false );
+		$clean = \PerformanceOptimise\Inc\Util::sanitize_settings_recursively(
+			array( 'unusedCSSRegressionThreshold' => '30abc' )
+		);
+		$this->assertSame( 20, $clean['unusedCSSRegressionThreshold'] );
+
+		$valid = \PerformanceOptimise\Inc\Util::sanitize_settings_recursively(
+			array( 'unusedCSSRegressionThreshold' => 30 )
+		);
+		$this->assertSame( 30, $valid['unusedCSSRegressionThreshold'] );
+	}
+
+	/**
+	 * With the builder preset off, builder handles delay again.
+	 */
+	public function test_external_delay_preset_off_delays_builder_handles(): void {
+		$this->stub_main_construction(
+			array(
+				'delayJS'              => true,
+				'delayJSBuilderPreset' => false,
+			)
+		);
+		$this->reset_delay_guard_superglobals();
+		Functions\when( 'wp_unslash' )->returnArg();
+		Functions\when( 'sanitize_text_field' )->returnArg();
+
+		$main = new Main();
+
+		// phpcs:disable WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for add_defer_attribute() tests.
+		$tag = '<script src="https://example.com/app.js" type="text/javascript"></script>';
+		// phpcs:enable WordPress.WP.EnqueuedResources.NonEnqueuedScript
+
+		$this->assertStringContainsString( 'wppo-src', $main->add_defer_attribute( $tag, 'elementor-frontend' ) );
+
+		$this->reset_delay_guard_superglobals();
+	}
+
+	/**
+	 * Meta-based disable flows through add_defer_attribute(): the tag is
+	 * returned untouched.
+	 *
+	 * Uses a highly unique ID: is_delay_disabled_for_page() caches per post
+	 * ID in a static request cache that persists process-wide.
+	 */
+	public function test_external_delay_meta_disabled_returns_tag_untouched(): void {
+		$this->stub_main_construction( array( 'delayJS' => true ) );
+		$this->reset_delay_guard_superglobals();
+		Functions\when( 'wp_unslash' )->returnArg();
+		Functions\when( 'sanitize_text_field' )->returnArg();
+		Functions\when( 'is_singular' )->justReturn( true );
+		Functions\when( 'get_the_ID' )->justReturn( 940101 );
+		Functions\when( 'get_post_meta' )->alias(
+			static function ( $post_id, $key ) {
+				if ( 940101 === $post_id && '_wppo_delay_disabled' === $key ) {
+					return '1';
+				}
+				return '';
+			}
+		);
+
+		$main = new Main();
+
+		// phpcs:disable WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for add_defer_attribute() tests.
+		$tag = '<script src="https://example.com/app.js" type="text/javascript"></script>';
+		// phpcs:enable WordPress.WP.EnqueuedResources.NonEnqueuedScript
+
+		$this->assertSame( $tag, $main->add_defer_attribute( $tag, 'my-app-script' ) );
+
+		$this->reset_delay_guard_superglobals();
+	}
+
+	/**
+	 * External-only / kill-switch skip the delay rewrite but must not skip
+	 * inline-JS minification (both features are independent).
+	 */
+	public function test_inline_minify_still_runs_when_delay_skipped(): void {
+		$this->reset_delay_guard_superglobals();
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		Functions\when( 'untrailingslashit' )->returnArg();
+		Functions\when( 'is_cart' )->justReturn( false );
+		Functions\when( 'is_checkout' )->justReturn( false );
+		Functions\when( 'is_account_page' )->justReturn( false );
+
+		// phpcs:disable WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for inline minify tests.
+		$html    = '<html><head></head><body><script>var   x   =   1;</script></body></html>';
+		$options = array(
+			'file_optimisation' => array(
+				'delayJS'             => true,
+				'delayJSExternalOnly' => true,
+				'minifyInlineJS'      => true,
+			),
+		);
+		// phpcs:enable WordPress.WP.EnqueuedResources.NonEnqueuedScript
+
+		$result = new \PerformanceOptimise\Inc\Minify\HTML( $html, $options );
+		$out    = $result->get_minified_html();
+		$this->assertStringNotContainsString( 'wppo/javascript', $out );
+		$this->assertStringContainsString( 'var x=1', $out );
 
 		$this->reset_delay_guard_superglobals();
 	}
