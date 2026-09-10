@@ -3266,7 +3266,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_builder_exclusions' ) ) {
 				return $preset;
 			}
-			return array_values( (array) apply_filters( 'wppo_delay_js_builder_exclusions', $preset ) );
+			try {
+				$raw = apply_filters( 'wppo_delay_js_builder_exclusions', $preset );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $preset;
+			}
+			if ( ! is_array( $raw ) ) {
+				return $preset;
+			}
+			return array_values(
+				array_unique(
+					array_filter(
+						array_map(
+							static function ( $val ): string {
+								return is_string( $val ) || is_numeric( $val ) ? (string) $val : '';
+							},
+							$raw
+						),
+						static function ( $val ): bool {
+							return '' !== $val;
+						}
+					)
+				)
+			);
 		}
 
 		/**
@@ -3309,7 +3332,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_commerce_exclusions' ) ) {
 				return $preset;
 			}
-			return (array) apply_filters( 'wppo_delay_js_commerce_exclusions', $preset );
+			try {
+				$raw = apply_filters( 'wppo_delay_js_commerce_exclusions', $preset );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $preset;
+			}
+			if ( ! is_array( $raw ) ) {
+				return $preset;
+			}
+			return array_values(
+				array_unique(
+					array_filter(
+						array_map(
+							static function ( $val ): string {
+								return is_string( $val ) || is_numeric( $val ) ? (string) $val : '';
+							},
+							$raw
+						),
+						static function ( $val ): bool {
+							return '' !== $val;
+						}
+					)
+				)
+			);
 		}
 
 		/**
@@ -3345,7 +3391,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_slider_exclusions' ) ) {
 				return $preset;
 			}
-			return (array) apply_filters( 'wppo_delay_js_slider_exclusions', $preset );
+			try {
+				$raw = apply_filters( 'wppo_delay_js_slider_exclusions', $preset );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $preset;
+			}
+			if ( ! is_array( $raw ) ) {
+				return $preset;
+			}
+			return array_values(
+				array_unique(
+					array_filter(
+						array_map(
+							static function ( $val ): string {
+								return is_string( $val ) || is_numeric( $val ) ? (string) $val : '';
+							},
+							$raw
+						),
+						static function ( $val ): bool {
+							return '' !== $val;
+						}
+					)
+				)
+			);
 		}
 
 		/**
@@ -3539,9 +3608,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					return;
 				}
 				// Bust this request's cached kill-switch entries for the post on
-				// every known blog key (at most a handful of entries).
+				// every known blog key (at most a handful of entries). Keys are
+				// always `blog_id:post_id`, so match on the suffix only.
 				foreach ( array_keys( self::$delay_disabled_page_cache ) as $key ) {
-					if ( (string) $key === (string) $post_id || str_ends_with( (string) $key, ':' . (string) $post_id ) ) {
+					if ( str_ends_with( (string) $key, ':' . (string) $post_id ) ) {
 						unset( self::$delay_disabled_page_cache[ $key ] );
 					}
 				}
@@ -3574,7 +3644,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * detection or purge failures never fatal the meta write.
 		 *
 		 * @since NEXT
-		 * @param int    $meta_id  Meta row ID (unused, required by hook signature).
+		 * @param mixed  $meta_id  Meta row ID for added/updated hooks, or an array of IDs for deleted_post_meta (unused, required by hook signature).
 		 * @param int    $post_id  Post ID the meta belongs to.
 		 * @param string $meta_key Meta key that was written.
 		 * @return void
@@ -3670,10 +3740,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_exclusions' ) ) {
 				return $preset;
 			}
+			// Fail-open (#1037 review): a misbehaving filter must never fatal the
+			// frontend script/style path. Guard with is_string/is_numeric checks
+			// (no blind strval — objects without __toString would throw Error)
+			// and fall back to the preset on any throwable.
+			try {
+				$raw = apply_filters( 'wppo_delay_js_exclusions', $preset );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $preset;
+			}
+			if ( ! is_array( $raw ) ) {
+				return $preset;
+			}
 			$filtered = array_values(
 				array_unique(
 					array_filter(
-						array_map( 'strval', (array) apply_filters( 'wppo_delay_js_exclusions', $preset ) ),
+						array_map(
+							static function ( $val ): string {
+								return is_string( $val ) || is_numeric( $val ) ? (string) $val : '';
+							},
+							$raw
+						),
 						static function ( $val ): bool {
 							return '' !== $val;
 						}
@@ -5232,12 +5320,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					return $tag;
 				}
 
-				try {
-					$file_version = filemtime( $cached_file_path );
-				} catch ( \Throwable $e ) {
-					unset( $e );
-					return $tag;
-				}
+				// filemtime() returns false (with a warning) on failure — it never
+				// throws — so fail open on the false check below.
+				$file_version = filemtime( $cached_file_path );
 				if ( false === $file_version ) {
 					return $tag;
 				}
@@ -5311,12 +5396,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					return $tag;
 				}
 
-				try {
-					$file_version = filemtime( $cached_file_path );
-				} catch ( \Throwable $e ) {
-					unset( $e );
-					return $tag;
-				}
+				// filemtime() returns false (with a warning) on failure — it never
+				// throws — so fail open on the false check below.
+				$file_version = filemtime( $cached_file_path );
 				if ( false === $file_version ) {
 					return $tag;
 				}

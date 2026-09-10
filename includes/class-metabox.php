@@ -433,6 +433,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 				delete_post_meta( $post_id, '_wppo_delay_disabled' );
 			}
 			if ( (bool) $delay_disabled !== (bool) $had_delay_disabled && class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'invalidate_delay_kill_switch_cache' ) ) {
+				// Intentional duplicate purge (#1037 review note): the
+				// update/delete_post_meta calls above also fire
+				// added/updated/deleted_post_meta, which purge the same URL a
+				// second time. Harmless (single-URL, fail-open) and kept so direct
+				// metabox saves purge even if the meta hooks are ever unhooked.
 				try {
 					Main::invalidate_delay_kill_switch_cache( (int) $post_id );
 				} catch ( \Throwable $e ) {
