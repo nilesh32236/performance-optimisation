@@ -123,15 +123,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
-				// @deprecated NEXT get_page_assets is deprecated; kept one release for
-				// external consumers. Migrate to the Abilities API
-				// performance-optimisation/get-page-assets.
-				'get_page_assets'           => array(
-					'methods'             => 'GET',
-					'callback'            => array( $this, 'get_page_assets' ),
-					'permission_callback' => array( $this, 'permission_callback' ),
-					'schema'              => $schemas,
-				),
 				'image_job_status'          => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_image_job_status' ),
@@ -1079,42 +1070,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		public function get_database_cleanup_counts( \WP_REST_Request $_request ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			$counts = Database_Cleanup::get_counts();
 			return $this->send_response( $counts );
-		}
-
-		/**
-		 * Returns the cached assets for a specific post/page.
-		 *
-		 * @deprecated NEXT Use the Abilities API `performance-optimisation/get-page-assets`
-		 *             or Asset_Manager::get_page_assets() directly. This REST route will
-		 *             be removed in a future release.
-		 * @param \WP_REST_Request $request The request object.
-		 * @since 1.1.0
-		 * @return \WP_REST_Response The response object.
-		 */
-		public function get_page_assets( \WP_REST_Request $request ) {
-			_deprecated_function( __METHOD__, 'NEXT', 'Abilities::execute_get_page_assets' );
-			$params  = $request->get_params();
-			$post_id = isset( $params['post_id'] ) ? absint( $params['post_id'] ) : 0;
-
-			if ( ! $post_id ) {
-				return $this->send_response( null, false, 400, __( 'Post ID is required.', 'performance-optimisation' ) );
-			}
-
-			$assets = Asset_Manager::get_page_assets( $post_id );
-
-			if ( false === $assets ) {
-				return $this->send_response(
-					array(
-						'scripts' => array(),
-						'styles'  => array(),
-					),
-					true,
-					200,
-					__( 'No assets captured yet. Visit the page on the frontend first.', 'performance-optimisation' )
-				);
-			}
-
-			return $this->send_response( $assets );
 		}
 
 		/**
