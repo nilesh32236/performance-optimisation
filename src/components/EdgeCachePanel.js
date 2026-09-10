@@ -78,14 +78,17 @@ const EdgeCachePanel = () => {
 					typeof wppoSettings !== 'undefined' &&
 					wppoSettings.settings
 				) {
-					wppoSettings.settings.edge_cache = {
-						enabled,
-						provider,
-						ttl: parseInt( ttl, 10 ) || 300,
-						staleWhileRevalidate: parseInt( swr, 10 ) || 86400,
-						cloudflareZoneId: cfZone,
-						bunnyPullZoneId: bunnyZone,
-					};
+					wppoSettings.settings = Object.freeze( {
+						...wppoSettings.settings,
+						edge_cache: Object.freeze( {
+							enabled,
+							provider,
+							ttl: parseInt( ttl, 10 ) || 300,
+							staleWhileRevalidate: parseInt( swr, 10 ) || 86400,
+							cloudflareZoneId: cfZone,
+							bunnyPullZoneId: bunnyZone,
+						} ),
+					} );
 				}
 				notify( {
 					type: 'success',

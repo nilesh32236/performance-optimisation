@@ -61,7 +61,10 @@ const LlmsPanel = () => {
 					typeof wppoSettings !== 'undefined' &&
 					wppoSettings.settings
 				) {
-					wppoSettings.settings.llms_txt = { enabled, source };
+					wppoSettings.settings = Object.freeze( {
+						...wppoSettings.settings,
+						llms_txt: Object.freeze( { enabled, source } ),
+					} );
 				}
 				notify( {
 					type: 'success',

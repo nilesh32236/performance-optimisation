@@ -642,8 +642,9 @@ const ImageOptimization = ( { options = {} } ) => {
 					icon={ <FontAwesomeIcon icon={ faMagic } /> }
 				>
 					<div className="wppo-field-group">
-						{ wppoSettings?.client_side_media_processing_enabled ===
-							true &&
+						{ ( typeof wppoSettings !== 'undefined'
+							? wppoSettings?.client_side_media_processing_enabled
+							: false ) === true &&
 							! settings.forceServerSideConversion && (
 								<NoticeBanner
 									type="info"

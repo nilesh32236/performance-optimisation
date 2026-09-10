@@ -2293,13 +2293,12 @@ const FileOptimization = ( {
 									) }
 							</div>
 							<div className="wppo-field wppo-mt-16">
-								{ /* eslint-disable-next-line jsx-a11y/label-has-associated-control */ }
-								<label className="wppo-field-label">
+								<span className="wppo-field-label">
 									{ __(
 										'CDN Mapping (parity with LSCWP)',
 										'performance-optimisation'
 									) }
-								</label>
+								</span>
 								<p className="wppo-text-muted wppo-text-small wppo-mb-12">
 									{ __(
 										'One-to-many mapping by origin/dir/filetype. Up to 5 entries. Use * wildcard in Origin Dir (e.g. wp-content/*).',
@@ -2313,13 +2312,12 @@ const FileOptimization = ( {
 											className="wppo-mt-12 wppo-file-opt-card"
 										>
 											<div className="wppo-field">
-												{ /* eslint-disable-next-line jsx-a11y/label-has-associated-control */ }
-												<label className="wppo-field-label">
+												<span className="wppo-field-label">
 													{ __(
 														'CDN URL',
 														'performance-optimisation'
 													) }
-												</label>
+												</span>
 												<input
 													className="wppo-input"
 													type="url"
@@ -2351,13 +2349,12 @@ const FileOptimization = ( {
 												/>
 											</div>
 											<div className="wppo-field wppo-mt-8">
-												{ /* eslint-disable-next-line jsx-a11y/label-has-associated-control */ }
-												<label className="wppo-field-label">
+												<span className="wppo-field-label">
 													{ __(
 														'Origin URL (ori)',
 														'performance-optimisation'
 													) }
-												</label>
+												</span>
 												<input
 													className="wppo-input"
 													type="url"
@@ -2387,13 +2384,12 @@ const FileOptimization = ( {
 												/>
 											</div>
 											<div className="wppo-field wppo-mt-8">
-												{ /* eslint-disable-next-line jsx-a11y/label-has-associated-control */ }
-												<label className="wppo-field-label">
+												<span className="wppo-field-label">
 													{ __(
 														'Origin Dir (ori_dir) — wildcard * allowed, pipe-separated',
 														'performance-optimisation'
 													) }
-												</label>
+												</span>
 												<input
 													className="wppo-input"
 													type="text"
@@ -2425,13 +2421,12 @@ const FileOptimization = ( {
 												/>
 											</div>
 											<div className="wppo-field wppo-mt-8">
-												{ /* eslint-disable-next-line jsx-a11y/label-has-associated-control */ }
-												<label className="wppo-field-label">
+												<span className="wppo-field-label">
 													{ __(
 														'Include Dirs',
 														'performance-optimisation'
 													) }
-												</label>
+												</span>
 												<input
 													className="wppo-input"
 													type="text"
@@ -2464,13 +2459,12 @@ const FileOptimization = ( {
 												/>
 											</div>
 											<div className="wppo-field wppo-mt-8">
-												{ /* eslint-disable-next-line jsx-a11y/label-has-associated-control */ }
-												<label className="wppo-field-label">
+												<span className="wppo-field-label">
 													{ __(
 														'Include Filetypes (comma-separated)',
 														'performance-optimisation'
 													) }
-												</label>
+												</span>
 												<input
 													className="wppo-input"
 													type="text"
@@ -2504,13 +2498,12 @@ const FileOptimization = ( {
 												/>
 											</div>
 											<div className="wppo-field wppo-mt-8">
-												{ /* eslint-disable-next-line jsx-a11y/label-has-associated-control */ }
-												<label className="wppo-field-label">
+												<span className="wppo-field-label">
 													{ __(
 														'CDN Attr allowlist (cdn_attr) — e.g. src,href,srcset',
 														'performance-optimisation'
 													) }
-												</label>
+												</span>
 												<input
 													className="wppo-input"
 													type="text"

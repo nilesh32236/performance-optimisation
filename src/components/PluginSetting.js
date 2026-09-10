@@ -270,7 +270,9 @@ const PluginSetting = ( { options } ) => {
 		dismissApiKey();
 		try {
 			const currentSettings =
-				wppoSettings?.settings?.performance_audit ?? {};
+				typeof wppoSettings !== 'undefined'
+					? wppoSettings?.settings?.performance_audit ?? {}
+					: {};
 			const urls = highValueUrls
 				.split( '\n' )
 				.map( ( url ) => url.trim() )
@@ -328,7 +330,9 @@ const PluginSetting = ( { options } ) => {
 		dismissApiKey();
 		try {
 			const currentSettings =
-				wppoSettings?.settings?.performance_audit ?? {};
+				typeof wppoSettings !== 'undefined'
+					? wppoSettings?.settings?.performance_audit ?? {}
+					: {};
 			const response = await apiCall( 'update_settings', {
 				tab: 'performance_audit',
 				settings: {
@@ -375,7 +379,9 @@ const PluginSetting = ( { options } ) => {
 		dismissApiKey();
 		try {
 			const currentSettings =
-				wppoSettings?.settings?.performance_audit ?? {};
+				typeof wppoSettings !== 'undefined'
+					? wppoSettings?.settings?.performance_audit ?? {}
+					: {};
 			const trimmedKey = newApiKey.trim();
 			const response = await apiCall( 'update_settings', {
 				tab: 'performance_audit',
