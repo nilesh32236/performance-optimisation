@@ -193,15 +193,27 @@ class WPPO_SiteUrl_FS_Mock {
 	public $put_paths = array();
 
 	/**
+	 * Paths removed via delete(), so exists() reflects removal even when
+	 * the mock was seeded with file_exists=true.
+	 *
+	 * @var array
+	 */
+	public $deleted_paths = array();
+
+	/**
 	 * Simulate file existence.
 	 *
 	 * Paths previously written via put_contents() (and not deleted) read
-	 * back, so the atomic-write verification passes.
+	 * back, so the atomic-write verification passes. Paths removed via
+	 * delete() report false even when the file_exists seed is true.
 	 *
 	 * @param string $path File path.
 	 * @return bool
 	 */
 	public function exists( $path ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+		if ( isset( $this->deleted_paths[ $path ] ) ) {
+			return false;
+		}
 		if ( isset( $this->put_paths[ $path ] ) ) {
 			return true;
 		}
@@ -234,6 +246,7 @@ class WPPO_SiteUrl_FS_Mock {
 		$this->put_called         = true;
 		$this->put_contents       = $contents;
 		$this->put_paths[ $path ] = $contents;
+		unset( $this->deleted_paths[ $path ] );
 		return true;
 	}
 
@@ -249,18 +262,21 @@ class WPPO_SiteUrl_FS_Mock {
 		if ( isset( $this->put_paths[ $src ] ) ) {
 			$this->put_paths[ $dst ] = $this->put_paths[ $src ];
 			unset( $this->put_paths[ $src ] );
+			$this->deleted_paths[ $src ] = true;
 		}
+		unset( $this->deleted_paths[ $dst ] );
 		return true;
 	}
 
 	/**
 	 * Record a delete call.
 	 *
-	 * @param string $path File path (unused).
+	 * @param string $path File path.
 	 * @return true
 	 */
-	public function delete( $path ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+	public function delete( $path ) {
 		unset( $this->put_paths[ $path ] );
+		$this->deleted_paths[ $path ] = true;
 		return true;
 	}
 }

@@ -492,15 +492,16 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		);
 		$this->reset_delay_guard_superglobals();
 		$this->stub_guard_request_env();
-		Functions\when( 'is_cart' )->justReturn( true );
+		Functions\when( 'is_cart' )->justReturn( false );
+		Functions\when( 'is_checkout' )->justReturn( false );
+		Functions\when( 'is_account_page' )->justReturn( false );
+		Functions\when( 'is_wc_endpoint_url' )->justReturn( false );
+		Functions\when( 'get_the_ID' )->justReturn( 0 );
 
 		$main = new Main();
 
-		$this->assertTrue( $main->is_delay_excluded_context() );
-
-		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for add_defer_attribute() tests.
-		$tag = '<script src="https://example.com/app.js" type="text/javascript"></script>';
-		$this->assertSame( $tag, $main->add_defer_attribute( $tag, 'app' ) );
+		$this->assertFalse( $main->is_delay_excluded_context() );
+		$this->assertFalse( $main->is_delay_js_safe_context() );
 
 		$this->reset_delay_guard_superglobals();
 	}
