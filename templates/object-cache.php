@@ -898,50 +898,125 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 * Uses a SCAN loop to find and delete keys matching this site's prefix,
 		 * avoiding a global FLUSH. Operators may opt in to a full flushDb() via
 		 * the 'object_cache_allow_flush_all' filter for single-site/isolated setups.
+		 * After deletion a bounded post-flush verification sample re-scans the
+		 * prefix: leftover keys trigger one retry sweep, and a still-dirty
+		 * prefix returns false so callers can surface stale keys instead of
+		 * silently claiming success. Never throws — any Redis failure
+		 * degrades to uncached (false) rather than fatal.
 		 *
-		 * @return bool True on success.
+		 * @since NEXT Post-flush verification sample added; returns false when stale keys remain.
+		 * @return bool True when the prefix verifies clean, false otherwise.
 		 */
 		public function flush() {
 			$this->cache = array();
-			if ( $this->redis_connected ) {
-				if ( apply_filters( 'object_cache_allow_flush_all', false ) ) {
-					return $this->redis->flushDb();
+			if ( ! $this->redis_connected ) {
+				return true;
+			}
+			try {
+				if ( function_exists( 'apply_filters' ) && apply_filters( 'object_cache_allow_flush_all', false ) ) {
+					$ok = $this->redis->flushDb();
+					if ( ! $ok ) {
+						return false;
+					}
+					return $this->verify_prefix_flushed( $this->blog_prefix . '*' );
 				}
 
-				$prefix  = $this->blog_prefix;
-				$pattern = $prefix . '*';
+				$this->scan_delete_pattern( $this->blog_prefix . '*' );
 
+				// Hygiene retry: a concurrent writer may repopulate between
+				// the sweep and verification, so one retry sweep runs before
+				// reporting stale keys.
+				if ( ! $this->verify_prefix_flushed( $this->blog_prefix . '*' ) ) {
+					$this->scan_delete_pattern( $this->blog_prefix . '*' );
+					return $this->verify_prefix_flushed( $this->blog_prefix . '*' );
+				}
+
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Delete every key matching a SCAN pattern (blog-prefix namespaced).
+		 *
+		 * Shared sweep for flush() and flush_group() so both paths stay
+		 * namespace-aware and multisite-safe. Fail-open: scan errors stop
+		 * the sweep without throwing.
+		 *
+		 * @since NEXT
+		 * @param string $pattern SCAN match pattern.
+		 * @return void
+		 */
+		private function scan_delete_pattern( string $pattern ): void {
+			if ( $this->redis instanceof \RedisCluster ) {
+				$masters = $this->redis->_masters();
+				foreach ( $masters as $node ) {
+					$cursor = null;
+					do {
+						$keys = $this->redis->scan( $cursor, $node, $pattern, 100 );
+						if ( false === $keys ) {
+							break;
+						}
+						if ( is_array( $keys ) && ! empty( $keys ) ) {
+							$this->redis->del( $keys );
+						}
+					} while ( $cursor && ( is_numeric( $cursor ) && 0 !== (int) $cursor ) );
+				}
+				return;
+			}
+
+			$cursor = null;
+			do {
+				$keys = $this->redis->scan( $cursor, $pattern, 100 );
+				if ( false === $keys ) {
+					break;
+				}
+				if ( is_array( $keys ) && ! empty( $keys ) ) {
+					$this->redis->del( $keys );
+				}
+			} while ( $cursor && ( is_numeric( $cursor ) && 0 !== (int) $cursor ) );
+		}
+
+		/**
+		 * Verify a flushed prefix with a bounded SCAN sample.
+		 *
+		 * Reads at most one SCAN page (count 100); any surviving key means
+		 * the prefix is still dirty. Bounded so verification cannot block a
+		 * request on a large keyspace. Returns true when disconnected (the
+		 * in-memory store was already cleared by the caller).
+		 *
+		 * @since NEXT
+		 * @param string $pattern SCAN match pattern.
+		 * @return bool True when no keys remain under the pattern.
+		 */
+		private function verify_prefix_flushed( string $pattern ): bool {
+			if ( ! $this->redis_connected || ! $this->redis ) {
+				return true;
+			}
+			try {
 				if ( $this->redis instanceof \RedisCluster ) {
-					$masters = $this->redis->_masters();
-					foreach ( $masters as $node ) {
+					foreach ( (array) $this->redis->_masters() as $node ) {
 						$cursor = null;
-						do {
-							$keys = $this->redis->scan( $cursor, $node, $pattern, 100 );
-							if ( false === $keys ) {
-								break;
-							}
-							if ( is_array( $keys ) && ! empty( $keys ) ) {
-								$this->redis->del( $keys );
-							}
-						} while ( $cursor && ( is_numeric( $cursor ) && 0 !== (int) $cursor ) );
+						$keys   = $this->redis->scan( $cursor, $node, $pattern, 100 );
+						if ( is_array( $keys ) && ! empty( $keys ) ) {
+							return false;
+						}
 					}
 					return true;
 				}
 
 				$cursor = null;
-				do {
-					$keys = $this->redis->scan( $cursor, $pattern, 100 );
-					if ( false === $keys ) {
-						break;
-					}
-					if ( is_array( $keys ) && ! empty( $keys ) ) {
-						$this->redis->del( $keys );
-					}
-				} while ( $cursor && ( is_numeric( $cursor ) && 0 !== (int) $cursor ) );
-
-				return true;
+				$keys   = $this->redis->scan( $cursor, $pattern, 100 );
+				if ( false === $keys ) {
+					return true;
+				}
+				return empty( $keys );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
 			}
-			return true;
 		}
 
 		/**
@@ -960,40 +1035,23 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 					unset( $this->cache[ $local_key ] );
 				}
 			}
-			if ( $this->redis_connected ) {
-				$pattern = $group_prefix . '*';
-
-				if ( $this->redis instanceof \RedisCluster ) {
-					$masters = $this->redis->_masters();
-					foreach ( $masters as $node ) {
-						$cursor = null;
-						do {
-							$keys = $this->redis->scan( $cursor, $node, $pattern, 100 );
-							if ( false === $keys ) {
-								break;
-							}
-							if ( is_array( $keys ) && ! empty( $keys ) ) {
-								$this->redis->del( $keys );
-							}
-						} while ( $cursor && ( is_numeric( $cursor ) && 0 !== (int) $cursor ) );
-					}
-					return true;
-				}
-
-				$cursor = null;
-				do {
-					$keys = $this->redis->scan( $cursor, $pattern, 100 );
-					if ( false === $keys ) {
-						break;
-					}
-					if ( is_array( $keys ) && ! empty( $keys ) ) {
-						$this->redis->del( $keys );
-					}
-				} while ( $cursor && ( is_numeric( $cursor ) && 0 !== (int) $cursor ) );
-
+			if ( ! $this->redis_connected ) {
 				return true;
 			}
-			return true;
+			try {
+				$pattern = $group_prefix . '*';
+				$this->scan_delete_pattern( $pattern );
+
+				if ( ! $this->verify_prefix_flushed( $pattern ) ) {
+					$this->scan_delete_pattern( $pattern );
+					return $this->verify_prefix_flushed( $pattern );
+				}
+
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
 		}
 
 		/**

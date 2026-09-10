@@ -334,11 +334,77 @@ if ( ! function_exists( 'wppo_parse_redis_node' ) ) {
 	}
 }
 
+if ( ! function_exists( 'wppo_resolve_redis_serializer' ) ) {
+	/**
+	 * Resolve a safe serializer for the current phpredis build.
+	 *
+	 * Probe order: igbinary → msgpack → PHP. Each binary serializer is
+	 * gated on both the phpredis constant AND the backing extension (or its
+	 * serialize function), plus a phpredis version guard for msgpack, so a
+	 * build that defines the constant without the extension can never fatal
+	 * or mis-serialize. Always falls back to the PHP serializer; never throws.
+	 *
+	 * @since NEXT
+	 * @return array Shape { serializer: int, name: string } where name is one of 'igbinary', 'msgpack', 'php'.
+	 */
+	function wppo_resolve_redis_serializer() {
+		try {
+			if ( defined( '\Redis::SERIALIZER_IGBINARY' )
+				&& ( extension_loaded( 'igbinary' ) || function_exists( 'igbinary_serialize' ) )
+				&& class_exists( 'Redis' )
+			) {
+				return array(
+					'serializer' => \Redis::SERIALIZER_IGBINARY,
+					'name'       => 'igbinary',
+				);
+			}
+
+			$redis_version_ok = false;
+			try {
+				$redis_version_ok = version_compare( (string) phpversion( 'redis' ), '5.0.0', '>=' );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$redis_version_ok = false;
+			}
+
+			if ( $redis_version_ok
+				&& defined( '\Redis::SERIALIZER_MSGPACK' )
+				&& ( extension_loaded( 'msgpack' ) || function_exists( 'msgpack_serialize' ) )
+			) {
+				return array(
+					'serializer' => \Redis::SERIALIZER_MSGPACK,
+					'name'       => 'msgpack',
+				);
+			}
+		} catch ( \Throwable $e ) {
+			unset( $e );
+		}
+
+		$fallback = 1;
+		try {
+			if ( defined( '\Redis::SERIALIZER_PHP' ) ) {
+				$fallback = \Redis::SERIALIZER_PHP;
+			}
+		} catch ( \Throwable $e ) {
+			unset( $e );
+		}
+
+		return array(
+			'serializer' => $fallback,
+			'name'       => 'php',
+		);
+	}
+}
+
 if ( ! function_exists( 'wppo_apply_redis_options' ) ) {
 	/**
 	 * Configure serializer and optional compression on a Redis client based on provided settings.
 	 *
-	 * Selects the igbinary serializer when available, otherwise falls back to the PHP serializer.
+	 * Selects the serializer via wppo_resolve_redis_serializer() (igbinary
+	 * only when the extension is actually present, otherwise msgpack, otherwise
+	 * the PHP serializer — never fatal on a missing extension). Each setOption()
+	 * is wrapped so an options failure degrades to uncached instead of blocking
+	 * the connection.
 	 * If `$config['compression']` is set to "lzf", "zstd", or "lz4" and the corresponding phpRedis
 	 * compression constant is defined, applies that compression option.
 	 *
@@ -348,8 +414,29 @@ if ( ! function_exists( 'wppo_apply_redis_options' ) ) {
 	 * @since 1.4.0
 	 */
 	function wppo_apply_redis_options( $redis, $config ) {
-		$serializer = defined( '\Redis::SERIALIZER_IGBINARY' ) ? \Redis::SERIALIZER_IGBINARY : \Redis::SERIALIZER_PHP;
-		$redis->setOption( \Redis::OPT_SERIALIZER, $serializer );
+		try {
+			$resolved   = function_exists( 'wppo_resolve_redis_serializer' ) ? wppo_resolve_redis_serializer() : array(
+				'serializer' => \Redis::SERIALIZER_PHP,
+				'name'       => 'php',
+			);
+			$serializer = $resolved['serializer'];
+		} catch ( \Throwable $e ) {
+			unset( $e );
+			$serializer = defined( '\Redis::SERIALIZER_PHP' ) ? \Redis::SERIALIZER_PHP : 1;
+		}
+
+		try {
+			$redis->setOption( \Redis::OPT_SERIALIZER, $serializer );
+		} catch ( \Throwable $e ) {
+			unset( $e );
+			try {
+				if ( defined( '\Redis::SERIALIZER_PHP' ) && \Redis::SERIALIZER_PHP !== $serializer ) {
+					$redis->setOption( \Redis::OPT_SERIALIZER, \Redis::SERIALIZER_PHP );
+				}
+			} catch ( \Throwable $inner ) {
+				unset( $inner );
+			}
+		}
 
 		if ( isset( $config['compression'] ) && 'none' !== $config['compression'] ) {
 			$compression_type = null;
@@ -362,7 +449,11 @@ if ( ! function_exists( 'wppo_apply_redis_options' ) ) {
 			}
 
 			if ( null !== $compression_type ) {
-				$redis->setOption( \Redis::OPT_COMPRESSION, $compression_type );
+				try {
+					$redis->setOption( \Redis::OPT_COMPRESSION, $compression_type );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 			}
 		}
 	}

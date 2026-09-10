@@ -1204,6 +1204,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'lz4'  => defined( '\Redis::COMPRESSION_LZ4' ),
 					'zstd' => defined( '\Redis::COMPRESSION_ZSTD' ),
 				);
+				if ( ! isset( $status['serializers'] ) ) {
+					$status['serializers'] = $manager->get_serializer_support();
+				}
 				return $this->send_response( $status );
 			}
 
@@ -1211,8 +1214,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$config = $this->build_redis_config( $params );
 				$ping   = $manager->ping( $config );
 				if ( is_wp_error( $ping ) ) {
-					Log::add( __( 'Redis connection ping failed.', 'performance-optimisation' ) );
-					return $this->send_response( null, false, 400, __( 'Redis connection failed.', 'performance-optimisation' ) );
+					$code = $ping->get_error_code();
+					Log::add( sprintf( 'Redis connection ping failed (%s): %s', $code, $ping->get_error_message() ) );
+					return $this->send_response( $this->redis_error_payload( $ping, 'error' ), false, 400, __( 'Redis connection failed.', 'performance-optimisation' ) );
 				}
 
 				return $this->send_response( array( 'success' => true ) );
@@ -1223,8 +1227,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$result = $manager->enable( $config );
 
 				if ( is_wp_error( $result ) ) {
-					Log::add( __( 'Redis connection enable failed.', 'performance-optimisation' ) );
-					return $this->send_response( null, false, 400, __( 'Redis connection failed.', 'performance-optimisation' ) );
+					$code = $result->get_error_code();
+					Log::add( sprintf( 'Redis connection enable failed (%s): %s', $code, $result->get_error_message() ) );
+					return $this->send_response( $this->redis_error_payload( $result, 'error' ), false, 400, __( 'Redis connection failed.', 'performance-optimisation' ) );
 				}
 
 				Log::add( __( 'Object Cache enabled.', 'performance-optimisation' ) );
@@ -1253,8 +1258,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$result = $manager->enable( $config );
 
 				if ( is_wp_error( $result ) ) {
-					Log::add( __( 'Object Cache circuit recovery failed — Redis still unreachable.', 'performance-optimisation' ) );
-					return $this->send_response( null, false, 400, __( 'Redis is still unreachable. The circuit breaker stays open.', 'performance-optimisation' ) );
+					Log::add( sprintf( 'Object Cache circuit recovery failed (%s) — Redis still unreachable: %s', $result->get_error_code(), $result->get_error_message() ) );
+					return $this->send_response( $this->redis_error_payload( $result, 'warning' ), false, 400, __( 'Redis is still unreachable. The circuit breaker stays open.', 'performance-optimisation' ) );
 				}
 
 				$manager->clear_circuit_state();
@@ -1273,7 +1278,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					Log::add( __( 'Object Cache flushed.', 'performance-optimisation' ) );
 					return $this->send_response( true, true, 200, __( 'Object Cache flushed.', 'performance-optimisation' ) );
 				}
-				return $this->send_response( null, false, 400, __( 'Failed to flush object cache.', 'performance-optimisation' ) );
+				$flush_error = new \WP_Error( 'flush_stale', __( 'Flush left stale keys behind or reported failure.', 'performance-optimisation' ) );
+				Log::add( sprintf( 'Object Cache flush failed (%s): %s', $flush_error->get_error_code(), $flush_error->get_error_message() ) );
+				return $this->send_response( $this->redis_error_payload( $flush_error, 'error' ), false, 400, __( 'Failed to flush object cache.', 'performance-optimisation' ) );
 			}
 
 			return $this->send_response( null, false, 400, __( 'Invalid action.', 'performance-optimisation' ) );
@@ -1388,6 +1395,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 			$nodes = sanitize_text_field( (string) $nodes );
 			return $nodes ? array( $nodes ) : array();
+		}
+
+		/**
+		 * Build a useNotice-compatible error payload for Redis failures.
+		 *
+		 * The SPA reads `res.success` + `res.message`; this adds a structured
+		 * `code` + `notice` ({ type, message }) body so useNotice() can render
+		 * the failure with the right severity without changing the envelope.
+		 *
+		 * @since NEXT
+		 * @param \WP_Error $error  Failing result.
+		 * @param string    $notice Notice severity: 'error', 'warning', 'info'.
+		 * @return array Shape { code: string, notice: array{ type: string, message: string } }.
+		 */
+		private function redis_error_payload( $error, string $notice = 'error' ): array {
+			$allowed = array( 'error', 'warning', 'info' );
+			if ( ! in_array( $notice, $allowed, true ) ) {
+				$notice = 'error';
+			}
+			$message = $error->get_error_message();
+			if ( '' === $message ) {
+				$message = __( 'Redis connection failed.', 'performance-optimisation' );
+			}
+			return array(
+				'code'   => $error->get_error_code(),
+				'notice' => array(
+					'type'    => $notice,
+					'message' => $message,
+				),
+			);
 		}
 
 		/**
