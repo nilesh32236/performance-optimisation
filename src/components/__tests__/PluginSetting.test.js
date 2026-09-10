@@ -23,7 +23,11 @@ jest.mock( '@fortawesome/free-solid-svg-icons', () => ( {
 	faTachometerAlt: { iconName: 'tachometer-alt' },
 } ) );
 
-import PluginSetting from '../PluginSetting';
+import PluginSetting, {
+	redactSecrets,
+	validateImportData,
+	MAX_IMPORT_TOP_KEYS,
+} from '../PluginSetting';
 import { apiCall, fetchRecentActivities } from '../../lib/apiRequest';
 
 describe( 'PluginSetting', () => {
@@ -355,6 +359,58 @@ describe( 'PluginSetting', () => {
 				action: 'import_settings',
 				settings: { file_optimisation: { minifyJS: true } },
 			} )
+		);
+	} );
+
+	it( 'redacts generic *_key names on export', () => {
+		const redacted = redactSecrets( {
+			object_cache: {
+				auth_key: 'supersecret',
+				consumer_key: 'ck_123',
+				private_key: 'pk_456',
+				google_key: 'gkey',
+				host: 'localhost',
+			},
+		} );
+		expect( redacted.object_cache.auth_key ).toBe( 'REDACTED' );
+		expect( redacted.object_cache.consumer_key ).toBe( 'REDACTED' );
+		expect( redacted.object_cache.private_key ).toBe( 'REDACTED' );
+		expect( redacted.object_cache.google_key ).toBe( 'REDACTED' );
+		expect( redacted.object_cache.host ).toBe( 'localhost' );
+	} );
+
+	it( 'does not redact ordinary words ending in key', () => {
+		const redacted = redactSecrets( { monkey: 'banana' } );
+		expect( redacted.monkey ).toBe( 'banana' );
+	} );
+
+	it( 'redacts separator-less apikey variants on export', () => {
+		const redacted = redactSecrets( {
+			performance_audit: {
+				apikey: 'secret-1',
+				apiKey: 'secret-2',
+				pagespeed_api_key: 'AIza-secret',
+			},
+		} );
+		expect( redacted.performance_audit.apikey ).toBe( 'REDACTED' );
+		expect( redacted.performance_audit.apiKey ).toBe( 'REDACTED' );
+	} );
+
+	it( 'caps top-level import keys at the allowlist length', () => {
+		expect( MAX_IMPORT_TOP_KEYS ).toBeGreaterThan( 0 );
+		expect(
+			validateImportData( { file_optimisation: { minifyJS: true } } )
+		).toBe( true );
+	} );
+
+	it( 'rejects over-cap and unknown-key import payloads', () => {
+		const overCap = {};
+		for ( let i = 0; i < MAX_IMPORT_TOP_KEYS + 1; i++ ) {
+			overCap[ `unknown_key_${ i }` ] = {};
+		}
+		expect( validateImportData( overCap ) ).toBe( false );
+		expect( validateImportData( { unknown_top_level_key: {} } ) ).toBe(
+			false
 		);
 	} );
 } );

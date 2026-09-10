@@ -1,4 +1,8 @@
-import { classifyDeviceWidth } from '../rum';
+import {
+	classifyDeviceWidth,
+	sanitizeRumValues,
+	RUM_MAX_METRIC_MS,
+} from '../rum';
 
 describe( 'classifyDeviceWidth', () => {
 	it( 'classifies a desktop from its physical screen even when the viewport is narrowed', () => {
@@ -40,5 +44,103 @@ describe( 'classifyDeviceWidth', () => {
 	it( 'returns null when both screen and viewport widths are invalid', () => {
 		expect( classifyDeviceWidth( NaN, NaN ) ).toBe( null );
 		expect( classifyDeviceWidth( -1, -1 ) ).toBe( null );
+	} );
+} );
+
+describe( 'sanitizeRumValues', () => {
+	it( 'caps time metrics at RUM_MAX_METRIC_MS', () => {
+		expect( RUM_MAX_METRIC_MS ).toBe( 60000 );
+		const clean = sanitizeRumValues( {
+			ttfb: 120,
+			fcp: 800,
+			lcp: 2500,
+			inp: 96,
+			cls: 0.05,
+		} );
+		expect( clean ).toEqual( {
+			ttfb: 120,
+			fcp: 800,
+			lcp: 2500,
+			inp: 96,
+			cls: 0.05,
+		} );
+	} );
+
+	it( 'drops time metrics above 60000ms instead of sending them', () => {
+		const clean = sanitizeRumValues( {
+			lcp: 120000,
+			inp: 99999,
+			ttfb: 50,
+		} );
+		expect( clean.lcp ).toBeUndefined();
+		expect( clean.inp ).toBeUndefined();
+		expect( clean.ttfb ).toBe( 50 );
+	} );
+
+	it( 'drops negative, non-finite and non-numeric metrics', () => {
+		const clean = sanitizeRumValues( {
+			lcp: -5,
+			fcp: NaN,
+			inp: Infinity,
+			ttfb: 'fast',
+			cls: '0.1',
+		} );
+		expect( clean ).toEqual( {} );
+	} );
+
+	it( 'drops CLS outside 0–1', () => {
+		expect( sanitizeRumValues( { cls: 2.5 } ) ).toEqual( {} );
+		expect( sanitizeRumValues( { cls: -0.1 } ) ).toEqual( {} );
+		expect( sanitizeRumValues( { cls: 0.25 } ) ).toEqual( {
+			cls: 0.25,
+		} );
+	} );
+
+	it( 'passes a validated lcpUrl through and ignores unknown input', () => {
+		const clean = sanitizeRumValues( {
+			lcp: 1200,
+			lcpUrl: 'https://example.com/hero.jpg',
+		} );
+		expect( clean.lcpUrl ).toBe( 'https://example.com/hero.jpg' );
+		expect( sanitizeRumValues( null ) ).toEqual( {} );
+		expect( sanitizeRumValues( 'nope' ) ).toEqual( {} );
+	} );
+
+	it( 'rejects out-of-policy lcpUrl values and drops unknown keys', () => {
+		expect(
+			sanitizeRumValues( { lcp: 1200, lcpUrl: 'javascript:alert(1)' } )
+				.lcpUrl
+		).toBeUndefined();
+		expect(
+			sanitizeRumValues( {
+				lcp: 1200,
+				lcpUrl: 'data:image/png;base64,x',
+			} ).lcpUrl
+		).toBeUndefined();
+		expect(
+			sanitizeRumValues( {
+				lcp: 1200,
+				lcpUrl: `https://example.com/${ 'a'.repeat( 2048 ) }`,
+			} ).lcpUrl
+		).toBeUndefined();
+		expect(
+			sanitizeRumValues( { lcp: 1200, lcpUrl: '' } ).lcpUrl
+		).toBeUndefined();
+		expect(
+			sanitizeRumValues( {
+				lcp: 1200,
+				lcpUrl: 'http://example.com/hero.jpg',
+			} ).lcpUrl
+		).toBe( 'http://example.com/hero.jpg' );
+		expect(
+			sanitizeRumValues( { lcp: 1200, lcpUrl: '/hero.jpg' } ).lcpUrl
+		).toBe( '/hero.jpg' );
+		const clean = sanitizeRumValues( {
+			ttfb: 50,
+			evilKey: 'evil',
+			__proto__: 'pollution',
+		} );
+		expect( clean ).toEqual( { ttfb: 50 } );
+		expect( clean.evilKey ).toBeUndefined();
 	} );
 } );

@@ -14,7 +14,7 @@ jest.mock( '../common/FeatureCard', () => ( { children, title } ) => (
 	</div>
 ) );
 
-import AutoloadedOptions from '../AutoloadedOptions';
+import AutoloadedOptions, { isValidOptionName } from '../AutoloadedOptions';
 import { apiCall } from '../../lib/apiRequest';
 
 describe( 'AutoloadedOptions', () => {
@@ -420,5 +420,67 @@ describe( 'AutoloadedOptions', () => {
 		).toBeInTheDocument();
 		// Audit list stays visible alongside the success notice.
 		expect( screen.getByText( 'big_option' ) ).toBeInTheDocument();
+	} );
+
+	it( 'validates option names before they reach the remediate endpoint', () => {
+		expect( isValidOptionName( 'big_plugin_blob' ) ).toBe( true );
+		expect( isValidOptionName( 'my.option-name_1' ) ).toBe( true );
+		expect( isValidOptionName( '' ) ).toBe( false );
+		expect( isValidOptionName( null ) ).toBe( false );
+		expect( isValidOptionName( 123 ) ).toBe( false );
+		expect( isValidOptionName( 'a'.repeat( 192 ) ) ).toBe( false );
+		expect( isValidOptionName( 'a'.repeat( 191 ) ) ).toBe( true );
+		expect( isValidOptionName( '../../etc/passwd' ) ).toBe( false );
+		expect( isValidOptionName( 'evil; DROP TABLE x' ) ).toBe( false );
+		expect( isValidOptionName( 'key with spaces' ) ).toBe( false );
+	} );
+
+	it( 'does not call the remediate endpoint when reverting an invalid option name', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				options: [ { option_name: 'big_option', size: 5000 } ],
+			},
+		} );
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				count: 1,
+				bytes_saved: 100,
+				options: [],
+				remediated: { 'evil; DROP TABLE x': 'yes' },
+			},
+		} );
+
+		render( <AutoloadedOptions /> );
+
+		await waitFor( () =>
+			expect( screen.getByText( 'big_option' ) ).toBeInTheDocument()
+		);
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: 'Check savings' } )
+		);
+
+		await waitFor( () =>
+			expect(
+				screen.getByRole( 'button', { name: 'Revert' } )
+			).toBeInTheDocument()
+		);
+
+		const callsBefore = apiCall.mock.calls.length;
+
+		fireEvent.click( screen.getByRole( 'button', { name: 'Revert' } ) );
+
+		await waitFor( () =>
+			expect(
+				screen.getByText( 'Failed to revert option.' )
+			).toBeInTheDocument()
+		);
+		expect( apiCall.mock.calls.length ).toBe( callsBefore );
+		expect( apiCall ).not.toHaveBeenCalledWith(
+			'autoload_remediate',
+			expect.objectContaining( { mode: 'revert' } )
+		);
 	} );
 } );
