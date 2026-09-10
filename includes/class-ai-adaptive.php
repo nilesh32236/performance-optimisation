@@ -903,32 +903,352 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		}
 
 		/**
-		 * Detect LCP regressions from stored Web Vitals trend history.
+		 * Option storing the last anomaly alarm timestamp (autoload=no).
 		 *
-		 * Rolling-baseline comparison per URL+strategy key: the latest sample
-		 * ("current", last-1 for determinism) is compared against the mean of
-		 * all prior numeric samples. A key regresses when current >= baseline
-		 * * 1.3 (+30%). At most one anomaly overall is returned (first
-		 * regressed key in iteration order) so dashboards surface a single
-		 * read-only suggestion instead of a flood.
+		 * Per-site option, hence inherently multisite-safe.
 		 *
-		 * Local computation only: no remote calls, no API keys, no option or
-		 * transient writes. Fail-open: under-sampled history (<10 numeric
-		 * samples), short history (<2 usable windows), non-positive baseline,
-		 * or any failure returns an empty array — never fatal.
+		 * @since NEXT
+		 * @var string
+		 */
+		private const ANOMALY_COOLDOWN_KEY = 'wppo_ai_anomaly_last_alarm';
+
+		/**
+		 * Default anomaly cooldown in days (single banner max).
 		 *
-		 * Trend source is Pagespeed::get_trends() (capped 30/URL+strategy);
-		 * RUM::get_data() aggregates are intentionally not used here (daily
-		 * per-day/per-path aggregates with a transient-locked write path).
+		 * @since NEXT
+		 * @var int
+		 */
+		private const ANOMALY_COOLDOWN_DAYS = 7;
+
+		/**
+		 * Default minimum numeric samples before an arm may fire.
 		 *
-		 * @param array|null $trends Optional trends map for testability. When null, reads Pagespeed::get_trends().
-		 * @return array[] At most one anomaly: array(array('key'=>string,'baseline'=>float,'current'=>float,'change_pct'=>float)).
+		 * @since NEXT
+		 * @var int
+		 */
+		private const ANOMALY_MIN_SAMPLES = 10;
+
+		/**
+		 * CLS regression arm threshold as an absolute delta (not percent).
+		 *
+		 * @since NEXT
+		 * @var float
+		 */
+		private const CLS_ABSOLUTE_DELTA = 0.05;
+
+		/**
+		 * LCP regression arm threshold as a relative multiplier (+30%).
+		 *
+		 * @since NEXT
+		 * @var float
+		 */
+		private const LCP_RELATIVE_MULTIPLIER = 1.3;
+
+		/**
+		 * Resolve the anomaly minimum-sample threshold.
+		 *
+		 * Reads the additive `ai_adaptive.anomaly_min_samples` setting,
+		 * falling back to ANOMALY_MIN_SAMPLES. Filterable via
+		 * `wppo_ai_anomaly_min_samples`. Fail-open to 10.
+		 *
+		 * @return int Minimum samples (>=1).
 		 * @since NEXT
 		 */
-		public static function detect_anomalies( ?array $trends = null ): array {
+		private static function anomaly_min_samples(): int {
+			try {
+				$min = self::ANOMALY_MIN_SAMPLES;
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					$settings = Util::get_settings();
+					if ( isset( $settings['ai_adaptive']['anomaly_min_samples'] ) ) {
+						$candidate = (int) $settings['ai_adaptive']['anomaly_min_samples'];
+						if ( $candidate >= 1 ) {
+							$min = $candidate;
+						}
+					}
+				}
+				if ( function_exists( 'apply_filters' ) ) {
+					$filtered = apply_filters( 'wppo_ai_anomaly_min_samples', $min );
+					if ( is_numeric( $filtered ) && (int) $filtered >= 1 ) {
+						$min = (int) $filtered;
+					}
+				}
+				return $min >= 1 ? $min : self::ANOMALY_MIN_SAMPLES;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return self::ANOMALY_MIN_SAMPLES;
+			}
+		}
+
+		/**
+		 * Resolve the anomaly cooldown window in days.
+		 *
+		 * Reads the additive `ai_adaptive.anomaly_cooldown_days` setting,
+		 * falling back to ANOMALY_COOLDOWN_DAYS. Filterable via
+		 * `wppo_ai_anomaly_cooldown_days`. Fail-open to 7.
+		 *
+		 * @return int Cooldown days (>=0; 0 disables the cooldown gate).
+		 * @since NEXT
+		 */
+		private static function anomaly_cooldown_days(): int {
+			try {
+				$days = self::ANOMALY_COOLDOWN_DAYS;
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					$settings = Util::get_settings();
+					if ( isset( $settings['ai_adaptive']['anomaly_cooldown_days'] ) ) {
+						$candidate = (int) $settings['ai_adaptive']['anomaly_cooldown_days'];
+						if ( $candidate >= 0 ) {
+							$days = $candidate;
+						}
+					}
+				}
+				if ( function_exists( 'apply_filters' ) ) {
+					$filtered = apply_filters( 'wppo_ai_anomaly_cooldown_days', $days );
+					if ( is_numeric( $filtered ) && (int) $filtered >= 0 ) {
+						$days = (int) $filtered;
+					}
+				}
+				return $days >= 0 ? $days : self::ANOMALY_COOLDOWN_DAYS;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return self::ANOMALY_COOLDOWN_DAYS;
+			}
+		}
+
+		/**
+		 * Get the last anomaly alarm timestamp.
+		 *
+		 * Read-only option read; never throws.
+		 *
+		 * @return int Unix timestamp (0 when never alarmed).
+		 * @since NEXT
+		 */
+		public static function get_last_anomaly_alarm(): int {
+			try {
+				if ( ! function_exists( 'get_option' ) ) {
+					return 0;
+				}
+				$ts = get_option( self::ANOMALY_COOLDOWN_KEY, 0 ); // phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.option_option -- Cooldown timestamp needs a dedicated per-site option.
+				return is_numeric( $ts ) ? (int) $ts : 0;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
+			}
+		}
+
+		/**
+		 * Persist the last anomaly alarm timestamp.
+		 *
+		 * Per-site option with autoload=false; never throws.
+		 *
+		 * @param int $ts Unix timestamp.
+		 * @return void
+		 * @since NEXT
+		 */
+		public static function set_last_anomaly_alarm( int $ts ): void {
+			try {
+				if ( ! function_exists( 'update_option' ) ) {
+					return;
+				}
+				update_option( self::ANOMALY_COOLDOWN_KEY, $ts, false ); // phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.option_option -- Cooldown timestamp needs a dedicated per-site option.
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Resolve the current timestamp deterministically.
+		 *
+		 * @param int|null $now Optional injected timestamp (tests).
+		 * @return int
+		 * @since NEXT
+		 */
+		private static function anomaly_now( ?int $now = null ): int {
+			if ( null !== $now ) {
+				return $now;
+			}
+			try {
+				if ( function_exists( 'time' ) ) {
+					return (int) time();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return 0;
+		}
+
+		/**
+		 * Whether the anomaly cooldown has elapsed.
+		 *
+		 * Fail-open: any failure returns true (detection proceeds).
+		 *
+		 * @param int|null $now Optional injected timestamp (tests).
+		 * @return bool True when a new banner may fire.
+		 * @since NEXT
+		 */
+		public static function is_anomaly_cooled_down( ?int $now = null ): bool {
+			try {
+				$days = self::anomaly_cooldown_days();
+				if ( $days <= 0 ) {
+					return true;
+				}
+				$last = self::get_last_anomaly_alarm();
+				if ( $last <= 0 ) {
+					return true;
+				}
+				$current = self::anomaly_now( $now );
+				if ( $current <= 0 ) {
+					return true;
+				}
+				$day_seconds = defined( 'DAY_IN_SECONDS' ) ? (int) DAY_IN_SECONDS : 86400;
+				if ( $day_seconds <= 0 ) {
+					$day_seconds = 86400;
+				}
+				return ( $current - $last ) >= ( $days * $day_seconds );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
+		 * Whether RUM field data corroborates a trend anomaly.
+		 *
+		 * Sums `n`/`sum` across dates/paths for the matching metric in the
+		 * RUM aggregate (`date => path => metric => [n,sum]`). Requires
+		 * total `n >= anomaly_min_samples()` (undersampled returns false).
+		 * Corroboration passes when the global RUM average is degraded vs
+		 * the trend baseline (LCP: rum_avg >= baseline; CLS: rum_avg >=
+		 * baseline). Fail-open: any failure returns false (no alarm).
+		 *
+		 * @param string     $metric Metric name ('lcp'|'cls').
+		 * @param array|null $rum Optional RUM aggregate (null = live read via RUM::get_data()).
+		 * @param float      $baseline Trend baseline for the firing arm.
+		 * @return bool True when real-user data agrees with the trend arm.
+		 * @since NEXT
+		 */
+		private static function is_rum_corroborated( string $metric, ?array $rum, float $baseline ): bool {
+			try {
+				if ( ! in_array( $metric, array( 'lcp', 'cls' ), true ) ) {
+					return false;
+				}
+				if ( $baseline <= 0 && 'lcp' === $metric ) {
+					return false;
+				}
+				if ( null === $rum ) {
+					if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'get_data' ) ) {
+						return false;
+					}
+					$rum = RUM::get_data();
+				}
+				if ( ! is_array( $rum ) || empty( $rum ) ) {
+					return false;
+				}
+				$total_n   = 0;
+				$total_sum = 0.0;
+				foreach ( $rum as $paths ) {
+					if ( ! is_array( $paths ) ) {
+						continue;
+					}
+					foreach ( $paths as $metrics ) {
+						if ( ! is_array( $metrics ) || ! isset( $metrics[ $metric ] ) || ! is_array( $metrics[ $metric ] ) ) {
+							continue;
+						}
+						$n   = isset( $metrics[ $metric ]['n'] ) ? (int) $metrics[ $metric ]['n'] : 0;
+						$sum = isset( $metrics[ $metric ]['sum'] ) ? (float) $metrics[ $metric ]['sum'] : 0.0;
+						if ( $n <= 0 ) {
+							continue;
+						}
+						$total_n   += $n;
+						$total_sum += $sum;
+					}
+				}
+				if ( $total_n < self::anomaly_min_samples() ) {
+					return false;
+				}
+				$rum_avg = $total_sum / $total_n;
+				if ( 'lcp' === $metric ) {
+					return $rum_avg >= $baseline;
+				}
+				// CLS arm: absolute-scale metric; corroborate when field
+				// average is at/above the lab baseline.
+				return $rum_avg >= $baseline;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Collect numeric samples for a metric from trend snapshots.
+		 *
+		 * @param array  $snapshots Trend snapshots for one URL+strategy key.
+		 * @param string $metric Metric key ('lcp'|'cls').
+		 * @param bool   $require_positive Whether to drop non-positive values (LCP only).
+		 * @return float[]
+		 * @since NEXT
+		 */
+		private static function collect_trend_samples( array $snapshots, string $metric, bool $require_positive ): array {
+			$values = array();
+			foreach ( $snapshots as $snapshot ) {
+				if ( ! is_array( $snapshot ) || ! isset( $snapshot[ $metric ] ) ) {
+					continue;
+				}
+				$value = $snapshot[ $metric ];
+				if ( ! is_numeric( $value ) ) {
+					continue;
+				}
+				$value = (float) $value;
+				if ( $require_positive && $value <= 0 ) {
+					continue;
+				}
+				if ( function_exists( 'is_finite' ) ) {
+					if ( ! is_finite( $value ) ) {
+						continue;
+					}
+				}
+				$values[] = $value;
+			}
+			return $values;
+		}
+
+		/**
+		 * Detect LCP/CLS regressions from stored Web Vitals trend history.
+		 *
+		 * Multi-metric rolling-baseline comparison per URL+strategy key: the
+		 * latest sample ("current", last value) is compared against the mean
+		 * of all prior numeric samples. A key regresses when:
+		 * - LCP: current >= baseline * 1.3 (+30%, relative), or
+		 * - CLS: current - baseline >= 0.05 (absolute delta, NOT percent).
+		 *
+		 * Quiet-reliability gates: each firing arm must be corroborated by
+		 * RUM field data (`is_rum_corroborated()`, total n >=
+		 * `anomaly_min_samples()`, default 10) before alarming, and at most
+		 * one anomaly overall is returned with a 7-day cooldown
+		 * (`anomaly_cooldown_days`, default 7) persisted in the per-site
+		 * `wppo_ai_anomaly_last_alarm` option (multisite-safe).
+		 *
+		 * Local computation only: no remote calls, no API keys, no email.
+		 * Fail-open: undersampled history (<min_samples numeric samples),
+		 * short history (<2 usable windows), non-positive LCP baseline,
+		 * uncorroborated arms, active cooldown, or any failure returns an
+		 * empty array — never fatal.
+		 *
+		 * Trend source is Pagespeed::get_trends() (capped 30/URL+strategy);
+		 * RUM source is RUM::get_data() unless an aggregate is injected.
+		 *
+		 * @param array|null $trends Optional trends map for testability. When null, reads Pagespeed::get_trends().
+		 * @param array|null $rum Optional RUM aggregate for testability. When null, reads RUM::get_data().
+		 * @param int|null   $now Optional current timestamp for testability. When null, uses time().
+		 * @return array[] At most one anomaly: array(array('key'=>string,'metric'=>string,'baseline'=>float,'current'=>float,'change_pct'=>float|'change_abs'=>float)).
+		 * @since NEXT
+		 */
+		public static function detect_anomalies( ?array $trends = null, ?array $rum = null, ?int $now = null ): array {
 			try {
 				if ( null === $trends ) {
 					if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
+						return array();
+					}
+					if ( ! method_exists( 'PerformanceOptimise\Inc\Pagespeed', 'get_trends' ) ) {
 						return array();
 					}
 					$trends = Pagespeed::get_trends();
@@ -936,59 +1256,94 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				if ( ! is_array( $trends ) || empty( $trends ) ) {
 					return array();
 				}
+				$resolved_now = self::anomaly_now( $now );
+				// Single-banner cap: an active cooldown suppresses all arms.
+				if ( ! self::is_anomaly_cooled_down( $resolved_now ) ) {
+					return array();
+				}
+				$min_samples = self::anomaly_min_samples();
+				if ( $min_samples < 1 ) {
+					$min_samples = self::ANOMALY_MIN_SAMPLES;
+				}
 				foreach ( $trends as $trend_key => $snapshots ) {
 					if ( ! is_array( $snapshots ) ) {
 						continue;
 					}
-					$lcps = array();
-					foreach ( $snapshots as $snapshot ) {
-						if ( ! is_array( $snapshot ) || ! isset( $snapshot['lcp'] ) ) {
+					$candidates = array();
+					// LCP arm (relative +30%).
+					$lcps = self::collect_trend_samples( $snapshots, 'lcp', true );
+					if ( count( $lcps ) >= $min_samples && count( $lcps ) >= 2 ) {
+						$current  = (float) end( $lcps );
+						$prior    = array_slice( $lcps, 0, -1 );
+						$baseline = array_sum( $prior ) / count( $prior );
+						if ( $baseline > 0 && $current >= $baseline * self::LCP_RELATIVE_MULTIPLIER ) {
+							$candidates[] = array(
+								'key'        => (string) $trend_key,
+								'metric'     => 'lcp',
+								'baseline'   => (float) $baseline,
+								'current'    => (float) $current,
+								'change_pct' => (float) ( ( $current - $baseline ) / $baseline * 100.0 ),
+							);
+						}
+					}
+					// CLS arm (absolute delta, NOT percent).
+					$clss = self::collect_trend_samples( $snapshots, 'cls', false );
+					if ( count( $clss ) >= $min_samples && count( $clss ) >= 2 ) {
+						$current  = (float) end( $clss );
+						$prior    = array_slice( $clss, 0, -1 );
+						$baseline = array_sum( $prior ) / count( $prior );
+						$finite   = true;
+						if ( function_exists( 'is_finite' ) ) {
+							$finite = is_finite( $baseline ) && is_finite( $current );
+						}
+						if ( $finite && ( $current - $baseline ) >= self::CLS_ABSOLUTE_DELTA ) {
+							$candidates[] = array(
+								'key'        => (string) $trend_key,
+								'metric'     => 'cls',
+								'baseline'   => (float) $baseline,
+								'current'    => (float) $current,
+								'change_abs' => (float) ( $current - $baseline ),
+							);
+						}
+					}
+					foreach ( $candidates as $anomaly ) {
+						// RUM corroboration gate: trends + real-user data must agree.
+						if ( ! self::is_rum_corroborated( $anomaly['metric'], $rum, (float) $anomaly['baseline'] ) ) {
 							continue;
 						}
-						$lcp = $snapshot['lcp'];
-						if ( ! is_numeric( $lcp ) ) {
-							continue;
-						}
-						$lcp = (float) $lcp;
-						if ( $lcp <= 0 ) {
-							continue;
-						}
-						$lcps[] = $lcp;
-					}
-					// Fail-open: under-sampled history never alarms.
-					if ( count( $lcps ) < 10 ) {
-						continue;
-					}
-					// Need baseline + current windows.
-					if ( count( $lcps ) < 2 ) {
-						continue;
-					}
-					$current  = (float) end( $lcps );
-					$prior    = array_slice( $lcps, 0, -1 );
-					$baseline = array_sum( $prior ) / count( $prior );
-					if ( $baseline <= 0 ) {
-						continue;
-					}
-					if ( $current >= $baseline * 1.3 ) {
-						$change_pct = ( $current - $baseline ) / $baseline * 100.0;
-						$anomaly    = array(
-							'key'        => (string) $trend_key,
-							'baseline'   => (float) $baseline,
-							'current'    => (float) $current,
-							'change_pct' => (float) $change_pct,
-						);
+						// Record the alarm before filtering so a repeated
+						// regression re-alarms only after the cooldown elapses.
+						self::set_last_anomaly_alarm( $resolved_now );
 						/**
-						 * Filters the detected LCP regression anomalies.
+						 * Filters the detected performance anomalies.
 						 *
 						 * @since NEXT
 						 * @param array[] $anomalies At most one anomaly array.
 						 */
-						$filtered = apply_filters( 'wppo_ai_lcp_regression', array( $anomaly ) );
-						if ( ! is_array( $filtered ) ) {
-							return array( $anomaly );
+						$filtered = $anomaly;
+						if ( function_exists( 'apply_filters' ) ) {
+							$filtered_anomalies = apply_filters( 'wppo_ai_anomaly_detected', array( $anomaly ) );
+							if ( is_array( $filtered_anomalies ) && ! empty( $filtered_anomalies ) ) {
+								$first = $filtered_anomalies[0];
+								if ( is_array( $first ) ) {
+									$filtered = $first;
+								}
+							} elseif ( is_array( $filtered_anomalies ) && empty( $filtered_anomalies ) ) {
+								return array();
+							}
+							// Backward compatibility: LCP consumers keep the
+							// legacy filter name.
+							if ( 'lcp' === ( $filtered['metric'] ?? 'lcp' ) ) {
+								$legacy = apply_filters( 'wppo_ai_lcp_regression', array( $filtered ) );
+								if ( ! is_array( $legacy ) ) {
+									return array( $filtered );
+								}
+								// Cap to a single anomaly even if a filter appends more.
+								return array_slice( array_values( $legacy ), 0, 1 );
+							}
 						}
 						// Cap to a single anomaly even if a filter appends more.
-						return array_slice( array_values( $filtered ), 0, 1 );
+						return array( $filtered );
 					}
 				}
 			} catch ( \Throwable $e ) {
@@ -1433,10 +1788,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			}
 
 			// Self-watching performance: surface a single read-only suggestion on
-			// +30% LCP regression. Fail-open: detector errors contribute zero
-			// suggestions (never fatal, never white-screen). No auto-tune, no
-			// speculation override here — that stays gated by is_enabled() in
-			// filter_speculation_rules().
+			// LCP (+30% relative, RUM-corroborated) or CLS (+0.05 absolute
+			// delta, RUM-corroborated) regression with a 7-day cooldown.
+			// Fail-open: detector errors contribute zero suggestions (never
+			// fatal, never white-screen). No auto-tune, no speculation
+			// override here — that stays gated by is_enabled() in
+			// filter_speculation_rules(). No email without opt-in.
 			try {
 				$anomalies = self::detect_anomalies();
 			} catch ( \Throwable $e ) {
@@ -1444,22 +1801,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				$anomalies = array();
 			}
 			if ( is_array( $anomalies ) && ! empty( $anomalies ) ) {
-				$anomaly    = $anomalies[0];
-				$change_pct = isset( $anomaly['change_pct'] ) ? (float) $anomaly['change_pct'] : 0.0;
-				/* translators: %d is the LCP percentage increase vs baseline. */
-				$value         = sprintf( __( 'LCP +%d%% vs baseline', 'performance-optimisation' ), (int) round( $change_pct ) );
-				$suggestions[] = array(
-					'metric'      => 'ai_lcp_regression',
-					'value'       => $value,
-					'unit'        => 'string',
-					'status'      => 'needs_improvement',
-					'description' => __( 'AI: LCP regression detected', 'performance-optimisation' ),
-					'fix_action'  => 'open_image_optimization_tab',
-					'ai_payload'  => array(
-						'tab'      => 'image_optimisation',
-						'settings' => array(),
-					),
-				);
+				$anomaly = $anomalies[0];
+				if ( 'cls' === ( $anomaly['metric'] ?? 'lcp' ) ) {
+					$change_abs = isset( $anomaly['change_abs'] ) ? (float) $anomaly['change_abs'] : 0.0;
+					/* translators: %s is the CLS absolute increase vs baseline. */
+					$cls_value     = sprintf( __( 'CLS +%s vs baseline', 'performance-optimisation' ), number_format( $change_abs, 2 ) );
+					$suggestions[] = array(
+						'metric'      => 'ai_cls_regression',
+						'value'       => $cls_value,
+						'unit'        => 'string',
+						'status'      => 'needs_improvement',
+						'description' => __( 'AI: CLS regression detected', 'performance-optimisation' ),
+						'fix_action'  => 'open_image_optimization_tab',
+						'ai_payload'  => array(
+							'tab'      => 'image_optimisation',
+							'settings' => array(),
+						),
+					);
+				} else {
+					$change_pct = isset( $anomaly['change_pct'] ) ? (float) $anomaly['change_pct'] : 0.0;
+					/* translators: %d is the LCP percentage increase vs baseline. */
+					$value         = sprintf( __( 'LCP +%d%% vs baseline', 'performance-optimisation' ), (int) round( $change_pct ) );
+					$suggestions[] = array(
+						'metric'      => 'ai_lcp_regression',
+						'value'       => $value,
+						'unit'        => 'string',
+						'status'      => 'needs_improvement',
+						'description' => __( 'AI: LCP regression detected', 'performance-optimisation' ),
+						'fix_action'  => 'open_image_optimization_tab',
+						'ai_payload'  => array(
+							'tab'      => 'image_optimisation',
+							'settings' => array(),
+						),
+					);
+				}
 			}
 
 			// Ensure fix_action is valid per Suggestion_Engine guard (already valid).

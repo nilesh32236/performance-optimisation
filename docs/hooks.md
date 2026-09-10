@@ -786,6 +786,40 @@ Filters AI-injected speculation rules. @since NEXT.
 
 ---
 
+### `wppo_ai_anomaly_detected`
+Filters the detected performance anomalies (LCP +30% relative or CLS +0.05 absolute delta, RUM-corroborated, 7-day cooldown). @since NEXT.
+
+At most one anomaly is passed; return an empty array to suppress the banner. The legacy `wppo_ai_lcp_regression` filter still runs for LCP anomalies.
+
+**Parameters:**
+- `$anomalies` *(array[])* — At most one anomaly array (`key`, `metric` (`lcp`|`cls`), `baseline`, `current`, plus `change_pct` for LCP or `change_abs` for CLS).
+
+---
+
+### `wppo_ai_lcp_regression`
+Filters the detected LCP regression anomalies (backward compatibility; runs after `wppo_ai_anomaly_detected` for LCP anomalies). @since NEXT.
+
+**Parameters:**
+- `$anomalies` *(array[])* — At most one anomaly array.
+
+---
+
+### `wppo_ai_anomaly_cooldown_days`
+Filters the anomaly cooldown window in days (single banner max). @since NEXT.
+
+**Parameters:**
+- `$days` *(int)* — Cooldown days (default 7, from `ai_adaptive.anomaly_cooldown_days`).
+
+---
+
+### `wppo_ai_anomaly_min_samples`
+Filters the minimum numeric samples before an anomaly arm may fire (trend arm and RUM corroboration gate). @since NEXT.
+
+**Parameters:**
+- `$min` *(int)* — Minimum samples (default 10, from `ai_adaptive.anomaly_min_samples`).
+
+---
+
 ### `wppo_speculation_list_urls`
 Filters the high-value speculation list URLs (home + `performance_audit.high_value_urls` + RUM top URLs, same-site validated, cart/checkout/account/query-string/fragment excluded, capped at 10). @since NEXT.
 
