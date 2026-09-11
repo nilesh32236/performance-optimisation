@@ -190,6 +190,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+				'woo_cache_self_test'       => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'get_woo_cache_self_test' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
 				'used_css_regenerate'       => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'used_css_regenerate' ),
@@ -1731,6 +1737,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			return $this->send_response( array( 'suggestions' => $suggestions ) );
+		}
+
+		/**
+		 * Verifiable WooCommerce cart/checkout cache-exclusion self-test (read-only).
+		 *
+		 * Returns Util::woo_cache_self_test(): detected Woo paths against the
+		 * exclusion list, safe-mode toggle state, and per-URL pass/fail
+		 * proving cart/checkout/account bypass the static HTML cache with
+		 * DONOTCACHEPAGE honored. Never writes options, transients, or files.
+		 *
+		 * @param \WP_REST_Request $_request The request object (unused).
+		 * @since NEXT
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function get_woo_cache_self_test( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			return $this->send_response( Util::woo_cache_self_test() );
 		}
 
 		/**

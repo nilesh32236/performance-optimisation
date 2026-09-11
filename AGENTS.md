@@ -75,7 +75,7 @@ Frontend lazy loading: `src/lazyload.js` (vanilla JS, not React) — Intersectio
 Admin bar cache clearing: `src/main.js` — two buttons ("Clear All Cache", "Clear This Page") with automatic nonce refresh on 403.
 
 ### REST API
-Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (30 routes). All require `manage_options` capability + `X-WP-Nonce` except `rum_collect` (public, token + IP rate-limited). The authoritative 30-route table lives in `.agents/AGENTS.md`; the summary table below lists the most-used routes.
+Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (31 routes). All require `manage_options` capability + `X-WP-Nonce` except `rum_collect` (public, token + IP rate-limited). The authoritative 31-route table lives in `.agents/AGENTS.md`; the summary table below lists the most-used routes.
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -97,6 +97,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (3
 | `web_vitals_trends` | GET | Stored Web Vitals trend history |
 | `suggestions` | GET | Performance suggestions |
 | `server_rules` | GET | Apache/Nginx rules text |
+| `woo_cache_self_test` | GET | WooCommerce cart/checkout cache-exclusion self-test (read-only) |
 | `used_css_regenerate` | POST | Regenerate used CSS for a post or all posts |
 | `regenerate_ccss` | POST | Regenerate critical CSS |
 | `ccss_status` | GET | Critical CSS generation status |
