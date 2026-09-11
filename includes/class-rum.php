@@ -1504,11 +1504,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 *
 		 * Read-only ordering signal for the critical-CSS / used-CSS queues
 		 * (issue #1059): collapses get_field_lcp_p75_by_segment() rows to
-		 * `path => max(p75)` and blends the latest PageSpeed trend LCP
-		 * snapshot per candidate URL (resolved via md5(esc_url_raw(url))
-		 * keys, max of mobile/desktop). Local aggregates only — no new
-		 * external calls, no PII. Fail-open: any failure returns array().
-		 * Multisite-safe: per-site get_option() reads only.
+		 * `path => max(p75)`. Callers blend this map with the latest
+		 * PageSpeed trend LCP snapshot per candidate URL via score_url_lcp()
+		 * (resolved via md5(esc_url_raw(url)) keys, max of mobile/desktop).
+		 * Local aggregates only — no new external calls, no PII. Fail-open:
+		 * any failure returns array(). Multisite-safe: per-site get_option()
+		 * reads only.
 		 *
 		 * @since NEXT
 		 * @param int|null $min_samples Minimum samples per segment. Null resolves via get_field_lcp_min_samples().
@@ -1582,7 +1583,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 							if ( ! isset( $trends[ $key ] ) || ! is_array( $trends[ $key ] ) || empty( $trends[ $key ] ) ) {
 								continue;
 							}
-							$last = end( $trends[ $key ] );
+							$snapshots = $trends[ $key ];
+							$last      = end( $snapshots );
 							if ( is_array( $last ) && isset( $last['lcp'] ) && is_numeric( $last['lcp'] ) ) {
 								$best = max( $best, (float) $last['lcp'] );
 							}
