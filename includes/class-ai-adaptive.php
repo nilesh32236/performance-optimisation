@@ -2205,11 +2205,465 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		}
 
 		/**
+		 * Whether RUM-gated speculation eagerness is enabled.
+		 *
+		 * Additive toggle (issue #1061) living in
+		 * `wppo_settings[preload_settings][speculationRumGating]` (default
+		 * true, alongside `speculationEagerness`). A legacy
+		 * `wppo_settings[ai_adaptive][speculation_rum_gating]` key is honored
+		 * as fallback when the preload key is absent. Filterable via
+		 * `wppo_ai_speculation_rum_gating`. Fail-open: any failure returns true.
+		 *
+		 * @return bool True when RUM gating applies.
+		 * @since NEXT
+		 */
+		public static function is_speculation_rum_gating_enabled(): bool {
+			try {
+				$settings = class_exists( 'PerformanceOptimise\Inc\Util' ) ? Util::get_settings() : array();
+				if ( isset( $settings['preload_settings']['speculationRumGating'] ) ) {
+					$enabled = (bool) $settings['preload_settings']['speculationRumGating'];
+				} elseif ( isset( $settings['ai_adaptive']['speculation_rum_gating'] ) ) {
+					$enabled = (bool) $settings['ai_adaptive']['speculation_rum_gating'];
+				} else {
+					$enabled = true;
+				}
+				/**
+				 * Filters whether RUM-gated speculation eagerness applies.
+				 *
+				 * @since NEXT
+				 * @param bool $enabled Whether RUM gating is enabled.
+				 */
+				return (bool) apply_filters( 'wppo_ai_speculation_rum_gating', $enabled );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
+		 * RUM-gated speculation eagerness state (read-only, fail-open).
+		 *
+		 * Good real-user p75 (LCP at/below `wppo_ai_speculation_lcp_threshold`,
+		 * default 2500ms, AND INP at/below `wppo_ai_speculation_inp_threshold`,
+		 * default 200ms, with n >= shared `field_lcp_min_samples` gate)
+		 * qualifies for a moderate/eager list rule (eagerness filterable via
+		 * `wppo_ai_speculation_eagerness`, default `moderate`). Poor or absent
+		 * RUM stays conservative. Missing signals never block: a segment type
+		 * with no qualified rows is treated as good. No option/transient
+		 * writes; multisite-safe via the per-site RUM aggregate.
+		 *
+		 * The optional $gating_enabled parameter lets the frontend hot path
+		 * (filter_speculation_rules()) resolve the
+		 * `wppo_ai_speculation_rum_gating` filter once per request and pass
+		 * the result down, instead of applying the filter once for the
+		 * fallback, once for the guard, and once more in the caller.
+		 *
+		 * @since NEXT
+		 * @param bool|null $gating_enabled Pre-resolved gating flag. Null resolves via is_speculation_rum_gating_enabled().
+		 * @return array{qualified:bool,eagerness:string,lcp_p75:float,inp_p75:float,samples:int,min_samples:int,gated:bool} Gated state.
+		 */
+		public static function get_rum_gated_speculation_state( ?bool $gating_enabled = null ): array {
+			$min = self::field_lcp_min_samples();
+			try {
+				$gating_enabled = null === $gating_enabled ? self::is_speculation_rum_gating_enabled() : $gating_enabled;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$gating_enabled = true;
+			}
+			$fallback = array(
+				'qualified'   => false,
+				'eagerness'   => 'conservative',
+				'lcp_p75'     => 0.0,
+				'inp_p75'     => 0.0,
+				'samples'     => 0,
+				'min_samples' => $min,
+				'gated'       => $gating_enabled,
+			);
+			try {
+				if ( ! $gating_enabled ) {
+					return $fallback;
+				}
+				$lcp_rows = self::segmented_field_lcp( 1 );
+				$inp_rows = self::segmented_field_inp( 1 );
+
+				$max_n = 0;
+				foreach ( array_merge( $lcp_rows, $inp_rows ) as $row ) {
+					if ( is_array( $row ) && isset( $row['n'] ) ) {
+						$max_n = max( $max_n, (int) $row['n'] );
+					}
+				}
+				$fallback['samples'] = $max_n;
+
+				$qualified_lcp = array();
+				foreach ( $lcp_rows as $row ) {
+					if ( is_array( $row ) && isset( $row['n'] ) && (int) $row['n'] >= $min ) {
+						$qualified_lcp[] = $row;
+					}
+				}
+				$qualified_inp = array();
+				foreach ( $inp_rows as $row ) {
+					if ( is_array( $row ) && isset( $row['n'] ) && (int) $row['n'] >= $min ) {
+						$qualified_inp[] = $row;
+					}
+				}
+				if ( empty( $qualified_lcp ) && empty( $qualified_inp ) ) {
+					return $fallback;
+				}
+
+				$max_lcp = 0.0;
+				foreach ( $qualified_lcp as $row ) {
+					if ( isset( $row['p75'] ) ) {
+						$max_lcp = max( $max_lcp, (float) $row['p75'] );
+					}
+				}
+				$max_inp = 0.0;
+				foreach ( $qualified_inp as $row ) {
+					if ( isset( $row['p75'] ) ) {
+						$max_inp = max( $max_inp, (float) $row['p75'] );
+					}
+				}
+				$fallback['lcp_p75'] = $max_lcp;
+				$fallback['inp_p75'] = $max_inp;
+
+				/**
+				 * Filters the LCP p75 (ms) threshold for RUM-gated speculation eagerness.
+				 *
+				 * @since NEXT
+				 * @param float $threshold LCP p75 threshold in milliseconds.
+				 */
+				$lcp_threshold = self::validate_speculation_threshold( apply_filters( 'wppo_ai_speculation_lcp_threshold', 2500.0 ), 2500.0 );
+				/**
+				 * Filters the INP p75 (ms) threshold for RUM-gated speculation eagerness.
+				 *
+				 * @since NEXT
+				 * @param float $threshold INP p75 threshold in milliseconds.
+				 */
+				$inp_threshold = self::validate_speculation_threshold( apply_filters( 'wppo_ai_speculation_inp_threshold', 200.0 ), 200.0 );
+
+				$lcp_good = empty( $qualified_lcp ) || $max_lcp <= $lcp_threshold;
+				$inp_good = empty( $qualified_inp ) || $max_inp <= $inp_threshold;
+				if ( ! $lcp_good || ! $inp_good ) {
+					return $fallback;
+				}
+
+				/**
+				 * Filters the eagerness for a RUM-qualified (good p75) speculation list rule.
+				 *
+				 * @since NEXT
+				 * @param string $eagerness Eagerness value (default `moderate`).
+				 * @param array  $state Gated state (lcp_p75, inp_p75, samples).
+				 */
+				$eagerness = (string) apply_filters(
+					'wppo_ai_speculation_eagerness',
+					'moderate',
+					array(
+						'lcp_p75' => $max_lcp,
+						'inp_p75' => $max_inp,
+						'samples' => $max_n,
+					)
+				);
+				$eagerness = self::normalize_eagerness( $eagerness );
+
+				return array(
+					'qualified'   => true,
+					'eagerness'   => $eagerness,
+					'lcp_p75'     => $max_lcp,
+					'inp_p75'     => $max_inp,
+					'samples'     => $max_n,
+					'min_samples' => $min,
+					'gated'       => true,
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $fallback;
+			}
+		}
+
+		/**
+		 * Validate a RUM-gated speculation p75 threshold from a filter value.
+		 *
+		 * Filter callbacks may return numeric strings, negatives, INF, or
+		 * NAN; an unvalidated cast would silently force always-conservative
+		 * (negative) or always-qualified (INF) behavior. Non-finite or
+		 * negative values fail open to the default.
+		 *
+		 * @param mixed $value Raw filter value.
+		 * @param float $fallback Fallback threshold.
+		 * @return float Validated threshold (>= 0 and finite).
+		 * @since NEXT
+		 */
+		private static function validate_speculation_threshold( $value, float $fallback ): float {
+			try {
+				$threshold = is_numeric( $value ) ? (float) $value : $fallback;
+				if ( ! is_finite( $threshold ) || $threshold < 0 ) {
+					return $fallback;
+				}
+				return $threshold;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $fallback;
+			}
+		}
+
+		/**
+		 * Whether an absolute URL falls under a commerce exclude prefix.
+		 *
+		 * Shared by the RUM-derived top-URL ranking and the
+		 * `wppo_ai_speculation_top_urls` filter-output sanitization so a
+		 * filter cannot reintroduce /cart/, /checkout/, /my-account/ (or
+		 * store-specific Woo prefixes) into an explicit list rule, which
+		 * bypasses href exclude-path filtering. Fail-open: unparseable URLs
+		 * are not treated as commerce URLs (the same-site guard still applies).
+		 *
+		 * @param string   $url Absolute URL.
+		 * @param string[] $excludes Commerce exclude prefixes (e.g. `/cart/*`).
+		 * @return bool True when the URL path matches a commerce prefix.
+		 * @since NEXT
+		 */
+		private static function is_speculation_commerce_url( string $url, array $excludes ): bool {
+			try {
+				if ( ! function_exists( 'wp_parse_url' ) ) {
+					return false;
+				}
+				$path_part = wp_parse_url( $url, PHP_URL_PATH );
+				$path_part = is_string( $path_part ) && '' !== $path_part ? rtrim( strtolower( $path_part ), '/' ) : '';
+				foreach ( array_merge( $excludes, array( '/account/*' ) ) as $exclude ) {
+					$prefix = rtrim( rtrim( (string) $exclude, '*' ), '/' );
+					$prefix = strtolower( $prefix );
+					if ( '' !== $prefix && ( $path_part === $prefix || 0 === strpos( $path_part . '/', $prefix . '/' ) ) ) {
+						return true;
+					}
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Top RUM (real-visit) URLs for the RUM-gated speculation list rule.
+		 *
+		 * Volume-ranked from the read-only RUM aggregate (no queue flush, no
+		 * transient writes — shares the per-request memo with the segmented
+		 * field-LCP/INP readers so the speculation-rules filter performs a
+		 * single aggregate deserialization), resolved to absolute
+		 * pretty-permalink URLs (trailing slash), deduped, same-site
+		 * validated, commerce/query-string/admin rejected, and capped at
+		 * $limit (keeps the ~1KB footprint). Invalid URLs are skipped
+		 * individually (fail-open); empty means "no RUM winners".
+		 *
+		 * @param int $limit Maximum URLs to return.
+		 * @return string[]
+		 * @since NEXT
+		 */
+		public static function get_rum_top_speculation_urls( int $limit = 5 ): array {
+			try {
+				if ( $limit < 1 ) {
+					return array();
+				}
+				if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
+					return array();
+				}
+				if ( method_exists( 'PerformanceOptimise\Inc\RUM', 'get_aggregate_readonly' ) ) {
+					$rum = RUM::get_aggregate_readonly();
+				} else {
+					if ( ! method_exists( 'PerformanceOptimise\Inc\RUM', 'get_data' ) || ! function_exists( 'get_option' ) ) {
+						return array();
+					}
+					// Back-compat fallback for runtimes without the read-only
+					// accessor: plain get_option() still avoids the
+					// queue-flushing get_data() write path.
+					$rum = get_option( RUM::OPTION, array() );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+			if ( ! is_array( $rum ) || empty( $rum ) ) {
+				return array();
+			}
+			try {
+				$counts = array();
+				foreach ( $rum as $paths ) {
+					if ( ! is_array( $paths ) ) {
+						continue;
+					}
+					foreach ( $paths as $path => $metrics ) {
+						if ( ! is_string( $path ) || '' === $path || ! is_array( $metrics ) ) {
+							continue;
+						}
+						if ( false !== strpos( $path, '?' ) || false !== strpos( $path, '#' ) ) {
+							continue;
+						}
+						$count = 0;
+						foreach ( $metrics as $metric => $aggregate ) {
+							if ( 'lcpUrls' === $metric || ! is_array( $aggregate ) ) {
+								continue;
+							}
+							$n = isset( $aggregate['n'] ) ? (int) $aggregate['n'] : 0;
+							if ( $n > $count ) {
+								$count = $n;
+							}
+						}
+						if ( $count <= 0 ) {
+							continue;
+						}
+						$normalized = class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'normalize_rum_path' )
+							? Util::normalize_rum_path( $path )
+							: $path;
+						if ( '/' === $normalized ) {
+							continue;
+						}
+						if ( ! isset( $counts[ $normalized ] ) ) {
+							$counts[ $normalized ] = 0;
+						}
+						$counts[ $normalized ] += $count;
+					}
+				}
+				if ( empty( $counts ) ) {
+					return array();
+				}
+				arsort( $counts );
+
+				$excludes = self::get_commerce_exclude_paths();
+				$urls     = array();
+				foreach ( array_keys( $counts ) as $top_path ) {
+					if ( '/' !== substr( $top_path, -1 ) ) {
+						$top_path .= '/';
+					}
+					$absolute = Util::cached_home_url( $top_path );
+					$clean    = function_exists( 'esc_url_raw' ) ? esc_url_raw( $absolute ) : $absolute;
+					if ( ! is_string( $clean ) || '' === $clean ) {
+						continue;
+					}
+					if ( in_array( $clean, $urls, true ) ) {
+						continue;
+					}
+					// Commerce-prefix guard (explicit list rules bypass
+					// href-exclude filtering, so filter here).
+					if ( self::is_speculation_commerce_url( $clean, $excludes ) ) {
+						continue;
+					}
+					$urls[] = $clean;
+					if ( count( $urls ) >= $limit ) {
+						break;
+					}
+				}
+				$urls = self::filter_same_site_urls( $urls );
+				/**
+				 * Filters the RUM-ranked top URLs for the gated speculation list rule.
+				 *
+				 * Filter-supplied URLs are untrusted input: they are re-sanitized
+				 * (esc_url_raw), re-checked against the commerce-prefix guard and
+				 * the same-site guard, deduped, and re-capped at $limit, so a
+				 * filter cannot reintroduce /checkout/, wp-admin, cross-site, or
+				 * unbounded URL lists into the ~1KB list rule.
+				 *
+				 * @since NEXT
+				 * @param string[] $urls Ranked absolute URLs.
+				 */
+				$urls = apply_filters( 'wppo_ai_speculation_top_urls', $urls );
+				if ( ! is_array( $urls ) ) {
+					return array();
+				}
+				$filtered = array();
+				foreach ( $urls as $candidate ) {
+					if ( ! is_string( $candidate ) || '' === $candidate ) {
+						continue;
+					}
+					$clean = function_exists( 'esc_url_raw' ) ? esc_url_raw( $candidate ) : $candidate;
+					if ( ! is_string( $clean ) || '' === $clean ) {
+						continue;
+					}
+					if ( in_array( $clean, $filtered, true ) ) {
+						continue;
+					}
+					if ( self::is_speculation_commerce_url( $clean, $excludes ) ) {
+						continue;
+					}
+					$filtered[] = $clean;
+					if ( count( $filtered ) >= $limit ) {
+						break;
+					}
+				}
+				$filtered = self::filter_same_site_urls( $filtered );
+				return array_values( array_slice( $filtered, 0, $limit ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
+		 * Whether the AI speculation rule is hard-suppressed for this request.
+		 *
+		 * Hard suppression (emit nothing): wp-admin, commerce page contexts
+		 * (cart/checkout/account via conditionals), or plain permalinks
+		 * disabled. Generic commerce/auth signals (Woo active, cookies,
+		 * logged-in) are NOT hard suppression — they keep the existing
+		 * filter-plus-cap guardrail so model URLs still emit conservatively.
+		 * Fail-open: any throwable means "not suppressed".
+		 *
+		 * @return bool True when no AI rule must be emitted.
+		 * @since NEXT
+		 */
+		private static function is_speculation_hard_suppressed(): bool {
+			try {
+				if ( function_exists( 'is_admin' ) ) {
+					try {
+						if ( is_admin() ) {
+							return true;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				foreach ( array( 'is_cart', 'is_checkout', 'is_account_page' ) as $conditional ) {
+					if ( function_exists( $conditional ) ) {
+						try {
+							if ( call_user_func( $conditional ) ) {
+								return true;
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+					}
+				}
+				if ( function_exists( 'get_option' ) ) {
+					try {
+						$structure = get_option( 'permalink_structure' );
+						// Plain permalinks store '' — suppress. A missing
+						// option (false, e.g. minimal test installs) stays
+						// fail-open so unit tests without the stub still run.
+						if ( '' === $structure ) {
+							return true;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
 		 * Inject AI-learned prefetch URLs into speculation rules.
 		 *
 		 * Hooks into wp_speculation_rules filter (WP 6.8+). Only injects when
 		 * AI adaptive is enabled and prefetch URLs exist; never auto-enables
 		 * speculation itself.
+		 *
+		 * RUM gating (issue #1061): model URLs are merged with the
+		 * volume-ranked RUM top-URL list (pretty permalinks, deduped, capped
+		 * at 5, ~1KB). When `speculationRumGating` is on (default), good RUM
+		 * p75 emits a moderate/eager list rule; poor or absent RUM forces
+		 * conservative. Commerce page contexts, wp-admin, and plain
+		 * permalinks emit nothing; generic commerce/auth signals keep the
+		 * filter-plus-cap guardrail (#908).
 		 *
 		 * @param array $rules Speculation rules array.
 		 * @return array
@@ -2222,9 +2676,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			if ( ! is_array( $rules ) ) {
 				return $rules;
 			}
+			// Hard suppression: commerce pages, wp-admin, no permalinks.
+			if ( self::is_speculation_hard_suppressed() ) {
+				return $rules;
+			}
 			// Single model read: reused for both prefetch URLs and eagerness.
-			$model = self::get_model();
-			$urls  = self::get_prefetch_urls_from_model( $model );
+			$model      = self::get_model();
+			$model_urls = self::get_prefetch_urls_from_model( $model );
+			// RUM-ranked top URLs fill the remaining budget (fail-open empty).
+			$rum_urls = self::get_rum_top_speculation_urls( 5 );
+			$urls     = array();
+			foreach ( array_merge( $model_urls, $rum_urls ) as $candidate ) {
+				if ( ! is_string( $candidate ) || '' === $candidate ) {
+					continue;
+				}
+				if ( in_array( $candidate, $urls, true ) ) {
+					continue;
+				}
+				$urls[] = $candidate;
+				if ( count( $urls ) >= 5 ) {
+					break;
+				}
+			}
 			if ( empty( $urls ) ) {
 				return $rules;
 			}
@@ -2236,12 +2709,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			if ( empty( $urls ) ) {
 				return $rules;
 			}
-			// Append AI prefetch rule (prefetch top-2). Structure mirrors WP core:
-			// rules = [ { source: 'list', urls: [...] , eagerness: 'conservative' } ].
+			// RUM-gated eagerness (issue #1061): good p75 → moderate/eager,
+			// poor/absent → conservative. Gating off → model eagerness.
 			// Guardrail (#908): allowlist stale values and downgrade a persisted
 			// `eager` to `moderate` in commerce/auth contexts before injecting.
-			$eagerness = self::normalize_eagerness( $model['eagerness'] ?? 'conservative' );
-			$rules[]   = array(
+			// The gating flag is resolved once and passed down so the
+			// `wppo_ai_speculation_rum_gating` filter fires once per request
+			// and the RUM aggregate is deserialized once (shared per-request
+			// memo with the segmented readers and the top-URL ranking).
+			$gating_enabled = self::is_speculation_rum_gating_enabled();
+			if ( $gating_enabled ) {
+				$state = self::get_rum_gated_speculation_state( $gating_enabled );
+				if ( ! empty( $state['qualified'] ) ) {
+					$eagerness = self::normalize_eagerness( $state['eagerness'] ?? 'moderate' );
+				} else {
+					$eagerness = 'conservative';
+				}
+			} else {
+				$eagerness = self::normalize_eagerness( $model['eagerness'] ?? 'conservative' );
+			}
+			$rules[] = array(
 				'source'    => 'list',
 				'urls'      => $urls,
 				'eagerness' => $eagerness,

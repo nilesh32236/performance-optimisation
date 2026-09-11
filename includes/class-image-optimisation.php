@@ -4933,5 +4933,149 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				);
 			}
 		}
+
+		/**
+		 * Lazily render below-fold containers via content-visibility.
+		 *
+		 * Opt-in, CSS-only progressive enhancement: tags below-fold candidate
+		 * containers (builder sections, footer widgets, comments) with
+		 * `content-visibility:auto` plus a precomputed `contain-intrinsic-size`
+		 * reserve so layout stays stable (no CLS) while the browser defers
+		 * render work until the node nears the viewport. Unsupported browsers
+		 * ignore the declarations. Any failure returns markup unmodified
+		 * (fail-open).
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $buffer The HTML buffer to process.
+		 * @return string The modified HTML buffer.
+		 */
+		public function lazy_render_elements( string $buffer ): string {
+			$image_opts = $this->options['image_optimisation'] ?? array();
+
+			if ( empty( $image_opts['lazyRenderBelowFold'] ) ) {
+				return $buffer;
+			}
+			if ( ! is_string( $buffer ) || '' === $buffer ) {
+				return $buffer;
+			}
+			if ( function_exists( 'is_admin' ) && is_admin() ) {
+				return $buffer;
+			}
+			if ( function_exists( 'is_user_logged_in' ) && is_user_logged_in() ) {
+				return $buffer;
+			}
+			if ( ( function_exists( 'is_feed' ) && is_feed() )
+				|| ( function_exists( 'is_preview' ) && is_preview() )
+				|| ( function_exists( 'is_embed' ) && is_embed() )
+				|| ( function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() ) ) {
+				return $buffer;
+			}
+			if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
+				return $buffer;
+			}
+
+			try {
+				$exclude_builders = ! isset( $image_opts['lazyRenderExcludeBuilders'] ) || ! empty( $image_opts['lazyRenderExcludeBuilders'] );
+
+				$excluded_classes = array( 'elementor-section', 'et_pb_section' );
+				if ( function_exists( 'apply_filters' ) ) {
+					$filtered = apply_filters( 'wppo_lazy_render_excluded_classes', $excluded_classes );
+					if ( is_array( $filtered ) ) {
+						$excluded_classes = array_values( array_filter( array_map( 'strval', $filtered ) ) );
+					}
+				}
+
+				$intrinsic_size = 'auto 600px';
+				if ( function_exists( 'apply_filters' ) ) {
+					$filtered_size = apply_filters( 'wppo_lazy_render_intrinsic_size', $intrinsic_size );
+					if ( is_string( $filtered_size ) && '' !== trim( $filtered_size ) ) {
+						$intrinsic_size = trim( $filtered_size );
+					}
+				}
+
+				$target_classes = array(
+					'elementor-section',
+					'et_pb_section',
+					'wp-block-group',
+					'footer-widget',
+					'widget-area',
+					'comments-area',
+					'comment-list',
+				);
+
+				$processor = new \WP_HTML_Tag_Processor( $buffer );
+				$seen      = 0;
+
+				while ( $processor->next_tag() ) {
+					$tag = strtoupper( $processor->get_tag() ?? '' );
+					if ( 'SECTION' !== $tag && 'FOOTER' !== $tag && 'ASIDE' !== $tag && 'DIV' !== $tag ) {
+						continue;
+					}
+
+					$class_attr = (string) ( $processor->get_attribute( 'class' ) ?? '' );
+					$id_attr    = (string) ( $processor->get_attribute( 'id' ) ?? '' );
+					$lower_cls  = strtolower( $class_attr . ' ' . $id_attr );
+
+					$is_footer_tag = ( 'FOOTER' === $tag || 'ASIDE' === $tag );
+					$is_targeted   = $is_footer_tag;
+					if ( ! $is_targeted ) {
+						foreach ( $target_classes as $needle ) {
+							if ( false !== strpos( $lower_cls, $needle ) ) {
+								$is_targeted = true;
+								break;
+							}
+						}
+						if ( ! $is_targeted && 'comments' === strtolower( $id_attr ) ) {
+							$is_targeted = true;
+						}
+					}
+					if ( ! $is_targeted ) {
+						continue;
+					}
+
+					if ( $exclude_builders ) {
+						$class_tokens = preg_split( '/\s+/', strtolower( $class_attr ), -1, PREG_SPLIT_NO_EMPTY );
+						$class_tokens = is_array( $class_tokens ) ? $class_tokens : array();
+						foreach ( $excluded_classes as $excluded ) {
+							$excluded_token = strtolower( trim( (string) $excluded ) );
+							if ( '' !== $excluded_token && in_array( $excluded_token, $class_tokens, true ) ) {
+								$is_targeted = false;
+								break;
+							}
+						}
+						if ( ! $is_targeted ) {
+							continue;
+						}
+					}
+
+					// Keep the first matching section above the fold untouched
+					// so hero content always renders eagerly.
+					if ( 0 === $seen && ( 'SECTION' === $tag || 'DIV' === $tag ) && ! $is_footer_tag
+						&& false === strpos( $lower_cls, 'comment' ) && false === strpos( $lower_cls, 'footer' ) ) {
+						++$seen;
+						continue;
+					}
+					++$seen;
+
+					$style = (string) ( $processor->get_attribute( 'style' ) ?? '' );
+					if ( '' !== $style && preg_match( '#content-visibility\s*:#i', $style ) ) {
+						continue;
+					}
+
+					$addition = 'content-visibility:auto;contain-intrinsic-size:' . $intrinsic_size;
+					$merged   = '' === trim( $style ) ? $addition : rtrim( trim( $style ), ';' ) . ';' . $addition;
+					$processor->set_attribute( 'style', $merged );
+				}
+
+				$updated = $processor->get_updated_html();
+				return is_string( $updated ) && '' !== $updated ? $updated : $buffer;
+			} catch ( \Throwable $e ) {
+				if ( function_exists( 'do_action' ) ) {
+					do_action( 'wppo_debug_log', 'WPPO lazy render failed: ' . $e->getMessage(), array( 'exception' => $e ) );
+				}
+				return $buffer;
+			}
+		}
 	}
 }

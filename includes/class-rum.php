@@ -401,6 +401,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		}
 
 		/**
+		 * Retrieve the aggregated RUM data without side effects (read-only).
+		 *
+		 * Unlike get_data(), this never flushes the queued-beacon queue and
+		 * never touches transients: it serves the per-request memoized
+		 * aggregate (a single get_option() deserialization shared with the
+		 * segmented field-LCP/INP readers). Intended for frontend hot paths
+		 * such as the speculation-rules filter. Fail-open: any failure
+		 * returns array().
+		 *
+		 * @return array Aggregate data (empty array when missing/invalid).
+		 * @since NEXT
+		 */
+		public static function get_aggregate_readonly(): array {
+			try {
+				if ( ! function_exists( 'get_option' ) ) {
+					return array();
+				}
+				$all = self::get_memoized_aggregate();
+				return is_array( $all ) ? $all : array();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
 		 * Enqueue the frontend beacon script on the public site.
 		 *
 		 * On WP 6.3+ the beacon uses the native `strategy: defer` script args

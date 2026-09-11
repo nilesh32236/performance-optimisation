@@ -1,8 +1,15 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import {
+	render,
+	screen,
+	fireEvent,
+	waitFor,
+	act,
+} from '@testing-library/react';
 import '@testing-library/jest-dom';
 // eslint-disable-next-line import/no-extraneous-dependencies -- React is required for JSX rendering in tests
 import React from 'react';
 import ImageOptimization from '../ImageOptimization';
+import { apiCall } from '../../lib/apiRequest';
 
 // Mock the API request
 jest.mock( '../../lib/apiRequest', () => ( {
@@ -121,5 +128,79 @@ describe( 'ImageOptimization Component', () => {
 		expect( toggle ).not.toBeChecked();
 		fireEvent.click( toggle );
 		expect( toggle ).toBeChecked();
+	} );
+
+	it( 'renders the lazy-render toggle off by default and nests the builder exclusion', () => {
+		render( <ImageOptimization /> );
+
+		const toggle = screen.getByLabelText(
+			/Lazy-render Below-fold Sections/i
+		);
+		expect( toggle ).not.toBeChecked();
+		expect(
+			screen.queryByLabelText( /Exclude Page-builder Sections/i )
+		).not.toBeInTheDocument();
+
+		fireEvent.click( toggle );
+		expect( toggle ).toBeChecked();
+
+		const nested = screen.getByLabelText(
+			/Exclude Page-builder Sections/i
+		);
+		expect( nested ).toBeInTheDocument();
+		expect( nested ).toBeChecked();
+	} );
+
+	it( 'toggles the nested builder exclusion off', () => {
+		render( <ImageOptimization /> );
+
+		fireEvent.click(
+			screen.getByLabelText( /Lazy-render Below-fold Sections/i )
+		);
+
+		const nested = screen.getByLabelText(
+			/Exclude Page-builder Sections/i
+		);
+		expect( nested ).toBeChecked();
+		fireEvent.click( nested );
+		expect( nested ).not.toBeChecked();
+	} );
+
+	it( 'persists both lazy-render toggles via update_settings', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			message: 'Settings updated successfully.',
+		} );
+
+		render( <ImageOptimization /> );
+
+		fireEvent.click(
+			screen.getByLabelText( /Lazy-render Below-fold Sections/i )
+		);
+
+		const submitButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+
+		await act( async () => {
+			fireEvent.click( submitButton );
+		} );
+
+		expect( apiCall ).toHaveBeenCalledWith(
+			'update_settings',
+			expect.objectContaining( {
+				tab: 'image_optimisation',
+				settings: expect.objectContaining( {
+					lazyRenderBelowFold: true,
+					lazyRenderExcludeBuilders: true,
+				} ),
+			} )
+		);
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Settings updated successfully.' )
+			).toBeInTheDocument();
+		} );
 	} );
 } );
