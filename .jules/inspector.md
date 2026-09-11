@@ -73,3 +73,11 @@
 **Bug/Gap:** The `RedisSentinel` constructor was incorrectly receiving an array of configuration options instead of strictly typed positional arguments, causing a PHP `TypeError` and breaking the connection logic. Furthermore, passing `$master_name` as the fourth argument inadvertently created a persistent connection.
 **Root Cause:** The `RedisSentinel` constructor requires specific positional arguments (host, port, timeout, persistent, retry_interval, read_timeout) according to the `phpredis` extension signature.
 **Test Added:** Replaced the array argument with the required positional arguments. Ensured the fourth argument `$persistent` is passed as an empty string `''` to retain the original non-persistent connection behavior instead of mistakenly passing `$master_name`.
+## 2026-09-11 - [Resolve PHPStan Errors]
+**Bug/Gap:** PHPStan static analysis found unreachable boolean logic (, , ), missing defined check (), unused return type (), and redundant array manipulation ().
+**Root Cause:** The code evolved to make some constraints impossible to fail.
+**Test Added:** No new test added, but code refactored and tests run via PHPUnit which failed due to a missing Brain Monkey stub in `PhpDeprecationHygieneTest.php`. Fixed the test by properly mocking `__` function.
+## 2026-09-02 - [Resolve PHPStan Errors]
+**Bug/Gap:** PHPStan static analysis found unreachable boolean logic (`smallerOrEqual.alwaysFalse`, `booleanNot.alwaysTrue`, `greater.alwaysTrue`), missing defined check (`constant.notFound`), unused return type (`return.unusedType`), and redundant array manipulation (`arrayValues.list`).
+**Root Cause:** The code evolved to make some constraints impossible to fail.
+**Test Added:** Code refactored and tests run via PHPUnit which failed due to a missing Brain Monkey stub in `PhpDeprecationHygieneTest.php`. Fixed the test by properly mocking `__` function.

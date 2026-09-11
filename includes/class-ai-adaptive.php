@@ -908,7 +908,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					return $b['avg_lcp'] <=> $a['avg_lcp'];
 				}
 			);
-			$rum_summary = array_slice( array_values( $scores ), 0, 10 );
+			$rum_summary = array_slice( $scores, 0, 10 );
 
 			$trends_summary = array();
 			$count          = 0;
@@ -1364,9 +1364,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					return true;
 				}
 				$day_seconds = defined( 'DAY_IN_SECONDS' ) ? (int) DAY_IN_SECONDS : 86400;
-				if ( $day_seconds <= 0 ) {
-					$day_seconds = 86400;
-				}
 				return ( $current - $last ) >= ( $days * $day_seconds );
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -2782,7 +2779,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				}
 				$kept[] = $url;
 			}
-			return array_values( $kept );
+			return $kept;
 		}
 
 		/**
