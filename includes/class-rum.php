@@ -212,6 +212,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		private static array $field_lcp_result_memo = array();
 
 		/**
+		 * Per-request memo for the Web Vitals trends option.
+		 *
+		 * Queue ordering calls score_url_lcp() once per candidate URL when
+		 * ordering the critical-CSS / used-CSS queues (issue #1059 review); without a memo
+		 * each call re-reads/deserializes the full wppo_web_vitals_trends
+		 * option. An empty array is a valid result, so the loaded flag tracks
+		 * fetch state separately from the value.
+		 *
+		 * @since NEXT
+		 * @var array|null
+		 */
+		private static ?array $score_trends_memo = null;
+
+		/**
+		 * Whether the trends memo has been populated this request.
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static bool $score_trends_loaded = false;
+
+		/**
 		 * Flush when queue reaches this size.
 		 *
 		 * @var int
@@ -243,6 +265,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			self::$field_lcp_aggregate   = null;
 			self::$field_lcp_loaded      = false;
 			self::$field_lcp_result_memo = array();
+			self::$score_trends_memo     = null;
+			self::$score_trends_loaded   = false;
 		}
 
 		/**
@@ -1553,9 +1577,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * @since NEXT
 		 * @param string               $url Candidate queue URL.
 		 * @param array<string, float> $priority Optional pre-loaded get_path_lcp_priority() map.
+		 * @param array|null           $trends Optional pre-loaded Pagespeed::get_trends() map. Null loads (and per-request memos) it once.
 		 * @return float Worst p75 LCP in ms, or 0.0 when unknown.
 		 */
-		public static function score_url_lcp( string $url, ?array $priority = null ): float {
+		public static function score_url_lcp( string $url, ?array $priority = null, ?array $trends = null ): float {
 			try {
 				if ( '' === trim( $url ) ) {
 					return 0.0;
@@ -1575,7 +1600,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				$best = isset( $priority[ $path ] ) ? (float) $priority[ $path ] : 0.0;
 
 				if ( class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) && method_exists( 'PerformanceOptimise\Inc\Pagespeed', 'get_trends' ) && function_exists( 'esc_url_raw' ) && function_exists( 'get_option' ) ) {
-					$trends = \PerformanceOptimise\Inc\Pagespeed::get_trends();
+					if ( null === $trends ) {
+						// Per-request memo: ordering N queue URLs must not
+						// re-read/deserialize the full trends option N times
+						// (issue #1059 review). An empty array is a valid result,
+						// so track fetch state separately from the value. Reset
+						// alongside the aggregate memo via clear_field_lcp_cache().
+						if ( ! self::$score_trends_loaded ) {
+							self::$score_trends_memo   = \PerformanceOptimise\Inc\Pagespeed::get_trends();
+							self::$score_trends_loaded = true;
+						}
+						$trends = is_array( self::$score_trends_memo ) ? self::$score_trends_memo : array();
+					}
 					if ( is_array( $trends ) ) {
 						$canonical = esc_url_raw( $url );
 						foreach ( array( 'mobile', 'desktop' ) as $strategy ) {

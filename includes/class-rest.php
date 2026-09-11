@@ -672,6 +672,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$sanitized_settings['field_lcp_min_samples'] = absint( $options['ai_adaptive']['field_lcp_min_samples'] );
 			}
 
+			// Preserve the RUM-priority ordering flags when the request omits
+			// them (issue #1059): FileOptimization UI saves post the full tab,
+			// but an older client/partial save must not wipe an opt-out set via
+			// WP-CLI/DB. Mirrors the server_timing_enabled/auto_rescan preserves.
+			if ( 'file_optimisation' === $tab && ! isset( $params['settings']['ccssRumPriority'] ) && isset( $options['file_optimisation']['ccssRumPriority'] ) ) {
+				$sanitized_settings['ccssRumPriority'] = (bool) $options['file_optimisation']['ccssRumPriority'];
+			}
+			if ( 'file_optimisation' === $tab && ! isset( $params['settings']['usedCssRumPriority'] ) && isset( $options['file_optimisation']['usedCssRumPriority'] ) ) {
+				$sanitized_settings['usedCssRumPriority'] = (bool) $options['file_optimisation']['usedCssRumPriority'];
+			}
+
 			$options[ $tab ] = $sanitized_settings;
 
 			update_option( 'wppo_settings', $options );

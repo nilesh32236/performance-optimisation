@@ -2391,17 +2391,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				if ( ! $enabled ) {
 					return $templates;
 				}
-				if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'get_path_lcp_priority' ) ) {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'get_path_lcp_priority' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'score_url_lcp' ) ) {
 					return $templates;
 				}
 				$priority = \PerformanceOptimise\Inc\RUM::get_path_lcp_priority();
 				if ( empty( $priority ) ) {
 					return $templates;
 				}
+				// Fetch trends once for the whole ordering pass instead of once
+				// per template inside score_url_lcp() (issue #1059 review).
+				$trends = null;
+				if ( class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) && method_exists( 'PerformanceOptimise\Inc\Pagespeed', 'get_trends' ) ) {
+					$trends = \PerformanceOptimise\Inc\Pagespeed::get_trends();
+					if ( ! is_array( $trends ) ) {
+						$trends = array();
+					}
+				}
 				$scores = array();
 				foreach ( $templates as $template => $label ) {
 					$url                          = self::get_sample_url( (string) $template );
-					$scores[ (string) $template ] = ( is_string( $url ) && '' !== $url ) ? \PerformanceOptimise\Inc\RUM::score_url_lcp( $url, $priority ) : 0.0;
+					$scores[ (string) $template ] = ( is_string( $url ) && '' !== $url ) ? \PerformanceOptimise\Inc\RUM::score_url_lcp( $url, $priority, $trends ) : 0.0;
 				}
 				$has_signal = false;
 				foreach ( $scores as $score ) {
@@ -2414,13 +2423,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					return $templates;
 				}
 				$order = array_keys( $templates );
+				// usort() is not stable: break score ties by original FIFO
+				// position so equal-score templates keep a deterministic order.
+				$pos = array_flip( array_keys( $templates ) );
 				usort(
 					$order,
-					static function ( $a, $b ) use ( $scores ) {
+					static function ( $a, $b ) use ( $scores, $pos ) {
 						$sa = $scores[ (string) $a ] ?? 0.0;
 						$sb = $scores[ (string) $b ] ?? 0.0;
 						if ( $sa === $sb ) {
-							return 0;
+							return ( $pos[ (string) $a ] ?? 0 ) <=> ( $pos[ (string) $b ] ?? 0 );
 						}
 						return $sa > $sb ? -1 : 1;
 					}

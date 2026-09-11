@@ -1661,7 +1661,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( ! $enabled ) {
 					return $post_ids;
 				}
-				if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'get_path_lcp_priority' ) ) {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'get_path_lcp_priority' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'score_url_lcp' ) ) {
 					return $post_ids;
 				}
 				if ( ! function_exists( 'get_permalink' ) ) {
@@ -1671,10 +1671,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( empty( $priority ) ) {
 					return $post_ids;
 				}
+				// Fetch trends once for the whole ordering pass instead of once
+				// per post inside score_url_lcp() (issue #1059 review).
+				$trends = null;
+				if ( class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) && method_exists( 'PerformanceOptimise\Inc\Pagespeed', 'get_trends' ) ) {
+					$trends = \PerformanceOptimise\Inc\Pagespeed::get_trends();
+					if ( ! is_array( $trends ) ) {
+						$trends = array();
+					}
+				}
 				$scores = array();
 				foreach ( $post_ids as $post_id ) {
 					$permalink          = get_permalink( $post_id );
-					$scores[ $post_id ] = ( is_string( $permalink ) && '' !== $permalink ) ? \PerformanceOptimise\Inc\RUM::score_url_lcp( $permalink, $priority ) : 0.0;
+					$scores[ $post_id ] = ( is_string( $permalink ) && '' !== $permalink ) ? \PerformanceOptimise\Inc\RUM::score_url_lcp( $permalink, $priority, $trends ) : 0.0;
 				}
 				$has_signal = false;
 				foreach ( $scores as $score ) {
@@ -1687,13 +1696,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					return $post_ids;
 				}
 				$order = $post_ids;
+				// usort() is not stable: break score ties by original FIFO
+				// position so equal-score posts keep a deterministic order.
+				$pos = array_flip( array_values( $post_ids ) );
 				usort(
 					$order,
-					static function ( $a, $b ) use ( $scores ) {
+					static function ( $a, $b ) use ( $scores, $pos ) {
 						$sa = $scores[ (int) $a ] ?? 0.0;
 						$sb = $scores[ (int) $b ] ?? 0.0;
 						if ( $sa === $sb ) {
-							return 0;
+							return ( $pos[ (int) $a ] ?? 0 ) <=> ( $pos[ (int) $b ] ?? 0 );
 						}
 						return $sa > $sb ? -1 : 1;
 					}
@@ -1729,11 +1741,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			global $wpdb;
 			$placeholders = implode( ',', array_fill( 0, count( $post_types ), '%s' ) );
 
-			$all_ids = array();
-
 			// Intentional bypass of WP_Query filters (pre_get_posts, language plugins) for performance:
 			// direct $wpdb cursor pagination (ID > last_id) avoids OFFSET cost on large sites. Site-specific
 			// filtering must be handled separately if needed.
+			// RUM prioritization is applied per cursor batch (sort-then-enqueue):
+			// buffering every post ID plus a get_permalink() per post in one
+			// worker risks memory growth/timeouts on large sites (issue #1059
+			// review), so each 200-row batch is ordered worst-p75 first and
+			// enqueued before the next batch is fetched. Streaming preserves the
+			// original memory profile; order_post_ids_by_rum_priority() is a
+			// no-op FIFO passthrough when the setting is off or no signal exists.
 			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- Intentional direct query, $placeholders is count-derived only.
 			do {
 				// Cursor pagination via ID > last_id avoids O(offset) MySQL scans.
@@ -1751,8 +1768,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					break;
 				}
 
-				foreach ( $post_ids as $post_id ) {
-					$all_ids[] = (int) $post_id;
+				$batch_ids = self::order_post_ids_by_rum_priority( array_values( array_map( 'intval', $post_ids ) ) );
+
+				foreach ( $batch_ids as $post_id ) {
+					if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => (int) $post_id ), 'performance_optimisation' ) ) {
+						continue;
+					}
+					as_enqueue_async_action(
+						'wppo_used_css_generate',
+						array( 'post_id' => (int) $post_id ),
+						'performance_optimisation'
+					);
+					++$queued;
 				}
 
 				$last_id = (int) end( $post_ids );
@@ -1761,20 +1788,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- count() on batch is intentional for loop termination.
 			} while ( count( $post_ids ) === $batch );
 			// phpcs:enable
-
-			$all_ids = self::order_post_ids_by_rum_priority( $all_ids );
-
-			foreach ( $all_ids as $post_id ) {
-				if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => (int) $post_id ), 'performance_optimisation' ) ) {
-					continue;
-				}
-				as_enqueue_async_action(
-					'wppo_used_css_generate',
-					array( 'post_id' => (int) $post_id ),
-					'performance_optimisation'
-				);
-				++$queued;
-			}
 
 			if ( $queued > 0 ) {
 				Log::add(
