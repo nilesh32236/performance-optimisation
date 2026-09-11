@@ -7,6 +7,10 @@
 
 namespace PerformanceOptimise\Inc;
 
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
 if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 
 	/**

@@ -310,8 +310,10 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 			wppo_cleanup_network_files();
 		}
 
-		// Delete user meta.
-		delete_user_meta_by_key( 'wppo_welcome_dismissed' );
+		// Delete user meta. `delete_metadata( 'user', null, ... )` is the core
+		// metadata API; the previous helper was not a WordPress core function,
+		// so it fataled here and aborted uninstall (compliance audit fix).
+		delete_metadata( 'user', null, 'wppo_welcome_dismissed', '', true );
 
 		// Delete transients (prefix computed above with the option cleanup).
 		delete_transient( $transient_prefix . 'wppo_activation_notices' );

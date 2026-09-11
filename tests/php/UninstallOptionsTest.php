@@ -257,4 +257,44 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 			'wppo_delete_directory() must reject dot-dot traversal segments'
 		);
 	}
+
+	/**
+	 * The welcome user-meta cleanup must use the core metadata API.
+	 *
+	 * The uninstall.php entrypoint cannot be executed inside PHPUnit (it runs
+	 * standalone), so this is a static source guard. The previous helper was
+	 * not a WordPress core function and would fatal, aborting uninstall.
+	 */
+	public function test_uninstall_php_deletes_welcome_user_meta_via_core_api(): void {
+		$path   = WPPO_PLUGIN_PATH . 'uninstall.php';
+		$source = file_get_contents( $path );
+		$this->assertNotFalse( $source );
+		$source = (string) $source;
+
+		$this->assertStringContainsString(
+			"delete_metadata( 'user', null, 'wppo_welcome_dismissed', '', true );",
+			$source,
+			'uninstall.php must delete the welcome user meta via delete_metadata( \'user\', null, ... )'
+		);
+		$this->assertStringNotContainsString(
+			'delete_user_meta_by_key',
+			$source,
+			'delete_user_meta_by_key() does not exist in core and fatals uninstall'
+		);
+	}
+
+	/**
+	 * The user-meta key removed on uninstall must match the key the plugin
+	 * writes/reads elsewhere (Main::... show_welcome).
+	 */
+	public function test_uninstall_welcome_meta_key_matches_plugin_usage(): void {
+		$source = file_get_contents( WPPO_PLUGIN_PATH . 'includes/class-main.php' );
+		$this->assertNotFalse( $source );
+
+		$this->assertStringContainsString(
+			"get_user_meta( get_current_user_id(), 'wppo_welcome_dismissed', true )",
+			(string) $source,
+			'uninstall.php must delete the same user meta key the plugin reads'
+		);
+	}
 }

@@ -120,12 +120,24 @@ const WebVitalsRum = () => {
 			<table className="wppo-rum-table wppo-table">
 				<thead>
 					<tr>
-						<th>{ __( 'Day', 'performance-optimisation' ) }</th>
-						<th>{ __( 'LCP', 'performance-optimisation' ) }</th>
-						<th>{ __( 'INP', 'performance-optimisation' ) }</th>
-						<th>{ __( 'CLS', 'performance-optimisation' ) }</th>
-						<th>{ __( 'FCP', 'performance-optimisation' ) }</th>
-						<th>{ __( 'TTFB', 'performance-optimisation' ) }</th>
+						<th scope="col">
+							{ __( 'Day', 'performance-optimisation' ) }
+						</th>
+						<th scope="col">
+							{ __( 'LCP', 'performance-optimisation' ) }
+						</th>
+						<th scope="col">
+							{ __( 'INP', 'performance-optimisation' ) }
+						</th>
+						<th scope="col">
+							{ __( 'CLS', 'performance-optimisation' ) }
+						</th>
+						<th scope="col">
+							{ __( 'FCP', 'performance-optimisation' ) }
+						</th>
+						<th scope="col">
+							{ __( 'TTFB', 'performance-optimisation' ) }
+						</th>
 					</tr>
 				</thead>
 				<tbody>
