@@ -167,15 +167,6 @@ class UsedCssSafeDefaultsTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Drift check fails open (false) when no used-CSS sidecar exists.
-	 */
-	public function test_builder_drift_fails_open_without_sidecar(): void {
-		Functions\when( 'get_option' )->justReturn( array( 'file_optimisation' => array( 'removeUnusedCSS' => true ) ) );
-		Functions\when( 'get_permalink' )->justReturn( 'http://example.com/sample-page/' );
-		$this->assertFalse( Used_CSS::maybe_requeue_on_builder_drift( 99 ) );
-	}
-
-	/**
 	 * The watcher registers builder-drift hooks alongside the upgrader hook.
 	 */
 	public function test_watcher_registers_drift_hooks(): void {

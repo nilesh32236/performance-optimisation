@@ -413,21 +413,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		/**
 		 * Stable content hash of CSS source (issue #1038).
 		 *
-		 * Pure local string hash — never fetches remotely. Used to detect
-		 * stylesheet edits that preserve mtime (deploy sync, minify rebuild
-		 * in the same second) so stale CCSS / used-CSS regenerates. SHA-256
-		 * is stable across installs and salt rotations (unlike wp_hash), so
-		 * stored checksums and `.sha256` sidecars stay comparable.
+		 * Thin backward-compatible wrapper around the shared
+		 * {@see Util::compute_css_checksum()} (audit #7) so existing callers
+		 * and tests keep working while both CSS pipelines share one
+		 * implementation.
 		 *
 		 * @param string $css CSS content.
 		 * @return string SHA-256 checksum, or '' for empty input.
 		 * @since NEXT
 		 */
 		public static function compute_css_checksum( string $css ): string {
-			if ( '' === $css ) {
-				return '';
-			}
-			return hash( 'sha256', $css );
+			return Util::compute_css_checksum( $css );
 		}
 
 		/**
