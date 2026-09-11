@@ -57,6 +57,10 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 	protected function setUp(): void {
 		parent::setUp();
 		\Brain\Monkey\setUp();
+		// Isolate from $GLOBALS['wp_version'] leaks by earlier suites (e.g.
+		// CacheTest/CssCombineFallbackTest leave a version behind); the
+		// version-gated separate-assets helpers treat "unset" as newest core.
+		unset( $GLOBALS['wp_version'] );
 		// Salted-cache gate default (issue #882).
 		Functions\when( 'wp_using_ext_object_cache' )->justReturn( true );
 

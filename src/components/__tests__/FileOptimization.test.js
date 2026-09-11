@@ -363,6 +363,49 @@ describe( 'FileOptimization Component', () => {
 		} );
 	} );
 
+	it( 'shows the logged-out smoke note when Remove Unused CSS is on', async () => {
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+
+		const switchField = screen.getByLabelText( /Remove Unused CSS/i );
+		fireEvent.click( switchField );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( /logged-out \(incognito\) window/i )
+			).toBeInTheDocument();
+		} );
+		expect(
+			screen.getByText( 'Purge Page Cache + Used CSS' )
+		).toBeInTheDocument();
+	} );
+
+	it( 'purge button calls purge_used_css_cache API and shows feedback', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			message: 'Page cache and used CSS purged.',
+		} );
+
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+
+		const switchField = screen.getByLabelText( /Remove Unused CSS/i );
+		fireEvent.click( switchField );
+
+		const purgeButton = await screen.findByText(
+			'Purge Page Cache + Used CSS'
+		);
+		fireEvent.click( purgeButton );
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith( 'purge_used_css_cache' );
+		} );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Page cache and used CSS purged.' )
+			).toBeInTheDocument();
+		} );
+	} );
+
 	it( 'does not call used_css_regenerate if saving settings fails', async () => {
 		apiCall.mockResolvedValueOnce( {
 			success: false,

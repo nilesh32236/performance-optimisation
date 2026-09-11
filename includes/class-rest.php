@@ -181,9 +181,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+				'woo_cache_self_test'       => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'get_woo_cache_self_test' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
 				'used_css_regenerate'       => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'used_css_regenerate' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
+				'purge_used_css_cache'      => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'purge_used_css_cache' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
@@ -630,6 +642,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// Preserve the auto_rescan frequency when the request omits it.
 			if ( 'performance_audit' === $tab && ! isset( $params['settings']['auto_rescan'] ) && isset( $options['performance_audit']['auto_rescan'] ) ) {
 				$sanitized_settings['auto_rescan'] = $options['performance_audit']['auto_rescan'];
+			}
+
+			// Preserve dismissed AI suggestions when the request omits them
+			// (issue #1036): AiPanel save posts only the toggles, while the
+			// dismiss action posts the full list — a toggle save must not
+			// wipe prior dismissals.
+			if ( 'ai_adaptive' === $tab && ! isset( $params['settings']['dismissed_suggestions'] ) && isset( $options['ai_adaptive']['dismissed_suggestions'] ) ) {
+				$dismissed = $options['ai_adaptive']['dismissed_suggestions'];
+				if ( is_array( $dismissed ) ) {
+					$sanitized_dismissed = array();
+					foreach ( $dismissed as $metric ) {
+						if ( ! is_string( $metric ) ) {
+							continue;
+						}
+						$m = sanitize_text_field( $metric );
+						if ( '' !== $m ) {
+							$sanitized_dismissed[] = substr( $m, 0, 64 );
+						}
+					}
+					$sanitized_settings['dismissed_suggestions'] = array_values( array_unique( $sanitized_dismissed ) );
+				}
+			}
+
+			// Preserve the field-LCP minimum-sample threshold when the request
+			// omits it (issue #1036): AiPanel save posts only the toggles, so
+			// a toggle save must not wipe a custom threshold.
+			if ( 'ai_adaptive' === $tab && ! isset( $params['settings']['field_lcp_min_samples'] ) && isset( $options['ai_adaptive']['field_lcp_min_samples'] ) ) {
+				$sanitized_settings['field_lcp_min_samples'] = absint( $options['ai_adaptive']['field_lcp_min_samples'] );
 			}
 
 			$options[ $tab ] = $sanitized_settings;
@@ -1159,6 +1199,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'lz4'  => defined( '\Redis::COMPRESSION_LZ4' ),
 					'zstd' => defined( '\Redis::COMPRESSION_ZSTD' ),
 				);
+				if ( ! isset( $status['serializers'] ) ) {
+					$status['serializers'] = $manager->get_serializer_support();
+				}
 				return $this->send_response( $status );
 			}
 
@@ -1166,8 +1209,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$config = $this->build_redis_config( $params );
 				$ping   = $manager->ping( $config );
 				if ( is_wp_error( $ping ) ) {
-					Log::add( __( 'Redis connection ping failed.', 'performance-optimisation' ) );
-					return $this->send_response( null, false, 400, __( 'Redis connection failed.', 'performance-optimisation' ) );
+					// No Log::add here: Object_Cache::ping() already records
+					// the failure in-app via log_redis_failure().
+					return $this->send_response( $this->redis_error_payload( $ping, 'error' ), false, 400, __( 'Redis connection failed.', 'performance-optimisation' ) );
 				}
 
 				return $this->send_response( array( 'success' => true ) );
@@ -1178,8 +1222,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$result = $manager->enable( $config );
 
 				if ( is_wp_error( $result ) ) {
-					Log::add( __( 'Redis connection enable failed.', 'performance-optimisation' ) );
-					return $this->send_response( null, false, 400, __( 'Redis connection failed.', 'performance-optimisation' ) );
+					// No Log::add here: enable() → ping() already logged it.
+					return $this->send_response( $this->redis_error_payload( $result, 'error' ), false, 400, __( 'Redis connection failed.', 'performance-optimisation' ) );
 				}
 
 				Log::add( __( 'Object Cache enabled.', 'performance-optimisation' ) );
@@ -1208,8 +1252,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$result = $manager->enable( $config );
 
 				if ( is_wp_error( $result ) ) {
-					Log::add( __( 'Object Cache circuit recovery failed — Redis still unreachable.', 'performance-optimisation' ) );
-					return $this->send_response( null, false, 400, __( 'Redis is still unreachable. The circuit breaker stays open.', 'performance-optimisation' ) );
+					// No Log::add here: enable() → ping() already logged it.
+					return $this->send_response( $this->redis_error_payload( $result, 'warning' ), false, 400, __( 'Redis is still unreachable. The circuit breaker stays open.', 'performance-optimisation' ) );
 				}
 
 				$manager->clear_circuit_state();
@@ -1228,7 +1272,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					Log::add( __( 'Object Cache flushed.', 'performance-optimisation' ) );
 					return $this->send_response( true, true, 200, __( 'Object Cache flushed.', 'performance-optimisation' ) );
 				}
-				return $this->send_response( null, false, 400, __( 'Failed to flush object cache.', 'performance-optimisation' ) );
+				// No Log::add here: Object_Cache::flush() already recorded
+				// the failure in-app. Forward the manager's real error so
+				// the SPA notice keeps its specificity.
+				$flush_error = $manager->get_last_flush_error();
+				if ( ! ( $flush_error instanceof \WP_Error ) ) {
+					$flush_error = new \WP_Error( 'flush_fail', __( 'Flush reported failure.', 'performance-optimisation' ) );
+				}
+				return $this->send_response( $this->redis_error_payload( $flush_error, 'error' ), false, 400, __( 'Failed to flush object cache.', 'performance-optimisation' ) );
 			}
 
 			return $this->send_response( null, false, 400, __( 'Invalid action.', 'performance-optimisation' ) );
@@ -1343,6 +1394,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 			$nodes = sanitize_text_field( (string) $nodes );
 			return $nodes ? array( $nodes ) : array();
+		}
+
+		/**
+		 * Build a useNotice-compatible error payload for Redis failures.
+		 *
+		 * The SPA reads `res.success` + `res.message`; this adds a structured
+		 * `code` + `notice` ({ type, message }) body so useNotice() can render
+		 * the failure with the right severity without changing the envelope.
+		 *
+		 * @since NEXT
+		 * @param \WP_Error $error  Failing result.
+		 * @param string    $notice Notice severity: 'error', 'warning', 'info'.
+		 * @return array Shape { code: string, notice: array{ type: string, message: string } }.
+		 */
+		private function redis_error_payload( $error, string $notice = 'error' ): array {
+			$allowed = array( 'error', 'warning', 'info' );
+			if ( ! in_array( $notice, $allowed, true ) ) {
+				$notice = 'error';
+			}
+			$message = $error->get_error_message();
+			if ( '' === $message ) {
+				$message = __( 'Redis connection failed.', 'performance-optimisation' );
+			}
+			return array(
+				'code'   => $error->get_error_code(),
+				'notice' => array(
+					'type'    => $notice,
+					'message' => $message,
+				),
+			);
 		}
 
 		/**
@@ -1689,6 +1770,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		}
 
 		/**
+		 * Verifiable WooCommerce cart/checkout cache-exclusion self-test (read-only).
+		 *
+		 * Returns Util::woo_cache_self_test(): detected Woo paths against the
+		 * exclusion list, safe-mode toggle state, and per-URL pass/fail
+		 * proving cart/checkout/account bypass the static HTML cache with
+		 * DONOTCACHEPAGE honored. Never writes options, transients, or files.
+		 *
+		 * @param \WP_REST_Request $_request The request object (unused).
+		 * @since NEXT
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function get_woo_cache_self_test( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			return $this->send_response( Util::woo_cache_self_test() );
+		}
+
+		/**
 		 * Regenerate used-CSS for all pages or a single post.
 		 *
 		 * @param \WP_REST_Request $request The request object.
@@ -1747,6 +1844,66 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					__( 'Queued %d used-CSS regeneration jobs.', 'performance-optimisation' ),
 					$queued
 				)
+			);
+		}
+
+		/**
+		 * Purge page cache and used CSS together via a single action (issue #1023).
+		 *
+		 * Shared purge path: delegates to Used_CSS::purge_coupled() which makes
+		 * a guarded call into the Cache layer. Accepts an optional `path` for a
+		 * single-page coupled purge; empty purges all.
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		public function purge_used_css_cache( \WP_REST_Request $request ): \WP_REST_Response {
+			$params = $request->get_params();
+			$path   = isset( $params['path'] ) ? sanitize_text_field( $params['path'] ) : null;
+
+			$url_path = null;
+			if ( null !== $path && '' !== $path ) {
+				$sanitized = Util::sanitize_cache_url_path( wp_normalize_path( $path ) );
+				if ( '' === $sanitized ) {
+					return $this->send_response( null, false, 400, __( 'Invalid path provided.', 'performance-optimisation' ) );
+				}
+				$url_path = $sanitized;
+			}
+
+			$result  = Used_CSS::purge_coupled( $url_path );
+			$page_ok = ! empty( $result['page_cache'] );
+			$css_ok  = ! empty( $result['used_css'] );
+			$data    = array(
+				'page_cache' => $page_ok,
+				'used_css'   => $css_ok,
+			);
+
+			if ( ! $page_ok && ! $css_ok ) {
+				Log::add( __( 'Coupled purge failed: page cache and used CSS not purged.', 'performance-optimisation' ) );
+				return $this->send_response( $data, false, 500, __( 'Failed to purge page cache and used CSS.', 'performance-optimisation' ) );
+			}
+
+			if ( $page_ok && $css_ok ) {
+				Log::add( __( 'Coupled purge: page cache and used CSS purged.', 'performance-optimisation' ) );
+				return $this->send_response(
+					$data,
+					true,
+					200,
+					__( 'Page cache and used CSS purged.', 'performance-optimisation' )
+				);
+			}
+
+			$message = $page_ok
+				? __( 'Page cache purged, but used CSS purge failed.', 'performance-optimisation' )
+				: __( 'Used CSS purged, but page cache purge failed.', 'performance-optimisation' );
+			Log::add( $message );
+
+			return $this->send_response(
+				$data,
+				true,
+				200,
+				$message
 			);
 		}
 

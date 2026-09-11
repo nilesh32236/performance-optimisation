@@ -86,6 +86,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			// so this backup covers exactly the ordered-write contract.
 			$backup = self::read_existing_rules( $htaccess_file, $wp_filesystem );
 
+			// Identical-content skip: avoid touching the filesystem when the
+			// desired block already matches the existing block (including the
+			// disable-when-already-empty case). Prevents mtime churn and
+			// narrows the race window for concurrent saves.
+			$existing_normalized = self::normalize_rules( null === $backup ? array() : $backup );
+			$desired_normalized  = self::normalize_rules( $rules );
+			if ( implode( "\n", $existing_normalized ) === implode( "\n", $desired_normalized ) ) {
+				return true;
+			}
+
+			// Preferred path: atomic temp+rename with post-write verification.
+			// Returns null when the filesystem transport cannot support atomic
+			// writes (missing methods), in which case fall through to legacy.
+			$atomic = self::atomic_write_verified( $htaccess_file, $wp_filesystem, $rules );
+			if ( true === $atomic ) {
+				return true;
+			}
+			if ( false === $atomic ) {
+				return false;
+			}
+
 			$result = insert_with_markers( $htaccess_file, self::MARKER, $rules );
 
 			if ( ! $result && null !== $backup ) {
@@ -93,7 +114,268 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				return false;
 			}
 
+			if ( $result && ! self::verify_after_write( $htaccess_file, $wp_filesystem, array() !== $desired_normalized ) ) {
+				if ( null !== $backup ) {
+					insert_with_markers( $htaccess_file, self::MARKER, $backup );
+				}
+				return false;
+			}
+
 			return (bool) $result;
+		}
+
+		/**
+		 * Normalize a rules array for identical-content comparison.
+		 *
+		 * Trims trailing empty lines so a stored block ("RuleA\n" split keeps a
+		 * trailing "") compares equal to the equivalent get_rules() output.
+		 * Internal blank lines and ordering are preserved.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $rules Raw rules lines.
+		 * @return array Normalized rules lines.
+		 */
+		private static function normalize_rules( array $rules ): array {
+			$normalized = array_values( $rules );
+			while ( array() !== $normalized && '' === end( $normalized ) ) {
+				array_pop( $normalized );
+			}
+			return $normalized;
+		}
+
+		/**
+		 * Serialize a rules array into a full marker block.
+		 *
+		 * Byte-identical with core insert_with_markers() formatting so the
+		 * identical-check, the atomic writer, and the verifier agree.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $rules Rules lines.
+		 * @return string Marker block, or empty string when there are no rules.
+		 */
+		private static function build_marker_block( array $rules ): string {
+			$normalized = self::normalize_rules( $rules );
+			if ( array() === $normalized ) {
+				return '';
+			}
+			return '# BEGIN ' . self::MARKER . "\n" . implode( "\n", $normalized ) . "\n# END " . self::MARKER . "\n";
+		}
+
+		/**
+		 * Splice a marker block into full .htaccess contents.
+		 *
+		 * Replaces the existing wppo_rules block in place (preserving all other
+		 * markers such as WordPress and LSCACHE and their order), appends when
+		 * absent, or removes the block when the new block is empty.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $current   Current .htaccess contents.
+		 * @param string $new_block New marker block (empty string to remove).
+		 * @return string Updated .htaccess contents.
+		 */
+		private static function splice_block( string $current, string $new_block ): string {
+			$begin = '# BEGIN ' . self::MARKER;
+			$end   = '# END ' . self::MARKER;
+
+			$start = strpos( $current, $begin );
+			$stop  = strpos( $current, $end );
+
+			if ( false !== $start && false !== $stop && $stop > $start ) {
+				$line_end = strpos( $current, "\n", $stop );
+				$head     = substr( $current, 0, $start );
+				$tail     = false === $line_end ? '' : substr( $current, $line_end + 1 );
+				if ( '' === $new_block ) {
+					return rtrim( $head, "\r\n" ) . ( '' === $tail ? '' : "\n" . ltrim( $tail, "\r\n" ) );
+				}
+				return $head . $new_block . ltrim( $tail, "\r\n" );
+			}
+
+			if ( '' === $new_block ) {
+				return $current;
+			}
+
+			if ( '' === $current ) {
+				return $new_block;
+			}
+
+			return rtrim( $current, "\r\n" ) . "\n" . $new_block;
+		}
+
+		/**
+		 * Verify .htaccess contents after a write.
+		 *
+		 * Asserts exactly one wppo block (or zero when rules were removed),
+		 * BEGIN before END, and balanced <IfModule> tags inside the block.
+		 * Pure string check — trivially unit-testable.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $contents     Full .htaccess contents.
+		 * @param bool   $expect_block Whether a wppo block is expected.
+		 * @return bool True when valid.
+		 */
+		private static function verify_htaccess_contents( string $contents, bool $expect_block ): bool {
+			$begin = '# BEGIN ' . self::MARKER;
+			$end   = '# END ' . self::MARKER;
+
+			$begin_count = substr_count( $contents, $begin );
+			$end_count   = substr_count( $contents, $end );
+
+			if ( ! $expect_block ) {
+				return 0 === $begin_count && 0 === $end_count;
+			}
+
+			if ( 1 !== $begin_count || 1 !== $end_count ) {
+				return false;
+			}
+
+			$start = strpos( $contents, $begin );
+			$stop  = strpos( $contents, $end );
+			if ( false === $start || false === $stop || $stop <= $start ) {
+				return false;
+			}
+
+			$block = substr( $contents, $start, $stop - $start );
+			if ( ! is_string( $block ) ) {
+				return false;
+			}
+
+			$open  = substr_count( $block, '<IfModule' );
+			$close = substr_count( $block, '</IfModule>' );
+			if ( $open !== $close ) {
+				return false;
+			}
+
+			return true;
+		}
+
+		/**
+		 * Re-read .htaccess and verify it after a legacy write.
+		 *
+		 * Fail-open: returns true when verification is impossible (missing
+		 * get_contents/exists methods) so untestable transports keep the legacy
+		 * behavior instead of fataling.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $htaccess_file Absolute path to the .htaccess file.
+		 * @param mixed  $wp_filesystem WP_Filesystem instance.
+		 * @param bool   $expect_block  Whether a wppo block is expected.
+		 * @return bool True when valid or unverifiable.
+		 */
+		private static function verify_after_write( string $htaccess_file, $wp_filesystem, bool $expect_block ): bool {
+			if ( ! $wp_filesystem || ! method_exists( $wp_filesystem, 'exists' ) || ! method_exists( $wp_filesystem, 'get_contents' ) ) {
+				return true;
+			}
+			if ( ! $wp_filesystem->exists( $htaccess_file ) ) {
+				return ! $expect_block;
+			}
+			$contents = $wp_filesystem->get_contents( $htaccess_file );
+			if ( ! is_string( $contents ) ) {
+				return true;
+			}
+			return self::verify_htaccess_contents( $contents, $expect_block );
+		}
+
+		/**
+		 * Atomically write .htaccess via temp file + rename with verification.
+		 *
+		 * Writes the spliced contents to a temp file in the same directory (same
+		 * filesystem, so rename is atomic), keeps one backup generation
+		 * (.wppo-bak), renames over the original, then re-reads and verifies
+		 * exactly one wppo block. On verification failure the backup is
+		 * restored so prior rules stay intact. On any temp/rename failure
+		 * returns null so the caller falls back to insert_with_markers().
+		 * Never leaves a missing .htaccess. Multisite-safe: only touches the
+		 * per-site ABSPATH .htaccess passed in.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $htaccess_file Absolute path to the .htaccess file.
+		 * @param mixed  $wp_filesystem WP_Filesystem instance.
+		 * @param array  $rules         Desired rules lines.
+		 * @return bool|null True on success, false on verified failure, null when atomic write is unsupported.
+		 */
+		private static function atomic_write_verified( string $htaccess_file, $wp_filesystem, array $rules ): ?bool {
+			$required = array( 'exists', 'get_contents', 'put_contents', 'move', 'copy', 'delete' );
+			foreach ( $required as $method ) {
+				if ( ! $wp_filesystem || ! method_exists( $wp_filesystem, $method ) ) {
+					return null;
+				}
+			}
+
+			$current = '';
+			if ( $wp_filesystem->exists( $htaccess_file ) ) {
+				$current = $wp_filesystem->get_contents( $htaccess_file );
+				if ( ! is_string( $current ) ) {
+					return null;
+				}
+			}
+
+			$new_block    = self::build_marker_block( $rules );
+			$new_contents = self::splice_block( $current, $new_block );
+
+			if ( $new_contents === $current ) {
+				return true;
+			}
+
+			$expect_block = array() !== self::normalize_rules( $rules );
+			$backup_file  = $htaccess_file . '.wppo-bak';
+
+			if ( '' !== $current ) {
+				// Best-effort single backup generation; in-memory $current
+				// remains the authoritative restore source if copy fails.
+				$wp_filesystem->copy( $htaccess_file, $backup_file, true );
+			}
+
+			if ( function_exists( 'wp_rand' ) ) {
+				$suffix = (string) wp_rand( 100000, 999999 );
+			} elseif ( function_exists( 'mt_rand' ) ) {
+				$suffix = (string) mt_rand( 100000, 999999 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.rand_mt_rand -- Fallback when wp_rand() is unavailable.
+			} else {
+				return null;
+			}
+			$tmp_file = $htaccess_file . '.wppo-tmp-' . $suffix;
+
+			$mode = defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644;
+			if ( ! $wp_filesystem->put_contents( $tmp_file, $new_contents, $mode ) ) {
+				if ( $wp_filesystem->exists( $tmp_file ) ) {
+					$wp_filesystem->delete( $tmp_file );
+				}
+				return null;
+			}
+
+			if ( ! $wp_filesystem->move( $tmp_file, $htaccess_file, true ) ) {
+				if ( $wp_filesystem->exists( $tmp_file ) ) {
+					$wp_filesystem->delete( $tmp_file );
+				}
+				return null;
+			}
+
+			$written = $wp_filesystem->get_contents( $htaccess_file );
+			if ( ! is_string( $written ) ) {
+				$wp_filesystem->put_contents( $htaccess_file, $current, $mode );
+				return false;
+			}
+
+			if ( ! self::verify_htaccess_contents( $written, $expect_block ) ) {
+				$restored = false;
+				if ( $wp_filesystem->exists( $backup_file ) ) {
+					$restored = (bool) $wp_filesystem->copy( $backup_file, $htaccess_file, true );
+				}
+				if ( ! $restored ) {
+					$restored = (bool) $wp_filesystem->put_contents( $htaccess_file, $current, $mode );
+				}
+				if ( ! $restored ) {
+					return false;
+				}
+				return false;
+			}
+
+			return true;
 		}
 
 		/**

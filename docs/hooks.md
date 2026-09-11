@@ -246,6 +246,39 @@ add_filter( 'wppo_builder_purge_map', function( $map ) {
 
 ---
 
+### `wppo_used_css_safelist`
+Filters the used-CSS safelist (issue #1023). The merged built-in (Elementor + popup presets) + user safelist is passed through this filter when a listener is registered (`has_filter`-guarded). Return the list to keep. @since NEXT.
+
+**Parameters:**
+- `$safelist` *(string[])* — Merged safelist selectors.
+
+**Example:**
+```php
+add_filter( 'wppo_used_css_safelist', function( $safelist ) {
+    $safelist[] = '.my-popup-';
+    return $safelist;
+} );
+```
+
+---
+
+### `wppo_builder_drift_requeue`
+Fires after builder-drift detection requeues used-CSS regeneration (issue #1023). Emitted by `Builder_Purge_Watcher::on_builder_drift()` (no args, Elementor CSS regen; full-site purge, at most once per request) and `Builder_Purge_Watcher::on_builder_drift_save( $post_id )` (explicit editor save, always requeues without an mtime check since the save itself proves the markup changed; fires only when a job was queued). @since NEXT.
+
+**Parameters:**
+- `$post_id` *(int, optional)* — Post ID saved in the builder (only for the editor-save variant).
+
+**Example:**
+```php
+add_action( 'wppo_builder_drift_requeue', function( $post_id = 0 ) {
+    if ( $post_id ) {
+        error_log( "Used CSS requeued for post {$post_id} after builder drift." );
+    }
+}, 10, 1 );
+```
+
+---
+
 ### `wppo_exclude_delay_js`
 Filters the list of script handles or URL substrings excluded from JavaScript delay loading.
 
@@ -786,6 +819,40 @@ Filters AI-injected speculation rules. @since NEXT.
 
 ---
 
+### `wppo_ai_anomaly_detected`
+Filters the detected performance anomalies (LCP +30% relative or CLS +0.05 absolute delta, RUM-corroborated, 7-day cooldown). @since NEXT.
+
+At most one anomaly is passed; return an empty array to suppress the banner. The legacy `wppo_ai_lcp_regression` filter still runs for LCP anomalies.
+
+**Parameters:**
+- `$anomalies` *(array[])* — At most one anomaly array (`key`, `metric` (`lcp`|`cls`), `baseline`, `current`, plus `change_pct` for LCP or `change_abs` for CLS).
+
+---
+
+### `wppo_ai_lcp_regression`
+Filters the detected LCP regression anomalies (backward compatibility; runs after `wppo_ai_anomaly_detected` for LCP anomalies). @since NEXT.
+
+**Parameters:**
+- `$anomalies` *(array[])* — At most one anomaly array.
+
+---
+
+### `wppo_ai_anomaly_cooldown_days`
+Filters the anomaly cooldown window in days (single banner max). @since NEXT.
+
+**Parameters:**
+- `$days` *(int)* — Cooldown days (default 7, from `ai_adaptive.anomaly_cooldown_days`).
+
+---
+
+### `wppo_ai_anomaly_min_samples`
+Filters the minimum numeric samples before an anomaly arm may fire (trend arm and RUM corroboration gate). @since NEXT.
+
+**Parameters:**
+- `$min` *(int)* — Minimum samples (default 10, from `ai_adaptive.anomaly_min_samples`).
+
+---
+
 ### `wppo_speculation_list_urls`
 Filters the high-value speculation list URLs (home + `performance_audit.high_value_urls` + RUM top URLs, same-site validated, cart/checkout/account/query-string/fragment excluded, capped at 10). @since NEXT.
 
@@ -812,6 +879,17 @@ Filters the speculation rules after the high-value list rule is appended. @since
 **Parameters:**
 - `$rules` *(array)* — Speculation rules array.
 - `$urls` *(string[])* — List URLs that were appended.
+
+---
+
+### `wppo_speculation_exclusions`
+Filters the speculation-rules href exclusion patterns (auth, admin, REST, generic commerce cart/checkout/account, WooCommerce dynamic paths, plus user `speculationExcludeUrls`). Merged fill-gaps-only via `wp_speculation_rules_href_exclude_paths` (WP 6.8+) so the core ruleset is never duplicated. @since NEXT.
+
+Intentionally narrow: no `*logout*` / `*nonce*` / `*add-to-cart*` substring wildcards are emitted — those are query-param actions (`?_wpnonce=`, `?action=logout`, `?add-to-cart=`) already excluded by core's `?`-URL handling, and substring wildcards would also block legitimate slugs containing those words (e.g. a post about "add to cart").
+
+**Parameters:**
+- `$excludes` *(string[])* — Canonical exclusion patterns.
+- `$preload_settings` *(array)* — The plugin's preload_settings option value.
 
 ---
 
@@ -1038,6 +1116,14 @@ Filters the delay-JS commerce preset exclusions (jQuery, cart-fragments, checkou
 
 **Parameters:**
 - `$preset` *(string[])* — Commerce preset exclusion patterns.
+
+---
+
+### `wppo_delay_js_builder_exclusions`
+Filters the delay-JS builder preset exclusions (Elementor, Divi, Bricks, WPBakery, Oxygen, block interactivity runtimes). Merged via `array_unique` with the commerce/slider presets and user excludes. @since NEXT.
+
+**Parameters:**
+- `$preset` *(string[])* — Builder preset exclusion patterns.
 
 ---
 

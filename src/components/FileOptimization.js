@@ -155,7 +155,13 @@ const FileOptimization = ( {
 
 	const [ settings, setSettings ] = useState( defaultSettings );
 	const [ isLoading, setIsLoading ] = useState( false );
+	const [ isPurging, setIsPurging ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
+	const {
+		notice: purgeNotice,
+		notify: notifyPurge,
+		dismiss: dismissPurge,
+	} = useNotice();
 	const { setIsDirty } = useContext( UnsavedChangesContext );
 	const [ baseline, setBaseline ] = useState( defaultSettings );
 	// Baseline is intentionally derived per-key (not per-object-identity)
@@ -541,6 +547,49 @@ const FileOptimization = ( {
 			} );
 		} finally {
 			setIsLoading( false );
+		}
+	};
+
+	const handlePurgeUsedCssCache = async () => {
+		setIsPurging( true );
+		dismissPurge();
+		try {
+			const res = await apiCall( 'purge_used_css_cache' );
+			if ( res.success ) {
+				notifyPurge( {
+					type: 'success',
+					message:
+						res.message ||
+						__(
+							'Page cache and used CSS purged.',
+							'performance-optimisation'
+						),
+					durationMs: 3000,
+				} );
+			} else {
+				notifyPurge( {
+					type: 'error',
+					message:
+						res.message ||
+						__(
+							'Failed to purge page cache and used CSS.',
+							'performance-optimisation'
+						),
+					durationMs: 3000,
+				} );
+			}
+		} catch ( err ) {
+			console.error( 'Failed to purge page cache and used CSS.', err );
+			notifyPurge( {
+				type: 'error',
+				message: __(
+					'An unexpected error occurred.',
+					'performance-optimisation'
+				),
+				durationMs: 3000,
+			} );
+		} finally {
+			setIsPurging( false );
 		}
 	};
 
@@ -1007,6 +1056,21 @@ const FileOptimization = ( {
 												</p>
 											</>
 										) }
+										<NoticeBanner
+											type="info"
+											className="wppo-mt-12"
+											message={ __(
+												'Smoke test: verify key pages in a logged-out (incognito) window after enabling — used CSS is generated from the logged-out view.',
+												'performance-optimisation'
+											) }
+										/>
+										{ purgeNotice && (
+											<NoticeBanner
+												type={ purgeNotice.type }
+												message={ purgeNotice.message }
+												onDismiss={ dismissPurge }
+											/>
+										) }
 										<button
 											className="wppo-button wppo-button--secondary wppo-mt-12"
 											onClick={ handleRegenerateUsedCSS }
@@ -1015,6 +1079,17 @@ const FileOptimization = ( {
 										>
 											{ __(
 												'Regenerate Used CSS',
+												'performance-optimisation'
+											) }
+										</button>
+										<button
+											className="wppo-button wppo-button--secondary wppo-mt-12"
+											onClick={ handlePurgeUsedCssCache }
+											type="button"
+											disabled={ isPurging }
+										>
+											{ __(
+												'Purge Page Cache + Used CSS',
 												'performance-optimisation'
 											) }
 										</button>

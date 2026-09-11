@@ -127,6 +127,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		public const MAX_LCP_SAMPLES_PER_SEGMENT = 100;
 
 		/**
+		 * Maximum distinct INP device × template segments tracked per path bucket.
+		 *
+		 * Bounds the `inpSeg` map added for RUM-gated INP-aware delay
+		 * suggestions (issue #1036) so the aggregate option stays within its
+		 * byte budget. Mirrors MAX_LCP_SEGMENTS_PER_PATH.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const MAX_INP_SEGMENTS_PER_PATH = 6;
+
+		/**
+		 * Maximum INP samples retained per device × template segment.
+		 *
+		 * Capped most-recent reservoir used solely for p75 computation;
+		 * oldest values are dropped first. Mirrors MAX_LCP_SAMPLES_PER_SEGMENT.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const MAX_INP_SAMPLES_PER_SEGMENT = 100;
+
+		/**
 		 * Maximum length (chars) accepted for an LCP element URL.
 		 *
 		 * @since NEXT
@@ -874,6 +897,66 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 						}
 					}
 
+					// Device × template INP segments (issue #1036): bounded per-path
+					// `inpSeg` map keyed `{device}|{template}` holding n/sum/
+					// min/max plus a capped most-recent reservoir for p75.
+					// Mirrors the `lcpSeg` block above; reuses the same device/
+					// template sanitization and the existing option byte-budget
+					// loop below. No new option or transient names. Fail-open:
+					// any malformed queue entry is skipped, never fatal.
+					if ( isset( $sample['inp'] ) ) {
+						$inp_value      = (float) $sample['inp'];
+						$raw_device_inp = isset( $sample['device'] ) && is_string( $sample['device'] ) ? sanitize_text_field( $sample['device'] ) : '';
+						$device_inp     = strtolower( trim( $raw_device_inp ) );
+						if ( 'mobile' !== $device_inp && 'desktop' !== $device_inp ) {
+							$device_inp = 'unknown';
+						}
+						$raw_template_inp = isset( $sample['template'] ) && is_string( $sample['template'] ) ? sanitize_text_field( $sample['template'] ) : '';
+						$template_inp     = '' !== trim( $raw_template_inp ) ? substr( $raw_template_inp, 0, 64 ) : 'unknown';
+						$inp_seg_key      = $device_inp . '|' . $template_inp;
+						if ( ! isset( $bucket['inpSeg'] ) || ! is_array( $bucket['inpSeg'] ) ) {
+							$bucket['inpSeg'] = array();
+						}
+						if ( ! isset( $bucket['inpSeg'][ $inp_seg_key ] ) || ! is_array( $bucket['inpSeg'][ $inp_seg_key ] ) ) {
+							$bucket['inpSeg'][ $inp_seg_key ] = array(
+								'device'   => $device_inp,
+								'template' => $template_inp,
+								'n'        => 0,
+								'sum'      => 0.0,
+								'min'      => $inp_value,
+								'max'      => $inp_value,
+								'samples'  => array(),
+							);
+						}
+						++$bucket['inpSeg'][ $inp_seg_key ]['n'];
+						$bucket['inpSeg'][ $inp_seg_key ]['sum'] += $inp_value;
+						$bucket['inpSeg'][ $inp_seg_key ]['min']  = min( $bucket['inpSeg'][ $inp_seg_key ]['min'], $inp_value );
+						$bucket['inpSeg'][ $inp_seg_key ]['max']  = max( $bucket['inpSeg'][ $inp_seg_key ]['max'], $inp_value );
+						$inp_samples                              = isset( $bucket['inpSeg'][ $inp_seg_key ]['samples'] ) && is_array( $bucket['inpSeg'][ $inp_seg_key ]['samples'] ) ? $bucket['inpSeg'][ $inp_seg_key ]['samples'] : array();
+						$inp_samples[]                            = $inp_value;
+						if ( count( $inp_samples ) > self::MAX_INP_SAMPLES_PER_SEGMENT ) {
+							$inp_samples = array_slice( $inp_samples, -self::MAX_INP_SAMPLES_PER_SEGMENT );
+						}
+						$bucket['inpSeg'][ $inp_seg_key ]['samples'] = array_values( $inp_samples );
+						$inp_seg_count                               = count( $bucket['inpSeg'] );
+						while ( $inp_seg_count > self::MAX_INP_SEGMENTS_PER_PATH ) {
+							$evict_key = null;
+							$evict_n   = null;
+							foreach ( $bucket['inpSeg'] as $key => $entry ) {
+								$entry_n = isset( $entry['n'] ) ? (int) $entry['n'] : 0;
+								if ( null === $evict_key || $entry_n < $evict_n ) {
+									$evict_key = $key;
+									$evict_n   = $entry_n;
+								}
+							}
+							if ( null === $evict_key ) {
+								break;
+							}
+							unset( $bucket['inpSeg'][ $evict_key ] );
+							--$inp_seg_count;
+						}
+					}
+
 					$day[ $path ] = $bucket;
 
 					// Bound paths per day.
@@ -1352,6 +1435,116 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 						}
 						$path = (string) $bucket_path;
 						foreach ( $bucket['lcpSeg'] as $seg ) {
+							if ( ! is_array( $seg ) ) {
+								continue;
+							}
+							$device   = isset( $seg['device'] ) && is_string( $seg['device'] ) ? $seg['device'] : 'unknown';
+							$template = isset( $seg['template'] ) && is_string( $seg['template'] ) && '' !== $seg['template'] ? $seg['template'] : 'unknown';
+							$key      = $path . '|' . $device . '|' . $template;
+							if ( ! isset( $merged[ $key ] ) ) {
+								$merged[ $key ] = array(
+									'path'     => $path,
+									'device'   => $device,
+									'template' => $template,
+									'n'        => 0,
+									'samples'  => array(),
+								);
+							}
+							$merged[ $key ]['n'] += isset( $seg['n'] ) ? (int) $seg['n'] : 0;
+							$samples              = isset( $seg['samples'] ) && is_array( $seg['samples'] ) ? $seg['samples'] : array();
+							foreach ( $samples as $value ) {
+								if ( is_numeric( $value ) ) {
+									$merged[ $key ]['samples'][] = (float) $value;
+								}
+							}
+						}
+					}
+				}
+				$rows = array();
+				foreach ( $merged as $entry ) {
+					$n = (int) $entry['n'];
+					// p75 is computed from the capped reservoir, not the
+					// unbounded accumulator: never qualify or report more
+					// observations than actually back the p75 value.
+					$sample_count = count( $entry['samples'] );
+					if ( $sample_count < $n ) {
+						$n = $sample_count;
+					}
+					if ( $n < $min ) {
+						continue;
+					}
+					$p75    = self::compute_p75( $entry['samples'] );
+					$rows[] = array(
+						'path'     => $entry['path'],
+						'device'   => $entry['device'],
+						'template' => $entry['template'],
+						'n'        => $n,
+						'p75'      => $p75,
+					);
+				}
+				usort(
+					$rows,
+					static function ( $a, $b ) {
+						$pa = isset( $a['p75'] ) ? (float) $a['p75'] : 0.0;
+						$pb = isset( $b['p75'] ) ? (float) $b['p75'] : 0.0;
+						if ( $pa === $pb ) {
+							return 0;
+						}
+						return $pa > $pb ? -1 : 1;
+					}
+				);
+				return $rows;
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+				return array();
+			}
+		}
+
+		/**
+		 * Get field INP p75 segmented by device × template (read-only).
+		 *
+		 * Pure read path for RUM-gated INP-aware delay suggestions (issue
+		 * #1036): reads the aggregate option only via get_option() — never
+		 * flushes the queue and never calls update_option/set_transient, so
+		 * the frontend incurs no new writes. Mirrors
+		 * get_field_lcp_p75_by_segment() over the bounded `inpSeg` reservoir
+		 * written by flush_queue(). Segments across all retained days are
+		 * merged by `{path}|{device}|{template}`; only segments with n >=
+		 * $min_samples are returned, slowest-first. Fail-open: any failure
+		 * returns array(). No PII: aggregates only (n/samples), no IP/URL
+		 * params stored. Multisite-safe: get_option() is inherently
+		 * site-specific; queue/lock keys go through Util::transient_key().
+		 *
+		 * @since NEXT
+		 * @param int|null $min_samples Minimum samples per segment. Null resolves via get_field_lcp_min_samples() (shared gate, default 20).
+		 * @return array[] Rows of array(path,device,template,n,p75).
+		 */
+		public static function get_field_inp_p75_by_segment( ?int $min_samples = null ): array {
+			try {
+				$min = null === $min_samples ? self::get_field_lcp_min_samples() : (int) $min_samples;
+				if ( $min < 1 ) {
+					$min = self::FIELD_LCP_DEFAULT_MIN_SAMPLES;
+				}
+				if ( ! function_exists( 'get_option' ) ) {
+					return array();
+				}
+				// Reuse the per-request memo so repeated calls do not each
+				// deserialize the full aggregate option. Read-only: the memo
+				// never flushes the queue.
+				$all = self::get_memoized_aggregate();
+				if ( ! is_array( $all ) || empty( $all ) ) {
+					return array();
+				}
+				$merged = array();
+				foreach ( $all as $day_bucket ) {
+					if ( ! is_array( $day_bucket ) ) {
+						continue;
+					}
+					foreach ( $day_bucket as $bucket_path => $bucket ) {
+						if ( ! is_array( $bucket ) || ! isset( $bucket['inpSeg'] ) || ! is_array( $bucket['inpSeg'] ) ) {
+							continue;
+						}
+						$path = (string) $bucket_path;
+						foreach ( $bucket['inpSeg'] as $seg ) {
 							if ( ! is_array( $seg ) ) {
 								continue;
 							}
