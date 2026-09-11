@@ -41,6 +41,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		public const NOTICE_TRANSIENT = 'wppo_builder_purge_notice';
 
 		/**
+		 * Hook + group for the deferred builder-drift purge.
+		 *
+		 * The post-less `elementor/core/files/clear_cache` signal is fired
+		 * inside ordinary editor/front-end requests, where the heavy
+		 * full-site purge (page cache + all used-CSS + queued regeneration)
+		 * must not run synchronously (issue #1023 follow-up, audit #6). The
+		 * signal only schedules this single background event; the callback
+		 * runs the heavy path later.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		public const DRIFT_PURGE_HOOK = 'wppo_builder_drift_purge';
+
+		/**
+		 * Transient key for the drift-purge enqueue lock.
+		 *
+		 * Prevents a burst of builder drift signals (or two concurrent
+		 * requests) from enqueueing duplicate background purges. Keyed per
+		 * site via Util::transient_key() for multisite safety.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		public const DRIFT_PURGE_LOCK = 'wppo_builder_drift_purge_lock';
+
+		/**
 		 * Known page builders, keyed by builder slug.
 		 *
 		 * Each entry holds a human label, plugin-file slugs, theme directory
@@ -135,18 +162,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 			add_action( 'upgrader_process_complete', array( $this, 'on_builder_update' ), 10, 2 );
 			add_action( 'elementor/core/files/clear_cache', array( $this, 'on_builder_drift' ), 10, 0 );
 			add_action( 'elementor/editor/after_save', array( $this, 'on_builder_drift_save' ), 10, 2 );
+			add_action( self::DRIFT_PURGE_HOOK, array( $this, 'run_deferred_drift_purge' ), 10, 0 );
 		}
 
 		/**
-		 * Handle Elementor asset-regen signals: purge derived caches + requeue used CSS.
+		 * Handle Elementor asset-regen signals: defer the derived-cache purge.
 		 *
-		 * Fires on elementor/core/files/clear_cache (CSS regen). This is a
-		 * full-site purge (page cache + all used CSS + queued regeneration of
-		 * up to 200 posts) because the signal carries no post context, so it
-		 * runs at most once per request (per-request dedupe) and is skipped
-		 * while the upgrader fan-out is firing (re-entrancy guard) — the
-		 * upgrader path already purges via purge_for_builders(). Guarded so a
-		 * builder failure can never break the request; fail-open keeps full CSS.
+		 * Fires on elementor/core/files/clear_cache (CSS regen). The signal
+		 * carries no post context, so the only safe action is a full-site
+		 * purge — but this signal can fire inside an ordinary editor /
+		 * front-end request, where the heavy path must not run inline.
+		 * Instead this schedules a single background purge
+		 * (DRIFT_PURGE_HOOK) and returns immediately:
+		 *
+		 *  - Action Scheduler is used when available (the plugin bundles it),
+		 *    deduped via as_has_scheduled_action().
+		 *  - Otherwise `wp_schedule_single_event()` is used, deduped via
+		 *    `wp_next_scheduled()`.
+		 *
+		 * A short-lived transient lock throttles the enqueue across
+		 * concurrent requests, and a per-request flag collapses repeated
+		 * signals in one request. Skipped while the upgrader fan-out is
+		 * firing (re-entrancy guard) — the upgrader path already purges via
+		 * purge_for_builders(). Guarded so a builder failure can never break
+		 * the request; fail-open keeps full CSS serving. Post-scoped drift is
+		 * handled by on_builder_drift_save() (the fast path).
 		 *
 		 * @since NEXT
 		 * @return void
@@ -160,7 +200,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 			}
 			self::$drift_handled_this_request = true;
 			try {
-				$this->purge_wppo_derived_caches();
+				if ( ! $this->schedule_deferred_drift_purge() ) {
+					return;
+				}
 				if ( function_exists( 'do_action' ) ) {
 					/**
 					 * Fires after builder-drift requeue (issue #1023).
@@ -175,15 +217,75 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		}
 
 		/**
+		 * Schedule the heavy drift purge as a single background event.
+		 *
+		 * De-duplicates with a short-lived transient lock plus the scheduler's
+		 * own pending check so repeated signals cannot enqueue duplicates.
+		 * Fail-open: any error reports false and the derived caches simply
+		 * stay as they are (full CSS keeps serving).
+		 *
+		 * @since NEXT
+		 * @return bool True when an event was enqueued or already pending.
+		 */
+		protected function schedule_deferred_drift_purge(): bool {
+			try {
+				if ( function_exists( 'get_transient' ) && get_transient( Util::transient_key( self::DRIFT_PURGE_LOCK ) ) ) {
+					return false;
+				}
+
+				$scheduled = false;
+				if ( function_exists( 'as_enqueue_async_action' ) ) {
+					if ( ! function_exists( 'as_has_scheduled_action' ) || ! as_has_scheduled_action( self::DRIFT_PURGE_HOOK, array(), 'performance_optimisation' ) ) {
+						as_enqueue_async_action( self::DRIFT_PURGE_HOOK, array(), 'performance_optimisation' );
+					}
+					$scheduled = true;
+				} elseif ( function_exists( 'wp_schedule_single_event' ) ) {
+					if ( ! function_exists( 'wp_next_scheduled' ) || ! wp_next_scheduled( self::DRIFT_PURGE_HOOK ) ) {
+						wp_schedule_single_event( time() + ( defined( 'MINUTE_IN_SECONDS' ) ? MINUTE_IN_SECONDS : 60 ), self::DRIFT_PURGE_HOOK );
+					}
+					$scheduled = true;
+				}
+
+				if ( $scheduled && function_exists( 'set_transient' ) && defined( 'MINUTE_IN_SECONDS' ) ) {
+					set_transient( Util::transient_key( self::DRIFT_PURGE_LOCK ), 1, 5 * MINUTE_IN_SECONDS );
+				}
+
+				return $scheduled;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Background callback: run the heavy derived-cache purge.
+		 *
+		 * Registered on DRIFT_PURGE_HOOK and executed by Action Scheduler or
+		 * WP-Cron, never inline in the originating request. Guarded and
+		 * fail-open like the other purge seams.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public function run_deferred_drift_purge(): void {
+			try {
+				$this->purge_wppo_derived_caches();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
 		 * Handle Elementor editor saves: requeue the saved post's used CSS.
 		 *
 		 * An explicit editor save always requeues (no mtime drift check): the
-		 * save itself proves the markup changed, the sidecar may not exist yet
-		 * for new posts, and the mtime comparison in
-		 * Used_CSS::maybe_requeue_on_builder_drift() is reserved for the
-		 * post-less elementor/core/files/clear_cache signal handled by
-		 * on_builder_drift(). The wppo_builder_drift_requeue action fires only
-		 * when a job was actually queued (or already scheduled).
+		 * save itself proves the markup changed and the sidecar may not exist
+		 * yet for new posts, so a per-post regeneration job is queued directly
+		 * via Used_CSS::requeue_for_post(). This is the post-scoped fast path.
+		 * The post-less elementor/core/files/clear_cache signal handled by
+		 * on_builder_drift() has no post context and schedules a background
+		 * full-site purge instead. The wppo_builder_drift_requeue action fires
+		 * only when a job was actually queued (or already scheduled).
 		 *
 		 * @since NEXT
 		 * @param int   $post_id Post ID saved in the editor.
