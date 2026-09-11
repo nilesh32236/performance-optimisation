@@ -584,9 +584,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Shared by the generation-time baseline (`generate()`) and the runtime
 		 * freshness probe so both hash the SAME source domain: locally
 		 * resolvable external stylesheets concatenated in emission order, read
-		 * raw (no @import expansion) so neither side can drift. Bounded (20
-		 * files, 512 KB per file, 2 MB total) so the probe cannot blow memory
-		 * on large multisheet sites. Fail-open: unresolvable URLs are skipped.
+		 * raw (no @import expansion) so neither side can drift. Duplicates are
+		 * collapsed by RESOLVED LOCAL PATH: `defer_stylesheets()` emits the
+		 * deferred `<link>` plus a `<noscript>` copy of the original tag, and
+		 * the generation-side XPath matches both while the probe reads each
+		 * handle once. Bounded (20 files, 512 KB per file, 2 MB total) so the
+		 * probe cannot blow memory on large multisheet sites. Fail-open:
+		 * unresolvable URLs are skipped.
 		 *
 		 * @param string[] $urls Ordered stylesheet URLs (document/queue order).
 		 * @return string Concatenated source CSS, or '' when none resolve locally.
@@ -595,6 +599,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		private static function build_local_source_css( array $urls ): string {
 			$combined = '';
 			$count    = 0;
+			$seen     = array();
 			foreach ( $urls as $url ) {
 				if ( $count >= 20 || strlen( $combined ) >= 2097152 ) {
 					break;
@@ -607,6 +612,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				if ( '' === $local_path || ! file_exists( $local_path ) ) {
 					continue;
 				}
+				// Collapse duplicate emissions (deferred link + <noscript>
+				// copy, or the same file enqueued twice) to a single entry so
+				// the baseline matches the one-per-handle probe set.
+				if ( isset( $seen[ $local_path ] ) ) {
+					continue;
+				}
+				$seen[ $local_path ] = true;
+
 				$size = filesize( $local_path );
 				if ( false === $size || $size <= 0 || $size > 524288 ) {
 					continue;
@@ -643,13 +656,87 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
+		 * Handles core's `wp_maybe_inline_styles()` will print inline.
+		 *
+		 * A handle opted into core's inline pass via `wp_style_add_data(
+		 * $handle, 'path', ... )` (see Main::minify_queued_styles()) emits an
+		 * inline `<style>` on the fetched page instead of a `<link>`, so the
+		 * generation-side source set never contains it. The probe runs on
+		 * `wp_head` priority 0, before core's inline pass at priority 1, so
+		 * its handles still carry `src` — it must exclude them explicitly or
+		 * the two domains diverge permanently (issue #1038).
+		 *
+		 * Mirrors core's candidate selection (extra `path` set with a `src`,
+		 * path exists) and its size-ordered total limit so the exclusion
+		 * tracks what the generation fetch actually inlined.
+		 *
+		 * @return string[] Handles that core will inline (queue order).
+		 * @since NEXT
+		 */
+		private static function get_core_inlined_handles(): array {
+			global $wp_styles;
+			if ( ! $wp_styles || empty( $wp_styles->queue ) || ! is_array( $wp_styles->queue ) ) {
+				return array();
+			}
+
+			$candidates = array();
+			foreach ( $wp_styles->queue as $handle ) {
+				$handle = (string) $handle;
+				if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
+					continue;
+				}
+				$style = $wp_styles->registered[ $handle ];
+				$src   = $style->src ?? '';
+				$extra = ( isset( $style->extra ) && is_array( $style->extra ) ) ? $style->extra : array();
+				$path  = $extra['path'] ?? '';
+				if ( '' === (string) $src || ! is_string( $path ) || '' === $path || ! file_exists( $path ) ) {
+					continue;
+				}
+				$candidates[] = array(
+					'handle' => $handle,
+					'path'   => $path,
+					'size'   => (int) filesize( $path ),
+				);
+			}
+
+			if ( empty( $candidates ) ) {
+				return array();
+			}
+
+			// Core inlines smallest-first until the total budget is reached.
+			usort(
+				$candidates,
+				static function ( array $a, array $b ): int {
+					return $a['size'] <=> $b['size'];
+				}
+			);
+
+			$limit   = self::get_styles_inline_limit();
+			$total   = 0;
+			$inlined = array();
+			foreach ( $candidates as $candidate ) {
+				if ( $total + $candidate['size'] > $limit ) {
+					break;
+				}
+				if ( ! is_readable( $candidate['path'] ) ) {
+					continue;
+				}
+				$total    += $candidate['size'];
+				$inlined[] = $candidate['handle'];
+			}
+
+			return $inlined;
+		}
+
+		/**
 		 * Aggregate locally-available source CSS from the queued stylesheets.
 		 *
 		 * Reads local files only via `Util::get_local_path()` — never fetches
 		 * remotely. Uses `$wp_styles->queue` order (the page's emission order)
-		 * to match the document-order source baselined at generation time.
-		 * Bounded by `build_local_source_css()`. Fail-open: any error yields ''
-		 * (no signal).
+		 * to match the document-order source baselined at generation time, and
+		 * skips handles core will inline (no `<link>` at generation time) plus
+		 * the shared skip list. Bounded by `build_local_source_css()`.
+		 * Fail-open: any error yields '' (no signal).
 		 *
 		 * @return string Concatenated local source CSS, or '' when unavailable.
 		 * @since NEXT
@@ -660,10 +747,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return '';
 			}
 			try {
-				$urls = array();
+				$inlined = self::get_core_inlined_handles();
+				$urls    = array();
 				foreach ( $wp_styles->queue as $handle ) {
 					$handle = (string) $handle;
 					if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
+						continue;
+					}
+					if ( in_array( $handle, $inlined, true ) ) {
 						continue;
 					}
 					$src = $wp_styles->registered[ $handle ]->src ?? '';
@@ -1150,7 +1241,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					// resolvable stylesheets contribute; inline <style> blocks
 					// and @import expansion are deliberately excluded so the
 					// frontend probe can reproduce this exact domain without a
-					// remote fetch.
+					// remote fetch. Handles core path-inlines (via
+					// wp_style_add_data(...,'path',...)) emit no <link> here and
+					// are therefore absent — the probe mirrors that by skipping
+					// them in get_local_source_css(). build_local_source_css()
+					// then collapses the deferred-link + <noscript> duplicate.
 					$source_urls[] = $href;
 
 					$fetched = self::fetch_stylesheet_with_imports( $href );

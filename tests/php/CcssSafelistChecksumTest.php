@@ -425,6 +425,220 @@ class CcssSafelistChecksumTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Integration: a deferred <link> + its <noscript> copy must not churn.
+	 *
+	 * The defer_stylesheets() shape emits the deferred tag AND
+	 * `<noscript>$tag</noscript>` where $tag is the original
+	 * `<link rel="stylesheet">`. generate()'s XPath
+	 * matches both, doubling the stylesheet in the baseline while the probe
+	 * reads the handle once. build_local_source_css() must de-duplicate by
+	 * resolved local path so an unchanged page keeps its variant.
+	 *
+	 * @return void
+	 */
+	public function test_generate_and_store_retains_variant_when_link_noscript_duplicated(): void {
+		$hash = 'ccssnoscript' . substr( md5( uniqid( 'wppo', true ) ), 0, 8 );
+
+		$this->option_map['wppo_settings'] = array(
+			'file_optimisation' => array(
+				'ccssSafelistExtra' => '.modal-open',
+			),
+		);
+		Util::clear_settings_cache();
+
+		$theme_dir = wp_normalize_path( WP_CONTENT_DIR . '/themes/wppo-ccss-noscript' );
+		if ( ! is_dir( $theme_dir ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
+			mkdir( $theme_dir, 0775, true );
+		}
+		$file_a = $theme_dir . '/a.css';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+		file_put_contents( $file_a, 'h1{font-size:2em}' );
+		$url_a = 'http://example.com/wp-content/themes/wppo-ccss-noscript/a.css';
+
+		// Shape emitted by Critical_CSS::defer_stylesheets(): a deferred
+		// <link> plus the original inside <noscript> (both rel=stylesheet).
+		$html = '<html><head><style>body{margin:0}</style>'
+			// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- Test fixture HTML.
+			. '<link rel="stylesheet" href="' . $url_a . '" media="print" onload="this.media=\'all\'" data-wppo-ccss="1" />'
+			. '<noscript>'
+			// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- Test fixture HTML.
+			. '<link rel="stylesheet" href="' . $url_a . '" media="all" />'
+			. '</noscript></head><body></body></html>';
+
+		$this->stub_generation_fetch( $html );
+
+		$entry_a              = new \stdClass();
+		$entry_a->src         = $url_a;
+		$styles               = new \stdClass();
+		$styles->queue        = array( 'wppo-fixture-a' );
+		$styles->registered   = array( 'wppo-fixture-a' => $entry_a );
+		$GLOBALS['wp_styles'] = $styles;
+
+		$ccss_file = $this->prepare_ccss_dir( $hash );
+
+		Critical_CSS::reset_ccss_memo();
+		try {
+			$this->assertTrue( $this->invoke_private( 'generate_and_store', $hash, 'index' ) );
+			$this->assertFileExists( $ccss_file );
+
+			Critical_CSS::reset_ccss_memo();
+			$dropped = Critical_CSS::maybe_check_stale_and_requeue( $hash );
+
+			$this->assertFalse( $dropped, 'Deferred <noscript> duplicate must not be stale' );
+			$this->assertFileExists( $ccss_file, 'Fresh generated CCSS must not be deleted' );
+		} finally {
+			$this->cleanup_ccss_fixture( $ccss_file, array( $file_a ), $theme_dir );
+		}
+	}
+
+	/**
+	 * Integration: a core path-inlined handle must not churn.
+	 *
+	 * The Main::minify_queued_styles() path opts styles into core's inline
+	 * pass via wp_style_add_data($handle, 'path', ...). Core's
+	 * wp_maybe_inline_styles() (wp_head priority 1) then emits an inline
+	 * <style> and no <link>, so the
+	 * generation fetch never sees the handle while the probe (priority 0) still
+	 * has it queued with a src. The probe must skip it, or baseline and probe
+	 * never converge.
+	 *
+	 * @return void
+	 */
+	public function test_generate_and_store_retains_variant_when_handle_is_path_inlined(): void {
+		$hash = 'ccssinline' . substr( md5( uniqid( 'wppo', true ) ), 0, 8 );
+
+		$this->option_map['wppo_settings'] = array(
+			'file_optimisation' => array(
+				'ccssSafelistExtra' => '.modal-open',
+			),
+		);
+		Util::clear_settings_cache();
+
+		$theme_dir = wp_normalize_path( WP_CONTENT_DIR . '/themes/wppo-ccss-inline' );
+		if ( ! is_dir( $theme_dir ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
+			mkdir( $theme_dir, 0775, true );
+		}
+		$file_a = $theme_dir . '/a.css';
+		$file_b = $theme_dir . '/inline-b.css';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+		file_put_contents( $file_a, 'h1{font-size:2em}' );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+		file_put_contents( $file_b, '.container{width:100%}' );
+		$url_a = 'http://example.com/wp-content/themes/wppo-ccss-inline/a.css';
+		$url_b = 'http://example.com/wp-content/themes/wppo-ccss-inline/inline-b.css';
+
+		// Fetched page: a.css is a normal <link>; the b handle was path-inlined
+		// by core, so it appears only as an inline <style>.
+		$html = '<html><head><style>body{margin:0}</style>'
+			// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- Test fixture HTML.
+			. '<link rel="stylesheet" href="' . $url_a . '" />'
+			. '<style id="wppo-fixture-b-inline-css">.container{width:100%}</style>'
+			. '</head><body></body></html>';
+
+		$this->stub_generation_fetch( $html );
+
+		$entry_a              = new \stdClass();
+		$entry_a->src         = $url_a;
+		$entry_b              = new \stdClass();
+		$entry_b->src         = $url_b;
+		$entry_b->extra       = array( 'path' => $file_b );
+		$styles               = new \stdClass();
+		$styles->queue        = array( 'wppo-fixture-a', 'wppo-fixture-b' );
+		$styles->registered   = array(
+			'wppo-fixture-a' => $entry_a,
+			'wppo-fixture-b' => $entry_b,
+		);
+		$GLOBALS['wp_styles'] = $styles;
+
+		$ccss_file = $this->prepare_ccss_dir( $hash );
+
+		Critical_CSS::reset_ccss_memo();
+		try {
+			$this->assertTrue( $this->invoke_private( 'generate_and_store', $hash, 'index' ) );
+			$this->assertFileExists( $ccss_file );
+
+			Critical_CSS::reset_ccss_memo();
+			$dropped = Critical_CSS::maybe_check_stale_and_requeue( $hash );
+
+			$this->assertFalse( $dropped, 'Path-inlined handle must be excluded from the probe' );
+			$this->assertFileExists( $ccss_file, 'Fresh generated CCSS must not be deleted' );
+		} finally {
+			$this->cleanup_ccss_fixture( $ccss_file, array( $file_a, $file_b ), $theme_dir );
+		}
+	}
+
+	/**
+	 * Stub the HTTP + mkdir calls used by the generate_and_store() fixtures.
+	 *
+	 * @param string $html Fetched page HTML returned for non-.css requests.
+	 * @return void
+	 */
+	private function stub_generation_fetch( string $html ): void {
+		$self = $this;
+		Functions\when( 'wp_remote_get' )->alias(
+			function ( $url ) use ( $self, $html ) {
+				++$self->http_calls;
+				return array(
+					'response' => array( 'code' => 200 ),
+					'body'     => ( false !== strpos( (string) $url, '.css' ) ) ? '' : $html,
+				);
+			}
+		);
+		Functions\when( 'is_wp_error' )->justReturn( false );
+		Functions\when( 'wp_remote_retrieve_response_code' )->alias(
+			static function ( $response ) {
+				return $response['response']['code'] ?? 200;
+			}
+		);
+		Functions\when( 'wp_remote_retrieve_body' )->alias(
+			static function ( $response ) {
+				return $response['body'] ?? '';
+			}
+		);
+		Functions\when( 'wp_mkdir_p' )->justReturn( true );
+	}
+
+	/**
+	 * Ensure the CCSS cache directory exists and return the variant path.
+	 *
+	 * @param string $hash Template hash.
+	 * @return string Variant path.
+	 */
+	private function prepare_ccss_dir( string $hash ): string {
+		$dir = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/ccss' );
+		if ( ! is_dir( $dir ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
+			mkdir( $dir, 0775, true );
+		}
+		return $dir . '/' . $hash . '.css';
+	}
+
+	/**
+	 * Tear down a generate_and_store() fixture.
+	 *
+	 * @param string   $ccss_file Variant path.
+	 * @param string[] $files     Stylesheet fixture paths.
+	 * @param string   $theme_dir Theme fixture directory.
+	 * @return void
+	 */
+	private function cleanup_ccss_fixture( string $ccss_file, array $files, string $theme_dir ): void {
+		unset( $GLOBALS['wp_styles'] );
+		Critical_CSS::reset_ccss_memo();
+		foreach ( array_merge( array( $ccss_file ), $files ) as $cleanup ) {
+			if ( file_exists( $cleanup ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+				unlink( $cleanup );
+			}
+		}
+		if ( is_dir( $theme_dir ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Test fixture cleanup.
+			rmdir( $theme_dir );
+		}
+	}
+
+	/**
 	 * Extracted regular rules keep their selector (issue #1038 correctness).
 	 *
 	 * Regression guard for parse_regular_rules(): storing only the
