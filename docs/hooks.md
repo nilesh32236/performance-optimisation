@@ -828,7 +828,7 @@ Filters whether RUM-gated speculation eagerness applies (issue #1061). @since NE
 ---
 
 ### `wppo_ai_speculation_lcp_threshold`
-Filters the LCP p75 (ms) threshold for RUM-gated speculation eagerness (issue #1061). @since NEXT.
+Filters the LCP p75 (ms) threshold for RUM-gated speculation eagerness (issue #1061). @since NEXT. Non-finite or negative values fail open to the default.
 
 **Parameters:**
 - `$threshold` *(float)* — LCP p75 threshold in milliseconds (default 2500.0).
@@ -836,7 +836,7 @@ Filters the LCP p75 (ms) threshold for RUM-gated speculation eagerness (issue #1
 ---
 
 ### `wppo_ai_speculation_inp_threshold`
-Filters the INP p75 (ms) threshold for RUM-gated speculation eagerness (issue #1061). @since NEXT.
+Filters the INP p75 (ms) threshold for RUM-gated speculation eagerness (issue #1061). @since NEXT. Non-finite or negative values fail open to the default.
 
 **Parameters:**
 - `$threshold` *(float)* — INP p75 threshold in milliseconds (default 200.0).
@@ -853,7 +853,7 @@ Filters the eagerness for a RUM-qualified (good p75) speculation list rule (issu
 ---
 
 ### `wppo_ai_speculation_top_urls`
-Filters the RUM-ranked top URLs for the gated speculation list rule (issue #1061). @since NEXT.
+Filters the RUM-ranked top URLs for the gated speculation list rule (issue #1061). @since NEXT. Filter output is untrusted: it is re-sanitized (`esc_url_raw`), re-checked against the commerce-prefix and same-site guards, deduped, and re-capped at 5 URLs.
 
 **Parameters:**
 - `$urls` *(string[])* — Ranked absolute URLs.

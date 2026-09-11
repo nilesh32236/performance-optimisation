@@ -33,9 +33,11 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Install Brain Monkey stubs.
 	 *
+	 * @param callable|null $apply_filters_handler Optional apply_filters handler
+	 *                                             (receives hook + value). Defaults to passthrough.
 	 * @return void
 	 */
-	private function install_stubs(): void {
+	private function install_stubs( ?callable $apply_filters_handler = null ): void {
 		// RUM field-LCP aggregate is memoized per request; reset between
 		// tests sharing one PHP process so per-test option stubs apply.
 		RUM::clear_field_lcp_cache();
@@ -82,12 +84,11 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		);
 		Functions\when( 'esc_url_raw' )->returnArg();
 		Functions\when( 'sanitize_text_field' )->returnArg();
-		Functions\when( 'apply_filters' )->alias(
-			function ( $hook, $value ) {
-				// Return filtered value (wppo_ai_adaptive_enabled passes bool, eagerness passes string).
-				return $value;
-			}
-		);
+		$apply_filters_handler = $apply_filters_handler ?? static function ( $hook, $value ) {
+			// Return filtered value (wppo_ai_adaptive_enabled passes bool, eagerness passes string).
+			return $value;
+		};
+		Functions\when( 'apply_filters' )->alias( $apply_filters_handler );
 		Functions\when( 'is_multisite' )->justReturn( false );
 		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
 		Functions\when( 'untrailingslashit' )->alias(
@@ -799,6 +800,210 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 
 		$rules = AI_Adaptive::filter_speculation_rules( array() );
 		$this->assertSame( array(), $rules );
+	}
+
+	/**
+	 * Test a filter-supplied eager value is capped to moderate on the gated path in commerce context (#1061).
+	 *
+	 * Good RUM qualifies the state, the `wppo_ai_speculation_eagerness`
+	 * filter returns `eager`, but a logged-in (auth) context must downgrade
+	 * it via the #908 guardrail before injecting.
+	 *
+	 * @return void
+	 */
+	public function test_filter_speculation_rules_caps_gated_eager_in_commerce_context(): void {
+		$this->install_stubs(
+			static function ( $hook, $value ) {
+				if ( 'wppo_ai_speculation_eagerness' === $hook ) {
+					return 'eager';
+				}
+				return $value;
+			}
+		);
+		$today                                = gmdate( 'Y-m-d' );
+		$this->options['wppo_web_vitals_rum'] = array(
+			$today => array(
+				'/popular/' => array(
+					'lcp'    => array(
+						'n'   => 30,
+						'sum' => 54000.0,
+						'min' => 1800.0,
+						'max' => 1800.0,
+					),
+					'lcpSeg' => array(
+						'mobile|single' => array(
+							'device'   => 'mobile',
+							'template' => 'single',
+							'n'        => 20,
+							'sum'      => 36000.0,
+							'min'      => 1800.0,
+							'max'      => 1800.0,
+							'samples'  => array_fill( 0, 20, 1800.0 ),
+						),
+					),
+				),
+			),
+		);
+		$this->options['wppo_settings']       = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		$this->options[ AI_Adaptive::OPTION ] = array(
+			'prefetch_urls' => array( 'http://example.com/a/' ),
+			'eagerness'     => 'conservative',
+		);
+		Util::clear_settings_cache();
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( true );
+
+		$rules = AI_Adaptive::filter_speculation_rules( array() );
+		$this->assertCount( 1, $rules );
+		$this->assertSame( 'moderate', $rules[0]['eagerness'] );
+	}
+
+	/**
+	 * Test the RUM top-URL ranking caps at 5 and excludes commerce paths (#1061).
+	 *
+	 * Seven content paths plus a high-volume /checkout/ path must yield
+	 * exactly the five highest-volume content URLs in rank order, with no
+	 * commerce URL present.
+	 *
+	 * @return void
+	 */
+	public function test_get_rum_top_speculation_urls_caps_at_five_and_excludes_commerce(): void {
+		$this->install_stubs();
+		$today = gmdate( 'Y-m-d' );
+		$paths = array(
+			'/checkout/success/' => 999,
+			'/post-one/'         => 90,
+			'/post-two/'         => 80,
+			'/post-three/'       => 70,
+			'/post-four/'        => 60,
+			'/post-five/'        => 50,
+			'/post-six/'         => 40,
+			'/post-seven/'       => 30,
+		);
+		$day   = array();
+		foreach ( $paths as $path => $n ) {
+			$day[ $path ] = array(
+				'lcp' => array(
+					'n'   => $n,
+					'sum' => (float) $n * 1000.0,
+					'min' => 1000.0,
+					'max' => 1000.0,
+				),
+			);
+		}
+		$this->options['wppo_web_vitals_rum'] = array( $today => $day );
+		Util::clear_settings_cache();
+
+		$urls = AI_Adaptive::get_rum_top_speculation_urls( 5 );
+		$this->assertCount( 5, $urls );
+		$this->assertSame(
+			array(
+				'http://example.com/post-one/',
+				'http://example.com/post-two/',
+				'http://example.com/post-three/',
+				'http://example.com/post-four/',
+				'http://example.com/post-five/',
+			),
+			$urls
+		);
+		foreach ( $urls as $url ) {
+			$this->assertStringNotContainsString( 'checkout', $url );
+		}
+	}
+
+	/**
+	 * Test filter-supplied top URLs are re-sanitized (commerce stripped, cap kept) (#1061).
+	 *
+	 * A `wppo_ai_speculation_top_urls` callback must not be able to
+	 * reintroduce /checkout/ URLs into the explicit list rule.
+	 *
+	 * @return void
+	 */
+	public function test_get_rum_top_speculation_urls_sanitizes_filter_output(): void {
+		$this->install_stubs(
+			static function ( $hook, $value ) {
+				if ( 'wppo_ai_speculation_top_urls' === $hook ) {
+					return array(
+						'http://example.com/checkout/evil/',
+						'http://example.com/filter-ok/',
+						'not-a-url-at-all',
+					);
+				}
+				return $value;
+			}
+		);
+		$today                                = gmdate( 'Y-m-d' );
+		$this->options['wppo_web_vitals_rum'] = array(
+			$today => array(
+				'/seed/' => array(
+					'lcp' => array(
+						'n'   => 10,
+						'sum' => 10000.0,
+						'min' => 1000.0,
+						'max' => 1000.0,
+					),
+				),
+			),
+		);
+		Util::clear_settings_cache();
+
+		$urls = AI_Adaptive::get_rum_top_speculation_urls( 5 );
+		$this->assertContains( 'http://example.com/filter-ok/', $urls );
+		foreach ( $urls as $url ) {
+			$this->assertStringNotContainsString( 'checkout', $url );
+		}
+		$this->assertLessThanOrEqual( 5, count( $urls ) );
+	}
+
+	/**
+	 * Test an invalid (negative) LCP threshold filter value fails open to the default (#1061).
+	 *
+	 * Without validation, -1 would make good 1800ms RUM look poor
+	 * (1800 > -1) and force conservative; with validation the default
+	 * 2500ms applies and good RUM stays moderate.
+	 *
+	 * @return void
+	 */
+	public function test_rum_gated_state_falls_back_on_invalid_threshold(): void {
+		$this->install_stubs(
+			static function ( $hook, $value ) {
+				if ( 'wppo_ai_speculation_lcp_threshold' === $hook ) {
+					return -1;
+				}
+				return $value;
+			}
+		);
+		$today                                = gmdate( 'Y-m-d' );
+		$this->options['wppo_web_vitals_rum'] = array(
+			$today => array(
+				'/popular/' => array(
+					'lcp'    => array(
+						'n'   => 30,
+						'sum' => 54000.0,
+						'min' => 1800.0,
+						'max' => 1800.0,
+					),
+					'lcpSeg' => array(
+						'mobile|single' => array(
+							'device'   => 'mobile',
+							'template' => 'single',
+							'n'        => 20,
+							'sum'      => 36000.0,
+							'min'      => 1800.0,
+							'max'      => 1800.0,
+							'samples'  => array_fill( 0, 20, 1800.0 ),
+						),
+					),
+				),
+			),
+		);
+		$this->options['wppo_settings']       = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		Util::clear_settings_cache();
+
+		$state = AI_Adaptive::get_rum_gated_speculation_state();
+		$this->assertTrue( $state['qualified'] );
+		$this->assertSame( 'moderate', $state['eagerness'] );
 	}
 
 	/**

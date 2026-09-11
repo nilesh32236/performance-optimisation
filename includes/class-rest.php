@@ -676,7 +676,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// omits it (issue #1061): PreloadSettings save posts only the
 			// toggles it renders, so a save must not wipe the gating flag.
 			if ( 'preload_settings' === $tab && ! array_key_exists( 'speculationRumGating', $settings ) && isset( $options['preload_settings']['speculationRumGating'] ) ) {
-				$sanitized_settings['speculationRumGating'] = ! empty( $options['preload_settings']['speculationRumGating'] );
+				// Same filter_var() normalization as
+				// Util::sanitize_settings_recursively() so a stored string
+				// shape (e.g. 'false') does not diverge between the two paths.
+				$stored = $options['preload_settings']['speculationRumGating'];
+				if ( is_bool( $stored ) ) {
+					$sanitized_settings['speculationRumGating'] = $stored;
+				} else {
+					$bool                                       = filter_var( $stored, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+					$sanitized_settings['speculationRumGating'] = null === $bool ? true : $bool;
+				}
 			}
 
 			$options[ $tab ] = $sanitized_settings;
