@@ -234,6 +234,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		private static bool $score_trends_loaded = false;
 
 		/**
+		 * Generation counter for the per-path top-URL transient index.
+		 *
+		 * Bumped on every aggregate flush so stale per-path entries are
+		 * never served without enumerating transient keys. Cached per
+		 * request; -1 means not loaded yet.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private static int $top_url_generation = -1;
+
+		/**
 		 * Flush when queue reaches this size.
 		 *
 		 * @var int
@@ -267,6 +279,54 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			self::$field_lcp_result_memo = array();
 			self::$score_trends_memo     = null;
 			self::$score_trends_loaded   = false;
+			self::$top_url_generation    = -1;
+		}
+
+		/**
+		 * Current generation for the per-path top-URL index.
+		 *
+		 * @since NEXT
+		 * @return int Generation counter.
+		 */
+		private static function top_url_generation(): int {
+			if ( self::$top_url_generation < 0 ) {
+				$stored                   = function_exists( 'get_option' ) ? get_option( 'wppo_rum_top_url_gen', 0 ) : 0;
+				self::$top_url_generation = max( 0, (int) $stored );
+			}
+			return self::$top_url_generation;
+		}
+
+		/**
+		 * Transient key for the per-path top-URL index entry.
+		 *
+		 * Bounded to one small transient per unique path+gate instead of
+		 * deserializing the full aggregate (up to MAX_OPTION_BYTES) per
+		 * unique path per request.
+		 *
+		 * @since NEXT
+		 * @param string $normalized_path Normalized page path.
+		 * @param int    $min             Sample gate.
+		 * @return string Transient key (unprefixed; wrap with Util::transient_key()).
+		 */
+		private static function top_url_cache_key( string $normalized_path, int $min ): string {
+			return 'wppo_rum_top_' . self::top_url_generation() . '_' . md5( $normalized_path . '|' . $min );
+		}
+
+		/**
+		 * Bump the top-URL index generation so flush-invalidated entries expire.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private static function bump_top_url_generation(): void {
+			// Note: previous-generation wppo_rum_top_* transients are
+			// intentionally not enumerated/deleted here; they are keyed
+			// by generation and expire naturally within HOUR_IN_SECONDS.
+			$next                     = self::top_url_generation() + 1;
+			self::$top_url_generation = $next;
+			if ( function_exists( 'update_option' ) ) {
+				update_option( 'wppo_rum_top_url_gen', $next, false );
+			}
 		}
 
 		/**
@@ -1092,6 +1152,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 
 				update_option( self::OPTION, $all, false );
 				self::clear_field_lcp_cache();
+				self::bump_top_url_generation();
 			} finally {
 				delete_transient( $lock_key );
 			}
@@ -1132,6 +1193,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				$memo_key = $normalized_path . '|' . $min;
 				if ( array_key_exists( $memo_key, self::$field_lcp_result_memo ) ) {
 					return self::$field_lcp_result_memo[ $memo_key ];
+				}
+				// Bounded per-path transient index: repeat visitors for a
+				// known path skip the full-aggregate scan entirely. Reads and
+				// writes are individually guarded: a broken object-cache
+				// backend (or a function stubbed out by another test in the
+				// same long-running process) must never discard a successful
+				// in-request computation.
+				$top_key    = self::top_url_cache_key( $normalized_path, $min );
+				$cached_top = false;
+				if ( function_exists( 'get_transient' ) ) {
+					try {
+						$cached_top = get_transient( Util::transient_key( $top_key ) );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$cached_top = false;
+					}
+				}
+				if ( is_array( $cached_top ) && isset( $cached_top['url'] ) ) {
+					$cached_n    = (int) ( $cached_top['n'] ?? 0 );
+					$cached_seen = (int) ( $cached_top['lastSeen'] ?? 0 );
+					if ( $cached_n >= $min && $cached_seen > 0 && ( time() - $cached_seen ) <= self::FIELD_LCP_STALE_TTL ) {
+						self::$field_lcp_result_memo[ $memo_key ] = $cached_top;
+						return $cached_top;
+					}
+					// Stale/under-sampled entry: fall through to the aggregate scan.
 				}
 				$all = self::get_memoized_aggregate();
 				if ( ! is_array( $all ) || empty( $all ) ) {
@@ -1210,6 +1296,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				}
 				unset( $top['_raw_n'] );
 				self::$field_lcp_result_memo[ $memo_key ] = $top;
+				if ( function_exists( 'set_transient' ) && class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
+					try {
+						set_transient( Util::transient_key( $top_key ), $top, HOUR_IN_SECONDS );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
 				return $top;
 			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
 				return null;

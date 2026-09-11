@@ -189,6 +189,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		private static array $uri_post_memo = array();
 
 		/**
+		 * Per-request memo for get_litespeed_tags_for_purge().
+		 *
+		 * The singular branch runs get_object_taxonomies +
+		 * wp_get_object_terms + get_post_field on the send_headers hot
+		 * path; memoize per request. Cleared on the save_post/delete_post/
+		 * permalink paths via invalidate_uri_post_map().
+		 *
+		 * @since NEXT
+		 * @var string[]|null
+		 */
+		private static ?array $purge_tags_memo = null;
+
+		/**
 		 * Whether Phase 3 hooks (send_headers, vary) are registered.
 		 *
 		 * Prevents double-registration when init() is called multiple times.
@@ -926,6 +939,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 */
 		public static function invalidate_uri_post_map(): void {
 			self::$uri_post_memo = array();
+			self::invalidate_purge_tags_memo();
 			try {
 				if ( function_exists( 'delete_transient' ) ) {
 					delete_transient( Util::transient_key( 'wppo_ls_uri_post_map' ) );
@@ -1881,6 +1895,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * @return string[]
 		 */
 		public static function get_litespeed_tags_for_purge(): array {
+			if ( null !== self::$purge_tags_memo ) {
+				return self::$purge_tags_memo;
+			}
+			$tags                  = self::compute_litespeed_tags_for_purge();
+			self::$purge_tags_memo = $tags;
+			return $tags;
+		}
+
+		/**
+		 * Invalidate the purge-tags memo.
+		 *
+		 * Called from invalidate_uri_post_map() (save_post/delete_post/
+		 * permalink_structure_changed) so the next request rebuilds the tag
+		 * fan-out instead of reusing a stale verdict.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function invalidate_purge_tags_memo(): void {
+			self::$purge_tags_memo = null;
+		}
+
+		/**
+		 * Compute the full LiteSpeed tag fan-out for the current request.
+		 *
+		 * @since NEXT
+		 * @return string[]
+		 */
+		private static function compute_litespeed_tags_for_purge(): array {
 			$tags = array( 'WPPO' );
 
 			// F: front page.
@@ -2397,6 +2440,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			self::$cached_brotli            = null;
 			self::$cached_can_cdn           = null;
 			self::$uri_post_memo            = array();
+			self::$purge_tags_memo          = null;
 			self::$hooks_registered         = false;
 			self::$queue_shutdown_hooked    = false;
 

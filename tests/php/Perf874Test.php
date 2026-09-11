@@ -173,15 +173,31 @@ class Perf874Test extends \PHPUnit\Framework\TestCase {
 		);
 
 		$url      = 'https://fonts.googleapis.com/css2?family=Inter';
+		$key      = md5( $url );
 		$fonts    = new Google_Fonts( array() );
-		$fail_key = Util::transient_key( 'wppo_gf_fail_' . md5( $url ) );
+		$fail_key = Util::transient_key( 'wppo_gf_fail_' . $key );
 
+		// The frontend hot path only queues — it must never fetch remotely.
 		$this->assertSame( '', $fonts->download_and_rewrite( $url ) );
+		$this->assertSame( 0, $this->remote_calls[ $url ] ?? 0 );
+
+		// The out-of-band job performs the fetch and records the sentinel.
+		Google_Fonts::process_queued_download_static(
+			array(
+				'key' => $key,
+				'url' => $url,
+			)
+		);
 		$this->assertSame( 1, $this->remote_calls[ $url ] ?? 0 );
 		$this->assertSame( 1, $this->transients[ $fail_key ] ?? null );
 
-		// Second call within the backoff window must not re-issue the request.
-		$this->assertSame( '', $fonts->download_and_rewrite( $url ) );
+		// A second queued run within the backoff window must not re-issue it.
+		Google_Fonts::process_queued_download_static(
+			array(
+				'key' => $key,
+				'url' => $url,
+			)
+		);
 		$this->assertSame( 1, $this->remote_calls[ $url ] ?? 0 );
 	}
 
@@ -246,16 +262,107 @@ class Perf874Test extends \PHPUnit\Framework\TestCase {
 		);
 
 		$fonts = new Google_Fonts( array() );
-		$this->assertNotSame( '', $fonts->download_and_rewrite( $css_url ) );
+
+		// Hot path queues (no synchronous rewrite) ...
+		$this->assertSame( '', $fonts->download_and_rewrite( $css_url ) );
+
+		// ... and the out-of-band job performs the CSS + font-file download.
+		Google_Fonts::process_queued_download_static(
+			array(
+				'key' => md5( $css_url ),
+				'url' => $css_url,
+			)
+		);
+
 		// A successful run must not leave failure sentinels behind (the
 		// download_font_file() success branch deletes its sentinel defensively).
 		$this->assertArrayNotHasKey( $css_key, $this->transients );
 		$this->assertArrayNotHasKey( $font_key, $this->transients );
 		$this->assertFileExists( $dest );
+		$this->assertFileExists( $css_file );
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
 		unlink( $dest );
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
 		unlink( $css_file );
+	}
+
+	/**
+	 * Test the Action Scheduler arg contract for the queued Google Fonts
+	 * download: the key and URL must travel as one positional array so the
+	 * one-accepted-arg callback receives both.
+	 *
+	 * ActionScheduler_Action::execute() dispatches via
+	 * do_action_ref_array( $hook, array_values( $this->get_args() ) ), so an
+	 * associative pair passed directly would be split and the handler would
+	 * receive only the md5 key (the download would silently no-op).
+	 *
+	 * @since NEXT
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_google_fonts_queued_action_carries_key_and_url(): void {
+		$this->install_stubs();
+		$this->stub_remote(
+			static function () {
+				return array(
+					'response' => array( 'code' => 200 ),
+					'body'     => '@font-face { font-family: Contract; src: url(https://fonts.gstatic.com/s/contract/v1/x.woff2) format("woff2"); }',
+				);
+			}
+		);
+		Functions\when( 'wp_remote_retrieve_response_code' )->alias(
+			static function ( $response ) {
+				return $response['response']['code'] ?? 0;
+			}
+		);
+		Functions\when( 'wp_remote_retrieve_body' )->alias(
+			static function ( $response ) {
+				return $response['body'] ?? '';
+			}
+		);
+
+		$captured = null;
+		$hook     = null;
+		$group    = null;
+		Functions\when( 'as_has_scheduled_action' )->justReturn( false );
+		Functions\when( 'as_enqueue_async_action' )->alias(
+			static function ( $action_hook, $args = array(), $action_group = null ) use ( &$captured, &$hook, &$group ) {
+				$hook     = $action_hook;
+				$captured = $args;
+				$group    = $action_group;
+				return 1;
+			}
+		);
+
+		$url = 'https://fonts.googleapis.com/css2?family=Perf874Contract';
+		$key = md5( $url );
+
+		$fonts = new Google_Fonts( array() );
+		$fonts->download_and_rewrite( $url );
+
+		$this->assertSame( Google_Fonts::AS_HOOK, $hook );
+		// One positional element holding BOTH values (not a bare assoc pair).
+		$expected_args = array(
+			array(
+				'key' => $key,
+				'url' => $url,
+			),
+		);
+		$this->assertSame( $expected_args, $captured );
+		$this->assertSame( 'performance_optimisation', $group );
+
+		// Simulate ActionScheduler_Action::execute() forwarding positional args
+		// to the 1-accepted-arg handler.
+		call_user_func_array( array( Google_Fonts::class, 'handle_queued_download_action' ), array_values( $captured ) );
+
+		// The handler received both key and URL, so the fetch actually ran.
+		$this->assertSame( 1, $this->remote_calls[ $url ] ?? 0 );
+
+		$css_file = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/fonts/css/' . $key . '.css' );
+		if ( file_exists( $css_file ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+			unlink( $css_file );
+		}
 	}
 
 	/**
