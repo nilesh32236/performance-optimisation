@@ -1284,21 +1284,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		/**
 		 * Stable content hash of CSS source (issue #1038).
 		 *
-		 * Pure local string hash — never fetches remotely. Used to detect
-		 * stylesheet edits that preserve mtime (deploy sync, minify rebuild
-		 * in the same second) so stale used-CSS regenerates. SHA-256 is
-		 * stable across installs and salt rotations, matching the `.sha256`
-		 * sidecar extension.
+		 * Thin backward-compatible wrapper around the shared
+		 * {@see Util::compute_css_checksum()} (audit #7) so both CSS
+		 * pipelines share one implementation.
 		 *
 		 * @param string $css CSS content.
 		 * @return string SHA-256 checksum, or '' for empty input.
 		 * @since NEXT
 		 */
 		public function compute_css_checksum( string $css ): string {
-			if ( '' === $css ) {
-				return '';
-			}
-			return hash( 'sha256', $css );
+			return Util::compute_css_checksum( $css );
 		}
 
 		/**
@@ -1629,90 +1624,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				}
 				as_enqueue_async_action( 'wppo_used_css_generate', $args, 'performance_optimisation' );
 				return true;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
-		}
-
-		/**
-		 * Requeue used CSS when builder assets drifted for a post.
-		 *
-		 * Compares the newest Elementor CSS mtime
-		 * (uploads/elementor/css/post-*.css, global css files) against the
-		 * post's used-CSS sidecar mtime; when builder assets are newer, the
-		 * used CSS is stale and a regeneration job is queued. Fail-open: any
-		 * filesystem failure returns false (full CSS keeps serving).
-		 *
-		 * @param int $post_id Post ID to check.
-		 * @return bool True when drift was detected and a requeue was queued.
-		 * @since NEXT
-		 */
-		public static function maybe_requeue_on_builder_drift( int $post_id ): bool {
-			if ( $post_id <= 0 ) {
-				return false;
-			}
-			try {
-				$options = Util::get_settings();
-				if ( empty( $options['file_optimisation']['removeUnusedCSS'] ) ) {
-					return false;
-				}
-				$permalink = function_exists( 'get_permalink' ) ? get_permalink( $post_id ) : '';
-				if ( empty( $permalink ) || ! is_string( $permalink ) ) {
-					return false;
-				}
-				$instance      = new self( $options );
-				$used_css_path = $instance->get_used_css_path( (string) $permalink );
-				if ( '' === $used_css_path || ! file_exists( $used_css_path ) ) {
-					return false;
-				}
-				$used_mtime = filemtime( $used_css_path );
-				if ( false === $used_mtime ) {
-					return false;
-				}
-				$newest_asset = self::get_newest_builder_asset_mtime( $post_id );
-				if ( false === $newest_asset || $newest_asset <= $used_mtime ) {
-					return false;
-				}
-				return self::requeue_for_post( $post_id );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
-		}
-
-		/**
-		 * Newest builder CSS asset mtime for a post (Elementor post/global CSS).
-		 *
-		 * @param int $post_id Post ID.
-		 * @return int|false Newest mtime, or false when no asset found.
-		 * @since NEXT
-		 */
-		private static function get_newest_builder_asset_mtime( int $post_id ) {
-			try {
-				if ( ! function_exists( 'wp_upload_dir' ) ) {
-					return false;
-				}
-				$upload = wp_upload_dir();
-				if ( ! is_array( $upload ) || empty( $upload['basedir'] ) || ! is_string( $upload['basedir'] ) ) {
-					return false;
-				}
-				$base       = wp_normalize_path( $upload['basedir'] ) . '/elementor/css';
-				$candidates = array(
-					$base . '/post-' . (int) $post_id . '.css',
-					$base . '/global.css',
-					$base . '/post-' . (int) $post_id . '.min.css',
-				);
-				$newest     = false;
-				foreach ( $candidates as $file ) {
-					if ( file_exists( $file ) ) {
-						$mtime = filemtime( $file );
-						if ( false !== $mtime && ( false === $newest || $mtime > $newest ) ) {
-							$newest = $mtime;
-						}
-					}
-				}
-				return $newest;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;

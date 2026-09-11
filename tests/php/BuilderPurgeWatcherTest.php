@@ -17,6 +17,8 @@ use PerformanceOptimise\Inc\Critical_CSS;
 use PerformanceOptimise\Inc\Used_CSS;
 use PerformanceOptimise\Inc\Util;
 use Brain\Monkey\Functions;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 
 /**
  * Tests for the builder-update purge watcher.
@@ -509,6 +511,166 @@ class BuilderPurgeWatcherTest extends \PHPUnit\Framework\TestCase {
 		$this->assertTrue( method_exists( Critical_CSS::class, 'regenerate_all' ) );
 		$this->assertTrue( method_exists( Critical_CSS::class, 'clear_all' ) );
 		$this->assertTrue( method_exists( Builder_Purge_Watcher::class, 'purge_wppo_derived_caches' ) );
+	}
+
+	/**
+	 * A post-less drift signal defers the heavy purge instead of running it
+	 * inline (audit #6).
+	 *
+	 * Isolated in a separate process so the eval-declared
+	 * `as_has_scheduled_action()` stub cannot leak into later test classes
+	 * (Patchwork cannot un-declare functions).
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_on_builder_drift_schedules_deferred_purge(): void {
+		$this->reset_drift_static_flags();
+		Functions\when( 'doing_action' )->justReturn( false );
+		Functions\when( 'as_has_scheduled_action' )->justReturn( false );
+
+		$enqueued = array();
+		Functions\when( 'as_enqueue_async_action' )->alias(
+			static function ( $hook, $args = array(), $group = '' ) use ( &$enqueued ) {
+				$enqueued[] = array( $hook, $args, $group );
+				return 1;
+			}
+		);
+		Functions\when( 'do_action' )->justReturn( null );
+
+		$watcher = new WPPO_Test_Builder_Watcher_Flow();
+		$watcher->on_builder_drift();
+
+		$this->assertFalse( $watcher->wppo_purged, 'Heavy purge must not run inside the originating request.' );
+		$this->assertSame(
+			array( array( Builder_Purge_Watcher::DRIFT_PURGE_HOOK, array(), 'performance_optimisation' ) ),
+			$enqueued
+		);
+	}
+
+	/**
+	 * The deferred purge runs the heavy path only from the background callback.
+	 */
+	public function test_deferred_drift_purge_runs_heavy_path(): void {
+		$watcher = new WPPO_Test_Builder_Watcher_Flow();
+		$watcher->run_deferred_drift_purge();
+		$this->assertTrue( $watcher->wppo_purged );
+	}
+
+	/**
+	 * A pending Action Scheduler job is not enqueued twice.
+	 *
+	 * Isolated in a separate process so the eval-declared
+	 * `as_has_scheduled_action()` stub does not leak into later test classes.
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_on_builder_drift_respects_pending_action_scheduler_job(): void {
+		$this->reset_drift_static_flags();
+		Functions\when( 'doing_action' )->justReturn( false );
+		Functions\when( 'as_has_scheduled_action' )->justReturn( true );
+
+		$enqueued = 0;
+		Functions\when( 'as_enqueue_async_action' )->alias(
+			static function () use ( &$enqueued ) {
+				++$enqueued;
+				return 1;
+			}
+		);
+		Functions\when( 'do_action' )->justReturn( null );
+
+		$watcher = new WPPO_Test_Builder_Watcher_Flow();
+		$watcher->on_builder_drift();
+
+		$this->assertSame( 0, $enqueued, 'An already-pending job must not be enqueued again.' );
+	}
+
+	/**
+	 * The transient lock throttles duplicate enqueues across requests.
+	 *
+	 * Isolated in a separate process so the eval-declared
+	 * `as_has_scheduled_action()` stub does not leak into later test classes.
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_on_builder_drift_lock_throttles_duplicate_enqueue(): void {
+		$this->reset_drift_static_flags();
+		Functions\when( 'doing_action' )->justReturn( false );
+		Functions\when( 'as_has_scheduled_action' )->justReturn( false );
+
+		$transients = array();
+		Functions\when( 'get_transient' )->alias(
+			static function ( $key ) use ( &$transients ) {
+				return $transients[ $key ] ?? false;
+			}
+		);
+		Functions\when( 'set_transient' )->alias(
+			static function ( $key, $value ) use ( &$transients ) {
+				$transients[ $key ] = $value;
+				return true;
+			}
+		);
+		$enqueued = 0;
+		Functions\when( 'as_enqueue_async_action' )->alias(
+			static function () use ( &$enqueued ) {
+				++$enqueued;
+				return 1;
+			}
+		);
+		Functions\when( 'do_action' )->justReturn( null );
+
+		$watcher = new WPPO_Test_Builder_Watcher_Flow();
+		$watcher->on_builder_drift();
+		// Simulate a second signal in a fresh request: the lock transient
+		// survives, the per-request flag does not.
+		$this->reset_drift_static_flags();
+		$watcher->on_builder_drift();
+
+		$this->assertSame( 1, $enqueued );
+	}
+
+	/**
+	 * Without Action Scheduler the purge falls back to wp_schedule_single_event().
+	 *
+	 * Runs in a separate process because an earlier test in this class
+	 * eval-declares `as_enqueue_async_action()` via Brain Monkey; Patchwork
+	 * cannot un-declare it, so a same-process run would take the Action
+	 * Scheduler branch instead of the WP-Cron fallback.
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_on_builder_drift_falls_back_to_wp_cron(): void {
+		$this->reset_drift_static_flags();
+		Functions\when( 'doing_action' )->justReturn( false );
+
+		$scheduled = array();
+		Functions\when( 'wp_next_scheduled' )->justReturn( false );
+		Functions\when( 'wp_schedule_single_event' )->alias(
+			static function ( $timestamp, $hook ) use ( &$scheduled ) {
+				$scheduled[] = array( $timestamp, $hook );
+				return true;
+			}
+		);
+		Functions\when( 'do_action' )->justReturn( null );
+
+		$watcher = new WPPO_Test_Builder_Watcher_Flow();
+		$watcher->on_builder_drift();
+
+		$this->assertCount( 1, $scheduled );
+		$this->assertSame( Builder_Purge_Watcher::DRIFT_PURGE_HOOK, $scheduled[0][1] );
+		$this->assertFalse( $watcher->wppo_purged, 'Heavy purge must remain deferred.' );
+	}
+
+	/**
+	 * Reset the watcher's static re-entrancy flags between assertions.
+	 *
+	 * @return void
+	 */
+	private function reset_drift_static_flags(): void {
+		foreach ( array( 'drift_suspended', 'drift_handled_this_request' ) as $name ) {
+			$property = new \ReflectionProperty( Builder_Purge_Watcher::class, $name );
+			$property->setAccessible( true );
+			$property->setValue( null, false );
+		}
 	}
 }
 

@@ -413,21 +413,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		/**
 		 * Stable content hash of CSS source (issue #1038).
 		 *
-		 * Pure local string hash — never fetches remotely. Used to detect
-		 * stylesheet edits that preserve mtime (deploy sync, minify rebuild
-		 * in the same second) so stale CCSS / used-CSS regenerates. SHA-256
-		 * is stable across installs and salt rotations (unlike wp_hash), so
-		 * stored checksums and `.sha256` sidecars stay comparable.
+		 * Thin backward-compatible wrapper around the shared
+		 * {@see Util::compute_css_checksum()} (audit #7) so existing callers
+		 * and tests keep working while both CSS pipelines share one
+		 * implementation.
 		 *
 		 * @param string $css CSS content.
 		 * @return string SHA-256 checksum, or '' for empty input.
 		 * @since NEXT
 		 */
 		public static function compute_css_checksum( string $css ): string {
-			if ( '' === $css ) {
-				return '';
-			}
-			return hash( 'sha256', $css );
+			return Util::compute_css_checksum( $css );
 		}
 
 		/**
@@ -443,6 +439,104 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 */
 		private static function get_source_checksum_key( string $template_hash ): string {
 			return Util::transient_key( 'wppo_ccss_checksum_' . $template_hash );
+		}
+
+		/**
+		 * Multisite-aware transient key for a template's canonical source URL list.
+		 *
+		 * Persisted alongside the source checksum at generation time so the
+		 * runtime probe can re-hash exactly the document-ordered URL list the
+		 * server-side fetch saw, instead of re-deriving one from
+		 * `$wp_styles->queue` that may differ in content or order (audit #9).
+		 *
+		 * @param string $template_hash Template hash.
+		 * @return string Transient key.
+		 * @since NEXT
+		 */
+		private static function get_source_urls_key( string $template_hash ): string {
+			return Util::transient_key( 'wppo_ccss_sources_' . $template_hash );
+		}
+
+		/**
+		 * TTL for the per-template source baseline transients.
+		 *
+		 * Shared by the checksum and URL-list baselines so they expire
+		 * together. Filterable via `wppo_ccss_checksum_ttl`.
+		 *
+		 * @return int TTL in seconds.
+		 * @since NEXT
+		 */
+		private static function get_source_checksum_ttl(): int {
+			/**
+			 * Filters how long a Critical CSS source checksum is kept.
+			 *
+			 * @param int $ttl Time to live in seconds. Default WEEK_IN_SECONDS.
+			 * @since NEXT
+			 */
+			$ttl = function_exists( 'apply_filters' ) ? (int) apply_filters( 'wppo_ccss_checksum_ttl', WEEK_IN_SECONDS ) : WEEK_IN_SECONDS;
+			return $ttl > 0 ? $ttl : WEEK_IN_SECONDS;
+		}
+
+		/**
+		 * Persist the canonical document-ordered source URL list after generation.
+		 *
+		 * The list is the exact ordered set of `//link[@rel=stylesheet]`
+		 * hrefs the generation fetch resolved (audit #9). The runtime probe
+		 * re-hashes this list so it cannot diverge from the generation-time
+		 * baseline. Local transient write only — no remote fetch. Fail-open:
+		 * missing transient API or an empty list is a no-op.
+		 *
+		 * @param string   $template_hash Template hash.
+		 * @param string[] $source_urls   Document-ordered stylesheet URLs.
+		 * @return void
+		 * @since NEXT
+		 */
+		public static function store_source_urls( string $template_hash, array $source_urls ): void {
+			if ( '' === $template_hash || array() === $source_urls ) {
+				return;
+			}
+			if ( ! function_exists( 'set_transient' ) ) {
+				return;
+			}
+			$urls = array();
+			foreach ( $source_urls as $url ) {
+				if ( is_string( $url ) && '' !== $url ) {
+					$urls[] = $url;
+				}
+			}
+			if ( array() === $urls ) {
+				return;
+			}
+			set_transient( self::get_source_urls_key( $template_hash ), array_values( $urls ), self::get_source_checksum_ttl() );
+		}
+
+		/**
+		 * Read the persisted canonical source URL list.
+		 *
+		 * Returns an empty array for already-cached entries generated before
+		 * the URL list was persisted (audit #9). Callers must treat that as
+		 * "no baseline" and fall back to the previous $wp_styles-derived
+		 * behavior rather than treating the entry as stale.
+		 *
+		 * @param string $template_hash Template hash.
+		 * @return string[] Persisted URLs, or array() when none.
+		 * @since NEXT
+		 */
+		private static function get_stored_source_urls( string $template_hash ): array {
+			if ( '' === $template_hash || ! function_exists( 'get_transient' ) ) {
+				return array();
+			}
+			$stored = get_transient( self::get_source_urls_key( $template_hash ) );
+			if ( ! is_array( $stored ) ) {
+				return array();
+			}
+			$urls = array();
+			foreach ( $stored as $url ) {
+				if ( is_string( $url ) && '' !== $url ) {
+					$urls[] = $url;
+				}
+			}
+			return $urls;
 		}
 
 		/**
@@ -492,17 +586,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			if ( ! function_exists( 'set_transient' ) ) {
 				return;
 			}
-			/**
-			 * Filters how long a Critical CSS source checksum is kept.
-			 *
-			 * @param int $ttl Time to live in seconds. Default WEEK_IN_SECONDS.
-			 * @since NEXT
-			 */
-			$ttl = function_exists( 'apply_filters' ) ? (int) apply_filters( 'wppo_ccss_checksum_ttl', WEEK_IN_SECONDS ) : WEEK_IN_SECONDS;
-			if ( $ttl <= 0 ) {
-				$ttl = WEEK_IN_SECONDS;
-			}
-			set_transient( self::get_source_checksum_key( $template_hash ), self::compute_css_checksum( $source_css ), $ttl );
+			set_transient( self::get_source_checksum_key( $template_hash ), self::compute_css_checksum( $source_css ), self::get_source_checksum_ttl() );
 		}
 
 		/**
@@ -556,6 +640,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					}
 				}
 				delete_transient( $key );
+				delete_transient( self::get_source_urls_key( $template_hash ) );
 				self::invalidate_ccss_memo( $template_hash );
 				if ( function_exists( 'clearstatcache' ) ) {
 					clearstatcache( true, $file );
@@ -857,7 +942,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				if ( array() !== self::get_ccss_safelist() && function_exists( 'get_transient' ) ) {
 					$stored = get_transient( self::get_source_checksum_key( $template_hash ) );
 					if ( is_string( $stored ) && '' !== $stored ) {
-						$source = self::get_local_source_css();
+						// Re-hash the exact document-ordered URL list persisted
+						// at generation time so the probe cannot diverge from
+						// the baseline (audit #9). Already-cached entries that
+						// predate the persisted list fall back to the previous
+						// $wp_styles-derived domain instead of being treated as
+						// stale.
+						$stored_urls = self::get_stored_source_urls( $template_hash );
+						$source      = array() !== $stored_urls
+							? self::build_local_source_css( $stored_urls )
+							: self::get_local_source_css();
 						if ( '' !== $source ) {
 							$result = self::maybe_refresh_from_local_css( $template_hash, $source );
 						}
@@ -1215,15 +1309,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * external CSS (resolving @import directives), and applies heuristic
 		 * above-fold rule extraction.
 		 *
-		 * @param string      $url        The page URL to generate CCSS for.
-		 * @param string|null $source_css Out-param: canonical local-source CSS
-		 *                                (locally-resolvable external
-		 *                                stylesheets, document order) used for
-		 *                                the freshness checksum (issue #1038).
+		 * @param string      $url          The page URL to generate CCSS for.
+		 * @param string|null $source_css   Out-param: canonical local-source CSS
+		 *                                  (locally-resolvable external
+		 *                                  stylesheets, document order) used for
+		 *                                  the freshness checksum (issue #1038).
+		 * @param array|null  $resolved_urls Out-param: the exact document-ordered
+		 *                                  `//link[@rel=stylesheet]` href list the
+		 *                                  fetch saw, persisted so the runtime
+		 *                                  probe re-hashes the same list (audit #9).
 		 * @return string|false The critical CSS content, or false on failure.
 		 * @since NEXT
 		 */
-		public static function generate( string $url, ?string &$source_css = null ) {
+		public static function generate( string $url, ?string &$source_css = null, ?array &$resolved_urls = null ) {
 			$response = wp_remote_get(
 				$url,
 				array(
@@ -1303,10 +1401,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 
 			// Canonical source domain: the locally-resolvable stylesheets the
 			// page emitted, in document order. generate_and_store() baselines
-			// the checksum of this string and the frontend probe recomputes it
-			// from $wp_styles in queue order (the page's emission order), so an
-			// unchanged source compares equal instead of churning forever.
+			// the checksum of this string AND persists $source_urls so the
+			// frontend probe re-hashes the exact same document-ordered list
+			// instead of re-deriving one from $wp_styles order (audit #9), so
+			// an unchanged source compares equal instead of churning forever.
 			$source_css = self::build_local_source_css( $source_urls );
+			if ( null !== $resolved_urls ) {
+				$resolved_urls = $source_urls;
+			}
 
 			if ( empty( $css_content ) ) {
 				return false;
@@ -1948,8 +2050,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return false;
 			}
 
-			$source_css   = '';
-			$critical_css = self::generate( $url, $source_css );
+			$source_css    = '';
+			$resolved_urls = array();
+			$critical_css  = self::generate( $url, $source_css, $resolved_urls );
 
 			// Reject generated CSS that could break out of the <style> context when
 			// inlined — a poisoned source stylesheet must never reach the CCSS cache.
@@ -1976,13 +2079,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// Baseline the canonical SOURCE checksum — not the generated
 			// output — so later local-source comparisons
 			// (maybe_refresh_from_local_css) hash the exact same domain the
-			// frontend probe reproduces from $wp_styles. This detects
-			// stylesheet edits that preserve mtime. Local transient write
-			// only — no remote fetch. An empty source (no locally-resolvable
-			// external stylesheets) stores nothing, so the probe stays a
-			// no-op and never churns.
+			// frontend probe reproduces. The document-ordered URL list the
+			// fetch saw is persisted too, and the probe re-hashes that exact
+			// list rather than re-deriving one from $wp_styles (audit #9).
+			// This detects stylesheet edits that preserve mtime. Local
+			// transient writes only — no remote fetch. An empty source (no
+			// locally-resolvable external stylesheets) stores nothing, so the
+			// probe stays a no-op and never churns.
 			if ( '' !== $source_css ) {
 				self::store_source_checksum( $template_hash, $source_css );
+				self::store_source_urls( $template_hash, $resolved_urls );
 			}
 
 			// The memo must reflect the fresh file within this request too;
@@ -2327,6 +2433,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			foreach ( $templates as $template => $label ) {
 				$hash = self::get_template_hash( $template );
 				delete_transient( Util::transient_key( 'wppo_ccss_status_' . $hash ) );
+				// Drop the source baselines too so a cleared variant cannot
+				// keep a stale source domain around for the next generation
+				// (audit #9).
+				delete_transient( self::get_source_checksum_key( $hash ) );
+				delete_transient( self::get_source_urls_key( $hash ) );
 			}
 			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
 				// Monotonic increment: same-second mutations must produce

@@ -1960,6 +1960,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Stable content hash of CSS source (issue #1038 / audit #7).
+		 *
+		 * Pure local string hash — never fetches remotely. Used by both the
+		 * critical-CSS and used-CSS pipelines to detect stylesheet edits that
+		 * preserve mtime (deploy sync, minify rebuild in the same second) so
+		 * stale derived CSS regenerates. SHA-256 is stable across installs and
+		 * salt rotations (unlike wp_hash), so stored checksums and `.sha256`
+		 * sidecars stay comparable. Empty input returns '' so callers can
+		 * treat "no source" as "no signal".
+		 *
+		 * @param string $css CSS content.
+		 * @return string SHA-256 checksum, or '' for empty input.
+		 * @since NEXT
+		 */
+		public static function compute_css_checksum( string $css ): string {
+			if ( '' === $css ) {
+				return '';
+			}
+			return hash( 'sha256', $css );
+		}
+
+		/**
 		 * Qualify a transient key with the current blog ID on multisite.
 		 *
 		 * Prevents transient key collisions when a shared object cache backend
