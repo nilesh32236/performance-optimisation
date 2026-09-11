@@ -55,6 +55,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		public static function init(): void {
 			$notices = array();
 
+			// Reinstall existence re-check: sweep orphan backup/tmp siblings
+			// left by an incomplete teardown before creating the fresh
+			// drop-in, so stale artifacts never survive a reinstall.
+			// Fail-open: never blocks activation.
+			try {
+				if ( method_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler', 'cleanup_stale_artifacts' ) ) {
+					Advanced_Cache_Handler::cleanup_stale_artifacts();
+				}
+			} catch ( \Throwable $ignored_artifacts ) {
+				unset( $ignored_artifacts );
+			}
+
 			if ( Advanced_Cache_Handler::foreign_dropin_present() ) {
 				$notices[] = 'foreign_dropin';
 			} else {
