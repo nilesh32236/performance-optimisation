@@ -61,7 +61,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 				System_Info::flush_dropin_cache();
 			}
 
+			// Remove the .htaccess wppo_rules marker block first so a failed
+			// drop-in/filesystem step below cannot leave marker residue
+			// behind. Fail-open: never fatals; residue is retried on the
+			// next deactivate/uninstall.
+			self::remove_htaccess_rules();
+
 			Advanced_Cache_Handler::remove();
+			// Re-check: remove() is a no-op when the filesystem was
+			// unavailable — sweep stale backup/tmp siblings so reinstall
+			// starts clean even after a failed remove().
+			self::cleanup_dropin_artifacts();
 
 			global $wp_filesystem;
 			if ( ! $wp_filesystem ) {
@@ -91,14 +101,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 				}
 			}
 
-			// Remove Redis config file.
+			// Remove Redis config file (verified: retry once when the first
+			// delete leaves the file behind; fail-open otherwise).
 			$redis_config_file = wp_normalize_path( WP_CONTENT_DIR . '/wppo-redis-config.php' );
-			if ( $wp_filesystem && $wp_filesystem->exists( $redis_config_file ) ) {
+			if ( $wp_filesystem && method_exists( $wp_filesystem, 'exists' ) && method_exists( $wp_filesystem, 'delete' ) && $wp_filesystem->exists( $redis_config_file ) ) {
 				$wp_filesystem->delete( $redis_config_file );
+				if ( $wp_filesystem->exists( $redis_config_file ) ) {
+					$wp_filesystem->delete( $redis_config_file );
+				}
+			}
+			// Final sweep: htaccess backup/tmp siblings must not survive
+			// deactivation even when marker removal ran before the
+			// filesystem was ready.
+			self::cleanup_dropin_artifacts();
+			if ( class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) && method_exists( 'PerformanceOptimise\Inc\Htaccess_Handler', 'cleanup_backup_artifacts' ) ) {
+				try {
+					Htaccess_Handler::cleanup_backup_artifacts();
+				} catch ( \Throwable $ignored_cleanup ) {
+					unset( $ignored_cleanup );
+				}
 			}
 
-			// Remove WP_CACHE constant from wp-config.php.
-			self::remove_wp_cache_constant();
+			// Remove WP_CACHE constant from wp-config.php (fail-open: a
+			// failed atomic edit keeps serving uncached via the drop-in
+			// early return; the notice contract is logged, never fatal).
+			$wp_cache_notice = self::remove_wp_cache_constant();
+			if ( is_string( $wp_cache_notice ) && '' !== $wp_cache_notice ) {
+				/* translators: %s: notice key describing the wp-config.php failure. */
+				Log::add( sprintf( __( 'Failed to update wp-config.php during deactivation (%s).', 'performance-optimisation' ), $wp_cache_notice ) );
+			}
 			Log::add( __( 'Plugin deactivated', 'performance-optimisation' ) );
 			Cache::clear_cache();
 		}
@@ -203,19 +234,71 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 		}
 
 		/**
+		 * Remove the .htaccess wppo_rules marker block (fail-open).
+		 *
+		 * Prefers the verified Htaccess_Handler::remove_rules() helper
+		 * (marker assertion + backup-restore + backup-sibling sweep) and
+		 * falls back to update_rules(false) on older class shapes. A failed
+		 * delete never fatals; residue is retried next deactivate/uninstall.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private static function remove_htaccess_rules(): void {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
+					return;
+				}
+				if ( method_exists( 'PerformanceOptimise\Inc\Htaccess_Handler', 'remove_rules' ) ) {
+					Htaccess_Handler::remove_rules();
+					return;
+				}
+				if ( method_exists( 'PerformanceOptimise\Inc\Htaccess_Handler', 'update_rules' ) ) {
+					Htaccess_Handler::update_rules( false );
+				}
+			} catch ( \Throwable $ignored ) {
+				unset( $ignored );
+			}
+		}
+
+		/**
+		 * Sweep stale advanced-cache backup/tmp siblings (fail-open).
+		 *
+		 * Covers the reinstall existence re-check: even when the live
+		 * drop-in is already gone, orphan `.wppo-backup` / `.tmp.*`
+		 * siblings from a crashed write must not survive deactivation.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private static function cleanup_dropin_artifacts(): void {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
+					return;
+				}
+				if ( method_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler', 'cleanup_stale_artifacts' ) ) {
+					Advanced_Cache_Handler::cleanup_stale_artifacts();
+				}
+			} catch ( \Throwable $ignored ) {
+				unset( $ignored );
+			}
+		}
+
+		/**
 		 * Removes WP_CACHE constant from wp-config.php file if present.
 		 *
 		 * Ensures that the constant enabling WordPress caching is deleted
 		 * during deactivation to prevent conflicts.
 		 *
 		 * @since 1.0.0
-		 * @return void
+		 * @since NEXT Now atomic (tmp + verify + backup + rename with rollback) and returns a notice key on failure.
+		 * @return string|null Notice key for the admin layer, or null on success / nothing to do.
 		 */
-		private static function remove_wp_cache_constant(): void {
+		public static function remove_wp_cache_constant(): ?string {
 			global $wp_filesystem;
 
 			if ( ! $wp_filesystem && ! Util::init_filesystem() ) {
-				return;
+				return null;
 			}
 
 			$wp_config_path = wp_normalize_path( ABSPATH . 'wp-config.php' );
@@ -225,20 +308,58 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 			}
 
 			if ( ! $wp_filesystem->is_writable( $wp_config_path ) ) {
-				return;
+				return null;
 			}
 
 			$wp_config_content = $wp_filesystem->get_contents( $wp_config_path );
 
+			if ( ! is_string( $wp_config_content ) ) {
+				return 'wp_config_read';
+			}
+
 			$pattern = '/\/\*\*\s*Enables WordPress Cache\s*\*\/\s*(?:\r?\n|\n)if\s*\(\s*!\s*defined\s*\(\s*[\'"]WP_CACHE[\'"]\s*\)\s*\)\s*\{\s*define\s*\(\s*[\'"]WP_CACHE[\'"]\s*,\s*true\s*\)\s*;\s*\}\s*/';
 
+			$before = $wp_config_content;
 			if ( preg_match( $pattern, $wp_config_content, $matches ) ) {
 				$wp_config_content = preg_replace( $pattern, '', $wp_config_content );
 			} else {
 				$wp_config_content = preg_replace( '/\n?define\(\s*[\'"]WP_CACHE[\'"]\s*,\s*true\s*\);\s*/', '', $wp_config_content );
 			}
 
-			$wp_filesystem->put_contents( $wp_config_path, $wp_config_content, FS_CHMOD_FILE );
+			if ( ! is_string( $wp_config_content ) ) {
+				return 'wp_config_write_failed';
+			}
+
+			if ( $wp_config_content === $before ) {
+				return null;
+			}
+
+			// Atomic path: tmp write + verify + backup + rename with rollback,
+			// mirroring Activate::add_wp_cache_constant(). Falls back to the
+			// legacy direct write when the transport cannot support it.
+			if ( method_exists( 'PerformanceOptimise\Inc\Util', 'atomic_write_php_verified' ) ) {
+				$atomic = Util::atomic_write_php_verified(
+					$wp_filesystem,
+					$wp_config_path,
+					$wp_config_content,
+					static function ( $contents ): bool {
+						// Only the plugin-owned marker block is asserted gone so a
+						// host-managed WP_CACHE define elsewhere in the file survives
+						// deactivation instead of spuriously failing verification.
+						return is_string( $contents ) && false === strpos( $contents, 'Enables WordPress Cache' );
+					}
+				);
+				if ( true === $atomic ) {
+					return null;
+				}
+				if ( false === $atomic ) {
+					return 'wp_config_write_failed';
+				}
+			}
+
+			$ok = $wp_filesystem->put_contents( $wp_config_path, $wp_config_content, FS_CHMOD_FILE );
+
+			return $ok ? null : 'wp_config_write_failed';
 		}
 	}
 }

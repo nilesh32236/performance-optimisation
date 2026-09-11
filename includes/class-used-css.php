@@ -187,6 +187,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		private static bool $traversal_probe_logged = false;
 
 		/**
+		 * Precomputed safelist index (exact/attr/prefix sets).
+		 *
+		 * Built once per instance from $safelist so is_selector_used()
+		 * avoids the ~60-entry loop with preg_replace per selector per rule.
+		 *
+		 * @since NEXT
+		 * @var array{exact: array<string, bool>, attrs: string[], prefixes: string[]}|null
+		 */
+		private ?array $safelist_index = null;
+
+		/**
+		 * Per-instance cache of split selector parts keyed by selector string.
+		 *
+		 * @since NEXT
+		 * @var array<string, string[]>
+		 */
+		private array $selector_split_cache = array();
+
+		/**
 		 * Memoized local-source checksum for this instance (issue #1038).
 		 *
 		 * The freshness probe runs full-content local reads; memoizing per
@@ -649,6 +668,73 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		}
 
 		/**
+		 * Build the precomputed safelist index (once per instance).
+		 *
+		 * Hoists the per-entry preg_replace out of the per-selector loop:
+		 * attribute names and non-empty prefixes are derived a single time.
+		 *
+		 * @since NEXT
+		 * @return array{exact: array<string, bool>, attrs: string[], prefixes: string[]}
+		 */
+		private function get_safelist_index(): array {
+			if ( null !== $this->safelist_index ) {
+				return $this->safelist_index;
+			}
+			$exact    = array();
+			$attrs    = array();
+			$prefixes = array();
+			foreach ( $this->safelist as $safe ) {
+				$safe = (string) $safe;
+				if ( '' === $safe ) {
+					continue;
+				}
+				$exact[ $safe ] = true;
+				if ( '[' === $safe[0] ) {
+					$attr_name = preg_replace( '/[\]=~|^$*"\'].*$/', '', $safe );
+					$attr_name = ltrim( trim( (string) $attr_name ), '[' );
+					if ( '' !== $attr_name ) {
+						$attrs[] = $attr_name;
+					}
+					continue;
+				}
+				$last_char = substr( $safe, -1 );
+				if ( '-' === $last_char || '_' === $last_char || '*' === $last_char ) {
+					$prefix = '*' === $last_char ? substr( $safe, 0, -1 ) : $safe;
+					// A bare '*' entry (the universal selector) is handled by
+					// the exact-match check; it must not act as a
+					// match-everything wildcard through an empty prefix (issue #1038).
+					if ( '' !== $prefix ) {
+						$prefixes[] = $prefix;
+					}
+				}
+			}
+			$this->safelist_index = array(
+				'exact'    => $exact,
+				'attrs'    => array_values( array_unique( $attrs ) ),
+				'prefixes' => array_values( array_unique( $prefixes ) ),
+			);
+			return $this->safelist_index;
+		}
+
+		/**
+		 * Cached split of a selector into simple parts.
+		 *
+		 * @since NEXT
+		 * @param string $selector Selector string.
+		 * @return string[] Simple selector parts.
+		 */
+		private function get_cached_simple_selectors( string $selector ): array {
+			if ( isset( $this->selector_split_cache[ $selector ] ) ) {
+				return $this->selector_split_cache[ $selector ];
+			}
+			$parts = $this->extract_simple_selectors( $selector );
+			if ( count( $this->selector_split_cache ) < 2000 ) {
+				$this->selector_split_cache[ $selector ] = $parts;
+			}
+			return $parts;
+		}
+
+		/**
 		 * Check if a CSS selector matches any used element in the HTML.
 		 *
 		 * Note: This method uses a conservative approach for descendant/child
@@ -670,53 +756,47 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				return false;
 			}
 
-			if ( in_array( $selector, $this->safelist, true ) ) {
+			$index = $this->get_safelist_index();
+
+			if ( isset( $index['exact'][ $selector ] ) ) {
 				return true;
 			}
 
-			foreach ( $this->safelist as $safe ) {
-				if ( '' !== $safe && '[' === $safe[0] ) {
-					// Attribute safelist (e.g. [data-elementor-type]): match by
-					// attribute-name substring so compound selectors like
-					// div[data-elementor-type] or [data-elementor-type="x"] stay
-					// kept. Bare [data-*]/[aria-*] selectors are additionally
-					// conserved by matches_simple_selector().
-					$attr_name = preg_replace( '/[\]=~|^$*"\'].*$/', '', $safe );
-					$attr_name = ltrim( trim( (string) $attr_name ), '[' );
-					if ( '' !== $attr_name && false !== stripos( $selector, $attr_name ) ) {
+			foreach ( $index['attrs'] as $attr_name ) {
+				// Attribute safelist (e.g. [data-elementor-type]): match by
+				// attribute-name substring so compound selectors like
+				// div[data-elementor-type] or [data-elementor-type="x"] stay
+				// kept. Bare [data-*]/[aria-*] selectors are additionally
+				// conserved by matches_simple_selector().
+				if ( false !== stripos( $selector, $attr_name ) ) {
+					return true;
+				}
+			}
+			if ( ! empty( $index['prefixes'] ) ) {
+				$parts = null;
+				foreach ( $index['prefixes'] as $prefix ) {
+					if ( 0 === strpos( $selector, $prefix ) ) {
 						return true;
 					}
-					continue;
-				}
-				$last_char = substr( $safe, -1 );
-				if ( '-' === $last_char || '_' === $last_char || '*' === $last_char ) {
-					$prefix = '*' === $last_char ? substr( $safe, 0, -1 ) : $safe;
-					// A bare '*' entry (the universal selector) is handled by
-					// the exact-match check above; it must not act as a
-					// match-everything wildcard through an empty prefix, which
-					// would silently disable all purging (issue #1038).
-					// Non-empty prefixes are safe to match.
-					if ( '' !== $prefix ) {
-						if ( 0 === strpos( $selector, $prefix ) ) {
+					// Compound/descendant selectors (issue #1023): a popup
+					// token buried inside a wrapper, portal, or tag-qualified
+					// part (e.g. '.foo .popup-bar', 'div.modal-dialog',
+					// 'div.elementor-popup-modal', 'button.mfp-close') must
+					// keep the rule even though the full string does not
+					// start with the prefix. Fail-safe direction: keeping
+					// extra CSS can never break styling.
+					if ( null === $parts ) {
+						$parts = $this->get_cached_simple_selectors( $selector );
+					}
+					foreach ( $parts as $part ) {
+						if ( 0 === strpos( $part, $prefix ) || false !== stripos( $part, $prefix ) ) {
 							return true;
-						}
-						// Compound/descendant selectors (issue #1023): a popup
-						// token buried inside a wrapper, portal, or tag-qualified
-						// part (e.g. '.foo .popup-bar', 'div.modal-dialog',
-						// 'div.elementor-popup-modal', 'button.mfp-close') must
-						// keep the rule even though the full string does not
-						// start with the prefix. Fail-safe direction: keeping
-						// extra CSS can never break styling.
-						foreach ( $this->extract_simple_selectors( $selector ) as $part ) {
-							if ( 0 === strpos( $part, $prefix ) || false !== stripos( $part, $prefix ) ) {
-								return true;
-							}
 						}
 					}
 				}
 			}
 
-			$simple_selectors = $this->extract_simple_selectors( $selector );
+			$simple_selectors = $this->get_cached_simple_selectors( $selector );
 
 			// Conservative OR logic: keep the rule if ANY simple selector part
 			// exists in the DOM, to avoid breaking descendant selectors like
@@ -1631,6 +1711,94 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		}
 
 		/**
+		 * Order post IDs worst-p75 LCP first for used-CSS queue prioritization.
+		 *
+		 * Read-only ordering signal (issue #1059): scores each post's
+		 * permalink via RUM::score_url_lcp() (RUM path p75 + latest
+		 * PageSpeed trend LCP blend). Worst p75 first so slow pages get
+		 * optimized CSS first. Fail-open: missing RUM/trends, disabled
+		 * setting, or any failure returns FIFO ID order. Purge-coupled
+		 * invalidation semantics unchanged. Multisite-safe: per-site
+		 * option reads only.
+		 *
+		 * @since NEXT
+		 * @param int[] $post_ids Post IDs in FIFO order.
+		 * @return int[] Ordered post IDs (same entries).
+		 */
+		public static function order_post_ids_by_rum_priority( array $post_ids ): array {
+			try {
+				if ( count( $post_ids ) < 2 ) {
+					return array_values( array_map( 'intval', $post_ids ) );
+				}
+				$post_ids = array_values( array_map( 'intval', $post_ids ) );
+				$enabled  = true;
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) && function_exists( 'get_option' ) ) {
+					$settings = \PerformanceOptimise\Inc\Util::get_settings();
+					if ( isset( $settings['file_optimisation']['usedCssRumPriority'] ) ) {
+						$enabled = (bool) $settings['file_optimisation']['usedCssRumPriority'];
+					}
+				}
+				if ( ! $enabled ) {
+					return $post_ids;
+				}
+				if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'get_path_lcp_priority' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'score_url_lcp' ) ) {
+					return $post_ids;
+				}
+				if ( ! function_exists( 'get_permalink' ) ) {
+					return $post_ids;
+				}
+				$priority = \PerformanceOptimise\Inc\RUM::get_path_lcp_priority();
+				// Fetch trends once for the whole ordering pass instead of once
+				// per post inside score_url_lcp() (issue #1059 review). A
+				// trend-only site (no RUM samples yet) must still prioritize,
+				// so only fall back to FIFO when both signals are empty.
+				$trends = null;
+				if ( class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) && method_exists( 'PerformanceOptimise\Inc\Pagespeed', 'get_trends' ) ) {
+					$trends = \PerformanceOptimise\Inc\Pagespeed::get_trends();
+					if ( ! is_array( $trends ) ) {
+						$trends = array();
+					}
+				}
+				if ( empty( $priority ) && empty( $trends ) ) {
+					return $post_ids;
+				}
+				$scores = array();
+				foreach ( $post_ids as $post_id ) {
+					$permalink          = get_permalink( $post_id );
+					$scores[ $post_id ] = ( is_string( $permalink ) && '' !== $permalink ) ? \PerformanceOptimise\Inc\RUM::score_url_lcp( $permalink, $priority, $trends ) : 0.0;
+				}
+				$has_signal = false;
+				foreach ( $scores as $score ) {
+					if ( $score > 0 ) {
+						$has_signal = true;
+						break;
+					}
+				}
+				if ( ! $has_signal ) {
+					return $post_ids;
+				}
+				$order = $post_ids;
+				// usort() is not stable: break score ties by original FIFO
+				// position so equal-score posts keep a deterministic order.
+				$pos = array_flip( array_values( $post_ids ) );
+				usort(
+					$order,
+					static function ( $a, $b ) use ( $scores, $pos ) {
+						$sa = $scores[ (int) $a ] ?? 0.0;
+						$sb = $scores[ (int) $b ] ?? 0.0;
+						if ( $sa === $sb ) {
+							return ( $pos[ (int) $a ] ?? 0 ) <=> ( $pos[ (int) $b ] ?? 0 );
+						}
+						return $sa > $sb ? -1 : 1;
+					}
+				);
+				return array_values( array_map( 'intval', $order ) );
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+				return array_values( array_map( 'intval', $post_ids ) );
+			}
+		}
+
+		/**
 		 * Queue background used-CSS regeneration for all published posts.
 		 *
 		 * @return int Number of jobs queued.
@@ -1658,6 +1826,63 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			// Intentional bypass of WP_Query filters (pre_get_posts, language plugins) for performance:
 			// direct $wpdb cursor pagination (ID > last_id) avoids OFFSET cost on large sites. Site-specific
 			// filtering must be handled separately if needed.
+			// RUM prioritization is applied per cursor batch (sort-then-enqueue):
+			// buffering every post ID plus a get_permalink() per post in one
+			// worker risks memory growth/timeouts on large sites (issue #1059
+			// review), so each 200-row batch is ordered worst-p75 first and
+			// enqueued before the next batch is fetched. Streaming preserves the
+			// original memory profile; order_post_ids_by_rum_priority() is a
+			// no-op FIFO passthrough when the setting is off or no signal exists.
+			// Hoisted scheduler snapshot (paginated to exhaustion) so a 5000-post
+			// site issues a bounded set of store queries instead of one per
+			// 200-post cursor batch. $lookup_ok disambiguates "none scheduled"
+			// from "lookup unavailable/failed", gating the per-post fallback.
+			$scheduled = array();
+			$lookup_ok = false;
+			if ( function_exists( 'as_get_scheduled_actions' ) ) {
+				try {
+					$as_offset   = 0;
+					$as_per_page = 1000;
+					// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
+					for ( $page = 0; $page < 20; $page++ ) {
+						$batch_actions = as_get_scheduled_actions(
+							array(
+								'hook'     => 'wppo_used_css_generate',
+								'group'    => 'performance_optimisation',
+								'per_page' => $as_per_page,
+								'offset'   => $as_offset,
+							),
+							'ARRAY_A'
+						);
+						if ( ! is_array( $batch_actions ) || empty( $batch_actions ) ) {
+							break;
+						}
+						foreach ( $batch_actions as $action ) {
+							if ( ! is_array( $action ) ) {
+								continue;
+							}
+							$action_args = $action['args'] ?? null;
+							if ( is_string( $action_args ) ) {
+								$decoded     = json_decode( $action_args, true );
+								$action_args = is_array( $decoded ) ? $decoded : null;
+							}
+							if ( is_array( $action_args ) && isset( $action_args['post_id'] ) ) {
+								$scheduled[ (int) $action_args['post_id'] ] = true;
+							}
+						}
+						// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
+						if ( count( $batch_actions ) < $as_per_page ) {
+							break;
+						}
+						$as_offset += $as_per_page;
+					}
+					$lookup_ok = true;
+				} catch ( \Throwable ) {
+					$scheduled = array();
+					$lookup_ok = false;
+				}
+			}
+
 			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- Intentional direct query, $placeholders is count-derived only.
 			do {
 				// Cursor pagination via ID > last_id avoids O(offset) MySQL scans.
@@ -1675,15 +1900,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					break;
 				}
 
-				foreach ( $post_ids as $post_id ) {
-					if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => (int) $post_id ), 'performance_optimisation' ) ) {
+				$batch_ids = self::order_post_ids_by_rum_priority( array_values( array_map( 'intval', $post_ids ) ) );
+
+				foreach ( $batch_ids as $post_id ) {
+					$post_id = (int) $post_id;
+					if ( isset( $scheduled[ $post_id ] ) ) {
+						continue;
+					}
+					if ( ! $lookup_ok && function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => $post_id ), 'performance_optimisation' ) ) {
+						$scheduled[ $post_id ] = true;
 						continue;
 					}
 					as_enqueue_async_action(
 						'wppo_used_css_generate',
-						array( 'post_id' => (int) $post_id ),
+						array( 'post_id' => $post_id ),
 						'performance_optimisation'
 					);
+					$scheduled[ $post_id ] = true;
 					++$queued;
 				}
 

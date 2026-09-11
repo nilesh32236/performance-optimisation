@@ -803,7 +803,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 				Util::close_curl_handle( $ch );
 			}
 			unset( $ch );
-			curl_multi_close( $mh ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_multi_close -- crawler requires curl_multi
+			// PHP 8.5 deprecates curl_multi_close(): the Util helper drops the
+			// reference on 8.5+ and keeps the legacy close path below 8.5.
+			Util::close_curl_multi_handle( $mh );
 
 			return array(
 				'success' => $success,

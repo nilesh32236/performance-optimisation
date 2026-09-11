@@ -105,6 +105,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			'wppo_generate_ccss',            // Critical CSS generation (Critical_CSS — AS-only).
 			'wppo_litespeed_crawler_batch',  // Dual-scheduled with SCHEDULED_HOOKS.
 			'wppo_crawler_warm',             // Dual-scheduled with SCHEDULED_HOOKS.
+			'wppo_google_fonts_download',    // Google Fonts CSS/font download (Google_Fonts — out-of-band).
 		);
 
 		/**
@@ -1277,10 +1278,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				set_transient( Util::transient_key( 'wppo_db_cleanup_lock' ), 1, 5 * MINUTE_IN_SECONDS );
 				try {
 					Database_Cleanup::auto_clean( $settings );
+					// Record the run timestamp while still holding the lock
+					// so two overlapping workers cannot both pass the
+					// should_run check and double-execute the cleanup.
+					update_option( 'wppo_last_db_cleanup', $now, false );
 				} finally {
 					delete_transient( Util::transient_key( 'wppo_db_cleanup_lock' ) );
 				}
-				update_option( 'wppo_last_db_cleanup', $now, false );
 			}
 		}
 	}

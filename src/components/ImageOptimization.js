@@ -98,6 +98,8 @@ const ImageOptimization = ( { options = {} } ) => {
 		lcp_first_n: 3,
 		autoAltText: false,
 		maxLongestEdgePx: 2560,
+		lazyRenderBelowFold: false,
+		lazyRenderExcludeBuilders: true,
 		clientSideMimeTypeOverride: false,
 		clientSideMimeTypes: DEFAULT_CLIENT_SIDE_MIME_TYPES,
 		forceServerSideConversion: false,
@@ -170,6 +172,8 @@ const ImageOptimization = ( { options = {} } ) => {
 		options.lcp_first_n,
 		options.autoAltText,
 		options.maxLongestEdgePx,
+		options.lazyRenderBelowFold,
+		options.lazyRenderExcludeBuilders,
 		options.clientSideMimeTypeOverride,
 		options.clientSideMimeTypes,
 		options.forceServerSideConversion,
@@ -232,6 +236,8 @@ const ImageOptimization = ( { options = {} } ) => {
 		options.lcp_first_n,
 		options.autoAltText,
 		options.maxLongestEdgePx,
+		options.lazyRenderBelowFold,
+		options.lazyRenderExcludeBuilders,
 		options.clientSideMimeTypeOverride,
 		options.clientSideMimeTypes,
 		options.forceServerSideConversion,
@@ -564,6 +570,40 @@ const ImageOptimization = ( { options = {} } ) => {
 							checked={ settings.autoAltText }
 							onChange={ handleChange( setSettings ) }
 						/>
+
+						<SwitchField
+							label={ __(
+								'Lazy-render Below-fold Sections',
+								'performance-optimisation'
+							) }
+							description={ __(
+								'Defer rendering of below-fold sections, footer widgets, and comments with content-visibility:auto plus a size reserve. Pure CSS with no JavaScript; unsupported browsers ignore it.',
+								'performance-optimisation'
+							) }
+							name="lazyRenderBelowFold"
+							checked={ settings.lazyRenderBelowFold }
+							onChange={ handleChange( setSettings ) }
+						/>
+
+						{ settings.lazyRenderBelowFold && (
+							<div className="wppo-field-nest">
+								<SwitchField
+									label={ __(
+										'Exclude Page-builder Sections',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Skip Elementor and Divi sections whose internal structure may be unsafe to lazy-render. Gutenberg groups, footers, and comments are still optimized.',
+										'performance-optimisation'
+									) }
+									name="lazyRenderExcludeBuilders"
+									checked={
+										settings.lazyRenderExcludeBuilders
+									}
+									onChange={ handleChange( setSettings ) }
+								/>
+							</div>
+						) }
 					</div>
 				</FeatureCard>
 

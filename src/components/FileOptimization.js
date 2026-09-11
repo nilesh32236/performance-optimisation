@@ -70,6 +70,10 @@ const FileOptimization = ( {
 			options.delayJSCommercePreset !== undefined
 				? options.delayJSCommercePreset
 				: true,
+		delayJSInteractionPreset:
+			options.delayJSInteractionPreset !== undefined
+				? options.delayJSInteractionPreset
+				: true,
 		delayJSExcludeUrls:
 			typeof options.delayJSExcludeUrls === 'string'
 				? options.delayJSExcludeUrls
@@ -1653,6 +1657,24 @@ const FileOptimization = ( {
 												) }
 												disabled={ optimizerDisabled }
 											/>
+											<SwitchField
+												label={ __(
+													'First-click interaction preset',
+													'performance-optimisation'
+												) }
+												description={ __(
+													'Keep Elementor popups/dialogs, mobile-menu toggles, and add-to-cart handles un-delayed so first clicks never need a second click.',
+													'performance-optimisation'
+												) }
+												name="delayJSInteractionPreset"
+												checked={
+													settings.delayJSInteractionPreset
+												}
+												onChange={ handleChange(
+													setSettings
+												) }
+												disabled={ optimizerDisabled }
+											/>
 											<div className="wppo-field">
 												<label
 													className="wppo-field-label"
@@ -1931,7 +1953,8 @@ const FileOptimization = ( {
 											</div>
 											{ settings.delayJS &&
 												( ! settings.delayJSCommercePreset ||
-													! settings.delayJSBuilderPreset ) && (
+													! settings.delayJSBuilderPreset ||
+													! settings.delayJSInteractionPreset ) && (
 													<NoticeBanner
 														type="warning"
 														message={ __(
@@ -1943,7 +1966,7 @@ const FileOptimization = ( {
 											<div className="wppo-notice wppo-notice--info wppo-mt-16">
 												<span>
 													{ __(
-														'Safe mode: WooCommerce, Elementor and form scripts are auto-excluded, and Delay-JS is skipped on cart, checkout and form pages. Customize via the wppo_delay_js_exclusions filter.',
+														'Safe mode: WooCommerce, Elementor and form scripts are auto-excluded, localised inline scripts are preserved, and Delay-JS is skipped on cart, checkout and form pages. Exclude single URLs above or disable Delay JS per page via the post editor Asset Manager. Customize via the wppo_delay_js_exclusions filter.',
 														'performance-optimisation'
 													) }
 												</span>

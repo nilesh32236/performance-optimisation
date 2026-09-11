@@ -212,6 +212,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		private static array $field_lcp_result_memo = array();
 
 		/**
+		 * Per-request memo for the Web Vitals trends option.
+		 *
+		 * Queue ordering calls score_url_lcp() once per candidate URL when
+		 * ordering the critical-CSS / used-CSS queues (issue #1059 review); without a memo
+		 * each call re-reads/deserializes the full wppo_web_vitals_trends
+		 * option. An empty array is a valid result, so the loaded flag tracks
+		 * fetch state separately from the value.
+		 *
+		 * @since NEXT
+		 * @var array|null
+		 */
+		private static ?array $score_trends_memo = null;
+
+		/**
+		 * Whether the trends memo has been populated this request.
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static bool $score_trends_loaded = false;
+
+		/**
+		 * Generation counter for the per-path top-URL transient index.
+		 *
+		 * Bumped on every aggregate flush so stale per-path entries are
+		 * never served without enumerating transient keys. Cached per
+		 * request; -1 means not loaded yet.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private static int $top_url_generation = -1;
+
+		/**
 		 * Flush when queue reaches this size.
 		 *
 		 * @var int
@@ -243,6 +277,56 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			self::$field_lcp_aggregate   = null;
 			self::$field_lcp_loaded      = false;
 			self::$field_lcp_result_memo = array();
+			self::$score_trends_memo     = null;
+			self::$score_trends_loaded   = false;
+			self::$top_url_generation    = -1;
+		}
+
+		/**
+		 * Current generation for the per-path top-URL index.
+		 *
+		 * @since NEXT
+		 * @return int Generation counter.
+		 */
+		private static function top_url_generation(): int {
+			if ( self::$top_url_generation < 0 ) {
+				$stored                   = function_exists( 'get_option' ) ? get_option( 'wppo_rum_top_url_gen', 0 ) : 0;
+				self::$top_url_generation = max( 0, (int) $stored );
+			}
+			return self::$top_url_generation;
+		}
+
+		/**
+		 * Transient key for the per-path top-URL index entry.
+		 *
+		 * Bounded to one small transient per unique path+gate instead of
+		 * deserializing the full aggregate (up to MAX_OPTION_BYTES) per
+		 * unique path per request.
+		 *
+		 * @since NEXT
+		 * @param string $normalized_path Normalized page path.
+		 * @param int    $min             Sample gate.
+		 * @return string Transient key (unprefixed; wrap with Util::transient_key()).
+		 */
+		private static function top_url_cache_key( string $normalized_path, int $min ): string {
+			return 'wppo_rum_top_' . self::top_url_generation() . '_' . md5( $normalized_path . '|' . $min );
+		}
+
+		/**
+		 * Bump the top-URL index generation so flush-invalidated entries expire.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private static function bump_top_url_generation(): void {
+			// Note: previous-generation wppo_rum_top_* transients are
+			// intentionally not enumerated/deleted here; they are keyed
+			// by generation and expire naturally within HOUR_IN_SECONDS.
+			$next                     = self::top_url_generation() + 1;
+			self::$top_url_generation = $next;
+			if ( function_exists( 'update_option' ) ) {
+				update_option( 'wppo_rum_top_url_gen', $next, false );
+			}
 		}
 
 		/**
@@ -374,6 +458,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			self::clear_field_lcp_cache();
 			$data = get_option( self::OPTION, array() );
 			return is_array( $data ) ? $data : array();
+		}
+
+		/**
+		 * Retrieve the aggregated RUM data without side effects (read-only).
+		 *
+		 * Unlike get_data(), this never flushes the queued-beacon queue and
+		 * never touches transients: it serves the per-request memoized
+		 * aggregate (a single get_option() deserialization shared with the
+		 * segmented field-LCP/INP readers). Intended for frontend hot paths
+		 * such as the speculation-rules filter. Fail-open: any failure
+		 * returns array().
+		 *
+		 * @return array Aggregate data (empty array when missing/invalid).
+		 * @since NEXT
+		 */
+		public static function get_aggregate_readonly(): array {
+			try {
+				if ( ! function_exists( 'get_option' ) ) {
+					return array();
+				}
+				$all = self::get_memoized_aggregate();
+				return is_array( $all ) ? $all : array();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
 		}
 
 		/**
@@ -1042,6 +1152,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 
 				update_option( self::OPTION, $all, false );
 				self::clear_field_lcp_cache();
+				self::bump_top_url_generation();
 			} finally {
 				delete_transient( $lock_key );
 			}
@@ -1082,6 +1193,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				$memo_key = $normalized_path . '|' . $min;
 				if ( array_key_exists( $memo_key, self::$field_lcp_result_memo ) ) {
 					return self::$field_lcp_result_memo[ $memo_key ];
+				}
+				// Bounded per-path transient index: repeat visitors for a
+				// known path skip the full-aggregate scan entirely. Reads and
+				// writes are individually guarded: a broken object-cache
+				// backend (or a function stubbed out by another test in the
+				// same long-running process) must never discard a successful
+				// in-request computation.
+				$top_key    = self::top_url_cache_key( $normalized_path, $min );
+				$cached_top = false;
+				if ( function_exists( 'get_transient' ) ) {
+					try {
+						$cached_top = get_transient( Util::transient_key( $top_key ) );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$cached_top = false;
+					}
+				}
+				if ( is_array( $cached_top ) && isset( $cached_top['url'] ) ) {
+					$cached_n    = (int) ( $cached_top['n'] ?? 0 );
+					$cached_seen = (int) ( $cached_top['lastSeen'] ?? 0 );
+					if ( $cached_n >= $min && $cached_seen > 0 && ( time() - $cached_seen ) <= self::FIELD_LCP_STALE_TTL ) {
+						self::$field_lcp_result_memo[ $memo_key ] = $cached_top;
+						return $cached_top;
+					}
+					// Stale/under-sampled entry: fall through to the aggregate scan.
 				}
 				$all = self::get_memoized_aggregate();
 				if ( ! is_array( $all ) || empty( $all ) ) {
@@ -1160,6 +1296,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				}
 				unset( $top['_raw_n'] );
 				self::$field_lcp_result_memo[ $memo_key ] = $top;
+				if ( function_exists( 'set_transient' ) && class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
+					try {
+						set_transient( Util::transient_key( $top_key ), $top, HOUR_IN_SECONDS );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
 				return $top;
 			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
 				return null;
@@ -1496,6 +1639,116 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				return $rows;
 			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
 				return array();
+			}
+		}
+
+		/**
+		 * Get worst p75 LCP per normalized path for CSS queue prioritization.
+		 *
+		 * Read-only ordering signal for the critical-CSS / used-CSS queues
+		 * (issue #1059): collapses get_field_lcp_p75_by_segment() rows to
+		 * `path => max(p75)`. Callers blend this map with the latest
+		 * PageSpeed trend LCP snapshot per candidate URL via score_url_lcp()
+		 * (resolved via md5(esc_url_raw(url)) keys, max of mobile/desktop).
+		 * Local aggregates only — no new external calls, no PII. Fail-open:
+		 * any failure returns array(). Multisite-safe: per-site get_option()
+		 * reads only.
+		 *
+		 * @since NEXT
+		 * @param int|null $min_samples Minimum samples per segment. Null resolves via get_field_lcp_min_samples().
+		 * @return array<string, float> Normalized path => worst p75 LCP in ms, worst-first order.
+		 */
+		public static function get_path_lcp_priority( ?int $min_samples = null ): array {
+			try {
+				if ( ! function_exists( 'get_option' ) ) {
+					return array();
+				}
+				$scores = array();
+				$rows   = self::get_field_lcp_p75_by_segment( $min_samples );
+				foreach ( $rows as $row ) {
+					if ( ! is_array( $row ) || ! isset( $row['path'], $row['p75'] ) ) {
+						continue;
+					}
+					$path = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::normalize_rum_path( (string) $row['path'] ) : (string) $row['path'];
+					$p75  = (float) $row['p75'];
+					if ( $p75 <= 0 ) {
+						continue;
+					}
+					if ( ! isset( $scores[ $path ] ) || $p75 > $scores[ $path ] ) {
+						$scores[ $path ] = $p75;
+					}
+				}
+				arsort( $scores, SORT_NUMERIC );
+				return $scores;
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+				return array();
+			}
+		}
+
+		/**
+		 * Score a queue URL by worst p75 LCP (RUM path + trend blend).
+		 *
+		 * Resolves $url to its normalized path, looks up the RUM priority
+		 * map, and takes the max with the latest stored PageSpeed trend LCP
+		 * for md5(esc_url_raw($url))_{mobile,desktop} keys. Returns 0.0 when
+		 * no signal exists (caller keeps FIFO order). Read-only, fail-open.
+		 *
+		 * @since NEXT
+		 * @param string               $url Candidate queue URL.
+		 * @param array<string, float> $priority Optional pre-loaded get_path_lcp_priority() map.
+		 * @param array|null           $trends Optional pre-loaded Pagespeed::get_trends() map. Null loads (and per-request memos) it once.
+		 * @return float Worst p75 LCP in ms, or 0.0 when unknown.
+		 */
+		public static function score_url_lcp( string $url, ?array $priority = null, ?array $trends = null ): float {
+			try {
+				if ( '' === trim( $url ) ) {
+					return 0.0;
+				}
+				if ( null === $priority ) {
+					$priority = self::get_path_lcp_priority();
+				}
+				$path = '/';
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$parts = wp_parse_url( $url );
+					$path  = isset( $parts['path'] ) && '' !== $parts['path'] ? (string) $parts['path'] : '/';
+				} elseif ( function_exists( 'parse_url' ) ) {
+					$parts = parse_url( $url ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url
+					$path  = isset( $parts['path'] ) && '' !== $parts['path'] ? (string) $parts['path'] : '/';
+				}
+				$path = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::normalize_rum_path( $path ) : $path;
+				$best = isset( $priority[ $path ] ) ? (float) $priority[ $path ] : 0.0;
+
+				if ( class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) && method_exists( 'PerformanceOptimise\Inc\Pagespeed', 'get_trends' ) && function_exists( 'esc_url_raw' ) && function_exists( 'get_option' ) ) {
+					if ( null === $trends ) {
+						// Per-request memo: ordering N queue URLs must not
+						// re-read/deserialize the full trends option N times
+						// (issue #1059 review). An empty array is a valid result,
+						// so track fetch state separately from the value. Reset
+						// alongside the aggregate memo via clear_field_lcp_cache().
+						if ( ! self::$score_trends_loaded ) {
+							self::$score_trends_memo   = \PerformanceOptimise\Inc\Pagespeed::get_trends();
+							self::$score_trends_loaded = true;
+						}
+						$trends = is_array( self::$score_trends_memo ) ? self::$score_trends_memo : array();
+					}
+					if ( is_array( $trends ) ) {
+						$canonical = esc_url_raw( $url );
+						foreach ( array( 'mobile', 'desktop' ) as $strategy ) {
+							$key = md5( $canonical ) . '_' . $strategy;
+							if ( ! isset( $trends[ $key ] ) || ! is_array( $trends[ $key ] ) || empty( $trends[ $key ] ) ) {
+								continue;
+							}
+							$snapshots = $trends[ $key ];
+							$last      = end( $snapshots );
+							if ( is_array( $last ) && isset( $last['lcp'] ) && is_numeric( $last['lcp'] ) ) {
+								$best = max( $best, (float) $last['lcp'] );
+							}
+						}
+					}
+				}
+				return $best >= 0 ? (float) $best : 0.0;
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+				return 0.0;
 			}
 		}
 

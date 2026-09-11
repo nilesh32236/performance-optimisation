@@ -672,6 +672,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$sanitized_settings['field_lcp_min_samples'] = absint( $options['ai_adaptive']['field_lcp_min_samples'] );
 			}
 
+			// Preserve the RUM-priority ordering flags when the request omits
+			// them (issue #1059): FileOptimization UI saves post the full tab,
+			// but an older client/partial save must not wipe an opt-out set via
+			// WP-CLI/DB. Mirrors the server_timing_enabled/auto_rescan preserves.
+			if ( 'file_optimisation' === $tab && ! isset( $params['settings']['ccssRumPriority'] ) && isset( $options['file_optimisation']['ccssRumPriority'] ) ) {
+				$sanitized_settings['ccssRumPriority'] = (bool) $options['file_optimisation']['ccssRumPriority'];
+			}
+			if ( 'file_optimisation' === $tab && ! isset( $params['settings']['usedCssRumPriority'] ) && isset( $options['file_optimisation']['usedCssRumPriority'] ) ) {
+				$sanitized_settings['usedCssRumPriority'] = (bool) $options['file_optimisation']['usedCssRumPriority'];
+			}
+
+			// Preserve the RUM-gated speculation toggle when the request
+			// omits it (issue #1061): PreloadSettings save posts only the
+			// toggles it renders, so a save must not wipe the gating flag.
+			if ( 'preload_settings' === $tab && ! array_key_exists( 'speculationRumGating', $settings ) && isset( $options['preload_settings']['speculationRumGating'] ) ) {
+				// Same filter_var() normalization as
+				// Util::sanitize_settings_recursively() so a stored string
+				// shape (e.g. 'false') does not diverge between the two paths.
+				$stored = $options['preload_settings']['speculationRumGating'];
+				if ( is_bool( $stored ) ) {
+					$sanitized_settings['speculationRumGating'] = $stored;
+				} else {
+					$bool                                       = filter_var( $stored, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+					$sanitized_settings['speculationRumGating'] = null === $bool ? true : $bool;
+				}
+			}
+
 			$options[ $tab ] = $sanitized_settings;
 
 			update_option( 'wppo_settings', $options );
@@ -847,22 +874,90 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				}
 			}
 
+			// Cap the merged client-supplied list so one request cannot
+			// enqueue unbounded jobs (100 per request; remainder left pending).
+			$jobs_cap    = (int) apply_filters( 'wppo_optimise_image_cap', 100 );
+			$jobs_cap    = $jobs_cap > 0 ? $jobs_cap : 100;
+			$jobs_capped = ( count( $webp_images ) + count( $avif_images ) ) > $jobs_cap;
+			if ( count( $webp_images ) > $jobs_cap ) {
+				$webp_images = array_slice( $webp_images, 0, $jobs_cap );
+			}
+			$remaining = $jobs_cap - count( $webp_images );
+			if ( count( $avif_images ) > $remaining ) {
+				$avif_images = array_slice( $avif_images, 0, max( 0, $remaining ) );
+			}
+
 			$use_action_scheduler = function_exists( 'as_enqueue_async_action' );
 			$jobs_queued          = 0;
 
 			if ( $use_action_scheduler ) {
+				// Paginated scheduler snapshot for dedup instead of one
+				// as_has_scheduled_action() query per image (N+1). Falls back
+				// to per-item checks whenever an item was not positively
+				// confirmed (snapshot unavailable/failed/incomplete).
+				$scheduled = array();
+				if ( function_exists( 'as_get_scheduled_actions' ) ) {
+					try {
+						$statuses = array( 'pending', 'in-progress' );
+						if ( class_exists( 'ActionScheduler_Store' ) ) {
+							$statuses = array(
+								\ActionScheduler_Store::STATUS_PENDING,
+								\ActionScheduler_Store::STATUS_RUNNING,
+							);
+						}
+						// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
+						for ( $as_page = 0; $as_page < 10; $as_page++ ) {
+							$query            = array(
+								'hook'     => 'wppo_convert_image_background',
+								'group'    => 'performance_optimisation',
+								'status'   => $statuses,
+								'per_page' => 1000,
+								'offset'   => $as_page * 1000,
+							);
+							$existing_actions = as_get_scheduled_actions( $query, 'ARRAY_A' );
+							if ( ! is_array( $existing_actions ) || empty( $existing_actions ) ) {
+								break;
+							}
+							foreach ( $existing_actions as $action ) {
+								if ( ! is_array( $action ) ) {
+									continue;
+								}
+								$action_args = $action['args'] ?? null;
+								if ( is_string( $action_args ) ) {
+									$decoded     = json_decode( $action_args, true );
+									$action_args = is_array( $decoded ) ? $decoded : null;
+								}
+								if ( is_array( $action_args ) && isset( $action_args[0]['source_path'], $action_args[0]['format'] ) ) {
+									$scheduled[ $action_args[0]['source_path'] . '|' . $action_args[0]['format'] ] = true;
+								}
+							}
+							// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
+							if ( count( $existing_actions ) < 1000 ) {
+								break;
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$scheduled = array();
+					}
+				}
 				// Schedule background jobs via Action Scheduler with deduplication.
 				foreach ( $webp_images as $webp_image ) {
 					$source_path = $this->resolve_optimise_source_path( $webp_image, $normalized_abspath );
 
 					if ( file_exists( $source_path ) ) {
-						$args = array(
+						$args      = array(
 							array(
 								'source_path' => $source_path,
 								'format'      => 'webp',
 							),
 						);
+						$dedup_key = $source_path . '|webp';
+						if ( isset( $scheduled[ $dedup_key ] ) ) {
+							continue;
+						}
 						if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_convert_image_background', $args, 'performance_optimisation' ) ) {
+							$scheduled[ $dedup_key ] = true;
 							continue;
 						}
 						as_enqueue_async_action(
@@ -870,6 +965,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 							$args,
 							'performance_optimisation'
 						);
+						$scheduled[ $dedup_key ] = true;
 						++$jobs_queued;
 					}
 				}
@@ -878,13 +974,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					$source_path = $this->resolve_optimise_source_path( $avif_image, $normalized_abspath );
 
 					if ( file_exists( $source_path ) ) {
-						$args = array(
+						$args      = array(
 							array(
 								'source_path' => $source_path,
 								'format'      => 'avif',
 							),
 						);
+						$dedup_key = $source_path . '|avif';
+						if ( isset( $scheduled[ $dedup_key ] ) ) {
+							continue;
+						}
 						if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_convert_image_background', $args, 'performance_optimisation' ) ) {
+							$scheduled[ $dedup_key ] = true;
 							continue;
 						}
 						as_enqueue_async_action(
@@ -892,6 +993,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 							$args,
 							'performance_optimisation'
 						);
+						$scheduled[ $dedup_key ] = true;
 						++$jobs_queued;
 					}
 				}
@@ -908,6 +1010,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					array(
 						'background'  => true,
 						'jobs_queued' => $jobs_queued,
+						'jobs_capped' => $jobs_capped,
 						'message'     => sprintf(
 							/* translators: %d: Number of jobs */
 							__( '%d images queued for background optimization.', 'performance-optimisation' ),
@@ -1236,24 +1339,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			// Check if Action Scheduler is active and get job counts.
 			// Bound the query so SPA polling does not recount the full set.
+			// The count is a capped sample: queues deeper than the cap are
+			// reported as '100+' via queued_jobs_capped.
 			if ( function_exists( 'as_get_scheduled_actions' ) ) {
-				$pending_jobs = as_get_scheduled_actions(
+				$pending_status = class_exists( 'ActionScheduler_Store' ) ? \ActionScheduler_Store::STATUS_PENDING : 'pending';
+				$pending_jobs   = as_get_scheduled_actions(
 					array(
 						'hook'     => 'wppo_convert_image_background',
-						'status'   => \ActionScheduler_Store::STATUS_PENDING,
+						'status'   => $pending_status,
 						'group'    => 'performance_optimisation',
 						'per_page' => 100,
 					),
 					'ARRAY_A'
 				);
 
-				$status['queued_jobs'] = count( $pending_jobs );
+				$queued_count                  = is_array( $pending_jobs ) ? count( $pending_jobs ) : 0;
+				$status['queued_jobs']         = $queued_count;
+				$status['queued_jobs_capped']  = $queued_count >= 100;
+				$status['queued_jobs_display'] = $queued_count >= 100 ? '100+' : (string) $queued_count;
 			} else {
-				$status['queued_jobs'] = 0;
+				$status['queued_jobs']         = 0;
+				$status['queued_jobs_capped']  = false;
+				$status['queued_jobs_display'] = '0';
 			}
 
 			// Aggregate original-vs-optimised sizes for the dashboard report.
-			$status['savings'] = Img_Converter::get_savings_summary();
+			// Derived from the single $img_info read above (no second unserialize).
+			$status['savings'] = Img_Converter::get_savings_summary( $img_info );
 
 			set_transient( $status_key, $status, 30 );
 

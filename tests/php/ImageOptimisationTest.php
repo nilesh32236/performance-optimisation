@@ -1839,4 +1839,159 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$img_tag = '<img src="https://example.com/my-sunset_photo.jpg"/>';
 		$this->assertSame( $img_tag, $method->invoke( $image_opt, $img_tag, 'https://example.com/my-sunset_photo.jpg' ) );
 	}
+
+	/**
+	 * Stub the WP conditionals/filters used by lazy_render_elements().
+	 *
+	 * @since NEXT
+	 */
+	private function stub_lazy_render_functions(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+		Functions\when( 'is_feed' )->justReturn( false );
+		Functions\when( 'is_preview' )->justReturn( false );
+		Functions\when( 'is_embed' )->justReturn( false );
+		Functions\when( 'wp_doing_ajax' )->justReturn( false );
+		Functions\when( 'apply_filters' )->returnArg( 2 );
+	}
+
+	/**
+	 * Build an Image_Optimisation instance with lazy-render options.
+	 *
+	 * @since NEXT
+	 * @param bool $enabled Whether lazyRenderBelowFold is on.
+	 * @param bool $exclude_builders Whether lazyRenderExcludeBuilders is on.
+	 */
+	private function make_lazy_render_instance( bool $enabled = true, bool $exclude_builders = true ): Image_Optimisation {
+		$options                       = $this->default_options;
+		$options['image_optimisation'] = array_merge(
+			$options['image_optimisation'],
+			array(
+				'lazyRenderBelowFold'       => $enabled,
+				'lazyRenderExcludeBuilders' => $exclude_builders,
+			)
+		);
+		return new Image_Optimisation( $options );
+	}
+
+	/**
+	 * Off-by-default: buffer must be returned byte-identical.
+	 *
+	 * @since NEXT
+	 */
+	public function test_lazy_render_off_by_default_is_byte_identical(): void {
+		$this->stub_lazy_render_functions();
+		$image_opt = $this->make_lazy_render_instance( false );
+
+		$html = '<div class="wp-block-group"><p>Second</p></div><footer><p>Foot</p></footer>';
+		$this->assertSame( $html, $image_opt->lazy_render_elements( $html ) );
+	}
+
+	/**
+	 * Empty buffer must fail open (returned unmodified).
+	 *
+	 * @since NEXT
+	 */
+	public function test_lazy_render_empty_buffer_fails_open(): void {
+		$this->stub_lazy_render_functions();
+		$image_opt = $this->make_lazy_render_instance( true );
+
+		$this->assertSame( '', $image_opt->lazy_render_elements( '' ) );
+	}
+
+	/**
+	 * First matching section/div is skipped (hero), later ones are tagged.
+	 *
+	 * @since NEXT
+	 */
+	public function test_lazy_render_skips_first_section_tags_second(): void {
+		$this->stub_lazy_render_functions();
+		$image_opt = $this->make_lazy_render_instance( true, false );
+
+		$html   = '<section class="wp-block-group"><p>Hero</p></section><section class="wp-block-group"><p>Below</p></section>';
+		$result = $image_opt->lazy_render_elements( $html );
+
+		$this->assertSame( 1, substr_count( $result, 'content-visibility:auto' ) );
+		$this->assertStringContainsString( 'contain-intrinsic-size:auto 600px', $result );
+	}
+
+	/**
+	 * Footer/aside tags are always eligible, even as the first match.
+	 *
+	 * @since NEXT
+	 */
+	public function test_lazy_render_tags_footer_and_comments(): void {
+		$this->stub_lazy_render_functions();
+		$image_opt = $this->make_lazy_render_instance( true, false );
+
+		$html   = '<footer><p>Foot</p></footer><div id="comments" class="other"><p>C</p></div>';
+		$result = $image_opt->lazy_render_elements( $html );
+
+		$this->assertSame( 2, substr_count( $result, 'content-visibility:auto' ) );
+	}
+
+	/**
+	 * Builder exclusion on skips Elementor/Divi sections; off tags them.
+	 *
+	 * @since NEXT
+	 */
+	public function test_lazy_render_builder_exclusion_on_off(): void {
+		$this->stub_lazy_render_functions();
+
+		$html = '<section class="wp-block-group"><p>Hero</p></section><section class="elementor-section"><p>Builder</p></section>';
+
+		$excluded = $this->make_lazy_render_instance( true, true );
+		$this->assertStringNotContainsString( 'content-visibility', $excluded->lazy_render_elements( $html ) );
+
+		$included = $this->make_lazy_render_instance( true, false );
+		$this->assertSame( 1, substr_count( $included->lazy_render_elements( $html ), 'content-visibility:auto' ) );
+	}
+
+	/**
+	 * Exclusion is token-based: a class merely containing the builder
+	 * name as a substring must not be excluded.
+	 *
+	 * @since NEXT
+	 */
+	public function test_lazy_render_exclusion_is_token_based_not_substring(): void {
+		$this->stub_lazy_render_functions();
+		$image_opt = $this->make_lazy_render_instance( true, true );
+
+		$html   = '<section class="wp-block-group"><p>Hero</p></section><section class="wp-block-group my-elementor-section-x"><p>Below</p></section>';
+		$result = $image_opt->lazy_render_elements( $html );
+
+		$this->assertSame( 1, substr_count( $result, 'content-visibility:auto' ) );
+	}
+
+	/**
+	 * Nodes already carrying content-visibility are skipped (idempotent).
+	 *
+	 * @since NEXT
+	 */
+	public function test_lazy_render_idempotent_skip(): void {
+		$this->stub_lazy_render_functions();
+		$image_opt = $this->make_lazy_render_instance( true, false );
+
+		$html   = '<section class="wp-block-group"><p>Hero</p></section><section class="wp-block-group" style="content-visibility:auto"><p>Below</p></section>';
+		$result = $image_opt->lazy_render_elements( $html );
+
+		$this->assertSame( 1, substr_count( $result, 'content-visibility:auto' ) );
+	}
+
+	/**
+	 * Existing style attributes are merged, never clobbered.
+	 *
+	 * @since NEXT
+	 */
+	public function test_lazy_render_merges_existing_style(): void {
+		$this->stub_lazy_render_functions();
+		$image_opt = $this->make_lazy_render_instance( true, false );
+
+		$html   = '<section class="wp-block-group"><p>Hero</p></section><section class="wp-block-group" style="color:red"><p>Below</p></section>';
+		$result = $image_opt->lazy_render_elements( $html );
+
+		$this->assertStringContainsString( 'color:red;content-visibility:auto', $result );
+	}
 }

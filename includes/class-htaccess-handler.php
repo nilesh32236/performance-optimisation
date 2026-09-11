@@ -125,6 +125,164 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		}
 
 		/**
+		 * Resolve the absolute path to the site .htaccess file.
+		 *
+		 * Centralizes the get_home_path() lookup (with ABSPATH fallback) so
+		 * deactivate/uninstall paths agree on the same file. Fail-open:
+		 * returns an empty string when the path cannot be resolved.
+		 *
+		 * @since NEXT
+		 *
+		 * @return string Absolute .htaccess path, or empty string when unresolvable.
+		 */
+		public static function get_htaccess_path(): string {
+			try {
+				if ( function_exists( 'get_home_path' ) ) {
+					$home_path = get_home_path();
+				} elseif ( defined( 'ABSPATH' ) ) {
+					$home_path = ABSPATH;
+				} else {
+					return '';
+				}
+				if ( ! is_string( $home_path ) || '' === $home_path ) {
+					return '';
+				}
+				if ( function_exists( 'wp_normalize_path' ) ) {
+					return wp_normalize_path( rtrim( $home_path, '/\\' ) . '/.htaccess' );
+				}
+				return rtrim( $home_path, '/\\' ) . '/.htaccess';
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Whether the wppo_rules marker block is present in .htaccess.
+		 *
+		 * Fail-open: returns false when the file cannot be read so callers
+		 * treat "unknown" as "nothing to remove".
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when the marker block exists.
+		 */
+		public static function has_rules(): bool {
+			try {
+				$htaccess_file = self::get_htaccess_path();
+				if ( '' === $htaccess_file ) {
+					return false;
+				}
+				$wp_filesystem = Util::init_filesystem();
+				if ( ! $wp_filesystem || ! method_exists( $wp_filesystem, 'exists' ) || ! method_exists( $wp_filesystem, 'get_contents' ) ) {
+					return false;
+				}
+				if ( ! $wp_filesystem->exists( $htaccess_file ) ) {
+					return false;
+				}
+				$contents = $wp_filesystem->get_contents( $htaccess_file );
+				if ( ! is_string( $contents ) ) {
+					return false;
+				}
+				return false !== strpos( $contents, '# BEGIN ' . self::MARKER ) || false !== strpos( $contents, '# END ' . self::MARKER );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Remove the wppo_rules marker block and clean backup artifacts.
+		 *
+		 * Verified removal: delegates to update_rules(false), asserts the
+		 * marker is gone via verify_after_write(), and deletes the
+		 * .wppo-bak / .wppo-tmp-* siblings so teardown leaves zero residue.
+		 * Fail-open: never throws; a failed delete is safe to retry on the
+		 * next deactivate/uninstall.
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when no marker remains (or nothing to remove).
+		 */
+		public static function remove_rules(): bool {
+			try {
+				if ( ! self::has_rules() ) {
+					self::cleanup_backup_artifacts();
+					return true;
+				}
+				$ok = self::update_rules( false );
+				self::cleanup_backup_artifacts();
+				if ( ! $ok ) {
+					return self::has_rules() ? false : true;
+				}
+				return self::has_rules() ? false : true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Delete the .htaccess backup sibling and orphaned tmp siblings.
+		 *
+		 * Best-effort only: failures are ignored so teardown never fails
+		 * because of stale artifacts. Removes `.htaccess.wppo-bak` (single
+		 * backup generation kept by atomic_write_verified()) and any
+		 * `.htaccess.wppo-tmp-*` orphans from crashed writes.
+		 *
+		 * @since NEXT
+		 *
+		 * @return void
+		 */
+		public static function cleanup_backup_artifacts(): void {
+			try {
+				$htaccess_file = self::get_htaccess_path();
+				if ( '' === $htaccess_file ) {
+					return;
+				}
+				global $wp_filesystem;
+				$fs = $wp_filesystem;
+				if ( ! is_object( $fs ) ) {
+					$fs = Util::init_filesystem();
+				}
+				if ( ! is_object( $fs ) || ! method_exists( $fs, 'delete' ) ) {
+					return;
+				}
+				$backup_file = $htaccess_file . '.wppo-bak';
+				if ( method_exists( $fs, 'exists' ) ) {
+					if ( $fs->exists( $backup_file ) ) {
+						$fs->delete( $backup_file );
+					}
+				} else {
+					$fs->delete( $backup_file );
+				}
+				if ( ! method_exists( $fs, 'dirlist' ) || ! method_exists( $fs, 'exists' ) ) {
+					return;
+				}
+				$dir = dirname( $htaccess_file );
+				if ( function_exists( 'wp_normalize_path' ) ) {
+					$dir = wp_normalize_path( $dir );
+				}
+				if ( ! $fs->exists( $dir ) ) {
+					return;
+				}
+				$listing = $fs->dirlist( $dir );
+				if ( ! is_array( $listing ) ) {
+					return;
+				}
+				$base = basename( $htaccess_file );
+				foreach ( $listing as $name => $info ) {
+					$name = (string) $name;
+					if ( 0 === strpos( $name, $base . '.wppo-tmp-' ) ) {
+						$fs->delete( $dir . '/' . $name );
+					}
+				}
+			} catch ( \Throwable $ignored ) {
+				unset( $ignored );
+			}
+		}
+
+		/**
 		 * Normalize a rules array for identical-content comparison.
 		 *
 		 * Trims trailing empty lines so a stored block ("RuleA\n" split keeps a
@@ -331,8 +489,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				$wp_filesystem->copy( $htaccess_file, $backup_file, true );
 			}
 
+			// wp_rand() is wrapped in try/catch (mirroring
+			// Advanced_Cache_Handler::atomic_write_dropin()): under Brain
+			// Monkey a stale wp_rand stub from another test can throw once
+			// its session tore down, and production filters must never let
+			// a suffix RNG failure break the write.
 			if ( function_exists( 'wp_rand' ) ) {
-				$suffix = (string) wp_rand( 100000, 999999 );
+				try {
+					$suffix = (string) wp_rand( 100000, 999999 );
+				} catch ( \Throwable $ignored_rand ) {
+					unset( $ignored_rand );
+					if ( function_exists( 'mt_rand' ) ) {
+						$suffix = (string) mt_rand( 100000, 999999 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.rand_mt_rand -- Fallback when wp_rand() is unavailable or throws.
+					} else {
+						return null;
+					}
+				}
 			} elseif ( function_exists( 'mt_rand' ) ) {
 				$suffix = (string) mt_rand( 100000, 999999 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.rand_mt_rand -- Fallback when wp_rand() is unavailable.
 			} else {

@@ -151,6 +151,13 @@ if ( ! defined( 'WPPO_PLUGIN_URL' ) ) {
 if ( ! defined( 'WPPO_VERSION' ) ) {
 	define( 'WPPO_VERSION', '1.9.0' );
 }
+// Zero-notice test environment (issue #1056): run the suite with WP_DEBUG on
+// so any E_DEPRECATED raised by plugin code paths is visible in CI logs.
+// Individual tests may additionally promote deprecations to failures with
+// set_error_handler() (see PhpDeprecationHygieneTest).
+if ( ! defined( 'WP_DEBUG' ) ) {
+	define( 'WP_DEBUG', true );
+}
 if ( ! defined( 'DAY_IN_SECONDS' ) ) {
 	define( 'DAY_IN_SECONDS', 86400 );
 }
