@@ -274,14 +274,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * @return void
 		 */
 		private function maybe_queue_download( string $key, string $url ): void {
-			$args = array(
-				'key' => $key,
-				'url' => $url,
+			// Action Scheduler (and wp_schedule_single_event) forward args
+			// positionally via array_values()/do_action_ref_array(), so the
+			// key/url pair must travel as ONE positional array element.
+			// Passing the associative pair directly would split it and the
+			// handler would only ever receive the md5 key.
+			$payload = array(
+				array(
+					'key' => $key,
+					'url' => $url,
+				),
 			);
-			// Wrap as a single positional arg: Action Scheduler and WP-Cron
-			// unpack stored args positionally (array_values), so the
-			// single-array handler must receive array( $args ).
-			$payload = array( $args );
 			if ( function_exists( 'as_has_scheduled_action' ) && function_exists( 'as_enqueue_async_action' ) ) {
 				try {
 					if ( ! as_has_scheduled_action( self::AS_HOOK, $payload, 'performance_optimisation' ) ) {

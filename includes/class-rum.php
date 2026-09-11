@@ -1145,9 +1145,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					return self::$field_lcp_result_memo[ $memo_key ];
 				}
 				// Bounded per-path transient index: repeat visitors for a
-				// known path skip the full-aggregate scan entirely.
+				// known path skip the full-aggregate scan entirely. Reads and
+				// writes are individually guarded: a broken object-cache
+				// backend (or a function stubbed out by another test in the
+				// same long-running process) must never discard a successful
+				// in-request computation.
 				$top_key    = self::top_url_cache_key( $normalized_path, $min );
-				$cached_top = function_exists( 'get_transient' ) ? get_transient( Util::transient_key( $top_key ) ) : false;
+				$cached_top = false;
+				if ( function_exists( 'get_transient' ) ) {
+					try {
+						$cached_top = get_transient( Util::transient_key( $top_key ) );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$cached_top = false;
+					}
+				}
 				if ( is_array( $cached_top ) && isset( $cached_top['url'] ) ) {
 					$cached_n    = (int) ( $cached_top['n'] ?? 0 );
 					$cached_seen = (int) ( $cached_top['lastSeen'] ?? 0 );
@@ -1235,7 +1247,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				unset( $top['_raw_n'] );
 				self::$field_lcp_result_memo[ $memo_key ] = $top;
 				if ( function_exists( 'set_transient' ) && class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
-					set_transient( Util::transient_key( $top_key ), $top, HOUR_IN_SECONDS );
+					try {
+						set_transient( Util::transient_key( $top_key ), $top, HOUR_IN_SECONDS );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
 				}
 				return $top;
 			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch

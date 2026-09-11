@@ -193,8 +193,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 *
 		 * The singular branch runs get_object_taxonomies +
 		 * wp_get_object_terms + get_post_field on the send_headers hot
-		 * path; memoize per request (invalidated on save/delete like
-		 * uri_post_memo).
+		 * path; memoize per request. Cleared on the save_post/delete_post/
+		 * permalink paths via invalidate_uri_post_map().
 		 *
 		 * @since NEXT
 		 * @var string[]|null
@@ -1904,7 +1904,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		}
 
 		/**
-		 * Invalidate the purge-tags memo (call on save_post/delete_post paths).
+		 * Invalidate the purge-tags memo.
+		 *
+		 * Called from invalidate_uri_post_map() (save_post/delete_post/
+		 * permalink_structure_changed) so the next request rebuilds the tag
+		 * fan-out instead of reusing a stale verdict.
 		 *
 		 * @since NEXT
 		 * @return void

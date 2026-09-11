@@ -138,12 +138,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Per-request memo for is_delay_excluded_context().
 		 *
 		 * Null = not computed yet; computed once per request and reused
-		 * for every script tag via add_defer_attribute().
+		 * for every script tag via add_defer_attribute(). The request
+		 * signature below guards against reusing a stale verdict in
+		 * long-running processes (Action Scheduler, WP-CLI) where the
+		 * request superglobals change between logical requests.
 		 *
 		 * @since NEXT
 		 * @var bool|null
 		 */
 		private static ?bool $delay_excluded_context_memo = null;
+
+		/**
+		 * Request signature the delay-context memo was computed for.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		private static string $delay_excluded_context_memo_sig = '';
 
 		/**
 		 * Cache instance for static HTML cache operations.
@@ -3193,12 +3204,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		public static function is_delay_excluded_context(): bool {
 			// Per-request memo: add_defer_attribute() calls this per script
 			// tag; REQUEST_URI/settings/slug parsing is done once per request.
-			if ( null !== self::$delay_excluded_context_memo ) {
+			// Reuse only while the request signature is unchanged so a
+			// long-running process handling several logical requests cannot
+			// serve a stale verdict (and tests can reset explicitly).
+			$signature = self::delay_context_request_signature();
+			if ( null !== self::$delay_excluded_context_memo && $signature === self::$delay_excluded_context_memo_sig ) {
 				return self::$delay_excluded_context_memo;
 			}
-			$result                            = self::compute_delay_excluded_context();
-			self::$delay_excluded_context_memo = $result;
+			$result                                = self::compute_delay_excluded_context();
+			self::$delay_excluded_context_memo     = $result;
+			self::$delay_excluded_context_memo_sig = $signature;
 			return $result;
+		}
+
+		/**
+		 * Signature of the request inputs that drive the delay-context verdict.
+		 *
+		 * The verdict depends on the request URI, query string, and query
+		 * arguments (plus conditional tags, which a real request does not
+		 * change mid-flight). Hashing these lets the memo self-invalidate
+		 * when a new logical request reuses the same PHP process.
+		 *
+		 * @since NEXT
+		 * @return string Signature string.
+		 */
+		private static function delay_context_request_signature(): string {
+			$uri = '';
+			if ( isset( $_SERVER['REQUEST_URI'] ) ) {
+				$uri = (string) wp_unslash( $_SERVER['REQUEST_URI'] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Read-only request memo key; never output or persisted.
+			}
+			$qs = '';
+			if ( isset( $_SERVER['QUERY_STRING'] ) ) {
+				$qs = (string) wp_unslash( $_SERVER['QUERY_STRING'] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Read-only request memo key; never output or persisted.
+			}
+			$get = array();
+			if ( ! empty( $_GET ) && is_array( $_GET ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only request memo key; no state change.
+				$get = array_map( 'strval', array_keys( $_GET ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only request memo key; no state change.
+				sort( $get );
+			}
+			return $uri . "\n" . $qs . "\n" . implode( ',', $get );
 		}
 
 		/**
@@ -3208,8 +3252,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return void
 		 */
 		public static function reset_delay_context_memo(): void {
-			self::$delay_excluded_context_memo = null;
-			self::$delay_pattern_regex_cache   = array();
+			self::$delay_excluded_context_memo     = null;
+			self::$delay_excluded_context_memo_sig = '';
+			self::$delay_pattern_regex_cache       = array();
 		}
 
 		/**
