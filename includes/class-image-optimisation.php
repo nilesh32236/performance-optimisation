@@ -1849,6 +1849,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			if ( array_key_exists( 'lcp_guardrails', $image_optimisation ) && empty( $image_optimisation['lcp_guardrails'] ) ) {
 				return 0;
 			}
+			// An explicit `lcp_first_n = 0` is an intentional disable and wins
+			// over OD measurements (OD never returns 0 — stored 0 clamps to 1).
+			// Disabling while OD is active otherwise requires
+			// `lcp_guardrails = false` or a `wppo_lcp_first_n` filter returning 0.
+			if ( array_key_exists( 'lcp_first_n', $image_optimisation ) && 0 === (int) $image_optimisation['lcp_first_n'] ) {
+				return 0;
+			}
 			$count = null;
 			if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 				try {
@@ -3770,7 +3777,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 									if ( ! $source->next_tag( array( 'tag_name' => 'source' ) ) ) {
 										return $sm[0];
 									}
-									$this->restore_js_lazy_placeholders( $source );
+									if ( ! $this->restore_js_lazy_placeholders( $source ) ) {
+										return $sm[0];
+									}
 									return $source->get_updated_html();
 								} catch ( \Throwable $e ) {
 									unset( $e );
@@ -3887,7 +3896,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 					// Parser bailed on unsupported markup; leave the buffer unchanged.
 					if ( null === $processor->get_last_error() ) {
-						return $stamped ? $new_html : $buffer;
+						return $stamped ? $this->promote_eager_picture_sources( $new_html ) : $buffer;
 					}
 				}
 			}
@@ -3916,7 +3925,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 			}
 
-			return $stamped ? $tags->get_updated_html() : $buffer;
+			return $stamped ? $this->promote_eager_picture_sources( $tags->get_updated_html() ) : $buffer;
 		}
 
 		/**
@@ -3986,7 +3995,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					}
 				}
 				if ( $changed ) {
-					$buffer = $tags->get_updated_html();
+					$buffer = $this->promote_eager_picture_sources( $tags->get_updated_html() );
 				}
 
 				// Companion preload link (fetchpriority=high). Skip when a

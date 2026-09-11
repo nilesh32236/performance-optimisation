@@ -1227,9 +1227,10 @@ const isHeroImage = ( el ) => {
  * Also promotes sibling `<source data-srcset>`/sizes inside a parent
  * `<picture>` (same loop as the IntersectionObserver path) so a responsive
  * hero is not left partly lazy, forces `loading="eager"`, and stamps
- * `fetchpriority="high"` on every restored hero — `isHeroImage` also
- * treats bare `loading="eager"` images as heroes, and those LCP
- * candidates need the priority hint too.
+ * `fetchpriority="high"` when absent (an explicit `fetchpriority="low"`
+ * is preserved, mirroring the PHP preserve-existing contract) —
+ * `isHeroImage` also treats bare `loading="eager"` images as heroes,
+ * and those LCP candidates need the priority hint too.
  *
  * @since NEXT
  * @param {Element} el The hero IMG element.
@@ -1266,7 +1267,9 @@ const restoreHeroImage = ( el ) => {
 	if ( el.getAttribute( 'loading' ) !== 'eager' ) {
 		el.setAttribute( 'loading', 'eager' );
 	}
-	el.setAttribute( 'fetchpriority', 'high' );
+	if ( ! el.hasAttribute( 'fetchpriority' ) ) {
+		el.setAttribute( 'fetchpriority', 'high' );
+	}
 	if ( ! el.getAttribute( 'decoding' ) ) {
 		el.setAttribute( 'decoding', 'async' );
 	}

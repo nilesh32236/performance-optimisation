@@ -753,7 +753,7 @@ add_filter( 'wppo_od_should_optimize', function( $should, $url ) {
 ### `wppo_lcp_first_n`
 Filters how many leading images are treated as above-the-fold and never lazy-loaded. @since NEXT.
 
-The LCP guardrails resolve the count as OD-measured data (1–3) when Optimization Detective is enabled, else the `lcp_first_n` setting (default 3) falling back to the legacy `excludeFirstImages` key. Return `0` to disable the first-N never-lazy pass; values are clamped to 0–10. Any filter failure fails open to the unfiltered count.
+The LCP guardrails resolve the count as OD-measured data (1–3) when Optimization Detective is enabled, else the `lcp_first_n` setting (default 3) falling back to the legacy `excludeFirstImages` key. Return `0` to disable the first-N never-lazy pass; values are clamped to 0–10. Any filter failure fails open to the unfiltered count. An explicit `lcp_first_n` setting of `0` is treated as an intentional disable and wins over OD measurements; disabling while OD is active otherwise requires `lcp_guardrails` set to `false` or a `wppo_lcp_first_n` filter returning `0`.
 
 **Parameters:**
 - `$count` *(int)* — Effective first-N count.
