@@ -666,21 +666,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			return ( (float) $width * (float) $height * (float) $channels ) > ( (float) $this->get_max_source_pixels() * 4 );
 		}
 
-	/**
-	 * Decode channel count for the pixel-budget estimate.
-	 *
-	 * GD `imagecreatefrom*()` allocates a truecolor (4 bytes/pixel)
-	 * bitmap regardless of source type, so the conservative 4-channel
-	 * estimate is used for every raster type to avoid underestimating
-	 * decode memory near the budget limit.
-	 *
-	 * @since NEXT
-	 *
-	 * @return int Channel count (always 4, conservative for GD truecolor).
-	 */
-	private function get_source_channels(): int {
-		return 4;
-	}
+		/**
+		 * Decode channel count for the pixel-budget estimate.
+		 *
+		 * GD `imagecreatefrom*()` allocates a truecolor (4 bytes/pixel)
+		 * bitmap regardless of source type, so the conservative 4-channel
+		 * estimate is used for every raster type to avoid underestimating
+		 * decode memory near the budget limit.
+		 *
+		 * @since NEXT
+		 *
+		 * @return int Channel count (always 4, conservative for GD truecolor).
+		 */
+		private function get_source_channels(): int {
+			return 4;
+		}
 
 		/**
 		 * Downscale a decoded GD image when its longest edge exceeds the cap.
