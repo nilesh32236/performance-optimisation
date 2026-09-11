@@ -3449,6 +3449,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'elementor-common',
 				'e-sticky',
 				'elementor-waypoints',
+				// Elementor first-click: popups/dialogs/lightbox must stay
+				// interactive on first click (issue #1055).
+				'elementor-popup',
+				'elementor-dialog',
+				'elementor-lightbox',
+				'e-popup',
+				'dialog-',
 				// Divi.
 				'divi-custom-script',
 				'et-core-api',
@@ -3530,6 +3537,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'wc-checkout',
 				'woocommerce',
 				'wc-add-to-cart',
+				// Generic first-click add-to-cart cover (issue #1055): matches
+				// non-prefixed handles/themes via dash-variant matching.
+				'add-to-cart',
 				'wc-single-product',
 				'cart-fragments',
 				'wc-cart',
@@ -3612,6 +3622,72 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 			try {
 				$raw = apply_filters( 'wppo_delay_js_slider_exclusions', $preset );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $preset;
+			}
+			if ( ! is_array( $raw ) ) {
+				return $preset;
+			}
+			return array_values(
+				array_unique(
+					array_filter(
+						array_map(
+							static function ( $val ): string {
+								return is_string( $val ) || is_numeric( $val ) ? (string) $val : '';
+							},
+							$raw
+						),
+						static function ( $val ): bool {
+							return '' !== $val;
+						}
+					)
+				)
+			);
+		}
+
+		/**
+		 * Curated first-click interaction Delay JS exclusions (issue #1055).
+		 *
+		 * Popup/dialog, mobile-menu, and add-to-cart handles must stay
+		 * un-delayed so first-click interactions never need a second click.
+		 * Filterable via wppo_delay_js_interaction_exclusions. Merged into
+		 * the global preset when `delayJSInteractionPreset` is on (default).
+		 * Per-site settings only; multisite-safe.
+		 *
+		 * @since NEXT
+		 * @return string[]
+		 */
+		public static function get_delay_js_interaction_exclusions(): array {
+			$preset = array(
+				// Elementor popup/dialog first-click.
+				'elementor-popup',
+				'elementor-dialog',
+				'e-popup',
+				'dialog-',
+				// Mobile / nav-menu toggles first-click.
+				'menu-toggle',
+				'mobile-menu',
+				'nav-menu',
+				'off-canvas',
+				'offcanvas',
+				'mmenu',
+				'slicknav',
+				// Woo first-click add-to-cart.
+				'add-to-cart',
+				'cart-fragments',
+			);
+			/**
+			 * Filters delay JS interaction preset exclusions.
+			 *
+			 * @since NEXT
+			 * @param string[] $preset Interaction preset exclusions.
+			 */
+			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_interaction_exclusions' ) ) {
+				return $preset;
+			}
+			try {
+				$raw = apply_filters( 'wppo_delay_js_interaction_exclusions', $preset );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return $preset;
@@ -3937,6 +4013,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			|| ! empty( $this->options['file_optimisation']['delayJSBuilderPreset'] );
 			if ( $builder_on ) {
 				$preset = array_merge( $preset, self::get_delay_js_builder_exclusions(), self::get_delay_js_slider_exclusions() );
+			}
+			// Interaction safe preset (#1055): first-click popup/dialog,
+			// mobile-menu, and add-to-cart handles. Safe-by-default on;
+			// missing key backfills to on (per-site settings, multisite-safe).
+			$interaction_on = ! isset( $this->options['file_optimisation']['delayJSInteractionPreset'] )
+			|| ! empty( $this->options['file_optimisation']['delayJSInteractionPreset'] );
+			if ( $interaction_on ) {
+				$preset = array_merge( $preset, self::get_delay_js_interaction_exclusions() );
 			}
 			// Breaker presets ship deduped via array_unique (#1037) so builder +
 			// commerce + user excludes never double-process; string-only values.

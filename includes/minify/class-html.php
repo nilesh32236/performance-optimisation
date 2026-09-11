@@ -172,6 +172,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 					unset( $e );
 				}
 			}
+			// Interaction safe preset (#1055): first-click popup/dialog,
+			// mobile-menu, and add-to-cart handles. Safe-by-default on;
+			// missing key backfills to on.
+			$interaction_on = ! isset( $this->options['file_optimisation']['delayJSInteractionPreset'] )
+				|| ! empty( $this->options['file_optimisation']['delayJSInteractionPreset'] );
+			if ( $interaction_on && class_exists( Main::class ) && method_exists( Main::class, 'get_delay_js_interaction_exclusions' ) ) {
+				try {
+					$this->exclude_delay_js = array_merge( $this->exclude_delay_js, Main::get_delay_js_interaction_exclusions() );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
 			$this->exclude_delay_js = array_values(
 				array_unique(
 					array_filter(
@@ -659,6 +671,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				}
 
 				$should_exclude = $skip_delay;
+				// Localised/config inline scripts (#1055): `wp_localize_script()`
+				// (`id="*-js-extra"`) and `wp_add_inline_script(..., 'before'|'after')`
+				// (`id="*-js-before|after"`, CDATA payloads) must stay un-delayed
+				// so dependents read their config on first interaction. Fail-open:
+				// matcher errors never exclude (delay proceeds).
+				if ( ! $skip_delay && ! $should_exclude && self::is_localised_inline_script( (string) $attributes, (string) $content ) ) {
+					$should_exclude = true;
+				}
 				if ( ! $skip_delay && ! empty( $this->exclude_delay_js ) ) {
 					foreach ( $this->exclude_delay_js as $exclude ) {
 						if (
@@ -773,6 +793,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				}
 			}
 			return 'normal';
+		}
+
+		/**
+		 * Whether an inline script is a localised/config payload (issue #1055).
+		 *
+		 * `wp_localize_script()` emits `id="*-js-extra"` with a CDATA/var
+		 * payload and `wp_add_inline_script(..., 'before'|'after')` emits
+		 * `id="*-js-before|after"`. Delaying these breaks dependents on
+		 * first click, so they stay un-delayed. Fail-open: any error
+		 * returns false (delay proceeds) so detection never fatals.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $attributes Script tag attributes string.
+		 * @param string $content    Inline script content.
+		 * @return bool True when the script must stay un-delayed.
+		 */
+		private static function is_localised_inline_script( string $attributes, string $content ): bool {
+			try {
+				$attrs = strtolower( $attributes );
+				if ( false !== strpos( $attrs, '-js-extra' ) || false !== strpos( $attrs, '-js-before' ) || false !== strpos( $attrs, '-js-after' ) ) {
+					return true;
+				}
+				if ( false !== stripos( $content, '<![CDATA[' ) || false !== stripos( $content, '/* <![CDATA[ */' ) ) {
+					return true;
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
 		}
 
 		/**
