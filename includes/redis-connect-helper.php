@@ -159,7 +159,7 @@ if ( ! function_exists( 'wppo_redis_connect_sentinel' ) ) {
 			return new \WP_Error( 'low_nodes', __( 'Not enough Sentinel nodes configured.', 'performance-optimisation' ) );
 		}
 
-		if ( version_compare( phpversion( 'redis' ), '6.0.0', '<' ) ) {
+		if ( version_compare( (string) phpversion( 'redis' ), '6.0.0', '<' ) ) {
 			return new \WP_Error( 'redis_version', __( 'Sentinel mode requires phpredis version 6.0.0 or higher.', 'performance-optimisation' ) );
 		}
 
@@ -304,6 +304,10 @@ if ( ! function_exists( 'wppo_parse_redis_node' ) ) {
 	 * @return array Associative array containing 'host' and 'port'.
 	 */
 	function wppo_parse_redis_node( $node ) {
+		// Null-safe: internal string functions deprecate null arguments on
+		// PHP 8.1+, so normalize any non-string input up front (fail-open to
+		// the invalid-node path handled by callers).
+		$node = is_string( $node ) ? $node : (string) $node;
 		if ( strpos( $node, '[' ) === 0 ) {
 			$port_start = strpos( $node, ']:' );
 			if ( false !== $port_start ) {
@@ -526,7 +530,19 @@ if ( ! function_exists( 'wppo_parse_nodes' ) ) {
 		}
 
 		if ( is_array( $nodes ) ) {
-			return array_values( array_filter( array_map( 'trim', $nodes ) ) );
+			// Null-safe trim: passing null to trim() is deprecated on PHP 8.1+,
+			// so cast each entry before trimming (non-string entries from
+			// untrusted config arrays degrade to '' and are filtered out).
+			return array_values(
+				array_filter(
+					array_map(
+						static function ( $entry ) {
+							return trim( (string) $entry );
+						},
+						$nodes
+					)
+				)
+			);
 		}
 
 		return array();
