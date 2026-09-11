@@ -734,6 +734,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		}
 
 		/**
+		 * Resolve a client- or DB-supplied image path to an absolute source path.
+		 *
+		 * DB-backed pending values are already absolute; relative client
+		 * values are resolved under `ABSPATH`. Uses the same
+		 * `ltrim()` + allowlist construction as the validator so the
+		 * enqueue/sync loops can never double-prefix an absolute value.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $img_path           Raw path from the request or DB queue.
+		 * @param string $normalized_abspath Trailingslashed `ABSPATH`.
+		 * @return string Absolute candidate source path.
+		 */
+		private function resolve_optimise_source_path( string $img_path, string $normalized_abspath ): string {
+			$candidate = wp_normalize_path( $img_path );
+			if ( method_exists( 'PerformanceOptimise\Inc\Img_Converter', 'is_path_in_allowlist' ) && Img_Converter::is_path_in_allowlist( $candidate ) ) {
+				return $candidate;
+			}
+			return $normalized_abspath . ltrim( $candidate, '/' );
+		}
+
+		/**
 		 * Optimizes the images and converts them to WebP or AVIF format.
 		 *
 		 * Uses Action Scheduler for background processing when available,
@@ -744,6 +766,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function optimise_image( \WP_REST_Request $request ) {
+			// Defense-in-depth capability re-check on the conversion/delete
+			// trigger path (the route permission_callback already requires
+			// manage_options). Guarded so unit stubs without the pluggable
+			// helper cannot fatal.
+			if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) ) {
+				return $this->send_response( null, false, 403, __( 'You are not allowed to optimize images.', 'performance-optimisation' ) );
+			}
+
 			$params = $request->get_params();
 
 			$webp_images = isset( $params['webp'] ) ? array_map( 'sanitize_text_field', (array) $params['webp'] ) : array();
@@ -769,15 +799,50 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				}
 			}
 
-			// Validate image paths using realpath to prevent directory traversal.
+			// Validate image paths against the uploads/wppo allowlist to
+			// prevent directory traversal. Relative client paths are resolved
+			// under ABSPATH, then containment is asserted via
+			// Img_Converter::is_path_in_allowlist() (guarded) plus a realpath
+			// check when the file exists. Fail-open: invalid paths are
+			// rejected with the file intact, never converted.
 			$normalized_abspath = trailingslashit( wp_normalize_path( ABSPATH ) );
 			foreach ( array_merge( $webp_images, $avif_images ) as $img_path ) {
-				$source_path = $normalized_abspath . $img_path;
+				if ( false !== strpos( $img_path, "\0" ) ) {
+					return $this->send_response( null, false, 400, __( 'Invalid image path provided.', 'performance-optimisation' ) );
+				}
+				// Segment-only traversal check: `..` as a full path segment
+				// (after URL-decoding), so `my..photo.jpg` stays valid.
+				$decoded_segments = str_replace( '\\', '/', rawurldecode( $img_path ) );
+				if ( 1 === preg_match( '#(^|/)\.\.(/|$)#', $decoded_segments ) ) {
+					return $this->send_response( null, false, 400, __( 'Invalid image path provided.', 'performance-optimisation' ) );
+				}
+				$source_path = $this->resolve_optimise_source_path( $img_path, $normalized_abspath );
+				if ( method_exists( 'PerformanceOptimise\Inc\Img_Converter', 'is_path_in_allowlist' ) && ! Img_Converter::is_path_in_allowlist( $source_path ) ) {
+					return $this->send_response( null, false, 400, __( 'Invalid image path provided.', 'performance-optimisation' ) );
+				}
 				if ( ! file_exists( $source_path ) ) {
 					continue;
 				}
 				$resolved = realpath( $source_path );
-				if ( false === $resolved || 0 !== strpos( wp_normalize_path( $resolved ), $normalized_abspath ) ) {
+				if ( false === $resolved ) {
+					return $this->send_response( null, false, 400, __( 'Invalid image path provided.', 'performance-optimisation' ) );
+				}
+				$resolved_norm = wp_normalize_path( $resolved );
+				$content_base  = trailingslashit( wp_normalize_path( WP_CONTENT_DIR ) );
+				$root_ok       = 0 === strpos( $resolved_norm, $normalized_abspath ) || 0 === strpos( $resolved_norm, $content_base );
+				if ( ! $root_ok ) {
+					$abspath_real = realpath( ABSPATH );
+					if ( false !== $abspath_real ) {
+						$root_ok = 0 === strpos( $resolved_norm, trailingslashit( wp_normalize_path( $abspath_real ) ) );
+					}
+				}
+				if ( ! $root_ok ) {
+					$content_real = realpath( WP_CONTENT_DIR );
+					if ( false !== $content_real ) {
+						$root_ok = 0 === strpos( $resolved_norm, trailingslashit( wp_normalize_path( $content_real ) ) );
+					}
+				}
+				if ( ! $root_ok ) {
 					return $this->send_response( null, false, 400, __( 'Invalid image path provided.', 'performance-optimisation' ) );
 				}
 			}
@@ -788,7 +853,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			if ( $use_action_scheduler ) {
 				// Schedule background jobs via Action Scheduler with deduplication.
 				foreach ( $webp_images as $webp_image ) {
-					$source_path = wp_normalize_path( ABSPATH . $webp_image );
+					$source_path = $this->resolve_optimise_source_path( $webp_image, $normalized_abspath );
 
 					if ( file_exists( $source_path ) ) {
 						$args = array(
@@ -810,7 +875,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				}
 
 				foreach ( $avif_images as $avif_image ) {
-					$source_path = wp_normalize_path( ABSPATH . $avif_image );
+					$source_path = $this->resolve_optimise_source_path( $avif_image, $normalized_abspath );
 
 					if ( file_exists( $source_path ) ) {
 						$args = array(
@@ -857,7 +922,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$img_converter = new Img_Converter( $options );
 
 			foreach ( $webp_images as $webp_image ) {
-				$source_path = wp_normalize_path( ABSPATH . $webp_image );
+				$source_path = $this->resolve_optimise_source_path( $webp_image, $normalized_abspath );
 
 				if ( file_exists( $source_path ) ) {
 					$img_converter->convert_image( $source_path, 'webp' );
@@ -865,7 +930,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			foreach ( $avif_images as $avif_image ) {
-				$source_path = wp_normalize_path( ABSPATH . $avif_image );
+				$source_path = $this->resolve_optimise_source_path( $avif_image, $normalized_abspath );
 
 				if ( file_exists( $source_path ) ) {
 					$img_converter->convert_image( $source_path, 'avif' );
@@ -894,12 +959,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function delete_optimised_image(): \WP_REST_Response {
+			// Defense-in-depth capability re-check on the delete trigger
+			// (the route permission_callback already requires
+			// manage_options). Guarded so unit stubs cannot fatal.
+			if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) ) {
+				return $this->send_response( null, false, 403, __( 'You are not allowed to delete optimized images.', 'performance-optimisation' ) );
+			}
+
 			global $wp_filesystem;
 			if ( ! Util::init_filesystem() ) {
 				return $this->send_response( null, false, 500, __( 'Unable to initialize filesystem.', 'performance-optimisation' ) );
 			}
 
 			$wppo_dir = wp_normalize_path( WP_CONTENT_DIR . '/wppo' );
+
+			// Delete containment: prove the target is exactly the plugin's
+			// `wppo` directory inside `WP_CONTENT_DIR` before unlinking, and
+			// re-assert via realpath when it exists. Never unlink outside.
+			$content_dir = rtrim( wp_normalize_path( WP_CONTENT_DIR ), '/' ) . '/';
+			if ( rtrim( $wppo_dir, '/' ) . '/' !== $content_dir . 'wppo/' ) {
+				return $this->send_response( null, false, 400, __( 'Invalid optimized images folder.', 'performance-optimisation' ) );
+			}
+			if ( file_exists( $wppo_dir ) ) {
+				$resolved_wppo = realpath( $wppo_dir );
+				if ( false === $resolved_wppo || rtrim( wp_normalize_path( $resolved_wppo ), '/' ) . '/' !== $content_dir . 'wppo/' ) {
+					// Allow symlink edge-cases only when the resolved path
+					// is still inside WP_CONTENT_DIR (fail-open otherwise).
+					if ( false === $resolved_wppo || 0 !== strpos( rtrim( wp_normalize_path( $resolved_wppo ), '/' ) . '/', $content_dir ) ) {
+						return $this->send_response( null, false, 400, __( 'Invalid optimized images folder.', 'performance-optimisation' ) );
+					}
+				}
+			}
 
 			if ( ! $wp_filesystem || ! $wp_filesystem->is_dir( $wppo_dir ) ) {
 				return $this->send_response( null, false, 404, __( 'Optimized images folder does not exist.', 'performance-optimisation' ) );

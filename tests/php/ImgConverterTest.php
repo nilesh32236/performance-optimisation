@@ -1353,4 +1353,139 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 			}
 		}
 	}
+
+	/**
+	 * Allowlist containment: uploads/wppo paths pass, while traversal,
+	 * encoded traversal, NUL bytes, off-site URLs, relative paths, and
+	 * outside-ABSPATH locations are refused (#1035).
+	 *
+	 * @since NEXT
+	 */
+	public function test_is_path_in_allowlist_rejects_traversal(): void {
+		$this->assertTrue( Img_Converter::is_path_in_allowlist( $this->uploads_dir . '/allowlist.png' ) );
+		$this->assertTrue( Img_Converter::is_path_in_allowlist( rtrim( WP_CONTENT_DIR, '/' ) . '/wppo/uploads/2026/08/allowlist.webp' ) );
+		// Dotted filenames without a `..` segment stay valid.
+		$this->assertTrue( Img_Converter::is_path_in_allowlist( $this->uploads_dir . '/my..photo.jpg' ) );
+
+		$this->assertFalse( Img_Converter::is_path_in_allowlist( '' ) );
+		$this->assertFalse( Img_Converter::is_path_in_allowlist( $this->uploads_dir . '/../secret.png' ) );
+		$this->assertFalse( Img_Converter::is_path_in_allowlist( $this->uploads_dir . '/%2e%2e/secret.png' ) );
+		$this->assertFalse( Img_Converter::is_path_in_allowlist( $this->uploads_dir . "/evil\0.png" ) );
+		$this->assertFalse( Img_Converter::is_path_in_allowlist( '/etc/passwd' ) );
+		$this->assertFalse( Img_Converter::is_path_in_allowlist( 'https://evil.example.com/img.png' ) );
+		$this->assertFalse( Img_Converter::is_path_in_allowlist( 'relative/path/img.png' ) );
+	}
+
+	/**
+	 * Strict delete allowlist: only uploads/wppo targets are unlinkable;
+	 * same-prefix siblings, other ABSPATH locations, traversal, and
+	 * off-site passthrough values are refused with the file intact (#1035).
+	 *
+	 * @since NEXT
+	 */
+	public function test_is_safe_delete_path_strict_allowlist(): void {
+		$this->assertTrue( Img_Converter::is_safe_delete_path( rtrim( WP_CONTENT_DIR, '/' ) . '/wppo/uploads/2026/08/a.webp' ) );
+		$this->assertTrue( Img_Converter::is_safe_delete_path( $this->uploads_dir . '/a.jpg' ) );
+
+		// Same-prefix sibling of uploads must not pass the boundary check.
+		$this->assertFalse( Img_Converter::is_safe_delete_path( rtrim( WP_CONTENT_DIR, '/' ) . '/uploads-evil/a.webp' ) );
+		// Elsewhere in ABSPATH is readable but never unlinkable.
+		$this->assertFalse( Img_Converter::is_safe_delete_path( rtrim( wp_normalize_path( ABSPATH ), '/' ) . '/wp-admin/admin.php' ) );
+		$this->assertFalse( Img_Converter::is_safe_delete_path( $this->uploads_dir . '/../wp-config.php' ) );
+		// Off-site passthrough from get_img_path() is never deletable.
+		$this->assertFalse( Img_Converter::is_safe_delete_path( 'https://cdn.example.com/a.webp' ) );
+		$this->assertFalse( Img_Converter::is_safe_delete_path( '' ) );
+	}
+
+	/**
+	 * Channels-aware pixel budget: 40MP exceeds the fallback budget while
+	 * a normal 12MP image fits, and corrupt (non-positive) dimensions are
+	 * NOT an oversize skip so the caller records `failed` (#1035).
+	 *
+	 * @since NEXT
+	 */
+	public function test_exceeds_pixel_budget_channels_aware(): void {
+		// phpcs:ignore WordPress.PHP.IniSet.memory_limit_Disallowed -- Test forces the unlimited-memory fallback path deterministically.
+		$previous = ini_set( 'memory_limit', '-1' );
+		try {
+			$converter = $this->make_converter();
+			$this->assertTrue( $converter->exceeds_pixel_budget( 8000, 5000, 4 ), '40MP exceeds the fallback budget' );
+			$this->assertFalse( $converter->exceeds_pixel_budget( 4000, 3000, 3 ), '12MP fits the fallback budget' );
+			$this->assertFalse( $converter->exceeds_pixel_budget( 0, 100 ), 'Corrupt zero dims are not an oversize skip' );
+			$this->assertFalse( $converter->exceeds_pixel_budget( -5, 100 ), 'Negative dims are not an oversize skip' );
+		} finally {
+			if ( false !== $previous ) {
+				// phpcs:ignore WordPress.PHP.IniSet.memory_limit_Disallowed -- Test restores the original memory limit.
+				ini_set( 'memory_limit', (string) $previous );
+			}
+		}
+	}
+
+	/**
+	 * Over-budget sources skip conversion fail-open: the original is served
+	 * unoptimised and the queue entry is marked `skipped`, never fatal (#1035).
+	 *
+	 * @since NEXT
+	 */
+	public function test_convert_image_pixel_budget_skip_marks_skipped(): void {
+		// phpcs:ignore WordPress.PHP.IniSet.memory_limit_Disallowed -- Test forces the unlimited-memory fallback path deterministically.
+		$previous = ini_set( 'memory_limit', '-1' );
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook_name, $value ) {
+				if ( 'wppo_max_source_pixels' === $hook_name ) {
+					return 1000;
+				}
+				return $value;
+			}
+		);
+		$file = $this->create_sample_png( 'pixel-budget.png' );
+		// Force the core-handles probe false so conversion reaches the
+		// pixel-budget guard instead of the WP 6.7+ core skip (same
+		// Patchwork pattern as the downscale test above).
+		$function_exists_handle = \Patchwork\redefine(
+			'function_exists',
+			static function ( $function_name ) {
+				return 'wp_image_quality' !== $function_name;
+			}
+		);
+		try {
+			$converter = $this->make_converter(
+				array(
+					'conversionFormat'        => 'webp',
+					'skipSmallThresholdBytes' => 0,
+				)
+			);
+			$this->assertFalse( $converter->convert_image( $file, 'webp' ) );
+			\Patchwork\restore( $function_exists_handle );
+
+			$this->assertFileExists( $file, 'Original must stay restorable' );
+
+			$full_rel = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $file ) );
+			$info     = Img_Converter::get_img_info();
+			$this->assertContains( $full_rel, $info['skipped']['webp'] ?? array() );
+		} finally {
+			\Patchwork\restore( $function_exists_handle );
+			if ( false !== $previous ) {
+				// phpcs:ignore WordPress.PHP.IniSet.memory_limit_Disallowed -- Test restores the original memory limit.
+				ini_set( 'memory_limit', (string) $previous );
+			}
+			if ( file_exists( $file ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+				unlink( $file );
+			}
+		}
+	}
+
+	/**
+	 * Traversal sources are refused before any decode: conversion returns
+	 * false and records `failed` without touching the filesystem (#1035).
+	 *
+	 * @since NEXT
+	 */
+	public function test_convert_image_rejects_traversal_source(): void {
+		$converter = $this->make_converter( array( 'conversionFormat' => 'webp' ) );
+
+		$this->assertFalse( $converter->convert_image( $this->uploads_dir . '/../wp-config.php', 'webp' ) );
+		$this->assertFalse( $converter->convert_image( 'https://evil.example.com/img.jpg', 'webp' ) );
+	}
 }

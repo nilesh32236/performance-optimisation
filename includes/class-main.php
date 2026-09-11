@@ -1512,6 +1512,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$source_path = wp_normalize_path( $args['source_path'] );
 			$format      = sanitize_text_field( $args['format'] );
 
+			// Allowlist containment for queued jobs: a tampered queue entry
+			// must never reach the converter. Fail-open: skip the job, keep
+			// the file intact.
+			if ( method_exists( 'PerformanceOptimise\Inc\Img_Converter', 'is_path_in_allowlist' ) && ! Img_Converter::is_path_in_allowlist( $source_path ) ) {
+				return;
+			}
+
 			if ( file_exists( $source_path ) ) {
 				$img_converter->convert_image( $source_path, $format );
 			}
