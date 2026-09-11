@@ -255,7 +255,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'lazyLoadNative'             => true,
 					'lazyLoadBackgroundImages'   => false,
 					'wrapInPicture'              => true,
-					'excludeFirstImages'         => 0,
+					// OD_Bridge::get_exclude_first_images_count() uses presence:
+					// absent → 2, present <= 0 → 1. Keep the absent fallback so
+					// fresh/CLI-merged installs behave identically.
+					'excludeFirstImages'         => 2,
 					'excludeImages'              => '',
 					'lazyLoadVideos'             => false,
 					'enableVideoPlaceholder'     => false,

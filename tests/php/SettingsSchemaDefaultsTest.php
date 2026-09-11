@@ -183,6 +183,19 @@ class SettingsSchemaDefaultsTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * `excludeFirstImages` must keep the OD-bridge absent fallback (2).
+	 *
+	 * OD_Bridge::get_exclude_first_images_count() branches on PRESENCE, not
+	 * emptiness: absent → 2, present and <= 0 → 1. A default of 0 would flip
+	 * fresh/CLI-merged installs from 2 to 1.
+	 */
+	public function test_exclude_first_images_defaults_to_od_bridge_absent_fallback(): void {
+		$defaults = Util::get_default_settings();
+
+		$this->assertSame( 2, $defaults['image_optimisation']['excludeFirstImages'] );
+	}
+
+	/**
 	 * A stored shape mirroring the live install must validate as `pass` once
 	 * every front-end key is part of the canonical defaults.
 	 */
