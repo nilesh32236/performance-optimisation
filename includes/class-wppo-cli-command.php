@@ -1303,20 +1303,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 *
 		 * Unknown top-level keys → fail (schema drift); unknown nested
 		 * sub-keys (one level deep, e.g. `cache_settings.enablCache`)
-		 * → fail; tabs present in
-		 * Util::get_default_settings() but missing from storage → warn
-		 * (fresh/partial install); array-vs-scalar mismatches vs defaults
-		 * (one level deep) → fail. Never calls update_option().
+		 * → fail; tabs present in Util::get_settings_schema() but missing
+		 * from storage → warn (fresh/partial install); array-vs-scalar
+		 * mismatches vs the schema (one level deep) → fail. The schema is
+		 * decoupled from the runtime defaults so SPA-persisted keys are
+		 * recognised without seeding them. Never calls update_option().
 		 *
 		 * @since NEXT
 		 * @param array         $stored Raw wppo_settings array (live get_option).
 		 * @param string[]|null $allowed Optional allowlist override (testing).
-		 * @param array|null    $defaults Optional defaults override (testing).
+		 * @param array|null    $schema  Optional schema override (testing).
 		 * @return array{check:string,status:string,detail:string} Verify row.
 		 */
-		public static function validate_settings_schema( array $stored, ?array $allowed = null, ?array $defaults = null ): array {
-			$allowed  = is_array( $allowed ) ? $allowed : Util::ALLOWED_SETTINGS_KEYS;
-			$defaults = is_array( $defaults ) ? $defaults : Util::get_default_settings();
+		public static function validate_settings_schema( array $stored, ?array $allowed = null, ?array $schema = null ): array {
+			$allowed = is_array( $allowed ) ? $allowed : Util::ALLOWED_SETTINGS_KEYS;
+			$schema  = is_array( $schema ) ? $schema : Util::get_settings_schema();
 
 			$unknown = array();
 			foreach ( array_keys( $stored ) as $key ) {
@@ -1326,7 +1327,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 			}
 
 			$missing = array();
-			foreach ( array_keys( $defaults ) as $tab ) {
+			foreach ( array_keys( $schema ) as $tab ) {
 				if ( ! array_key_exists( $tab, $stored ) ) {
 					$missing[] = (string) $tab;
 				}
@@ -1335,30 +1336,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 			$mismatches     = array();
 			$unknown_nested = array();
 			foreach ( $stored as $tab => $value ) {
-				if ( ! array_key_exists( $tab, $defaults ) || ! is_array( $defaults[ $tab ] ) || ! is_array( $value ) ) {
+				if ( ! array_key_exists( $tab, $schema ) || ! is_array( $schema[ $tab ] ) || ! is_array( $value ) ) {
 					continue;
 				}
 				foreach ( $value as $sub_key => $sub_value ) {
-					if ( ! array_key_exists( $sub_key, $defaults[ $tab ] ) ) {
+					if ( ! array_key_exists( $sub_key, $schema[ $tab ] ) ) {
 						$unknown_nested[] = sprintf( '%s.%s', $tab, $sub_key );
 						continue;
 					}
-					$default_is_array = is_array( $defaults[ $tab ][ $sub_key ] );
-					$stored_is_array  = is_array( $sub_value );
-					if ( $default_is_array !== $stored_is_array ) {
+					$schema_is_array = 'array' === $schema[ $tab ][ $sub_key ];
+					$stored_is_array = is_array( $sub_value );
+					if ( $schema_is_array !== $stored_is_array ) {
 						$mismatches[] = sprintf(
 							'%s.%s expected %s got %s',
 							$tab,
 							$sub_key,
-							$default_is_array ? 'array' : 'scalar',
+							$schema_is_array ? 'array' : 'scalar',
 							$stored_is_array ? 'array' : 'scalar'
 						);
 					}
 				}
 			}
-			// Tabs stored as scalars at the top level (defaults are all arrays).
+			// Tabs stored as scalars at the top level (schema tabs are all arrays).
 			foreach ( $stored as $tab => $value ) {
-				if ( array_key_exists( $tab, $defaults ) && is_array( $defaults[ $tab ] ) && ! is_array( $value ) ) {
+				if ( array_key_exists( $tab, $schema ) && is_array( $schema[ $tab ] ) && ! is_array( $value ) ) {
 					$mismatches[] = sprintf( '%s expected array got scalar', $tab );
 				}
 			}

@@ -55,6 +55,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		public static function init(): void {
 			$notices = array();
 
+			// Reinstall existence re-check: sweep orphan backup/tmp siblings
+			// left by an incomplete teardown before creating the fresh
+			// drop-in, so stale artifacts never survive a reinstall.
+			// Fail-open: never blocks activation.
+			try {
+				if ( method_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler', 'cleanup_stale_artifacts' ) ) {
+					Advanced_Cache_Handler::cleanup_stale_artifacts();
+				}
+			} catch ( \Throwable $ignored_artifacts ) {
+				unset( $ignored_artifacts );
+			}
+
 			if ( Advanced_Cache_Handler::foreign_dropin_present() ) {
 				$notices[] = 'foreign_dropin';
 			} else {
@@ -276,6 +288,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 					$wp_config_content = substr_replace( $wp_config_content, $constant_code, $insert_position, 0 );
 				} else {
 					$wp_config_content .= $constant_code;
+				}
+			}
+
+			// Atomic path: tmp write + verify + backup + rename with rollback,
+			// so a kill mid-write or full disk never leaves a truncated
+			// wp-config.php. Falls back to the legacy direct write when the
+			// filesystem transport cannot support atomic writes.
+			if ( method_exists( 'PerformanceOptimise\Inc\Util', 'atomic_write_php_verified' ) ) {
+				$atomic = Util::atomic_write_php_verified(
+					$wp_filesystem,
+					$wp_config_path,
+					$wp_config_content,
+					static function ( $contents ): bool {
+						return is_string( $contents ) && false !== strpos( $contents, 'WP_CACHE' );
+					}
+				);
+				if ( true === $atomic ) {
+					return null;
+				}
+				if ( false === $atomic ) {
+					return 'wp_config_write_failed';
 				}
 			}
 

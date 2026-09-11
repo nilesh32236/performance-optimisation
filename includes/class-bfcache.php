@@ -125,7 +125,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 		 * @param string|null $session_token Session token, defaults to current.
 		 * @return string|null Token or null.
 		 */
-		public static function get_user_token( ?int $user_id = null, ?string $session_token = null ): ?string {
+		public static function get_user_token( ?int $user_id = null, #[\SensitiveParameter] ?string $session_token = null ): ?string {
 			if ( ! class_exists( 'WP_Session_Tokens' ) ) {
 				return null;
 			}

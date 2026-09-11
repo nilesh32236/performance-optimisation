@@ -663,6 +663,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 		}
 
 		/**
+		 * Delete stale drop-in artifacts without touching the live drop-in.
+		 *
+		 * Public reinstall/uninstall-safe wrapper: removes the
+		 * `.wppo-backup` sibling and orphaned `.tmp.*` siblings so a fresh
+		 * activation never inherits residue from an incomplete teardown.
+		 * Fail-open: never throws.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function cleanup_stale_artifacts(): void {
+			self::cleanup_dropin_artifacts();
+		}
+
+		/**
 		 * Delete the backup sibling and any orphaned tmp siblings.
 		 *
 		 * Best-effort only: failures are ignored so remove() never fails
