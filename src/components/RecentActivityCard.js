@@ -13,8 +13,15 @@ import { memo } from '@wordpress/element';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faHistory, faArrowRight } from '@fortawesome/free-solid-svg-icons';
 import FeatureCard from './common/FeatureCard';
+import NoticeBanner from './common/NoticeBanner';
 
-const RecentActivityCard = ( { activities, onNavigate } ) => {
+const RecentActivityCard = ( {
+	activities,
+	activitiesError = false,
+	onNavigate,
+} ) => {
+	const showList = Array.isArray( activities ) && activities.length > 0;
+	const showEmptyState = ! showList && ! activitiesError;
 	return (
 		<FeatureCard
 			title={ __(
@@ -44,7 +51,16 @@ const RecentActivityCard = ( { activities, onNavigate } ) => {
 				) }
 			</p>
 			<div className="wppo-activity-wrapper">
-				{ activities?.length ? (
+				{ activitiesError && (
+					<NoticeBanner
+						type="error"
+						message={ __(
+							'Failed to load recent activity. Open the Tools tab for the full log.',
+							'performance-optimisation'
+						) }
+					/>
+				) }
+				{ showList && (
 					<ul className="wppo-activity-list">
 						{ activities.slice( 0, 5 ).map( ( activity ) => (
 							<li key={ activity.id }>
@@ -54,7 +70,8 @@ const RecentActivityCard = ( { activities, onNavigate } ) => {
 							</li>
 						) ) }
 					</ul>
-				) : (
+				) }
+				{ showEmptyState && (
 					<div className="wppo-empty-state">
 						{ __(
 							'No optimisation activity recorded yet.',

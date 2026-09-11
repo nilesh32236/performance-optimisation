@@ -30,10 +30,17 @@ describe( 'StatusBadge', () => {
 		expect( badge ).toHaveAttribute( 'aria-label', 'Poor' );
 	} );
 
-	it( 'falls back to the raw status string for unknown values', () => {
+	it( 'falls back to a safe unknown badge for unexpected values', () => {
 		render( <StatusBadge status="unknown_value" /> );
-		const badge = screen.getByText( 'unknown_value' );
-		expect( badge ).toHaveClass( 'wppo-status-badge--unknown_value' );
-		expect( badge ).toHaveAttribute( 'aria-label', 'unknown_value' );
+		const badge = screen.getByText( 'Unknown' );
+		expect( badge ).toHaveClass( 'wppo-status-badge--unknown' );
+		expect( badge ).toHaveAttribute( 'aria-label', 'Unknown' );
+	} );
+
+	it( 'falls back to a safe unknown badge when status is missing', () => {
+		render( <StatusBadge status={ undefined } /> );
+		const badge = screen.getByText( 'Unknown' );
+		expect( badge ).toHaveClass( 'wppo-status-badge--unknown' );
+		expect( badge ).toHaveAttribute( 'aria-label', 'Unknown' );
 	} );
 } );

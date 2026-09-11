@@ -275,11 +275,13 @@ export const fetchSystemInfo = ( signal ) => {
  *
  * @since 1.6.0
  * @since NEXT Scan URL and strategy are validated client-side before the request.
- * @param {string} url      The URL to scan.
- * @param {string} strategy 'mobile' or 'desktop'.
+ * @since NEXT Accepts an optional AbortSignal for request cancellation.
+ * @param {string}      url      The URL to scan.
+ * @param {string}      strategy 'mobile' or 'desktop'.
+ * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
  * @return {Promise<Object>} Resolved response with job_id.
  */
-export const queuePagespeedScan = ( url, strategy = 'mobile' ) => {
+export const queuePagespeedScan = ( url, strategy = 'mobile', signal ) => {
 	if ( ! isValidScanUrl( url ) ) {
 		return Promise.reject(
 			new Error( 'Invalid scan URL: must be a same-origin http(s) URL.' )
@@ -290,7 +292,7 @@ export const queuePagespeedScan = ( url, strategy = 'mobile' ) => {
 			new Error( "Invalid strategy: must be 'mobile' or 'desktop'." )
 		);
 	}
-	return apiCall( 'pagespeed_scan', { url, strategy } );
+	return apiCall( 'pagespeed_scan', { url, strategy }, 'POST', signal );
 };
 
 /**

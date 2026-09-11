@@ -118,9 +118,14 @@ describe( 'AutoloadedOptions', () => {
 			).toBeInTheDocument()
 		);
 		expect( screen.getByText( 'big_plugin_blob' ) ).toBeInTheDocument();
-		expect( apiCall ).toHaveBeenCalledWith( 'autoload_remediate', {
-			mode: 'dry_run',
-		} );
+		expect( apiCall ).toHaveBeenCalledWith(
+			'autoload_remediate',
+			{
+				mode: 'dry_run',
+			},
+			'POST',
+			expect.any( AbortSignal )
+		);
 	} );
 
 	it( 'applies the fix and offers per-option revert', async () => {
@@ -198,9 +203,14 @@ describe( 'AutoloadedOptions', () => {
 				screen.getByText( 'Remediation applied to 1 options.' )
 			).toBeInTheDocument()
 		);
-		expect( apiCall ).toHaveBeenCalledWith( 'autoload_remediate', {
-			mode: 'apply',
-		} );
+		expect( apiCall ).toHaveBeenCalledWith(
+			'autoload_remediate',
+			{
+				mode: 'apply',
+			},
+			'POST',
+			expect.any( AbortSignal )
+		);
 
 		await waitFor( () =>
 			expect(
@@ -221,10 +231,15 @@ describe( 'AutoloadedOptions', () => {
 				screen.getByText( 'Reverted autoload for big_plugin_blob.' )
 			).toBeInTheDocument()
 		);
-		expect( apiCall ).toHaveBeenCalledWith( 'autoload_remediate', {
-			mode: 'revert',
-			option: 'big_plugin_blob',
-		} );
+		expect( apiCall ).toHaveBeenCalledWith(
+			'autoload_remediate',
+			{
+				mode: 'revert',
+				option: 'big_plugin_blob',
+			},
+			'POST',
+			expect.any( AbortSignal )
+		);
 	} );
 
 	it( 'shows a failure notice when the dry run request fails', async () => {

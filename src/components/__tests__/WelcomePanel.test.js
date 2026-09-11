@@ -309,4 +309,21 @@ describe( 'WelcomePanel', () => {
 			screen.getByText( 'Welcome to Performance Optimisation' )
 		).toBeInTheDocument();
 	} );
+
+	it( 'appears when the global show_welcome arrives late', async () => {
+		global.wppoSettings.show_welcome = false;
+		const { rerender } = render( <WelcomePanel /> );
+		expect(
+			screen.queryByText( 'Welcome to Performance Optimisation' )
+		).not.toBeInTheDocument();
+
+		global.wppoSettings.show_welcome = true;
+		rerender( <WelcomePanel /> );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Welcome to Performance Optimisation' )
+			).toBeInTheDocument();
+		} );
+	} );
 } );

@@ -2522,7 +2522,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						}
 
 						if ( $delay_js ) {
-							$delay_config = wp_json_encode( $lazy_config['delayConfig'] );
+							$delay_config = wp_json_encode( $lazy_config['delayConfig'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP );
 							wp_add_inline_script( 'wppo-lazyload', 'window.wppoDelayConfig=' . $delay_config . ';', 'before' );
 						}
 					}
@@ -6260,7 +6260,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			wp_add_inline_script(
 				'wppo-admin-bar-script',
-				'const wppoObject = ' . wp_json_encode( $data ) . ';',
+				'window.wppoObject = ' . wp_json_encode( $data, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP ) . ';',
 				'before'
 			);
 

@@ -1,4 +1,10 @@
-import { useState, useEffect, useCallback, useId } from '@wordpress/element';
+import {
+	useState,
+	useEffect,
+	useCallback,
+	useId,
+	useMemo,
+} from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 import { apiCall } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
@@ -45,7 +51,21 @@ const EdgeCachePanel = () => {
 	const [ saving, setSaving ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
 
+	// Resync when the global settings arrive late or change after a save
+	// elsewhere. The global is not reactive, so derive a snapshot key that
+	// changes whenever the parent re-renders with fresh globals.
+	const edgeCacheSlice =
+		typeof wppoSettings !== 'undefined'
+			? wppoSettings?.settings?.edge_cache ?? null
+			: null;
+	const edgeCacheKey = useMemo(
+		() => JSON.stringify( edgeCacheSlice ),
+		[ edgeCacheSlice ]
+	);
 	useEffect( () => {
+		if ( saving ) {
+			return;
+		}
 		const s =
 			typeof wppoSettings !== 'undefined'
 				? wppoSettings?.settings?.edge_cache || {}
@@ -56,7 +76,7 @@ const EdgeCachePanel = () => {
 		setSwr( String( s.staleWhileRevalidate ?? 86400 ) );
 		setCfZone( s.cloudflareZoneId || '' );
 		setBunnyZone( s.bunnyPullZoneId || '' );
-	}, [] );
+	}, [ edgeCacheKey, saving ] );
 
 	const handleSave = useCallback( async () => {
 		setSaving( true );

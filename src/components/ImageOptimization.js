@@ -805,13 +805,13 @@ const ImageOptimization = ( { options = {} } ) => {
 								onChange={ toggleClientSideMimeTypeOverride }
 							/>
 							{ settings.clientSideMimeTypeOverride && (
-								<div className="wppo-mt-12">
-									<span className="wppo-field-label">
+								<fieldset className="wppo-mt-12 wppo-fieldset-reset">
+									<legend className="wppo-field-label">
 										{ __(
 											'Formats to Process in the Browser',
 											'performance-optimisation'
 										) }
-									</span>
+									</legend>
 									<div className="wppo-post-types-grid--chips">
 										{ CLIENT_SIDE_MIME_OPTIONS.map(
 											( option ) => (
@@ -850,7 +850,7 @@ const ImageOptimization = ( { options = {} } ) => {
 											'performance-optimisation'
 										) }
 									</p>
-								</div>
+								</fieldset>
 							) }
 						</div>
 

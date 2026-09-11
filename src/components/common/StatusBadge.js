@@ -10,7 +10,10 @@
 
 import { __ } from '@wordpress/i18n';
 
+const KNOWN_STATUSES = [ 'good', 'needs_improvement', 'poor' ];
+
 const StatusBadge = ( { status } ) => {
+	const safeStatus = KNOWN_STATUSES.includes( status ) ? status : 'unknown';
 	const labelMap = {
 		good: __( 'Good', 'performance-optimisation' ),
 		needs_improvement: __(
@@ -18,13 +21,14 @@ const StatusBadge = ( { status } ) => {
 			'performance-optimisation'
 		),
 		poor: __( 'Poor', 'performance-optimisation' ),
+		unknown: __( 'Unknown', 'performance-optimisation' ),
 	};
 
-	const label = labelMap[ status ] || status;
+	const label = labelMap[ safeStatus ];
 
 	return (
 		<span
-			className={ `wppo-status-badge wppo-status-badge--${ status }` }
+			className={ `wppo-status-badge wppo-status-badge--${ safeStatus }` }
 			aria-label={ label }
 		>
 			{ label }

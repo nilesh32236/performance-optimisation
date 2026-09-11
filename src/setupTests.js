@@ -5,7 +5,12 @@ jest.mock( '@wordpress/i18n', () => {
 	};
 	const sprintf = ( format, ...args ) => {
 		let i = 0;
-		return format.replace( /%(?:(\d+)\$)?[sd]/g, ( match, index ) => {
+		// Single-pass: handle %% and placeholders together, mirroring
+		// sprintf-js behaviour without a sentinel.
+		return format.replace( /%%|%(?:(\d+)\$)?[sd]/g, ( match, index ) => {
+			if ( match === '%%' ) {
+				return '%';
+			}
 			if ( index ) {
 				const positional = Number( index ) - 1;
 				i = Math.max( i, positional + 1 );

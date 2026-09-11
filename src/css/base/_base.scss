@@ -122,6 +122,20 @@ textarea:focus-visible,
 	overflow-wrap: anywhere;
 }
 
+// Reset native fieldset chrome when a fieldset is used purely as an
+// accessible group wrapper (e.g. the MIME checkbox group in
+// ImageOptimization.js).
+.wppo-fieldset-reset {
+	border: 0;
+	margin: 0;
+	padding: 0;
+	min-width: 0;
+
+	> legend {
+		padding: 0;
+	}
+}
+
 /* Activity list */
 .wppo-activity-wrapper {
 	min-height: 80px;

@@ -121,6 +121,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 	const pollRef = useRef( null );
 	const pollCountRef = useRef( 0 );
 	const pollSignalRef = useRef( null );
+	const queueSignalRef = useRef( null );
 	const submittingRef = useRef( false );
 
 	const stopPolling = useCallback( () => {
@@ -131,6 +132,10 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 		if ( pollSignalRef.current ) {
 			pollSignalRef.current.abort();
 			pollSignalRef.current = null;
+		}
+		if ( queueSignalRef.current ) {
+			queueSignalRef.current.abort();
+			queueSignalRef.current = null;
 		}
 		pollCountRef.current = 0;
 	}, [] );
@@ -273,7 +278,13 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 		dismiss();
 
 		try {
-			const response = await queuePagespeedScan( url, strategy );
+			queueSignalRef.current = new AbortController();
+			const response = await queuePagespeedScan(
+				url,
+				strategy,
+				queueSignalRef.current.signal
+			);
+			queueSignalRef.current = null;
 
 			if ( ! isMounted.current ) {
 				submittingRef.current = false;
@@ -301,6 +312,10 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 		} catch ( err ) {
 			submittingRef.current = false;
 			if ( ! isMounted.current ) {
+				return;
+			}
+			if ( err?.name === 'AbortError' ) {
+				setScanning( false );
 				return;
 			}
 			setScanning( false );

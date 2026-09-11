@@ -9,7 +9,7 @@ import { faImages, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import { formatBytes } from '../lib/util';
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 
 const ImageOptimizationCard = ( {
 	completed = {},
@@ -140,9 +140,15 @@ const ImageOptimizationCard = ( {
 					className="wppo-text-muted wppo-text-small wppo-mt-10"
 					aria-live="polite"
 				>
-					{ __( 'Failed conversions:', 'performance-optimisation' ) }{ ' ' }
-					WebP { failedWebP }, AVIF { failedAvif }{ ' ' }
-					{ __( '(included in total)', 'performance-optimisation' ) }
+					{ sprintf(
+						/* translators: %1$d: failed WebP count, %2$d: failed AVIF count. */
+						__(
+							'Failed conversions: WebP %1$d, AVIF %2$d (included in total)',
+							'performance-optimisation'
+						),
+						failedWebP,
+						failedAvif
+					) }
 				</div>
 			) }
 
@@ -154,21 +160,24 @@ const ImageOptimizationCard = ( {
 						aria-live="polite"
 					>
 						<span>
-							{ __( 'Original', 'performance-optimisation' ) }{ ' ' }
-							{ formatBytes( savings.original_bytes ) }{ ' ' }
-							{ __( '→ Optimised', 'performance-optimisation' ) }{ ' ' }
-							{ formatBytes( savings.converted_bytes ) } (
-							{ Math.max(
-								0,
-								Math.round(
-									( savings.saved_bytes /
-										savings.original_bytes ) *
-										100
-								)
+							{ sprintf(
+								/* translators: %1$s: original size, %2$s: optimised size, %3$d: percent saved, %4$d: image count. */
+								__(
+									'Original %1$s → Optimised %2$s (%3$d%% smaller · %4$d images)',
+									'performance-optimisation'
+								),
+								formatBytes( savings.original_bytes ),
+								formatBytes( savings.converted_bytes ),
+								Math.max(
+									0,
+									Math.round(
+										( savings.saved_bytes /
+											savings.original_bytes ) *
+											100
+									)
+								),
+								savings.images_counted
 							) }
-							% { __( 'smaller', 'performance-optimisation' ) } ·{ ' ' }
-							{ savings.images_counted }{ ' ' }
-							{ __( 'images', 'performance-optimisation' ) })
 						</span>
 					</div>
 				) }

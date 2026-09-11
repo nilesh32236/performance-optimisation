@@ -63,6 +63,7 @@ const normalizeImageInfo = ( raw ) => {
 
 const Dashboard = ( {
 	activities,
+	activitiesError = false,
 	cacheSettings: propCacheSettings,
 	userRoles: propUserRoles,
 	onNavigate,
@@ -608,6 +609,17 @@ const Dashboard = ( {
 						),
 						durationMs: 5000,
 					} );
+				} else {
+					notify( {
+						type: 'error',
+						message:
+							response.message ||
+							__(
+								'Failed to save page cache settings.',
+								'performance-optimisation'
+							),
+						durationMs: 5000,
+					} );
 				}
 			} )
 			.catch( () =>
@@ -700,6 +712,17 @@ const Dashboard = ( {
 							'Logged-in cache settings saved.',
 							'performance-optimisation'
 						),
+						durationMs: 5000,
+					} );
+				} else {
+					notify( {
+						type: 'error',
+						message:
+							response.message ||
+							__(
+								'Failed to save logged-in cache settings.',
+								'performance-optimisation'
+							),
 						durationMs: 5000,
 					} );
 				}
@@ -1400,11 +1423,15 @@ const Dashboard = ( {
 						{ Array.isArray( wooSelfTest.checks ) && (
 							<ul className="wppo-woo-self-test">
 								{ wooSelfTest.checks.map( ( check, index ) => (
-									<li key={ `${ check.path }-${ index }` }>
-										<span>{ check.path }</span>
+									<li
+										key={ `${
+											check?.path ?? 'check'
+										}-${ index }` }
+									>
+										<span>{ check?.path }</span>
 										{ ' — ' }
 										<span>
-											{ check.pass
+											{ check?.pass
 												? __(
 														'Bypassed (pass)',
 														'performance-optimisation'
@@ -1694,6 +1721,7 @@ const Dashboard = ( {
 
 				<RecentActivityCard
 					activities={ activities }
+					activitiesError={ activitiesError }
 					onNavigate={ onNavigate }
 				/>
 			</div>

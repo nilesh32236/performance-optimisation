@@ -506,7 +506,9 @@ const PluginSetting = ( { options } ) => {
 		const link = document.createElement( 'a' );
 		link.href = URL.createObjectURL( blob );
 		link.download = `plugin-settings_${ getTimestamp() }.json`;
+		document.body.appendChild( link );
 		link.click();
+		link.remove();
 		// Defer revocation so the download can start before the object URL is
 		// released (Firefox can abort the save otherwise).
 		setTimeout( () => URL.revokeObjectURL( link.href ), 0 );

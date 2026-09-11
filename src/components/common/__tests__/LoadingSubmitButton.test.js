@@ -66,4 +66,22 @@ describe( 'LoadingSubmitButton', () => {
 		expect( button ).toBeDisabled();
 		expect( button ).toHaveAttribute( 'aria-busy', 'true' );
 	} );
+
+	it( 'has no live region when idle and announces loading text while loading', () => {
+		const { rerender } = render(
+			<LoadingSubmitButton label="Submit" loadingLabel="Saving..." />
+		);
+		expect( screen.queryByRole( 'status' ) ).not.toBeInTheDocument();
+
+		rerender(
+			<LoadingSubmitButton
+				isLoading={ true }
+				label="Submit"
+				loadingLabel="Saving..."
+			/>
+		);
+		const liveRegion = screen.getByRole( 'status' );
+		expect( liveRegion ).toBeInTheDocument();
+		expect( liveRegion ).toHaveTextContent( 'Saving...' );
+	} );
 } );
