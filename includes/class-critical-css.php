@@ -508,14 +508,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		/**
 		 * Checksum-triggered refresh from locally-available CSS (issue #1038).
 		 *
-		 * Re-extracts above-fold CSS from the given source entirely locally
-		 * (no remote fetch) and compares its checksum against the checksum
-		 * stored at generation time. On mismatch the stored variant is
-		 * deleted so the next `inline_ccss()` hit re-queues background
-		 * generation through the existing path; the oversize file-first
-		 * delivery and 20 KB inline cap in `inline_ccss()` are untouched, so
-		 * the cap stays honored. Fail-open: any error returns false and the
-		 * pristine stored variant is left in place (never fatal).
+		 * Compares the checksum of the given local source against the source
+		 * checksum stored at generation time — same source domain, so an
+		 * unchanged page is fresh (no remote fetch on either side). On
+		 * mismatch the stored variant is deleted so the next `inline_ccss()`
+		 * hit re-queues background generation through the existing path; the
+		 * oversize file-first delivery and 20 KB inline cap in `inline_ccss()`
+		 * are untouched, so the cap stays honored. Fail-open: any error
+		 * returns false and the pristine stored variant is left in place
+		 * (never fatal).
 		 *
 		 * @param string $template_hash Template hash.
 		 * @param string $source_css    Locally-available source CSS content.
@@ -526,31 +527,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			if ( '' === $template_hash || '' === $source_css ) {
 				return false;
 			}
+			if ( ! function_exists( 'get_transient' ) || ! function_exists( 'delete_transient' ) ) {
+				return false;
+			}
 			try {
-				$extracted = self::extract_above_fold_css( $source_css );
-				if ( '' === $extracted ) {
-					return false;
-				}
-				// Canonical checksum domain: generate_and_store() baselines
-				// the checksum of the minified generate() output, so minify
-				// here too — otherwise identical sources hash differently
-				// and every refresh falsely reports stale.
-				try {
-					$minifier  = new CSSMinifier( $extracted );
-					$extracted = $minifier->minify();
-				} catch ( \Exception $e ) {
-					unset( $e );
-				}
-				if ( ! function_exists( 'get_transient' ) || ! function_exists( 'delete_transient' ) ) {
-					return false;
-				}
 				$key    = self::get_source_checksum_key( $template_hash );
 				$stored = get_transient( $key );
 				if ( ! is_string( $stored ) || '' === $stored ) {
-					self::store_source_checksum( $template_hash, $extracted );
+					// No baseline yet: adopt the current local source so the
+					// next content change is detected. Never drops the file.
+					self::store_source_checksum( $template_hash, $source_css );
 					return false;
 				}
-				if ( hash_equals( $stored, self::compute_css_checksum( $extracted ) ) ) {
+				// Same raw local-source domain that generate_and_store()
+				// baselined: an unchanged page hashes equal and keeps its
+				// generated variant.
+				if ( ! self::is_source_checksum_stale( $template_hash, $source_css ) ) {
 					return false;
 				}
 				$file = self::get_ccss_file( $template_hash );
@@ -587,12 +579,77 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		private static array $stale_probe_memo = array();
 
 		/**
+		 * Build the canonical local-source CSS string from ordered URLs.
+		 *
+		 * Shared by the generation-time baseline (`generate()`) and the runtime
+		 * freshness probe so both hash the SAME source domain: locally
+		 * resolvable external stylesheets concatenated in emission order, read
+		 * raw (no @import expansion) so neither side can drift. Bounded (20
+		 * files, 512 KB per file, 2 MB total) so the probe cannot blow memory
+		 * on large multisheet sites. Fail-open: unresolvable URLs are skipped.
+		 *
+		 * @param string[] $urls Ordered stylesheet URLs (document/queue order).
+		 * @return string Concatenated source CSS, or '' when none resolve locally.
+		 * @since NEXT
+		 */
+		private static function build_local_source_css( array $urls ): string {
+			$combined = '';
+			$count    = 0;
+			foreach ( $urls as $url ) {
+				if ( $count >= 20 || strlen( $combined ) >= 2097152 ) {
+					break;
+				}
+				$url = (string) $url;
+				if ( '' === $url || self::is_skipped_source_url( $url ) ) {
+					continue;
+				}
+				$local_path = Util::get_local_path( $url );
+				if ( '' === $local_path || ! file_exists( $local_path ) ) {
+					continue;
+				}
+				$size = filesize( $local_path );
+				if ( false === $size || $size <= 0 || $size > 524288 ) {
+					continue;
+				}
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local cache-freshness read only, never remote.
+				$content = file_get_contents( $local_path );
+				if ( ! is_string( $content ) || '' === $content ) {
+					continue;
+				}
+				$combined .= substr( $content, 0, 524288 ) . "\n";
+				++$count;
+			}
+			return $combined;
+		}
+
+		/**
+		 * Whether a stylesheet URL is excluded from the CCSS source set.
+		 *
+		 * Mirrors the generation-time skip list (combined bundle, dashicons,
+		 * admin-bar, block-library) so the baseline and the probe hash the
+		 * exact same URL set.
+		 *
+		 * @param string $url Stylesheet URL or handle-like fragment.
+		 * @return bool True when skipped.
+		 * @since NEXT
+		 */
+		private static function is_skipped_source_url( string $url ): bool {
+			foreach ( self::SKIP_DEFER_HANDLES as $handle ) {
+				if ( false !== strpos( $url, $handle ) ) {
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/**
 		 * Aggregate locally-available source CSS from the queued stylesheets.
 		 *
 		 * Reads local files only via `Util::get_local_path()` — never fetches
-		 * remotely. Bounded (sorted handles, 20 files max, 512 KB per file,
-		 * 2 MB total) so the frontend freshness probe cannot blow memory on
-		 * large multisheet sites. Fail-open: any error yields '' (no signal).
+		 * remotely. Uses `$wp_styles->queue` order (the page's emission order)
+		 * to match the document-order source baselined at generation time.
+		 * Bounded by `build_local_source_css()`. Fail-open: any error yields ''
+		 * (no signal).
 		 *
 		 * @return string Concatenated local source CSS, or '' when unavailable.
 		 * @since NEXT
@@ -603,38 +660,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return '';
 			}
 			try {
-				$handles = array_values( array_unique( array_map( 'strval', (array) $wp_styles->queue ) ) );
-				sort( $handles );
-				$combined = '';
-				$count    = 0;
-				foreach ( $handles as $handle ) {
-					if ( $count >= 20 || strlen( $combined ) >= 2097152 ) {
-						break;
-					}
+				$urls = array();
+				foreach ( $wp_styles->queue as $handle ) {
+					$handle = (string) $handle;
 					if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
 						continue;
 					}
 					$src = $wp_styles->registered[ $handle ]->src ?? '';
-					if ( empty( $src ) ) {
+					if ( '' === $src ) {
 						continue;
 					}
-					$local_path = Util::get_local_path( (string) $src );
-					if ( '' === $local_path || ! file_exists( $local_path ) ) {
-						continue;
-					}
-					$size = filesize( $local_path );
-					if ( false === $size || $size <= 0 || $size > 524288 ) {
-						continue;
-					}
-					// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local cache-freshness read only, never remote.
-					$content = file_get_contents( $local_path );
-					if ( ! is_string( $content ) || '' === $content ) {
-						continue;
-					}
-					$combined .= substr( $content, 0, 524288 ) . "\n";
-					++$count;
+					$urls[] = (string) $src;
 				}
-				return $combined;
+				return self::build_local_source_css( $urls );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return '';
@@ -646,12 +684,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * Called from `inline_ccss()` before serving the stored variant: when
 		 * a source checksum was baselined at generation time and the current
-		 * locally-available stylesheets extract to different critical CSS,
-		 * the stale variant is dropped (via `maybe_refresh_from_local_css()`)
-		 * so this same hit falls through to the existing background-regen
-		 * queue. Fail-open and cheap: no stored checksum (or no local source)
-		 * returns false immediately without local reads, and the verdict is
-		 * memoized per template per request.
+		 * locally-available stylesheets hash differently, the stale variant is
+		 * dropped (via `maybe_refresh_from_local_css()`) so this same hit falls
+		 * through to the existing background-regen queue. Fail-open and cheap:
+		 * no stored checksum (or no local source) returns false immediately
+		 * without local reads, and the verdict is memoized per template per
+		 * request.
+		 *
+		 * Inert without a user safelist: the checksum auto-regen is part of the
+		 * `ccssSafelistExtra` feature (issue #1038), so an empty safelist keeps
+		 * the pre-feature behaviour verbatim — no new regeneration churn.
 		 *
 		 * @param string $template_hash Template hash.
 		 * @return bool True when the stored variant was dropped as stale.
@@ -666,7 +708,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			}
 			$result = false;
 			try {
-				if ( function_exists( 'get_transient' ) ) {
+				// Fail-open gate: no user safelist configured means the feature
+				// is off — preserve the pre-#1038 behaviour (no regeneration).
+				if ( array() !== self::get_ccss_safelist() && function_exists( 'get_transient' ) ) {
 					$stored = get_transient( self::get_source_checksum_key( $template_hash ) );
 					if ( is_string( $stored ) && '' !== $stored ) {
 						$source = self::get_local_source_css();
@@ -1034,11 +1078,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * external CSS (resolving @import directives), and applies heuristic
 		 * above-fold rule extraction.
 		 *
-		 * @param string $url The page URL to generate CCSS for.
+		 * @param string      $url        The page URL to generate CCSS for.
+		 * @param string|null $source_css Out-param: canonical local-source CSS
+		 *                                (locally-resolvable external
+		 *                                stylesheets, document order) used for
+		 *                                the freshness checksum (issue #1038).
 		 * @return string|false The critical CSS content, or false on failure.
 		 * @since NEXT
 		 */
-		public static function generate( string $url ) {
+		public static function generate( string $url, ?string &$source_css = null ) {
 			$response = wp_remote_get(
 				$url,
 				array(
@@ -1085,24 +1133,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			}
 
 			// Extract external stylesheet URLs (skip data-* handles, dashicons, admin-bar).
-			$link_tags = $xpath->query( '//link[@rel="stylesheet"]' );
+			$link_tags   = $xpath->query( '//link[@rel="stylesheet"]' );
+			$source_urls = array();
 			if ( $link_tags ) {
 				foreach ( $link_tags as $tag ) {
 					$href = $tag->getAttribute( 'href' );
 					if ( empty( $href ) ) {
 						continue;
 					}
-
-					$skip = false;
-					foreach ( self::SKIP_DEFER_HANDLES as $handle ) {
-						if ( false !== strpos( $href, $handle ) ) {
-							$skip = true;
-							break;
-						}
-					}
-					if ( $skip ) {
+					if ( self::is_skipped_source_url( $href ) ) {
 						continue;
 					}
+
+					// Record the document-ordered stylesheet set used for the
+					// canonical source checksum (issue #1038). Only locally
+					// resolvable stylesheets contribute; inline <style> blocks
+					// and @import expansion are deliberately excluded so the
+					// frontend probe can reproduce this exact domain without a
+					// remote fetch.
+					$source_urls[] = $href;
 
 					$fetched = self::fetch_stylesheet_with_imports( $href );
 					if ( '' !== $fetched ) {
@@ -1110,6 +1159,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					}
 				}
 			}
+
+			// Canonical source domain: the locally-resolvable stylesheets the
+			// page emitted, in document order. generate_and_store() baselines
+			// the checksum of this string and the frontend probe recomputes it
+			// from $wp_styles in queue order (the page's emission order), so an
+			// unchanged source compares equal instead of churning forever.
+			$source_css = self::build_local_source_css( $source_urls );
 
 			if ( empty( $css_content ) ) {
 				return false;
@@ -1525,6 +1581,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Handles minified CSS, multi-line selectors, and nested braces
 		 * (e.g., background: url(data:...{...})).
 		 *
+		 * Each matched rule is stored as `selector + declarations` (issue
+		 * #1038): before this, only the `{declarations}` fragment was kept,
+		 * producing selector-less CSS that browsers discard — the emitted
+		 * above-fold rules had no effect. This is a correctness fix, not a
+		 * formatting preference; it is covered by
+		 * CcssSafelistChecksumTest::test_regular_rules_keep_selector_with_declarations().
+		 *
 		 * @param string        $css            Full CSS content.
 		 * @param array         $critical_parts Reference to array of extracted critical CSS parts.
 		 * @param string[]|null $safelist Pre-fetched safelist (null = fetch once here).
@@ -1744,7 +1807,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return false;
 			}
 
-			$critical_css = self::generate( $url );
+			$source_css   = '';
+			$critical_css = self::generate( $url, $source_css );
 
 			// Reject generated CSS that could break out of the <style> context when
 			// inlined — a poisoned source stylesheet must never reach the CCSS cache.
@@ -1768,10 +1832,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				file_put_contents( self::get_ccss_file( $template_hash ), $critical_css );
 			}
 
-			// Baseline the source checksum so later local-source comparisons
-			// (maybe_refresh_from_local_css) detect stylesheet edits that
-			// preserve mtime. Local transient write only — no remote fetch.
-			self::store_source_checksum( $template_hash, $critical_css );
+			// Baseline the canonical SOURCE checksum — not the generated
+			// output — so later local-source comparisons
+			// (maybe_refresh_from_local_css) hash the exact same domain the
+			// frontend probe reproduces from $wp_styles. This detects
+			// stylesheet edits that preserve mtime. Local transient write
+			// only — no remote fetch. An empty source (no locally-resolvable
+			// external stylesheets) stores nothing, so the probe stays a
+			// no-op and never churns.
+			if ( '' !== $source_css ) {
+				self::store_source_checksum( $template_hash, $source_css );
+			}
 
 			// The memo must reflect the fresh file within this request too;
 			// clear PHP's stat cache so file_exists/mtime are not stale. Only

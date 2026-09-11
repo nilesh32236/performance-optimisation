@@ -275,11 +275,10 @@ class CcssSafelistChecksumTest extends \PHPUnit\Framework\TestCase {
 		file_put_contents( $file, 'body{margin:0}' );
 
 		try {
-			// Baseline the checksum for the original source in the canonical
-			// (minified) domain that maybe_refresh_from_local_css() hashes.
-			$baseline = $this->invoke_private( 'extract_above_fold_css', 'body{margin:0}' );
-			$minifier = new \MatthiasMullie\Minify\CSS( $baseline );
-			Critical_CSS::store_source_checksum( $hash, $minifier->minify() );
+			// Baseline the raw local-source domain that
+			// maybe_refresh_from_local_css() hashes (issue #1038): the
+			// generation-time baseline and the probe must share one domain.
+			Critical_CSS::store_source_checksum( $hash, 'body{margin:0}' );
 
 			// Unchanged source: fresh, file kept.
 			$this->assertFalse( Critical_CSS::maybe_refresh_from_local_css( $hash, 'body{margin:0}' ) );
@@ -298,6 +297,153 @@ class CcssSafelistChecksumTest extends \PHPUnit\Framework\TestCase {
 				unlink( $file );
 			}
 		}
+	}
+
+	/**
+	 * Integration: an unchanged source keeps the generated CCSS variant.
+	 *
+	 * Drives the real production pair — generate_and_store() baselines the
+	 * source checksum from the fetched page, then the frontend probe
+	 * maybe_check_stale_and_requeue() recomputes it from $wp_styles. Both
+	 * sides must hash the SAME source domain, otherwise the freshly generated
+	 * .css is deleted on the very next request and regenerated forever
+	 * (issue #1038 blocking defect).
+	 *
+	 * The page emits two stylesheets in document order b,a (alphabetical order
+	 * would be a,b) so the old remote-output-vs-sorted-local mismatch is
+	 * exercised: pre-fix, the probe hashed sorted local extraction against the
+	 * remote-generated output and dropped the file.
+	 *
+	 * @return void
+	 */
+	public function test_generate_and_store_retains_variant_when_source_unchanged(): void {
+		$hash = 'ccssintegrity' . substr( md5( uniqid( 'wppo', true ) ), 0, 8 );
+
+		// A non-empty safelist is what activates the checksum auto-regen.
+		$this->option_map['wppo_settings'] = array(
+			'file_optimisation' => array(
+				'ccssSafelistExtra' => '.modal-open',
+			),
+		);
+		Util::clear_settings_cache();
+
+		// Two local stylesheets on disk; document order below is b then a.
+		$theme_dir = wp_normalize_path( WP_CONTENT_DIR . '/themes/wppo-ccss-integrity' );
+		if ( ! is_dir( $theme_dir ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
+			mkdir( $theme_dir, 0775, true );
+		}
+		$file_a = $theme_dir . '/a.css';
+		$file_b = $theme_dir . '/b.css';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+		file_put_contents( $file_a, 'h1{font-size:2em}' );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+		file_put_contents( $file_b, '.container{width:100%}' );
+
+		$url_a = 'http://example.com/wp-content/themes/wppo-ccss-integrity/a.css';
+		$url_b = 'http://example.com/wp-content/themes/wppo-ccss-integrity/b.css';
+
+		// The fetched page carries an inline <style> (so generate() has a
+		// non-empty source) plus the two external stylesheets in b,a order.
+		$html = '<html><head><style>body{margin:0}</style>'
+			// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- Test fixture HTML.
+			. '<link rel="stylesheet" href="' . $url_b . '" />'
+			// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- Test fixture HTML.
+			. '<link rel="stylesheet" href="' . $url_a . '" />'
+			. '</head><body></body></html>';
+
+		$self = $this;
+		Functions\when( 'wp_remote_get' )->alias(
+			function ( $url ) use ( $self, $html ) {
+				++$self->http_calls;
+				return array(
+					'response' => array( 'code' => 200 ),
+					'body'     => ( false !== strpos( (string) $url, '.css' ) ) ? '' : $html,
+				);
+			}
+		);
+		Functions\when( 'is_wp_error' )->justReturn( false );
+		Functions\when( 'wp_remote_retrieve_response_code' )->alias(
+			static function ( $response ) {
+				return $response['response']['code'] ?? 200;
+			}
+		);
+		Functions\when( 'wp_remote_retrieve_body' )->alias(
+			static function ( $response ) {
+				return $response['body'] ?? '';
+			}
+		);
+		Functions\when( 'wp_mkdir_p' )->justReturn( true );
+
+		// Frontend queue order matches document order: b then a.
+		$styles               = new \stdClass();
+		$entry_a              = new \stdClass();
+		$entry_a->src         = $url_a;
+		$entry_b              = new \stdClass();
+		$entry_b->src         = $url_b;
+		$styles->queue        = array( 'wppo-fixture-b', 'wppo-fixture-a' );
+		$styles->registered   = array(
+			'wppo-fixture-b' => $entry_b,
+			'wppo-fixture-a' => $entry_a,
+		);
+		$GLOBALS['wp_styles'] = $styles;
+
+		$dir = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/ccss' );
+		if ( ! is_dir( $dir ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
+			mkdir( $dir, 0775, true );
+		}
+		$ccss_file = $dir . '/' . $hash . '.css';
+
+		Critical_CSS::reset_ccss_memo();
+		try {
+			$generated = $this->invoke_private( 'generate_and_store', $hash, 'index' );
+			$this->assertTrue( $generated, 'generate_and_store() should succeed' );
+			$this->assertFileExists( $ccss_file );
+
+			// Frontend probe on an unchanged source: same domain → fresh, so
+			// the generated variant must be RETAINED (not dropped/requeued).
+			Critical_CSS::reset_ccss_memo();
+			$dropped = Critical_CSS::maybe_check_stale_and_requeue( $hash );
+
+			$this->assertFalse( $dropped, 'Unchanged source must not be treated as stale' );
+			$this->assertFileExists( $ccss_file, 'Fresh generated CCSS must not be deleted' );
+		} finally {
+			unset( $GLOBALS['wp_styles'] );
+			Critical_CSS::reset_ccss_memo();
+			foreach ( array( $ccss_file, $file_a, $file_b ) as $cleanup ) {
+				if ( file_exists( $cleanup ) ) {
+					// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+					unlink( $cleanup );
+				}
+			}
+			if ( is_dir( $theme_dir ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Test fixture cleanup.
+				rmdir( $theme_dir );
+			}
+		}
+	}
+
+	/**
+	 * Extracted regular rules keep their selector (issue #1038 correctness).
+	 *
+	 * Regression guard for parse_regular_rules(): storing only the
+	 * `{declarations}` fragment yields selector-less CSS that browsers
+	 * discard, so the above-fold rules had no effect.
+	 *
+	 * @return void
+	 */
+	public function test_regular_rules_keep_selector_with_declarations(): void {
+		$this->option_map['wppo_settings'] = array(
+			'file_optimisation' => array(
+				'ccssSafelistExtra' => '.modal-open',
+			),
+		);
+		Util::clear_settings_cache();
+
+		$extracted = $this->invoke_private( 'extract_above_fold_css', '.modal-open{display:block}' );
+
+		$this->assertStringContainsString( '.modal-open{display:block}', $extracted );
 	}
 
 	/**

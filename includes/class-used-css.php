@@ -1333,6 +1333,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		/**
 		 * Reset the memoized local-source checksum.
 		 *
+		 * Production flow computes the checksum once per request after the
+		 * source is stable, so it never needs to clear the memo itself. This
+		 * exists for tests (which mutate fixture files mid-test) and for any
+		 * long-running process that rewrites stylesheets in-request.
+		 *
 		 * @return void
 		 * @since NEXT
 		 */
