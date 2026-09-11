@@ -178,6 +178,12 @@
 		color: var(--wppo-error);
 		border: 1px solid var(--wppo-error-border);
 	}
+
+	&--unknown {
+		background: var(--wppo-bg-muted, #f1f5f9);
+		color: var(--wppo-text-light);
+		border: 1px solid var(--wppo-border, #e2e8f0);
+	}
 }
 
 // -----------------------------------------------------------------------------

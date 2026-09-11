@@ -63,6 +63,7 @@ const normalizeImageInfo = ( raw ) => {
 
 const Dashboard = ( {
 	activities,
+	activitiesError = false,
 	cacheSettings: propCacheSettings,
 	userRoles: propUserRoles,
 	onNavigate,
@@ -608,6 +609,17 @@ const Dashboard = ( {
 						),
 						durationMs: 5000,
 					} );
+				} else {
+					notify( {
+						type: 'error',
+						message:
+							response.message ||
+							__(
+								'Failed to save page cache settings.',
+								'performance-optimisation'
+							),
+						durationMs: 5000,
+					} );
 				}
 			} )
 			.catch( () =>
@@ -700,6 +712,17 @@ const Dashboard = ( {
 							'Logged-in cache settings saved.',
 							'performance-optimisation'
 						),
+						durationMs: 5000,
+					} );
+				} else {
+					notify( {
+						type: 'error',
+						message:
+							response.message ||
+							__(
+								'Failed to save logged-in cache settings.',
+								'performance-optimisation'
+							),
 						durationMs: 5000,
 					} );
 				}
@@ -1399,8 +1422,8 @@ const Dashboard = ( {
 						</p>
 						{ Array.isArray( wooSelfTest.checks ) && (
 							<ul className="wppo-woo-self-test">
-								{ wooSelfTest.checks.map( ( check, index ) => (
-									<li key={ `${ check.path }-${ index }` }>
+								{ wooSelfTest.checks.map( ( check ) => (
+									<li key={ check.path }>
 										<span>{ check.path }</span>
 										{ ' — ' }
 										<span>
@@ -1694,6 +1717,7 @@ const Dashboard = ( {
 
 				<RecentActivityCard
 					activities={ activities }
+					activitiesError={ activitiesError }
 					onNavigate={ onNavigate }
 				/>
 			</div>

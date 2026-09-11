@@ -42,9 +42,13 @@ const LoadingSubmitButton = ( {
 					className="wppo-mr-8"
 				/>
 			) }
-			<span role="status" aria-live="polite">
-				{ isLoading ? loadingLabel || children : label || children }
-			</span>
+			{ isLoading ? (
+				<span role="status" aria-live="polite">
+					{ loadingLabel || label || children }
+				</span>
+			) : (
+				<span>{ label || children }</span>
+			) }
 		</button>
 	);
 };

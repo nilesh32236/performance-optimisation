@@ -13,7 +13,7 @@
  *             POST /autoload_remediate.
  */
 
-import { useState, useEffect, useCallback } from '@wordpress/element';
+import { useState, useEffect, useCallback, useRef } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faDatabase, faSpinner } from '@fortawesome/free-solid-svg-icons';
@@ -54,6 +54,14 @@ const AutoloadedOptions = () => {
 	const [ revertingAll, setRevertingAll ] = useState( false );
 	const [ reverting, setReverting ] = useState( {} );
 	const { notice, notify, dismiss } = useNotice();
+	const isMounted = useRef( true );
+
+	useEffect( () => {
+		isMounted.current = true;
+		return () => {
+			isMounted.current = false;
+		};
+	}, [] );
 
 	const load = useCallback(
 		async ( signal ) => {
@@ -116,10 +124,19 @@ const AutoloadedOptions = () => {
 
 	const runDryRun = useCallback( async () => {
 		setChecking( true );
+		const controller = new AbortController();
 		try {
-			const response = await apiCall( 'autoload_remediate', {
-				mode: 'dry_run',
-			} );
+			const response = await apiCall(
+				'autoload_remediate',
+				{
+					mode: 'dry_run',
+				},
+				'POST',
+				controller.signal
+			);
+			if ( controller.signal.aborted || ! isMounted.current ) {
+				return;
+			}
 			if ( response.success && response.data ) {
 				setReport( response.data );
 				setAppliedSummary( null );
@@ -137,6 +154,12 @@ const AutoloadedOptions = () => {
 				} );
 			}
 		} catch ( dryRunError ) {
+			if ( controller.signal.aborted || ! isMounted.current ) {
+				return;
+			}
+			if ( dryRunError?.name === 'AbortError' ) {
+				return;
+			}
 			console.error( 'Error building remediation report:', dryRunError );
 			notify( {
 				type: 'error',
@@ -147,16 +170,27 @@ const AutoloadedOptions = () => {
 				durationMs: 5000,
 			} );
 		} finally {
-			setChecking( false );
+			if ( isMounted.current ) {
+				setChecking( false );
+			}
 		}
 	}, [ notify ] );
 
 	const applyFix = useCallback( async () => {
 		setApplying( true );
+		const controller = new AbortController();
 		try {
-			const response = await apiCall( 'autoload_remediate', {
-				mode: 'apply',
-			} );
+			const response = await apiCall(
+				'autoload_remediate',
+				{
+					mode: 'apply',
+				},
+				'POST',
+				controller.signal
+			);
+			if ( controller.signal.aborted || ! isMounted.current ) {
+				return;
+			}
 			if ( response.success && response.data ) {
 				// Keep the dry-run report intact: the apply payload has no
 				// count/options, so store it separately for the applied summary.
@@ -164,6 +198,9 @@ const AutoloadedOptions = () => {
 				setRemediated( response.data.remediated || {} );
 				// Reload first: load() dismisses stale notices, so notify after.
 				await load();
+				if ( ! isMounted.current ) {
+					return;
+				}
 				notify( {
 					type: 'success',
 					message: sprintf(
@@ -189,6 +226,12 @@ const AutoloadedOptions = () => {
 				} );
 			}
 		} catch ( applyError ) {
+			if ( controller.signal.aborted || ! isMounted.current ) {
+				return;
+			}
+			if ( applyError?.name === 'AbortError' ) {
+				return;
+			}
 			console.error( 'Error applying remediation:', applyError );
 			notify( {
 				type: 'error',
@@ -199,7 +242,9 @@ const AutoloadedOptions = () => {
 				durationMs: 5000,
 			} );
 		} finally {
-			setApplying( false );
+			if ( isMounted.current ) {
+				setApplying( false );
+			}
 		}
 	}, [ notify, load ] );
 
@@ -217,11 +262,20 @@ const AutoloadedOptions = () => {
 				return;
 			}
 			setReverting( ( prev ) => ( { ...prev, [ optionName ]: true } ) );
+			const controller = new AbortController();
 			try {
-				const response = await apiCall( 'autoload_remediate', {
-					mode: 'revert',
-					option: optionName,
-				} );
+				const response = await apiCall(
+					'autoload_remediate',
+					{
+						mode: 'revert',
+						option: optionName,
+					},
+					'POST',
+					controller.signal
+				);
+				if ( controller.signal.aborted || ! isMounted.current ) {
+					return;
+				}
 				if ( response.success ) {
 					setRemediated( ( prev ) => {
 						const next = { ...prev };
@@ -246,6 +300,9 @@ const AutoloadedOptions = () => {
 					} );
 					// Reload first: load() dismisses stale notices, so notify after.
 					await load();
+					if ( ! isMounted.current ) {
+						return;
+					}
 					notify( {
 						type: 'success',
 						message: sprintf(
@@ -271,6 +328,12 @@ const AutoloadedOptions = () => {
 					} );
 				}
 			} catch ( revertError ) {
+				if ( controller.signal.aborted || ! isMounted.current ) {
+					return;
+				}
+				if ( revertError?.name === 'AbortError' ) {
+					return;
+				}
 				console.error( 'Error reverting option:', revertError );
 				notify( {
 					type: 'error',
@@ -281,10 +344,12 @@ const AutoloadedOptions = () => {
 					durationMs: 5000,
 				} );
 			} finally {
-				setReverting( ( prev ) => ( {
-					...prev,
-					[ optionName ]: false,
-				} ) );
+				if ( isMounted.current ) {
+					setReverting( ( prev ) => ( {
+						...prev,
+						[ optionName ]: false,
+					} ) );
+				}
 			}
 		},
 		[ notify, load ]
@@ -292,15 +357,27 @@ const AutoloadedOptions = () => {
 
 	const revertAll = useCallback( async () => {
 		setRevertingAll( true );
+		const controller = new AbortController();
 		try {
-			const response = await apiCall( 'autoload_remediate', {
-				mode: 'revert_all',
-			} );
+			const response = await apiCall(
+				'autoload_remediate',
+				{
+					mode: 'revert_all',
+				},
+				'POST',
+				controller.signal
+			);
+			if ( controller.signal.aborted || ! isMounted.current ) {
+				return;
+			}
 			if ( response.success ) {
 				setRemediated( {} );
 				setAppliedSummary( null );
 				// Reload first: load() dismisses stale notices, so notify after.
 				await load();
+				if ( ! isMounted.current ) {
+					return;
+				}
 				notify( {
 					type: 'success',
 					message: __(
@@ -322,6 +399,12 @@ const AutoloadedOptions = () => {
 				} );
 			}
 		} catch ( revertAllError ) {
+			if ( controller.signal.aborted || ! isMounted.current ) {
+				return;
+			}
+			if ( revertAllError?.name === 'AbortError' ) {
+				return;
+			}
 			console.error( 'Error reverting options:', revertAllError );
 			notify( {
 				type: 'error',
@@ -332,7 +415,9 @@ const AutoloadedOptions = () => {
 				durationMs: 5000,
 			} );
 		} finally {
-			setRevertingAll( false );
+			if ( isMounted.current ) {
+				setRevertingAll( false );
+			}
 		}
 	}, [ notify, load ] );
 

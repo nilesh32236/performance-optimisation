@@ -1,4 +1,4 @@
-import { useState } from '@wordpress/element';
+import { useState, useEffect } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 import { apiCall, getWppoSettings } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
@@ -65,6 +65,13 @@ const WelcomePanel = () => {
 	const [ activatingStep, setActivatingStep ] = useState( null );
 	const [ dismissing, setDismissing ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
+
+	// Resync when the global settings arrive late (e.g. localised data
+	// injected after first paint) or change after a save elsewhere.
+	const showWelcomeKey = String( getWppoSettings()?.show_welcome ?? false );
+	useEffect( () => {
+		setVisible( getWppoSettings()?.show_welcome ?? false );
+	}, [ showWelcomeKey ] );
 
 	if ( ! visible ) {
 		return null;

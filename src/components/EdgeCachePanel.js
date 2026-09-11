@@ -45,6 +45,14 @@ const EdgeCachePanel = () => {
 	const [ saving, setSaving ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
 
+	// Resync when the global settings arrive late or change after a save
+	// elsewhere. The global is not reactive, so derive a snapshot key that
+	// changes whenever the parent re-renders with fresh globals.
+	const edgeCacheKey = JSON.stringify(
+		typeof wppoSettings !== 'undefined'
+			? wppoSettings?.settings?.edge_cache ?? null
+			: null
+	);
 	useEffect( () => {
 		const s =
 			typeof wppoSettings !== 'undefined'
@@ -56,7 +64,7 @@ const EdgeCachePanel = () => {
 		setSwr( String( s.staleWhileRevalidate ?? 86400 ) );
 		setCfZone( s.cloudflareZoneId || '' );
 		setBunnyZone( s.bunnyPullZoneId || '' );
-	}, [] );
+	}, [ edgeCacheKey ] );
 
 	const handleSave = useCallback( async () => {
 		setSaving( true );

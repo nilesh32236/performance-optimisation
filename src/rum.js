@@ -261,6 +261,9 @@ export const sanitizeRumValues = ( raw ) => {
 		try {
 			lcpObserver = new PerformanceObserver( ( list ) => {
 				const entries = list.getEntries();
+				if ( ! entries.length ) {
+					return;
+				}
 				const last = entries[ entries.length - 1 ];
 				values.lcp = Math.round( last.startTime );
 				// Field-measured LCP element URL (issue #935): overrides the
@@ -307,6 +310,9 @@ export const sanitizeRumValues = ( raw ) => {
 		try {
 			inpObserver = new PerformanceObserver( ( list ) => {
 				const entries = list.getEntries();
+				if ( ! entries.length ) {
+					return;
+				}
 				values.inp = Math.round(
 					entries[ entries.length - 1 ].duration
 				);

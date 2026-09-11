@@ -81,6 +81,7 @@ const App = () => {
 	const [ transition, setTransition ] = useState( false );
 	const [ mobileMenuOpen, setMobileMenuOpen ] = useState( false );
 	const [ recentActivities, setRecentActivities ] = useState( [] );
+	const [ activitiesError, setActivitiesError ] = useState( false );
 	const [ serverRules, setServerRules ] = useState( null );
 	const [ serverRulesError, setServerRulesError ] = useState( false );
 	const [ rulesRetryTrigger, setRulesRetryTrigger ] = useState( 0 );
@@ -192,6 +193,7 @@ const App = () => {
 			dashboard: (
 				<Dashboard
 					activities={ recentActivities?.activities }
+					activitiesError={ activitiesError }
 					cacheSettings={ settings.cache_settings }
 					userRoles={
 						typeof wppoSettings !== 'undefined'
@@ -373,10 +375,12 @@ const App = () => {
 				);
 				if ( ! activitiesController.signal.aborted ) {
 					setRecentActivities( data );
+					setActivitiesError( false );
 					hasFetchedActivities.current = true;
 				}
 			} catch ( error ) {
 				if ( ! activitiesController.signal.aborted ) {
+					setActivitiesError( true );
 					console.error(
 						__(
 							'Failed to fetch activities:',
@@ -514,26 +518,10 @@ const App = () => {
 
 				{ /* Sidebar Overlay */ }
 				{ mobileMenuOpen && (
-					<div
+					<button
+						type="button"
 						className="wppo-sidebar-overlay"
 						onClick={ toggleMobileMenu }
-						onKeyDown={ ( e ) => {
-							// Native-button parity: activate on Enter keydown,
-							// suppress the Space-keydown page scroll.
-							if ( e.key === ' ' ) {
-								e.preventDefault();
-							} else if ( e.key === 'Enter' ) {
-								toggleMobileMenu();
-							}
-						} }
-						onKeyUp={ ( e ) => {
-							if ( e.key === ' ' ) {
-								e.preventDefault();
-								toggleMobileMenu();
-							}
-						} }
-						role="button"
-						tabIndex="0"
 						aria-label={ __(
 							'Close Menu',
 							'performance-optimisation'

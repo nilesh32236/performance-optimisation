@@ -14,7 +14,11 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faHistory, faArrowRight } from '@fortawesome/free-solid-svg-icons';
 import FeatureCard from './common/FeatureCard';
 
-const RecentActivityCard = ( { activities, onNavigate } ) => {
+const RecentActivityCard = ( {
+	activities,
+	activitiesError = false,
+	onNavigate,
+} ) => {
 	return (
 		<FeatureCard
 			title={ __(
@@ -44,6 +48,18 @@ const RecentActivityCard = ( { activities, onNavigate } ) => {
 				) }
 			</p>
 			<div className="wppo-activity-wrapper">
+				{ activitiesError && (
+					<div
+						className="wppo-notice wppo-notice--error"
+						role="alert"
+						aria-live="assertive"
+					>
+						{ __(
+							'Failed to load recent activity. Open the Tools tab for the full log.',
+							'performance-optimisation'
+						) }
+					</div>
+				) }
 				{ activities?.length ? (
 					<ul className="wppo-activity-list">
 						{ activities.slice( 0, 5 ).map( ( activity ) => (

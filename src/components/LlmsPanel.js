@@ -1,4 +1,4 @@
-import { useState } from '@wordpress/element';
+import { useState, useEffect } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 import { apiCall } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
@@ -41,6 +41,22 @@ const LlmsPanel = () => {
 	const [ source, setSource ] = useState( initial.source || 'both' );
 	const [ saving, setSaving ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
+
+	// Resync when the global settings arrive late or change after a save
+	// elsewhere (see EdgeCachePanel for the snapshot-key pattern).
+	const llmsKey = JSON.stringify(
+		typeof wppoSettings !== 'undefined'
+			? wppoSettings?.settings?.llms_txt ?? null
+			: null
+	);
+	useEffect( () => {
+		const s =
+			typeof wppoSettings !== 'undefined'
+				? wppoSettings?.settings?.llms_txt || {}
+				: {};
+		setEnabled( !! s.enabled );
+		setSource( s.source || 'both' );
+	}, [ llmsKey ] );
 
 	const homeUrl =
 		typeof wppoSettings !== 'undefined' ? wppoSettings?.homeUrl || '' : '';

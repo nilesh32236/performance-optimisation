@@ -8,7 +8,7 @@
  * @since 1.5.0
  */
 
-import { useState, memo } from '@wordpress/element';
+import { useState, useRef, useEffect, memo } from '@wordpress/element';
 import { fetchSystemInfo } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
@@ -95,13 +95,34 @@ const SystemInfo = () => {
 	const [ loading, setLoading ] = useState( false );
 	const [ loaded, setLoaded ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
+	const isMounted = useRef( true );
+	const loadControllerRef = useRef( null );
+
+	useEffect( () => {
+		isMounted.current = true;
+		return () => {
+			isMounted.current = false;
+			if ( loadControllerRef.current ) {
+				loadControllerRef.current.abort();
+				loadControllerRef.current = null;
+			}
+		};
+	}, [] );
 
 	const handleLoad = async () => {
+		if ( loadControllerRef.current ) {
+			loadControllerRef.current.abort();
+		}
+		const controller = new AbortController();
+		loadControllerRef.current = controller;
 		setLoading( true );
 		dismiss();
 
 		try {
-			const response = await fetchSystemInfo();
+			const response = await fetchSystemInfo( controller.signal );
+			if ( controller.signal.aborted || ! isMounted.current ) {
+				return;
+			}
 			if ( response.success && response.data ) {
 				setInfo( response.data );
 				setLoaded( true );
@@ -117,6 +138,12 @@ const SystemInfo = () => {
 				} );
 			}
 		} catch ( err ) {
+			if ( controller.signal.aborted || ! isMounted.current ) {
+				return;
+			}
+			if ( err?.name === 'AbortError' ) {
+				return;
+			}
 			notify( {
 				type: 'error',
 				message: __(
@@ -126,7 +153,12 @@ const SystemInfo = () => {
 			} );
 			console.error( 'System info fetch error:', err );
 		} finally {
-			setLoading( false );
+			if (
+				loadControllerRef.current === controller &&
+				isMounted.current
+			) {
+				setLoading( false );
+			}
 		}
 	};
 
