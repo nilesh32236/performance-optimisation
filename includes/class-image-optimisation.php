@@ -4927,7 +4927,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							}
 						}
 
-					return "<video $attributes>$inner_html</video>";
+						return "<video $attributes>$inner_html</video>";
 					},
 					$buffer
 				);
@@ -5035,8 +5035,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					}
 
 					if ( $exclude_builders ) {
+						$class_tokens = preg_split( '/\s+/', strtolower( $class_attr ), -1, PREG_SPLIT_NO_EMPTY );
+						$class_tokens = is_array( $class_tokens ) ? $class_tokens : array();
 						foreach ( $excluded_classes as $excluded ) {
-							if ( '' !== $excluded && false !== stripos( $class_attr, $excluded ) ) {
+							$excluded_token = strtolower( trim( (string) $excluded ) );
+							if ( '' !== $excluded_token && in_array( $excluded_token, $class_tokens, true ) ) {
 								$is_targeted = false;
 								break;
 							}

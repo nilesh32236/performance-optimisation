@@ -2436,6 +2436,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					continue;
 				}
 
+				// Lazy-render below-fold toggle — normalize malformed import
+				// shapes (0/1, '0'/'1', 'false'/'true') to bool. Fail-safe off.
+				if ( 'lazyRenderBelowFold' === $safe_key && ! is_array( $value ) ) {
+					if ( is_bool( $value ) ) {
+						$sanitized[ $safe_key ] = $value;
+					} else {
+						$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+						$sanitized[ $safe_key ] = null === $bool ? false : $bool;
+					}
+					continue;
+				}
+
+				// Lazy-render builder exclusion — pinned before the generic
+				// textarea branch (the key contains 'exclude'), so 'false'/0/1
+				// import shapes normalize to bool. Fail-safe on (never
+				// lazy-render builder runtimes on unrecognized values).
+				if ( 'lazyRenderExcludeBuilders' === $safe_key && ! is_array( $value ) ) {
+					if ( is_bool( $value ) ) {
+						$sanitized[ $safe_key ] = $value;
+					} else {
+						$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+						$sanitized[ $safe_key ] = null === $bool ? true : $bool;
+					}
+					continue;
+				}
+
 				// Unused-CSS regression threshold (issue #966) — int clamped to
 				// 5-50 (% retained). Unrecognized values fail safe to 20.
 				if ( 'unusedCSSRegressionThreshold' === $safe_key && ! is_array( $value ) ) {
