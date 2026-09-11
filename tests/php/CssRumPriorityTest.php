@@ -298,8 +298,8 @@ class CssRumPriorityTest extends \PHPUnit\Framework\TestCase {
 		);
 		Util::clear_settings_cache();
 		RUM::clear_field_lcp_cache();
-		$slow_url                                  = 'http://example.com/slow-page/';
-		$this->permalink_map                       = array(
+		$slow_url                                   = 'http://example.com/slow-page/';
+		$this->permalink_map                        = array(
 			10 => 'http://example.com/fast-page/',
 			11 => $slow_url,
 		);
@@ -351,8 +351,8 @@ class CssRumPriorityTest extends \PHPUnit\Framework\TestCase {
 		Util::clear_settings_cache();
 		Critical_CSS::reset_ccss_memo();
 		RUM::clear_field_lcp_cache();
-		$slow_url                                  = 'http://example.com/slow-page/';
-		$this->permalink_map                       = array(
+		$slow_url                                   = 'http://example.com/slow-page/';
+		$this->permalink_map                        = array(
 			55 => $slow_url,
 		);
 		$this->option_map['wppo_web_vitals_trends'] = array(

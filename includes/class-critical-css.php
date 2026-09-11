@@ -2394,21 +2394,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'get_path_lcp_priority' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'score_url_lcp' ) ) {
 					return $templates;
 				}
-			$priority = \PerformanceOptimise\Inc\RUM::get_path_lcp_priority();
-			// Fetch trends once for the whole ordering pass instead of once
-			// per template inside score_url_lcp() (issue #1059 review). A
-			// trend-only site (no RUM samples yet) must still prioritize,
-			// so only fall back to FIFO when both signals are empty.
-			$trends = null;
-			if ( class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) && method_exists( 'PerformanceOptimise\Inc\Pagespeed', 'get_trends' ) ) {
-				$trends = \PerformanceOptimise\Inc\Pagespeed::get_trends();
-				if ( ! is_array( $trends ) ) {
-					$trends = array();
+				$priority = \PerformanceOptimise\Inc\RUM::get_path_lcp_priority();
+				// Fetch trends once for the whole ordering pass instead of once
+				// per template inside score_url_lcp() (issue #1059 review). A
+				// trend-only site (no RUM samples yet) must still prioritize,
+				// so only fall back to FIFO when both signals are empty.
+				$trends = null;
+				if ( class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) && method_exists( 'PerformanceOptimise\Inc\Pagespeed', 'get_trends' ) ) {
+					$trends = \PerformanceOptimise\Inc\Pagespeed::get_trends();
+					if ( ! is_array( $trends ) ) {
+						$trends = array();
+					}
 				}
-			}
-			if ( empty( $priority ) && empty( $trends ) ) {
-				return $templates;
-			}
+				if ( empty( $priority ) && empty( $trends ) ) {
+					return $templates;
+				}
 				$scores = array();
 				foreach ( $templates as $template => $label ) {
 					$url                          = self::get_sample_url( (string) $template );
