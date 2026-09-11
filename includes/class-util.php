@@ -2081,6 +2081,285 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Check that PHP code parses without a syntax error.
+		 *
+		 * Layered, fully guarded so it never fatals on any supported
+		 * WP/PHP combination:
+		 * - Layer 1: `PhpToken::tokenize()` when the class exists (throws
+		 *   `ParseError` on broken syntax).
+		 * - Layer 2: optional `php -l` against a sibling tmp file, only when
+		 *   an exec function exists, is not disabled, and `PHP_BINARY` is
+		 *   defined. Never lints the live file.
+		 * - Layer 3 (always): the code must open with `<?php`.
+		 *
+		 * @param string $code PHP source to check.
+		 * @param string $tmp_file_for_lint Optional tmp file holding $code for `php -l`.
+		 * @return bool True when the code looks parseable.
+		 * @since NEXT
+		 */
+		public static function verify_php_syntax( string $code, string $tmp_file_for_lint = '' ): bool {
+			if ( '' === $code ) {
+				return false;
+			}
+			$stripped = ltrim( $code );
+			$stripped = preg_replace( "/^\xEF\xBB\xBF/", '', $stripped );
+			if ( ! is_string( $stripped ) || 0 !== strpos( $stripped, '<?php' ) ) {
+				return false;
+			}
+			if ( class_exists( 'PhpToken' ) ) {
+				try {
+					$tokens = \PhpToken::tokenize( $code );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return false;
+				}
+				// PhpToken::tokenize() is lenient (it lexes, not parses), so a
+				// truncated file with unbalanced brackets would still lex fine.
+				// Count structural brackets outside strings/comments/HTML to
+				// catch torn writes that lexing alone would miss.
+				if ( ! self::php_brackets_balanced( $tokens ) ) {
+					return false;
+				}
+			} elseif ( function_exists( 'token_get_all' ) ) {
+				try {
+					$legacy = token_get_all( $code );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return false;
+				}
+				if ( ! self::php_brackets_balanced( $legacy ) ) {
+					return false;
+				}
+			}
+			// Optional `php -l` against the on-disk tmp file only (never the
+			// live file). Skipped when the tmp path is not a real readable
+			// file — e.g. under WP_Filesystem transports or unit-test mocks.
+			if ( '' !== $tmp_file_for_lint && function_exists( 'escapeshellarg' ) && defined( 'PHP_BINARY' ) && '' !== (string) constant( 'PHP_BINARY' ) ) {
+				$disabled = '';
+				if ( function_exists( 'ini_get' ) ) {
+					$disabled = (string) ini_get( 'disable_functions' );
+				}
+				$disabled_list = array_map( 'trim', explode( ',', strtolower( (string) $disabled ) ) );
+				$exec_disabled = in_array( 'exec', $disabled_list, true );
+				if ( function_exists( 'exec' ) && ! $exec_disabled && is_readable( $tmp_file_for_lint ) ) {
+					try {
+						$binary = (string) constant( 'PHP_BINARY' );
+						$cmd    = escapeshellarg( $binary ) . ' -l ' . escapeshellarg( $tmp_file_for_lint ) . ' 2>&1';
+						$output = array();
+						$rc     = 1;
+						// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_exec -- Guarded php -l syntax check on the tmp file only; never the live file.
+						exec( $cmd, $output, $rc );
+						if ( 0 !== (int) $rc ) {
+							return false;
+						}
+						$joined = implode( "\n", $output );
+						if ( false === stripos( $joined, 'No syntax errors' ) ) {
+							return false;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return false;
+					}
+				}
+			}
+			return true;
+		}
+
+		/**
+		 * Check that structural brackets are balanced in a token stream.
+		 *
+		 * Counts `(`, `)`, `{`, `}`, `[`, `]` from single-char tokens only, so
+		 * brackets inside strings, comments, and inline HTML are ignored. A
+		 * torn write (e.g. a file cut mid-statement) leaves the counts
+		 * unbalanced and is rejected.
+		 *
+		 * @param array $tokens Token stream from `PhpToken::tokenize()`.
+		 * @return bool True when every bracket type is balanced and ordered.
+		 * @since NEXT
+		 */
+		private static function php_brackets_balanced( array $tokens ): bool {
+			$pairs = array(
+				'(' => ')',
+				'{' => '}',
+				'[' => ']',
+			);
+			$stack = array();
+			foreach ( $tokens as $token ) {
+				$id = null;
+				if ( $token instanceof \PhpToken ) {
+					$id = $token->id;
+				} elseif ( is_array( $token ) && isset( $token[0] ) ) {
+					$id = $token[0];
+				}
+				if ( null !== $id && ( ( defined( 'T_CURLY_OPEN' ) && T_CURLY_OPEN === $id ) || ( defined( 'T_DOLLAR_OPEN_CURLY_BRACES' ) && T_DOLLAR_OPEN_CURLY_BRACES === $id ) ) ) {
+					$stack[] = '{';
+					continue;
+				}
+				$text = $token instanceof \PhpToken ? $token->text : ( is_string( $token ) ? $token : '' );
+				if ( 1 !== strlen( $text ) || ( ! isset( $pairs[ $text ] ) && ! in_array( $text, $pairs, true ) ) ) {
+					continue;
+				}
+				if ( isset( $pairs[ $text ] ) ) {
+					$stack[] = $text;
+					continue;
+				}
+				$last = array_pop( $stack );
+				if ( null === $last || ! isset( $pairs[ $last ] ) || $pairs[ $last ] !== $text ) {
+					return false;
+				}
+			}
+			return array() === $stack;
+		}
+
+		/**
+		 * Atomically write PHP source with syntax verification and rollback.
+		 *
+		 * Writes `$contents` to a unique sibling tmp file (same directory, so
+		 * rename is atomic), verifies the tmp (byte-identical re-read, caller
+		 * `$expect` assertion, PHP-parse check), keeps one best-effort backup
+		 * generation (`$path . '.wppo-bak'`), renames over the live file, then
+		 * re-reads and re-verifies the live file. On post-rename verification
+		 * failure the backup (or the in-memory original) is restored so the
+		 * live file is never left truncated. On any tmp/rename failure the tmp
+		 * is cleaned and the live file is untouched.
+		 *
+		 * Returns null when the filesystem transport cannot support atomic
+		 * writes (missing methods) so callers can fall back to the legacy
+		 * direct-write path. Multisite-safe: only touches the single
+		 * `wp-config.php` path passed in; no per-site option writes.
+		 *
+		 * @param mixed         $fs Filesystem object exposing exists()/get_contents()/put_contents()/move()/copy()/delete().
+		 * @param string        $path Final file path.
+		 * @param string        $contents New file contents.
+		 * @param callable|null $expect Optional assertion receiving contents, returning bool.
+		 * @return bool|null True on verified success, false on verified failure, null when unsupported.
+		 * @since NEXT
+		 */
+		public static function atomic_write_php_verified( $fs, string $path, string $contents, $expect = null ): ?bool {
+			$required = array( 'exists', 'get_contents', 'put_contents', 'move', 'copy', 'delete' );
+			foreach ( $required as $method ) {
+				if ( ! is_object( $fs ) || ! method_exists( $fs, $method ) ) {
+					return null;
+				}
+			}
+			if ( '' === $path || '' === $contents ) {
+				return false;
+			}
+			$chmod = defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644;
+			try {
+				$original = '';
+				if ( $fs->exists( $path ) ) {
+					$original = $fs->get_contents( $path );
+					if ( ! is_string( $original ) ) {
+						return false;
+					}
+				}
+				$tmp = self::atomic_tmp_path( $path );
+				if ( '' === $tmp ) {
+					return false;
+				}
+				if ( ! $fs->put_contents( $tmp, $contents, $chmod ) ) {
+					$fs->delete( $tmp );
+					return false;
+				}
+				$tmp_read = $fs->get_contents( $tmp );
+				if ( ! is_string( $tmp_read ) || $tmp_read !== $contents ) {
+					$fs->delete( $tmp );
+					return false;
+				}
+				if ( null !== $expect && ! call_user_func( $expect, $tmp_read ) ) {
+					$fs->delete( $tmp );
+					return false;
+				}
+				if ( ! self::verify_php_syntax( $tmp_read, $tmp ) ) {
+					$fs->delete( $tmp );
+					return false;
+				}
+				if ( '' !== $original ) {
+					// Best-effort single backup generation; in-memory
+					// $original remains the authoritative restore source.
+					$fs->copy( $path, $path . '.wppo-bak', true );
+				}
+				if ( ! $fs->move( $tmp, $path, true ) ) {
+					$fs->delete( $tmp );
+					return false;
+				}
+				$written = $fs->get_contents( $path );
+				if ( ! is_string( $written ) || $written !== $contents ) {
+					self::restore_php_backup( $fs, $path, $original, $chmod );
+					$fs->delete( $tmp );
+					return false;
+				}
+				if ( null !== $expect && ! call_user_func( $expect, $written ) ) {
+					self::restore_php_backup( $fs, $path, $original, $chmod );
+					$fs->delete( $tmp );
+					return false;
+				}
+				if ( ! self::verify_php_syntax( $written ) ) {
+					self::restore_php_backup( $fs, $path, $original, $chmod );
+					$fs->delete( $tmp );
+					return false;
+				}
+				$fs->delete( $tmp );
+				// The backup holds full wp-config.php secrets beside the live
+				// file in the web root, so remove it once the rename verified.
+				// Best-effort: success stands even if the delete fails.
+				try {
+					$fs->delete( $path . '.wppo-bak' );
+				} catch ( \Throwable $ignored ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Best-effort backup cleanup must never throw.
+				}
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				try {
+					if ( isset( $original ) && is_string( $original ) && '' !== $original ) {
+						self::restore_php_backup( $fs, $path, $original, $chmod );
+					}
+				} catch ( \Throwable $ignored_restore ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Best-effort restore must never throw.
+				}
+				try {
+					if ( isset( $tmp ) && is_string( $tmp ) && '' !== $tmp && $fs->exists( $tmp ) ) {
+						$fs->delete( $tmp );
+					}
+				} catch ( \Throwable $ignored ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Best-effort tmp cleanup must never throw.
+				}
+				return false;
+			}
+		}
+
+		/**
+		 * Restore a PHP file from its in-memory original or `.wppo-bak` backup.
+		 *
+		 * Prefers the in-memory original (the known-good read from this
+		 * invocation); falls back to the on-disk backup copy, which may be
+		 * stale from a previous run or concurrent writer. Best-effort: never throws.
+		 *
+		 * @param mixed  $fs Filesystem object.
+		 * @param string $path Final file path.
+		 * @param string $original In-memory original contents ('' when none).
+		 * @param int    $chmod File mode for a direct-write restore.
+		 * @return bool True when a restore write/copy was issued.
+		 * @since NEXT
+		 */
+		private static function restore_php_backup( $fs, string $path, string $original, int $chmod ): bool {
+			try {
+				if ( '' !== $original ) {
+					if ( $fs->put_contents( $path, $original, $chmod ) ) {
+						return true;
+					}
+				}
+				if ( $fs->exists( $path . '.wppo-bak' ) ) {
+					if ( $fs->copy( $path . '.wppo-bak', $path, true ) ) {
+						return true;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return false;
+		}
+
+		/**
 		 * Stable content hash of CSS source (issue #1038 / audit #7).
 		 *
 		 * Pure local string hash — never fetches remotely. Used by both the
