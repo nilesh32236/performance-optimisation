@@ -243,4 +243,30 @@ describe( 'SystemInfo Component', () => {
 		);
 		consoleSpy.mockRestore();
 	} );
+
+	it( 'swallows AbortError without a notice and resets loading', async () => {
+		const abortError = new Error( 'Aborted' );
+		abortError.name = 'AbortError';
+		fetchSystemInfo.mockRejectedValueOnce( abortError );
+		render( <SystemInfo /> );
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /load system info/i } )
+		);
+
+		await waitFor( () => {
+			expect( fetchSystemInfo ).toHaveBeenCalledWith(
+				expect.any( AbortSignal )
+			);
+		} );
+
+		await waitFor( () => {
+			expect(
+				screen.queryByText( /Failed to fetch system info/i )
+			).not.toBeInTheDocument();
+			expect(
+				screen.getByRole( 'button', { name: /load system info/i } )
+			).not.toBeDisabled();
+		} );
+	} );
 } );

@@ -326,6 +326,26 @@ describe( 'API Request library', () => {
 				queuePagespeedScan( 'https://example.com', 'desktop' )
 			).rejects.toThrow( 'Network error' );
 		} );
+
+		it( 'forwards an AbortSignal to fetch', async () => {
+			const mockData = { success: true, data: { job_id: 123 } };
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( mockData ),
+			} );
+
+			const { queuePagespeedScan } = await import( '../apiRequest' );
+			const controller = new AbortController();
+			await queuePagespeedScan(
+				'https://example.com',
+				'desktop',
+				controller.signal
+			);
+
+			expect( global.fetch ).toHaveBeenCalledWith(
+				expect.any( String ),
+				expect.objectContaining( { signal: controller.signal } )
+			);
+		} );
 	} );
 
 	describe( 'getPagespeedResults', () => {

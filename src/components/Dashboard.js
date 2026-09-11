@@ -1422,8 +1422,8 @@ const Dashboard = ( {
 						</p>
 						{ Array.isArray( wooSelfTest.checks ) && (
 							<ul className="wppo-woo-self-test">
-								{ wooSelfTest.checks.map( ( check ) => (
-									<li key={ check.path }>
+								{ wooSelfTest.checks.map( ( check, index ) => (
+									<li key={ check.path ?? index }>
 										<span>{ check.path }</span>
 										{ ' — ' }
 										<span>

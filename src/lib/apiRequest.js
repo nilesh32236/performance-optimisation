@@ -275,6 +275,7 @@ export const fetchSystemInfo = ( signal ) => {
  *
  * @since 1.6.0
  * @since NEXT Scan URL and strategy are validated client-side before the request.
+ * @since NEXT Accepts an optional AbortSignal for request cancellation.
  * @param {string}      url      The URL to scan.
  * @param {string}      strategy 'mobile' or 'desktop'.
  * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.

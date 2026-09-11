@@ -762,7 +762,11 @@ const FileOptimization = ( {
 							key={ tab.id }
 							id={ `tab-${ tab.id }` }
 							ref={ ( el ) => {
-								tabRefs.current[ tab.id ] = el;
+								if ( el ) {
+									tabRefs.current[ tab.id ] = el;
+								} else {
+									delete tabRefs.current[ tab.id ];
+								}
 							} }
 							className={ `wppo-sub-tab${
 								activeSubTab === tab.id

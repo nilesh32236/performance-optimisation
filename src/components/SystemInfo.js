@@ -153,11 +153,11 @@ const SystemInfo = () => {
 			} );
 			console.error( 'System info fetch error:', err );
 		} finally {
-			if (
-				loadControllerRef.current === controller &&
-				isMounted.current
-			) {
-				setLoading( false );
+			if ( loadControllerRef.current === controller ) {
+				loadControllerRef.current = null;
+				if ( isMounted.current ) {
+					setLoading( false );
+				}
 			}
 		}
 	};

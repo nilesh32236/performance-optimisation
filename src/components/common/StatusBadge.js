@@ -24,7 +24,7 @@ const StatusBadge = ( { status } ) => {
 		unknown: __( 'Unknown', 'performance-optimisation' ),
 	};
 
-	const label = labelMap[ safeStatus ] || safeStatus;
+	const label = labelMap[ safeStatus ];
 
 	return (
 		<span

@@ -124,7 +124,7 @@ describe( 'PageSpeedPanel Component', () => {
 			expect( queuePagespeedScan ).toHaveBeenCalledWith(
 				defaultUrl,
 				'mobile',
-				expect.anything()
+				expect.any( AbortSignal )
 			);
 		} );
 	} );

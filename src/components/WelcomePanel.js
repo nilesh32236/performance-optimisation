@@ -1,4 +1,4 @@
-import { useState, useEffect } from '@wordpress/element';
+import { useState, useEffect, useRef } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 import { apiCall, getWppoSettings } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
@@ -65,11 +65,15 @@ const WelcomePanel = () => {
 	const [ activatingStep, setActivatingStep ] = useState( null );
 	const [ dismissing, setDismissing ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
+	const dismissedRef = useRef( false );
 
 	// Resync when the global settings arrive late (e.g. localised data
 	// injected after first paint) or change after a save elsewhere.
 	const showWelcomeKey = String( getWppoSettings()?.show_welcome ?? false );
 	useEffect( () => {
+		if ( dismissedRef.current ) {
+			return;
+		}
 		setVisible( getWppoSettings()?.show_welcome ?? false );
 	}, [ showWelcomeKey ] );
 
@@ -115,6 +119,7 @@ const WelcomePanel = () => {
 				}
 			);
 			if ( dismissRes.success ) {
+				dismissedRef.current = true;
 				setVisible( false );
 			} else {
 				// Partial success: the feature is enabled, but the panel
@@ -153,6 +158,7 @@ const WelcomePanel = () => {
 		try {
 			const res = await apiCall( 'dismiss_welcome' );
 			if ( res.success ) {
+				dismissedRef.current = true;
 				setVisible( false );
 			} else {
 				notify( {

@@ -5,19 +5,19 @@ jest.mock( '@wordpress/i18n', () => {
 	};
 	const sprintf = ( format, ...args ) => {
 		let i = 0;
-		// Protect escaped percents (%% → %) before placeholder substitution,
-		// mirroring sprintf-js behaviour.
-		return format
-			.replace( /%%/g, '\u0000' )
-			.replace( /%(?:(\d+)\$)?[sd]/g, ( match, index ) => {
-				if ( index ) {
-					const positional = Number( index ) - 1;
-					i = Math.max( i, positional + 1 );
-					return args[ positional ];
-				}
-				return args[ i++ ];
-			} )
-			.replace( /\u0000/g, '%' );
+		// Single-pass: handle %% and placeholders together, mirroring
+		// sprintf-js behaviour without a sentinel.
+		return format.replace( /%%|%(?:(\d+)\$)?[sd]/g, ( match, index ) => {
+			if ( match === '%%' ) {
+				return '%';
+			}
+			if ( index ) {
+				const positional = Number( index ) - 1;
+				i = Math.max( i, positional + 1 );
+				return args[ positional ];
+			}
+			return args[ i++ ];
+		} );
 	};
 	return {
 		__: ( str ) => str,

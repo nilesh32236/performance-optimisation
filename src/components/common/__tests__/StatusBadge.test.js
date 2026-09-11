@@ -41,5 +41,6 @@ describe( 'StatusBadge', () => {
 		render( <StatusBadge status={ undefined } /> );
 		const badge = screen.getByText( 'Unknown' );
 		expect( badge ).toHaveClass( 'wppo-status-badge--unknown' );
+		expect( badge ).toHaveAttribute( 'aria-label', 'Unknown' );
 	} );
 } );
