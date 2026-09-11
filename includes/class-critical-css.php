@@ -298,6 +298,527 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
+		 * User safelist of selectors always kept in Critical CSS (issue #1038).
+		 *
+		 * Reads the additive `file_optimisation.ccssSafelistExtra` setting
+		 * (one selector per line, default empty = current behaviour). Local
+		 * reads only — never fetches remotely. Per-site settings make this
+		 * multisite-safe by construction.
+		 *
+		 * @return string[] Safelisted selectors, trimmed and de-duplicated.
+		 * @since NEXT
+		 */
+		public static function get_ccss_safelist(): array {
+			$options = Util::get_settings();
+			$raw     = $options['file_optimisation']['ccssSafelistExtra'] ?? '';
+			if ( is_array( $raw ) ) {
+				$raw = implode( "\n", $raw );
+			}
+			$list = Util::process_urls( (string) $raw );
+
+			/**
+			 * Filters the Critical CSS user safelist.
+			 *
+			 * @param string[] $list Safelisted selectors.
+			 * @since NEXT
+			 */
+			if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_ccss_safelist' ) ) {
+				$filtered = apply_filters( 'wppo_ccss_safelist', $list );
+				if ( is_array( $filtered ) ) {
+					// Fail-open: rogue filter output (nested arrays, objects)
+					// degrades to ignored entries instead of a trim() fatal
+					// inside the wp_head inline path.
+					$filtered = array_filter( $filtered, 'is_string' );
+					$list     = array_values( array_filter( array_unique( array_map( 'trim', $filtered ) ) ) );
+				}
+			}
+
+			return $list;
+		}
+
+		/**
+		 * Whether a selector matches the Critical CSS user safelist.
+		 *
+		 * Mirrors the Used_CSS safelist semantics: exact match wins;
+		 * attribute entries (leading `[`) match by attribute-name substring
+		 * so compound selectors stay kept; trailing `-`, `_`, or `*`
+		 * entries match by prefix. Otherwise a case-insensitive substring
+		 * match keeps hidden/dynamic selectors (e.g. `.modal-open`,
+		 * `.sub-menu`) that the static above-fold walk never sees.
+		 * Fail-open: an empty safelist never matches.
+		 *
+		 * Local string comparison only — no remote fetch.
+		 *
+		 * @param string        $selector CSS selector string (may be a group).
+		 * @param string[]|null $safelist Optional pre-fetched safelist; callers
+		 *                               walking many rules pass the list in so
+		 *                               settings are read once, not per rule.
+		 * @return bool True when safelisted.
+		 * @since NEXT
+		 */
+		public static function matches_ccss_safelist( string $selector, ?array $safelist = null ): bool {
+			$selector = trim( $selector );
+			if ( '' === $selector ) {
+				return false;
+			}
+
+			$list = $safelist ?? self::get_ccss_safelist();
+			if ( empty( $list ) ) {
+				return false;
+			}
+
+			foreach ( $list as $safe ) {
+				$safe = trim( (string) $safe );
+				if ( '' === $safe ) {
+					continue;
+				}
+				if ( $selector === $safe ) {
+					return true;
+				}
+				if ( '[' === $safe[0] ) {
+					$attr_name = preg_replace( '/[\]=~|^$*"\'].*$/', '', $safe );
+					$attr_name = ltrim( trim( (string) $attr_name ), '[' );
+					if ( '' !== $attr_name && false !== stripos( $selector, $attr_name ) ) {
+						return true;
+					}
+					continue;
+				}
+				$last = substr( $safe, -1 );
+				if ( ( '-' === $last || '_' === $last ) && 0 === strpos( $selector, $safe ) ) {
+					return true;
+				}
+				// Wildcard entries match by non-empty prefix only: a bare
+				// '*' covers just the universal selector (exact match above),
+				// never every rule.
+				$stem = '*' === $last ? substr( $safe, 0, -1 ) : '';
+				if ( '' !== $stem && 0 === strpos( $selector, $stem ) ) {
+					return true;
+				}
+				// Substring fallback is token-gated: entries shorter than 3
+				// chars (e.g. 'p', 'a') would otherwise match nearly every
+				// selector via stripos and silently keep the whole
+				// stylesheet. Exact, attribute, and prefix matches above are
+				// unaffected — single-char selectors still match exactly.
+				if ( strlen( $safe ) < 3 ) {
+					continue;
+				}
+				if ( false !== stripos( $selector, $safe ) ) {
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		/**
+		 * Stable content hash of CSS source (issue #1038).
+		 *
+		 * Pure local string hash — never fetches remotely. Used to detect
+		 * stylesheet edits that preserve mtime (deploy sync, minify rebuild
+		 * in the same second) so stale CCSS / used-CSS regenerates. SHA-256
+		 * is stable across installs and salt rotations (unlike wp_hash), so
+		 * stored checksums and `.sha256` sidecars stay comparable.
+		 *
+		 * @param string $css CSS content.
+		 * @return string SHA-256 checksum, or '' for empty input.
+		 * @since NEXT
+		 */
+		public static function compute_css_checksum( string $css ): string {
+			if ( '' === $css ) {
+				return '';
+			}
+			return hash( 'sha256', $css );
+		}
+
+		/**
+		 * Multisite-aware transient key for a template's source checksum.
+		 *
+		 * Blog-ID prefixing via `Util::transient_key()` keeps per-site
+		 * checksums isolated on multisite networks with a shared object
+		 * cache backend.
+		 *
+		 * @param string $template_hash Template hash.
+		 * @return string Transient key.
+		 * @since NEXT
+		 */
+		private static function get_source_checksum_key( string $template_hash ): string {
+			return Util::transient_key( 'wppo_ccss_checksum_' . $template_hash );
+		}
+
+		/**
+		 * Whether stored source checksum differs (stale CCSS, issue #1038).
+		 *
+		 * Compares the checksum of locally-available source CSS against the
+		 * stored checksum. Local reads only — no remote fetch. Fail-open:
+		 * missing stored checksum or unavailable transient API reports stale
+		 * only when there is stored output to compare against; an empty
+		 * checksum input never reports stale.
+		 *
+		 * @param string $template_hash Template hash.
+		 * @param string $source_css    Locally-available source CSS content.
+		 * @return bool True when the source changed since generation.
+		 * @since NEXT
+		 */
+		public static function is_source_checksum_stale( string $template_hash, string $source_css ): bool {
+			if ( '' === $template_hash || '' === $source_css ) {
+				return false;
+			}
+			if ( ! function_exists( 'get_transient' ) ) {
+				return false;
+			}
+			$stored = get_transient( self::get_source_checksum_key( $template_hash ) );
+			if ( ! is_string( $stored ) || '' === $stored ) {
+				return false;
+			}
+			return ! hash_equals( $stored, self::compute_css_checksum( $source_css ) );
+		}
+
+		/**
+		 * Persist the source checksum after a successful generation.
+		 *
+		 * Local transient write only — no remote fetch. Fail-open: missing
+		 * transient API is a no-op. The TTL is filterable via
+		 * `wppo_ccss_checksum_ttl` (default WEEK_IN_SECONDS).
+		 *
+		 * @param string $template_hash Template hash.
+		 * @param string $source_css    Source CSS content that was generated from.
+		 * @return void
+		 * @since NEXT
+		 */
+		public static function store_source_checksum( string $template_hash, string $source_css ): void {
+			if ( '' === $template_hash || '' === $source_css ) {
+				return;
+			}
+			if ( ! function_exists( 'set_transient' ) ) {
+				return;
+			}
+			/**
+			 * Filters how long a Critical CSS source checksum is kept.
+			 *
+			 * @param int $ttl Time to live in seconds. Default WEEK_IN_SECONDS.
+			 * @since NEXT
+			 */
+			$ttl = function_exists( 'apply_filters' ) ? (int) apply_filters( 'wppo_ccss_checksum_ttl', WEEK_IN_SECONDS ) : WEEK_IN_SECONDS;
+			if ( $ttl <= 0 ) {
+				$ttl = WEEK_IN_SECONDS;
+			}
+			set_transient( self::get_source_checksum_key( $template_hash ), self::compute_css_checksum( $source_css ), $ttl );
+		}
+
+		/**
+		 * Checksum-triggered refresh from locally-available CSS (issue #1038).
+		 *
+		 * Compares the checksum of the given local source against the source
+		 * checksum stored at generation time — same source domain, so an
+		 * unchanged page is fresh (no remote fetch on either side). On
+		 * mismatch the stored variant is deleted so the next `inline_ccss()`
+		 * hit re-queues background generation through the existing path; the
+		 * oversize file-first delivery and 20 KB inline cap in `inline_ccss()`
+		 * are untouched, so the cap stays honored. Fail-open: any error
+		 * returns false and the pristine stored variant is left in place
+		 * (never fatal).
+		 *
+		 * @param string $template_hash Template hash.
+		 * @param string $source_css    Locally-available source CSS content.
+		 * @return bool True when the stored variant was dropped as stale.
+		 * @since NEXT
+		 */
+		public static function maybe_refresh_from_local_css( string $template_hash, string $source_css ): bool {
+			if ( '' === $template_hash || '' === $source_css ) {
+				return false;
+			}
+			if ( ! function_exists( 'get_transient' ) || ! function_exists( 'delete_transient' ) ) {
+				return false;
+			}
+			try {
+				$key    = self::get_source_checksum_key( $template_hash );
+				$stored = get_transient( $key );
+				if ( ! is_string( $stored ) || '' === $stored ) {
+					// No baseline yet: adopt the current local source so the
+					// next content change is detected. Never drops the file.
+					self::store_source_checksum( $template_hash, $source_css );
+					return false;
+				}
+				// Same raw local-source domain that generate_and_store()
+				// baselined: an unchanged page hashes equal and keeps its
+				// generated variant.
+				if ( ! self::is_source_checksum_stale( $template_hash, $source_css ) ) {
+					return false;
+				}
+				$file = self::get_ccss_file( $template_hash );
+				if ( '' !== $file && file_exists( $file ) ) {
+					$filesystem = Util::init_filesystem();
+					if ( $filesystem ) {
+						$filesystem->delete( $file );
+					} else {
+						// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Local cache invalidation fallback.
+						unlink( $file );
+					}
+				}
+				delete_transient( $key );
+				self::invalidate_ccss_memo( $template_hash );
+				if ( function_exists( 'clearstatcache' ) ) {
+					clearstatcache( true, $file );
+				}
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Per-request memo for the local-source freshness probe.
+		 *
+		 * The probe runs at most once per template per request so repeated
+		 * `inline_ccss()` calls cost a single capped local-source pass.
+		 *
+		 * @since NEXT
+		 * @var array<string, bool>
+		 */
+		private static array $stale_probe_memo = array();
+
+		/**
+		 * Build the canonical local-source CSS string from ordered URLs.
+		 *
+		 * Shared by the generation-time baseline (`generate()`) and the runtime
+		 * freshness probe so both hash the SAME source domain: locally
+		 * resolvable external stylesheets concatenated in emission order, read
+		 * raw (no @import expansion) so neither side can drift. Duplicates are
+		 * collapsed by RESOLVED LOCAL PATH: `defer_stylesheets()` emits the
+		 * deferred `<link>` plus a `<noscript>` copy of the original tag, and
+		 * the generation-side XPath matches both while the probe reads each
+		 * handle once. Bounded (20 files, 512 KB per file, 2 MB total) so the
+		 * probe cannot blow memory on large multisheet sites. Fail-open:
+		 * unresolvable URLs are skipped.
+		 *
+		 * @param string[] $urls Ordered stylesheet URLs (document/queue order).
+		 * @return string Concatenated source CSS, or '' when none resolve locally.
+		 * @since NEXT
+		 */
+		private static function build_local_source_css( array $urls ): string {
+			$combined = '';
+			$count    = 0;
+			$seen     = array();
+			foreach ( $urls as $url ) {
+				if ( $count >= 20 || strlen( $combined ) >= 2097152 ) {
+					break;
+				}
+				$url = (string) $url;
+				if ( '' === $url || self::is_skipped_source_url( $url ) ) {
+					continue;
+				}
+				$local_path = Util::get_local_path( $url );
+				if ( '' === $local_path || ! file_exists( $local_path ) ) {
+					continue;
+				}
+				// Collapse duplicate emissions (deferred link + <noscript>
+				// copy, or the same file enqueued twice) to a single entry so
+				// the baseline matches the one-per-handle probe set.
+				if ( isset( $seen[ $local_path ] ) ) {
+					continue;
+				}
+				$seen[ $local_path ] = true;
+
+				$size = filesize( $local_path );
+				if ( false === $size || $size <= 0 || $size > 524288 ) {
+					continue;
+				}
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local cache-freshness read only, never remote.
+				$content = file_get_contents( $local_path );
+				if ( ! is_string( $content ) || '' === $content ) {
+					continue;
+				}
+				$combined .= substr( $content, 0, 524288 ) . "\n";
+				++$count;
+			}
+			return $combined;
+		}
+
+		/**
+		 * Whether a stylesheet URL is excluded from the CCSS source set.
+		 *
+		 * Mirrors the generation-time skip list (combined bundle, dashicons,
+		 * admin-bar, block-library) so the baseline and the probe hash the
+		 * exact same URL set.
+		 *
+		 * @param string $url Stylesheet URL or handle-like fragment.
+		 * @return bool True when skipped.
+		 * @since NEXT
+		 */
+		private static function is_skipped_source_url( string $url ): bool {
+			foreach ( self::SKIP_DEFER_HANDLES as $handle ) {
+				if ( false !== strpos( $url, $handle ) ) {
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/**
+		 * Handles core's `wp_maybe_inline_styles()` will print inline.
+		 *
+		 * A handle opted into core's inline pass via `wp_style_add_data(
+		 * $handle, 'path', ... )` (see Main::minify_queued_styles()) emits an
+		 * inline `<style>` on the fetched page instead of a `<link>`, so the
+		 * generation-side source set never contains it. The probe runs on
+		 * `wp_head` priority 0, before core's inline pass at priority 1, so
+		 * its handles still carry `src` — it must exclude them explicitly or
+		 * the two domains diverge permanently (issue #1038).
+		 *
+		 * Mirrors core's candidate selection (extra `path` set with a `src`,
+		 * path exists) and its size-ordered total limit so the exclusion
+		 * tracks what the generation fetch actually inlined.
+		 *
+		 * @return string[] Handles that core will inline (queue order).
+		 * @since NEXT
+		 */
+		private static function get_core_inlined_handles(): array {
+			global $wp_styles;
+			if ( ! $wp_styles || empty( $wp_styles->queue ) || ! is_array( $wp_styles->queue ) ) {
+				return array();
+			}
+
+			$candidates = array();
+			foreach ( $wp_styles->queue as $handle ) {
+				$handle = (string) $handle;
+				if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
+					continue;
+				}
+				$style = $wp_styles->registered[ $handle ];
+				$src   = $style->src ?? '';
+				$extra = ( isset( $style->extra ) && is_array( $style->extra ) ) ? $style->extra : array();
+				$path  = $extra['path'] ?? '';
+				if ( '' === (string) $src || ! is_string( $path ) || '' === $path || ! file_exists( $path ) ) {
+					continue;
+				}
+				$candidates[] = array(
+					'handle' => $handle,
+					'path'   => $path,
+					'size'   => (int) filesize( $path ),
+				);
+			}
+
+			if ( empty( $candidates ) ) {
+				return array();
+			}
+
+			// Core inlines smallest-first until the total budget is reached.
+			usort(
+				$candidates,
+				static function ( array $a, array $b ): int {
+					return $a['size'] <=> $b['size'];
+				}
+			);
+
+			$limit   = self::get_styles_inline_limit();
+			$total   = 0;
+			$inlined = array();
+			foreach ( $candidates as $candidate ) {
+				if ( $total + $candidate['size'] > $limit ) {
+					break;
+				}
+				if ( ! is_readable( $candidate['path'] ) ) {
+					continue;
+				}
+				$total    += $candidate['size'];
+				$inlined[] = $candidate['handle'];
+			}
+
+			return $inlined;
+		}
+
+		/**
+		 * Aggregate locally-available source CSS from the queued stylesheets.
+		 *
+		 * Reads local files only via `Util::get_local_path()` — never fetches
+		 * remotely. Uses `$wp_styles->queue` order (the page's emission order)
+		 * to match the document-order source baselined at generation time, and
+		 * skips handles core will inline (no `<link>` at generation time) plus
+		 * the shared skip list. Bounded by `build_local_source_css()`.
+		 * Fail-open: any error yields '' (no signal).
+		 *
+		 * @return string Concatenated local source CSS, or '' when unavailable.
+		 * @since NEXT
+		 */
+		private static function get_local_source_css(): string {
+			global $wp_styles;
+			if ( ! $wp_styles || empty( $wp_styles->queue ) || ! is_array( $wp_styles->queue ) ) {
+				return '';
+			}
+			try {
+				$inlined = self::get_core_inlined_handles();
+				$urls    = array();
+				foreach ( $wp_styles->queue as $handle ) {
+					$handle = (string) $handle;
+					if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
+						continue;
+					}
+					if ( in_array( $handle, $inlined, true ) ) {
+						continue;
+					}
+					$src = $wp_styles->registered[ $handle ]->src ?? '';
+					if ( '' === $src ) {
+						continue;
+					}
+					$urls[] = (string) $src;
+				}
+				return self::build_local_source_css( $urls );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Checksum freshness probe wired into the production path (issue #1038).
+		 *
+		 * Called from `inline_ccss()` before serving the stored variant: when
+		 * a source checksum was baselined at generation time and the current
+		 * locally-available stylesheets hash differently, the stale variant is
+		 * dropped (via `maybe_refresh_from_local_css()`) so this same hit falls
+		 * through to the existing background-regen queue. Fail-open and cheap:
+		 * no stored checksum (or no local source) returns false immediately
+		 * without local reads, and the verdict is memoized per template per
+		 * request.
+		 *
+		 * Inert without a user safelist: the checksum auto-regen is part of the
+		 * `ccssSafelistExtra` feature (issue #1038), so an empty safelist keeps
+		 * the pre-feature behaviour verbatim — no new regeneration churn.
+		 *
+		 * @param string $template_hash Template hash.
+		 * @return bool True when the stored variant was dropped as stale.
+		 * @since NEXT
+		 */
+		public static function maybe_check_stale_and_requeue( string $template_hash ): bool {
+			if ( '' === $template_hash ) {
+				return false;
+			}
+			if ( array_key_exists( $template_hash, self::$stale_probe_memo ) ) {
+				return self::$stale_probe_memo[ $template_hash ];
+			}
+			$result = false;
+			try {
+				// Fail-open gate: no user safelist configured means the feature
+				// is off — preserve the pre-#1038 behaviour (no regeneration).
+				if ( array() !== self::get_ccss_safelist() && function_exists( 'get_transient' ) ) {
+					$stored = get_transient( self::get_source_checksum_key( $template_hash ) );
+					if ( is_string( $stored ) && '' !== $stored ) {
+						$source = self::get_local_source_css();
+						if ( '' !== $source ) {
+							$result = self::maybe_refresh_from_local_css( $template_hash, $source );
+						}
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$result = false;
+			}
+			self::$stale_probe_memo[ $template_hash ] = $result;
+			return $result;
+		}
+
+		/**
 		 * Read core's `styles_inline_size_limit` budget.
 		 *
 		 * Mirrors the version-dependent default in Cache::get_styles_inline_limit():
@@ -410,6 +931,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			self::$ccss_exists_cache  = array();
 			self::$ccss_content_cache = array();
 			self::$sample_url_cache   = array();
+			self::$stale_probe_memo   = array();
 		}
 
 		/**
@@ -647,11 +1169,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * external CSS (resolving @import directives), and applies heuristic
 		 * above-fold rule extraction.
 		 *
-		 * @param string $url The page URL to generate CCSS for.
+		 * @param string      $url        The page URL to generate CCSS for.
+		 * @param string|null $source_css Out-param: canonical local-source CSS
+		 *                                (locally-resolvable external
+		 *                                stylesheets, document order) used for
+		 *                                the freshness checksum (issue #1038).
 		 * @return string|false The critical CSS content, or false on failure.
 		 * @since NEXT
 		 */
-		public static function generate( string $url ) {
+		public static function generate( string $url, ?string &$source_css = null ) {
 			$response = wp_remote_get(
 				$url,
 				array(
@@ -698,24 +1224,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			}
 
 			// Extract external stylesheet URLs (skip data-* handles, dashicons, admin-bar).
-			$link_tags = $xpath->query( '//link[@rel="stylesheet"]' );
+			$link_tags   = $xpath->query( '//link[@rel="stylesheet"]' );
+			$source_urls = array();
 			if ( $link_tags ) {
 				foreach ( $link_tags as $tag ) {
 					$href = $tag->getAttribute( 'href' );
 					if ( empty( $href ) ) {
 						continue;
 					}
-
-					$skip = false;
-					foreach ( self::SKIP_DEFER_HANDLES as $handle ) {
-						if ( false !== strpos( $href, $handle ) ) {
-							$skip = true;
-							break;
-						}
-					}
-					if ( $skip ) {
+					if ( self::is_skipped_source_url( $href ) ) {
 						continue;
 					}
+
+					// Record the document-ordered stylesheet set used for the
+					// canonical source checksum (issue #1038). Only locally
+					// resolvable stylesheets contribute; inline <style> blocks
+					// and @import expansion are deliberately excluded so the
+					// frontend probe can reproduce this exact domain without a
+					// remote fetch. Handles core path-inlines (via
+					// wp_style_add_data(...,'path',...)) emit no <link> here and
+					// are therefore absent — the probe mirrors that by skipping
+					// them in get_local_source_css(). build_local_source_css()
+					// then collapses the deferred-link + <noscript> duplicate.
+					$source_urls[] = $href;
 
 					$fetched = self::fetch_stylesheet_with_imports( $href );
 					if ( '' !== $fetched ) {
@@ -723,6 +1254,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					}
 				}
 			}
+
+			// Canonical source domain: the locally-resolvable stylesheets the
+			// page emitted, in document order. generate_and_store() baselines
+			// the checksum of this string and the frontend probe recomputes it
+			// from $wp_styles in queue order (the page's emission order), so an
+			// unchanged source compares equal instead of churning forever.
+			$source_css = self::build_local_source_css( $source_urls );
 
 			if ( empty( $css_content ) ) {
 				return false;
@@ -1113,9 +1651,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 
 			// Extract media queries for mobile-first approach (max-width queries).
 			preg_match_all( '/@media\s*\(max-width:[^}]+\{(?:[^{}]|\{[^{}]*\})*\}/is', $css, $mobile_queries );
+			// The safelist is fetched once and threaded through so settings
+			// are not re-read per rule.
+			$safelist = self::get_ccss_safelist();
 			if ( ! empty( $mobile_queries[0] ) ) {
 				foreach ( $mobile_queries[0] as $mq ) {
-					$filtered = self::filter_media_query_rules( $mq );
+					$filtered = self::filter_media_query_rules( $mq, $safelist );
 					if ( ! empty( $filtered ) ) {
 						$critical_parts[] = $filtered;
 					}
@@ -1124,7 +1665,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 
 			// Extract regular rules using brace-depth-based parsing.
 			// Handles minified CSS (single line), multi-line selectors, and nested braces.
-			self::parse_regular_rules( $css, $critical_parts );
+			self::parse_regular_rules( $css, $critical_parts, $safelist );
 
 			return implode( "\n", array_unique( array_filter( $critical_parts ) ) );
 		}
@@ -1135,12 +1676,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Handles minified CSS, multi-line selectors, and nested braces
 		 * (e.g., background: url(data:...{...})).
 		 *
-		 * @param string $css            Full CSS content.
-		 * @param array  $critical_parts Reference to array of extracted critical CSS parts.
+		 * Each matched rule is stored as `selector + declarations` (issue
+		 * #1038): before this, only the `{declarations}` fragment was kept,
+		 * producing selector-less CSS that browsers discard — the emitted
+		 * above-fold rules had no effect. This is a correctness fix, not a
+		 * formatting preference; it is covered by
+		 * CcssSafelistChecksumTest::test_regular_rules_keep_selector_with_declarations().
+		 *
+		 * @param string        $css            Full CSS content.
+		 * @param array         $critical_parts Reference to array of extracted critical CSS parts.
+		 * @param string[]|null $safelist Pre-fetched safelist (null = fetch once here).
 		 * @return void
 		 * @since NEXT
 		 */
-		private static function parse_regular_rules( string $css, array &$critical_parts ): void {
+		private static function parse_regular_rules( string $css, array &$critical_parts, ?array $safelist = null ): void {
+			$safelist = $safelist ?? self::get_ccss_safelist();
 			$length   = strlen( $css );
 			$depth    = 0;
 			$buffer   = '';
@@ -1171,9 +1721,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					--$depth;
 					$buffer .= $char;
 					if ( 0 === $depth && $in_rule ) {
-						// Complete rule block.
-						if ( '' !== $selector && self::matches_above_fold( $selector ) ) {
-							$critical_parts[] = $buffer;
+						// Complete rule block. The selector is stored with
+						// its declarations (issue #1038): without it the
+						// output is invalid CSS that browsers ignore.
+						if ( '' !== $selector && self::matches_above_fold( $selector, $safelist ) ) {
+							$critical_parts[] = $selector . $buffer;
 						}
 						$buffer   = '';
 						$selector = '';
@@ -1190,11 +1742,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		/**
 		 * Filter rules inside a media query to keep only above-fold selectors.
 		 *
-		 * @param string $media_query Full media query block.
+		 * @param string        $media_query Full media query block.
+		 * @param string[]|null $safelist Pre-fetched safelist (null = fetch once here).
 		 * @return string Filtered media query or empty string.
 		 * @since NEXT
 		 */
-		private static function filter_media_query_rules( string $media_query ): string {
+		private static function filter_media_query_rules( string $media_query, ?array $safelist = null ): string {
 			$header_end = strpos( $media_query, '{' );
 			if ( false === $header_end ) {
 				return '';
@@ -1216,7 +1769,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					continue;
 				}
 				$selector = substr( $rule, 0, $selector_end );
-				if ( self::matches_above_fold( $selector ) ) {
+				if ( self::matches_above_fold( $selector, $safelist ) ) {
 					$filtered_rules[] = $rule;
 				}
 			}
@@ -1235,16 +1788,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * using token-based matching to prevent false positives (e.g., '.container'
 		 * does not match '.container-fluid').
 		 *
-		 * @param string $selector The CSS selector string (may contain multiple selectors separated by commas).
+		 * @param string        $selector The CSS selector string (may contain multiple selectors separated by commas).
+		 * @param string[]|null $safelist Pre-fetched safelist (null = fetch once here).
 		 * @return bool True if any individual selector should be included in critical CSS.
 		 * @since NEXT
 		 */
-		private static function matches_above_fold( string $selector ): bool {
+		private static function matches_above_fold( string $selector, ?array $safelist = null ): bool {
 			$selector = trim( $selector );
 
 			if ( empty( $selector ) ) {
 				return false;
 			}
+
+			$safelist = $safelist ?? self::get_ccss_safelist();
 
 			// Split multi-selector groups on commas (outside parentheses).
 			$individual_selectors = preg_split( '/,(?=(?:[^()]*\([^()]*\))*[^()]*$)/', $selector );
@@ -1254,7 +1810,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				if ( '' === $single ) {
 					continue;
 				}
-				if ( self::matches_above_fold_single( $single ) ) {
+				if ( self::matches_above_fold_single( $single, $safelist ) ) {
 					return true;
 				}
 			}
@@ -1268,15 +1824,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Uses word-boundary-aware matching to prevent false positives like
 		 * '.container' matching '.container-fluid'.
 		 *
-		 * @param string $selector A single trimmed CSS selector.
+		 * @param string        $selector A single trimmed CSS selector.
+		 * @param string[]|null $safelist Pre-fetched safelist (null = fetch once here).
 		 * @return bool True if the selector matches.
 		 * @since NEXT
 		 */
-		private static function matches_above_fold_single( string $selector ): bool {
+		private static function matches_above_fold_single( string $selector, ?array $safelist = null ): bool {
 			$selector = trim( $selector );
 
 			if ( empty( $selector ) ) {
 				return false;
+			}
+
+			// User safelist (issue #1038): hidden/dynamic selectors are
+			// always kept. Empty safelist keeps current behaviour verbatim.
+			if ( self::matches_ccss_safelist( $selector, $safelist ) ) {
+				return true;
 			}
 
 			// Remove pseudo-classes and pseudo-elements for matching.
@@ -1339,7 +1902,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return false;
 			}
 
-			$critical_css = self::generate( $url );
+			$source_css   = '';
+			$critical_css = self::generate( $url, $source_css );
 
 			// Reject generated CSS that could break out of the <style> context when
 			// inlined — a poisoned source stylesheet must never reach the CCSS cache.
@@ -1361,6 +1925,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			} else {
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 				file_put_contents( self::get_ccss_file( $template_hash ), $critical_css );
+			}
+
+			// Baseline the canonical SOURCE checksum — not the generated
+			// output — so later local-source comparisons
+			// (maybe_refresh_from_local_css) hash the exact same domain the
+			// frontend probe reproduces from $wp_styles. This detects
+			// stylesheet edits that preserve mtime. Local transient write
+			// only — no remote fetch. An empty source (no locally-resolvable
+			// external stylesheets) stores nothing, so the probe stays a
+			// no-op and never churns.
+			if ( '' !== $source_css ) {
+				self::store_source_checksum( $template_hash, $source_css );
 			}
 
 			// The memo must reflect the fresh file within this request too;
@@ -1422,6 +1998,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 
 			$template_slug = self::get_current_template_slug();
 			$template_hash = self::get_template_hash( $template_slug );
+
+			// Checksum auto-regen (issue #1038): drop a content-stale variant
+			// so this hit re-queues generation below. Fail-open: no stored
+			// checksum (or no local source) is a no-op.
+			try {
+				self::maybe_check_stale_and_requeue( $template_hash );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 
 			$content = self::get_ccss_content( $template_hash );
 			if ( null !== $content ) {

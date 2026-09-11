@@ -171,6 +171,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'unusedCSSRegressionThreshold' => 20,
 					'criticalCSS'                  => false,
 					'ccssMaxSize'                  => 20480,
+					'ccssSafelistExtra'            => '',
 					'hostGoogleFontsLocally'       => false,
 					'blockAssetsOnDemand'          => function_exists( 'wp_load_classic_theme_block_styles_on_demand' ),
 					'loadAllCoreBlockAssets'       => false,
@@ -2420,7 +2421,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				}
 
 				// Unused-CSS extra safelist (issue #966) — one selector per line.
-				if ( 'unusedCSSSafelistExtra' === $safe_key && ! is_array( $value ) ) {
+				// CCSS user safelist (issue #1038) shares the same textarea
+				// contract: selectors never pruned from Critical CSS inlining.
+				if ( in_array( $safe_key, array( 'unusedCSSSafelistExtra', 'ccssSafelistExtra' ), true ) && ! is_array( $value ) ) {
 					$sanitized[ $safe_key ] = sanitize_textarea_field( (string) $value );
 					continue;
 				}

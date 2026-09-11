@@ -99,11 +99,18 @@ class UsedCssSafeDefaultsTest extends \PHPUnit\Framework\TestCase {
 				return 'wppo_used_css_safelist' === $hook ? 10 : false;
 			}
 		);
-		add_filter(
-			'wppo_used_css_safelist',
-			static function ( $safelist ) {
-				$safelist[] = '.my-keep-';
-				return $safelist;
+		Functions\when( 'add_filter' )->justReturn( true );
+		// The filter must actually run here: without this stub the assertion
+		// below only passed because the bare '*' built-in caught every
+		// selector. The issue #1038 fix intentionally stops that catch-all,
+		// so this test now exercises the documented wppo_used_css_safelist
+		// extension instead of relying on it.
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook, $value ) {
+				if ( 'wppo_used_css_safelist' === $hook && is_array( $value ) ) {
+					$value[] = '.my-keep-';
+				}
+				return $value;
 			}
 		);
 
