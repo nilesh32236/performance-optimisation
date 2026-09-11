@@ -1224,35 +1224,49 @@ const isHeroImage = ( el ) => {
  * Eagerly restore a hero image that PHP missed (leave src/srcset intact,
  * drop data-* placeholders) so it is never lazy-loaded.
  *
+ * Also promotes sibling `<source data-srcset>`/sizes inside a parent
+ * `<picture>` (same loop as the IntersectionObserver path) so a responsive
+ * hero is not left partly lazy, forces `loading="eager"`, and stamps
+ * `fetchpriority="high"` on every restored hero — `isHeroImage` also
+ * treats bare `loading="eager"` images as heroes, and those LCP
+ * candidates need the priority hint too.
+ *
  * @since NEXT
  * @param {Element} el The hero IMG element.
  */
 const restoreHeroImage = ( el ) => {
 	if ( el.hasAttribute( 'data-src' ) ) {
-		el.src = el.getAttribute( 'data-src' );
+		const dataSrc = el.getAttribute( 'data-src' );
+		if ( dataSrc ) {
+			el.src = dataSrc;
+		}
 		el.removeAttribute( 'data-src' );
 	}
 	if ( el.hasAttribute( 'data-srcset' ) ) {
-		el.srcset = el.getAttribute( 'data-srcset' );
+		const dataSrcset = el.getAttribute( 'data-srcset' );
+		if ( dataSrcset ) {
+			el.srcset = dataSrcset;
+		}
 		el.removeAttribute( 'data-srcset' );
 	}
-	if ( el.hasAttribute( 'data-sizes' ) ) {
-		el.setAttribute( 'sizes', el.getAttribute( 'data-sizes' ) );
-		el.removeAttribute( 'data-sizes' );
+	restoreSizes( el );
+	const parent = el.parentNode;
+	if ( parent && parent.tagName === 'PICTURE' ) {
+		parent.querySelectorAll( 'source' ).forEach( ( s ) => {
+			restoreSizes( s );
+			if ( s.hasAttribute( 'data-srcset' ) ) {
+				const sourceSrcset = s.getAttribute( 'data-srcset' );
+				if ( sourceSrcset ) {
+					s.srcset = sourceSrcset;
+				}
+				s.removeAttribute( 'data-srcset' );
+			}
+		} );
 	}
-	if ( el.getAttribute( 'loading' ) === 'lazy' ) {
-		el.removeAttribute( 'loading' );
-	}
-	if ( ! el.getAttribute( 'loading' ) ) {
+	if ( el.getAttribute( 'loading' ) !== 'eager' ) {
 		el.setAttribute( 'loading', 'eager' );
 	}
-	if (
-		el.getAttribute( 'fetchpriority' ) !== 'high' &&
-		( el.hasAttribute( 'data-wppo-hero' ) ||
-			el.hasAttribute( 'data-wppo-lcp' ) )
-	) {
-		el.setAttribute( 'fetchpriority', 'high' );
-	}
+	el.setAttribute( 'fetchpriority', 'high' );
 	if ( ! el.getAttribute( 'decoding' ) ) {
 		el.setAttribute( 'decoding', 'async' );
 	}
@@ -1261,7 +1275,8 @@ const restoreHeroImage = ( el ) => {
 		'wppo-lazyload',
 		'lazyload',
 		'lazyloaded',
-		'lazyloading'
+		'lazyloading',
+		'lazy'
 	);
 };
 

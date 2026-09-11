@@ -1879,7 +1879,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			if ( function_exists( 'apply_filters' ) ) {
 				try {
 					$filtered = apply_filters( 'wppo_lcp_first_n', $count, $image_optimisation );
-					$count    = (int) $filtered;
+					if ( is_numeric( $filtered ) ) {
+						$count = (int) $filtered;
+					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
@@ -3648,7 +3650,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
 					$src      = $tags->get_attribute( 'src' );
 					$data_src = $tags->get_attribute( 'data-src' );
-					if ( null === $src && null === $data_src ) {
+					if ( ( null === $src || '' === $src ) && ( null === $data_src || '' === $data_src ) ) {
 						continue;
 					}
 
@@ -3657,28 +3659,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						break;
 					}
 					try {
-						if ( null !== $data_src && '' !== $data_src ) {
-							$tags->set_attribute( 'src', (string) $data_src );
-							$tags->remove_attribute( 'data-src' );
+						if ( $this->restore_js_lazy_placeholders( $tags ) ) {
 							$changed = true;
 						}
-						$data_srcset = $tags->get_attribute( 'data-srcset' );
-						if ( null !== $data_srcset ) {
-							if ( '' !== $data_srcset ) {
-								$tags->set_attribute( 'srcset', (string) $data_srcset );
-							}
-							$tags->remove_attribute( 'data-srcset' );
+						if ( $this->remove_lazy_classes( $tags ) ) {
 							$changed = true;
 						}
-						$data_sizes = $tags->get_attribute( 'data-sizes' );
-						if ( null !== $data_sizes ) {
-							if ( '' !== $data_sizes ) {
-								$tags->set_attribute( 'sizes', (string) $data_sizes );
-							}
-							$tags->remove_attribute( 'data-sizes' );
-							$changed = true;
-						}
-						$this->remove_lazy_classes( $tags );
 						if ( 'lazy' === $tags->get_attribute( 'loading' ) ) {
 							$tags->remove_attribute( 'loading' );
 							$changed = true;
@@ -3697,7 +3683,107 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					}
 				}
 
-				return $changed ? $tags->get_updated_html() : $buffer;
+				$result = $changed ? $tags->get_updated_html() : $buffer;
+				return $this->promote_eager_picture_sources( $result );
+			} catch ( \Throwable $e ) {
+				return $buffer;
+			}
+		}
+
+		/**
+		 * Restore JS-lazy placeholder attributes on the current tag.
+		 *
+		 * Promotes `data-src` to `src`, `data-srcset` to `srcset` and
+		 * `data-sizes` to `sizes` (non-empty values only; empty placeholders
+		 * are dropped). Fail-open per attribute: any failure leaves the tag
+		 * untouched.
+		 *
+		 * @since NEXT
+		 *
+		 * @param \WP_HTML_Tag_Processor|\WP_HTML_Processor $tags The tag processor matched on an <img>.
+		 * @return bool True when any attribute was changed.
+		 */
+		private function restore_js_lazy_placeholders( $tags ): bool {
+			$changed = false;
+			try {
+				$data_src = $tags->get_attribute( 'data-src' );
+				if ( is_string( $data_src ) && '' !== $data_src ) {
+					$tags->set_attribute( 'src', $data_src );
+					$tags->remove_attribute( 'data-src' );
+					$changed = true;
+				}
+				$data_srcset = $tags->get_attribute( 'data-srcset' );
+				if ( null !== $data_srcset ) {
+					if ( '' !== $data_srcset ) {
+						$tags->set_attribute( 'srcset', (string) $data_srcset );
+					}
+					$tags->remove_attribute( 'data-srcset' );
+					$changed = true;
+				}
+				$data_sizes = $tags->get_attribute( 'data-sizes' );
+				if ( null !== $data_sizes ) {
+					if ( '' !== $data_sizes ) {
+						$tags->set_attribute( 'sizes', (string) $data_sizes );
+					}
+					$tags->remove_attribute( 'data-sizes' );
+					$changed = true;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $changed;
+		}
+
+		/**
+		 * Promote lazy `<source>` placeholders inside `<picture>` blocks whose
+		 * IMG was stamped eager.
+		 *
+		 * `WP_HTML_Tag_Processor` is forward-only and exposes no parent node,
+		 * so responsive heroes are handled in a second pass: for each
+		 * `<picture>` block containing a `loading="eager"` image, sibling
+		 * `<source data-srcset>`/`data-sizes` placeholders are promoted to
+		 * `srcset`/`sizes`. Fail-open: any parse failure returns the buffer
+		 * unchanged.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $buffer The HTML buffer.
+		 * @return string The buffer with eager-picture sources promoted.
+		 */
+		private function promote_eager_picture_sources( string $buffer ): string {
+			try {
+				if ( false === stripos( $buffer, '<picture' ) ) {
+					return $buffer;
+				}
+				$updated = preg_replace_callback(
+					'#<picture\b[^>]*>.*?</picture>#is',
+					function ( array $m ): string {
+						$block = $m[0];
+						if ( false === stripos( $block, 'loading="eager"' ) && false === stripos( $block, "loading='eager'" ) ) {
+							return $block;
+						}
+						$rebuilt = preg_replace_callback(
+							'#<source\b[^>]*>#i',
+							function ( array $sm ): string {
+								try {
+									$source = new \WP_HTML_Tag_Processor( $sm[0] );
+									if ( ! $source->next_tag( array( 'tag_name' => 'source' ) ) ) {
+										return $sm[0];
+									}
+									$this->restore_js_lazy_placeholders( $source );
+									return $source->get_updated_html();
+								} catch ( \Throwable $e ) {
+									unset( $e );
+									return $sm[0];
+								}
+							},
+							$block
+						);
+						return is_string( $rebuilt ) ? $rebuilt : $block;
+					},
+					$buffer
+				);
+				return is_string( $updated ) ? $updated : $buffer;
 			} catch ( \Throwable $e ) {
 				return $buffer;
 			}
@@ -3706,34 +3792,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Strip JS-lazy placeholder classes from the current IMG tag.
 		 *
-		 * Removes `wppo-lazy`, `wppo-lazyload`, `lazyload`, `lazyloaded` and
-		 * `lazyloading` tokens while preserving all other classes. No-op when
-		 * the tag carries no class attribute.
+		 * Removes `wppo-lazy`, `wppo-lazyload`, `lazyload`, `lazyloaded`,
+		 * `lazyloading` and the bare `lazy` token (exact-token match, so
+		 * classes like `lazy-button` are preserved) while keeping all other
+		 * classes. No-op when the tag carries no class attribute.
 		 *
 		 * @since NEXT
 		 *
-		 * @param \WP_HTML_Tag_Processor $tags The tag processor matched on an <img>.
-		 * @return void
+		 * @param \WP_HTML_Tag_Processor|\WP_HTML_Processor $tags The tag processor matched on an <img>.
+		 * @return bool True when a class token was stripped.
 		 */
-		private function remove_lazy_classes( $tags ): void {
+		private function remove_lazy_classes( $tags ): bool {
 			$class = $tags->get_attribute( 'class' );
 			if ( null === $class ) {
-				return;
+				return false;
 			}
-			$lazy_tokens = array( 'wppo-lazy', 'wppo-lazyload', 'lazyload', 'lazyloaded', 'lazyloading' );
+			$lazy_tokens = array( 'wppo-lazy', 'wppo-lazyload', 'lazyload', 'lazyloaded', 'lazyloading', 'lazy' );
 			$tokens      = preg_split( '/\s+/', (string) $class, -1, PREG_SPLIT_NO_EMPTY );
 			if ( ! is_array( $tokens ) ) {
-				return;
+				return false;
 			}
 			$kept = array_values( array_diff( $tokens, $lazy_tokens ) );
 			if ( count( $kept ) === count( $tokens ) ) {
-				return;
+				return false;
 			}
 			if ( empty( $kept ) ) {
 				$tags->remove_attribute( 'class' );
 			} else {
 				$tags->set_attribute( 'class', implode( ' ', $kept ) );
 			}
+			return true;
 		}
 
 		/**
@@ -3778,6 +3866,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							! $stamped &&
 							$this->tag_matches_lcp_url( $processor, $lcp_url )
 						) {
+							$this->restore_js_lazy_placeholders( $processor );
+							$this->remove_lazy_classes( $processor );
 							if ( null === $processor->get_attribute( 'fetchpriority' ) ) {
 								$processor->set_attribute( 'fetchpriority', 'high' );
 							}
@@ -3807,6 +3897,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$stamped = false;
 			while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
 				if ( $this->tag_matches_lcp_url( $tags, $lcp_url ) ) {
+					$this->restore_js_lazy_placeholders( $tags );
+					$this->remove_lazy_classes( $tags );
 					if ( null === $tags->get_attribute( 'fetchpriority' ) ) {
 						$tags->set_attribute( 'fetchpriority', 'high' );
 					}
@@ -3864,6 +3956,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$changed = false;
 				while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
 					if ( $this->tag_matches_lcp_url( $tags, $lcp_url ) ) {
+						if ( $this->restore_js_lazy_placeholders( $tags ) ) {
+							$changed = true;
+						}
+						if ( $this->remove_lazy_classes( $tags ) ) {
+							$changed = true;
+						}
 						if ( 'lazy' === $tags->get_attribute( 'loading' ) ) {
 							$tags->remove_attribute( 'loading' );
 							$changed = true;
@@ -3950,10 +4048,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Whether the buffer already contains a preload link for the image URL.
 		 *
-		 * Scans `<link rel="preload">` tags and compares normalized hrefs so
-		 * absolute-vs-relative URLs and WordPress size-suffix variants dedup
-		 * instead of emitting a duplicate hint. Fail-open: any parse failure
-		 * returns false (emit the hint) rather than skipping it.
+		 * Scans `<link>` tags whose `rel` token list contains `preload` and
+		 * whose `as` attribute is either `image` or absent, then compares the
+		 * normalized href (absolute-vs-relative agnostic) plus the raw query
+		 * string, so versioned assets (`hero.jpg?v=1` vs `hero.jpg?v=2`)
+		 * emit distinct hints. WordPress size-suffix variants only collapse
+		 * when the requested URL itself carries a size suffix — a
+		 * `hero-300x200.jpg` preload never suppresses the full-size
+		 * `hero.jpg` hint. Fail-open: any parse failure returns false (emit
+		 * the hint) rather than skipping it.
 		 *
 		 * @since NEXT
 		 *
@@ -3967,18 +4070,68 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( '' === $needle ) {
 					return false;
 				}
-				if ( ! preg_match_all( '#<link[^>]*rel=["\']preload["\'][^>]*>#i', $buffer, $links ) ) {
+				$needle_exact     = $this->normalize_image_url( $url, false );
+				$needle_has_sizes = ( '' !== $needle_exact && $needle_exact !== $needle );
+				$needle_query     = $this->get_url_query( $url );
+				if ( ! preg_match_all( '#<link\b[^>]*>#i', $buffer, $links ) ) {
 					return false;
 				}
 				foreach ( $links[0] as $link ) {
-					if ( preg_match( '#href=["\']([^"\']+)["\']#i', $link, $hm ) && $this->normalize_image_url( $hm[1] ) === $needle ) {
-						return true;
+					if ( ! preg_match( '#rel=["\']([^"\']*)["\']#i', $link, $rm ) ) {
+						continue;
 					}
+					$rel_tokens = preg_split( '/\s+/', strtolower( trim( $rm[1] ) ), -1, PREG_SPLIT_NO_EMPTY );
+					if ( ! is_array( $rel_tokens ) || ! in_array( 'preload', $rel_tokens, true ) ) {
+						continue;
+					}
+					if ( preg_match( '#\bas\s*=\s*["\']([^"\']*)["\']#i', $link, $am ) && 'image' !== strtolower( trim( $am[1] ) ) ) {
+						continue;
+					}
+					if ( ! preg_match( '#href=["\']([^"\']+)["\']#i', $link, $hm ) ) {
+						continue;
+					}
+					if ( $this->normalize_image_url( $hm[1] ) !== $needle ) {
+						continue;
+					}
+					if ( ! $needle_has_sizes && $this->normalize_image_url( $hm[1], false ) !== $needle_exact ) {
+						continue;
+					}
+					if ( $this->get_url_query( $hm[1] ) !== $needle_query ) {
+						continue;
+					}
+					return true;
 				}
 			} catch ( \Throwable $e ) {
 				return false;
 			}
 			return false;
+		}
+
+		/**
+		 * Get the raw query string of a URL for preload-dedup comparison.
+		 *
+		 * `normalize_image_url()` deliberately drops the query string for LCP
+		 * matching, but preload hints are per-resource: `img.jpg?v=1` and
+		 * `img.jpg?v=2` are distinct. Fail-open: any parse failure returns an
+		 * empty string.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $url The URL to inspect.
+		 * @return string The query string without the leading `?`, or empty.
+		 */
+		private function get_url_query( string $url ): string {
+			try {
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$parsed = wp_parse_url( $url, PHP_URL_QUERY );
+					if ( is_string( $parsed ) && '' !== $parsed ) {
+						return $parsed;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return '';
 		}
 
 		/**
@@ -4031,14 +4184,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Resolves protocol-relative and root-relative URLs against home_url(),
 		 * drops the scheme and any query string, and strips WordPress generated
 		 * size suffixes (-NNNxNNN, -scaled, -eNNN) so derived assets are treated
-		 * as the same image as their full-size original.
+		 * as the same image as their full-size original. Pass
+		 * `$strip_size_suffix = false` to keep the suffix (used by preload
+		 * dedup, which only collapses size variants when the requested URL
+		 * itself carries one).
 		 *
 		 * @since NEXT
 		 *
-		 * @param string $url The raw URL to normalize.
+		 * @param string $url               The raw URL to normalize.
+		 * @param bool   $strip_size_suffix Whether to strip WordPress size suffixes. Default true.
 		 * @return string Normalized host + path, or an empty string when unparseable.
 		 */
-		private function normalize_image_url( string $url ): string {
+		private function normalize_image_url( string $url, bool $strip_size_suffix = true ): string {
 			$url = trim( $url );
 
 			if ( '' === $url ) {
@@ -4067,7 +4224,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			// The `$` anchor lives inside the lookahead so the suffix only
 			// strips immediately before the file extension at end of path
 			// (a trailing `$` outside the lookahead could never match).
-			$path = (string) preg_replace( '#-(?:\d+x\d+|scaled|e\d+)(?=\.[A-Za-z0-9]+$)#', '', $path );
+			if ( $strip_size_suffix ) {
+				$path = (string) preg_replace( '#-(?:\d+x\d+|scaled|e\d+)(?=\.[A-Za-z0-9]+$)#', '', $path );
+			}
 
 			return $host . $path;
 		}
@@ -4389,14 +4548,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						$tag_name = $wppo_tags->get_tag();
 
 						if ( 'IMG' === $tag_name ) {
-							$src = $wppo_tags->get_attribute( 'src' );
-							if ( null === $src ) {
+							$src      = $wppo_tags->get_attribute( 'src' );
+							$data_src = $wppo_tags->get_attribute( 'data-src' );
+							// Same src-or-data-src counting as
+							// unlazyload_first_images() so input already
+							// containing JS-lazy markup stays aligned.
+							if ( ( null === $src || '' === $src ) && ( null === $data_src || '' === $data_src ) ) {
 								continue;
 							}
 
 							++$img_counter;
 							if ( $exclude_img_count >= $img_counter ) {
-								$exclude_imgs[] = $src;
+								$count_src = ( is_string( $src ) && '' !== $src ) ? $src : $data_src;
+								if ( is_string( $count_src ) && '' !== $count_src ) {
+									$exclude_imgs[] = $count_src;
+								}
 							}
 
 							$should_exclude = false;
@@ -4405,9 +4571,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							// http/https and WordPress size-suffix variants
 							// (e.g. hero-300x200.jpg matches candidate hero.jpg),
 							// which substring matching alone would miss.
+							$match_src = ( is_string( $src ) && '' !== $src ) ? $src : (string) $data_src;
 							if ( '' !== $od_lcp_normalized || '' !== $candidate_lcp_normalized ) {
 								try {
-									$src_normalized = Util::normalize_url( (string) $src );
+									$src_normalized = Util::normalize_url( $match_src );
 									if ( ( '' !== $od_lcp_normalized && $src_normalized === $od_lcp_normalized )
 									|| ( '' !== $candidate_lcp_normalized && $src_normalized === $candidate_lcp_normalized ) ) {
 										$should_exclude = true;
@@ -4418,7 +4585,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							}
 							if ( ! $should_exclude ) {
 								foreach ( $exclude_imgs as $exclude_img ) {
-									if ( '' !== $exclude_img && false !== strpos( $src, $exclude_img ) ) {
+									if ( '' !== $exclude_img && '' !== $match_src && false !== strpos( $match_src, $exclude_img ) ) {
 										$should_exclude = true;
 										break;
 									}
@@ -4433,7 +4600,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 										'decoding'      => 'sync',
 									)
 								);
-								$this->maybe_autofill_alt_processor( $wppo_tags, (string) $src );
+								$this->maybe_autofill_alt_processor( $wppo_tags, $match_src );
 								continue;
 							}
 
@@ -4441,7 +4608,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 								continue;
 							}
 
-							$original_src_decoded = htmlspecialchars_decode( $src, ENT_QUOTES );
+							$original_src_decoded = htmlspecialchars_decode( $match_src, ENT_QUOTES );
 
 							if ( preg_match( '#^data:image/#i', $original_src_decoded ) ) {
 								$this->maybe_autofill_alt_processor( $wppo_tags, $original_src_decoded );
