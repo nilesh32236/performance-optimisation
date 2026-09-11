@@ -149,15 +149,22 @@ class MainLegacyQueryStringsTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Canonical defaults must not contain the legacy key.
+	 * The legacy key is retained in the canonical schema as a known-but-inert
+	 * entry so `wp wppo verify --check=settings_schema` recognises previously
+	 * stored values instead of flagging them as unknown sub-keys. It must
+	 * default to `false` and still never enable the removed stripping path.
 	 */
-	public function test_defaults_have_no_remove_query_strings_key(): void {
+	public function test_defaults_retain_legacy_remove_query_strings_key_as_false(): void {
 		$defaults = Util::get_default_settings();
 
-		$this->assertArrayNotHasKey(
+		$this->assertArrayHasKey(
 			'removeQueryStrings',
 			$defaults['file_optimisation'],
-			'Canonical defaults must not seed the removed legacy key (#925)'
+			'Canonical defaults must keep the legacy key known for the schema validator'
+		);
+		$this->assertFalse(
+			$defaults['file_optimisation']['removeQueryStrings'],
+			'Legacy key default must be false so no default install enables the removed path'
 		);
 	}
 
