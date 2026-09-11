@@ -172,6 +172,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'criticalCSS'                  => false,
 					'ccssMaxSize'                  => 20480,
 					'ccssSafelistExtra'            => '',
+					'ccssRumPriority'              => true,
+					'usedCssRumPriority'           => true,
 					'hostGoogleFontsLocally'       => false,
 					'blockAssetsOnDemand'          => function_exists( 'wp_load_classic_theme_block_styles_on_demand' ),
 					'loadAllCoreBlockAssets'       => false,

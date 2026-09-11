@@ -1711,6 +1711,94 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		}
 
 		/**
+		 * Order post IDs worst-p75 LCP first for used-CSS queue prioritization.
+		 *
+		 * Read-only ordering signal (issue #1059): scores each post's
+		 * permalink via RUM::score_url_lcp() (RUM path p75 + latest
+		 * PageSpeed trend LCP blend). Worst p75 first so slow pages get
+		 * optimized CSS first. Fail-open: missing RUM/trends, disabled
+		 * setting, or any failure returns FIFO ID order. Purge-coupled
+		 * invalidation semantics unchanged. Multisite-safe: per-site
+		 * option reads only.
+		 *
+		 * @since NEXT
+		 * @param int[] $post_ids Post IDs in FIFO order.
+		 * @return int[] Ordered post IDs (same entries).
+		 */
+		public static function order_post_ids_by_rum_priority( array $post_ids ): array {
+			try {
+				if ( count( $post_ids ) < 2 ) {
+					return array_values( array_map( 'intval', $post_ids ) );
+				}
+				$post_ids = array_values( array_map( 'intval', $post_ids ) );
+				$enabled  = true;
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) && function_exists( 'get_option' ) ) {
+					$settings = \PerformanceOptimise\Inc\Util::get_settings();
+					if ( isset( $settings['file_optimisation']['usedCssRumPriority'] ) ) {
+						$enabled = (bool) $settings['file_optimisation']['usedCssRumPriority'];
+					}
+				}
+				if ( ! $enabled ) {
+					return $post_ids;
+				}
+				if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'get_path_lcp_priority' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'score_url_lcp' ) ) {
+					return $post_ids;
+				}
+				if ( ! function_exists( 'get_permalink' ) ) {
+					return $post_ids;
+				}
+				$priority = \PerformanceOptimise\Inc\RUM::get_path_lcp_priority();
+				// Fetch trends once for the whole ordering pass instead of once
+				// per post inside score_url_lcp() (issue #1059 review). A
+				// trend-only site (no RUM samples yet) must still prioritize,
+				// so only fall back to FIFO when both signals are empty.
+				$trends = null;
+				if ( class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) && method_exists( 'PerformanceOptimise\Inc\Pagespeed', 'get_trends' ) ) {
+					$trends = \PerformanceOptimise\Inc\Pagespeed::get_trends();
+					if ( ! is_array( $trends ) ) {
+						$trends = array();
+					}
+				}
+				if ( empty( $priority ) && empty( $trends ) ) {
+					return $post_ids;
+				}
+				$scores = array();
+				foreach ( $post_ids as $post_id ) {
+					$permalink          = get_permalink( $post_id );
+					$scores[ $post_id ] = ( is_string( $permalink ) && '' !== $permalink ) ? \PerformanceOptimise\Inc\RUM::score_url_lcp( $permalink, $priority, $trends ) : 0.0;
+				}
+				$has_signal = false;
+				foreach ( $scores as $score ) {
+					if ( $score > 0 ) {
+						$has_signal = true;
+						break;
+					}
+				}
+				if ( ! $has_signal ) {
+					return $post_ids;
+				}
+				$order = $post_ids;
+				// usort() is not stable: break score ties by original FIFO
+				// position so equal-score posts keep a deterministic order.
+				$pos = array_flip( array_values( $post_ids ) );
+				usort(
+					$order,
+					static function ( $a, $b ) use ( $scores, $pos ) {
+						$sa = $scores[ (int) $a ] ?? 0.0;
+						$sb = $scores[ (int) $b ] ?? 0.0;
+						if ( $sa === $sb ) {
+							return ( $pos[ (int) $a ] ?? 0 ) <=> ( $pos[ (int) $b ] ?? 0 );
+						}
+						return $sa > $sb ? -1 : 1;
+					}
+				);
+				return array_values( array_map( 'intval', $order ) );
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+				return array_values( array_map( 'intval', $post_ids ) );
+			}
+		}
+
+		/**
 		 * Queue background used-CSS regeneration for all published posts.
 		 *
 		 * @return int Number of jobs queued.
@@ -1738,6 +1826,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			// Intentional bypass of WP_Query filters (pre_get_posts, language plugins) for performance:
 			// direct $wpdb cursor pagination (ID > last_id) avoids OFFSET cost on large sites. Site-specific
 			// filtering must be handled separately if needed.
+			// RUM prioritization is applied per cursor batch (sort-then-enqueue):
+			// buffering every post ID plus a get_permalink() per post in one
+			// worker risks memory growth/timeouts on large sites (issue #1059
+			// review), so each 200-row batch is ordered worst-p75 first and
+			// enqueued before the next batch is fetched. Streaming preserves the
+			// original memory profile; order_post_ids_by_rum_priority() is a
+			// no-op FIFO passthrough when the setting is off or no signal exists.
 			// Hoisted scheduler snapshot (paginated to exhaustion) so a 5000-post
 			// site issues a bounded set of store queries instead of one per
 			// 200-post cursor batch. $lookup_ok disambiguates "none scheduled"
@@ -1805,7 +1900,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					break;
 				}
 
-				foreach ( $post_ids as $post_id ) {
+				$batch_ids = self::order_post_ids_by_rum_priority( array_values( array_map( 'intval', $post_ids ) ) );
+
+				foreach ( $batch_ids as $post_id ) {
 					$post_id = (int) $post_id;
 					if ( isset( $scheduled[ $post_id ] ) ) {
 						continue;

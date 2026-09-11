@@ -212,6 +212,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		private static array $field_lcp_result_memo = array();
 
 		/**
+		 * Per-request memo for the Web Vitals trends option.
+		 *
+		 * Queue ordering calls score_url_lcp() once per candidate URL when
+		 * ordering the critical-CSS / used-CSS queues (issue #1059 review); without a memo
+		 * each call re-reads/deserializes the full wppo_web_vitals_trends
+		 * option. An empty array is a valid result, so the loaded flag tracks
+		 * fetch state separately from the value.
+		 *
+		 * @since NEXT
+		 * @var array|null
+		 */
+		private static ?array $score_trends_memo = null;
+
+		/**
+		 * Whether the trends memo has been populated this request.
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static bool $score_trends_loaded = false;
+
+		/**
 		 * Generation counter for the per-path top-URL transient index.
 		 *
 		 * Bumped on every aggregate flush so stale per-path entries are
@@ -255,6 +277,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			self::$field_lcp_aggregate   = null;
 			self::$field_lcp_loaded      = false;
 			self::$field_lcp_result_memo = array();
+			self::$score_trends_memo     = null;
+			self::$score_trends_loaded   = false;
 			self::$top_url_generation    = -1;
 		}
 
@@ -1615,6 +1639,116 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				return $rows;
 			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
 				return array();
+			}
+		}
+
+		/**
+		 * Get worst p75 LCP per normalized path for CSS queue prioritization.
+		 *
+		 * Read-only ordering signal for the critical-CSS / used-CSS queues
+		 * (issue #1059): collapses get_field_lcp_p75_by_segment() rows to
+		 * `path => max(p75)`. Callers blend this map with the latest
+		 * PageSpeed trend LCP snapshot per candidate URL via score_url_lcp()
+		 * (resolved via md5(esc_url_raw(url)) keys, max of mobile/desktop).
+		 * Local aggregates only — no new external calls, no PII. Fail-open:
+		 * any failure returns array(). Multisite-safe: per-site get_option()
+		 * reads only.
+		 *
+		 * @since NEXT
+		 * @param int|null $min_samples Minimum samples per segment. Null resolves via get_field_lcp_min_samples().
+		 * @return array<string, float> Normalized path => worst p75 LCP in ms, worst-first order.
+		 */
+		public static function get_path_lcp_priority( ?int $min_samples = null ): array {
+			try {
+				if ( ! function_exists( 'get_option' ) ) {
+					return array();
+				}
+				$scores = array();
+				$rows   = self::get_field_lcp_p75_by_segment( $min_samples );
+				foreach ( $rows as $row ) {
+					if ( ! is_array( $row ) || ! isset( $row['path'], $row['p75'] ) ) {
+						continue;
+					}
+					$path = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::normalize_rum_path( (string) $row['path'] ) : (string) $row['path'];
+					$p75  = (float) $row['p75'];
+					if ( $p75 <= 0 ) {
+						continue;
+					}
+					if ( ! isset( $scores[ $path ] ) || $p75 > $scores[ $path ] ) {
+						$scores[ $path ] = $p75;
+					}
+				}
+				arsort( $scores, SORT_NUMERIC );
+				return $scores;
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+				return array();
+			}
+		}
+
+		/**
+		 * Score a queue URL by worst p75 LCP (RUM path + trend blend).
+		 *
+		 * Resolves $url to its normalized path, looks up the RUM priority
+		 * map, and takes the max with the latest stored PageSpeed trend LCP
+		 * for md5(esc_url_raw($url))_{mobile,desktop} keys. Returns 0.0 when
+		 * no signal exists (caller keeps FIFO order). Read-only, fail-open.
+		 *
+		 * @since NEXT
+		 * @param string               $url Candidate queue URL.
+		 * @param array<string, float> $priority Optional pre-loaded get_path_lcp_priority() map.
+		 * @param array|null           $trends Optional pre-loaded Pagespeed::get_trends() map. Null loads (and per-request memos) it once.
+		 * @return float Worst p75 LCP in ms, or 0.0 when unknown.
+		 */
+		public static function score_url_lcp( string $url, ?array $priority = null, ?array $trends = null ): float {
+			try {
+				if ( '' === trim( $url ) ) {
+					return 0.0;
+				}
+				if ( null === $priority ) {
+					$priority = self::get_path_lcp_priority();
+				}
+				$path = '/';
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$parts = wp_parse_url( $url );
+					$path  = isset( $parts['path'] ) && '' !== $parts['path'] ? (string) $parts['path'] : '/';
+				} elseif ( function_exists( 'parse_url' ) ) {
+					$parts = parse_url( $url ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url
+					$path  = isset( $parts['path'] ) && '' !== $parts['path'] ? (string) $parts['path'] : '/';
+				}
+				$path = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::normalize_rum_path( $path ) : $path;
+				$best = isset( $priority[ $path ] ) ? (float) $priority[ $path ] : 0.0;
+
+				if ( class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) && method_exists( 'PerformanceOptimise\Inc\Pagespeed', 'get_trends' ) && function_exists( 'esc_url_raw' ) && function_exists( 'get_option' ) ) {
+					if ( null === $trends ) {
+						// Per-request memo: ordering N queue URLs must not
+						// re-read/deserialize the full trends option N times
+						// (issue #1059 review). An empty array is a valid result,
+						// so track fetch state separately from the value. Reset
+						// alongside the aggregate memo via clear_field_lcp_cache().
+						if ( ! self::$score_trends_loaded ) {
+							self::$score_trends_memo   = \PerformanceOptimise\Inc\Pagespeed::get_trends();
+							self::$score_trends_loaded = true;
+						}
+						$trends = is_array( self::$score_trends_memo ) ? self::$score_trends_memo : array();
+					}
+					if ( is_array( $trends ) ) {
+						$canonical = esc_url_raw( $url );
+						foreach ( array( 'mobile', 'desktop' ) as $strategy ) {
+							$key = md5( $canonical ) . '_' . $strategy;
+							if ( ! isset( $trends[ $key ] ) || ! is_array( $trends[ $key ] ) || empty( $trends[ $key ] ) ) {
+								continue;
+							}
+							$snapshots = $trends[ $key ];
+							$last      = end( $snapshots );
+							if ( is_array( $last ) && isset( $last['lcp'] ) && is_numeric( $last['lcp'] ) ) {
+								$best = max( $best, (float) $last['lcp'] );
+							}
+						}
+					}
+				}
+				return $best >= 0 ? (float) $best : 0.0;
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+				return 0.0;
 			}
 		}
 

@@ -2428,6 +2428,94 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
+		 * Order templates worst-p75 LCP first for CCSS queue prioritization.
+		 *
+		 * Read-only ordering signal (issue #1059): scores each template's
+		 * sample URL via RUM::score_url_lcp() (RUM path p75 + latest
+		 * PageSpeed trend LCP blend). Worst p75 first so high-traffic slow
+		 * pages get optimized CSS first. Fail-open: missing RUM/trends,
+		 * disabled setting, or any failure returns FIFO template order.
+		 * Cap, safelist, and purge-coupled invalidation semantics unchanged.
+		 * Multisite-safe: per-site option reads only.
+		 *
+		 * @since NEXT
+		 * @param array<string, string> $templates Template identifier => Label.
+		 * @return array<string, string> Ordered templates (same entries).
+		 */
+		public static function order_templates_by_rum_priority( array $templates ): array {
+			try {
+				if ( count( $templates ) < 2 ) {
+					return $templates;
+				}
+				$enabled = true;
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) && function_exists( 'get_option' ) ) {
+					$settings = \PerformanceOptimise\Inc\Util::get_settings();
+					if ( isset( $settings['file_optimisation']['ccssRumPriority'] ) ) {
+						$enabled = (bool) $settings['file_optimisation']['ccssRumPriority'];
+					}
+				}
+				if ( ! $enabled ) {
+					return $templates;
+				}
+				if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'get_path_lcp_priority' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'score_url_lcp' ) ) {
+					return $templates;
+				}
+				$priority = \PerformanceOptimise\Inc\RUM::get_path_lcp_priority();
+				// Fetch trends once for the whole ordering pass instead of once
+				// per template inside score_url_lcp() (issue #1059 review). A
+				// trend-only site (no RUM samples yet) must still prioritize,
+				// so only fall back to FIFO when both signals are empty.
+				$trends = null;
+				if ( class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) && method_exists( 'PerformanceOptimise\Inc\Pagespeed', 'get_trends' ) ) {
+					$trends = \PerformanceOptimise\Inc\Pagespeed::get_trends();
+					if ( ! is_array( $trends ) ) {
+						$trends = array();
+					}
+				}
+				if ( empty( $priority ) && empty( $trends ) ) {
+					return $templates;
+				}
+				$scores = array();
+				foreach ( $templates as $template => $label ) {
+					$url                          = self::get_sample_url( (string) $template );
+					$scores[ (string) $template ] = ( is_string( $url ) && '' !== $url ) ? \PerformanceOptimise\Inc\RUM::score_url_lcp( $url, $priority, $trends ) : 0.0;
+				}
+				$has_signal = false;
+				foreach ( $scores as $score ) {
+					if ( $score > 0 ) {
+						$has_signal = true;
+						break;
+					}
+				}
+				if ( ! $has_signal ) {
+					return $templates;
+				}
+				$order = array_keys( $templates );
+				// usort() is not stable: break score ties by original FIFO
+				// position so equal-score templates keep a deterministic order.
+				$pos = array_flip( array_keys( $templates ) );
+				usort(
+					$order,
+					static function ( $a, $b ) use ( $scores, $pos ) {
+						$sa = $scores[ (string) $a ] ?? 0.0;
+						$sb = $scores[ (string) $b ] ?? 0.0;
+						if ( $sa === $sb ) {
+							return ( $pos[ (string) $a ] ?? 0 ) <=> ( $pos[ (string) $b ] ?? 0 );
+						}
+						return $sa > $sb ? -1 : 1;
+					}
+				);
+				$ordered = array();
+				foreach ( $order as $template ) {
+					$ordered[ $template ] = $templates[ $template ];
+				}
+				return $ordered;
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+				return $templates;
+			}
+		}
+
+		/**
 		 * Regenerate all template CCSS files via Action Scheduler.
 		 *
 		 * @return int Number of jobs queued.
@@ -2438,6 +2526,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			$queued    = 0;
 
 			self::clear_all();
+
+			$templates = self::order_templates_by_rum_priority( $templates );
 
 			foreach ( $templates as $template => $label ) {
 				$hash = self::get_template_hash( $template );
