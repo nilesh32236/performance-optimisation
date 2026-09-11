@@ -122,6 +122,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		private static bool $drift_handled_this_request = false;
 
 		/**
+		 * Reset the per-request drift dedupe flag.
+		 *
+		 * Intended for PHPUnit (statics persist across tests in one process)
+		 * and long-lived workers where a second drift signal in the same
+		 * process must not be silently suppressed.
+		 *
+		 * @internal
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_drift_state_for_tests(): void {
+			self::$drift_handled_this_request = false;
+		}
+
+		/**
 		 * Register the upgrader hook plus builder-drift hooks.
 		 *
 		 * Drift hooks (issue #1023) listen to Elementor asset-regen signals
@@ -165,9 +180,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 					/**
 					 * Fires after builder-drift requeue (issue #1023).
 					 *
+					 * Always passes an explicit post ID: 0 for the site-wide
+					 * elementor/core/files/clear_cache signal (no post context).
+					 *
 					 * @since NEXT
+					 *
+					 * @param int $post_id Post ID, or 0 for the site-wide signal.
 					 */
-					do_action( 'wppo_builder_drift_requeue' );
+					do_action( 'wppo_builder_drift_requeue', 0 );
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -192,6 +212,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 */
 		public function on_builder_drift_save( $post_id, $editor_data ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- Signature must match the elementor/editor/after_save action.
 			unset( $editor_data );
+			if ( self::$drift_suspended ) {
+				return;
+			}
+			if ( function_exists( 'doing_action' ) && doing_action( 'upgrader_process_complete' ) ) {
+				return;
+			}
 			try {
 				$post_id = (int) $post_id;
 				if ( $post_id <= 0 ) {

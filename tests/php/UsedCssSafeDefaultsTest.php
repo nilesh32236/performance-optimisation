@@ -36,31 +36,40 @@ class UsedCssSafeDefaultsTest extends \PHPUnit\Framework\TestCase {
 
 	/**
 	 * Popup selectors are kept even when absent from the DOM walk.
+	 *
+	 * Uses the presets without the bare '*' built-in entry so the popup
+	 * safelist is genuinely exercised (with the full safelist the '*'
+	 * entry keeps every selector by pre-existing semantics).
 	 */
 	public function test_popup_selector_is_kept_by_default(): void {
 		Functions\when( 'has_filter' )->justReturn( false );
 		Functions\when( 'get_option' )->justReturn( array() );
-		$used_css = new Used_CSS( array( 'file_optimisation' => array() ) );
+		$used_css  = new Used_CSS( array( 'file_optimisation' => array() ) );
+		$safe_prop = new \ReflectionProperty( Used_CSS::class, 'safelist' );
+		$safe_prop->setAccessible( true );
+		$safe_prop->setValue( $used_css, Used_CSS::get_safelist_presets() );
+		$used = array(
+			'tags'    => array(),
+			'classes' => array(),
+			'ids'     => array(),
+			'attrs'   => array(),
+		);
 		$this->assertTrue(
 			$used_css->is_selector_used(
 				'.elementor-popup-modal .dialog-widget-content',
-				array(
-					'tags'    => array(),
-					'classes' => array(),
-					'ids'     => array(),
-					'attrs'   => array(),
-				)
+				$used
 			)
 		);
 		$this->assertTrue(
 			$used_css->is_selector_used(
 				'.mfp-content',
-				array(
-					'tags'    => array(),
-					'classes' => array(),
-					'ids'     => array(),
-					'attrs'   => array(),
-				)
+				$used
+			)
+		);
+		$this->assertFalse(
+			$used_css->is_selector_used(
+				'.totally-unrelated-widget',
+				$used
 			)
 		);
 	}

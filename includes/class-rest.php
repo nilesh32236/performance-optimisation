@@ -1912,14 +1912,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			$message = $page_ok
-				? __( 'Page cache purged, but used CSS purge failed.', 'performance-optimisation' )
-				: __( 'Used CSS purged, but page cache purge failed.', 'performance-optimisation' );
+			? __( 'Page cache purged, but used CSS purge failed.', 'performance-optimisation' )
+			: __( 'Used CSS purged, but page cache purge failed.', 'performance-optimisation' );
 			Log::add( $message );
 
 			return $this->send_response(
 				$data,
-				true,
-				200,
+				false,
+				207,
 				$message
 			);
 		}

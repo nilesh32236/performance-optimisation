@@ -59,6 +59,23 @@ add_action( 'wppo_after_builder_purge', function( $matched ) {
 
 ---
 
+### `wppo_builder_drift_requeue`
+Fires after builder-drift detection requeues used-CSS regeneration (issue #1023). Emitted by `Builder_Purge_Watcher::on_builder_drift()` (Elementor CSS regen; full-site purge, at most once per request) and `Builder_Purge_Watcher::on_builder_drift_save( $post_id )` (explicit editor save, always requeues without an mtime check since the save itself proves the markup changed; fires only when a job was queued). Always passes an explicit post ID: `0` for the site-wide signal, the saved post ID otherwise. @since NEXT.
+
+**Parameters:**
+- `$post_id` *(int)* — Post ID saved in the builder, or `0` for the site-wide signal.
+
+**Example:**
+```php
+add_action( 'wppo_builder_drift_requeue', function( $post_id = 0 ) {
+    if ( $post_id ) {
+        error_log( "Used CSS requeued for post {$post_id} after builder drift." );
+    }
+}, 10, 1 );
+```
+
+---
+
 ### `wppo_database_cleanup_completed`
 Fires after a database cleanup operation completes. Since NEXT, also fires per-type after each individual cleanup (before the `all` aggregate). @since NEXT for per-type.
 
@@ -258,23 +275,6 @@ add_filter( 'wppo_used_css_safelist', function( $safelist ) {
     $safelist[] = '.my-popup-';
     return $safelist;
 } );
-```
-
----
-
-### `wppo_builder_drift_requeue`
-Fires after builder-drift detection requeues used-CSS regeneration (issue #1023). Emitted by `Builder_Purge_Watcher::on_builder_drift()` (no args, Elementor CSS regen; full-site purge, at most once per request) and `Builder_Purge_Watcher::on_builder_drift_save( $post_id )` (explicit editor save, always requeues without an mtime check since the save itself proves the markup changed; fires only when a job was queued). @since NEXT.
-
-**Parameters:**
-- `$post_id` *(int, optional)* — Post ID saved in the builder (only for the editor-save variant).
-
-**Example:**
-```php
-add_action( 'wppo_builder_drift_requeue', function( $post_id = 0 ) {
-    if ( $post_id ) {
-        error_log( "Used CSS requeued for post {$post_id} after builder drift." );
-    }
-}, 10, 1 );
 ```
 
 ---

@@ -106,8 +106,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			// Prefix entries ending in '-' or '*' match via prefix in
 			// is_selector_used(); attribute entries (e.g. [data-elementor-type])
 			// match by attribute-name substring so compound selectors stay kept.
-			'.elementor-',
-			'.e-con*',
+			// Elementor + popup selectors live in get_safelist_presets() (the
+			// single source of truth, issue #1023) and are merged in
+			// init_safelist() — they are intentionally not repeated here.
 			'.et_*',
 			'.et_pb_*',
 			'.et-pb-',
@@ -119,18 +120,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			'.oxy-',
 			'.no-js',
 			'.js-enabled',
-			'[data-elementor-type]',
-			// Popup/modal selectors (issue #1023): popups render outside the
-			// static DOM walk (hidden containers, JS portals), so purge keeps
-			// Elementor + generic popup selectors by default.
-			'.elementor-popup-',
-			'.e-popup-',
-			'.dialog-',
-			'.popup-',
-			'.modal-',
-			'.mfp-',
-			'.swal2-',
-			'[data-elementor-type="popup"]',
 		);
 
 		/**
@@ -235,12 +224,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		/**
 		 * Safelist presets shipped safe-by-default (Elementor + popup selectors).
 		 *
-		 * This is the popup/Elementor subset of the built-in safelist below:
-		 * prefix entries ending in '-' or '*' match via prefix in
-		 * {@see is_selector_used()}; attribute entries match by attribute-name
-		 * substring. Filterable via the `wppo_used_css_safelist` filter.
-		 * init_safelist() merges these presets together with the built-in list
-		 * (deduplicated), so the two sources cannot drift.
+		 * This is the single source of truth for Elementor/popup safelist
+		 * entries: the built-in list above intentionally holds no
+		 * Elementor/popup selectors. init_safelist() merges these presets
+		 * together with the built-in list (deduplicated).
+		 * Prefix entries ending in '-' or '*' match via case-sensitive prefix
+		 * in {@see is_selector_used()}; attribute entries match by
+		 * attribute-name substring. Filterable via the
+		 * `wppo_used_css_safelist` filter.
 		 *
 		 * @return string[]
 		 * @since NEXT
@@ -663,6 +654,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				return true;
 			}
 
+			// Parsed once and reused for both the safelist prefix check and the
+			// conservative OR match below (issue #1023).
+			$parts = $this->extract_simple_selectors( $selector );
+
 			foreach ( $this->safelist as $safe ) {
 				if ( '' !== $safe && '[' === $safe[0] ) {
 					// Attribute safelist (e.g. [data-elementor-type]): match by
@@ -681,28 +676,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( '-' === $last_char || '_' === $last_char || '*' === $last_char ) {
 					$prefix = '*' === $last_char ? substr( $safe, 0, -1 ) : $safe;
 					// Note: a bare '*' entry yields an empty prefix, and
-					// strpos( $selector, '' ) === 0 keeps every selector
+					// strpos( $part, '' ) === 0 keeps every selector
 					// (pre-existing semantics, covered by
 					// DelaySafeDefaultsTest::test_unused_css_extra_safelist_merge).
-					if ( 0 === strpos( $selector, $prefix ) ) {
-						return true;
-					}
 					// Compound/descendant selectors (issue #1023): a popup token
 					// buried inside a wrapper, portal, or tag-qualified part
 					// (e.g. '.foo .popup-bar', 'div.modal-dialog',
 					// 'div.elementor-popup-modal', 'button.mfp-close') must keep
-					// the rule even though the full string does not start with
-					// the prefix. Fail-safe direction: keeping extra CSS can
-					// never break styling.
-					foreach ( $this->extract_simple_selectors( $selector ) as $part ) {
-						if ( 0 === strpos( $part, $prefix ) || false !== stripos( $part, $prefix ) ) {
+					// the rule. The check runs per simple-selector part with a
+					// case-sensitive prefix match (CSS class names are
+					// case-sensitive); keeping extra CSS can never break styling.
+					foreach ( $parts as $part ) {
+						if ( 0 === strpos( $part, $prefix ) ) {
 							return true;
 						}
 					}
 				}
 			}
 
-			$simple_selectors = $this->extract_simple_selectors( $selector );
+			$simple_selectors = $parts;
 
 			// Conservative OR logic: keep the rule if ANY simple selector part
 			// exists in the DOM, to avoid breaking descendant selectors like
@@ -1424,7 +1416,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * Requeue used CSS when builder assets drifted for a post.
 		 *
 		 * Compares the newest Elementor CSS mtime
-		 * (uploads/elementor/css/post-*.css, global css files) against the
+		 * (uploads/elementor/css/post-*.css, global.css, kit-*.css) against the
 		 * post's used-CSS sidecar mtime; when builder assets are newer, the
 		 * used CSS is stale and a regeneration job is queued. Fail-open: any
 		 * filesystem failure returns false (full CSS keeps serving).
@@ -1467,7 +1459,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		}
 
 		/**
-		 * Newest builder CSS asset mtime for a post (Elementor post/global CSS).
+		 * Newest builder CSS asset mtime for a post (Elementor post/global/kit CSS).
+		 *
+		 * Checks the fixed post/global candidates plus any kit stylesheets
+		 * (kit-*.css, global-kit CSS under uploads/elementor/css) via a
+		 * top-level glob, so kit/global-kit drift also triggers a requeue.
 		 *
 		 * @param int $post_id Post ID.
 		 * @return int|false Newest mtime, or false when no asset found.
@@ -1494,6 +1490,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 						$mtime = filemtime( $file );
 						if ( false !== $mtime && ( false === $newest || $mtime > $newest ) ) {
 							$newest = $mtime;
+						}
+					}
+				}
+				if ( function_exists( 'glob' ) ) {
+					$kit_files = glob( $base . '/kit-*.css' );
+					if ( is_array( $kit_files ) ) {
+						foreach ( $kit_files as $file ) {
+							if ( ! is_string( $file ) || ! file_exists( $file ) ) {
+								continue;
+							}
+							$mtime = filemtime( $file );
+							if ( false !== $mtime && ( false === $newest || $mtime > $newest ) ) {
+								$newest = $mtime;
+							}
 						}
 					}
 				}

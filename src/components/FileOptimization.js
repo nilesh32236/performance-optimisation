@@ -1087,11 +1087,17 @@ const FileOptimization = ( {
 											onClick={ handlePurgeUsedCssCache }
 											type="button"
 											disabled={ isPurging }
+											aria-busy={ isPurging }
 										>
-											{ __(
-												'Purge Page Cache + Used CSS',
-												'performance-optimisation'
-											) }
+											{ isPurging
+												? __(
+														'Purging…',
+														'performance-optimisation'
+												  )
+												: __(
+														'Purge Page Cache + Used CSS',
+														'performance-optimisation'
+												  ) }
 										</button>
 									</div>
 								) }

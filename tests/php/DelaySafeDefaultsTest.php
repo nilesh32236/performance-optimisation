@@ -316,20 +316,23 @@ class DelaySafeDefaultsTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Fixture mirror must stay in parity with the production built-in safelist.
+	 * Fixture mirror must stay in parity with the production safelist.
 	 *
 	 * The default_safelist() helper hand-mirrors the builder entries, so pin
-	 * it against the real Used_CSS built-in list — the matching tests would
+	 * it against the real Used_CSS safelist sources — the matching tests would
 	 * otherwise still pass if the production list drifts or drops an entry.
+	 * Elementor/popup entries live in get_safelist_presets() (single source
+	 * of truth, issue #1023); the rest live in the built-in list.
 	 */
 	public function test_safelist_fixture_matches_production_builtin(): void {
 		$instance = ( new \ReflectionClass( Used_CSS::class ) )->newInstanceWithoutConstructor();
 		$prop     = new \ReflectionProperty( Used_CSS::class, 'built_in_safelist' );
 		$prop->setAccessible( true );
 		$builtin = $prop->getValue( $instance );
+		$merged  = array_merge( Used_CSS::get_safelist_presets(), is_array( $builtin ) ? $builtin : array() );
 
 		foreach ( $this->default_safelist() as $entry ) {
-			$this->assertContains( $entry, $builtin, "Fixture entry {$entry} missing from production built-in safelist." );
+			$this->assertContains( $entry, $merged, "Fixture entry {$entry} missing from production safelist." );
 		}
 	}
 
