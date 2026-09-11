@@ -1637,6 +1637,37 @@ Filters the final click-to-play placeholder markup. @since NEXT.
 
 ---
 
+### `wppo_lazy_render_excluded_classes`
+Filters the CSS class tokens excluded from below-fold lazy rendering when `image_optimisation.lazyRenderExcludeBuilders` is on. Matching is token-based (exact class names, case-insensitive). @since NEXT.
+
+**Parameters:**
+- `$excluded_classes` *(string[])* — Default `array( 'elementor-section', 'et_pb_section' )`.
+
+**Example:**
+```php
+add_filter( 'wppo_lazy_render_excluded_classes', function( $classes ) {
+    $classes[] = 'my-builder-section';
+    return $classes;
+} );
+```
+
+---
+
+### `wppo_lazy_render_intrinsic_size`
+Filters the `contain-intrinsic-size` reserve appended alongside `content-visibility:auto` in below-fold lazy rendering. @since NEXT.
+
+**Parameters:**
+- `$intrinsic_size` *(string)* — Default `'auto 600px'`.
+
+**Example:**
+```php
+add_filter( 'wppo_lazy_render_intrinsic_size', function() {
+    return 'auto 800px';
+} );
+```
+
+---
+
 ## 🔧 CLI-Only Settings Keys
 
 These `wppo_settings` keys have no SPA toggle — they are read by background

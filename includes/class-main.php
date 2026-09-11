@@ -304,6 +304,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['image_optimisation']['maxLongestEdgePx'] ) ) {
 				$this->options['image_optimisation']['maxLongestEdgePx'] = 2560;
 			}
+			if ( ! isset( $this->options['image_optimisation']['lazyRenderBelowFold'] ) ) {
+				$this->options['image_optimisation']['lazyRenderBelowFold'] = false;
+			}
+			if ( ! isset( $this->options['image_optimisation']['lazyRenderExcludeBuilders'] ) ) {
+				$this->options['image_optimisation']['lazyRenderExcludeBuilders'] = true;
+			}
 			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
 				$this->options['file_optimisation'] = array();
 			}

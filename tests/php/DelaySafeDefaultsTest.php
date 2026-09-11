@@ -619,4 +619,56 @@ class DelaySafeDefaultsTest extends \PHPUnit\Framework\TestCase {
 
 		$this->reset_delay_guard_superglobals();
 	}
+
+	/**
+	 * Lazy-render toggles normalize malformed import shapes to bool.
+	 *
+	 * Pins the sanitizer fix: lazyRenderExcludeBuilders contains the
+	 * substring 'exclude', so without explicit branches it would fall
+	 * into the generic textarea sanitizer; 'false' strings are truthy
+	 * under empty() and must normalize via FILTER_VALIDATE_BOOLEAN.
+	 *
+	 * @since NEXT
+	 */
+	public function test_util_lazy_render_toggles_normalize_to_bool(): void {
+		Functions\when( 'has_filter' )->justReturn( false );
+
+		$clean = \PerformanceOptimise\Inc\Util::sanitize_settings_recursively(
+			array(
+				'lazyRenderBelowFold'       => 'false',
+				'lazyRenderExcludeBuilders' => 'false',
+			)
+		);
+		$this->assertSame( false, $clean['lazyRenderBelowFold'] );
+		$this->assertSame( false, $clean['lazyRenderExcludeBuilders'] );
+
+		$clean = \PerformanceOptimise\Inc\Util::sanitize_settings_recursively(
+			array(
+				'lazyRenderBelowFold'       => 1,
+				'lazyRenderExcludeBuilders' => 0,
+			)
+		);
+		$this->assertSame( true, $clean['lazyRenderBelowFold'] );
+		$this->assertSame( false, $clean['lazyRenderExcludeBuilders'] );
+
+		// Unrecognized values fail safe: below-fold off, exclusion on.
+		$clean = \PerformanceOptimise\Inc\Util::sanitize_settings_recursively(
+			array(
+				'lazyRenderBelowFold'       => 'maybe',
+				'lazyRenderExcludeBuilders' => 'maybe',
+			)
+		);
+		$this->assertSame( false, $clean['lazyRenderBelowFold'] );
+		$this->assertSame( true, $clean['lazyRenderExcludeBuilders'] );
+
+		// Bools pass through unchanged.
+		$clean = \PerformanceOptimise\Inc\Util::sanitize_settings_recursively(
+			array(
+				'lazyRenderBelowFold'       => true,
+				'lazyRenderExcludeBuilders' => true,
+			)
+		);
+		$this->assertSame( true, $clean['lazyRenderBelowFold'] );
+		$this->assertSame( true, $clean['lazyRenderExcludeBuilders'] );
+	}
 }

@@ -248,6 +248,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'cssHeroPreload'             => false,
 					'autoAltText'                => false,
 					'maxLongestEdgePx'           => 2560,
+					'lazyRenderBelowFold'        => false,
+					'lazyRenderExcludeBuilders'  => true,
 				),
 				'performance_audit'     => array(
 					'pagespeed_api_key'     => '',
@@ -2843,6 +2845,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					} else {
 						$bool = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
 						// Fail-safe: preset/guard default on; unrecognized values stay on.
+						$sanitized[ $safe_key ] = null === $bool ? true : $bool;
+					}
+					continue;
+				}
+
+				// Lazy-render below-fold toggle — normalize malformed import
+				// shapes (0/1, '0'/'1', 'false'/'true') to bool. Fail-safe off.
+				if ( 'lazyRenderBelowFold' === $safe_key && ! is_array( $value ) ) {
+					if ( is_bool( $value ) ) {
+						$sanitized[ $safe_key ] = $value;
+					} else {
+						$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+						$sanitized[ $safe_key ] = null === $bool ? false : $bool;
+					}
+					continue;
+				}
+
+				// Lazy-render builder exclusion — pinned before the generic
+				// textarea branch (the key contains 'exclude'), so 'false'/0/1
+				// import shapes normalize to bool. Fail-safe on (never
+				// lazy-render builder runtimes on unrecognized values).
+				if ( 'lazyRenderExcludeBuilders' === $safe_key && ! is_array( $value ) ) {
+					if ( is_bool( $value ) ) {
+						$sanitized[ $safe_key ] = $value;
+					} else {
+						$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
 						$sanitized[ $safe_key ] = null === $bool ? true : $bool;
 					}
 					continue;
