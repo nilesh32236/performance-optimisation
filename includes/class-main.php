@@ -4888,7 +4888,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return bool True when core owns the handle under separate-assets mode.
 		 */
 		private function is_core_block_asset_skipped( $handle ): bool {
-			return function_exists( 'wp_should_load_separate_core_block_assets' ) && wp_should_load_separate_core_block_assets() && str_starts_with( (string) $handle, 'wp-block-' );
+			if ( isset( $GLOBALS['wp_version'] ) && version_compare( $GLOBALS['wp_version'], '6.9-alpha', '<' ) ) {
+				return false;
+			}
+			if ( ! function_exists( 'wp_should_load_separate_core_block_assets' ) ) {
+				return false;
+			}
+			try {
+				return (bool) wp_should_load_separate_core_block_assets() && str_starts_with( (string) $handle, 'wp-block-' );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
 		}
 
 		/**
