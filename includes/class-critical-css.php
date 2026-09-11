@@ -2001,17 +2001,49 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return false;
 			}
 
-			// Split descendant selectors and test last (most specific) part.
+			// Split descendant selectors and test last (most specific) part
+			// via the precompiled matcher (exact sets + one alternation).
 			$parts = preg_split( '/\s+/', $clean );
 			$last  = end( $parts );
 
+			return self::token_match_precompiled( (string) $last );
+		}
+
+		/**
+		 * Precompiled above-fold matcher state (exact sets + fallback regex).
+		 *
+		 * Built once per request so matches_above_fold_single() avoids
+		 * rebuilding/running 53 regexes per CSS rule.
+		 *
+		 * @since NEXT
+		 * @var array{exact: array<string, bool>, regex: string}|null
+		 */
+		private static ?array $above_fold_matcher = null;
+
+		/**
+		 * Build the precompiled above-fold matcher (exact hash sets + one alternation).
+		 *
+		 * @since NEXT
+		 * @return array{exact: array<string, bool>, regex: string}
+		 */
+		private static function get_above_fold_matcher(): array {
+			if ( null !== self::$above_fold_matcher ) {
+				return self::$above_fold_matcher;
+			}
+			$exact  = array();
+			$quoted = array();
 			foreach ( self::ABOVE_FOLD_SELECTORS as $above ) {
-				if ( self::token_match( $last, $above ) ) {
-					return true;
+				$exact[ $above ] = true;
+				$token           = ltrim( (string) $above, '.' );
+				if ( '' !== $token ) {
+					$quoted[] = preg_quote( $token, '/' );
 				}
 			}
-
-			return false;
+			self::$above_fold_matcher = array(
+				'exact' => $exact,
+				'regex' => '' !== implode( '', $quoted ) ? '/\b(?:' . implode( '|', $quoted ) . ')\b/' : '',
+			);
+			return self::$above_fold_matcher;
 		}
 
 		/**
@@ -2033,6 +2065,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			$pattern = '/\b' . preg_quote( ltrim( $above, '.' ), '/' ) . '\b/';
 
 			return (bool) preg_match( $pattern, $selector_part );
+		}
+
+		/**
+		 * Fast token match using the precompiled above-fold matcher.
+		 *
+		 * Exact tag/class/id hits resolve via hash lookup; everything else
+		 * falls back to the single combined word-boundary alternation.
+		 *
+		 * @since NEXT
+		 * @param string $selector_part Single selector fragment (last descendant part).
+		 * @return bool True on match.
+		 */
+		private static function token_match_precompiled( string $selector_part ): bool {
+			$matcher = self::get_above_fold_matcher();
+			if ( isset( $matcher['exact'][ $selector_part ] ) ) {
+				return true;
+			}
+			if ( '' === $matcher['regex'] ) {
+				return false;
+			}
+			try {
+				$matched = preg_match( $matcher['regex'], $selector_part );
+				if ( false !== $matched ) {
+					return (bool) $matched;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			foreach ( self::ABOVE_FOLD_SELECTORS as $above ) {
+				if ( self::token_match( $selector_part, $above ) ) {
+					return true;
+				}
+			}
+			return false;
 		}
 
 		/**

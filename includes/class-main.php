@@ -123,6 +123,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private array $deferred_handles = array();
 
 		/**
+		 * Per-request cache of precompiled delay-pattern alternations.
+		 *
+		 * Keyed by md5 of the serialized pattern list; avoids rebuilding a
+		 * preg_quote()+preg_match() regex per pattern per script tag on the
+		 * frontend hot path (O(tags x patterns) compiles).
+		 *
+		 * @since NEXT
+		 * @var array<string, string>
+		 */
+		private static array $delay_pattern_regex_cache = array();
+
+		/**
+		 * Per-request memo for is_delay_excluded_context().
+		 *
+		 * Null = not computed yet; computed once per request and reused
+		 * for every script tag via add_defer_attribute().
+		 *
+		 * @since NEXT
+		 * @var bool|null
+		 */
+		private static ?bool $delay_excluded_context_memo = null;
+
+		/**
 		 * Cache instance for static HTML cache operations.
 		 *
 		 * @var   Cache|null
@@ -953,6 +976,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			// Register Action Scheduler callback for background used-CSS generation.
 			add_action( 'wppo_used_css_generate', array( 'PerformanceOptimise\Inc\Used_CSS', 'process_background' ), 10, 1 );
+
+			// Register out-of-band Google Fonts download (keeps the frontend output-buffer hot path non-blocking).
+			add_action( 'wppo_google_fonts_download', array( 'PerformanceOptimise\Inc\Google_Fonts', 'handle_queued_download_action' ), 10, 1 );
 
 			// Queue used-CSS regeneration when post content changes.
 			add_action( 'save_post', array( $this, 'on_save_post_queue_used_css' ), 10, 3 );
@@ -3028,6 +3054,72 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Build (once per request) a combined alternation regex for a pattern list.
+		 *
+		 * @since NEXT
+		 * @param string[] $patterns Pattern list.
+		 * @return string Empty string when no usable patterns; otherwise a ready regex.
+		 */
+		private static function get_delay_patterns_regex( array $patterns ): string {
+			$cleaned = array();
+			foreach ( $patterns as $pattern ) {
+				$pattern = (string) $pattern;
+				if ( '' !== $pattern ) {
+					$cleaned[] = $pattern;
+				}
+			}
+			if ( empty( $cleaned ) ) {
+				return '';
+			}
+			$cache_key = md5( function_exists( 'wp_json_encode' ) ? (string) wp_json_encode( $cleaned ) : implode( "\0", $cleaned ) );
+			if ( isset( self::$delay_pattern_regex_cache[ $cache_key ] ) ) {
+				return self::$delay_pattern_regex_cache[ $cache_key ];
+			}
+			$quoted = array();
+			foreach ( $cleaned as $pattern ) {
+				$quoted[] = preg_quote( $pattern, '/' );
+			}
+			$regex = '/\b(?:' . implode( '|', $quoted ) . ')\b/';
+			self::$delay_pattern_regex_cache[ $cache_key ] = $regex;
+			return $regex;
+		}
+
+		/**
+		 * Whether a handle matches any pattern in a list via the precompiled alternation.
+		 *
+		 * Falls back to per-pattern matching only when the combined regex
+		 * fails to compile (extremely long lists).
+		 *
+		 * @since NEXT
+		 * @param string   $handle   Script handle.
+		 * @param string[] $patterns Pattern list.
+		 * @return bool True on match.
+		 */
+		private function matches_any_delay_pattern( string $handle, array $patterns ): bool {
+			if ( '' === $handle || empty( $patterns ) ) {
+				return false;
+			}
+			$regex = self::get_delay_patterns_regex( $patterns );
+			if ( '' === $regex ) {
+				return false;
+			}
+			try {
+				$matched = preg_match( $regex, $handle );
+				if ( false !== $matched ) {
+					return (bool) $matched;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			foreach ( $patterns as $pattern ) {
+				if ( $this->matches_delay_pattern( $handle, (string) $pattern ) ) {
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/**
 		 * Whether a script handle is excluded from Delay JS.
 		 *
 		 * Checks exact membership first, then falls back to
@@ -3063,9 +3155,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( 0 === strpos( $handle, $pattern . '-' ) || 0 === strpos( $handle, $pattern . '_' ) ) {
 					return true;
 				}
-				if ( $this->matches_delay_pattern( $handle, $pattern ) ) {
-					return true;
-				}
+			}
+			// Word-boundary matching via one precompiled alternation per
+			// request instead of one preg_match compile per pattern per tag.
+			if ( $this->matches_any_delay_pattern( $handle, $this->exclude_delay_js ) ) {
+				return true;
 			}
 			return false;
 		}
@@ -3097,6 +3191,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return bool True when delay must be skipped for this request.
 		 */
 		public static function is_delay_excluded_context(): bool {
+			// Per-request memo: add_defer_attribute() calls this per script
+			// tag; REQUEST_URI/settings/slug parsing is done once per request.
+			if ( null !== self::$delay_excluded_context_memo ) {
+				return self::$delay_excluded_context_memo;
+			}
+			$result                            = self::compute_delay_excluded_context();
+			self::$delay_excluded_context_memo = $result;
+			return $result;
+		}
+
+		/**
+		 * Reset the per-request delay-context memo (for tests).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_delay_context_memo(): void {
+			self::$delay_excluded_context_memo = null;
+			self::$delay_pattern_regex_cache   = array();
+		}
+
+		/**
+		 * Compute whether the current request must skip delay-JS rewriting.
+		 *
+		 * @since NEXT
+		 * @return bool True when delay must be skipped for this request.
+		 */
+		private static function compute_delay_excluded_context(): bool {
 			try {
 				// Store API routes are dynamic JSON: never delay (issue #962).
 				// Unconditional on wooSafeMode, mirroring wc-ajax — checked
@@ -3330,15 +3452,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return 'viewport';
 			}
 			// Also check via URL pattern matching against the handle text (handles often contain the handle name).
-			foreach ( $this->delay_js_idle_list as $pattern ) {
-				if ( $this->matches_delay_pattern( $handle, $pattern ) ) {
-					return 'idle';
-				}
+			// Precompiled alternation: one regex per list per request instead of per-pattern compiles.
+			if ( $this->matches_any_delay_pattern( $handle, $this->delay_js_idle_list ) ) {
+				return 'idle';
 			}
-			foreach ( $this->delay_js_viewport_list as $pattern ) {
-				if ( $this->matches_delay_pattern( $handle, $pattern ) ) {
-					return 'viewport';
-				}
+			if ( $this->matches_any_delay_pattern( $handle, $this->delay_js_viewport_list ) ) {
+				return 'viewport';
 			}
 			return $this->delay_js_default_strategy;
 		}
@@ -3355,10 +3474,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( isset( $this->delay_js_priority[ $handle ] ) ) {
 				return $this->delay_js_priority[ $handle ];
 			}
-			// Check partial matches.
-			foreach ( $this->delay_js_priority as $pattern => $level ) {
-				if ( $this->matches_delay_pattern( $handle, $pattern ) ) {
-					return $level;
+			// Check partial matches via one precompiled alternation, then
+			// resolve the winning pattern for the level.
+			$patterns = array_keys( $this->delay_js_priority );
+			if ( ! empty( $patterns ) && $this->matches_any_delay_pattern( $handle, $patterns ) ) {
+				foreach ( $this->delay_js_priority as $pattern => $level ) {
+					if ( $this->matches_delay_pattern( $handle, (string) $pattern ) ) {
+						return $level;
+					}
 				}
 			}
 			return 'normal';
@@ -5818,15 +5941,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return true;
 			}
 
-			$cache_key   = 'min_' . $type . '_' . md5( $file_path );
-			$cache_group = 'wppo_minify_check';
-			$found       = false;
-			$cached      = wp_cache_get( $cache_key, $cache_group, false, $found );
-
-			if ( $found ) {
-				return (bool) $cached;
-			}
-
 			if ( ! file_exists( $file_path ) ) {
 				return true;
 			}
@@ -5834,6 +5948,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$file_size = filesize( $file_path );
 			if ( false === $file_size ) {
 				return true;
+			}
+			$file_mtime = filemtime( $file_path );
+			if ( false === $file_mtime ) {
+				return true;
+			}
+
+			// Fold mtime+size into the key so an updated plugin/theme
+			// asset cannot serve a stale 'already minified, skip' verdict
+			// for up to an hour after the file changes.
+			$cache_key   = 'min_' . $type . '_' . md5( $file_path . '|' . $file_mtime . '|' . $file_size );
+			$cache_group = 'wppo_minify_check';
+			$found       = false;
+			$cached      = wp_cache_get( $cache_key, $cache_group, false, $found );
+
+			if ( $found ) {
+				return (bool) $cached;
 			}
 
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen

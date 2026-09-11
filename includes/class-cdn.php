@@ -559,6 +559,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 			}
 			$site_url       = Util::cached_home_url();
 			$site_url_regex = '#^' . preg_quote( $site_url, '#' ) . '(/|$)#';
+			// Precompiled once per buffer: the inline style-url() pattern
+			// reuses the same quoted site URL instead of preg_quote() per tag.
+			$style_url_pattern = '#url\s*\(\s*(["\']?)' . preg_quote( $site_url, '#' ) . '([^"\')\s]*)\1\s*\)#i';
 
 			// Expanded tag list parity: add audio,track,embed,object,iframe,picture,meta.
 			$allowed_tags = array( 'img', 'script', 'link', 'source', 'video', 'audio', 'track', 'embed', 'object', 'iframe', 'picture', 'meta' );
@@ -571,7 +574,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 			// unavailable (WP <6.9) or the parse fails.
 			$processed = null;
 			if ( Util::should_use_html_processor() ) {
-				$processed = self::rewrite_buffer_with_processor( $buffer, $mappings, $site_url, $site_url_regex, $allowed_tags );
+				$processed = self::rewrite_buffer_with_processor( $buffer, $mappings, $site_url, $site_url_regex, $allowed_tags, $style_url_pattern );
 			}
 
 			if ( null !== $processed ) {
@@ -579,7 +582,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 			} elseif ( class_exists( '\WP_HTML_Tag_Processor' ) ) {
 				$tags = new \WP_HTML_Tag_Processor( $buffer );
 				while ( $tags->next_tag() ) {
-					self::rewrite_tag_assets( $tags, $mappings, $site_url, $site_url_regex, $allowed_tags );
+					self::rewrite_tag_assets( $tags, $mappings, $site_url, $site_url_regex, $allowed_tags, $style_url_pattern );
 				}
 				$buffer = $tags->get_updated_html();
 			}
@@ -594,7 +597,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 			// style="..." attributes ARE attribute context and are gated on
 			// the mapping's 'style' allowance above.
 			$buffer = preg_replace_callback(
-				'#url\s*\(\s*(["\']?)' . preg_quote( $site_url, '#' ) . '([^"\')\s]*)\1\s*\)#i',
+				$style_url_pattern,
 				function ( $m ) use ( $mappings, $site_url ) {
 					$full_url = $site_url . $m[2];
 					$cdn      = self::find_cdn_for_url( $full_url, $mappings );
@@ -633,14 +636,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		 *
 		 * @since NEXT
 		 *
-		 * @param string   $buffer         HTML buffer.
-		 * @param array    $mappings       CDN mappings.
-		 * @param string   $site_url       Site URL.
-		 * @param string   $site_url_regex Regex matching a site-relative URL start.
-		 * @param string[] $allowed_tags  Tag names whose attributes may be rewritten.
+		 * @param string   $buffer            HTML buffer.
+		 * @param array    $mappings          CDN mappings.
+		 * @param string   $site_url          Site URL.
+		 * @param string   $site_url_regex    Regex matching a site-relative URL start.
+		 * @param string[] $allowed_tags      Tag names whose attributes may be rewritten.
+		 * @param string   $style_url_pattern Precompiled inline style-url() pattern.
 		 * @return string|null Rewritten buffer, or null on failure (fallback).
 		 */
-		private static function rewrite_buffer_with_processor( string $buffer, array $mappings, string $site_url, string $site_url_regex, array $allowed_tags ): ?string {
+		private static function rewrite_buffer_with_processor( string $buffer, array $mappings, string $site_url, string $site_url_regex, array $allowed_tags, string $style_url_pattern = '' ): ?string {
 			$processor = Util::create_html_processor( $buffer );
 			if ( null === $processor ) {
 				return null;
@@ -650,7 +654,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 				$out = '';
 				while ( $processor->next_token() ) {
 					if ( '#tag' === $processor->get_token_type() && ! $processor->is_tag_closer() ) {
-						self::rewrite_tag_assets( $processor, $mappings, $site_url, $site_url_regex, $allowed_tags );
+						self::rewrite_tag_assets( $processor, $mappings, $site_url, $site_url_regex, $allowed_tags, $style_url_pattern );
 					}
 					$out .= $processor->serialize_token();
 				}
@@ -681,14 +685,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		 *
 		 * @since NEXT
 		 *
-		 * @param \WP_HTML_Tag_Processor $tags           Processor positioned on the current tag.
-		 * @param array                  $mappings       CDN mappings.
-		 * @param string                 $site_url       Site URL.
-		 * @param string                 $site_url_regex Regex matching a site-relative URL start.
-		 * @param string[]               $allowed_tags   Tag names whose attributes may be rewritten.
+		 * @param \WP_HTML_Tag_Processor $tags              Processor positioned on the current tag.
+		 * @param array                  $mappings          CDN mappings.
+		 * @param string                 $site_url          Site URL.
+		 * @param string                 $site_url_regex    Regex matching a site-relative URL start.
+		 * @param string[]               $allowed_tags      Tag names whose attributes may be rewritten.
+		 * @param string                 $style_url_pattern Precompiled inline style-url() pattern.
 		 * @return void
 		 */
-		private static function rewrite_tag_assets( \WP_HTML_Tag_Processor $tags, array $mappings, string $site_url, string $site_url_regex, array $allowed_tags ): void {
+		private static function rewrite_tag_assets( \WP_HTML_Tag_Processor $tags, array $mappings, string $site_url, string $site_url_regex, array $allowed_tags, string $style_url_pattern = '' ): void {
 			$tag_name = strtolower( (string) $tags->get_tag() );
 			if ( ! in_array( $tag_name, $allowed_tags, true ) ) {
 				return;
@@ -743,11 +748,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 				}
 			}
 
-			// style attribute url() handling inline.
+			// style attribute url() handling inline (pattern precompiled
+			// once per buffer by rewrite_buffer()).
 			$style_val = $tags->get_attribute( 'style' );
 			if ( $style_val && false !== strpos( $style_val, 'url(' ) ) {
+				if ( '' === $style_url_pattern ) {
+					$style_url_pattern = '#url\s*\(\s*(["\']?)' . preg_quote( $site_url, '#' ) . '([^"\')\s]*)\1\s*\)#i';
+				}
 				$new_style = preg_replace_callback(
-					'#url\s*\(\s*(["\']?)' . preg_quote( $site_url, '#' ) . '([^"\')\s]*)\1\s*\)#i',
+					$style_url_pattern,
 					function ( $m2 ) use ( $mappings, $site_url ) {
 						$full_url = $site_url . $m2[2];
 						$match    = self::find_cdn_match( $full_url, $mappings );

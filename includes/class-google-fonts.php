@@ -213,17 +213,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		}
 
 		/**
+		 * Action Scheduler hook for out-of-band Google Fonts downloads.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		public const AS_HOOK = 'wppo_google_fonts_download';
+
+		/**
 		 * Download Google Fonts CSS, fetch font files, rewrite URLs, and cache locally.
 		 *
-		 * Failure backoff (audit #874 finding 3): a failed CSS fetch sets a
-		 * short-lived transient sentinel so subsequent frontend requests skip
-		 * the synchronous remote call for a few minutes instead of re-issuing
-		 * a 20s wp_remote_get per request (self-DoS while Google is
-		 * unreachable). Mirrors the PageSpeed store_failure() sentinel.
+		 * Hot-path safe: this method never performs a synchronous remote
+		 * fetch. On a cache miss it returns '' (the caller keeps the
+		 * original tag) and queues a single deduped Action Scheduler job
+		 * that performs the 20s CSS fetch plus the per-file downloads
+		 * out-of-band; the local URL is served on the next request. A
+		 * recent failure sentinel (wppo_gf_fail_*) still short-circuits the
+		 * queue attempt. Mirrors the PageSpeed store_failure() sentinel.
 		 *
 		 * @param string $url The Google Fonts CSS URL.
-		 * @return string Local CSS URL on success, empty string on failure.
-		 * @since NEXT Failure sentinel transient (wppo_gf_fail_*).
+		 * @return string Local CSS URL on success, empty string on failure/cache-miss.
+		 * @since NEXT Failure sentinel transient (wppo_gf_fail_*). Out-of-band download via Action Scheduler.
 		 */
 		public function download_and_rewrite( $url ) {
 			$url = $this->normalize_google_fonts_url( $url );
@@ -247,7 +257,83 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 				return '';
 			}
 
-			// Fetch CSS from Google Fonts API.
+			$this->maybe_queue_download( $key, $url );
+
+			return '';
+		}
+
+		/**
+		 * Queue an out-of-band Google Fonts download job (deduped by CSS key).
+		 *
+		 * Falls back to a WP-Cron single event when Action Scheduler is
+		 * unavailable so the download still happens off the hot path.
+		 *
+		 * @since NEXT
+		 * @param string $key CSS md5 key.
+		 * @param string $url Normalized Google Fonts CSS URL.
+		 * @return void
+		 */
+		private function maybe_queue_download( string $key, string $url ): void {
+			$args = array(
+				'key' => $key,
+				'url' => $url,
+			);
+			if ( function_exists( 'as_has_scheduled_action' ) && function_exists( 'as_enqueue_async_action' ) ) {
+				try {
+					if ( ! as_has_scheduled_action( self::AS_HOOK, $args, 'performance_optimisation' ) ) {
+						as_enqueue_async_action( self::AS_HOOK, $args, 'performance_optimisation' );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				return;
+			}
+			if ( function_exists( 'wp_next_scheduled' ) && function_exists( 'wp_schedule_single_event' ) ) {
+				try {
+					if ( false === wp_next_scheduled( self::AS_HOOK, $args ) ) {
+						wp_schedule_single_event( time() + MINUTE_IN_SECONDS, self::AS_HOOK, $args );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+		}
+
+		/**
+		 * Action Scheduler / cron callback: fetch CSS + font files out-of-band.
+		 *
+		 * Contains the former synchronous body of download_and_rewrite():
+		 * 20s CSS fetch, per-file gstatic downloads, font-display:swap
+		 * injection, and atomic cache write. Never called from the
+		 * output-buffer hot path.
+		 *
+		 * @since NEXT
+		 * @param string $key CSS md5 key.
+		 * @param string $url Normalized Google Fonts CSS URL.
+		 * @return bool True when the local CSS file now exists.
+		 */
+		public function process_queued_download( string $key, string $url ): bool {
+			$url = $this->normalize_google_fonts_url( $url );
+			if ( '' === $url || '' === $key || md5( $url ) !== $key ) {
+				return false;
+			}
+
+			$css_file = $this->font_cache_dir . '/css/' . $key . '.css';
+			$css_url  = $this->font_cache_url . '/css/' . $key . '.css';
+			if ( '' === $css_url ) {
+				return false;
+			}
+
+			if ( file_exists( $css_file ) ) {
+				return true;
+			}
+
+			$fail_key = Util::transient_key( 'wppo_gf_fail_' . $key );
+			if ( get_transient( $fail_key ) ) {
+				return false;
+			}
+
+			// Fetch CSS from Google Fonts API (out-of-band only).
 			$response = wp_remote_get(
 				$url,
 				array(
@@ -258,13 +344,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 
 			if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
 				set_transient( $fail_key, 1, self::backoff_ttl() );
-				return '';
+				return false;
 			}
 
 			$css = wp_remote_retrieve_body( $response );
 			if ( empty( $css ) ) {
 				set_transient( $fail_key, 1, self::backoff_ttl() );
-				return '';
+				return false;
 			}
 
 			// Success — clear any prior failure sentinel.
@@ -274,7 +360,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			Util::prepare_cache_dir( $this->font_cache_dir . '/css' );
 			Util::prepare_cache_dir( $this->font_cache_dir . '/files' );
 
-			// Extract and download font file URLs from @font-face src declarations.
+			// Rewrite url(...) to the local file only when it already
+			// exists; the queued job downloads missing files out-of-band
+			// and the original gstatic URL is kept until then so no
+			// request ever blocks on a 30s streamed fetch.
 			$css = preg_replace_callback(
 				'#(url\()\s*(["\']?)(https://fonts\.gstatic\.com[^"\')]+)\2\s*\)#i',
 				function ( $matches ) {
@@ -282,17 +371,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 					$hash     = md5( $file_url );
 					$local    = $this->font_cache_dir . '/files/' . $hash . '.woff2';
 
-					if ( ! file_exists( $local ) ) {
-						$this->download_font_file( $file_url, $local );
+					if ( file_exists( $local ) ) {
+						return 'url(' . $this->font_cache_url . '/files/' . $hash . '.woff2)';
 					}
 
-					return 'url(' . $this->font_cache_url . '/files/' . $hash . '.woff2)';
+					if ( $this->download_font_file( $file_url, $local ) && file_exists( $local ) ) {
+						return 'url(' . $this->font_cache_url . '/files/' . $hash . '.woff2)';
+					}
+
+					return $matches[0];
 				},
 				$css
 			);
 
 			if ( null === $css ) {
-				return '';
+				return false;
 			}
 
 			// Inject font-display: swap.
@@ -307,11 +400,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 				file_put_contents( $css_file, $css );
 			}
 
-			if ( file_exists( $css_file ) ) {
-				return $css_url;
-			}
+			return file_exists( $css_file );
+		}
 
-			return '';
+		/**
+		 * Static entry point for the Action Scheduler / WP-Cron hook.
+		 *
+		 * Rebuilds settings-owned state (cache dir/URL) from defaults so
+		 * the job works without a constructed instance. Accepts either the
+		 * args array scheduled by maybe_queue_download() or discrete args
+		 * from direct calls/tests.
+		 *
+		 * @since NEXT
+		 * @param array|string $args Args array with key/url, or the CSS key.
+		 * @param string       $url  Normalized Google Fonts CSS URL (when $args is a key).
+		 * @return void
+		 */
+		public static function process_queued_download_static( $args = array(), string $url = '' ): void {
+			try {
+				$key = '';
+				if ( is_array( $args ) ) {
+					$key = isset( $args['key'] ) ? (string) $args['key'] : '';
+					$url = isset( $args['url'] ) ? (string) $args['url'] : $url;
+				} else {
+					$key = (string) $args;
+				}
+				if ( '' === $key || '' === $url ) {
+					return;
+				}
+				$options  = class_exists( 'PerformanceOptimise\Inc\Util' ) ? Util::get_settings() : array();
+				$instance = new self( is_array( $options ) ? $options : array() );
+				$instance->process_queued_download( $key, $url );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Action Scheduler callback wrapper (single-arg hook signature).
+		 *
+		 * @since NEXT
+		 * @param array $args Job args with key/url.
+		 * @return void
+		 */
+		public static function handle_queued_download_action( $args = array() ): void {
+			self::process_queued_download_static( $args );
 		}
 
 		/**
