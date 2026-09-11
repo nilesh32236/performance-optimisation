@@ -216,6 +216,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			$status['circuit_reason']     = $circuit['reason'];
 			$status['circuit_error_code'] = $circuit['error_code'];
 			$status['failure_count']      = $circuit['failures'];
+			$status['serializers']        = $this->get_serializer_support();
+			$status['last_failure']       = $this->get_last_failure_payload();
 
 			if ( file_exists( $this->dropin_path ) ) {
 				$wp_filesystem = Util::init_filesystem();
@@ -553,6 +555,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			delete_option( self::CIRCUIT_OPTION );
 			delete_transient( Util::transient_key( self::FAIL_TRANSIENT ) );
 			delete_transient( Util::transient_key( self::CIRCUIT_NOTICE_TRANSIENT ) );
+			delete_transient( Util::transient_key( self::LAST_FAILURE_TRANSIENT ) );
 
 			$wp_filesystem = Util::init_filesystem();
 			foreach ( array( $this->get_parked_path(), $this->get_disabled_state_path(), $this->get_failures_path() ) as $path ) {
@@ -756,6 +759,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			$connection = $this->connect_internal( $config );
 
 			if ( is_wp_error( $connection ) ) {
+				$this->log_redis_failure( $connection->get_error_code(), $connection->get_error_message() );
 				return $connection;
 			}
 
@@ -767,7 +771,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					if ( true === $result || '+PONG' === $result || ( is_string( $result ) && stripos( $result, 'PONG' ) !== false ) ) {
 						return true;
 					}
-					return new \WP_Error( 'ping_fail', __( 'Ping returned false', 'performance-optimisation' ) );
+					$error = new \WP_Error( 'ping_fail', __( 'Ping returned false', 'performance-optimisation' ) );
+					$this->log_redis_failure( $error->get_error_code(), $error->get_error_message() );
+					return $error;
 				} catch ( \Exception $e ) {
 					if ( method_exists( $connection, 'close' ) ) {
 						$connection->close();
@@ -776,12 +782,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 						// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 						error_log( 'Redis ping exception: ' . $e->getMessage() );
 					}
-					return new \WP_Error( 'ping_exception', __( 'Redis connection failed.', 'performance-optimisation' ) );
+					$error = new \WP_Error( 'ping_exception', __( 'Redis connection failed.', 'performance-optimisation' ) );
+					$this->log_redis_failure( $error->get_error_code(), $error->get_error_message() );
+					return $error;
 				}
 			}
 
 			$connection->close();
-			return new \WP_Error( 'no_ping_method', __( 'Connection does not support ping', 'performance-optimisation' ) );
+			$error = new \WP_Error( 'no_ping_method', __( 'Connection does not support ping', 'performance-optimisation' ) );
+			$this->log_redis_failure( $error->get_error_code(), $error->get_error_message() );
+			return $error;
 		}
 
 
@@ -920,16 +930,273 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		}
 
 		/**
-		 * Flush the complete object cache.
+		 * Transient key (blog-prefixed via Util::transient_key()) carrying the
+		 * latest Redis failure for admin-notice / REST surfacing.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		public const LAST_FAILURE_TRANSIENT = 'wppo_redis_last_failure';
+
+		/**
+		 * Record a Redis failure in-app (activity log + admin-notice transient).
+		 *
+		 * Drop-in early-boot failures can only reach error_log(); this is the
+		 * fully-booted twin that writes where admins actually look. The
+		 * error_log line is kept as a secondary sink under WP_DEBUG. Never
+		 * throws — logging must not break the fail-open path.
+		 *
+		 * @since NEXT
+		 * @param string $code    Machine-readable failure code.
+		 * @param string $message Human-readable failure description.
+		 * @return void
+		 */
+		public function log_redis_failure( string $code, string $message ): void {
+			// Pure-PHP sanitization (no sanitize_key/sanitize_text_field):
+			// Brain Monkey's function_exists() returns true for WP stubs
+			// defined by earlier tests in the same process, but calling an
+			// unstubbed function throws MissingFunctionExpectations — so the
+			// logging path must never depend on WP sanitizers.
+			$code    = strtolower( (string) preg_replace( '/[^a-zA-Z0-9_\-]/', '', (string) $code ) );
+			$message = trim( (string) preg_replace( '/<[^>]*>/', '', (string) $message ) );
+			$code    = substr( $code, 0, 64 );
+			$message = substr( $message, 0, 200 );
+			if ( '' === $code ) {
+				$code = 'redis_error';
+			}
+			if ( '' === $message ) {
+				$message = __( 'Redis connection failed.', 'performance-optimisation' );
+			}
+
+			try {
+				Log::add( sprintf( 'Redis failure (%s): %s', $code, $message ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
+			try {
+				set_transient(
+					Util::transient_key( self::LAST_FAILURE_TRANSIENT ),
+					array(
+						'code'    => $code,
+						'message' => $message,
+						'time'    => time(),
+					),
+					DAY_IN_SECONDS
+				);
+				// NOTE: the circuit-notice transient is armed only by the
+				// breaker trip path (auto_disable_circuit()); plain failures
+				// must not clobber the trip payload/TTL (WEEK vs DAY), and the
+				// latest failure is surfaced via get_status()['last_failure'].
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+				error_log( 'WPPO Redis failure (' . $code . '): ' . $message );
+			}
+		}
+
+		/**
+		 * Report which serializers the current phpredis build can safely use.
+		 *
+		 * Mirrors the wppo_resolve_redis_serializer() probe (igbinary only
+		 * when the extension is present, msgpack gated on extension + redis
+		 * >= 5.0.0, PHP always) without touching a connection, for the REST
+		 * status payload and SPA capability display.
+		 *
+		 * @since NEXT
+		 * @return array Shape { active: string, igbinary: bool, msgpack: bool, php: bool }.
+		 */
+		public function get_serializer_support(): array {
+			$support = array(
+				'active'   => 'php',
+				'igbinary' => false,
+				'msgpack'  => false,
+				'php'      => true,
+			);
+
+			try {
+				require_once WPPO_PLUGIN_PATH . 'includes/redis-connect-helper.php';
+				if ( function_exists( 'wppo_resolve_redis_serializer' ) ) {
+					$resolved          = wppo_resolve_redis_serializer();
+					$support['active'] = isset( $resolved['name'] ) ? (string) $resolved['name'] : 'php';
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
+			try {
+				$support['igbinary'] = defined( '\Redis::SERIALIZER_IGBINARY' )
+					&& ( extension_loaded( 'igbinary' ) || function_exists( 'igbinary_serialize' ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
+			try {
+				$version_ok         = version_compare( (string) phpversion( 'redis' ), '5.0.0', '>=' );
+				$support['msgpack'] = $version_ok
+					&& defined( '\Redis::SERIALIZER_MSGPACK' )
+					&& ( extension_loaded( 'msgpack' ) || function_exists( 'msgpack_serialize' ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
+			return $support;
+		}
+
+		/**
+		 * Last flush failure (set by flush(), cleared on success).
+		 *
+		 * Lets the REST flush handler forward the manager's real failure
+		 * code/message instead of synthesizing a generic one, without
+		 * changing the bool flush() contract relied on by WP-CLI/abilities.
+		 *
+		 * @since NEXT
+		 * @var \WP_Error|null
+		 */
+		private $last_flush_error = null;
+
+		/**
+		 * Read the latest recorded Redis failure for admin/REST surfacing.
+		 *
+		 * Fail-open: returns null when the transient is missing, malformed,
+		 * or unreadable — callers treat null as "no known failure".
+		 *
+		 * @since NEXT
+		 * @return array|null Shape { code: string, message: string, time: int } or null.
+		 */
+		public function get_last_failure_payload() {
+			try {
+				$payload = get_transient( Util::transient_key( self::LAST_FAILURE_TRANSIENT ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return null;
+			}
+			if ( ! is_array( $payload ) || empty( $payload['code'] ) ) {
+				return null;
+			}
+			return array(
+				'code'    => (string) $payload['code'],
+				'message' => isset( $payload['message'] ) ? (string) $payload['message'] : '',
+				'time'    => isset( $payload['time'] ) ? (int) $payload['time'] : 0,
+			);
+		}
+
+		/**
+		 * Latest flush failure, if any.
+		 *
+		 * @since NEXT
+		 * @return \WP_Error|null The WP_Error set by the last failed flush(), or null.
+		 */
+		public function get_last_flush_error() {
+			return $this->last_flush_error instanceof \WP_Error ? $this->last_flush_error : null;
+		}
+
+		/**
+		 * Flush the complete object cache with best-effort memory-delta logging.
+		 *
+		 * Runs wp_cache_flush() (the drop-in performs the namespace-aware
+		 * SCAN+DEL sweep with its own full-keyspace verification + retry).
+		 * No plugin-side re-scan is done here: re-scanning over a fresh
+		 * connection races with concurrent writers repopulating between the
+		 * drop-in sweep and this check (flaky false negatives) and costs an
+		 * extra connection per flush. Memory growth after a flush is logged,
+		 * never failed. Failures are recorded in-app via
+		 * log_redis_failure() and exposed via get_last_flush_error() so REST
+		 * can surface the real code/message.
 		 *
 		 * @since 1.4.0
-		 * @return bool
+		 * @since NEXT Removed plugin-side re-verification (drop-in verifies with retry); failures exposed via get_last_flush_error().
+		 * @return bool True when flushed, false otherwise.
 		 */
 		public function flush() {
-			if ( function_exists( 'wp_cache_flush' ) ) {
-				return wp_cache_flush();
+			if ( ! function_exists( 'wp_cache_flush' ) ) {
+				$this->last_flush_error = new \WP_Error( 'flush_unavailable', __( 'Object cache flush is unavailable.', 'performance-optimisation' ) );
+				return false;
 			}
-			return false;
+
+			$this->last_flush_error = null;
+			$memory_before          = $this->read_redis_memory_bytes();
+			$flushed                = wp_cache_flush();
+			if ( ! $flushed ) {
+				$this->last_flush_error = new \WP_Error( 'flush_fail', __( 'Object cache flush reported failure.', 'performance-optimisation' ) );
+				$this->log_redis_failure( 'flush_fail', __( 'Object cache flush reported failure.', 'performance-optimisation' ) );
+				return false;
+			}
+
+			$memory_after = $this->read_redis_memory_bytes();
+			if ( null !== $memory_before && null !== $memory_after && $memory_after > $memory_before ) {
+				// Memory growth after a flush means writers repopulated (or
+				// another blog shares the DB) — not a flush failure, so
+				// still report success but log the delta for diagnosability.
+				try {
+					Log::add(
+						sprintf(
+							/* translators: %1$d: memory before flush in bytes, %2$d: memory after flush in bytes */
+							__( 'Object cache flushed with memory delta: %1$d → %2$d bytes.', 'performance-optimisation' ),
+							$memory_before,
+							$memory_after
+						)
+					);
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			return true;
+		}
+
+		/**
+		 * Read Redis used_memory in bytes via INFO (best-effort).
+		 *
+		 * @since NEXT
+		 * @return int|null Bytes used, or null when unreachable/unavailable.
+		 */
+		private function read_redis_memory_bytes() {
+			try {
+				$config     = $this->get_redis_config();
+				$connection = $this->connect_internal( $config );
+				if ( is_wp_error( $connection ) ) {
+					return null;
+				}
+				try {
+					if ( ! method_exists( $connection, 'info' ) ) {
+						return null;
+					}
+					$info = $connection->info( 'memory' );
+					if ( is_array( $info ) && isset( $info['used_memory'] ) ) {
+						return (int) $info['used_memory'];
+					}
+					if ( is_array( $info ) ) {
+						// Cluster mode returns per-node info maps: sum
+						// used_memory across all nodes.
+						$total = 0;
+						$found = false;
+						foreach ( $info as $node_info ) {
+							if ( is_array( $node_info ) && isset( $node_info['used_memory'] ) ) {
+								$total += (int) $node_info['used_memory'];
+								$found  = true;
+							}
+						}
+						if ( $found ) {
+							return $total;
+						}
+					}
+				} finally {
+					if ( method_exists( $connection, 'close' ) ) {
+						try {
+							$connection->close();
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return null;
 		}
 	}
 }

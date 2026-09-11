@@ -296,6 +296,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'use_wp_ai_client'      => false,
 					'field_lcp_min_samples' => 20,
 					'dismissed_suggestions' => array(),
+					'anomaly_cooldown_days' => 7,
+					'anomaly_min_samples'   => 10,
 				),
 				'edge_cache'            => array(
 					'enabled' => false,
@@ -527,6 +529,150 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				unset( $e );
 			}
 			return $paths;
+		}
+
+		/**
+		 * Whether WooCommerce is active on the current site.
+		 *
+		 * Guard for every Woo conditional call: `class_exists( 'WooCommerce' )`
+		 * covers the plugin bootstrap while the `function_exists()` checks
+		 * cover its conditional tags / page resolver. Multisite-safe:
+		 * per-site detection only, no cross-site state.
+		 *
+		 * @since NEXT
+		 * @return bool True when any WooCommerce symbol is available.
+		 */
+		public static function is_woo_active(): bool {
+			try {
+				return class_exists( 'WooCommerce', false )
+					|| function_exists( 'is_woocommerce' )
+					|| function_exists( 'is_cart' )
+					|| function_exists( 'is_checkout' )
+					|| function_exists( 'is_account_page' )
+					|| function_exists( 'wc_get_page_id' );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Verifiable WooCommerce cart/checkout cache-exclusion self-test.
+		 *
+		 * Trust-but-verify proof that dynamic Woo routes can never be served
+		 * as a static-cache HIT: for each canonical probe (`/cart/`,
+		 * `/checkout/`, `/my-account/`), every resolved custom path from
+		 * {@see get_woo_excluded_paths()} and one Store API probe
+		 * (`/wp-json/wc/store/v1/cart`), asserts `is_cacheable=false` by
+		 * mirroring `Cache::is_woo_excluded()` path/safe-mode semantics without
+		 * instantiating Cache (`is_woo_store_api_path()` uncacheable
+		 * unconditionally, otherwise `safe_mode && is_woo_dynamic_path()`).
+		 * Scope note: this covers path/safe-mode semantics only and does not
+		 * evaluate the `wppo_woo_cacheable` / `wppo_should_cache_request`
+		 * overrides, which can re-allow caching of an excluded URL at runtime.
+		 * `donotcachepage_honored` is assumed (not probed): DONOTCACHEPAGE
+		 * enforcement lives in `Cache::is_not_cacheable()` — this method never
+		 * defines the constant, it only asserts the existing enforcement path.
+		 *
+		 * Fail-open: any per-URL detection failure yields
+		 * `pass=false, cacheable=false, error` (treated non-cacheable, never
+		 * fatal); a whole-method failure returns the `runnable=false` shape.
+		 * Multisite-safe: per-site path detection via
+		 * {@see get_woo_excluded_paths()}, blog-keyed settings, no
+		 * cross-site leakage. Read-only: no options, transients, or files
+		 * are written.
+		 *
+		 * @since NEXT
+		 * @return array{woo_active: bool, safe_mode: bool, runnable: bool, excluded_paths: string[], donotcachepage_honored: bool, checks: array<int, array{url: string, path: string, is_dynamic: bool, cacheable: bool, donotcachepage_honored: bool, pass: bool, error?: string}>, all_pass: bool} Structured self-test result.
+		 */
+		public static function woo_cache_self_test(): array {
+			try {
+				$woo_active = self::is_woo_active();
+				$safe_mode  = self::is_woo_safe_mode_enabled();
+				$excluded   = self::get_woo_excluded_paths();
+
+				$probe_paths = array( 'cart', 'checkout', 'my-account' );
+				foreach ( $excluded as $extra ) {
+					$candidate = strtolower( trim( (string) $extra, '/' ) );
+					if ( '' !== $candidate && ! in_array( $candidate, $probe_paths, true ) ) {
+						$probe_paths[] = $candidate;
+					}
+				}
+				$probe_paths[] = 'wp-json/wc/store/v1/cart';
+
+				$checks = array();
+				foreach ( $probe_paths as $probe ) {
+					$path = strtolower( trim( (string) $probe, '/' ) );
+					if ( '' === $path ) {
+						continue;
+					}
+					try {
+						$is_store   = self::is_woo_store_api_path( $path );
+						$is_dynamic = self::is_woo_dynamic_path( $path );
+						// Mirror Cache::is_woo_excluded(): Store API is
+						// uncacheable even when safe mode is off.
+						$excluded_flag = $is_store || ( $safe_mode && $is_dynamic );
+						$cacheable     = ! $excluded_flag;
+						$pass          = $is_dynamic && ! $cacheable;
+						try {
+							$url = self::cached_home_url( '/' . $path . '/' );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$url = '/' . $path . '/';
+						}
+						if ( ! is_string( $url ) || '' === $url ) {
+							$url = '/' . $path . '/';
+						}
+						$checks[] = array(
+							'url'                    => $url,
+							'path'                   => '/' . $path . '/',
+							'is_dynamic'             => $is_dynamic,
+							'cacheable'              => $cacheable,
+							'donotcachepage_honored' => true,
+							'pass'                   => $pass,
+						);
+					} catch ( \Throwable $e ) {
+						$checks[] = array(
+							'url'                    => '/' . $path . '/',
+							'path'                   => '/' . $path . '/',
+							'is_dynamic'             => true,
+							'cacheable'              => false,
+							'donotcachepage_honored' => true,
+							'pass'                   => false,
+							'error'                  => get_class( $e ),
+						);
+					}
+				}
+
+				$all_pass = ! empty( $checks );
+				foreach ( $checks as $check ) {
+					if ( empty( $check['pass'] ) ) {
+						$all_pass = false;
+						break;
+					}
+				}
+
+				return array(
+					'woo_active'             => $woo_active,
+					'safe_mode'              => $safe_mode,
+					'runnable'               => true,
+					'excluded_paths'         => array_values( $excluded ),
+					'donotcachepage_honored' => true,
+					'checks'                 => $checks,
+					'all_pass'               => $all_pass,
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array(
+					'woo_active'             => false,
+					'safe_mode'              => true,
+					'runnable'               => false,
+					'excluded_paths'         => array( 'cart', 'checkout', 'my-account' ),
+					'donotcachepage_honored' => true,
+					'checks'                 => array(),
+					'all_pass'               => false,
+				);
+			}
 		}
 
 		/**
@@ -1599,6 +1745,217 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			}
 
 			return $normalized;
+		}
+
+		/**
+		 * Whether an absolute path stays inside the cache tree.
+		 *
+		 * Centralized dual-prefix containment: the normalized path must start
+		 * with both the cache root and the per-domain directory
+		 * (trailing-slash aware so `wppo-evil` never prefix-matches `wppo`).
+		 * Empty root or domain fails closed. Pure static helper: no I/O.
+		 * Multisite-safe: callers pass the per-site canonical domain.
+		 *
+		 * @param string $cache_root_dir Absolute cache root directory.
+		 * @param string $domain Canonical domain directory segment.
+		 * @param string $path Absolute file or directory path to check.
+		 * @return bool True when contained.
+		 * @since NEXT
+		 */
+		public static function is_cache_path_contained( string $cache_root_dir, string $domain, string $path ): bool {
+			if ( '' === $cache_root_dir || '' === $domain || '' === $path ) {
+				return false;
+			}
+			// Fail closed on its own: a future direct caller passing
+			// unsanitized input must never prefix-match through. Null bytes
+			// and dot-dot segments are refused before the prefix check;
+			// current callers only ever pass sanitizer-built paths, so this
+			// is defense-in-depth with no benign behavior change.
+			if ( false !== strpos( $path, "\0" ) ) {
+				return false;
+			}
+			if ( function_exists( 'wp_normalize_path' ) ) {
+				$norm = wp_normalize_path( $path );
+				$root = wp_normalize_path( $cache_root_dir );
+			} else {
+				$norm = str_replace( '\\', '/', $path );
+				$root = str_replace( '\\', '/', $cache_root_dir );
+			}
+			if ( false !== strpos( $norm, "\0" ) || false !== strpos( $norm, '..' ) ) {
+				return false;
+			}
+			$root       = rtrim( $root, '/' ) . '/';
+			$domain_dir = $root . trim( $domain, '/' ) . '/';
+			return 0 === strpos( $norm, $root ) && 0 === strpos( $norm, $domain_dir );
+		}
+
+		/**
+		 * Build a contained absolute cache file path from its parts.
+		 *
+		 * Single auditable containment point for the static HTML cache and
+		 * the per-page used-CSS surface: normalizes the host via
+		 * {@see normalize_cache_host()}, sanitizes the path via
+		 * {@see sanitize_cache_url_path()} (single-decode semantics —
+		 * `%252e` stays literal, single-encoded `%2e%2e` / `%00` decode once
+		 * and are rejected), refuses absolute-form inputs (scheme `://`,
+		 * protocol-relative `//host`, drive `C:`, UNC `\\`, detected on the
+		 * authority part before `?`/`#` so query strings carrying URLs never
+		 * false-positive) and foreign-host absolute URLs, allowlists the file
+		 * name, then enforces dual-prefix containment before returning.
+		 * Returns an empty string on any failure; callers fail open (serve
+		 * dynamic/uncached, log a probe).
+		 *
+		 * Pure static helper: no I/O, no settings reads. Multisite-safe: the
+		 * per-site canonical domain is passed explicitly, so a secondary
+		 * site can never address the primary site tree.
+		 *
+		 * @param string      $cache_root_dir Absolute cache root directory.
+		 * @param string      $domain Canonical domain directory segment.
+		 * @param string|null $url_path_or_url Raw URL path or URL.
+		 * @param string      $filename File name (e.g. `index.html`).
+		 * @return string Contained absolute path, or '' when refused.
+		 * @since NEXT
+		 */
+		public static function sanitize_cache_path( string $cache_root_dir, string $domain, $url_path_or_url, string $filename ): string {
+			if ( '' === $cache_root_dir || '' === $filename ) {
+				return '';
+			}
+			$domain = self::normalize_cache_host( $domain );
+			if ( '' === $domain ) {
+				return '';
+			}
+			if ( false !== strpos( $filename, '/' ) || false !== strpos( $filename, '\\' ) || false !== strpos( $filename, "\0" ) || false !== strpos( $filename, '..' ) ) {
+				return '';
+			}
+			if ( 1 !== preg_match( '/^[a-z0-9][a-z0-9._-]*$/i', $filename ) || strlen( $filename ) > 64 ) {
+				return '';
+			}
+			$raw_input = (string) $url_path_or_url;
+			$trimmed   = ltrim( $raw_input );
+			// Inspect only the authority part (before `?`/`#`), matching the
+			// Cache constructor: a benign relative path whose query/fragment
+			// carries a URL (e.g. `/search?redirect=https://other`) must not
+			// be misread as an absolute-form target. The split uses strcspn()
+			// (no process-global strtok() state).
+			$authority = substr( $trimmed, 0, strcspn( $trimmed, '?#' ) );
+			if ( '' !== $authority && ( false !== strpos( $authority, '://' ) || 0 === strpos( $authority, '//' ) || 0 === strpos( $authority, '\\\\' ) || (bool) preg_match( '#^[a-zA-Z]:#', $authority ) ) ) {
+				// Absolute-form target: only same-host absolute URLs may map
+				// to a path; drive/UNC/protocol-relative/foreign-host inputs
+				// are refused outright.
+				$host_raw = null;
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$host_raw = wp_parse_url( $raw_input, PHP_URL_HOST );
+				} else {
+					$host_raw = parse_url( $raw_input, PHP_URL_HOST ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
+				}
+				if ( is_string( $host_raw ) && '' !== $host_raw ) {
+					if ( self::normalize_cache_host( $host_raw ) !== $domain ) {
+						return '';
+					}
+				} else {
+					return '';
+				}
+			}
+			$path = self::sanitize_cache_url_path( $raw_input );
+			if ( '' === $path ) {
+				$component = null;
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$component = wp_parse_url( $raw_input, PHP_URL_PATH );
+				} else {
+					$component = parse_url( $raw_input, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
+				}
+				if ( null === $component || false === $component ) {
+					$component = $raw_input;
+				}
+				if ( '' !== trim( trim( (string) $component ), '/' ) ) {
+					return '';
+				}
+			}
+			if ( function_exists( 'wp_normalize_path' ) ) {
+				$root = wp_normalize_path( $cache_root_dir );
+			} else {
+				$root = str_replace( '\\', '/', $cache_root_dir );
+			}
+			$root     = rtrim( $root, '/' );
+			$resolved = '' === $path ? "{$root}/{$domain}/{$filename}" : "{$root}/{$domain}/{$path}/{$filename}";
+			if ( ! self::is_cache_path_contained( $root, $domain, $resolved ) ) {
+				return '';
+			}
+			return $resolved;
+		}
+
+		/**
+		 * Build a unique sibling tmp path for atomic writes.
+		 *
+		 * Wide rand range plus PID/uniqid segments so concurrent writers
+		 * never share a tmp name. Uses `wp_rand()` when available with an
+		 * `mt_rand()` fallback for very old WP.
+		 *
+		 * @param string $final_path Final file path the tmp sits beside.
+		 * @return string Tmp sibling path ('' when input is empty).
+		 * @since NEXT
+		 */
+		public static function atomic_tmp_path( string $final_path ): string {
+			if ( '' === $final_path ) {
+				return '';
+			}
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.rand_mt_rand -- Fallback only when wp_rand() is unavailable; uniqueness is all that is needed for the tmp suffix.
+			$rand_suffix = mt_rand( 1000000, 9999999 );
+			if ( function_exists( 'wp_rand' ) ) {
+				try {
+					$rand_suffix = wp_rand( 1000000, 9999999 );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			$pid_part  = function_exists( 'getmypid' ) ? (int) getmypid() : 0;
+			$uniq_part = substr( md5( uniqid( (string) microtime( true ), true ) ), 0, 8 );
+			return $final_path . '.tmp.' . $rand_suffix . '-' . $pid_part . '-' . $uniq_part;
+		}
+
+		/**
+		 * Atomically write contents via tmp-file + rename.
+		 *
+		 * Writes to a unique sibling tmp file in the same directory and then
+		 * moves it over the final path, so interrupted writes never leave
+		 * partial output behind. A failed move cleans up the tmp file and
+		 * reports failure — there is intentionally no non-atomic direct-write
+		 * fallback, so readers can never observe a torn file.
+		 *
+		 * @param mixed  $fs Filesystem object exposing put_contents()/move()/delete().
+		 * @param string $path Final file path.
+		 * @param string $contents File contents.
+		 * @return bool True on success.
+		 * @since NEXT
+		 */
+		public static function atomic_file_put_contents( $fs, string $path, string $contents ): bool {
+			if ( '' === $path || ! is_object( $fs ) || ! method_exists( $fs, 'put_contents' ) || ! method_exists( $fs, 'move' ) || ! method_exists( $fs, 'delete' ) ) {
+				return false;
+			}
+			$chmod = defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644;
+			$tmp   = self::atomic_tmp_path( $path );
+			if ( '' === $tmp ) {
+				return false;
+			}
+			try {
+				if ( ! $fs->put_contents( $tmp, $contents, $chmod ) ) {
+					$fs->delete( $tmp );
+					return false;
+				}
+				$moved = (bool) $fs->move( $tmp, $path, true );
+				if ( ! $moved ) {
+					$fs->delete( $tmp );
+					return false;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				try {
+					$fs->delete( $tmp );
+				} catch ( \Throwable $ignored ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Best-effort tmp cleanup must never throw.
+				}
+				return false;
+			}
+			return true;
 		}
 
 		/**

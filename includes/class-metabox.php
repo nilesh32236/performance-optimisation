@@ -420,12 +420,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 
 			// Per-page Delay JS kill-switch + notes (issue #966). Checkbox-only
 			// (no JS); notes capped at 2000 chars, informational only.
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_asset_manager_nonce.
+	// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_asset_manager_nonce.
 			$delay_disabled = isset( $_POST['wppo_delay_disabled'] ) && ! empty( $_POST['wppo_delay_disabled'] );
+			// Per-page kill-switch single-URL purge (#1037): when the toggle
+			// flips, purge only this post URL's static cache so the new delay
+			// state renders without a full purge or home/archive fan-out.
+			// Fail-open: purge failures never break the meta save.
+			$had_delay_disabled = ! empty( get_post_meta( $post_id, '_wppo_delay_disabled', true ) );
 			if ( $delay_disabled ) {
 				update_post_meta( $post_id, '_wppo_delay_disabled', '1' );
 			} else {
 				delete_post_meta( $post_id, '_wppo_delay_disabled' );
+			}
+			if ( (bool) $delay_disabled !== (bool) $had_delay_disabled && class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'invalidate_delay_kill_switch_cache' ) ) {
+				// Intentional duplicate purge (#1037 review note): the
+				// update/delete_post_meta calls above also fire
+				// added/updated/deleted_post_meta, which purge the same URL a
+				// second time. Harmless (single-URL, fail-open) and kept so direct
+				// metabox saves purge even if the meta hooks are ever unhooked.
+				try {
+					Main::invalidate_delay_kill_switch_cache( (int) $post_id );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 			}
 
 			// Per-page Used CSS kill-switch (#988). Checkbox-only (no JS).

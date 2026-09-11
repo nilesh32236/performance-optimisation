@@ -235,7 +235,9 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			'web_vitals_trends',
 			'suggestions',
 			'server_rules',
+			'woo_cache_self_test',
 			'used_css_regenerate',
+			'purge_used_css_cache',
 			'regenerate_ccss',
 			'ccss_status',
 			'dismiss_welcome',
@@ -249,11 +251,57 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			'ai_suggestions',
 		);
 
-		// Keep in sync with the AGENTS.md endpoint count (30).
-		$this->assertCount( 30, $routes, 'REST route count drifted from the documented endpoint count' );
+		// Keep in sync with the AGENTS.md endpoint count (31).
+		$this->assertCount( 31, $routes, 'REST route count drifted from the documented endpoint count' );
 
 		foreach ( $expected as $route ) {
 			$this->assertArrayHasKey( $route, $routes, "Missing route: {$route}" );
+		}
+	}
+
+	/**
+	 * Test that the Woo cache self-test endpoint returns the read-only
+	 * Util::woo_cache_self_test() result (issue #1020).
+	 */
+	public function test_woo_cache_self_test_returns_read_only_result(): void {
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'untrailingslashit' )->alias(
+			static function ( $url ) {
+				return rtrim( (string) $url, '/' );
+			}
+		);
+		Functions\when( 'get_option' )->justReturn( array() );
+		// Read-only proof: the endpoint must never write options or transients.
+		Functions\expect( 'update_option' )->never();
+		Functions\expect( 'set_transient' )->never();
+		Functions\expect( 'set_site_transient' )->never();
+		// phpcs:disable WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Test-only wp_parse_url stub.
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		// phpcs:enable WordPress.WP.AlternativeFunctions.parse_url_parse_url
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		\PerformanceOptimise\Inc\Util::reset_cached_home_urls();
+
+		$request  = \Mockery::mock( \WP_REST_Request::class );
+		$response = $this->rest->get_woo_cache_self_test( $request );
+
+		$data = $response->get_data();
+		$this->assertTrue( $data['success'] );
+		$this->assertTrue( $data['data']['runnable'] );
+		// woo_active reflects process-wide Woo symbol state (Brain Monkey
+		// stubs eval-persist, see bootstrap), so only the shape is asserted.
+		$this->assertArrayHasKey( 'woo_active', $data['data'] );
+		$this->assertIsBool( $data['data']['woo_active'] );
+		$this->assertTrue( $data['data']['safe_mode'] );
+		$this->assertTrue( $data['data']['all_pass'] );
+		$this->assertTrue( $data['data']['donotcachepage_honored'] );
+		$this->assertNotEmpty( $data['data']['excluded_paths'] );
+		$this->assertNotEmpty( $data['data']['checks'] );
+		foreach ( $data['data']['checks'] as $check ) {
+			$this->assertFalse( $check['cacheable'] );
+			$this->assertTrue( $check['pass'] );
+			$this->assertTrue( $check['donotcachepage_honored'] );
 		}
 	}
 
