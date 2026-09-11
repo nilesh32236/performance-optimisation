@@ -1588,6 +1588,64 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		}
 
 		/**
+		 * Store placeholder data for multiple rel_paths in one atomic update.
+		 *
+		 * Single read-copy-merge cycle for a whole upload (original + N
+		 * sub-sizes) instead of N full get/update cycles over the growing
+		 * wppo_img_info array. Idempotent: unchanged entries are skipped
+		 * before scheduling the atomic write.
+		 *
+		 * @since NEXT
+		 * @param array<string, array{color: string, lqip: string}> $batch Map of rel_path => data.
+		 * @return void
+		 */
+		private function store_placeholder_data_batch( array $batch ): void {
+			if ( empty( $batch ) ) {
+				return;
+			}
+			$existing = self::get_img_info();
+			$filtered = array();
+			foreach ( $batch as $rel_path => $data ) {
+				$rel_path = (string) $rel_path;
+				if ( '' === $rel_path || ! is_array( $data ) ) {
+					continue;
+				}
+				$color = isset( $data['color'] ) ? (string) $data['color'] : '';
+				$lqip  = isset( $data['lqip'] ) ? (string) $data['lqip'] : '';
+				if ( isset( $existing['dominant_color'][ $rel_path ] ) && $existing['dominant_color'][ $rel_path ] === $color ) {
+					$existing_lqip = $existing['lqip'][ $rel_path ] ?? '';
+					if ( empty( $lqip ) || $existing_lqip === $lqip ) {
+						continue;
+					}
+				}
+				$filtered[ $rel_path ] = array(
+					'color' => $color,
+					'lqip'  => $lqip,
+				);
+			}
+			if ( empty( $filtered ) ) {
+				return;
+			}
+			self::update_img_info_atomic(
+				function ( $img_info ) use ( $filtered ) {
+					if ( ! isset( $img_info['dominant_color'] ) || ! is_array( $img_info['dominant_color'] ) ) {
+						$img_info['dominant_color'] = array();
+					}
+					if ( ! isset( $img_info['lqip'] ) || ! is_array( $img_info['lqip'] ) ) {
+						$img_info['lqip'] = array();
+					}
+					foreach ( $filtered as $rel_path => $data ) {
+						$img_info['dominant_color'][ $rel_path ] = $data['color'];
+						if ( '' !== $data['lqip'] ) {
+							$img_info['lqip'][ $rel_path ] = $data['lqip'];
+						}
+					}
+					return $img_info;
+				}
+			);
+		}
+
+		/**
 		 * Get placeholder data (dominant_color, lqip) from the shared wppo_img_info option.
 		 *
 		 * @since NEXT
@@ -2239,11 +2297,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 							$image = @imagecreatefromavif( $file );
 						} elseif ( $has_string_loader ) {
 							// Last resort: buffer + string decode (only when string loader exists).
-							// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents, WordPress.PHP.NoSilencedErrors.Discouraged
-							$contents = @file_get_contents( $file );
-							if ( false !== $contents ) {
-								// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-								$image = @imagecreatefromstring( $contents );
+							// Skipped for large files: raw bytes + GD bitmap
+							// simultaneously doubles memory on big uploads.
+							$string_fallback_max = (int) apply_filters( 'wppo_placeholder_string_fallback_max_bytes', 2 * 1024 * 1024 );
+							$file_bytes          = filesize( $file );
+							if ( false !== $file_bytes && $file_bytes <= $string_fallback_max ) {
+								// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents, WordPress.PHP.NoSilencedErrors.Discouraged
+								$contents = @file_get_contents( $file );
+								if ( false !== $contents ) {
+									// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+									$image = @imagecreatefromstring( $contents );
+									unset( $contents );
+								}
 							}
 						}
 						break;
@@ -2260,7 +2325,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			$dominant_color = $this->extract_dominant_color( $image );
 			$lqip           = $this->generate_lqip( $image );
 
-			$this->store_placeholder_data( $rel_path, $dominant_color, $lqip );
+			// Collect all rel_path => data pairs first, then apply them in
+			// a single atomic update instead of N read-copy-merge cycles.
+			$placeholder_batch = array(
+				$rel_path => array(
+					'color' => $dominant_color,
+					'lqip'  => $lqip,
+				),
+			);
 
 			// Frontend placeholder lookups key on the resolved path of the
 			// actually-rendered img URL, which is usually a sub-size. Store the
@@ -2272,11 +2344,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				$dir = dirname( $file );
 				foreach ( $metadata['sizes'] as $size_data ) {
 					if ( ! empty( $size_data['file'] ) && file_exists( $dir . '/' . $size_data['file'] ) ) {
-						$size_rel = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $dir . '/' . $size_data['file'] ) );
-						$this->store_placeholder_data( $size_rel, $dominant_color, $lqip );
+						$size_rel                       = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $dir . '/' . $size_data['file'] ) );
+						$placeholder_batch[ $size_rel ] = array(
+							'color' => $dominant_color,
+							'lqip'  => $lqip,
+						);
 					}
 				}
 			}
+
+			$this->store_placeholder_data_batch( $placeholder_batch );
 
 			Util::destroy_gd_image( $image );
 		}
@@ -2441,11 +2518,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * Only images whose sizes were measured (post-dating this feature)
 		 * are counted; legacy completed entries contribute nothing.
 		 *
-		 * @return array { original_bytes: int, converted_bytes: int, saved_bytes: int, images_counted: int }
+		 * @param array|null $img_info Pre-read img info (null = read here, avoids a second unserialize).
+		 * @return array{original_bytes: int, converted_bytes: int, saved_bytes: int, images_counted: int}
 		 * @since NEXT
 		 */
-		public static function get_savings_summary(): array {
-			$img_info  = self::get_img_info();
+		public static function get_savings_summary( ?array $img_info = null ): array {
+			if ( null === $img_info ) {
+				$img_info = self::get_img_info();
+			}
 			$sizes     = is_array( $img_info['sizes'] ?? null ) ? $img_info['sizes'] : array();
 			$original  = 0;
 			$converted = 0;

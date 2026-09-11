@@ -24,11 +24,23 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Run the shared bootstrap and clear the process-wide delay-context memo so
+	 * each test starts from a fresh logical request.
+	 *
+	 * @return void
+	 */
+	protected function setUp(): void {
+		$this->wppoSetUp();
+		Main::reset_delay_context_memo();
+	}
+
+	/**
 	 * Ensure wp_version global is clean between tests (6.9 gate in stub_script_modules).
 	 *
 	 * @return void
 	 */
 	protected function tearDown(): void {
+		Main::reset_delay_context_memo();
 		unset( $GLOBALS['wp_version'], $GLOBALS['wp_scripts'] );
 		$this->wppoTearDown();
 	}
@@ -866,6 +878,8 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'is_cart' )->justReturn( false );
 		Functions\when( 'is_checkout' )->justReturn( false );
 		Functions\when( 'is_account_page' )->justReturn( false );
+		// New logical request: reset the per-request verdict memo.
+		Main::reset_delay_context_memo();
 		$delayed = new \PerformanceOptimise\Inc\Minify\HTML( $html, $options );
 		$this->assertStringContainsString( 'wppo/javascript', $delayed->get_minified_html() );
 

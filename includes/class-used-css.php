@@ -187,6 +187,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		private static bool $traversal_probe_logged = false;
 
 		/**
+		 * Precomputed safelist index (exact/attr/prefix sets).
+		 *
+		 * Built once per instance from $safelist so is_selector_used()
+		 * avoids the ~60-entry loop with preg_replace per selector per rule.
+		 *
+		 * @since NEXT
+		 * @var array{exact: array<string, bool>, attrs: string[], prefixes: string[]}|null
+		 */
+		private ?array $safelist_index = null;
+
+		/**
+		 * Per-instance cache of split selector parts keyed by selector string.
+		 *
+		 * @since NEXT
+		 * @var array<string, string[]>
+		 */
+		private array $selector_split_cache = array();
+
+		/**
 		 * Memoized local-source checksum for this instance (issue #1038).
 		 *
 		 * The freshness probe runs full-content local reads; memoizing per
@@ -649,6 +668,73 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		}
 
 		/**
+		 * Build the precomputed safelist index (once per instance).
+		 *
+		 * Hoists the per-entry preg_replace out of the per-selector loop:
+		 * attribute names and non-empty prefixes are derived a single time.
+		 *
+		 * @since NEXT
+		 * @return array{exact: array<string, bool>, attrs: string[], prefixes: string[]}
+		 */
+		private function get_safelist_index(): array {
+			if ( null !== $this->safelist_index ) {
+				return $this->safelist_index;
+			}
+			$exact    = array();
+			$attrs    = array();
+			$prefixes = array();
+			foreach ( $this->safelist as $safe ) {
+				$safe = (string) $safe;
+				if ( '' === $safe ) {
+					continue;
+				}
+				$exact[ $safe ] = true;
+				if ( '[' === $safe[0] ) {
+					$attr_name = preg_replace( '/[\]=~|^$*"\'].*$/', '', $safe );
+					$attr_name = ltrim( trim( (string) $attr_name ), '[' );
+					if ( '' !== $attr_name ) {
+						$attrs[] = $attr_name;
+					}
+					continue;
+				}
+				$last_char = substr( $safe, -1 );
+				if ( '-' === $last_char || '_' === $last_char || '*' === $last_char ) {
+					$prefix = '*' === $last_char ? substr( $safe, 0, -1 ) : $safe;
+					// A bare '*' entry (the universal selector) is handled by
+					// the exact-match check; it must not act as a
+					// match-everything wildcard through an empty prefix (issue #1038).
+					if ( '' !== $prefix ) {
+						$prefixes[] = $prefix;
+					}
+				}
+			}
+			$this->safelist_index = array(
+				'exact'    => $exact,
+				'attrs'    => array_values( array_unique( $attrs ) ),
+				'prefixes' => array_values( array_unique( $prefixes ) ),
+			);
+			return $this->safelist_index;
+		}
+
+		/**
+		 * Cached split of a selector into simple parts.
+		 *
+		 * @since NEXT
+		 * @param string $selector Selector string.
+		 * @return string[] Simple selector parts.
+		 */
+		private function get_cached_simple_selectors( string $selector ): array {
+			if ( isset( $this->selector_split_cache[ $selector ] ) ) {
+				return $this->selector_split_cache[ $selector ];
+			}
+			$parts = $this->extract_simple_selectors( $selector );
+			if ( count( $this->selector_split_cache ) < 2000 ) {
+				$this->selector_split_cache[ $selector ] = $parts;
+			}
+			return $parts;
+		}
+
+		/**
 		 * Check if a CSS selector matches any used element in the HTML.
 		 *
 		 * Note: This method uses a conservative approach for descendant/child
@@ -670,53 +756,47 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				return false;
 			}
 
-			if ( in_array( $selector, $this->safelist, true ) ) {
+			$index = $this->get_safelist_index();
+
+			if ( isset( $index['exact'][ $selector ] ) ) {
 				return true;
 			}
 
-			foreach ( $this->safelist as $safe ) {
-				if ( '' !== $safe && '[' === $safe[0] ) {
-					// Attribute safelist (e.g. [data-elementor-type]): match by
-					// attribute-name substring so compound selectors like
-					// div[data-elementor-type] or [data-elementor-type="x"] stay
-					// kept. Bare [data-*]/[aria-*] selectors are additionally
-					// conserved by matches_simple_selector().
-					$attr_name = preg_replace( '/[\]=~|^$*"\'].*$/', '', $safe );
-					$attr_name = ltrim( trim( (string) $attr_name ), '[' );
-					if ( '' !== $attr_name && false !== stripos( $selector, $attr_name ) ) {
+			foreach ( $index['attrs'] as $attr_name ) {
+				// Attribute safelist (e.g. [data-elementor-type]): match by
+				// attribute-name substring so compound selectors like
+				// div[data-elementor-type] or [data-elementor-type="x"] stay
+				// kept. Bare [data-*]/[aria-*] selectors are additionally
+				// conserved by matches_simple_selector().
+				if ( false !== stripos( $selector, $attr_name ) ) {
+					return true;
+				}
+			}
+			if ( ! empty( $index['prefixes'] ) ) {
+				$parts = null;
+				foreach ( $index['prefixes'] as $prefix ) {
+					if ( 0 === strpos( $selector, $prefix ) ) {
 						return true;
 					}
-					continue;
-				}
-				$last_char = substr( $safe, -1 );
-				if ( '-' === $last_char || '_' === $last_char || '*' === $last_char ) {
-					$prefix = '*' === $last_char ? substr( $safe, 0, -1 ) : $safe;
-					// A bare '*' entry (the universal selector) is handled by
-					// the exact-match check above; it must not act as a
-					// match-everything wildcard through an empty prefix, which
-					// would silently disable all purging (issue #1038).
-					// Non-empty prefixes are safe to match.
-					if ( '' !== $prefix ) {
-						if ( 0 === strpos( $selector, $prefix ) ) {
+					// Compound/descendant selectors (issue #1023): a popup
+					// token buried inside a wrapper, portal, or tag-qualified
+					// part (e.g. '.foo .popup-bar', 'div.modal-dialog',
+					// 'div.elementor-popup-modal', 'button.mfp-close') must
+					// keep the rule even though the full string does not
+					// start with the prefix. Fail-safe direction: keeping
+					// extra CSS can never break styling.
+					if ( null === $parts ) {
+						$parts = $this->get_cached_simple_selectors( $selector );
+					}
+					foreach ( $parts as $part ) {
+						if ( 0 === strpos( $part, $prefix ) || false !== stripos( $part, $prefix ) ) {
 							return true;
-						}
-						// Compound/descendant selectors (issue #1023): a popup
-						// token buried inside a wrapper, portal, or tag-qualified
-						// part (e.g. '.foo .popup-bar', 'div.modal-dialog',
-						// 'div.elementor-popup-modal', 'button.mfp-close') must
-						// keep the rule even though the full string does not
-						// start with the prefix. Fail-safe direction: keeping
-						// extra CSS can never break styling.
-						foreach ( $this->extract_simple_selectors( $selector ) as $part ) {
-							if ( 0 === strpos( $part, $prefix ) || false !== stripos( $part, $prefix ) ) {
-								return true;
-							}
 						}
 					}
 				}
 			}
 
-			$simple_selectors = $this->extract_simple_selectors( $selector );
+			$simple_selectors = $this->get_cached_simple_selectors( $selector );
 
 			// Conservative OR logic: keep the rule if ANY simple selector part
 			// exists in the DOM, to avoid breaking descendant selectors like
@@ -1658,6 +1738,56 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			// Intentional bypass of WP_Query filters (pre_get_posts, language plugins) for performance:
 			// direct $wpdb cursor pagination (ID > last_id) avoids OFFSET cost on large sites. Site-specific
 			// filtering must be handled separately if needed.
+			// Hoisted scheduler snapshot (paginated to exhaustion) so a 5000-post
+			// site issues a bounded set of store queries instead of one per
+			// 200-post cursor batch. $lookup_ok disambiguates "none scheduled"
+			// from "lookup unavailable/failed", gating the per-post fallback.
+			$scheduled = array();
+			$lookup_ok = false;
+			if ( function_exists( 'as_get_scheduled_actions' ) ) {
+				try {
+					$as_offset   = 0;
+					$as_per_page = 1000;
+					// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
+					for ( $page = 0; $page < 20; $page++ ) {
+						$batch_actions = as_get_scheduled_actions(
+							array(
+								'hook'     => 'wppo_used_css_generate',
+								'group'    => 'performance_optimisation',
+								'per_page' => $as_per_page,
+								'offset'   => $as_offset,
+							),
+							'ARRAY_A'
+						);
+						if ( ! is_array( $batch_actions ) || empty( $batch_actions ) ) {
+							break;
+						}
+						foreach ( $batch_actions as $action ) {
+							if ( ! is_array( $action ) ) {
+								continue;
+							}
+							$action_args = $action['args'] ?? null;
+							if ( is_string( $action_args ) ) {
+								$decoded     = json_decode( $action_args, true );
+								$action_args = is_array( $decoded ) ? $decoded : null;
+							}
+							if ( is_array( $action_args ) && isset( $action_args['post_id'] ) ) {
+								$scheduled[ (int) $action_args['post_id'] ] = true;
+							}
+						}
+						// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
+						if ( count( $batch_actions ) < $as_per_page ) {
+							break;
+						}
+						$as_offset += $as_per_page;
+					}
+					$lookup_ok = true;
+				} catch ( \Throwable ) {
+					$scheduled = array();
+					$lookup_ok = false;
+				}
+			}
+
 			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- Intentional direct query, $placeholders is count-derived only.
 			do {
 				// Cursor pagination via ID > last_id avoids O(offset) MySQL scans.
@@ -1676,14 +1806,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				}
 
 				foreach ( $post_ids as $post_id ) {
-					if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => (int) $post_id ), 'performance_optimisation' ) ) {
+					$post_id = (int) $post_id;
+					if ( isset( $scheduled[ $post_id ] ) ) {
+						continue;
+					}
+					if ( ! $lookup_ok && function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => $post_id ), 'performance_optimisation' ) ) {
+						$scheduled[ $post_id ] = true;
 						continue;
 					}
 					as_enqueue_async_action(
 						'wppo_used_css_generate',
-						array( 'post_id' => (int) $post_id ),
+						array( 'post_id' => $post_id ),
 						'performance_optimisation'
 					);
+					$scheduled[ $post_id ] = true;
 					++$queued;
 				}
 
