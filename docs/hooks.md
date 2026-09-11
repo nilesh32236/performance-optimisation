@@ -815,6 +815,17 @@ Filters the speculation rules after the high-value list rule is appended. @since
 
 ---
 
+### `wppo_speculation_exclusions`
+Filters the speculation-rules href exclusion patterns (auth, admin, REST, generic commerce cart/checkout/account, WooCommerce dynamic paths, plus user `speculationExcludeUrls`). Merged fill-gaps-only via `wp_speculation_rules_href_exclude_paths` (WP 6.8+) so the core ruleset is never duplicated. @since NEXT.
+
+Intentionally narrow: no `*logout*` / `*nonce*` / `*add-to-cart*` substring wildcards are emitted — those are query-param actions (`?_wpnonce=`, `?action=logout`, `?add-to-cart=`) already excluded by core's `?`-URL handling, and substring wildcards would also block legitimate slugs containing those words (e.g. a post about "add to cart").
+
+**Parameters:**
+- `$excludes` *(string[])* — Canonical exclusion patterns.
+- `$preload_settings` *(array)* — The plugin's preload_settings option value.
+
+---
+
 ### `wppo_edge_cache_enabled`
 Filters whether Edge HTML Cache (N2) is enabled. @since NEXT.
 
