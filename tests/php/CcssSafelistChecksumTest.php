@@ -10,7 +10,11 @@
  * @package PerformanceOptimise\Tests
  */
 
+use PerformanceOptimise\Inc\Cache;
 use PerformanceOptimise\Inc\Critical_CSS;
+use PerformanceOptimise\Inc\Google_Fonts;
+use PerformanceOptimise\Inc\Image_Optimisation;
+use PerformanceOptimise\Inc\Main;
 use PerformanceOptimise\Inc\Used_CSS;
 use PerformanceOptimise\Inc\Util;
 use Brain\Monkey\Functions;
@@ -857,5 +861,237 @@ class CcssSafelistChecksumTest extends \PHPUnit\Framework\TestCase {
 				rmdir( $page_dir );
 			}
 		}
+	}
+
+	/**
+	 * Capture Main::setup_hooks() registrations for ordering assertions.
+	 *
+	 * The test-class setUp stubs add_action()/add_filter() to no-ops, so they
+	 * are re-stubbed here with recording aliases. This mirrors
+	 * BufferCharacterizationTest::capture_setup_hooks().
+	 *
+	 * @param array $options Plugin options.
+	 * @return array{actions:array<int,array{0:string,1:mixed,2:int}>,filters:array<int,array{0:string,1:mixed,2:int}>}
+	 */
+	private function capture_setup_hooks( array $options ): array {
+		$actions = array();
+		$filters = array();
+		Functions\when( 'add_action' )->alias(
+			static function ( $hook, $callback = null, $priority = 10, $args = 1 ) use ( &$actions ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- Test mock signature must match add_action().
+				$actions[] = array( $hook, $callback, $priority );
+				return true;
+			}
+		);
+		Functions\when( 'add_filter' )->alias(
+			static function ( $hook, $callback = null, $priority = 10, $args = 1 ) use ( &$filters ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- Test mock signature must match add_filter().
+				$filters[] = array( $hook, $callback, $priority );
+				return true;
+			}
+		);
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'do_action' )->justReturn( null );
+
+		$main = ( new \ReflectionClass( Main::class ) )->newInstanceWithoutConstructor();
+		$prop = new \ReflectionProperty( Main::class, 'options' );
+		$prop->setAccessible( true );
+		$prop->setValue( $main, $options );
+		$prop = new \ReflectionProperty( Main::class, 'image_optimisation' );
+		$prop->setAccessible( true );
+		$prop->setValue( $main, new Image_Optimisation( $options ) );
+		$prop = new \ReflectionProperty( Main::class, 'google_fonts' );
+		$prop->setAccessible( true );
+		$prop->setValue( $main, new Google_Fonts( $options ) );
+		$prop = new \ReflectionProperty( Main::class, 'used_css_buffer_enhanced' );
+		$prop->setAccessible( true );
+		$prop->setValue( $main, false );
+
+		$method = new \ReflectionMethod( Main::class, 'setup_hooks' );
+		$method->setAccessible( true );
+		$method->invoke( $main );
+
+		return array(
+			'actions' => $actions,
+			'filters' => $filters,
+		);
+	}
+
+	/**
+	 * Find a captured hook registration by hook + method name.
+	 *
+	 * @param array  $hooks  Captured hooks.
+	 * @param string $hook   Hook name.
+	 * @param string $method Callback method name fragment.
+	 * @return array|null Matching [hook, callback, priority] entry, or null.
+	 */
+	private function find_hook( array $hooks, string $hook, string $method ): ?array {
+		foreach ( $hooks as $entry ) {
+			if ( $entry[0] !== $hook ) {
+				continue;
+			}
+			$callback = $entry[1];
+			if ( is_array( $callback ) && isset( $callback[1] ) && false !== strpos( (string) $callback[1], $method ) ) {
+				return $entry;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Defect 1 (blocking): the freshness probe must run after the queue is final.
+	 *
+	 * `inline_ccss()` is hooked at `wp_head` priority 0, but on the standard
+	 * enqueue path `$wp_styles->queue` is not populated until core runs
+	 * `wp_enqueue_scripts` inside its `wp_head` priority-1 callback — AFTER
+	 * priority 0. This test pins the corrected ordering: the probe is
+	 * registered on the `wp_enqueue_scripts` ACTION at PHP_INT_MAX (queue
+	 * final, before core's `wp_maybe_inline_styles()`), and `inline_ccss()`
+	 * stays at `wp_head` priority 0 but no longer owns the probe.
+	 *
+	 * Fails pre-fix: no callback named `maybe_check_stale_on_enqueue` exists on
+	 * `wp_enqueue_scripts`.
+	 *
+	 * @return void
+	 */
+	public function test_ccss_probe_runs_on_final_layout_queue_not_pre_enqueue_wp_head(): void {
+		$captured = $this->capture_setup_hooks(
+			array(
+				'file_optimisation' => array( 'criticalCSS' => true ),
+			)
+		);
+
+		$probe = $this->find_hook( $captured['actions'], 'wp_enqueue_scripts', 'maybe_check_stale_on_enqueue' );
+		$this->assertNotNull( $probe, 'Freshness probe must be registered on wp_enqueue_scripts' );
+		$this->assertSame( PHP_INT_MAX, $probe[2], 'Probe must run at PHP_INT_MAX (queue already final)' );
+		$this->assertSame( array( Critical_CSS::class, 'maybe_check_stale_on_enqueue' ), $probe[1] );
+
+		// inline_ccss() must remain at wp_head priority 0 to render critical CSS
+		// as early as possible; it must not be the probe entrypoint anymore.
+		$inline = $this->find_hook( $captured['actions'], 'wp_head', 'inline_ccss' );
+		$this->assertNotNull( $inline, 'inline_ccss() must stay hooked to wp_head' );
+		$this->assertSame( 0, $inline[2], 'inline_ccss() must stay at wp_head priority 0' );
+	}
+
+	/**
+	 * Defect 1 functional proof: a stale checksum detected on the final queue.
+	 *
+	 * Simulates the production `wp_enqueue_scripts` point (queue populated) and
+	 * invokes the new probe entrypoint. With a baselined checksum that no longer
+	 * matches the queued local source, the probe must drop the stale variant so
+	 * the next request's `inline_ccss()` re-queues generation.
+	 *
+	 * @return void
+	 */
+	public function test_ccss_probe_drops_stale_variant_when_queue_is_final(): void {
+		$this->option_map['wppo_settings'] = array(
+			'file_optimisation' => array( 'ccssSafelistExtra' => '.modal-open' ),
+		);
+		Util::clear_settings_cache();
+
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$theme_dir = wp_normalize_path( WP_CONTENT_DIR . '/themes/wppo-ccss-probe' );
+		if ( ! is_dir( $theme_dir ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
+			mkdir( $theme_dir, 0775, true );
+		}
+		$file_a = $theme_dir . '/probe.css';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+		file_put_contents( $file_a, 'h1{font-size:2em}' );
+		$url_a = 'http://example.com/wp-content/themes/wppo-ccss-probe/probe.css';
+
+		$entry                = new \stdClass();
+		$entry->src           = $url_a;
+		$styles               = new \stdClass();
+		$styles->queue        = array( 'wppo-probe-a' );
+		$styles->registered   = array( 'wppo-probe-a' => $entry );
+		$GLOBALS['wp_styles'] = $styles;
+
+		// get_template_hash() resolves deterministically from the stubbed
+		// conditionals (front page = home, stylesheet = test-theme, blog 1).
+		$hash      = Critical_CSS::get_template_hash();
+		$ccss_file = $this->prepare_ccss_dir( $hash );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+		file_put_contents( $ccss_file, 'body{margin:0}' );
+
+		try {
+			// Baseline the OLD source so the current queued source is stale.
+			Critical_CSS::store_source_checksum( $hash, 'old-source{different}' );
+			Critical_CSS::reset_ccss_memo();
+
+			Critical_CSS::maybe_check_stale_on_enqueue();
+
+			$this->assertFileDoesNotExist( $ccss_file, 'Stale variant must be dropped from the final queue' );
+			$this->assertSame( 0, $this->http_calls, 'Probe must use local reads only' );
+		} finally {
+			unset( $GLOBALS['wp_styles'] );
+			Critical_CSS::reset_ccss_memo();
+			if ( file_exists( $ccss_file ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+				unlink( $ccss_file );
+			}
+			if ( file_exists( $file_a ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+				unlink( $file_a );
+			}
+			if ( is_dir( $theme_dir ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Test fixture cleanup.
+				rmdir( $theme_dir );
+			}
+		}
+	}
+
+	/**
+	 * Defect 2: Cache and Critical_CSS share ONE version-aware budget helper.
+	 *
+	 * The two private delegates must return the same value as
+	 * Util::get_styles_inline_limit() for every boundary — especially
+	 * `'6.9-alpha'`, where the old `'6.9'` vs `'6.9-alpha'` comparators
+	 * disagreed.
+	 *
+	 * @return void
+	 */
+	public function test_styles_inline_limit_is_shared_and_pre_release_aware(): void {
+		Functions\when( 'apply_filters' )->returnArg( 2 );
+
+		$cache = ( new \ReflectionClass( Cache::class ) )->newInstanceWithoutConstructor();
+
+		$cache_method = new ReflectionMethod( Cache::class, 'get_styles_inline_limit' );
+		$cache_method->setAccessible( true );
+		$ccss_method = new ReflectionMethod( Critical_CSS::class, 'get_styles_inline_limit' );
+		$ccss_method->setAccessible( true );
+
+		$cases = array(
+			'6.8'       => 20000,
+			'6.9-alpha' => 40000,
+			'6.9-beta1' => 40000,
+			'6.9'       => 40000,
+		);
+
+		foreach ( $cases as $version => $expected ) {
+			$GLOBALS['wp_version'] = $version;
+			$this->assertSame( $expected, Util::get_styles_inline_limit(), 'Util budget for ' . $version );
+			$this->assertSame( $expected, $ccss_method->invoke( null ), 'Critical_CSS budget for ' . $version );
+			$this->assertSame( $expected, $cache_method->invoke( $cache ), 'Cache budget for ' . $version );
+		}
+
+		unset( $GLOBALS['wp_version'] );
+		$this->assertSame( 40000, Util::get_styles_inline_limit(), 'Absent version assumes newest default' );
+	}
+
+	/**
+	 * Defect 3: the no-op `is_core_block_hoisting_active()` duplicate is gone.
+	 *
+	 * It returned true in both branches and was equivalent to
+	 * `block_assets_are_separate()` on WP >= 6.9-alpha; combine_css() now uses
+	 * the single source of truth directly.
+	 *
+	 * @return void
+	 */
+	public function test_core_block_hoisting_noop_duplicate_is_removed(): void {
+		$this->assertFalse(
+			method_exists( Cache::class, 'is_core_block_hoisting_active' ),
+			'No-op duplicate of block_assets_are_separate() must be removed'
+		);
 	}
 }

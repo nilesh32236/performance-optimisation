@@ -2760,5 +2760,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			$image = null;
 			unset( $image );
 		}
+
+		/**
+		 * Read core's `styles_inline_size_limit` budget.
+		 *
+		 * Single source of truth shared by Cache and Critical_CSS so their
+		 * inline-budget accounting cannot diverge. Core's default is
+		 * version-dependent: 20KB before WP 6.9, 40KB on 6.9+. The
+		 * `'6.9-alpha'` comparator is used so alpha/beta/RC builds of 6.9
+		 * already report the raised default (the raised budget shipped in the
+		 * 6.9 development cycle). Site-level overrides through the
+		 * `styles_inline_size_limit` filter always win. An absent
+		 * `$GLOBALS['wp_version']` assumes the newest default.
+		 *
+		 * @since NEXT
+		 * @return int The inline size limit in bytes.
+		 */
+		public static function get_styles_inline_limit(): int {
+			$default = 40000;
+			if ( isset( $GLOBALS['wp_version'] ) && version_compare( (string) $GLOBALS['wp_version'], '6.9-alpha', '<' ) ) {
+				$default = 20000;
+			}
+			return (int) apply_filters( 'styles_inline_size_limit', $default );
+		}
 	}
 }
