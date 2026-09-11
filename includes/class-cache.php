@@ -2291,26 +2291,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		private function get_cache_file_path( $type = 'html', string $role_hash = '', string $variant = '' ): string {
-			if ( '' === $this->cache_root_dir || '' === $this->domain ) {
-				return '';
-			}
-			// A path rejected at construction time never maps to a file:
-			// serve dynamic/uncached instead of the homepage index.html.
-			if ( $this->path_rejected ) {
-				return '';
-			}
-			// Defense-in-depth literal check: url_path is already sanitized
-			// at construction, and sanitize_cache_path() below is the real
-			// gate (it also refuses encoded vectors this check cannot see).
-			// Kept so a future construction-path regression still fails
-			// closed here instead of reaching the filesystem.
-			if ( false !== strpos( $this->url_path, "\0" ) || false !== strpos( $this->url_path, '..' ) ) {
-				$this->log_traversal_probe( $this->url_path );
-				return '';
-			}
-			// Role-hash / variant suffixes are interpolated into the file
-			// name: allowlist them so a crafted suffix can never inject
-			// separators or traversal sequences into the resolved path.
+			// All containment lives in safe_path_for_url() (single
+			// choke-point): role-hash/variant/type allowlists shape the leaf
+			// filename, then the choke-point enforces domain, single-decode,
+			// and dual-prefix containment. Empty string means refuse.
 			if ( '' !== $role_hash && ! preg_match( '/^[a-z0-9-]{1,32}$/i', $role_hash ) ) {
 				$this->log_traversal_probe( $role_hash );
 				return '';
@@ -2328,12 +2312,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return '';
 			}
 			$filename = "index{$suffix}.{$type}";
-			$resolved = Util::sanitize_cache_path( $this->cache_root_dir, $this->domain, $this->url_path, $filename );
-			if ( '' === $resolved ) {
-				$this->log_traversal_probe( $this->url_path );
-				return '';
-			}
-			return $resolved;
+			return $this->safe_path_for_url( $this->url_path, $filename );
 		}
 
 		/**
@@ -2346,26 +2325,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		public function get_cache_file_url( $type = 'html', string $variant = '' ): string {
-			if ( '' === $this->cache_root_url || '' === $this->cache_root_dir || '' === $this->domain ) {
+			if ( '' === $this->cache_root_url ) {
 				return '';
 			}
-			// A path rejected at construction time never maps to a file URL:
-			// callers fall open instead of emitting the homepage URL.
-			if ( $this->path_rejected ) {
-				return '';
-			}
-			// Defense-in-depth literal check (see get_cache_file_path()):
-			// url_path is already sanitized at construction and
-			// sanitize_cache_path() below is the real gate for encoded
-			// vectors; kept so a construction-path regression still fails
-			// closed here instead of emitting a URL for an escaped path.
-			if ( false !== strpos( $this->url_path, "\0" ) || false !== strpos( $this->url_path, '..' ) ) {
-				$this->log_traversal_probe( $this->url_path );
-				return '';
-			}
-			// Variant suffix is interpolated into the public URL: allowlist it
-			// exactly like get_cache_file_path() so a crafted suffix can never
-			// inject separators/traversal into the emitted URL.
+			// Variant/type shape the leaf filename; containment parity with
+			// get_cache_file_path() comes from the same single choke-point.
 			if ( '' !== $variant && ! preg_match( '/^[a-z0-9-]{1,32}$/i', $variant ) ) {
 				$this->log_traversal_probe( $variant );
 				return '';
@@ -2376,11 +2340,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 			$suffix   = $variant ? "-{$variant}" : '';
 			$filename = "index{$suffix}.{$type}";
-			// Containment parity with get_cache_file_path(): refuse when the
-			// resolved filesystem path would escape the cache root/domain.
-			$resolved = Util::sanitize_cache_path( $this->cache_root_dir, $this->domain, $this->url_path, $filename );
+			$resolved = $this->safe_path_for_url( $this->url_path, $filename );
 			if ( '' === $resolved ) {
-				$this->log_traversal_probe( $this->url_path );
 				return '';
 			}
 			$relative = ( '' === $this->url_path ? $filename : "{$this->url_path}/{$filename}" );
@@ -2408,7 +2369,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		private function prepare_cache_dir(): bool {
-			$target = "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $this->url_path ? '' : "/{$this->url_path}" );
+			// Funnel through the single choke-point: the probe file must
+			// resolve inside the cache tree before any directory is created.
+			// The directory itself is derived from the contained probe path
+			// so it can never escape the root/domain tree.
+			$probe = $this->safe_path_for_url( $this->url_path, 'index.html' );
+			if ( '' === $probe ) {
+				return false;
+			}
+			if ( function_exists( 'dirname' ) ) {
+				$target = dirname( $probe );
+			} else {
+				$target = "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $this->url_path ? '' : "/{$this->url_path}" );
+			}
 			if ( ! $this->is_path_contained( trailingslashit( $target ) ) ) {
 				$this->log_traversal_probe( $this->url_path );
 				return false;
@@ -2422,6 +2395,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Writes to a temporary sibling file in the same directory and then
 		 * atomically moves it to the final path, preventing readers from
 		 * observing a partially-written cache file during stampede writes.
+		 * The final path must originate from {@see safe_path_for_url()}; the
+		 * containment pre-check below is defense-in-depth on the resolved path.
 		 *
 		 * @since NEXT
 		 * @param string $path Final file path.
@@ -2446,6 +2421,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 		/**
 		 * Save cache files with optional gzip compression.
+		 *
+		 * The file path must originate from {@see safe_path_for_url()} (via
+		 * `get_cache_file_path()`); the containment guard below plus the
+		 * `atomic_put_contents()` re-check on the base and `.gz`/`.br`
+		 * siblings are defense-in-depth on resolved paths.
 		 *
 		 * @param string $buffer The content to save.
 		 * @param string $file_path The file path for saving.
@@ -2541,6 +2521,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 		/**
 		 * Save processed buffer with filesystem guard (shared by legacy and WP 6.9+ paths).
+		 *
+		 * The file path must originate from {@see safe_path_for_url()}; the
+		 * containment guard below is defense-in-depth on the resolved path.
 		 *
 		 * @param string $buffer   The processed buffer content.
 		 * @param string $file_path The file path for saving.
@@ -3211,6 +3194,129 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Single choke-point mapping a URL path + leaf filename to a contained absolute path.
+		 *
+		 * The ONLY function that maps a URL path + leaf filename to an absolute
+		 * filesystem path under `wp-content/cache/wppo/{domain}/{path}/`. Every
+		 * cache write and purge funnels through this gate: `get_cache_file_path()`,
+		 * `get_cache_file_url()`, `get_file_path()`, and `prepare_cache_dir()`
+		 * delegate here, while `atomic_put_contents()`, `save_cache_files()`,
+		 * `save_processed_buffer()`, `delete_cache_files()`,
+		 * `delete_no_cache_marker()`, `delete_role_variant_files()`, and the
+		 * `clear_cache()` single-page branch re-check containment via
+		 * {@see is_path_contained()} as defense-in-depth on already-resolved
+		 * paths. Returns an empty string on any rejection; callers fail open
+		 * (serve dynamic/uncached) and never touch the filesystem. `.htaccess`
+		 * writers are never called from this path.
+		 *
+		 * Internal steps (single place): fail-closed on empty root/domain or
+		 * a construction-time `path_rejected` flag; leaf-filename allowlist
+		 * (`index` plus optional `-[a-z0-9-]{1,32}` suffix groups with an
+		 * `[a-z0-9]+` extension, optional `.gz`/`.br` sibling suffix, plus the
+		 * explicit `used-css.css` alternative; length
+		 * <= 64; no `/`, `\`, NUL, or `..`); domain allowlist via
+		 * `Util::normalize_cache_host()` (fail-closed on `''`); resolution via
+		 * `Util::sanitize_cache_path()` (single-decode + NUL/dot-dot/drive/UNC
+		 * rejection + dual-prefix containment); final `is_path_contained()`
+		 * re-check; `log_traversal_probe()` on reject (skipped for the benign
+		 * homepage so `''`/`'/'` never logs).
+		 *
+		 * @since NEXT
+		 * @param string $url_path_or_url Raw URL path or URL.
+		 * @param string $filename Leaf filename (e.g. `index.html`).
+		 * @return string Contained absolute path, or '' when refused.
+		 */
+		private function safe_path_for_url( string $url_path_or_url, string $filename ): string {
+			$raw_input = (string) $url_path_or_url;
+			if ( '' === $this->cache_root_dir || '' === $this->domain ) {
+				return '';
+			}
+			if ( $this->path_rejected ) {
+				return '';
+			}
+			if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'normalize_cache_host' ) ) {
+				try {
+					$normalized_domain = Util::normalize_cache_host( $this->domain );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$normalized_domain = '';
+				}
+				if ( '' === $normalized_domain ) {
+					return '';
+				}
+			}
+			$leaf = (string) $filename;
+			if ( '' === $leaf || strlen( $leaf ) > 64 ) {
+				$this->log_traversal_probe( $raw_input );
+				return '';
+			}
+			if ( false !== strpos( $leaf, '/' ) || false !== strpos( $leaf, '\\' ) || false !== strpos( $leaf, "\0" ) || false !== strpos( $leaf, '..' ) ) {
+				$this->log_traversal_probe( $raw_input );
+				return '';
+			}
+			$is_allowed = false;
+			if ( function_exists( 'preg_match' ) ) {
+				$is_allowed = (bool) preg_match( '/^(?:index(?:-[a-z0-9-]{1,32})*\.[a-z0-9]+(?:\.(?:gz|br))?|used-css\.css(?:\.(?:gz|br))?)$/i', $leaf );
+			} else {
+				$is_allowed = ( 'index.html' === $leaf || 'used-css.css' === $leaf );
+			}
+			if ( ! $is_allowed ) {
+				$this->log_traversal_probe( $raw_input );
+				return '';
+			}
+			$resolved = '';
+			if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'sanitize_cache_path' ) ) {
+				try {
+					$resolved = Util::sanitize_cache_path( $this->cache_root_dir, $this->domain, $raw_input, $leaf );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$resolved = '';
+				}
+			}
+			if ( '' === $resolved ) {
+				$this->log_homepage_aware_probe( $raw_input );
+				return '';
+			}
+			if ( ! $this->is_path_contained( $resolved ) ) {
+				$this->log_traversal_probe( $raw_input );
+				return '';
+			}
+			return $resolved;
+		}
+
+		/**
+		 * Log a rejected path unless it is the benign homepage.
+		 *
+		 * `Util::sanitize_cache_path()` returns `''` for both the benign
+		 * homepage (`''`/`'/'`) and hostile inputs; only the latter is a probe.
+		 *
+		 * @since NEXT
+		 * @param string $raw_input The raw input that resolved to ''.
+		 * @return void
+		 */
+		private function log_homepage_aware_probe( string $raw_input ): void {
+			$raw_component = null;
+			try {
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$raw_component = wp_parse_url( $raw_input, PHP_URL_PATH );
+				} elseif ( function_exists( 'parse_url' ) ) {
+					$raw_component = parse_url( $raw_input, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
+				} else {
+					$raw_component = $raw_input;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$raw_component = $raw_input;
+			}
+			if ( null === $raw_component || false === $raw_component ) {
+				$raw_component = $raw_input;
+			}
+			if ( '' !== trim( trim( (string) $raw_component ), '/' ) ) {
+				$this->log_traversal_probe( $raw_input );
+			}
+		}
+
+		/**
 		 * Log a blocked cache path traversal probe (once per request).
 		 *
 		 * Never throws: failures degrade silently to serving uncached.
@@ -3263,10 +3369,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private function get_file_path( ?string $url_path = null, string $type = 'html' ): string {
 			$raw_input = (string) $url_path;
 
-			if ( '' === $this->cache_root_dir || '' === $this->domain ) {
-				return '';
-			}
-
 			if ( 'used-css' === $type ) {
 				$filename = 'used-css.css';
 			} else {
@@ -3277,30 +3379,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$filename = "index.{$type}";
 			}
 
-			// Single auditable containment point: host normalization, path
-			// sanitization, filename allowlist, and dual-prefix containment
-			// all live in Util::sanitize_cache_path().
-			$resolved = Util::sanitize_cache_path( $this->cache_root_dir, $this->domain, $raw_input, $filename );
-
-			if ( '' === $resolved ) {
-				// Distinguish the benign homepage ('/', '') from a rejected
-				// hostile input: only log when the raw path component is
-				// non-empty after trimming slashes and whitespace.
-				if ( function_exists( 'wp_parse_url' ) ) {
-					$raw_component = wp_parse_url( $raw_input, PHP_URL_PATH );
-				} else {
-					$raw_component = parse_url( $raw_input, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
-				}
-				if ( null === $raw_component || false === $raw_component ) {
-					$raw_component = $raw_input;
-				}
-				if ( '' !== trim( trim( (string) $raw_component ), '/' ) ) {
-					$this->log_traversal_probe( $raw_input );
-				}
-				return ''; // Return empty string to prevent deletion or creation outside cache root.
-			}
-
-			return $resolved;
+			// Funnel through the single choke-point (domain + single-decode
+			// + filename allowlist + dual-prefix containment). Empty string
+			// means refuse; the choke-point already logs hostile probes
+			// (homepage-aware, so benign ''/'/' stays silent).
+			return $this->safe_path_for_url( $raw_input, $filename );
 		}
 
 		/**
@@ -3335,6 +3418,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Delete cache files for a specific file path.
 		 *
+		 * The file path must originate from {@see safe_path_for_url()}; the
+		 * base plus `.gz`/`.br` sibling containment checks below are
+		 * defense-in-depth on resolved paths.
+		 *
 		 * @param string $file_path The file path.
 		 * @return bool True if successful (or not exists), false otherwise.
 		 *
@@ -3347,6 +3434,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 			$gzip_file_path = $file_path . '.gz';
 			$br_file_path   = $file_path . '.br';
+			// Sibling re-check (defense-in-depth): appending an extension can
+			// never escape, but every unlink funnels through containment.
+			if ( ! $this->is_path_contained( $gzip_file_path ) || ! $this->is_path_contained( $br_file_path ) ) {
+				$this->log_traversal_probe( (string) $file_path );
+				return false;
+			}
 
 			$fs = $this->get_filesystem();
 			if ( $fs ) {
@@ -3361,6 +3454,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 		/**
 		 * Delete all index-{hash}.html role-variant cache files in a directory.
+		 *
+		 * The directory must derive from a {@see safe_path_for_url()}-resolved
+		 * path (e.g. `dirname()` of a choke-point result); the directory and
+		 * per-file containment checks below are defense-in-depth.
 		 *
 		 * @param string $dir Directory to scan.
 		 * @return void
@@ -3384,6 +3481,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			foreach ( $files as $file ) {
 				if ( preg_match( '/^index-[a-f0-9]{12}\.html(\.gz|\.br)?$/', $file['name'] ) ) {
 					$file_path = trailingslashit( $dir ) . $file['name'];
+					// Per-file containment (defense-in-depth): the directory
+					// itself came from a choke-point-resolved path, but every
+					// unlink is re-checked so a crafted dirlist entry can never
+					// escape the cache tree.
+					if ( ! $this->is_path_contained( $file_path ) ) {
+						$this->log_traversal_probe( $file_path );
+						continue;
+					}
 					$fs->delete( $file_path );
 				}
 			}
@@ -3418,37 +3523,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			if ( $url_path ) {
 				$raw_clear_path = (string) $url_path;
-				// Centralized sanitization (single-decode, null-byte/dot-dot/
-				// drive/UNC rejection): encoded vectors the old literal
-				// `..`/`\0` check missed are refused here instead of reaching
-				// the filesystem. A benign homepage ('/') still sanitizes to
-				// '' and proceeds; a hostile input fails closed.
-				// Note: the sanitized result is passed through get_file_path()
-				// (which runs sanitize_cache_path() → sanitize_cache_url_path()
-				// a second time). The double-sanitize is fail-closed by design:
-				// the first pass output is already free of `..`/NUL/drive/UNC,
-				// so the second rawurldecode pass can at most yield a benign
-				// literal (e.g. `%252e` → `%2e` → `.`) or refuse to ''.
-				$sanitized_clear = Util::sanitize_cache_url_path( $raw_clear_path );
-				if ( '' === $sanitized_clear ) {
-					if ( function_exists( 'wp_parse_url' ) ) {
-						$raw_component = wp_parse_url( $raw_clear_path, PHP_URL_PATH );
-					} else {
-						$raw_component = parse_url( $raw_clear_path, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
-					}
-					if ( null === $raw_component || false === $raw_component ) {
-						$raw_component = $raw_clear_path;
-					}
-					if ( '' !== trim( trim( (string) $raw_component ), '/' ) ) {
-						$instance->log_traversal_probe( $raw_clear_path );
-						return false;
-					}
-				}
-				$url_path = $sanitized_clear;
-
-				$html_file_path = $instance->get_file_path( $url_path, 'html' );
-				$css_file_path  = $instance->get_file_path( $url_path, 'css' );
-				$used_css_path  = $instance->get_file_path( $url_path, 'used-css' );
+				// Single choke-point: get_file_path() delegates to
+				// safe_path_for_url() (single-decode, NUL/dot-dot/drive/UNC
+				// rejection, filename allowlist, dual-prefix containment). A
+				// benign homepage ('/') resolves to the homepage file; a
+				// hostile input resolves to '' (probe already logged) and the
+				// purge is refused. The triple is_path_contained() check below
+				// stays as defense-in-depth on already-resolved paths.
+				$html_file_path = $instance->get_file_path( $raw_clear_path, 'html' );
+				$css_file_path  = $instance->get_file_path( $raw_clear_path, 'css' );
+				$used_css_path  = $instance->get_file_path( $raw_clear_path, 'used-css' );
 
 				if ( empty( $html_file_path ) || empty( $css_file_path ) || empty( $used_css_path ) ) {
 					return false;
