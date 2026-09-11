@@ -80,6 +80,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * The `wppo_litespeed_purge_queue` entry is blog-prefixed at runtime via
 		 * transient_key() on multisite; the list stores its base name.
 		 *
+		 * SYNC INVARIANT: `uninstall.php` runs standalone under
+		 * WP_UNINSTALL_PLUGIN (without these classes loaded), so it keeps a
+		 * parallel `$wppo_options` array. Every key added or removed here MUST
+		 * be mirrored there, and vice-versa. `UninstallOptionsTest` guards the
+		 * two lists against drift.
+		 *
 		 * @since 2.0.0
 		 * @var string[]
 		 */
@@ -113,6 +119,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			'wppo_litespeed_purge_queue',
 			'wppo_autoload_remediated',
 			'wppo_autoload_migrated',
+			// Option-leak hardening: salt options and runtime counters that are
+			// written by the plugin but were previously absent from the list.
+			'wppo_ccss_salt',                          // Critical_CSS::SALT_KEY.
+			'wppo_sysinfo_salt',                       // System_Info::DROPIN_SALT_KEY.
+			'wppo_rum_top_url_gen',                    // RUM top-URL generation counter (class-rum.php).
+			'wppo_remove_query_strings_deprecated_logged', // Legacy removal marker from the retired #925 feature (class-main.php).
+			'wppo_ai_anomaly_last_alarm',              // AI_Adaptive::ANOMALY_COOLDOWN_KEY.
+			'wppo_object_cache_circuit',               // Object_Cache::CIRCUIT_OPTION.
+			'wppo_object_cache_circuit_dismissed',     // Object_Cache::CIRCUIT_DISMISSED_OPTION.
 		);
 
 		/**

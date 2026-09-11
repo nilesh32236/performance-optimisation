@@ -1497,7 +1497,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 * Find wppo_* options without a known live owner (pure helper).
 		 *
 		 * Known = Util::UNINSTALL_OPTIONS (blog-prefix stripped) + dynamic
-		 * prefixes (front-page LCP, crawler batches) + runtime circuit keys.
+		 * prefixes (front-page LCP, crawler batches, purge queue).
+		 *
+		 * Object_Cache's circuit options now live in Util::UNINSTALL_OPTIONS
+		 * (they gained uninstall rows in the option-leak hardening pass), so
+		 * they no longer need a separate runtime whitelist.
 		 *
 		 * @since 2.0.0
 		 * @param string[] $found_names Option names from the options table.
@@ -1508,9 +1512,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 			foreach ( Util::UNINSTALL_OPTIONS as $name ) {
 				$known[] = $name;
 			}
-			// Runtime keys with a live owner but no uninstall row.
-			$known[] = 'wppo_object_cache_circuit';
-			$known[] = 'wppo_object_cache_circuit_dismissed';
 
 			$prefixes = array(
 				Util::FRONT_PAGE_LCP_OPTION_PREFIX,

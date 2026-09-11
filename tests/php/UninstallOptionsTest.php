@@ -14,6 +14,9 @@
  */
 
 use PerformanceOptimise\Inc\Util;
+use PerformanceOptimise\Inc\WPPO_CLI_Command;
+
+require_once __DIR__ . '/stubs/wp-cli.php';
 
 /**
  * Uninstall option-list membership/completeness/sync tests.
@@ -24,11 +27,32 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 	use WPPO_Test_Bootstrap;
 
 	/**
+	 * Option keys added by the option-leak hardening pass.
+	 *
+	 * Live `wp wppo verify` flagged the salt/marker keys; the audit also found
+	 * the RUM counter, the AI anomaly cooldown and the Object_Cache circuit
+	 * keys missing. All must be present in both lists and considered known by
+	 * `WPPO_CLI_Command::find_unknown_wppo_options()`.
+	 *
+	 * @var string[]
+	 */
+	private array $leak_hardening_options = array(
+		'wppo_ccss_salt',                          // Critical_CSS::SALT_KEY.
+		'wppo_sysinfo_salt',                       // System_Info::DROPIN_SALT_KEY.
+		'wppo_rum_top_url_gen',                    // class-rum.php:332.
+		'wppo_remove_query_strings_deprecated_logged', // class-main.php:1316/1322.
+		'wppo_ai_anomaly_last_alarm',              // AI_Adaptive::ANOMALY_COOLDOWN_KEY.
+		'wppo_object_cache_circuit',               // Object_Cache::CIRCUIT_OPTION.
+		'wppo_object_cache_circuit_dismissed',     // Object_Cache::CIRCUIT_DISMISSED_OPTION.
+	);
+
+	/**
 	 * The fixed option names every uninstall must remove per site.
 	 *
 	 * Completeness baseline: the 24 names that existed before audit #899 plus
 	 * the three audit #899 findings (img-scan cursors, blog-prefixed purge
-	 * queue) plus the issue #934 autoload-remediation priors option.
+	 * queue) plus the issue #934 autoload-remediation priors option plus the
+	 * option-leak hardening additions.
 	 *
 	 * @var string[]
 	 */
@@ -64,6 +88,14 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 		// Issue #934 autoload remediation priors.
 		'wppo_autoload_remediated',
 		'wppo_autoload_migrated',
+		// Option-leak hardening additions.
+		'wppo_ccss_salt',
+		'wppo_sysinfo_salt',
+		'wppo_rum_top_url_gen',
+		'wppo_remove_query_strings_deprecated_logged',
+		'wppo_ai_anomaly_last_alarm',
+		'wppo_object_cache_circuit',
+		'wppo_object_cache_circuit_dismissed',
 	);
 
 	/**
@@ -155,6 +187,45 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 			array_values( $expected ),
 			array_values( array_unique( $found ) ),
 			'uninstall.php option list drifted from Util::UNINSTALL_OPTIONS (audit #899 regression guard)'
+		);
+	}
+
+	/**
+	 * Leak hardening: every newly-added key must be present in the canonical
+	 * constant AND in uninstall.php's inline list (the two lists must match).
+	 */
+	public function test_leak_hardening_options_present_in_both_lists(): void {
+		$extracted = $this->extract_uninstall_option_list();
+		$this->assertNotNull( $extracted, 'uninstall.php must keep the $wppo_options list' );
+
+		foreach ( $this->leak_hardening_options as $name ) {
+			$this->assertContains(
+				$name,
+				Util::UNINSTALL_OPTIONS,
+				"Util::UNINSTALL_OPTIONS must contain the leak-hardening option {$name}"
+			);
+			$this->assertContains(
+				$name,
+				$extracted['names'],
+				"uninstall.php \$wppo_options must contain the leak-hardening option {$name}"
+			);
+		}
+	}
+
+	/**
+	 * `wp wppo verify`'s uninstall check treats Util::UNINSTALL_OPTIONS as its
+	 * known-owner set, so every leak-hardening key (plain and blog-prefixed)
+	 * must classify as known — otherwise verify keeps warning after uninstall.
+	 */
+	public function test_leak_hardening_options_are_known_to_verify(): void {
+		$probe = $this->leak_hardening_options;
+		// Include a multisite blog-prefixed variant to mirror verify's matcher.
+		$probe[] = '7_wppo_ccss_salt';
+
+		$this->assertSame(
+			array(),
+			WPPO_CLI_Command::find_unknown_wppo_options( $probe ),
+			'wp wppo verify must classify every hardened option as having a known owner'
 		);
 	}
 

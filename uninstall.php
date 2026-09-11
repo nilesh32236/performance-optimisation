@@ -233,9 +233,13 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 
 		// Delete options.
 		//
-		// Must stay in sync with Util::UNINSTALL_OPTIONS in
-		// includes/class-util.php (audit #899) — this file runs standalone
-		// under WP_UNINSTALL_PLUGIN, without the plugin's classes autoloaded.
+		// SYNC INVARIANT: this inline list must stay exactly in sync with
+		// Util::UNINSTALL_OPTIONS in includes/class-util.php (audit #899).
+		// This file runs standalone under WP_UNINSTALL_PLUGIN, without the
+		// plugin's classes autoloaded, so the canonical constant cannot be
+		// referenced here. `UninstallOptionsTest` fails when the two lists
+		// drift; `wp wppo verify` reads Util::UNINSTALL_OPTIONS as its known
+		// owner set.
 		$transient_prefix = ( function_exists( 'is_multisite' ) && is_multisite() && function_exists( 'get_current_blog_id' ) ) ? (string) get_current_blog_id() . '_' : '';
 		$wppo_options     = array(
 			'wppo_settings',
@@ -275,6 +279,15 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 			// (LiteSpeed_Integration::get_db_queue_key()), so compose it here
 			// (audit #899) — a plain-name delete orphaned per-site rows.
 			$transient_prefix . 'wppo_litespeed_purge_queue',
+			// Option-leak hardening: salt options and runtime counters that are
+			// written by the plugin but were previously absent from the list.
+			'wppo_ccss_salt',                          // Critical_CSS::SALT_KEY.
+			'wppo_sysinfo_salt',                       // System_Info::DROPIN_SALT_KEY.
+			'wppo_rum_top_url_gen',                    // RUM top-URL generation counter (class-rum.php).
+			'wppo_remove_query_strings_deprecated_logged', // Legacy removal marker from the retired #925 feature (class-main.php).
+			'wppo_ai_anomaly_last_alarm',              // AI_Adaptive::ANOMALY_COOLDOWN_KEY.
+			'wppo_object_cache_circuit',               // Object_Cache::CIRCUIT_OPTION.
+			'wppo_object_cache_circuit_dismissed',     // Object_Cache::CIRCUIT_DISMISSED_OPTION.
 		);
 		foreach ( $wppo_options as $wppo_option ) {
 			delete_option( $wppo_option );
