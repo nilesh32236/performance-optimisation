@@ -19,7 +19,9 @@ require_once __DIR__ . '/../../includes/class-cdn.php';
  * @package PerformanceOptimise\Tests
  */
 class CdnPerMappingAttrTest extends \PHPUnit\Framework\TestCase {
-	use WPPO_Test_Bootstrap;
+	use WPPO_Test_Bootstrap {
+		tearDown as protected wppoTearDown;
+	}
 
 	/**
 	 * Stub the URL helpers find_cdn_match() relies on and reset shared Util
@@ -37,6 +39,15 @@ class CdnPerMappingAttrTest extends \PHPUnit\Framework\TestCase {
 				return rtrim( (string) $value, '/' );
 			}
 		);
+	}
+
+	/**
+	 * Drop any mapping memo written during a test so it cannot leak into other
+	 * test classes (this setUp shadows the trait's reset).
+	 */
+	protected function tearDown(): void {
+		CDN::reset_cache();
+		$this->wppoTearDown();
 	}
 
 	/**
@@ -182,5 +193,70 @@ class CdnPerMappingAttrTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertNotEmpty( $mappings );
 		$this->assertSame( 'https://cdn.example.com', $mappings[0]['cdn_url'] );
+	}
+
+	/**
+	 * Regression: WordPress registers rewrite_url() as a 2-argument filter on
+	 * `wp_get_attachment_url`, `style_loader_src` and `script_loader_src`, and
+	 * passes the attachment ID / asset handle as the second argument — never an
+	 * array. The old `?array $mappings` declaration threw:
+	 *
+	 *   TypeError: CDN::rewrite_url(): Argument #2 ($mappings) must be of type
+	 *   ?array, string given
+	 *
+	 * from login_header() -> print_admin_styles(), hard-fataling wp-login.php.
+	 *
+	 * @since NEXT
+	 * @return void
+	 */
+	public function test_rewrite_url_accepts_non_array_second_arg(): void {
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'apply_filters' )->returnArg( 2 );
+		Functions\when( 'get_option' )->justReturn( array() );
+		\PerformanceOptimise\Inc\LiteSpeed_Integration::reset_cache();
+
+		$url    = 'https://example.test/app.css';
+		$result = CDN::rewrite_url( $url, 'some-style-handle' );
+
+		$this->assertIsString( $result );
+		$this->assertSame( $url, $result );
+	}
+
+	/**
+	 * The optional $mappings pass-down used by rewrite_srcset() and
+	 * Critical_CSS must keep working: an array argument is used directly and
+	 * the URL is rewritten without reading options.
+	 *
+	 * @since NEXT
+	 * @return void
+	 */
+	public function test_rewrite_url_uses_supplied_array_mappings(): void {
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'apply_filters' )->returnArg( 2 );
+		// Intentionally no stored settings: the supplied array must be used.
+		Functions\when( 'get_option' )->justReturn( array() );
+		\PerformanceOptimise\Inc\LiteSpeed_Integration::reset_cache();
+
+		$mappings = array(
+			array(
+				'cdn_url'           => 'https://cdn.example.com',
+				'cdn_urls'          => array( 'https://cdn.example.com' ),
+				'ori'               => '',
+				'ori_dir'           => '',
+				'cdn_attr'          => '',
+				'include_dirs'      => 'wp-content',
+				'include_filetypes' => 'css',
+			),
+		);
+
+		$result = CDN::rewrite_url(
+			'http://example.com/wp-content/themes/x/style.css',
+			$mappings
+		);
+
+		$this->assertSame(
+			'https://cdn.example.com/wp-content/themes/x/style.css',
+			$result
+		);
 	}
 }

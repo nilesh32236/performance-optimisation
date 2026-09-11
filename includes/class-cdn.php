@@ -446,11 +446,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		 * (e.g. rewrite_srcset()) can resolve mappings once.
 		 *
 		 * @since NEXT
-		 * @param string     $url      URL.
-		 * @param array|null $mappings Optional pre-resolved mappings from get_mappings().
+		 * @param string $url      URL.
+		 * @param mixed  $mappings Optional pre-resolved mappings from get_mappings(). When
+		 *                         this method is invoked as a `*_loader_src` / `wp_get_attachment_url`
+		 *                         filter, WordPress passes the handle/attachment ID as the second
+		 *                         argument — any non-array value is ignored and mappings are resolved.
 		 * @return string Rewritten or original.
 		 */
-		public static function rewrite_url( string $url, ?array $mappings = null ): string {
+		public static function rewrite_url( string $url, mixed $mappings = null ): string {
 			if ( '' === $url ) {
 				return $url;
 			}
@@ -463,7 +466,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && ! LiteSpeed_Integration::can_apply_cdn() ) {
 				return $url;
 			}
-			if ( null === $mappings ) {
+			if ( ! is_array( $mappings ) ) {
 				$mappings = self::get_mappings();
 			}
 			if ( empty( $mappings ) ) {

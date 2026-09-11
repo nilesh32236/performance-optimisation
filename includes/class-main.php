@@ -170,10 +170,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Set to false transiently by Util::init_filesystem() before the
 		 * constructor normalizes a failed init to null.
 		 *
-		 * @var   WP_Filesystem_Base|false|null
+		 * @var   \WP_Filesystem_Base|false|null
 		 * @since 1.0.0
 		 */
-		private WP_Filesystem_Base|false|null $filesystem = null;
+		private \WP_Filesystem_Base|false|null $filesystem = null;
 
 		/**
 		 * Image Optimisation instance for handling image optimization.
