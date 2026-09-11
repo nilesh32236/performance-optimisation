@@ -596,7 +596,11 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_filter_speculation_rules_caps_stale_eager_in_commerce_context(): void {
 		$this->install_stubs();
-		$this->options['wppo_settings']       = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		// Gating off: exercise the model + commerce-cap path (#908) in isolation.
+		$this->options['wppo_settings']       = array(
+			'ai_adaptive'      => array( 'enabled' => true ),
+			'preload_settings' => array( 'speculationRumGating' => false ),
+		);
 		$this->options[ AI_Adaptive::OPTION ] = array(
 			'prefetch_urls' => array( 'http://example.com/a/' ),
 			'eagerness'     => 'eager',
@@ -617,7 +621,12 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_filter_speculation_rules_preserves_eager_without_commerce_context(): void {
 		$this->install_stubs();
-		$this->options['wppo_settings']       = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		// Gating off: exercise the model eagerness passthrough in isolation
+		// (gating on with absent RUM forces conservative per #1061).
+		$this->options['wppo_settings']       = array(
+			'ai_adaptive'      => array( 'enabled' => true ),
+			'preload_settings' => array( 'speculationRumGating' => false ),
+		);
 		$this->options[ AI_Adaptive::OPTION ] = array(
 			'prefetch_urls' => array( 'http://example.com/a/' ),
 			'eagerness'     => 'eager',
@@ -630,6 +639,166 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$rules = AI_Adaptive::filter_speculation_rules( array() );
 		$this->assertCount( 1, $rules );
 		$this->assertSame( 'eager', $rules[0]['eagerness'] );
+	}
+
+	/**
+	 * Test good RUM p75 gates the list rule to moderate with top URLs (#1061).
+	 *
+	 * @return void
+	 */
+	public function test_filter_speculation_rules_emits_moderate_list_with_good_rum(): void {
+		$this->install_stubs();
+		$today                                = gmdate( 'Y-m-d' );
+		$this->options['wppo_web_vitals_rum'] = array(
+			$today => array(
+				'/popular/' => array(
+					'lcp'    => array(
+						'n'   => 30,
+						'sum' => 54000.0,
+						'min' => 1800.0,
+						'max' => 1800.0,
+					),
+					'lcpSeg' => array(
+						'mobile|single' => array(
+							'device'   => 'mobile',
+							'template' => 'single',
+							'n'        => 20,
+							'sum'      => 36000.0,
+							'min'      => 1800.0,
+							'max'      => 1800.0,
+							'samples'  => array_fill( 0, 20, 1800.0 ),
+						),
+					),
+				),
+			),
+		);
+		$this->options['wppo_settings']       = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		$this->options[ AI_Adaptive::OPTION ] = array(
+			'prefetch_urls' => array( 'http://example.com/a/' ),
+			'eagerness'     => 'conservative',
+		);
+		Util::clear_settings_cache();
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$rules = AI_Adaptive::filter_speculation_rules( array() );
+		$this->assertCount( 1, $rules );
+		$this->assertSame( 'moderate', $rules[0]['eagerness'] );
+		$this->assertContains( 'http://example.com/a/', $rules[0]['urls'] );
+		$this->assertContains( 'http://example.com/popular/', $rules[0]['urls'] );
+	}
+
+	/**
+	 * Test poor RUM p75 forces a conservative list rule even for eager models (#1061).
+	 *
+	 * @return void
+	 */
+	public function test_filter_speculation_rules_forces_conservative_with_poor_rum(): void {
+		$this->install_stubs();
+		$today                                = gmdate( 'Y-m-d' );
+		$this->options['wppo_web_vitals_rum'] = array(
+			$today => array(
+				'/slow/' => array(
+					'lcp'    => array(
+						'n'   => 30,
+						'sum' => 120000.0,
+						'min' => 4000.0,
+						'max' => 4000.0,
+					),
+					'lcpSeg' => array(
+						'mobile|single' => array(
+							'device'   => 'mobile',
+							'template' => 'single',
+							'n'        => 20,
+							'sum'      => 80000.0,
+							'min'      => 4000.0,
+							'max'      => 4000.0,
+							'samples'  => array_fill( 0, 20, 4000.0 ),
+						),
+					),
+				),
+			),
+		);
+		$this->options['wppo_settings']       = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		$this->options[ AI_Adaptive::OPTION ] = array(
+			'prefetch_urls' => array( 'http://example.com/a/' ),
+			'eagerness'     => 'eager',
+		);
+		Util::clear_settings_cache();
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$rules = AI_Adaptive::filter_speculation_rules( array() );
+		$this->assertCount( 1, $rules );
+		$this->assertSame( 'conservative', $rules[0]['eagerness'] );
+	}
+
+	/**
+	 * Test absent RUM forces a conservative list rule (#1061).
+	 *
+	 * @return void
+	 */
+	public function test_filter_speculation_rules_forces_conservative_with_absent_rum(): void {
+		$this->install_stubs();
+		$this->options['wppo_web_vitals_rum'] = array();
+		$this->options['wppo_settings']       = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		$this->options[ AI_Adaptive::OPTION ] = array(
+			'prefetch_urls' => array( 'http://example.com/a/' ),
+			'eagerness'     => 'eager',
+		);
+		Util::clear_settings_cache();
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$rules = AI_Adaptive::filter_speculation_rules( array() );
+		$this->assertCount( 1, $rules );
+		$this->assertSame( 'conservative', $rules[0]['eagerness'] );
+	}
+
+	/**
+	 * Test commerce page contexts emit no AI speculation rule (#1061).
+	 *
+	 * @return void
+	 */
+	public function test_filter_speculation_rules_emits_nothing_on_commerce_pages(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings']       = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		$this->options[ AI_Adaptive::OPTION ] = array(
+			'prefetch_urls' => array( 'http://example.com/a/' ),
+			'eagerness'     => 'moderate',
+		);
+		Util::clear_settings_cache();
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+		Functions\when( 'is_cart' )->justReturn( true );
+
+		$rules = AI_Adaptive::filter_speculation_rules( array() );
+		$this->assertSame( array(), $rules );
+	}
+
+	/**
+	 * Test plain permalinks emit no AI speculation rule (#1061).
+	 *
+	 * @return void
+	 */
+	public function test_filter_speculation_rules_emits_nothing_without_permalinks(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings']       = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		$this->options[ AI_Adaptive::OPTION ] = array(
+			'prefetch_urls' => array( 'http://example.com/a/' ),
+			'eagerness'     => 'moderate',
+		);
+		$this->options['permalink_structure'] = '';
+		Util::clear_settings_cache();
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$rules = AI_Adaptive::filter_speculation_rules( array() );
+		$this->assertSame( array(), $rules );
 	}
 
 	/**

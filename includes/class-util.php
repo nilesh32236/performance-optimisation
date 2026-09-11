@@ -225,6 +225,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'enableSpeculationRules'   => false,
 					'speculationMode'          => 'prefetch',
 					'speculationEagerness'     => 'conservative',
+					'speculationRumGating'     => true,
 					'speculationExcludeUrls'   => '',
 					'speculationDocumentRules' => true,
 					'preloadSitemap'           => false,
@@ -2384,6 +2385,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					 */
 					$mapping                = (array) apply_filters( 'wppo_cdn_mapping', $mapping );
 					$sanitized[ $safe_key ] = $mapping;
+					continue;
+				}
+
+				// RUM-gated speculation eagerness (issue #1061) — normalize
+				// malformed import shapes (0/1, '0'/'1', 'false'/'true') to
+				// bool. Unrecognized values fail open to true (gating on).
+				if ( 'speculationRumGating' === $safe_key && ! is_array( $value ) ) {
+					if ( is_bool( $value ) ) {
+						$sanitized[ $safe_key ] = $value;
+					} else {
+						$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+						$sanitized[ $safe_key ] = null === $bool ? true : $bool;
+					}
 					continue;
 				}
 

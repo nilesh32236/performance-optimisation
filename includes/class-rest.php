@@ -672,6 +672,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$sanitized_settings['field_lcp_min_samples'] = absint( $options['ai_adaptive']['field_lcp_min_samples'] );
 			}
 
+			// Preserve the RUM-gated speculation toggle when the request
+			// omits it (issue #1061): PreloadSettings save posts only the
+			// toggles it renders, so a save must not wipe the gating flag.
+			if ( 'preload_settings' === $tab && ! array_key_exists( 'speculationRumGating', $settings ) && isset( $options['preload_settings']['speculationRumGating'] ) ) {
+				$sanitized_settings['speculationRumGating'] = ! empty( $options['preload_settings']['speculationRumGating'] );
+			}
+
 			$options[ $tab ] = $sanitized_settings;
 
 			update_option( 'wppo_settings', $options );
