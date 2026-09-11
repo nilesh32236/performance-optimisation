@@ -34,22 +34,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		const NAMESPACE = 'performance-optimisation/v1';
 
 		/**
-		 * Per-tab keys that must be deleted from the stored tab on save.
-		 *
-		 * Settings updates merge into the stored tab so omitted keys are
-		 * preserved (some components intentionally POST a partial tab). When
-		 * a key is removed from the schema it must be listed here, otherwise
-		 * the merge would resurrect the stored value instead of letting it
-		 * decay (e.g. the legacy `removeQueryStrings` key, #925).
-		 *
-		 * @since NEXT
-		 * @var array<string,string[]>
-		 */
-		private const SETTINGS_DELETE_KEYS = array(
-			'file_optimisation' => array( 'removeQueryStrings' ),
-		);
-
-		/**
 		 * Cache directory path.
 		 *
 		 * @var string
@@ -645,22 +629,50 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			$options = Util::get_settings();
 
-			// Merge the incoming tab into the stored tab instead of replacing
-			// it wholesale: several components intentionally POST a partial
-			// tab, and a whole-tab replace silently dropped every key they
-			// omitted. Omitted keys are preserved; present keys update; nested
-			// associative arrays merge deeply; list values (e.g.
-			// high_value_urls) replace wholesale so shortened lists can drop
-			// removed entries. Keys that must decay are listed in
-			// SETTINGS_DELETE_KEYS and removed after the merge.
-			$existing_tab    = isset( $options[ $tab ] ) && is_array( $options[ $tab ] ) ? $options[ $tab ] : array();
-			$options[ $tab ] = $this->merge_tab_settings( $existing_tab, $sanitized_settings );
+			// Preserve the pagespeed_api_key when the request omits it.
+			if ( 'performance_audit' === $tab && ! isset( $params['settings']['pagespeed_api_key'] ) && isset( $options['performance_audit']['pagespeed_api_key'] ) ) {
+				$sanitized_settings['pagespeed_api_key'] = sanitize_text_field( $options['performance_audit']['pagespeed_api_key'] );
+			}
 
-			if ( isset( self::SETTINGS_DELETE_KEYS[ $tab ] ) ) {
-				foreach ( self::SETTINGS_DELETE_KEYS[ $tab ] as $delete_key ) {
-					unset( $options[ $tab ][ $delete_key ] );
+			// Preserve the server_timing_enabled flag when the request omits it (no UI toggle exists yet).
+			if ( 'performance_audit' === $tab && ! isset( $params['settings']['server_timing_enabled'] ) && isset( $options['performance_audit']['server_timing_enabled'] ) ) {
+				$sanitized_settings['server_timing_enabled'] = $options['performance_audit']['server_timing_enabled'];
+			}
+
+			// Preserve the auto_rescan frequency when the request omits it.
+			if ( 'performance_audit' === $tab && ! isset( $params['settings']['auto_rescan'] ) && isset( $options['performance_audit']['auto_rescan'] ) ) {
+				$sanitized_settings['auto_rescan'] = $options['performance_audit']['auto_rescan'];
+			}
+
+			// Preserve dismissed AI suggestions when the request omits them
+			// (issue #1036): AiPanel save posts only the toggles, while the
+			// dismiss action posts the full list — a toggle save must not
+			// wipe prior dismissals.
+			if ( 'ai_adaptive' === $tab && ! isset( $params['settings']['dismissed_suggestions'] ) && isset( $options['ai_adaptive']['dismissed_suggestions'] ) ) {
+				$dismissed = $options['ai_adaptive']['dismissed_suggestions'];
+				if ( is_array( $dismissed ) ) {
+					$sanitized_dismissed = array();
+					foreach ( $dismissed as $metric ) {
+						if ( ! is_string( $metric ) ) {
+							continue;
+						}
+						$m = sanitize_text_field( $metric );
+						if ( '' !== $m ) {
+							$sanitized_dismissed[] = substr( $m, 0, 64 );
+						}
+					}
+					$sanitized_settings['dismissed_suggestions'] = array_values( array_unique( $sanitized_dismissed ) );
 				}
 			}
+
+			// Preserve the field-LCP minimum-sample threshold when the request
+			// omits it (issue #1036): AiPanel save posts only the toggles, so
+			// a toggle save must not wipe a custom threshold.
+			if ( 'ai_adaptive' === $tab && ! isset( $params['settings']['field_lcp_min_samples'] ) && isset( $options['ai_adaptive']['field_lcp_min_samples'] ) ) {
+				$sanitized_settings['field_lcp_min_samples'] = absint( $options['ai_adaptive']['field_lcp_min_samples'] );
+			}
+
+			$options[ $tab ] = $sanitized_settings;
 
 			update_option( 'wppo_settings', $options );
 
@@ -686,37 +698,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 */
 		private function sanitize_settings_recursively( $settings ) {
 			return Util::sanitize_settings_recursively( $settings );
-		}
-
-		/**
-		 * Deep-merge one settings tab into the stored tab (audit #8).
-		 *
-		 * Uses `array_replace_recursive()` so a partial POST preserves every
-		 * omitted key, present keys update, and nested associative arrays
-		 * merge deeply. List values (sequential integer-keyed arrays such as
-		 * `high_value_urls` or `dismissed_suggestions`) are replaced
-		 * wholesale afterwards: index-wise merging would retain stale tail
-		 * entries when a caller submits a shortened list.
-		 *
-		 * @since NEXT
-		 * @param array $existing Existing stored tab.
-		 * @param array $incoming Sanitized incoming tab.
-		 * @return array Merged tab.
-		 */
-		private function merge_tab_settings( array $existing, array $incoming ): array {
-			$merged = array_replace_recursive( $existing, $incoming );
-			foreach ( $incoming as $key => $value ) {
-				if ( ! is_array( $value ) ) {
-					continue;
-				}
-				if ( array_is_list( $value ) ) {
-					$merged[ $key ] = $value;
-					continue;
-				}
-				$existing_child = isset( $existing[ $key ] ) && is_array( $existing[ $key ] ) ? $existing[ $key ] : array();
-				$merged[ $key ] = $this->merge_tab_settings( $existing_child, $value );
-			}
-			return $merged;
 		}
 
 		/**
