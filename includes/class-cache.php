@@ -2299,6 +2299,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( $this->path_rejected ) {
 				return '';
 			}
+			// Defense-in-depth literal check: url_path is already sanitized
+			// at construction, and sanitize_cache_path() below is the real
+			// gate (it also refuses encoded vectors this check cannot see).
+			// Kept so a future construction-path regression still fails
+			// closed here instead of reaching the filesystem.
 			if ( false !== strpos( $this->url_path, "\0" ) || false !== strpos( $this->url_path, '..' ) ) {
 				$this->log_traversal_probe( $this->url_path );
 				return '';
@@ -2318,8 +2323,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( $variant ) {
 				$suffix .= "-{$variant}";
 			}
-			$resolved = "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $this->url_path ? "index{$suffix}.{$type}" : "{$this->url_path}/index{$suffix}.{$type}" );
-			if ( ! $this->is_path_contained( $resolved ) ) {
+			if ( ! preg_match( '/^[a-z0-9]+$/i', (string) $type ) ) {
+				$this->log_traversal_probe( (string) $type );
+				return '';
+			}
+			$filename = "index{$suffix}.{$type}";
+			$resolved = Util::sanitize_cache_path( $this->cache_root_dir, $this->domain, $this->url_path, $filename );
+			if ( '' === $resolved ) {
 				$this->log_traversal_probe( $this->url_path );
 				return '';
 			}
@@ -2344,6 +2354,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( $this->path_rejected ) {
 				return '';
 			}
+			// Defense-in-depth literal check (see get_cache_file_path()):
+			// url_path is already sanitized at construction and
+			// sanitize_cache_path() below is the real gate for encoded
+			// vectors; kept so a construction-path regression still fails
+			// closed here instead of emitting a URL for an escaped path.
 			if ( false !== strpos( $this->url_path, "\0" ) || false !== strpos( $this->url_path, '..' ) ) {
 				$this->log_traversal_probe( $this->url_path );
 				return '';
@@ -2355,15 +2370,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$this->log_traversal_probe( $variant );
 				return '';
 			}
+			if ( ! preg_match( '/^[a-z0-9]+$/i', (string) $type ) ) {
+				$this->log_traversal_probe( (string) $type );
+				return '';
+			}
 			$suffix   = $variant ? "-{$variant}" : '';
-			$relative = ( '' === $this->url_path ? "index{$suffix}.{$type}" : "{$this->url_path}/index{$suffix}.{$type}" );
+			$filename = "index{$suffix}.{$type}";
 			// Containment parity with get_cache_file_path(): refuse when the
 			// resolved filesystem path would escape the cache root/domain.
-			$resolved = "{$this->cache_root_dir}/{$this->domain}/{$relative}";
-			if ( ! $this->is_path_contained( $resolved ) ) {
+			$resolved = Util::sanitize_cache_path( $this->cache_root_dir, $this->domain, $this->url_path, $filename );
+			if ( '' === $resolved ) {
 				$this->log_traversal_probe( $this->url_path );
 				return '';
 			}
+			$relative = ( '' === $this->url_path ? $filename : "{$this->url_path}/{$filename}" );
 			return "{$this->cache_root_url}/{$this->domain}/{$relative}";
 		}
 
@@ -2409,22 +2429,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return bool True on success.
 		 */
 		private function atomic_put_contents( string $path, string $contents ): bool {
+			// Containment pre-check: never create a tmp sibling outside the
+			// cache root/domain tree (fail-closed, no partial file).
+			if ( '' === $path || ! $this->is_path_contained( $path ) ) {
+				$this->log_traversal_probe( $path );
+				return false;
+			}
 			$fs = $this->get_filesystem();
 			if ( ! $fs ) {
 				return false;
 			}
-			$tmp = $path . '.tmp.' . wp_rand();
-			if ( ! $fs->put_contents( $tmp, $contents, FS_CHMOD_FILE ) ) {
-				$fs->delete( $tmp );
-				return false;
-			}
-			$moved = $fs->move( $tmp, $path, true );
-			if ( ! $moved ) {
-				$fs->delete( $tmp );
-				// Fallback to direct write if move is unavailable.
-				return (bool) $fs->put_contents( $path, $contents, FS_CHMOD_FILE );
-			}
-			return true;
+			// Shared tmp+rename helper: unique tmp name, no non-atomic
+			// direct-write fallback so interrupted writes leave nothing.
+			return Util::atomic_file_put_contents( $fs, $path, $contents );
 		}
 
 		/**
@@ -2743,20 +2760,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			 */
 			$urls = (array) apply_filters( 'wppo_invalidation_urls', $urls, $page_id );
 
-			// Sanitize: normalize, reject traversal and null bytes, dedupe.
+			// Sanitize via the shared helper (single-decode, null-byte/
+			// dot-dot/drive/UNC rejection) so encoded vectors a literal
+			// `..`/`\0` check would miss are dropped before any delete.
+			// '' is the benign homepage and is kept; a hostile input that
+			// sanitizes to '' is skipped. The sanitized entries pass through
+			// get_file_path() (a second sanitize pass); that double-sanitize
+			// is fail-closed — the first pass output can only decode to a
+			// benign literal or refuse (see clear_cache()).
 			$sanitized = array();
 			foreach ( $urls as $u ) {
-				$u = is_string( $u ) ? $u : (string) $u;
-				$u = wp_normalize_path( trim( $u, '/' ) );
-				if ( '' !== $u && ( false !== strpos( $u, "\0" ) || false !== strpos( $u, '..' ) ) ) {
-					continue;
+				$u              = is_string( $u ) ? $u : (string) $u;
+				$sanitized_path = Util::sanitize_cache_url_path( $u );
+				if ( '' === $sanitized_path ) {
+					if ( function_exists( 'wp_parse_url' ) ) {
+						$raw_component = wp_parse_url( $u, PHP_URL_PATH );
+					} else {
+						$raw_component = parse_url( $u, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
+					}
+					if ( null === $raw_component || false === $raw_component ) {
+						$raw_component = $u;
+					}
+					if ( '' !== trim( trim( (string) $raw_component ), '/' ) ) {
+						continue;
+					}
 				}
-				$sanitized[] = $u;
+				$sanitized[] = $sanitized_path;
 			}
 			$sanitized = array_values( array_unique( $sanitized ) );
 
 			// Purge collected URLs via filesystem; primary URL also clears css/used-css.
-			$primary_normalized = wp_normalize_path( trim( (string) $path, '/' ) );
+			$primary_normalized = Util::sanitize_cache_url_path( (string) $path );
 			foreach ( $sanitized as $url_path ) {
 				$html_file_path = $this->get_file_path( $url_path, 'html' );
 				if ( '' === $html_file_path ) {
@@ -2972,31 +3006,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$primary_normalized = '';
 			// Track the object's own permalink separately from filtered extras
 			// so a filter entry cannot redefine sidecar/regen decisions.
+			// Shared-helper sanitization (single-decode, null-byte/dot-dot/
+			// drive/UNC rejection) so encoded vectors never reach delete.
 			if ( ! empty( $urls ) && is_string( $urls[0] ) ) {
-				$primary_candidate = (string) wp_parse_url( $urls[0], PHP_URL_PATH );
-				if ( '' === $primary_candidate ) {
-					$primary_candidate = $urls[0];
-				}
-				$primary_candidate = wp_normalize_path( trim( rawurldecode( $primary_candidate ), '/' ) );
-				if ( '' !== $primary_candidate && false === strpos( $primary_candidate, '..' ) ) {
-					$primary_normalized = $primary_candidate;
-				}
+				$primary_normalized = Util::sanitize_cache_url_path( $urls[0] );
 			}
 			foreach ( $urls as $u ) {
 				$u = is_string( $u ) ? $u : (string) $u;
 				// Accept full URLs/query strings from the filter: purge by path only.
-				$path_only = (string) wp_parse_url( $u, PHP_URL_PATH );
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$path_only = (string) wp_parse_url( $u, PHP_URL_PATH );
+				} else {
+					$path_only = (string) parse_url( $u, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
+				}
 				if ( '' === trim( (string) $path_only, '/' ) && false !== strpos( $u, '?' ) ) {
 					continue;
 				}
-				if ( '' !== $path_only ) {
-					$u = $path_only;
-				}
-				$u = wp_normalize_path( trim( rawurldecode( $u ), '/' ) );
-				if ( '' === $u || false !== strpos( $u, '..' ) ) {
+				$sanitized_path = Util::sanitize_cache_url_path( $u );
+				if ( '' === $sanitized_path ) {
 					continue;
 				}
-				$sanitized[] = $u;
+				$sanitized[] = $sanitized_path;
 			}
 			$sanitized = array_values( array_unique( $sanitized ) );
 
@@ -3112,22 +3142,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return bool True when contained.
 		 */
 		private function is_path_contained( string $path ): bool {
-			if ( '' === $this->cache_root_dir || '' === $this->domain ) {
-				return false;
-			}
-
-			if ( function_exists( 'wp_normalize_path' ) ) {
-				$norm = wp_normalize_path( $path );
-				$root = wp_normalize_path( $this->cache_root_dir );
-			} else {
-				$norm = str_replace( '\\', '/', $path );
-				$root = str_replace( '\\', '/', $this->cache_root_dir );
-			}
-
-			$root       = rtrim( $root, '/' ) . '/';
-			$domain_dir = $root . trim( $this->domain, '/' ) . '/';
-
-			return 0 === strpos( $norm, $root ) && 0 === strpos( $norm, $domain_dir );
+			// Centralized dual-prefix containment lives in
+			// Util::is_cache_path_contained(); this wrapper only binds the
+			// per-instance root/domain so every call site shares one audit point.
+			return Util::is_cache_path_contained( $this->cache_root_dir, $this->domain, $path );
 		}
 
 		/**
@@ -3182,13 +3200,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		private function get_file_path( ?string $url_path = null, string $type = 'html' ): string {
 			$raw_input = (string) $url_path;
-			$url_path  = self::sanitize_cache_url_path( $url_path );
 
 			if ( '' === $this->cache_root_dir || '' === $this->domain ) {
 				return '';
 			}
 
-			if ( '' === $url_path && '' !== trim( $raw_input ) ) {
+			if ( 'used-css' === $type ) {
+				$filename = 'used-css.css';
+			} else {
+				if ( ! preg_match( '/^[a-z0-9]+$/i', (string) $type ) ) {
+					$this->log_traversal_probe( $raw_input );
+					return '';
+				}
+				$filename = "index.{$type}";
+			}
+
+			// Single auditable containment point: host normalization, path
+			// sanitization, filename allowlist, and dual-prefix containment
+			// all live in Util::sanitize_cache_path().
+			$resolved = Util::sanitize_cache_path( $this->cache_root_dir, $this->domain, $raw_input, $filename );
+
+			if ( '' === $resolved ) {
 				// Distinguish the benign homepage ('/', '') from a rejected
 				// hostile input: only log when the raw path component is
 				// non-empty after trimming slashes and whitespace.
@@ -3202,17 +3234,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				}
 				if ( '' !== trim( trim( (string) $raw_component ), '/' ) ) {
 					$this->log_traversal_probe( $raw_input );
-					return ''; // Return empty string to prevent deletion or creation outside cache root.
 				}
-			}
-
-			$filename = 'used-css' === $type ? 'used-css.css' : "index.{$type}";
-
-			$resolved = "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $url_path ? $filename : "{$url_path}/{$filename}" );
-
-			if ( ! $this->is_path_contained( $resolved ) ) {
-				$this->log_traversal_probe( $raw_input );
-				return '';
+				return ''; // Return empty string to prevent deletion or creation outside cache root.
 			}
 
 			return $resolved;
@@ -3333,11 +3356,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			if ( $url_path ) {
 				$raw_clear_path = (string) $url_path;
-				$url_path       = wp_normalize_path( $raw_clear_path );
-
-				if ( false !== strpos( $url_path, "\0" ) || false !== strpos( $url_path, '..' ) ) {
-					return false;
+				// Centralized sanitization (single-decode, null-byte/dot-dot/
+				// drive/UNC rejection): encoded vectors the old literal
+				// `..`/`\0` check missed are refused here instead of reaching
+				// the filesystem. A benign homepage ('/') still sanitizes to
+				// '' and proceeds; a hostile input fails closed.
+				// Note: the sanitized result is passed through get_file_path()
+				// (which runs sanitize_cache_path() → sanitize_cache_url_path()
+				// a second time). The double-sanitize is fail-closed by design:
+				// the first pass output is already free of `..`/NUL/drive/UNC,
+				// so the second rawurldecode pass can at most yield a benign
+				// literal (e.g. `%252e` → `%2e` → `.`) or refuse to ''.
+				$sanitized_clear = Util::sanitize_cache_url_path( $raw_clear_path );
+				if ( '' === $sanitized_clear ) {
+					if ( function_exists( 'wp_parse_url' ) ) {
+						$raw_component = wp_parse_url( $raw_clear_path, PHP_URL_PATH );
+					} else {
+						$raw_component = parse_url( $raw_clear_path, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
+					}
+					if ( null === $raw_component || false === $raw_component ) {
+						$raw_component = $raw_clear_path;
+					}
+					if ( '' !== trim( trim( (string) $raw_component ), '/' ) ) {
+						$instance->log_traversal_probe( $raw_clear_path );
+						return false;
+					}
 				}
+				$url_path = $sanitized_clear;
 
 				$html_file_path = $instance->get_file_path( $url_path, 'html' );
 				$css_file_path  = $instance->get_file_path( $url_path, 'css' );
