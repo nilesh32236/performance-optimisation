@@ -152,7 +152,7 @@ jobs:
             4. npm run build — wp-scripts compile
             All 4 must pass before considering the fix complete.
             Versioning rule: Never invent a version number. New functions, classes, and methods
-            get @since NEXT (the NEXT placeholder is replaced with the real version at release time).
+            get the `NEXT` placeholder in their `@since` tag (the placeholder is replaced with the real version at release time).
             Do not guess future versions like 2.0.0 or 3.8.0.
 
   # ── 2. REVIEW ────────────────────────────────────────────────────────────────
@@ -581,7 +581,7 @@ jobs:
             4. npm run build — wp-scripts compile
             All 4 must pass before considering the fix complete.
             Versioning rule: Never invent a version number. New functions, classes, and methods
-            get @since NEXT (the NEXT placeholder is replaced with the real version at release time).
+            get the `NEXT` placeholder in their `@since` tag (the placeholder is replaced with the real version at release time).
             Do not guess future versions like 2.0.0 or 3.8.0.
 
   # ── 4. AUTO-MERGE ────────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@
 
 **Baseline:** `performance-optimisation.php:1` v1.9.0 · `master@bbb4783e` · LiteSpeed Phases 0-4 shipped (LS-001..404) · WP 7.1 · PHP 8.2 · Node 22.14.0  
 **Companion docs:** `docs/litespeed-research.md:1`, `docs/litespeed-integration-plan.md:1`, `docs/litespeed-roadmap.md:1`, `docs/competitive-audit-2026.md:1`, `docs/performance-report-2026-08-27.md:1`, `docs/wordpress-7x-readiness.md:1`, `COMPETITIVE_GAP_ANALYSIS.md:1`, `AGENTS.md:29` (verification order)  
-**Principles:** Ship incrementally, zero breakage on non-LS hosts, every new API behind `function_exists()`/`class_exists()` per `AGENTS.md:174`, new symbols `@since NEXT`, settings default-safe, multisite via `Util::transient_key()` (`includes/class-util.php`), verification order `npm run lint:js → composer lint → npm test → npm run build` (`AGENTS.md:29`) + `composer test`.
+**Principles:** Ship incrementally, zero breakage on non-LS hosts, every new API behind `function_exists()`/`class_exists()` per `AGENTS.md:174`, new symbols `@since 2.0.0`, settings default-safe, multisite via `Util::transient_key()` (`includes/class-util.php`), verification order `npm run lint:js → composer lint → npm test → npm run build` (`AGENTS.md:29`) + `composer test`.
 
 ---
 
@@ -69,7 +69,7 @@ Score = `(UserValue × 3) + (Moat × 2) + (EffortInverse × 1)` / 5, each 1-5. U
 ### 2.2 Weekly research ritual (30 min, every Monday 10:00 IST)
 
 1. Run `scripts/research-competitors.sh` (see §2.3) — writes `reports/research-YYYY-MM-DD.md` with 8 plugin tiles (price, page cache, object cache, RUM, CSS method, bloat count, CDN, perf claim).
-2. Diff against `competitive-audit-2026.md:2` — if matrix cell flips, open issue `competitor-matrix` with label `research` + update matrix via PR (1-line per cell, `@since NEXT` not needed for doc).
+2. Diff against `competitive-audit-2026.md:2` — if matrix cell flips, open issue `competitor-matrix` with label `research` + update matrix via PR (1-line per cell, `@since 2.0.0` not needed for doc).
 3. Triage new competitor release notes for `WOW` feature → score via §1.1 → if Score ≥4.0, open `enhancement` issue with `N-candidate` label + proposal branch.
 
 ### 2.3 Competitor lab (on this host or `test-lab/` clone)
@@ -118,7 +118,7 @@ Goal: CI green on `master` before any new feature lands. No new surface — only
 |---|---|---|---|
 | GH-722 | Fix `InlineCssTest` 3 errors | `tests/php/InlineCssTest.php:397,419,473` + `includes/class-litespeed-integration.php:253` chain | Add `Brain\Monkey\Functions\when('get_option')->justReturn([])` (or `when('get_option')->alias('__return_empty_array')`) in `setUp` of those 3 tests; `composer test` 380/380 green |
 | LS-902a | Sync matrices | `COMPETITIVE_GAP_ANALYSIS.md:2`, `PERFORMANCE.md`, `docs/competitive-audit-2026.md:2` | Flip RUM/CDN/bg-lazy rows ✅, add TTFB host table (LS ~90ms vs PHP 170-350ms), footnotes FlyingPress 5.6 / NitroPack 2026-01-19 |
-| LS-902b | Hooks audit | `docs/hooks.md` | Ensure `wppo_litespeed_*` (mode, purge_sync, nextgen, brotli, ttl) listed `@since NEXT` |
+| LS-902b | Hooks audit | `docs/hooks.md` | Ensure `wppo_litespeed_*` (mode, purge_sync, nextgen, brotli, ttl) listed `@since 2.0.0` |
 | — | `npm run lint:js` warning triage | `src/components/Dashboard.js:122` `react-hooks/exhaustive-deps` | Either wrap `cacheSettings` in `useMemo` or add `// eslint-disable-next-line` with justification; 0 warnings target |
 
 **PR:** `fix: audit green — InlineCss mocks + matrix sync (GH-722/LS-902)` (1 PR, 1 day). **Merge gate:** `composer test` + `npm test` + `composer lint` + `npm run lint:js` + `npm run build` + `build/` committed. **Close:** #722, #706.
@@ -151,7 +151,7 @@ Goal: Harvest “free” Tier-2 parity wins — small code, high user-visible va
 | Tier-2-10 | `module_dependencies` (7.0) — classic→module combine guard | S | `includes/class-cache.php:combine_css()`, `includes/class-main.php:minify_*` | When `wp_script_modules()` present, exclude handles with `module_dependencies` from combine/minify; add data provider `@todo #module_deps` |
 | Tier-2-11 | `.mo→php` starter (Perf Lab parity, N7 phase 1) | M | `includes/class-perf-translations.php` (new) + `templates/perf-translations.php` | Toggle compiles `.mo` to `.php` via `load_textdomain` filter when `function_exists('wp_cache_get_salted')`; gated `perf_translations.enabled` false default; multisite per-locale file under `wp-content/cache/wppo/lang/` |
 | Tier-2-08 | Bloat toggle delta w/ Perfmatters gap | S | `includes/class-core-tweaks.php`, `src/components/PluginSetting.js` | Add 3 toggles missed: `disableRSD`, `disableWLW`, `disableSelfPingbacks` behind existing `core_tweaks` group; SPA `CheckboxOption` + `useNotice()` |
-| — | Design chooser pick (#709) — if chosen, implement one of `designs/` variants | M | `src/App.js`, `src/components/common/*`, `src/styles/*` | One PR, one variant, `npm run build` + screenshot in PR, `@since NEXT` not needed (style) |
+| — | Design chooser pick (#709) — if chosen, implement one of `designs/` variants | M | `src/App.js`, `src/components/common/*`, `src/styles/*` | One PR, one variant, `npm run build` + screenshot in PR, `@since 2.0.0` not needed (style) |
 
 **Close:** #708 remainder + #709 when picked. **Research:** Run competitor lab for `.mo→php` baseline (no plugin does it inside a cache plugin — confirm uniqueness per `competitive-audit-2026.md:4`).
 
@@ -311,7 +311,7 @@ Keep `wppoSettings` per-test extension (`apiUrl`, `nonce`, `settings.llms_txt`).
 
 Copied from `docs/litespeed-roadmap.md:4` — extended for novel features:
 
-- [ ] New symbols `@since NEXT`, new settings default-safe (`auto`/`false`) gated by `is_litespeed()` / `class_exists` so non-LS host unchanged.
+- [ ] New symbols `@since 2.0.0`, new settings default-safe (`auto`/`false`) gated by `is_litespeed()` / `class_exists` so non-LS host unchanged.
 - [ ] New transients via `Util::transient_key()` + domain-isolated files; multisite tested.
 - [ ] New filters `wppo_*` documented in `docs/hooks.md` + `docs/DOUBTS.md` updated if open question.
 - [ ] PHP unit + JS unit tests added; `composer test` + `npm test` + `composer lint` + `npm run lint:js` + `npm run build` green; `build/` committed.

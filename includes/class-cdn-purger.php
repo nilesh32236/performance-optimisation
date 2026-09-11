@@ -21,7 +21,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 	 * the Redis password handling). Varnish is purged by sending PURGE requests
 	 * to the configured server URLs.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	class CDN_Purger {
 
@@ -44,7 +44,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 		 * @param string|null $url_path Page path for single-page clears (unused; edge purges are all-or-nothing).
 		 * @return bool True when no purge was needed or all requests succeeded.
 		 *
-		 * @since NEXT The $type and $url_path parameters were added.
+		 * @since 2.0.0 The $type and $url_path parameters were added.
 		 */
 		public static function purge_all( string $type = 'all', $url_path = null ): bool {
 			// LS-203: LiteSpeed purge sync — always attempt before the
@@ -79,7 +79,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 		 * litespeed_purge_url) via home_url(). Also queues stale tags so LS
 		 * stale cache is cleared (LS-330 stale/private split).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string      $type     Clear type ('all' or 'single_page').
 		 * @param string|null $url_path Page path for single-page clears.
 		 * @return void

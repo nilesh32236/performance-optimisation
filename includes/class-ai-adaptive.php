@@ -3,7 +3,7 @@
  * AI Adaptive optimization — RUM → heuristic/auto-tune via suggestions.
  *
  * @package PerformanceOptimise\Inc
- * @since NEXT
+ * @since 2.0.0
  */
 
 namespace PerformanceOptimise\Inc;
@@ -20,7 +20,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 	 * Never auto-enables: all outputs are suggestions gated by
 	 * ai_adaptive.enabled + wppo_ai_adaptive_enabled filter.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	class AI_Adaptive {
 
@@ -46,7 +46,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * boolean setting and must return bool.
 		 *
 		 * @return bool
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function is_enabled(): bool {
 			$settings = Util::get_settings();
@@ -54,7 +54,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			/**
 			 * Filters whether AI Adaptive is enabled.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param bool $enabled Whether AI adaptive is enabled.
 			 */
 			return (bool) apply_filters( 'wppo_ai_adaptive_enabled', $enabled );
@@ -64,7 +64,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Get the stored model.
 		 *
 		 * @return array
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function get_model(): array {
 			$model = get_option( self::OPTION, array() );
@@ -76,7 +76,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * @param array $model Model data.
 		 * @return void
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function update_model( array $model ): void {
 			update_option( self::OPTION, $model, false );
@@ -107,7 +107,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * for logged-in frontend visitors.
 		 *
 		 * @return bool True when a commerce/auth context is detected.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function is_commerce_or_auth_context(): bool {
 			$is_commerce = self::detect_commerce_or_auth_context();
@@ -117,7 +117,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			 *
 			 * Allows hosts/tests to force the context deterministically.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param bool $is_commerce Whether a commerce/auth context was detected.
 			 */
 			return (bool) apply_filters( 'wppo_ai_adaptive_commerce_context', $is_commerce );
@@ -127,7 +127,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Internal helper to detect commerce or auth context using early returns.
 		 *
 		 * @return bool True when a commerce/auth context is detected.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static function detect_commerce_or_auth_context(): bool {
 			// WooCommerce active (plugin present, even outside shop pages — conservative cap).
@@ -205,7 +205,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @see Main::add_speculation_rules()
 		 *
 		 * @return string[]
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function get_commerce_exclude_paths(): array {
 			$paths = array();
@@ -275,7 +275,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * unit tests and minimal installs default to frontend (true).
 		 *
 		 * @return bool True when the request looks like a frontend visit.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static function is_frontend_context(): bool {
 			if ( defined( 'WP_CLI' ) && WP_CLI ) {
@@ -327,7 +327,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * @param mixed $eagerness Raw eagerness value.
 		 * @return string Normalized eagerness value.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static function normalize_eagerness( $eagerness ): string {
 			// Non-stringable input (e.g. an array from a malformed AI payload)
@@ -351,7 +351,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * @param string $eagerness Learned eagerness value.
 		 * @return string Capped eagerness value.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function maybe_cap_eagerness( string $eagerness ): string {
 			if ( 'eager' === $eagerness && self::is_commerce_or_auth_context() ) {
@@ -369,7 +369,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * classes/functions fall back to the local heuristic.
 		 *
 		 * @return bool
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function is_wp_ai_client_enabled(): bool {
 			$settings = Util::get_settings();
@@ -377,7 +377,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			/**
 			 * Filters whether the WordPress AI client path may be used.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param bool $enabled Whether the WP AI client opt-in is on.
 			 */
 			return (bool) apply_filters( 'wppo_ai_adaptive_use_wp_client', $enabled );
@@ -395,7 +395,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * @param mixed $s Candidate suggestion.
 		 * @return bool True when the shape is valid.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static function is_valid_suggestion( $s ): bool {
 			if ( ! is_array( $s ) ) {
@@ -434,7 +434,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * - speculation eagerness: derived from average LCP / RUM ttfb.
 		 *
 		 * @return array The updated model.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function learn(): array {
 			// Throttle: at most once per minute.
@@ -509,7 +509,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @param array|null $rum Optional pre-loaded RUM aggregate (loaded once per learn run).
 		 * @param array|null $trends Optional pre-loaded trends aggregate.
 		 * @return array|null Model or null on fallback.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static function learn_via_ai_client( ?array $rum = null, ?array $trends = null ): ?array {
 			if ( ! self::is_wp_ai_client_enabled() ) {
@@ -563,7 +563,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * sufficient samples. Poor INP (>500ms) maps to the `eager` level
 		 * (capped at `moderate` in commerce/auth contexts).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var float
 		 */
 		public const INP_P75_DELAY_THRESHOLD_MS = 200.0;
@@ -573,7 +573,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * Matches the Core Web Vitals "poor" boundary (>500ms).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var float
 		 */
 		public const INP_P75_EAGER_THRESHOLD_MS = 500.0;
@@ -584,7 +584,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Mirrors the speculation eagerness ladder (>2500ms moderate,
 		 * >3500ms eager) so heavy pages also surface a delay suggestion.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var float
 		 */
 		public const LCP_P75_DELAY_THRESHOLD_MS = 2500.0;
@@ -592,7 +592,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		/**
 		 * LCP p75 threshold (ms) for the `eager` delay level.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var float
 		 */
 		public const LCP_P75_EAGER_THRESHOLD_MS = 3500.0;
@@ -604,7 +604,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * heuristic_learn() degrades to the global-average path when RUM is
 		 * unavailable. No option or transient writes; never throws.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param int $min_samples Minimum samples per segment (1 = observe all).
 		 * @return array[] Rows of array(path,device,template,n,p75).
 		 */
@@ -628,7 +628,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * heuristic_learn() degrades gracefully when RUM is unavailable.
 		 * No option or transient writes; never throws.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param int $min_samples Minimum samples per segment (1 = observe all).
 		 * @return array[] Rows of array(path,device,template,n,p75).
 		 */
@@ -653,7 +653,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * behavior: it only hides the suggestion card until cleared from settings.
 		 * Local-only: no remote calls, no PII. Fail-open: any failure returns array().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string[] Dismissed metric identifiers.
 		 */
 		public static function get_dismissed_suggestions(): array {
@@ -683,7 +683,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		/**
 		 * Whether an AI suggestion metric has been dismissed.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $metric Suggestion metric identifier.
 		 * @return bool True when dismissed.
 		 */
@@ -712,7 +712,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * per-site RUM aggregate. Commerce/auth contexts cap the level at
 		 * `moderate` (never `eager`) via maybe_cap_eagerness().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array{qualified:bool,level:string,inp_p75:float,lcp_p75:float,samples:int,min_samples:int,provisional:bool,segment:array|null} Gated state.
 		 */
 		public static function get_rum_gated_delay_state(): array {
@@ -820,7 +820,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * `image_optimisation.fieldLcpMinSamples` fallback) is honoured in
 		 * one place. Fail-open to 20.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return int Minimum samples (>=1).
 		 */
 		private static function field_lcp_min_samples(): int {
@@ -843,7 +843,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		/**
 		 * Format a p75 millisecond value as seconds for suggestion copy.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param float $p75_ms p75 in milliseconds.
 		 * @return string e.g. "3.8s".
 		 */
@@ -860,7 +860,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * LCP/TTFB and sample counts, plus the latest trends snapshot per
 		 * key (capped at 10 keys), so the model prompt stays small.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array $rum RUM aggregate.
 		 * @param array $trends Trends aggregate.
 		 * @return array{rum:array,trends:array} Bounded summary.
@@ -943,7 +943,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @param array|null $rum Optional pre-loaded RUM aggregate.
 		 * @param array|null $trends Optional pre-loaded trends aggregate.
 		 * @return array
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static function heuristic_learn( ?array $rum = null, ?array $trends = null ): array {
 			if ( null === $rum ) {
@@ -1134,7 +1134,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			/**
 			 * Filters AI-learned speculation eagerness.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string $eagerness Eagerness value.
 			 * @param array  $rum RUM aggregates.
 			 */
@@ -1171,7 +1171,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * Per-site option, hence inherently multisite-safe.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		private const ANOMALY_COOLDOWN_KEY = 'wppo_ai_anomaly_last_alarm';
@@ -1179,7 +1179,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		/**
 		 * Default anomaly cooldown in days (single banner max).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		private const ANOMALY_COOLDOWN_DAYS = 7;
@@ -1187,7 +1187,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		/**
 		 * Default minimum numeric samples before an arm may fire.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		private const ANOMALY_MIN_SAMPLES = 10;
@@ -1195,7 +1195,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		/**
 		 * CLS regression arm threshold as an absolute delta (not percent).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var float
 		 */
 		private const CLS_ABSOLUTE_DELTA = 0.05;
@@ -1203,7 +1203,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		/**
 		 * LCP regression arm threshold as a relative multiplier (+30%).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var float
 		 */
 		private const LCP_RELATIVE_MULTIPLIER = 1.3;
@@ -1216,7 +1216,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * `wppo_ai_anomaly_min_samples`. Fail-open to 10.
 		 *
 		 * @return int Minimum samples (>=1).
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static function anomaly_min_samples(): int {
 			try {
@@ -1251,7 +1251,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * `wppo_ai_anomaly_cooldown_days`. Fail-open to 7.
 		 *
 		 * @return int Cooldown days (>=0; 0 disables the cooldown gate).
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static function anomaly_cooldown_days(): int {
 			try {
@@ -1284,7 +1284,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Read-only option read; never throws.
 		 *
 		 * @return int Unix timestamp (0 when never alarmed).
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function get_last_anomaly_alarm(): int {
 			try {
@@ -1306,7 +1306,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * @param int $ts Unix timestamp.
 		 * @return void
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function set_last_anomaly_alarm( int $ts ): void {
 			try {
@@ -1324,7 +1324,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * @param int|null $now Optional injected timestamp (tests).
 		 * @return int
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static function anomaly_now( ?int $now = null ): int {
 			if ( null !== $now ) {
@@ -1347,7 +1347,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * @param int|null $now Optional injected timestamp (tests).
 		 * @return bool True when a new banner may fire.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function is_anomaly_cooled_down( ?int $now = null ): bool {
 			try {
@@ -1388,7 +1388,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @param array|null $rum Optional RUM aggregate (null = live read via RUM::get_data()).
 		 * @param float      $baseline Trend baseline for the firing arm.
 		 * @return bool True when real-user data agrees with the trend arm.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static function is_rum_corroborated( string $metric, ?array $rum, float $baseline ): bool {
 			try {
@@ -1449,7 +1449,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @param string $metric Metric key ('lcp'|'cls').
 		 * @param bool   $require_positive Whether to drop non-positive values (LCP only).
 		 * @return float[]
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static function collect_trend_samples( array $snapshots, string $metric, bool $require_positive ): array {
 			$values = array();
@@ -1504,7 +1504,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @param array|null $rum Optional RUM aggregate for testability. When null, reads RUM::get_data().
 		 * @param int|null   $now Optional current timestamp for testability. When null, uses time().
 		 * @return array[] At most one anomaly: array(array('key'=>string,'metric'=>string,'baseline'=>float,'current'=>float,'change_pct'=>float|'change_abs'=>float)).
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function detect_anomalies( ?array $trends = null, ?array $rum = null, ?int $now = null ): array {
 			try {
@@ -1581,7 +1581,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 						/**
 						 * Filters the detected performance anomalies.
 						 *
-						 * @since NEXT
+						 * @since 2.0.0
 						 * @param array[] $anomalies At most one anomaly array.
 						 */
 						$filtered = $anomaly;
@@ -1620,7 +1620,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		/**
 		 * Per-request memo of disabled-asset aggregates keyed by meta key (audit #982).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var array<string, string[]>
 		 */
 		private static array $disabled_assets_cache = array();
@@ -1628,7 +1628,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		/**
 		 * Reset the per-request disabled-asset memo (for testing).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function reset_disabled_assets_cache(): void {
@@ -1638,7 +1638,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		/**
 		 * Rank serialized handle lists into top-3 handles by frequency.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array $rows Raw meta_value strings.
 		 * @return string[]
 		 */
@@ -1672,7 +1672,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * @param string $meta_key The meta key to query.
 		 * @return string[]
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static function get_disabled_assets( string $meta_key ): array {
 			if ( array_key_exists( $meta_key, self::$disabled_assets_cache ) ) {
@@ -1760,7 +1760,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Get AI-learned prefetch URLs (top-2).
 		 *
 		 * @return string[]
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function get_prefetch_urls(): array {
 			return self::get_prefetch_urls_from_model( self::get_model() );
@@ -1774,7 +1774,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * @param array $model Model data.
 		 * @return string[]
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static function get_prefetch_urls_from_model( array $model ): array {
 			$urls = $model['prefetch_urls'] ?? array();
@@ -1815,7 +1815,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * display on is_enabled() (guard: never auto-apply).
 		 *
 		 * @return array[]
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function get_suggestions(): array {
 			$model = self::get_model();
@@ -2215,7 +2215,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * `wppo_ai_speculation_rum_gating`. Fail-open: any failure returns true.
 		 *
 		 * @return bool True when RUM gating applies.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function is_speculation_rum_gating_enabled(): bool {
 			try {
@@ -2230,7 +2230,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				/**
 				 * Filters whether RUM-gated speculation eagerness applies.
 				 *
-				 * @since NEXT
+				 * @since 2.0.0
 				 * @param bool $enabled Whether RUM gating is enabled.
 				 */
 				return (bool) apply_filters( 'wppo_ai_speculation_rum_gating', $enabled );
@@ -2258,7 +2258,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * the result down, instead of applying the filter once for the
 		 * fallback, once for the guard, and once more in the caller.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param bool|null $gating_enabled Pre-resolved gating flag. Null resolves via is_speculation_rum_gating_enabled().
 		 * @return array{qualified:bool,eagerness:string,lcp_p75:float,inp_p75:float,samples:int,min_samples:int,gated:bool} Gated state.
 		 */
@@ -2328,14 +2328,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				/**
 				 * Filters the LCP p75 (ms) threshold for RUM-gated speculation eagerness.
 				 *
-				 * @since NEXT
+				 * @since 2.0.0
 				 * @param float $threshold LCP p75 threshold in milliseconds.
 				 */
 				$lcp_threshold = self::validate_speculation_threshold( apply_filters( 'wppo_ai_speculation_lcp_threshold', 2500.0 ), 2500.0 );
 				/**
 				 * Filters the INP p75 (ms) threshold for RUM-gated speculation eagerness.
 				 *
-				 * @since NEXT
+				 * @since 2.0.0
 				 * @param float $threshold INP p75 threshold in milliseconds.
 				 */
 				$inp_threshold = self::validate_speculation_threshold( apply_filters( 'wppo_ai_speculation_inp_threshold', 200.0 ), 200.0 );
@@ -2349,7 +2349,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				/**
 				 * Filters the eagerness for a RUM-qualified (good p75) speculation list rule.
 				 *
-				 * @since NEXT
+				 * @since 2.0.0
 				 * @param string $eagerness Eagerness value (default `moderate`).
 				 * @param array  $state Gated state (lcp_p75, inp_p75, samples).
 				 */
@@ -2390,7 +2390,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @param mixed $value Raw filter value.
 		 * @param float $fallback Fallback threshold.
 		 * @return float Validated threshold (>= 0 and finite).
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static function validate_speculation_threshold( $value, float $fallback ): float {
 			try {
@@ -2418,7 +2418,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @param string   $url Absolute URL.
 		 * @param string[] $excludes Commerce exclude prefixes (e.g. `/cart/*`).
 		 * @return bool True when the URL path matches a commerce prefix.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static function is_speculation_commerce_url( string $url, array $excludes ): bool {
 			try {
@@ -2455,7 +2455,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * @param int $limit Maximum URLs to return.
 		 * @return string[]
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function get_rum_top_speculation_urls( int $limit = 5 ): array {
 			try {
@@ -2560,7 +2560,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				 * filter cannot reintroduce /checkout/, wp-admin, cross-site, or
 				 * unbounded URL lists into the ~1KB list rule.
 				 *
-				 * @since NEXT
+				 * @since 2.0.0
 				 * @param string[] $urls Ranked absolute URLs.
 				 */
 				$urls = apply_filters( 'wppo_ai_speculation_top_urls', $urls );
@@ -2606,7 +2606,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Fail-open: any throwable means "not suppressed".
 		 *
 		 * @return bool True when no AI rule must be emitted.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static function is_speculation_hard_suppressed(): bool {
 			try {
@@ -2667,7 +2667,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * @param array $rules Speculation rules array.
 		 * @return array
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function filter_speculation_rules( $rules ) {
 			if ( ! self::is_enabled() ) {
@@ -2736,7 +2736,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			/**
 			 * Filters AI-injected speculation rules.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param array $rules Updated rules.
 			 * @param array $urls AI prefetch URLs.
 			 */
@@ -2752,7 +2752,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 *
 		 * @param string[] $urls Candidate URLs.
 		 * @return string[]
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static function filter_same_site_urls( array $urls ): array {
 			$home = Util::cached_home_url();
@@ -2791,7 +2791,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @param string[] $urls  Candidate AI URLs.
 		 * @param array    $rules Existing speculation rules.
 		 * @return string[]
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static function dedupe_against_existing_lists( array $urls, array $rules ): array {
 			$existing = array();
@@ -2819,7 +2819,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Register hooks.
 		 *
 		 * @return void
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function init(): void {
 			if ( function_exists( 'wp_get_speculation_rules' ) ) {

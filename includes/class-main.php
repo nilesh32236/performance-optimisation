@@ -67,7 +67,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Default delay strategy: 'interaction', 'idle', or 'viewport'.
 		 *
 		 * @var   string
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private string $delay_js_default_strategy = 'interaction';
 
@@ -75,7 +75,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * List of script handles/URLs to load via requestIdleCallback.
 		 *
 		 * @var   array
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private array $delay_js_idle_list = array();
 
@@ -83,7 +83,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * List of script handles/URLs to load when in viewport.
 		 *
 		 * @var   array
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private array $delay_js_viewport_list = array();
 
@@ -91,7 +91,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Map of script handles/URLs to priority ('high', 'normal', 'low').
 		 *
 		 * @var   array<string, string>
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private array $delay_js_priority = array();
 
@@ -99,7 +99,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Idle callback timeout in milliseconds (default 3000).
 		 *
 		 * @var   int
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private int $delay_js_idle_timeout = 3000;
 
@@ -110,7 +110,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * post meta escape hatch (issue #966). Checked in add_defer_attribute().
 		 *
 		 * @var   bool
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private bool $delay_disabled_for_page = false;
 
@@ -118,7 +118,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Associative array of deferred script handles (keyed by handle for O(1) lookups).
 		 *
 		 * @var   array<string, bool>
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private array $deferred_handles = array();
 
@@ -129,7 +129,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * preg_quote()+preg_match() regex per pattern per script tag on the
 		 * frontend hot path (O(tags x patterns) compiles).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var array<string, string>
 		 */
 		private static array $delay_pattern_regex_cache = array();
@@ -143,7 +143,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * long-running processes (Action Scheduler, WP-CLI) where the
 		 * request superglobals change between logical requests.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var bool|null
 		 */
 		private static ?bool $delay_excluded_context_memo = null;
@@ -151,7 +151,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Request signature the delay-context memo was computed for.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		private static string $delay_excluded_context_memo_sig = '';
@@ -160,7 +160,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Cache instance for static HTML cache operations.
 		 *
 		 * @var   Cache|null
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private ?Cache $cache = null;
 
@@ -187,7 +187,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Google_Fonts instance for hosting Google Fonts locally.
 		 *
 		 * @var   Google_Fonts
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private Google_Fonts $google_fonts;
 
@@ -218,7 +218,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * run it twice. One-shot per request.
 		 *
 		 * @var   bool
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private bool $used_css_buffer_enhanced = false;
 
@@ -231,7 +231,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * {@see Deactivate::unregister_runtime_hooks()}).
 		 *
 		 * @var   Main|null
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static ?Main $instance = null;
 
@@ -244,14 +244,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * {@see invalidate_delay_kill_switch_cache()}.
 		 *
 		 * @var array<string, bool>
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static array $delay_disabled_page_cache = array();
 
 		/**
 		 * Get the current Main instance (null before construction / in tests).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return Main|null
 		 */
 		public static function get_instance(): ?Main {
@@ -261,7 +261,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Clear the tracked Main instance (test isolation).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function reset_instance(): void {
@@ -715,7 +715,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// order / coupon changes purge only affected URLs — never a
 				// full-cache wipe. add_action() on unregistered hooks is
 				// harmless on non-Woo installs; callbacks guard WC APIs at
-				// call time for WP 6.2 / PHP 8.2 compat. @since NEXT.
+				// call time for WP 6.2 / PHP 8.2 compat. @since 2.0.0.
 				add_action( 'woocommerce_update_product', array( $this, 'on_woocommerce_product_updated' ), 10, 1 );
 				add_action( 'woocommerce_checkout_order_created', array( $this, 'on_woocommerce_order_changed' ), 10, 1 );
 				add_action( 'woocommerce_update_order', array( $this, 'on_woocommerce_order_changed' ), 10, 1 );
@@ -727,7 +727,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// which disables response streaming. TTFB increases while TTLB unchanged — intentional
 			// when Server-Timing is enabled; keep disabled by default and emit only on cache-miss
 			// generation passes (advanced-cache.php serves cached pages without booting WordPress).
-			// @since NEXT.
+			// @since 2.0.0.
 			if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && $this->server_timing_enabled() ) {
 				add_action( 'template_redirect', array( $this, 'capture_template_start' ), 0 );
 				add_action( 'wp_finalized_template_enhancement_output_buffer', array( $this, 'emit_server_timing_header' ), 0, 1 );
@@ -1164,7 +1164,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * observes the backfilled value.
 		 *
 		 * @return void
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public function maybe_migrate_ccss_max_size(): void {
 			// allowlist(settings-read-guard): deliberate direct read — must distinguish
@@ -1207,7 +1207,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * multisite sites migrate independently with no cross-site leakage.
 		 *
 		 * @return void
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public function maybe_migrate_ccss_safelist(): void {
 			// allowlist(settings-read-guard): deliberate direct read — must distinguish
@@ -1252,7 +1252,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * independently with no cross-site leakage.
 		 *
 		 * @return void
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public function maybe_migrate_image_alt_edge_defaults(): void {
 			// allowlist(settings-read-guard): deliberate direct read — must distinguish
@@ -1302,7 +1302,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Runs on `admin_init` (not the constructor) so a cacheable front-end
 		 * request never pays for the flag lookup.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public function maybe_notify_remove_query_strings_removal(): void {
@@ -1558,7 +1558,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * `aria-live="assertive"` announce the failure immediately, matching
 		 * the React NoticeBanner contract used across the SPA.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function render_htaccess_failure_notice(): void {
@@ -1592,7 +1592,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return bool True when the drop-in is left in a correct state, false on
 		 *              filesystem failure. Skipped (unchanged value, or
 		 *              scheme/path-only change with an identical host) returns true.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function on_site_url_change( $old_value = null, $value = null, $option = '' ): bool {
 			if ( $old_value === $value ) {
@@ -1650,7 +1650,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param int      $post_id Post ID.
 		 * @param \WP_Post $post    Post object.
 		 * @param bool     $update  Whether this is an existing post being updated.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public function on_save_post_invalidate_cache( $post_id, $post, $update ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found, Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 			if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
@@ -1736,7 +1736,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * @param int $product_id Product ID.
 		 * @return void
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public function on_woocommerce_product_updated( $product_id ): void {
 			if ( ! $this->cache || ! method_exists( $this->cache, 'invalidate_woo_object' ) ) {
@@ -1754,7 +1754,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * @param mixed $order Order ID or WC_Order object.
 		 * @return void
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public function on_woocommerce_order_changed( $order ): void {
 			if ( ! $this->cache || ! method_exists( $this->cache, 'invalidate_woo_object' ) ) {
@@ -1781,7 +1781,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * @param mixed $coupon Coupon ID or WC_Coupon object.
 		 * @return void
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public function on_woocommerce_coupon_saved( $coupon ): void {
 			if ( ! $this->cache || ! method_exists( $this->cache, 'invalidate_woo_object' ) ) {
@@ -1904,7 +1904,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * wp_finalized_template_enhancement_output_buffer.
 		 *
 		 * @since 1.9.0
-		 * @since NEXT Expanded documentation for buffering opt-in context.
+		 * @since 2.0.0 Expanded documentation for buffering opt-in context.
 		 * @return void
 		 */
 		public function capture_template_start(): void {
@@ -1973,7 +1973,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * @param string $output The finalized output buffer content (final HTML string, alias $final).
 		 * @return void
-		 * @since NEXT Performance Lab Server-Timing interop: defer to the
+		 * @since 2.0.0 Performance Lab Server-Timing interop: defer to the
 		 *             Performance Lab-owned header (no duplicate/conflicting
 		 *             metric names); {@see is_pl_server_timing_active()}.
 		 */
@@ -2048,7 +2048,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * {@see emit_server_timing_header()} to defer to the Performance Lab-owned
 		 * Server-Timing header instead of emitting a second, conflicting one.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True when the Performance Lab Server-Timing API is present.
 		 */
 		public function is_pl_server_timing_active(): bool {
@@ -2212,7 +2212,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * Checks block theme (theme.json) first, then classic theme (customizer).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array{primary?: string, secondary?: string, text?: string}
 		 */
 		private function get_frontend_theme_colors(): array {
@@ -2379,7 +2379,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// Img_Converter::clean_placeholder_on_delete() and
 					// maybe_extract_placeholder_for_upload() HEIC early-exit).
 					// Trac #64876: client_side_supported_mime_types intersection
-					// guard stays until a public filter lands. @since NEXT.
+					// guard stays until a public filter lands. @since 2.0.0.
 					'client_side_media_processing_enabled' => function_exists( 'wp_is_client_side_media_processing_enabled' ) && wp_is_client_side_media_processing_enabled(),
 					'performance_audit'                    => array(
 						'homeUrl'                   => Util::cached_home_url( '/' ),
@@ -2497,7 +2497,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						// WP 6.9+: load lazyload as a native script module with fetchpriority low
 						// and in_footer true. Modules are always deferred (non-render-blocking)
 						// and the native args are rendered by core (Trac #61734, #63486).
-						// @since NEXT.
+						// @since 2.0.0.
 						if ( function_exists( 'wp_enqueue_script_module' ) ) {
 							wp_enqueue_script_module( 'wppo-lazyload', WPPO_PLUGIN_URL . 'build/lazyload.js', array(), WPPO_VERSION, $lazy_mod_args );
 						} elseif ( function_exists( 'wp_register_script_module' ) ) {
@@ -2514,7 +2514,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						);
 					} else {
 						// WP <6.9 fallback: classic script enqueued with inline config injection.
-						// @since NEXT.
+						// @since 2.0.0.
 						//
 						// The window.wppoNativeLazy / window.wppoDelayConfig globals
 						// below are consumed once at module init (src/lazyload.js) and
@@ -2551,7 +2551,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * no-op on older core. Guarded by version_compare and
 		 * function_exists/class_exists for backward compat.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public function apply_module_loading_strategies(): void {
@@ -2566,7 +2566,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// set_in_footer/set_fetchpriority keeps compat if the API is partially present.
 			// Version gate uses same (string) ($GLOBALS['wp_version'] ?? get_bloginfo('version'))
 			// pattern as enqueue_scripts/add_defer_strategy/setup_hooks for consistency.
-			// @since NEXT.
+			// @since 2.0.0.
 			$wp_version = (string) ( $GLOBALS['wp_version'] ?? get_bloginfo( 'version' ) );
 			if ( version_compare( $wp_version, '6.9-alpha', '<' ) ) {
 				return;
@@ -2648,7 +2648,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * in core, so isset()/direct reads from outside are always false and
 		 * would silently overwrite explicit values in production.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param object $modules Script modules instance from wp_script_modules().
 		 * @param string $id      Module id.
@@ -2685,7 +2685,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * unavailable; reads the private $registered (then $all) store. Returns an
 		 * empty array when the store is unreadable.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param object $modules Script modules instance from wp_script_modules().
 		 * @return string[] Module ids.
@@ -2707,7 +2707,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * of raising. Public properties are read directly; non-public ones go
 		 * through reflection with setAccessible().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param object $modules  Script modules instance.
 		 * @param string $property Property name.
@@ -2797,7 +2797,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param \WP_Admin_Bar $wp_admin_bar The WordPress admin bar object used to add nodes and settings.
 		 *
 		 * @since 1.0.0
-		 * @since NEXT Added `manage_options` capability check.
+		 * @since 2.0.0 Added `manage_options` capability check.
 		 */
 		public function add_setting_to_admin_bar( $wp_admin_bar ) {
 			if ( ! current_user_can( 'manage_options' ) ) {
@@ -2855,7 +2855,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * for classic scripts) and can be disabled per handle via the
 		 * `wppo_deferred_in_footer` filter.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return void
 		 */
@@ -2907,7 +2907,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 							 * scripts. Return 'high' for an LCP-critical handle, falsy to
 							 * suppress, or 'auto' to defer to browser.
 							 *
-							 * @since NEXT
+							 * @since 2.0.0
 							 *
 							 * @param string $fetchpriority Fetchpriority value.
 							 * @param string $handle        Script handle.
@@ -2940,7 +2940,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						 * scripts). Return false for a handle that must stay in
 						 * the head (e.g. document.write dependencies).
 						 *
-						 * @since NEXT
+						 * @since 2.0.0
 						 *
 						 * @param bool   $in_footer Whether to set the footer group.
 						 * @param string $handle    Script handle.
@@ -3099,7 +3099,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Build (once per request) a combined alternation regex for a pattern list.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string[] $patterns Pattern list.
 		 * @return string Empty string when no usable patterns; otherwise a ready regex.
 		 */
@@ -3133,7 +3133,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Falls back to per-pattern matching only when the combined regex
 		 * fails to compile (extremely long lists).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string   $handle   Script handle.
 		 * @param string[] $patterns Pattern list.
 		 * @return bool True on match.
@@ -3171,7 +3171,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * stay excluded on the external-script path exactly as the inline
 		 * path in Minify\HTML excludes them by substring.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $handle The script's registered handle.
 		 * @return bool True when the handle must stay un-delayed.
@@ -3229,7 +3229,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * additionally resolves custom/translated slugs via wc_get_page_id() when
 		 * WooCommerce is active; on non-Woo installs only the default slugs apply.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return bool True when delay must be skipped for this request.
 		 */
@@ -3257,7 +3257,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * change mid-flight). Hashing these lets the memo self-invalidate
 		 * when a new logical request reuses the same PHP process.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string Signature string.
 		 */
 		private static function delay_context_request_signature(): string {
@@ -3280,7 +3280,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Reset the per-request delay-context memo (for tests).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function reset_delay_context_memo(): void {
@@ -3292,7 +3292,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Compute whether the current request must skip delay-JS rewriting.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True when delay must be skipped for this request.
 		 */
 		private static function compute_delay_excluded_context(): bool {
@@ -3462,7 +3462,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Custom/translated slugs are resolved via wc_get_page_id() when
 		 * WooCommerce is active; otherwise only the default slugs apply.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $local_path Request path with a leading slash.
 		 * @return bool True when the path is a Woo page path.
@@ -3638,7 +3638,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * over-matches by substring over attributes+content (fail-open
 		 * direction), so over/under-exclusion can still diverge.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string[]
 		 */
 		public static function get_delay_js_builder_exclusions(): array {
@@ -3686,7 +3686,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			 * un-delayed when the builder preset is on so page builders never
 			 * break. Merged with `array_unique` by callers.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string[] $preset Builder preset exclusions.
 			 */
 			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_builder_exclusions' ) ) {
@@ -3725,7 +3725,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * the commerce preset is on so carts and checkouts never break.
 		 * Filterable via wppo_delay_js_commerce_exclusions.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string[]
 		 */
 		public static function get_delay_js_commerce_exclusions(): array {
@@ -3755,7 +3755,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			/**
 			 * Filters delay JS commerce preset exclusions.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string[] $preset Commerce preset exclusions.
 			 */
 			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_commerce_exclusions' ) ) {
@@ -3793,7 +3793,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Slider runtimes stay un-delayed with the builder preset so hero
 		 * sliders keep working. Filterable via wppo_delay_js_slider_exclusions.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string[]
 		 */
 		public static function get_delay_js_slider_exclusions(): array {
@@ -3814,7 +3814,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			/**
 			 * Filters delay JS slider preset exclusions.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string[] $preset Slider preset exclusions.
 			 */
 			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_slider_exclusions' ) ) {
@@ -3855,7 +3855,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * the global preset when `delayJSInteractionPreset` is on (default).
 		 * Per-site settings only; multisite-safe.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string[]
 		 */
 		public static function get_delay_js_interaction_exclusions(): array {
@@ -3880,7 +3880,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			/**
 			 * Filters delay JS interaction preset exclusions.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string[] $preset Interaction preset exclusions.
 			 */
 			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_interaction_exclusions' ) ) {
@@ -3919,7 +3919,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * regex when wrapped in valid delimiters (e.g. `#...#`). Fail-open:
 		 * any detection failure returns false (no exclusion).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $url_list Newline-separated exclusion list.
 		 * @return bool True when the current request URL is excluded.
@@ -3993,7 +3993,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Checks the per-URL `usedCSSExcludeUrls` list plus the `_wppo_used_css_disabled`
 		 * per-page kill-switch. Fail-open: any detection failure returns false.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True when used CSS must be skipped.
 		 */
 		public static function is_used_css_excluded_for_url(): bool {
@@ -4033,7 +4033,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * unexpected throwables, which return false as well — callers already
 		 * fail open to original scripts on rewrite errors.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param int $post_id Optional post ID. Defaults to the current post.
 		 * @return bool True when delay must be skipped for this page.
@@ -4093,7 +4093,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * cache paths, no cross-site leakage. Fail-open: any failure is
 		 * swallowed so meta saves never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param int $post_id Post ID whose kill-switch changed.
 		 * @return void
 		 */
@@ -4138,7 +4138,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * the `_wppo_delay_disabled` key; everything else is ignored. Fail-open:
 		 * detection or purge failures never fatal the meta write.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param mixed  $meta_id  Meta row ID for added/updated hooks, or an array of IDs for deleted_post_meta (unused, required by hook signature).
 		 * @param int    $post_id  Post ID the meta belongs to.
 		 * @param string $meta_key Meta key that was written.
@@ -4162,7 +4162,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * excluded so checkout and forms never break. Filterable via
 		 * wppo_delay_js_exclusions. Preset prevents breakage on 10% sites.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string[]
 		 */
 		private function get_delay_js_preset_exclusions(): array {
@@ -4237,7 +4237,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			/**
 			 * Filters delay JS preset exclusions.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string[] $preset Preset exclusions.
 			 */
 			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_exclusions' ) ) {
@@ -4282,7 +4282,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * is present in the current post content. Any detection failure fails
 		 * open to safe (no delay) so interactivity is never broken.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True when Delay-JS must be skipped.
 		 */
 		public function is_delay_js_safe_context(): bool {
@@ -4516,7 +4516,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * block is printed by this plugin on 6.2-6.7); invalid URLs are
 		 * skipped individually and logged-in visitors are always excluded.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return void
 		 */
@@ -4594,7 +4594,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * wildcard is emitted — such wildcards would also block legitimate
 		 * slugs (e.g. a post about "add to cart").
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param array $preload_settings The plugin's preload_settings option value.
 		 * @return string[] Exclusion patterns (possibly empty, never fatal).
@@ -4685,7 +4685,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					/**
 					 * Filters the speculation-rules href exclusion patterns.
 					 *
-					 * @since NEXT
+					 * @since 2.0.0
 					 * @param string[] $excludes         Canonical exclusion patterns.
 					 * @param array    $preload_settings The plugin's preload_settings option value.
 					 */
@@ -4733,7 +4733,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * neither core nor plugin rules prefetch them.
 		 *
 		 * @since 1.9.0
-		 * @since NEXT Honor `wp_get_speculation_rules_default_configuration()` when available (WP 7.1).
+		 * @since 2.0.0 Honor `wp_get_speculation_rules_default_configuration()` when available (WP 7.1).
 		 *
 		 * @param array<string,string>|null $config            Filter value ('auto' defaults, or null when speculative loading is disabled for the request).
 		 * @param array                     $preload_settings  The plugin's preload_settings option value.
@@ -4816,7 +4816,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Invalid URLs are skipped individually (fail-open); an empty array
 		 * means "emit nothing".
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return string[] Validated absolute URLs (possibly empty).
 		 */
@@ -4902,7 +4902,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Fail-open: any throwable, missing class, or empty RUM returns an
 		 * empty array — never fatal, never white-screen.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return string[] Validated absolute RUM winner URLs (possibly empty).
 		 */
@@ -5010,7 +5010,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * non-cacheable URL wastes origin load and risks broken carts.
 		 * Fail-open: any throwable means "not suppressed".
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return bool True when rules must not be emitted.
 		 */
@@ -5054,7 +5054,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * link, logged-in visitor, document rules toggled off, or any
 		 * failure) — fail-open to "emit nothing", never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return array<string,mixed>|null The singular rule, or null.
 		 */
@@ -5104,7 +5104,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * first post resolves, for logged-in visitors, when document rules
 		 * are toggled off, or on any failure (fail-open, never fatal).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return array<string,mixed>|null The archive document rule, or null.
 		 */
@@ -5188,7 +5188,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * carrying a query string or fragment (mirroring core's
 		 * `?`-URL exclusion).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $url Candidate absolute URL.
 		 * @return bool True when the URL may be prefetched.
@@ -5334,7 +5334,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * all emitted entries (and against pre-existing list rules) so no
 		 * URL is speculated twice.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param mixed $rules Speculation rules array from core.
 		 * @return mixed Updated rules, or the input unchanged.
@@ -5384,7 +5384,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			/**
 			 * Filters the high-value speculation list URLs.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string[] $urls Validated list URLs (home + high-value + RUM winners).
 			 */
 			$urls = apply_filters( 'wppo_speculation_list_urls', $urls );
@@ -5458,7 +5458,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					/**
 					 * Filters the archive first-post document rule before it is appended.
 					 *
-					 * @since NEXT
+					 * @since 2.0.0
 					 * @param array $archive_rule The archive document rule.
 					 */
 					$archive_rule = apply_filters( 'wppo_speculation_document_rule', $archive_rule );
@@ -5479,7 +5479,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			/**
 			 * Filters the speculation rules after the high-value list rule is appended.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param array    $rules Updated rules.
 			 * @param string[] $urls  List URLs that were appended.
 			 */
@@ -5493,7 +5493,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * {@see filter_speculation_list_rules()} so source-checking logic
 		 * lives in one place.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param array $rules Existing speculation rules.
 		 * @return bool True when a document-source rule is present.
@@ -5510,7 +5510,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Collect URLs already covered by list-source rules.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param array $rules Existing speculation rules.
 		 * @return string[] List-source URLs already present.
@@ -5541,7 +5541,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * method's contribution and the priority-20 AI rule can never
 		 * re-add the same URL (single block, no duplicates).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string[] $urls  Candidate list URLs.
 		 * @param array    $rules Existing speculation rules.
@@ -5561,7 +5561,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Reduces each `href_matches` pattern (e.g. `/first-post/*`) to its
 		 * path prefix so generic-list URLs can be compared on the same basis.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param array $document_rule Document-source rule.
 		 * @return string[] Normalized paths (e.g. `/first-post`).
@@ -5611,7 +5611,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * `WP_Speculation_Rules::is_valid_mode()` / `is_valid_eagerness()` when available.
 		 *
 		 * @since 1.9.0
-		 * @since NEXT Honor `wp_get_speculation_rules_default_configuration()` when available.
+		 * @since 2.0.0 Honor `wp_get_speculation_rules_default_configuration()` when available.
 		 *
 		 * @param string $name Override name, e.g. 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS'.
 		 * @return string|null The override value, or null when neither the constant nor the environment variable is set to a valid value.
@@ -5729,7 +5729,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * `array_unique`; respects the existing `litespeed_can_optm` gate (optimization
 		 * disabled there anyway).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string[] List of handle strings to exclude.
 		 */
 		private function get_cve_guard_handles(): array {
@@ -5777,7 +5777,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * ships conditionally, so the minify path skips them in that mode —
 		 * mirroring `Cache::is_core_block_asset()`.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $handle The registered style handle.
 		 * @return bool True when core owns the handle under separate-assets mode.

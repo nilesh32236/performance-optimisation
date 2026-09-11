@@ -7,7 +7,7 @@
  * and AJAX fallback on OLS with DONOTCACHEPAGE.
  *
  * @package PerformanceOptimise\Inc
- * @since NEXT
+ * @since 2.0.0
  */
 
 namespace PerformanceOptimise\Inc;
@@ -21,7 +21,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 	/**
 	 * Class LiteSpeed_ESI
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	final class LiteSpeed_ESI {
 
@@ -30,7 +30,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 *
 		 * Checks LITESPEED_SERVER_TYPE, LITESPEED_ESI_ON, or litespeed_esi_status filter.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool
 		 */
 		public static function is_esi_available(): bool {
@@ -50,7 +50,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			/**
 			 * Filter whether ESI is available (primary).
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param bool $available Whether ESI is available.
 			 */
 			$available = (bool) apply_filters( 'wppo_litespeed_esi_available', false );
@@ -60,7 +60,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			/**
 			 * Filter whether ESI is available (legacy alias).
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param bool $available Whether ESI is available.
 			 */
 			return (bool) apply_filters( 'wppo_esi_available', false );
@@ -75,7 +75,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * and src/esi.js hydrates them via the wppo_esi_fragment endpoint
 		 * (audit #898).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool
 		 */
 		public static function is_setting_enabled(): bool {
@@ -84,7 +84,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			/**
 			 * Filter whether the ESI bridge setting is enabled.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param bool $enabled Whether the ESI setting is enabled.
 			 */
 			return (bool) apply_filters( 'wppo_esi_enabled', $enabled );
@@ -93,7 +93,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		/**
 		 * Whether ESI is enabled via settings AND available (Enterprise).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool
 		 */
 		public static function is_enabled(): bool {
@@ -122,7 +122,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * supplies the version + dependency list, with a classic footer enqueue —
 		 * this client is plain vanilla JS, not a script module.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function enqueue_hydration_client(): void {
@@ -170,7 +170,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 *
 		 * Gated by is_litespeed() && !is_esi_available() plus Woo / auth context.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $context Context: cart|checkout|account|adminbar|nonce etc.
 		 * @return bool
 		 */
@@ -195,7 +195,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			/**
 			 * Filter whether hole-punch should be active for context.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param bool   $punch   Whether to punch.
 			 * @param string $context Context name.
 			 */
@@ -324,7 +324,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 *
 		 * Enterprise: <esi:include src="...">; OLS: <div data-wppo-esi="block" data-nonce="...">
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $block Block name (cart, adminbar, nonce).
 		 * @param array  $attrs Optional attributes.
 		 * @return string
@@ -337,7 +337,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			/**
 			 * Filter ESI block name.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string $block Block name.
 			 * @param array  $attrs Attributes.
 			 */
@@ -377,7 +377,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 				/**
 				 * Filter ESI placeholder HTML.
 				 *
-				 * @since NEXT
+				 * @since 2.0.0
 				 * @param string $html  Placeholder HTML.
 				 * @param string $block Block name.
 				 * @param array  $attrs Attributes.
@@ -386,7 +386,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 				/**
 				 * Legacy alias for placeholder.
 				 *
-				 * @since NEXT
+				 * @since 2.0.0
 				 * @param string $html  Placeholder HTML.
 				 * @param string $block Block name.
 				 */
@@ -415,7 +415,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			/**
 			 * Filter ESI placeholder HTML (OLS fallback).
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string $html  Placeholder HTML.
 			 * @param string $block Block name.
 			 * @param array  $attrs Attributes.
@@ -433,7 +433,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * marker is hidden from assistive tech instead. Values are defaults
 		 * only: callers can override any attribute via $attrs.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $block Block name.
 		 * @return array<string,?string> Attribute => value map (null skips the attribute).
 		 */
@@ -464,7 +464,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			/**
 			 * Filters the accessible loading label for an ESI placeholder.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string $label Loading label.
 			 * @param string $block Block name.
 			 */
@@ -481,7 +481,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		/**
 		 * Register AJAX handlers for ESI fragments.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function register_ajax_handlers(): void {
@@ -500,7 +500,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * Third parties can extend (never loosen) it via the
 		 * `wppo_esi_allowed_html` filter.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array Allowed tags => attributes map, in wp_kses() shape.
 		 */
 		public static function get_allowed_fragment_html(): array {
@@ -622,7 +622,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			 * the server-side sanitization contract. Extend it for custom
 			 * widget markup; never add script-capable tags.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param array $tags Allowed tags => attributes map (kses shape).
 			 */
 			return (array) apply_filters( 'wppo_esi_allowed_html', $tags );
@@ -644,7 +644,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * get_allowed_fragment_html() before it is echoed. Never return raw
 		 * untrusted markup from this endpoint.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function handle_ajax_fragment(): void {
@@ -708,7 +708,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			/**
 			 * Filter ESI fragment HTML.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string $fragment Fragment HTML.
 			 * @param string $block    Block name.
 			 */
@@ -746,7 +746,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * Replaces placeholder like __WPPO_ESI_NONCE__ or empty data-wppo-nonce with fresh nonce.
 		 * Stores 12h transient blog-prefixed.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $content Content to inject.
 		 * @return string
 		 */
@@ -790,7 +790,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			/**
 			 * Filter nonce-replaced content.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string $content Content after replacement.
 			 * @param string $nonce   Nonce value.
 			 */
@@ -805,7 +805,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 *
 		 * Hooked on send_headers:1.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function handle_send_headers(): void {
@@ -858,7 +858,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 				/**
 				 * Filter ESI private header decision.
 				 *
-				 * @since NEXT
+				 * @since 2.0.0
 				 * @param string $context Context.
 				 */
 				do_action( 'wppo_esi_private_headers_sent', 'private' );
@@ -884,7 +884,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 *
 		 * Should be called from Main::setup_hooks() when is_enabled() or always for OLS fallback.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function init(): void {
@@ -940,7 +940,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		/**
 		 * Handle litespeed_nonce action for widget/cart hole-punching.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $action Nonce action.
 		 * @return void
 		 */
@@ -962,7 +962,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		/**
 		 * Filter litespeed_esi_nonces for hole-punch list.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array $nonces Nonce list.
 		 * @return array
 		 */
@@ -980,7 +980,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			/**
 			 * Filter ESI nonces for widget/cart.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param array $nonces Nonce list.
 			 */
 			$nonces = (array) apply_filters( 'wppo_esi_nonces', $nonces );
@@ -994,7 +994,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * Emits DONOTCACHEPAGE guard and returns fragment via wp-ajax.
 		 * Filterable via wppo_esi_fallback.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $fragment Fragment HTML.
 		 * @return string
 		 */
@@ -1002,7 +1002,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			/**
 			 * Filter whether ESI fallback should use AJAX.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param bool   $use_fallback Whether to use fallback.
 			 * @param string $fragment Fragment HTML.
 			 */

@@ -81,7 +81,7 @@
 
 | Rank | Theme | Action | Confidence | Gate |
 |------|-------|--------|------------|------|
-| P1 | Architecture | `Main`→`HookRegistry`+controllers (`PreloadCtrl`, `StyleCtrl`, `ScriptCtrl`, `LcpCtrl`), `Util`→`Sanitizer`+`UrlHelper`+`TransientKeys`, `wppoSettings` store singleton | HIGH | `npm run lint:js` → `composer lint` → `npm test` → `build` → `phpunit`; commit `build/`; `@since NEXT` never bump `1.9.0` |
+| P1 | Architecture | `Main`→`HookRegistry`+controllers (`PreloadCtrl`, `StyleCtrl`, `ScriptCtrl`, `LcpCtrl`), `Util`→`Sanitizer`+`UrlHelper`+`TransientKeys`, `wppoSettings` store singleton | HIGH | `npm run lint:js` → `composer lint` → `npm test` → `build` → `phpunit`; commit `build/`; `@since 2.0.0` never bump `1.9.0` |
 | P2 | Performance | `WppoSettings::get()` memo (1 `get_option` / request), tmp+rename atomic stampede lock, RUM queue `transient`+`wppo_rum_flush` cron, `combine_css` single-pass, memo 120× sim | HIGH | Measure p95 before/after (LCP, DB writes/day, FS stats) |
 | P3 | Correctness | ability enum align `trash`↔`trashed_posts` + test; `maybe_serve_next_gen` TagProcessor path; `uninstall is_link`; `get_sitemap_urls` HTTP code + `realpath` fallback | HIGH | `phpunit` + `img-converter` snapshot |
 | P4 | Duplication | `BatchDeleter` trait for 5× batched DELETE; `wppo-allowed-keys.json` generator for whitelist triplication; `flex-center/truncate` + legacy selectors rm + `stylelint` | MEDIUM | `grep` dedup count |

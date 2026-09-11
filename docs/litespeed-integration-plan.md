@@ -3,7 +3,7 @@
 **Date:** 2026-08-27  
 **Status:** Shipped — Phases 0–4 implemented and verified (see `docs/litespeed-compatibility-audit-2026-09-01.md` and the ✅ ticks in `docs/litespeed-roadmap.md`). Phase 5 (enterprise/QUIC options) remains deferred.  
 **Companion:** `docs/litespeed-research.md` (deep research)  
-**Principles:** Zero breakage on non-LS hosts — every LiteSpeed path is an additive, opt-in or auto-detected path with fallback. No invention of version numbers — new symbols get `@since NEXT`.
+**Principles:** Zero breakage on non-LS hosts — every LiteSpeed path is an additive, opt-in or auto-detected path with fallback. No invention of version numbers — new symbols get `@since 2.0.0`.
 
 ---
 
@@ -531,7 +531,7 @@ No new tables. No options outside `wppo_settings`.
 - **WP version gates:** Every new WP API behind `function_exists()` / `class_exists()` / `method_exists()`. LS header emission is version-agnostic — just `header()` + `do_action()` — no WP version gate needed.
 - **Settings backward compat:** New `litespeed_integration` key defaults to `auto` / `false` — existing installs see no behaviour change until they actively set a non-default or are on LS with LSCWP. Non-LS hosts never see the setting.
 - **Filters:** New filters `wppo_litespeed_mode`, `wppo_litespeed_should_disable_optimizer`, `wppo_litespeed_purge_sync` — prefix `wppo_` per repo rule, document in `docs/hooks.md`.
-- **`@since` tags:** All new symbols get `@since NEXT` — never invent a version number.
+- **`@since` tags:** All new symbols get `@since 2.0.0` — never invent a version number.
 - **Vendor dir:** No new Composer deps for LS integration (zero).
 
 ---
@@ -622,7 +622,7 @@ No new tables. No options outside `wppo_settings`.
 4. **Header method:** Prefer `do_action('litespeed_control_set_*')` (bitmask-correct when LSCWP active) vs raw `header('X-LiteSpeed-...')` (works without LSCWP). Proposal: both — action when hook exists, raw header as fallback (cover OLS without LSCWP).
 5. **Scheduling:** Do we install `litespeed-cache` now on this host for integration testing, or keep this host WPPO-only and test LS paths via header spoofing (`$_SERVER['SERVER_SOFTWARE']='LiteSpeed'` stub)? Proposal: install on staging clone, not production.
 6. **Docs location:** Keep these two docs (`research.md` + `integration-plan.md`) or merge into `COMPETITIVE_GAP_ANALYSIS.md` Tier-4 section? Proposal: keep separate + link from `COMPETITIVE_GAP_ANALYSIS.md` and `AGENTS.md`.
-7. **Release naming:** All new symbols `@since NEXT` — confirm `NEXT` placeholder flow (replaced at `v*` tag by `scripts/build-release.sh` / CI).
+7. **Release naming:** All new symbols `@since 2.0.0` — confirm `NEXT` placeholder flow (replaced at `v*` tag by `scripts/build-release.sh` / CI).
 
 ---
 

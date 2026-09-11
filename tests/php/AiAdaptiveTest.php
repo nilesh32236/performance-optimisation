@@ -1201,7 +1201,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * The global-average path stays conservative (per-path averages of 1000ms)
 	 * so any eagerness upgrade is attributable to the segmented p75 routing.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 *
 	 * @param int $segment_n Segment sample count.
 	 * @return void
@@ -1249,7 +1249,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 *
 	 * Given <20 samples the heuristic uses the global-average path unchanged.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 *
 	 * @return void
 	 */
@@ -1278,7 +1278,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test at-threshold segments route device + template + p75 into the suggestion.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 *
 	 * @return void
 	 */
@@ -1312,7 +1312,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test empty RUM data falls back to the global path without errors.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 *
 	 * @return void
 	 */
@@ -1339,7 +1339,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Build a single-key trends map with baseline samples + a current sample.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 *
 	 * @param string $metric Metric key ('lcp'|'cls').
 	 * @param int    $baseline_count Number of baseline samples.
@@ -1359,7 +1359,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Build a RUM aggregate with a single path carrying n samples at an average.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 *
 	 * @param string $metric Metric key ('lcp'|'cls').
 	 * @param int    $n Sample count.
@@ -1385,7 +1385,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * Given n below 10 When evaluated Then no alarm — even with
 	 * corroborating RUM field data.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 *
 	 * @return void
 	 */
@@ -1403,7 +1403,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * The same regression alarms once corroborating field data (n>=10,
 	 * average degraded vs the trend baseline) is provided.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 *
 	 * @return void
 	 */
@@ -1428,7 +1428,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * 7-day cooldown: the second evaluation is suppressed and alarming
 	 * resumes only after the window elapses.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 *
 	 * @return void
 	 */
@@ -1454,7 +1454,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	 * A +0.07 absolute shift alarms; a +30% relative shift under the
 	 * +0.05 absolute threshold does not.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 *
 	 * @return void
 	 */
@@ -1481,7 +1481,7 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test detector throwables degrade to an empty result (fail-open).
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 *
 	 * @return void
 	 */

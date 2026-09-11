@@ -6,7 +6,7 @@
  * and other plugins via the WordPress Abilities API.
  *
  * @package PerformanceOptimise\Inc
- * @since NEXT
+ * @since 2.0.0
  */
 
 namespace PerformanceOptimise\Inc;
@@ -22,14 +22,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 	 * Registers the plugin's performance capabilities with the WP 7.0 Abilities API
 	 * so that AI assistants and other plugins can discover WPPO's feature surface.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	class Abilities {
 
 		/**
 		 * Register hooks for the Abilities API.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public function __construct() {
 			add_action( 'wp_abilities_api_categories_init', array( $this, 'register_categories' ) );
@@ -41,7 +41,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		/**
 		 * Register the performance-optimisation ability category.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public function register_categories(): void {
@@ -61,7 +61,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		/**
 		 * Register all plugin abilities with the Abilities API.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public function register_abilities(): void {
@@ -79,7 +79,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		/**
 		 * Get the definitions for all registered abilities.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return array[] Array of ability definition arrays, each with 'id' and 'args'.
 		 */
@@ -187,7 +187,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * and MCP discovery. Guarded by function_exists('wp_register_ability')
 		 * in register_abilities() so WP <6.9 is no-op.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return array[] Operational ability definitions.
 		 */
@@ -576,7 +576,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		/**
 		 * Permission callback for all abilities.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool Whether the current user can manage options.
 		 */
 		public static function permission_check(): bool {
@@ -586,7 +586,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		/**
 		 * Execute callback: Cache Management.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool
 		 */
 		public static function can_cache_management(): bool {
@@ -597,7 +597,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		/**
 		 * Execute callback: Image Optimization.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool
 		 */
 		public static function can_image_optimization(): bool {
@@ -608,7 +608,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		/**
 		 * Execute callback: CSS Minification.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool
 		 */
 		public static function can_css_minification(): bool {
@@ -619,7 +619,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		/**
 		 * Execute callback: JS Optimization.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool
 		 */
 		public static function can_js_optimization(): bool {
@@ -630,7 +630,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		/**
 		 * Execute callback: Database Cleanup.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool
 		 */
 		public static function can_database_cleanup(): bool {
@@ -641,7 +641,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		/**
 		 * Execute callback: Redis Object Cache.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool
 		 */
 		public static function can_redis_object_cache(): bool {
@@ -653,7 +653,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 *
 		 * Delegates to Cache::clear_cache() — same path as the REST handler.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param array $input Input data (scope, url).
 		 * @return array{cleared: bool}
@@ -675,7 +675,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		/**
 		 * Execute callback: Optimise Image (operational).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param array $input Input data (attachment_id, format).
 		 * @return array{queued: bool}
@@ -697,7 +697,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		/**
 		 * Execute callback: Run Database Cleanup (operational).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param array $input Input data (type).
 		 * @return array{cleaned: int}
@@ -740,7 +740,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 *
 		 * Delegates to System_Info::get_all().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param array $input Unused input data.
 		 * @return array System information.
@@ -754,7 +754,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 *
 		 * Delegates to Telemetry::scan().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param array $input Input data (url).
 		 * @return array Scan results or error.
@@ -773,7 +773,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 *
 		 * Delegates to Pagespeed::queue_scan().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param array $input Input data (url, strategy).
 		 * @return array{queued: bool}
@@ -790,7 +790,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 *
 		 * Delegates to Pagespeed::get_results().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param array $input Input data (url, strategy).
 		 * @return array PageSpeed results.
@@ -807,7 +807,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 *
 		 * Delegates to Suggestion_Engine::from_telemetry() using cached scan data.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param array $input Input data (url).
 		 * @return array{suggestions: array} Suggestions.
@@ -834,7 +834,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 *
 		 * Delegates to Database_Cleanup::get_counts().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param array $input Unused input data.
 		 * @return array Cleanup counts by type.
@@ -848,7 +848,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 *
 		 * Delegates to Img_Converter::get_img_info().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param array $input Unused input data.
 		 * @return array Image job status.
@@ -862,7 +862,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 *
 		 * Delegates to Asset_Manager::get_page_assets().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param array $input Input data (post_id).
 		 * @return array Page assets or empty.
@@ -885,7 +885,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		/**
 		 * Execute callback: Get Autoloaded Options (operational).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param array $input Unused input data.
 		 * @return array Autoloaded options data.
@@ -919,7 +919,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 *
 		 * Delegates to RUM::get_data().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param array $input Unused input data.
 		 * @return array RUM data.
@@ -931,7 +931,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		/**
 		 * Execute callback: Flush Object Cache (operational).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param array $input Unused input data.
 		 * @return array{flushed: bool}
@@ -956,7 +956,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * callback) for WP Monitor spec discoverability; both share the
 		 * `performance-optimisation` category.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return array[] WPPO ability definitions.
 		 */
@@ -1102,7 +1102,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * canonical. Enables `auto_fix_enabled` AI Adaptive MCP workflows
 		 * without REST round-trips.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return void
 		 */
@@ -1152,7 +1152,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * Delegates to `Critical_CSS::regenerate_all()` — same path as the
 		 * REST handler `Rest::regenerate_ccss()`.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param array $input Unused input data.
 		 * @return array{queued: int}
@@ -1175,7 +1175,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * input shape (`post_id` optional). Queues a single post job or
 		 * regenerates for all pages.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param array $input Input data (post_id).
 		 * @return array{queued: int}
@@ -1227,7 +1227,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * Same-site enforcement aligns with the home-host check formerly in
 		 * the removed `Rest::handle_crawler()` route (#900).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param array $input Input data (url, urls).
 		 * @return array Crawler result or error.

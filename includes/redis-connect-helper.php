@@ -96,7 +96,7 @@ if ( ! function_exists( 'wppo_redis_connect_cluster' ) ) {
 	 * Establishes a Redis Cluster connection.
 	 *
 	 * @param array $config Redis configuration.
-	 * @since NEXT
+	 * @since 2.0.0
 	 * @return \RedisCluster|\WP_Error A connected RedisCluster client or a WP_Error on failure.
 	 */
 	function wppo_redis_connect_cluster( $config ) {
@@ -146,7 +146,7 @@ if ( ! function_exists( 'wppo_redis_connect_sentinel' ) ) {
 	 * Establishes a Redis Sentinel connection.
 	 *
 	 * @param array $config Redis configuration.
-	 * @since NEXT
+	 * @since 2.0.0
 	 * @return \Redis|\WP_Error A connected Redis client or a WP_Error on failure.
 	 */
 	function wppo_redis_connect_sentinel( $config ) {
@@ -249,7 +249,7 @@ if ( ! function_exists( 'wppo_redis_connect_standalone' ) ) {
 	 * Establishes a standalone Redis connection.
 	 *
 	 * @param array $config Redis configuration.
-	 * @since NEXT
+	 * @since 2.0.0
 	 * @return \Redis|\WP_Error A connected Redis client or a WP_Error on failure.
 	 */
 	function wppo_redis_connect_standalone( $config ) {
@@ -300,7 +300,7 @@ if ( ! function_exists( 'wppo_parse_redis_node' ) ) {
 	 * Handles standard "host:port" formats as well as IPv6 enclosed in brackets.
 	 *
 	 * @param string $node The node string to parse.
-	 * @since NEXT
+	 * @since 2.0.0
 	 * @return array Associative array containing 'host' and 'port'.
 	 */
 	function wppo_parse_redis_node( $node ) {
@@ -355,7 +355,7 @@ if ( ! function_exists( 'wppo_normalize_redis_serializer_choice' ) ) {
 	 * deliberately ignored — msgpack is never selected. Always falls back to the
 	 * PHP serializer; never throws.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 * @param bool $igbinary_available Whether the igbinary serializer is usable for this build.
 	 * @param bool $msgpack_available  Whether ext-msgpack is available (informational; never selected).
 	 * @return array Shape { serializer: int, name: string } where name is 'igbinary' or 'php'.
@@ -405,7 +405,7 @@ if ( ! function_exists( 'wppo_resolve_redis_serializer' ) ) {
 	 * were written with SERIALIZER_PHP. Always falls back to the PHP
 	 * serializer; never throws.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 * @return array Shape { serializer: int, name: string } where name is 'igbinary' or 'php'.
 	 */
 	function wppo_resolve_redis_serializer() {

@@ -3,7 +3,7 @@
  * Tests for LiteSpeed_Crawler throttler + sitemap + blacklist + variant matrix.
  *
  * @package PerformanceOptimise\Tests
- * @since NEXT
+ * @since 2.0.0
  */
 
 // phpcs:disable Squiz.Commenting.FunctionComment.Missing,Squiz.Commenting.VariableComment.Missing,Generic.CodeAnalysis.UnusedFunctionParameter,Generic.Commenting.Todo,Squiz.Commenting.InlineComment

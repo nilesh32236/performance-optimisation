@@ -60,7 +60,7 @@ Completed: 2026-08-31 11:35 UTC
 - 765: 212-file conflict → closed supersized, branch preserved for split (<100 files each)
 
 ## Remaining Work
-- 5 WP Monitor enhancements → 5 focused PRs (<100 files, @since NEXT, guarded by function_exists)
+- 5 WP Monitor enhancements → 5 focused PRs (<100 files, @since 2.0.0, guarded by function_exists)
 - 6 marketing/design → require product/design input
 - Fix/audit branch split → 5 PRs (CLI, Hooks, Perf, H-fixes, Option B redesign pending #709)
 

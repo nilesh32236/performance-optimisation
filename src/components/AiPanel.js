@@ -15,7 +15,7 @@ import LoadingSubmitButton from './common/LoadingSubmitButton';
  *
  * Toggle + Learn + suggestions with one-click Apply (never auto-enables).
  *
- * @since NEXT
+ * @since 2.0.0
  */
 const AiPanel = () => {
 	const initial =

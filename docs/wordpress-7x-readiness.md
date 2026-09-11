@@ -37,9 +37,9 @@ Plus: **Abilities API** (`wp_register_ability`, 3 REST namespaces, categories), 
 - ✅ Abilities: `class-abilities.php` registers base set.
 
 **Adopted (LS-904b-d ✅ done 2026-09-01 — #708):**
-- ✅ Salted-cache family completeness — `templates/object-cache.php` now provides `wp_cache_get_salted`/`set_salted`/`get_multiple_salted`/`set_multiple_salted`/`delete_salted`/`delete_multiple_salted` with `function_exists` gates, array salt implode, stable-key check + `*-queries` eviction; `@since NEXT` (see `LS-904b`).
-- ✅ `wp_get_loading_optimization_attributes()` for occluded/below-fold images — `class-image-optimisation.php` wires `wp_get_loading_optimization_attributes()` (WP 6.7+) via `set_loading_optimization_attributes()` + `function_exists` gates on both `WP_HTML_Tag_Processor` and regex fallbacks; native-lazy and JS-lazy paths set `fetchpriority=low` for occluded images without overriding existing priority; fallback `low` for pre-6.7; `@since NEXT` (see `LS-904c`, `ImageOptimisationTest` occluded cases).
-- ✅ Emoji footer module — `class-core-tweaks.php` `disable_emojis()` now dequeues footer module `wp_dequeue_script_module('emoji')` + legacy `wp-emoji` when `function_exists`, plus `disable_emojis_script_module()` hooked `wp_enqueue_scripts`/`admin_enqueue_scripts` at 100 when `function_exists('wp_dequeue_script_module')`; `@since NEXT` (see `LS-904d`, `CoreTweaksTest`).
+- ✅ Salted-cache family completeness — `templates/object-cache.php` now provides `wp_cache_get_salted`/`set_salted`/`get_multiple_salted`/`set_multiple_salted`/`delete_salted`/`delete_multiple_salted` with `function_exists` gates, array salt implode, stable-key check + `*-queries` eviction; `@since 2.0.0` (see `LS-904b`).
+- ✅ `wp_get_loading_optimization_attributes()` for occluded/below-fold images — `class-image-optimisation.php` wires `wp_get_loading_optimization_attributes()` (WP 6.7+) via `set_loading_optimization_attributes()` + `function_exists` gates on both `WP_HTML_Tag_Processor` and regex fallbacks; native-lazy and JS-lazy paths set `fetchpriority=low` for occluded images without overriding existing priority; fallback `low` for pre-6.7; `@since 2.0.0` (see `LS-904c`, `ImageOptimisationTest` occluded cases).
+- ✅ Emoji footer module — `class-core-tweaks.php` `disable_emojis()` now dequeues footer module `wp_dequeue_script_module('emoji')` + legacy `wp-emoji` when `function_exists`, plus `disable_emojis_script_module()` hooked `wp_enqueue_scripts`/`admin_enqueue_scripts` at 100 when `function_exists('wp_dequeue_script_module')`; `@since 2.0.0` (see `LS-904d`, `CoreTweaksTest`).
 
 **Remain (P1 — low):**
 - `enqueue_empty_block_content_assets` filter pass-through for hidden-block omission (doc-only, one-line).
@@ -92,9 +92,9 @@ Plus: **Abilities API** (`wp_register_ability`, 3 REST namespaces, categories), 
 | Priority | Item | Files | Effort | Status |
 |---|---|---|---|---|
 | **P0** | Bump `action-scheduler` ✅ done 4.1.0 | `composer.json`/`composer.lock` | 1 day | ✅ done 2026-08-27 (LS-904a) — see §2 |
-| **P1** | Salted-cache family in `templates/object-cache.php` (`get_multiple_salted` + `*-queries` eviction + `delete_salted`/`delete_multiple_salted`) | `templates/object-cache.php`, `tests/php/ObjectCacheTest.php` | 2 days | ✅ done 2026-09-01 (LS-904b) — `@since NEXT` |
-| **P1** | `wp_get_loading_optimization_attributes()` for occluded images (`fetchpriority=low` Image Prioritizer) | `class-image-optimisation.php`, `tests/php/ImageOptimisationTest.php` | 2 days | ✅ done 2026-09-01 (LS-904c) — `@since NEXT` |
-| **P1** | Emoji footer module dequeuing (`wp_dequeue_script_module('emoji')`) | `class-core-tweaks.php`, `tests/php/CoreTweaksTest.php` | 0.5 day | ✅ done 2026-09-01 (LS-904d) — `@since NEXT` |
+| **P1** | Salted-cache family in `templates/object-cache.php` (`get_multiple_salted` + `*-queries` eviction + `delete_salted`/`delete_multiple_salted`) | `templates/object-cache.php`, `tests/php/ObjectCacheTest.php` | 2 days | ✅ done 2026-09-01 (LS-904b) — `@since 2.0.0` |
+| **P1** | `wp_get_loading_optimization_attributes()` for occluded images (`fetchpriority=low` Image Prioritizer) | `class-image-optimisation.php`, `tests/php/ImageOptimisationTest.php` | 2 days | ✅ done 2026-09-01 (LS-904c) — `@since 2.0.0` |
+| **P1** | Emoji footer module dequeuing (`wp_dequeue_script_module('emoji')`) | `class-core-tweaks.php`, `tests/php/CoreTweaksTest.php` | 0.5 day | ✅ done 2026-09-01 (LS-904d) — `@since 2.0.0` |
 | **P2** | `module_dependencies` exclusion in combine/minify | `class-cache.php`, `class-main.php` | 1 day | Deferred |
 | **P2** | OD-aware LCP (detect `OD_URL_Metric`) | `class-image-optimisation.php` | 1 day | Deferred |
 | **P2** | Abilities refinements (`wp_get_abilities($args)`, categories, lifecycle hooks) | `class-abilities.php` | 1-2 days | Deferred |
@@ -105,7 +105,7 @@ Plus: **Abilities API** (`wp_register_ability`, 3 REST namespaces, categories), 
 
 Keep `voku/html-min`/`matthiasmullie/minify` as-is. Re-assess `combineCSS` once 7.2 concat-elimination lands (`TODO #624`).
 
-> **LS-903 N9 CVE guard (filter-only, S scope, @since NEXT):** `wppo_cve_guard_handles` (alias `wppo_cve_excluded_handles`) in `includes/class-main.php:setup_hooks()` merges `array_unique` into `exclude_js`/`exclude_css`/`exclude_defer_js`/`exclude_delay_js`; no `wp_options` persistence, default empty (disabled), respects `litespeed_can_optm` gate (see `docs/hooks.md`).
+> **LS-903 N9 CVE guard (filter-only, S scope, @since 2.0.0):** `wppo_cve_guard_handles` (alias `wppo_cve_excluded_handles`) in `includes/class-main.php:setup_hooks()` merges `array_unique` into `exclude_js`/`exclude_css`/`exclude_defer_js`/`exclude_delay_js`; no `wp_options` persistence, default empty (disabled), respects `litespeed_can_optm` gate (see `docs/hooks.md`).
 
 *Sources: wordpress.org/news (7.1 Mary Lou), make.wordpress.org/core field guides (6.8 2025-03-28, 6.9 2025-11-18, 7.0 2026-05-14, 7.1 2026-08-05) + client-side media deep dive 2026-07-22, proposal 7.2 Secrets 2026-08-25, Perf Chat 2026-08-25, developer.wordpress.org since 6.8-7.1, packagist.org 2026-08-27, 2026-09-01.*
 

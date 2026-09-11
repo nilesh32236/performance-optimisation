@@ -21,7 +21,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 	 * protected with a daily rolling, per-page token and per-IP rate limiting
 	 * instead of the manage_options permission used by the admin endpoints.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	class RUM {
 
@@ -53,7 +53,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * aggregate option past 1MB on high-traffic sites (audit #888
 		 * finding 10). Oldest days are dropped first on write.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		const MAX_TOTAL_PATHS = 600;
@@ -61,7 +61,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		/**
 		 * Serialized-size budget (bytes) for the aggregate option.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		const MAX_OPTION_BYTES = 491520;
@@ -77,7 +77,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * Transient key for the RUM sample queue.
 		 *
 		 * @var string
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private const QUEUE_KEY = 'wppo_rum_queue';
 
@@ -85,7 +85,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * Transient key for the flush lock.
 		 *
 		 * @var string
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private const FLUSH_LOCK_KEY = 'wppo_rum_flush_lock';
 
@@ -93,7 +93,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * Maximum queued samples before forced flush.
 		 *
 		 * @var int
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private const QUEUE_MAX = 100;
 
@@ -103,7 +103,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * Bounds the `lcpUrls` map added for field-measured LCP targeting
 		 * (issue #935) so the aggregate option stays within its byte budget.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		public const MAX_LCP_URLS_PER_PATH = 10;
@@ -114,7 +114,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * Bounds the `lcpSeg` map added for field-LCP p75 routing
 		 * (issue #986) so the aggregate option stays within its byte budget.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		public const MAX_LCP_SEGMENTS_PER_PATH = 6;
@@ -125,7 +125,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * Capped reservoir (most-recent values) used solely for p75
 		 * computation; oldest values are dropped first.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		public const MAX_LCP_SAMPLES_PER_SEGMENT = 100;
@@ -137,7 +137,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * suggestions (issue #1036) so the aggregate option stays within its
 		 * byte budget. Mirrors MAX_LCP_SEGMENTS_PER_PATH.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		public const MAX_INP_SEGMENTS_PER_PATH = 6;
@@ -148,7 +148,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * Capped most-recent reservoir used solely for p75 computation;
 		 * oldest values are dropped first. Mirrors MAX_LCP_SAMPLES_PER_SEGMENT.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		public const MAX_INP_SAMPLES_PER_SEGMENT = 100;
@@ -156,7 +156,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		/**
 		 * Maximum length (chars) accepted for an LCP element URL.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		public const LCP_URL_MAX_LENGTH = 2048;
@@ -167,7 +167,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * The top LCP URL for a path overrides the PageSpeed heuristic only
 		 * once it has been observed at least this many times.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		public const FIELD_LCP_DEFAULT_MIN_SAMPLES = 20;
@@ -179,7 +179,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * self-corrects back to the heuristic, so a changed hero recovers
 		 * within 24h.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		public const FIELD_LCP_STALE_TTL = 86400;
@@ -193,7 +193,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * (bounded only by MAX_OPTION_BYTES). Memoizing collapses both
 		 * lookups to a single get_option() per request.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var array|null
 		 */
 		private static ?array $field_lcp_aggregate = null;
@@ -201,7 +201,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		/**
 		 * Whether the aggregate memo has been populated this request.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var bool
 		 */
 		private static bool $field_lcp_loaded = false;
@@ -210,7 +210,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * Per-request memo for resolved field-LCP results, keyed by
 		 * normalized path + sample gate.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var array<string, array|null>
 		 */
 		private static array $field_lcp_result_memo = array();
@@ -224,7 +224,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * option. An empty array is a valid result, so the loaded flag tracks
 		 * fetch state separately from the value.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var array|null
 		 */
 		private static ?array $score_trends_memo = null;
@@ -232,7 +232,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		/**
 		 * Whether the trends memo has been populated this request.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var bool
 		 */
 		private static bool $score_trends_loaded = false;
@@ -244,7 +244,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * never served without enumerating transient keys. Cached per
 		 * request; -1 means not loaded yet.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		private static int $top_url_generation = -1;
@@ -253,7 +253,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * Flush when queue reaches this size.
 		 *
 		 * @var int
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private const FLUSH_THRESHOLD = 20;
 
@@ -274,7 +274,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * option; exposed publicly so tests can reset isolation between
 		 * cases that mutate the option store directly.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function clear_field_lcp_cache(): void {
@@ -289,7 +289,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		/**
 		 * Current generation for the per-path top-URL index.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return int Generation counter.
 		 */
 		private static function top_url_generation(): int {
@@ -307,7 +307,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * deserializing the full aggregate (up to MAX_OPTION_BYTES) per
 		 * unique path per request.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $normalized_path Normalized page path.
 		 * @param int    $min             Sample gate.
 		 * @return string Transient key (unprefixed; wrap with Util::transient_key()).
@@ -319,7 +319,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		/**
 		 * Bump the top-URL index generation so flush-invalidated entries expire.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		private static function bump_top_url_generation(): void {
@@ -336,7 +336,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		/**
 		 * Get the RUM aggregate with a per-request memo.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array Aggregate data (empty array when missing/invalid).
 		 */
 		private static function get_memoized_aggregate(): array {
@@ -356,7 +356,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		/**
 		 * Register invalidation hooks for the RUM aggregate memo (once per request).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		private static function ensure_field_lcp_cache_hook(): void {
@@ -377,7 +377,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * keep loading on every WordPress request via alloptions. Mirrors
 		 * Img_Converter::migrate_img_info_autoload().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function migrate_rum_autoload(): void {
@@ -475,7 +475,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * returns array().
 		 *
 		 * @return array Aggregate data (empty array when missing/invalid).
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function get_aggregate_readonly(): array {
 			try {
@@ -534,7 +534,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		/**
 		 * Whether core supports the native `strategy` script args (WP 6.3+).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool
 		 */
 		private static function supports_script_strategy(): bool {
@@ -595,7 +595,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * Fail-open: returns '' when undetectable so the beacon field is
 		 * omitted and aggregation falls back to the `unknown` bucket.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string Template slug (max 64 chars) or ''.
 		 */
 		private static function detect_template_slug(): string {
@@ -633,7 +633,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * @param string $path      Page path the token is minted for.
 		 * @return string
 		 *
-		 * @since NEXT The $path parameter was added.
+		 * @since 2.0.0 The $path parameter was added.
 		 */
 		private static function token_for( int $timestamp, string $path = '/' ): string {
 			return wp_hash( 'wppo_rum_' . gmdate( 'Ymd', $timestamp ) . '|' . $path );
@@ -646,7 +646,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * @param string $path  Page path the beacon was served on.
 		 * @return bool
 		 *
-		 * @since NEXT The $path parameter was added.
+		 * @since 2.0.0 The $path parameter was added.
 		 */
 		private static function is_valid_token( string $token, string $path = '/' ): bool {
 			if ( '' === $token ) {
@@ -784,7 +784,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * host) is rejected so the public beacon cannot inject a
 		 * cross-origin preload target.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $lcp_url Candidate LCP URL.
 		 * @return bool True when same-origin.
 		 */
@@ -814,7 +814,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 *
 		 * @param array $sample Normalized sample.
 		 * @return void
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static function store_sample( array $sample ): void {
 			// Attach timestamp so flush can bucket by sample day, not flush day.
@@ -849,7 +849,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * QUEUE_MAX samples, with a transient lock to prevent concurrent
 		 * flushes from duplicating or losing samples.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function flush_queue(): void {
@@ -1171,7 +1171,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * changed hero self-corrects back to the heuristic. Returns null
 		 * otherwise so callers fall through to the PageSpeed heuristic.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string|null $path Page path (e.g. "/about/"). Defaults to the current request path.
 		 * @return array{url:string,n:int,lastSeen:int}|null Top LCP URL entry or null.
 		 */
@@ -1328,7 +1328,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * manual preload-image meta / hero path. Fail-open: any failure
 		 * returns null, never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string|null $path Page path (e.g. "/about/"). Defaults to the current request path.
 		 * @return array{url:string,n:int,lastSeen:int}|null Single LCP candidate or null.
 		 */
@@ -1367,7 +1367,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * `get_field_lcp_url()` resolves `$_SERVER['REQUEST_URI']` itself.
 		 * Fail-open: any failure returns null.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string|null Current page path or null when unresolvable.
 		 */
 		private static function resolve_current_path(): ?string {
@@ -1402,7 +1402,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * Every WP API is guarded so unit contexts without WP fail open to
 		 * an empty string.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string|null $path Page path (e.g. "/about/"). Defaults to the current request URL.
 		 * @return string The PageSpeed LCP image URL, or empty string when none is stored.
 		 */
@@ -1496,7 +1496,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 *
 		 * Pure read path: no option or transient writes.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return int Minimum samples (>=1).
 		 */
 		public static function get_field_lcp_min_samples(): int {
@@ -1524,7 +1524,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 *
 		 * Nearest-rank method: sort ascending, pick index ceil(0.75*n)-1.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param float[] $samples Numeric samples.
 		 * @return float p75 value or 0.0 when empty.
 		 */
@@ -1551,7 +1551,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * by `{path}|{device}|{template}`; only segments with n >=
 		 * $min_samples are returned. Fail-open: any failure returns array().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param int|null $min_samples Minimum samples per segment. Null resolves via get_field_lcp_min_samples().
 		 * @return array[] Rows of array(path,device,template,n,p75).
 		 */
@@ -1658,7 +1658,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * any failure returns array(). Multisite-safe: per-site get_option()
 		 * reads only.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param int|null $min_samples Minimum samples per segment. Null resolves via get_field_lcp_min_samples().
 		 * @return array<string, float> Normalized path => worst p75 LCP in ms, worst-first order.
 		 */
@@ -1697,7 +1697,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * for md5(esc_url_raw($url))_{mobile,desktop} keys. Returns 0.0 when
 		 * no signal exists (caller keeps FIFO order). Read-only, fail-open.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string               $url Candidate queue URL.
 		 * @param array<string, float> $priority Optional pre-loaded get_path_lcp_priority() map.
 		 * @param array|null           $trends Optional pre-loaded Pagespeed::get_trends() map. Null loads (and per-request memos) it once.
@@ -1771,7 +1771,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * params stored. Multisite-safe: get_option() is inherently
 		 * site-specific; queue/lock keys go through Util::transient_key().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param int|null $min_samples Minimum samples per segment. Null resolves via get_field_lcp_min_samples() (shared gate, default 20).
 		 * @return array[] Rows of array(path,device,template,n,p75).
 		 */

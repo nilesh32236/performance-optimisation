@@ -9,7 +9,7 @@
  * size threshold to autoload off, and every flip is revertible per option.
  *
  * @since 2.18.0
- * @since NEXT Added dry-run report, apply, and per-option revert via
+ * @since 2.0.0 Added dry-run report, apply, and per-option revert via
  *             POST /autoload_remediate.
  */
 
@@ -30,7 +30,7 @@ import LoadingSubmitButton from './common/LoadingSubmitButton';
  * (varchar(191)): non-empty string, max 191 chars, conservative charset.
  * Server-side sanitization remains authoritative.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {*} optionName Raw option name value.
  * @return {boolean} True when the name is safe to forward to the server.
  */

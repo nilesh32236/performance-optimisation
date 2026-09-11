@@ -24,14 +24,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 	 * Manages LiteSpeed detection, LSCache coexistence modes, and
 	 * optimizer guard decisions.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	final class LiteSpeed_Integration {
 
 		/**
 		 * Mode: auto-detect (default).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		public const MODE_AUTO = 'auto';
@@ -39,7 +39,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Mode: WPPO owns cache/optimizer.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		public const MODE_WPPO = 'wppo';
@@ -47,7 +47,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Mode: LiteSpeed Cache owns cache/optimizer.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		public const MODE_LITESPEED = 'litespeed';
@@ -55,7 +55,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Mode: standalone (ignore LiteSpeed server).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		public const MODE_STANDALONE = 'standalone';
@@ -63,7 +63,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Allowed modes.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string[]
 		 */
 		private const ALLOWED_MODES = array(
@@ -79,7 +79,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * Used to prevent infinite purge loops between WPPO and LSCache
 		 * (WPPO→LS→WPPO) when purgeSync is enabled.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		private const PURGE_LOCK = 'wppo_litespeed_purge_lock';
@@ -87,7 +87,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * TTL for purge-loop lock in seconds.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		private const PURGE_LOCK_TTL = 60;
@@ -97,7 +97,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 *
 		 * Null means not yet resolved.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string|null
 		 */
 		private static ?string $cached_effective_mode = null;
@@ -105,7 +105,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Per-request cached get_mode value.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string|null
 		 */
 		private static ?string $cached_mode = null;
@@ -113,7 +113,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Per-request cached litespeed detection.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var bool|null
 		 */
 		private static ?bool $cached_is_litespeed = null;
@@ -121,7 +121,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Per-request cached LSCache active detection.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var bool|null
 		 */
 		private static ?bool $cached_is_lscache_active = null;
@@ -131,7 +131,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 *
 		 * Null means not yet resolved.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int|null
 		 */
 		private static ?int $cached_ttl = null;
@@ -141,7 +141,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 *
 		 * Null means not yet resolved.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var bool|null
 		 */
 		private static ?bool $cached_is_cacheable = null;
@@ -151,7 +151,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 *
 		 * Null means not yet resolved.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var bool|null
 		 */
 		private static ?bool $cached_should_vary = null;
@@ -159,7 +159,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Per-request cached next-gen rewrite enabled check.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var bool|null
 		 */
 		private static ?bool $cached_nextgen = null;
@@ -167,7 +167,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Per-request cached brotli enabled check.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var bool|null
 		 */
 		private static ?bool $cached_brotli = null;
@@ -175,7 +175,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Per-request cached CDN allowed check.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var bool|null
 		 */
 		private static ?bool $cached_can_cdn = null;
@@ -183,7 +183,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Per-request URI-to-post-ID memo for get_litespeed_ttl().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var array<string, int>
 		 */
 		private static array $uri_post_memo = array();
@@ -196,7 +196,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * path; memoize per request. Cleared on the save_post/delete_post/
 		 * permalink paths via invalidate_uri_post_map().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string[]|null
 		 */
 		private static ?array $purge_tags_memo = null;
@@ -206,7 +206,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 *
 		 * Prevents double-registration when init() is called multiple times.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var bool
 		 */
 		private static bool $hooks_registered = false;
@@ -216,7 +216,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 *
 		 * Delegates to Server_Rules::is_litespeed() when available.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True if LiteSpeed or OpenLiteSpeed is detected.
 		 */
 		public static function is_litespeed(): bool {
@@ -236,7 +236,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			/**
 			 * Filter whether the current server is detected as LiteSpeed.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param bool $is_litespeed Whether LiteSpeed was detected.
 			 */
 			self::$cached_is_litespeed = (bool) apply_filters( 'wppo_litespeed_is_litespeed', self::$cached_is_litespeed );
@@ -250,7 +250,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * Checks active_plugins, active_sitewide_plugins, the LSCWP_V constant,
 		 * and known LSCWP classes. Cheap — result cached per request.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True if LiteSpeed Cache plugin is active.
 		 */
 		public static function is_lscache_active(): bool {
@@ -301,7 +301,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			/**
 			 * Filter whether LiteSpeed Cache plugin is considered active.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param bool $is_active Whether LSCWP is active.
 			 */
 			self::$cached_is_lscache_active = (bool) apply_filters( 'wppo_litespeed_is_lscache_active', self::$cached_is_lscache_active );
@@ -315,7 +315,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * Reads from wppo_settings['litespeed_integration']['mode'] with a safe
 		 * default of 'auto'. Value is allowlisted.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string One of self::MODE_* constants.
 		 */
 		public static function get_mode(): string {
@@ -334,7 +334,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			/**
 			 * Filter the configured LiteSpeed integration mode.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string $mode The sanitized mode value.
 			 */
 			$mode = (string) apply_filters( 'wppo_litespeed_mode', $mode );
@@ -362,7 +362,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 *
 		 * Result is cached per request.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string One of self::MODE_* concrete modes (never 'auto').
 		 */
 		public static function effective_mode(): string {
@@ -405,7 +405,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			/**
 			 * Filter the effective LiteSpeed integration mode.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string $effective_mode The resolved effective mode.
 			 * @param string $configured_mode The raw configured mode before resolution.
 			 */
@@ -426,7 +426,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * On LiteSpeed, standalone is NOT considered WPPO-owned for UI clarity
 		 * (user explicitly said "ignore LS").
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True if WPPO is the cache owner.
 		 */
 		public static function is_wppo_cache_owner(): bool {
@@ -450,7 +450,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * LiteSpeed Cache owns optimization. Respects the litespeed_can_optm
 		 * filter when it exists and returns false.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True if WPPO optimizer should be disabled.
 		 */
 		public static function should_disable_wppo_optimizer(): bool {
@@ -469,7 +469,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			/**
 			 * Filter whether WPPO optimizer should be disabled on LiteSpeed.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param bool   $disable Whether optimizer should be disabled.
 			 * @param string $effective_mode The effective integration mode.
 			 */
@@ -485,7 +485,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * `litespeed_integration.purgeSync` true (default on). Filterable
 		 * via `wppo_litespeed_purge_sync`.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True if purges should be synced.
 		 */
 		public static function is_purge_sync_enabled(): bool {
@@ -500,7 +500,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			/**
 			 * Filter whether LiteSpeed purge sync is enabled.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param bool $purge_sync Whether purge sync is enabled.
 			 */
 			$purge_sync = (bool) apply_filters( 'wppo_litespeed_purge_sync', $purge_sync );
@@ -511,7 +511,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Get the blog-prefixed purge-lock transient key.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string Transient key.
 		 */
 		public static function get_purge_lock_key(): string {
@@ -521,7 +521,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Whether a purge-loop lock is currently active.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True if lock present.
 		 */
 		public static function has_purge_lock(): bool {
@@ -531,7 +531,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Set the purge-loop lock for PURGE_LOCK_TTL seconds.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function set_purge_lock(): void {
@@ -545,7 +545,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * blog-prefixed lock via Util::transient_key() before emitting
 		 * `litespeed_purge_all`.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function sync_purge_all_to_litespeed(): void {
@@ -562,7 +562,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Sync a WPPO single-page purge to LSCache via URL.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $url_path URL path (e.g. "/about/").
 		 * @return void
 		 */
@@ -584,7 +584,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Sync a WPPO post invalidation to LSCache via post ID.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param int $post_id Post ID.
 		 * @return void
 		 */
@@ -605,7 +605,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Option key for DB queue fallback when headers_sent (LSCWP purge.cls.php:670).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		public const DB_QUEUE = 'wppo_litespeed_purge_queue';
@@ -613,7 +613,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Transient key for tag queue.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		private const TAG_QUEUE = 'wppo_lscache_tag_queue';
@@ -621,7 +621,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Max tags in queue before dropping oldest.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		private const TAG_QUEUE_MAX = 100;
@@ -629,7 +629,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Max tags kept in the DB_QUEUE fallback option (drop-oldest beyond this).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		private const DB_QUEUE_MAX = 200;
@@ -637,7 +637,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Age (seconds) after which an unconsumed DB_QUEUE fallback is discarded.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		private const DB_QUEUE_TTL = HOUR_IN_SECONDS;
@@ -645,7 +645,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Whether shutdown flush is hooked.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var bool
 		 */
 		private static bool $queue_shutdown_hooked = false;
@@ -656,7 +656,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * Mirrors LSCWP Tag taxonomy (F,H,PGS,Po.{id},PT.{type},T.{id},A.{id},D.,B.{id},W.{id},ESI.,REST,HTTP.{code} + public/private/stale scope).
 		 * Stored to blog-prefixed transient with 60s lock fan-out on multisite.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string[] $tags  Tag strings (e.g. Po.123, T.5, F).
 		 * @param string   $scope Scope: public|private|stale.
 		 * @return void
@@ -696,7 +696,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			/**
 			 * Filter tags before queue.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string[] $tags Tag list.
 			 * @param string   $scope Scope.
 			 */
@@ -726,7 +726,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Ensure shutdown flush is hooked once.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		private static function maybe_hook_shutdown(): void {
@@ -742,7 +742,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 *
 		 * Checks both transient queue and DB_QUEUE fallback (headers_sent / cron).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function flush_tag_queue(): void {
@@ -779,7 +779,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			/**
 			 * Filter flushed tag string.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string   $tag_str Tag string.
 			 * @param string[] $tags    Tag array.
 			 */
@@ -813,7 +813,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 *
 		 * @param string $db_key Option key (blog-prefixed).
 		 * @return string[] Valid queued tags.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static function read_db_queue( string $db_key ): array {
 			$stored = get_option( $db_key, array() );
@@ -854,7 +854,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * @param string   $db_key Option key (blog-prefixed).
 		 * @param string[] $tags Tags to persist.
 		 * @return void
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static function write_db_queue( string $db_key, array $tags ): void {
 			$tags = array_values(
@@ -887,7 +887,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Get DB queue option key (blog-prefixed).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string
 		 */
 		public static function get_db_queue_key(): string {
@@ -901,7 +901,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * acceleration hooks (send_headers header emission + vary bridge).
 		 * Idempotent — safe to call multiple times per request.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function init(): void {
@@ -934,7 +934,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * Hooked to save_post/delete_post/permalink_structure_changed so
 		 * permalink changes cannot serve stale post-ID resolutions.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function invalidate_uri_post_map(): void {
@@ -952,7 +952,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Handle LSCache "purged all" → clear WPPO file cache.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function handle_litespeed_purged_all(): void {
@@ -971,7 +971,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Handle LSCache "purged post" → invalidate WPPO static HTML for post.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param int $post_id Post ID purged by LSCache.
 		 * @return void
 		 */
@@ -996,7 +996,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Handle LSCache purge finalize (catch-all) → clear WPPO cache.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function handle_litespeed_purge_finalize(): void {
@@ -1019,7 +1019,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * namespaced via Util::transient_key(). Negative results are cached
 		 * too so unknown URIs do not re-hit url_to_postid() every request.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $uri Request URI.
 		 * @return int Post ID (0 when unresolvable).
 		 */
@@ -1046,7 +1046,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Store a URI-to-post-ID resolution in per-request + persistent caches.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $uri Request URI.
 		 * @param int    $post_id Resolved post ID (0 for negative).
 		 * @return void
@@ -1087,7 +1087,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 *
 		 * Result is cached per request; filterable via `wppo_litespeed_ttl`.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string|null $uri     Optional URI for per-page TTL.
 		 * @param int|null    $post_id Optional post ID.
 		 * @return int TTL seconds (>=0, 0 = no-cache).
@@ -1276,7 +1276,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			/**
 			 * Filter per-page TTL (Tier-1, filter-only).
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param int         $seconds TTL seconds.
 			 * @param string      $uri     Request URI.
 			 * @param int|null    $post_id Resolved post ID or null.
@@ -1286,7 +1286,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			/**
 			 * Filter LiteSpeed TTL seconds (per-context).
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param int   $seconds TTL in seconds (0 = no-cache).
 			 * @param int   $hours   Original cacheLife hours (0 = never expire) or -1 for context override.
 			 * @param array $context Context array with uri, post_id, post_type.
@@ -1317,7 +1317,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * to DONOTCACHEPAGE when Cache is unavailable. Filterable via
 		 * `wppo_litespeed_is_cacheable`.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True if cacheable.
 		 */
 		public static function is_request_cacheable(): bool {
@@ -1330,7 +1330,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				/**
 				 * Filter whether current request is cacheable for LiteSpeed.
 				 *
-				 * @since NEXT
+				 * @since 2.0.0
 				 * @param bool $is_cacheable Whether request is cacheable.
 				 */
 				self::$cached_is_cacheable = (bool) apply_filters( 'wppo_litespeed_is_cacheable', self::$cached_is_cacheable );
@@ -1383,7 +1383,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			/**
 			 * Filter whether current request is cacheable for LiteSpeed.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param bool $is_cacheable Whether request is cacheable.
 			 */
 			self::$cached_is_cacheable = (bool) apply_filters( 'wppo_litespeed_is_cacheable', self::$cached_is_cacheable );
@@ -1397,7 +1397,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * True when is_litespeed && is_wppo_cache_owner && enableLoggedInCache.
 		 * Cheap per-request cached; filterable via `wppo_litespeed_vary_enabled`.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True if vary bridge should be active.
 		 */
 		public static function should_vary_by_role(): bool {
@@ -1416,7 +1416,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			/**
 			 * Filter whether LiteSpeed vary-by-role is enabled.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param bool $enable Whether vary bridge is enabled.
 			 */
 			$enable = (bool) apply_filters( 'wppo_litespeed_vary_enabled', $enable );
@@ -1433,7 +1433,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * Role vary is derived from enableLoggedInCache. All filtered via
 		 * wppo_litespeed_vary_groups.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array{role:bool,guest:bool,mobile:bool,webp:bool,commenter:bool,postpass:bool}
 		 */
 		public static function get_vary_groups(): array {
@@ -1450,7 +1450,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			/**
 			 * Filter active vary groups.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param array $active Vary groups.
 			 */
 			$active = (array) apply_filters( 'wppo_litespeed_vary_groups', $active );
@@ -1469,7 +1469,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 *
 		 * Mirrors LSCWP vary.cls.php:261 check_commenter.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True if commenter cookie present.
 		 */
 		public static function is_commenter_request(): bool {
@@ -1490,7 +1490,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 *
 		 * Mirrors LSCWP vary.cls.php:707 post_password handling.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True if postpass cookie present.
 		 */
 		public static function is_postpass_request(): bool {
@@ -1520,7 +1520,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * True when commenter/postpass cookies present AND corresponding vary
 		 * group enabled. Mirrors LSCWP vary.cls.php:261,707.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True if request should be private/nocache.
 		 */
 		public static function is_private_request(): bool {
@@ -1540,7 +1540,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * Called on init priority 1 when is_litespeed && is_wppo_cache_owner.
 		 * Builds deterministic hash from active vary groups.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function seed_lscache_vary_cookie(): void {
@@ -1568,7 +1568,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			/**
 			 * Filter the _lscache_vary cookie value.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string $value 12-char hash.
 			 * @param array  $payload Active vary payload.
 			 */
@@ -1582,7 +1582,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Get the vary role value — group 99 for admin (LSCWP parity).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string Role value (99 for admin, role hash otherwise).
 		 */
 		private static function get_vary_role_value(): string {
@@ -1600,7 +1600,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Whether the current client supports WebP images.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True if Accept header contains image/webp or image/avif.
 		 */
 		private static function client_supports_webp(): bool {
@@ -1611,7 +1611,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Clear _lscache_vary cookie on logout.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function clear_lscache_vary_cookie(): void {
@@ -1628,7 +1628,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * new code should call Header_Emitter directly. Temporary — planned
 		 * for removal in a follow-up once the migration is fully soaked.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $value Header value to clean.
 		 * @return string Value without header-breaking control characters.
 		 */
@@ -1639,7 +1639,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Build fallback vary header value from active groups (P2).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string Vary header value.
 		 */
 		public static function build_vary_header(): string {
@@ -1664,7 +1664,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			/**
 			 * Filter built vary header.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string $cookie_vary Vary header.
 			 * @param array  $groups Active groups.
 			 */
@@ -1683,7 +1683,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * for non-cacheable routes only (bypass path, LS-302). Strips generic
 		 * Cache-Control when LS public header sent to avoid conflict (LS-304).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function handle_send_headers(): void {
@@ -1787,7 +1787,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 					/**
 					 * Filter the fallback vary header value when litespeed_vary not present.
 					 *
-					 * @since NEXT
+					 * @since 2.0.0
 					 * @param string $vary Fallback vary header.
 					 */
 					$fallback = (string) apply_filters( 'wppo_litespeed_vary_fallback', $vary_header );
@@ -1810,7 +1810,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * correct when LSCWP active) else raw header('X-LiteSpeed-Cache-Control').
 		 * Filterable via wppo_litespeed_ttl and wppo_litespeed_cache_control_header.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param int $ttl TTL seconds.
 		 * @return void
 		 */
@@ -1825,7 +1825,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			/**
 			 * Filter the LiteSpeed cache-control header for cacheable routes.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string $header Header string.
 			 * @param int    $ttl    TTL seconds.
 			 */
@@ -1846,7 +1846,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * Uses do_action('litespeed_control_set_nocache') when hook exists else
 		 * raw header('X-LiteSpeed-Cache-Control: no-cache').
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $reason Reason for nocache (for LSCWP logging).
 		 * @return void
 		 */
@@ -1854,7 +1854,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			/**
 			 * Filter reason for LiteSpeed no-cache.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string $reason Reason string.
 			 */
 			$reason = (string) apply_filters( 'wppo_litespeed_nocache_reason', $reason );
@@ -1874,7 +1874,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			/**
 			 * Filter the LiteSpeed no-cache header.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string $header Header string.
 			 * @param string $reason Reason.
 			 */
@@ -1891,7 +1891,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * W.{hash} widget tags are emitted only by the ESI bridge.
 		 * Filterable via wppo_litespeed_tag (single) and wppo_litespeed_purge_tags (array).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string[]
 		 */
 		public static function get_litespeed_tags_for_purge(): array {
@@ -1910,7 +1910,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * permalink_structure_changed) so the next request rebuilds the tag
 		 * fan-out instead of reusing a stale verdict.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function invalidate_purge_tags_memo(): void {
@@ -1920,7 +1920,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Compute the full LiteSpeed tag fan-out for the current request.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string[]
 		 */
 		private static function compute_litespeed_tags_for_purge(): array {
@@ -2091,7 +2091,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			/**
 			 * Filter the LiteSpeed tags for current request (fan-out).
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string[] $tags Tag list.
 			 * @param string   $scope Cache scope ('public'|'private'|'stale').
 			 */
@@ -2107,7 +2107,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * Uses DB_QUEUE fallback when headers_sent.
 		 * Filterable via wppo_litespeed_tag (single) and wppo_litespeed_purge_tags (array).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		private static function send_litespeed_tags(): void {
@@ -2117,7 +2117,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			/**
 			 * Filter the LiteSpeed tag for WPPO pages.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string $tag Tag string.
 			 */
 			$filtered_first = (string) apply_filters( 'wppo_litespeed_tag', $first );
@@ -2167,7 +2167,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * is_litespeed && is_wppo_cache_owner && enableLoggedInCache. Filterable
 		 * via wppo_litespeed_vary.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param mixed $vary Vary value from LSCWP (array|string).
 		 * @return mixed Modified vary value.
 		 */
@@ -2212,7 +2212,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			/**
 			 * Filter the LiteSpeed vary value after WPPO vary appended.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param mixed $vary Vary value.
 			 * @param array $groups Active vary groups.
 			 */
@@ -2228,7 +2228,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * Gated by is_litespeed() and image_optimisation.convertImg. Filterable
 		 * via wppo_litespeed_nextgen_rewrite.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True if next-gen rewrite should be active.
 		 */
 		public static function is_nextgen_rewrite_enabled(): bool {
@@ -2253,7 +2253,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			/**
 			 * Filter whether next-gen Vary:Accept rewrite is enabled.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param bool $enabled Whether next-gen rewrite is enabled.
 			 */
 			$enabled = (bool) apply_filters( 'wppo_litespeed_nextgen_rewrite', $enabled );
@@ -2261,7 +2261,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			/**
 			 * Legacy alias — also check wppo_litespeed_enable_nextgen_rewrite.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param bool $enabled Whether next-gen rewrite is enabled.
 			 */
 			$enabled = (bool) apply_filters( 'wppo_litespeed_enable_nextgen_rewrite', $enabled );
@@ -2278,7 +2278,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * but still opt-in via enableNextGenRewrite and gated on convertImg.
 		 * Filterable via wppo_litespeed_nextgen_rewrite.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True if nginx next-gen map should be included.
 		 */
 		public static function is_nextgen_rewrite_enabled_for_nginx(): bool {
@@ -2292,7 +2292,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			/**
 			 * Filter whether next-gen rewrite is enabled for Nginx.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param bool $enabled Whether next-gen rewrite is enabled.
 			 */
 			$enabled = (bool) apply_filters( 'wppo_litespeed_nextgen_rewrite', $enabled );
@@ -2309,7 +2309,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * function_exists('brotli_compress')). Filterable via
 		 * wppo_litespeed_brotli and wppo_litespeed_enable_brotli.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True if brotli generation should run.
 		 */
 		public static function is_brotli_enabled(): bool {
@@ -2335,7 +2335,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			/**
 			 * Filter whether Brotli generation is enabled.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param bool $enabled Whether brotli is enabled.
 			 */
 			$enabled = (bool) apply_filters( 'wppo_litespeed_brotli', $enabled );
@@ -2343,7 +2343,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			/**
 			 * Legacy alias — also check wppo_litespeed_enable_brotli.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param bool $enabled Whether brotli is enabled.
 			 */
 			$enabled = (bool) apply_filters( 'wppo_litespeed_enable_brotli', $enabled );
@@ -2360,7 +2360,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * (LSCWP ecosystem filter). When either returns false, WPPO CDN rewrite
 		 * is skipped to avoid double CDN mapping. True by default.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True if CDN rewriting may proceed.
 		 */
 		public static function can_apply_cdn(): bool {
@@ -2375,7 +2375,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			/**
 			 * Filter whether WPPO CDN rewriting is allowed.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param bool $can_cdn Whether CDN may be applied.
 			 */
 			$can_cdn = (bool) apply_filters( 'wppo_litespeed_can_cdn', true );
@@ -2403,14 +2403,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * X-LiteSpeed-Cache-Control: public,max-age=N. Uses header_remove()
 		 * when available; respects wppo_litespeed_strip_cache_control filter.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		private static function maybe_strip_generic_cache_control(): void {
 			/**
 			 * Filter whether to strip generic Cache-Control when LS header sent.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param bool $strip Whether to strip.
 			 */
 			$strip = (bool) apply_filters( 'wppo_litespeed_strip_cache_control', true );
@@ -2425,7 +2425,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Reset all per-request caches (for testing).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function reset_cache(): void {
@@ -2455,7 +2455,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Get a structured LiteSpeed info array for REST/JS consumption.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array{
 		 *     detected: bool,
 		 *     server_type: string,

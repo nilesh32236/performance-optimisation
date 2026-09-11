@@ -41,7 +41,7 @@ npm run build           # wp-scripts build
 
 `vendor/` is **ignored in git** (`/.gitignore`). Never stage or commit it. It is installed on demand:
 - **Locally**: `composer dev-setup` (dev deps) or `composer release` (production-only)
-- **In CI/release**: `release.yml` and `scripts/build-release.sh` run `composer install --no-dev --optimize-autoloader` before packaging, so the shipped build always contains production deps (`voku/html-min`, `matthiasmullie/minify`, `woocommerce/action-scheduler`)
+- **In CI/release**: `release.yml` and `scripts/build-release.sh` run `composer install --no-dev --optimize-autoloader` before packaging, so the shipped build always contains the 7 production packages (`voku/html-min`, `voku/simple_html_dom`, `matthiasmullie/minify`, `matthiasmullie/path-converter`, `symfony/css-selector`, `tedivm/jshrink`, `woocommerce/action-scheduler`)
 
 `composer.lock` **is tracked** to keep installs reproducible.
 

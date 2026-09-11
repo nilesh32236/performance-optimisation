@@ -133,7 +133,7 @@ Autonomous maintenance processed **11 open PRs** (8 merged, 2 duplicates closed,
 
 | Issue | Title | Type | Decision | Next action |
 |-------|-------|------|----------|-------------|
-|754|Delegate speculation rules to Core on WP 6.8+|enhancement wp-monitor|DEFERRED low risk, additive, needs WP 6.8+ manual viewport test, guarded by `function_exists('wp_get_speculation_rules')`|5 PRs split after 767, @since NEXT, docs/hooks.md|
+|754|Delegate speculation rules to Core on WP 6.8+|enhancement wp-monitor|DEFERRED low risk, additive, needs WP 6.8+ manual viewport test, guarded by `function_exists('wp_get_speculation_rules')`|5 PRs split after 767, @since 2.0.0, docs/hooks.md|
 |755|Add native fetchpriority to combined-CSS preload and deferred scripts|enhancement wp-monitor|DEFERRED low risk, needs WP 6.9 + browser hint verification|PR with `wp_style_add_data('fetchpriority','high')` + `wp_script_add_data('low')`|
 |756|Guard object-cache group flush with wp_cache_supports|enhancement wp-monitor|DEFERRED low risk, docs + guard `wp_cache_supports('flush_group')` to avoid polyfill full flush|PR for `Cache::flush_group`|
 |757|Align image lazy/auto-sizes pipeline with Core helpers|enhancement wp-monitor|DEFERRED medium risk (LCP), needs `wp_get_loading_optimization_attributes` + containment fix allow-list|PR with image optimisation pipeline|
@@ -239,7 +239,7 @@ All actionable automated feedback evaluated per 8-classification (FIX/ALREADY FI
 
 **Intentionally left open with reasons:**
 
-- **5 WP Monitor enhancements (754-758):** Need WP 6.9+ environment testing (Core APIs: `wp_get_speculation_rules`, `wp_cache_supports`, `wp_get_loading_optimization_attributes`, `wp_register_ability`, fetchpriority). Each will be a focused PR (<100 files, @since NEXT, `function_exists` guard, docs/hooks.md). Not blockers — plugin works via legacy fallback on <6.9.
+- **5 WP Monitor enhancements (754-758):** Need WP 6.9+ environment testing (Core APIs: `wp_get_speculation_rules`, `wp_cache_supports`, `wp_get_loading_optimization_attributes`, `wp_register_ability`, fetchpriority). Each will be a focused PR (<100 files, @since 2.0.0, `function_exists` guard, docs/hooks.md). Not blockers — plugin works via legacy fallback on <6.9.
 - **3 SPA/design (709,708,707):** 709 needs product vote on 3 static HTML previews; 708/707 need dep bump + competitive audit, not urgent.
 - **3 marketing/meta (646,369,368):** 646 is meta tracker; 369/368 need design assets/screenshots, manual.
 - **Fix/audit branch split (origin/fix/audit-2026-08-28):** 212-file branch preserved, contains CLI phases, hooks expansion, perf P2-P5, H-fixes, Option B redesign — to be split into 5 PRs after design chooser.

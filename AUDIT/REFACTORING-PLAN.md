@@ -29,7 +29,7 @@ _Do not modify production code during audit. This plan is audit-only; implementa
 - `Tested up to: 7.1` → `7.0` or `7.2` after smoke on 7.2; `composer.json:55` `php>=8.2` pin justified. Confidence MEDIUM.
 
 ## Guardrails per AGENTS.md
-- Order: `npm run lint:js` → `composer lint` → `npm test` → `npm run build` → `composer test`. Commit `build/`. Use `@since NEXT`, never bump `1.9.0` during audit batches. Keep opt-in `enabled=false` for wp.org edge features.
+- Order: `npm run lint:js` → `composer lint` → `npm test` → `npm run build` → `composer test`. Commit `build/`. Use `@since 2.0.0`, never bump `1.9.0` during audit batches. Keep opt-in `enabled=false` for wp.org edge features.
 
 ## Verification after each batch
 - `php -l` + `vendor/bin/phpcs --report=summary` (ignore free-tier `deepseek` err_… outage, infra `8.5 parallel-lint` download), `vendor/bin/phpunit` (401/946), `npm run lint:js` (0 errors), `npm test` (345), `npm run build` (webpack 5.109).

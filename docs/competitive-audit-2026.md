@@ -143,7 +143,7 @@ Core does **not** bundle `symfony/css-selector` (uses `WP_HTML_Tag_Processor`), 
 
 1. **P0 now:** Phase 0 LS detection fix `Server_Rules::get_server_type()` + `litespeed-roadmap.md:LS-001-005`
 2. **P1 next:** Sync matrices (flip RUM/CDN rows ✅) + TTFB disclaimer + `action-scheduler` bump + design pick (this doc + `designs/` chooser)
-3. **P2 next:** White-space N8 (LLMs.txt S) → N5 OD (M) → N1 AI Adaptive (L flagship) — each gated `function_exists()`/`@since NEXT`
+3. **P2 next:** White-space N8 (LLMs.txt S) → N5 OD (M) → N1 AI Adaptive (L flagship) — each gated `function_exists()`/`@since 2.0.0`
 
 ---
 

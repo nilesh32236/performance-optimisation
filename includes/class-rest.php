@@ -226,7 +226,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				// - Per-IP rate limit: 120/hour via Util::transient_key('wppo_rum_ratelimit_' . md5(IP)), multisite-safe.
 				// - Bounded storage: 14 days × 200 paths/day with oldest-path eviction; metrics clamped.
 				// __return_true is intentional and reviewed (A08 A-AUTH-01) — do not gate with manage_options.
-				// @since NEXT Added rate-limit documentation.
+				// @since 2.0.0 Added rate-limit documentation.
 				'rum_collect'               => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'collect_rum' ),
@@ -305,7 +305,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public function handle_autoload_remediate( \WP_REST_Request $request ): \WP_REST_Response {
 			$params = $request->get_params();
@@ -357,7 +357,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public function export_expired_transients( \WP_REST_Request $request ): \WP_REST_Response {
 			$params = $request->get_params();
@@ -386,7 +386,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
-		 * @since NEXT Added public-endpoint justification with rate-limit reference.
+		 * @since 2.0.0 Added public-endpoint justification with rate-limit reference.
 		 */
 		public function collect_rum( \WP_REST_Request $request ): \WP_REST_Response {
 			$params = $request->get_json_params();
@@ -416,7 +416,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * and error message structure. Enables API discoverability and integration
 		 * with WP REST API tooling.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return array The JSON schema definition.
 		 */
@@ -453,7 +453,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * Checks if the user has permission to access the route.
 		 *
 		 * @since 1.0.0
-		 * @since NEXT Added $request parameter for header canonicalization.
+		 * @since 2.0.0 Added $request parameter for header canonicalization.
 		 * @param \WP_REST_Request|null $request The REST request object.
 		 * @return bool True if the user has permission, false otherwise.
 		 */
@@ -557,7 +557,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				} else {
 					// Fallback when realpath() returns false (uncached page or missing dir).
 					// Validates via normalized string prefix so "Clear This Page" works before caching.
-					// @since NEXT Added wp_normalize_path fallback for uncached pages.
+					// @since 2.0.0 Added wp_normalize_path fallback for uncached pages.
 					$is_exact_match = ( $candidate_path === $normalized_cache_dir );
 					$is_under_dir   = ( 0 === strpos( $candidate_path, $normalized_cache_dir_trail ) );
 
@@ -768,7 +768,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * `ltrim()` + allowlist construction as the validator so the
 		 * enqueue/sync loops can never double-prefix an absolute value.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $img_path           Raw path from the request or DB queue.
 		 * @param string $normalized_abspath Trailingslashed `ABSPATH`.
@@ -1502,8 +1502,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *                        filling keys the request does not explicitly carry. Defaults to array()
 		 *                        (historic behaviour: hardcoded host/port/mode fallbacks).
 		 * @since 1.4.0
-		 * @since NEXT Request-supplied passwords are ignored when WPPO_REDIS_PASSWORD is defined, unless the `wppo_redis_allow_request_password` filter returns true.
-		 * @since NEXT Added the $defaults parameter for circuit-breaker recovery.
+		 * @since 2.0.0 Request-supplied passwords are ignored when WPPO_REDIS_PASSWORD is defined, unless the `wppo_redis_allow_request_password` filter returns true.
+		 * @since 2.0.0 Added the $defaults parameter for circuit-breaker recovery.
 		 * @return array Sanitized Redis config.
 		 */
 		private function build_redis_config( $params, $defaults = array() ) {
@@ -1549,7 +1549,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param string $key Config key (one of the build_redis_config() allowlist).
 		 * @param mixed  $value Raw value.
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return mixed Sanitized value.
 		 */
 		private function sanitize_redis_config_value( $key, $value ) {
@@ -1605,7 +1605,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * `code` + `notice` ({ type, message }) body so useNotice() can render
 		 * the failure with the right severity without changing the envelope.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param \WP_Error $error  Failing result.
 		 * @param string    $notice Notice severity: 'error', 'warning', 'info'.
 		 * @return array Shape { code: string, notice: array{ type: string, message: string } }.
@@ -1885,7 +1885,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * trend option data so the React Dashboard can render trend charts.
 		 *
 		 * @param \WP_REST_Request $request The request object.
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function get_web_vitals_trends( \WP_REST_Request $request ): \WP_REST_Response {
@@ -1980,7 +1980,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * DONOTCACHEPAGE honored. Never writes options, transients, or files.
 		 *
 		 * @param \WP_REST_Request $_request The request object (unused).
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function get_woo_cache_self_test( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
@@ -2058,7 +2058,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public function purge_used_css_cache( \WP_REST_Request $request ): \WP_REST_Response {
 			$params = $request->get_params();
@@ -2134,7 +2134,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * Regenerate critical CSS for all templates.
 		 *
 		 * @param \WP_REST_Request $_request The request object.
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function regenerate_ccss( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
@@ -2156,7 +2156,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * Get critical CSS status per template.
 		 *
 		 * @param \WP_REST_Request $_request The request object.
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function get_ccss_status( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
@@ -2170,7 +2170,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $_request The request object.
 		 * @return \WP_REST_Response The response object.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public function get_ai_model( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			$model = class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ? AI_Adaptive::get_model() : array();
@@ -2182,7 +2182,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $_request The request object.
 		 * @return \WP_REST_Response The response object.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public function ai_learn( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			$model = class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ? AI_Adaptive::learn() : array();
@@ -2194,7 +2194,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $_request The request object.
 		 * @return \WP_REST_Response The response object.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public function get_ai_suggestions( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			$suggestions = class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ? Suggestion_Engine::from_ai_adaptive() : array();
@@ -2204,7 +2204,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Dismisses the welcome panel for the current user.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function dismiss_welcome(): \WP_REST_Response {

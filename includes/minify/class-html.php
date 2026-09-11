@@ -41,7 +41,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 * disabled, so it is deferred until HTML minification actually runs.
 		 *
 		 * @since 1.0.0
-		 * @since NEXT Lazy-instantiated via get_html_min().
+		 * @since 2.0.0 Lazy-instantiated via get_html_min().
 		 * @var HtmlMin|null $html_min
 		 */
 		private ?HtmlMin $html_min = null;
@@ -52,7 +52,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 * Computed during initialize_minification_settings() and consumed by
 		 * get_html_min() when the minifier is first built.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		private string $html_min_base_url = '';
@@ -64,7 +64,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 * multisite-safe by construction: each request/instance mints its own
 		 * namespace and only tokens carrying it can be restored.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		private string $preserve_namespace = '';
@@ -96,7 +96,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		/**
 		 * Handles/URLs to load via requestIdleCallback.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var array
 		 */
 		private array $delay_js_idle_list = array();
@@ -104,7 +104,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		/**
 		 * Handles/URLs to load when in viewport.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var array
 		 */
 		private array $delay_js_viewport_list = array();
@@ -112,7 +112,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		/**
 		 * Default delay strategy.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		private string $delay_js_default_strategy = 'interaction';
@@ -120,7 +120,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		/**
 		 * Priority map handle=>level.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var array
 		 */
 		private array $delay_js_priority = array();
@@ -279,7 +279,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		/**
 		 * Get (and lazily configure) the HtmlMin instance.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return HtmlMin
 		 */
 		private function get_html_min(): HtmlMin {
@@ -363,7 +363,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 * and finally to a `uniqid()`/`wp_rand()` token. Never fatals: any
 		 * failure degrades to a static fallback namespace (fail-open).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string Non-empty namespace string.
 		 */
 		private function get_preserve_namespace(): string {
@@ -384,7 +384,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 * index within bounds of `$scripts`. Any anomaly returns null so the
 		 * caller emits the node unmodified (fail-open).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $token   The matched placeholder tag.
 		 * @param array  $scripts The preserved scripts allowlist.
 		 * @return string|null Restored script HTML, or null on anomaly.
@@ -435,7 +435,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 *
 		 * @param string $attributes The script attributes string.
 		 * @return string The extracted and lowercased script type, or an empty string.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private function get_script_type( string $attributes ): string {
 			if ( preg_match( '/\btype\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i', $attributes, $type_matches ) ) {
@@ -561,7 +561,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 * `<style…>…</style>` tag instead of fataling or emitting partial output.
 		 * No new WP/PHP APIs; safe on WP 6.2+ / PHP 8.2+.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $attrs Style tag attributes string (including leading space).
 		 * @param string $css   Raw CSS block content.
 		 * @return string Minified style tag, or the pristine tag on failure.
@@ -755,7 +755,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		/**
 		 * Determine delay strategy for an inline script.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $attributes Script tag attributes string.
 		 * @param string $content    Inline script content.
@@ -779,7 +779,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		/**
 		 * Determine delay priority for an inline script.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $attributes Script tag attributes string.
 		 * @param string $content    Inline script content.
@@ -804,7 +804,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 * first click, so they stay un-delayed. Fail-open: any error
 		 * returns false (delay proceeds) so detection never fatals.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $attributes Script tag attributes string.
 		 * @param string $content    Inline script content.
@@ -834,7 +834,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 * rewriting too. Delegates to Main when available; fails open to delay
 		 * (false) when Main is not loaded so minification never fatals.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return bool True when delay must be skipped for this request.
 		 */

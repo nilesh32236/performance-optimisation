@@ -193,7 +193,7 @@ Current version and scripts are defined in the repo; for example:
 ```json
 {
   "name": "performance-optimisation",
-  "version": "1.9.0",
+  "version": "2.0.0",
   "scripts": {
     "build": "wp-scripts build src/index.js src/lazyload.js src/main.js",
     "start": "wp-scripts start"

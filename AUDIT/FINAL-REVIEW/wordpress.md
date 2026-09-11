@@ -107,7 +107,7 @@ public static function transient_key(string $key): string {
 
 **Impl — `includes/class-cron.php:56-409`:**
 
-* Constructor hooks: `init→schedule_cron_jobs` (reschedule check), `wppo_page_cron_hook` + `wppo_page_cron_batch→wppo_page_cron_callback`, `wppo_img_conversion→img_convert_cron`, `cron_schedules→add_custom_cron_interval`, `wppo_generate_static_page/url→process_page/url`, `wppo_database_cleanup_cron`, `wppo_web_vitals_rescan`, `wppo_llms_txt_daily`, `wppo_used_css_cron`, `wppo_ccss_regeneration` — all via `add_action`/`add_filter` at `__construct`. `74` adds `wppo_rum_flush→RUM::flush_queue` (`@since NEXT`).
+* Constructor hooks: `init→schedule_cron_jobs` (reschedule check), `wppo_page_cron_hook` + `wppo_page_cron_batch→wppo_page_cron_callback`, `wppo_img_conversion→img_convert_cron`, `cron_schedules→add_custom_cron_interval`, `wppo_generate_static_page/url→process_page/url`, `wppo_database_cleanup_cron`, `wppo_web_vitals_rescan`, `wppo_llms_txt_daily`, `wppo_used_css_cron`, `wppo_ccss_regeneration` — all via `add_action`/`add_filter` at `__construct`. `74` adds `wppo_rum_flush→RUM::flush_queue` (`@since 2.0.0`).
 * Custom schedule `includes/class-cron.php:100-104`:
   ```php
   $schedules['every_5_hours']=['interval'=>5*60*60,'display'=>__('Every 5 Hours',...)];

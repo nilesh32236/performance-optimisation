@@ -126,7 +126,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) ) {
 				/**
 				 * Filter whether nginx next-gen map is enabled (fallback).
 				 *
-				 * @since NEXT
+				 * @since 2.0.0
 				 * @param bool $use_nextgen Whether next-gen map is enabled.
 				 */
 				$use_nextgen = (bool) apply_filters( 'wppo_litespeed_nextgen_rewrite', $use_nextgen );
@@ -156,7 +156,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) ) {
 				/**
 				 * Filter nginx next-gen rules.
 				 *
-				 * @since NEXT
+				 * @since 2.0.0
 				 * @param bool $use_nextgen Whether next-gen map was added.
 				 */
 				$rules = (array) apply_filters( 'wppo_nginx_nextgen_rules', $rules );
@@ -195,7 +195,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) ) {
 			/**
 			 * Filter nginx rules.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string $rules_str Nginx rules.
 			 */
 			return apply_filters( 'wppo_nginx_rules', $rules_str );

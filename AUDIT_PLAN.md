@@ -53,9 +53,9 @@ assertions**, `composer lint` **clean**, `npm test` **303 / 31 suites**, `npm ru
   `test_empty_rule_is_skipped`, `test_whitespace_rule_is_skipped`.
 - **Verification:** `phpunit` OK (174 tests), `phpcs` clean.
 
-### AUDIT-0005 `[COMPLETED]` — Unresolved `@since NEXT` doc tags
+### AUDIT-0005 `[COMPLETED]` — Unresolved `@since 2.0.0` doc tags
 - **Files:** `includes/class-metabox.php:389,402,419`.
-- **Fix:** Replaced `@since NEXT` with `@since 2.16.0`, matching `is_url_excluded()` in the same
+- **Fix:** Replaced `@since 2.0.0` with `@since 2.16.0`, matching `is_url_excluded()` in the same
   unreleased feature train.
 - **Verification:** `phpcs` clean.
 

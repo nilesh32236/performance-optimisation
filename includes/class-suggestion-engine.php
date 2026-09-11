@@ -61,7 +61,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ) {
 		 * enabled (guard: never auto-applies — caller must render Apply UX).
 		 * Returns an empty list when the AI feature is disabled or unavailable.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array[] Array of suggestion objects.
 		 */
 		public static function from_ai_adaptive(): array {

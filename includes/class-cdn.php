@@ -3,7 +3,7 @@
  * CDN rewrite class (LS-410 parity with LSCWP cdn.cls.php).
  *
  * @package PerformanceOptimise\Inc
- * @since NEXT
+ * @since 2.0.0
  */
 
 namespace PerformanceOptimise\Inc;
@@ -19,7 +19,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 	 * Owns CDN mapping resolution, LITESPEED_BYPASS_CDN guard, wildcard2regex,
 	 * buffer rewrite and typed hooks (wp_get_attachment_url, srcset, etc.).
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	final class CDN {
 
@@ -35,7 +35,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		 *
 		 * Keyed by the trimmed pattern string; reset via reset_cache().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var array<string, string>
 		 */
 		private static array $regex_cache = array();
@@ -48,7 +48,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		 * Bypassed entirely when a mapping filter is present so dynamic /
 		 * conditional filters are never frozen for the rest of the request.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var array<int|string, array>
 		 */
 		private static array $mappings_cache = array();
@@ -58,7 +58,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		 *
 		 * Mirrors LSCWP cdn.cls.php:106.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool
 		 */
 		public static function should_bypass(): bool {
@@ -82,7 +82,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		 *
 		 * `*` => `.*`, escape regex meta elsewhere.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $pattern Wildcard pattern.
 		 * @return string Regex fragment.
 		 */
@@ -118,7 +118,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		 *
 		 * Parses ori/ori_dir/cdn_attr/cdns, legacy cdnURL fallback, auto filetypes, wildcard2regex.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array $options Optional plugin options override. When empty, loads from DB.
 		 * @return array
 		 */
@@ -168,7 +168,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 						/**
 						 * Filter auto filetypes for CDN mapping with empty include_filetypes.
 						 *
-						 * @since NEXT
+						 * @since 2.0.0
 						 * @param string $default_types Default filetypes.
 						 * @param array  $m Original mapping entry.
 						 */
@@ -187,14 +187,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 				/**
 				 * Filter CDN mapping hosts alias (round-robin hosts).
 				 *
-				 * @since NEXT
+				 * @since 2.0.0
 				 * @param array $normalized Mappings.
 				 */
 				$normalized = (array) apply_filters( 'wppo_cdn_mapping_hosts', $normalized );
 				/**
 				 * Filter CDN mappings before use.
 				 *
-				 * @since NEXT
+				 * @since 2.0.0
 				 * @param array $normalized CDN mappings.
 				 */
 				$normalized = (array) apply_filters( 'wppo_cdn_mapping', $normalized );
@@ -245,7 +245,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		 * `_allowed_filetypes` keys, with a raw-mapping fallback in
 		 * find_cdn_match() for direct callers.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param mixed $mapping Raw mapping entry.
 		 * @return array Mapping with precomputed keys.
 		 */
@@ -288,7 +288,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		 * compatibility with existing callers and the
 		 * `wppo_cdn_url_for_asset` filter contract.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $url      Asset URL.
 		 * @param array  $mappings Normalized mappings from get_mappings().
 		 * @return string|null CDN URL or null when no mapping matches.
@@ -305,7 +305,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		 * honour per-mapping settings such as `cdn_attr` (audit #888
 		 * finding 21) instead of a global union of all mappings' restrictions.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $url      Asset URL.
 		 * @param array  $mappings Normalized mappings from get_mappings().
 		 * @return array{cdn:string,mapping:array}|null Match info or null when no mapping matches.
@@ -400,7 +400,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 				/**
 				 * Filter CDN URL for asset.
 				 *
-				 * @since NEXT
+				 * @since 2.0.0
 				 * @param string $cdn CDN URL.
 				 * @param string $url Asset URL.
 				 * @param array  $m Mapping entry.
@@ -425,7 +425,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		 * rewriting in <style> blocks is unaffected: it has no attribute
 		 * context and keeps its unrestricted behaviour.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array  $mapping Mapping entry.
 		 * @param string $attr    Attribute name (lowercase, e.g. 'src', 'srcset').
 		 * @return bool
@@ -445,7 +445,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		 * Added optional $mappings pass-down so bulk callers
 		 * (e.g. rewrite_srcset()) can resolve mappings once.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $url      URL.
 		 * @param mixed  $mappings Optional pre-resolved mappings from get_mappings(). When
 		 *                         this method is invoked as a `*_loader_src` / `wp_get_attachment_url`
@@ -498,7 +498,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		 * Added optional $mappings pass-down; resolves once per
 		 * call instead of once per srcset candidate.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array $sources  Srcset sources.
 		 * @param mixed $mappings Optional pre-resolved mappings from get_mappings().
 		 *                        Non-array values (e.g. a filter's handle or
@@ -539,7 +539,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		/**
 		 * Rewrite buffer (tags + inline url()).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $buffer HTML buffer.
 		 * @return string
 		 */
@@ -618,7 +618,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 			/**
 			 * Filter CDN buffer after rewrite.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string $buffer Rewritten buffer.
 			 */
 			$buffer = (string) apply_filters( 'wppo_cdn_buffer', $buffer );
@@ -640,7 +640,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		 * Returns null to trigger the Tag Processor fallback when the parser
 		 * cannot be created or the token stream ended with a parse error.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string   $buffer            HTML buffer.
 		 * @param array    $mappings          CDN mappings.
@@ -689,7 +689,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		 * the site URL, honouring each URL's own mapping `cdn_attr` allowance
 		 * (audit #888 finding 21).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param \WP_HTML_Tag_Processor $tags              Processor positioned on the current tag.
 		 * @param array                  $mappings          CDN mappings.
@@ -782,7 +782,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		/**
 		 * Reset idempotency guard (for testing).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function reset_cache(): void {

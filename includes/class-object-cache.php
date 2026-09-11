@@ -45,7 +45,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * option mirrors that state for fully-booted WordPress (admin notices,
 		 * cron probe scheduling, SPA status).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		public const CIRCUIT_OPTION = 'wppo_object_cache_circuit';
@@ -54,7 +54,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * Transient key (blog-prefixed via Util::transient_key()) mirroring
 		 * the drop-in failure counter for admin UI and cron use.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		public const FAIL_TRANSIENT = 'wppo_redis_failures';
@@ -63,7 +63,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * Admin-notice transient key (blog-prefixed via Util::transient_key())
 		 * armed when the circuit trips and cleared on dismiss/recovery.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		public const CIRCUIT_NOTICE_TRANSIENT = 'wppo_object_cache_circuit_notice';
@@ -73,7 +73,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * dismissed for. A later trip carries a newer timestamp, which
 		 * automatically re-arms the notice.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		public const CIRCUIT_DISMISSED_OPTION = 'wppo_object_cache_circuit_dismissed';
@@ -81,7 +81,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Parked drop-in suffix used when the breaker auto-disables.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		public const PARKED_SUFFIX = '.wppo-disabled';
@@ -89,7 +89,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * File bridging the drop-in trip to fully-booted WordPress.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		public const DISABLED_STATE_FILE = 'wppo-redis-disabled.json';
@@ -97,7 +97,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Drop-in failure-counter file (JSON { count, first, last }).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		public const FAILURES_FILE = 'wppo-redis-failures.json';
@@ -109,7 +109,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * with REST 10-key allowlist (mode,host,port,password,database,nodes,master_name,use_tls,persistent,compression)
 		 * to prevent silent drops for Sentinel/Cluster/TLS options.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string[]
 		 */
 		public const ALLOWED_KEYS = array( 'mode', 'host', 'port', 'password', 'database', 'timeout', 'prefix', 'nodes', 'master_name', 'use_tls', 'persistent', 'compression' );
@@ -139,7 +139,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * Constructor function.
 		 *
 		 * @since 1.4.0
-		 * @since NEXT Filtered drop-in paths are validated for wp-content containment.
+		 * @since 2.0.0 Filtered drop-in paths are validated for wp-content containment.
 		 */
 		public function __construct() {
 			$default_dropin = wp_normalize_path( WP_CONTENT_DIR . '/object-cache.php' );
@@ -174,7 +174,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * instead of assuming the canonical WP_CONTENT_DIR location, so a
 		 * relocated drop-in is still reported correctly.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string
 		 */
 		public function get_dropin_path(): string {
@@ -314,7 +314,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * object-cache.php.wppo-disabled sibling, and the wppo-redis-failures.json
 		 * counter for the failure count.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array Shape { open: bool, tripped_at: int, reason: string, error_code: string, failures: int }.
 		 */
 		public function get_circuit_state(): array {
@@ -410,7 +410,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * and the FAIL_TRANSIENT failure mirror (both blog-prefixed via
 		 * Util::transient_key() for multisite isolation), and logs the event.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $reason Human-readable trip reason.
 		 * @return bool|\WP_Error True on success, WP_Error for foreign drop-ins or filesystem failures.
 		 */
@@ -510,7 +510,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * On failure the circuit stays open (the WP_Error is returned so cron
 		 * and REST callers can distinguish "still down" from success).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool|\WP_Error True when the circuit is closed (or was never open), WP_Error while Redis is still unreachable.
 		 */
 		public function probe_recovery() {
@@ -548,7 +548,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * Called after successful enable()/disable()/probe recovery so a
 		 * healed setup never shows a stale "auto-disabled" notice.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public function clear_circuit_state(): void {
@@ -581,7 +581,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * so a legacy-only match additionally requires the WPPO-specific
 		 * 'wppo-redis-config' signal present in every plugin drop-in.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param mixed $content Raw file contents.
 		 * @return bool True when the content carries this plugin's marker.
 		 */
@@ -600,7 +600,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Whether the installed drop-in carries this plugin's marker.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True when the drop-in is ours (or absent), false for foreign files.
 		 */
 		private function is_own_dropin(): bool {
@@ -634,7 +634,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Read a small JSON state file from wp-content.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $path Absolute file path.
 		 * @return array|null Decoded array, or null when missing/unreadable/invalid.
 		 */
@@ -666,7 +666,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Absolute path of the parked drop-in sibling.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string
 		 */
 		private function get_parked_path(): string {
@@ -676,7 +676,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Absolute path of the disabled-state bridge file.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string
 		 */
 		private function get_disabled_state_path(): string {
@@ -686,7 +686,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Absolute path of the drop-in failure-counter file.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string
 		 */
 		private function get_failures_path(): string {
@@ -711,7 +711,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * Merges Dashboard settings with on-disk config and allows filtering
 		 * via `wppo_object_cache_config` before connection.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array The Redis configuration.
 		 */
 		public function get_redis_config(): array {
@@ -728,7 +728,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			/**
 			 * Filter the Redis object cache configuration.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param array $config The Redis configuration.
 			 */
 			$config = (array) apply_filters( 'wppo_object_cache_config', $config );
@@ -751,7 +751,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			/**
 			 * Filter the Redis object cache configuration.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param array $config The Redis configuration.
 			 */
 			$config = (array) apply_filters( 'wppo_object_cache_config', $config );
@@ -933,7 +933,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * Transient key (blog-prefixed via Util::transient_key()) carrying the
 		 * latest Redis failure for admin-notice / REST surfacing.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		public const LAST_FAILURE_TRANSIENT = 'wppo_redis_last_failure';
@@ -946,7 +946,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * error_log line is kept as a secondary sink under WP_DEBUG. Never
 		 * throws — logging must not break the fail-open path.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $code    Machine-readable failure code.
 		 * @param string $message Human-readable failure description.
 		 * @return void
@@ -1008,7 +1008,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * never auto-selected because doing so would make existing
 		 * SERIALIZER_PHP entries unreadable on upgrade.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array Shape { active: string, igbinary: bool, msgpack: bool, php: bool }.
 		 */
 		public function get_serializer_support(): array {
@@ -1055,7 +1055,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * code/message instead of synthesizing a generic one, without
 		 * changing the bool flush() contract relied on by WP-CLI/abilities.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var \WP_Error|null
 		 */
 		private $last_flush_error = null;
@@ -1066,7 +1066,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * Fail-open: returns null when the transient is missing, malformed,
 		 * or unreadable — callers treat null as "no known failure".
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array|null Shape { code: string, message: string, time: int } or null.
 		 */
 		public function get_last_failure_payload() {
@@ -1089,7 +1089,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Latest flush failure, if any.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return \WP_Error|null The WP_Error set by the last failed flush(), or null.
 		 */
 		public function get_last_flush_error() {
@@ -1110,7 +1110,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * can surface the real code/message.
 		 *
 		 * @since 1.4.0
-		 * @since NEXT Removed plugin-side re-verification (drop-in verifies with retry); failures exposed via get_last_flush_error().
+		 * @since 2.0.0 Removed plugin-side re-verification (drop-in verifies with retry); failures exposed via get_last_flush_error().
 		 * @return bool True when flushed, false otherwise.
 		 */
 		public function flush() {
@@ -1153,7 +1153,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Read Redis used_memory in bytes via INFO (best-effort).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return int|null Bytes used, or null when unreachable/unavailable.
 		 */
 		private function read_redis_memory_bytes() {

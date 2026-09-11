@@ -44,5 +44,5 @@ Run `find` vs assignment:
 
 ## 4. Conclusion
 
-**Audit complete.** `AUDIT/` contains traceable evidence for every line. No generic "looks good" — every severity is `file:line` evidenced, confidence-rated, with keep/abstract/remove verdict for duplicates and reference-traced verdict for dead code. Next step is explicit fix batches per `REFACTORING-PLAN.md` with verification gate `npm run lint:js` → `composer lint` → `npm test` → `npm run build` → `composer test`, committing `build/` and using `@since NEXT` never bumping `1.9.0`.
+**Audit complete.** `AUDIT/` contains traceable evidence for every line. No generic "looks good" — every severity is `file:line` evidenced, confidence-rated, with keep/abstract/remove verdict for duplicates and reference-traced verdict for dead code. Next step is explicit fix batches per `REFACTORING-PLAN.md` with verification gate `npm run lint:js` → `composer lint` → `npm test` → `npm run build` → `composer test`, committing `build/` and using `@since 2.0.0` never bumping `1.9.0`.
 

@@ -37,7 +37,7 @@ S = <1 day · M = 1-3 days · L = ~1 week · Effort per task is solo-dev, includ
 
 | ID | Task | Effort | Depends | Acceptance |
 |---|---|---|---|---|
-| ✅ **LS-101** | New class `includes/class-litespeed-integration.php` — `is_litespeed()`, `is_lscache_active()` (active_plugins+sitewide+`LSCWP_V`+`class_exists`), `get_mode()`, `effective_mode()`, `is_wppo_cache_owner()`, `should_disable_wppo_optimizer()` | M | LS-001 | `Main::includes()` loads it; cheap per-request caching; `@since NEXT`; 100% unit coverage |
+| ✅ **LS-101** | New class `includes/class-litespeed-integration.php` — `is_litespeed()`, `is_lscache_active()` (active_plugins+sitewide+`LSCWP_V`+`class_exists`), `get_mode()`, `effective_mode()`, `is_wppo_cache_owner()`, `should_disable_wppo_optimizer()` | M | LS-001 | `Main::includes()` loads it; cheap per-request caching; `@since 2.0.0`; 100% unit coverage |
 | ✅ **LS-102** | Add `litespeed_integration` defaults to `Main::get_default_settings()` — `mode=auto`, `enableNextGenRewrite=false`, `enableBrotli=false`, `purgeSync=true`; sanitize via `Util::sanitize_settings_recursively()` + REST allowlist | S | LS-101 | `wppo_settings` round-trip via REST `update_settings tab=litespeed_integration`; invalid `mode` rejected |
 | ✅ **LS-103** | Optimizer guards — early return in `Main::minify_css/combine_css/minify_js/add_defer_strategy/add_defer_attribute/delayJS`, `Cache::minify_buffer/maybe_apply_cdn` when `should_disable_wppo_optimizer()` | M | LS-101 | With LSCWP active + mode=litespeed, view-source shows 0 `wppo-src` / `wppo-combine-css` tags; with mode=wppo, WPPO tags present |
 | ✅ **LS-104** | `litespeed_can_optm` / `litespeed_can_cdn` cooperation — respect `apply_filters('litespeed_can_optm', true)` negative | S | LS-103 | Stub filter `__return_false` → our optimizer skipped |
@@ -87,10 +87,10 @@ S = <1 day · M = 1-3 days · L = ~1 week · Effort per task is solo-dev, includ
 
 | ID | Task | Effort | Depends | Acceptance |
 |---|---|---|---|---|
-| **LS-901** | Update `docs/hooks.md` — `wppo_litespeed_mode`, `wppo_litespeed_should_disable_optimizer`, `wppo_litespeed_purge_sync`, `wppo_litespeed_nextgen_rewrite` + `litespeed_purge_*` bridge note | S | LS-101 | Hooks table has new entries, `@since NEXT` |
+| **LS-901** | Update `docs/hooks.md` — `wppo_litespeed_mode`, `wppo_litespeed_should_disable_optimizer`, `wppo_litespeed_purge_sync`, `wppo_litespeed_nextgen_rewrite` + `litespeed_purge_*` bridge note | S | LS-101 | Hooks table has new entries, `@since 2.0.0` |
 | **LS-902** | Update `COMPETITIVE_GAP_ANALYSIS.md` Tier 4 — link to LS docs, move "server-level next-gen / Brotli / ESI / QUIC" from Tier 2/3 → LS-specific tier | S | Phase 0 | Matrix row "Server-level cache (LS-native)" moved to LS tier with `wppo: via Litespeed_Integration` |
 | **LS-903** | Update `AGENTS.md` — add `docs/litespeed-research.md` + `docs/litespeed-integration-plan.md` + `docs/litespeed-roadmap.md` to file list, mention `is_litespeed` detection pattern | S | — | AGENTS.md reflects LS files, no stale file count |
-| **LS-904** | Release chore — `npm run build`, commit `build/`, `npm run lint:js` → `composer lint` → `npm test` → `npm run build` all green per AGENTS.md, tag `@since NEXT` via release script | S | All LS | CI green, build output committed |
+| **LS-904** | Release chore — `npm run build`, commit `build/`, `npm run lint:js` → `composer lint` → `npm test` → `npm run build` all green per AGENTS.md, tag `@since 2.0.0` via release script | S | All LS | CI green, build output committed |
 
 ---
 
@@ -107,7 +107,7 @@ S = <1 day · M = 1-3 days · L = ~1 week · Effort per task is solo-dev, includ
 
 ## 4. Definition of Done (per PR)
 
-- [ ] New symbols `@since NEXT`, new settings default-safe (`auto`/`false`), gated by `is_litespeed()` so non-LS host unchanged.
+- [ ] New symbols `@since 2.0.0`, new settings default-safe (`auto`/`false`), gated by `is_litespeed()` so non-LS host unchanged.
 - [ ] `Util::transient_key()` for any new transient; multisite tested via `is_multisite()` shard.
 - [ ] New filters `wppo_*`, documented in `docs/hooks.md`.
 - [ ] PHP unit + JS unit tests added; `composer test` + `npm test` + `composer lint` + `npm run lint:js` + `npm run build` green; `build/` committed.

@@ -36,7 +36,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		/**
 		 * Option key used for the audit cache salt.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		private const AUDIT_SALT_KEY = 'wppo_audit_salt';
@@ -47,7 +47,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * Redirects are followed manually so every hop can be re-validated
 		 * against the same-host policy before the next request is issued.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		private const MAX_REDIRECT_HOPS = 2;
@@ -963,7 +963,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * finding 18).
 		 *
 		 * @since  1.5.0
-		 * @since NEXT Empty-string alt also fails the check.
+		 * @since 2.0.0 Empty-string alt also fails the check.
 		 * @param  array $images Array of image data from parse_resources().
 		 * @return bool True if all images have alt text, false otherwise.
 		 */
@@ -987,7 +987,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * Should be called when performance audit settings change or when
 		 * a fresh scan should be forced next request.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function invalidate_audit_cache(): void {
@@ -1031,8 +1031,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * merge is order-independent for our own key (re-asserted last).
 		 *
 		 * @since  1.5.0
-		 * @since NEXT Added re-read-before-write merge with bounded retry.
-		 * @since NEXT Skip the verify re-read on the first attempt when the
+		 * @since 2.0.0 Added re-read-before-write merge with bounded retry.
+		 * @since 2.0.0 Skip the verify re-read on the first attempt when the
 		 *             merge observed no concurrent changes (2 reads instead of 3
 		 *             on the common no-contention path).
 		 * @param  string $key The transient key to register.
@@ -1099,7 +1099,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		/**
 		 * Read and normalize the transient index option.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array<string, int>
 		 */
 		private static function read_transient_index(): array {
@@ -1110,7 +1110,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		/**
 		 * Prune expired entries and cap the transient index size.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array<string, int> $index Raw index map.
 		 * @param int                $now  Current timestamp.
 		 * @return array<string, int> Pruned, capped index.

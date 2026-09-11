@@ -23,7 +23,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
  * In-memory $wpdb recorder so traversal-probe Log::add() can run.
  *
  * @package PerformanceOptimise\Tests
- * @since NEXT
+ * @since 2.0.0
  */
 class WPPO_Containment_Wpdb_Recorder {
 
@@ -65,7 +65,7 @@ class WPPO_Containment_Wpdb_Recorder {
  * method_exists().
  *
  * @package PerformanceOptimise\Tests
- * @since NEXT
+ * @since 2.0.0
  */
 class WPPO_Containment_Fake_Fs {
 
@@ -139,7 +139,7 @@ class WPPO_Containment_Fake_Fs {
  * Central containment helper tests.
  *
  * @package PerformanceOptimise\Tests
- * @since NEXT
+ * @since 2.0.0
  */
 class CachePathContainmentTest extends \PHPUnit\Framework\TestCase {
 	use WPPO_Test_Bootstrap;

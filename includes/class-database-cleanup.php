@@ -36,7 +36,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * Keys correspond to cleanup types; values are unprefixed table identifiers
 		 * passed to `$wpdb->{table}` for dynamic table name resolution.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var array<string, array<string>>
 		 */
 		public const TABLE_MAP = array(
@@ -54,7 +54,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Maps cleanup method names to their cleanup type keys for TABLE_MAP lookup.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var array<string, string>
 		 */
 		private const METHOD_TO_TYPE = array(
@@ -75,7 +75,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * Used by Rest, Abilities and clean_all to avoid 4-way drift.
 		 * Mirrors TABLE_MAP keys.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var array<string, string>
 		 */
 		public const CLEANUP_METHOD_MAP = array(
@@ -93,7 +93,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Get the cleanup method map (type => method).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array<string, string>
 		 */
 		public static function get_cleanup_method_map(): array {
@@ -103,7 +103,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Get valid cleanup types including 'all'.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string[]
 		 */
 		public static function get_valid_cleanup_types(): array {
@@ -113,7 +113,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Option key used for the DB cleanup counts cache salt.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		private const SALT_KEY = 'wppo_db_cleanup_salt';
@@ -125,7 +125,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * that was copy-pasted across 5 `clean_*` methods. Keeps error handling,
 		 * placeholder generation and `while ( count >= batch )` semantics identical.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $select_sql  SQL returning a single ID column (must include LIMIT).
 		 * @param string $meta_table  Fully-qualified meta table name (e.g. $wpdb->postmeta).
@@ -322,7 +322,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Flush a batch of revision IDs to the database (postmeta + posts) in 50-row chunks.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param int[] $ids     Revision IDs to delete.
 		 * @param int   $deleted Running deleted counter (passed by reference, incremented).
 		 * @return bool True on success, false on SQL error.
@@ -409,7 +409,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * NULL `comment_type` stays eligible for cleanup.
 		 *
 		 * @since 1.1.0
-		 * @since NEXT Exclude WP 6.9+ Notes (`comment_type='note'`).
+		 * @since 2.0.0 Exclude WP 6.9+ Notes (`comment_type='note'`).
 		 * @return int|false Number of rows deleted, or false on error.
 		 */
 		public static function clean_spam_comments() {
@@ -434,7 +434,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * NULL `comment_type` stays eligible for cleanup.
 		 *
 		 * @since 1.1.0
-		 * @since NEXT Exclude WP 6.9+ Notes (`comment_type='note'`).
+		 * @since 2.0.0 Exclude WP 6.9+ Notes (`comment_type='note'`).
 		 * @return int|false Number of rows deleted, or false on error.
 		 */
 		public static function clean_trashed_comments() {
@@ -604,7 +604,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * referenced by any post, page, or custom post type. Unattached media
 		 * accumulates quickly on busy sites and bloats the database.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return int|false Number of attachments deleted, or false on error.
 		 */
 		public static function clean_unattached_media() {
@@ -664,7 +664,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * Uses the core API when available (WP 6.6+ introduced the `auto-on`
 		 * value) and falls back to the full historical list otherwise.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string[]
 		 */
 		public static function get_autoloadable_values(): array {
@@ -680,7 +680,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * Mirrors the Performance Lab autoloaded-options health check so users can
 		 * identify option bloat that inflates every page load.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param int $limit Maximum number of options to return.
 		 * @return array<int, array{option_name:string,size:int,autoload:string}> Sorted by size.
@@ -726,7 +726,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * Maps option_name => prior autoload value so every flip is revertible.
 		 * Site-specific via get_option/update_option (multisite-safe).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		public const REMEDIATED_OPTION = 'wppo_autoload_remediated';
@@ -734,7 +734,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Default minimum option size (bytes) for autoload remediation candidacy.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		public const AUTOLOAD_SIZE_THRESHOLD = 1024;
@@ -742,7 +742,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Maximum number of options a single remediation pass will touch.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		public const AUTOLOAD_REMEDIATION_LIMIT = 100;
@@ -753,7 +753,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * Shared by settings validation, the clamp helper, and the REST layer
 		 * so direct PHP calls cannot bypass the bounds.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		public const AUTOLOAD_THRESHOLD_MIN = 100;
@@ -761,7 +761,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Maximum remediation threshold in bytes (10 MB).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		public const AUTOLOAD_THRESHOLD_MAX = 10485760;
@@ -769,7 +769,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Maximum number of candidates a single remediation pass will consider.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		public const AUTOLOAD_LIMIT_MAX = 500;
@@ -777,7 +777,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Maximum number of expired-transient rows a single export will return.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		public const EXPORT_LIMIT_MAX = 2000;
@@ -787,7 +787,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 *
 		 * Filterable via `wppo_core_autoload_options`.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string[]
 		 */
 		public static function get_core_autoload_options(): array {
@@ -879,7 +879,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			/**
 			 * Filters the core option names excluded from autoload remediation.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string[] $core Core option names.
 			 */
 			$filtered = apply_filters( 'wppo_core_autoload_options', $core );
@@ -893,7 +893,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * On older cores remediation is unavailable (fail-open: dry run still
 		 * reports, apply leaves values unchanged).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool
 		 */
 		public static function is_autoload_remediation_supported(): bool {
@@ -919,7 +919,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * Additive `database_cleanup.autoloadThreshold` key (default 1024,
 		 * clamped to 100 .. 10MB) so existing installs migrate without change.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param mixed $settings Optional settings array or null to load from option.
 		 * @return int Threshold in bytes.
 		 */
@@ -938,7 +938,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Get the total bytes currently held by autoloaded options.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return int Total bytes, or 0 on error.
 		 */
 		public static function get_autoload_total_bytes(): int {
@@ -962,7 +962,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * expired-transient purge), oEmbed cache entries, and the plugin's own
 		 * `wppo_*` options (e.g. wppo_settings must stay autoloaded).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param int $threshold Minimum option size in bytes.
 		 * @param int $limit     Maximum number of candidates to return.
 		 * @return array<int, array{option_name:string,size:int,autoload:string}> Sorted by size desc.
@@ -1032,7 +1032,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * Matches the settings clamp (100 B .. 10 MB) so direct PHP calls cannot
 		 * bypass the bounds enforced by settings validation and the REST layer.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param int $threshold Threshold in bytes.
 		 * @return int Clamped threshold in bytes.
 		 */
@@ -1043,7 +1043,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Build a dry-run remediation report without changing anything.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param int|null $threshold Optional threshold override (bytes).
 		 * @param int      $limit     Maximum number of candidates.
 		 * @return array{threshold:int,supported:bool,total_autoload_bytes:int,count:int,bytes_saved:int,options:array}
@@ -1068,7 +1068,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Get stored prior autoload values for remediated options.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array<string,string> Map of option_name => prior autoload value.
 		 */
 		public static function get_remediated_options(): array {
@@ -1083,7 +1083,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * a direct options-table update. Any failure returns false and leaves
 		 * the value unchanged (fail-open, never fatal).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $option_name Option name.
 		 * @param string $autoload_off Value disabling autoload ('off' on WP 6.6+, 'no' legacy).
 		 * @return bool True on success, false on failure.
@@ -1122,7 +1122,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * flavor rather than just autoload-on semantics. Falls back to a
 		 * direct update on WP < 6.6. Any failure returns false (fail-open).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $option_name Option name.
 		 * @param string $prior       Prior autoload value to restore.
 		 * @return bool True on success, false on failure.
@@ -1184,7 +1184,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * (fail-open to current behavior, never fatal) and reports
 		 * `supported: false` with zero applied.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param int|null $threshold Optional threshold override (bytes).
 		 * @param int      $limit     Maximum number of options to flip.
 		 * @return array{threshold:int,supported:bool,applied:array,failed:array,bytes_saved:int,total_autoload_bytes:int}
@@ -1264,7 +1264,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Revert a single remediated option to its prior autoload value.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $option_name Option name to revert.
 		 * @return bool|WP_Error True on success, WP_Error when unknown/failed.
 		 */
@@ -1300,7 +1300,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * Fail-open per option: failures are collected and reported while
 		 * successful reverts are still persisted.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array{reverted:string[],failed:string[]}
 		 */
 		public static function revert_autoload_all(): array {
@@ -1340,7 +1340,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * Mirrors the expired-only predicate of clean_expired_transients() so
 		 * the export shows exactly what a purge would delete.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param int $limit Maximum number of rows to export.
 		 * @return array<int, array{option_name:string,timeout_option:string,expired_at:int,size:int}>
 		 */
@@ -1493,7 +1493,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				/**
 				 * Fires after each individual cleanup type completes.
 				 *
-				 * @since NEXT
+				 * @since 2.0.0
 				 *
 				 * @param string $type  Cleanup type.
 				 * @param int    $count Number of rows deleted.
@@ -1520,7 +1520,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 *
 		 * Resolves maximum age and keep-latest values from settings with bounds.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param mixed $settings Optional settings array or null to load from option.
 		 * @return array{0:int,1:int} Tuple of [max_age_days, keep_latest].
 		 */
@@ -1546,7 +1546,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * spam/trashed comments, expired transients, and orphan postmeta). If a cleanup fails,
 		 * an error is logged via the Log class.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array $settings Cleanup settings. Recognized keys:
 		 *                        - 'dbRevMaxAge'     (int) Maximum age in days for revision pruning (default 30).
 		 *                        - 'dbRevKeepLatest' (int) Number of latest revisions to retain per parent (default 5).
@@ -1613,7 +1613,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * match what cleanup would actually delete (issue #884).
 		 *
 		 * @since 1.1.0
-		 * @since NEXT Exclude WP 6.9+ Notes from spam/trashed comment counts.
+		 * @since 2.0.0 Exclude WP 6.9+ Notes from spam/trashed comment counts.
 		 * @return array<string,int> Associative array mapping cleanup type to its current count.
 		 */
 		public static function get_counts() {
@@ -1764,7 +1764,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * escaping happens at display time.
 		 *
 		 * @since 1.4.0
-		 * @since NEXT Added method whitelist + is_callable guard returning WP_Error.
+		 * @since 2.0.0 Added method whitelist + is_callable guard returning WP_Error.
 		 * @param mixed $method The static method name to invoke (string; other types are guarded).
 		 * @param mixed ...$args Arguments forwarded to the method.
 		 * @return mixed The invoked method's return value, or a `WP_Error` if the method returned `false` or is not callable.
@@ -1805,7 +1805,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Invalidate the DB cleanup counts cache by incrementing the salt or deleting the transient.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function invalidate_counts_cache(): void {
@@ -1823,7 +1823,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 *
 		 * @param int           $post_id Post ID.
 		 * @param \WP_Post|null $post    Post object.
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function on_post_change( $post_id, ?\WP_Post $post = null ): void {
@@ -1841,7 +1841,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 *
 		 * Queries `information_schema.TABLES` to determine the total size.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $table Full table name (including prefix).
 		 * @return int Table size in bytes, or 0 if unknown.
@@ -1865,7 +1865,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 
 			// Fallback when information_schema is not readable (permission denied).
 			// SHOW TABLE STATUS does not require information_schema SELECT privilege.
-			// @since NEXT Added fallback for restricted DB users.
+			// @since 2.0.0 Added fallback for restricted DB users.
 			if ( ! empty( $wpdb->last_error ) ) {
 				$wpdb->last_error = '';
 			}
@@ -1894,8 +1894,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * vs values), so direct interpolation with allowlist check is the correct
 		 * WordPress pattern. Verified: no REST/CLI path forwards raw user input here.
 		 *
-		 * @since NEXT
-		 * @since NEXT Added allowlist justification and verified no user input reaches interpolation.
+		 * @since 2.0.0
+		 * @since 2.0.0 Added allowlist justification and verified no user input reaches interpolation.
 		 *
 		 * @param string $table Unprefixed table identifier (e.g. 'posts', 'postmeta').
 		 * @return bool True on success, false on invalid identifier, empty table, skipped due to size (>1GB), or query failure.
@@ -1967,7 +1967,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 *
 		 * Deduplicates table names and calls {@see optimize_table()} for each.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param array<string> $table_names Unprefixed table identifiers (e.g. 'posts', 'commentmeta').
 		 * @param bool          $enabled     Whether optimization is enabled.

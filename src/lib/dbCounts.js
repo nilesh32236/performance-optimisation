@@ -7,7 +7,7 @@ import { apiCall } from './apiRequest';
  * `database_cleanup_counts` GET with no shared cache; this module memoizes
  * one in-flight promise with a short TTL so tab navigation reuses data.
  *
- * @since NEXT
+ * @since 2.0.0
  */
 
 const TTL_MS = 60000;
@@ -21,7 +21,7 @@ let generation = 0;
 /**
  * Fetch database cleanup counts with memoization.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
  * @return {Promise<Object>} Counts keyed by cleanup type.
  */
@@ -77,7 +77,7 @@ export const getDbCounts = async ( signal ) => {
 /**
  * Clear the memoized counts (e.g. after a cleanup run invalidates them).
  *
- * @since NEXT
+ * @since 2.0.0
  * @return {void}
  */
 export const clearDbCountsCache = () => {

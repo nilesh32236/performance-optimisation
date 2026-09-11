@@ -20,7 +20,7 @@
 
 @mixin flex-center {
 	// Retained for P5 design-system reuse — currently unused but part of
-	// the shared layout toolkit. Marked @since NEXT to allow removal if
+	// the shared layout toolkit. Marked @since 2.0.0 to allow removal if
 	// still unused after the P5 card/grid audit.
 	display: flex;
 	align-items: center;

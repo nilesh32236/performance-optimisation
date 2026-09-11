@@ -399,7 +399,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that the Delay-JS preset exclusions are safe by default (Woo, Elementor, forms).
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_delay_js_preset_exclusions_include_safe_entries(): void {
 		$this->stub_main_construction(
@@ -426,7 +426,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	 * unrelated markup such as `showcase-`. The scoped replacements keep the
 	 * real handles (and their dash/word-boundary variants) covered.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_delay_js_presets_use_scoped_prefixes(): void {
 		Functions\when( 'has_filter' )->justReturn( false );
@@ -448,7 +448,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	 * Test that the scoped preset handles still match their dash/word-boundary
 	 * variants through is_delay_excluded_handle().
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_delay_js_scoped_preset_handles_match_variants(): void {
 		$this->stub_main_construction(
@@ -545,7 +545,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	 * Test that is_delay_js_safe_context() returns false (delay allowed)
 	 * when no safe signals are present.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_delay_js_safe_context_returns_false_when_no_safe_signals(): void {
 		$this->stub_main_construction(
@@ -595,7 +595,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that add_defer_attribute skips Delay-JS rewriting on WooCommerce checkout pages.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_add_defer_attribute_skips_delay_on_checkout(): void {
 		$this->stub_main_construction(
@@ -626,7 +626,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	 * Test that delayJSSafeMode=false disables the safe-context check entirely,
 	 * so a checkout page does NOT skip Delay-JS.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_delay_js_safe_context_disabled_when_safe_mode_false(): void {
 		$this->stub_main_construction(
@@ -646,7 +646,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that a form shortcode in the current post content skips Delay-JS.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_delay_js_safe_context_skips_on_form_shortcode(): void {
 		$this->stub_main_construction(
@@ -991,7 +991,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function stub_script_modules( object $fake ): void {
 		// WP 6.9+ gate for fetchpriority/in_footer (apply_module_loading_strategies).
-		// @since NEXT.
+		// @since 2.0.0.
 		$GLOBALS['wp_version'] = '6.9';
 		// The implementation guards on class_exists( 'WP_Script_Modules' ); the
 		// stand-in below (end of file) guarantees the probe passes when core is
@@ -1322,7 +1322,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	 * A handle already carrying fetchpriority=high (e.g. LCP-critical) must keep
 	 * it; the strategy + footer group still apply.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_add_defer_strategy_fills_fetchpriority_gaps_only(): void {
 		$this->stub_main_construction(
@@ -1373,7 +1373,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	 * Test that the module pass skips modules with an explicit fetchpriority
 	 * (fill-gaps-only, issue #1019) while still moving them to the footer.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_apply_module_loading_strategies_skips_explicit_fetchpriority(): void {
 		$main = $this->make_main(
@@ -1400,7 +1400,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	 * Test that the Delay-JS tag rewriter never emits a duplicate fetchpriority
 	 * attribute when one is already present (issue #1019).
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_add_defer_attribute_skips_duplicate_fetchpriority(): void {
 		$this->stub_main_construction(
@@ -1459,7 +1459,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	 * Core emits data-wp-fetchpriority= alongside the real attribute; the
 	 * duplicate guard must only match a real attribute boundary.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_add_defer_attribute_ignores_data_fetchpriority(): void {
 		$this->stub_main_construction(
@@ -1505,7 +1505,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	 * Test that an explicit 'auto' classic fetchpriority is treated as a gap
 	 * (consistent with the module path, issue #1019 review).
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_add_defer_strategy_treats_auto_as_gap(): void {
 		$this->stub_main_construction(
@@ -1551,7 +1551,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	 * get_registered(); the implementation must still observe the explicit
 	 * 'high' via reflection instead of failing open to 'low'.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_apply_module_loading_strategies_reflection_fallback(): void {
 		$main = $this->make_main(

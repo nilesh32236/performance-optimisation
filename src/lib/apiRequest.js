@@ -11,7 +11,7 @@
  * fallback {} which would mask the absent-global case and break the live
  * mutation contract.
  *
- * @since NEXT
+ * @since 2.0.0
  * @return {Object} The global settings object, or an empty object when absent.
  */
 export const getWppoSettings = () => {
@@ -161,7 +161,7 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
  * or `#` from user-controlled input).
  *
  * @since 1.0.0
- * @since NEXT Page is validated as a positive integer and URL-encoded.
+ * @since 2.0.0 Page is validated as a positive integer and URL-encoded.
  * @param {number}      page     Page number (defaults to 1).
  * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
  * @return {Promise<Object>} Resolved activities data.
@@ -183,7 +183,7 @@ export const fetchRecentActivities = ( page = 1, signal ) => {
  * Server-side host allowlisting + per-user/IP rate limiting remains
  * authoritative.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {string} url Raw scan URL.
  * @return {boolean} True when the URL is safe to forward to the server.
  */
@@ -224,7 +224,7 @@ export const isValidScanUrl = ( url ) => {
  * resource-intensive pagespeed_scan / pagespeed_results / web_vitals_trends
  * endpoints. Server-side allowlisting remains authoritative.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {string}  strategy   Raw strategy value.
  * @param {boolean} allowEmpty Whether '' is accepted (list endpoints).
  * @return {boolean} True when the strategy is safe to forward to the server.
@@ -243,7 +243,7 @@ export const isValidScanStrategy = ( strategy, allowEmpty = false ) => {
  * Run a local telemetry scan on the given URL.
  *
  * @since 1.5.0
- * @since NEXT Scan URL is validated client-side (http(s), same-origin) before the request.
+ * @since 2.0.0 Scan URL is validated client-side (http(s), same-origin) before the request.
  * @param {string}      url      The URL to scan.
  * @param {boolean}     force    Whether to force the scan.
  * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
@@ -262,7 +262,7 @@ export const runPerformanceScan = ( url, force = false, signal ) => {
  * Fetch system information (PHP, DB, WordPress, server, cache).
  *
  * @since 1.5.0
- * @since NEXT Accepts an optional AbortSignal for request cancellation.
+ * @since 2.0.0 Accepts an optional AbortSignal for request cancellation.
  * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
  * @return {Promise<Object>} Resolved system info data.
  */
@@ -274,8 +274,8 @@ export const fetchSystemInfo = ( signal ) => {
  * Queue a Google PageSpeed Insights scan as a background job.
  *
  * @since 1.6.0
- * @since NEXT Scan URL and strategy are validated client-side before the request.
- * @since NEXT Accepts an optional AbortSignal for request cancellation.
+ * @since 2.0.0 Scan URL and strategy are validated client-side before the request.
+ * @since 2.0.0 Accepts an optional AbortSignal for request cancellation.
  * @param {string}      url      The URL to scan.
  * @param {string}      strategy 'mobile' or 'desktop'.
  * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
@@ -302,8 +302,8 @@ export const queuePagespeedScan = ( url, strategy = 'mobile', signal ) => {
  * has not yet completed.
  *
  * @since 1.6.0
- * @since NEXT Accepts an optional AbortSignal for request cancellation.
- * @since NEXT Scan URL and strategy are validated client-side before the request.
+ * @since 2.0.0 Accepts an optional AbortSignal for request cancellation.
+ * @since 2.0.0 Scan URL and strategy are validated client-side before the request.
  * @param {string}      url      The scanned URL.
  * @param {string}      strategy 'mobile' or 'desktop'.
  * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
@@ -336,8 +336,8 @@ export const getPagespeedResults = ( url, strategy = 'mobile', signal ) => {
  * Optionally scopes to a URL and strategy via query params.
  *
  * @since 2.14.0
- * @since NEXT Accepts an optional AbortSignal for request cancellation.
- * @since NEXT Scan URL and strategy are validated client-side before the request.
+ * @since 2.0.0 Accepts an optional AbortSignal for request cancellation.
+ * @since 2.0.0 Scan URL and strategy are validated client-side before the request.
  * @param {string}      url      The scanned URL.
  * @param {string}      strategy 'mobile', 'desktop' or ''.
  * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
@@ -374,7 +374,7 @@ export const fetchWebVitalsTrends = ( url = '', strategy = '', signal ) => {
  * Retrieve Suggestion_Engine output for a cached telemetry scan.
  *
  * @since 1.6.0
- * @since NEXT Scan URL is validated client-side before the request.
+ * @since 2.0.0 Scan URL is validated client-side before the request.
  * @param {string}      url      The scanned URL.
  * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
  * @return {Promise<Object>} Resolved suggestions array.
@@ -411,7 +411,7 @@ export const fetchServerRules = ( signal ) => {
  * with DONOTCACHEPAGE honored. Returns the detected Woo paths, safe-mode
  * toggle state, and per-URL pass/fail entries.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
  * @return {Promise<Object>} Resolved self-test result data.
  */

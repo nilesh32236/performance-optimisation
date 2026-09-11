@@ -10,7 +10,7 @@ import LoadingSubmitButton from './common/LoadingSubmitButton';
 /**
  * Whether a URL is safe to render as an external link href (http(s) only).
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {string} url Raw URL.
  * @return {boolean} True when the URL parses as http(s).
  */
@@ -29,7 +29,7 @@ export const isHttpUrl = ( url ) => {
 /**
  * LLMs.txt panel for Dashboard (N8).
  *
- * @since NEXT
+ * @since 2.0.0
  */
 const LlmsPanel = () => {
 	const initial =

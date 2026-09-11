@@ -5,8 +5,8 @@
  * Requires at least: 6.2
  * Requires PHP:      8.2
  * Tested up to:      7.1
- * Version:           1.9.0
- * Author:            Nilesh kanzariya
+ * Version:           2.0.0
+ * Author:            Nilesh Kanzariya
  * Author URI:        https://github.com/nilesh32236
  * License:           GPL-2.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
@@ -34,7 +34,7 @@ if ( ! defined( 'WPPO_PLUGIN_URL' ) ) {
 }
 
 if ( ! defined( 'WPPO_VERSION' ) ) {
-	define( 'WPPO_VERSION', '1.9.0' );
+	define( 'WPPO_VERSION', '2.0.0' );
 }
 
 // Minimum supported runtimes (mirrors the plugin header above).
@@ -54,7 +54,7 @@ if ( ! function_exists( 'wppo_get_wp_version' ) ) {
 	 * `get_bloginfo( 'version' )`. Returns an empty string when the version
 	 * cannot be determined so callers can fail open.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 * @return string WordPress version string, or empty string when unknown.
 	 */
 	function wppo_get_wp_version(): string {
@@ -93,7 +93,7 @@ if ( ! function_exists( 'wppo_requirements_met' ) ) {
 	 * version API cannot itself take the site down; an unknown PHP version
 	 * fails closed. Any unexpected error fails closed to "do not boot".
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 * @param string|null $php_version Optional PHP version override (defaults to the runtime version).
 	 * @param string|null $wp_version  Optional WordPress version override (defaults to the detected version).
 	 * @return bool True when the plugin may boot.
@@ -138,7 +138,7 @@ if ( ! function_exists( 'wppo_render_requirements_notice' ) ) {
 	 * Capability-gated to administrators and fully guarded so the notice
 	 * itself can never fatal, even when WordPress APIs are unavailable.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 * @return void
 	 */
 	function wppo_render_requirements_notice(): void {
@@ -191,7 +191,7 @@ if ( ! function_exists( 'wppo_version_guard' ) ) {
 	 * per-site. The optional parameters are test-only overrides passed
 	 * through to `wppo_requirements_met()`.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 * @param string|null $php_version Optional PHP version override (defaults to the runtime version).
 	 * @param string|null $wp_version  Optional WordPress version override (defaults to the detected version).
 	 * @return bool True when the plugin may boot, false when paused.

@@ -149,7 +149,7 @@ if ( ! defined( 'WPPO_PLUGIN_URL' ) ) {
 	define( 'WPPO_PLUGIN_URL', 'http://example.com/wp-content/plugins/performance-optimisation/' );
 }
 if ( ! defined( 'WPPO_VERSION' ) ) {
-	define( 'WPPO_VERSION', '1.9.0' );
+	define( 'WPPO_VERSION', '2.0.0' );
 }
 // Zero-notice test environment (issue #1056): run the suite with WP_DEBUG on
 // so any E_DEPRECATED raised by plugin code paths is visible in CI logs.
@@ -256,7 +256,7 @@ trait WPPO_Test_Bootstrap {
 	 * Lives outside setUp() so test classes that need their own setUp()
 	 * (shadowing the trait method) can still register the same common stubs.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 * @return void
 	 */
 	protected function register_common_function_stubs(): void {

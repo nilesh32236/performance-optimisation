@@ -7,7 +7,7 @@
  * DNS lookups, improve GDPR compliance, and apply font-display: swap.
  *
  * @package PerformanceOptimise\Inc
- * @since NEXT
+ * @since 2.0.0
  */
 
 namespace PerformanceOptimise\Inc;
@@ -21,7 +21,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 	/**
 	 * Class Google_Fonts
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	class Google_Fonts {
 
@@ -29,7 +29,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * Font cache subdirectory under WP_CONTENT_DIR /cache/wppo/.
 		 *
 		 * @var string
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private const FONTS_CACHE_DIR = '/cache/wppo/fonts';
 
@@ -37,7 +37,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * Chrome 120+ user-agent to request woff2 format from Google Fonts API.
 		 *
 		 * @var string
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
@@ -45,7 +45,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * Plugin settings.
 		 *
 		 * @var array
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private array $options;
 
@@ -53,7 +53,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * Font cache directory path.
 		 *
 		 * @var string
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private string $font_cache_dir;
 
@@ -61,7 +61,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * Font cache directory URL.
 		 *
 		 * @var string
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private string $font_cache_url;
 
@@ -69,7 +69,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * Constructor.
 		 *
 		 * @param array $options Plugin settings array.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public function __construct( array $options ) {
 			$this->options  = $options;
@@ -86,14 +86,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * Filterable via `wppo_google_fonts_backoff` so operators can tune the
 		 * backoff for slow or persistently blocked endpoints.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return int
 		 */
 		public static function backoff_ttl(): int {
 			/**
 			 * Filters the Google Fonts failure-backoff TTL in seconds.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param int $ttl Default 300 (5 minutes).
 			 */
 			return max( 60, (int) apply_filters( 'wppo_google_fonts_backoff', 5 * MINUTE_IN_SECONDS ) );
@@ -108,7 +108,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * @param string $handle The stylesheet handle.
 		 * @param string $href   The stylesheet URL.
 		 * @return string Modified link tag with local URL or original tag.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public function process_style_tag( $tag, $handle, $href ) {
 			if ( is_admin() ) {
@@ -127,7 +127,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 
 			// Exact host allowlist — not strpos (prevents evil.com/fonts.googleapis.com or fonts.googleapis.com.evil.com).
 			// Caller: style_loader_tag filter; $href is the queued stylesheet URL.
-			// @since NEXT.
+			// @since 2.0.0.
 			if ( 'fonts.googleapis.com' !== wp_parse_url( $href, PHP_URL_HOST ) ) {
 				return $tag;
 			}
@@ -148,7 +148,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 *
 		 * @param string $buffer The HTML buffer.
 		 * @return string The modified HTML buffer.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public function process_buffer( $buffer ) {
 			$enabled = $this->options['file_optimisation']['hostGoogleFontsLocally'] ?? false;
@@ -202,7 +202,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * `https://evil.com/?fonts.googleapis.com` enter the local-font
 		 * pipeline. Mirrors the allowlist used by process_style_tag().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $url Candidate URL.
 		 * @return bool True when the host is exactly fonts.googleapis.com.
 		 */
@@ -215,7 +215,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		/**
 		 * Action Scheduler hook for out-of-band Google Fonts downloads.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		public const AS_HOOK = 'wppo_google_fonts_download';
@@ -233,7 +233,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 *
 		 * @param string $url The Google Fonts CSS URL.
 		 * @return string Local CSS URL on success, empty string on failure/cache-miss.
-		 * @since NEXT Failure sentinel transient (wppo_gf_fail_*). Out-of-band download via Action Scheduler.
+		 * @since 2.0.0 Failure sentinel transient (wppo_gf_fail_*). Out-of-band download via Action Scheduler.
 		 */
 		public function download_and_rewrite( $url ) {
 			$url = $this->normalize_google_fonts_url( $url );
@@ -268,7 +268,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * Falls back to a WP-Cron single event when Action Scheduler is
 		 * unavailable so the download still happens off the hot path.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $key CSS md5 key.
 		 * @param string $url Normalized Google Fonts CSS URL.
 		 * @return void
@@ -314,7 +314,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * injection, and atomic cache write. Never called from the
 		 * output-buffer hot path.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $key CSS md5 key.
 		 * @param string $url Normalized Google Fonts CSS URL.
 		 * @return bool True when the local CSS file now exists.
@@ -418,7 +418,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * args array scheduled by maybe_queue_download() or discrete args
 		 * from direct calls/tests.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array|string $args Args array with key/url, or the CSS key.
 		 * @param string       $url  Normalized Google Fonts CSS URL (when $args is a key).
 		 * @return void
@@ -446,7 +446,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		/**
 		 * Action Scheduler callback wrapper (single-arg hook signature).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array $args Job args with key/url.
 		 * @return void
 		 */
@@ -467,11 +467,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 *
 		 * @param string $url The raw URL.
 		 * @return string Normalized URL or empty string if not a Google Fonts URL.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private function normalize_google_fonts_url( $url ) {
 			// Exact host allowlist — replaces strpos substring check.
-			// @since NEXT.
+			// @since 2.0.0.
 			$host = wp_parse_url( $url, PHP_URL_HOST );
 			if ( 'fonts.googleapis.com' !== $host && 'fonts.gstatic.com' !== $host ) {
 				return '';
@@ -498,11 +498,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * @param string $url   The font file URL.
 		 * @param string $dest  Local destination path.
 		 * @return bool True on success, false on failure.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private function download_font_file( $url, $dest ) {
 			// Exact host allowlist — only fonts.gstatic.com may be fetched as a font file.
-			// @since NEXT.
+			// @since 2.0.0.
 			if ( 'fonts.gstatic.com' !== wp_parse_url( $url, PHP_URL_HOST ) ) {
 				return false;
 			}
@@ -566,7 +566,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * Uses hardcoded metrics for common Google Fonts to reduce CLS vs system fallback.
 		 * Filterable via wppo_font_metric_fallback_css.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $family Font family name.
 		 * @return string Fallback @font-face CSS or empty string.
 		 */
@@ -638,7 +638,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			/**
 			 * Filters metric fallback CSS.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string $css    Fallback CSS.
 			 * @param string $family Font family.
 			 */
@@ -648,7 +648,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		/**
 		 * Inject metric-matched fallback style into buffer when enabled.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $buffer HTML buffer.
 		 * @return string Modified buffer.
 		 */
@@ -683,7 +683,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * Clear the entire Google Fonts cache directory.
 		 *
 		 * @return void
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function clear_font_cache() {
 			$font_cache_dir = wp_normalize_path( WP_CONTENT_DIR . self::FONTS_CACHE_DIR );

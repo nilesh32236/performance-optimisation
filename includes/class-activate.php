@@ -118,7 +118,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		 * Without this, `get_option( 'wppo_settings', [] )` returns an empty array
 		 * and the CLI reports “Available tabs: .” until the first admin save.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		private static function maybe_seed_settings(): void {
@@ -196,7 +196,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		 * loading via alloptions on every request. Guarded by a flag option
 		 * so the DB writes run once, not on every admin_init.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function maybe_migrate_option_autoload(): void {

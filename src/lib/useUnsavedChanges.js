@@ -4,7 +4,7 @@ import UnsavedChangesContext from './UnsavedChangesContext';
 /**
  * Stable stringify with sorted keys for deterministic dirty comparison.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {*} value Value to stringify.
  * @return {string} Stable JSON string.
  */
@@ -36,7 +36,7 @@ const stableStringify = ( value ) => {
  * flag is set, which the App shell uses for tab-switch and beforeunload
  * guards.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {Object} settings Current form state.
  * @param {Object} baseline Baseline derived from props / defaults.
  */

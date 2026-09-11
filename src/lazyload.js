@@ -100,7 +100,7 @@ const getLazySelector = () => {
  * every delayed script (Main::add_defer_attribute()) and dropping it would
  * change loading behaviour; `wppo-type` is the delayed original `type`.
  *
- * @since NEXT
+ * @since 2.0.0
  * @type {Set<string>}
  */
 const SCRIPT_ATTR_ALLOWLIST = new Set( [
@@ -123,7 +123,7 @@ const SCRIPT_ATTR_ALLOWLIST = new Set( [
  * Attribute name prefixes that are safe to copy (data-* metadata and aria-*
  * accessibility attributes carry no execution semantics).
  *
- * @since NEXT
+ * @since 2.0.0
  * @type {string[]}
  */
 const SCRIPT_ATTR_PREFIX_ALLOWLIST = [ 'data-', 'aria-' ];
@@ -133,7 +133,7 @@ const SCRIPT_ATTR_PREFIX_ALLOWLIST = [ 'data-', 'aria-' ];
  * Module scope so it is not reallocated per isSafeBackgroundValue call.
  * Global flag is stateful — reset lastIndex before each exec loop.
  *
- * @since NEXT
+ * @since 2.0.0
  * @type {RegExp}
  */
 const BACKGROUND_URL_PATTERN = /url\(\s*(['"]?)(.*?)\1\s*\)/g;
@@ -143,7 +143,7 @@ const BACKGROUND_URL_PATTERN = /url\(\s*(['"]?)(.*?)\1\s*\)/g;
  * Gates checkCleanup so completion does not cost a full DOM scan per
  * intersection on image-heavy pages.
  *
- * @since NEXT
+ * @since 2.0.0
  * @type {number}
  */
 let pendingLazyCount = 0;
@@ -158,7 +158,7 @@ let pendingLazyCount = 0;
  * `window.wppoAllowedScriptHosts`. Set `window.wppoAllowedScriptHosts` to
  * `['*']` to allow any host (not recommended).
  *
- * @since NEXT
+ * @since 2.0.0
  * @type {string[]}
  */
 const SCRIPT_SRC_HOST_ALLOWLIST = [
@@ -232,7 +232,7 @@ const SCRIPT_SRC_HOST_ALLOWLIST = [
  * keep the client strict-but-extensible for embeds filtered in via
  * `wppo_video_placeholder_html`). Same-origin embeds are also permitted.
  *
- * @since NEXT
+ * @since 2.0.0
  * @type {string[]}
  */
 const VIDEO_EMBED_HOST_ALLOWLIST = [
@@ -250,7 +250,7 @@ const VIDEO_EMBED_HOST_ALLOWLIST = [
  * allowfullscreen); src/width/height/style are owned by this code and on*
  * handlers are never restorable.
  *
- * @since NEXT
+ * @since 2.0.0
  * @type {Set<string>}
  */
 const IFRAME_ATTR_ALLOWLIST = new Set( [
@@ -271,7 +271,7 @@ const IFRAME_ATTR_ALLOWLIST = new Set( [
  * `allow="camera; microphone"`), so unknown tokens are stripped and the
  * attribute is dropped when nothing safe remains.
  *
- * @since NEXT
+ * @since 2.0.0
  * @type {Set<string>}
  */
 const IFRAME_ALLOW_TOKENS = new Set( [
@@ -290,7 +290,7 @@ const IFRAME_ALLOW_TOKENS = new Set( [
  * deliberately excluded so a tampered payload cannot let the iframe break
  * out of its frame.
  *
- * @since NEXT
+ * @since 2.0.0
  * @type {Set<string>}
  */
 const IFRAME_SANDBOX_TOKENS = new Set( [
@@ -309,7 +309,7 @@ const IFRAME_SANDBOX_TOKENS = new Set( [
 /**
  * Valid `referrerpolicy` values for restored iframes.
  *
- * @since NEXT
+ * @since 2.0.0
  * @type {Set<string>}
  */
 const IFRAME_REFERRERPOLICY_TOKENS = new Set( [
@@ -327,7 +327,7 @@ const IFRAME_REFERRERPOLICY_TOKENS = new Set( [
  * Sanitize a stored `allow` value: keep only known-safe Permissions-Policy
  * tokens, return '' when nothing safe remains.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {string} value Raw allow attribute value.
  * @return {string} Sanitized value ('' when unsafe/empty).
  */
@@ -349,7 +349,7 @@ const sanitizeIframeAllow = ( value ) => {
  * top-navigation). Returns null when a non-empty value has no safe token
  * left; an empty input stays empty (fully sandboxed, strictest).
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {string} value Raw sandbox attribute value.
  * @return {string|null} Sanitized value, or null to skip the attribute.
  */
@@ -372,7 +372,7 @@ const sanitizeIframeSandbox = ( value ) => {
 /**
  * Whether a host matches the allowlist (exact or subdomain, case-insensitive).
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {string}   hostname URL hostname (lower-cased by the caller).
  * @param {string[]} hosts    Allowlisted base hosts.
  * @return {boolean} True when the host is allowlisted.
@@ -386,7 +386,7 @@ const hostInAllowlist = ( hostname, hosts ) =>
  * Whether the '*' wildcard warning has already been emitted. getScriptSrcHosts
  * runs per deferred script, so the warning must fire once, not per script.
  *
- * @since NEXT
+ * @since 2.0.0
  * @type {boolean}
  */
 let wildcardWarned = false;
@@ -397,7 +397,7 @@ let wildcardWarned = false;
  * PHP-provided wppoDelayConfig.allowedScriptHosts (see
  * `wppo_delay_js_allowed_hosts` filter). A `'*'` entry allows all hosts.
  *
- * @since NEXT
+ * @since 2.0.0
  * @return {string[]|'*'} Allowlist entries, or '*' to allow everything.
  */
 const getScriptSrcHosts = () => {
@@ -430,7 +430,7 @@ const getScriptSrcHosts = () => {
  * an allowlisted host. Rejects javascript:/data:/blob: and arbitrary origins
  * so attacker-controlled placeholder attributes cannot execute.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {string} src Raw src attribute value.
  * @return {boolean} True when the src is safe to load.
  */
@@ -465,7 +465,7 @@ const isSafeScriptSrc = ( src ) => {
  * same-origin URLs are trusted (http dev origins included). Rejects
  * javascript:/data:/blob: and protocol-relative shenanigans outright.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {string} src Raw data-wppo-video-src attribute value.
  * @return {boolean} True when the embed URL is safe to load in an iframe.
  */
@@ -502,7 +502,7 @@ const isSafeVideoEmbedUrl = ( src ) => {
  * Unlike isSafeVideoEmbedUrl (host-allowlisted embeds), this is intentionally
  * generic so legitimate non-video iframes (maps, forms, widgets) keep working.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {string} src Raw data-* attribute value.
  * @return {boolean} True when the URL is safe to assign to src/poster.
  */
@@ -543,7 +543,7 @@ const isSafeSubresourceUrl = ( src ) => {
  * rejects javascript:/vbscript:/expression()/behavior/-moz-binding and
  * control characters.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {string} value Raw data-wppo-bg attribute value.
  * @return {boolean} True when the value is safe to assign.
  */
@@ -605,7 +605,7 @@ const isSafeBackgroundValue = ( value ) => {
  * Event-handler (`on*`) attributes are never copied — the allowlist is the
  * only path from placeholder to live element.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {HTMLScriptElement} from        Placeholder script element.
  * @param {HTMLScriptElement} replacement Fresh script element.
  * @return {void}
@@ -635,7 +635,7 @@ const copyAllowedScriptAttrs = ( from, replacement ) => {
  * once the script has loaded or errors.
  *
  * @since 1.0.0
- * @since NEXT Placeholder attributes are allowlisted and wppo-src is validated (scheme + same-origin/host allowlist) before a replacement script is created.
+ * @since 2.0.0 Placeholder attributes are allowlisted and wppo-src is validated (scheme + same-origin/host allowlist) before a replacement script is created.
  * @param {HTMLScriptElement} script The script element to load.
  * @return {Promise<void>}
  */
@@ -1030,7 +1030,7 @@ const clearSafetyScan = () => {
  * Also deletes the `window.wppoNativeLazy` / `window.wppoDelayConfig` config
  * globals injected by Main::enqueue_scripts() on the WP <6.9 classic path.
  *
- * @since NEXT
+ * @since 2.0.0
  */
 const teardownLazyload = () => {
 	pendingLazyCount = 0;
@@ -1149,7 +1149,7 @@ const restoreSizes = ( el ) => {
  * IntersectionObserver callback, so pendingLazyCount would otherwise leak
  * and gate checkCleanup (and observer teardown) forever.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {NodeList} removedNodes Nodes removed from the DOM.
  */
 const releaseRemovedLazyNodes = ( removedNodes ) => {
@@ -1217,7 +1217,7 @@ const checkCleanup = () => {
  * a hero PHP missed (fetchpriority=high, data-wppo-hero/data-wppo-lcp, or
  * loading=eager). Such images keep src/srcset intact and are never observed.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {Element} el The DOM element.
  * @return {boolean} True when the element is a hero image.
  */
@@ -1245,7 +1245,7 @@ const isHeroImage = ( el ) => {
  * `isHeroImage` also treats bare `loading="eager"` images as heroes,
  * and those LCP candidates need the priority hint too.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {Element} el The hero IMG element.
  */
 const restoreHeroImage = ( el ) => {

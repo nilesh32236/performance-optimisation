@@ -21,7 +21,7 @@ import LoadingSubmitButton from './common/LoadingSubmitButton';
  * - Purge via Edge_Purger alongside CDN_Purger on wppo_after_cache_clear
  * - Stale-while-revalidate <30ms global TTFB
  *
- * @since NEXT
+ * @since 2.0.0
  */
 const EdgeCachePanel = () => {
 	const uid = useId();

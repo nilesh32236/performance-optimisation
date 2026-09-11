@@ -21,7 +21,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 	/**
 	 * LLMs.txt generator and virtual-file router.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	class Llms {
 
@@ -31,7 +31,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 		/**
 		 * Whether LLMs.txt generation is enabled.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool
 		 */
 		public static function is_enabled(): bool {
@@ -40,7 +40,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 			/**
 			 * Filters whether LLMs.txt is enabled.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param bool $enabled Whether enabled.
 			 */
 			return (bool) apply_filters( 'wppo_llms_txt_enabled', $enabled );
@@ -49,7 +49,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 		/**
 		 * Base directory for LLMs files (blog-scoped on multisite).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string
 		 */
 		private static function base_dir(): string {
@@ -63,7 +63,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 		/**
 		 * Absolute file path for the requested variant.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $which 'llms' or 'full'.
 		 * @return string
 		 */
@@ -75,7 +75,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 		/**
 		 * Register rewrite rules for virtual /llms.txt and /llms-full.txt.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function register_rewrite(): void {
@@ -92,7 +92,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 		/**
 		 * Register query vars for the rewrite rules.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array $vars Existing query vars.
 		 * @return array
 		 */
@@ -107,7 +107,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 		 *
 		 * Handles ETag / 304 and generates on-demand if file missing.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function serve(): void {
@@ -200,7 +200,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 		/**
 		 * Emit Link header for discovery.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function emit_link_header(): void {
@@ -220,7 +220,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 		/**
 		 * Emit <link> in wp_head.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function emit_head_link(): void {
@@ -237,7 +237,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 		/**
 		 * Generate llms.txt and llms-full.txt files.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True if files written.
 		 */
 		public static function generate(): bool {
@@ -273,7 +273,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 			/**
 			 * Filters LLMs.txt content before writing.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string $content The markdown content.
 			 * @param string $which   'llms' or 'llms-full'.
 			 */
@@ -281,7 +281,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 			/**
 			 * Filters LLMs.txt full content before writing.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string $content The markdown content.
 			 * @param string $which   'llms' or 'llms-full'.
 			 */
@@ -323,7 +323,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 		/**
 		 * Cap content at word boundary.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $content Content.
 		 * @param int    $max_bytes Max bytes.
 		 * @return string
@@ -343,7 +343,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 		/**
 		 * Collect top URLs for LLMs digest.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param int    $limit  Max URLs.
 		 * @param string $source Source filter.
 		 * @return string[]
@@ -426,7 +426,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 		/**
 		 * Collect URLs from sitemap (local only).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param int $cap Max URLs.
 		 * @return string[]
 		 */
@@ -498,7 +498,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 		/**
 		 * Build markdown content.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string[] $urls List of URLs.
 		 * @param string   $site_name Site name.
 		 * @param string   $site_desc Site description.
@@ -537,7 +537,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 		/**
 		 * React to wppo_settings changes (flush rewrite, regenerate).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param mixed $old_value Old option value.
 		 * @param mixed $new_value New option value.
 		 * @return void

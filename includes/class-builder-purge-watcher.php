@@ -28,14 +28,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 	/**
 	 * Purge builder + WPPO caches after a page-builder update.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	class Builder_Purge_Watcher {
 
 		/**
 		 * Transient key for the one-time admin notice after a purge.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		public const NOTICE_TRANSIENT = 'wppo_builder_purge_notice';
@@ -50,7 +50,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * signal only schedules this single background event; the callback
 		 * runs the heavy path later.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		public const DRIFT_PURGE_HOOK = 'wppo_builder_drift_purge';
@@ -62,7 +62,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * requests) from enqueueing duplicate background purges. Keyed per
 		 * site via Util::transient_key() for multisite safety.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		public const DRIFT_PURGE_LOCK = 'wppo_builder_drift_purge_lock';
@@ -83,7 +83,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * implementation time (issue #907); hosts and themes can extend or
 		 * correct the map via the wppo_builder_purge_map filter.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var array<string,array{label:string,plugins:string[],themes:string[],upload_subdirs:string[],content_subdirs:string[],clear_hooks:string[],css_only?:bool}>
 		 */
 		private const BUILDER_MAP = array(
@@ -131,7 +131,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * set around the fan-out do_action() so the upgrader path cannot re-enter
 		 * on_builder_drift() and purge/queue twice.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var bool
 		 */
 		private static bool $drift_suspended = false;
@@ -143,7 +143,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * during editing; the full derived-cache purge below runs at most once
 		 * per request so a hot signal cannot stampede the cache.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var bool
 		 */
 		private static bool $drift_handled_this_request = false;
@@ -155,7 +155,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * so editing in a builder requeues used-CSS regeneration instead of
 		 * leaving stale used CSS until manual regen/cron.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public function register(): void {
@@ -188,7 +188,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * the request; fail-open keeps full CSS serving. Post-scoped drift is
 		 * handled by on_builder_drift_save() (the fast path).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public function on_builder_drift(): void {
@@ -207,7 +207,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 					/**
 					 * Fires after builder-drift requeue (issue #1023).
 					 *
-					 * @since NEXT
+					 * @since 2.0.0
 					 */
 					do_action( 'wppo_builder_drift_requeue' );
 				}
@@ -224,7 +224,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * Fail-open: any error reports false and the derived caches simply
 		 * stay as they are (full CSS keeps serving).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True when an event was enqueued or already pending.
 		 */
 		protected function schedule_deferred_drift_purge(): bool {
@@ -264,7 +264,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * WP-Cron, never inline in the originating request. Guarded and
 		 * fail-open like the other purge seams.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public function run_deferred_drift_purge(): void {
@@ -287,7 +287,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * full-site purge instead. The wppo_builder_drift_requeue action fires
 		 * only when a job was actually queued (or already scheduled).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param int   $post_id Post ID saved in the editor.
 		 * @param mixed $editor_data Editor data (unused).
 		 * @return void
@@ -310,7 +310,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 					/**
 					 * Fires after builder-drift requeue for a saved post (issue #1023).
 					 *
-					 * @since NEXT
+					 * @since 2.0.0
 					 *
 					 * @param int $post_id Post ID saved in the builder.
 					 */
@@ -324,7 +324,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		/**
 		 * Get the builder map, filterable by hosts and themes.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array<string,array> Builder map keyed by builder slug.
 		 */
 		public static function get_builder_map(): array {
@@ -336,7 +336,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 				 * Lets hosts and themes add builders or correct slugs and
 				 * cache directories without editing the plugin.
 				 *
-				 * @since NEXT
+				 * @since 2.0.0
 				 *
 				 * @param array<string,array> $map Builder map keyed by builder slug.
 				 */
@@ -356,7 +356,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * keeps the blast radius to builder updates only — WPPO's own update
 		 * path included, its slug is not in the map).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param mixed $upgrader   Upgrader instance (unused).
 		 * @param mixed $hook_extra Update context (action/type/plugin/plugins/theme/themes).
 		 * @return void
@@ -414,7 +414,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * Comparisons are case-insensitive (theme directory slugs such as
 		 * Divi vary in case across installs).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string[] $plugins Updated plugin files.
 		 * @param string[] $themes  Updated theme slugs.
 		 * @param array    $map     Builder map (resolved once per update).
@@ -453,7 +453,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * Protected (not private) so unit tests can subclass and observe the
 		 * routing without touching the filesystem.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string[] $matched Matched builder keys.
 		 * @param array    $map     Builder map (resolved once per update).
 		 * @return void
@@ -473,7 +473,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 			/**
 			 * Fires after WPPO purges builder + page caches for a builder update.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 *
 			 * @param string[] $matched Matched builder keys (e.g. array( 'elementor' )).
 			 */
@@ -493,7 +493,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * documented as fully regenerable) delete only top-level *.css files
 		 * so templates, assets, or custom files in the same root survive.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string[] $matched Matched builder keys.
 		 * @param array    $map     Builder map.
 		 * @return string[] Deleted paths (for tests and logging).
@@ -567,7 +567,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		/**
 		 * Resolve a builder cache subdirectory strictly inside its base dir.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $base Base directory (normalized).
 		 * @param mixed  $sub  Relative subdirectory from the map.
 		 * @return string Normalized absolute path, or '' when unsafe.
@@ -608,7 +608,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * used-CSS and critical-CSS, so any stale nested reference is
 		 * dropped with the HTML that pointed at it and rebuilt on next visit.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param object   $fs      WP_Filesystem instance.
 		 * @param string   $dir     Scoped directory (already containment-checked).
 		 * @param string[] $deleted Deleted paths accumulator.
@@ -657,7 +657,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * self::$drift_suspended) so firing elementor/core/files/clear_cache
 		 * here cannot re-enter on_builder_drift() and double-purge.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string[] $matched Matched builder keys.
 		 * @param array    $map     Builder map.
 		 * @return void
@@ -699,7 +699,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * request is never blocked; without Action Scheduler the caches are
 		 * simply cleared and rebuilt lazily on the next visits.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		protected function purge_wppo_derived_caches(): void {
@@ -744,7 +744,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		/**
 		 * Write the audit-trail entry for a builder purge.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string[] $labels Human-readable builder names.
 		 * @return void
 		 */
@@ -772,7 +772,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * and deletes the transient, so it shows once; the TTL is only a
 		 * backstop for auto-expiry when no admin page loads.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string[] $labels Human-readable builder names.
 		 * @return void
 		 */

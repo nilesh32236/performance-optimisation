@@ -13,7 +13,7 @@ Run after every batch per AGENTS.md order; final gate before declaring completio
 | `vendor/bin/phpunit` (`phpunit.xml.dist`, Brain Monkey) | PASS | `403 tests, 958 assertions, 1 skipped` (AbilitiesTest 2 new) — 4 `CronSitemapTest` errors fixed by mocks |
 | `npm test` (`wp-scripts test-unit-js`, jsdom, `@testing-library/react`) | PASS | `PASS` 8 suites shown (`DatabaseCleanup`, `FileOptimization`, `Dashboard`, `ObjectCache`, `PreloadSettings`, `PluginSetting`, `PerformanceAudit`, `NoticeBanner`); full suite 345 earlier, now + `NoticeBanner` 2 fixed |
 | `git status` | — | 46 files `M` + 1 new `tests/php/AbilitiesTest.php` + `AUDIT/` untracked; no accidental `vendor/node_modules` diff |
-| `git diff --stat` | — | `46 files changed, 1141 insertions(+), 676 deletions(-)` — all `@since NEXT` audit-driven |
+| `git diff --stat` | — | `46 files changed, 1141 insertions(+), 676 deletions(-)` — all `@since 2.0.0` audit-driven |
 | Skipped test | 1 | `tests/php/TelemetryTest::test_scan_skipped_when_locked` — transient lock 20 min, expected skip |
 
 Expected `Lint PASS / Unit tests PASS / Build PASS / PHP syntax PASS / Static analysis PASS` ✅

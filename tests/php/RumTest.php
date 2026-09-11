@@ -457,7 +457,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that a beacon lcpUrl is aggregated per path.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_collect_aggregates_lcp_url(): void {
 		$this->install_stubs();
@@ -497,7 +497,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	 *
 	 * Under 20 samples the heuristic wins (null); at 20 the URL is returned.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_get_field_lcp_url_gates_on_sample_count(): void {
 		$this->install_stubs();
@@ -535,7 +535,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that a stale field LCP override self-corrects back to the heuristic.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_get_field_lcp_url_self_corrects_when_stale(): void {
 		$this->install_stubs();
@@ -565,7 +565,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that a beacon device/template pair is aggregated into a bounded segment.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_collect_aggregates_device_template_segment(): void {
 		$this->install_stubs();
@@ -599,7 +599,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that an invalid device falls back to unknown without rejecting the sample.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_collect_falls_back_to_unknown_segment(): void {
 		$this->install_stubs();
@@ -630,7 +630,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	 * Under 20 samples no row is returned; at 20 the segment row with the
 	 * computed p75 is returned, slowest-first.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_get_field_lcp_p75_by_segment_gates_on_sample_count(): void {
 		$this->install_stubs();
@@ -678,7 +678,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that the segmented p75 read path performs no option/transient writes.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_get_field_lcp_p75_by_segment_makes_no_writes(): void {
 		$this->install_stubs();
@@ -723,7 +723,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that suspicious lcpUrl values are dropped while numeric data is kept.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_collect_drops_suspicious_lcp_url(): void {
 		$this->install_stubs();
@@ -803,7 +803,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that the preload candidate returns the field URL once the sample gate passes.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_get_lcp_preload_candidate_returns_field_url_when_gated(): void {
 		$this->install_stubs();
@@ -825,7 +825,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that the preload candidate falls back to the PageSpeed URL when samples are insufficient.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_get_lcp_preload_candidate_falls_back_to_pagespeed_when_under_threshold(): void {
 		$this->install_stubs();
@@ -849,7 +849,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	 *
 	 * Callers fall through to the manual preload-image meta / hero path.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_get_lcp_preload_candidate_returns_null_when_no_data(): void {
 		$this->install_stubs();
@@ -871,7 +871,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	 * The singular-post-meta tier must not win for an explicit path, and the
 	 * transient lookup must use the home_url + path hash for that path.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_get_stored_pagespeed_lcp_url_threads_explicit_path(): void {
 		$this->install_stubs();
@@ -908,7 +908,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that a null path still consults the current-request post-meta tier.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_get_stored_pagespeed_lcp_url_uses_post_meta_for_current_request(): void {
 		$this->install_stubs();

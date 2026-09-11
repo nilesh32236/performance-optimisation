@@ -43,7 +43,7 @@ class ServerRulesTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that get_server_type detects LiteSpeed.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_get_server_type_detects_litespeed(): void {
 		$_SERVER['SERVER_SOFTWARE'] = 'LiteSpeed';
@@ -53,7 +53,7 @@ class ServerRulesTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that get_server_type detects OpenLiteSpeed.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_get_server_type_detects_openlitespeed(): void {
 		$_SERVER['SERVER_SOFTWARE'] = 'OpenLiteSpeed';
@@ -63,7 +63,7 @@ class ServerRulesTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that get_server_type is case-insensitive for LiteSpeed.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_get_server_type_detects_litespeed_case_insensitive(): void {
 		$_SERVER['SERVER_SOFTWARE'] = 'LITESPEED/1.9.1 Open';
@@ -73,7 +73,7 @@ class ServerRulesTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that is_litespeed returns true for LiteSpeed.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_is_litespeed_returns_true_for_litespeed(): void {
 		$_SERVER['SERVER_SOFTWARE'] = 'LiteSpeed';
@@ -83,7 +83,7 @@ class ServerRulesTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that is_litespeed returns false for Apache.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_is_litespeed_returns_false_for_apache(): void {
 		$_SERVER['SERVER_SOFTWARE'] = 'Apache/2.4.41 (Ubuntu)';

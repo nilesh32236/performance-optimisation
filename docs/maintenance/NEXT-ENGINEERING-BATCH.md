@@ -17,7 +17,7 @@
 ### #755 — fetchpriority
 - **Gap:** preload via `Util::generate_preload_link` without high; deferred low hard-coded
 - **Fix:** `Cache::maybe_preload_combine_css:590` filter `wppo_combine_preload_fetchpriority` default high → `generate_preload_link(..., fetchpriority)`; `Main::add_defer_strategy:1948` filter `wppo_deferred_fetchpriority` per-handle default low (allow high for LCP)
-- **Compat:** `function_exists` not needed for unknown attr (harmless), `is_wp69_plus` guard for native vs regex, `@since NEXT`, docs/hooks.md
+- **Compat:** `function_exists` not needed for unknown attr (harmless), `is_wp69_plus` guard for native vs regex, `@since 2.0.0`, docs/hooks.md
 - **Tests:** `phpcs 0`, `npm test 34/34`, `phpunit 435/435`, `build` success; manual view-source preload high, deferred low, filter override high
 
 ### #754 — speculation

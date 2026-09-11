@@ -12,7 +12,7 @@
  * working (e.g. 'cloudflare' vs 'cloudflare-edge').
  *
  * @package PerformanceOptimise\Inc
- * @since NEXT
+ * @since 2.0.0
  */
 
 namespace PerformanceOptimise\Inc;
@@ -29,14 +29,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cloudflare_Purger' ) ) {
 	 * request to Cloudflare and surfaces failures via the wppo_debug_log action
 	 * (mirroring CDN_Purger / Edge_Purger log behaviour).
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	class Cloudflare_Purger {
 
 		/**
 		 * Cloudflare purge timeout (seconds).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		private const TIMEOUT = 10;
@@ -48,7 +48,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cloudflare_Purger' ) ) {
 		 * replaces. Keeps the same URL shape, Bearer header, JSON body, timeout,
 		 * is_wp_error branch and 2xx status check.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $zone    Cloudflare zone ID (already sanitized).
 		 * @param string $token   Cloudflare API token (Bearer).
 		 * @param string $log_tag Provider tag for wppo_debug_log ('cloudflare' or 'cloudflare-edge').
@@ -88,7 +88,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cloudflare_Purger' ) ) {
 		/**
 		 * Surface a failed purge via wppo_debug_log.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $service Log tag (e.g. cloudflare, cloudflare-edge).
 		 * @param string $detail  Endpoint / reason.
 		 * @return void

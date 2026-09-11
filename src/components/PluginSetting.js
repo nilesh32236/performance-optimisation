@@ -46,14 +46,14 @@ const ALLOWED_IMPORT_KEYS =
  * Maximum accepted settings-file size (512KB). Real exports are <100KB;
  * larger files risk freezing the admin UI during parse.
  *
- * @since NEXT
+ * @since 2.0.0
  */
 const MAX_IMPORT_BYTES = 512 * 1024;
 
 /**
  * Maximum nesting depth accepted in an imported settings file.
  *
- * @since NEXT
+ * @since 2.0.0
  */
 const MAX_IMPORT_DEPTH = 10;
 
@@ -65,7 +65,7 @@ const MAX_IMPORT_DEPTH = 10;
  * not an independent limit. Nested objects/arrays use
  * MAX_IMPORT_NESTED_KEYS instead.
  *
- * @since NEXT
+ * @since 2.0.0
  */
 const MAX_IMPORT_TOP_KEYS = ALLOWED_IMPORT_KEYS.length;
 
@@ -74,7 +74,7 @@ const MAX_IMPORT_TOP_KEYS = ALLOWED_IMPORT_KEYS.length;
  * imported settings file. Real exports are small; larger values risk
  * freezing the admin UI during parse.
  *
- * @since NEXT
+ * @since 2.0.0
  */
 const MAX_IMPORT_NESTED_KEYS = 1000;
 
@@ -110,7 +110,7 @@ const validateImportData = ( data ) => {
  * "monkey" that merely end in "key". The separator-optional api[_-]?keys?
  * alternative covers separator-less 'apikey'/'apiKey' variants.
  *
- * @since NEXT
+ * @since 2.0.0
  */
 const SECRET_KEY_PATTERN =
 	/(?:[_-]keys?|api[_-]?keys?|password|passwd|secret|api[_-]?token|auth[_-]?token|cloudflare|bunny|token|nonce)$/i;
@@ -119,7 +119,7 @@ const SECRET_KEY_PATTERN =
  * Deep-clone an object while masking every nested key matching
  * SECRET_KEY_PATTERN with 'REDACTED'.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {*} value Value to redact.
  * @return {*} Redacted clone.
  */
@@ -151,7 +151,7 @@ const redactSecrets = ( value ) => {
  * Rejects excessive depth, oversized strings and non-plain values.
  * Server-side allowlist + PHP sanitization remains authoritative.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {*}      value Value to check.
  * @param {number} depth Current depth.
  * @return {boolean} True when the value is safe to forward to the server.

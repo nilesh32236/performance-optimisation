@@ -38,7 +38,7 @@
 - **Recommendation:** Defer to roadmap planning, not code PR now; evaluate per N's user value vs maintenance cost.
 
 ## 646 — Remaining Work Before v2.0.0 Release
-- **Problem:** Meta milestone: 213× `@since NEXT`→`2.0.0`, header/`WPPO_VERSION`/`readme.txt:7` Stable tag lockstep, changelog, breaking scope (min WP bump 6.2→?).
+- **Problem:** Meta milestone: 213× `@since 2.0.0`→`2.0.0`, header/`WPPO_VERSION`/`readme.txt:7` Stable tag lockstep, changelog, breaking scope (min WP bump 6.2→?).
 - **Current:** No @since rewrite yet (NEXT placeholder per `AGENTS.md:184`).
 - **Priority:** P3 meta — depends on 709 and 708 closures.
 - **Recommendation:** Keep open as v2.0.0 checklist, verify gate `npm lint → composer lint → npm test → npm run build` (`AGENTS.md:18`) before tag.

@@ -30,7 +30,7 @@
 **Diff:** Adds `wppo_should_cache_request`, `wppo_invalidation_urls`, per-type cleanup, `wppo_object_cache_config` + lazy fs, Abilities Util memo (get_option→Util::get_settings).
 **Class:** STILL NEEDED (some memo already in master via 751's Util fix? No — master has Util memo already via 751's class-cache; but hooks filters themselves not in master)
 **Overlap:** `class-cache.php` already has wppo_cache_stats fix, but hooks add new `apply_filters` calls — PARTIALLY NEEDED (rebase onto current cache).
-**Rework:** Ensure `@since NEXT`, `function_exists`/`has_filter` guards, `docs/hooks.md` (currently 765 adds 60 lines vs master docs/hooks.md — STILL NEEDED).
+**Rework:** Ensure `@since 2.0.0`, `function_exists`/`has_filter` guards, `docs/hooks.md` (currently 765 adds 60 lines vs master docs/hooks.md — STILL NEEDED).
 
 ### PR-E3 — Performance P2-P5 (b84a07d6/d6a8163c/5ec22efd etc.)
 **Files:** `includes/class-cache.php` (LRU, core_will_inline_memo), `includes/class-cron.php` (cursor), `includes/class-telemetry.php` (remote head removal), `src/lazyload.js`, `src/css/*`, `tests/php/CacheCombineLruTest.php` etc.
@@ -72,7 +72,7 @@
 
 ## Recommended Extraction Order
 1. **E1 CLI** — independent, tests, low risk
-2. **E2 Hooks** — docs/hooks.md, 3 Hook*Test, @since NEXT
+2. **E2 Hooks** — docs/hooks.md, 3 Hook*Test, @since 2.0.0
 3. **E4 Hardened H-fixes** — small, correctness, after E2 to avoid rebase churn
 4. **E3 Perf unique** — pick src stat LRU + remaining CSS vars after E4
 5. **E5 UX** — last, after #709 vote, split tailwind infra → HealthHeader → SetupWizard

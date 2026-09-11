@@ -36,7 +36,7 @@ All spot-reviewed via `git diff 63f3fb2b..788bf59b` + `gh pr view` + file reads:
 ### #765 Branch Analyzed
 - **Branch:** `origin/fix/audit-2026-08-28` at `661a3a7c`, PR 765 CLOSED unmerged, 212 files `+25011/-3545` (52 AUDIT +30 ux-research +20 wp-cli-hooks docs + 82 code/build +15 tests)
 - **Duplicate detection:** `git diff --name-only master...fix/audit` 212 vs `git diff --name-only 63f3fb2b..master` 30 overlap (build, class-cache/cron etc.) → 182 only-in-765, 30 overlapping PARTIALLY NEEDED.
-- **Extraction map:** `docs/maintenance/765-EXTRACTION-MAP.md` — 5 PR splits: E1 CLI, E2 Hooks, E3 Perf unique (src stat LRU), E4 Hardened H-01..12+C-01, E5 UX (tailwind split, BLOCKED on #709). Each <100 files, @since NEXT, guarded. AUDIT docs obsolete for merge (archive).
+- **Extraction map:** `docs/maintenance/765-EXTRACTION-MAP.md` — 5 PR splits: E1 CLI, E2 Hooks, E3 Perf unique (src stat LRU), E4 Hardened H-01..12+C-01, E5 UX (tailwind split, BLOCKED on #709). Each <100 files, @since 2.0.0, guarded. AUDIT docs obsolete for merge (archive).
 - **Conflicts:** E3/E4/E5 will conflict on `build/*` → rebuild via `npm run build`; E5 tailwind conflicts on `src/index.js/style.scss`.
 - No unique bug lost: All 765 code duplicates are either already in master via 761/746/751 or preserved for split.
 
@@ -89,7 +89,7 @@ All spot-reviewed via `git diff 63f3fb2b..788bf59b` + `gh pr view` + file reads:
 |757 lazy/auto-sizes | P1 IMPLEMENT LATER medium LCP | Honour `wp_get_loading_optimization_attributes` + allow-list `img-auto-sizes-contain` | 754 | ~6 files |
 |758 Abilities API | P3 OBSOLETE/DONE (docs) | Add docs/hooks.md polish | none | XS |
 
-Order: 756/755 →754→757→758, each `@since NEXT`, `<100`, guarded.
+Order: 756/755 →754→757→758, each `@since 2.0.0`, `<100`, guarded.
 
 ## Product/Design — Plan in `PRODUCT-DESIGN-BACKLOG.md`
 
@@ -98,7 +98,7 @@ Order: 756/755 →754→757→758, each `@since NEXT`, `<100`, guarded.
 |709 design chooser | Needs human vote on 3 static HTML (designs/variant-*) | P3 BLOCKED | Vote #709 |
 |708 LS-904 | Tracker duplicate of 756/757, dep bump done 4.1 | P3 DUPLICATE | Keep/close as umbrella |
 |707 LS-903 N-features | Roadmap N1-N10 gated behind Advanced | P3 | Roadmap planning |
-|646 v2.0.0 | Meta 213× @since NEXT→2.0.0 | P3 | After 709/708 |
+|646 v2.0.0 | Meta 213× @since 2.0.0→2.0.0 | P3 | After 709/708 |
 |369 banner/icon | Manual design 1544×500 +256 | P3 | Pre-release |
 |368 screenshots | Manual 1200×900 | P3 | After #709 |
 

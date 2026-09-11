@@ -24,7 +24,7 @@ class MainFilesystemPropertyTypeTest extends \PHPUnit\Framework\TestCase {
 	 * The property type must resolve to the global class, never the namespaced
 	 * one.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 * @return void
 	 */
 	public function test_filesystem_property_type_resolves_to_global_class(): void {

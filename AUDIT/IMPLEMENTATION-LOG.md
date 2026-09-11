@@ -3,7 +3,7 @@
 _Template per spec §10: Finding ID | Severity | Category | Original file:line | Changed files | What changed | Why | Tests added | Tests executed | Result | Regression risk | Reviewer | Status_
 
 Branch base: `fix/deep-dashboard-2026` (from `master 0f3e8ea9` + mobile `736` merged)
-Method: P1→P5 batches, sub-agents A–J, `@since NEXT`, `php -l` + `phpcs` + `phpunit` + `lint:js` + `npm test` + `build` per batch.
+Method: P1→P5 batches, sub-agents A–J, `@since 2.0.0`, `php -l` + `phpcs` + `phpunit` + `lint:js` + `npm test` + `build` per batch.
 
 ## Status table
 

@@ -51,7 +51,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Deliberately NOT called from save_cache_files(): frontend cache
 		 * misses are the normal write path and would defeat the TTL entirely.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function bump_stats_cache(): void {
@@ -77,7 +77,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Rate-limits WP_DEBUG logging for depth cap hits to once per request
 		 * so a deeply nested cache tree does not flood the error log.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var bool
 		 */
 		private static bool $depth_warning_logged = false;
@@ -103,7 +103,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * payloads.
 		 *
 		 * @var bool
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private bool $host_mismatch = false;
 
@@ -142,7 +142,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * the homepage `index.html`).
 		 *
 		 * @var bool
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private bool $path_rejected = false;
 
@@ -155,7 +155,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * served externally instead of inlined so core cannot double-inline it.
 		 *
 		 * @var bool
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private bool $inline_drift_detected = false;
 
@@ -170,7 +170,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * could otherwise run the pipeline twice. One-shot per request.
 		 *
 		 * @var bool
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static bool $buffer_enhanced = false;
 
@@ -183,7 +183,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * additionally throttles persistent drift across requests.
 		 *
 		 * @var bool
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static bool $inline_drift_logged = false;
 
@@ -202,7 +202,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * styles in its budget loop without charging their size.
 		 *
 		 * @var array<string,array{size:int,readable:bool}>|null
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private ?array $inline_size_map = null;
 
@@ -214,21 +214,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * generation loops (2*3*n simulations → 2*n with memo).
 		 *
 		 * @var array<string,bool>
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private array $core_will_inline_memo = array();
 
 		/**
 		 * Max entries for the src stat LRU.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private const SRC_STAT_CACHE_LIMIT = 500;
 
 		/**
 		 * Per-request LRU cache for src file stat (is_readable + filesize).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var array<string,array{readable:bool,size:int|false}>
 		 */
 		private array $src_stat_cache = array();
@@ -249,7 +249,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * shutdown. Null while no cache buffer is open.
 		 *
 		 * @var int|null
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private ?int $cache_ob_level = null;
 
@@ -281,7 +281,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Image_Optimisation instance for buffer processing.
 		 *
 		 * @var Image_Optimisation|null
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private $image_optimisation;
 
@@ -289,7 +289,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Google_Fonts instance for buffer-level font interception.
 		 *
 		 * @var Google_Fonts|null
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private $google_fonts;
 
@@ -297,7 +297,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Role hash for the current request, set during buffer processing.
 		 *
 		 * @var string
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private string $current_role_hash = '';
 
@@ -316,7 +316,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * and emitted on `wp_head` by {@see maybe_preload_combine_css()}.
 		 *
 		 * @var string
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private string $combine_css_preload_url = '';
 
@@ -424,7 +424,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * payloads.
 		 *
 		 * @return bool True when the request host differs from the canonical host.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public function is_host_mismatched(): bool {
 			return $this->host_mismatch;
@@ -468,7 +468,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @param Image_Optimisation $image_optimisation The existing instance.
 		 * @return void
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public function set_image_optimisation( Image_Optimisation $image_optimisation ): void {
 			$this->image_optimisation = $image_optimisation;
@@ -479,7 +479,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @param Google_Fonts $google_fonts The existing instance.
 		 * @return void
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public function set_google_fonts( Google_Fonts $google_fonts ): void {
 			$this->google_fonts = $google_fonts;
@@ -513,7 +513,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * {@see get_styles_inline_limit()}.
 		 *
 		 * @return bool True when core loads separate core block assets on demand.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private function block_assets_are_separate(): bool {
 			if ( isset( $GLOBALS['wp_version'] ) && version_compare( $GLOBALS['wp_version'], '6.9-alpha', '<' ) ) {
@@ -543,7 +543,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $handle                The registered style handle.
 		 * @param bool   $separate_block_assets Whether core loads separate block assets.
 		 * @return bool True if the handle is a core block asset under separate assets.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private function is_core_block_asset( $handle, bool $separate_block_assets ): bool {
 			return $separate_block_assets && str_starts_with( (string) $handle, 'wp-block-' );
@@ -562,7 +562,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $handle                The registered style handle.
 		 * @param bool   $separate_block_assets Whether core loads separate block assets.
 		 * @return bool True when the handle must stay out of the combined file.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private function is_duplicate_of_core_output( $handle, bool $separate_block_assets ): bool {
 			if ( $this->is_core_block_asset( $handle, $separate_block_assets ) ) {
@@ -577,7 +577,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Centralises the `litespeed_can_optm` gate that was copy-pasted across
 		 * combine/minify/CDN paths.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True if the current request should bypass WPPO optimisation.
 		 */
 		private function should_bypass_for_litespeed(): bool {
@@ -820,7 +820,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param int|string $version       Cache-busting version suffix.
 		 * @param string     $css_file_path Absolute path to the combined CSS file.
 		 * @return void
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private function set_combine_css_preload( $css_url, $version, $css_file_path ): void {
 			if ( $this->will_combine_css_inline( $css_file_path ) ) {
@@ -838,7 +838,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * and before core prints the stylesheet `<link>` at priority 8.
 		 *
 		 * @return void
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public function maybe_preload_combine_css(): void {
 			// TODO(#624): once WP 7.2 removes concatenation in favour of preloads,
@@ -852,7 +852,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			 *
 			 * Default 'high' for external preload (LCP). Return falsy to suppress.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 *
 			 * @param string $fetchpriority Fetchpriority value ('high'|'low'|'auto').
 			 * @param string $url           Preload URL.
@@ -874,7 +874,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * Checks both exact handle match and URL fragment substring.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $handle              Handle to check.
 		 * @param string $src                 Style src URL.
 		 * @param array  $exclude_combine_css Exclusion list.
@@ -1088,7 +1088,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * {@see $inline_size_map}) so repeated simulations pay the filesystem stat
 		 * cost once per queue snapshot instead of once per call.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $handle       The registered style handle.
 		 * @param int    $limit        The inline size limit in bytes.
@@ -1187,7 +1187,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Log share the `PerformanceOptimise\Inc` namespace, so no import is
 		 * required.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $handle The handle whose prediction drifted.
 		 * @param int    $limit  The inline size limit in bytes.
@@ -1231,7 +1231,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Operator opt-out via `wppo_safe_css_combine_fallback` (default true).
 		 * When false the legacy combine path is used without strict guards.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True when fallback guards are active.
 		 */
 		private function is_safe_css_combine_fallback_enabled(): bool {
@@ -1241,7 +1241,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Whether a combined CSS file is valid (exists, readable, non-empty).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $path Absolute path to the combined CSS file.
 		 * @return bool True when the file is usable.
 		 */
@@ -1256,7 +1256,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * per-reason transient throttling (DAY_IN_SECONDS) prevents the log from
 		 * growing per pageview on persistent failures.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $reason  Machine-readable reason (empty_payload, fetch_failure, write_failure, head_match_failure).
 		 * @param array  $handles Handles preserved by the fallback.
 		 * @return void
@@ -1360,7 +1360,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * regardless of `src`. An absent `$wp_version` assumes the newest behavior,
 		 * matching {@see get_styles_inline_limit()}.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return bool True when inline candidates must carry a `src`.
 		 */
@@ -1378,7 +1378,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * plugin's legacy accounting. An absent `$wp_version` assumes the newest
 		 * behavior.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return bool True when the core-faithful pass must skip unreadable styles.
 		 */
@@ -1393,7 +1393,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * should_skip_combine_for_inline_budget and reuses filesystem results when
 		 * combine_css is invoked multiple times per request.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $path Absolute filesystem path.
 		 * @return array{readable:bool,size:int|false}
 		 */
@@ -1433,7 +1433,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *   combined file to exist; the skip premise — "core inlines everything,
 		 *   so the file is redundant" — does not hold.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string[] $eligible_handles Handles that would be combined.
 		 * @return bool True when combining should be skipped.
@@ -1479,7 +1479,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			/**
 			 * Filter whether to skip the combined-CSS file on small block-theme bundles.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 *
 			 * @param bool     $skip             Whether to skip combining (default true on block themes with small bundles).
 			 * @param string[] $eligible_handles The handles that would be combined.
@@ -1659,7 +1659,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * case: the save decision is made inside the callback, the (processed)
 		 * buffer is always flushed to the client.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public function maybe_end_output_buffer(): void {
@@ -1680,7 +1680,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $buffer The content to be processed.
 		 * @return string The processed buffer content.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private function process_buffer_only( $buffer ) {
 			// Nesting balance (issue #881): the enhancement-buffer filter and the
@@ -1751,7 +1751,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $output          The raw output buffer content.
 		 * @return string The processed output buffer.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public function process_buffer_for_cache( $filtered_output, $output ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 			if ( ! $this->is_cache_allowed_for_current_user() || $this->is_not_cacheable() ) {
@@ -1777,7 +1777,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $output The finalized output buffer content (alias $final).
 		 * @return void
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public function stash_cache( $output ) {
 			if ( ! $this->is_cache_allowed_for_current_user() || $this->is_not_cacheable() ) {
@@ -1812,7 +1812,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $buffer HTML buffer.
 		 * @return string
 		 * @since 1.2.0
-		 * @since NEXT Added LITESPEED_BYPASS_CDN guard and CDN delegation.
+		 * @since 2.0.0 Added LITESPEED_BYPASS_CDN guard and CDN delegation.
 		 */
 		public function maybe_apply_cdn( string $buffer ): string {
 			if ( defined( 'LITESPEED_BYPASS_CDN' ) && LITESPEED_BYPASS_CDN ) {
@@ -1921,7 +1921,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * storage layer refuses wc-ajax XHRs even if is_not_cacheable() is
 		 * bypassed via the wppo_should_cache_request filter.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True for wc-ajax requests.
 		 */
 		private function is_wc_ajax_request(): bool {
@@ -1945,7 +1945,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Fail-open: detection failure returns true (treated as dynamic, never cached) and
 		 * the broader Woo guards still apply.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True for Store API requests.
 		 */
 		private function is_woo_store_api_request(): bool {
@@ -1998,7 +1998,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * URI/cookie guards remain so hardcoded cart/checkout slugs stay safe even
 		 * on non-Woo installs (legacy behaviour preserved, 0 queries).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True when the request is Woo-excluded (not cacheable).
 		 */
 		private function is_woo_excluded(): bool {
@@ -2167,7 +2167,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			 * always wins even if the filter returns true. Return false to skip
 			 * ob_start and cache storage.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 *
 			 * @param bool   $should_cache Whether the request should be cached. Default true.
 			 * @param string $request_uri  The request URI.
@@ -2354,7 +2354,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * The final path must originate from {@see safe_path_for_url()}; the
 		 * containment pre-check below is defense-in-depth on the resolved path.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $path Final file path.
 		 * @param string $contents File contents.
 		 * @return bool True on success.
@@ -2388,7 +2388,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $type The file type (default: 'html').
 		 * @return void
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private function save_cache_files( $buffer, $file_path, $type = 'html' ): void {
 			if ( '' === (string) $file_path || ! $this->is_path_contained( (string) $file_path ) ) {
@@ -2446,7 +2446,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 						/**
 						 * Filter whether brotli generation is enabled (fallback).
 						 *
-						 * @since NEXT
+						 * @since 2.0.0
 						 * @param bool $use_brotli Whether brotli is enabled.
 						 */
 						$use_brotli = (bool) apply_filters( 'wppo_litespeed_brotli', $use_brotli );
@@ -2485,7 +2485,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $file_path The file path for saving.
 		 * @return void
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private function save_processed_buffer( string $buffer, string $file_path ): void {
 			if ( '' === $file_path || ! $this->is_path_contained( $file_path ) ) {
@@ -2537,7 +2537,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				/**
 				 * Filter whether WPPO file cache storage should be bypassed on LiteSpeed.
 				 *
-				 * @since NEXT
+				 * @since 2.0.0
 				 * @param bool $bypass Whether to bypass file cache.
 				 */
 				$bypass = (bool) apply_filters( 'wppo_litespeed_bypass_file_cache', true );
@@ -2567,7 +2567,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// Refuse storage for WooCommerce AJAX endpoints (issue #907
 			// defense-in-depth: storage still refuses wc-ajax XHRs even if
 			// is_not_cacheable() is bypassed via the wppo_should_cache_request
-			// filter; covers pretty-permalink paths with an empty query string; @since NEXT).
+			// filter; covers pretty-permalink paths with an empty query string; @since 2.0.0).
 			if ( $this->is_wc_ajax_request() ) {
 				return false;
 			}
@@ -2620,7 +2620,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * internals. Cheap — creates no I/O beyond what is_not_cacheable()
 		 * already does.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True if cacheable.
 		 */
 		public function is_page_cacheable(): bool {
@@ -2692,7 +2692,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			/**
 			 * Filter the list of URLs to invalidate.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 *
 			 * @param string[] $urls    List of URL paths to purge.
 			 * @param int      $post_id The post ID being invalidated.
@@ -2858,7 +2858,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * cross-site leakage. Fail-open: any failure is swallowed — callers must
 		 * never fatal a meta save. No new WP/PHP APIs; safe on WP 6.2+ / PHP 8.2+.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param int $page_id Post ID whose single URL cache must be purged.
 		 * @return void
 		 */
@@ -2917,7 +2917,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Woo-excluded permalinks. Multisite-safe: per-site get_permalink() +
 		 * domain-based get_file_path(), no cross-site purge.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param int    $object_id Woo object (product/order/coupon) ID.
 		 * @param string $kind      Object kind: 'product', 'order', or 'coupon'.
 		 * @return void
@@ -2996,7 +2996,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			/**
 			 * Filter the surgical Woo invalidation URL list.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string[] $urls      List of URL paths to purge.
 			 * @param int      $object_id The Woo object ID being invalidated.
 			 * @param string   $kind      Object kind ('product', 'order', 'coupon').
@@ -3105,7 +3105,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Rate-limits activity-log writes so a hostile crawler cannot flood
 		 * the log table with one entry per request path probe.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var bool
 		 */
 		private static bool $traversal_probe_logged = false;
@@ -3122,7 +3122,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Delegates to the shared {@see Util::sanitize_cache_url_path()}
 		 * helper so every file-writing surface normalizes identically.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string|null $url_path Raw URL path or URL.
 		 * @return string Sanitized relative path or empty string.
 		 */
@@ -3138,7 +3138,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * so `wppo-evil` never prefix-matches `wppo`). Empty root or domain
 		 * fails closed.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $path Absolute file or directory path.
 		 * @return bool True when contained.
 		 */
@@ -3177,7 +3177,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * re-check; `log_traversal_probe()` on reject (skipped for the benign
 		 * homepage so `''`/`'/'` never logs).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $url_path_or_url Raw URL path or URL.
 		 * @param string $filename Leaf filename (e.g. `index.html`).
 		 * @return string Contained absolute path, or '' when refused.
@@ -3246,7 +3246,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * `Util::sanitize_cache_path()` returns `''` for both the benign
 		 * homepage (`''`/`'/'`) and hostile inputs; only the latter is a probe.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $raw_input The raw input that resolved to ''.
 		 * @return void
 		 */
@@ -3277,7 +3277,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * Never throws: failures degrade silently to serving uncached.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $raw_input The hostile input that was rejected.
 		 * @return void
 		 */
@@ -3586,7 +3586,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * has_action('litespeed_purge_all') exists (handled via sync above).
 		 * Filterable via wppo_litespeed_swap_purge.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string|null $url_path URL path or null for all.
 		 * @return void
 		 */
@@ -3600,7 +3600,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			/**
 			 * Filter whether swap fallback purge should run.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param bool $enable Whether to run swap purge.
 			 * @param string|null $url_path URL path being purged.
 			 */
@@ -3734,7 +3734,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Size and count are cached atomically in a single transient (wppo_cache_stats) to avoid
 		 * race conditions where one field is refreshed and the other remains stale.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array{size: string, cached_pages: int, last_cleared: string, cache_dir: string}
 		 */
 		public static function get_cache_stats(): array {
@@ -3830,7 +3830,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * immediately (issue #882). The transient write is kept for cores
 		 * without the salted cache family and for BC with external consumers.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param array<string,mixed> $unified   Unified stats payload.
 		 * @param string              $stats_key Transient key (multisite-prefixed).
@@ -3855,7 +3855,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param int    $depth     Recursion depth guard.
 		 * @return array{size:int,count:int} Total bytes and index.html count.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private function calculate_directory_stats( string $directory, int $depth = 0 ): array {
 			$empty = array(
@@ -3947,7 +3947,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Allows targeted flushing of object cache groups (e.g. wppo_minify_check,
 		 * wppo_activity_logs) instead of a full cache flush.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $group The cache group to flush.
 		 * @return bool True if the flush succeeded, false if the cache implementation

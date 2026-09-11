@@ -23,7 +23,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
  * In-memory $wpdb recorder for probe-log assertions.
  *
  * @package PerformanceOptimise\Tests
- * @since NEXT
+ * @since 2.0.0
  */
 class WPPO_SafePath_Wpdb_Recorder {
 
@@ -62,7 +62,7 @@ class WPPO_SafePath_Wpdb_Recorder {
  * Single choke-point tests.
  *
  * @package PerformanceOptimise\Tests
- * @since NEXT
+ * @since 2.0.0
  */
 class CacheSafePathTest extends \PHPUnit\Framework\TestCase {
 	use WPPO_Test_Bootstrap;

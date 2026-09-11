@@ -139,7 +139,7 @@ class ComplianceAuditTest extends \PHPUnit\Framework\TestCase {
 		$this->assertStringNotContainsString(
 			'@since ' . $invented,
 			$source,
-			"{$relative}: invented @since {$invented} must use @since NEXT instead"
+			"{$relative}: invented @since {$invented} must use @since 2.0.0 instead"
 		);
 	}
 
