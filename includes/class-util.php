@@ -247,6 +247,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'cssHeroPreload'             => false,
 					'autoAltText'                => false,
 					'maxLongestEdgePx'           => 2560,
+					'lazyRenderBelowFold'        => false,
+					'lazyRenderExcludeBuilders'  => true,
 				),
 				'performance_audit'     => array(
 					'pagespeed_api_key'     => '',
