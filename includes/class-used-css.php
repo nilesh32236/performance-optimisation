@@ -789,7 +789,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 						$parts = $this->get_cached_simple_selectors( $selector );
 					}
 					foreach ( $parts as $part ) {
-						if ( 0 === strpos( $part, $prefix ) || false !== stripos( $part, $prefix ) ) {
+						if ( false !== stripos( $part, $prefix ) ) {
 							return true;
 						}
 					}
@@ -1741,32 +1741,44 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			// Hoisted scheduler snapshot (paginated to exhaustion) so a 5000-post
 			// site issues a bounded set of store queries instead of one per
 			// 200-post cursor batch. $lookup_ok disambiguates "none scheduled"
-			// from "lookup unavailable/failed", gating the per-post fallback.
-			$scheduled = array();
-			$lookup_ok = false;
+			// from "lookup unavailable/failed". $snapshot_truncated marks a
+			// capped scan (>20k pending) so snapshot misses still fall back to
+			// per-post as_has_scheduled_action() checks.
+			$scheduled          = array();
+			$lookup_ok          = false;
+			$snapshot_truncated = false;
 			if ( function_exists( 'as_get_scheduled_actions' ) ) {
 				try {
 					$as_offset   = 0;
 					$as_per_page = 1000;
 					// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
 					for ( $page = 0; $page < 20; $page++ ) {
+						// OBJECT format: as_get_scheduled_actions() with 'ARRAY_A'
+						// converts each ActionScheduler_Action via get_object_vars()
+						// outside class scope, which drops the protected $args prop
+						// and leaves $action['args'] always null. Objects expose
+						// get_args(); the array/JSON handling below is fallback only.
+						// Status filter excludes complete/failed/cancelled actions
+						// (retained ~30 days) so legitimate re-queues are not skipped.
 						$batch_actions = as_get_scheduled_actions(
 							array(
 								'hook'     => 'wppo_used_css_generate',
 								'group'    => 'performance_optimisation',
+								'status'   => array( 'pending', 'in-progress' ),
 								'per_page' => $as_per_page,
 								'offset'   => $as_offset,
-							),
-							'ARRAY_A'
+							)
 						);
 						if ( ! is_array( $batch_actions ) || empty( $batch_actions ) ) {
 							break;
 						}
 						foreach ( $batch_actions as $action ) {
-							if ( ! is_array( $action ) ) {
-								continue;
+							$action_args = null;
+							if ( is_object( $action ) && method_exists( $action, 'get_args' ) ) {
+								$action_args = $action->get_args();
+							} elseif ( is_array( $action ) ) {
+								$action_args = $action['args'] ?? null;
 							}
-							$action_args = $action['args'] ?? null;
 							if ( is_string( $action_args ) ) {
 								$decoded     = json_decode( $action_args, true );
 								$action_args = is_array( $decoded ) ? $decoded : null;
@@ -1780,11 +1792,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 							break;
 						}
 						$as_offset += $as_per_page;
+						if ( 19 === $page ) {
+							// Last page was full: the scan hit the 20-page cap and
+							// may have missed scheduled post_ids.
+							$snapshot_truncated = true;
+						}
 					}
 					$lookup_ok = true;
 				} catch ( \Throwable ) {
-					$scheduled = array();
-					$lookup_ok = false;
+					$scheduled          = array();
+					$lookup_ok          = false;
+					$snapshot_truncated = true;
 				}
 			}
 
@@ -1810,7 +1828,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					if ( isset( $scheduled[ $post_id ] ) ) {
 						continue;
 					}
-					if ( ! $lookup_ok && function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => $post_id ), 'performance_optimisation' ) ) {
+					// Snapshot misses are always re-checked per-post: an empty
+					// snapshot is ambiguous ("none scheduled" vs "lookup
+					// failed/truncated"), so a negative snapshot alone must
+					// never skip the authoritative per-item check.
+					if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => $post_id ), 'performance_optimisation' ) ) {
 						$scheduled[ $post_id ] = true;
 						continue;
 					}

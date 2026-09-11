@@ -2300,7 +2300,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 							// Skipped for large files: raw bytes + GD bitmap
 							// simultaneously doubles memory on big uploads.
 							$string_fallback_max = (int) apply_filters( 'wppo_placeholder_string_fallback_max_bytes', 2 * 1024 * 1024 );
-							$file_bytes          = filesize( $file );
+							$file_bytes          = file_exists( $file ) ? filesize( $file ) : false;
 							if ( false !== $file_bytes && $file_bytes <= $string_fallback_max ) {
 								// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents, WordPress.PHP.NoSilencedErrors.Discouraged
 								$contents = @file_get_contents( $file );

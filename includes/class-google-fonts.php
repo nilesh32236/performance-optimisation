@@ -368,9 +368,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			Util::prepare_cache_dir( $this->font_cache_dir . '/files' );
 
 			// Rewrite url(...) to the local file only when it already
-			// exists; the queued job downloads missing files out-of-band
-			// and the original gstatic URL is kept until then so no
-			// request ever blocks on a 30s streamed fetch.
+			// exists; otherwise download it synchronously here. This is
+			// acceptable because this method runs in the background worker
+			// (Action Scheduler / WP-Cron), never on the frontend hot path,
+			// so a 30s streamed fetch cannot block page rendering.
 			$css = preg_replace_callback(
 				'#(url\()\s*(["\']?)(https://fonts\.gstatic\.com[^"\')]+)\2\s*\)#i',
 				function ( $matches ) {
