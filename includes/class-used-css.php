@@ -1667,19 +1667,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( ! function_exists( 'get_permalink' ) ) {
 					return $post_ids;
 				}
-				$priority = \PerformanceOptimise\Inc\RUM::get_path_lcp_priority();
-				if ( empty( $priority ) ) {
-					return $post_ids;
+			$priority = \PerformanceOptimise\Inc\RUM::get_path_lcp_priority();
+			// Fetch trends once for the whole ordering pass instead of once
+			// per post inside score_url_lcp() (issue #1059 review). A
+			// trend-only site (no RUM samples yet) must still prioritize,
+			// so only fall back to FIFO when both signals are empty.
+			$trends = null;
+			if ( class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) && method_exists( 'PerformanceOptimise\Inc\Pagespeed', 'get_trends' ) ) {
+				$trends = \PerformanceOptimise\Inc\Pagespeed::get_trends();
+				if ( ! is_array( $trends ) ) {
+					$trends = array();
 				}
-				// Fetch trends once for the whole ordering pass instead of once
-				// per post inside score_url_lcp() (issue #1059 review).
-				$trends = null;
-				if ( class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) && method_exists( 'PerformanceOptimise\Inc\Pagespeed', 'get_trends' ) ) {
-					$trends = \PerformanceOptimise\Inc\Pagespeed::get_trends();
-					if ( ! is_array( $trends ) ) {
-						$trends = array();
-					}
-				}
+			}
+			if ( empty( $priority ) && empty( $trends ) ) {
+				return $post_ids;
+			}
 				$scores = array();
 				foreach ( $post_ids as $post_id ) {
 					$permalink          = get_permalink( $post_id );

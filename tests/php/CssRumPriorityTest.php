@@ -288,6 +288,123 @@ class CssRumPriorityTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Used-CSS prioritizes by trend LCP alone when no RUM samples exist.
+	 *
+	 * @return void
+	 */
+	public function test_used_css_orders_by_trend_only_without_rum(): void {
+		$this->option_map['wppo_settings'] = array(
+			'file_optimisation' => array( 'usedCssRumPriority' => true ),
+		);
+		Util::clear_settings_cache();
+		RUM::clear_field_lcp_cache();
+		$slow_url                                  = 'http://example.com/slow-page/';
+		$this->permalink_map                       = array(
+			10 => 'http://example.com/fast-page/',
+			11 => $slow_url,
+		);
+		$this->option_map['wppo_web_vitals_trends'] = array(
+			md5( $slow_url ) . '_mobile' => array(
+				array(
+					'fetched_at'  => '2026-09-01 00:00:00',
+					'performance' => 40,
+					'lcp'         => 5000.0,
+					'cls'         => 0.1,
+					'tbt'         => 200.0,
+				),
+			),
+		);
+
+		$this->assertSame( array( 11, 10 ), Used_CSS::order_post_ids_by_rum_priority( array( 10, 11 ) ) );
+	}
+
+	/**
+	 * Used-CSS keeps FIFO order on tied scores (deterministic usort tie-break).
+	 *
+	 * @return void
+	 */
+	public function test_used_css_tie_keeps_fifo(): void {
+		$this->seed_rum_fixture();
+		$this->option_map['wppo_settings'] = array(
+			'file_optimisation' => array( 'usedCssRumPriority' => true ),
+		);
+		Util::clear_settings_cache();
+		$slow_url            = 'http://example.com/slow-page/';
+		$this->permalink_map = array(
+			10 => $slow_url,
+			11 => $slow_url,
+		);
+
+		$this->assertSame( array( 10, 11 ), Used_CSS::order_post_ids_by_rum_priority( array( 10, 11 ) ) );
+		$this->assertSame( array( 11, 10 ), Used_CSS::order_post_ids_by_rum_priority( array( 11, 10 ) ) );
+	}
+
+	/**
+	 * Critical-CSS prioritizes by trend LCP alone when no RUM samples exist.
+	 *
+	 * @return void
+	 */
+	public function test_critical_css_orders_by_trend_only_without_rum(): void {
+		$this->option_map['wppo_settings'] = array(
+			'file_optimisation' => array( 'ccssRumPriority' => true ),
+		);
+		Util::clear_settings_cache();
+		Critical_CSS::reset_ccss_memo();
+		RUM::clear_field_lcp_cache();
+		$slow_url                                  = 'http://example.com/slow-page/';
+		$this->permalink_map                       = array(
+			55 => $slow_url,
+		);
+		$this->option_map['wppo_web_vitals_trends'] = array(
+			md5( $slow_url ) . '_mobile' => array(
+				array(
+					'fetched_at'  => '2026-09-01 00:00:00',
+					'performance' => 40,
+					'lcp'         => 5500.0,
+					'cls'         => 0.1,
+					'tbt'         => 200.0,
+				),
+			),
+		);
+
+		$ordered = Critical_CSS::order_templates_by_rum_priority(
+			array(
+				'home'   => 'Home',
+				'single' => 'Single Post',
+			)
+		);
+
+		$this->assertSame( array( 'single', 'home' ), array_keys( $ordered ) );
+	}
+
+	/**
+	 * Critical-CSS keeps FIFO order on tied scores (deterministic usort tie-break).
+	 *
+	 * @return void
+	 */
+	public function test_critical_css_tie_keeps_fifo(): void {
+		$this->seed_rum_fixture( 3000.0, 3000.0 );
+		$this->option_map['wppo_settings'] = array(
+			'file_optimisation' => array( 'ccssRumPriority' => true ),
+		);
+		Util::clear_settings_cache();
+		Critical_CSS::reset_ccss_memo();
+
+		$fifo = array(
+			'home'   => 'Home',
+			'single' => 'Single Post',
+		);
+		$this->assertSame( $fifo, Critical_CSS::order_templates_by_rum_priority( $fifo ) );
+
+		Critical_CSS::reset_ccss_memo();
+		$reversed = array(
+			'single' => 'Single Post',
+			'home'   => 'Home',
+		);
+		$this->assertSame( $reversed, Critical_CSS::order_templates_by_rum_priority( $reversed ) );
+	}
+
+	/**
 	 * New priority toggles default to on via Util defaults.
 	 *
 	 * @return void
