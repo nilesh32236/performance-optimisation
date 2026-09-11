@@ -574,6 +574,129 @@ class CcssSafelistChecksumTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * The persisted document-ordered URL list is re-hashed on probe, so a
+	 * $wp_styles queue with a different order cannot churn (audit #9).
+	 */
+	public function test_generate_and_store_persists_source_urls_for_probe(): void {
+		$hash = 'ccsssrcdom' . substr( md5( uniqid( 'wppo', true ) ), 0, 8 );
+
+		$this->option_map['wppo_settings'] = array(
+			'file_optimisation' => array(
+				'ccssSafelistExtra' => '.modal-open',
+			),
+		);
+		Util::clear_settings_cache();
+
+		$theme_dir = wp_normalize_path( WP_CONTENT_DIR . '/themes/wppo-ccss-srcdom' );
+		if ( ! is_dir( $theme_dir ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
+			mkdir( $theme_dir, 0775, true );
+		}
+		$file_a = $theme_dir . '/a.css';
+		$file_b = $theme_dir . '/b.css';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+		file_put_contents( $file_a, 'h1{font-size:2em}' );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+		file_put_contents( $file_b, '.container{width:100%}' );
+
+		$url_a = 'http://example.com/wp-content/themes/wppo-ccss-srcdom/a.css';
+		$url_b = 'http://example.com/wp-content/themes/wppo-ccss-srcdom/b.css';
+
+		// The fetched page emits document order b, a.
+		$html = '<html><head><style>body{margin:0}</style>'
+			// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- Test fixture HTML.
+			. '<link rel="stylesheet" href="' . $url_b . '" />'
+			// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- Test fixture HTML.
+			. '<link rel="stylesheet" href="' . $url_a . '" />'
+			. '</head><body></body></html>';
+		$this->stub_generation_fetch( $html );
+
+		// Probe queue is reversed: pre-fix this hashes a, b and churns.
+		$entry_a              = new \stdClass();
+		$entry_a->src         = $url_a;
+		$entry_b              = new \stdClass();
+		$entry_b->src         = $url_b;
+		$styles               = new \stdClass();
+		$styles->queue        = array( 'wppo-fixture-a', 'wppo-fixture-b' );
+		$styles->registered   = array(
+			'wppo-fixture-a' => $entry_a,
+			'wppo-fixture-b' => $entry_b,
+		);
+		$GLOBALS['wp_styles'] = $styles;
+
+		$ccss_file = $this->prepare_ccss_dir( $hash );
+
+		Critical_CSS::reset_ccss_memo();
+		try {
+			$this->assertTrue( $this->invoke_private( 'generate_and_store', $hash, 'index' ) );
+			$this->assertFileExists( $ccss_file );
+
+			// The canonical document-ordered URL list must be persisted.
+			$persisted_key = Util::transient_key( 'wppo_ccss_sources_' . $hash );
+			$this->assertArrayHasKey( $persisted_key, $this->transient_map );
+			$this->assertSame( array( $url_b, $url_a ), $this->transient_map[ $persisted_key ] );
+
+			// Probe re-hashes the persisted list, not the reversed queue.
+			Critical_CSS::reset_ccss_memo();
+			$dropped = Critical_CSS::maybe_check_stale_and_requeue( $hash );
+
+			$this->assertFalse( $dropped, 'Probe must re-hash the persisted document-ordered URL list' );
+			$this->assertFileExists( $ccss_file, 'Persisted source domain must keep the variant fresh' );
+		} finally {
+			$this->cleanup_ccss_fixture( $ccss_file, array( $file_a, $file_b ), $theme_dir );
+		}
+	}
+
+	/**
+	 * Already-cached entries without a persisted URL list fall back to the
+	 * previous $wp_styles-derived domain instead of being invalidated (#9).
+	 */
+	public function test_probe_falls_back_when_persisted_url_list_absent(): void {
+		$hash = 'ccsslegacy' . substr( md5( uniqid( 'wppo', true ) ), 0, 8 );
+
+		$this->option_map['wppo_settings'] = array(
+			'file_optimisation' => array(
+				'ccssSafelistExtra' => '.modal-open',
+			),
+		);
+		Util::clear_settings_cache();
+
+		$theme_dir = wp_normalize_path( WP_CONTENT_DIR . '/themes/wppo-ccss-legacy' );
+		if ( ! is_dir( $theme_dir ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
+			mkdir( $theme_dir, 0775, true );
+		}
+		$file_a = $theme_dir . '/a.css';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+		file_put_contents( $file_a, 'h1{font-size:2em}' );
+		$url_a = 'http://example.com/wp-content/themes/wppo-ccss-legacy/a.css';
+
+		$entry_a              = new \stdClass();
+		$entry_a->src         = $url_a;
+		$styles               = new \stdClass();
+		$styles->queue        = array( 'wppo-fixture-a' );
+		$styles->registered   = array( 'wppo-fixture-a' => $entry_a );
+		$GLOBALS['wp_styles'] = $styles;
+
+		$ccss_file = $this->prepare_ccss_dir( $hash );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+		file_put_contents( $ccss_file, 'body{margin:0}' );
+
+		// Legacy baseline: checksum present, URL list absent.
+		Critical_CSS::store_source_checksum( $hash, 'stale-source-domain' );
+
+		Critical_CSS::reset_ccss_memo();
+		try {
+			$dropped = Critical_CSS::maybe_check_stale_and_requeue( $hash );
+
+			$this->assertTrue( $dropped, 'Legacy entries must fall back to the $wp_styles-derived domain' );
+			$this->assertFileDoesNotExist( $ccss_file );
+		} finally {
+			$this->cleanup_ccss_fixture( $ccss_file, array( $file_a ), $theme_dir );
+		}
+	}
+
+	/**
 	 * Stub the HTTP + mkdir calls used by the generate_and_store() fixtures.
 	 *
 	 * @param string $html Fetched page HTML returned for non-.css requests.
