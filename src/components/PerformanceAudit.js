@@ -489,19 +489,19 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 					<table className="wppo-audit-table">
 						<thead>
 							<tr>
-								<th>
+								<th scope="col">
 									{ __(
 										'Metric',
 										'performance-optimisation'
 									) }
 								</th>
-								<th>
+								<th scope="col">
 									{ __(
 										'Value',
 										'performance-optimisation'
 									) }
 								</th>
-								<th>
+								<th scope="col">
 									{ __(
 										'Status',
 										'performance-optimisation'

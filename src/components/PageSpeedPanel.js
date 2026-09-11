@@ -479,19 +479,19 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 					<table className="wppo-vitals-table">
 						<thead>
 							<tr>
-								<th>
+								<th scope="col">
 									{ __(
 										'Metric',
 										'performance-optimisation'
 									) }
 								</th>
-								<th>
+								<th scope="col">
 									{ __(
 										'Value',
 										'performance-optimisation'
 									) }
 								</th>
-								<th>
+								<th scope="col">
 									{ __(
 										'Status',
 										'performance-optimisation'

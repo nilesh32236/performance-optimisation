@@ -155,7 +155,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * served externally instead of inlined so core cannot double-inline it.
 		 *
 		 * @var bool
-		 * @since 2.22.0
+		 * @since NEXT
 		 */
 		private bool $inline_drift_detected = false;
 
@@ -183,7 +183,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * additionally throttles persistent drift across requests.
 		 *
 		 * @var bool
-		 * @since 2.22.0
+		 * @since NEXT
 		 */
 		private static bool $inline_drift_logged = false;
 
@@ -202,7 +202,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * styles in its budget loop without charging their size.
 		 *
 		 * @var array<string,array{size:int,readable:bool}>|null
-		 * @since 2.22.0
+		 * @since NEXT
 		 */
 		private ?array $inline_size_map = null;
 
@@ -1088,7 +1088,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * {@see $inline_size_map}) so repeated simulations pay the filesystem stat
 		 * cost once per queue snapshot instead of once per call.
 		 *
-		 * @since 2.22.0
+		 * @since NEXT
 		 *
 		 * @param string $handle       The registered style handle.
 		 * @param int    $limit        The inline size limit in bytes.
@@ -1187,7 +1187,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Log share the `PerformanceOptimise\Inc` namespace, so no import is
 		 * required.
 		 *
-		 * @since 2.22.0
+		 * @since NEXT
 		 *
 		 * @param string $handle The handle whose prediction drifted.
 		 * @param int    $limit  The inline size limit in bytes.
@@ -1360,7 +1360,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * regardless of `src`. An absent `$wp_version` assumes the newest behavior,
 		 * matching {@see get_styles_inline_limit()}.
 		 *
-		 * @since 2.22.0
+		 * @since NEXT
 		 *
 		 * @return bool True when inline candidates must carry a `src`.
 		 */
@@ -1378,7 +1378,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * plugin's legacy accounting. An absent `$wp_version` assumes the newest
 		 * behavior.
 		 *
-		 * @since 2.22.0
+		 * @since NEXT
 		 *
 		 * @return bool True when the core-faithful pass must skip unreadable styles.
 		 */

@@ -363,7 +363,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		 * @return void
 		 */
 		private function maybe_review_notice(): void {
-			if ( ! is_admin() || ! current_user_can( 'manage_options' ) ) {
+			$screen = get_current_screen();
+
+			// Limit the review ask to the plugin's own admin screen so it does
+			// not nag on every wp-admin page (matches Main::admin_enqueue_scripts()).
+			if ( ! $screen || 'toplevel_page_performance-optimisation' !== $screen->base ) {
+				return;
+			}
+
+			if ( ! current_user_can( 'manage_options' ) ) {
 				return;
 			}
 

@@ -273,7 +273,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 		 *
 		 * @param string $css The original CSS content.
 		 * @return string The modified CSS content.
-		 * @since 1.6.1
+		 * @since NEXT
 		 */
 		public static function inject_font_display_swap( $css ) {
 			$offset = 0;

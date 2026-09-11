@@ -5078,7 +5078,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * - adds the `wppo-lazy-video` class,
 		 * - defers `poster` to `data-poster` for core's animated-GIF companion videos (WP 7.1+, the `autoplay` + `loop` + `muted` + `playsinline` + `poster` signature), which the client restores on intersect.
 		 *
-		 * @since 1.2.4
+		 * @since NEXT
 		 * @since NEXT Defer companion-video `poster` frames to `data-poster`.
 		 *
 		 * @param string $buffer HTML markup to process.
