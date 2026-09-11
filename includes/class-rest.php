@@ -864,31 +864,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$jobs_queued          = 0;
 
 			if ( $use_action_scheduler ) {
-				// Single scheduler snapshot for dedup: one store query for
-				// the hook/group instead of one as_has_scheduled_action()
-				// query per image (N+1). Falls back to per-item checks when
-				// the snapshot API is unavailable.
+				// Paginated scheduler snapshot for dedup instead of one
+				// as_has_scheduled_action() query per image (N+1). Falls back
+				// to per-item checks whenever an item was not positively
+				// confirmed (snapshot unavailable/failed/incomplete).
 				$scheduled = array();
 				if ( function_exists( 'as_get_scheduled_actions' ) ) {
 					try {
-						$statuses = array();
+						$statuses = array( 'pending', 'in-progress' );
 						if ( class_exists( 'ActionScheduler_Store' ) ) {
 							$statuses = array(
 								\ActionScheduler_Store::STATUS_PENDING,
 								\ActionScheduler_Store::STATUS_RUNNING,
 							);
 						}
-						$query = array(
-							'hook'     => 'wppo_convert_image_background',
-							'group'    => 'performance_optimisation',
-							'per_page' => 1000,
-						);
-						if ( ! empty( $statuses ) ) {
-							$query['status'] = $statuses;
-						}
-						$existing_actions = as_get_scheduled_actions( $query, 'ARRAY_A' );
-						if ( is_array( $existing_actions ) ) {
+						// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
+						for ( $as_page = 0; $as_page < 10; $as_page++ ) {
+							$query            = array(
+								'hook'     => 'wppo_convert_image_background',
+								'group'    => 'performance_optimisation',
+								'status'   => $statuses,
+								'per_page' => 1000,
+								'offset'   => $as_page * 1000,
+							);
+							$existing_actions = as_get_scheduled_actions( $query, 'ARRAY_A' );
+							if ( ! is_array( $existing_actions ) || empty( $existing_actions ) ) {
+								break;
+							}
 							foreach ( $existing_actions as $action ) {
+								if ( ! is_array( $action ) ) {
+									continue;
+								}
 								$action_args = $action['args'] ?? null;
 								if ( is_string( $action_args ) ) {
 									$decoded     = json_decode( $action_args, true );
@@ -896,12 +902,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 								}
 								if ( is_array( $action_args ) && isset( $action_args[0]['source_path'], $action_args[0]['format'] ) ) {
 									$scheduled[ $action_args[0]['source_path'] . '|' . $action_args[0]['format'] ] = true;
-								} elseif ( is_object( $action ) && method_exists( $action, 'get_args' ) ) {
-									$oa = $action->get_args();
-									if ( isset( $oa[0]['source_path'], $oa[0]['format'] ) ) {
-										$scheduled[ $oa[0]['source_path'] . '|' . $oa[0]['format'] ] = true;
-									}
 								}
+							}
+							// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
+							if ( count( $existing_actions ) < 1000 ) {
+								break;
 							}
 						}
 					} catch ( \Throwable $e ) {
@@ -924,7 +929,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 						if ( isset( $scheduled[ $dedup_key ] ) ) {
 							continue;
 						}
-						if ( empty( $scheduled ) && function_exists( 'as_has_scheduled_action' ) && ! function_exists( 'as_get_scheduled_actions' ) && as_has_scheduled_action( 'wppo_convert_image_background', $args, 'performance_optimisation' ) ) {
+						if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_convert_image_background', $args, 'performance_optimisation' ) ) {
+							$scheduled[ $dedup_key ] = true;
 							continue;
 						}
 						as_enqueue_async_action(
@@ -951,7 +957,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 						if ( isset( $scheduled[ $dedup_key ] ) ) {
 							continue;
 						}
-						if ( empty( $scheduled ) && function_exists( 'as_has_scheduled_action' ) && ! function_exists( 'as_get_scheduled_actions' ) && as_has_scheduled_action( 'wppo_convert_image_background', $args, 'performance_optimisation' ) ) {
+						if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_convert_image_background', $args, 'performance_optimisation' ) ) {
+							$scheduled[ $dedup_key ] = true;
 							continue;
 						}
 						as_enqueue_async_action(
@@ -1307,11 +1314,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// Bound the query so SPA polling does not recount the full set.
 			// The count is a capped sample: queues deeper than the cap are
 			// reported as '100+' via queued_jobs_capped.
-			if ( function_exists( 'as_get_scheduled_actions' ) && class_exists( 'ActionScheduler_Store' ) ) {
-				$pending_jobs = as_get_scheduled_actions(
+			if ( function_exists( 'as_get_scheduled_actions' ) ) {
+				$pending_status = class_exists( 'ActionScheduler_Store' ) ? \ActionScheduler_Store::STATUS_PENDING : 'pending';
+				$pending_jobs   = as_get_scheduled_actions(
 					array(
 						'hook'     => 'wppo_convert_image_background',
-						'status'   => \ActionScheduler_Store::STATUS_PENDING,
+						'status'   => $pending_status,
 						'group'    => 'performance_optimisation',
 						'per_page' => 100,
 					),

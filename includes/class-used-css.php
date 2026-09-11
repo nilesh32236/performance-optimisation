@@ -1738,6 +1738,56 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			// Intentional bypass of WP_Query filters (pre_get_posts, language plugins) for performance:
 			// direct $wpdb cursor pagination (ID > last_id) avoids OFFSET cost on large sites. Site-specific
 			// filtering must be handled separately if needed.
+			// Hoisted scheduler snapshot (paginated to exhaustion) so a 5000-post
+			// site issues a bounded set of store queries instead of one per
+			// 200-post cursor batch. $lookup_ok disambiguates "none scheduled"
+			// from "lookup unavailable/failed", gating the per-post fallback.
+			$scheduled = array();
+			$lookup_ok = false;
+			if ( function_exists( 'as_get_scheduled_actions' ) ) {
+				try {
+					$as_offset   = 0;
+					$as_per_page = 1000;
+					// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
+					for ( $page = 0; $page < 20; $page++ ) {
+						$batch_actions = as_get_scheduled_actions(
+							array(
+								'hook'     => 'wppo_used_css_generate',
+								'group'    => 'performance_optimisation',
+								'per_page' => $as_per_page,
+								'offset'   => $as_offset,
+							),
+							'ARRAY_A'
+						);
+						if ( ! is_array( $batch_actions ) || empty( $batch_actions ) ) {
+							break;
+						}
+						foreach ( $batch_actions as $action ) {
+							if ( ! is_array( $action ) ) {
+								continue;
+							}
+							$action_args = $action['args'] ?? null;
+							if ( is_string( $action_args ) ) {
+								$decoded     = json_decode( $action_args, true );
+								$action_args = is_array( $decoded ) ? $decoded : null;
+							}
+							if ( is_array( $action_args ) && isset( $action_args['post_id'] ) ) {
+								$scheduled[ (int) $action_args['post_id'] ] = true;
+							}
+						}
+						// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
+						if ( count( $batch_actions ) < $as_per_page ) {
+							break;
+						}
+						$as_offset += $as_per_page;
+					}
+					$lookup_ok = true;
+				} catch ( \Throwable ) {
+					$scheduled = array();
+					$lookup_ok = false;
+				}
+			}
+
 			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- Intentional direct query, $placeholders is count-derived only.
 			do {
 				// Cursor pagination via ID > last_id avoids O(offset) MySQL scans.
@@ -1755,48 +1805,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					break;
 				}
 
-				// One scheduler lookup per batch instead of one
-				// as_has_scheduled_action() query per post (N+1 on bulk path).
-				$batch_scheduled = array();
-				if ( function_exists( 'as_get_scheduled_actions' ) ) {
-					try {
-						$batch_actions = as_get_scheduled_actions(
-							array(
-								'hook'     => 'wppo_used_css_generate',
-								'group'    => 'performance_optimisation',
-								'per_page' => 1000,
-							),
-							'ARRAY_A'
-						);
-						if ( is_array( $batch_actions ) ) {
-							foreach ( $batch_actions as $action ) {
-								$action_args = $action['args'] ?? null;
-								if ( is_string( $action_args ) ) {
-									$decoded     = json_decode( $action_args, true );
-									$action_args = is_array( $decoded ) ? $decoded : null;
-								}
-								if ( is_array( $action_args ) && isset( $action_args['post_id'] ) ) {
-									$batch_scheduled[ (int) $action_args['post_id'] ] = true;
-								} elseif ( is_object( $action ) && method_exists( $action, 'get_args' ) ) {
-									$oa = $action->get_args();
-									if ( isset( $oa['post_id'] ) ) {
-										$batch_scheduled[ (int) $oa['post_id'] ] = true;
-									}
-								}
-							}
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						$batch_scheduled = array();
-					}
-				}
-
 				foreach ( $post_ids as $post_id ) {
 					$post_id = (int) $post_id;
-					if ( isset( $batch_scheduled[ $post_id ] ) ) {
+					if ( isset( $scheduled[ $post_id ] ) ) {
 						continue;
 					}
-					if ( empty( $batch_scheduled ) && ! function_exists( 'as_get_scheduled_actions' ) && function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => $post_id ), 'performance_optimisation' ) ) {
+					if ( ! $lookup_ok && function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => $post_id ), 'performance_optimisation' ) ) {
+						$scheduled[ $post_id ] = true;
 						continue;
 					}
 					as_enqueue_async_action(
@@ -1804,7 +1819,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 						array( 'post_id' => $post_id ),
 						'performance_optimisation'
 					);
-					$batch_scheduled[ $post_id ] = true;
+					$scheduled[ $post_id ] = true;
 					++$queued;
 				}
 

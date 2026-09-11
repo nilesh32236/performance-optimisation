@@ -278,10 +278,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 				'key' => $key,
 				'url' => $url,
 			);
+			// Wrap as a single positional arg: Action Scheduler and WP-Cron
+			// unpack stored args positionally (array_values), so the
+			// single-array handler must receive array( $args ).
+			$payload = array( $args );
 			if ( function_exists( 'as_has_scheduled_action' ) && function_exists( 'as_enqueue_async_action' ) ) {
 				try {
-					if ( ! as_has_scheduled_action( self::AS_HOOK, $args, 'performance_optimisation' ) ) {
-						as_enqueue_async_action( self::AS_HOOK, $args, 'performance_optimisation' );
+					if ( ! as_has_scheduled_action( self::AS_HOOK, $payload, 'performance_optimisation' ) ) {
+						as_enqueue_async_action( self::AS_HOOK, $payload, 'performance_optimisation' );
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
@@ -290,8 +294,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			}
 			if ( function_exists( 'wp_next_scheduled' ) && function_exists( 'wp_schedule_single_event' ) ) {
 				try {
-					if ( false === wp_next_scheduled( self::AS_HOOK, $args ) ) {
-						wp_schedule_single_event( time() + MINUTE_IN_SECONDS, self::AS_HOOK, $args );
+					if ( false === wp_next_scheduled( self::AS_HOOK, $payload ) ) {
+						wp_schedule_single_event( time() + MINUTE_IN_SECONDS, self::AS_HOOK, $payload );
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );

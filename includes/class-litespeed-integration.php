@@ -938,8 +938,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * @return void
 		 */
 		public static function invalidate_uri_post_map(): void {
-			self::$uri_post_memo   = array();
-			self::$purge_tags_memo = null;
+			self::$uri_post_memo = array();
+			self::invalidate_purge_tags_memo();
 			try {
 				if ( function_exists( 'delete_transient' ) ) {
 					delete_transient( Util::transient_key( 'wppo_ls_uri_post_map' ) );
