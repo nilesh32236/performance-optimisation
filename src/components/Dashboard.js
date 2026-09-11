@@ -1423,11 +1423,15 @@ const Dashboard = ( {
 						{ Array.isArray( wooSelfTest.checks ) && (
 							<ul className="wppo-woo-self-test">
 								{ wooSelfTest.checks.map( ( check, index ) => (
-									<li key={ check.path ?? index }>
-										<span>{ check.path }</span>
+									<li
+										key={ `${
+											check?.path ?? 'check'
+										}-${ index }` }
+									>
+										<span>{ check?.path }</span>
 										{ ' — ' }
 										<span>
-											{ check.pass
+											{ check?.pass
 												? __(
 														'Bypassed (pass)',
 														'performance-optimisation'

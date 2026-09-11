@@ -63,6 +63,9 @@ const EdgeCachePanel = () => {
 		[ edgeCacheSlice ]
 	);
 	useEffect( () => {
+		if ( saving ) {
+			return;
+		}
 		const s =
 			typeof wppoSettings !== 'undefined'
 				? wppoSettings?.settings?.edge_cache || {}
@@ -73,7 +76,7 @@ const EdgeCachePanel = () => {
 		setSwr( String( s.staleWhileRevalidate ?? 86400 ) );
 		setCfZone( s.cloudflareZoneId || '' );
 		setBunnyZone( s.bunnyPullZoneId || '' );
-	}, [ edgeCacheKey ] );
+	}, [ edgeCacheKey, saving ] );
 
 	const handleSave = useCallback( async () => {
 		setSaving( true );

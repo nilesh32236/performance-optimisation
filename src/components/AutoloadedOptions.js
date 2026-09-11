@@ -55,11 +55,14 @@ const AutoloadedOptions = () => {
 	const [ reverting, setReverting ] = useState( {} );
 	const { notice, notify, dismiss } = useNotice();
 	const isMounted = useRef( true );
+	const pendingRef = useRef( new Set() );
 
 	useEffect( () => {
 		isMounted.current = true;
+		const pending = pendingRef.current;
 		return () => {
 			isMounted.current = false;
+			pending.forEach( ( c ) => c.abort() );
 		};
 	}, [] );
 
@@ -74,12 +77,18 @@ const AutoloadedOptions = () => {
 					'GET',
 					signal
 				);
-				if ( signal?.aborted ) {
+				if ( signal?.aborted || ! isMounted.current ) {
 					return;
 				}
 				if ( response.success && response.data?.options ) {
+					if ( ! isMounted.current ) {
+						return;
+					}
 					setOptions( response.data.options );
 				} else {
+					if ( ! isMounted.current ) {
+						return;
+					}
 					notify( {
 						type: 'error',
 						message:
@@ -95,6 +104,9 @@ const AutoloadedOptions = () => {
 				if ( signal?.aborted || loadError?.name === 'AbortError' ) {
 					return;
 				}
+				if ( ! isMounted.current ) {
+					return;
+				}
 				notify( {
 					type: 'error',
 					message: __(
@@ -108,7 +120,7 @@ const AutoloadedOptions = () => {
 					loadError
 				);
 			} finally {
-				if ( ! signal?.aborted ) {
+				if ( ! signal?.aborted && isMounted.current ) {
 					setLoading( false );
 				}
 			}
@@ -125,6 +137,7 @@ const AutoloadedOptions = () => {
 	const runDryRun = useCallback( async () => {
 		setChecking( true );
 		const controller = new AbortController();
+		pendingRef.current.add( controller );
 		try {
 			const response = await apiCall(
 				'autoload_remediate',
@@ -170,6 +183,7 @@ const AutoloadedOptions = () => {
 				durationMs: 5000,
 			} );
 		} finally {
+			pendingRef.current.delete( controller );
 			if ( isMounted.current ) {
 				setChecking( false );
 			}
@@ -179,6 +193,7 @@ const AutoloadedOptions = () => {
 	const applyFix = useCallback( async () => {
 		setApplying( true );
 		const controller = new AbortController();
+		pendingRef.current.add( controller );
 		try {
 			const response = await apiCall(
 				'autoload_remediate',
@@ -197,8 +212,8 @@ const AutoloadedOptions = () => {
 				setAppliedSummary( response.data );
 				setRemediated( response.data.remediated || {} );
 				// Reload first: load() dismisses stale notices, so notify after.
-				await load();
-				if ( ! isMounted.current ) {
+				await load( controller.signal );
+				if ( controller.signal.aborted || ! isMounted.current ) {
 					return;
 				}
 				notify( {
@@ -242,6 +257,7 @@ const AutoloadedOptions = () => {
 				durationMs: 5000,
 			} );
 		} finally {
+			pendingRef.current.delete( controller );
 			if ( isMounted.current ) {
 				setApplying( false );
 			}
@@ -263,6 +279,7 @@ const AutoloadedOptions = () => {
 			}
 			setReverting( ( prev ) => ( { ...prev, [ optionName ]: true } ) );
 			const controller = new AbortController();
+			pendingRef.current.add( controller );
 			try {
 				const response = await apiCall(
 					'autoload_remediate',
@@ -299,8 +316,8 @@ const AutoloadedOptions = () => {
 						};
 					} );
 					// Reload first: load() dismisses stale notices, so notify after.
-					await load();
-					if ( ! isMounted.current ) {
+					await load( controller.signal );
+					if ( controller.signal.aborted || ! isMounted.current ) {
 						return;
 					}
 					notify( {
@@ -344,6 +361,7 @@ const AutoloadedOptions = () => {
 					durationMs: 5000,
 				} );
 			} finally {
+				pendingRef.current.delete( controller );
 				if ( isMounted.current ) {
 					setReverting( ( prev ) => ( {
 						...prev,
@@ -358,6 +376,7 @@ const AutoloadedOptions = () => {
 	const revertAll = useCallback( async () => {
 		setRevertingAll( true );
 		const controller = new AbortController();
+		pendingRef.current.add( controller );
 		try {
 			const response = await apiCall(
 				'autoload_remediate',
@@ -374,8 +393,8 @@ const AutoloadedOptions = () => {
 				setRemediated( {} );
 				setAppliedSummary( null );
 				// Reload first: load() dismisses stale notices, so notify after.
-				await load();
-				if ( ! isMounted.current ) {
+				await load( controller.signal );
+				if ( controller.signal.aborted || ! isMounted.current ) {
 					return;
 				}
 				notify( {
@@ -415,6 +434,7 @@ const AutoloadedOptions = () => {
 				durationMs: 5000,
 			} );
 		} finally {
+			pendingRef.current.delete( controller );
 			if ( isMounted.current ) {
 				setRevertingAll( false );
 			}

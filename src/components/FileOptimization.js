@@ -1,5 +1,11 @@
 import { __ } from '@wordpress/i18n';
-import { useState, useRef, useEffect, useContext } from '@wordpress/element';
+import {
+	useState,
+	useRef,
+	useEffect,
+	useContext,
+	useCallback,
+} from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 import { modeLabel } from '../lib/litespeed';
@@ -43,6 +49,23 @@ const FileOptimization = ( {
 } ) => {
 	const [ activeSubTab, setActiveSubTab ] = useState( 'assets' );
 	const tabRefs = useRef( {} );
+	const tabRefCallbacks = useRef( {} );
+
+	// Stable per-tab ref callbacks: caching by tab id avoids creating a new
+	// inline closure every render (which would detach/re-attach every tab
+	// ref on each keystroke-driven re-render).
+	const getTabRef = useCallback( ( id ) => {
+		if ( ! tabRefCallbacks.current[ id ] ) {
+			tabRefCallbacks.current[ id ] = ( el ) => {
+				if ( el ) {
+					tabRefs.current[ id ] = el;
+				} else {
+					delete tabRefs.current[ id ];
+				}
+			};
+		}
+		return tabRefCallbacks.current[ id ];
+	}, [] );
 
 	const defaultSettings = {
 		minifyJS: false,
@@ -761,13 +784,7 @@ const FileOptimization = ( {
 						<button
 							key={ tab.id }
 							id={ `tab-${ tab.id }` }
-							ref={ ( el ) => {
-								if ( el ) {
-									tabRefs.current[ tab.id ] = el;
-								} else {
-									delete tabRefs.current[ tab.id ];
-								}
-							} }
+							ref={ getTabRef( tab.id ) }
 							className={ `wppo-sub-tab${
 								activeSubTab === tab.id
 									? ' wppo-sub-tab--active'
