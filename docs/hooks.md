@@ -815,7 +815,48 @@ Filters AI-injected speculation rules. @since NEXT.
 
 **Parameters:**
 - `$rules` *(array)* — Speculation rules array.
-- `$urls` *(string[])* — Top-2 predicted prefetch URLs.
+- `$urls` *(string[])* — Top predicted prefetch URLs (model + RUM-ranked top URLs, capped at 5).
+
+---
+
+### `wppo_ai_speculation_rum_gating`
+Filters whether RUM-gated speculation eagerness applies (issue #1061). @since NEXT. When on (default true via `preload_settings.speculationRumGating`), good RUM p75 emits a moderate/eager list rule with top URLs; poor or absent RUM forces conservative.
+
+**Parameters:**
+- `$enabled` *(bool)* — Whether RUM gating is enabled.
+
+---
+
+### `wppo_ai_speculation_lcp_threshold`
+Filters the LCP p75 (ms) threshold for RUM-gated speculation eagerness (issue #1061). @since NEXT. Non-finite or negative values fail open to the default.
+
+**Parameters:**
+- `$threshold` *(float)* — LCP p75 threshold in milliseconds (default 2500.0).
+
+---
+
+### `wppo_ai_speculation_inp_threshold`
+Filters the INP p75 (ms) threshold for RUM-gated speculation eagerness (issue #1061). @since NEXT. Non-finite or negative values fail open to the default.
+
+**Parameters:**
+- `$threshold` *(float)* — INP p75 threshold in milliseconds (default 200.0).
+
+---
+
+### `wppo_ai_speculation_eagerness`
+Filters the eagerness for a RUM-qualified (good p75) speculation list rule (issue #1061). @since NEXT.
+
+**Parameters:**
+- `$eagerness` *(string)* — Eagerness value (default `moderate`).
+- `$state` *(array)* — Gated state (`lcp_p75`, `inp_p75`, `samples`).
+
+---
+
+### `wppo_ai_speculation_top_urls`
+Filters the RUM-ranked top URLs for the gated speculation list rule (issue #1061). @since NEXT. Filter output is untrusted: it is re-sanitized (`esc_url_raw`), re-checked against the commerce-prefix and same-site guards, deduped, and re-capped at 5 URLs.
+
+**Parameters:**
+- `$urls` *(string[])* — Ranked absolute URLs.
 
 ---
 

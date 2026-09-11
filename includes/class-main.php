@@ -311,6 +311,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$this->options['file_optimisation']['delayJSSafeMode'] = true;
 			}
 
+			// Existing installs whose stored settings predate the
+			// speculationRumGating key (issue #1061) inherit the enabled
+			// default in-memory here (no database write on front-end
+			// requests). Multisite-safe: per-site wppo_settings only.
+			if ( ! isset( $this->options['preload_settings'] ) || ! is_array( $this->options['preload_settings'] ) ) {
+				$this->options['preload_settings'] = array();
+			}
+			if ( ! isset( $this->options['preload_settings']['speculationRumGating'] ) ) {
+				$this->options['preload_settings']['speculationRumGating'] = true;
+			}
+
 			if ( ! isset( $this->options['llms_txt'] ) || ! is_array( $this->options['llms_txt'] ) ) {
 				$this->options['llms_txt'] = array();
 			}
