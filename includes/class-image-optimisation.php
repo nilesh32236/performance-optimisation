@@ -1832,17 +1832,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Get the effective excludeFirstImages count, preferring OD measured data.
 		 *
 		 * When OD is available and enabled, returns the measured count (1-3)
-		 * from viewport groups; otherwise returns the stored heuristic.
+		 * from viewport groups; otherwise returns the stored heuristic. The
+		 * `lcp_first_n` setting (default 3) takes precedence over the legacy
+		 * `excludeFirstImages` key. The result is filterable via
+		 * `wppo_lcp_first_n` (manual preload list / lazy-threshold override
+		 * when detection is inconclusive) and clamped to 0-10. When the
+		 * `lcp_guardrails` kill-switch is explicitly disabled, returns 0 so
+		 * the first-N never-lazy pass is skipped. Fail-open: any filter
+		 * failure falls back to the unfiltered count.
 		 *
 		 * @since NEXT
 		 * @param array $image_optimisation Image optimisation settings.
 		 * @return int Exclude count.
 		 */
 		private function get_effective_exclude_first_images_count( array $image_optimisation ): int {
+			if ( array_key_exists( 'lcp_guardrails', $image_optimisation ) && empty( $image_optimisation['lcp_guardrails'] ) ) {
+				return 0;
+			}
+			$count = null;
 			if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 				try {
 					if ( \PerformanceOptimise\Inc\OD_Bridge::is_enabled() ) {
-						return \PerformanceOptimise\Inc\OD_Bridge::get_exclude_first_images_count();
+						$count = \PerformanceOptimise\Inc\OD_Bridge::get_exclude_first_images_count();
 					}
 				} catch ( \Throwable $e ) {
 					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
@@ -1850,7 +1861,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					}
 				}
 			}
-			return (int) ( $image_optimisation['excludeFirstImages'] ?? 0 );
+			if ( null === $count ) {
+				// No OD measurement: prefer the additive `lcp_first_n` key,
+				// fall back to the legacy `excludeFirstImages` key, and
+				// finally to 0 (disabled) so option arrays predating the
+				// guardrails keep their legacy behaviour. Fresh installs get
+				// the default 3 via Util::get_default_settings() and existing
+				// installs via the Main migration.
+				if ( isset( $image_optimisation['lcp_first_n'] ) ) {
+					$count = (int) $image_optimisation['lcp_first_n'];
+				} elseif ( isset( $image_optimisation['excludeFirstImages'] ) ) {
+					$count = (int) $image_optimisation['excludeFirstImages'];
+				} else {
+					$count = 0;
+				}
+			}
+			if ( function_exists( 'apply_filters' ) ) {
+				try {
+					$filtered = apply_filters( 'wppo_lcp_first_n', $count, $image_optimisation );
+					$count    = (int) $filtered;
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			if ( $count < 0 ) {
+				return 0;
+			}
+			if ( $count > 10 ) {
+				return 10;
+			}
+			return $count;
 		}
 
 		/**
@@ -3576,18 +3616,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
-		 * Remove loading="lazy" from the first N images in the buffer.
+		 * Remove lazy-loading from the first N images in the buffer.
 		 *
 		 * Mirrors the excludeFirstImages heuristic used by add_delay_load_img() so
-		 * the same count semantics apply to the finalized HTML. Only <img> tags
-		 * carrying a `src` are counted (matching add_delay_load_img()); only the
-		 * `loading` attribute is stripped; JS-lazy images keep their data-* attributes.
+		 * the same count semantics apply to the finalized HTML. Images carrying
+		 * either `src` or a JS-lazy `data-src` placeholder are counted, so a
+		 * JS-lazy hero is never missed. For each of the first N images the
+		 * transform is fail-open per node: `loading="lazy"` is stripped and
+		 * replaced with `loading="eager"`, JS-lazy placeholders are restored
+		 * (`data-src` to `src`, `data-srcset` to `srcset`, `data-sizes` to
+		 * `sizes`), lazy classes are removed, and `decoding="async"` is
+		 * stamped when absent. Nodes that fail to parse keep their markup.
 		 *
 		 * @since NEXT
 		 *
 		 * @param string $buffer             The HTML buffer.
 		 * @param array  $image_optimisation Image optimization settings.
-		 * @return string The buffer with loading="lazy" removed from the first N images.
+		 * @return string The buffer with lazy-loading removed from the first N images.
 		 */
 		private function unlazyload_first_images( string $buffer, array $image_optimisation ): string {
 			$exclude_img_count = $this->get_effective_exclude_first_images_count( $image_optimisation );
@@ -3595,24 +3640,100 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return $buffer;
 			}
 
-			$tags        = new \WP_HTML_Tag_Processor( $buffer );
-			$img_counter = 0;
-			$changed     = false;
+			try {
+				$tags        = new \WP_HTML_Tag_Processor( $buffer );
+				$img_counter = 0;
+				$changed     = false;
 
-			while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
-				$src = $tags->get_attribute( 'src' );
-				if ( null === $src ) {
-					continue;
+				while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
+					$src      = $tags->get_attribute( 'src' );
+					$data_src = $tags->get_attribute( 'data-src' );
+					if ( null === $src && null === $data_src ) {
+						continue;
+					}
+
+					++$img_counter;
+					if ( $img_counter > $exclude_img_count ) {
+						break;
+					}
+					try {
+						if ( null !== $data_src && '' !== $data_src ) {
+							$tags->set_attribute( 'src', (string) $data_src );
+							$tags->remove_attribute( 'data-src' );
+							$changed = true;
+						}
+						$data_srcset = $tags->get_attribute( 'data-srcset' );
+						if ( null !== $data_srcset ) {
+							if ( '' !== $data_srcset ) {
+								$tags->set_attribute( 'srcset', (string) $data_srcset );
+							}
+							$tags->remove_attribute( 'data-srcset' );
+							$changed = true;
+						}
+						$data_sizes = $tags->get_attribute( 'data-sizes' );
+						if ( null !== $data_sizes ) {
+							if ( '' !== $data_sizes ) {
+								$tags->set_attribute( 'sizes', (string) $data_sizes );
+							}
+							$tags->remove_attribute( 'data-sizes' );
+							$changed = true;
+						}
+						$this->remove_lazy_classes( $tags );
+						if ( 'lazy' === $tags->get_attribute( 'loading' ) ) {
+							$tags->remove_attribute( 'loading' );
+							$changed = true;
+						}
+						if ( null === $tags->get_attribute( 'loading' ) ) {
+							$tags->set_attribute( 'loading', 'eager' );
+							$changed = true;
+						}
+						if ( null === $tags->get_attribute( 'decoding' ) ) {
+							$tags->set_attribute( 'decoding', 'async' );
+							$changed = true;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						continue;
+					}
 				}
 
-				++$img_counter;
-				if ( $exclude_img_count >= $img_counter && 'lazy' === $tags->get_attribute( 'loading' ) ) {
-					$tags->remove_attribute( 'loading' );
-					$changed = true;
-				}
+				return $changed ? $tags->get_updated_html() : $buffer;
+			} catch ( \Throwable $e ) {
+				return $buffer;
 			}
+		}
 
-			return $changed ? $tags->get_updated_html() : $buffer;
+		/**
+		 * Strip JS-lazy placeholder classes from the current IMG tag.
+		 *
+		 * Removes `wppo-lazy`, `wppo-lazyload`, `lazyload`, `lazyloaded` and
+		 * `lazyloading` tokens while preserving all other classes. No-op when
+		 * the tag carries no class attribute.
+		 *
+		 * @since NEXT
+		 *
+		 * @param \WP_HTML_Tag_Processor $tags The tag processor matched on an <img>.
+		 * @return void
+		 */
+		private function remove_lazy_classes( $tags ): void {
+			$class = $tags->get_attribute( 'class' );
+			if ( null === $class ) {
+				return;
+			}
+			$lazy_tokens = array( 'wppo-lazy', 'wppo-lazyload', 'lazyload', 'lazyloaded', 'lazyloading' );
+			$tokens      = preg_split( '/\s+/', (string) $class, -1, PREG_SPLIT_NO_EMPTY );
+			if ( ! is_array( $tokens ) ) {
+				return;
+			}
+			$kept = array_values( array_diff( $tokens, $lazy_tokens ) );
+			if ( count( $kept ) === count( $tokens ) ) {
+				return;
+			}
+			if ( empty( $kept ) ) {
+				$tags->remove_attribute( 'class' );
+			} else {
+				$tags->set_attribute( 'class', implode( ' ', $kept ) );
+			}
 		}
 
 		/**
@@ -3623,7 +3744,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * attribute already exists, so core's wp_get_loading_optimization_attributes()
 		 * output and the plugin's existing excludeFirstImages high-priority assignment
 		 * are never double-applied. The matched LCP image is also un-lazy-loaded so an
-		 * in-viewport LCP image is actually fetched eagerly at high priority.
+		 * in-viewport LCP image is actually fetched eagerly at high priority:
+		 * `loading="lazy"` is replaced with `loading="eager"` and
+		 * `decoding="async"` is stamped when absent (progressive enhancement,
+		 * ignored by old browsers).
 		 *
 		 * @since NEXT
 		 *
@@ -3660,6 +3784,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							if ( 'lazy' === $processor->get_attribute( 'loading' ) ) {
 								$processor->remove_attribute( 'loading' );
 							}
+							if ( null === $processor->get_attribute( 'loading' ) ) {
+								$processor->set_attribute( 'loading', 'eager' );
+							}
+							if ( null === $processor->get_attribute( 'decoding' ) ) {
+								$processor->set_attribute( 'decoding', 'async' );
+							}
 							$stamped = true;
 						}
 						$new_html .= $processor->serialize_token();
@@ -3682,6 +3812,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					}
 					if ( 'lazy' === $tags->get_attribute( 'loading' ) ) {
 						$tags->remove_attribute( 'loading' );
+					}
+					if ( null === $tags->get_attribute( 'loading' ) ) {
+						$tags->set_attribute( 'loading', 'eager' );
+					}
+					if ( null === $tags->get_attribute( 'decoding' ) ) {
+						$tags->set_attribute( 'decoding', 'async' );
 					}
 					$stamped = true;
 					break;
@@ -3732,8 +3868,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							$tags->remove_attribute( 'loading' );
 							$changed = true;
 						}
+						if ( null === $tags->get_attribute( 'loading' ) ) {
+							$tags->set_attribute( 'loading', 'eager' );
+							$changed = true;
+						}
 						if ( null === $tags->get_attribute( 'fetchpriority' ) ) {
 							$tags->set_attribute( 'fetchpriority', 'high' );
+							$changed = true;
+						}
+						if ( null === $tags->get_attribute( 'decoding' ) ) {
+							$tags->set_attribute( 'decoding', 'async' );
 							$changed = true;
 						}
 						if ( null === $tags->get_attribute( 'data-wppo-hero' ) ) {
@@ -3747,8 +3891,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$buffer = $tags->get_updated_html();
 				}
 
-				// Companion preload link (fetchpriority=high). Skip when already present.
-				if ( false !== strpos( $buffer, $lcp_url ) && false !== strpos( $buffer, 'rel="preload"' ) && false !== strpos( $buffer, esc_attr( $lcp_url ) ) ) {
+				// Companion preload link (fetchpriority=high). Skip when a
+				// matching preload link already exists (normalized-URL scan so
+				// absolute-vs-relative and size-suffix variants dedup).
+				if ( $this->buffer_has_image_preload( $buffer, $lcp_url ) ) {
 					return $buffer;
 				}
 				$link_tag = Util::get_preload_link(
@@ -3799,6 +3945,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return '';
 			}
 			return '';
+		}
+
+		/**
+		 * Whether the buffer already contains a preload link for the image URL.
+		 *
+		 * Scans `<link rel="preload">` tags and compares normalized hrefs so
+		 * absolute-vs-relative URLs and WordPress size-suffix variants dedup
+		 * instead of emitting a duplicate hint. Fail-open: any parse failure
+		 * returns false (emit the hint) rather than skipping it.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $buffer The HTML buffer.
+		 * @param string $url    The image URL to look for.
+		 * @return bool True when a matching preload link exists.
+		 */
+		private function buffer_has_image_preload( string $buffer, string $url ): bool {
+			try {
+				$needle = $this->normalize_image_url( $url );
+				if ( '' === $needle ) {
+					return false;
+				}
+				if ( ! preg_match_all( '#<link[^>]*rel=["\']preload["\'][^>]*>#i', $buffer, $links ) ) {
+					return false;
+				}
+				foreach ( $links[0] as $link ) {
+					if ( preg_match( '#href=["\']([^"\']+)["\']#i', $link, $hm ) && $this->normalize_image_url( $hm[1] ) === $needle ) {
+						return true;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				return false;
+			}
+			return false;
 		}
 
 		/**

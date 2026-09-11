@@ -94,6 +94,8 @@ const ImageOptimization = ( { options = {} } ) => {
 		excludeSize: '',
 		autoPreloadLCP: false,
 		prioritizeLCPImages: false,
+		lcp_guardrails: true,
+		lcp_first_n: 3,
 		autoAltText: false,
 		maxLongestEdgePx: 2560,
 		clientSideMimeTypeOverride: false,

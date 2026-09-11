@@ -298,6 +298,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['image_optimisation']['lcpHeroPreload'] ) ) {
 				$this->options['image_optimisation']['lcpHeroPreload'] = true;
 			}
+			if ( ! isset( $this->options['image_optimisation']['lcp_guardrails'] ) ) {
+				$this->options['image_optimisation']['lcp_guardrails'] = true;
+			}
+			if ( ! isset( $this->options['image_optimisation']['lcp_first_n'] ) ) {
+				$this->options['image_optimisation']['lcp_first_n'] = 3;
+			}
 			if ( ! isset( $this->options['image_optimisation']['autoAltText'] ) ) {
 				$this->options['image_optimisation']['autoAltText'] = false;
 			}

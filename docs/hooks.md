@@ -750,6 +750,24 @@ add_filter( 'wppo_od_should_optimize', function( $should, $url ) {
 
 ---
 
+### `wppo_lcp_first_n`
+Filters how many leading images are treated as above-the-fold and never lazy-loaded. @since NEXT.
+
+The LCP guardrails resolve the count as OD-measured data (1–3) when Optimization Detective is enabled, else the `lcp_first_n` setting (default 3) falling back to the legacy `excludeFirstImages` key. Return `0` to disable the first-N never-lazy pass; values are clamped to 0–10. Any filter failure fails open to the unfiltered count.
+
+**Parameters:**
+- `$count` *(int)* — Effective first-N count.
+- `$image_optimisation` *(array)* — Image optimisation settings.
+
+**Example:**
+```php
+add_filter( 'wppo_lcp_first_n', function( $count ) {
+    return 2;
+} );
+```
+
+---
+
 ### `wppo_bfcache_enabled`
 Filters whether bfcache (Instant Back/Forward) is enabled. @since NEXT.
 

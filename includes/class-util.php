@@ -236,6 +236,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'autoPreloadLCP'             => false,
 					'prioritizeLCPImages'        => false,
 					'lcpHeroPreload'             => true,
+					'lcp_guardrails'             => true,
+					'lcp_first_n'                => 3,
 					'clientSideMimeTypeOverride' => false,
 					'clientSideMimeTypes'        => array(),
 					'lazyLoadBackgroundImages'   => false,

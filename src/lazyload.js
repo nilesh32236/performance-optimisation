@@ -1236,9 +1236,33 @@ const restoreHeroImage = ( el ) => {
 		el.srcset = el.getAttribute( 'data-srcset' );
 		el.removeAttribute( 'data-srcset' );
 	}
+	if ( el.hasAttribute( 'data-sizes' ) ) {
+		el.setAttribute( 'sizes', el.getAttribute( 'data-sizes' ) );
+		el.removeAttribute( 'data-sizes' );
+	}
 	if ( el.getAttribute( 'loading' ) === 'lazy' ) {
 		el.removeAttribute( 'loading' );
 	}
+	if ( ! el.getAttribute( 'loading' ) ) {
+		el.setAttribute( 'loading', 'eager' );
+	}
+	if (
+		el.getAttribute( 'fetchpriority' ) !== 'high' &&
+		( el.hasAttribute( 'data-wppo-hero' ) ||
+			el.hasAttribute( 'data-wppo-lcp' ) )
+	) {
+		el.setAttribute( 'fetchpriority', 'high' );
+	}
+	if ( ! el.getAttribute( 'decoding' ) ) {
+		el.setAttribute( 'decoding', 'async' );
+	}
+	el.classList.remove(
+		'wppo-lazy',
+		'wppo-lazyload',
+		'lazyload',
+		'lazyloaded',
+		'lazyloading'
+	);
 };
 
 /**
