@@ -2755,6 +2755,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Release a cURL multi handle without triggering the PHP 8.5 deprecation.
+		 *
+		 * On PHP 8.5+ the multi handle reference is dropped (null + unset)
+		 * instead of calling `curl_multi_close()`; below 8.5 the legacy
+		 * `curl_multi_close()` path runs unchanged. Fail-open: when
+		 * `curl_multi_close()` is unavailable the reference is dropped on
+		 * every runtime. Multisite-safe: no option/cache changes.
+		 *
+		 * @since NEXT
+		 * @param mixed       $mh          cURL multi handle to release (nulled in the caller scope).
+		 * @param string|null $php_version Optional version override for testing; defaults to PHP_VERSION.
+		 * @return void
+		 */
+		public static function close_curl_multi_handle( &$mh, ?string $php_version = null ): void {
+			if ( self::is_php85_or_greater( $php_version ) ) {
+				$mh = null;
+				unset( $mh );
+				return;
+			}
+			if ( function_exists( 'curl_multi_close' ) ) {
+				// phpcs:ignore Generic.PHP.DeprecatedFunctions.Deprecated,WordPress.WP.AlternativeFunctions.curl_curl_multi_close -- legacy close path below PHP 8.5 only.
+				curl_multi_close( $mh );
+				return;
+			}
+			$mh = null;
+			unset( $mh );
+		}
+
+		/**
 		 * Release a GD image without triggering the PHP 8.5 deprecation.
 		 *
 		 * On PHP 8.5+ the image reference is dropped (null + unset) instead of
