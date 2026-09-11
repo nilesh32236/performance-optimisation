@@ -307,6 +307,127 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Canonical settings schema for verify/validation.
+		 *
+		 * Decoupled from {@see self::get_default_settings()} so the schema can
+		 * recognise every key the SPA persists WITHOUT seeding those keys as
+		 * runtime defaults (which would change fresh-install / CLI-merged
+		 * behavior). Returns `tab => [ subkey => 'array'|'scalar' ]`, the
+		 * expected shape consumed by
+		 * WPPO_CLI_Command::validate_settings_schema().
+		 *
+		 * Built from the union of the runtime defaults and the SPA-persisted
+		 * keys surfaced by the drift-guard scan in
+		 * tests/php/SettingsSchemaDefaultsTest.php. Replace that pragmatic
+		 * source scan with a localized `wppoSettings.schema` when available.
+		 *
+		 * @since NEXT
+		 * @return array<string, array<string, string>> Schema keyed by tab.
+		 */
+		public static function get_settings_schema(): array {
+			$schema = array();
+			foreach ( self::get_default_settings() as $tab => $values ) {
+				$schema[ $tab ] = array();
+				if ( ! is_array( $values ) ) {
+					continue;
+				}
+				foreach ( $values as $key => $value ) {
+					$schema[ $tab ][ $key ] = is_array( $value ) ? 'array' : 'scalar';
+				}
+			}
+
+			// SPA-persisted keys absent from the runtime defaults.
+			$spa_only = array(
+				'cache_settings'     => array(
+					'cdnPurgeService'  => 'scalar',
+					'cloudflareZoneId' => 'scalar',
+					'varnishPurgeUrls' => 'array',
+				),
+				'file_optimisation'  => array(
+					'removeQueryStrings'    => 'scalar',
+					'removeWooCSSJS'        => 'scalar',
+					'excludeUrlToKeepJSCSS' => 'scalar',
+					'removeCssJsHandle'     => 'scalar',
+					'disableEmojis'         => 'scalar',
+					'disableEmbeds'         => 'scalar',
+					'disableDashicons'      => 'scalar',
+					'disableXMLRPC'         => 'scalar',
+					'heartbeatControl'      => 'scalar',
+				),
+				'preload_settings'   => array(
+					'preconnect'         => 'scalar',
+					'preconnectOrigins'  => 'scalar',
+					'prefetchDNS'        => 'scalar',
+					'dnsPrefetchOrigins' => 'scalar',
+					'preloadFonts'       => 'scalar',
+					'preloadFontsUrls'   => 'scalar',
+					'preloadCSS'         => 'scalar',
+					'preloadCSSUrls'     => 'scalar',
+				),
+				'image_optimisation' => array(
+					'wrapInPicture'              => 'scalar',
+					'excludeFirstImages'         => 'scalar',
+					'excludeImages'              => 'scalar',
+					'lazyLoadVideos'             => 'scalar',
+					'enableVideoPlaceholder'     => 'scalar',
+					'excludeVideos'              => 'scalar',
+					'convertImg'                 => 'scalar',
+					'conversionFormat'           => 'scalar',
+					'excludeConvertImages'       => 'scalar',
+					'preloadFrontPageImages'     => 'scalar',
+					'preloadFrontPageImagesUrls' => 'scalar',
+					'preloadPostTypeImage'       => 'scalar',
+					'selectedPostType'           => 'array',
+					'availablePostTypes'         => 'array',
+					'excludePostTypeImgUrl'      => 'scalar',
+					'maxWidthImgSize'            => 'scalar',
+					'excludeSize'                => 'scalar',
+					'forceServerSideConversion'  => 'scalar',
+				),
+				'edge_cache'         => array(
+					'provider'             => 'scalar',
+					'ttl'                  => 'scalar',
+					'staleWhileRevalidate' => 'scalar',
+					'cloudflareZoneId'     => 'scalar',
+					'bunnyPullZoneId'      => 'scalar',
+				),
+				'database_cleanup'   => array(
+					'dbSchedule'      => 'scalar',
+					'dbRevMaxAge'     => 'scalar',
+					'dbRevKeepLatest' => 'scalar',
+					'dbOptimize'      => 'scalar',
+				),
+				// Mirrors Object_Cache::ALLOWED_KEYS. `password` is stripped by
+				// the REST layer but may survive in imported/legacy payloads.
+				'object_cache'       => array(
+					'mode'        => 'scalar',
+					'host'        => 'scalar',
+					'port'        => 'scalar',
+					'password'    => 'scalar',
+					'database'    => 'scalar',
+					'timeout'     => 'scalar',
+					'prefix'      => 'scalar',
+					'nodes'       => 'scalar',
+					'master_name' => 'scalar',
+					'use_tls'     => 'scalar',
+					'persistent'  => 'scalar',
+					'compression' => 'scalar',
+				),
+			);
+
+			foreach ( $spa_only as $tab => $keys ) {
+				if ( ! isset( $schema[ $tab ] ) || ! is_array( $schema[ $tab ] ) ) {
+					$schema[ $tab ] = array();
+				}
+				foreach ( $keys as $key => $type ) {
+					$schema[ $tab ][ $key ] = $type;
+				}
+			}
+
+			return $schema;
+		}
+
+		/**
 		 * Whether WooCommerce safe mode is enabled.
 		 *
 		 * Single toggle for all Woo dynamic-page guards (cache, delay,
