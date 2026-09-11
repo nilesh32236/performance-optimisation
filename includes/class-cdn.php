@@ -499,11 +499,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		 * call instead of once per srcset candidate.
 		 *
 		 * @since NEXT
-		 * @param array      $sources  Srcset sources.
-		 * @param array|null $mappings Optional pre-resolved mappings from get_mappings().
+		 * @param array $sources  Srcset sources.
+		 * @param mixed $mappings Optional pre-resolved mappings from get_mappings().
+		 *                        Non-array values (e.g. a filter's handle or
+		 *                        size array argument) are ignored and mappings
+		 *                        are resolved via get_mappings().
 		 * @return array
 		 */
-		public static function rewrite_srcset( array $sources, ?array $mappings = null ): array {
+		public static function rewrite_srcset( array $sources, mixed $mappings = null ): array {
 			if ( defined( 'LITESPEED_BYPASS_CDN' ) && LITESPEED_BYPASS_CDN ) {
 				return $sources;
 			}
@@ -519,7 +522,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 			if ( has_filter( 'litespeed_can_cdn' ) && ! apply_filters( 'litespeed_can_cdn', true ) ) {
 				return $sources;
 			}
-			if ( null === $mappings ) {
+			if ( ! is_array( $mappings ) ) {
 				$mappings = self::get_mappings();
 			}
 			if ( empty( $mappings ) ) {
