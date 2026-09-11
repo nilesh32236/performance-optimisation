@@ -157,6 +157,10 @@ class LazyLoadEscapeTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertStringContainsString( 'data-wppo-iframe-attrs=', $out );
 
+		// The thumbnail reserves a 16:9 box to avoid CLS before the lazy
+		// image/embed resolves (audit #1077 finding 7).
+		$this->assertStringContainsString( 'width="1280" height="720"', $out );
+
 		$this->assertSame( 1, preg_match( '/data-wppo-iframe-attrs="([^"]*)"/', $out, $matches ) );
 		$stored = json_decode( html_entity_decode( $matches[1], ENT_QUOTES, 'UTF-8' ), true );
 

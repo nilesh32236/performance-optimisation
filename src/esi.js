@@ -6,7 +6,8 @@
  * credentials: 'same-origin', no jQuery, requestAnimationFrame batched.
  * Intentionally bypasses SPA apiRequest — uses different auth (nonce via POST
  * body + same-origin credentials, no X-WP-Nonce REST header) and must remain
- * decoupled from the admin SPA bundle.
+ * decoupled from the admin SPA bundle. Only the shared `@wordpress/i18n`
+ * runtime package is imported for translatable error strings.
  *
  * ## Security contract
  *
@@ -31,6 +32,8 @@
  *
  * @since NEXT
  */
+
+import { __ } from '@wordpress/i18n';
 
 /**
  * Attributes whose values are URLs and must be scheme-checked before the
@@ -67,6 +70,109 @@ const ESI_URL_ATTRS = new Set( [
  * @type {number}
  */
 export const MAX_ESI_NODES = 500;
+
+/**
+ * Request headers shared by every ESI fragment fetch.
+ *
+ * @since NEXT
+ * @type {Object<string, string>}
+ */
+const ESI_REQUEST_HEADERS = {
+	'Content-Type': 'application/x-www-form-urlencoded',
+	'X-Requested-With': 'XMLHttpRequest',
+};
+
+/**
+ * JSON payload error codes indicating an expired/invalid nonce even when the
+ * HTTP status is 200. Mirrors the retry list in src/lib/apiRequest.js and
+ * src/main.js (rest_forbidden / rest_cookie_invalid_nonce /
+ * rest_cookie_nonce_invalid).
+ *
+ * @since NEXT
+ * @type {Set<string>}
+ */
+const ESI_AUTH_ERROR_CODES = new Set( [
+	'rest_forbidden',
+	'rest_cookie_invalid_nonce',
+	'rest_cookie_nonce_invalid',
+] );
+
+/**
+ * In-flight nonce refresh promise (thundering-herd guard).
+ *
+ * Concurrent 401/403 responses share a single `nonce` block round-trip, and
+ * the promise is cleared once settled so a later failure can refresh again.
+ *
+ * @since NEXT
+ * @type {Promise<string>|null}
+ */
+let pendingNonceRefresh = null;
+
+/**
+ * AbortController owning every in-flight hydration fetch.
+ *
+ * Recreated after an abort so a later hydration batch still has a live signal.
+ *
+ * @since NEXT
+ * @type {AbortController|null}
+ */
+let hydrationController = null;
+
+/**
+ * Whether a value is an AbortSignal-like object.
+ *
+ * Guards against being called with a DOM Event (e.g. when this module is
+ * registered directly as an event listener).
+ *
+ * @since NEXT
+ * @param {*} value Candidate signal.
+ * @return {boolean} True when the value quacks like an AbortSignal.
+ */
+const isAbortSignal = ( value ) =>
+	!! value &&
+	'object' === typeof value &&
+	'boolean' === typeof value.aborted &&
+	'function' === typeof value.addEventListener;
+
+/**
+ * Return the shared hydration AbortSignal, recreating it after an abort.
+ *
+ * @since NEXT
+ * @return {AbortSignal|undefined} Signal, or undefined when unsupported.
+ */
+const getHydrationSignal = () => {
+	if ( 'undefined' === typeof AbortController ) {
+		return undefined;
+	}
+	if ( ! hydrationController || hydrationController.signal.aborted ) {
+		hydrationController = new AbortController();
+	}
+	return hydrationController.signal;
+};
+
+/**
+ * Abort every in-flight ESI fetch (pagehide teardown).
+ *
+ * @since NEXT
+ * @return {void}
+ */
+const abortHydration = () => {
+	if ( hydrationController ) {
+		hydrationController.abort();
+	}
+};
+
+/**
+ * Whether an error came from an aborted fetch.
+ *
+ * Navigation-time aborts are expected and must neither mark placeholders as
+ * failed nor log a warning.
+ *
+ * @since NEXT
+ * @param {*} err Thrown error.
+ * @return {boolean} True when the error is an abort.
+ */
+const isAbortError = ( err ) => !! err && 'AbortError' === err.name;
 
 /**
  * Client-side defense-in-depth sanitizer for ESI fragment HTML.
@@ -205,6 +311,28 @@ const applyFragmentToElement = ( el, frag ) => {
 };
 
 /**
+ * Clear the loading live-region state after a failed hydration.
+ *
+ * Audit #1077 finding 1: without this the placeholder keeps
+ * role="status"/aria-live/aria-busy and assistive technology announces the
+ * loading label forever. Mirrors the applyFragmentToElement() ARIA cleanup
+ * and leaves a translated failure label in place of the loading label.
+ *
+ * @since NEXT
+ * @param {HTMLElement} el Placeholder element.
+ * @return {void}
+ */
+const markElementFailed = ( el ) => {
+	el.removeAttribute( 'aria-busy' );
+	el.removeAttribute( 'aria-live' );
+	el.removeAttribute( 'role' );
+	el.setAttribute(
+		'aria-label',
+		__( 'Embedded content failed to load.', 'performance-optimisation' )
+	);
+};
+
+/**
  * Read the block name and nonce for a placeholder element.
  *
  * @since NEXT
@@ -224,42 +352,163 @@ const readBlockInfo = ( el ) => {
 };
 
 /**
+ * Parse a fetch response as JSON without throwing on empty/non-JSON bodies.
+ *
+ * @since NEXT
+ * @param {Response} response Fetch response.
+ * @return {Promise<Object|null>} Parsed payload, or null.
+ */
+const readJsonSafely = async ( response ) => {
+	try {
+		return await response.json();
+	} catch {
+		return null;
+	}
+};
+
+/**
+ * Extract fragment HTML from a wppo_esi_fragment JSON payload.
+ *
+ * @since NEXT
+ * @param {Object|null} data JSON payload.
+ * @return {string} Fragment HTML (empty when absent).
+ */
+const extractFragmentHtml = ( data ) => {
+	if ( ! data ) {
+		return '';
+	}
+	const html = data.data && data.data.html ? data.data.html : data.html || '';
+	return html ? String( html ) : '';
+};
+
+/**
+ * Whether a response/payload indicates a nonce/auth failure worth retrying.
+ *
+ * @since NEXT
+ * @param {Response}    response Fetch response.
+ * @param {Object|null} data     Parsed payload.
+ * @return {boolean} True when a nonce refresh + single retry is warranted.
+ */
+const isAuthFailure = ( response, data ) => {
+	if ( response && ( 401 === response.status || 403 === response.status ) ) {
+		return true;
+	}
+	return !! ( data && data.code && ESI_AUTH_ERROR_CODES.has( data.code ) );
+};
+
+/**
+ * Fetch a fresh `wppo_esi` nonce via the public `nonce` ESI block.
+ *
+ * The `nonce` block is exempt from nonce verification server-side (see
+ * LiteSpeed_ESI::handle_ajax_fragment()) and returns a freshly minted nonce as
+ * its fragment. Concurrent callers share one in-flight request.
+ *
+ * @since NEXT
+ * @param {AbortSignal|undefined} signal Optional abort signal.
+ * @return {Promise<string>} Fresh nonce, or empty string on failure.
+ */
+const refreshEsiNonce = ( signal ) => {
+	if ( pendingNonceRefresh ) {
+		return pendingNonceRefresh;
+	}
+	const refresh = fetch( buildEsiUrl(), {
+		method: 'POST',
+		credentials: 'same-origin',
+		headers: ESI_REQUEST_HEADERS,
+		body: buildEsiBody( 'nonce', '' ),
+		signal,
+	} )
+		.then( ( response ) => ( response.ok ? response.json() : null ) )
+		.then( ( data ) => extractFragmentHtml( data ) )
+		.catch( () => '' );
+
+	pendingNonceRefresh = refresh.finally( () => {
+		pendingNonceRefresh = null;
+	} );
+	return pendingNonceRefresh;
+};
+
+/**
+ * Request a single ESI fragment, refreshing the nonce once on 401/403.
+ *
+ * Mirrors the src/main.js 403 nonce-refresh pattern: one refresh + one retry,
+ * then surface the failure. Aborts (navigation) propagate to the caller.
+ *
+ * @since NEXT
+ * @param {string}                block  Block name.
+ * @param {string}                nonce  Placeholder nonce.
+ * @param {AbortSignal|undefined} signal Optional abort signal.
+ * @return {Promise<string>} Sanitized-by-server fragment HTML.
+ * @throws {Error} When the request fails after the retry.
+ */
+const requestEsiFragment = async ( block, nonce, signal ) => {
+	const send = ( token ) =>
+		fetch( buildEsiUrl(), {
+			method: 'POST',
+			credentials: 'same-origin',
+			headers: ESI_REQUEST_HEADERS,
+			body: buildEsiBody( block, token ),
+			signal,
+		} );
+
+	let response = await send( nonce );
+	let data = await readJsonSafely( response );
+
+	if ( isAuthFailure( response, data ) ) {
+		const freshNonce = await refreshEsiNonce( signal );
+		if ( freshNonce ) {
+			response = await send( freshNonce );
+			data = await readJsonSafely( response );
+		}
+	}
+
+	if ( ! response.ok ) {
+		throw new Error(
+			`ESI fragment request failed (HTTP ${ response.status })`
+		);
+	}
+
+	return extractFragmentHtml( data );
+};
+
+/**
  * Hydrate a single placeholder element.
  *
- * @param {HTMLElement} el Placeholder element.
+ * @since NEXT
+ * @param {HTMLElement}           el     Placeholder element.
+ * @param {AbortSignal|undefined} signal Optional abort signal.
  * @return {Promise<void>}
  */
-export const hydrateElement = async ( el ) => {
+export const hydrateElement = async ( el, signal ) => {
 	const info = readBlockInfo( el );
 	if ( ! info ) {
 		return;
 	}
 	const { block, nonce } = info;
+	const activeSignal = isAbortSignal( signal )
+		? signal
+		: getHydrationSignal();
 	try {
-		const res = await fetch( buildEsiUrl(), {
-			method: 'POST',
-			credentials: 'same-origin',
-			headers: {
-				'Content-Type': 'application/x-www-form-urlencoded',
-				'X-Requested-With': 'XMLHttpRequest',
-			},
-			body: buildEsiBody( block, nonce ),
-		} );
-		if ( ! res.ok ) {
+		const html = await requestEsiFragment( block, nonce, activeSignal );
+		if ( ! html ) {
+			markElementFailed( el );
 			return;
 		}
-		const data = await res.json();
-		const html =
-			data && data.data && data.data.html
-				? data.data.html
-				: data.html || '';
-		if ( html ) {
-			// Server-sanitized per the wp_kses contract (file header); this
-			// client-side pass is defense-in-depth before DOM insertion.
-			applyFragmentToElement( el, sanitizeEsiFragment( html ) );
-		}
+		// Server-sanitized per the wp_kses contract (file header); this
+		// client-side pass is defense-in-depth before DOM insertion.
+		applyFragmentToElement( el, sanitizeEsiFragment( html ) );
 	} catch ( err ) {
-		console.warn( 'WPPO ESI hydrate failed', err );
+		if ( isAbortError( err ) ) {
+			return;
+		}
+		console.warn(
+			__(
+				'WPPO ESI hydration failed; embedded content could not be loaded.',
+				'performance-optimisation'
+			),
+			err
+		);
+		markElementFailed( el );
 	}
 };
 
@@ -270,13 +519,18 @@ export const hydrateElement = async ( el ) => {
  * fetch; the sanitized fragment is fanned out (cloned per extra element)
  * so N identical blocks produce one network request.
  *
+ * @since NEXT
+ * @param {AbortSignal|undefined} signal Optional abort signal.
  * @return {void}
  */
-export const hydrateESIPlaceholders = () => {
+export const hydrateESIPlaceholders = ( signal ) => {
 	const els = document.querySelectorAll( '[data-wppo-esi]' );
 	if ( ! els.length ) {
 		return;
 	}
+	const activeSignal = isAbortSignal( signal )
+		? signal
+		: getHydrationSignal();
 	const run = () => {
 		const groups = new Map();
 		els.forEach( ( el ) => {
@@ -293,24 +547,13 @@ export const hydrateESIPlaceholders = () => {
 		Promise.all(
 			[ ...groups.values() ].map( async ( { block, nonce, targets } ) => {
 				try {
-					const res = await fetch( buildEsiUrl(), {
-						method: 'POST',
-						credentials: 'same-origin',
-						headers: {
-							'Content-Type': 'application/x-www-form-urlencoded',
-							'X-Requested-With': 'XMLHttpRequest',
-						},
-						body: buildEsiBody( block, nonce ),
-					} );
-					if ( ! res.ok ) {
-						return;
-					}
-					const data = await res.json();
-					const html =
-						data && data.data && data.data.html
-							? data.data.html
-							: data.html || '';
+					const html = await requestEsiFragment(
+						block,
+						nonce,
+						activeSignal
+					);
 					if ( ! html ) {
+						targets.forEach( ( el ) => markElementFailed( el ) );
 						return;
 					}
 					const frag = sanitizeEsiFragment( html );
@@ -325,11 +568,27 @@ export const hydrateESIPlaceholders = () => {
 						applyFragmentToElement( el, piece );
 					} );
 				} catch ( err ) {
-					console.warn( 'WPPO ESI hydrate failed', err );
+					if ( isAbortError( err ) ) {
+						return;
+					}
+					console.warn(
+						__(
+							'WPPO ESI hydration failed; embedded content could not be loaded.',
+							'performance-optimisation'
+						),
+						err
+					);
+					targets.forEach( ( el ) => markElementFailed( el ) );
 				}
 			} )
 		).catch( ( err ) => {
-			console.warn( 'WPPO ESI hydrate failed', err );
+			console.warn(
+				__(
+					'WPPO ESI hydration failed; embedded content could not be loaded.',
+					'performance-optimisation'
+				),
+				err
+			);
 		} );
 	};
 	if ( typeof window !== 'undefined' && 'requestAnimationFrame' in window ) {
@@ -339,10 +598,21 @@ export const hydrateESIPlaceholders = () => {
 	}
 };
 
+// Abort pending hydration fetches when the page is being unloaded so a
+// navigation never leaves in-flight requests pinning the event loop.
+if (
+	typeof window !== 'undefined' &&
+	'function' === typeof window.addEventListener
+) {
+	window.addEventListener( 'pagehide', abortHydration );
+}
+
 // Auto-hydrate on DOMContentLoaded.
 if ( typeof document !== 'undefined' ) {
 	if ( document.readyState === 'loading' ) {
-		document.addEventListener( 'DOMContentLoaded', hydrateESIPlaceholders );
+		document.addEventListener( 'DOMContentLoaded', () =>
+			hydrateESIPlaceholders()
+		);
 	} else {
 		hydrateESIPlaceholders();
 	}

@@ -936,4 +936,22 @@ describe( 'Lazy Load (lazyload.js)', () => {
 			expect( listener ).toHaveBeenCalled();
 		} );
 	} );
+
+	describe( 'teardown releases injected config globals', () => {
+		it( 'deletes wppoNativeLazy and wppoDelayConfig', () => {
+			mockIntersectionObserver();
+			bootLazyload();
+			global.wppoNativeLazy = true;
+			global.wppoDelayConfig = {
+				idleTimeout: 1,
+				defaultStrategy: 'idle',
+			};
+
+			expect( typeof window.wppoLazyloadTeardown ).toBe( 'function' );
+			window.wppoLazyloadTeardown();
+
+			expect( 'wppoNativeLazy' in window ).toBe( false );
+			expect( 'wppoDelayConfig' in window ).toBe( false );
+		} );
+	} );
 } );

@@ -3030,7 +3030,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$placeholder_html = '<div class="wppo-video-placeholder" data-wppo-video-src="' . esc_url( $original_src ) . '" data-wppo-video-type="' . esc_attr( $video_type ) . '"' . ( $attrs_json ? ' data-wppo-iframe-attrs="' . esc_attr( $attrs_json ) . '"' : '' ) . '>
 				' . $noscript_iframe . '
 				<picture>
-					<img src="' . esc_url( $thumbnail_url ) . '" alt="' . esc_attr__( 'Video thumbnail', 'performance-optimisation' ) . '" loading="lazy" data-wppo-fallback="' . esc_url( $fallback_thumbnail_url ) . '">
+					<img src="' . esc_url( $thumbnail_url ) . '" alt="' . esc_attr__( 'Video thumbnail', 'performance-optimisation' ) . '" width="1280" height="720" loading="lazy" data-wppo-fallback="' . esc_url( $fallback_thumbnail_url ) . '">
 				</picture>
 				' . $play_button . '
 			</div>';

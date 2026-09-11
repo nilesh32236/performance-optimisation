@@ -216,6 +216,9 @@ class MetaboxTest extends \PHPUnit\Framework\TestCase {
 		$this->assertStringContainsString( 'interaction', $output );
 		$this->assertStringContainsString( 'high', $output );
 		$this->assertStringContainsString( 'protected', $output );
+		// Every header cell in the scripts (5) and styles (3) tables must
+		// declare its column scope so AT can associate data cells (audit #1077).
+		$this->assertSame( 8, substr_count( $output, 'scope="col"' ), 'All Asset Manager <th> cells must carry scope="col"' );
 		$this->assertStringNotContainsString( '<script', $output );
 		$this->assertStringNotContainsString( 'addEventListener', $output );
 		$this->assertStringNotContainsString( 'onclick=', $output );

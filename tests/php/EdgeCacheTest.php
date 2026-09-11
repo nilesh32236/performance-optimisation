@@ -191,6 +191,9 @@ class EdgeCacheTest extends \PHPUnit\Framework\TestCase {
 		$this->assertStringContainsString( 'stale-while-revalidate', $js );
 		$this->assertStringContainsString( '300', $js );
 		$this->assertStringContainsString( '86400', $js );
+		// Best-effort cache population/revalidation must swallow failures
+		// (audit #1077 finding 8) instead of leaking an unhandled rejection.
+		$this->assertStringContainsString( '.catch(', $js );
 		$this->assertStringNotContainsString( '{{CACHE_TTL}}', $js );
 		$this->assertStringNotContainsString( '{{SWR}}', $js );
 	}
@@ -234,6 +237,9 @@ class EdgeCacheTest extends \PHPUnit\Framework\TestCase {
 		);
 		$this->assertStringContainsString( 'stale-while-revalidate', $js );
 		$this->assertStringContainsString( '86400', $js );
+		// Best-effort waitUntil() cache.put() must not leak rejections
+		// (audit #1077 finding 8).
+		$this->assertStringContainsString( '.catch(', $js );
 	}
 
 	/**

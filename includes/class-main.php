@@ -2515,6 +2515,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					} else {
 						// WP <6.9 fallback: classic script enqueued with inline config injection.
 						// @since NEXT.
+						//
+						// The window.wppoNativeLazy / window.wppoDelayConfig globals
+						// below are consumed once at module init (src/lazyload.js) and
+						// are deleted again by window.wppoLazyloadTeardown() (audit
+						// #1077 finding 9). If this script element is ever removed
+						// dynamically, call window.wppoLazyloadTeardown() FIRST so the
+						// observers/interval and these config globals are released
+						// before the <script> is detached; nothing observes script
+						// removal automatically.
 						wp_enqueue_script( 'wppo-lazyload', WPPO_PLUGIN_URL . 'build/lazyload.js', array(), WPPO_VERSION, array( 'in_footer' => true ) );
 
 						if ( $use_native_lazy ) {
