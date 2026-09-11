@@ -170,7 +170,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * canonical cache files.
 		 *
 		 * @var bool
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private bool $host_mismatch = false;
 
@@ -181,7 +181,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * the log table with one entry per request path probe. Mirrors
 		 * Cache::$traversal_probe_logged.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var bool
 		 */
 		private static bool $traversal_probe_logged = false;
@@ -192,7 +192,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * Built once per instance from $safelist so is_selector_used()
 		 * avoids the ~60-entry loop with preg_replace per selector per rule.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var array{exact: array<string, bool>, attrs: string[], prefixes: string[]}|null
 		 */
 		private ?array $safelist_index = null;
@@ -200,7 +200,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		/**
 		 * Per-instance cache of split selector parts keyed by selector string.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var array<string, string[]>
 		 */
 		private array $selector_split_cache = array();
@@ -211,7 +211,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * The freshness probe runs full-content local reads; memoizing per
 		 * instance keeps repeated cache-hit calls to a single capped pass.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string|null Null when not yet computed.
 		 */
 		private ?string $source_checksum_memo = null;
@@ -256,7 +256,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * Whether the request Host header mismatched the canonical home host.
 		 *
 		 * @return bool True when the request host differs from the canonical host.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public function is_host_mismatched(): bool {
 			return $this->host_mismatch;
@@ -273,7 +273,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * (deduplicated), so the two sources cannot drift.
 		 *
 		 * @return string[]
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function get_safelist_presets(): array {
 			return array(
@@ -296,7 +296,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 *
 		 * @return void
 		 * @since 1.9.0
-		 * @since NEXT Added wppo_used_css_safelist filter (has_filter-guarded).
+		 * @since 2.0.0 Added wppo_used_css_safelist filter (has_filter-guarded).
 		 */
 		private function init_safelist(): void {
 			$file_opts = $this->options['file_optimisation'] ?? array();
@@ -323,7 +323,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				 * Lets themes/hosts extend or trim the merged built-in + user
 				 * safelist without editing settings.
 				 *
-				 * @since NEXT
+				 * @since 2.0.0
 				 *
 				 * @param string[] $safelist Merged safelist selectors.
 				 */
@@ -346,7 +346,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @param string $html The HTML content.
 		 * @return array{tags: array, classes: array, ids: array, attrs: array}
 		 * @since 1.9.0
-		 * @since NEXT Added WP_HTML_Processor path with Tag Processor fallback.
+		 * @since 2.0.0 Added WP_HTML_Processor path with Tag Processor fallback.
 		 */
 		public function extract_selectors( string $html ): array {
 			$used = array(
@@ -383,7 +383,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * null to trigger the Tag Processor fallback when the parser cannot
 		 * be created or the token stream ended with a parse error.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $html The HTML content.
 		 * @return array{tags: array, classes: array, ids: array, attrs: array}|null Selector data, or null on failure.
@@ -421,7 +421,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * processor is walking the document (WP_HTML_Processor extends
 		 * WP_HTML_Tag_Processor).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param \WP_HTML_Tag_Processor $tags Processor positioned on the current tag.
 		 * @param array                  $used Selector accumulator (passed by reference).
@@ -673,7 +673,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * Hoists the per-entry preg_replace out of the per-selector loop:
 		 * attribute names and non-empty prefixes are derived a single time.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array{exact: array<string, bool>, attrs: string[], prefixes: string[]}
 		 */
 		private function get_safelist_index(): array {
@@ -719,7 +719,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		/**
 		 * Cached split of a selector into simple parts.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $selector Selector string.
 		 * @return string[] Simple selector parts.
 		 */
@@ -802,7 +802,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			// exists in the DOM, to avoid breaking descendant selectors like
 			// `.sidebar .widget` when only one side is present. This matches
 			// the documented behaviour and avoids false-positive purging.
-			// @since NEXT Fixed from AND to OR to match docs.
+			// @since 2.0.0 Fixed from AND to OR to match docs.
 			foreach ( $simple_selectors as $simple ) {
 				if ( $this->matches_simple_selector( $simple, $used ) ) {
 					return true;
@@ -1199,7 +1199,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * prefixes): only the latter counts as a traversal probe. Mirrors
 		 * the homepage distinction in Cache::get_file_path().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $url The original URL ('' = current REQUEST_URI).
 		 * @return bool True when the raw path component is non-blank.
 		 */
@@ -1227,7 +1227,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * so `wppo-evil` never prefix-matches `wppo`). Empty root or domain
 		 * fails closed. Mirrors Cache::is_path_contained().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $path Absolute file or directory path.
 		 * @return bool True when contained.
 		 */
@@ -1244,7 +1244,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * Never throws: failures degrade silently to serving unoptimized
 		 * output. Mirrors Cache::log_traversal_probe().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $raw_input The hostile input that was rejected.
 		 * @return void
 		 */
@@ -1306,7 +1306,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			// (cache/wppo//<path>/) would collide across multisite blogs instead
 			// of namespacing per site. Mirrors Cache::maybe_store_cache().
 			//
-			// @since NEXT Empty-domain refusal.
+			// @since 2.0.0 Empty-domain refusal.
 			if ( '' === $this->domain ) {
 				return false;
 			}
@@ -1370,7 +1370,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 *
 		 * @param string $css CSS content.
 		 * @return string SHA-256 checksum, or '' for empty input.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public function compute_css_checksum( string $css ): string {
 			return Util::compute_css_checksum( $css );
@@ -1385,7 +1385,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 *
 		 * @param string $used_css_path Used-CSS file path.
 		 * @return string Checksum sidecar path, or '' when refused.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private function get_checksum_path( string $used_css_path ): string {
 			if ( '' === $used_css_path ) {
@@ -1411,7 +1411,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * input yields ''.
 		 *
 		 * @return string Combined checksum, or '' when unavailable.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public function compute_local_source_checksum(): string {
 			if ( null !== $this->source_checksum_memo ) {
@@ -1478,7 +1478,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * long-running process that rewrites stylesheets in-request.
 		 *
 		 * @return void
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public function reset_source_checksum_memo(): void {
 			$this->source_checksum_memo = null;
@@ -1494,7 +1494,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 *
 		 * @param string $used_css_path Used-CSS file path.
 		 * @return bool True when the source changed since generation.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private function is_checksum_stale( string $used_css_path ): bool {
 			try {
@@ -1526,7 +1526,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 *
 		 * @param string $used_css_path Used-CSS file path.
 		 * @return void
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private function persist_source_checksum( string $used_css_path ): void {
 			try {
@@ -1646,7 +1646,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 *
 		 * @param string|null $url_path Optional URL path for a single-page purge; null purges all.
 		 * @return array{page_cache: bool, used_css: bool} Per-store results.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function purge_coupled( $url_path = null ): array {
 			$result = array(
@@ -1684,7 +1684,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 *
 		 * @param int $post_id Post ID to requeue.
 		 * @return bool True when a job is queued or already scheduled.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function requeue_for_post( int $post_id ): bool {
 			if ( $post_id <= 0 ) {
@@ -1721,7 +1721,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * invalidation semantics unchanged. Multisite-safe: per-site
 		 * option reads only.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param int[] $post_ids Post IDs in FIFO order.
 		 * @return int[] Ordered post IDs (same entries).
 		 */
@@ -2001,7 +2001,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @param string $html The HTML content.
 		 * @return array Array of CSS content strings keyed by md5 hash of URL.
 		 * @since 1.9.0
-		 * @since NEXT Added WP_HTML_Processor path with Tag Processor fallback.
+		 * @since 2.0.0 Added WP_HTML_Processor path with Tag Processor fallback.
 		 */
 		private static function extract_css_assets_from_html( string $html ): array {
 			$assets = array();
@@ -2030,7 +2030,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * fallback when the parser cannot be created or the token stream
 		 * ended with a parse error.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $html The HTML content.
 		 * @return array<string,string>|null CSS contents keyed by URL hash, or null on failure.
@@ -2066,7 +2066,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * whichever processor is walking the document (WP_HTML_Processor
 		 * extends WP_HTML_Tag_Processor).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param \WP_HTML_Tag_Processor $tags   Processor positioned on the current tag.
 		 * @param array                  $assets Asset accumulator (passed by reference).
@@ -2171,7 +2171,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * token `stylesheet` so same-URL `preload`/`preconnect` hints are
 		 * never stripped.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $buffer      The HTML buffer.
 		 * @param array  $quoted_srcs preg_quote()d src URLs (delimiter '/').
 		 * @return array|null Array [ string $stripped, int $strip_count ] or null on PCRE error.
@@ -2368,7 +2368,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * get the fail-open guard without a storage migration (per-site
 		 * settings, multisite-safe).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool
 		 */
 		public function is_regression_guard_enabled(): bool {
@@ -2384,7 +2384,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 *
 		 * Clamped to 5-50; unrecognized values fail safe to 20.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return int
 		 */
 		public function get_regression_threshold(): int {
@@ -2407,7 +2407,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * threshold, or when a large input (>10 KB) purges to <1 KB. Empty
 		 * inputs never trip (callers handle empties separately).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $combined_css Full combined stylesheet.
 		 * @param string $purged_css   Purged output.
@@ -2435,7 +2435,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		/**
 		 * Whether the safe CSS combine fallback is enabled.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool
 		 */
 		private function is_safe_fallback_enabled(): bool {
@@ -2449,7 +2449,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * per-reason transient throttling (DAY_IN_SECONDS) prevents the log from
 		 * growing per pageview on persistent failures.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $reason  Reason code.
 		 * @param array  $handles Handles involved.
 		 * @return void
@@ -2461,7 +2461,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		/**
 		 * Whether a used-CSS file is valid.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $path Absolute path.
 		 * @return bool
 		 */

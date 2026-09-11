@@ -11,7 +11,7 @@ use Brain\Monkey\Functions;
 /**
  * Tier-1 filter-only TTL tests — LS layer only, file-cache stays global.
  *
- * @since NEXT
+ * @since 2.0.0
  */
 class LiteSpeedTtlFilterTest extends \PHPUnit\Framework\TestCase {
 	use WPPO_Test_Bootstrap;

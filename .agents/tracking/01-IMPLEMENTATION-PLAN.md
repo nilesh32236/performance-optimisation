@@ -2,7 +2,7 @@
 
 ## W1 — Recon (DONE)
 Site stack (OpenLiteSpeed/PHP 8.3/MariaDB 11.8/Redis 8.0), plugin architecture (42 classes,
-30 REST routes, 7 CLI subcommands), theme map, content model (6 projects CPT, 9 pages originally,
+31 REST routes, 7 CLI subcommands), theme map, content model (6 projects CPT, 9 pages originally,
 blog empty, media library empty), docs state (~1,827 words user-facing), 2026 benchmarks research.
 Full findings were recorded in the plugin's internal docs + .agents notes.
 

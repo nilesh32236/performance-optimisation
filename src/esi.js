@@ -30,7 +30,7 @@
  *    UI redress or selector-based exfiltration if a fragment source is ever
  *    compromised.
  *
- * @since NEXT
+ * @since 2.0.0
  */
 
 import { __ } from '@wordpress/i18n';
@@ -66,7 +66,7 @@ const ESI_URL_ATTRS = new Set( [
  * (fail-closed) to bound CPU on the hot hydration path and to avoid
  * inserting an unscrubbed fragment.
  *
- * @since NEXT
+ * @since 2.0.0
  * @type {number}
  */
 export const MAX_ESI_NODES = 500;
@@ -74,7 +74,7 @@ export const MAX_ESI_NODES = 500;
 /**
  * Request headers shared by every ESI fragment fetch.
  *
- * @since NEXT
+ * @since 2.0.0
  * @type {Object<string, string>}
  */
 const ESI_REQUEST_HEADERS = {
@@ -88,7 +88,7 @@ const ESI_REQUEST_HEADERS = {
  * src/main.js (rest_forbidden / rest_cookie_invalid_nonce /
  * rest_cookie_nonce_invalid).
  *
- * @since NEXT
+ * @since 2.0.0
  * @type {Set<string>}
  */
 const ESI_AUTH_ERROR_CODES = new Set( [
@@ -103,7 +103,7 @@ const ESI_AUTH_ERROR_CODES = new Set( [
  * Concurrent 401/403 responses share a single `nonce` block round-trip, and
  * the promise is cleared once settled so a later failure can refresh again.
  *
- * @since NEXT
+ * @since 2.0.0
  * @type {Promise<string>|null}
  */
 let pendingNonceRefresh = null;
@@ -113,7 +113,7 @@ let pendingNonceRefresh = null;
  *
  * Recreated after an abort so a later hydration batch still has a live signal.
  *
- * @since NEXT
+ * @since 2.0.0
  * @type {AbortController|null}
  */
 let hydrationController = null;
@@ -124,7 +124,7 @@ let hydrationController = null;
  * Guards against being called with a DOM Event (e.g. when this module is
  * registered directly as an event listener).
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {*} value Candidate signal.
  * @return {boolean} True when the value quacks like an AbortSignal.
  */
@@ -137,7 +137,7 @@ const isAbortSignal = ( value ) =>
 /**
  * Return the shared hydration AbortSignal, recreating it after an abort.
  *
- * @since NEXT
+ * @since 2.0.0
  * @return {AbortSignal|undefined} Signal, or undefined when unsupported.
  */
 const getHydrationSignal = () => {
@@ -153,7 +153,7 @@ const getHydrationSignal = () => {
 /**
  * Abort every in-flight ESI fetch (pagehide teardown).
  *
- * @since NEXT
+ * @since 2.0.0
  * @return {void}
  */
 const abortHydration = () => {
@@ -168,7 +168,7 @@ const abortHydration = () => {
  * Navigation-time aborts are expected and must neither mark placeholders as
  * failed nor log a warning.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {*} err Thrown error.
  * @return {boolean} True when the error is an abort.
  */
@@ -184,7 +184,7 @@ const isAbortError = ( err ) => !! err && 'AbortError' === err.name;
  * dangerous URL schemes, and returns a DocumentFragment ready for
  * `el.replaceChildren()`.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {string} html Server-provided fragment HTML.
  * @return {DocumentFragment} Sanitized fragment.
  */
@@ -250,7 +250,7 @@ export const sanitizeEsiFragment = ( html ) => {
  * action, block and nonce all travel in the POST body (see buildEsiBody) so
  * the nonce never appears in URLs, access logs or Referer headers.
  *
- * @since NEXT
+ * @since 2.0.0
  * @return {string} admin-ajax.php URL.
  */
 export const buildEsiUrl = () => {
@@ -269,7 +269,7 @@ export const buildEsiUrl = () => {
  * The nonce is sent once, as `_wpnonce` (the parameter
  * `LiteSpeed_ESI::handle_ajax_fragment()` validates with wp_verify_nonce()).
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {string} block Block name.
  * @param {string} nonce Nonce value.
  * @return {URLSearchParams} Request body.
@@ -289,7 +289,7 @@ export const buildEsiBody = ( block, nonce ) => {
  * Apply an already-sanitized fragment to a placeholder element and clear
  * placeholder attributes.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {HTMLElement}      el   Placeholder element.
  * @param {DocumentFragment} frag Sanitized fragment (consumed by the last target; clone for fan-out).
  * @return {void}
@@ -318,7 +318,7 @@ const applyFragmentToElement = ( el, frag ) => {
  * loading label forever. Mirrors the applyFragmentToElement() ARIA cleanup
  * and leaves a translated failure label in place of the loading label.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {HTMLElement} el Placeholder element.
  * @return {void}
  */
@@ -335,7 +335,7 @@ const markElementFailed = ( el ) => {
 /**
  * Read the block name and nonce for a placeholder element.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {HTMLElement} el Placeholder element.
  * @return {{block: string, nonce: string}|null} Block info, or null when no block.
  */
@@ -354,7 +354,7 @@ const readBlockInfo = ( el ) => {
 /**
  * Parse a fetch response as JSON without throwing on empty/non-JSON bodies.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {Response} response Fetch response.
  * @return {Promise<Object|null>} Parsed payload, or null.
  */
@@ -369,7 +369,7 @@ const readJsonSafely = async ( response ) => {
 /**
  * Extract fragment HTML from a wppo_esi_fragment JSON payload.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {Object|null} data JSON payload.
  * @return {string} Fragment HTML (empty when absent).
  */
@@ -384,7 +384,7 @@ const extractFragmentHtml = ( data ) => {
 /**
  * Whether a response/payload indicates a nonce/auth failure worth retrying.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {Response}    response Fetch response.
  * @param {Object|null} data     Parsed payload.
  * @return {boolean} True when a nonce refresh + single retry is warranted.
@@ -403,7 +403,7 @@ const isAuthFailure = ( response, data ) => {
  * LiteSpeed_ESI::handle_ajax_fragment()) and returns a freshly minted nonce as
  * its fragment. Concurrent callers share one in-flight request.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {AbortSignal|undefined} signal Optional abort signal.
  * @return {Promise<string>} Fresh nonce, or empty string on failure.
  */
@@ -434,7 +434,7 @@ const refreshEsiNonce = ( signal ) => {
  * Mirrors the src/main.js 403 nonce-refresh pattern: one refresh + one retry,
  * then surface the failure. Aborts (navigation) propagate to the caller.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {string}                block  Block name.
  * @param {string}                nonce  Placeholder nonce.
  * @param {AbortSignal|undefined} signal Optional abort signal.
@@ -474,7 +474,7 @@ const requestEsiFragment = async ( block, nonce, signal ) => {
 /**
  * Hydrate a single placeholder element.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {HTMLElement}           el     Placeholder element.
  * @param {AbortSignal|undefined} signal Optional abort signal.
  * @return {Promise<void>}
@@ -519,7 +519,7 @@ export const hydrateElement = async ( el, signal ) => {
  * fetch; the sanitized fragment is fanned out (cloned per extra element)
  * so N identical blocks produce one network request.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {AbortSignal|undefined} signal Optional abort signal.
  * @return {void}
  */

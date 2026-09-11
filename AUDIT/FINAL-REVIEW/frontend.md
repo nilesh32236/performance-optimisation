@@ -92,7 +92,7 @@ Build pipeline: `@wordpress/scripts` (`src/index.js` + `src/lazyload.js` + `src/
   ```scss
   @mixin flex-center {
     // Retained for P5 design-system reuse — currently unused but part of
-    // the shared layout toolkit. Marked @since NEXT ...
+    // the shared layout toolkit. Marked @since 2.0.0 ...
   }
   @mixin truncate {
     // Retained for P5 design-system reuse — ... See AUDIT/DUPLICATE-CODE.md X-04.

@@ -36,6 +36,6 @@
 
 **Remaining risks:** RUM write storm + stampede + SCAN+DEL dominate p95 under load; symlink/admin-bar are low-exploit but compliance-audit blockers; duplication debt slows velocity not availability. All mitigatable without schema/contract break.
 
-**Gate before fix batches:** `npm run lint:js` → `composer lint` → `npm test` → `npm run build` → `composer test`; commit `build/`; `@since NEXT` never bump `1.9.0`; keep `enabled=false` for edge opt-in.
+**Gate before fix batches:** `npm run lint:js` → `composer lint` → `npm test` → `npm run build` → `composer test`; commit `build/`; `@since 2.0.0` never bump `1.9.0`; keep `enabled=false` for edge opt-in.
 
 > Full evidence: `AUDIT/AGENTS/agent-A*.md` (2286 lines), shards `AUDIT/FINDINGS/*.md` (by severity), category docs `AUDIT/*-REVIEW.md`, map `FUNCTIONALITY-MAP.md`, plan `REFACTORING-PLAN.md`.

@@ -28,7 +28,7 @@
   - Empty and whitespace-only rules are skipped instead of matching the homepage.
   - Home base resolved once per request via a blog-id-keyed static cache (perf); re-resolved only
     when a `home_url` filter is active. Multisite-safe.
-- Resolved `@since NEXT` → `@since 2.16.0` in `includes/class-metabox.php` (3 helpers).
+- Resolved `@since 2.0.0` → `@since 2.16.0` in `includes/class-metabox.php` (3 helpers).
 - Added 7 tests to `tests/php/UtilIsUrlExcludedTest.php` (scheme mismatch, empty/whitespace rules,
   root-relative wildcard prefix matching + sibling non-match).
 - Files modified: `includes/class-util.php`, `includes/class-metabox.php`,
@@ -94,7 +94,7 @@
   - Duplicate doc-block openings removed (`class-main`, `class-system-info`).
   - `Util::is_url_excluded()` hardened: scheme-normalized matching, empty-rule skip, home base
     cached per blog id (multisite-safe), root-relative wildcard support.
-  - `@since NEXT` → `2.16.0` in `class-metabox` helpers.
+  - `@since 2.0.0` → `2.16.0` in `class-metabox` helpers.
   - PHPUnit 12 readiness: `@dataProvider` → `#[DataProvider]`, redundant `@before` removed.
 - **Test-infrastructure fixes:** `ARRAY_A`/`ARRAY_N`/`OBJECT`/`FS_CHMOD_*` constants + i18n
   stub pre-registration in `tests/php/bootstrap.php` (prevents redeclare/patchwork errors).

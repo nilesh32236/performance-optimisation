@@ -4,19 +4,19 @@ import { __, sprintf } from '@wordpress/i18n';
  * Default idle timeout (ms) applied when the delayJSIdleTimeout field is
  * empty, non-numeric, non-finite or non-positive.
  *
- * @since NEXT
+ * @since 2.0.0
  */
 export const DELAY_IDLE_TIMEOUT_DEFAULT = 3000;
 /**
  * Minimum clamped idle timeout (ms) for delayJSIdleTimeout.
  *
- * @since NEXT
+ * @since 2.0.0
  */
 export const DELAY_IDLE_TIMEOUT_MIN = 500;
 /**
  * Maximum clamped idle timeout (ms) for delayJSIdleTimeout.
  *
- * @since NEXT
+ * @since 2.0.0
  */
 export const DELAY_IDLE_TIMEOUT_MAX = 20000;
 /**
@@ -29,7 +29,7 @@ export const DELAY_IDLE_TIMEOUT_MAX = 20000;
  * [DELAY_IDLE_TIMEOUT_MIN, DELAY_IDLE_TIMEOUT_MAX] so an idle-callback delay can neither
  * fire too eagerly nor stall the delayed scripts indefinitely.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {Function} setSettings React state setter for the settings object.
  * @return {Function} Change event handler.
  */
@@ -82,7 +82,7 @@ export const handleChange = ( setSettings ) => ( e ) => {
  * passed through __() and composed via sprintf() so translators can reorder
  * words and localise the unit.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {number} bytes Byte count.
  * @return {string} Formatted size (e.g. "1.5 KB").
  */

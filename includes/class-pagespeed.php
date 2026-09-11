@@ -66,7 +66,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		/**
 		 * Option name holding historical PageSpeed results for trend charts.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		const TREND_OPTION = 'wppo_web_vitals_trends';
@@ -74,7 +74,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		/**
 		 * Maximum number of historical results kept per URL + strategy.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		const TREND_LIMIT = 30;
@@ -85,7 +85,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * Guards against unbounded option growth when many distinct URLs are
 		 * scanned over time. Older keys are pruned first.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		const TREND_MAX_KEYS = 20;
@@ -221,7 +221,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			 * Defaults to 60s (the API commonly takes 30-90s). Long values
 			 * risk wedging the AS worker; short values risk false timeouts.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param int $timeout Timeout in seconds.
 			 */
 			$timeout = (int) apply_filters( 'wppo_pagespeed_request_timeout', 60 );
@@ -348,7 +348,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * re-queue with as_schedule_single_action() and free the Action
 		 * Scheduler worker slot instead of blocking it with sleep().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $query_url Fully built API URL.
 		 * @param int    $timeout   Request timeout in seconds.
 		 * @return array|WP_Error Response array or error object.
@@ -365,14 +365,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		/**
 		 * Get the re-queue delay (seconds) after a transport failure.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return int Delay clamped to 1-10 seconds.
 		 */
 		private static function get_retry_delay(): int {
 			/**
 			 * Filters the backoff delay (seconds) before the PageSpeed retry.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param int $retry_after Delay in seconds.
 			 */
 			$retry_after = (int) apply_filters( 'wppo_pagespeed_retry_delay', 2 );
@@ -382,7 +382,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		/**
 		 * Persist a scan failure for later surfacing in the admin UI.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $url      Scanned URL.
 		 * @param string $strategy Strategy slug.
 		 * @param string $message  Failure message.
@@ -434,7 +434,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * cache lock so concurrent async workers (e.g. mobile + desktop scans
 		 * running at the same time) cannot overwrite each other's snapshot.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param  string $url      The scanned URL.
 		 * @param  array  $prepared The prepared PageSpeed result array.
 		 * @param  string $strategy Either 'mobile' or 'desktop'.
@@ -487,7 +487,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * the DB), so a simultaneous worker cannot both hold the lock. Locks
 		 * older than TREND_LOCK_TTL are considered stale and stolen.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool
 		 */
 		private static function acquire_trend_lock(): bool {
@@ -507,7 +507,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		/**
 		 * Release the trend write lock.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		private static function release_trend_lock(): void {
@@ -521,7 +521,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * timestamp of their most recent snapshot) are dropped, preserving recent
 		 * data while keeping the option bounded.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param  array $hist The full trends map.
 		 * @return array The trimmed trends map.
 		 */
@@ -560,7 +560,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		/**
 		 * Retrieve the full Web Vitals trend history.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array Keyed by md5(url)_strategy, each value a list of snapshots.
 		 */
 		public static function get_trends(): array {
@@ -575,7 +575,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * keep loading on every WordPress request via alloptions. Mirrors
 		 * Img_Converter::migrate_img_info_autoload().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function migrate_trends_autoload(): void {
@@ -696,7 +696,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 *
 		 * Returns null when no image URL can be identified (text LCP, background-image, etc.).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array $diagnostics The prepared diagnostics array.
 		 * @return string|null The image URL, or null if not found.
 		 */
@@ -745,7 +745,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 *
 		 * Does nothing if no LCP image URL was detected.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $url      The scanned URL.
 		 * @param array  $prepared The prepared PageSpeed result array.
 		 * @param string $strategy The scan strategy ('mobile' or 'desktop').

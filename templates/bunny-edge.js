@@ -13,7 +13,7 @@
  * Edge_Cache::get_bunny_edge_js() output as reference for
  * configuring the Bunny pull zone Cache-Control.
  *
- * @since NEXT
+ * @since 2.0.0
  */
 
 async function handleRequest(event) {

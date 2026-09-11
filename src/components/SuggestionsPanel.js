@@ -140,7 +140,7 @@ export const formatValue = ( value, unit ) => {
  * composite key instead of using the array index (which remounts cards and
  * loses internal state on filter/reorder).
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {Object}        suggestion Suggestion object.
  * @param {number|string} [index]    Optional list index appended to disambiguate
  *                                   duplicates sharing all four fields.

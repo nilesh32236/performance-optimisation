@@ -30,14 +30,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 	/**
 	 * Bfcache handler.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	class Bfcache {
 
 		/**
 		 * User session key for the bfcache session token.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		const SESSION_KEY = 'bfcache_session_token';
@@ -45,7 +45,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 		/**
 		 * Filter to control whether bfcache is enabled.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		const FILTER_ENABLED = 'wppo_bfcache_enabled';
@@ -53,7 +53,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 		/**
 		 * Script handle for the inline invalidation script.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		const SCRIPT_HANDLE = 'wppo-bfcache';
@@ -69,7 +69,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 		 * the feature still works, but the filter documents the intended WP
 		 * version. No hard dependency — pure function_exists guard.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True when bfcache is enabled.
 		 */
 		public static function is_enabled(): bool {
@@ -81,7 +81,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 			/**
 			 * Filters whether bfcache (Instant Back/Forward) is enabled.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param bool $enabled Whether bfcache is enabled.
 			 */
 			$enabled = (bool) apply_filters( self::FILTER_ENABLED, $enabled );
@@ -93,7 +93,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 		 *
 		 * Incorporates COOKIEHASH to prevent collisions on multisite subdirectory installs.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string Cookie name.
 		 */
 		public static function get_cookie_name(): string {
@@ -107,7 +107,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 		/**
 		 * Generate a bfcache session token.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string Token (43 chars).
 		 */
 		public static function generate_token(): string {
@@ -120,7 +120,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 		/**
 		 * Get the bfcache session token for a user/session.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param int|null    $user_id User ID, defaults to current.
 		 * @param string|null $session_token Session token, defaults to current.
 		 * @return string|null Token or null.
@@ -162,7 +162,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 		 * Hooks into `attach_session_information`. When bfcache is enabled,
 		 * generates a random session token for the new session.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param mixed $session Session array.
 		 * @return array Session array.
 		 */
@@ -184,7 +184,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 		/**
 		 * Whether the logged_in cookie should be secure (copied from core logic).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param int $user_id User ID.
 		 * @return bool
 		 */
@@ -199,7 +199,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 		/**
 		 * Set the bfcache session token cookie.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param int    $user_id User ID.
 		 * @param string $token Token.
 		 * @param int    $expire Expiration timestamp.
@@ -220,7 +220,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 		/**
 		 * Hook: set_logged_in_cookie — mirror the session token into a readable cookie.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $logged_in_cookie Cookie value (unused).
 		 * @param int    $expire Expiration.
 		 * @param int    $expiration Expiration.
@@ -242,7 +242,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 		/**
 		 * Hook: clear_auth_cookie — clear the bfcache session token cookie on logout.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function on_clear_auth_cookie(): void {
@@ -263,7 +263,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 		 * so proxies never cache authenticated responses while browsers may use bfcache/HTTP cache.
 		 * Only runs when bfcache is enabled and the current session has a token.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param mixed $headers Headers array.
 		 * @return array Headers.
 		 */
@@ -316,7 +316,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 		 * is cleared and reloaded. Handles both HTTP cache (immediate check) and
 		 * bfcache (pageshow with persisted=true). Uses vanilla JS, no dependencies.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function enqueue_scripts(): void {
@@ -405,7 +405,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 		/**
 		 * Register hooks.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function init(): void {

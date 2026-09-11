@@ -184,7 +184,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		 * for the current trip (tripped_at comparison) so the next trip
 		 * automatically re-arms the notice.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		private function maybe_object_cache_circuit_notice(): void {
@@ -239,7 +239,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		 * minify/combine/defer optimizers to avoid double processing. Show a
 		 * dismissible info notice linking to the LiteSpeed control.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		private function maybe_litespeed_coexistence_notice(): void {
@@ -317,7 +317,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		 * is read and deleted here so the notice renders once, and expires
 		 * via its TTL otherwise (no dismiss key needed).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		private function maybe_builder_purge_notice(): void {

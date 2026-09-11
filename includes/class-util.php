@@ -37,7 +37,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * `src/components/PluginSetting.js` is kept in sync via `wppoSettings.allowedSettingsKeys`
 		 * (see Main::enqueue_admin_scripts()) and a build-time comment.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string[]
 		 */
 		public const ALLOWED_SETTINGS_KEYS = array(
@@ -63,7 +63,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Identical to ALLOWED_SETTINGS_KEYS — kept as an alias for semantic
 		 * clarity at call-sites that validate a single tab.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string[]
 		 */
 		public const ALLOWED_SETTINGS_TABS = self::ALLOWED_SETTINGS_KEYS;
@@ -80,7 +80,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * The `wppo_litespeed_purge_queue` entry is blog-prefixed at runtime via
 		 * transient_key() on multisite; the list stores its base name.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string[]
 		 */
 		public const UNINSTALL_OPTIONS = array(
@@ -122,7 +122,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * options-table LIKE match because the strategy suffix is dynamic
 		 * (audit #899).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		public const FRONT_PAGE_LCP_OPTION_PREFIX = 'wppo_front_page_lcp_';
@@ -130,7 +130,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Get the allowlisted top-level settings keys.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string[]
 		 */
 		public static function get_allowed_settings_keys(): array {
@@ -147,7 +147,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * empty (no defaults) for BC, database_cleanup carries only the
 		 * additive autoloadThreshold default (issue #934).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array<string, array<string, mixed>> Default settings keyed by tab.
 		 */
 		public static function get_default_settings(): array {
@@ -329,7 +329,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * tests/php/SettingsSchemaDefaultsTest.php. Replace that pragmatic
 		 * source scan with a localized `wppoSettings.schema` when available.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array<string, array<string, string>> Schema keyed by tab.
 		 */
 		public static function get_settings_schema(): array {
@@ -442,7 +442,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * used-CSS, preload). Absent key defaults to enabled (fail-safe);
 		 * explicit false disables. Malformed values normalize to enabled.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array|null $settings Optional settings array (defaults to get_settings()).
 		 * @return bool True when safe mode is enabled.
 		 */
@@ -477,7 +477,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * never be cached, delayed, or preloaded — unconditional on
 		 * safe-mode toggle.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $path Request path (leading slash optional) or a `rest_route` value.
 		 * @return bool True when the path is a Store API route.
 		 */
@@ -512,7 +512,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * (path `/`) is treated as Store API across all layers. Fail-open:
 		 * detection failure returns true (treated as dynamic).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string      $path         Request path (leading slash optional).
 		 * @param string|null $query_string Optional raw query string (defaults to `$_SERVER['QUERY_STRING']`).
 		 * @param string|null $rest_route   Optional `rest_route` value (defaults to `$_GET['rest_route']`).
@@ -556,7 +556,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * caching checkout content) plus Store API routes. Fail-open: any
 		 * detection failure returns true (treated as dynamic, never fatal).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $path Request path (leading slash optional).
 		 * @return bool True when the path is Woo-dynamic.
 		 */
@@ -603,7 +603,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * resolution failure returns the defaults (never fatal, 0 queries when
 		 * Woo is absent).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string[] Relative paths (e.g. `cart`, `shop/basket`), unique, lowercased.
 		 */
 		public static function get_woo_excluded_paths(): array {
@@ -669,7 +669,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * cover its conditional tags / page resolver. Multisite-safe:
 		 * per-site detection only, no cross-site state.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True when any WooCommerce symbol is available.
 		 */
 		public static function is_woo_active(): bool {
@@ -712,7 +712,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * cross-site leakage. Read-only: no options, transients, or files
 		 * are written.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array{woo_active: bool, safe_mode: bool, runnable: bool, excluded_paths: string[], donotcachepage_honored: bool, checks: array<int, array{url: string, path: string, is_dynamic: bool, cacheable: bool, donotcachepage_honored: bool, pass: bool, error?: string}>, all_pass: bool} Structured self-test result.
 		 */
 		public static function woo_cache_self_test(): array {
@@ -809,7 +809,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Static cache for resolved home URLs, keyed by blog ID.
 		 *
 		 * @var array<int, string>
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static array $home_url_cache = array();
 
@@ -819,7 +819,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Keyed by blog ID for multisite correctness under switch_to_blog().
 		 *
 		 * @var array<int, array>
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static array $settings_cache = array();
 
@@ -827,14 +827,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Whether the settings cache has been populated this request, keyed by blog ID.
 		 *
 		 * @var array<int, bool>
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static array $settings_cache_loaded = array();
 
 		/**
 		 * Resets the home_url static cache for testing isolation.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function reset_cached_home_urls(): void {
 			self::$home_url_cache = array();
@@ -850,7 +850,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * to one lookup per ID per request. Results are non-false strings —
 		 * failed lookups memoize as ''.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var array<string, string>
 		 */
 		private static array $permalink_cache = array();
@@ -862,7 +862,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * request (cron/crawler loops) can never serve another site's
 		 * permalink for the same numeric ID (audit #874 Part review).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param int $post_id Post ID.
 		 * @return string Permalink, or '' when unavailable (false from get_permalink()).
 		 */
@@ -878,7 +878,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Clear the per-request permalink memo (testing isolation, switch_blog).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function clear_permalink_cache(): void {
@@ -888,7 +888,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Resolve current blog ID safely (handles Brain Monkey stub mis-configuration in tests).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return int Blog ID.
 		 */
 		private static function current_blog_id(): int {
@@ -911,7 +911,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * on update/add/delete of the option. Blog-keyed to avoid cross-site
 		 * leakage under switch_to_blog() (see F-COMPAT-03).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array The plugin settings.
 		 */
 		public static function get_settings(): array {
@@ -932,7 +932,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Set the settings cache to a known value (e.g. after update_option in same request).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array $settings The settings to cache.
 		 * @return void
 		 */
@@ -951,7 +951,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * delete_option_wppo_settings action passes no blog ID, so the full
 		 * clear path is taken. switch_blog is handled by on_switch_blog().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param int|null $blog_id Optional blog ID to clear. Null clears all.
 		 * @return void
 		 */
@@ -978,7 +978,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * Kept separate from clear_settings_cache for hook arity clarity.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param int $new_blog_id New blog ID.
 		 * @param int $prev_blog_id Previous blog ID.
 		 * @return void
@@ -1006,7 +1006,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Safe to call multiple times — a static guard makes the registration
 		 * idempotent.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function register_settings_cache_hooks(): void {
@@ -1016,7 +1016,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Ensure the invalidation hooks for wppo_settings are registered once per request.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		private static function ensure_settings_cache_hook(): void {
@@ -1034,7 +1034,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Invalidate/update the memo when wppo_settings is updated.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param mixed $old_value Previous value.
 		 * @param mixed $value New value.
 		 * @return void
@@ -1048,7 +1048,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Populate the memo when wppo_settings is added.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $option Option name.
 		 * @param mixed  $value Option value.
 		 * @return void
@@ -1267,7 +1267,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string $media The media attribute (optional).
 		 * @param string $fetchpriority The fetchpriority attribute (optional).
 		 * @since 1.0.0
-		 * @since NEXT Echoes only in front-end HTML contexts; returns the tag and delegates building to get_preload_link().
+		 * @since 2.0.0 Echoes only in front-end HTML contexts; returns the tag and delegates building to get_preload_link().
 		 */
 		public static function generate_preload_link( $href, $rel, $resource_type = '', $crossorigin = false, $type = '', $media = '', $fetchpriority = '' ) {
 			$link_tag = self::get_preload_link( $href, $rel, $resource_type, $crossorigin, $type, $media, $fetchpriority );
@@ -1306,7 +1306,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string $type The type attribute (optional).
 		 * @param string $media The media attribute (optional).
 		 * @param string $fetchpriority The fetchpriority attribute (optional).
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string The sanitized `<link ...>` tag.
 		 */
 		public static function get_preload_link( $href, $rel, $resource_type = '', $crossorigin = false, $type = '', $media = '', $fetchpriority = '' ): string {
@@ -1379,7 +1379,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string $url         The URL to check.
 		 * @param array  $exclude_urls List of exclusion rules.
 		 * @return bool True when the URL matches any exclusion rule, false otherwise.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function is_url_excluded( string $url, array $exclude_urls ): bool {
 			$url = rtrim( $url, '/' );
@@ -1452,7 +1452,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * the normalization used in store_lcp_image_url(). The returned
 		 * URL is untrailingslashed and passed through esc_url_raw().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string Current URL.
 		 */
 		public static function get_current_url(): string {
@@ -1471,7 +1471,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * stored beacon path kept it verbatim. Trims the trailing slash
 		 * (keeping '/' for the root) and ensures a leading slash.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $path Raw page path.
 		 * @return string Normalized path (e.g. '/hero-page', '/').
 		 */
@@ -1501,7 +1501,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * as the same image as their full-size original. Returns host + path
 		 * lowercased for host, or empty string when unparseable.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $url The raw URL to normalize.
 		 * @return string Normalized host + path, or empty string when unparseable.
 		 */
@@ -1547,7 +1547,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * and finally to a `uniqid()`/`wp_rand()` token. Never fatals: any
 		 * failure degrades to a static fallback namespace (fail-open).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string Non-empty namespace string.
 		 */
 		public static function mint_placeholder_namespace(): string {
@@ -1592,7 +1592,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * prefix check and one-time cleanup of pre-namespacing directories.
 		 *
 		 * @return string Normalized absolute path to the shared min cache root.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function min_cache_base_dir(): string {
 			return wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/min' );
@@ -1609,7 +1609,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @param string $subdir Optional 'css' or 'js' subdirectory.
 		 * @return string Normalized absolute path to the site-scoped min cache dir.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function min_cache_dir( string $subdir = '' ): string {
 			$dir = self::min_cache_base_dir() . '/' . get_current_blog_id();
@@ -1625,7 +1625,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string $subdir   Optional 'css' or 'js' subdirectory.
 		 * @param string $filename Optional file name appended to the URL.
 		 * @return string The blog-scoped content URL.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function min_cache_url( string $subdir = '', string $filename = '' ): string {
 			$path = 'cache/wppo/min/' . get_current_blog_id();
@@ -1649,7 +1649,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @param string $path Path relative to the content directory.
 		 * @return string The content URL for the given path.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function cached_content_url( $path ) {
 			if ( false !== has_filter( 'content_url' ) ) {
@@ -1679,7 +1679,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @param string $path Optional. Path relative to the home URL. Default empty.
 		 * @return string The untrailingslashed home URL, with path appended if provided.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function cached_home_url( string $path = '' ): string {
 			if ( false !== has_filter( 'home_url' ) ) {
@@ -1710,7 +1710,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @param string $raw_host Raw host value (e.g. $_SERVER['HTTP_HOST'] or a home_url() host).
 		 * @return string Normalized lowercase host, or '' when invalid.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function normalize_cache_host( string $raw_host ): string {
 			$domain = trim( $raw_host );
@@ -1782,7 +1782,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * fataling.
 		 *
 		 * @return string Canonical lowercase host, or '' when it cannot be resolved.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function get_canonical_host(): string {
 			if ( ! function_exists( 'home_url' ) || ! function_exists( 'wp_parse_url' ) ) {
@@ -1827,7 +1827,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @param string|null $url_path Raw URL path or URL.
 		 * @return string Sanitized relative path or empty string.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function sanitize_cache_url_path( ?string $url_path ): string {
 			$raw_input = (string) $url_path;
@@ -1890,7 +1890,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string $domain Canonical domain directory segment.
 		 * @param string $path Absolute file or directory path to check.
 		 * @return bool True when contained.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function is_cache_path_contained( string $cache_root_dir, string $domain, string $path ): bool {
 			if ( '' === $cache_root_dir || '' === $domain || '' === $path ) {
@@ -1944,7 +1944,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string|null $url_path_or_url Raw URL path or URL.
 		 * @param string      $filename File name (e.g. `index.html`).
 		 * @return string Contained absolute path, or '' when refused.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function sanitize_cache_path( string $cache_root_dir, string $domain, $url_path_or_url, string $filename ): string {
 			if ( '' === $cache_root_dir || '' === $filename ) {
@@ -2023,7 +2023,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @param string $final_path Final file path the tmp sits beside.
 		 * @return string Tmp sibling path ('' when input is empty).
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function atomic_tmp_path( string $final_path ): string {
 			if ( '' === $final_path ) {
@@ -2056,7 +2056,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string $path Final file path.
 		 * @param string $contents File contents.
 		 * @return bool True on success.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function atomic_file_put_contents( $fs, string $path, string $contents ): bool {
 			if ( '' === $path || ! is_object( $fs ) || ! method_exists( $fs, 'put_contents' ) || ! method_exists( $fs, 'move' ) || ! method_exists( $fs, 'delete' ) ) {
@@ -2103,7 +2103,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string $code PHP source to check.
 		 * @param string $tmp_file_for_lint Optional tmp file holding $code for `php -l`.
 		 * @return bool True when the code looks parseable.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function verify_php_syntax( string $code, string $tmp_file_for_lint = '' ): bool {
 			if ( '' === $code ) {
@@ -2183,7 +2183,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @param array $tokens Token stream from `PhpToken::tokenize()`.
 		 * @return bool True when every bracket type is balanced and ordered.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static function php_brackets_balanced( array $tokens ): bool {
 			$pairs = array(
@@ -2241,7 +2241,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string        $contents New file contents.
 		 * @param callable|null $expect Optional assertion receiving contents, returning bool.
 		 * @return bool|null True on verified success, false on verified failure, null when unsupported.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function atomic_write_php_verified( $fs, string $path, string $contents, $expect = null ): ?bool {
 			$required = array( 'exists', 'get_contents', 'put_contents', 'move', 'copy', 'delete' );
@@ -2347,7 +2347,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string $original In-memory original contents ('' when none).
 		 * @param int    $chmod File mode for a direct-write restore.
 		 * @return bool True when a restore write/copy was issued.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static function restore_php_backup( $fs, string $path, string $original, int $chmod ): bool {
 			try {
@@ -2380,7 +2380,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @param string $css CSS content.
 		 * @return string SHA-256 checksum, or '' for empty input.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function compute_css_checksum( string $css ): string {
 			if ( '' === $css ) {
@@ -2398,7 +2398,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @param string $key The bare transient key.
 		 * @return string Blog-ID-prefixed key on multisite, or the original key.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function transient_key( string $key ): string {
 			if ( ! function_exists( 'is_multisite' ) ) {
@@ -2422,7 +2422,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @param string $key The bare option name.
 		 * @return string Blog-ID-prefixed option name on multisite, or the original name.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function option_key( string $key ): string {
 			if ( ! function_exists( 'is_multisite' ) ) {
@@ -2444,7 +2444,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * drop-in at generation time so the early-boot serving code can compute
 		 * an identical hash.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param \WP_User $user The user whose roles to hash.
 		 * @return string 12-char hex hash, or empty string if the user has no roles.
 		 */
@@ -2463,7 +2463,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * Non-logged-in visitors always return true (they always get cached).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array $cache_settings The cache_settings sub-array from wppo_settings.
 		 * @return bool True if the current user may receive cached pages / optimisations.
 		 */
@@ -2517,7 +2517,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * `class_exists` and `method_exists` for beta API variance (WP 6.9 beta
 		 * exposed `get_block_type` vs `get_block_name`).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $content    Post content.
 		 * @param string $block_name Block name e.g. 'core/image'.
 		 * @return bool True when the block type is present.
@@ -2555,7 +2555,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Streaming via `WP_Block_Processor` on WP 6.9+; fallback to
 		 * `parse_blocks()` recursion. Reused for gallery/LCP counts.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $content    Post content.
 		 * @param string $block_name Block name e.g. 'core/gallery'.
 		 * @return int Number of matching blocks.
@@ -2589,7 +2589,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Whether a parsed block tree contains a block type (recursive).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array  $blocks     Parsed blocks from parse_blocks().
 		 * @param string $block_name Block name.
 		 * @return bool
@@ -2611,7 +2611,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Count blocks of type in a parsed block tree (recursive).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array  $blocks     Parsed blocks.
 		 * @param string $block_name Block name.
 		 * @return int
@@ -2632,7 +2632,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Convert wildcard pattern to regex fragment (mirrors CDN::wildcard2regex / LSCWP cdn.cls.php:188).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $pattern Wildcard pattern.
 		 * @return string Regex fragment.
 		 */
@@ -2657,7 +2657,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @param array $settings The settings array.
 		 * @return array The sanitized settings array.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function sanitize_settings_recursively( $settings ) {
 			$sanitized = array();
@@ -2700,7 +2700,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					/**
 					 * Filter sanitized TTL overrides.
 					 *
-					 * @since NEXT
+					 * @since 2.0.0
 					 * @param array $overrides Sanitized overrides.
 					 */
 					$overrides              = (array) apply_filters( 'wppo_cache_ttl_overrides', $overrides );
@@ -2777,7 +2777,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 						/**
 						 * Filter single CDN mapping entry post-sanitize.
 						 *
-						 * @since NEXT
+						 * @since 2.0.0
 						 * @param array $data Sanitized entry.
 						 */
 						$data      = (array) apply_filters( 'wppo_cdn_mapping_entry', $data );
@@ -2787,7 +2787,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					/**
 					 * Filter CDN mapping array.
 					 *
-					 * @since NEXT
+					 * @since 2.0.0
 					 * @param array $mapping Sanitized mapping.
 					 */
 					$mapping                = (array) apply_filters( 'wppo_cdn_mapping', $mapping );
@@ -2950,7 +2950,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * (the comparison never changes) and reduce invalidation to the
 		 * entry TTL alone.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $option Option key holding the salt.
 		 * @return string Current salt value ('0' until the first bump).
@@ -2970,7 +2970,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Reset per request via {@see reset_html_processor_memo()} (used by the
 		 * test suite to isolate the reflection probe).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var bool|null
 		 */
 		private static ?bool $html_processor_available = null;
@@ -2985,7 +2985,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Shared by every processor-based buffer rewrite (image optimisation,
 		 * CDN rewriting, used-CSS extraction); memoized per request.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True when `WP_HTML_Processor::serialize_token()` is public.
 		 */
 		public static function should_use_html_processor(): bool {
@@ -3012,7 +3012,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * used by the test suite so the reflection probe can be re-evaluated
 		 * after HTML API class fixtures change.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function reset_html_processor_memo(): void {
@@ -3033,7 +3033,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * when the processor is unavailable, the factory fails, or the input
 		 * cannot be parsed.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $html HTML document or fragment.
 		 * @return \WP_HTML_Processor|null Processor instance, or null on failure.
@@ -3064,7 +3064,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Operator opt-out via `wppo_safe_css_combine_fallback` (default true).
 		 * When false the legacy path is used without strict guards.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True when fallback guards are active.
 		 */
 		public static function safe_css_fallback_enabled(): bool {
@@ -3075,7 +3075,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			 * payload is non-empty and the target file exists/readable before
 			 * stripping original stylesheets, and fail-open to originals on error.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param bool $enabled Whether the safe fallback is enabled.
 			 */
 			return (bool) apply_filters( 'wppo_safe_css_combine_fallback', true );
@@ -3088,7 +3088,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * cache is cleared for the exact path so a file written earlier in the
 		 * same request is never judged stale.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $path Absolute path to the CSS file.
 		 * @return bool True when the file is usable.
 		 */
@@ -3107,7 +3107,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * static flag (so a later request failure in the same process is still
 		 * observable).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $reason  Machine-readable reason code (empty_payload, write_failure, head_match_failure, ...).
 		 * @param array  $handles Handles preserved by the fallback.
 		 * @param string $context 'combine' or 'usedcss' — selects the log-key prefix and message.
@@ -3159,7 +3159,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * The optional $php_version parameter exists so PHPUnit (Brain Monkey)
 		 * can exercise both sides of the gate without redefining PHP_VERSION.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string|null $php_version Optional version string for testing; defaults to PHP_VERSION.
 		 * @return bool True on PHP 8.5+, false below.
 		 */
@@ -3181,7 +3181,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * variable untouched; assigning null releases the CurlHandle object in
 		 * the caller scope on every supported runtime.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param mixed       $ch          cURL handle to release (nulled in the caller scope).
 		 * @param string|null $php_version Optional version override for testing; defaults to PHP_VERSION.
 		 * @return void
@@ -3210,7 +3210,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * `curl_multi_close()` is unavailable the reference is dropped on
 		 * every runtime. Multisite-safe: no option/cache changes.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param mixed       $mh          cURL multi handle to release (nulled in the caller scope).
 		 * @param string|null $php_version Optional version override for testing; defaults to PHP_VERSION.
 		 * @return void
@@ -3239,7 +3239,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * reference is dropped on every runtime. Multisite-safe: no
 		 * option/cache changes.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param mixed       $image       GD image to release (nulled in the caller scope).
 		 * @param string|null $php_version Optional version override for testing; defaults to PHP_VERSION.
 		 * @return void
@@ -3271,7 +3271,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * `styles_inline_size_limit` filter always win. An absent
 		 * `$GLOBALS['wp_version']` assumes the newest default.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return int The inline size limit in bytes.
 		 */
 		public static function get_styles_inline_limit(): int {

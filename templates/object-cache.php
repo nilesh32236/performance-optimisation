@@ -82,7 +82,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 * Called by wp_cache_add_salt() (WP 6.9+) to invalidate all cached data
 		 * by changing the key space.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $salt The salt string to add.
 		 * @return void
@@ -295,7 +295,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 * outage, so tripping the breaker on them would park a drop-in that
 		 * no recovery probe could ever heal.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string[]
 		 */
 		private const NON_CIRCUIT_ERROR_CODES = array( 'missing_redis', 'missing_cluster', 'missing_sentinel', 'low_nodes', 'redis_version' );
@@ -307,7 +307,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 * then the wppo_object_cache_circuit_breaker_threshold filter (when
 		 * plugins are loaded), defaulting to 5 consecutive failures.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return int Minimum 1.
 		 */
 		private function get_circuit_threshold(): int {
@@ -316,7 +316,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				/**
 				 * Filter the object-cache circuit-breaker failure threshold.
 				 *
-				 * @since NEXT
+				 * @since 2.0.0
 				 * @param int $threshold Consecutive counted failures that trip the breaker. Default 5.
 				 */
 				$threshold = (int) apply_filters( 'wppo_object_cache_circuit_breaker_threshold', $threshold );
@@ -332,7 +332,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 * are loaded), defaulting to 600 (10 minutes). Failures older than
 		 * the window reset the counter instead of tripping the breaker.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return int Minimum 1.
 		 */
 		private function get_circuit_window(): int {
@@ -341,7 +341,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				/**
 				 * Filter the object-cache circuit-breaker counting window.
 				 *
-				 * @since NEXT
+				 * @since 2.0.0
 				 * @param int $window Seconds in which threshold failures must occur to trip. Default 600.
 				 */
 				$window = (int) apply_filters( 'wppo_object_cache_circuit_breaker_window', $window );
@@ -361,7 +361,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 * When the breaker already tripped (parked sibling on disk) counting
 		 * stops so the state file is written exactly once.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $error_code Machine-readable failure code.
 		 * @param string $reason     Human-readable failure description.
 		 * @return void
@@ -452,7 +452,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 * Called on every healthy boot (via log_redis_recovery()) so past
 		 * outages cannot trip the breaker after recovery.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		private function clear_redis_failures(): void {
@@ -479,7 +479,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 * the recovery probe. Logs exactly one final line; the tripping
 		 * request itself keeps serving from the in-memory fallback.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $error_code Machine-readable failure code.
 		 * @param string $reason     Human-readable failure description.
 		 * @param array  $state      Counter state { count, first, last }.
@@ -904,7 +904,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 * silently claiming success. Never throws — any Redis failure
 		 * degrades to uncached (false) rather than fatal.
 		 *
-		 * @since NEXT Post-flush verification sample added; returns false when stale keys remain.
+		 * @since 2.0.0 Post-flush verification sample added; returns false when stale keys remain.
 		 * @return bool True when the prefix verifies clean, false otherwise.
 		 */
 		public function flush() {
@@ -945,7 +945,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 * namespace-aware and multisite-safe. Fail-open: scan errors stop
 		 * the sweep without throwing.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $pattern SCAN match pattern.
 		 * @return void
 		 */
@@ -988,7 +988,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 * Fail-open: scan errors or a disconnected client report clean
 		 * because the in-memory store was already cleared by the caller.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $pattern SCAN match pattern.
 		 * @return bool True when no keys remain under the pattern.
 		 */
@@ -1016,7 +1016,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		/**
 		 * Check a SCAN pattern is empty via a bounded full-keyspace walk.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string     $pattern SCAN match pattern.
 		 * @param array|null $node    Cluster node (RedisCluster scan signature), null for standalone.
 		 * @return bool True when no keys match, or the scan itself failed (fail-open).
@@ -1400,7 +1400,7 @@ if ( ! function_exists( 'wp_cache_get_salted' ) ) {
 	 * so Redis memory stays bounded and a stale salt yields a miss rather
 	 * than leaving orphaned keys behind.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 *
 	 * @param string          $cache_key The cache key used for storage and retrieval.
 	 * @param string          $group     The cache group used for organizing data.
@@ -1427,7 +1427,7 @@ if ( ! function_exists( 'wp_cache_set_salted' ) ) {
 	 * later write with a new salt overwrites the previous value and non-salted
 	 * wp_cache_delete() calls can still invalidate the entry.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 *
 	 * @param string          $cache_key The cache key under which to store the data.
 	 * @param mixed           $data      The data to be cached.
@@ -1455,7 +1455,7 @@ if ( ! function_exists( 'wp_cache_get_multiple_salted' ) ) {
 	/**
 	 * Retrieves multiple salted items from the cache (WP 6.9+ native override).
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 *
 	 * @param string[]        $cache_keys Array of cache keys to retrieve.
 	 * @param string          $group      The group of the cache to check.
@@ -1487,7 +1487,7 @@ if ( ! function_exists( 'wp_cache_set_multiple_salted' ) ) {
 	/**
 	 * Stores multiple salted items in the cache (WP 6.9+ native override).
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 *
 	 * @param mixed[]         $data   Associative array of keys and values to store.
 	 * @param string          $group  The group to which the cached data belongs.
@@ -1515,7 +1515,7 @@ if ( ! function_exists( 'wp_cache_delete_salted' ) ) {
 	 *
 	 * Mirrors core's cache-compat.php: fetch the wrapper, check salt, delete stable key only on match.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 * @param string          $cache_key Cache key.
 	 * @param string          $group     Cache group.
 	 * @param string|string[] $salt      Salt when the group was last updated.
@@ -1536,7 +1536,7 @@ if ( ! function_exists( 'wp_cache_delete_multiple_salted' ) ) {
 	/**
 	 * Deletes multiple salted items from the cache (WP 6.9+ native override).
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 * @param string[]        $cache_keys Array of cache keys.
 	 * @param string          $group      Cache group.
 	 * @param string|string[] $salt       Salt when the group was last updated.
@@ -1563,7 +1563,7 @@ if ( ! function_exists( 'wp_cache_supports' ) ) {
 	/**
 	 * Determines whether the object cache implementation supports a particular feature.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 *
 	 * @param string $feature The feature to check support for.
 	 * @return bool True if the feature is supported, false otherwise.
@@ -1602,7 +1602,7 @@ if ( ! function_exists( 'wp_cache_add_salt' ) ) {
 	 * Allows core to invalidate all cached data by changing the key space.
 	 * The drop-in must support this via WP_Object_Cache::add_salt().
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 *
 	 * @param string $salt The salt string to add.
 	 * @return void

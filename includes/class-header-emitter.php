@@ -23,7 +23,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Header_Emitter' ) ) {
 	 * Consolidates dynamic header() emission (LiteSpeed purge/tag/TTL/vary
 	 * plus ESI private/no-cache pairs) with CR/LF/NUL stripping.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	final class Header_Emitter {
 
@@ -34,7 +34,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Header_Emitter' ) ) {
 		 * dynamic header emission safe against filter-injected control
 		 * characters instead of relying on PHP's failure mode.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $value Header value to clean.
 		 * @return string Value without header-breaking control characters.
 		 */
@@ -48,7 +48,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Header_Emitter' ) ) {
 		 * No-op when headers were already sent; otherwise emits the
 		 * CRLF-stripped header via header().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $header  Full header line (e.g. 'X-LiteSpeed-Tag: WPPO').
 		 * @param bool   $replace Whether to replace a previous similar header.
 		 * @return bool True when emitted, false when headers were already sent.
@@ -73,7 +73,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Header_Emitter' ) ) {
 		 * `if ( ! headers_sent() ) { header(); header(); }` shape so a
 		 * mid-pair race cannot emit a partial pair.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function emit_private_pair(): void {
@@ -92,7 +92,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Header_Emitter' ) ) {
 		 * (issue #905 review). Single headers_sent() check mirrors the
 		 * pre-extraction shape (see emit_private_pair()).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function emit_nocache_pair(): void {
@@ -106,7 +106,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Header_Emitter' ) ) {
 		/**
 		 * Emit an X-LiteSpeed-Purge tag header (CRLF-safe).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $tag_str Comma-separated tag list (unsanitized).
 		 * @return bool True when emitted, false when headers were already sent.
 		 */
@@ -117,7 +117,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Header_Emitter' ) ) {
 		/**
 		 * Emit an X-LiteSpeed-Tag header (CRLF-safe).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $tag Single tag value (unsanitized).
 		 * @return bool True when emitted, false when headers were already sent.
 		 */
@@ -128,7 +128,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Header_Emitter' ) ) {
 		/**
 		 * Emit an ESI tag header (X-LiteSpeed-Tag: ESI.{action}).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $action ESI action name (unsanitized).
 		 * @return bool True when emitted, false when headers were already sent.
 		 */
@@ -142,7 +142,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Header_Emitter' ) ) {
 		 * Prevents Cache-Control: no-cache conflicting with
 		 * X-LiteSpeed-Cache-Control: public,max-age=N. Guarded on headers_sent().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function remove_generic_cache_control(): void {

@@ -11,7 +11,7 @@
  * no global document/window access is involved.
  *
  * @package PerformanceOptimise\Tests
- * @since NEXT
+ * @since 2.0.0
  */
 
 use PerformanceOptimise\Inc\Metabox;
@@ -227,7 +227,7 @@ class MetaboxTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that process_delay_setting correctly filters data using guard clauses.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_process_delay_setting_filters_correctly(): void {
 		\Brain\Monkey\Functions\when( 'sanitize_text_field' )->returnArg();

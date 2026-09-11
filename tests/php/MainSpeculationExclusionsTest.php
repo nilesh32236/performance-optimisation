@@ -8,7 +8,7 @@
  * in is_speculation_list_url_valid().
  *
  * @package PerformanceOptimise\Tests
- * @since NEXT
+ * @since 2.0.0
  */
 
 use PerformanceOptimise\Inc\Main;
@@ -19,7 +19,7 @@ use Brain\Monkey\Functions;
  * Tests the narrowed speculation-rules exclusion behavior.
  *
  * @package PerformanceOptimise\Tests
- * @since NEXT
+ * @since 2.0.0
  */
 class MainSpeculationExclusionsTest extends \PHPUnit\Framework\TestCase {
 	use WPPO_Test_Bootstrap;

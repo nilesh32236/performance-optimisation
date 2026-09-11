@@ -48,7 +48,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 		 * must not insert an activity row on every page load, so logging is
 		 * transient-rate-limited (audit #888 Part 2 review).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $message Message to log.
 		 * @return void
 		 */
@@ -74,7 +74,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 		 * another plugin's drop-in.
 		 *
 		 * @since 1.0.0
-		 * @since NEXT Filesystem errors are logged instead of silently swallowed.
+		 * @since 2.0.0 Filesystem errors are logged instead of silently swallowed.
 		 * @return bool True when the drop-in exists and is WPPO-owned; false otherwise (including unknown).
 		 */
 		public static function is_our_dropin(): bool {
@@ -157,7 +157,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 		 * The backup lives in the same directory so tmp, final, and backup are
 		 * always on the same filesystem and the rename stays atomic.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string Backup file path.
 		 */
 		public static function get_dropin_backup_path(): string {
@@ -174,7 +174,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 		 * (or no file) survives and no half-written file is left in place, so the
 		 * site fails open with caching bypassed.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $handler_code Generated drop-in code.
 		 * @return bool True on success (or when a foreign drop-in is left untouched), false on failure.
 		 */
@@ -348,13 +348,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			// COOKIEHASH fallback must be scheme-agnostic; the logged-in cookie name does not include
 			// scheme/path, so md5(home_url()) would mismatch on http/https or subdirectory installs.
 			// Derive the fallback from the host only.
-			// @since NEXT Fallback now uses host-only hash to avoid scheme mismatch.
+			// @since 2.0.0 Fallback now uses host-only hash to avoid scheme mismatch.
 			$site_host     = wp_parse_url( $site_url, PHP_URL_HOST );
 			$fallback_hash = $site_host ? md5( $site_host ) : md5( $site_url );
 			$cookie_hash   = defined( 'COOKIEHASH' ) ? COOKIEHASH : $fallback_hash;
 
 			// Canonical host pinned into the drop-in (Host-header cache-poisoning
-			// guard, @since NEXT): the pre-boot serve path below only ever reads
+			// guard, @since 2.0.0): the pre-boot serve path below only ever reads
 			// cache/wppo/<canonical-host>/, so a forged Host header is served
 			// uncached (falls through to WordPress) and can never create or
 			// serve a poisoned file. Empty canonical fails open to uncached.
@@ -670,7 +670,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 		 * activation never inherits residue from an incomplete teardown.
 		 * Fail-open: never throws.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function cleanup_stale_artifacts(): void {
@@ -683,7 +683,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 		 * Best-effort only: failures are ignored so remove() never fails
 		 * because of stale artifacts.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		private static function cleanup_dropin_artifacts(): void {

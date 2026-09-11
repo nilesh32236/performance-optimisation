@@ -27,7 +27,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
  * In-memory $wpdb recorder for traversal-probe Log::add() assertions.
  *
  * @package PerformanceOptimise\Tests
- * @since NEXT
+ * @since 2.0.0
  */
 class WPPO_Traversal_Wpdb_Recorder {
 
@@ -69,7 +69,7 @@ class WPPO_Traversal_Wpdb_Recorder {
  * method_exists(), which fails for __call-based mocks.
  *
  * @package PerformanceOptimise\Tests
- * @since NEXT
+ * @since 2.0.0
  */
 class WPPO_Traversal_Fake_Fs {
 
@@ -129,7 +129,7 @@ class WPPO_Traversal_Fake_Fs {
  * Traversal hardening tests.
  *
  * @package PerformanceOptimise\Tests
- * @since NEXT
+ * @since 2.0.0
  */
 class CacheTraversalTest extends \PHPUnit\Framework\TestCase {
 	use WPPO_Test_Bootstrap;
@@ -262,7 +262,7 @@ class CacheTraversalTest extends \PHPUnit\Framework\TestCase {
 	 * Shared by the hostile-matrix tests so the harness cannot drift from
 	 * the production heuristic in Util::sanitize_cache_url_path().
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 * @param string $payload Request target payload.
 	 * @return bool
 	 */

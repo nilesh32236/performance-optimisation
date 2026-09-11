@@ -7,7 +7,7 @@
  * rule, logged-in suppression, and single-block no-duplicate output.
  *
  * @package PerformanceOptimise\Tests
- * @since NEXT
+ * @since 2.0.0
  */
 
 use PerformanceOptimise\Inc\Main;
@@ -18,7 +18,7 @@ use Brain\Monkey\Functions;
  * Tests RUM-driven eager list + document speculation rules.
  *
  * @package PerformanceOptimise\Tests
- * @since NEXT
+ * @since 2.0.0
  */
 class MainSpeculationDocumentRulesTest extends \PHPUnit\Framework\TestCase {
 	use WPPO_Test_Bootstrap;
@@ -102,7 +102,7 @@ class MainSpeculationDocumentRulesTest extends \PHPUnit\Framework\TestCase {
 	 * patterns with the trailing `*` stripped) so the two can be compared on the
 	 * same basis.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 *
 	 * @param array $rules Speculation rules.
 	 * @return string[] Normalized target paths.
@@ -374,7 +374,7 @@ class MainSpeculationDocumentRulesTest extends \PHPUnit\Framework\TestCase {
 	 * so a user-configured high-value URL that equals the first post is out of
 	 * scope for this invariant.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 *
 	 * @return void
 	 */

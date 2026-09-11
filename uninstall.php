@@ -348,18 +348,18 @@ if ( ! function_exists( 'wppo_delete_directory' ) ) {
 	 *
 	 * @param string $dir Absolute path to the directory.
 	 * @return void
-	 * @since NEXT Symlink guard (is_link) + path-containment guard (WP_CONTENT_DIR prefix + realpath).
+	 * @since 2.0.0 Symlink guard (is_link) + path-containment guard (WP_CONTENT_DIR prefix + realpath).
 	 */
 	function wppo_delete_directory( string $dir ): void {
 		// If $dir itself is a symlink, delete the link only — do not follow.
-		// @since NEXT — added.
+		// @since 2.0.0 — added.
 		if ( is_link( $dir ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 			@unlink( $dir ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.unlink_unlink
 			return;
 		}
 
 		// Path-containment guard: never delete outside WP_CONTENT_DIR.
-		// @since NEXT — added.
+		// @since 2.0.0 — added.
 		$normalized_dir  = wp_normalize_path( $dir );
 		$normalized_root = trailingslashit( wp_normalize_path( WP_CONTENT_DIR ) );
 
@@ -407,7 +407,7 @@ if ( ! function_exists( 'wppo_delete_directory' ) ) {
 
 			// Symlink guard: delete the link itself, never recurse into it.
 			// Must be before is_dir() because is_dir() follows symlinks.
-			// @since NEXT — added.
+			// @since 2.0.0 — added.
 			if ( is_link( $path ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 				@unlink( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.unlink_unlink
 				continue;

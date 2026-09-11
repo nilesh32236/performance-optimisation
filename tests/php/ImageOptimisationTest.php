@@ -845,7 +845,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	 * A prefix-only subtype (data:image/pngevil) must be rejected while real
 	 * raster image data URLs with a `;`/`,` delimiter are accepted.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_is_valid_lazy_placeholder_candidate_data_allowlist(): void {
 		$image_opt  = new Image_Optimisation( $this->default_options );
@@ -1192,7 +1192,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	 * 'wppo_settings', the RUM aggregate for the RUM option, and the
 	 * fallback for everything else.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 * @param array  $wppo_settings  Plugin settings for Util::get_settings().
 	 * @param array  $rum_aggregate  Aggregate stored under the RUM option.
 	 * @param string $heuristic_url  LCP URL the transient lookup should return.
@@ -1232,7 +1232,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Build a RUM aggregate with a single LCP URL entry for a path.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 * @param string $path      Page path.
 	 * @param string $url       Raw LCP element URL.
 	 * @param int    $samples   Observation count.
@@ -1258,7 +1258,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that the field-measured LCP URL overrides the heuristic after enough samples.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_get_current_lcp_url_field_override_wins_after_min_samples(): void {
 		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
@@ -1281,7 +1281,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that the heuristic wins while field samples are under the threshold.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_get_current_lcp_url_field_override_keeps_heuristic_when_under_threshold(): void {
 		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
@@ -1304,7 +1304,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that a stale field override self-corrects back to the heuristic.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_get_current_lcp_url_field_override_self_corrects_when_stale(): void {
 		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
@@ -1327,7 +1327,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that a CSS background hero emits exactly one preload link.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_css_hero_emits_exactly_one_preload_link(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
@@ -1359,7 +1359,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that a stored LCP URL gets a companion preload link, fetchpriority high, and is never lazy.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_hero_lcp_emits_preload_and_never_lazy(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
@@ -1391,7 +1391,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	 * background hero and a matching img, so without the img-match skip
 	 * the CSS pass would emit exactly one preload link.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_css_hero_skipped_when_img_matches(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
@@ -1423,7 +1423,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that no node carries fetchpriority high plus loading lazy together.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_prioritize_lcp_never_combines_fetchpriority_with_lazy(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
@@ -1448,7 +1448,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that the first-viewport image is treated as hero when no stored LCP URL resolves.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_hero_fallback_treats_first_image_as_hero(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
@@ -1476,7 +1476,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	 * JS-lazy data-src hero) never carry loading=lazy, and the LCP hero gets
 	 * fetchpriority=high, decoding=async plus a matching preload link.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_lcp_guardrails_first_n_never_lazy_with_hero_preload(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
@@ -1553,7 +1553,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	 * Test that the RUM-field LCP candidate emits exactly one image preload
 	 * with fetchpriority high, and that a repeated call emits nothing.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_auto_lcp_preload_emits_single_preload_with_fetchpriority_high(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
@@ -1599,7 +1599,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	 * Test that the field-measured LCP candidate is excluded from lazy load
 	 * when the fieldLcpOverride toggle is on.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_field_lcp_candidate_excluded_from_lazy_with_field_override(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
@@ -1636,7 +1636,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	 * Test that the field-measured LCP candidate is still lazy-loaded when
 	 * all LCP toggles are off (gated exclusion preserves default behaviour).
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_field_lcp_candidate_lazy_loaded_when_toggles_off(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
@@ -1669,7 +1669,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	 * Test that a WordPress size variant of the LCP candidate is excluded
 	 * from lazy load via normalized matching.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_field_lcp_candidate_size_variant_excluded_from_lazy(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
@@ -1704,7 +1704,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	 * Test that preload dedup keys keep query-string versions distinct while
 	 * collapsing scheme/relative variants of the same resource.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_preload_dedup_key_distinguishes_query_versions(): void {
 		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
@@ -1731,7 +1731,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Stub the WP functions shared by the missing-alt autofill tests.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 *
 	 * @return void
 	 */
@@ -1756,7 +1756,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Build an Image_Optimisation instance with the alt toggle forced on/off.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 *
 	 * @param bool $enabled Whether autoAltText is enabled.
 	 * @return Image_Optimisation
@@ -1777,7 +1777,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Existing alt attributes must stay byte-identical when autofill is on.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_auto_alt_preserves_existing_alt(): void {
 		$this->stub_auto_alt_functions();
@@ -1793,7 +1793,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Decorative empty alt="" must be preserved, never overwritten.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_auto_alt_preserves_decorative_empty_alt(): void {
 		$this->stub_auto_alt_functions();
@@ -1809,7 +1809,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Missing alt is derived deterministically from the filename.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_auto_alt_derives_from_filename_deterministically(): void {
 		$this->stub_auto_alt_functions();
@@ -1827,7 +1827,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Toggle-off must leave the tag byte-identical (regex helper, fail-open).
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_auto_alt_toggle_off_is_byte_identical(): void {
 		$this->stub_auto_alt_functions();
@@ -1843,7 +1843,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Stub the WP conditionals/filters used by lazy_render_elements().
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	private function stub_lazy_render_functions(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
@@ -1860,7 +1860,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Build an Image_Optimisation instance with lazy-render options.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 * @param bool $enabled Whether lazyRenderBelowFold is on.
 	 * @param bool $exclude_builders Whether lazyRenderExcludeBuilders is on.
 	 */
@@ -1879,7 +1879,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Off-by-default: buffer must be returned byte-identical.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_lazy_render_off_by_default_is_byte_identical(): void {
 		$this->stub_lazy_render_functions();
@@ -1892,7 +1892,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Empty buffer must fail open (returned unmodified).
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_lazy_render_empty_buffer_fails_open(): void {
 		$this->stub_lazy_render_functions();
@@ -1904,7 +1904,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * First matching section/div is skipped (hero), later ones are tagged.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_lazy_render_skips_first_section_tags_second(): void {
 		$this->stub_lazy_render_functions();
@@ -1920,7 +1920,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Footer/aside tags are always eligible, even as the first match.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_lazy_render_tags_footer_and_comments(): void {
 		$this->stub_lazy_render_functions();
@@ -1935,7 +1935,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Builder exclusion on skips Elementor/Divi sections; off tags them.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_lazy_render_builder_exclusion_on_off(): void {
 		$this->stub_lazy_render_functions();
@@ -1953,7 +1953,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	 * Exclusion is token-based: a class merely containing the builder
 	 * name as a substring must not be excluded.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_lazy_render_exclusion_is_token_based_not_substring(): void {
 		$this->stub_lazy_render_functions();
@@ -1968,7 +1968,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Nodes already carrying content-visibility are skipped (idempotent).
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_lazy_render_idempotent_skip(): void {
 		$this->stub_lazy_render_functions();
@@ -1983,7 +1983,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Existing style attributes are merged, never clobbered.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_lazy_render_merges_existing_style(): void {
 		$this->stub_lazy_render_functions();

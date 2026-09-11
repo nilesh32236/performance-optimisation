@@ -131,7 +131,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		 * deactivate/uninstall paths agree on the same file. Fail-open:
 		 * returns an empty string when the path cannot be resolved.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return string Absolute .htaccess path, or empty string when unresolvable.
 		 */
@@ -163,7 +163,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		 * Fail-open: returns false when the file cannot be read so callers
 		 * treat "unknown" as "nothing to remove".
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return bool True when the marker block exists.
 		 */
@@ -200,7 +200,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		 * Fail-open: never throws; a failed delete is safe to retry on the
 		 * next deactivate/uninstall.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return bool True when no marker remains (or nothing to remove).
 		 */
@@ -230,7 +230,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		 * backup generation kept by atomic_write_verified()) and any
 		 * `.htaccess.wppo-tmp-*` orphans from crashed writes.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return void
 		 */
@@ -289,7 +289,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		 * trailing "") compares equal to the equivalent get_rules() output.
 		 * Internal blank lines and ordering are preserved.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param array $rules Raw rules lines.
 		 * @return array Normalized rules lines.
@@ -308,7 +308,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		 * Byte-identical with core insert_with_markers() formatting so the
 		 * identical-check, the atomic writer, and the verifier agree.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param array $rules Rules lines.
 		 * @return string Marker block, or empty string when there are no rules.
@@ -328,7 +328,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		 * markers such as WordPress and LSCACHE and their order), appends when
 		 * absent, or removes the block when the new block is empty.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $current   Current .htaccess contents.
 		 * @param string $new_block New marker block (empty string to remove).
@@ -369,7 +369,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		 * BEGIN before END, and balanced <IfModule> tags inside the block.
 		 * Pure string check — trivially unit-testable.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $contents     Full .htaccess contents.
 		 * @param bool   $expect_block Whether a wppo block is expected.
@@ -417,7 +417,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		 * get_contents/exists methods) so untestable transports keep the legacy
 		 * behavior instead of fataling.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $htaccess_file Absolute path to the .htaccess file.
 		 * @param mixed  $wp_filesystem WP_Filesystem instance.
@@ -450,7 +450,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		 * Never leaves a missing .htaccess. Multisite-safe: only touches the
 		 * per-site ABSPATH .htaccess passed in.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $htaccess_file Absolute path to the .htaccess file.
 		 * @param mixed  $wp_filesystem WP_Filesystem instance.
@@ -557,7 +557,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		 * restore it when a new write fails. Returns null when the file is
 		 * missing or unreadable (nothing to restore).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $htaccess_file Absolute path to the .htaccess file.
 		 * @param mixed  $wp_filesystem WP_Filesystem instance.
@@ -684,7 +684,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				/**
 				 * Filter whether next-gen rewrite is enabled (fallback).
 				 *
-				 * @since NEXT
+				 * @since 2.0.0
 				 * @param bool $use_nextgen Whether next-gen rewrite is enabled.
 				 */
 				$use_nextgen = (bool) apply_filters( 'wppo_litespeed_nextgen_rewrite', $use_nextgen );
@@ -728,7 +728,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				/**
 				 * Filter the next-gen htaccess block.
 				 *
-				 * @since NEXT
+				 * @since 2.0.0
 				 * @param bool $use_nextgen Whether next-gen block was added.
 				 */
 				$rules = (array) apply_filters( 'wppo_htaccess_nextgen_rules', $rules );
@@ -782,7 +782,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 					/**
 					 * Filter Cache-Vary htaccess rules.
 					 *
-					 * @since NEXT
+					 * @since 2.0.0
 					 * @param array $cache_vary Active Cache-Vary groups.
 					 */
 					$rules = (array) apply_filters( 'wppo_htaccess_cache_vary_rules', $rules, $cache_vary );
@@ -792,7 +792,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			/**
 			 * Filter htaccess rules.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param array $rules Htaccess rules.
 			 */
 			$rules = (array) apply_filters( 'wppo_htaccess_rules', $rules );

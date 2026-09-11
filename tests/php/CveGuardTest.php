@@ -15,7 +15,7 @@ use Brain\Monkey\Functions;
 /**
  * CVE guard filter tests.
  *
- * @since NEXT
+ * @since 2.0.0
  */
 class CveGuardTest extends \PHPUnit\Framework\TestCase {
 	use WPPO_Test_Bootstrap;

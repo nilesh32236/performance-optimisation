@@ -63,7 +63,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		/**
 		 * Option key used for the image info cache salt.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		private const SALT_KEY = 'wppo_img_info_salt';
@@ -132,7 +132,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		/**
 		 * Check if WordPress core (6.7+) natively handles next-gen format generation (WebP/AVIF).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return bool True if core handles next-gen formats natively.
 		 */
@@ -143,7 +143,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		/**
 		 * Check if WordPress core (7.1+) natively handles both WebP and AVIF generation.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return bool True if core can generate both WebP and AVIF natively.
 		 */
@@ -156,7 +156,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		/**
 		 * Get the current conversion format.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return string The format ('webp', 'avif', 'both', or 'none').
 		 */
@@ -182,7 +182,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * wp_get_image_encode_quality() (WP 7.1+) so per-size quality filters
 		 * are honoured.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $mime     The output MIME type (e.g. 'image/webp').
 		 * @param int    $fallback Fallback quality (1-100) used when no core API provides a value.
@@ -225,7 +225,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * numeric quality mapping (AVIF = WebP − 20) and stays fail-open when
 		 * core maps the source MIME elsewhere.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $source_image     Filesystem path to the source image.
 		 * @param string $requested_format The format requested by the plugin ('webp', 'avif', or 'both').
@@ -264,7 +264,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * Used to feed `wp_get_image_encode_quality()` so per-size quality
 		 * tuning matches what core would apply.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $source_image Filesystem path to the source image.
 		 * @return array The dimensions array ('width'/'height'), empty for full-size originals.
@@ -287,7 +287,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * `imageavif()` (PHP 8.2+) or Imagick with AVIF delegate support.
 		 * All callers fail open to WebP, else the original, when false.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return bool True when AVIF encoding is supported.
 		 */
@@ -336,7 +336,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * for negligible byte savings. Filterable via
 		 * `wppo_skip_small_threshold_bytes`. Defaults to 5120 bytes.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return int Threshold in bytes (>= 0).
 		 */
@@ -346,7 +346,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				/**
 				 * Filter the skip-small byte threshold.
 				 *
-				 * @since NEXT
+				 * @since 2.0.0
 				 * @param int $threshold Threshold in bytes.
 				 */
 				$threshold = apply_filters( 'wppo_skip_small_threshold_bytes', $threshold );
@@ -366,7 +366,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * Fail-open (returns false) when the file is unreadable so behaviour
 		 * is unchanged for missing files — downstream guards still apply.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $path Filesystem path to the source image.
 		 * @return bool True when the file is at or under the threshold.
@@ -399,7 +399,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * default path keeps full-size output). Filterable via
 		 * `wppo_max_longest_edge_px`. Defaults to 2560 px.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return int Cap in pixels (>= 0). `0` means disabled.
 		 */
@@ -409,7 +409,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				/**
 				 * Filter the longest-edge downscale cap in pixels.
 				 *
-				 * @since NEXT
+				 * @since 2.0.0
 				 * @param int $cap Cap in pixels. `0` disables downscaling.
 				 */
 				$cap = apply_filters( 'wppo_max_longest_edge_px', $cap );
@@ -437,7 +437,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * default is derived from the PHP memory limit (roughly 5 bytes per
 		 * pixel, half the limit reserved for the decoded image).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return int Pixel budget (>= 1).
 		 */
@@ -445,7 +445,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			/**
 			 * Filter the pre-decode source pixel budget.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 *
 			 * @param int $pixels Maximum decodable source pixels. `0` uses the memory-derived default.
 			 */
@@ -466,7 +466,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		/**
 		 * Parse PHP's memory_limit into bytes.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return int Bytes, or `0` when unlimited or unknown.
 		 */
@@ -502,7 +502,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * true for relative paths, URLs, or empty strings. Multisite-safe:
 		 * uses only constants, no per-site state.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $path Absolute filesystem path to check.
 		 * @return bool True when the path is inside the allowlist.
@@ -563,7 +563,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * passthrough value from `get_img_path()` can never reach
 		 * `wp_delete_file()`.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $path Absolute filesystem path proposed for deletion.
 		 * @return bool True when deletion is allowed.
@@ -617,7 +617,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * `''` for a local `..` traversal) can never make the GD/Imagick
 		 * encoders write into `wp-admin`, themes, or plugins.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $path Absolute filesystem path proposed for writing.
 		 * @return bool True when writing is allowed.
@@ -639,7 +639,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * unknown. Fail-open direction: oversize returns true (caller skips
 		 * the decode and serves the original), never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param int $width    Source width in pixels.
 		 * @param int $height   Source height in pixels.
@@ -674,7 +674,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * estimate is used for every raster type to avoid underestimating
 		 * decode memory near the budget limit.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return int Channel count (always 4, conservative for GD truecolor).
 		 */
@@ -693,7 +693,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * `imagescale()` when available with an `imagecopyresampled()`
 		 * fallback path. No external HTTP, no DB.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param resource|\GdImage $image  Decoded GD image resource.
 		 * @param int               $width  Source width in pixels.
@@ -776,7 +776,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * and `function_exists()`); this method owns only the numeric mapping
 		 * and stays fail-open whatever core decides.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $mime Output MIME type (e.g. 'image/avif').
 		 * @param array  $size Optional source dimensions ('width'/'height').
@@ -788,7 +788,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				/**
 				 * Filter whether smart quality mapping is applied.
 				 *
-				 * @since NEXT
+				 * @since 2.0.0
 				 * @param bool $smart Whether smart quality is enabled.
 				 */
 				$smart = apply_filters( 'wppo_smart_quality', (bool) $smart );
@@ -813,7 +813,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 *
 		 * @param string $source_image Filesystem path to the candidate image.
 		 * @return bool True when an hdrgm XMP marker is present.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private function is_gain_map_image( string $source_image ): bool {
 			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Bounded header peek; silencing missing-file notices is intentional.
@@ -1420,7 +1420,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 *
 		 * Samples pixels at a reduced stride to compute the average color.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param \GdImage $image The GD image resource.
 		 * @return string Hex color string (e.g. '#aabbcc').
@@ -1471,7 +1471,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 *
 		 * Creates a 20x20 JPEG thumbnail and returns it as a base64 data URI.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param \GdImage $image The GD image resource.
 		 * @return string Base64-encoded data URI, or empty string on failure.
@@ -1551,7 +1551,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * dedupes via array_merge, but this early bail avoids the shutdown
 		 * write entirely.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $rel_path       The relative image path (ABSPATH-stripped).
 		 * @param string $dominant_color Hex color string.
@@ -1595,7 +1595,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * wppo_img_info array. Idempotent: unchanged entries are skipped
 		 * before scheduling the atomic write.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array<string, array{color: string, lqip: string}> $batch Map of rel_path => data.
 		 * @return void
 		 */
@@ -1648,7 +1648,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		/**
 		 * Get placeholder data (dominant_color, lqip) from the shared wppo_img_info option.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return array{dominant_color: array<string, string>, lqip: array<string, string>}
 		 */
@@ -1676,7 +1676,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * explicitly skips any underscore-prefixed key, so protected `_wp_*`
 		 * attachment meta is provably untouched.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param int $post_id The attachment ID.
 		 * @return void
@@ -2032,7 +2032,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * path not clamped) — already correct.
 		 *
 		 * @since 1.9.0
-		 * @since NEXT Document wasm gating and HDR preservation.
+		 * @since 2.0.0 Document wasm gating and HDR preservation.
 		 *
 		 * @return bool True if client-side media processing is enabled.
 		 */
@@ -2081,7 +2081,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * widen the list additively.
 		 *
 		 * @since 1.9.0
-		 * @since NEXT Add HEIC early-exit and double-fire idempotency guard.
+		 * @since 2.0.0 Add HEIC early-exit and double-fire idempotency guard.
 		 *
 		 * @param array $metadata      The attachment metadata.
 		 * @param int   $attachment_id The attachment ID.
@@ -2489,7 +2489,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * @param string $img_path Relative source path (ABSPATH-stripped).
 		 * @param string $type     Conversion type ('webp' or 'avif').
 		 * @return array|null { original: int, converted: int } or null when either file cannot be measured.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static function measure_conversion_sizes( string $img_path, string $type ): ?array {
 			$source = wp_normalize_path( ABSPATH . ltrim( $img_path, '/' ) );
@@ -2520,7 +2520,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 *
 		 * @param array|null $img_info Pre-read img info (null = read here, avoids a second unserialize).
 		 * @return array{original_bytes: int, converted_bytes: int, saved_bytes: int, images_counted: int}
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function get_savings_summary( ?array $img_info = null ): array {
 			if ( null === $img_info ) {
@@ -2571,7 +2571,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * @param string[] $formats Conversion formats to ensure ('webp', 'avif').
 		 * @param int      $limit   Maximum attachments inspected per window.
 		 * @return int Number of files newly queued.
-		 * @since NEXT Cursor pagination via wppo_img_scan_cursor.
+		 * @since 2.0.0 Cursor pagination via wppo_img_scan_cursor.
 		 */
 		public static function queue_unconverted_library_images( array $formats, int $limit = 50 ): int {
 			global $wpdb;
@@ -2706,7 +2706,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			 * Filters the source image extensions eligible for WebP/AVIF conversion.
 			 *
 			 * @param string[] $extensions Lowercase source extensions eligible for conversion.
-			 * @since NEXT
+			 * @since 2.0.0
 			 */
 			$convertible = apply_filters(
 				'wppo_convertible_image_extensions',
@@ -2921,7 +2921,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		/**
 		 * Invalidate the image info cache by bumping the salt.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function invalidate_img_info_cache(): void {

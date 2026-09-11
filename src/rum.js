@@ -20,7 +20,7 @@
  * (coarse 1024px tradeoff documented; narrow the cutoff to 768px only if
  * tablet traffic should count as desktop).
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {number} screenWidth   `window.screen.width` (0 when unavailable).
  * @param {number} viewportWidth `window.innerWidth` (0 when unavailable).
  * @return {boolean|null} True when mobile, false when desktop, null when unknown.
@@ -50,7 +50,7 @@ export const classifyDeviceWidth = ( screenWidth, viewportWidth ) => {
  * pollute the stored aggregates. Server-side per-IP rate limiting and
  * per-path token validation remain authoritative.
  *
- * @since NEXT
+ * @since 2.0.0
  * @type {number}
  */
 export const RUM_MAX_METRIC_MS = 60000;
@@ -63,7 +63,7 @@ export const RUM_MAX_METRIC_MS = 60000;
  * the PerformanceObserver collector (http(s):// or leading '/' and
  * ≤2048 chars). Only known metric keys are kept; unknown keys are dropped.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {Object} raw Collected metric values.
  * @return {Object} Sanitized copy containing only in-range metrics.
  */

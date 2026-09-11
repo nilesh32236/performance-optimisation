@@ -381,7 +381,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 			/**
 			 * Fires after a per-type database cleanup completes.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string $type  Cleanup type.
 			 * @param int    $count Number of rows deleted.
 			 */
@@ -499,7 +499,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 * Delegates to Util::get_default_settings() for single-source defaults
 		 * (A-01 minimal). Keeps CLI usable before first admin save.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array<string, array<string, mixed>> Default settings keyed by tab.
 		 */
 		private static function get_default_settings(): array {
@@ -901,7 +901,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 *
 		 * Uses Object_Cache::ALLOWED_KEYS as single source (converged 6→10+).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array $assoc_args The associative arguments from the command.
 		 * @return array<string, mixed> Redis connection configuration.
 		 */
@@ -1082,7 +1082,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 *
 		 * @when after_wp_load
 		 * @subcommand verify
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array $args Command positional arguments.
 		 * @param array $assoc_args Command associative arguments.
 		 * @return void
@@ -1222,7 +1222,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		/**
 		 * Canonical verify check names (single source for --check validation).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string[]
 		 */
 		public static function get_verify_check_names(): array {
@@ -1237,7 +1237,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 * intentionally stripped (audit C-06: the drop-in keeps `:` while Cache
 		 * strips it — verify resolves against the Cache convention).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $home_url Home URL.
 		 * @return string Sanitized domain, or '' when unresolvable.
 		 */
@@ -1283,7 +1283,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 *
 		 * Same key list WPPO_CLI_Command::get_redis_config_from_assoc() uses.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array $stored Raw wppo_settings array.
 		 * @return array<string, mixed> Redis connection configuration.
 		 */
@@ -1309,7 +1309,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 * decoupled from the runtime defaults so SPA-persisted keys are
 		 * recognised without seeding them. Never calls update_option().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array         $stored Raw wppo_settings array (live get_option).
 		 * @param string[]|null $allowed Optional allowlist override (testing).
 		 * @param array|null    $schema  Optional schema override (testing).
@@ -1404,7 +1404,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 * The legacy `wppo_img_conversation` misspelling is allowlisted as
 		 * known-BC and reported separately (warn, not fail).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string[] $found_hooks Hook names discovered in WP-Cron.
 		 * @return array{orphans:string[],legacy:string[]} Orphan and legacy lists.
 		 */
@@ -1432,7 +1432,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		/**
 		 * Evaluate LiteSpeed coherence from live inputs (pure helper, no I/O).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $raw_mode Raw configured mode string (unvalidated).
 		 * @param string $effective Resolved effective mode.
 		 * @param bool   $server_ls Whether the server is LiteSpeed.
@@ -1499,7 +1499,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 * Known = Util::UNINSTALL_OPTIONS (blog-prefix stripped) + dynamic
 		 * prefixes (front-page LCP, crawler batches) + runtime circuit keys.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string[] $found_names Option names from the options table.
 		 * @return string[] Unknown option names.
 		 */
@@ -1551,7 +1551,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 * `$severity='warn'`), `warn` when rows warn but the gate stays
 		 * green, otherwise `pass`.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array  $rows Verify rows.
 		 * @param string $severity Exit-code gate ('fail' or 'warn').
 		 * @return array{overall:string,checks:array} Payload for --format=json.
@@ -1585,7 +1585,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 * Never calls Cache::get_cache_stats(), Cache::get_cache_size(), or any
 		 * wppo_* transient — every probe hits the filesystem directly.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array{check:string,status:string,detail:string} Verify row.
 		 */
 		private function check_verify_cache_dirs(): array {
@@ -1682,7 +1682,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		/**
 		 * Check 2 — drop-ins present & intended (incl. foreign).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array $stored Raw wppo_settings array.
 		 * @return array{check:string,status:string,detail:string} Verify row.
 		 */
@@ -1824,7 +1824,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 * "Enabled" is derived live from stored settings (non-empty host/nodes)
 		 * AND own drop-in presence — never from get_status() caches.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array $stored Raw wppo_settings array.
 		 * @return array{check:string,status:string,detail:string} Verify row.
 		 */
@@ -1897,7 +1897,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		/**
 		 * Check 4 — LiteSpeed mode coherent.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array $stored Raw wppo_settings array.
 		 * @return array{check:string,status:string,detail:string} Verify row.
 		 */
@@ -1957,7 +1957,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		/**
 		 * Check 6 — orphaned cron / Action Scheduler events.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array $stored Raw wppo_settings array.
 		 * @return array{check:string,status:string,detail:string} Verify row.
 		 */
@@ -2093,7 +2093,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 * 51 rows (contains match so multisite blog-prefixed rows like
 		 * `2_wppo_settings` are visible to the classifier); never deletes.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array{check:string,status:string,detail:string} Verify row.
 		 */
 		private function check_verify_uninstall_spot(): array {
@@ -2175,7 +2175,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		/**
 		 * Read a small file via WP_Filesystem with a native fallback (size-guarded).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $path Absolute path.
 		 * @return string|null Contents, or null when missing/unreadable/too large.
 		 */

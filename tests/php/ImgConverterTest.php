@@ -1153,7 +1153,7 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Longest-edge cap defaults to 2560, is filter-overridable, and clamps negatives.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_longest_edge_cap_default_filter_and_clamp(): void {
 		$converter = $this->make_converter();
@@ -1204,7 +1204,7 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	 * The constructor stores options verbatim (no sanitizer), so this exercises
 	 * the explicit `cap < 0 => 0` branch rather than a pre-clamped value.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_longest_edge_cap_clamps_negative_option(): void {
 		$converter = $this->make_converter( array( 'maxLongestEdgePx' => -5 ) );
@@ -1228,7 +1228,7 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	 * The get_max_source_pixels() budget honors the wppo_max_source_pixels
 	 * filter and returns a positive memory-derived value by default.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_get_max_source_pixels_filter_and_default(): void {
 		$converter = $this->make_converter();
@@ -1252,7 +1252,7 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Downscale shrinks oversized resources, keeps small ones, and fails open.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_maybe_downscale_gd_image(): void {
 		if ( ! function_exists( 'imagecreatetruecolor' ) ) {
@@ -1289,7 +1289,7 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * End-to-end: oversized source converts to a capped WebP; original kept.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_convert_image_downscales_oversized_output_to_cap(): void {
 		if ( ! function_exists( 'imagewebp' ) ) {
@@ -1359,7 +1359,7 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	 * encoded traversal, NUL bytes, off-site URLs, relative paths, and
 	 * outside-ABSPATH locations are refused (#1035).
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_is_path_in_allowlist_rejects_traversal(): void {
 		$this->assertTrue( Img_Converter::is_path_in_allowlist( $this->uploads_dir . '/allowlist.png' ) );
@@ -1381,7 +1381,7 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	 * same-prefix siblings, other ABSPATH locations, traversal, and
 	 * off-site passthrough values are refused with the file intact (#1035).
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_is_safe_delete_path_strict_allowlist(): void {
 		$this->assertTrue( Img_Converter::is_safe_delete_path( rtrim( WP_CONTENT_DIR, '/' ) . '/wppo/uploads/2026/08/a.webp' ) );
@@ -1402,7 +1402,7 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	 * a normal 12MP image fits, and corrupt (non-positive) dimensions are
 	 * NOT an oversize skip so the caller records `failed` (#1035).
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_exceeds_pixel_budget_channels_aware(): void {
 		// phpcs:ignore WordPress.PHP.IniSet.memory_limit_Disallowed -- Test forces the unlimited-memory fallback path deterministically.
@@ -1425,7 +1425,7 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	 * Over-budget sources skip conversion fail-open: the original is served
 	 * unoptimised and the queue entry is marked `skipped`, never fatal (#1035).
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_convert_image_pixel_budget_skip_marks_skipped(): void {
 		// phpcs:ignore WordPress.PHP.IniSet.memory_limit_Disallowed -- Test forces the unlimited-memory fallback path deterministically.
@@ -1480,7 +1480,7 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	 * Traversal sources are refused before any decode: conversion returns
 	 * false and records `failed` without touching the filesystem (#1035).
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_convert_image_rejects_traversal_source(): void {
 		$converter = $this->make_converter( array( 'conversionFormat' => 'webp' ) );

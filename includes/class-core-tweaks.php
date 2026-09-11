@@ -170,7 +170,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 		/**
 		 * Dequeue the WP 6.9+ emoji script module.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public function disable_emojis_script_module() {
@@ -449,7 +449,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 		/**
 		 * Remove RSD (EditURI) link.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public function remove_rsd_link(): void {
@@ -459,7 +459,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 		/**
 		 * Remove wlwmanifest link.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public function remove_wlwmanifest_link(): void {
@@ -469,7 +469,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 		/**
 		 * Remove global styles and SVG filters.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public function remove_global_styles(): void {
@@ -482,7 +482,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 		/**
 		 * Remove classic theme styles.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public function remove_classic_theme_styles(): void {
@@ -493,7 +493,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 		/**
 		 * Disable WooCommerce cart fragments.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public function disable_woo_cart_fragments(): void {
@@ -504,7 +504,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 		/**
 		 * Remove recent comments widget style.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public function remove_recent_comments_style(): void {
@@ -518,7 +518,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 		/**
 		 * Remove comment-reply script.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public function remove_comment_reply(): void {
@@ -528,7 +528,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 		/**
 		 * Disable block widgets editor.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public function disable_block_widgets(): void {

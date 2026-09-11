@@ -2,7 +2,107 @@
 
 All notable changes to the Performance Optimisation plugin will be documented in this file.
 
-## [Unreleased]
+## [2.0.0] - 2026-09-11
+
+### ⚠️ Breaking Changes
+
+- **Removed REST route `performance-optimisation/v1/get_page_assets`** and the `Rest::get_page_assets()` handler. Use the Abilities API operation `performance-optimisation/get-page-assets` or `Asset_Manager::get_page_assets()` instead.
+- **Removed public static method `Cache::clear_ccss()`.** External callers must use `Critical_CSS::clear_all()`. No compatibility shim ships.
+- **Removed the legacy `core_tweaks` settings tab/key.** `update_settings` with `tab=core_tweaks` and `import_settings` payloads containing a top-level `core_tweaks` key now return HTTP 400, so a settings export from 1.9.0 that contains `core_tweaks` can no longer be imported. Core-tweak values always lived under `file_optimisation`, so no live settings are lost.
+- **Removed `file_optimisation.removeQueryStrings`** and the entire `?ver=` stripping path (`Main::strip_static_query_strings()`, `is_plugin_cache_url()`, default, SPA toggle). A stored legacy value is ignored (fail-open: `?ver` is always preserved) with a one-time activity-log notice, and the key is dropped on the next save.
+- **Removed orphaned REST routes `performance-optimisation/v1/crawler` and `crawler_status`.**
+- **Changed default: native lazy loading.** `image_optimisation.lazyLoadNative` now defaults to `true` (native `loading="lazy"` + `decoding="async"`); the legacy JS IntersectionObserver loader is opt-in via `lazyLoadNative=false`. Installs missing the key inherit native in memory; an explicit stored `false` is preserved.
+- **Changed defaults: speculative loading.** `preload_settings.speculationMode` changed `prerender` → `prefetch` and `speculationEagerness` `moderate` → `conservative` (fallbacks in `class-main.php` match); `speculationRumGating` defaults on. Installs without stored values get the more conservative behaviour.
+- **Changed defaults: safe-by-default toggles now ship enabled** where the key is absent for both existing and new installs: `file_optimisation.delayJSSafeMode`, Delay-JS presets (`delayJSBuilderPreset`, `delayJSCommercePreset`, `delayJSInteractionPreset`), `unusedCSSRegressionGuard`, `ccssRumPriority`, `usedCssRumPriority`, `image_optimisation.lcpHeroPreload`, `lcp_guardrails`, `avifFirst`, `smartQuality`, `cache_settings.wooSafeMode`, `speculationRumGating`.
+- **Import/export contract is stricter:** unknown top-level setting keys are now rejected with HTTP 400 (previously only the old whitelist was enforced).
+- **`object_cache` REST returns HTTP 400 for an unsupported `flush_group`** (previously a silent no-op path).
+- **Deactivate/uninstall teardown** now removes `.htaccess` markers/rules and generated drop-ins (`advanced-cache.php`, object-cache drop-in) and cleans options on uninstall. Re-activation regenerates them.
+- **Public signature changes (backward-compatible):** `Rest::permission_callback( ?\WP_REST_Request $request = null ): bool`; `Util::cached_home_url( string $path = '' ): string`; `Main::emit_server_timing_header( string $output = '' ): void`; `Critical_CSS::generate( string $url, ?string &$source_css = null, ?array &$resolved_urls = null )`; `Minify\JS::get_cache_file_path` visibility is now public (fixes a frontend 500).
+- Minimum runtime remains WordPress 6.2 / PHP 8.2, now enforced by a runtime guard that cleanly self-deactivates on older versions.
+
+### Added
+
+- **LiteSpeed / OpenLiteSpeed coexistence:** four modes (`auto` / `wppo` / `litespeed` / `standalone`), server + LSCache detection, native `X-LiteSpeed-*` header protocol, cache-control bridge, ESI punch-holing with AJAX fallback, per-page and per-post-type TTL overrides, CVE guard filter, Vary/guest parity and CDN mapping parity.
+- **LiteSpeed cache crawler:** background preloader with variant matrix, concurrency, load limits and sitemap discovery.
+- **Edge cache, CDN & purge:** Edge HTML Cache adapter (Cloudflare Workers / Bunny Edge), purge fan-out for Cloudflare, Bunny and Varnish, per-mapping LiteSpeed CDN URL rewrite with attribute controls, and a builder-update purge watcher for Elementor/Divi/Bricks/WPBakery.
+- **Real-User Monitoring (RUM):** anonymised field Web Vitals (LCP/INP/CLS) collection, aggregation, `rum_collect`/`rum_data`/`web_vitals_trends` REST routes and trend charts.
+- **AI Adaptive:** RUM/trend heuristic auto-tune with an optional WordPress AI client, read-only suggestions, multi-metric anomaly detection with cooldown + RUM corroboration, and `ai_model`/`ai_learn`/`ai_suggestions` routes.
+- **Optimization Detective bridge** for real-visit LCP data.
+- **Configurable static-HTML Cache Life (TTL)** baked into the advanced-cache drop-in, with per-URL/role variants.
+- **Optimised CSS pipeline:** safe-by-default Used CSS with coupled purge and builder-drift requeue, a user safelist with checksum auto-regeneration, and RUM-prioritised critical/used-CSS queues.
+- **Critical CSS:** max-size cap with per-template variants, file-first delivery, localhost synchronous fallback and a staleness probe.
+- **Redis object-cache circuit breaker** with auto-disable, recovery probe and admin notice; serializer defaults, flush hygiene and in-app failure logging.
+- **bfcache support for logged-in users** and `.mo` → `.php` performance translations.
+- **`llms.txt` / `llms-full.txt`** virtual files refreshed daily.
+- **Delay-JS presets** (INP-first, builder, commerce, interaction), a per-page kill switch and safe mode.
+- **LCP guardrails:** never lazy-load above-the-fold content, preload the hero with `fetchpriority`, LCP-aware lazy load and field-measured LCP targeting.
+- **`content-visibility` lazy-render** of below-fold DOM.
+- **Speculation rules:** high-value URL lists, mode/eagerness validation via `WP_Speculation_Rules`, WP 7.1 host overrides, core-API narrowing with commerce/nonce exclusions and RUM-gated eagerness.
+- **Native `fetchpriority` and `in_footer`** via the core Script Loader / footer script-module APIs on WP 6.9+.
+- **Images:** AVIF-first `<picture>` output, smart quality, skip-small threshold, HDR bit-depth respect, UltraHDR gain-map skip, max-longest-edge cap and pixel-budget OOM guard.
+- **Google Fonts self-hosting** with font-metric fallback and backoff.
+- **WooCommerce safe cache defaults:** dynamic-page safety, cart/checkout exclusion, `wooSafeMode` toggle and a checkout/cart self-test REST route (`woo_cache_self_test`).
+- **WordPress Abilities API (WP 6.9+)** surface (13 core operations + operational/image/asset actions) and a `wp wppo verify` WP-CLI command.
+- **Autoloaded-options audit** (`autoloaded_options`, `autoload_remediate` dry-run/apply/revert/revert_all) and a read-only expired-transients export (`expired_transients_export`).
+- **Runtime guard** with clean self-deactivation for the PHP 8.2 / WP 6.2 floor.
+- **Redesigned dashboard and all settings tabs** with WCAG AA contrast, equal-height metrics, segmented tabs, full mobile/RTL support and 44×44 touch targets.
+
+### Changed
+
+- Canonical default settings are single-sourced in `Util::get_default_settings()` and consumed by REST/CLI/Main.
+- Speculative loading is narrowed to the core `WP_Speculation_Rules` API with commerce/auth/nonce exclusions and cache awareness.
+- CSS combine defers to core 6.9+ block-style hoisting and inline-style budgets, and skips small block-theme bundles.
+- Lazy loading honours core's `loading` decision for LCP images and preserves `auto-sizes`/`contain`.
+- Native core APIs adopted on WP 6.9+: template enhancement buffer, salted-cache deletes, `serialize_token`, `WP_Block_Processor`, `wp_maybe_inline_styles` budget, fetchpriority/`in_footer`.
+- Redis serializer resolution never selects msgpack; serializer support is reported in status.
+- Settings access hardened: nonce-verified `permission_callback`, sensitive-value redaction from REST responses and memoised settings invalidation.
+- Dependency bumps: `woocommerce/action-scheduler` 3.9.3 → 4.1.0; `voku/html-min` ^5.0 (PHP 8.5); `squizlabs/php_codesniffer` → 3.13.6 (CVE-2026-67434).
+
+### Fixed
+
+- **Fatals / hard errors:** Redis drop-in `WP_PLUGIN_DIR` undefined before object-cache boot; wp-login/admin fatals from a typed property and filter signature; `CDN::rewrite_srcset` non-array filter arg; `Minify\JS::get_cache_file_path` visibility causing a frontend 500; `FS_CHMOD_FILE` fatal in a namespaced context; `WP_REST_Response::remove_header()` on an undefined method; `RedisSentinel` constructor strict-types instantiation; escaped `preg_match` delimiter in the drop-in; CLI fresh-install and sibling-tab settings wipe.
+- **Cache:** static-cache path traversal containment and atomic writes; `advanced-cache.php` atomic write with tmp+rename+backup; `.htaccess` atomic writes, identical-content skip and post-write verification; static-cache TTL/freshness; `flush_group` REST 400; object-cache drop-in ownership/legacy cleanup.
+- **CSS/JS:** preserve the `wppo-critical-css` id when minifying inline styles; localhost synchronous CCSS fallback; null-byte-free noscript tokenization; media-print deadlock when defer/delay swaps scripts; core inline-styles budget drift; JS switch ARIA, dialog leak, lazyload teardown and App.js loop.
+- **Images:** HEIC/JXL client-side MIME UI, HEIC early-exit and wasm gating; HDR bit depth + per-size quality; UltraHDR gain-map skip; smart AVIF/WebP quality with core deference and crop safety; srcset rewrite hardening.
+- **RUM:** `keepalive:true` beacon fallback; observer disconnect + nonce refresh + fallback-timer dedupe; page-scoped RUM tokens.
+- **Settings/REST/CLI:** settings verify schema decoupled from runtime defaults; strict top-level key validation; `core_tweaks` rejection; import/export edge cases; `wp wppo verify` correctness.
+- **WP compatibility:** WP 6.9 block styles, WP 7.0 drop-in boot, WP 7.1 client-side media and speculation defaults; PHP 8.5 `curl_close`/image destroy; `:void` return-type PHP-version guard.
+- **UI:** unsaved-changes guard on tab switch; per-action loading state split; tooltip keyboard/Esc handling; notice-banner a11y; dialog scroll-lock compensation; RTL tab fade/focus ring; feature-header wrap/i18n overflow; mobile input 16px rules; sidebar RTL drawer; disabled-button a11y and warning contrast; responsive rhythm overflow.
+- **Release:** plugin ZIP missing `vendor/`.
+
+### Performance
+
+- Centralised `home_url()`/`content_url()` static caching, eliminated N+1 permalink resolution, memoised settings access, Google Fonts backoff and autoload dedup.
+- Optimised URL-to-path resolution and removed regex in the CSS minifier; cached parsed content-URL parts in asset enqueue hooks.
+- Memoised URL-exclusion rules in `Util::is_url_excluded`, optimised WooCommerce script exclusion and string normalisation.
+- `SRC_STAT` LRU(500) and Cloudflare purger dedupe.
+- Parallelised React initial data fetching (WelcomePanel/Dashboard).
+- Critical CSS size cap, Used-CSS safelist/checksum and RUM-prioritised queues reduce generation cost.
+- Native lazy loading removes the JS IntersectionObserver payload for most sites; `content-visibility` lazy-renders below-fold content; LCP guardrails avoid above-the-fold penalties.
+
+### Security
+
+- Fixed path traversal → arbitrary file write / `.htaccess` overwrite, symlink traversal and `wppo_delete_directory` path containment.
+- Fixed host-header cache poisoning → stored XSS, generated CSS/JS callback + lazy-load rewriter XSS and RUM config reflection XSS.
+- Fixed SQL injection in the database `optimize_table` path.
+- Hardened ESI/AJAX nonce verification, ESI hydration and permission-callback nonce checks.
+- Hardened telemetry/SSRF: redirect SSRF, Critical-CSS SSRF guard and inline-CSS sanitisation; redacted System Info output, rejected external image URLs and gated CDN purge.
+- Atomic write + verify/rollback for `wp-config` `WP_CACHE`, `advanced-cache.php` and `.htaccess`.
+- Strict nonce/capability enforcement on all REST routes; `rum_collect` remains public but is token + IP rate-limited.
+
+### Removed
+
+- `performance-optimisation/v1/get_page_assets` REST route and `Rest::get_page_assets()` handler.
+- `Cache::clear_ccss()` public static method (replaced by `Critical_CSS::clear_all()`).
+- `core_tweaks` from `Util::ALLOWED_SETTINGS_KEYS` / allowed `update_settings` tabs (rejected with HTTP 400).
+- `file_optimisation.removeQueryStrings` setting and the `?ver=` stripping path.
+- Orphaned REST routes `performance-optimisation/v1/crawler` and `crawler_status`.
+- Legacy `advanced-cache.php` / object-cache drop-ins on uninstall.
+
+### Deprecated
+
+- No new deprecations. The former `get_page_assets` deprecation is superseded by its hard removal (see Removed).
+
 
 ## [1.9.0] - 2026-08-11
 

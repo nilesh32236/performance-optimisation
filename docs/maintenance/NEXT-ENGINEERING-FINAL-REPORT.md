@@ -23,7 +23,7 @@
 ### #755 — fetchpriority (WP 6.9 `wp_script_add_data('fetchpriority')`, preload high)
 - Problem: preload without high, deferred low hard-coded
 - Solution: `Cache::maybe_preload_combine_css:590` filter `wppo_combine_preload_fetchpriority` default high → `Util::generate_preload_link(..., fetchpriority)`; `Main::add_defer_strategy:1948` filter `wppo_deferred_fetchpriority` per-handle low default, validated `high|low|auto`, `wp_script_add_data` if non-empty, `in_footer` guarded `WP_Script_Modules::set_in_footer`
-- Compat: unknown attr harmless on <6.9, `is_wp69_plus` for native vs regex, `@since NEXT`, docs/hooks added
+- Compat: unknown attr harmless on <6.9, `is_wp69_plus` for native vs regex, `@since 2.0.0`, docs/hooks added
 - Verification: `php -l`, `phpcs 0`, `phpunit 435/435`, `npm test 34/34`, `build`, `curl` not needed (attribute view-source), WP 7.1 `wp_get_speculation_rules` true
 
 ### #754 — speculation (WP 6.8 `WP_Speculation_Rules`, `WP_URL_Pattern_Prefixer`)

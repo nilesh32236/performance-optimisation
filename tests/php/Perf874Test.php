@@ -296,7 +296,7 @@ class Perf874Test extends \PHPUnit\Framework\TestCase {
 	 * associative pair passed directly would be split and the handler would
 	 * receive only the md5 key (the download would silently no-op).
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	#[RunInSeparateProcess]
 	#[PreserveGlobalState( false )]

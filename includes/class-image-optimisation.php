@@ -39,14 +39,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Guards against malformed or extreme width/height attributes so
 		 * placeholders cannot bloat memory or break layout.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private const SVG_PLACEHOLDER_MAX_DIMENSION = 4096;
 
 		/**
 		 * Maximum number of entries retained in the per-request image-size cache.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private const IMG_SIZE_CACHE_LIMIT = 100;
 
@@ -61,7 +61,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Counter for picture/LCP prioritization (first image = high, rest = async).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		private int $picture_counter = 0;
@@ -129,7 +129,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * to prevent unbounded growth on pages with many unique images.
 		 *
 		 * @var array<string,bool>
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static array $file_exists_cache = array();
 
@@ -137,7 +137,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Maximum entries in the file_exists cache.
 		 *
 		 * @var int
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private const FILE_EXISTS_CACHE_LIMIT = 500;
 
@@ -155,7 +155,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * repeated on a later page is skipped as already emitted.
 		 *
 		 * @var array<string,bool>
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static array $preload_emitted = array();
 
@@ -168,7 +168,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * cache clears (audit #888 finding 7). Bounded by IMG_SIZE_CACHE_LIMIT.
 		 *
 		 * @var array<string,array|false>
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static array $img_size_cache = array();
 
@@ -179,7 +179,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * multisite-safe by construction: each request/instance mints its own
 		 * namespace and only tokens carrying it can be restored.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		private string $noscript_namespace = '';
@@ -197,7 +197,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * pages should construct a fresh instance per page instead.
 		 *
 		 * @var string|null Null until resolved, then the candidate URL or ''.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private ?string $lazy_lcp_exclusion_url = null;
 
@@ -214,7 +214,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * pages should construct a fresh instance per page instead.
 		 *
 		 * @var string|null Null until resolved, then the LCP URL or ''.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private ?string $current_lcp_url = null;
 
@@ -227,7 +227,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * eviction per request, so this is a correctness flush, not the growth
 		 * bound.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function clear_runtime_caches(): void {
@@ -339,7 +339,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * for <7.1 (filter not registered there). Wasm gating: ~13 MB lazy-loaded
 		 * wasm-vips gated by Document-Isolation-Policy / SharedArrayBuffer.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string[] $supported_mime_types The MIME types core supports client-side.
 		 * @return string[] The filtered MIME types.
@@ -413,7 +413,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * and finally to a `uniqid()`/`wp_rand()` token. Never fatals: any
 		 * failure degrades to a static fallback namespace (fail-open).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string Non-empty namespace string.
 		 */
 		private function get_noscript_namespace(): string {
@@ -435,7 +435,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * anomaly returns null so the caller emits the node unmodified
 		 * (fail-open).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $token           The matched placeholder comment.
 		 * @param array  $noscript_tokens The exact-token allowlist (token => HTML).
 		 * @return string|null Restored HTML, or null on anomaly.
@@ -488,7 +488,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * unmodified (fail-open) so attacker-controlled markup shaped like a
 		 * token stays inert. PCRE failure degrades to the unmodified buffer.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $buffer          The HTML buffer containing tokens.
 		 * @param array  $noscript_tokens The exact-token allowlist (token => HTML).
 		 * @return string Buffer with known tokens restored.
@@ -518,7 +518,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * locally generated lazy node and must be emitted unmodified without
 		 * any placeholder rewrite.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $data_src The `data-src` URL of the image.
 		 * @return bool True when the node may receive a placeholder `src`.
 		 */
@@ -568,7 +568,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Anomaly gate: candidate nodes failing {@see is_valid_lazy_placeholder_candidate()}
 		 * are emitted unmodified without any lazy/placeholder rewrite (fail-open).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $buffer                  The HTML buffer after WP_HTML_Tag_Processor serialization.
 		 * @param bool   $enable_placeholder      Whether placeholders are enabled.
@@ -623,7 +623,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * without PCRE fragility. Falls back to regex on parse errors or when
 		 * WP_HTML_Processor is unavailable (WP <6.9 fallback).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $buffer The HTML buffer.
 		 * @return string|null Processed buffer or null on failure (triggers regex fallback).
 		 */
@@ -692,7 +692,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Post-processes the serialized buffer to add missing width/height attributes to lazy-loaded images.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $buffer The HTML buffer after WP_HTML_Tag_Processor serialization.
 		 * @return string The modified buffer.
@@ -738,7 +738,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Processor-based dimension injection using serialize_token().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $buffer The HTML buffer.
 		 * @return string|null Processed buffer or null on failure.
 		 */
@@ -866,7 +866,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Processor-based auto-sizes upgrade using serialize_token().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $buffer The HTML buffer.
 		 * @return string|null Processed buffer or null on failure.
 		 */
@@ -945,7 +945,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * processor-based rewrite shares one reflection guard for the public
 		 * `WP_HTML_Processor::serialize_token()` (WP 6.9).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool
 		 */
 		private function should_use_html_processor(): bool {
@@ -959,7 +959,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * uses core helper on WP 6.9+ without breaking WP <6.9. Falls back
 		 * to the raw attribute name.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $attr Raw attribute name (e.g. `data-wppo-dominant-color`).
 		 * @return string Normalized attribute name.
 		 */
@@ -989,7 +989,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Consolidated via shared helpers; no further dedup is safe without losing
 		 * the version-gated fallback.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $buffer           The HTML buffer.
 		 * @param int    $img_counter      Current image counter.
@@ -1107,7 +1107,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Processes <picture> blocks using regex fallback when WP_HTML_Processor is unavailable.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $buffer           The HTML buffer.
 		 * @param int    $img_counter      Current image counter.
@@ -1221,7 +1221,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					return $tags->get_updated_html();
 				} else {
 					// Regex Fallback for hosts without WP_HTML_Tag_Processor.
-					// @since NEXT Fixed fallback to handle <source> and <video poster> (previously only <img>).
+					// @since 2.0.0 Fixed fallback to handle <source> and <video poster> (previously only <img>).
 					// Prefer the TagProcessor path when available; this fallback preserves
 					// <source> src/srcset and <video> poster handling for older WP.
 					$buffer = preg_replace_callback(
@@ -1358,7 +1358,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Cached file_exists check to avoid repeated stat calls per image per request.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $path Absolute file path.
 		 * @return bool Whether the file exists.
 		 */
@@ -1382,7 +1382,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Clear the file_exists cache (for testing isolation).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function clear_file_exists_cache(): void {
@@ -1395,7 +1395,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Consolidates the `getimagesize` LRU that was copy-pasted between
 		 * `post_process_img_dimensions()` and `add_delay_load_img()` (D-14).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $local_path Absolute file path.
 		 * @return array|false Image size array or false on failure.
 		 */
@@ -1646,7 +1646,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * participates in the normalized-URL + query + media dedup in
 		 * `get_all_preload_data()`. The toggle autoPreloadLCP must be enabled.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array List of preload items (zero or one item).
 		 */
 		private function get_auto_lcp_preload_data(): array {
@@ -1706,7 +1706,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * PageSpeed chain: the top real-user LCP URL for the current path wins
 		 * only after enough samples (default 20) and while fresh (<24h).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string The LCP image URL, or empty string when none is stored.
 		 */
 		private function get_current_lcp_url(): string {
@@ -1781,7 +1781,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Returns an empty string when no branch applies or nothing resolves.
 		 * Fail-open: any failure returns an empty string, never fatal.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array $image_optimisation Image optimisation settings.
 		 * @return string The candidate URL, or empty string when none applies.
 		 */
@@ -1841,7 +1841,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * the first-N never-lazy pass is skipped. Fail-open: any filter
 		 * failure falls back to the unfiltered count.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array $image_optimisation Image optimisation settings.
 		 * @return int Exclude count.
 		 */
@@ -2208,7 +2208,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * detection (Image Prioritizer) when core returns fetchpriority low for
 		 * below-fold images.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param \WP_HTML_Tag_Processor $tags    The tag processor instance.
 		 * @param array                  $defaults Default attributes to set if core function is unavailable.
@@ -2276,7 +2276,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * returns byte-identical HTML with respect to `alt`. The value is
 		 * filterable via `wppo_auto_alt_enabled` for host-level overrides.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return bool True when missing `alt` attributes should be derived.
 		 */
@@ -2286,7 +2286,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				/**
 				 * Filter whether missing-alt autofill is enabled.
 				 *
-				 * @since NEXT
+				 * @since 2.0.0
 				 * @param bool $enabled Whether autofill is enabled.
 				 */
 				$enabled = (bool) apply_filters( 'wppo_auto_alt_enabled', $enabled );
@@ -2304,7 +2304,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * filename remains (e.g. `data:` URIs, query-only URLs). Makes no
 		 * external HTTP requests and no database queries.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $src The image `src` URL.
 		 * @return string The filename-derived alt, or empty string.
@@ -2378,7 +2378,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Read the bounded persistent src-to-title map for derived alt text.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array<string, string>
 		 */
 		private static function get_derived_alt_map(): array {
@@ -2405,7 +2405,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Capped at 200 entries (drop-oldest) with a day TTL so the map
 		 * cannot grow unbounded.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $src   Image src URL.
 		 * @param string $title Resolved title (may be '').
 		 * @return void
@@ -2442,7 +2442,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * produced nothing. Fail-open: any failure returns an empty string
 		 * (caller then leaves the tag untouched).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $src The image `src` URL.
 		 * @return string The derived alt, or empty string when none applies.
@@ -2484,7 +2484,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				/**
 				 * Filter the derived alt text for images missing an alt attribute.
 				 *
-				 * @since NEXT
+				 * @since 2.0.0
 				 * @param string $alt The derived alt text (may be empty).
 				 * @param string $src The image `src` URL.
 				 */
@@ -2518,7 +2518,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * `alt=""` is treated as an intentional decorative image and left
 		 * untouched. Tag Processor escapes the value on serialize.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param \WP_HTML_Tag_Processor $tags         Processor positioned on the `<img>` tag.
 		 * @param string                 $original_src The original image `src` value.
@@ -2545,7 +2545,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * do not count as an `alt`. Escapes at emit because the regex
 		 * path concatenates raw strings.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $img_tag      The original `<img>` tag HTML.
 		 * @param string $original_src The original image `src` value.
@@ -2942,7 +2942,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Extract the YouTube video ID from an iframe src URL.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $src The iframe src URL.
 		 * @return string The video ID, or empty string if not a YouTube embed.
@@ -2960,7 +2960,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Replaces the YouTube embed iframe with a static thumbnail and play button.
 		 * The actual iframe is loaded only on user click via JavaScript.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $iframe_tag   The original <iframe> tag HTML.
 		 * @param string $original_src The original src attribute value.
@@ -3050,7 +3050,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * falls back to regex-based attribute manipulation.
 		 *
 		 * @since 1.0.0
-		 * @since NEXT Native lazy-load path for iframes.
+		 * @since 2.0.0 Native lazy-load path for iframes.
 		 *
 		 * @param string   $iframe_tag   The original `<iframe>` tag HTML.
 		 * @param string   $original_src The original `src` attribute value (absolute or relative URL).
@@ -3143,7 +3143,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Fail-open contract lives with the caller: when false, AVIF sources
 		 * are omitted and WebP/original delivery is used instead.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return bool True when the request Accept header allows image/avif.
 		 */
@@ -3171,7 +3171,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * Shared by the TagProcessor and regex-fallback wrap paths.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $original_src   Original image URL.
 		 * @param string $srcset         Raw srcset value from the processed img (may be empty).
@@ -3523,7 +3523,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * prioritization twice. The attribute set is idempotent, the scan is
 		 * not — the second pass is skipped.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var bool
 		 */
 		private bool $lcp_priority_applied = false;
@@ -3549,7 +3549,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Uses `WP_HTML_Processor::serialize_token()` (public since WP 6.9) when
 		 * available, falling back to `WP_HTML_Tag_Processor` on older versions.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $filtered_output The filtered output from previous callbacks.
 		 * @param string $output          The raw output buffer content (unused; present
@@ -3637,7 +3637,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * `sizes`), lazy classes are removed, and `decoding="async"` is
 		 * stamped when absent. Nodes that fail to parse keep their markup.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $buffer             The HTML buffer.
 		 * @param array  $image_optimisation Image optimization settings.
@@ -3705,7 +3705,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * are dropped). Fail-open per attribute: any failure leaves the tag
 		 * untouched.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param \WP_HTML_Tag_Processor|\WP_HTML_Processor $tags The tag processor matched on an <img>.
 		 * @return bool True when any attribute was changed.
@@ -3752,7 +3752,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * `srcset`/`sizes`. Fail-open: any parse failure returns the buffer
 		 * unchanged.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $buffer The HTML buffer.
 		 * @return string The buffer with eager-picture sources promoted.
@@ -3806,7 +3806,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * classes like `lazy-button` are preserved) while keeping all other
 		 * classes. No-op when the tag carries no class attribute.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param \WP_HTML_Tag_Processor|\WP_HTML_Processor $tags The tag processor matched on an <img>.
 		 * @return bool True when a class token was stripped.
@@ -3846,7 +3846,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * `decoding="async"` is stamped when absent (progressive enhancement,
 		 * ignored by old browsers).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string      $buffer  The HTML buffer.
 		 * @param string|null $lcp_url Optional pre-resolved LCP URL. When null the
@@ -3937,7 +3937,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * wp_get_loading_optimization_attributes() decision is honoured — gaps
 		 * are only filled. Fail-open: any failure returns the buffer unchanged.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $buffer             The HTML buffer.
 		 * @param array  $image_optimisation Image optimisation settings.
@@ -4030,7 +4030,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Get the first <img src> URL in the buffer (hero fallback).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $buffer The HTML buffer.
 		 * @return string First image src, or empty string when none found.
@@ -4067,7 +4067,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * `hero.jpg` hint. Fail-open: any parse failure returns false (emit
 		 * the hint) rather than skipping it.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $buffer The HTML buffer.
 		 * @param string $url    The image URL to look for.
@@ -4124,7 +4124,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * `img.jpg?v=2` are distinct. Fail-open: any parse failure returns an
 		 * empty string.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $url The URL to inspect.
 		 * @return string The query string without the leading `?`, or empty.
@@ -4151,7 +4151,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * home_url(), query strings and WordPress size suffixes stripped) so that
 		 * absolute-vs-relative matches work and derived assets cannot false-positive.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param \WP_HTML_Tag_Processor $tags    The tag processor matched on an <img>.
 		 * @param string                 $lcp_url The detected LCP image URL.
@@ -4198,7 +4198,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * dedup, which only collapses size variants when the requested URL
 		 * itself carries one).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $url               The raw URL to normalize.
 		 * @param bool   $strip_size_suffix Whether to strip WordPress size suffixes. Default true.
@@ -4253,7 +4253,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * hint alongside the full-size original (`hero.jpg`). Fail-open: any
 		 * parse failure falls back to the normalized URL + media key.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $url   The raw preload URL.
 		 * @param string $media The preload media attribute.
@@ -4293,7 +4293,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * the LCP URL. Any scan failure returns an empty string (fail-open
 		 * to heuristic).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $buffer The HTML buffer.
 		 * @return string The hero background image URL, or empty string.
@@ -4338,7 +4338,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Used to choose between the img preload path and the CSS-hero
 		 * preload path so exactly one preload link is ever emitted.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $buffer  The HTML buffer.
 		 * @param string $lcp_url The detected LCP image URL.
@@ -4371,7 +4371,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * path), when the hero is unrelated to the LCP target, or when an
 		 * equivalent preload link already exists.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $buffer The HTML buffer.
 		 * @return string The buffer with at most one added preload link.
@@ -4491,7 +4491,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					}
 				}
 
-				// Stored LCP + hero fallback (LCP-aware lazy-load, @since NEXT).
+				// Stored LCP + hero fallback (LCP-aware lazy-load, @since 2.0.0).
 				// Gated on the LCP feature toggles so default lazy behaviour is
 				// unchanged when LCP prioritization is off (backward compat):
 				// the stored LCP URL (PageSpeed/post-meta/transient) and, when
@@ -4804,7 +4804,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * available, otherwise a regex fallback. Fail-open: returns the
 		 * buffer unchanged when disabled or on any processing failure.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $buffer The HTML buffer to process.
 		 * @return string The buffer with missing `alt` attributes filled.
@@ -4894,7 +4894,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Get the current placeholder type.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @return string One of 'none', 'svg', 'dominant_color', 'lqip'.
 		 */
@@ -4910,7 +4910,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Looks up stored placeholder data (dominant color, LQIP) from Img_Converter's
 		 * image info by resolving the data-src URL to a local path.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $img_tag  The <img> tag HTML.
 		 * @param string $data_src The data-src URL of the image.
@@ -4986,7 +4986,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * restore it on intersection. The first N backgrounds (hero heuristics) and
 		 * data: URIs are left untouched.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $buffer The HTML buffer.
 		 * @return string The processed buffer.
@@ -5078,8 +5078,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * - adds the `wppo-lazy-video` class,
 		 * - defers `poster` to `data-poster` for core's animated-GIF companion videos (WP 7.1+, the `autoplay` + `loop` + `muted` + `playsinline` + `poster` signature), which the client restores on intersect.
 		 *
-		 * @since NEXT
-		 * @since NEXT Defer companion-video `poster` frames to `data-poster`.
+		 * @since 2.0.0
+		 * @since 2.0.0 Defer companion-video `poster` frames to `data-poster`.
 		 *
 		 * @param string $buffer HTML markup to process.
 		 * @return string The HTML with video elements rewritten for lazy loading.
@@ -5301,7 +5301,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * ignore the declarations. Any failure returns markup unmodified
 		 * (fail-open).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 *
 		 * @param string $buffer The HTML buffer to process.
 		 * @return string The modified HTML buffer.

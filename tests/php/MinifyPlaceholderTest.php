@@ -9,7 +9,7 @@
  * (fail-open).
  *
  * @package PerformanceOptimise\Tests
- * @since NEXT
+ * @since 2.0.0
  */
 
 use PerformanceOptimise\Inc\Image_Optimisation;
@@ -20,7 +20,7 @@ use Brain\Monkey\Functions;
 /**
  * Placeholder namespace + strict restore tests.
  *
- * @since NEXT
+ * @since 2.0.0
  */
 class MinifyPlaceholderTest extends \PHPUnit\Framework\TestCase {
 	use WPPO_Test_Bootstrap {

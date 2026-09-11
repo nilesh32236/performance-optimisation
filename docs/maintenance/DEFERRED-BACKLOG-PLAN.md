@@ -7,7 +7,7 @@
 
 No P0. Full gate passes, WP active, no fake metrics, no critical regression. All WP Monitor issues are additive enhancements with legacy fallback.
 
-## P1 — High Value Next Sprint (5 issues, each <100 files, @since NEXT)
+## P1 — High Value Next Sprint (5 issues, each <100 files, @since 2.0.0)
 
 ### 754 — Delegate speculation rules to Core on WP 6.8+
 - **Problem:** Plugin's `Main::add_speculation_rules()` prints own `<script type=speculationrules>` at `wp_head:0` unconditionally when `preload_settings.enableSpeculationRules` on, duplicates Core's 6.8 `<script type=speculationrules>` and misses Core built-ins (`wp-admin/*`, `uploads`, `content`, `plugins`, `template`, `stylesheet`, `?*`, `rel=nofollow`, `.no-prefetch/.no-prerender`).
@@ -59,7 +59,7 @@ No P0. Full gate passes, WP active, no fake metrics, no critical regression. All
 ## P2 — Useful (none beyond P1 engineering)
 
 ## Dependencies & Suggested Order
-1. **756/755** (XS, low, independent) → 2. **754** (S, speculation) → 3. **757** (M, LCP, needs viewport) → 4. **758** (XS docs, last). All guarded, no DB migration, no schema change, `@since NEXT`.
+1. **756/755** (XS, low, independent) → 2. **754** (S, speculation) → 3. **757** (M, LCP, needs viewport) → 4. **758** (XS docs, last). All guarded, no DB migration, no schema change, `@since 2.0.0`.
 
 ## PR Sizing
 Each ≤6 files + 1 test + 1 doc, <100 limit, must pass `npm lint → phpcs → npm test 34/34 → phpunit 435/435 → npm build`.

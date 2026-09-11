@@ -19,14 +19,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 	/**
 	 * Edge cache purger.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	class Edge_Purger {
 
 		/**
 		 * Transient lock key.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		private const PURGE_LOCK = 'wppo_edge_purge_lock';
@@ -34,7 +34,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		/**
 		 * Lock TTL seconds.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		private const PURGE_LOCK_TTL = 60;
@@ -42,7 +42,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		/**
 		 * Get blog-prefixed lock key.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string
 		 */
 		public static function get_purge_lock_key(): string {
@@ -52,7 +52,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		/**
 		 * Whether lock is active.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool
 		 */
 		public static function has_purge_lock(): bool {
@@ -62,7 +62,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		/**
 		 * Set lock.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function set_purge_lock(): void {
@@ -85,7 +85,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		 * api.cloudflare.com/client/v4/zones/{id}/purge_cache purge_everything
 		 * (or purge_files for single_page).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string      $type     Clear type ('all' or 'single_page').
 		 * @param string|null $url_path Page path (or absolute URL) for single-page clears.
 		 * @return bool True when no purge needed or all requests succeeded.
@@ -148,7 +148,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		 * Accepts an absolute URL or a path; paths are resolved against the
 		 * home URL. Returns '' when unresolvable.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string|null $url_path Page path or absolute URL.
 		 * @return string Absolute URL or ''.
 		 */
@@ -173,7 +173,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		/**
 		 * Purge specific Cloudflare files (URL-scoped single-page purge).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $zone Zone ID.
 		 * @param string $token API token.
 		 * @param string $url Absolute URL to purge.
@@ -207,7 +207,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		/**
 		 * Purge Cloudflare zone cache (purge_everything).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $zone Zone ID.
 		 * @param string $token API token.
 		 * @return bool
@@ -242,7 +242,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		 *
 		 * API: POST https://api.bunny.net/pullzone/{id}/purgeCache
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $zone Pull zone ID.
 		 * @param string $api_key API key.
 		 * @return bool
@@ -274,7 +274,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		/**
 		 * Surface failure via debug log.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $service Service.
 		 * @param string $detail Detail.
 		 * @return void

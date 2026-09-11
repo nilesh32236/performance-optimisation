@@ -302,7 +302,7 @@ class CssCombineFallbackTest extends \PHPUnit\Framework\TestCase {
 	 * Test that href-first tags with whitespace around `=` and a multi-token
 	 * rel (e.g. `rel="alternate stylesheet"`) are still stripped.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_inject_used_css_strips_whitespace_and_multi_token_rel(): void {
 		$src = 'http://example.com/wp-content/themes/t/style.css';
@@ -320,7 +320,7 @@ class CssCombineFallbackTest extends \PHPUnit\Framework\TestCase {
 	 * Test that rel-first tags with whitespace around `=` and a trailing rel
 	 * token are still stripped.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_inject_used_css_strips_rel_first_whitespace_and_extra_token(): void {
 		$src = 'http://example.com/wp-content/themes/t/style.css';
@@ -337,7 +337,7 @@ class CssCombineFallbackTest extends \PHPUnit\Framework\TestCase {
 	 * Test that a same-URL hint whose rel never contains the `stylesheet` token
 	 * (e.g. `rel="preconnect"`) survives stripping.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_inject_used_css_preserves_preconnect_without_stylesheet_token(): void {
 		$src = 'http://example.com/wp-content/themes/t/style.css';

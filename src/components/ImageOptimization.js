@@ -43,7 +43,7 @@ const DEFAULT_CLIENT_SIDE_MIME_TYPES = [
  * Mirrors the PHP sanitizer (2560 default, 0 disables): negatives,
  * fractions, '' or non-numeric payloads never stay in state.
  *
- * @since NEXT
+ * @since 2.0.0
  * @param {*}      value    Raw option value.
  * @param {number} fallback Fallback when unparseable.
  * @return {number} Coerced integer >= 0.

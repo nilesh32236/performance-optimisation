@@ -44,7 +44,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		/**
 		 * Maximum number of child sitemaps to fetch from an index.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private const TO_FETCH_LIMIT = 50;
 
@@ -65,7 +65,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * in Critical_CSS) with a WP-Cron single-event fallback when the AS
 		 * enqueue fails, so it is listed here too and cleaned in both paths.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string[]
 		 */
 		public const SCHEDULED_HOOKS = array(
@@ -95,7 +95,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * as_unschedule_all_actions() (see Deactivate::unschedule_action_scheduler_jobs()).
 		 * Any future as_enqueue_async_action() site must be added here.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string[]
 		 */
 		public const AS_HOOKS = array(
@@ -142,7 +142,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 *
 		 * Wraps the private schedule_page_cron_jobs() for WP-CLI invocation.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public static function trigger_preload(): void {
 			$instance = new self();
@@ -168,7 +168,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			/**
 			 * Filter the object-cache recovery-probe interval in seconds.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param int $interval Seconds between recovery probes while the circuit is open. Default HOUR_IN_SECONDS, minimum 300.
 			 */
 			$probe_interval                       = max( 300, (int) apply_filters( 'wppo_object_cache_probe_interval', HOUR_IN_SECONDS ) );
@@ -251,7 +251,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * Small wrapper so schedule_cron_jobs() (which runs on every init)
 		 * degrades gracefully when the Object_Cache class is unavailable.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True when the circuit is open.
 		 */
 		private function is_object_cache_circuit_open(): bool {
@@ -278,7 +278,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * parallel. On success Object_Cache::probe_recovery() restores the
 		 * drop-in and clears this schedule.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public function object_cache_probe_cron(): void {
@@ -302,7 +302,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		/**
 		 * Callback for LLMs.txt daily regeneration cron.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public function llms_txt_cron(): void {
@@ -319,7 +319,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * Callback for CCSS daily regeneration cron.
 		 *
 		 * @return void
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public function ccss_regeneration_cron() {
 			$options = Util::get_settings();
@@ -337,7 +337,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * throttles itself by checking the last-run timestamp.
 		 *
 		 * @return void
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		public function web_vitals_rescan_cron(): void {
 			$options = Util::get_settings();
@@ -574,7 +574,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * Skips URLs that match configured exclusion rules and URLs already
 		 * scheduled, and caps the number of events to avoid flooding cron.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array $exclude_urls Exclusion rules (processed URLs/patterns).
 		 * @return void
 		 */
@@ -629,7 +629,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * always skipped, mirroring Cache::is_woo_excluded(). Fail-open:
 		 * detection failure skips the URL (never preload dynamic content).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string        $url       Absolute URL.
 		 * @param bool|null     $woo_safe  Optional pre-resolved safe-mode flag (hoisted by batch callers).
 		 * @param string[]|null $woo_paths Optional pre-resolved Woo excluded paths (hoisted by batch callers).
@@ -690,7 +690,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * entries for `$hook` by JSON-encoded args. Returns null when the
 		 * cron API is unavailable so callers fall back to wp_next_scheduled().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $hook Cron hook name.
 		 * @return array<string, bool>|null Args set, or null on fallback.
 		 */
@@ -730,7 +730,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * Uses the in-memory snapshot when available; falls back to
 		 * wp_next_scheduled() otherwise.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string                   $hook Hook name.
 		 * @param array                    $args Event args.
 		 * @param array<string, bool>|null $scheduled In-memory snapshot (null = fallback).
@@ -758,7 +758,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		/**
 		 * Extract the `rest_route` query value from a preload URL.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $url   Absolute URL.
 		 * @param string $query Pre-parsed query string.
 		 * @return string The `rest_route` value or ''.
@@ -813,7 +813,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 *
 		 * @return void
 		 * @since 1.0.0
-		 * @since NEXT Derived from Cron::SCHEDULED_HOOKS; added wppo_img_conversion and wppo_database_cleanup_cron.
+		 * @since 2.0.0 Derived from Cron::SCHEDULED_HOOKS; added wppo_img_conversion and wppo_database_cleanup_cron.
 		 */
 		public static function clear_cron_jobs(): void {
 			// Canonical plugin hooks (recurring + single events).
@@ -867,7 +867,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * ID (custom endpoints, third-party archives). Reuses the same remote
 		 * GET approach as {@see load_page()}.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $url The URL to preload.
 		 * @return void
 		 */
@@ -914,7 +914,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * belong to this site. Falls back to an empty list when the request fails
 		 * or the sitemap is unavailable, so preloading never breaks.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param int $cap Maximum number of URLs to return.
 		 * @return string[] List of absolute sitemap URLs.
 		 */
@@ -1035,7 +1035,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * the URL list in a transient so WP-Cron args stay small (audit #888
 		 * finding 6) — or, for legacy/fallback events, the URL array itself.
 		 *
-		 * @since NEXT Accepts batch-ID arguments and cleans up the transient.
+		 * @since 2.0.0 Accepts batch-ID arguments and cleans up the transient.
 		 * @param string|string[] $arg Batch ID or URL list.
 		 * @return void
 		 */
@@ -1071,7 +1071,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 *
 		 * @param mixed $arg Batch ID or URL list.
 		 * @return string[] URLs to crawl.
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static function peek_crawler_batch_arg( $arg ): array {
 			if ( is_string( $arg ) && '' !== $arg ) {
@@ -1085,7 +1085,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		/**
 		 * Warm a single URL via crawler (post-publish lane).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $url URL.
 		 * @return void
 		 */

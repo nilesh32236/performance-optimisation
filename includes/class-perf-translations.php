@@ -26,14 +26,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Perf_Translations' ) ) {
 	/**
 	 * Perf Translations handler.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	class Perf_Translations {
 
 		/**
 		 * Filter for enabling perf translations.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		const FILTER_ENABLED = 'wppo_perf_translations_enabled';
@@ -45,7 +45,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Perf_Translations' ) ) {
 		 * existence (WP 6.9+). Filter `wppo_perf_translations_enabled` may
 		 * override.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool
 		 */
 		public static function is_enabled(): bool {
@@ -57,7 +57,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Perf_Translations' ) ) {
 			/**
 			 * Filters whether Performant Translations (.mo→php) is enabled.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param bool $enabled Whether enabled.
 			 */
 			$enabled = (bool) apply_filters( self::FILTER_ENABLED, $enabled );
@@ -76,7 +76,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Perf_Translations' ) ) {
 		 *
 		 * Blog-scoped on multisite (`site-{id}/`) mirroring Llms::base_dir().
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string Normalized path.
 		 */
 		public static function get_cache_dir(): string {
@@ -95,7 +95,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Perf_Translations' ) ) {
 		 * filename suffix (e.g. `my-plugin-de_DE.mo` → `de_DE`). Falls back to
 		 * hash-only when extraction fails.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $mofile Path to .mo file.
 		 * @param string $domain Text domain.
 		 * @return string Normalized cache file path (.php).
@@ -129,7 +129,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Perf_Translations' ) ) {
 		 * cached php path when successful and newer than the source. Otherwise
 		 * returns the original path.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $file Path to translation file (.mo or .php).
 		 * @param string $domain Text domain.
 		 * @return string Filtered path.
@@ -204,7 +204,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Perf_Translations' ) ) {
 				/**
 				 * Fires after a perf translation file was written.
 				 *
-				 * @since NEXT
+				 * @since 2.0.0
 				 * @param string $cache_file Path to the compiled php file.
 				 * @param string $mofile Source .mo file.
 				 * @param string $domain Text domain.
@@ -219,7 +219,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Perf_Translations' ) ) {
 		/**
 		 * Invalidate OPCache after file write (action handler).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $file File path.
 		 * @return void
 		 */
@@ -237,7 +237,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Perf_Translations' ) ) {
 		/**
 		 * Register hooks.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function init(): void {
@@ -254,7 +254,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Perf_Translations' ) ) {
 		 * regenerates fresh. We delete per-locale cache files matching the
 		 * upgraded language; the next load_translation_file call will regenerate.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param mixed $upgrader Upgrader instance.
 		 * @param array $hook_extra Extra data.
 		 * @return void

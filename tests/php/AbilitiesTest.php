@@ -24,7 +24,7 @@ class AbilitiesTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that the run-database-cleanup ability enum matches the canonical set.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_database_cleanup_ability_enum_matches_canonical(): void {
 		Functions\when( 'wp_normalize_path' )->returnArg();
@@ -76,7 +76,7 @@ class AbilitiesTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that execute_database_cleanup accepts trashed_posts and rejects the legacy trash alias.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_execute_database_cleanup_accepts_trashed_posts_rejects_trash(): void {
 		Functions\when( '__' )->returnArg( 1 );

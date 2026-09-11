@@ -154,7 +154,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 		 * Instance-method callbacks are removed via {@see Main::get_instance()}
 		 * (null when the Main constructor never ran, e.g. in tests).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function unregister_runtime_hooks(): void {
@@ -202,7 +202,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 		 * events for a hook, recurring and single (audit #888 findings 1 + 9).
 		 *
 		 * @since 1.0.0
-		 * @since NEXT Delegates to the canonical Cron::SCHEDULED_HOOKS list.
+		 * @since 2.0.0 Delegates to the canonical Cron::SCHEDULED_HOOKS list.
 		 * @return void
 		 */
 		private static function unschedule_crons(): void {
@@ -220,7 +220,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 		 * source of truth shared with the scheduling sites); the dual-scheduled
 		 * crawler hooks are cleaned in both paths.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		private static function unschedule_action_scheduler_jobs(): void {
@@ -241,7 +241,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 		 * falls back to update_rules(false) on older class shapes. A failed
 		 * delete never fatals; residue is retried next deactivate/uninstall.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		private static function remove_htaccess_rules(): void {
@@ -268,7 +268,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 		 * drop-in is already gone, orphan `.wppo-backup` / `.tmp.*`
 		 * siblings from a crashed write must not survive deactivation.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		private static function cleanup_dropin_artifacts(): void {
@@ -291,7 +291,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 		 * during deactivation to prevent conflicts.
 		 *
 		 * @since 1.0.0
-		 * @since NEXT Now atomic (tmp + verify + backup + rename with rollback) and returns a notice key on failure.
+		 * @since 2.0.0 Now atomic (tmp + verify + backup + rename with rollback) and returns a notice key on failure.
 		 * @return string|null Notice key for the admin layer, or null on success / nothing to do.
 		 */
 		public static function remove_wp_cache_constant(): ?string {

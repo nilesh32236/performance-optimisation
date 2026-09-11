@@ -56,3 +56,21 @@
 /test-lab/
 /reports/
 /review-output.jsonl
+
+# Internal audit, planning and design artifacts — never ship in the release ZIP
+/AUDIT/
+/AUDIT_PLAN.md
+/AUTONOMOUS_PLAN.md
+/COMPETITIVE_GAP_ANALYSIS.md
+/PERFORMANCE.md
+/PROGRESS.md
+/designs/
+/docs/
+/fix_ids.py
+/opencode.json
+/eslint.config.js
+/phpstan.neon
+/phpunit.xml.dist
+/.ignore
+/.distignore
+/.phpunit.cache/

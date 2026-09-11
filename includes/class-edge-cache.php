@@ -25,14 +25,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 	/**
 	 * Edge cache adapter.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	class Edge_Cache {
 
 		/**
 		 * Filter to control whether edge cache is enabled.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		const FILTER_ENABLED = 'wppo_edge_cache_enabled';
@@ -40,7 +40,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 		/**
 		 * Filter for Cloudflare Worker content.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		const FILTER_WORKER_CONTENT = 'wppo_edge_cache_worker_content';
@@ -48,7 +48,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 		/**
 		 * Filter for wrangler.toml content.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		const FILTER_WRANGLER_CONTENT = 'wppo_edge_cache_wrangler_content';
@@ -56,7 +56,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 		/**
 		 * Filter for Bunny edge JS content.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		const FILTER_BUNNY_CONTENT = 'wppo_edge_cache_bunny_content';
@@ -67,7 +67,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 		 * Reads wppo_settings[edge_cache][enabled] (false default) and
 		 * applies the wppo_edge_cache_enabled filter.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True when edge cache is enabled.
 		 */
 		public static function is_enabled(): bool {
@@ -79,7 +79,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 			/**
 			 * Filters whether edge HTML cache is enabled.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param bool $enabled Whether edge cache is enabled.
 			 */
 			return (bool) apply_filters( self::FILTER_ENABLED, $enabled );
@@ -92,7 +92,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 		 * At least one provider configured is considered "configured" when edge is enabled;
 		 * purge is still safe as no-op when unconfigured.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool
 		 */
 		public static function is_configured(): bool {
@@ -118,7 +118,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 		/**
 		 * Get adapter config for template generation.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array{origin_url:string, cache_ttl:int, swr:int, provider:string}
 		 */
 		public static function get_config(): array {
@@ -137,7 +137,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 			/**
 			 * Filters edge cache adapter config.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param array $config Config array.
 			 */
 			$config = apply_filters(
@@ -164,7 +164,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 		 * templates/cloudflare-worker.js. Falls back to an inline template when
 		 * the file is missing.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array $config Optional override config.
 		 * @return string Worker JS source.
 		 */
@@ -196,7 +196,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 			/**
 			 * Filters Cloudflare Worker JS content.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string $content Worker JS source.
 			 * @param array  $config  Adapter config.
 			 */
@@ -206,7 +206,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 		/**
 		 * Get wrangler.toml content for Cloudflare Workers deployment.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array $config Optional override config.
 		 * @return string wrangler.toml source.
 		 */
@@ -233,7 +233,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 			/**
 			 * Filters wrangler.toml content.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string $toml   wrangler.toml source.
 			 * @param array  $config Adapter config.
 			 */
@@ -246,7 +246,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 		 * Semantics mirror Cloudflare worker: cache/wppo/{domain}/{path}/index.html
 		 * stale-while-revalidate at the Bunny edge.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param array $config Optional override config.
 		 * @return string Bunny edge JS source.
 		 */
@@ -277,7 +277,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 			/**
 			 * Filters Bunny edge JS content.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string $content Bunny JS source.
 			 * @param array  $config  Adapter config.
 			 */

@@ -16,7 +16,7 @@
  *
  * TTFB target: <30ms global (edge) vs LS-local ~90ms.
  *
- * @since NEXT
+ * @since 2.0.0
  */
 
 export default {

@@ -165,7 +165,7 @@ class CdnPerMappingAttrTest extends \PHPUnit\Framework\TestCase {
 	 * Previously the settings read lived inside the memo branch, so a
 	 * filter-present call returned an empty mapping set and disabled the CDN.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	public function test_get_mappings_reads_settings_when_filter_registered(): void {
 		Functions\when( 'apply_filters' )->returnArg( 2 );
@@ -206,7 +206,7 @@ class CdnPerMappingAttrTest extends \PHPUnit\Framework\TestCase {
 	 *
 	 * from login_header() -> print_admin_styles(), hard-fataling wp-login.php.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 * @return void
 	 */
 	public function test_rewrite_url_accepts_non_array_second_arg(): void {
@@ -227,7 +227,7 @@ class CdnPerMappingAttrTest extends \PHPUnit\Framework\TestCase {
 	 * Critical_CSS must keep working: an array argument is used directly and
 	 * the URL is rewritten without reading options.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 * @return void
 	 */
 	public function test_rewrite_url_uses_supplied_array_mappings(): void {
@@ -273,7 +273,7 @@ class CdnPerMappingAttrTest extends \PHPUnit\Framework\TestCase {
 	 * non-null value as mappings. A non-array argument must be ignored and
 	 * mappings resolved via get_mappings().
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 * @return void
 	 */
 	public function test_rewrite_srcset_accepts_non_array_second_arg(): void {
@@ -310,7 +310,7 @@ class CdnPerMappingAttrTest extends \PHPUnit\Framework\TestCase {
 	 * an array argument is used directly and the URL is rewritten without
 	 * reading options.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 * @return void
 	 */
 	public function test_rewrite_srcset_uses_supplied_array_mappings(): void {

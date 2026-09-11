@@ -19,7 +19,7 @@ Cross-check: Inventory → Findings → Implementation Log → Changed Files →
 | `class-main.php, google-fonts, uninstall, database-cleanup, rest, rum, cache, cron, util, critical-css, used-css, abilities, image-optimisation, advanced-cache-handler, wppo-cli, main.js, rum.js, lazyload, Dashboard, FileOptimization, PluginSetting, NoticeBanner, CheckboxOption, MetricCard, litespeed.js, SCSS 7, readme.txt, tests/php 4, build 11` | `AbilitiesTest.php` new 2, `CronSitemapTest.php` 4 mocks, `RumTest.php` 15 mocks, `bootstrap.php` reset, `NoticeBanner.test.js` 2 expectations | Security PASS (6/6 fixed), Perf PASS (5/5, 1 partial), Architect PASS, WP PASS (2 MEDIUM follow-ups), Frontend PASS→PASS after test fix, Testing conditional fail→PASS after NoticeBanner | 32 residual `get_option` long-tail, RUM queue race, stampede advisory, telemetry HEAD storm, used-css parse, OFFSET scan, 200× `wp_next_scheduled` — all documented in `FINAL-REVIEW/*.md` as deferred P6 |
 
 ## 3. No finding silently disappeared
-- Every HIGH traced to `@since NEXT` diff + `file:line` in log.
+- Every HIGH traced to `@since 2.0.0` diff + `file:line` in log.
 - `WONT_FIX` only `rum_collect __return_true` (intentional public) with docblock justification — reviewed by Final Security.
 - `FALSE_POSITIVE` only `withNotification` dup (grep 1 use) + `TODO(#553)` version gates (live fallbacks).
 - `DEFERRED` only Tier-2 architecture/perf (god `Main` 2956, `Util` 810, telemetry 550s, used-css char loop) — listed in `REFACTORING-PLAN.md` P6 and `FINAL-REVIEW/*`.

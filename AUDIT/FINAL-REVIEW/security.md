@@ -32,7 +32,7 @@
       }
       $wp_admin_bar->add_node( ... );
   ```
-- Docblock expanded `@since NEXT Added manage_options capability check.` with defence-in-depth note that REST `permission_callback` also requires `manage_options + X-WP-Nonce`.
+- Docblock expanded `@since 2.0.0 Added manage_options capability check.` with defence-in-depth note that REST `permission_callback` also requires `manage_options + X-WP-Nonce`.
 - **Functionality preserved:** Admins still see both nodes; non-admins see none. REST handlers unchanged, so 403 on direct POST remains. No regression — hook still registered for all but early-returns cheaply. Alternative gate at `add_action` registration was not chosen; either location is correct, this one is simpler and avoids capability timing issues on `init`.
 
 ### 2.2 A02-009 — Google Fonts host substring bypass → SSRF (MEDIUM)

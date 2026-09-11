@@ -31,7 +31,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		/**
 		 * Per-request memo for get_litespeed() (audit #888 finding 25).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var array|null
 		 */
 		private static $litespeed_request_cache = null;
@@ -42,7 +42,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 * mutator (object-cache enable/disable, advanced-cache create/remove)
 		 * invalidates the salted entry immediately.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		private const DROPIN_SALT_KEY = 'wppo_sysinfo_salt';
@@ -171,7 +171,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 * and translated labels cannot disagree (audit #888 finding 20).
 		 *
 		 * @since  1.5.0
-		 * @since NEXT `using_https`/`multisite` return booleans instead of translated strings.
+		 * @since 2.0.0 `using_https`/`multisite` return booleans instead of translated strings.
 		 * @return array {
 		 *     @type string $version              WordPress version.
 		 *     @type string $environment_type     WP_ENVIRONMENT_TYPE constant value.
@@ -255,7 +255,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 * finding 20).
 		 *
 		 * @since  1.5.0
-		 * @since NEXT `object_cache_status` returns a boolean instead of a translated string.
+		 * @since 2.0.0 `object_cache_status` returns a boolean instead of a translated string.
 		 * @return array {
 		 *     @type bool             $object_cache_status  Whether an external object cache is in use.
 		 *     @type string           $active_cache_plugin  Slug of active cache plugin or 'None'.
@@ -391,7 +391,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 * Cached by get_litespeed() in a transient; kept separate so the
 		 * detection logic stays testable.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array{advanced_cache:string,object_cache:string}
 		 */
 		private static function detect_dropin_ownership(): array {
@@ -471,7 +471,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 * advanced-cache create/remove) so System Info reflects reality without
 		 * waiting out the 15-minute TTL.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function flush_dropin_cache(): void {

@@ -25,14 +25,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 	/**
 	 * Optimization Detective bridge.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	class OD_Bridge {
 
 		/**
 		 * Settings key for the OD integration toggle.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		const SETTINGS_KEY = 'od_integration';
@@ -40,7 +40,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		/**
 		 * Filter to control whether OD optimization should be applied.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		const FILTER_SHOULD_OPTIMIZE = 'wppo_od_should_optimize';
@@ -52,7 +52,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * error_log ignore live in one place. These messages never reach the
 		 * activity log (Log::add()) because they are low-level exception output.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $message Message to log.
 		 * @return void
 		 */
@@ -70,7 +70,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * function od_get_url_metrics(). No autoload is triggered beyond
 		 * the class_exists check (autoload true by default).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True when OD is active.
 		 */
 		public static function is_od_available(): bool {
@@ -84,7 +84,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * (true when OD is active, false otherwise) and applies the
 		 * wppo_od_should_optimize filter.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool True when OD data should be consumed.
 		 */
 		public static function is_enabled(): bool {
@@ -111,7 +111,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 			/**
 			 * Filters whether OD-based optimization should be applied.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param bool   $should      Whether to optimize.
 			 * @param string $current_url Current URL (if resolvable).
 			 */
@@ -128,7 +128,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * a flat metric scan. Returns empty string when no OD data is
 		 * available or optimization is disabled.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string LCP image URL or empty string.
 		 */
 		public static function get_lcp_url(): string {
@@ -175,7 +175,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * degrades to a heuristic 1-3 based on the stored setting or a
 		 * static 2 default.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return int Number of first images to exclude, 1-3.
 		 */
 		public static function get_exclude_first_images_count(): int {
@@ -234,7 +234,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * - OD_URL_Metric::get_lcp_element() / get_elements() with isLCP flag
 		 * - Array-shaped metrics with ['elements'] and ['isLCP'] / ['xpath']
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string[] Distinct LCP image URLs.
 		 */
 		private static function collect_lcp_urls(): array {
@@ -251,7 +251,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * across viewport groups. Uses the same extraction logic as
 		 * collect_lcp_urls() but returns filtered list without uniquing.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string[] Raw LCP image URLs (may contain duplicates).
 		 */
 		private static function collect_raw_lcp_urls(): array {
@@ -351,7 +351,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * Used as a proxy for above-the-fold image count when LCP tag
 		 * is not yet available but groups are.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return int Number of viewport groups (0 when unavailable).
 		 */
 		private static function count_viewport_groups(): int {
@@ -439,7 +439,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * Tries od_get_url_metrics() first (Lab 6.9). Falls back to
 		 * OD_URL_Metric static helpers if the function is unavailable.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array List of metric objects/arrays.
 		 */
 		private static function get_url_metrics(): array {
@@ -511,7 +511,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		/**
 		 * Whether an OD element is the LCP element.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param mixed $element Element object or array.
 		 * @return bool True when LCP.
 		 */
@@ -575,7 +575,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * Handles object methods get_url(), get_src(), get_xpath() with
 		 * attribute extraction, and array keys src/url/xpath.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param mixed $element Element object or array.
 		 * @return string URL or empty string.
 		 */

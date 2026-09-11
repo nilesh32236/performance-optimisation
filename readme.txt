@@ -4,7 +4,7 @@ Tags: cache, performance, speed, pagespeed, minify
 Requires at least: 6.2
 Requires PHP: 8.2
 Tested up to: 7.1
-Stable tag: 1.9.0
+Stable tag: 2.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -79,7 +79,7 @@ System Info dashboard, Google PageSpeed Insights integration, per-page asset man
  - **Freelancers and agencies** who need a reliable speed plugin they can deploy across client sites.
  - **Developers** who want granular control over caching, minification, and delivery without vendor lock-in.
 
-This plugin uses `voku/html-min` for HTML minification, `matthiasmullie/minify` for JavaScript and CSS minification, and `woocommerce/action-scheduler` for background job processing.
+This plugin bundles 7 Composer packages: `voku/html-min` (HTML minification), `matthiasmullie/minify` with its `matthiasmullie/path-converter` and `symfony/css-selector` dependencies (CSS/JS minification), `tedivm/jshrink` (JS minification), `voku/simple_html_dom` (HTML parsing), and `woocommerce/action-scheduler` (background job processing).
 
 == Installation ==
 
@@ -98,22 +98,49 @@ After activation, you can manage the following from the settings tabs:
 - **Object Cache** — One-click Redis integration with standalone, sentinel, and cluster support.
 - **Tools** — Import/export settings for quick deployment across multiple sites.
 
-== Screenshots ==
-
-1. **Dashboard**: Real-time overview of cache status, optimized files, image conversion progress, and recent activity log.
-2. **File Optimization**: Minify JavaScript, CSS, and HTML with granular controls for defer, delay, combine, and exclude rules.
-3. **Preload**: Cache warm-up, preconnect, DNS prefetch, and critical asset preloading with fetchpriority hints.
-4. **Image Optimization**: One-click WebP/AVIF conversion, smart lazy loading with SVG placeholders, and LCP image preloading.
-5. **Database Cleanup**: Safe manual and automated cleanup with fine-grained revision control (by age and count).
-6. **Object Cache**: Redis integration with standalone, sentinel, and cluster topology support — no separate plugin needed.
-7. **Tools**: One-click import/export for deploying your performance configuration across multiple sites.
-
 == Changelog ==
 
-= NEXT (unreleased) =
-* Removed: `file_optimisation.removeQueryStrings` ("Remove Query Strings From Static Resources") (#925, closes #904 removal TODO). The `?ver=` stripping path (`Main::strip_static_query_strings()` on `script/style_loader_src`, `is_plugin_cache_url()` helpers, setting default, SPA toggle) is deleted. `?ver=` is the cache-busting mechanism — a stored legacy value is now ignored (fail-open, `?ver` always preserved) with a one-time activity-log notice, and the key is dropped on the next save.
-* Removed: orphaned `performance-optimisation/v1/crawler` and `crawler_status` REST routes (no SPA/CLI consumers; cache warming remains driven by WP-Cron/Action Scheduler via `LiteSpeed_Crawler`).
-* Deprecated: `performance-optimisation/v1/get_page_assets` REST route (kept one release; migrate to the Abilities API `performance-optimisation/get-page-assets` or `Asset_Manager::get_page_assets()`).
+= 2.0.0 (2026-09-11) =
+* New: LiteSpeed/OpenLiteSpeed coexistence with Auto/WPPO/LiteSpeed/Standalone modes, native X-LiteSpeed header protocol, purge sync, ESI punch-holing, per-page/per-post-type TTL overrides and a background cache crawler.
+* New: Edge cache support with purge fan-out for Cloudflare, Bunny and Varnish, plus per-mapping CDN URL rewriting.
+* New: Real-User Monitoring (RUM) collects anonymised field Web Vitals (LCP, INP, CLS) with trend charts in the dashboard.
+* New: AI Adaptive read-only suggestions and RUM anomaly detection, with optional WordPress AI client integration.
+* New: Optimization Detective bridge for real-visit LCP data.
+* New: bfcache support for logged-in users.
+* New: Auto-generated /llms.txt and /llms-full.txt files, refreshed daily.
+* New: WordPress Abilities API (WP 6.9+) surface for programmatic/AI access, plus a `wp wppo verify` WP-CLI self-verification command.
+* New: Autoloaded-options audit with dry-run/apply/revert remediation, and a read-only expired-transients export.
+* New: Safe-by-default Used CSS with coupled purge and builder-drift requeue, plus a user safelist with automatic checksum regeneration.
+* New: Critical CSS size cap, per-template variants and file-first delivery.
+* New: Delay-JS presets (INP-first, builder, commerce, interaction), a per-page kill switch and a WooCommerce safe-mode toggle.
+* New: LCP guardrails that never lazy-load above-the-fold content and preload the hero image with fetchpriority.
+* New: AVIF-first picture output with smart quality, skip-small threshold and HDR gain-map handling.
+* New: Configurable static-page Cache Life (TTL), with per-role/per-URL variants.
+* New: Redis object-cache circuit breaker with auto-disable, recovery probe and admin notice.
+* New: Builder-update purge watcher for Elementor, Divi, Bricks and WPBakery.
+* New: Redesigned dashboard and all settings tabs with WCAG AA contrast, equal-height metrics and full mobile/RTL support.
+* Improvement: Native lazy loading (`loading="lazy"`) is now the default; the legacy JavaScript IntersectionObserver lazy loader is opt-in.
+* Improvement: Adopted WordPress 6.9+ core APIs — template enhancement buffer, salted cache deletes, script-loader fetchpriority/in_footer, inline-style budget and the WordPress Abilities API.
+* Improvement: Speculative loading is more conservative by default (prefetch + conservative eagerness) and narrowed to core's Speculation Rules API with commerce and nonce exclusions.
+* Improvement: Canonical settings defaults single-sourced across the admin, REST API and WP-CLI.
+* Performance: Centralised URL caching, memoised settings, removed N+1 permalink lookups and reduced minifier regex overhead.
+* Performance: Lazy-render below-fold DOM with content-visibility and defer non-critical fetchpriority hints.
+* Security: Hardened cache-path/static-file handling against path traversal and arbitrary file write, fixed host-header cache-poisoning and stored-XSS vectors, added nonce verification to ESI/AJAX handlers and redacted sensitive data from System Info.
+* Security: Atomic, verified writes for wp-config, advanced-cache.php and .htaccess with rollback.
+* Fixed: Redis drop-in boot fatal on some WordPress 7.0 setups.
+* Fixed: wp-login/admin fatals caused by a typed property and a filter signature.
+* Fixed: frontend 500 from Minify\JS cache-file path visibility.
+* Fixed: media-print deadlock when defer/delay scripts are swapped.
+* Fixed: inline CSS minification no longer strips the critical-CSS id; localhost now gets a synchronous CCSS fallback.
+* Fixed: assorted mobile/RTL/a11y and unsaved-changes issues across the admin UI.
+* Removed: `file_optimisation.removeQueryStrings` ("Remove Query Strings From Static Resources") — `?ver=` is the cache-busting mechanism and is now always preserved; a stored legacy value is ignored (fail-open) and dropped on the next save.
+* Removed: orphaned `performance-optimisation/v1/crawler` and `crawler_status` REST routes.
+* Removed: `performance-optimisation/v1/get_page_assets` REST route and handler; use the Abilities API `performance-optimisation/get-page-assets` or `Asset_Manager::get_page_assets()`.
+* Removed: the public `Cache::clear_ccss()` method; use `Critical_CSS::clear_all()` instead.
+* Changed: the legacy `core_tweaks` settings tab is no longer accepted by `update_settings`/`import_settings` (core-tweak options live under File Optimization); pre-2.0 exports containing `core_tweaks` will be rejected.
+* Changed: minimum runtime remains WordPress 6.2 / PHP 8.2, now enforced with clean self-deactivation.
+
+
 
 = 1.9.0 (2026-08-11) =
 * Performance: Centralized `content_url()` static caching across asset minification loops via `Util::cached_content_url()`. Keys static cache per site per request (`get_current_blog_id()`) for multisite safety under `switch_to_blog()` and gates caching with `has_filter('content_url')`.
@@ -276,7 +303,7 @@ Yes. The plugin is fully compatible with WooCommerce. WooCommerce-specific asset
 You should only run **one** full-page caching solution at a time. If another plugin (WP Super Cache, LiteSpeed Cache, WP Rocket, etc.) already manages caching, this plugin will detect it and won't overwrite the existing setup. You can still use the minification, image optimization, and database cleanup features alongside most other plugins.
 
 = Does this plugin improve Core Web Vitals and PageSpeed scores? =
-Yes. In benchmark testing on a standard WordPress install (Astra theme, 5 images), PageSpeed scores increased from 52 to 98/100 on Mobile and 74 to 100/100 on Desktop. Time to First Byte (TTFB) dropped from 680ms to 45ms (-93%), LCP improved from 4.1s to 1.2s (-71%), and total page size was reduced from 3.2 MB to 820 KB (-74%). Features like lazy loading, static HTML caching, WebP/AVIF image conversion, font preloading, and script deferral directly target Core Web Vitals metrics.
+Yes. The features below — static HTML caching, lazy loading, WebP/AVIF image conversion, font preloading, and script deferral — directly target the metrics measured by Core Web Vitals and PageSpeed Insights. In one internal example benchmark on a standard WordPress install (Astra theme, 5 images) we observed improvements in PageSpeed scores, Time to First Byte, LCP, and total page size, but **results vary** significantly with hosting, theme, plugin mix, and content, so your own before/after measurements are the only reliable guide.
 
 = Does this work on shared hosting? =
 Yes. The plugin works on any standard WordPress hosting — shared hosting, VPS, dedicated servers, and managed WordPress hosts. Redis Object Cache requires Redis to be installed on your server, but all other features work everywhere.
@@ -307,7 +334,7 @@ Yes. Performance Optimisation is 100% free and open source. There is no premium 
 
 == External Services ==
 
-This plugin relies on the following external services. No data is sent to any external service without an explicit admin action as described below.
+This plugin relies on the following external services. The PageSpeed and Google Fonts requests are only made after an explicit administrator action as described below. Edge-cache purges (Cloudflare, Bunny and Varnish) are the one exception: the plugin calls them automatically after it clears its own page cache — including on post publish/update — but only when the administrator has already configured the integration and stored the relevant credentials. Each entry lists the exact data sent and how to opt out.
 
 = Google PageSpeed Insights API (https://www.googleapis.com/pagespeedonline/v5/runPagespeed) =
 * **Purpose:** Provides Lighthouse performance scores, Core Web Vitals, and diagnostic audits for the URL you choose to scan. Used by the Dashboard → Performance Audit → PageSpeed panel.
@@ -325,7 +352,37 @@ This plugin relies on the following external services. No data is sent to any ex
 * **Terms/Privacy:** https://developers.google.com/fonts/faq and https://policies.google.com/privacy.
 * **EOL/Opt-out:** Disable “Host Google Fonts Locally” to stop all server-side fetches; existing cached files remain in `wp-content/cache/wppo/fonts/` until cleared via “Clear All Cache” or the plugin is uninstalled.
 
+= Cloudflare cache purge (https://api.cloudflare.com/client/v4/zones/{zoneId}/purge_cache) =
+* **Purpose:** Purge the configured Cloudflare zone cache whenever the plugin clears its own page cache, so visitors do not receive stale HTML after content or settings change.
+* **When:** Automatically after `wppo_after_cache_clear` fires — this includes post publish/update (`save_post`), theme/plugin changes, settings saves and manual "Clear All Cache". No request is made unless an administrator has stored a Cloudflare API token (constant `WPPO_CLOUDFLARE_API_TOKEN`) and a Zone ID in the Edge Cache settings.
+* **Where:** Server-side `wp_remote_request` POST to `https://api.cloudflare.com/client/v4/zones/{zoneId}/purge_cache`. A full purge sends `{"purge_everything":true}`; a single-page clear sends `{"files":["<page URL>"]}`.
+* **What data is sent:** The Cloudflare Zone ID (in the URL), the API token (as an `Authorization: Bearer` header) and either the purge-everything flag or the URL(s) being purged. No visitor data, cookies, or site content are sent.
+* **Terms/Privacy:** https://www.cloudflare.com/terms/ and https://www.cloudflare.com/privacypolicy/.
+* **Opt-out:** Remove the `WPPO_CLOUDFLARE_API_TOKEN` constant, clear the Zone ID, or set the CDN purge service to "None" in the Edge Cache settings. No further purge calls are made.
+
+= Bunny pull-zone cache purge (https://api.bunny.net/pullzone/{pullZoneId}/purgeCache) =
+* **Purpose:** Purge the configured Bunny pull zone whenever the plugin clears its own page cache, so edge visitors do not receive stale HTML.
+* **When:** Automatically after `wppo_after_cache_clear` (post publish/update, settings saves, manual cache clear), but only when an administrator has stored a Bunny API key (constant `WPPO_BUNNY_API_KEY`) and a Pull Zone ID in the Edge Cache settings. Bunny only supports all-or-nothing purges, so single-page clears skip it.
+* **Where:** Server-side `wp_remote_request` POST to `https://api.bunny.net/pullzone/{pullZoneId}/purgeCache`.
+* **What data is sent:** The Pull Zone ID (in the URL) and the API key (as an `AccessKey` header). No request body, visitor data or site content are sent.
+* **Terms/Privacy:** https://bunny.net/terms/ and https://bunny.net/privacy/.
+* **Opt-out:** Remove the `WPPO_BUNNY_API_KEY` constant and/or clear the Pull Zone ID. No further purge calls are made.
+
+= Varnish cache purge (administrator-provided endpoints) =
+* **Purpose:** Send HTTP `PURGE` requests to the Varnish endpoints you configure, so your own edge/Varnish layer is invalidated together with the plugin cache.
+* **When:** Automatically after `wppo_after_cache_clear` (post publish/update, settings saves, manual cache clear), but only when you have entered one or more Varnish purge URLs in the CDN settings.
+* **Where:** Server-side `wp_remote_request` `PURGE` calls to the exact URLs you entered (capped at 20 per purge, filterable). No vendor service is contacted.
+* **What data is sent:** Only the HTTP `PURGE` request to your configured endpoint; no site content or visitor data.
+* **Opt-out:** Remove the configured Varnish purge URLs. No further purge calls are made.
+
+= First-party Real-User Monitoring (RUM) data =
+
+When Real-User Monitoring is enabled (Dashboard → Web Vitals), the plugin records **anonymised field metrics only** — the page path and that page's Largest Contentful Paint (LCP), Interaction to Next Paint (INP) and Cumulative Layout Shift (CLS) samples. No cookies, names, email addresses, user IDs, form values, or IP addresses are stored with the samples. A visitor IP is read into memory solely to rate-limit the public beacon (120 requests/hour) and is never persisted. Metrics are aggregated and stored only in your own site's database (`wppo_web_vitals_rum` option plus per-path trend data), retained on a rolling 14-day window (up to 200 paths/day, 600 paths total), and are never sent to the plugin author or any third party. Disabling RUM stops collection; uninstalling the plugin removes the stored data. See `includes/class-rum.php`.
+
 == Upgrade Notice ==
+
+= 2.0.0 (2026-09-11) =
+Major release. Native lazy loading is now the default and several safety presets ship enabled; the legacy `core_tweaks` settings tab and `Cache::clear_ccss()` are removed, and the `get_page_assets` REST route is removed. Back up your settings before upgrading.
 
 = 1.9.0 (2026-08-11) =
 Major feature and compatibility release introducing WP 7.1+ client-side media processing control, size-aware image encoding quality, content_url() static caching, core resource hints API migration, and inline CSS budget support.

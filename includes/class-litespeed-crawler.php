@@ -6,7 +6,7 @@
  * and variant matrix (Accept webp/avif × mobile/desktop × guest/role).
  *
  * @package PerformanceOptimise\Inc
- * @since NEXT
+ * @since 2.0.0
  */
 
 // phpcs:disable WordPress.WP.AlternativeFunctions.curl_curl_init,WordPress.WP.AlternativeFunctions.curl_curl_multi_init,WordPress.WP.AlternativeFunctions.curl_curl_multi_add_handle,WordPress.WP.AlternativeFunctions.curl_curl_multi_exec,WordPress.WP.AlternativeFunctions.curl_curl_multi_info_read,WordPress.WP.AlternativeFunctions.curl_curl_multi_remove_handle,WordPress.WP.AlternativeFunctions.curl_curl_multi_close,WordPress.WP.AlternativeFunctions.curl_curl_close,WordPress.WP.AlternativeFunctions.curl_curl_setopt,WordPress.WP.AlternativeFunctions.curl_curl_getinfo
@@ -25,7 +25,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 	 * Provides curl_multi batch preloading with variant matrix and
 	 * blacklist handling. All settings are opt-in via litespeed_integration.crawler.
 	 *
-	 * @since NEXT
+	 * @since 2.0.0
 	 */
 	final class LiteSpeed_Crawler {
 
@@ -34,7 +34,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		 *
 		 * Mirrors LSCWP crawler.cls.php:26 BLACKLIST_THRESHOLD=3.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		public const BLACKLIST_THRESHOLD = 3;
@@ -42,7 +42,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		/**
 		 * Default concurrency (2-4).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		public const DEFAULT_CONCURRENCY = 2;
@@ -50,7 +50,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		/**
 		 * Transient prefix for blacklist counts.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		private const BLACKLIST_PREFIX = 'wppo_crawler_blacklist_';
@@ -58,7 +58,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		/**
 		 * Transient key for server IP cache.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var string
 		 */
 		private const SERVER_IP_KEY = 'wppo_crawler_server_ip';
@@ -66,7 +66,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		/**
 		 * Maximum URLs carried by a single deferred crawler batch event.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		public const DEFERRED_BATCH_MAX_URLS = 50;
@@ -74,7 +74,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		/**
 		 * Transient TTL (seconds) for deferred crawler batch payloads.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @var int
 		 */
 		private const DEFERRED_BATCH_TTL = 2 * HOUR_IN_SECONDS;
@@ -85,7 +85,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		 * Adaptive by load: when overloaded, caller should defer; when load is
 		 * moderate, concurrency is capped lower.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return int
 		 */
 		public static function get_concurrency(): int {
@@ -95,7 +95,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			/**
 			 * Filter crawler concurrency.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param int $concurrency Concurrency 1-4.
 			 */
 			$concurrency = (int) apply_filters( 'wppo_crawler_concurrency', $concurrency );
@@ -118,7 +118,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		/**
 		 * Get blacklist threshold filtered via wppo_crawler_blacklist_threshold.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return int
 		 */
 		public static function get_blacklist_threshold(): int {
@@ -128,7 +128,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			/**
 			 * Filter blacklist threshold.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param int $threshold Threshold.
 			 */
 			$threshold = (int) apply_filters( 'wppo_crawler_blacklist_threshold', $threshold );
@@ -141,7 +141,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		 * Reads litespeed_integration.crawler.loadLimit or computes nproc*2 fallback.
 		 * Filtered via wppo_crawler_load_limit with default 4.0 (LSCWP crawler.cls.php:684).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return float
 		 */
 		public static function get_load_limit(): float {
@@ -175,7 +175,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			/**
 			 * Filter crawler load limit.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param float $limit Load limit 1-min avg.
 			 */
 			$limit = (float) apply_filters( 'wppo_crawler_load_limit', $limit );
@@ -187,7 +187,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		 *
 		 * Uses sys_getloadavg 1-min or /proc/loadavg fallback.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return bool
 		 */
 		public static function is_overloaded(): bool {
@@ -215,7 +215,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			/**
 			 * Filter overload decision for testing / extensibility.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param bool  $overloaded Whether overloaded.
 			 * @param float $load Current load.
 			 * @param float $limit Load limit.
@@ -229,7 +229,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		 * Resolves home_url host via gethostbyname and caches 1h via
 		 * Util::transient_key('wppo_crawler_server_ip').
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return string IP or empty string.
 		 */
 		public static function get_server_ip(): string {
@@ -254,7 +254,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		/**
 		 * Whether URL is blacklisted (failures >= threshold).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $url URL.
 		 * @return bool
 		 */
@@ -267,7 +267,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		/**
 		 * Record failure for URL; increment blacklist counter.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $url URL.
 		 * @return void
 		 */
@@ -280,7 +280,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		/**
 		 * Clear blacklist for URL on success.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $url URL.
 		 * @return void
 		 */
@@ -295,7 +295,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		 * Variants: Accept webp/avif × mobile/desktop × guest/role_hash.
 		 * Filterable via wppo_crawler_variants.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $url Base URL.
 		 * @return array<int, array{url:string,headers:array<string,string>}>
 		 */
@@ -331,7 +331,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			/**
 			 * Filter crawler variant matrix.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param array  $variants Variant list.
 			 * @param string $url Base URL.
 			 */
@@ -346,7 +346,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		 * Default guest:false → single primary; guest+mobile+webp+role true → 8 variants.
 		 * Filterable via wppo_crawler_variants and wppo_crawler_full_matrix for BC.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $url Base URL.
 		 * @return array<int, array{url:string,headers:array<string,string>}>
 		 */
@@ -404,7 +404,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			/**
 			 * Filter crawler variants to warm.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param array  $variants Variants.
 			 * @param string $url Base URL.
 			 */
@@ -419,7 +419,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		 * deduplicates, respects wppo_invalidation_urls and wppo_crawler_urls filters,
 		 * caps at $cap and respects 15s wall-clock budget.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param int $cap Cap for sitemap + total URLs.
 		 * @return string[]
 		 */
@@ -447,7 +447,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 				/**
 				 * Filter sitemap URLs for crawler.
 				 *
-				 * @since NEXT
+				 * @since 2.0.0
 				 * @param string[] $sitemap_urls Sitemap URLs.
 				 * @param int      $cap Cap.
 				 */
@@ -478,7 +478,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 				/**
 				 * Filter final crawler URLs.
 				 *
-				 * @since NEXT
+				 * @since 2.0.0
 				 * @param string[] $urls URLs.
 				 */
 				$urls = (array) apply_filters( 'wppo_crawler_urls', $urls );
@@ -590,14 +590,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			/**
 			 * Filter crawler URLs (post + sitemap merged).
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string[] $urls URLs.
 			 */
 			$urls = (array) apply_filters( 'wppo_crawler_urls', $urls );
 			/**
 			 * Filter invalidation URLs (compat).
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param string[] $urls URLs.
 			 */
 			$urls = (array) apply_filters( 'wppo_invalidation_urls', $urls );
@@ -615,7 +615,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		 * with timeout 5s per handle and 15s wall-clock budget (mirroring get_sitemap_urls:555).
 		 * Lane throttling via concurrency param; blacklist threshold 3 skips failing URLs.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string[] $urls URLs to crawl.
 		 * @param int|null $concurrency Concurrency override or null for setting.
 		 * @return array{success:int,failed:int,skipped:int}
@@ -679,7 +679,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			/**
 			 * Filter to disable curl_multi for testing fallback.
 			 *
-			 * @since NEXT
+			 * @since 2.0.0
 			 * @param bool $disable Whether to disable curl_multi.
 			 */
 			$disable_curl = (bool) apply_filters( 'wppo_crawler_disable_curl', false );
@@ -830,7 +830,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		 *
 		 * @param string[] $urls URLs to defer.
 		 * @return void
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private static function defer_crawl_batch( array $urls ): void {
 			if ( ! function_exists( 'wp_schedule_single_event' ) || ! function_exists( 'wp_next_scheduled' ) ) {
@@ -871,7 +871,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		/**
 		 * Lane wrapper for single URL preload (wraps process_url).
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @param string $url URL.
 		 * @return void
 		 */
@@ -919,7 +919,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		 * (audit #874 finding 2); a reset must also drop that memo so mid-test
 		 * re-stubs of `wppo_settings` take effect.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function reset_cache(): void {
@@ -932,7 +932,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		/**
 		 * Get crawler queue status.
 		 *
-		 * @since NEXT
+		 * @since 2.0.0
 		 * @return array{concurrency:int,load_limit:float,overloaded:bool,server_ip:string}
 		 */
 		public static function get_status(): array {

@@ -4,7 +4,7 @@
  * call. Imported by FileOptimization.js and Dashboard.js for mode-label
  * rendering (A05/A10).
  *
- * @since NEXT
+ * @since 2.0.0
  */
 
 import { __ } from '@wordpress/i18n';

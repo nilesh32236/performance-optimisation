@@ -213,7 +213,7 @@ jobs:
           - Backward-compatible with WP 6.2+ AND PHP 8.2+.
           - Every new WP/PHP function call guarded (function_exists /
             version_compare / has_filter / class_exists).
-          - New functions/classes/methods use "@since NEXT" — never invent a
+          - New functions/classes/methods use the NEXT version placeholder in their @since tag — never invent a
             version number.
           - Fail-open: cache/object-cache/CDN failures must degrade to
             uncached, never fatal. Multisite-safe (blog-aware keys/paths).
@@ -630,7 +630,7 @@ jobs:
             silently drop them.
           - Each issue = ONE specific change with clear file + function target,
             current code reference, source URL(s), and acceptance criteria.
-          - New functions, classes, and methods must use "@since NEXT" in their
+          - New functions, classes, and methods must use the NEXT version placeholder in their
             doc blocks — never guess a version (e.g. 2.0.0, 3.8.0); the placeholder
             is resolved at release time.
           - Modularity/lightweight bias: prefer conditional loading, lazy boot,
@@ -696,7 +696,7 @@ jobs:
           - 42 classes: class-cache.php (HTML cache), class-object-cache.php (Redis),
             class-img-converter.php (GD+Imagick WebP/AVIF), class-image-optimisation.php,
             class-main.php (orchestrator), class-advanced-cache-handler.php,
-            class-rest.php (30 routes, namespace performance-optimisation/v1,
+            class-rest.php (31 routes, namespace performance-optimisation/v1,
             manage_options + X-WP-Nonce), class-used-css.php / class-critical-css.php,
             class-litespeed-*.php, class-edge-*.php / class-cloudflare-purger.php /
             class-cdn-purger.php, class-cdn.php, class-rum.php, class-ai-adaptive.php

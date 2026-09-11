@@ -13,7 +13,7 @@ use Brain\Monkey\Functions;
 /**
  * Tier-2 per-type override tests — LS layer only, file-cache stays global.
  *
- * @since NEXT
+ * @since 2.0.0
  */
 class LiteSpeedTtlOverridesTest extends \PHPUnit\Framework\TestCase {
 	use WPPO_Test_Bootstrap;
