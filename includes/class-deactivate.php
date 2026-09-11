@@ -97,8 +97,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 				$wp_filesystem->delete( $redis_config_file );
 			}
 
-			// Remove WP_CACHE constant from wp-config.php.
-			self::remove_wp_cache_constant();
+			// Remove WP_CACHE constant from wp-config.php (fail-open: a
+			// failed atomic edit keeps serving uncached via the drop-in
+			// early return; the notice contract is logged, never fatal).
+			$wp_cache_notice = self::remove_wp_cache_constant();
+			if ( is_string( $wp_cache_notice ) && '' !== $wp_cache_notice ) {
+				Log::add( __( 'Failed to update wp-config.php during deactivation.', 'performance-optimisation' ) );
+			}
 			Log::add( __( 'Plugin deactivated', 'performance-optimisation' ) );
 			Cache::clear_cache();
 		}
@@ -209,13 +214,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 		 * during deactivation to prevent conflicts.
 		 *
 		 * @since 1.0.0
-		 * @return void
+		 * @since NEXT Now atomic (tmp + verify + backup + rename with rollback) and returns a notice key on failure.
+		 * @return string|null Notice key for the admin layer, or null on success / nothing to do.
 		 */
-		private static function remove_wp_cache_constant(): void {
+		public static function remove_wp_cache_constant(): ?string {
 			global $wp_filesystem;
 
 			if ( ! $wp_filesystem && ! Util::init_filesystem() ) {
-				return;
+				return null;
 			}
 
 			$wp_config_path = wp_normalize_path( ABSPATH . 'wp-config.php' );
@@ -225,10 +231,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 			}
 
 			if ( ! $wp_filesystem->is_writable( $wp_config_path ) ) {
-				return;
+				return null;
 			}
 
 			$wp_config_content = $wp_filesystem->get_contents( $wp_config_path );
+
+			if ( ! is_string( $wp_config_content ) ) {
+				return 'wp_config_read';
+			}
 
 			$pattern = '/\/\*\*\s*Enables WordPress Cache\s*\*\/\s*(?:\r?\n|\n)if\s*\(\s*!\s*defined\s*\(\s*[\'"]WP_CACHE[\'"]\s*\)\s*\)\s*\{\s*define\s*\(\s*[\'"]WP_CACHE[\'"]\s*,\s*true\s*\)\s*;\s*\}\s*/';
 
@@ -238,7 +248,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 				$wp_config_content = preg_replace( '/\n?define\(\s*[\'"]WP_CACHE[\'"]\s*,\s*true\s*\);\s*/', '', $wp_config_content );
 			}
 
-			$wp_filesystem->put_contents( $wp_config_path, $wp_config_content, FS_CHMOD_FILE );
+			if ( ! is_string( $wp_config_content ) ) {
+				return 'wp_config_write_failed';
+			}
+
+			// Atomic path: tmp write + verify + backup + rename with rollback,
+			// mirroring Activate::add_wp_cache_constant(). Falls back to the
+			// legacy direct write when the transport cannot support it.
+			if ( method_exists( 'PerformanceOptimise\Inc\Util', 'atomic_write_php_verified' ) ) {
+				$atomic = Util::atomic_write_php_verified(
+					$wp_filesystem,
+					$wp_config_path,
+					$wp_config_content,
+					static function ( $contents ): bool {
+						return is_string( $contents ) && false === strpos( $contents, 'Enables WordPress Cache' );
+					}
+				);
+				if ( true === $atomic ) {
+					return null;
+				}
+				if ( false === $atomic ) {
+					return 'wp_config_write_failed';
+				}
+			}
+
+			$ok = $wp_filesystem->put_contents( $wp_config_path, $wp_config_content, FS_CHMOD_FILE );
+
+			return $ok ? null : 'wp_config_write_failed';
 		}
 	}
 }

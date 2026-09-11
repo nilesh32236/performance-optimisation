@@ -279,6 +279,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				}
 			}
 
+			// Atomic path: tmp write + verify + backup + rename with rollback,
+			// so a kill mid-write or full disk never leaves a truncated
+			// wp-config.php. Falls back to the legacy direct write when the
+			// filesystem transport cannot support atomic writes.
+			if ( method_exists( 'PerformanceOptimise\Inc\Util', 'atomic_write_php_verified' ) ) {
+				$atomic = Util::atomic_write_php_verified(
+					$wp_filesystem,
+					$wp_config_path,
+					$wp_config_content,
+					static function ( $contents ): bool {
+						return is_string( $contents ) && false !== strpos( $contents, 'WP_CACHE' );
+					}
+				);
+				if ( true === $atomic ) {
+					return null;
+				}
+				if ( false === $atomic ) {
+					return 'wp_config_write_failed';
+				}
+			}
+
 			$ok = $wp_filesystem->put_contents( $wp_config_path, $wp_config_content, FS_CHMOD_FILE );
 
 			return $ok ? null : 'wp_config_write_failed';
