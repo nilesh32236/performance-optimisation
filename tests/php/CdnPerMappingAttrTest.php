@@ -259,4 +259,88 @@ class CdnPerMappingAttrTest extends \PHPUnit\Framework\TestCase {
 			$result
 		);
 	}
+
+	/**
+	 * Regression (same class as #1074): rewrite_srcset() is registered on
+	 * `wp_calculate_image_srcset`, and should accepted_args ever be raised,
+	 * WordPress would pass `$size_array` as the second argument — never CDN
+	 * mappings. The old `?array $mappings` declaration threw:
+	 *
+	 *   TypeError: CDN::rewrite_srcset(): Argument #2 ($mappings) must be of
+	 *   type ?array, string given
+	 *
+	 * and the old `null === $mappings` guard would have silently treated any
+	 * non-null value as mappings. A non-array argument must be ignored and
+	 * mappings resolved via get_mappings().
+	 *
+	 * @since NEXT
+	 * @return void
+	 */
+	public function test_rewrite_srcset_accepts_non_array_second_arg(): void {
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'apply_filters' )->returnArg( 2 );
+		Functions\when( 'get_option' )->justReturn(
+			array(
+				'file_optimisation' => array(
+					'cdnMapping' => array(
+						array( 'cdn_url' => 'https://cdn.example.com' ),
+					),
+				),
+			)
+		);
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		CDN::reset_cache();
+
+		$sources = array(
+			1 => array( 'url' => 'http://example.com/wp-content/uploads/img.jpg' ),
+		);
+
+		$result = CDN::rewrite_srcset( $sources, 'not-a-mappings-array' );
+
+		// The string was ignored and the stored mapping was resolved through
+		// get_mappings(): the URL is rewritten, not left untouched.
+		$this->assertSame(
+			'https://cdn.example.com/wp-content/uploads/img.jpg',
+			$result[1]['url']
+		);
+	}
+
+	/**
+	 * The optional $mappings pass-down used by Critical_CSS must keep working:
+	 * an array argument is used directly and the URL is rewritten without
+	 * reading options.
+	 *
+	 * @since NEXT
+	 * @return void
+	 */
+	public function test_rewrite_srcset_uses_supplied_array_mappings(): void {
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'apply_filters' )->returnArg( 2 );
+		// Intentionally no stored settings: the supplied array must be used.
+		Functions\when( 'get_option' )->justReturn( array() );
+		CDN::reset_cache();
+
+		$mappings = array(
+			array(
+				'cdn_url'           => 'https://cdn.example.com',
+				'cdn_urls'          => array( 'https://cdn.example.com' ),
+				'ori'               => '',
+				'ori_dir'           => '',
+				'cdn_attr'          => '',
+				'include_dirs'      => 'wp-content',
+				'include_filetypes' => 'jpg',
+			),
+		);
+
+		$sources = array(
+			1 => array( 'url' => 'http://example.com/wp-content/uploads/img.jpg' ),
+		);
+
+		$result = CDN::rewrite_srcset( $sources, $mappings );
+
+		$this->assertSame(
+			'https://cdn.example.com/wp-content/uploads/img.jpg',
+			$result[1]['url']
+		);
+	}
 }
