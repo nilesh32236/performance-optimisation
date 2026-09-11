@@ -81,6 +81,7 @@ class WpConfigAtomicTest extends \PHPUnit\Framework\TestCase {
 		$this->assertStringContainsString( 'WP_CACHE', $fs->contents );
 		$this->assertTrue( Util::verify_php_syntax( $fs->contents ) );
 		$this->assertArrayHasKey( '/tmp/wordpress/wp-config.php.wppo-bak', $fs->copied );
+		$this->assertContains( '/tmp/wordpress/wp-config.php.wppo-bak', $fs->deleted );
 	}
 
 	/**
@@ -197,6 +198,68 @@ class WpConfigAtomicTest extends \PHPUnit\Framework\TestCase {
 		$this->assertNull( Util::atomic_write_php_verified( $fs, '/tmp/wordpress/wp-config.php', "<?php\nfoo();\n" ) );
 		$this->assertNull( Util::atomic_write_php_verified( null, '/tmp/wordpress/wp-config.php', "<?php\nfoo();\n" ) );
 	}
+
+	/**
+	 * Unreadable original is a verified failure (not unsupported transport).
+	 */
+	public function test_atomic_write_unreadable_original_returns_false(): void {
+		$this->stub_path_helpers();
+		$fs = new WPPO_WpConfig_Unreadable_Mock();
+
+		$ok = Util::atomic_write_php_verified(
+			$fs,
+			'/tmp/wordpress/wp-config.php',
+			"<?php\ndefine( 'WP_CACHE', true );\n"
+		);
+
+		$this->assertFalse( $ok );
+	}
+
+	/**
+	 * Curly string interpolation still verifies.
+	 */
+	public function test_verify_php_syntax_allows_curly_interpolation(): void {
+		$code = "<?php\n\$name = 'world';\n\$s = \"hello \${name} and {\$name}\";\n";
+		$this->assertTrue( Util::verify_php_syntax( $code ) );
+		$this->assertTrue( Util::verify_php_syntax( "\xEF\xBB\xBF<?php\ndefine( 'A', 1 );\n" ) );
+	}
+
+	/**
+	 * Move failure leaves the live file untouched.
+	 */
+	public function test_atomic_write_move_failure_keeps_live(): void {
+		$this->stub_path_helpers();
+		$original = $this->valid_config();
+		$fs       = $this->make_fs( $original, true, false );
+
+		$ok = Util::atomic_write_php_verified(
+			$fs,
+			'/tmp/wordpress/wp-config.php',
+			$original . "define( 'WP_CACHE', true );\n"
+		);
+
+		$this->assertFalse( $ok );
+		$this->assertSame( $original, $fs->contents );
+	}
+
+	/**
+	 * Torn rename (corrupt live re-read) restores the original.
+	 */
+	public function test_atomic_write_post_rename_mismatch_restores(): void {
+		$this->stub_path_helpers();
+		$original                    = $this->valid_config();
+		$fs                          = $this->make_fs( $original );
+		$fs->corrupt_live_after_move = true;
+
+		$ok = Util::atomic_write_php_verified(
+			$fs,
+			'/tmp/wordpress/wp-config.php',
+			$original . "define( 'WP_CACHE', true );\n"
+		);
+
+		$this->assertFalse( $ok );
+		$this->assertSame( $original, $fs->contents );
+	}
 }
 
 // phpcs:disable Generic.Files.OneObjectStructurePerFile
@@ -235,6 +298,13 @@ class WPPO_WpConfig_FS_Mock {
 	 * @var bool
 	 */
 	public $writable = true;
+	/**
+	 * When true, move() writes corrupt PHP to the live path to simulate a
+	 * torn rename, exercising the post-rename restore branch.
+	 *
+	 * @var bool
+	 */
+	public $corrupt_live_after_move = false;
 	/**
 	 * Tmp/any-path writes keyed by path.
 	 *
@@ -336,7 +406,7 @@ class WPPO_WpConfig_FS_Mock {
 		if ( $this->is_backup_path( $dst ) ) {
 			$this->copied[ $dst ] = $content;
 		} else {
-			$this->contents    = $content;
+			$this->contents    = $this->corrupt_live_after_move ? "<?php\nbroken trunc if ( ! defined(" : $content;
 			$this->file_exists = true;
 		}
 		$this->deleted[] = $src;
@@ -399,5 +469,77 @@ class WPPO_WpConfig_FS_Mock {
 	 */
 	private function is_backup_path( $path ): bool {
 		return false !== strpos( (string) $path, '.wppo-bak' );
+	}
+}
+
+/**
+ * Filesystem mock whose live-file read fails (returns false).
+ */
+class WPPO_WpConfig_Unreadable_Mock {
+	/**
+	 * Check existence.
+	 *
+	 * @param string $path Path.
+	 * @return bool
+	 */
+	public function exists( $path ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+		return true;
+	}
+
+	/**
+	 * Fail the read.
+	 *
+	 * @param string $path Path.
+	 * @return bool
+	 */
+	public function get_contents( $path ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+		return false;
+	}
+
+	/**
+	 * Write.
+	 *
+	 * @param string $path Path.
+	 * @param string $contents Contents.
+	 * @param int    $chmod Mode.
+	 * @return bool
+	 */
+	public function put_contents( $path, $contents, $chmod = 0 ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		return true;
+	}
+
+	/**
+	 * Move.
+	 *
+	 * @param string $src Source.
+	 * @param string $dst Destination.
+	 * @param bool   $overwrite Overwrite.
+	 * @return bool
+	 */
+	public function move( $src, $dst, $overwrite = false ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		return true;
+	}
+
+	/**
+	 * Copy.
+	 *
+	 * @param string $src Source.
+	 * @param string $dst Destination.
+	 * @param bool   $overwrite Overwrite.
+	 * @param int    $chmod Mode.
+	 * @return bool
+	 */
+	public function copy( $src, $dst, $overwrite = false, $chmod = 0 ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		return true;
+	}
+
+	/**
+	 * Delete.
+	 *
+	 * @param string $path Path.
+	 * @return bool
+	 */
+	public function delete( $path ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+		return true;
 	}
 }

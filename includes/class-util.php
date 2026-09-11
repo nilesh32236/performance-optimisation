@@ -1980,7 +1980,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			if ( '' === $code ) {
 				return false;
 			}
-			if ( 0 !== strpos( ltrim( $code ), '<?php' ) ) {
+			$stripped = ltrim( $code );
+			$stripped = preg_replace( "/^\xEF\xBB\xBF/", '', $stripped );
+			if ( ! is_string( $stripped ) || 0 !== strpos( $stripped, '<?php' ) ) {
 				return false;
 			}
 			if ( class_exists( 'PhpToken' ) ) {
@@ -2016,10 +2018,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				if ( function_exists( 'ini_get' ) ) {
 					$disabled = (string) ini_get( 'disable_functions' );
 				}
-				if ( function_exists( 'exec' ) && false === stripos( $disabled, 'exec' ) && is_readable( $tmp_file_for_lint ) ) {
+				$disabled_list = array_map( 'trim', explode( ',', strtolower( (string) $disabled ) ) );
+				$exec_disabled = in_array( 'exec', $disabled_list, true );
+				if ( function_exists( 'exec' ) && ! $exec_disabled && is_readable( $tmp_file_for_lint ) ) {
 					try {
 						$binary = (string) constant( 'PHP_BINARY' );
-						$cmd    = $binary . ' -l ' . escapeshellarg( $tmp_file_for_lint ) . ' 2>&1';
+						$cmd    = escapeshellarg( $binary ) . ' -l ' . escapeshellarg( $tmp_file_for_lint ) . ' 2>&1';
 						$output = array();
 						$rc     = 1;
 						// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_exec -- Guarded php -l syntax check on the tmp file only; never the live file.
@@ -2060,6 +2064,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			);
 			$stack = array();
 			foreach ( $tokens as $token ) {
+				$id = null;
+				if ( $token instanceof \PhpToken ) {
+					$id = $token->id;
+				} elseif ( is_array( $token ) && isset( $token[0] ) ) {
+					$id = $token[0];
+				}
+				if ( null !== $id && ( ( defined( 'T_CURLY_OPEN' ) && T_CURLY_OPEN === $id ) || ( defined( 'T_DOLLAR_OPEN_CURLY_BRACES' ) && T_DOLLAR_OPEN_CURLY_BRACES === $id ) ) ) {
+					$stack[] = '{';
+					continue;
+				}
 				$text = $token instanceof \PhpToken ? $token->text : ( is_string( $token ) ? $token : '' );
 				if ( 1 !== strlen( $text ) || ( ! isset( $pairs[ $text ] ) && ! in_array( $text, $pairs, true ) ) ) {
 					continue;
@@ -2116,7 +2130,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				if ( $fs->exists( $path ) ) {
 					$original = $fs->get_contents( $path );
 					if ( ! is_string( $original ) ) {
-						return null;
+						return false;
 					}
 				}
 				$tmp = self::atomic_tmp_path( $path );
@@ -2166,9 +2180,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					return false;
 				}
 				$fs->delete( $tmp );
+				// The backup holds full wp-config.php secrets beside the live
+				// file in the web root, so remove it once the rename verified.
+				// Best-effort: success stands even if the delete fails.
+				try {
+					$fs->delete( $path . '.wppo-bak' );
+				} catch ( \Throwable $ignored ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Best-effort backup cleanup must never throw.
+				}
 				return true;
 			} catch ( \Throwable $e ) {
 				unset( $e );
+				try {
+					if ( isset( $original ) && is_string( $original ) && '' !== $original ) {
+						self::restore_php_backup( $fs, $path, $original, $chmod );
+					}
+				} catch ( \Throwable $ignored_restore ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Best-effort restore must never throw.
+				}
 				try {
 					if ( isset( $tmp ) && is_string( $tmp ) && '' !== $tmp && $fs->exists( $tmp ) ) {
 						$fs->delete( $tmp );
@@ -2180,10 +2207,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
-		 * Restore a PHP file from its `.wppo-bak` backup or in-memory original.
+		 * Restore a PHP file from its in-memory original or `.wppo-bak` backup.
 		 *
-		 * Prefers the on-disk backup copy; falls back to the in-memory
-		 * original when no backup exists. Best-effort: never throws.
+		 * Prefers the in-memory original (the known-good read from this
+		 * invocation); falls back to the on-disk backup copy, which may be
+		 * stale from a previous run or concurrent writer. Best-effort: never throws.
 		 *
 		 * @param mixed  $fs Filesystem object.
 		 * @param string $path Final file path.
@@ -2194,13 +2222,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 */
 		private static function restore_php_backup( $fs, string $path, string $original, int $chmod ): bool {
 			try {
+				if ( '' !== $original ) {
+					if ( $fs->put_contents( $path, $original, $chmod ) ) {
+						return true;
+					}
+				}
 				if ( $fs->exists( $path . '.wppo-bak' ) ) {
 					if ( $fs->copy( $path . '.wppo-bak', $path, true ) ) {
 						return true;
 					}
-				}
-				if ( '' !== $original ) {
-					return (bool) $fs->put_contents( $path, $original, $chmod );
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );

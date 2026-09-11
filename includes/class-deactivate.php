@@ -102,7 +102,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 			// early return; the notice contract is logged, never fatal).
 			$wp_cache_notice = self::remove_wp_cache_constant();
 			if ( is_string( $wp_cache_notice ) && '' !== $wp_cache_notice ) {
-				Log::add( __( 'Failed to update wp-config.php during deactivation.', 'performance-optimisation' ) );
+				/* translators: %s: notice key describing the wp-config.php failure. */
+				Log::add( sprintf( __( 'Failed to update wp-config.php during deactivation (%s).', 'performance-optimisation' ), $wp_cache_notice ) );
 			}
 			Log::add( __( 'Plugin deactivated', 'performance-optimisation' ) );
 			Cache::clear_cache();
@@ -242,6 +243,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 
 			$pattern = '/\/\*\*\s*Enables WordPress Cache\s*\*\/\s*(?:\r?\n|\n)if\s*\(\s*!\s*defined\s*\(\s*[\'"]WP_CACHE[\'"]\s*\)\s*\)\s*\{\s*define\s*\(\s*[\'"]WP_CACHE[\'"]\s*,\s*true\s*\)\s*;\s*\}\s*/';
 
+			$before = $wp_config_content;
 			if ( preg_match( $pattern, $wp_config_content, $matches ) ) {
 				$wp_config_content = preg_replace( $pattern, '', $wp_config_content );
 			} else {
@@ -250,6 +252,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 
 			if ( ! is_string( $wp_config_content ) ) {
 				return 'wp_config_write_failed';
+			}
+
+			if ( $wp_config_content === $before ) {
+				return null;
 			}
 
 			// Atomic path: tmp write + verify + backup + rename with rollback,
@@ -261,7 +267,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 					$wp_config_path,
 					$wp_config_content,
 					static function ( $contents ): bool {
-						return is_string( $contents ) && false === strpos( $contents, 'Enables WordPress Cache' );
+						return is_string( $contents ) && false === strpos( $contents, 'Enables WordPress Cache' ) && 1 !== preg_match( "/define\s*\(\s*['\"]WP_CACHE['\"]/", (string) $contents );
 					}
 				);
 				if ( true === $atomic ) {
