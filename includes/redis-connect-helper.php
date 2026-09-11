@@ -334,50 +334,89 @@ if ( ! function_exists( 'wppo_parse_redis_node' ) ) {
 	}
 }
 
+if ( ! function_exists( 'wppo_normalize_redis_serializer_choice' ) ) {
+	/**
+	 * Map availability probes to a concrete phpredis serializer choice.
+	 *
+	 * Probe order is deliberately igbinary → PHP and NEVER msgpack. Object-cache
+	 * entries on existing sites were written with SERIALIZER_PHP; flipping a host
+	 * that merely has ext-msgpack (but no igbinary) to SERIALIZER_MSGPACK makes
+	 * those entries unreadable (deserialize failures/garbage) because Redis
+	 * serialization is not self-describing. Keeping this a pure, side-effect-free
+	 * decision keeps the pre-existing contract intact and testable without a live
+	 * Redis or ext-msgpack.
+	 *
+	 * `$msgpack_available` is accepted so the migration-safety policy can be
+	 * asserted on hosts that do not define SERIALIZER_MSGPACK, but it is
+	 * deliberately ignored — msgpack is never selected. Always falls back to the
+	 * PHP serializer; never throws.
+	 *
+	 * @since NEXT
+	 * @param bool $igbinary_available Whether the igbinary serializer is usable for this build.
+	 * @param bool $msgpack_available  Whether ext-msgpack is available (informational; never selected).
+	 * @return array Shape { serializer: int, name: string } where name is 'igbinary' or 'php'.
+	 */
+	function wppo_normalize_redis_serializer_choice( $igbinary_available, $msgpack_available = false ) {
+		// Intentionally ignored: msgpack is not migration-safe (issue #1022).
+		unset( $msgpack_available );
+
+		if ( $igbinary_available ) {
+			try {
+				if ( defined( '\Redis::SERIALIZER_IGBINARY' ) ) {
+					return array(
+						'serializer' => \Redis::SERIALIZER_IGBINARY,
+						'name'       => 'igbinary',
+					);
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		$fallback = 1;
+		try {
+			if ( defined( '\Redis::SERIALIZER_PHP' ) ) {
+				$fallback = \Redis::SERIALIZER_PHP;
+			}
+		} catch ( \Throwable $e ) {
+			unset( $e );
+		}
+
+		return array(
+			'serializer' => $fallback,
+			'name'       => 'php',
+		);
+	}
+}
+
 if ( ! function_exists( 'wppo_resolve_redis_serializer' ) ) {
 	/**
 	 * Resolve a safe serializer for the current phpredis build.
 	 *
-	 * Probe order: igbinary → msgpack → PHP. Each binary serializer is
-	 * gated on both the phpredis constant AND the backing extension (or its
-	 * serialize function), plus a phpredis version guard for msgpack, so a
+	 * Probe order: igbinary → PHP. igbinary is gated on both the phpredis
+	 * constant AND the backing extension (or its serialize function) so a
 	 * build that defines the constant without the extension can never fatal
-	 * or mis-serialize. Always falls back to the PHP serializer; never throws.
+	 * or mis-serialize. msgpack is intentionally not selected: flipping a
+	 * msgpack-capable host without igbinary would break existing entries that
+	 * were written with SERIALIZER_PHP. Always falls back to the PHP
+	 * serializer; never throws.
 	 *
 	 * @since NEXT
-	 * @return array Shape { serializer: int, name: string } where name is one of 'igbinary', 'msgpack', 'php'.
+	 * @return array Shape { serializer: int, name: string } where name is 'igbinary' or 'php'.
 	 */
 	function wppo_resolve_redis_serializer() {
+		$igbinary_available = false;
 		try {
-			if ( defined( '\Redis::SERIALIZER_IGBINARY' )
+			$igbinary_available = defined( '\Redis::SERIALIZER_IGBINARY' )
 				&& ( extension_loaded( 'igbinary' ) || function_exists( 'igbinary_serialize' ) )
-				&& class_exists( 'Redis' )
-			) {
-				return array(
-					'serializer' => \Redis::SERIALIZER_IGBINARY,
-					'name'       => 'igbinary',
-				);
-			}
-
-			$redis_version_ok = false;
-			try {
-				$redis_version_ok = version_compare( (string) phpversion( 'redis' ), '5.0.0', '>=' );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				$redis_version_ok = false;
-			}
-
-			if ( $redis_version_ok
-				&& defined( '\Redis::SERIALIZER_MSGPACK' )
-				&& ( extension_loaded( 'msgpack' ) || function_exists( 'msgpack_serialize' ) )
-			) {
-				return array(
-					'serializer' => \Redis::SERIALIZER_MSGPACK,
-					'name'       => 'msgpack',
-				);
-			}
+				&& class_exists( 'Redis' );
 		} catch ( \Throwable $e ) {
 			unset( $e );
+			$igbinary_available = false;
+		}
+
+		if ( function_exists( 'wppo_normalize_redis_serializer_choice' ) ) {
+			return wppo_normalize_redis_serializer_choice( $igbinary_available );
 		}
 
 		$fallback = 1;
@@ -401,9 +440,10 @@ if ( ! function_exists( 'wppo_apply_redis_options' ) ) {
 	 * Configure serializer and optional compression on a Redis client based on provided settings.
 	 *
 	 * Selects the serializer via wppo_resolve_redis_serializer() (igbinary
-	 * only when the extension is actually present, otherwise msgpack, otherwise
-	 * the PHP serializer — never fatal on a missing extension). Each setOption()
-	 * is wrapped so an options failure degrades to uncached instead of blocking
+	 * only when the extension is actually present, otherwise the PHP
+	 * serializer — never fatal on a missing extension). msgpack is not used
+	 * so existing SERIALIZER_PHP entries stay readable. Each setOption() is
+	 * wrapped so an options failure degrades to uncached instead of blocking
 	 * the connection.
 	 * If `$config['compression']` is set to "lzf", "zstd", or "lz4" and the corresponding phpRedis
 	 * compression constant is defined, applies that compression option.
