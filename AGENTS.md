@@ -99,6 +99,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (3
 | `server_rules` | GET | Apache/Nginx rules text |
 | `woo_cache_self_test` | GET | WooCommerce cart/checkout cache-exclusion self-test (read-only) |
 | `used_css_regenerate` | POST | Regenerate used CSS for a post or all posts |
+| `purge_used_css_cache` | POST | Purge page cache + used CSS together (optional `path` for single page) |
 | `regenerate_ccss` | POST | Regenerate critical CSS |
 | `ccss_status` | GET | Critical CSS generation status |
 | `rum_collect` | POST | Real-user Web Vitals beacon (public, token + IP rate-limited) |
@@ -122,7 +123,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (3
 | `class-cron.php` | WP-Cron: preload (5h), image conversion (hourly), DB cleanup (daily), web vitals rescan, used/critical CSS, llms.txt |
 | `class-img-converter.php` | WebP/AVIF conversion (GD, Imagick), deferred option commits |
 | `class-image-optimisation.php` | Next-gen serving, lazy load, picture wrap, preload, video lazy |
-| `class-rest.php` | All 28 REST API endpoints |
+| `class-rest.php` | All 31 REST API endpoints |
 | `class-pagespeed.php` | Google PageSpeed Insights API + Action Scheduler job |
 | `class-suggestion-engine.php` | Performance suggestions from telemetry + PageSpeed |
 | `class-telemetry.php` | Local cURL-based performance scanner |

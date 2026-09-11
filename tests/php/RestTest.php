@@ -237,6 +237,7 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			'server_rules',
 			'woo_cache_self_test',
 			'used_css_regenerate',
+			'purge_used_css_cache',
 			'regenerate_ccss',
 			'ccss_status',
 			'dismiss_welcome',

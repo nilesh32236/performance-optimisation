@@ -120,6 +120,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			'.no-js',
 			'.js-enabled',
 			'[data-elementor-type]',
+			// Popup/modal selectors (issue #1023): popups render outside the
+			// static DOM walk (hidden containers, JS portals), so purge keeps
+			// Elementor + generic popup selectors by default.
+			'.elementor-popup-',
+			'.e-popup-',
+			'.dialog-',
+			'.popup-',
+			'.modal-',
+			'.mfp-',
+			'.swal2-',
+			'[data-elementor-type="popup"]',
 		);
 
 		/**
@@ -222,10 +233,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		}
 
 		/**
+		 * Safelist presets shipped safe-by-default (Elementor + popup selectors).
+		 *
+		 * This is the popup/Elementor subset of the built-in safelist below:
+		 * prefix entries ending in '-' or '*' match via prefix in
+		 * {@see is_selector_used()}; attribute entries match by attribute-name
+		 * substring. Filterable via the `wppo_used_css_safelist` filter.
+		 * init_safelist() merges these presets together with the built-in list
+		 * (deduplicated), so the two sources cannot drift.
+		 *
+		 * @return string[]
+		 * @since NEXT
+		 */
+		public static function get_safelist_presets(): array {
+			return array(
+				'.elementor-',
+				'.elementor-popup-',
+				'.e-con*',
+				'.e-popup-',
+				'.dialog-',
+				'.popup-',
+				'.modal-',
+				'.mfp-',
+				'.swal2-',
+				'[data-elementor-type]',
+				'[data-elementor-type="popup"]',
+			);
+		}
+
+		/**
 		 * Initialize safelist from settings and built-in list.
 		 *
 		 * @return void
 		 * @since 1.9.0
+		 * @since NEXT Added wppo_used_css_safelist filter (has_filter-guarded).
 		 */
 		private function init_safelist(): void {
 			$file_opts = $this->options['file_optimisation'] ?? array();
@@ -242,8 +283,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				$user_list = array_merge( $user_list, $extra );
 			}
 
-			$this->safelist = array_merge( $this->built_in_safelist, $user_list );
+			$this->safelist = array_merge( self::get_safelist_presets(), $this->built_in_safelist, $user_list );
 			$this->safelist = array_unique( array_filter( $this->safelist ) );
+
+			if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_used_css_safelist' ) ) {
+				/**
+				 * Filter the used-CSS safelist (issue #1023).
+				 *
+				 * Lets themes/hosts extend or trim the merged built-in + user
+				 * safelist without editing settings.
+				 *
+				 * @since NEXT
+				 *
+				 * @param string[] $safelist Merged safelist selectors.
+				 */
+				$filtered = apply_filters( 'wppo_used_css_safelist', $this->safelist );
+				if ( is_array( $filtered ) ) {
+					$this->safelist = array_values( array_unique( array_filter( array_map( 'strval', $filtered ) ) ) );
+				}
+			}
 		}
 
 		/**
@@ -619,14 +677,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					}
 					continue;
 				}
-				if ( '-' === substr( $safe, -1 ) && 0 === strpos( $selector, $safe ) ) {
-					return true;
-				}
-				if ( '_' === substr( $safe, -1 ) && 0 === strpos( $selector, $safe ) ) {
-					return true;
-				}
-				if ( '*' === substr( $safe, -1 ) && 0 === strpos( $selector, substr( $safe, 0, -1 ) ) ) {
-					return true;
+				$last_char = substr( $safe, -1 );
+				if ( '-' === $last_char || '_' === $last_char || '*' === $last_char ) {
+					$prefix = '*' === $last_char ? substr( $safe, 0, -1 ) : $safe;
+					// Note: a bare '*' entry yields an empty prefix, and
+					// strpos( $selector, '' ) === 0 keeps every selector
+					// (pre-existing semantics, covered by
+					// DelaySafeDefaultsTest::test_unused_css_extra_safelist_merge).
+					if ( 0 === strpos( $selector, $prefix ) ) {
+						return true;
+					}
+					// Compound/descendant selectors (issue #1023): a popup token
+					// buried inside a wrapper, portal, or tag-qualified part
+					// (e.g. '.foo .popup-bar', 'div.modal-dialog',
+					// 'div.elementor-popup-modal', 'button.mfp-close') must keep
+					// the rule even though the full string does not start with
+					// the prefix. Fail-safe direction: keeping extra CSS can
+					// never break styling.
+					foreach ( $this->extract_simple_selectors( $selector ) as $part ) {
+						if ( 0 === strpos( $part, $prefix ) || false !== stripos( $part, $prefix ) ) {
+							return true;
+						}
+					}
 				}
 			}
 
@@ -1273,6 +1345,163 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			}
 
 			return $success;
+		}
+
+		/**
+		 * Purge page cache and used CSS together via a single shared action.
+		 *
+		 * Fail-open: on any generation/clear failure the full (unoptimised) CSS
+		 * keeps serving — never broken styling. Multisite-safe: used-CSS files
+		 * live per-site under the domain-based cache tree.
+		 *
+		 * @param string|null $url_path Optional URL path for a single-page purge; null purges all.
+		 * @return array{page_cache: bool, used_css: bool} Per-store results.
+		 * @since NEXT
+		 */
+		public static function purge_coupled( $url_path = null ): array {
+			$result = array(
+				'page_cache' => false,
+				'used_css'   => false,
+			);
+
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
+					$result['page_cache'] = \PerformanceOptimise\Inc\Cache::clear_cache( $url_path );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
+			try {
+				if ( null !== $url_path && '' !== $url_path ) {
+					$instance           = new self( Util::get_settings() );
+					$result['used_css'] = $instance->delete_used_css( (string) $url_path );
+				} else {
+					$result['used_css'] = self::delete_all_used_css();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
+			return $result;
+		}
+
+		/**
+		 * Queue used-CSS regeneration for a single post (builder-drift requeue).
+		 *
+		 * De-duplicates via as_has_scheduled_action(). No-op when
+		 * removeUnusedCSS is off or Action Scheduler is unavailable.
+		 *
+		 * @param int $post_id Post ID to requeue.
+		 * @return bool True when a job is queued or already scheduled.
+		 * @since NEXT
+		 */
+		public static function requeue_for_post( int $post_id ): bool {
+			if ( $post_id <= 0 ) {
+				return false;
+			}
+			try {
+				$options = Util::get_settings();
+				if ( empty( $options['file_optimisation']['removeUnusedCSS'] ) ) {
+					return false;
+				}
+				if ( ! function_exists( 'as_has_scheduled_action' ) || ! function_exists( 'as_enqueue_async_action' ) ) {
+					return false;
+				}
+				$args = array( 'post_id' => $post_id );
+				if ( as_has_scheduled_action( 'wppo_used_css_generate', $args, 'performance_optimisation' ) ) {
+					return true;
+				}
+				as_enqueue_async_action( 'wppo_used_css_generate', $args, 'performance_optimisation' );
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Requeue used CSS when builder assets drifted for a post.
+		 *
+		 * Compares the newest Elementor CSS mtime
+		 * (uploads/elementor/css/post-*.css, global css files) against the
+		 * post's used-CSS sidecar mtime; when builder assets are newer, the
+		 * used CSS is stale and a regeneration job is queued. Fail-open: any
+		 * filesystem failure returns false (full CSS keeps serving).
+		 *
+		 * @param int $post_id Post ID to check.
+		 * @return bool True when drift was detected and a requeue was queued.
+		 * @since NEXT
+		 */
+		public static function maybe_requeue_on_builder_drift( int $post_id ): bool {
+			if ( $post_id <= 0 ) {
+				return false;
+			}
+			try {
+				$options = Util::get_settings();
+				if ( empty( $options['file_optimisation']['removeUnusedCSS'] ) ) {
+					return false;
+				}
+				$permalink = function_exists( 'get_permalink' ) ? get_permalink( $post_id ) : '';
+				if ( empty( $permalink ) || ! is_string( $permalink ) ) {
+					return false;
+				}
+				$instance      = new self( $options );
+				$used_css_path = $instance->get_used_css_path( (string) $permalink );
+				if ( '' === $used_css_path || ! file_exists( $used_css_path ) ) {
+					return false;
+				}
+				$used_mtime = filemtime( $used_css_path );
+				if ( false === $used_mtime ) {
+					return false;
+				}
+				$newest_asset = self::get_newest_builder_asset_mtime( $post_id );
+				if ( false === $newest_asset || $newest_asset <= $used_mtime ) {
+					return false;
+				}
+				return self::requeue_for_post( $post_id );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Newest builder CSS asset mtime for a post (Elementor post/global CSS).
+		 *
+		 * @param int $post_id Post ID.
+		 * @return int|false Newest mtime, or false when no asset found.
+		 * @since NEXT
+		 */
+		private static function get_newest_builder_asset_mtime( int $post_id ) {
+			try {
+				if ( ! function_exists( 'wp_upload_dir' ) ) {
+					return false;
+				}
+				$upload = wp_upload_dir();
+				if ( ! is_array( $upload ) || empty( $upload['basedir'] ) || ! is_string( $upload['basedir'] ) ) {
+					return false;
+				}
+				$base       = wp_normalize_path( $upload['basedir'] ) . '/elementor/css';
+				$candidates = array(
+					$base . '/post-' . (int) $post_id . '.css',
+					$base . '/global.css',
+					$base . '/post-' . (int) $post_id . '.min.css',
+				);
+				$newest     = false;
+				foreach ( $candidates as $file ) {
+					if ( file_exists( $file ) ) {
+						$mtime = filemtime( $file );
+						if ( false !== $mtime && ( false === $newest || $mtime > $newest ) ) {
+							$newest = $mtime;
+						}
+					}
+				}
+				return $newest;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
 		}
 
 		/**
