@@ -295,6 +295,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'enabled'               => false,
 					'use_wp_ai_client'      => false,
 					'field_lcp_min_samples' => 20,
+					'dismissed_suggestions' => array(),
 					'anomaly_cooldown_days' => 7,
 					'anomaly_min_samples'   => 10,
 				),

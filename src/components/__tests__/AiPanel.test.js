@@ -60,7 +60,56 @@ describe( 'AiPanel Component', () => {
 					settings: {
 						enabled: true,
 						use_wp_ai_client: true,
+						dismissed_suggestions: [],
 					},
+				} )
+			);
+		} );
+	} );
+
+	it( 'dismisses a suggestion and persists the metric', async () => {
+		apiCall.mockImplementation( async ( endpoint ) => {
+			if ( endpoint === 'ai_model' ) {
+				return { success: true, data: null };
+			}
+			if ( endpoint === 'ai_suggestions' ) {
+				return {
+					success: true,
+					data: {
+						suggestions: [
+							{
+								metric: 'ai_delay_js',
+								value: 'moderate · mobile · single · INP p75 0.3s',
+								unit: 'string',
+								status: 'needs_improvement',
+								description: 'AI: Delay JavaScript suggestion',
+								fix_action: 'open_file_optimization_tab',
+								ai_payload: {
+									tab: 'file_optimisation',
+									settings: { delayJS: true },
+								},
+							},
+						],
+					},
+				};
+			}
+			return { success: true, data: {} };
+		} );
+		render( <AiPanel /> );
+
+		const dismissButton = await screen.findByRole( 'button', {
+			name: /Dismiss: AI: Delay JavaScript suggestion/i,
+		} );
+		fireEvent.click( dismissButton );
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				expect.objectContaining( {
+					tab: 'ai_adaptive',
+					settings: expect.objectContaining( {
+						dismissed_suggestions: [ 'ai_delay_js' ],
+					} ),
 				} )
 			);
 		} );

@@ -556,6 +556,48 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		}
 
 		/**
+		 * INP p75 threshold (ms) gating delay-JS suggestions.
+		 *
+		 * Matches the Core Web Vitals "needs improvement" boundary (>200ms):
+		 * delay is suggested only when real-user INP p75 crosses it with
+		 * sufficient samples. Poor INP (>500ms) maps to the `eager` level
+		 * (capped at `moderate` in commerce/auth contexts).
+		 *
+		 * @since NEXT
+		 * @var float
+		 */
+		public const INP_P75_DELAY_THRESHOLD_MS = 200.0;
+
+		/**
+		 * INP p75 threshold (ms) for the `eager` delay level.
+		 *
+		 * Matches the Core Web Vitals "poor" boundary (>500ms).
+		 *
+		 * @since NEXT
+		 * @var float
+		 */
+		public const INP_P75_EAGER_THRESHOLD_MS = 500.0;
+
+		/**
+		 * LCP p75 threshold (ms) gating delay-JS suggestions.
+		 *
+		 * Mirrors the speculation eagerness ladder (>2500ms moderate,
+		 * >3500ms eager) so heavy pages also surface a delay suggestion.
+		 *
+		 * @since NEXT
+		 * @var float
+		 */
+		public const LCP_P75_DELAY_THRESHOLD_MS = 2500.0;
+
+		/**
+		 * LCP p75 threshold (ms) for the `eager` delay level.
+		 *
+		 * @since NEXT
+		 * @var float
+		 */
+		public const LCP_P75_EAGER_THRESHOLD_MS = 3500.0;
+
+		/**
 		 * Read segmented field-LCP p75 rows (device × template) fail-open.
 		 *
 		 * Thin wrapper over RUM::get_field_lcp_p75_by_segment() so
@@ -576,6 +618,197 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return array();
+			}
+		}
+
+		/**
+		 * Read segmented field-INP p75 rows (device × template) fail-open.
+		 *
+		 * Thin wrapper over RUM::get_field_inp_p75_by_segment() so
+		 * heuristic_learn() degrades gracefully when RUM is unavailable.
+		 * No option or transient writes; never throws.
+		 *
+		 * @since NEXT
+		 * @param int $min_samples Minimum samples per segment (1 = observe all).
+		 * @return array[] Rows of array(path,device,template,n,p75).
+		 */
+		private static function segmented_field_inp( int $min_samples = 1 ): array {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'get_field_inp_p75_by_segment' ) ) {
+					return array();
+				}
+				$rows = RUM::get_field_inp_p75_by_segment( $min_samples );
+				return is_array( $rows ) ? $rows : array();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
+		 * Dismissed AI suggestion metrics (persisted, per-site).
+		 *
+		 * Stored additively in `wppo_settings[ai_adaptive][dismissed_suggestions]`
+		 * (array of metric strings). Dismissing is read-only w.r.t. frontend
+		 * behavior: it only hides the suggestion card until cleared from settings.
+		 * Local-only: no remote calls, no PII. Fail-open: any failure returns array().
+		 *
+		 * @since NEXT
+		 * @return string[] Dismissed metric identifiers.
+		 */
+		public static function get_dismissed_suggestions(): array {
+			try {
+				$settings  = class_exists( 'PerformanceOptimise\Inc\Util' ) ? Util::get_settings() : array();
+				$dismissed = $settings['ai_adaptive']['dismissed_suggestions'] ?? array();
+				if ( ! is_array( $dismissed ) ) {
+					return array();
+				}
+				$clean = array();
+				foreach ( $dismissed as $metric ) {
+					if ( ! is_string( $metric ) || '' === trim( $metric ) ) {
+						continue;
+					}
+					$metric = function_exists( 'sanitize_text_field' ) ? sanitize_text_field( $metric ) : trim( $metric );
+					if ( '' !== $metric ) {
+						$clean[] = substr( $metric, 0, 64 );
+					}
+				}
+				return array_values( array_unique( $clean ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
+		 * Whether an AI suggestion metric has been dismissed.
+		 *
+		 * @since NEXT
+		 * @param string $metric Suggestion metric identifier.
+		 * @return bool True when dismissed.
+		 */
+		public static function is_suggestion_dismissed( string $metric ): bool {
+			try {
+				if ( '' === $metric ) {
+					return false;
+				}
+				return in_array( $metric, self::get_dismissed_suggestions(), true );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * RUM-gated, INP-aware delay-JS state (read-only, fail-open).
+		 *
+		 * Emits a delay suggestion only when real-user p75 crosses a
+		 * threshold with sufficient samples: n >= min (shared
+		 * `ai_adaptive.field_lcp_min_samples` gate, default 20) AND
+		 * (INP p75 > 200ms OR LCP p75 > 2500ms). Below threshold, on error,
+		 * or when the RUM class is unavailable the state is provisional with
+		 * `qualified=false` so callers emit nothing. No external calls, no
+		 * PII stored, no option/transient writes; multisite-safe via the
+		 * per-site RUM aggregate. Commerce/auth contexts cap the level at
+		 * `moderate` (never `eager`) via maybe_cap_eagerness().
+		 *
+		 * @since NEXT
+		 * @return array{qualified:bool,level:string,inp_p75:float,lcp_p75:float,samples:int,min_samples:int,provisional:bool,segment:array|null} Gated state.
+		 */
+		public static function get_rum_gated_delay_state(): array {
+			$fallback = array(
+				'qualified'   => false,
+				'level'       => 'conservative',
+				'inp_p75'     => 0.0,
+				'lcp_p75'     => 0.0,
+				'samples'     => 0,
+				'min_samples' => 20,
+				'provisional' => true,
+				'segment'     => null,
+			);
+			try {
+				$min                     = self::field_lcp_min_samples();
+				$fallback['min_samples'] = $min;
+
+				$inp_rows = self::segmented_field_inp( 1 );
+				$lcp_rows = self::segmented_field_lcp( 1 );
+
+				$max_n = 0;
+				foreach ( array_merge( $inp_rows, $lcp_rows ) as $row ) {
+					if ( is_array( $row ) && isset( $row['n'] ) ) {
+						$max_n = max( $max_n, (int) $row['n'] );
+					}
+				}
+				$fallback['samples'] = $max_n;
+
+				$qualified_inp = array();
+				foreach ( $inp_rows as $row ) {
+					if ( is_array( $row ) && isset( $row['n'] ) && (int) $row['n'] >= $min ) {
+						$qualified_inp[] = $row;
+					}
+				}
+				$qualified_lcp = array();
+				foreach ( $lcp_rows as $row ) {
+					if ( is_array( $row ) && isset( $row['n'] ) && (int) $row['n'] >= $min ) {
+						$qualified_lcp[] = $row;
+					}
+				}
+				if ( empty( $qualified_inp ) && empty( $qualified_lcp ) ) {
+					return $fallback;
+				}
+
+				$top_inp = ! empty( $qualified_inp ) ? $qualified_inp[0] : null;
+				$top_lcp = ! empty( $qualified_lcp ) ? $qualified_lcp[0] : null;
+				$inp_p75 = ( is_array( $top_inp ) && isset( $top_inp['p75'] ) ) ? (float) $top_inp['p75'] : 0.0;
+				$lcp_p75 = ( is_array( $top_lcp ) && isset( $top_lcp['p75'] ) ) ? (float) $top_lcp['p75'] : 0.0;
+
+				$crosses_inp = $inp_p75 > self::INP_P75_DELAY_THRESHOLD_MS;
+				$crosses_lcp = $lcp_p75 > self::LCP_P75_DELAY_THRESHOLD_MS;
+				if ( ! $crosses_inp && ! $crosses_lcp ) {
+					$fallback['inp_p75'] = $inp_p75;
+					$fallback['lcp_p75'] = $lcp_p75;
+					return $fallback;
+				}
+
+				$level = 'moderate';
+				if ( $inp_p75 > self::INP_P75_EAGER_THRESHOLD_MS || $lcp_p75 > self::LCP_P75_EAGER_THRESHOLD_MS ) {
+					$level = 'eager';
+				}
+				// Guardrail: commerce/auth contexts never suggest eager.
+				$level = self::maybe_cap_eagerness( $level );
+				if ( ! in_array( $level, array( 'conservative', 'moderate', 'eager' ), true ) ) {
+					$level = 'moderate';
+				}
+
+				// Anchor the copy on the crossed signal (prefer INP, the
+				// delay-JS lever); fall back to the LCP segment otherwise.
+				$anchor  = ( $crosses_inp && is_array( $top_inp ) ) ? $top_inp : $top_lcp;
+				$segment = null;
+				if ( is_array( $anchor ) ) {
+					$segment = array(
+						'path'     => isset( $anchor['path'] ) ? (string) $anchor['path'] : '',
+						'device'   => isset( $anchor['device'] ) ? (string) $anchor['device'] : 'unknown',
+						'template' => isset( $anchor['template'] ) ? (string) $anchor['template'] : 'unknown',
+					);
+				}
+				$samples = 0;
+				if ( is_array( $anchor ) && isset( $anchor['n'] ) ) {
+					$samples = (int) $anchor['n'];
+				}
+
+				return array(
+					'qualified'   => true,
+					'level'       => $level,
+					'inp_p75'     => $inp_p75,
+					'lcp_p75'     => $lcp_p75,
+					'samples'     => $samples,
+					'min_samples' => $min,
+					'provisional' => false,
+					'segment'     => $segment,
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $fallback;
 			}
 		}
 
@@ -874,6 +1107,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				}
 			}
 
+			// RUM-gated INP-aware delay state (issue #1036): read-only, opt-in
+			// via ai_adaptive.enabled; qualified only at n>=min with INP/LCP
+			// p75 crossed. Fail-open: provisional/empty on error, never fatal,
+			// no external calls, no PII.
+			$delay_state = array(
+				'qualified'   => false,
+				'level'       => 'conservative',
+				'inp_p75'     => 0.0,
+				'lcp_p75'     => 0.0,
+				'samples'     => 0,
+				'min_samples' => $field_lcp_min,
+				'provisional' => true,
+				'segment'     => null,
+			);
+			try {
+				$live_delay = self::get_rum_gated_delay_state();
+				if ( is_array( $live_delay ) && ! empty( $live_delay ) ) {
+					$delay_state = array_merge( $delay_state, $live_delay );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
 			// Allow filter for eagerness.
 			/**
 			 * Filters AI-learned speculation eagerness.
@@ -899,6 +1155,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				'field_lcp_provisional' => $field_lcp_provisional,
 				'field_lcp_samples'     => $field_lcp_samples,
 				'field_lcp_min_samples' => $field_lcp_min,
+				'delay_js_level'        => isset( $delay_state['level'] ) ? (string) $delay_state['level'] : 'conservative',
+				'delay_inp_p75'         => isset( $delay_state['inp_p75'] ) ? (float) $delay_state['inp_p75'] : 0.0,
+				'delay_lcp_p75'         => isset( $delay_state['lcp_p75'] ) ? (float) $delay_state['lcp_p75'] : 0.0,
+				'delay_samples'         => isset( $delay_state['samples'] ) ? (int) $delay_state['samples'] : 0,
+				'delay_min_samples'     => isset( $delay_state['min_samples'] ) ? (int) $delay_state['min_samples'] : $field_lcp_min,
+				'delay_provisional'     => ! ( isset( $delay_state['qualified'] ) && $delay_state['qualified'] ),
+				'delay_qualified'       => ! empty( $delay_state['qualified'] ),
+				'delay_segment'         => isset( $delay_state['segment'] ) && is_array( $delay_state['segment'] ) ? $delay_state['segment'] : null,
 			);
 		}
 
@@ -1720,6 +1984,83 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				);
 			}
 
+			// RUM-gated INP-aware delay-JS suggestion (issue #1036): read-only,
+			// opt-in via ai_adaptive.enabled; emitted only when real-user p75
+			// crosses thresholds with sufficient samples (n>=min AND
+			// INP p75>200ms OR LCP p75>2500ms). Low samples, uncrossed
+			// thresholds, or errors emit nothing (fail-open). Commerce/auth
+			// contexts cap the level at `moderate` (never `eager`) via
+			// get_rum_gated_delay_state(). Resolves once delayJS is enabled.
+			// No external calls, no PII, no option/transient writes.
+			try {
+				$delay_qualified = array_key_exists( 'delay_qualified', $model ) ? ! empty( $model['delay_qualified'] ) : null;
+				$delay_level     = isset( $model['delay_js_level'] ) && is_string( $model['delay_js_level'] ) ? $model['delay_js_level'] : null;
+				$delay_inp       = isset( $model['delay_inp_p75'] ) ? (float) $model['delay_inp_p75'] : null;
+				$delay_lcp       = isset( $model['delay_lcp_p75'] ) ? (float) $model['delay_lcp_p75'] : null;
+				$delay_samples   = isset( $model['delay_samples'] ) ? (int) $model['delay_samples'] : null;
+				$delay_min       = isset( $model['delay_min_samples'] ) ? (int) $model['delay_min_samples'] : null;
+				$delay_segment   = isset( $model['delay_segment'] ) && is_array( $model['delay_segment'] ) ? $model['delay_segment'] : null;
+				if ( null === $delay_qualified || null === $delay_level ) {
+					// Models persisted before #1036 lack delay keys: fall back
+					// to a live read-only lookup. Fail-open to unqualified.
+					$live_delay = self::get_rum_gated_delay_state();
+					if ( is_array( $live_delay ) ) {
+						$delay_qualified = ! empty( $live_delay['qualified'] );
+						$delay_level     = isset( $live_delay['level'] ) ? (string) $live_delay['level'] : 'conservative';
+						$delay_inp       = isset( $live_delay['inp_p75'] ) ? (float) $live_delay['inp_p75'] : 0.0;
+						$delay_lcp       = isset( $live_delay['lcp_p75'] ) ? (float) $live_delay['lcp_p75'] : 0.0;
+						$delay_samples   = isset( $live_delay['samples'] ) ? (int) $live_delay['samples'] : 0;
+						$delay_min       = isset( $live_delay['min_samples'] ) ? (int) $live_delay['min_samples'] : self::field_lcp_min_samples();
+						$delay_segment   = isset( $live_delay['segment'] ) && is_array( $live_delay['segment'] ) ? $live_delay['segment'] : null;
+					}
+				}
+				if ( $delay_qualified && is_string( $delay_level ) && 'conservative' !== $delay_level ) {
+					// Commerce/auth guardrail: never propose `eager` (covers
+					// models persisted before the cap).
+					$delay_level = self::maybe_cap_eagerness( $delay_level );
+					if ( ! in_array( $delay_level, array( 'moderate', 'eager' ), true ) ) {
+						$delay_level = 'moderate';
+					}
+					$delay_settings = class_exists( 'PerformanceOptimise\Inc\Util' ) ? Util::get_settings() : array();
+					$delay_enabled  = ! empty( $delay_settings['file_optimisation']['delayJS'] );
+					if ( ! $delay_enabled && ! self::is_suggestion_dismissed( 'ai_delay_js' ) ) {
+						$delay_device   = ( is_array( $delay_segment ) && isset( $delay_segment['device'] ) ) ? (string) $delay_segment['device'] : 'unknown';
+						$delay_template = ( is_array( $delay_segment ) && isset( $delay_segment['template'] ) ) ? (string) $delay_segment['template'] : 'unknown';
+						// Anchor the copy on the crossed signal (prefer INP).
+						$crossed_inp      = (float) $delay_inp > self::INP_P75_DELAY_THRESHOLD_MS;
+						$delay_anchor_p75 = $crossed_inp ? (float) $delay_inp : (float) $delay_lcp;
+						if ( $crossed_inp ) {
+							/* translators: %1$s level, %2$s device, %3$s template, %4$s p75 seconds. */
+							$delay_value = sprintf( __( '%1$s · %2$s · %3$s · INP p75 %4$s', 'performance-optimisation' ), $delay_level, $delay_device, $delay_template, self::format_p75_seconds( (float) $delay_anchor_p75 ) );
+							/* translators: %1$s device, %2$s template, %3$s p75 seconds, %4$d sample count. */
+							$delay_description = sprintf( __( 'AI: Delay JavaScript suggestion for %1$s/%2$s (INP p75 %3$s, %4$d samples)', 'performance-optimisation' ), $delay_device, $delay_template, self::format_p75_seconds( (float) $delay_anchor_p75 ), (int) $delay_samples );
+						} else {
+							/* translators: %1$s level, %2$s device, %3$s template, %4$s p75 seconds. */
+							$delay_value = sprintf( __( '%1$s · %2$s · %3$s · LCP p75 %4$s', 'performance-optimisation' ), $delay_level, $delay_device, $delay_template, self::format_p75_seconds( (float) $delay_anchor_p75 ) );
+							/* translators: %1$s device, %2$s template, %3$s p75 seconds, %4$d sample count. */
+							$delay_description = sprintf( __( 'AI: Delay JavaScript suggestion for %1$s/%2$s (LCP p75 %3$s, %4$d samples)', 'performance-optimisation' ), $delay_device, $delay_template, self::format_p75_seconds( (float) $delay_anchor_p75 ), (int) $delay_samples );
+						}
+						$suggestions[] = array(
+							'metric'      => 'ai_delay_js',
+							'value'       => $delay_value,
+							'unit'        => 'string',
+							'status'      => 'needs_improvement',
+							'description' => $delay_description,
+							'fix_action'  => 'open_file_optimization_tab',
+							'ai_payload'  => array(
+								'tab'      => 'file_optimisation',
+								'settings' => array(
+									'delayJS'          => true,
+									'delayJSINPPreset' => true,
+								),
+							),
+						);
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
 			$prefetch = $model['prefetch_urls'] ?? array();
 			if ( is_array( $prefetch ) && ! empty( $prefetch ) ) {
 				$suggestions[] = array(
@@ -1835,6 +2176,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 						),
 					);
 				}
+			}
+
+			// Dismiss persistence (issue #1036): filter out dismissed metrics
+			// so a dismissed suggestion stays hidden across reloads until
+			// the user clears it from settings. Fail-open: lookup errors
+			// keep all suggestions.
+			try {
+				$dismissed = self::get_dismissed_suggestions();
+				if ( ! empty( $dismissed ) ) {
+					$suggestions = array_values(
+						array_filter(
+							$suggestions,
+							static function ( $s ) use ( $dismissed ) {
+								$metric = is_array( $s ) && isset( $s['metric'] ) ? (string) $s['metric'] : '';
+								return '' === $metric || ! in_array( $metric, $dismissed, true );
+							}
+						)
+					);
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 			}
 
 			// Ensure fix_action is valid per Suggestion_Engine guard (already valid).

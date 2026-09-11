@@ -653,6 +653,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$sanitized_settings['auto_rescan'] = $options['performance_audit']['auto_rescan'];
 			}
 
+			// Preserve dismissed AI suggestions when the request omits them
+			// (issue #1036): AiPanel save posts only the toggles, while the
+			// dismiss action posts the full list — a toggle save must not
+			// wipe prior dismissals.
+			if ( 'ai_adaptive' === $tab && ! isset( $params['settings']['dismissed_suggestions'] ) && isset( $options['ai_adaptive']['dismissed_suggestions'] ) ) {
+				$dismissed = $options['ai_adaptive']['dismissed_suggestions'];
+				if ( is_array( $dismissed ) ) {
+					$sanitized_dismissed = array();
+					foreach ( $dismissed as $metric ) {
+						if ( ! is_string( $metric ) ) {
+							continue;
+						}
+						$m = sanitize_text_field( $metric );
+						if ( '' !== $m ) {
+							$sanitized_dismissed[] = substr( $m, 0, 64 );
+						}
+					}
+					$sanitized_settings['dismissed_suggestions'] = array_values( array_unique( $sanitized_dismissed ) );
+				}
+			}
+
+			// Preserve the field-LCP minimum-sample threshold when the request
+			// omits it (issue #1036): AiPanel save posts only the toggles, so
+			// a toggle save must not wipe a custom threshold.
+			if ( 'ai_adaptive' === $tab && ! isset( $params['settings']['field_lcp_min_samples'] ) && isset( $options['ai_adaptive']['field_lcp_min_samples'] ) ) {
+				$sanitized_settings['field_lcp_min_samples'] = absint( $options['ai_adaptive']['field_lcp_min_samples'] );
+			}
+
 			$options[ $tab ] = $sanitized_settings;
 
 			update_option( 'wppo_settings', $options );

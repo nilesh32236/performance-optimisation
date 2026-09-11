@@ -101,9 +101,20 @@ const AiPanel = () => {
 		setSaving( true );
 		dismiss();
 		try {
+			const dismissed =
+				typeof wppoSettings !== 'undefined' &&
+				Array.isArray(
+					wppoSettings.settings?.ai_adaptive?.dismissed_suggestions
+				)
+					? wppoSettings.settings.ai_adaptive.dismissed_suggestions
+					: [];
 			const response = await apiCall( 'update_settings', {
 				tab: 'ai_adaptive',
-				settings: { enabled, use_wp_ai_client: useWpAiClient },
+				settings: {
+					enabled,
+					use_wp_ai_client: useWpAiClient,
+					dismissed_suggestions: dismissed,
+				},
 			} );
 			if ( response.success ) {
 				if (
@@ -115,6 +126,7 @@ const AiPanel = () => {
 						ai_adaptive: Object.freeze( {
 							enabled,
 							use_wp_ai_client: useWpAiClient,
+							dismissed_suggestions: dismissed,
 						} ),
 					} );
 				}
@@ -240,6 +252,85 @@ const AiPanel = () => {
 		}
 	};
 
+	const handleDismiss = async ( suggestion ) => {
+		const metric = suggestion?.metric;
+		if ( ! metric ) {
+			return;
+		}
+		const current =
+			typeof wppoSettings !== 'undefined' &&
+			Array.isArray(
+				wppoSettings.settings?.ai_adaptive?.dismissed_suggestions
+			)
+				? [ ...wppoSettings.settings.ai_adaptive.dismissed_suggestions ]
+				: [];
+		if ( ! current.includes( metric ) ) {
+			current.push( metric );
+		}
+		// Optimistic hide so dismissal feels instant; refetch on failure.
+		setSuggestions( ( prev ) =>
+			prev.filter( ( s ) => s.metric !== metric )
+		);
+		try {
+			const res = await apiCall( 'update_settings', {
+				tab: 'ai_adaptive',
+				settings: {
+					enabled,
+					use_wp_ai_client: useWpAiClient,
+					dismissed_suggestions: current,
+				},
+			} );
+			if ( res.success ) {
+				if (
+					typeof wppoSettings !== 'undefined' &&
+					wppoSettings.settings
+				) {
+					const prevAdaptive =
+						wppoSettings.settings.ai_adaptive || {};
+					wppoSettings.settings = Object.freeze( {
+						...wppoSettings.settings,
+						ai_adaptive: Object.freeze( {
+							...prevAdaptive,
+							enabled,
+							use_wp_ai_client: useWpAiClient,
+							dismissed_suggestions: Object.freeze( [
+								...current,
+							] ),
+						} ),
+					} );
+				}
+				notify( {
+					type: 'success',
+					message: __(
+						'Suggestion dismissed.',
+						'performance-optimisation'
+					),
+					durationMs: 3000,
+				} );
+			} else {
+				notify( {
+					type: 'error',
+					message:
+						res.message ||
+						__(
+							'Failed to dismiss suggestion.',
+							'performance-optimisation'
+						),
+				} );
+				fetchSuggestions();
+			}
+		} catch {
+			notify( {
+				type: 'error',
+				message: __(
+					'Failed to dismiss suggestion.',
+					'performance-optimisation'
+				),
+			} );
+			fetchSuggestions();
+		}
+	};
+
 	return (
 		<FeatureCard
 			title={ __( 'AI Adaptive', 'performance-optimisation' ) }
@@ -348,6 +439,26 @@ const AiPanel = () => {
 									>
 										{ __(
 											'Apply',
+											'performance-optimisation'
+										) }
+									</button>
+								) }
+								{ s.metric && (
+									<button
+										type="button"
+										className="wppo-button wppo-button--sm wppo-button--secondary wppo-ml-8"
+										onClick={ () => handleDismiss( s ) }
+										aria-label={ sprintf(
+											// translators: %s is the suggestion description.
+											__(
+												'Dismiss: %s',
+												'performance-optimisation'
+											),
+											s.description
+										) }
+									>
+										{ __(
+											'Dismiss',
 											'performance-optimisation'
 										) }
 									</button>
