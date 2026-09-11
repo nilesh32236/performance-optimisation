@@ -223,9 +223,6 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			'import_settings',
 			'database_cleanup',
 			'database_cleanup_counts',
-			// @deprecated NEXT get_page_assets is deprecated but still registered
-			// for one release; removal happens next release (#900).
-			'get_page_assets',
 			'image_job_status',
 			'object_cache',
 			'system_info',

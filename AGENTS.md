@@ -87,7 +87,6 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (3
 | `import_settings` | POST | Import settings JSON |
 | `database_cleanup` | POST | Run cleanup by type |
 | `database_cleanup_counts` | GET | Counts per cleanup type |
-| `get_page_assets` | GET | Captured frontend assets (deprecated, removal pending) |
 | `image_job_status` | GET | Image conversion job status |
 | `object_cache` | POST | Redis status/enable/disable/flush/ping |
 | `system_info` | GET | PHP/DB/WP/Server/Cache info |
