@@ -172,13 +172,47 @@ class ObjectCacheRedisResilienceTest extends \PHPUnit\Framework\TestCase {
 		$this->assertIsArray( $resolved );
 		$this->assertArrayHasKey( 'serializer', $resolved );
 		$this->assertArrayHasKey( 'name', $resolved );
-		$this->assertContains( $resolved['name'], array( 'igbinary', 'msgpack', 'php' ) );
+		$this->assertContains( $resolved['name'], array( 'igbinary', 'php' ) );
 
 		// Without the igbinary extension loaded, the resolver must not
 		// select igbinary: any other outcome would risk mis-serialization.
 		if ( ! extension_loaded( 'igbinary' ) && ! function_exists( 'igbinary_serialize' ) ) {
 			$this->assertNotSame( 'igbinary', $resolved['name'] );
 		}
+	}
+
+	/**
+	 * Resolver never selects msgpack (migration safety, issue #1022).
+	 *
+	 * Object-cache entries on existing sites were written with
+	 * SERIALIZER_PHP; selecting msgpack on a host that has ext-msgpack but no
+	 * igbinary would make those entries unreadable (Redis serialization is not
+	 * self-describing and there is no flush-on-serializer-change). The probe
+	 * chain must therefore be igbinary → PHP only.
+	 */
+	public function test_serializer_resolver_never_selects_msgpack(): void {
+		$this->assertTrue( function_exists( 'wppo_normalize_redis_serializer_choice' ) );
+
+		// Pure decision: without igbinary it must fall straight to PHP, even
+		// when ext-msgpack is explicitly reported as available. The second
+		// argument exists so this policy is provable on hosts that do not
+		// define SERIALIZER_MSGPACK at all.
+		$without_igbinary = wppo_normalize_redis_serializer_choice( false, true );
+		$this->assertSame( 'php', $without_igbinary['name'], 'No igbinary must mean PHP — never msgpack, even when msgpack is available.' );
+		$this->assertNotSame( 'msgpack', $without_igbinary['name'] );
+
+		// With igbinary the choice is igbinary (when phpredis exposes it).
+		$with_igbinary = wppo_normalize_redis_serializer_choice( true, true );
+		if ( defined( '\Redis::SERIALIZER_IGBINARY' ) ) {
+			$this->assertSame( 'igbinary', $with_igbinary['name'] );
+		} else {
+			$this->assertSame( 'php', $with_igbinary['name'] );
+		}
+
+		// The live resolver must never surface msgpack either.
+		$resolved = wppo_resolve_redis_serializer();
+		$this->assertNotSame( 'msgpack', $resolved['name'] );
+		$this->assertContains( $resolved['name'], array( 'igbinary', 'php' ) );
 	}
 
 	/**
@@ -370,7 +404,8 @@ class ObjectCacheRedisResilienceTest extends \PHPUnit\Framework\TestCase {
 		$support = $manager->get_serializer_support();
 
 		$this->assertTrue( $support['php'] );
-		$this->assertContains( $support['active'], array( 'igbinary', 'msgpack', 'php' ) );
+		$this->assertContains( $support['active'], array( 'igbinary', 'php' ) );
+		$this->assertNotSame( 'msgpack', $support['active'], 'msgpack must never be reported as the active serializer.' );
 		if ( ! extension_loaded( 'igbinary' ) && ! function_exists( 'igbinary_serialize' ) ) {
 			$this->assertFalse( $support['igbinary'] );
 		}

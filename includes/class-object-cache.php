@@ -1002,9 +1002,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * Report which serializers the current phpredis build can safely use.
 		 *
 		 * Mirrors the wppo_resolve_redis_serializer() probe (igbinary only
-		 * when the extension is present, msgpack gated on extension + redis
-		 * >= 5.0.0, PHP always) without touching a connection, for the REST
-		 * status payload and SPA capability display.
+		 * when the extension is present, otherwise PHP) without touching a
+		 * connection, for the REST status payload and SPA capability display.
+		 * The `msgpack` key only reports ext-msgpack availability; msgpack is
+		 * never auto-selected because doing so would make existing
+		 * SERIALIZER_PHP entries unreadable on upgrade.
 		 *
 		 * @since NEXT
 		 * @return array Shape { active: string, igbinary: bool, msgpack: bool, php: bool }.
