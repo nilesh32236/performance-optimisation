@@ -198,11 +198,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 						<table class="widefat fixed striped" style="margin-bottom: 15px;">
 							<thead>
 								<tr>
-									<th style="width: 30px;"><?php esc_html_e( 'Disable', 'performance-optimisation' ); ?></th>
-									<th><?php esc_html_e( 'Handle', 'performance-optimisation' ); ?></th>
-									<th><?php esc_html_e( 'Source', 'performance-optimisation' ); ?></th>
-									<th style="width: 130px;"><?php esc_html_e( 'Delay Strategy', 'performance-optimisation' ); ?></th>
-									<th style="width: 90px;"><?php esc_html_e( 'Priority', 'performance-optimisation' ); ?></th>
+									<th scope="col" style="width: 30px;"><?php esc_html_e( 'Disable', 'performance-optimisation' ); ?></th>
+									<th scope="col"><?php esc_html_e( 'Handle', 'performance-optimisation' ); ?></th>
+									<th scope="col"><?php esc_html_e( 'Source', 'performance-optimisation' ); ?></th>
+									<th scope="col" style="width: 130px;"><?php esc_html_e( 'Delay Strategy', 'performance-optimisation' ); ?></th>
+									<th scope="col" style="width: 90px;"><?php esc_html_e( 'Priority', 'performance-optimisation' ); ?></th>
 								</tr>
 							</thead>
 							<tbody>
@@ -286,9 +286,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 						<table class="widefat fixed striped">
 							<thead>
 								<tr>
-									<th style="width: 30px;"><?php esc_html_e( 'Disable', 'performance-optimisation' ); ?></th>
-									<th><?php esc_html_e( 'Handle', 'performance-optimisation' ); ?></th>
-									<th><?php esc_html_e( 'Source', 'performance-optimisation' ); ?></th>
+									<th scope="col" style="width: 30px;"><?php esc_html_e( 'Disable', 'performance-optimisation' ); ?></th>
+									<th scope="col"><?php esc_html_e( 'Handle', 'performance-optimisation' ); ?></th>
+									<th scope="col"><?php esc_html_e( 'Source', 'performance-optimisation' ); ?></th>
 								</tr>
 							</thead>
 							<tbody>

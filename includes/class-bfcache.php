@@ -358,10 +358,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 			// the plugin cannot know a site's nonce value, so it deliberately
 			// does not emit one itself.
 			//
+			// The `pageshow` listener registered below is intentionally
+			// page-scoped (audit #1077 finding 4): the script runs once per
+			// document, and the listener is discarded with the document on the
+			// next navigation, so it does not need an explicit
+			// removeEventListener() teardown. The invalidation itself only
+			// reloads the page (with a cache-busting query arg); it must not
+			// wipe `documentElement.innerHTML` or hide the page — the abrupt
+			// DOM/opacity mutation caused avoidable flicker and could race the
+			// in-flight navigation. Reload is sufficient to drop stale private
+			// content.
+			//
 			// Use wp_print_inline_script_tag if available (WP 6.0+), else echo.
 			$json_flags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
 			$js         = sprintf(
-				'(function(){var c=%1$s,t=%2$s,q="wppo_bfcache_reloaded";function g(){var p=c+"=",a=document.cookie.split(/; */);for(var i=0;i<a.length;i++){var kv=a[i];if(kv.indexOf(p)===0){return decodeURIComponent(kv.substring(p.length))}}return null}function i(){var u=new URL(window.location.href);if(u.searchParams.has(q))return;document.documentElement.style.opacity="0";try{document.documentElement.innerHTML=""}catch(e){}u.searchParams.set(q,String(Math.random()));history.replaceState({},\"\",u.href);window.location.reload()}function h(e){if(e.persisted&&t!==g()){i();return}var u=new URL(window.location.href);if(u.searchParams.has(q)){u.searchParams.delete(q);history.replaceState({},\"\",u.href)}}if(t!==g()){i()}else{window.addEventListener("pageshow",h)}})();',
+				'(function(){var c=%1$s,t=%2$s,q="wppo_bfcache_reloaded";function g(){var p=c+"=",a=document.cookie.split(/; */);for(var i=0;i<a.length;i++){var kv=a[i];if(kv.indexOf(p)===0){return decodeURIComponent(kv.substring(p.length))}}return null}function i(){var u=new URL(window.location.href);if(u.searchParams.has(q))return;u.searchParams.set(q,String(Math.random()));history.replaceState({},\"\",u.href);window.location.reload()}function h(e){if(e.persisted&&t!==g()){i();return}var u=new URL(window.location.href);if(u.searchParams.has(q)){u.searchParams.delete(q);history.replaceState({},\"\",u.href)}}if(t!==g()){i()}else{window.addEventListener("pageshow",h)}})();',
 				wp_json_encode( $cookie_name, $json_flags ),
 				wp_json_encode( $token, $json_flags )
 			);

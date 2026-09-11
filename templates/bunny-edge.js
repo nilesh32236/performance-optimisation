@@ -56,7 +56,7 @@ async function handleRequest(event) {
     response.headers.set('Cache-Control', 'public, max-age={{CACHE_TTL}}, stale-while-revalidate={{SWR}}');
     response.headers.set('X-Edge-Cache', 'MISS');
     response.headers.set('X-WPPO-Edge', 'bunny');
-    event.waitUntil(cache.put(request, response.clone()));
+    event.waitUntil(cache.put(request, response.clone()).catch(() => {}));
     return response;
   }
   return originResponse;

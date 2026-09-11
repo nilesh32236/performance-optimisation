@@ -1027,6 +1027,8 @@ const clearSafetyScan = () => {
  * pagehide/beforeunload and is exposed as window.wppoLazyloadTeardown for
  * tests and SPA-style teardown (call it before removing this module's script
  * element dynamically; nothing observes script-element removal automatically).
+ * Also deletes the `window.wppoNativeLazy` / `window.wppoDelayConfig` config
+ * globals injected by Main::enqueue_scripts() on the WP <6.9 classic path.
  *
  * @since NEXT
  */
@@ -1050,6 +1052,17 @@ const teardownLazyload = () => {
 	if ( backgroundObserver ) {
 		backgroundObserver.disconnect();
 		backgroundObserver = null;
+	}
+	// Release the PHP-injected config globals (WP <6.9 classic-script path,
+	// Main::enqueue_scripts()) so dynamically removing this script element
+	// does not leave stale config behind (audit #1077 finding 9). Built-in
+	// globals assigned via `window.wppoNativeLazy = …` are configurable, but
+	// a third party could have frozen them — ignore delete failures.
+	try {
+		delete window.wppoNativeLazy;
+		delete window.wppoDelayConfig;
+	} catch {
+		// Non-configurable global; nothing to release.
 	}
 };
 

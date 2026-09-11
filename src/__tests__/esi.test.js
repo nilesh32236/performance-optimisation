@@ -186,6 +186,152 @@ describe( 'ESI placeholder hydration (esi.js)', () => {
 		hydrateESIPlaceholders();
 		expect( global.fetch ).not.toHaveBeenCalled();
 	} );
+
+	it( 'clears loading ARIA and sets a translated error label on !res.ok', async () => {
+		document.body.innerHTML =
+			'<div data-wppo-esi="cart" data-nonce="abc" role="status" aria-live="polite" aria-busy="true" aria-label="Loading shopping cart…"></div>';
+		const el = document.querySelector( '[data-wppo-esi="cart"]' );
+
+		global.fetch.mockResolvedValueOnce( {
+			ok: false,
+			status: 500,
+			json: async () => ( { success: false } ),
+		} );
+
+		await hydrateElement( el );
+
+		// AT must not be stuck announcing the loading state forever.
+		expect( el.hasAttribute( 'role' ) ).toBe( false );
+		expect( el.hasAttribute( 'aria-live' ) ).toBe( false );
+		expect( el.hasAttribute( 'aria-busy' ) ).toBe( false );
+		expect( el.getAttribute( 'aria-label' ) ).toBe(
+			'Embedded content failed to load.'
+		);
+		expect( console.warn ).toHaveBeenCalled();
+	} );
+
+	it( 'refreshes the nonce via the nonce block and retries once on 403', async () => {
+		document.body.innerHTML =
+			'<div data-wppo-esi="cart" data-nonce="stale"></div>';
+		const el = document.querySelector( '[data-wppo-esi="cart"]' );
+
+		// 1) Original request: 403 auth failure.
+		global.fetch.mockResolvedValueOnce( {
+			ok: false,
+			status: 403,
+			json: async () => ( { code: 'rest_forbidden' } ),
+		} );
+		// 2) Nonce refresh via the public `nonce` block.
+		global.fetch.mockResolvedValueOnce( {
+			ok: true,
+			status: 200,
+			json: async () => ( {
+				success: true,
+				data: { html: 'freshnonce' },
+			} ),
+		} );
+		// 3) Retry with the fresh nonce.
+		global.fetch.mockResolvedValueOnce( {
+			ok: true,
+			status: 200,
+			json: async () => ( {
+				success: true,
+				data: { html: '<span>cart(9)</span>' },
+			} ),
+		} );
+
+		await hydrateElement( el );
+
+		expect( global.fetch ).toHaveBeenCalledTimes( 3 );
+		const refreshBody = global.fetch.mock.calls[ 1 ][ 1 ].body;
+		expect( refreshBody.get( 'block' ) ).toBe( 'nonce' );
+		expect( refreshBody.get( '_wpnonce' ) ).toBe( null );
+		const retryBody = global.fetch.mock.calls[ 2 ][ 1 ].body;
+		expect( retryBody.get( 'block' ) ).toBe( 'cart' );
+		expect( retryBody.get( '_wpnonce' ) ).toBe( 'freshnonce' );
+		expect( el.innerHTML ).toBe( '<span>cart(9)</span>' );
+	} );
+
+	it( 'warns and clears loading ARIA when the retry also fails', async () => {
+		document.body.innerHTML =
+			'<div data-wppo-esi="adminbar" data-nonce="stale" role="status" aria-live="polite" aria-busy="true"></div>';
+		const el = document.querySelector( '[data-wppo-esi="adminbar"]' );
+
+		// Original + retried request both 401; refresh returns a nonce.
+		global.fetch.mockResolvedValueOnce( {
+			ok: false,
+			status: 401,
+			json: async () => ( { code: 'rest_forbidden' } ),
+		} );
+		global.fetch.mockResolvedValueOnce( {
+			ok: true,
+			status: 200,
+			json: async () => ( {
+				success: true,
+				data: { html: 'freshnonce' },
+			} ),
+		} );
+		global.fetch.mockResolvedValueOnce( {
+			ok: false,
+			status: 401,
+			json: async () => ( { code: 'rest_forbidden' } ),
+		} );
+
+		await hydrateElement( el );
+
+		expect( console.warn ).toHaveBeenCalled();
+		expect( el.hasAttribute( 'aria-busy' ) ).toBe( false );
+		expect( el.hasAttribute( 'role' ) ).toBe( false );
+		expect( el.getAttribute( 'aria-label' ) ).toBe(
+			'Embedded content failed to load.'
+		);
+	} );
+
+	it( 'threads an AbortSignal through fetches and aborts it on pagehide', async () => {
+		document.body.innerHTML =
+			'<div data-wppo-esi="cart" data-nonce="n"></div>';
+		global.fetch.mockResolvedValue( {
+			ok: true,
+			status: 200,
+			json: async () => ( {
+				success: true,
+				data: { html: '<b>x</b>' },
+			} ),
+		} );
+
+		hydrateESIPlaceholders();
+		await new Promise( ( r ) => setTimeout( r, 0 ) );
+
+		const signal = global.fetch.mock.calls[ 0 ][ 1 ].signal;
+		expect( signal ).toBeDefined();
+		expect( signal.aborted ).toBe( false );
+
+		window.dispatchEvent( new Event( 'pagehide' ) );
+		expect( signal.aborted ).toBe( true );
+	} );
+
+	it( 'honours an explicit AbortSignal passed to hydrateElement', async () => {
+		document.body.innerHTML =
+			'<div data-wppo-esi="cart" data-nonce="n"></div>';
+		const el = document.querySelector( '[data-wppo-esi="cart"]' );
+		const controller = new AbortController();
+
+		global.fetch.mockResolvedValueOnce( {
+			ok: true,
+			status: 200,
+			json: async () => ( {
+				success: true,
+				data: { html: '<span>cart(2)</span>' },
+			} ),
+		} );
+
+		await hydrateElement( el, controller.signal );
+
+		expect( global.fetch.mock.calls[ 0 ][ 1 ].signal ).toBe(
+			controller.signal
+		);
+		expect( el.innerHTML ).toBe( '<span>cart(2)</span>' );
+	} );
 } );
 
 describe( 'sanitizeEsiFragment (defense-in-depth DOM sanitizer)', () => {

@@ -92,7 +92,7 @@ export default {
       response.headers.set('X-Edge-Cache', 'MISS');
       response.headers.set('X-WPPO-Edge', 'cloudflare');
       // Origin: {{ORIGIN_URL}}
-      ctx.waitUntil(cache.put(cacheKey, response.clone()));
+      ctx.waitUntil(cache.put(cacheKey, response.clone()).catch(() => {}));
       return response;
     }
 
