@@ -531,43 +531,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
-		 * Whether core 6.9+ block-style hoisting owns block styles on this request.
-		 *
-		 * True only when the version-gated separate-assets state is on: core
-		 * hoists on-demand block styles itself (classic-theme on-demand loader
-		 * `wp_load_classic_theme_block_styles_on_demand()` plus the
-		 * `wp_should_output_buffer_template_for_enhancement()` template-enhancement
-		 * buffer on 6.9+), so the combine pipeline must still minify eligible
-		 * non-block handles but let core hoist — never pull `wp-block-*`
-		 * handles into the combined file. Fail-open: any missing symbol or
-		 * detection exception returns false (legacy combine behavior, never fatal).
-		 *
-		 * @return bool True when core owns block-style hoisting on this request.
-		 * @since NEXT
-		 */
-		private function is_core_block_hoisting_active(): bool {
-			// Version gate first: pre-6.9 cores stay on the legacy path even
-			// when the separate-assets symbol was backported.
-			if ( isset( $GLOBALS['wp_version'] ) && version_compare( $GLOBALS['wp_version'], '6.9-alpha', '<' ) ) {
-				return false;
-			}
-			try {
-				if ( ! function_exists( 'wp_should_load_separate_core_block_assets' ) || ! wp_should_load_separate_core_block_assets() ) {
-					return false;
-				}
-				// When the 6.9+ template-enhancement buffer is active, core
-				// definitively owns hoisting — record the state, same outcome.
-				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && wp_should_output_buffer_template_for_enhancement() ) {
-					return true;
-				}
-				return true;
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return false;
-			}
-		}
-
-		/**
 		 * Whether a style handle belongs to the core block-assets family.
 		 *
 		 * On WP 6.9+ with separate block assets active, the combined stylesheet
@@ -667,21 +630,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// would force the wp-block-library monolith (or per-block styles for
 			// blocks not even on the page) back into the head and fight core's
 			// conditional loading. Belt-and-suspenders: these handles are normally
-			// not in the queue on 6.9 anyway. When core hoisting is active the
-			// pipeline still minifies eligible non-block handles below but lets
-			// core hoist block styles (yield where core wins; combine is the
-			// fallback, not a competitor). The `should_load_separate_core_block_assets`
-			// opt-out filter is honoured via block_assets_are_separate(): an
-			// explicit opt-out restores the legacy monolith path.
+			// not in the queue on 6.9 anyway. The pipeline still minifies eligible
+			// non-block handles below but lets core hoist block styles (yield where
+			// core wins; combine is the fallback, not a competitor). The
+			// `should_load_separate_core_block_assets` opt-out filter is honoured
+			// via block_assets_are_separate(): an explicit opt-out restores the
+			// legacy monolith path.
 			$separate_block_assets = $this->block_assets_are_separate();
-			$core_hoisting         = $this->is_core_block_hoisting_active();
 
 			// The effective separate-assets state is baked into the combined-CSS
 			// cache filename, so a 6.8 -> 6.9 upgrade (which flips separate block
 			// assets on by default for classic themes) cannot keep serving a stale
 			// combined monolith built while wp-block-library was still in the queue.
-			// Core hoisting implies the separate variant (same handle set).
-			$css_variant = ( $separate_block_assets || $core_hoisting ) ? 'separate' : '';
+			$css_variant = $separate_block_assets ? 'separate' : '';
 
 			// The set of handles this request would pull into the combined file. The
 			// same skip rules are applied below during generation so the two branches
@@ -1379,22 +1340,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Reads the core `styles_inline_size_limit` budget.
 		 *
-		 * Core's default is version-dependent: 20KB before WP 6.9, 40KB on 6.9+.
-		 * Site-level overrides through the `styles_inline_size_limit` filter always
-		 * win. `$GLOBALS['wp_version']` may be absent in some contexts, in which
-		 * case the newest default is used.
+		 * Delegates to the single shared implementation in
+		 * {@see Util::get_styles_inline_limit()} so this class and Critical_CSS
+		 * cannot disagree during the 6.9 pre-release window.
 		 *
 		 * @since 1.9.0
 		 *
 		 * @return int The inline size limit in bytes.
 		 */
 		private function get_styles_inline_limit(): int {
-			$default = 40000;
-			if ( isset( $GLOBALS['wp_version'] ) && version_compare( $GLOBALS['wp_version'], '6.9-alpha', '<' ) ) {
-				$default = 20000;
-			}
-
-			return (int) apply_filters( 'styles_inline_size_limit', $default );
+			return Util::get_styles_inline_limit();
 		}
 
 		/**

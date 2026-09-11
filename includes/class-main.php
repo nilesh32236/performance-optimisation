@@ -934,6 +934,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// Critical CSS hooks.
 			if ( ! empty( $this->options['file_optimisation']['criticalCSS'] ) ) {
 				add_action( 'wp_head', array( 'PerformanceOptimise\Inc\Critical_CSS', 'inline_ccss' ), 0 );
+				// Checksum auto-regen (issue #1038) must run once $wp_styles->queue
+				// is final: the `wp_enqueue_scripts` action fires inside core's
+				// `wp_head` priority-1 `wp_enqueue_scripts()` call, AFTER theme and
+				// plugin enqueues but BEFORE core's `wp_maybe_inline_styles()`.
+				// inline_ccss() at wp_head:0 runs too early (queue still empty) and
+				// no longer performs the probe itself.
+				add_action( 'wp_enqueue_scripts', array( 'PerformanceOptimise\Inc\Critical_CSS', 'maybe_check_stale_on_enqueue' ), PHP_INT_MAX );
 				add_filter( 'style_loader_tag', array( 'PerformanceOptimise\Inc\Critical_CSS', 'defer_stylesheets' ), 10, 3 );
 				add_action( 'wppo_generate_ccss', array( 'PerformanceOptimise\Inc\Critical_CSS', 'background_generate' ), 10, 1 );
 			}

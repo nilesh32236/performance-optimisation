@@ -661,10 +661,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * A handle opted into core's inline pass via `wp_style_add_data(
 		 * $handle, 'path', ... )` (see Main::minify_queued_styles()) emits an
 		 * inline `<style>` on the fetched page instead of a `<link>`, so the
-		 * generation-side source set never contains it. The probe runs on
-		 * `wp_head` priority 0, before core's inline pass at priority 1, so
-		 * its handles still carry `src` — it must exclude them explicitly or
-		 * the two domains diverge permanently (issue #1038).
+		 * generation-side source set never contains it. The probe runs on the
+		 * `wp_enqueue_scripts` action at PHP_INT_MAX — inside core's `wp_head`
+		 * priority-1 `wp_enqueue_scripts()` call, after theme/plugin enqueues
+		 * but before core's inline pass — so its handles still carry `src` and
+		 * it must exclude them explicitly or the two domains diverge
+		 * permanently (issue #1038).
 		 *
 		 * Mirrors core's candidate selection (extra `path` set with a `src`,
 		 * path exists) and its size-ordered total limit so the exclusion
@@ -773,14 +775,65 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		/**
 		 * Checksum freshness probe wired into the production path (issue #1038).
 		 *
-		 * Called from `inline_ccss()` before serving the stored variant: when
-		 * a source checksum was baselined at generation time and the current
-		 * locally-available stylesheets hash differently, the stale variant is
-		 * dropped (via `maybe_refresh_from_local_css()`) so this same hit falls
-		 * through to the existing background-regen queue. Fail-open and cheap:
-		 * no stored checksum (or no local source) returns false immediately
-		 * without local reads, and the verdict is memoized per template per
-		 * request.
+		 * Invoked from the `wp_enqueue_scripts` action at PHP_INT_MAX (see
+		 * Main::setup_hooks()) — i.e. inside core's `wp_head` priority-1
+		 * `wp_enqueue_scripts()` call, once `$wp_styles->queue` is final and
+		 * before core's `wp_maybe_inline_styles()` pass. `inline_ccss()` no
+		 * longer calls this at `wp_head` priority 0 because the styles queue
+		 * is empty that early, so the probe could never see a source change.
+		 *
+		 * When a source checksum was baselined at generation time and the
+		 * current locally-available stylesheets hash differently, the stale
+		 * variant is dropped (via `maybe_refresh_from_local_css()`) so the
+		 * NEXT request's `inline_ccss()` (priority 0) finds no variant and
+		 * re-queues background generation through the existing path.
+		 * Fail-open and cheap: no stored checksum (or no local source) returns
+		 * false immediately without local reads, and the verdict is memoized
+		 * per template per request.
+		 *
+		 * Inert without a user safelist: the checksum auto-regen is part of the
+		 * `ccssSafelistExtra` feature (issue #1038), so an empty safelist keeps
+		 * the pre-feature behaviour verbatim — no new regeneration churn.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public static function maybe_check_stale_on_enqueue(): void {
+			if ( is_admin() ) {
+				return;
+			}
+			if ( is_user_logged_in() ) {
+				$options = Util::get_settings();
+				$enabled = ! empty( $options['cache_settings']['enableLoggedInCache'] ?? false );
+				if ( ! $enabled ) {
+					return;
+				}
+			}
+
+			// Mirror inline_ccss(): operators who disabled plugin inlining get
+			// no critical-CSS pipeline at all, so skip the freshness probe too.
+			if ( ! self::is_inline_allowed() ) {
+				return;
+			}
+
+			try {
+				self::maybe_check_stale_and_requeue( self::get_template_hash() );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Checksum freshness probe (issue #1038).
+		 *
+		 * Called by `maybe_check_stale_on_enqueue()`: when a source checksum
+		 * was baselined at generation time and the current locally-available
+		 * stylesheets hash differently, the stale variant is dropped (via
+		 * `maybe_refresh_from_local_css()`) so the next `inline_ccss()` hit
+		 * falls through to the existing background-regen queue. Fail-open and
+		 * cheap: no stored checksum (or no local source) returns false
+		 * immediately without local reads, and the verdict is memoized per
+		 * template per request.
 		 *
 		 * Inert without a user safelist: the checksum auto-regen is part of the
 		 * `ccssSafelistExtra` feature (issue #1038), so an empty safelist keeps
@@ -821,22 +874,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		/**
 		 * Read core's `styles_inline_size_limit` budget.
 		 *
-		 * Mirrors the version-dependent default in Cache::get_styles_inline_limit():
-		 * 20KB before WP 6.9, 40KB on 6.9+. Site-level overrides through the
-		 * `styles_inline_size_limit` filter always win.
+		 * Delegates to the single shared implementation in
+		 * {@see Util::get_styles_inline_limit()} so Cache and Critical_CSS
+		 * cannot disagree during the 6.9 pre-release window.
 		 *
 		 * @return int The inline size limit in bytes.
 		 * @since NEXT
 		 */
 		private static function get_styles_inline_limit(): int {
-			$default = 40000;
-			if ( isset( $GLOBALS['wp_version'] ) && version_compare( (string) $GLOBALS['wp_version'], '6.9', '<' ) ) {
-				$default = 20000;
-			}
-			if ( ! function_exists( 'apply_filters' ) ) {
-				return $default;
-			}
-			return (int) apply_filters( 'styles_inline_size_limit', $default );
+			return Util::get_styles_inline_limit();
 		}
 
 		/**
@@ -1998,15 +2044,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 
 			$template_slug = self::get_current_template_slug();
 			$template_hash = self::get_template_hash( $template_slug );
-
-			// Checksum auto-regen (issue #1038): drop a content-stale variant
-			// so this hit re-queues generation below. Fail-open: no stored
-			// checksum (or no local source) is a no-op.
-			try {
-				self::maybe_check_stale_and_requeue( $template_hash );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
 
 			$content = self::get_ccss_content( $template_hash );
 			if ( null !== $content ) {
