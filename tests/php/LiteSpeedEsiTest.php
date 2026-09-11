@@ -142,6 +142,31 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 		$this->assertStringNotContainsString( '__WPPO_ESI_NONCE__', $result );
 	}
 
+	public function test_inject_nonce_replacement_uses_prefixed_wildcard_key(): void {
+		Functions\when( 'wp_create_nonce' )->alias(
+			static function ( $action ) {
+				return 'testnonce_' . $action;
+			}
+		);
+		Functions\when( 'wp_salt' )->justReturn( 'salt123' );
+		Functions\when( 'sanitize_text_field' )->returnArg();
+		Functions\when( 'esc_attr' )->returnArg();
+		Functions\when( 'get_transient' )->justReturn( false );
+		Functions\when( 'apply_filters' )->returnArg( 2 );
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'is_multisite' )->justReturn( false );
+		$written = array();
+		Functions\when( 'set_transient' )->alias(
+			static function ( $key, $value, $expiry = 0 ) use ( &$written ) {
+				$written[] = $key;
+				return true;
+			}
+		);
+		$content = '<div data-wppo-nonce="__WPPO_ESI_NONCE__"></div>';
+		LiteSpeed_ESI::inject_nonce_replacement( $content );
+		$this->assertContains( 'wppo_esi_nonces', $written, 'Wildcard allowlist transient must be wppo_-prefixed to avoid collisions.' );
+	}
+
 	public function test_ajax_handler_returns_json_and_headers(): void {
 		$this->set_litespeed( true );
 		$headers = array();

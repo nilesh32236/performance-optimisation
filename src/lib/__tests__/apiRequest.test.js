@@ -651,6 +651,39 @@ describe( 'API Request library', () => {
 		} );
 	} );
 
+	describe( 'fetchWooCacheSelfTest', () => {
+		it( 'should call apiCall with correct parameters for fetchWooCacheSelfTest', async () => {
+			const mockData = { success: true, data: { all_pass: true } };
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( mockData ),
+			} );
+
+			const { fetchWooCacheSelfTest } = await import( '../apiRequest' );
+			const result = await fetchWooCacheSelfTest();
+
+			expect( global.fetch ).toHaveBeenCalledWith(
+				'http://test.com/wp-json/wppo/v1/woo_cache_self_test',
+				{
+					method: 'GET',
+					headers: {
+						'X-WP-Nonce': 'testnonce',
+					},
+				}
+			);
+			expect( result ).toEqual( mockData );
+		} );
+
+		it( 'should throw an error on sad path network failure', async () => {
+			const mockError = new Error( 'Network error' );
+			global.fetch.mockRejectedValueOnce( mockError );
+
+			const { fetchWooCacheSelfTest } = await import( '../apiRequest' );
+			await expect( fetchWooCacheSelfTest() ).rejects.toThrow(
+				'Network error'
+			);
+		} );
+	} );
+
 	describe( 'scan input validation', () => {
 		it( 'exposes isValidScanStrategy for mobile/desktop with optional empty', async () => {
 			const { isValidScanStrategy } = await import( '../apiRequest' );

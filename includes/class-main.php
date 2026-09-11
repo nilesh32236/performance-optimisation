@@ -202,6 +202,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private static ?Main $instance = null;
 
 		/**
+		 * Per-request cache for the `_wppo_delay_disabled` kill-switch lookups.
+		 *
+		 * Keyed by `blog_id:post_id` so multisite `switch_to_blog()` contexts
+		 * never leak one site's kill-switch state into another site sharing the
+		 * same post ID (#1037). Cleared per key by
+		 * {@see invalidate_delay_kill_switch_cache()}.
+		 *
+		 * @var array<string, bool>
+		 * @since NEXT
+		 */
+		private static array $delay_disabled_page_cache = array();
+
+		/**
 		 * Get the current Main instance (null before construction / in tests).
 		 *
 		 * @since NEXT
@@ -340,6 +353,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 			if ( ! isset( $this->options['ai_adaptive']['field_lcp_min_samples'] ) ) {
 				$this->options['ai_adaptive']['field_lcp_min_samples'] = 20;
+			}
+			if ( ! isset( $this->options['ai_adaptive']['anomaly_cooldown_days'] ) ) {
+				$this->options['ai_adaptive']['anomaly_cooldown_days'] = 7;
+			}
+			if ( ! isset( $this->options['ai_adaptive']['anomaly_min_samples'] ) ) {
+				$this->options['ai_adaptive']['anomaly_min_samples'] = 10;
 			}
 
 			if ( ! isset( $this->options['edge_cache'] ) || ! is_array( $this->options['edge_cache'] ) ) {
@@ -612,6 +631,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// never stacks on top of an active core buffer.
 				add_action( 'template_redirect', array( $this->cache, 'start_output_buffer' ) );
 				add_action( 'save_post', array( $this, 'on_save_post_invalidate_cache' ), 10, 3 );
+				// Per-page delay kill-switch single-URL purge (#1037): programmatic
+				// `_wppo_delay_disabled` writes (REST, WP-CLI, imports) purge that
+				// URL only via invalidate_delay_kill_switch_cache() — never a
+				// full-cache wipe. The metabox save path is covered by save_post
+				// above plus the toggle check in Metabox::save_asset_manager_settings().
+				// add_action() on these hooks is harmless when meta is untouched;
+				// callbacks ignore every key except `_wppo_delay_disabled`.
+				add_action( 'added_post_meta', array( $this, 'on_delay_kill_switch_meta_changed' ), 10, 3 );
+				add_action( 'updated_post_meta', array( $this, 'on_delay_kill_switch_meta_changed' ), 10, 3 );
+				add_action( 'deleted_post_meta', array( $this, 'on_delay_kill_switch_meta_changed' ), 10, 3 );
 				// WooCommerce surgical invalidation (issue #962): product /
 				// order / coupon changes purge only affected URLs — never a
 				// full-cache wipe. add_action() on unregistered hooks is
@@ -2406,24 +2435,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! function_exists( 'wp_script_modules' ) ) {
 				return;
 			}
+			if ( ! class_exists( 'WP_Script_Modules' ) ) {
+				return;
+			}
 
 			$modules = wp_script_modules();
 			if ( ! is_object( $modules ) ) {
 				return;
 			}
 
-			$excluded = Util::process_urls( (string) ( $this->options['file_optimisation']['excludeDeferJS'] ?? '' ) );
+			// Canonical exclusions: the $this->exclude_defer_js property carries the
+			// wppo-lazyload default, the wppo_exclude_defer_js filter, and the
+			// CVE-guard handles. Merge the raw option as a fallback so instances
+			// built without the constructor path stay covered. Fail-open.
+			$excluded = is_array( $this->exclude_defer_js ) ? $this->exclude_defer_js : array();
+			$raw      = (string) ( $this->options['file_optimisation']['excludeDeferJS'] ?? '' );
+			if ( '' !== $raw ) {
+				$excluded = array_unique( array_merge( $excluded, Util::process_urls( $raw ) ) );
+			}
+			if ( ! in_array( 'wppo-lazyload', $excluded, true ) ) {
+				$excluded[] = 'wppo-lazyload';
+			}
 
 			// Collect registered module ids, tolerating core version differences.
+			// Prefer the public get_print_queue() API; fall back to reading the
+			// registered store via reflection because WP_Script_Modules::$registered
+			// is private in core and isset( $modules->registered ) from outside is
+			// always false on production (direct access would fatal on magic-less
+			// objects, so never touch ->registered directly).
 			$ids = array();
 			if ( method_exists( $modules, 'get_print_queue' ) ) {
 				$ids = (array) $modules->get_print_queue();
 			}
-			if ( empty( $ids ) && isset( $modules->registered ) ) {
-				$ids = array_keys( (array) $modules->registered );
-			}
-			if ( empty( $ids ) && isset( $modules->all ) ) {
-				$ids = array_keys( (array) $modules->all );
+			if ( empty( $ids ) ) {
+				$ids = $this->get_registered_module_ids( $modules );
 			}
 
 			foreach ( $ids as $id ) {
@@ -2434,8 +2479,113 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					$modules->set_in_footer( (string) $id, true );
 				}
 				if ( method_exists( $modules, 'set_fetchpriority' ) ) {
+					// Fill-gaps-only: skip modules that already carry an explicit
+					// fetchpriority. Core defaults gaps to 'auto' (see
+					// WP_Script_Modules::register), so only 'auto'/missing/empty
+					// counts as a gap; 'high' (LCP-critical) and explicit 'low'
+					// are left untouched. Reads via the public get_registered()
+					// getter when available (WP 7.0+) with a reflection fallback
+					// for the private 6.9 store. Fail-open: any unreadable shape
+					// falls through to 'low'. This matches the classic-script
+					// path in add_defer_strategy(), where 'auto' is likewise
+					// treated as a gap.
+					$existing = $this->get_module_fetchpriority( $modules, (string) $id );
+					if ( is_string( $existing ) && '' !== trim( $existing ) && 'auto' !== strtolower( trim( $existing ) ) ) {
+						continue;
+					}
 					$modules->set_fetchpriority( (string) $id, 'low' );
 				}
+			}
+		}
+
+		/**
+		 * Read a script module's fetchpriority without touching private state directly.
+		 *
+		 * Uses the public get_registered() getter when available, otherwise reads
+		 * the private $registered store via reflection. Returns null when the
+		 * module is unregistered, carries no fetchpriority key, or the store is
+		 * unreadable (fail-open: callers treat null as a gap and write 'low').
+		 * Never accesses $modules->registered directly: that property is private
+		 * in core, so isset()/direct reads from outside are always false and
+		 * would silently overwrite explicit values in production.
+		 *
+		 * @since NEXT
+		 *
+		 * @param object $modules Script modules instance from wp_script_modules().
+		 * @param string $id      Module id.
+		 * @return mixed Fetchpriority value, or null when missing/unreadable.
+		 */
+		private function get_module_fetchpriority( $modules, string $id ) {
+			if ( method_exists( $modules, 'get_registered' ) ) {
+				$entry = $modules->get_registered( $id );
+				if ( is_array( $entry ) && array_key_exists( 'fetchpriority', $entry ) ) {
+					return $entry['fetchpriority'];
+				}
+				if ( is_object( $entry ) && isset( $entry->fetchpriority ) ) {
+					return $entry->fetchpriority;
+				}
+				return null;
+			}
+			$registered = $this->read_private_module_store( $modules, 'registered' );
+			if ( is_array( $registered ) && array_key_exists( $id, $registered ) ) {
+				$entry = $registered[ $id ];
+				if ( is_array( $entry ) && array_key_exists( 'fetchpriority', $entry ) ) {
+					return $entry['fetchpriority'];
+				}
+				if ( is_object( $entry ) && isset( $entry->fetchpriority ) ) {
+					return $entry->fetchpriority;
+				}
+			}
+			return null;
+		}
+
+		/**
+		 * Collect registered module ids without touching private state directly.
+		 *
+		 * Reflection fallback for environments where get_print_queue() is empty or
+		 * unavailable; reads the private $registered (then $all) store. Returns an
+		 * empty array when the store is unreadable.
+		 *
+		 * @since NEXT
+		 *
+		 * @param object $modules Script modules instance from wp_script_modules().
+		 * @return string[] Module ids.
+		 */
+		private function get_registered_module_ids( $modules ): array {
+			foreach ( array( 'registered', 'all' ) as $property ) {
+				$store = $this->read_private_module_store( $modules, $property );
+				if ( is_array( $store ) && ! empty( $store ) ) {
+					return array_map( 'strval', array_keys( $store ) );
+				}
+			}
+			return array();
+		}
+
+		/**
+		 * Read a (possibly private) property from the script-modules instance.
+		 *
+		 * Returns null when the property does not exist or is unreadable instead
+		 * of raising. Public properties are read directly; non-public ones go
+		 * through reflection with setAccessible().
+		 *
+		 * @since NEXT
+		 *
+		 * @param object $modules  Script modules instance.
+		 * @param string $property Property name.
+		 * @return mixed Property value, or null when unreadable.
+		 */
+		private function read_private_module_store( $modules, string $property ) {
+			try {
+				$reflection = new \ReflectionObject( $modules );
+				if ( ! $reflection->hasProperty( $property ) ) {
+					return null;
+				}
+				$prop = $reflection->getProperty( $property );
+				$prop->setAccessible( true );
+				return $prop->getValue( $modules );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return null;
 			}
 		}
 
@@ -2598,28 +2748,43 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					$this->deferred_handles[ $handle ] = true;
 					// Native fetchpriority on WP 6.9+ (Trac #61734); pre-6.9 is handled
 					// by the script_loader_tag regex fallback (add_fetchpriority_to_deferred).
-					/**
-					 * Filters fetchpriority for each deferred handle.
-					 *
-					 * Default 'low' deprioritises deferred (non-render-blocking)
-					 * scripts. Return 'high' for an LCP-critical handle, falsy to
-					 * suppress, or 'auto' to defer to browser.
-					 *
-					 * @since NEXT
-					 *
-					 * @param string $fetchpriority Fetchpriority value.
-					 * @param string $handle        Script handle.
-					 */
-					$fetchpriority = apply_filters( 'wppo_deferred_fetchpriority', 'low', $handle );
-					if ( ! is_string( $fetchpriority ) ) {
-						$fetchpriority = '';
-					}
-					$fetchpriority = strtolower( trim( $fetchpriority ) );
-					if ( ! in_array( $fetchpriority, array( 'high', 'low', 'auto' ), true ) ) {
-						$fetchpriority = '';
-					}
-					if ( '' !== $fetchpriority ) {
-						wp_script_add_data( $handle, 'fetchpriority', $fetchpriority );
+					// Pre-release-inclusive '6.9-alpha' floor matches setup_hooks() so
+					// alpha/beta/RC builds already carrying the API are covered.
+					// Fill-gaps-only: never overwrite an explicit fetchpriority value
+					// (e.g. an LCP-critical handle filtered to 'high'). Core
+					// defaults module gaps to 'auto', and 'auto' is
+					// indistinguishable from "defer to browser" here, so
+					// 'auto'/missing/empty counts as a gap in both this path and
+					// apply_module_loading_strategies(); 'high' and explicit 'low'
+					// are left untouched.
+					if ( $is_wp69_plus && function_exists( 'wp_script_add_data' ) ) {
+						$existing_fetchpriority = method_exists( $wp_scripts, 'get_data' ) ? $wp_scripts->get_data( $handle, 'fetchpriority' ) : false;
+						$is_gap                 = empty( $existing_fetchpriority ) || ( is_string( $existing_fetchpriority ) && 'auto' === strtolower( trim( $existing_fetchpriority ) ) );
+						if ( $is_gap ) {
+							/**
+							 * Filters fetchpriority for each deferred handle.
+							 *
+							 * Default 'low' deprioritises deferred (non-render-blocking)
+							 * scripts. Return 'high' for an LCP-critical handle, falsy to
+							 * suppress, or 'auto' to defer to browser.
+							 *
+							 * @since NEXT
+							 *
+							 * @param string $fetchpriority Fetchpriority value.
+							 * @param string $handle        Script handle.
+							 */
+							$fetchpriority = apply_filters( 'wppo_deferred_fetchpriority', 'low', $handle );
+							if ( ! is_string( $fetchpriority ) ) {
+								$fetchpriority = '';
+							}
+							$fetchpriority = strtolower( trim( $fetchpriority ) );
+							if ( ! in_array( $fetchpriority, array( 'high', 'low', 'auto' ), true ) ) {
+								$fetchpriority = '';
+							}
+							if ( '' !== $fetchpriority ) {
+								wp_script_add_data( $handle, 'fetchpriority', $fetchpriority );
+							}
+						}
 					}
 					if ( $is_wp69_plus ) {
 						// Native in_footer for deferred classic scripts on WP 6.9+
@@ -2692,7 +2857,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					}
 				}
 				if ( ! $this->is_delay_excluded_handle( $handle ) ) {
-					$tag = str_replace( '<script ', '<script fetchpriority="low" ', $tag );
+					// Fill-gaps-only: never emit a duplicate fetchpriority attribute
+					// when core or an earlier filter already stamped one. Anchored
+					// on a whitespace boundary so data-*fetchpriority attributes
+					// (e.g. data-wp-fetchpriority=, which core emits alongside the
+					// real attribute) never count as a real fetchpriority.
+					if ( ! preg_match( '/\sfetchpriority\s*=/i', (string) $tag ) ) {
+						$tag = str_replace( '<script ', '<script fetchpriority="low" ', $tag );
+					}
 					$tag = str_replace( ' src', ' wppo-src', $tag );
 					$tag = preg_replace(
 						'/type=("|\')text\/javascript("|\')/',
@@ -2700,8 +2872,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						$tag
 					) ?? $tag;
 
-					// Determine delay strategy for this handle.
-					$strategy = $this->get_delay_strategy_for_handle( $handle );
+						// Determine delay strategy for this handle.
+						$strategy = $this->get_delay_strategy_for_handle( $handle );
 					if ( 'interaction' !== $strategy ) {
 						$tag = str_replace(
 							'<script ',
@@ -2710,8 +2882,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						);
 					}
 
-					// Determine priority for this handle.
-					$priority = $this->get_delay_priority_for_handle( $handle );
+						// Determine priority for this handle.
+						$priority = $this->get_delay_priority_for_handle( $handle );
 					if ( 'normal' !== $priority ) {
 						$tag = str_replace(
 							'<script ',
@@ -3200,7 +3372,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return string[]
 		 */
 		public static function get_delay_js_builder_exclusions(): array {
-			return array(
+			$preset = array(
 				// Elementor.
 				'elementor-frontend',
 				'elementor-pro-frontend',
@@ -3229,6 +3401,43 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'wp-block-library',
 				'wp-interactivity',
 				'wp-i18n',
+			);
+			/**
+			 * Filters delay JS builder preset exclusions.
+			 *
+			 * Builder runtimes (Elementor/Divi/Bricks/WPBakery/Oxygen) stay
+			 * un-delayed when the builder preset is on so page builders never
+			 * break. Merged with `array_unique` by callers.
+			 *
+			 * @since NEXT
+			 * @param string[] $preset Builder preset exclusions.
+			 */
+			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_builder_exclusions' ) ) {
+				return $preset;
+			}
+			try {
+				$raw = apply_filters( 'wppo_delay_js_builder_exclusions', $preset );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $preset;
+			}
+			if ( ! is_array( $raw ) ) {
+				return $preset;
+			}
+			return array_values(
+				array_unique(
+					array_filter(
+						array_map(
+							static function ( $val ): string {
+								return is_string( $val ) || is_numeric( $val ) ? (string) $val : '';
+							},
+							$raw
+						),
+						static function ( $val ): bool {
+							return '' !== $val;
+						}
+					)
+				)
 			);
 		}
 
@@ -3272,7 +3481,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_commerce_exclusions' ) ) {
 				return $preset;
 			}
-			return (array) apply_filters( 'wppo_delay_js_commerce_exclusions', $preset );
+			try {
+				$raw = apply_filters( 'wppo_delay_js_commerce_exclusions', $preset );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $preset;
+			}
+			if ( ! is_array( $raw ) ) {
+				return $preset;
+			}
+			return array_values(
+				array_unique(
+					array_filter(
+						array_map(
+							static function ( $val ): string {
+								return is_string( $val ) || is_numeric( $val ) ? (string) $val : '';
+							},
+							$raw
+						),
+						static function ( $val ): bool {
+							return '' !== $val;
+						}
+					)
+				)
+			);
 		}
 
 		/**
@@ -3308,7 +3540,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_slider_exclusions' ) ) {
 				return $preset;
 			}
-			return (array) apply_filters( 'wppo_delay_js_slider_exclusions', $preset );
+			try {
+				$raw = apply_filters( 'wppo_delay_js_slider_exclusions', $preset );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $preset;
+			}
+			if ( ! is_array( $raw ) ) {
+				return $preset;
+			}
+			return array_values(
+				array_unique(
+					array_filter(
+						array_map(
+							static function ( $val ): string {
+								return is_string( $val ) || is_numeric( $val ) ? (string) $val : '';
+							},
+							$raw
+						),
+						static function ( $val ): bool {
+							return '' !== $val;
+						}
+					)
+				)
+			);
 		}
 
 		/**
@@ -3438,7 +3693,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return bool True when delay must be skipped for this page.
 		 */
 		public static function is_delay_disabled_for_page( int $post_id = 0 ): bool {
-			static $cache = array();
 			try {
 				if ( function_exists( 'is_singular' ) && ! is_singular() && 0 === $post_id ) {
 					return false;
@@ -3452,18 +3706,106 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( $post_id <= 0 ) {
 					return false;
 				}
-				if ( isset( $cache[ $post_id ] ) ) {
-					return $cache[ $post_id ];
+				// Multisite-safe request cache (#1037): key by blog ID + post ID
+				// so `switch_to_blog()` can never leak one site's kill-switch
+				// state into another site sharing the same post ID.
+				$blog_id = 0;
+				if ( function_exists( 'is_multisite' ) && function_exists( 'get_current_blog_id' ) ) {
+					try {
+						if ( is_multisite() ) {
+							$blog_id = (int) get_current_blog_id();
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$blog_id = 0;
+					}
+				}
+				$cache_key = $blog_id . ':' . $post_id;
+				if ( isset( self::$delay_disabled_page_cache[ $cache_key ] ) ) {
+					return self::$delay_disabled_page_cache[ $cache_key ];
 				}
 				if ( ! function_exists( 'get_post_meta' ) ) {
 					return false;
 				}
-				$disabled          = ! empty( get_post_meta( $post_id, '_wppo_delay_disabled', true ) );
-				$cache[ $post_id ] = $disabled;
+				$disabled                                      = ! empty( get_post_meta( $post_id, '_wppo_delay_disabled', true ) );
+				self::$delay_disabled_page_cache[ $cache_key ] = $disabled;
 				return $disabled;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;
+			}
+		}
+
+		/**
+		 * Clear the per-page delay kill-switch request cache and purge that URL only.
+		 *
+		 * Called when the `_wppo_delay_disabled` meta toggles (metabox save or
+		 * programmatic meta write) so the next frontend hit for that URL renders
+		 * with the new delay state. Purges only the single post URL's static
+		 * HTML/CSS sidecars via `Cache::invalidate_single_static_html()` — never
+		 * a full-cache wipe. Multisite-safe: per-site post/meta, domain-based
+		 * cache paths, no cross-site leakage. Fail-open: any failure is
+		 * swallowed so meta saves never fatal.
+		 *
+		 * @since NEXT
+		 * @param int $post_id Post ID whose kill-switch changed.
+		 * @return void
+		 */
+		public static function invalidate_delay_kill_switch_cache( int $post_id ): void {
+			try {
+				if ( $post_id <= 0 ) {
+					return;
+				}
+				// Bust this request's cached kill-switch entries for the post on
+				// every known blog key (at most a handful of entries). Keys are
+				// always `blog_id:post_id`, so match on the suffix only.
+				foreach ( array_keys( self::$delay_disabled_page_cache ) as $key ) {
+					if ( str_ends_with( (string) $key, ':' . (string) $post_id ) ) {
+						unset( self::$delay_disabled_page_cache[ $key ] );
+					}
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
+					try {
+						$settings = array();
+						if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+							$settings = (array) Util::get_settings();
+						}
+						$cache = new Cache( $settings );
+						if ( method_exists( $cache, 'invalidate_single_static_html' ) ) {
+							$cache->invalidate_single_static_html( $post_id );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Handle `_wppo_delay_disabled` meta writes for the per-page kill-switch.
+		 *
+		 * Wired to `added_post_meta` / `updated_post_meta` / `deleted_post_meta`
+		 * in `setup_hooks()` so programmatic meta changes (REST, WP-CLI, imports)
+		 * purge the single URL just like the metabox save path. Only reacts to
+		 * the `_wppo_delay_disabled` key; everything else is ignored. Fail-open:
+		 * detection or purge failures never fatal the meta write.
+		 *
+		 * @since NEXT
+		 * @param mixed  $meta_id  Meta row ID for added/updated hooks, or an array of IDs for deleted_post_meta (unused, required by hook signature).
+		 * @param int    $post_id  Post ID the meta belongs to.
+		 * @param string $meta_key Meta key that was written.
+		 * @return void
+		 */
+		public function on_delay_kill_switch_meta_changed( $meta_id, $post_id, $meta_key ): void {
+			try {
+				if ( '_wppo_delay_disabled' !== (string) $meta_key ) {
+					return;
+				}
+				self::invalidate_delay_kill_switch_cache( (int) $post_id );
+			} catch ( \Throwable $e ) {
+				unset( $e );
 			}
 		}
 
@@ -3514,7 +3856,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// cart-fragments/checkout handles unless explicitly disabled.
 			// Missing key backfills to on (per-site settings, multisite-safe).
 			$commerce_on = ! isset( $this->options['file_optimisation']['delayJSCommercePreset'] )
-				|| ! empty( $this->options['file_optimisation']['delayJSCommercePreset'] );
+			|| ! empty( $this->options['file_optimisation']['delayJSCommercePreset'] );
 			if ( $commerce_on ) {
 				$preset = array_merge( $preset, self::get_delay_js_commerce_exclusions() );
 			}
@@ -3522,10 +3864,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// runtime handles plus slider runtimes (#988) unless explicitly disabled.
 			// Missing key backfills to on (per-site settings, multisite-safe).
 			$builder_on = ! isset( $this->options['file_optimisation']['delayJSBuilderPreset'] )
-				|| ! empty( $this->options['file_optimisation']['delayJSBuilderPreset'] );
+			|| ! empty( $this->options['file_optimisation']['delayJSBuilderPreset'] );
 			if ( $builder_on ) {
 				$preset = array_merge( $preset, self::get_delay_js_builder_exclusions(), self::get_delay_js_slider_exclusions() );
 			}
+			// Breaker presets ship deduped via array_unique (#1037) so builder +
+			// commerce + user excludes never double-process; string-only values.
+			$preset = array_values(
+				array_unique(
+					array_filter(
+						array_map( 'strval', (array) $preset ),
+						static function ( $val ): bool {
+							return '' !== $val;
+						}
+					)
+				)
+			);
 			/**
 			 * Filters delay JS preset exclusions.
 			 *
@@ -3535,7 +3889,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_exclusions' ) ) {
 				return $preset;
 			}
-			return (array) apply_filters( 'wppo_delay_js_exclusions', $preset );
+			// Fail-open (#1037 review): a misbehaving filter must never fatal the
+			// frontend script/style path. Guard with is_string/is_numeric checks
+			// (no blind strval — objects without __toString would throw Error)
+			// and fall back to the preset on any throwable.
+			try {
+				$raw = apply_filters( 'wppo_delay_js_exclusions', $preset );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $preset;
+			}
+			if ( ! is_array( $raw ) ) {
+				return $preset;
+			}
+			$filtered = array_values(
+				array_unique(
+					array_filter(
+						array_map(
+							static function ( $val ): string {
+								return is_string( $val ) || is_numeric( $val ) ? (string) $val : '';
+							},
+							$raw
+						),
+						static function ( $val ): bool {
+							return '' !== $val;
+						}
+					)
+				)
+			);
+			return $filtered;
 		}
 
 		/**
@@ -3614,7 +3996,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return string Modified script tag with fetchpriority="low".
 		 */
 		public function add_fetchpriority_to_deferred( $tag, $handle ): string {
-			if ( isset( $this->deferred_handles[ $handle ] ) && false === strpos( $tag, 'fetchpriority=' ) ) {
+			if ( isset( $this->deferred_handles[ $handle ] ) && ! preg_match( '/\sfetchpriority\s*=/i', (string) $tag ) ) {
 				$tag = str_replace( '<script ', '<script fetchpriority="low" ', $tag );
 			}
 			return $tag;
@@ -3819,61 +4201,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_filter(
 				'wp_speculation_rules_href_exclude_paths',
 				function ( $exclude_paths ) use ( $preload_settings ) {
-					$exclude_paths[] = '/wp-login.php';
-					$exclude_paths[] = '/wp-admin/*';
-					$exclude_paths[] = '/wp-json/*';
-
-					$custom_excludes = ! empty( $preload_settings['speculationExcludeUrls'] )
-						? Util::process_urls( $preload_settings['speculationExcludeUrls'] )
-						: array();
-					foreach ( $custom_excludes as $exclude ) {
-						// Convert bare paths to wildcard pattern via WP_URL_Pattern_Prefixer when available (WP 6.8+).
-						if ( class_exists( 'WP_URL_Pattern_Prefixer' ) && method_exists( 'WP_URL_Pattern_Prefixer', 'prefix_path_pattern' ) ) {
-							// Core helper adds /* for path prefix patterns; guard already wildcarded.
-							if ( false === strpos( $exclude, '*' ) && '/' === $exclude[0] ) {
-								$exclude = \WP_URL_Pattern_Prefixer::prefix_path_pattern( $exclude, '/' );
-							}
-						} elseif ( '/' === $exclude[0] && false === strpos( $exclude, '*' ) ) {
-							// Fallback: ensure wildcard for path prefix.
-							$exclude = rtrim( $exclude, '/' ) . '/*';
-						}
+					if ( ! is_array( $exclude_paths ) ) {
+						$exclude_paths = array();
+					}
+					foreach ( $this->get_speculation_exclude_paths( $preload_settings ) as $exclude ) {
 						if ( ! in_array( $exclude, $exclude_paths, true ) ) {
-							$exclude_paths[] = $exclude;
-						}
-					}
-
-					$woocommerce_excludes = array();
-
-					// Keep in sync with AI_Adaptive::get_commerce_exclude_paths() —
-					// both derive the same WooCommerce cart/checkout/account paths.
-					if ( function_exists( 'wc_get_checkout_url' ) ) {
-						$checkout_url = wc_get_checkout_url();
-						if ( $checkout_url ) {
-							$path = wp_parse_url( $checkout_url, PHP_URL_PATH );
-							if ( $path && '/' !== $path ) {
-								$woocommerce_excludes[] = trailingslashit( $path ) . '*';
-							}
-						}
-
-						$cart_url = wc_get_cart_url();
-						if ( $cart_url ) {
-							$path = wp_parse_url( $cart_url, PHP_URL_PATH );
-							if ( $path && '/' !== $path ) {
-								$woocommerce_excludes[] = trailingslashit( $path ) . '*';
-							}
-						}
-
-						$myaccount_url = wc_get_page_permalink( 'myaccount' );
-						if ( $myaccount_url ) {
-							$path = wp_parse_url( $myaccount_url, PHP_URL_PATH );
-							if ( $path && '/' !== $path ) {
-								$woocommerce_excludes[] = trailingslashit( $path ) . '*';
-							}
-						}
-					}
-
-					foreach ( $woocommerce_excludes as $exclude ) {
-						if ( ! in_array( $exclude, $custom_excludes, true ) ) {
 							$exclude_paths[] = $exclude;
 						}
 					}
@@ -3890,6 +4222,130 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			);
 
 			add_filter( 'wp_speculation_rules', array( $this, 'filter_speculation_list_rules' ), 10 );
+		}
+
+		/**
+		 * Canonical speculation-rules href exclusion patterns.
+		 *
+		 * Merges core safety defaults (auth, admin, REST), generic commerce
+		 * paths (cart/checkout/account), WooCommerce dynamic cart/checkout/
+		 * account paths, and user-configured `speculationExcludeUrls`.
+		 * Fill-gaps-only: callers dedupe against pre-existing core patterns
+		 * so the core ruleset is never duplicated.
+		 *
+		 * Intentionally narrow: nonce/logout/add-to-cart are query-param
+		 * actions (`?_wpnonce=`, `?action=logout`, `?add-to-cart=`) already
+		 * excluded by core's `?`-URL handling and by
+		 * {@see is_speculation_list_url_valid()}, so no `*substring*`
+		 * wildcard is emitted — such wildcards would also block legitimate
+		 * slugs (e.g. a post about "add to cart").
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $preload_settings The plugin's preload_settings option value.
+		 * @return string[] Exclusion patterns (possibly empty, never fatal).
+		 */
+		public function get_speculation_exclude_paths( array $preload_settings = array() ): array {
+			try {
+				$excludes = array(
+					'/wp-login*',
+					'/wp-admin/*',
+					'/wp-json/*',
+					'/cart/*',
+					'/checkout/*',
+					'/my-account/*',
+					'/account/*',
+				);
+
+				$custom_excludes = ! empty( $preload_settings['speculationExcludeUrls'] )
+					? Util::process_urls( $preload_settings['speculationExcludeUrls'] )
+					: array();
+				foreach ( $custom_excludes as $exclude ) {
+					// Convert bare paths to wildcard pattern via WP_URL_Pattern_Prefixer when available (WP 6.8+).
+					if ( class_exists( 'WP_URL_Pattern_Prefixer' ) && method_exists( 'WP_URL_Pattern_Prefixer', 'prefix_path_pattern' ) ) {
+						// Core helper adds /* for path prefix patterns; guard already wildcarded.
+						if ( false === strpos( $exclude, '*' ) && isset( $exclude[0] ) && '/' === $exclude[0] ) {
+							$exclude = \WP_URL_Pattern_Prefixer::prefix_path_pattern( $exclude, '/' );
+						}
+					} elseif ( isset( $exclude[0] ) && '/' === $exclude[0] && false === strpos( $exclude, '*' ) ) {
+						// Fallback: ensure wildcard for path prefix.
+						$exclude = rtrim( $exclude, '/' ) . '/*';
+					}
+					if ( ! in_array( $exclude, $excludes, true ) ) {
+						$excludes[] = $exclude;
+					}
+				}
+
+				// Keep in sync with AI_Adaptive::get_commerce_exclude_paths() —
+				// both derive the same WooCommerce cart/checkout/account paths.
+				if ( function_exists( 'wc_get_checkout_url' ) ) {
+					try {
+						$checkout_url = wc_get_checkout_url();
+						if ( $checkout_url ) {
+							$path = wp_parse_url( $checkout_url, PHP_URL_PATH );
+							if ( $path && '/' !== $path ) {
+								$pattern = trailingslashit( $path ) . '*';
+								if ( ! in_array( $pattern, $excludes, true ) ) {
+									$excludes[] = $pattern;
+								}
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( function_exists( 'wc_get_cart_url' ) ) {
+					try {
+						$cart_url = wc_get_cart_url();
+						if ( $cart_url ) {
+							$path = wp_parse_url( $cart_url, PHP_URL_PATH );
+							if ( $path && '/' !== $path ) {
+								$pattern = trailingslashit( $path ) . '*';
+								if ( ! in_array( $pattern, $excludes, true ) ) {
+									$excludes[] = $pattern;
+								}
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( function_exists( 'wc_get_page_permalink' ) ) {
+					try {
+						$myaccount_url = wc_get_page_permalink( 'myaccount' );
+						if ( $myaccount_url ) {
+							$path = wp_parse_url( $myaccount_url, PHP_URL_PATH );
+							if ( $path && '/' !== $path ) {
+								$pattern = trailingslashit( $path ) . '*';
+								if ( ! in_array( $pattern, $excludes, true ) ) {
+									$excludes[] = $pattern;
+								}
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+
+				if ( function_exists( 'apply_filters' ) ) {
+					/**
+					 * Filters the speculation-rules href exclusion patterns.
+					 *
+					 * @since NEXT
+					 * @param string[] $excludes         Canonical exclusion patterns.
+					 * @param array    $preload_settings The plugin's preload_settings option value.
+					 */
+					$filtered = apply_filters( 'wppo_speculation_exclusions', $excludes, $preload_settings );
+					if ( is_array( $filtered ) ) {
+						$excludes = array_values( array_unique( array_filter( $filtered, 'is_string' ) ) );
+					}
+				}
+
+				return $excludes;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
 		}
 
 		/**
@@ -3918,6 +4374,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * (user `speculationExcludeUrls` + WooCommerce cart/checkout/account via
 		 * {@see add_speculation_rules()}).
 		 *
+		 * Cache awareness: non-cacheable responses (`DONOTCACHEPAGE`,
+		 * cart/checkout/account, previews, logged-in visitors) return null so
+		 * neither core nor plugin rules prefetch them.
+		 *
 		 * @since 1.9.0
 		 * @since NEXT Honor `wp_get_speculation_rules_default_configuration()` when available (WP 7.1).
 		 *
@@ -3929,6 +4389,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		public function filter_speculation_rules_configuration( $config, array $preload_settings, bool $enable_speculation ) {
 			if ( ! is_array( $config ) ) {
 				return $config;
+			}
+
+			// Cache awareness: never speculate non-cacheable responses
+			// (DONOTCACHEPAGE / cart/checkout/account / previews). Returning
+			// null disables speculation for the request (core convention),
+			// so neither core nor plugin rules prefetch the cart.
+			if ( $this->is_speculation_suppressed_for_visitor() ) {
+				return null;
 			}
 
 			if ( $enable_speculation ) {
@@ -4183,6 +4651,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * Logged-in users stay excluded (mirrors the `null` config
 		 * passthrough in {@see filter_speculation_rules_configuration()}).
+		 * Cache-aware: pages served with `DONOTCACHEPAGE` / `no-store`
+		 * (cart/checkout/account, previews) never speculate — speculating a
+		 * non-cacheable URL wastes origin load and risks broken carts.
 		 * Fail-open: any throwable means "not suppressed".
 		 *
 		 * @since NEXT
@@ -4191,7 +4662,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		private function is_speculation_suppressed_for_visitor(): bool {
 			try {
-				return function_exists( 'is_user_logged_in' ) && is_user_logged_in();
+				if ( function_exists( 'is_user_logged_in' ) && is_user_logged_in() ) {
+					return true;
+				}
+
+				// Non-cacheable responses must not speculate.
+				if ( defined( 'DONOTCACHEPAGE' ) && DONOTCACHEPAGE ) {
+					return true;
+				}
+
+				// Commerce / preview contexts are served no-store.
+				foreach ( array( 'is_cart', 'is_checkout', 'is_account_page', 'is_preview', 'is_customize_preview' ) as $conditional ) {
+					if ( function_exists( $conditional ) ) {
+						try {
+							if ( call_user_func( $conditional ) ) {
+								return true;
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+					}
+				}
+
+				return false;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;
@@ -4386,11 +4879,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return false;
 			}
 
-			$path  = strtolower( (string) ( $parts['path'] ?? '/' ) );
-			$lower = strtolower( $url );
+			$path = strtolower( (string) ( $parts['path'] ?? '/' ) );
 
-			if ( false !== strpos( $path, '/wp-admin' ) || false !== strpos( $lower, 'wp-login.php' ) || false !== strpos( $path, '/wp-json' ) ) {
+			if ( false !== strpos( $path, '/wp-admin' ) || false !== strpos( $path, 'wp-login.php' ) || false !== strpos( $path, '/wp-json' ) ) {
 				return false;
+			}
+
+			// Nonce-bearing, logout, add-to-cart, and admin-ajax URLs must
+			// never be speculated. Scoped to path+query (never scheme+host)
+			// so hosts containing these substrings — or legitimate slugs
+			// like /add-to-cart-guide/ handled below — are not over-blocked.
+			// Query-param forms (preview, customize_changeset) need no check
+			// here: any URL carrying a query string already returned false
+			// above, mirroring core's `?`-URL exclusion.
+			$query_string = '';
+			try {
+				$parsed_query = wp_parse_url( $url, PHP_URL_QUERY );
+				if ( is_string( $parsed_query ) ) {
+					$query_string = strtolower( $parsed_query );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			$haystack = $path . '?' . $query_string;
+			foreach ( array( 'nonce', 'logout', 'add-to-cart', 'admin-ajax' ) as $unsafe ) {
+				if ( false !== strpos( $haystack, $unsafe ) ) {
+					return false;
+				}
 			}
 
 			$commerce_paths = array( '/cart', '/checkout', '/my-account', '/account' );
@@ -4582,15 +5097,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$new_rules[] = $singular_rule;
 			}
 			if ( is_array( $archive_rule ) ) {
-				/**
-				 * Filters the archive first-post document rule before it is appended.
-				 *
-				 * @since NEXT
-				 * @param array $archive_rule The archive document rule.
-				 */
-				$archive_rule = apply_filters( 'wppo_speculation_document_rule', $archive_rule );
-				if ( is_array( $archive_rule ) ) {
-					$new_rules[] = $archive_rule;
+				// Fill-gaps-only: never duplicate a document-source rule
+				// already contributed by core or another plugin — at most one
+				// document rule is emitted per request.
+				if ( ! $this->has_document_source_rule( $rules ) ) {
+					/**
+					 * Filters the archive first-post document rule before it is appended.
+					 *
+					 * @since NEXT
+					 * @param array $archive_rule The archive document rule.
+					 */
+					$archive_rule = apply_filters( 'wppo_speculation_document_rule', $archive_rule );
+					if ( is_array( $archive_rule ) ) {
+						$new_rules[] = $archive_rule;
+					}
 				}
 			}
 
@@ -4610,6 +5130,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			 * @param string[] $urls  List URLs that were appended.
 			 */
 			return apply_filters( 'wppo_speculation_list_rules', $rules, $urls );
+		}
+
+		/**
+		 * Whether any rule in the set uses a document source.
+		 *
+		 * Shared by the fill-gaps-only document-rule gate in
+		 * {@see filter_speculation_list_rules()} so source-checking logic
+		 * lives in one place.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $rules Existing speculation rules.
+		 * @return bool True when a document-source rule is present.
+		 */
+		private function has_document_source_rule( array $rules ): bool {
+			foreach ( $rules as $rule ) {
+				if ( is_array( $rule ) && ( $rule['source'] ?? '' ) === 'document' ) {
+					return true;
+				}
+			}
+			return false;
 		}
 
 		/**
@@ -4888,7 +5429,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return bool True when core owns the handle under separate-assets mode.
 		 */
 		private function is_core_block_asset_skipped( $handle ): bool {
-			return function_exists( 'wp_should_load_separate_core_block_assets' ) && wp_should_load_separate_core_block_assets() && str_starts_with( (string) $handle, 'wp-block-' );
+			if ( isset( $GLOBALS['wp_version'] ) && version_compare( $GLOBALS['wp_version'], '6.9-alpha', '<' ) ) {
+				return false;
+			}
+			if ( ! function_exists( 'wp_should_load_separate_core_block_assets' ) ) {
+				return false;
+			}
+			try {
+				return (bool) wp_should_load_separate_core_block_assets() && str_starts_with( (string) $handle, 'wp-block-' );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
 		}
 
 		/**
@@ -5068,8 +5620,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return $tag;
 			}
 
-			$css_minifier = new Minify\CSS( $local_path, Util::min_cache_dir( 'css' ) );
-			$cached_file  = $css_minifier->minify();
+			// Fail-open safe-mode (#1037): any engine throwable degrades to the
+			// pristine tag — engine failure never fatals or white-screens.
+			try {
+				$css_minifier = new Minify\CSS( $local_path, Util::min_cache_dir( 'css' ) );
+				$cached_file  = $css_minifier->minify();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $tag;
+			}
 
 			if ( $cached_file ) {
 				$basename         = basename( $cached_file );
@@ -5080,6 +5639,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					return $tag;
 				}
 
+				// filemtime() returns false (with a warning) on failure — it never
+				// throws — so fail open on the false check below.
 				$file_version = filemtime( $cached_file_path );
 				if ( false === $file_version ) {
 					return $tag;
@@ -5135,8 +5696,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return $tag;
 			}
 
-			$js_minifier = new Minify\JS( $local_path, Util::min_cache_dir( 'js' ) );
-			$cached_file = $js_minifier->minify();
+			// Fail-open safe-mode (#1037): any engine throwable degrades to the
+			// pristine tag — engine failure never fatals or white-screens.
+			try {
+				$js_minifier = new Minify\JS( $local_path, Util::min_cache_dir( 'js' ) );
+				$cached_file = $js_minifier->minify();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $tag;
+			}
 
 			if ( $cached_file ) {
 				$basename         = basename( $cached_file );
@@ -5147,6 +5715,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					return $tag;
 				}
 
+				// filemtime() returns false (with a warning) on failure — it never
+				// throws — so fail open on the false check below.
 				$file_version = filemtime( $cached_file_path );
 				if ( false === $file_version ) {
 					return $tag;

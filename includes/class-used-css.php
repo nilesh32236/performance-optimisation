@@ -1002,17 +1002,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			if ( '' === $this->cache_root_dir || '' === $this->domain ) {
 				return '';
 			}
-			$path = $this->get_url_path( $url );
-			if ( '' === $path && $this->is_raw_path_non_blank( $url ) ) {
-				// Distinguish the benign homepage ('/', '') from a rejected
-				// hostile input: never map a probe to the homepage file —
-				// refuse and log so callers fail open to unoptimized output.
+			// Default-'' means the current page: resolve through REQUEST_URI
+			// first so per-page sidecars never collide on the homepage file.
+			// A hostile REQUEST_URI that sanitizes to '' is a probe, not the
+			// homepage — refuse before sanitize_cache_path() maps '' to the
+			// homepage file.
+			$effective = ( '' === $url ) ? $this->get_url_path( $url ) : $url;
+			if ( '' === $url && '' === $effective && $this->is_raw_path_non_blank( $url ) ) {
 				$this->log_traversal_probe( $url );
 				return '';
 			}
-			$path_suffix = '' !== $path ? "/{$path}" : '';
-			$candidate   = "{$this->cache_root_dir}/{$this->domain}{$path_suffix}/" . self::USED_CSS_FILENAME;
-			if ( ! $this->is_path_contained( $candidate ) ) {
+			// Single auditable containment point: host normalization, path
+			// sanitization, filename allowlist, and dual-prefix containment
+			// all live in Util::sanitize_cache_path().
+			$candidate = Util::sanitize_cache_path( $this->cache_root_dir, $this->domain, $effective, self::USED_CSS_FILENAME );
+			if ( '' === $candidate ) {
+				// Distinguish the benign homepage ('/', '') from a rejected
+				// hostile input: never map a probe to the homepage file —
+				// refuse and log so callers fail open to unoptimized output.
+				if ( '' === $effective && ! $this->is_raw_path_non_blank( $url ) ) {
+					return '';
+				}
 				$this->log_traversal_probe( $url );
 				return '';
 			}
@@ -1033,20 +1043,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			if ( '' === $this->cache_root_dir || '' === $this->cache_root_url || '' === $this->domain ) {
 				return '';
 			}
-			$path = $this->get_url_path( $url );
-			if ( '' === $path && $this->is_raw_path_non_blank( $url ) ) {
+			// Same effective-path resolution as get_used_css_path(): the
+			// containment candidate and the emitted URL derive from the same
+			// path so default-'' calls agree instead of checking the homepage
+			// while emitting the REQUEST_URI path.
+			$effective = ( '' === $url ) ? $this->get_url_path( $url ) : $url;
+			if ( '' === $url && '' === $effective && $this->is_raw_path_non_blank( $url ) ) {
 				$this->log_traversal_probe( $url );
 				return '';
 			}
-			$path_suffix = '' !== $path ? "/{$path}" : '';
 			// Containment parity with get_used_css_path(): resolve the
-			// filesystem candidate through the same dual-prefix check so the
+			// filesystem candidate through the same central helper so the
 			// URL and path surfaces refuse the same hostile inputs.
-			$candidate = "{$this->cache_root_dir}/{$this->domain}{$path_suffix}/" . self::USED_CSS_FILENAME;
-			if ( ! $this->is_path_contained( $candidate ) ) {
+			$candidate = Util::sanitize_cache_path( $this->cache_root_dir, $this->domain, $effective, self::USED_CSS_FILENAME );
+			if ( '' === $candidate ) {
+				if ( '' === $effective && ! $this->is_raw_path_non_blank( $url ) ) {
+					return '';
+				}
 				$this->log_traversal_probe( $url );
 				return '';
 			}
+			$path        = ( '' === $url ) ? $effective : $this->get_url_path( $url );
+			$path_suffix = '' !== $path ? "/{$path}" : '';
 			return "{$this->cache_root_url}/{$this->domain}{$path_suffix}/" . self::USED_CSS_FILENAME;
 		}
 
@@ -1120,22 +1138,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @return bool True when contained.
 		 */
 		private function is_path_contained( string $path ): bool {
-			if ( '' === $this->cache_root_dir || '' === $this->domain ) {
-				return false;
-			}
-
-			if ( function_exists( 'wp_normalize_path' ) ) {
-				$norm = wp_normalize_path( $path );
-				$root = wp_normalize_path( $this->cache_root_dir );
-			} else {
-				$norm = str_replace( '\\', '/', $path );
-				$root = str_replace( '\\', '/', $this->cache_root_dir );
-			}
-
-			$root       = rtrim( $root, '/' ) . '/';
-			$domain_dir = $root . trim( $this->domain, '/' ) . '/';
-
-			return 0 === strpos( $norm, $root ) && 0 === strpos( $norm, $domain_dir );
+			// Centralized dual-prefix containment lives in
+			// Util::is_cache_path_contained(); this wrapper only binds the
+			// per-instance root/domain so every call site shares one audit point.
+			return Util::is_cache_path_contained( $this->cache_root_dir, $this->domain, $path );
 		}
 
 		/**
@@ -1255,20 +1261,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				return false;
 			}
 
-			// Atomic write: write to a temporary file, then rename to prevent
-			// concurrent requests from producing truncated/interleaved output.
-			$tmp_path = $file_path . '.tmp.' . wp_rand();
-			$written  = $fs->put_contents( $tmp_path, $css, FS_CHMOD_FILE );
-			if ( ! $written ) {
-				$fs->delete( $tmp_path );
-				return false;
-			}
-			$moved = $fs->move( $tmp_path, $file_path, true );
-			if ( ! $moved ) {
-				$fs->delete( $tmp_path );
-				return false;
-			}
-			return true;
+			// Atomic write via the shared tmp+rename helper (unique tmp
+			// name, no non-atomic fallback) so interrupted writes never
+			// leave partial CSS behind.
+			return Util::atomic_file_put_contents( $fs, $file_path, $css );
 		}
 
 		/**

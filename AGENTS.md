@@ -97,6 +97,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (3
 | `web_vitals_trends` | GET | Stored Web Vitals trend history |
 | `suggestions` | GET | Performance suggestions |
 | `server_rules` | GET | Apache/Nginx rules text |
+| `woo_cache_self_test` | GET | WooCommerce cart/checkout cache-exclusion self-test (read-only) |
 | `used_css_regenerate` | POST | Regenerate used CSS for a post or all posts |
 | `purge_used_css_cache` | POST | Purge page cache + used CSS together (optional `path` for single page) |
 | `regenerate_ccss` | POST | Regenerate critical CSS |

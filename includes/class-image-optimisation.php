@@ -202,6 +202,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private ?string $lazy_lcp_exclusion_url = null;
 
 		/**
+		 * Memoized current-page LCP URL for this instance.
+		 *
+		 * `get_current_lcp_url()` is called up to 7x per frontend render and
+		 * each call re-runs the OD lookup plus the RUM / PageSpeed chain
+		 * (post meta + options + transients). This memo keeps repeated calls
+		 * on the same instance from repeating those lookups. Per-instance
+		 * (not static): instances are constructed per request with one
+		 * site's options, so a memoized URL can never leak across sites or
+		 * option sets. Long-lived processes that reuse one instance across
+		 * pages should construct a fresh instance per page instead.
+		 *
+		 * @var string|null Null until resolved, then the LCP URL or ''.
+		 * @since NEXT
+		 */
+		private ?string $current_lcp_url = null;
+
+		/**
 		 * Clear the per-request runtime caches (file_exists + image sizes).
 		 *
 		 * Called on switch_blog (absolute paths from another site must not be
@@ -1693,12 +1710,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The LCP image URL, or empty string when none is stored.
 		 */
 		private function get_current_lcp_url(): string {
+			if ( null !== $this->current_lcp_url ) {
+				return $this->current_lcp_url;
+			}
+			$this->current_lcp_url = '';
 			// Priority 0: Optimization Detective — LCP tag per viewport group (mobile/desktop).
 			if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 				try {
 					$od_url = \PerformanceOptimise\Inc\OD_Bridge::get_lcp_url();
 					if ( '' !== $od_url ) {
-						return $od_url;
+						$this->current_lcp_url = $od_url;
+						return $this->current_lcp_url;
 					}
 				} catch ( \Throwable $e ) {
 					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
@@ -1721,7 +1743,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						$field_path = Util::normalize_rum_path( $raw_path );
 						$field      = \PerformanceOptimise\Inc\RUM::get_field_lcp_url( $field_path );
 						if ( is_array( $field ) && ! empty( $field['url'] ) && is_string( $field['url'] ) ) {
-							return $field['url'];
+							$this->current_lcp_url = $field['url'];
+							return $this->current_lcp_url;
 						}
 					} catch ( \Throwable $e ) {
 						if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
@@ -1736,7 +1759,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			// drift apart. Fail-open: any failure inside returns ''.
 			if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_stored_pagespeed_lcp_url' ) ) {
 				try {
-					return \PerformanceOptimise\Inc\RUM::get_stored_pagespeed_lcp_url();
+					$this->current_lcp_url = \PerformanceOptimise\Inc\RUM::get_stored_pagespeed_lcp_url();
+					return $this->current_lcp_url;
 				} catch ( \Throwable $e ) {
 					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 						error_log( 'WPPO Image optimisation PageSpeed LCP error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
@@ -1744,7 +1768,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 			}
 
-			return '';
+			return $this->current_lcp_url;
 		}
 
 		/**

@@ -374,20 +374,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 
 			foreach ( $urls as $scan_url ) {
 				foreach ( array( 'mobile', 'desktop' ) as $scan_strategy ) {
-					// Deduplicate: skip if an identical PageSpeed job is already pending.
-					if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action(
-						Pagespeed::AS_HOOK,
-						array(
-							array(
-								'url'      => $scan_url,
-								'strategy' => $scan_strategy,
-							),
-						),
-						Pagespeed::AS_GROUP
-					) ) {
-						continue;
-					}
-					// queue_scan() returns 0 when Action Scheduler cannot create the job or deduped.
+					// queue_scan() already deduplicates internally via
+					// as_has_scheduled_action() + as_get_scheduled_actions()
+					// (returning the existing job ID), so no outer pre-check
+					// here — it would only double the Action Scheduler store
+					// queries per URL x strategy. A non-zero return means
+					// newly queued or already pending; 0 means enqueue failed
+					// or deduped without a retrievable job ID.
 					$job_id = Pagespeed::queue_scan( $scan_url, $scan_strategy );
 					if ( 0 === $job_id ) {
 						$all_queued = false;
@@ -397,10 +390,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				}
 			}
 
-			// Only record a completed run when at least one job was newly queued and
-			// no enqueue failed. If all jobs were already pending (newly_queued==0),
-			// do not advance the weekly/daily timestamp — otherwise the rescan is
-			// marked completed without actually scheduling new scans.
+			// Only record a completed run when at least one job is queued or
+			// already pending and no enqueue failed. A 0 return means the
+			// job could neither be queued nor confirmed pending, so the
+			// timestamp must not advance — otherwise the rescan is marked
+			// completed without scans actually being scheduled.
 			if ( $all_queued && $newly_queued > 0 ) {
 				update_option( 'wppo_web_vitals_last_rescan', time(), false );
 			}

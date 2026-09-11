@@ -358,6 +358,30 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that repeated get_current_lcp_url calls resolve lookups only once (per-instance memo).
+	 */
+	public function test_get_current_lcp_url_is_memoized_per_instance(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'is_singular' )->justReturn( true );
+		Functions\when( 'get_the_ID' )->justReturn( 42 );
+		Functions\when( 'is_front_page' )->justReturn( false );
+
+		Functions\expect( 'get_post_meta' )
+			->once()
+			->with( 42, '_wppo_lcp_image_url_mobile', true )
+			->andReturn( 'https://example.com/wp-content/uploads/hero.jpg' );
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+
+		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'get_current_lcp_url' );
+		$reflection->setAccessible( true );
+
+		$this->assertSame( 'https://example.com/wp-content/uploads/hero.jpg', $reflection->invoke( $image_opt ) );
+		$this->assertSame( 'https://example.com/wp-content/uploads/hero.jpg', $reflection->invoke( $image_opt ) );
+		$this->assertSame( 'https://example.com/wp-content/uploads/hero.jpg', $reflection->invoke( $image_opt ) );
+	}
+
+	/**
 	 * Stub the WP functions used to resolve the current LCP URL.
 	 *
 	 * @param string $lcp_url The LCP URL the transient lookup should return.

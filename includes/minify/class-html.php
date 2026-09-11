@@ -173,11 +173,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				}
 			}
 			$this->exclude_delay_js = array_values(
-				array_filter(
-					$this->exclude_delay_js,
-					static function ( mixed $val ): bool {
-						return is_string( $val ) && '' !== $val;
-					}
+				array_unique(
+					array_filter(
+						$this->exclude_delay_js,
+						static function ( mixed $val ): bool {
+							return is_string( $val ) && '' !== $val;
+						}
+					)
 				)
 			);
 
@@ -327,7 +329,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			if ( ! empty( $this->options['file_optimisation']['minifyHTML'] ) ) {
 				try {
 					$html = $this->get_html_min()->minify( $html );
-				} catch ( \Exception $e ) {
+				} catch ( \Throwable $e ) {
 					do_action( 'wppo_debug_log', 'WPPO HTML minify failed: ' . $e->getMessage(), array( 'exception' => $e ) );
 				}
 			}
@@ -540,6 +542,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		}
 
 		/**
+		 * Minify a single inline CSS block with a fail-open contract.
+		 *
+		 * Wraps the `matthiasmullie/minify` CSS engine so any engine failure
+		 * (`\Exception` or `\Error`/`\Throwable`) degrades to the pristine
+		 * `<style…>…</style>` tag instead of fataling or emitting partial output.
+		 * No new WP/PHP APIs; safe on WP 6.2+ / PHP 8.2+.
+		 *
+		 * @since NEXT
+		 * @param string $attrs Style tag attributes string (including leading space).
+		 * @param string $css   Raw CSS block content.
+		 * @return string Minified style tag, or the pristine tag on failure.
+		 */
+		private function safe_minify_css_block( string $attrs, string $css ): string {
+			$pristine = '<style' . $attrs . '>' . $css . '</style>';
+			try {
+				if ( ! class_exists( CSSMinifier::class ) ) {
+					return $pristine;
+				}
+				$css_minifier = new CSSMinifier( $css );
+				return '<style' . $attrs . '>' . $css_minifier->minify() . '</style>';
+			} catch ( \Throwable $e ) {
+				// Fail-open: return original content, never fatal/white-screen.
+				unset( $e );
+				return $pristine;
+			}
+		}
+
+		/**
 		 * Minify inline CSS in HTML.
 		 *
 		 * @param string $html The HTML content containing inline CSS.
@@ -547,38 +577,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 * @since 1.0.0
 		 */
 		private function minify_inline_css( string $html ): string {
-			$html = preg_replace_callback(
+			$result = preg_replace_callback(
 				'#<style\b([^>]*)>(.*?)</style>#is',
 				function ( $matches ) {
-					try {
-						$css_minifier = new CSSMinifier( $matches[2] );
-						return '<style' . $matches[1] . '>' . $css_minifier->minify() . '</style>';
-					} catch ( \Exception $e ) {
-						// Return original content if there's an error.
-						return $matches[0];
-					}
+					return $this->safe_minify_css_block( $matches[1], $matches[2] );
 				},
 				$html
 			);
 
-			return $html;
+			// PCRE failure: fail-open to the pristine buffer.
+			return null !== $result ? $result : $html;
 		}
 
 		/**
 		 * Minify inline JavaScript in HTML.
+		 *
+		 * Fail-open: a PCRE failure returns the pristine buffer unchanged.
 		 *
 		 * @param string $html The HTML content containing inline JS.
 		 * @return string HTML content with minified JS.
 		 * @since 1.0.0
 		 */
 		private function minify_inline_js( string $html ): string {
-			return preg_replace_callback(
+			$result = preg_replace_callback(
 				'#<script\b([^>]*)>(.*?)</script>#is',
 				function ( $matches ) {
 					return $this->safe_minify_js( $matches[1], $matches[2] );
 				},
 				$html
 			);
+
+			return null !== $result ? $result : $html;
 		}
 
 		/**
@@ -670,11 +699,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			}
 
 			if ( ! empty( $this->options['file_optimisation']['minifyInlineJS'] ) ) {
+				// Unified fail-open safe-mode (#1037): any engine throwable
+				// (`\Exception` or `\Error`) returns the pristine buffer so
+				// Elementor/Woo inline scripts survive minify failures.
 				try {
+					if ( ! class_exists( JSMinifier::class ) ) {
+						return '<script' . $attributes . '>' . $content . '</script>';
+					}
 					$js_minifier = new JSMinifier( $content );
 					return '<script' . $attributes . '>' . $js_minifier->minify() . '</script>';
-				} catch ( \Exception $e ) {
+				} catch ( \Throwable $e ) {
 					// Return original content if there's an error.
+					unset( $e );
 					return '<script' . $attributes . '>' . $content . '</script>';
 				}
 			}

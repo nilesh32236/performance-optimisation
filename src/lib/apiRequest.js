@@ -401,3 +401,18 @@ export const fetchSuggestions = ( url, signal ) => {
 export const fetchServerRules = ( signal ) => {
 	return apiCall( 'server_rules', {}, 'GET', signal );
 };
+
+/**
+ * Run the verifiable WooCommerce cart/checkout cache-exclusion self-test.
+ *
+ * Read-only GET proving cart/checkout/account bypass the static HTML cache
+ * with DONOTCACHEPAGE honored. Returns the detected Woo paths, safe-mode
+ * toggle state, and per-URL pass/fail entries.
+ *
+ * @since NEXT
+ * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
+ * @return {Promise<Object>} Resolved self-test result data.
+ */
+export const fetchWooCacheSelfTest = ( signal ) => {
+	return apiCall( 'woo_cache_self_test', {}, 'GET', signal );
+};

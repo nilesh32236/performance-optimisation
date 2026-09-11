@@ -507,13 +507,64 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Single source of truth for the separate-assets state shared by the
 		 * combined-CSS cache filename variant and every combine/preload loop. The
 		 * 6.9+ gate keeps pre-6.9 cores (which have no such function) on the
-		 * legacy monolith path.
+		 * legacy monolith path, including cores with a backported
+		 * `wp_should_load_separate_core_block_assets()` symbol. An absent
+		 * `$wp_version` assumes the newest core, matching
+		 * {@see get_styles_inline_limit()}.
 		 *
 		 * @return bool True when core loads separate core block assets on demand.
 		 * @since NEXT
 		 */
 		private function block_assets_are_separate(): bool {
-			return function_exists( 'wp_should_load_separate_core_block_assets' ) && wp_should_load_separate_core_block_assets();
+			if ( isset( $GLOBALS['wp_version'] ) && version_compare( $GLOBALS['wp_version'], '6.9-alpha', '<' ) ) {
+				return false;
+			}
+			if ( ! function_exists( 'wp_should_load_separate_core_block_assets' ) ) {
+				return false;
+			}
+			try {
+				return (bool) wp_should_load_separate_core_block_assets();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Whether core 6.9+ block-style hoisting owns block styles on this request.
+		 *
+		 * True only when the version-gated separate-assets state is on: core
+		 * hoists on-demand block styles itself (classic-theme on-demand loader
+		 * `wp_load_classic_theme_block_styles_on_demand()` plus the
+		 * `wp_should_output_buffer_template_for_enhancement()` template-enhancement
+		 * buffer on 6.9+), so the combine pipeline must still minify eligible
+		 * non-block handles but let core hoist — never pull `wp-block-*`
+		 * handles into the combined file. Fail-open: any missing symbol or
+		 * detection exception returns false (legacy combine behavior, never fatal).
+		 *
+		 * @return bool True when core owns block-style hoisting on this request.
+		 * @since NEXT
+		 */
+		private function is_core_block_hoisting_active(): bool {
+			// Version gate first: pre-6.9 cores stay on the legacy path even
+			// when the separate-assets symbol was backported.
+			if ( isset( $GLOBALS['wp_version'] ) && version_compare( $GLOBALS['wp_version'], '6.9-alpha', '<' ) ) {
+				return false;
+			}
+			try {
+				if ( ! function_exists( 'wp_should_load_separate_core_block_assets' ) || ! wp_should_load_separate_core_block_assets() ) {
+					return false;
+				}
+				// When the 6.9+ template-enhancement buffer is active, core
+				// definitively owns hoisting — record the state, same outcome.
+				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && wp_should_output_buffer_template_for_enhancement() ) {
+					return true;
+				}
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
 		}
 
 		/**
@@ -533,6 +584,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		private function is_core_block_asset( $handle, bool $separate_block_assets ): bool {
 			return $separate_block_assets && str_starts_with( (string) $handle, 'wp-block-' );
+		}
+
+		/**
+		 * Whether a handle is already owned by core output and must never be combined.
+		 *
+		 * Single dedupe assertion for the combine pipeline: true when core will
+		 * inline the handle under its `styles_inline_size_limit` budget
+		 * ({@see core_will_inline()}) or when core 6.9+ hoisting owns the block
+		 * handle ({@see is_core_block_asset()}). Every combine/preload loop
+		 * funnels through this so no scattered skip site can emit duplicate
+		 * style output for the same handle.
+		 *
+		 * @param string $handle                The registered style handle.
+		 * @param bool   $separate_block_assets Whether core loads separate block assets.
+		 * @return bool True when the handle must stay out of the combined file.
+		 * @since NEXT
+		 */
+		private function is_duplicate_of_core_output( $handle, bool $separate_block_assets ): bool {
+			if ( $this->is_core_block_asset( $handle, $separate_block_assets ) ) {
+				return true;
+			}
+			return $this->core_will_inline( $handle );
 		}
 
 		/**
@@ -594,14 +667,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// would force the wp-block-library monolith (or per-block styles for
 			// blocks not even on the page) back into the head and fight core's
 			// conditional loading. Belt-and-suspenders: these handles are normally
-			// not in the queue on 6.9 anyway.
+			// not in the queue on 6.9 anyway. When core hoisting is active the
+			// pipeline still minifies eligible non-block handles below but lets
+			// core hoist block styles (yield where core wins; combine is the
+			// fallback, not a competitor). The `should_load_separate_core_block_assets`
+			// opt-out filter is honoured via block_assets_are_separate(): an
+			// explicit opt-out restores the legacy monolith path.
 			$separate_block_assets = $this->block_assets_are_separate();
+			$core_hoisting         = $this->is_core_block_hoisting_active();
 
 			// The effective separate-assets state is baked into the combined-CSS
 			// cache filename, so a 6.8 -> 6.9 upgrade (which flips separate block
 			// assets on by default for classic themes) cannot keep serving a stale
 			// combined monolith built while wp-block-library was still in the queue.
-			$css_variant = $separate_block_assets ? 'separate' : '';
+			// Core hoisting implies the separate variant (same handle set).
+			$css_variant = ( $separate_block_assets || $core_hoisting ) ? 'separate' : '';
 
 			// The set of handles this request would pull into the combined file. The
 			// same skip rules are applied below during generation so the two branches
@@ -865,7 +945,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * core inlines itself, core block-asset styles under the 6.9+ separate-assets
 		 * mode, handles excluded from combining, and non-'all' media styles stay out
 		 * of the combined file. Used both to build the file and to detect when a
-		 * previously cached file is stale.
+		 * previously cached file is stale. Classic themes stay on the combine path
+		 * (only block themes short-circuit via the inline budget); on 6.9+
+		 * classic themes the hoisting-aware dedupe below keeps `wp-block-*`
+		 * handles out of the combined file so no duplicate output or FOUC occurs
+		 * while non-block CSS still benefits from combining.
 		 *
 		 * @since 1.9.0
 		 *
@@ -885,11 +969,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				}
 				$style_data = $wp_styles->registered[ $handle ];
 
-				if ( $this->core_will_inline( $handle ) ) {
-					continue;
-				}
-
-				if ( $this->is_core_block_asset( $handle, $separate_block_assets ) ) {
+				// Single dedupe assertion: never emit combined output for a
+				// handle core already hoisted/inlined (block hoisting + the
+				// cumulative styles_inline_size_limit budget).
+				if ( $this->is_duplicate_of_core_output( $handle, $separate_block_assets ) ) {
 					continue;
 				}
 
@@ -1430,6 +1513,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			if ( ! function_exists( 'wp_is_block_theme' ) || ! wp_is_block_theme() ) {
+				// Classic themes intentionally stay on the combine path: core
+				// 6.9 on-demand hoisting owns only `wp-block-*` handles (excluded
+				// from $eligible_handles via the dedupe above), while the
+				// remaining theme CSS still benefits from combining. No FOUC:
+				// the combined file holds only non-block handles core never emits.
 				return false;
 			}
 			$limit = $this->get_styles_inline_limit();
@@ -2211,6 +2299,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( $this->path_rejected ) {
 				return '';
 			}
+			// Defense-in-depth literal check: url_path is already sanitized
+			// at construction, and sanitize_cache_path() below is the real
+			// gate (it also refuses encoded vectors this check cannot see).
+			// Kept so a future construction-path regression still fails
+			// closed here instead of reaching the filesystem.
 			if ( false !== strpos( $this->url_path, "\0" ) || false !== strpos( $this->url_path, '..' ) ) {
 				$this->log_traversal_probe( $this->url_path );
 				return '';
@@ -2230,8 +2323,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( $variant ) {
 				$suffix .= "-{$variant}";
 			}
-			$resolved = "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $this->url_path ? "index{$suffix}.{$type}" : "{$this->url_path}/index{$suffix}.{$type}" );
-			if ( ! $this->is_path_contained( $resolved ) ) {
+			if ( ! preg_match( '/^[a-z0-9]+$/i', (string) $type ) ) {
+				$this->log_traversal_probe( (string) $type );
+				return '';
+			}
+			$filename = "index{$suffix}.{$type}";
+			$resolved = Util::sanitize_cache_path( $this->cache_root_dir, $this->domain, $this->url_path, $filename );
+			if ( '' === $resolved ) {
 				$this->log_traversal_probe( $this->url_path );
 				return '';
 			}
@@ -2256,6 +2354,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( $this->path_rejected ) {
 				return '';
 			}
+			// Defense-in-depth literal check (see get_cache_file_path()):
+			// url_path is already sanitized at construction and
+			// sanitize_cache_path() below is the real gate for encoded
+			// vectors; kept so a construction-path regression still fails
+			// closed here instead of emitting a URL for an escaped path.
 			if ( false !== strpos( $this->url_path, "\0" ) || false !== strpos( $this->url_path, '..' ) ) {
 				$this->log_traversal_probe( $this->url_path );
 				return '';
@@ -2267,15 +2370,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$this->log_traversal_probe( $variant );
 				return '';
 			}
+			if ( ! preg_match( '/^[a-z0-9]+$/i', (string) $type ) ) {
+				$this->log_traversal_probe( (string) $type );
+				return '';
+			}
 			$suffix   = $variant ? "-{$variant}" : '';
-			$relative = ( '' === $this->url_path ? "index{$suffix}.{$type}" : "{$this->url_path}/index{$suffix}.{$type}" );
+			$filename = "index{$suffix}.{$type}";
 			// Containment parity with get_cache_file_path(): refuse when the
 			// resolved filesystem path would escape the cache root/domain.
-			$resolved = "{$this->cache_root_dir}/{$this->domain}/{$relative}";
-			if ( ! $this->is_path_contained( $resolved ) ) {
+			$resolved = Util::sanitize_cache_path( $this->cache_root_dir, $this->domain, $this->url_path, $filename );
+			if ( '' === $resolved ) {
 				$this->log_traversal_probe( $this->url_path );
 				return '';
 			}
+			$relative = ( '' === $this->url_path ? $filename : "{$this->url_path}/{$filename}" );
 			return "{$this->cache_root_url}/{$this->domain}/{$relative}";
 		}
 
@@ -2321,22 +2429,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return bool True on success.
 		 */
 		private function atomic_put_contents( string $path, string $contents ): bool {
+			// Containment pre-check: never create a tmp sibling outside the
+			// cache root/domain tree (fail-closed, no partial file).
+			if ( '' === $path || ! $this->is_path_contained( $path ) ) {
+				$this->log_traversal_probe( $path );
+				return false;
+			}
 			$fs = $this->get_filesystem();
 			if ( ! $fs ) {
 				return false;
 			}
-			$tmp = $path . '.tmp.' . wp_rand();
-			if ( ! $fs->put_contents( $tmp, $contents, FS_CHMOD_FILE ) ) {
-				$fs->delete( $tmp );
-				return false;
-			}
-			$moved = $fs->move( $tmp, $path, true );
-			if ( ! $moved ) {
-				$fs->delete( $tmp );
-				// Fallback to direct write if move is unavailable.
-				return (bool) $fs->put_contents( $path, $contents, FS_CHMOD_FILE );
-			}
-			return true;
+			// Shared tmp+rename helper: unique tmp name, no non-atomic
+			// direct-write fallback so interrupted writes leave nothing.
+			return Util::atomic_file_put_contents( $fs, $path, $contents );
 		}
 
 		/**
@@ -2655,20 +2760,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			 */
 			$urls = (array) apply_filters( 'wppo_invalidation_urls', $urls, $page_id );
 
-			// Sanitize: normalize, reject traversal and null bytes, dedupe.
+			// Sanitize via the shared helper (single-decode, null-byte/
+			// dot-dot/drive/UNC rejection) so encoded vectors a literal
+			// `..`/`\0` check would miss are dropped before any delete.
+			// '' is the benign homepage and is kept; a hostile input that
+			// sanitizes to '' is skipped. The sanitized entries pass through
+			// get_file_path() (a second sanitize pass); that double-sanitize
+			// is fail-closed — the first pass output can only decode to a
+			// benign literal or refuse (see clear_cache()).
 			$sanitized = array();
 			foreach ( $urls as $u ) {
-				$u = is_string( $u ) ? $u : (string) $u;
-				$u = wp_normalize_path( trim( $u, '/' ) );
-				if ( '' !== $u && ( false !== strpos( $u, "\0" ) || false !== strpos( $u, '..' ) ) ) {
-					continue;
+				$u              = is_string( $u ) ? $u : (string) $u;
+				$sanitized_path = Util::sanitize_cache_url_path( $u );
+				if ( '' === $sanitized_path ) {
+					if ( function_exists( 'wp_parse_url' ) ) {
+						$raw_component = wp_parse_url( $u, PHP_URL_PATH );
+					} else {
+						$raw_component = parse_url( $u, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
+					}
+					if ( null === $raw_component || false === $raw_component ) {
+						$raw_component = $u;
+					}
+					if ( '' !== trim( trim( (string) $raw_component ), '/' ) ) {
+						continue;
+					}
 				}
-				$sanitized[] = $u;
+				$sanitized[] = $sanitized_path;
 			}
 			$sanitized = array_values( array_unique( $sanitized ) );
 
 			// Purge collected URLs via filesystem; primary URL also clears css/used-css.
-			$primary_normalized = wp_normalize_path( trim( (string) $path, '/' ) );
+			$primary_normalized = Util::sanitize_cache_url_path( (string) $path );
 			foreach ( $sanitized as $url_path ) {
 				$html_file_path = $this->get_file_path( $url_path, 'html' );
 				if ( '' === $html_file_path ) {
@@ -2785,6 +2907,68 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Invalidate the static HTML cache for a single post URL only.
+		 *
+		 * Used by the per-page delay kill-switch (#1037) so toggling
+		 * `_wppo_delay_disabled` takes effect on that URL without a full purge
+		 * and without the home/archive fan-out of
+		 * {@see invalidate_dynamic_static_html()}: only the post permalink's
+		 * `index.html` (+ gzip/brotli variants, role variants, no-cache marker,
+		 * and css/used-css sidecars) is deleted. Multisite-safe: per-site
+		 * `get_permalink()` plus domain-based `get_file_path()`, so no
+		 * cross-site leakage. Fail-open: any failure is swallowed — callers must
+		 * never fatal a meta save. No new WP/PHP APIs; safe on WP 6.2+ / PHP 8.2+.
+		 *
+		 * @since NEXT
+		 * @param int $page_id Post ID whose single URL cache must be purged.
+		 * @return void
+		 */
+		public function invalidate_single_static_html( int $page_id ): void {
+			try {
+				if ( $page_id <= 0 ) {
+					return;
+				}
+				$permalink = function_exists( 'get_permalink' ) ? get_permalink( $page_id ) : '';
+				if ( ! is_string( $permalink ) || '' === $permalink || is_wp_error( $permalink ) ) {
+					return;
+				}
+				$path = function_exists( 'wp_make_link_relative' ) ? wp_make_link_relative( $permalink ) : (string) wp_parse_url( $permalink, PHP_URL_PATH );
+				if ( ! is_string( $path ) || '' === trim( $path ) ) {
+					return;
+				}
+				$url_path = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( trim( (string) $path, '/' ) ) : trim( (string) $path, '/' );
+				if ( false !== strpos( $url_path, "\0" ) || false !== strpos( $url_path, '..' ) ) {
+					return;
+				}
+
+				$html_file_path = $this->get_file_path( $url_path, 'html' );
+				if ( '' !== $html_file_path ) {
+					$norm            = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $html_file_path ) : $html_file_path;
+					$cache_root_norm = '' !== $this->cache_root_dir && function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $this->cache_root_dir ) : $this->cache_root_dir;
+					$abspath_norm    = defined( 'ABSPATH' ) && function_exists( 'wp_normalize_path' ) ? wp_normalize_path( ABSPATH ) : ( defined( 'ABSPATH' ) ? ABSPATH : '' );
+					if ( ( '' === $cache_root_norm || 0 === strpos( $norm, $cache_root_norm ) )
+					&& ( '' === $abspath_norm || 0 === strpos( $norm, $abspath_norm ) ) ) {
+						$this->delete_cache_files( $html_file_path );
+						$this->delete_role_variant_files( dirname( $html_file_path ) );
+						$this->delete_no_cache_marker( $html_file_path );
+					}
+				}
+				$css_file_path = $this->get_file_path( $url_path, 'css' );
+				if ( '' !== $css_file_path ) {
+					$this->delete_cache_files( $css_file_path );
+				}
+				$used_css_path = $this->get_file_path( $url_path, 'used-css' );
+				if ( '' !== $used_css_path ) {
+					$this->delete_cache_files( $used_css_path );
+				}
+
+				self::bump_stats_cache();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
 		 * Surgically invalidate cache for a WooCommerce product, order, or coupon.
 		 *
 		 * Purges only the object's own permalink path (+ css/used-css sidecars)
@@ -2884,31 +3068,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$primary_normalized = '';
 			// Track the object's own permalink separately from filtered extras
 			// so a filter entry cannot redefine sidecar/regen decisions.
+			// Shared-helper sanitization (single-decode, null-byte/dot-dot/
+			// drive/UNC rejection) so encoded vectors never reach delete.
 			if ( ! empty( $urls ) && is_string( $urls[0] ) ) {
-				$primary_candidate = (string) wp_parse_url( $urls[0], PHP_URL_PATH );
-				if ( '' === $primary_candidate ) {
-					$primary_candidate = $urls[0];
-				}
-				$primary_candidate = wp_normalize_path( trim( rawurldecode( $primary_candidate ), '/' ) );
-				if ( '' !== $primary_candidate && false === strpos( $primary_candidate, '..' ) ) {
-					$primary_normalized = $primary_candidate;
-				}
+				$primary_normalized = Util::sanitize_cache_url_path( $urls[0] );
 			}
 			foreach ( $urls as $u ) {
 				$u = is_string( $u ) ? $u : (string) $u;
 				// Accept full URLs/query strings from the filter: purge by path only.
-				$path_only = (string) wp_parse_url( $u, PHP_URL_PATH );
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$path_only = (string) wp_parse_url( $u, PHP_URL_PATH );
+				} else {
+					$path_only = (string) parse_url( $u, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
+				}
 				if ( '' === trim( (string) $path_only, '/' ) && false !== strpos( $u, '?' ) ) {
 					continue;
 				}
-				if ( '' !== $path_only ) {
-					$u = $path_only;
-				}
-				$u = wp_normalize_path( trim( rawurldecode( $u ), '/' ) );
-				if ( '' === $u || false !== strpos( $u, '..' ) ) {
+				$sanitized_path = Util::sanitize_cache_url_path( $u );
+				if ( '' === $sanitized_path ) {
 					continue;
 				}
-				$sanitized[] = $u;
+				$sanitized[] = $sanitized_path;
 			}
 			$sanitized = array_values( array_unique( $sanitized ) );
 
@@ -3024,22 +3204,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return bool True when contained.
 		 */
 		private function is_path_contained( string $path ): bool {
-			if ( '' === $this->cache_root_dir || '' === $this->domain ) {
-				return false;
-			}
-
-			if ( function_exists( 'wp_normalize_path' ) ) {
-				$norm = wp_normalize_path( $path );
-				$root = wp_normalize_path( $this->cache_root_dir );
-			} else {
-				$norm = str_replace( '\\', '/', $path );
-				$root = str_replace( '\\', '/', $this->cache_root_dir );
-			}
-
-			$root       = rtrim( $root, '/' ) . '/';
-			$domain_dir = $root . trim( $this->domain, '/' ) . '/';
-
-			return 0 === strpos( $norm, $root ) && 0 === strpos( $norm, $domain_dir );
+			// Centralized dual-prefix containment lives in
+			// Util::is_cache_path_contained(); this wrapper only binds the
+			// per-instance root/domain so every call site shares one audit point.
+			return Util::is_cache_path_contained( $this->cache_root_dir, $this->domain, $path );
 		}
 
 		/**
@@ -3094,13 +3262,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		private function get_file_path( ?string $url_path = null, string $type = 'html' ): string {
 			$raw_input = (string) $url_path;
-			$url_path  = self::sanitize_cache_url_path( $url_path );
 
 			if ( '' === $this->cache_root_dir || '' === $this->domain ) {
 				return '';
 			}
 
-			if ( '' === $url_path && '' !== trim( $raw_input ) ) {
+			if ( 'used-css' === $type ) {
+				$filename = 'used-css.css';
+			} else {
+				if ( ! preg_match( '/^[a-z0-9]+$/i', (string) $type ) ) {
+					$this->log_traversal_probe( $raw_input );
+					return '';
+				}
+				$filename = "index.{$type}";
+			}
+
+			// Single auditable containment point: host normalization, path
+			// sanitization, filename allowlist, and dual-prefix containment
+			// all live in Util::sanitize_cache_path().
+			$resolved = Util::sanitize_cache_path( $this->cache_root_dir, $this->domain, $raw_input, $filename );
+
+			if ( '' === $resolved ) {
 				// Distinguish the benign homepage ('/', '') from a rejected
 				// hostile input: only log when the raw path component is
 				// non-empty after trimming slashes and whitespace.
@@ -3114,17 +3296,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				}
 				if ( '' !== trim( trim( (string) $raw_component ), '/' ) ) {
 					$this->log_traversal_probe( $raw_input );
-					return ''; // Return empty string to prevent deletion or creation outside cache root.
 				}
-			}
-
-			$filename = 'used-css' === $type ? 'used-css.css' : "index.{$type}";
-
-			$resolved = "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $url_path ? $filename : "{$url_path}/{$filename}" );
-
-			if ( ! $this->is_path_contained( $resolved ) ) {
-				$this->log_traversal_probe( $raw_input );
-				return '';
+				return ''; // Return empty string to prevent deletion or creation outside cache root.
 			}
 
 			return $resolved;
@@ -3245,11 +3418,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			if ( $url_path ) {
 				$raw_clear_path = (string) $url_path;
-				$url_path       = wp_normalize_path( $raw_clear_path );
-
-				if ( false !== strpos( $url_path, "\0" ) || false !== strpos( $url_path, '..' ) ) {
-					return false;
+				// Centralized sanitization (single-decode, null-byte/dot-dot/
+				// drive/UNC rejection): encoded vectors the old literal
+				// `..`/`\0` check missed are refused here instead of reaching
+				// the filesystem. A benign homepage ('/') still sanitizes to
+				// '' and proceeds; a hostile input fails closed.
+				// Note: the sanitized result is passed through get_file_path()
+				// (which runs sanitize_cache_path() → sanitize_cache_url_path()
+				// a second time). The double-sanitize is fail-closed by design:
+				// the first pass output is already free of `..`/NUL/drive/UNC,
+				// so the second rawurldecode pass can at most yield a benign
+				// literal (e.g. `%252e` → `%2e` → `.`) or refuse to ''.
+				$sanitized_clear = Util::sanitize_cache_url_path( $raw_clear_path );
+				if ( '' === $sanitized_clear ) {
+					if ( function_exists( 'wp_parse_url' ) ) {
+						$raw_component = wp_parse_url( $raw_clear_path, PHP_URL_PATH );
+					} else {
+						$raw_component = parse_url( $raw_clear_path, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
+					}
+					if ( null === $raw_component || false === $raw_component ) {
+						$raw_component = $raw_clear_path;
+					}
+					if ( '' !== trim( trim( (string) $raw_component ), '/' ) ) {
+						$instance->log_traversal_probe( $raw_clear_path );
+						return false;
+					}
 				}
+				$url_path = $sanitized_clear;
 
 				$html_file_path = $instance->get_file_path( $url_path, 'html' );
 				$css_file_path  = $instance->get_file_path( $url_path, 'css' );
@@ -3564,10 +3759,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return $stats;
 			}
 
-			// Cache miss: compute both together and store atomically.
-			$total_size            = $instance->calculate_directory_size( $cache_dir );
+			// Cache miss: compute size and page count in a single recursive
+			// walk so large caches pay one filesystem enumeration, not two.
+			$dir_stats             = $instance->calculate_directory_stats( $cache_dir );
+			$total_size            = $dir_stats['size'];
 			$stats['size']         = size_format( $total_size );
-			$stats['cached_pages'] = $instance->count_cached_pages( $cache_dir );
+			$stats['cached_pages'] = $dir_stats['count'];
 			self::store_cache_stats(
 				array(
 					'size'  => $stats['size'],
@@ -3607,15 +3804,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
-		 * Calculate the size of a directory.
+		 * Calculate directory size and cached-page count in a single walk.
 		 *
-		 * @param string $directory The path to the directory whose size is to be calculated.
+		 * Single recursive `$fs->dirlist()` traversal returning both
+		 * aggregates so callers do not enumerate large static caches twice.
+		 * Reuses the `size` already reported by `dirlist()` when available
+		 * instead of issuing a second `size()` stat per file.
+		 *
+		 * @param string $directory The path to the directory to scan.
 		 * @param int    $depth     Recursion depth guard.
-		 * @return int The total size of the directory in bytes.
+		 * @return array{size:int,count:int} Total bytes and index.html count.
 		 *
-		 * @since 1.0.0
+		 * @since NEXT
 		 */
-		private function calculate_directory_size( string $directory, int $depth = 0 ): int {
+		private function calculate_directory_stats( string $directory, int $depth = 0 ): array {
+			$empty = array(
+				'size'  => 0,
+				'count' => 0,
+			);
 			// Guard against unbounded recursion on very large caches (10k+ pages).
 			if ( $depth > 20 ) {
 				if ( ! self::$depth_warning_logged && defined( 'WP_DEBUG' ) && WP_DEBUG ) {
@@ -3625,31 +3831,60 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					// anomalies (symlink loops) are server-ops signal. Fires once per
 					// request, strictly WP_DEBUG-gated.
 					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-					error_log( 'WPPO: calculate_directory_size depth cap (20) hit at ' . $directory . ' — stats may be under-reported due to deep nesting or symlink loop.' );
+					error_log( 'WPPO: calculate_directory_stats depth cap (20) hit at ' . $directory . ' — stats may be under-reported due to deep nesting or symlink loop.' );
 				}
-				return 0;
+				return $empty;
 			}
-			$total_size = 0;
-			$fs         = $this->get_filesystem();
+			$fs = $this->get_filesystem();
 
 			if ( ! $fs ) {
-				return $total_size;
+				return $empty;
 			}
 
 			$files = $fs->dirlist( $directory );
 
 			if ( ! $files ) {
-				return $total_size;
+				return $empty;
 			}
 
+			$size  = 0;
+			$count = 0;
 			foreach ( $files as $file ) {
-				$file_path   = trailingslashit( $directory ) . $file['name'];
-				$total_size += ( 'd' === $file['type'] )
-					? $this->calculate_directory_size( $file_path, $depth + 1 )
-					: $fs->size( $file_path );
+				$file_path = trailingslashit( $directory ) . $file['name'];
+				if ( 'd' === $file['type'] ) {
+					$child  = $this->calculate_directory_stats( $file_path, $depth + 1 );
+					$size  += $child['size'];
+					$count += $child['count'];
+					continue;
+				}
+				if ( isset( $file['size'] ) && is_numeric( $file['size'] ) && (int) $file['size'] >= 0 ) {
+					$size += (int) $file['size'];
+				} else {
+					$size += (int) $fs->size( $file_path );
+				}
+				if ( 'index.html' === $file['name'] ) {
+					++$count;
+				}
 			}
 
-			return $total_size;
+			return array(
+				'size'  => $size,
+				'count' => $count,
+			);
+		}
+
+		/**
+		 * Calculate the size of a directory.
+		 *
+		 * @param string $directory The path to the directory whose size is to be calculated.
+		 * @param int    $depth     Recursion depth guard.
+		 * @return int The total size of the directory in bytes.
+		 *
+		 * @since 1.0.0
+		 */
+		private function calculate_directory_size( string $directory, int $depth = 0 ): int {
+			$stats = $this->calculate_directory_stats( $directory, $depth );
+			return $stats['size'];
 		}
 
 		/**
@@ -3662,36 +3897,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.9.0
 		 */
 		private function count_cached_pages( string $directory, int $depth = 0 ): int {
-			if ( $depth > 20 ) {
-				if ( ! self::$depth_warning_logged && defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-					self::$depth_warning_logged = true;
-					// error_log (not Log::add()) is intentional: same rationale as in
-					// calculate_directory_size() — stats-time DB writes are undesirable.
-					// Fires once per request, strictly WP_DEBUG-gated.
-					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-					error_log( 'WPPO: count_cached_pages depth cap (20) hit at ' . $directory . ' — stats may be under-reported due to deep nesting or symlink loop.' );
-				}
-				return 0;
-			}
-			$fs = $this->get_filesystem();
-
-			if ( ! $fs ) {
-				return 0;
-			}
-
-			$files = $fs->dirlist( $directory );
-			if ( ! $files ) {
-				return 0;
-			}
-			$count = 0;
-			foreach ( $files as $file ) {
-				if ( 'd' === $file['type'] ) {
-					$count += $this->count_cached_pages( trailingslashit( $directory ) . $file['name'], $depth + 1 );
-				} elseif ( 'index.html' === $file['name'] ) {
-					++$count;
-				}
-			}
-			return $count;
+			$stats = $this->calculate_directory_stats( $directory, $depth );
+			return $stats['count'];
 		}
 
 		/**

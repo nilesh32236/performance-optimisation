@@ -190,6 +190,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+				'woo_cache_self_test'       => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'get_woo_cache_self_test' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
 				'used_css_regenerate'       => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'used_css_regenerate' ),
@@ -1210,6 +1216,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'lz4'  => defined( '\Redis::COMPRESSION_LZ4' ),
 					'zstd' => defined( '\Redis::COMPRESSION_ZSTD' ),
 				);
+				if ( ! isset( $status['serializers'] ) ) {
+					$status['serializers'] = $manager->get_serializer_support();
+				}
 				return $this->send_response( $status );
 			}
 
@@ -1217,8 +1226,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$config = $this->build_redis_config( $params );
 				$ping   = $manager->ping( $config );
 				if ( is_wp_error( $ping ) ) {
-					Log::add( __( 'Redis connection ping failed.', 'performance-optimisation' ) );
-					return $this->send_response( null, false, 400, __( 'Redis connection failed.', 'performance-optimisation' ) );
+					// No Log::add here: Object_Cache::ping() already records
+					// the failure in-app via log_redis_failure().
+					return $this->send_response( $this->redis_error_payload( $ping, 'error' ), false, 400, __( 'Redis connection failed.', 'performance-optimisation' ) );
 				}
 
 				return $this->send_response( array( 'success' => true ) );
@@ -1229,8 +1239,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$result = $manager->enable( $config );
 
 				if ( is_wp_error( $result ) ) {
-					Log::add( __( 'Redis connection enable failed.', 'performance-optimisation' ) );
-					return $this->send_response( null, false, 400, __( 'Redis connection failed.', 'performance-optimisation' ) );
+					// No Log::add here: enable() → ping() already logged it.
+					return $this->send_response( $this->redis_error_payload( $result, 'error' ), false, 400, __( 'Redis connection failed.', 'performance-optimisation' ) );
 				}
 
 				Log::add( __( 'Object Cache enabled.', 'performance-optimisation' ) );
@@ -1259,8 +1269,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$result = $manager->enable( $config );
 
 				if ( is_wp_error( $result ) ) {
-					Log::add( __( 'Object Cache circuit recovery failed — Redis still unreachable.', 'performance-optimisation' ) );
-					return $this->send_response( null, false, 400, __( 'Redis is still unreachable. The circuit breaker stays open.', 'performance-optimisation' ) );
+					// No Log::add here: enable() → ping() already logged it.
+					return $this->send_response( $this->redis_error_payload( $result, 'warning' ), false, 400, __( 'Redis is still unreachable. The circuit breaker stays open.', 'performance-optimisation' ) );
 				}
 
 				$manager->clear_circuit_state();
@@ -1279,7 +1289,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					Log::add( __( 'Object Cache flushed.', 'performance-optimisation' ) );
 					return $this->send_response( true, true, 200, __( 'Object Cache flushed.', 'performance-optimisation' ) );
 				}
-				return $this->send_response( null, false, 400, __( 'Failed to flush object cache.', 'performance-optimisation' ) );
+				// No Log::add here: Object_Cache::flush() already recorded
+				// the failure in-app. Forward the manager's real error so
+				// the SPA notice keeps its specificity.
+				$flush_error = $manager->get_last_flush_error();
+				if ( ! ( $flush_error instanceof \WP_Error ) ) {
+					$flush_error = new \WP_Error( 'flush_fail', __( 'Flush reported failure.', 'performance-optimisation' ) );
+				}
+				return $this->send_response( $this->redis_error_payload( $flush_error, 'error' ), false, 400, __( 'Failed to flush object cache.', 'performance-optimisation' ) );
 			}
 
 			return $this->send_response( null, false, 400, __( 'Invalid action.', 'performance-optimisation' ) );
@@ -1394,6 +1411,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 			$nodes = sanitize_text_field( (string) $nodes );
 			return $nodes ? array( $nodes ) : array();
+		}
+
+		/**
+		 * Build a useNotice-compatible error payload for Redis failures.
+		 *
+		 * The SPA reads `res.success` + `res.message`; this adds a structured
+		 * `code` + `notice` ({ type, message }) body so useNotice() can render
+		 * the failure with the right severity without changing the envelope.
+		 *
+		 * @since NEXT
+		 * @param \WP_Error $error  Failing result.
+		 * @param string    $notice Notice severity: 'error', 'warning', 'info'.
+		 * @return array Shape { code: string, notice: array{ type: string, message: string } }.
+		 */
+		private function redis_error_payload( $error, string $notice = 'error' ): array {
+			$allowed = array( 'error', 'warning', 'info' );
+			if ( ! in_array( $notice, $allowed, true ) ) {
+				$notice = 'error';
+			}
+			$message = $error->get_error_message();
+			if ( '' === $message ) {
+				$message = __( 'Redis connection failed.', 'performance-optimisation' );
+			}
+			return array(
+				'code'   => $error->get_error_code(),
+				'notice' => array(
+					'type'    => $notice,
+					'message' => $message,
+				),
+			);
 		}
 
 		/**
@@ -1737,6 +1784,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			return $this->send_response( array( 'suggestions' => $suggestions ) );
+		}
+
+		/**
+		 * Verifiable WooCommerce cart/checkout cache-exclusion self-test (read-only).
+		 *
+		 * Returns Util::woo_cache_self_test(): detected Woo paths against the
+		 * exclusion list, safe-mode toggle state, and per-URL pass/fail
+		 * proving cart/checkout/account bypass the static HTML cache with
+		 * DONOTCACHEPAGE honored. Never writes options, transients, or files.
+		 *
+		 * @param \WP_REST_Request $_request The request object (unused).
+		 * @since NEXT
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function get_woo_cache_self_test( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			return $this->send_response( Util::woo_cache_self_test() );
 		}
 
 		/**
