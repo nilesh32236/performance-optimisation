@@ -963,6 +963,168 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Build a single-key trends map with baseline samples + a current sample.
+	 *
+	 * @since NEXT
+	 *
+	 * @param string $metric Metric key ('lcp'|'cls').
+	 * @param int    $baseline_count Number of baseline samples.
+	 * @param float  $baseline_value Baseline sample value.
+	 * @param float  $current_value Current (latest) sample value.
+	 * @return array Trends map.
+	 */
+	private function make_anomaly_trends( string $metric, int $baseline_count, float $baseline_value, float $current_value ): array {
+		$snapshots = array();
+		for ( $i = 0; $i < $baseline_count; $i++ ) {
+			$snapshots[] = array( $metric => $baseline_value );
+		}
+		$snapshots[] = array( $metric => $current_value );
+		return array( 'key1' => $snapshots );
+	}
+
+	/**
+	 * Build a RUM aggregate with a single path carrying n samples at an average.
+	 *
+	 * @since NEXT
+	 *
+	 * @param string $metric Metric key ('lcp'|'cls').
+	 * @param int    $n Sample count.
+	 * @param float  $avg Sample average.
+	 * @return array RUM aggregate.
+	 */
+	private function make_anomaly_rum( string $metric, int $n, float $avg ): array {
+		return array(
+			'2026-09-01' => array(
+				'/' => array(
+					$metric => array(
+						'n'   => $n,
+						'sum' => (float) $n * $avg,
+					),
+				),
+			),
+		);
+	}
+
+	/**
+	 * Test undersampled trend history never alarms.
+	 *
+	 * Given n below 10 When evaluated Then no alarm — even with
+	 * corroborating RUM field data.
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_detect_anomalies_undersampled_returns_empty(): void {
+		$this->install_stubs();
+		$trends = $this->make_anomaly_trends( 'lcp', 4, 2000.0, 3000.0 );
+		$rum    = $this->make_anomaly_rum( 'lcp', 50, 2600.0 );
+
+		$this->assertSame( array(), AI_Adaptive::detect_anomalies( $trends, $rum, 1700000000 ) );
+	}
+
+	/**
+	 * Test a trend regression without RUM corroboration never alarms.
+	 *
+	 * The same regression alarms once corroborating field data (n>=10,
+	 * average degraded vs the trend baseline) is provided.
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_detect_anomalies_requires_rum_corroboration(): void {
+		$this->install_stubs();
+		$trends = $this->make_anomaly_trends( 'lcp', 10, 2000.0, 3000.0 );
+
+		$undersampled = $this->make_anomaly_rum( 'lcp', 5, 2600.0 );
+		$this->assertSame( array(), AI_Adaptive::detect_anomalies( $trends, $undersampled, 1700000000 ) );
+
+		$corroborating = $this->make_anomaly_rum( 'lcp', 12, 2600.0 );
+		$anomalies     = AI_Adaptive::detect_anomalies( $trends, $corroborating, 1700000000 );
+		$this->assertCount( 1, $anomalies );
+		$this->assertSame( 'lcp', $anomalies[0]['metric'] );
+		$this->assertEqualsWithDelta( 50.0, $anomalies[0]['change_pct'], 0.001 );
+	}
+
+	/**
+	 * Test repeated anomalies collapse to a single banner with 7-day cooldown.
+	 *
+	 * Given repeated anomaly When alarmed Then single banner max with
+	 * 7-day cooldown: the second evaluation is suppressed and alarming
+	 * resumes only after the window elapses.
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_detect_anomalies_cooldown_single_banner(): void {
+		$this->install_stubs();
+		$trends = $this->make_anomaly_trends( 'lcp', 10, 2000.0, 3000.0 );
+		$rum    = $this->make_anomaly_rum( 'lcp', 12, 2600.0 );
+		$now    = 1700000000;
+
+		$first = AI_Adaptive::detect_anomalies( $trends, $rum, $now );
+		$this->assertCount( 1, $first );
+
+		$this->assertSame( array(), AI_Adaptive::detect_anomalies( $trends, $rum, $now ) );
+		$this->assertSame( array(), AI_Adaptive::detect_anomalies( $trends, $rum, $now + ( 6 * DAY_IN_SECONDS ) ) );
+
+		$after = AI_Adaptive::detect_anomalies( $trends, $rum, $now + ( 7 * DAY_IN_SECONDS ) + 1 );
+		$this->assertCount( 1, $after );
+	}
+
+	/**
+	 * Test the CLS arm uses an absolute delta, not a percent change.
+	 *
+	 * A +0.07 absolute shift alarms; a +30% relative shift under the
+	 * +0.05 absolute threshold does not.
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_detect_anomalies_cls_absolute_delta(): void {
+		$this->install_stubs();
+		$now = 1700000000;
+
+		$shift = $this->make_anomaly_trends( 'cls', 10, 0.05, 0.12 );
+		$rum   = $this->make_anomaly_rum( 'cls', 12, 0.10 );
+		$fired = AI_Adaptive::detect_anomalies( $shift, $rum, $now );
+		$this->assertCount( 1, $fired );
+		$this->assertSame( 'cls', $fired[0]['metric'] );
+		$this->assertEqualsWithDelta( 0.07, $fired[0]['change_abs'], 0.0001 );
+
+		// Reset the alarm so the second evaluation tests the arm
+		// threshold, not the cooldown gate.
+		unset( $this->options['wppo_ai_anomaly_last_alarm'] );
+
+		$relative_only = $this->make_anomaly_trends( 'cls', 10, 0.02, 0.026 );
+		$rum_small     = $this->make_anomaly_rum( 'cls', 12, 0.024 );
+		$this->assertSame( array(), AI_Adaptive::detect_anomalies( $relative_only, $rum_small, $now ) );
+	}
+
+	/**
+	 * Test detector throwables degrade to an empty result (fail-open).
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_detect_anomalies_throwable_returns_empty(): void {
+		$this->install_stubs();
+		Functions\when( 'apply_filters' )->alias(
+			static function () {
+				throw new \Exception( 'filter exploded' );
+			}
+		);
+		$trends = $this->make_anomaly_trends( 'lcp', 10, 2000.0, 3000.0 );
+		$rum    = $this->make_anomaly_rum( 'lcp', 12, 2600.0 );
+
+		$this->assertSame( array(), AI_Adaptive::detect_anomalies( $trends, $rum, 1700000000 ) );
+	}
+
+	/**
 	 * Test commerce exclude paths derive from WooCommerce URLs when available.
 	 *
 	 * Runs last: covering the Woo-presence branch requires eval-declaring the

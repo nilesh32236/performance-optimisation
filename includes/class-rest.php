@@ -123,15 +123,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
-				// @deprecated NEXT get_page_assets is deprecated; kept one release for
-				// external consumers. Migrate to the Abilities API
-				// performance-optimisation/get-page-assets.
-				'get_page_assets'           => array(
-					'methods'             => 'GET',
-					'callback'            => array( $this, 'get_page_assets' ),
-					'permission_callback' => array( $this, 'permission_callback' ),
-					'schema'              => $schemas,
-				),
 				'image_job_status'          => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_image_job_status' ),
@@ -190,9 +181,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+				'woo_cache_self_test'       => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'get_woo_cache_self_test' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
 				'used_css_regenerate'       => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'used_css_regenerate' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
+				'purge_used_css_cache'      => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'purge_used_css_cache' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
@@ -641,6 +644,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$sanitized_settings['auto_rescan'] = $options['performance_audit']['auto_rescan'];
 			}
 
+			// Preserve dismissed AI suggestions when the request omits them
+			// (issue #1036): AiPanel save posts only the toggles, while the
+			// dismiss action posts the full list — a toggle save must not
+			// wipe prior dismissals.
+			if ( 'ai_adaptive' === $tab && ! isset( $params['settings']['dismissed_suggestions'] ) && isset( $options['ai_adaptive']['dismissed_suggestions'] ) ) {
+				$dismissed = $options['ai_adaptive']['dismissed_suggestions'];
+				if ( is_array( $dismissed ) ) {
+					$sanitized_dismissed = array();
+					foreach ( $dismissed as $metric ) {
+						if ( ! is_string( $metric ) ) {
+							continue;
+						}
+						$m = sanitize_text_field( $metric );
+						if ( '' !== $m ) {
+							$sanitized_dismissed[] = substr( $m, 0, 64 );
+						}
+					}
+					$sanitized_settings['dismissed_suggestions'] = array_values( array_unique( $sanitized_dismissed ) );
+				}
+			}
+
+			// Preserve the field-LCP minimum-sample threshold when the request
+			// omits it (issue #1036): AiPanel save posts only the toggles, so
+			// a toggle save must not wipe a custom threshold.
+			if ( 'ai_adaptive' === $tab && ! isset( $params['settings']['field_lcp_min_samples'] ) && isset( $options['ai_adaptive']['field_lcp_min_samples'] ) ) {
+				$sanitized_settings['field_lcp_min_samples'] = absint( $options['ai_adaptive']['field_lcp_min_samples'] );
+			}
+
 			$options[ $tab ] = $sanitized_settings;
 
 			update_option( 'wppo_settings', $options );
@@ -703,6 +734,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		}
 
 		/**
+		 * Resolve a client- or DB-supplied image path to an absolute source path.
+		 *
+		 * DB-backed pending values are already absolute; relative client
+		 * values are resolved under `ABSPATH`. Uses the same
+		 * `ltrim()` + allowlist construction as the validator so the
+		 * enqueue/sync loops can never double-prefix an absolute value.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $img_path           Raw path from the request or DB queue.
+		 * @param string $normalized_abspath Trailingslashed `ABSPATH`.
+		 * @return string Absolute candidate source path.
+		 */
+		private function resolve_optimise_source_path( string $img_path, string $normalized_abspath ): string {
+			$candidate = wp_normalize_path( $img_path );
+			if ( method_exists( 'PerformanceOptimise\Inc\Img_Converter', 'is_path_in_allowlist' ) && Img_Converter::is_path_in_allowlist( $candidate ) ) {
+				return $candidate;
+			}
+			return $normalized_abspath . ltrim( $candidate, '/' );
+		}
+
+		/**
 		 * Optimizes the images and converts them to WebP or AVIF format.
 		 *
 		 * Uses Action Scheduler for background processing when available,
@@ -713,6 +766,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function optimise_image( \WP_REST_Request $request ) {
+			// Defense-in-depth capability re-check on the conversion/delete
+			// trigger path (the route permission_callback already requires
+			// manage_options). Guarded so unit stubs without the pluggable
+			// helper cannot fatal.
+			if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) ) {
+				return $this->send_response( null, false, 403, __( 'You are not allowed to optimize images.', 'performance-optimisation' ) );
+			}
+
 			$params = $request->get_params();
 
 			$webp_images = isset( $params['webp'] ) ? array_map( 'sanitize_text_field', (array) $params['webp'] ) : array();
@@ -738,15 +799,50 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				}
 			}
 
-			// Validate image paths using realpath to prevent directory traversal.
+			// Validate image paths against the uploads/wppo allowlist to
+			// prevent directory traversal. Relative client paths are resolved
+			// under ABSPATH, then containment is asserted via
+			// Img_Converter::is_path_in_allowlist() (guarded) plus a realpath
+			// check when the file exists. Fail-open: invalid paths are
+			// rejected with the file intact, never converted.
 			$normalized_abspath = trailingslashit( wp_normalize_path( ABSPATH ) );
 			foreach ( array_merge( $webp_images, $avif_images ) as $img_path ) {
-				$source_path = $normalized_abspath . $img_path;
+				if ( false !== strpos( $img_path, "\0" ) ) {
+					return $this->send_response( null, false, 400, __( 'Invalid image path provided.', 'performance-optimisation' ) );
+				}
+				// Segment-only traversal check: `..` as a full path segment
+				// (after URL-decoding), so `my..photo.jpg` stays valid.
+				$decoded_segments = str_replace( '\\', '/', rawurldecode( $img_path ) );
+				if ( 1 === preg_match( '#(^|/)\.\.(/|$)#', $decoded_segments ) ) {
+					return $this->send_response( null, false, 400, __( 'Invalid image path provided.', 'performance-optimisation' ) );
+				}
+				$source_path = $this->resolve_optimise_source_path( $img_path, $normalized_abspath );
+				if ( method_exists( 'PerformanceOptimise\Inc\Img_Converter', 'is_path_in_allowlist' ) && ! Img_Converter::is_path_in_allowlist( $source_path ) ) {
+					return $this->send_response( null, false, 400, __( 'Invalid image path provided.', 'performance-optimisation' ) );
+				}
 				if ( ! file_exists( $source_path ) ) {
 					continue;
 				}
 				$resolved = realpath( $source_path );
-				if ( false === $resolved || 0 !== strpos( wp_normalize_path( $resolved ), $normalized_abspath ) ) {
+				if ( false === $resolved ) {
+					return $this->send_response( null, false, 400, __( 'Invalid image path provided.', 'performance-optimisation' ) );
+				}
+				$resolved_norm = wp_normalize_path( $resolved );
+				$content_base  = trailingslashit( wp_normalize_path( WP_CONTENT_DIR ) );
+				$root_ok       = 0 === strpos( $resolved_norm, $normalized_abspath ) || 0 === strpos( $resolved_norm, $content_base );
+				if ( ! $root_ok ) {
+					$abspath_real = realpath( ABSPATH );
+					if ( false !== $abspath_real ) {
+						$root_ok = 0 === strpos( $resolved_norm, trailingslashit( wp_normalize_path( $abspath_real ) ) );
+					}
+				}
+				if ( ! $root_ok ) {
+					$content_real = realpath( WP_CONTENT_DIR );
+					if ( false !== $content_real ) {
+						$root_ok = 0 === strpos( $resolved_norm, trailingslashit( wp_normalize_path( $content_real ) ) );
+					}
+				}
+				if ( ! $root_ok ) {
 					return $this->send_response( null, false, 400, __( 'Invalid image path provided.', 'performance-optimisation' ) );
 				}
 			}
@@ -757,7 +853,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			if ( $use_action_scheduler ) {
 				// Schedule background jobs via Action Scheduler with deduplication.
 				foreach ( $webp_images as $webp_image ) {
-					$source_path = wp_normalize_path( ABSPATH . $webp_image );
+					$source_path = $this->resolve_optimise_source_path( $webp_image, $normalized_abspath );
 
 					if ( file_exists( $source_path ) ) {
 						$args = array(
@@ -779,7 +875,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				}
 
 				foreach ( $avif_images as $avif_image ) {
-					$source_path = wp_normalize_path( ABSPATH . $avif_image );
+					$source_path = $this->resolve_optimise_source_path( $avif_image, $normalized_abspath );
 
 					if ( file_exists( $source_path ) ) {
 						$args = array(
@@ -826,7 +922,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$img_converter = new Img_Converter( $options );
 
 			foreach ( $webp_images as $webp_image ) {
-				$source_path = wp_normalize_path( ABSPATH . $webp_image );
+				$source_path = $this->resolve_optimise_source_path( $webp_image, $normalized_abspath );
 
 				if ( file_exists( $source_path ) ) {
 					$img_converter->convert_image( $source_path, 'webp' );
@@ -834,7 +930,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			foreach ( $avif_images as $avif_image ) {
-				$source_path = wp_normalize_path( ABSPATH . $avif_image );
+				$source_path = $this->resolve_optimise_source_path( $avif_image, $normalized_abspath );
 
 				if ( file_exists( $source_path ) ) {
 					$img_converter->convert_image( $source_path, 'avif' );
@@ -863,12 +959,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function delete_optimised_image(): \WP_REST_Response {
+			// Defense-in-depth capability re-check on the delete trigger
+			// (the route permission_callback already requires
+			// manage_options). Guarded so unit stubs cannot fatal.
+			if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) ) {
+				return $this->send_response( null, false, 403, __( 'You are not allowed to delete optimized images.', 'performance-optimisation' ) );
+			}
+
 			global $wp_filesystem;
 			if ( ! Util::init_filesystem() ) {
 				return $this->send_response( null, false, 500, __( 'Unable to initialize filesystem.', 'performance-optimisation' ) );
 			}
 
 			$wppo_dir = wp_normalize_path( WP_CONTENT_DIR . '/wppo' );
+
+			// Delete containment: prove the target is exactly the plugin's
+			// `wppo` directory inside `WP_CONTENT_DIR` before unlinking, and
+			// re-assert via realpath when it exists. Never unlink outside.
+			$content_dir = rtrim( wp_normalize_path( WP_CONTENT_DIR ), '/' ) . '/';
+			if ( rtrim( $wppo_dir, '/' ) . '/' !== $content_dir . 'wppo/' ) {
+				return $this->send_response( null, false, 400, __( 'Invalid optimized images folder.', 'performance-optimisation' ) );
+			}
+			if ( file_exists( $wppo_dir ) ) {
+				$resolved_wppo = realpath( $wppo_dir );
+				if ( false === $resolved_wppo || rtrim( wp_normalize_path( $resolved_wppo ), '/' ) . '/' !== $content_dir . 'wppo/' ) {
+					// Allow symlink edge-cases only when the resolved path
+					// is still inside WP_CONTENT_DIR (fail-open otherwise).
+					if ( false === $resolved_wppo || 0 !== strpos( rtrim( wp_normalize_path( $resolved_wppo ), '/' ) . '/', $content_dir ) ) {
+						return $this->send_response( null, false, 400, __( 'Invalid optimized images folder.', 'performance-optimisation' ) );
+					}
+				}
+			}
 
 			if ( ! $wp_filesystem || ! $wp_filesystem->is_dir( $wppo_dir ) ) {
 				return $this->send_response( null, false, 404, __( 'Optimized images folder does not exist.', 'performance-optimisation' ) );
@@ -1082,42 +1203,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		}
 
 		/**
-		 * Returns the cached assets for a specific post/page.
-		 *
-		 * @deprecated NEXT Use the Abilities API `performance-optimisation/get-page-assets`
-		 *             or Asset_Manager::get_page_assets() directly. This REST route will
-		 *             be removed in a future release.
-		 * @param \WP_REST_Request $request The request object.
-		 * @since 1.1.0
-		 * @return \WP_REST_Response The response object.
-		 */
-		public function get_page_assets( \WP_REST_Request $request ) {
-			_deprecated_function( __METHOD__, 'NEXT', 'Abilities::execute_get_page_assets' );
-			$params  = $request->get_params();
-			$post_id = isset( $params['post_id'] ) ? absint( $params['post_id'] ) : 0;
-
-			if ( ! $post_id ) {
-				return $this->send_response( null, false, 400, __( 'Post ID is required.', 'performance-optimisation' ) );
-			}
-
-			$assets = Asset_Manager::get_page_assets( $post_id );
-
-			if ( false === $assets ) {
-				return $this->send_response(
-					array(
-						'scripts' => array(),
-						'styles'  => array(),
-					),
-					true,
-					200,
-					__( 'No assets captured yet. Visit the page on the frontend first.', 'performance-optimisation' )
-				);
-			}
-
-			return $this->send_response( $assets );
-		}
-
-		/**
 		 * Returns the status of background image optimization jobs.
 		 *
 		 * @param \WP_REST_Request $_request The request object.
@@ -1204,6 +1289,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'lz4'  => defined( '\Redis::COMPRESSION_LZ4' ),
 					'zstd' => defined( '\Redis::COMPRESSION_ZSTD' ),
 				);
+				if ( ! isset( $status['serializers'] ) ) {
+					$status['serializers'] = $manager->get_serializer_support();
+				}
 				return $this->send_response( $status );
 			}
 
@@ -1211,8 +1299,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$config = $this->build_redis_config( $params );
 				$ping   = $manager->ping( $config );
 				if ( is_wp_error( $ping ) ) {
-					Log::add( __( 'Redis connection ping failed.', 'performance-optimisation' ) );
-					return $this->send_response( null, false, 400, __( 'Redis connection failed.', 'performance-optimisation' ) );
+					// No Log::add here: Object_Cache::ping() already records
+					// the failure in-app via log_redis_failure().
+					return $this->send_response( $this->redis_error_payload( $ping, 'error' ), false, 400, __( 'Redis connection failed.', 'performance-optimisation' ) );
 				}
 
 				return $this->send_response( array( 'success' => true ) );
@@ -1223,8 +1312,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$result = $manager->enable( $config );
 
 				if ( is_wp_error( $result ) ) {
-					Log::add( __( 'Redis connection enable failed.', 'performance-optimisation' ) );
-					return $this->send_response( null, false, 400, __( 'Redis connection failed.', 'performance-optimisation' ) );
+					// No Log::add here: enable() → ping() already logged it.
+					return $this->send_response( $this->redis_error_payload( $result, 'error' ), false, 400, __( 'Redis connection failed.', 'performance-optimisation' ) );
 				}
 
 				Log::add( __( 'Object Cache enabled.', 'performance-optimisation' ) );
@@ -1253,8 +1342,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$result = $manager->enable( $config );
 
 				if ( is_wp_error( $result ) ) {
-					Log::add( __( 'Object Cache circuit recovery failed — Redis still unreachable.', 'performance-optimisation' ) );
-					return $this->send_response( null, false, 400, __( 'Redis is still unreachable. The circuit breaker stays open.', 'performance-optimisation' ) );
+					// No Log::add here: enable() → ping() already logged it.
+					return $this->send_response( $this->redis_error_payload( $result, 'warning' ), false, 400, __( 'Redis is still unreachable. The circuit breaker stays open.', 'performance-optimisation' ) );
 				}
 
 				$manager->clear_circuit_state();
@@ -1273,7 +1362,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					Log::add( __( 'Object Cache flushed.', 'performance-optimisation' ) );
 					return $this->send_response( true, true, 200, __( 'Object Cache flushed.', 'performance-optimisation' ) );
 				}
-				return $this->send_response( null, false, 400, __( 'Failed to flush object cache.', 'performance-optimisation' ) );
+				// No Log::add here: Object_Cache::flush() already recorded
+				// the failure in-app. Forward the manager's real error so
+				// the SPA notice keeps its specificity.
+				$flush_error = $manager->get_last_flush_error();
+				if ( ! ( $flush_error instanceof \WP_Error ) ) {
+					$flush_error = new \WP_Error( 'flush_fail', __( 'Flush reported failure.', 'performance-optimisation' ) );
+				}
+				return $this->send_response( $this->redis_error_payload( $flush_error, 'error' ), false, 400, __( 'Failed to flush object cache.', 'performance-optimisation' ) );
 			}
 
 			return $this->send_response( null, false, 400, __( 'Invalid action.', 'performance-optimisation' ) );
@@ -1388,6 +1484,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 			$nodes = sanitize_text_field( (string) $nodes );
 			return $nodes ? array( $nodes ) : array();
+		}
+
+		/**
+		 * Build a useNotice-compatible error payload for Redis failures.
+		 *
+		 * The SPA reads `res.success` + `res.message`; this adds a structured
+		 * `code` + `notice` ({ type, message }) body so useNotice() can render
+		 * the failure with the right severity without changing the envelope.
+		 *
+		 * @since NEXT
+		 * @param \WP_Error $error  Failing result.
+		 * @param string    $notice Notice severity: 'error', 'warning', 'info'.
+		 * @return array Shape { code: string, notice: array{ type: string, message: string } }.
+		 */
+		private function redis_error_payload( $error, string $notice = 'error' ): array {
+			$allowed = array( 'error', 'warning', 'info' );
+			if ( ! in_array( $notice, $allowed, true ) ) {
+				$notice = 'error';
+			}
+			$message = $error->get_error_message();
+			if ( '' === $message ) {
+				$message = __( 'Redis connection failed.', 'performance-optimisation' );
+			}
+			return array(
+				'code'   => $error->get_error_code(),
+				'notice' => array(
+					'type'    => $notice,
+					'message' => $message,
+				),
+			);
 		}
 
 		/**
@@ -1734,6 +1860,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		}
 
 		/**
+		 * Verifiable WooCommerce cart/checkout cache-exclusion self-test (read-only).
+		 *
+		 * Returns Util::woo_cache_self_test(): detected Woo paths against the
+		 * exclusion list, safe-mode toggle state, and per-URL pass/fail
+		 * proving cart/checkout/account bypass the static HTML cache with
+		 * DONOTCACHEPAGE honored. Never writes options, transients, or files.
+		 *
+		 * @param \WP_REST_Request $_request The request object (unused).
+		 * @since NEXT
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function get_woo_cache_self_test( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			return $this->send_response( Util::woo_cache_self_test() );
+		}
+
+		/**
 		 * Regenerate used-CSS for all pages or a single post.
 		 *
 		 * @param \WP_REST_Request $request The request object.
@@ -1792,6 +1934,66 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					__( 'Queued %d used-CSS regeneration jobs.', 'performance-optimisation' ),
 					$queued
 				)
+			);
+		}
+
+		/**
+		 * Purge page cache and used CSS together via a single action (issue #1023).
+		 *
+		 * Shared purge path: delegates to Used_CSS::purge_coupled() which makes
+		 * a guarded call into the Cache layer. Accepts an optional `path` for a
+		 * single-page coupled purge; empty purges all.
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		public function purge_used_css_cache( \WP_REST_Request $request ): \WP_REST_Response {
+			$params = $request->get_params();
+			$path   = isset( $params['path'] ) ? sanitize_text_field( $params['path'] ) : null;
+
+			$url_path = null;
+			if ( null !== $path && '' !== $path ) {
+				$sanitized = Util::sanitize_cache_url_path( wp_normalize_path( $path ) );
+				if ( '' === $sanitized ) {
+					return $this->send_response( null, false, 400, __( 'Invalid path provided.', 'performance-optimisation' ) );
+				}
+				$url_path = $sanitized;
+			}
+
+			$result  = Used_CSS::purge_coupled( $url_path );
+			$page_ok = ! empty( $result['page_cache'] );
+			$css_ok  = ! empty( $result['used_css'] );
+			$data    = array(
+				'page_cache' => $page_ok,
+				'used_css'   => $css_ok,
+			);
+
+			if ( ! $page_ok && ! $css_ok ) {
+				Log::add( __( 'Coupled purge failed: page cache and used CSS not purged.', 'performance-optimisation' ) );
+				return $this->send_response( $data, false, 500, __( 'Failed to purge page cache and used CSS.', 'performance-optimisation' ) );
+			}
+
+			if ( $page_ok && $css_ok ) {
+				Log::add( __( 'Coupled purge: page cache and used CSS purged.', 'performance-optimisation' ) );
+				return $this->send_response(
+					$data,
+					true,
+					200,
+					__( 'Page cache and used CSS purged.', 'performance-optimisation' )
+				);
+			}
+
+			$message = $page_ok
+				? __( 'Page cache purged, but used CSS purge failed.', 'performance-optimisation' )
+				: __( 'Used CSS purged, but page cache purge failed.', 'performance-optimisation' );
+			Log::add( $message );
+
+			return $this->send_response(
+				$data,
+				true,
+				200,
+				$message
 			);
 		}
 
