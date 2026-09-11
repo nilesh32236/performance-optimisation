@@ -492,6 +492,118 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Update_settings() merges a partial tab: omitted keys survive, present
+	 * keys update, and nested associative arrays merge deeply (audit #8).
+	 */
+	public function test_update_settings_merges_partial_tab_without_dropping_keys(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		Functions\when( 'esc_url_raw' )->returnArg();
+
+		$existing = array(
+			'performance_audit' => array(
+				'pagespeed_api_key'     => 'SECRET-KEY',
+				'auto_rescan'           => 'weekly',
+				'server_timing_enabled' => false,
+				'nested'                => array(
+					'a' => 1,
+					'b' => 2,
+				),
+			),
+		);
+		Functions\when( 'get_option' )->alias(
+			static function ( $name, $fallback = false ) use ( $existing ) {
+				return 'wppo_settings' === $name ? $existing : $fallback;
+			}
+		);
+
+		$captured = array();
+		Functions\when( 'update_option' )->alias(
+			static function ( $name, $value ) use ( &$captured ) {
+				if ( 'wppo_settings' === $name ) {
+					$captured = $value;
+				}
+				return true;
+			}
+		);
+
+		$request = new WP_REST_Request(
+			array(
+				'tab'      => 'performance_audit',
+				'settings' => array(
+					'nested'      => array(
+						'b' => 20,
+						'c' => 3,
+					),
+					'rum_enabled' => true,
+				),
+			)
+		);
+
+		$response = $this->rest->update_settings( $request );
+
+		$this->assertSame( 200, $response->get_status() );
+		$tab = $captured['performance_audit'];
+
+		// (a) Keys omitted from the partial request are preserved.
+		$this->assertSame( 'SECRET-KEY', $tab['pagespeed_api_key'], 'Omitted API key must be preserved' );
+		$this->assertSame( 'weekly', $tab['auto_rescan'], 'Omitted auto_rescan must be preserved' );
+		$this->assertFalse( $tab['server_timing_enabled'], 'Omitted boolean flag must be preserved' );
+
+		// (b) A key present in the request updates.
+		$this->assertTrue( $tab['rum_enabled'], 'Present key must update' );
+
+		// (c) Nested associative arrays merge deeply instead of replacing.
+		$expected_nested = array(
+			'a' => 1,
+			'b' => 20,
+			'c' => 3,
+		);
+		$this->assertSame( $expected_nested, $tab['nested'], 'Nested arrays must merge deeply' );
+	}
+
+	/**
+	 * List values replace wholesale so a shortened list drops removed entries
+	 * instead of retaining stale tail entries via index-wise merging (audit #8).
+	 */
+	public function test_update_settings_replaces_list_values_wholesale(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		Functions\when( 'esc_url_raw' )->returnArg();
+
+		$existing = array(
+			'performance_audit' => array(
+				'high_value_urls' => array( 'https://a.test/', 'https://b.test/', 'https://c.test/' ),
+			),
+		);
+		Functions\when( 'get_option' )->alias(
+			static function ( $name, $fallback = false ) use ( $existing ) {
+				return 'wppo_settings' === $name ? $existing : $fallback;
+			}
+		);
+		$captured = array();
+		Functions\when( 'update_option' )->alias(
+			static function ( $name, $value ) use ( &$captured ) {
+				if ( 'wppo_settings' === $name ) {
+					$captured = $value;
+				}
+				return true;
+			}
+		);
+
+		$request = new WP_REST_Request(
+			array(
+				'tab'      => 'performance_audit',
+				'settings' => array(
+					'high_value_urls' => array( 'https://a.test/' ),
+				),
+			)
+		);
+
+		$this->rest->update_settings( $request );
+
+		$this->assertSame( array( 'https://a.test/' ), $captured['performance_audit']['high_value_urls'], 'Shortened lists must replace wholesale' );
+	}
+
+	/**
 	 * Test that import_settings sanitizes markup injected into exclude/delay
 	 * fields and coerces numeric strings supplied for string settings.
 	 */
