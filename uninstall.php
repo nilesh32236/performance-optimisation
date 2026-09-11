@@ -15,13 +15,216 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 
 global $wpdb;
 
+if ( ! function_exists( 'wppo_cleanup_network_files' ) ) {
+	/**
+	 * Clean up network-global filesystem artifacts (runs once per process).
+	 *
+	 * Covers the static HTML cache, converted-image dir, redis config, both
+	 * drop-ins (+ `.wppo-backup` / `.tmp.*` siblings), and the `.htaccess`
+	 * wppo_rules marker (+ `.wppo-bak` / `.wppo-tmp-*` siblings). These paths
+	 * live under WP_CONTENT_DIR / the site home directory and are shared by
+	 * every subsite, so the multisite loop must not repeat them per site —
+	 * a static once-guard makes repeats a no-op (fail-open throughout).
+	 *
+	 * @return void
+	 */
+	function wppo_cleanup_network_files(): void {
+		static $done = false;
+		if ( $done ) {
+			return;
+		}
+		$done = true;
+
+		// Remove cache directory.
+		// NOTE: This path must stay in sync with Cache::CACHE_DIR constant in includes/class-cache.php.
+		$cache_dir = WP_CONTENT_DIR . '/cache/wppo/';
+		wppo_delete_directory( $cache_dir );
+
+		// Remove converted images directory.
+		// NOTE: This path must stay in sync with Img_Converter class uploads paths in includes/class-img-converter.php.
+		$wppo_dir = WP_CONTENT_DIR . '/wppo/';
+		wppo_delete_directory( $wppo_dir );
+
+		// Remove Redis config file (verified: retry once, fail-open).
+		$redis_config = WP_CONTENT_DIR . '/wppo-redis-config.php';
+		if ( file_exists( $redis_config ) ) {
+			wp_delete_file( $redis_config );
+			if ( file_exists( $redis_config ) ) {
+				wp_delete_file( $redis_config );
+			}
+		}
+
+		// Remove advanced-cache.php drop-in if it belongs to this plugin.
+		$advanced_cache = WP_CONTENT_DIR . '/advanced-cache.php';
+		if ( file_exists( $advanced_cache ) ) {
+			$content = file_get_contents( $advanced_cache ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+			if ( false !== $content && ( false !== strpos( $content, 'WPPO_ADVANCED_CACHE_DROPIN' ) || false !== strpos( $content, 'is_user_logged_in_without_wp' ) ) ) {
+				wp_delete_file( $advanced_cache );
+				if ( file_exists( $advanced_cache ) ) {
+					wp_delete_file( $advanced_cache );
+				}
+			}
+		}
+		// Sweep backup/tmp siblings left by atomic writes (crashed or not),
+		// even when the live drop-in is already gone.
+		wppo_cleanup_dropin_artifacts();
+
+		// Remove object-cache.php drop-in if it belongs to this plugin.
+		// Marker-verified (current + legacy with WPPO signal) — never delete foreign drop-ins (fail-open).
+		$object_cache = WP_CONTENT_DIR . '/object-cache.php';
+		if ( file_exists( $object_cache ) && is_readable( $object_cache ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_readable
+			$size = filesize( $object_cache ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize
+			if ( false !== $size && $size < 1048576 ) {
+				$content = file_get_contents( $object_cache ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+				$is_own  = false;
+				if ( is_string( $content ) ) {
+					if ( class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) && method_exists( 'PerformanceOptimise\Inc\Object_Cache', 'is_own_dropin_content' ) ) {
+						$is_own = \PerformanceOptimise\Inc\Object_Cache::is_own_dropin_content( $content );
+					} else {
+						$is_own = ( false !== strpos( $content, 'Redis Object Cache Drop-in for Performance Optimisation' ) || ( false !== strpos( $content, 'Redis Object Cache Drop-in' ) && false !== strpos( $content, 'wppo-redis-config' ) ) );
+					}
+				}
+				if ( $is_own ) {
+					wp_delete_file( $object_cache );
+					if ( file_exists( $object_cache ) ) {
+						wp_delete_file( $object_cache );
+					}
+				}
+			}
+		}
+
+		// Remove the .htaccess marker block (delete-plugin-without-deactivate
+		// path) plus backup/tmp siblings so no residue survives uninstall.
+		wppo_remove_htaccess_rules();
+	}
+}
+
+if ( ! function_exists( 'wppo_cleanup_dropin_artifacts' ) ) {
+	/**
+	 * Delete advanced-cache backup/tmp siblings (fail-open).
+	 *
+	 * Removes `advanced-cache.php.wppo-backup` and orphaned
+	 * `advanced-cache.php.tmp.*` files from crashed atomic writes.
+	 *
+	 * @return void
+	 */
+	function wppo_cleanup_dropin_artifacts(): void {
+		$backup = WP_CONTENT_DIR . '/advanced-cache.php.wppo-backup';
+		if ( file_exists( $backup ) ) {
+			wp_delete_file( $backup );
+		}
+		$pattern = WP_CONTENT_DIR . '/advanced-cache.php.tmp.*';
+		$matches = glob( $pattern ); // phpcs:ignore WordPress.WP.AlternativeFunctions.glob_glob
+		if ( is_array( $matches ) ) {
+			foreach ( $matches as $tmp_file ) {
+				if ( is_file( $tmp_file ) ) {
+					wp_delete_file( $tmp_file );
+				}
+			}
+		}
+	}
+}
+
+if ( ! function_exists( 'wppo_remove_htaccess_rules' ) ) {
+	/**
+	 * Remove the wppo_rules marker block from .htaccess (fail-open).
+	 *
+	 * Standalone-safe: uninstall runs without the plugin's classes, so the
+	 * marker splice is implemented natively here. Deletes the
+	 * `.htaccess.wppo-bak` backup generation and `.htaccess.wppo-tmp-*`
+	 * orphans as well. Never fatals; residue is retried on the next
+	 * deactivate/uninstall.
+	 *
+	 * @return void
+	 */
+	function wppo_remove_htaccess_rules(): void {
+		$home_path = '';
+		if ( function_exists( 'get_home_path' ) ) {
+			$home_path = get_home_path();
+		} elseif ( defined( 'ABSPATH' ) ) {
+			$home_path = ABSPATH;
+		}
+		if ( ! is_string( $home_path ) || '' === $home_path ) {
+			return;
+		}
+		$htaccess_file = rtrim( $home_path, '/\\' ) . '/.htaccess';
+		if ( function_exists( 'wp_normalize_path' ) ) {
+			$htaccess_file = wp_normalize_path( $htaccess_file );
+		}
+
+		if ( ! file_exists( $htaccess_file ) || ! is_readable( $htaccess_file ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_readable
+			wppo_cleanup_htaccess_artifacts( $htaccess_file );
+			return;
+		}
+
+		$contents = file_get_contents( $htaccess_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+		if ( ! is_string( $contents ) ) {
+			return;
+		}
+
+		$begin = '# BEGIN wppo_rules';
+		$end   = '# END wppo_rules';
+		$start = strpos( $contents, $begin );
+		$stop  = strpos( $contents, $end );
+		if ( false !== $start && false !== $stop && $stop > $start ) {
+			$line_end = strpos( $contents, "\n", $stop );
+			$head     = substr( $contents, 0, $start );
+			$tail     = false === $line_end ? '' : substr( $contents, $line_end + 1 );
+			if ( '' === trim( (string) $tail ) ) {
+				$new_contents = rtrim( (string) $head, "\r\n" );
+				if ( '' !== $new_contents ) {
+					$new_contents .= "\n";
+				}
+			} else {
+				$new_contents = rtrim( (string) $head, "\r\n" ) . "\n" . ltrim( (string) $tail, "\r\n" );
+			}
+			if ( is_writable( $htaccess_file ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_writable
+				file_put_contents( $htaccess_file, $new_contents, LOCK_EX ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+			}
+		}
+
+		wppo_cleanup_htaccess_artifacts( $htaccess_file );
+	}
+}
+
+if ( ! function_exists( 'wppo_cleanup_htaccess_artifacts' ) ) {
+	/**
+	 * Delete .htaccess backup/tmp siblings (fail-open).
+	 *
+	 * @param string $htaccess_file Absolute path to the .htaccess file.
+	 * @return void
+	 */
+	function wppo_cleanup_htaccess_artifacts( string $htaccess_file ): void {
+		$backup = $htaccess_file . '.wppo-bak';
+		if ( file_exists( $backup ) ) {
+			wp_delete_file( $backup );
+		}
+		$pattern = $htaccess_file . '.wppo-tmp-*';
+		$matches = glob( $pattern ); // phpcs:ignore WordPress.WP.AlternativeFunctions.glob_glob
+		if ( is_array( $matches ) ) {
+			foreach ( $matches as $tmp_file ) {
+				if ( is_file( $tmp_file ) ) {
+					wp_delete_file( $tmp_file );
+				}
+			}
+		}
+	}
+}
+
 if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 	/**
 	 * Clean up plugin data for a single site.
 	 *
+	 * Per-site data (options, post/user meta, activity table, transients) is
+	 * removed on every call; network-global filesystem artifacts (cache dirs,
+	 * drop-ins, redis config, .htaccess marker) are delegated to
+	 * wppo_cleanup_network_files(), which runs once per process so the
+	 * multisite loop below does not repeat shared file deletes per subsite.
+	 *
+	 * @param bool $clean_network_files Whether to clean network-global files.
 	 * @return void
 	 */
-	function wppo_cleanup_site(): void {
+	function wppo_cleanup_site( bool $clean_network_files = true ): void {
 		global $wpdb;
 
 		// Drop custom table.
@@ -33,7 +236,7 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 		// Must stay in sync with Util::UNINSTALL_OPTIONS in
 		// includes/class-util.php (audit #899) — this file runs standalone
 		// under WP_UNINSTALL_PLUGIN, without the plugin's classes autoloaded.
-		$transient_prefix = is_multisite() ? (string) get_current_blog_id() . '_' : '';
+		$transient_prefix = ( function_exists( 'is_multisite' ) && is_multisite() && function_exists( 'get_current_blog_id' ) ) ? (string) get_current_blog_id() . '_' : '';
 		$wppo_options     = array(
 			'wppo_settings',
 			'wppo_img_info',
@@ -99,50 +302,12 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 		$like_lcp_meta = $wpdb->esc_like( '_wppo_lcp_image_url_' ) . '%';
 		$wpdb->query( "DELETE FROM {$wpdb->postmeta} WHERE meta_key LIKE '{$like_lcp_meta}'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
-		// Remove cache directory.
-		// NOTE: This path must stay in sync with Cache::CACHE_DIR constant in includes/class-cache.php.
-		$cache_dir = WP_CONTENT_DIR . '/cache/wppo/';
-		wppo_delete_directory( $cache_dir );
-
-		// Remove converted images directory.
-		// NOTE: This path must stay in sync with Img_Converter class uploads paths in includes/class-img-converter.php.
-		$wppo_dir = WP_CONTENT_DIR . '/wppo/';
-		wppo_delete_directory( $wppo_dir );
-
-		// Remove Redis config file.
-		$redis_config = WP_CONTENT_DIR . '/wppo-redis-config.php';
-		if ( file_exists( $redis_config ) ) {
-			wp_delete_file( $redis_config );
-		}
-
-		// Remove advanced-cache.php drop-in if it belongs to this plugin.
-		$advanced_cache = WP_CONTENT_DIR . '/advanced-cache.php';
-		if ( file_exists( $advanced_cache ) ) {
-			$content = file_get_contents( $advanced_cache ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
-			if ( false !== $content && ( false !== strpos( $content, 'WPPO_ADVANCED_CACHE_DROPIN' ) || false !== strpos( $content, 'is_user_logged_in_without_wp' ) ) ) {
-				wp_delete_file( $advanced_cache );
-			}
-		}
-
-		// Remove object-cache.php drop-in if it belongs to this plugin.
-		// Marker-verified (current + legacy with WPPO signal) — never delete foreign drop-ins (fail-open).
-		$object_cache = WP_CONTENT_DIR . '/object-cache.php';
-		if ( file_exists( $object_cache ) && is_readable( $object_cache ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_readable
-			$size = filesize( $object_cache ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize
-			if ( false !== $size && $size < 1048576 ) {
-				$content = file_get_contents( $object_cache ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
-				$is_own  = false;
-				if ( is_string( $content ) ) {
-					if ( class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) && method_exists( 'PerformanceOptimise\Inc\Object_Cache', 'is_own_dropin_content' ) ) {
-						$is_own = \PerformanceOptimise\Inc\Object_Cache::is_own_dropin_content( $content );
-					} else {
-						$is_own = ( false !== strpos( $content, 'Redis Object Cache Drop-in for Performance Optimisation' ) || ( false !== strpos( $content, 'Redis Object Cache Drop-in' ) && false !== strpos( $content, 'wppo-redis-config' ) ) );
-					}
-				}
-				if ( $is_own ) {
-					wp_delete_file( $object_cache );
-				}
-			}
+		// Network-global filesystem artifacts (cache dirs, drop-ins +
+		// siblings, redis config, .htaccess marker) are shared by every
+		// subsite — delegate to the once-guarded helper so the multisite
+		// loop below does not repeat them per site.
+		if ( $clean_network_files ) {
+			wppo_cleanup_network_files();
 		}
 
 		// Delete user meta.
@@ -258,11 +423,11 @@ if ( ! function_exists( 'wppo_delete_directory' ) ) {
 	}
 }
 
-// Clean up current site.
+// Clean up current site (includes the once-guarded network files).
 wppo_cleanup_site();
 
 // Clean up all sites in a multisite network.
-if ( is_multisite() && function_exists( 'get_sites' ) ) {
+if ( function_exists( 'is_multisite' ) && is_multisite() && function_exists( 'get_sites' ) ) {
 	$site_page      = 1;
 	$limit          = 100;
 	$has_more_sites = true;
@@ -279,9 +444,15 @@ if ( is_multisite() && function_exists( 'get_sites' ) ) {
 		}
 		$has_more_sites = ( count( $sites ) === $limit );
 		foreach ( $sites as $site ) {
-			switch_to_blog( $site->blog_id );
-			wppo_cleanup_site();
-			restore_current_blog();
+			if ( function_exists( 'switch_to_blog' ) ) {
+				switch_to_blog( $site->blog_id );
+			}
+			// Per-site data only — network files were already cleaned once
+			// by the initial wppo_cleanup_site() call above (once-guarded).
+			wppo_cleanup_site( false );
+			if ( function_exists( 'restore_current_blog' ) ) {
+				restore_current_blog();
+			}
 		}
 		++$site_page;
 	} while ( $has_more_sites );
