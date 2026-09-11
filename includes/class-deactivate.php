@@ -267,7 +267,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 					$wp_config_path,
 					$wp_config_content,
 					static function ( $contents ): bool {
-						return is_string( $contents ) && false === strpos( $contents, 'Enables WordPress Cache' ) && 1 !== preg_match( "/define\s*\(\s*['\"]WP_CACHE['\"]/", (string) $contents );
+						// Only the plugin-owned marker block is asserted gone so a
+						// host-managed WP_CACHE define elsewhere in the file survives
+						// deactivation instead of spuriously failing verification.
+						return is_string( $contents ) && false === strpos( $contents, 'Enables WordPress Cache' );
 					}
 				);
 				if ( true === $atomic ) {

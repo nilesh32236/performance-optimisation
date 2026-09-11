@@ -80,8 +80,9 @@ class WpConfigAtomicTest extends \PHPUnit\Framework\TestCase {
 		$this->assertTrue( $ok );
 		$this->assertStringContainsString( 'WP_CACHE', $fs->contents );
 		$this->assertTrue( Util::verify_php_syntax( $fs->contents ) );
-		$this->assertArrayHasKey( '/tmp/wordpress/wp-config.php.wppo-bak', $fs->copied );
+		$this->assertContains( '/tmp/wordpress/wp-config.php.wppo-bak', $fs->copy_log );
 		$this->assertContains( '/tmp/wordpress/wp-config.php.wppo-bak', $fs->deleted );
+		$this->assertFalse( $fs->exists( '/tmp/wordpress/wp-config.php.wppo-bak' ) );
 	}
 
 	/**
@@ -187,6 +188,27 @@ class WpConfigAtomicTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertNull( $notice );
 		$this->assertStringNotContainsString( 'Enables WordPress Cache', $fs->contents );
+		$this->assertTrue( Util::verify_php_syntax( $fs->contents ) );
+	}
+
+	/**
+	 * Deactivate keeps a host-managed WP_CACHE define while removing the plugin block.
+	 */
+	public function test_deactivate_keeps_host_wp_cache_define(): void {
+		$this->stub_path_helpers();
+		$with_block               = "<?php\ndefine( 'DB_NAME', 'test' );\ndefine( 'WP_CACHE', false ); // host-managed\n/** Enables WordPress Cache */\nif ( ! defined( 'WP_CACHE' ) ) {\n\tdefine( 'WP_CACHE', true );\n}\n/* That's all, stop editing! Happy publishing. */\n";
+		$fs                       = $this->make_fs( $with_block );
+		$GLOBALS['wp_filesystem'] = $fs;
+
+		try {
+			$notice = Deactivate::remove_wp_cache_constant();
+		} finally {
+			unset( $GLOBALS['wp_filesystem'] );
+		}
+
+		$this->assertNull( $notice );
+		$this->assertStringNotContainsString( 'Enables WordPress Cache', $fs->contents );
+		$this->assertStringContainsString( "define( 'WP_CACHE', false )", $fs->contents );
 		$this->assertTrue( Util::verify_php_syntax( $fs->contents ) );
 	}
 
@@ -318,6 +340,13 @@ class WPPO_WpConfig_FS_Mock {
 	 */
 	public $copied = array();
 	/**
+	 * Every copy destination, kept after delete() so tests can prove a
+	 * transient backup was created even once exists() reports it gone.
+	 *
+	 * @var array
+	 */
+	public $copy_log = array();
+	/**
 	 * Deleted paths.
 	 *
 	 * @var array
@@ -405,6 +434,7 @@ class WPPO_WpConfig_FS_Mock {
 		$content = isset( $this->put_paths[ $src ] ) ? $this->put_paths[ $src ] : $this->contents;
 		if ( $this->is_backup_path( $dst ) ) {
 			$this->copied[ $dst ] = $content;
+			$this->copy_log[]     = $dst;
 		} else {
 			$this->contents    = $this->corrupt_live_after_move ? "<?php\nbroken trunc if ( ! defined(" : $content;
 			$this->file_exists = true;
@@ -432,6 +462,7 @@ class WPPO_WpConfig_FS_Mock {
 			$content = $this->contents;
 		}
 		$this->copied[ $dst ] = $content;
+		$this->copy_log[]     = $dst;
 		if ( ! $this->is_backup_path( $dst ) && ! $this->is_tmp_path( $dst ) ) {
 			$this->contents    = $content;
 			$this->file_exists = true;
@@ -447,7 +478,7 @@ class WPPO_WpConfig_FS_Mock {
 	 */
 	public function delete( $path ) {
 		$this->deleted[] = $path;
-		unset( $this->put_paths[ $path ] );
+		unset( $this->put_paths[ $path ], $this->copied[ $path ] );
 		return true;
 	}
 
