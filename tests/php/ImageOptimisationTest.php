@@ -430,8 +430,8 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$result = $image_opt->prioritize_lcp_in_buffer( $html, $html );
 
 		$this->assertSame( 1, substr_count( $result, 'loading="lazy"' ) );
-		$this->assertStringContainsString( '<img src="https://example.com/a.jpg" />', $result );
-		$this->assertStringContainsString( '<img src="https://example.com/b.jpg" />', $result );
+		$this->assertStringContainsString( '<img src="https://example.com/a.jpg" loading="eager" decoding="async"', $result );
+		$this->assertStringContainsString( '<img src="https://example.com/b.jpg" loading="eager" decoding="async"', $result );
 		$this->assertStringContainsString( '<img src="https://example.com/c.jpg" loading="lazy"', $result );
 	}
 
@@ -1469,6 +1469,84 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$this->assertStringContainsString( 'rel="preload"', $result );
 		// The below-fold image keeps its lazy loading.
 		$this->assertStringContainsString( '<img src="https://example.com/second.jpg" loading="lazy"', $result );
+	}
+
+	/**
+	 * Test LCP guardrails on a six-image post: the first N images (including a
+	 * JS-lazy data-src hero) never carry loading=lazy, and the LCP hero gets
+	 * fetchpriority=high, decoding=async plus a matching preload link.
+	 *
+	 * @since NEXT
+	 */
+	public function test_lcp_guardrails_first_n_never_lazy_with_hero_preload(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+		Functions\when( 'esc_attr' )->returnArg();
+		Functions\when( 'esc_url' )->returnArg();
+		Functions\when( 'wp_kses' )->returnArg();
+		$this->stub_lcp_resolution( 'https://example.com/wp-content/uploads/hero.jpg' );
+
+		$image_opt = $this->make_lcp_enabled_instance( array( 'lcp_first_n' => 3 ) );
+
+		$html   = '<html><head></head><body>'
+			. '<img data-src="https://example.com/wp-content/uploads/hero.jpg" loading="lazy" />'
+			. '<img src="https://example.com/b.jpg" loading="lazy" />'
+			. '<img src="https://example.com/c.jpg" loading="lazy" />'
+			. '<img src="https://example.com/d.jpg" loading="lazy" />'
+			. '<img src="https://example.com/e.jpg" loading="lazy" />'
+			. '<img src="https://example.com/f.jpg" loading="lazy" /></body></html>';
+		$result = $image_opt->prioritize_lcp_in_buffer( $html, $html );
+
+		// The JS-lazy hero placeholder is restored and never lazy.
+		$this->assertStringNotContainsString( 'data-src=', $result );
+		$this->assertStringContainsString( 'src="https://example.com/wp-content/uploads/hero.jpg"', $result );
+		$this->assertStringContainsString( 'fetchpriority="high"', $result );
+		$this->assertStringContainsString( 'decoding="async"', $result );
+		$this->assertStringContainsString( 'rel="preload"', $result );
+		// First three images are eager; the remaining three stay lazy.
+		$this->assertSame( 3, substr_count( $result, 'loading="lazy"' ) );
+		$this->assertSame( 3, substr_count( $result, 'loading="eager"' ) );
+		// Positional: the first three URLs (hero, b, c) are eager with
+		// decoding async; the last three (d, e, f) stay lazy.
+		foreach (
+			array(
+				'https://example.com/wp-content/uploads/hero.jpg',
+				'https://example.com/b.jpg',
+				'https://example.com/c.jpg',
+			) as $eager_url
+		) {
+			$this->assertMatchesRegularExpression(
+				'#<img[^>]*src="' . preg_quote( $eager_url, '#' ) . '"[^>]*loading="eager"[^>]*>#',
+				$result,
+				"Expected {$eager_url} to be eager."
+			);
+			$this->assertMatchesRegularExpression(
+				'#<img[^>]*src="' . preg_quote( $eager_url, '#' ) . '"[^>]*decoding="async"[^>]*>#',
+				$result,
+				"Expected {$eager_url} to carry decoding async."
+			);
+		}
+		foreach (
+			array(
+				'https://example.com/d.jpg',
+				'https://example.com/e.jpg',
+				'https://example.com/f.jpg',
+			) as $lazy_url
+		) {
+			$this->assertMatchesRegularExpression(
+				'#<img[^>]*src="' . preg_quote( $lazy_url, '#' ) . '"[^>]*loading="lazy"[^>]*>#',
+				$result,
+				"Expected {$lazy_url} to stay lazy."
+			);
+		}
+		// The preload hint targets the hero URL (not a below-fold image).
+		$this->assertMatchesRegularExpression(
+			'#<link[^>]*rel="preload"[^>]*href="[^"]*hero\.jpg[^"]*"[^>]*>#',
+			$result,
+			'Expected the preload hint to reference the hero URL.'
+		);
 	}
 
 	/**

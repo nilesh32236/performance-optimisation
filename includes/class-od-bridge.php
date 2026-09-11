@@ -198,10 +198,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 				}
 			}
 
-			// Heuristic fallback 1-3.
+			// Heuristic fallback 1-3. Same precedence as
+			// Image_Optimisation::get_effective_exclude_first_images_count():
+			// additive `lcp_first_n` wins over legacy `excludeFirstImages`.
 			$settings = Util::get_settings();
 			$stored   = null;
-			if ( isset( $settings['image_optimisation']['excludeFirstImages'] ) ) {
+			if ( isset( $settings['image_optimisation']['lcp_first_n'] ) ) {
+				$stored = (int) $settings['image_optimisation']['lcp_first_n'];
+			} elseif ( isset( $settings['image_optimisation']['excludeFirstImages'] ) ) {
 				$stored = (int) $settings['image_optimisation']['excludeFirstImages'];
 			}
 

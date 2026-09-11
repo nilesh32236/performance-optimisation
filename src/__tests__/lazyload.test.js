@@ -526,6 +526,38 @@ describe( 'Lazy Load (lazyload.js)', () => {
 		} );
 	} );
 
+	describe( 'LCP hero guard', () => {
+		it( 'never lazy-loads a hero image: restores it eagerly and skips observation', () => {
+			const { observe } = mockIntersectionObserver();
+
+			const hero = document.createElement( 'img' );
+			hero.setAttribute( 'data-src', 'https://example.com/hero.jpg' );
+			hero.setAttribute( 'data-wppo-hero', '1' );
+			hero.setAttribute( 'loading', 'lazy' );
+			hero.classList.add( 'lazyload' );
+			document.body.appendChild( hero );
+
+			const below = document.createElement( 'img' );
+			below.setAttribute( 'data-src', 'https://example.com/below.jpg' );
+			document.body.appendChild( below );
+
+			jest.isolateModules( () => {
+				require( '../lazyload' );
+			} );
+
+			expect( hero.getAttribute( 'src' ) ).toBe(
+				'https://example.com/hero.jpg'
+			);
+			expect( hero.hasAttribute( 'data-src' ) ).toBe( false );
+			expect( hero.getAttribute( 'loading' ) ).toBe( 'eager' );
+			expect( hero.getAttribute( 'decoding' ) ).toBe( 'async' );
+			expect( hero.getAttribute( 'fetchpriority' ) ).toBe( 'high' );
+			expect( hero.classList.contains( 'lazyload' ) ).toBe( false );
+			expect( observe ).not.toHaveBeenCalledWith( hero );
+			expect( observe ).toHaveBeenCalledWith( below );
+		} );
+	} );
+
 	describe( 'loadImages()', () => {
 		it( 'restores iframes with loading=lazy in native mode', () => {
 			global.wppoNativeLazy = true;
