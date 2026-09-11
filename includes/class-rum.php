@@ -1500,6 +1500,102 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		}
 
 		/**
+		 * Get worst p75 LCP per normalized path for CSS queue prioritization.
+		 *
+		 * Read-only ordering signal for the critical-CSS / used-CSS queues
+		 * (issue #1059): collapses get_field_lcp_p75_by_segment() rows to
+		 * `path => max(p75)` and blends the latest PageSpeed trend LCP
+		 * snapshot per candidate URL (resolved via md5(esc_url_raw(url))
+		 * keys, max of mobile/desktop). Local aggregates only — no new
+		 * external calls, no PII. Fail-open: any failure returns array().
+		 * Multisite-safe: per-site get_option() reads only.
+		 *
+		 * @since NEXT
+		 * @param int|null $min_samples Minimum samples per segment. Null resolves via get_field_lcp_min_samples().
+		 * @return array<string, float> Normalized path => worst p75 LCP in ms, worst-first order.
+		 */
+		public static function get_path_lcp_priority( ?int $min_samples = null ): array {
+			try {
+				if ( ! function_exists( 'get_option' ) ) {
+					return array();
+				}
+				$scores = array();
+				$rows   = self::get_field_lcp_p75_by_segment( $min_samples );
+				foreach ( $rows as $row ) {
+					if ( ! is_array( $row ) || ! isset( $row['path'], $row['p75'] ) ) {
+						continue;
+					}
+					$path = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::normalize_rum_path( (string) $row['path'] ) : (string) $row['path'];
+					$p75  = (float) $row['p75'];
+					if ( $p75 <= 0 ) {
+						continue;
+					}
+					if ( ! isset( $scores[ $path ] ) || $p75 > $scores[ $path ] ) {
+						$scores[ $path ] = $p75;
+					}
+				}
+				arsort( $scores, SORT_NUMERIC );
+				return $scores;
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+				return array();
+			}
+		}
+
+		/**
+		 * Score a queue URL by worst p75 LCP (RUM path + trend blend).
+		 *
+		 * Resolves $url to its normalized path, looks up the RUM priority
+		 * map, and takes the max with the latest stored PageSpeed trend LCP
+		 * for md5(esc_url_raw($url))_{mobile,desktop} keys. Returns 0.0 when
+		 * no signal exists (caller keeps FIFO order). Read-only, fail-open.
+		 *
+		 * @since NEXT
+		 * @param string               $url Candidate queue URL.
+		 * @param array<string, float> $priority Optional pre-loaded get_path_lcp_priority() map.
+		 * @return float Worst p75 LCP in ms, or 0.0 when unknown.
+		 */
+		public static function score_url_lcp( string $url, ?array $priority = null ): float {
+			try {
+				if ( '' === trim( $url ) ) {
+					return 0.0;
+				}
+				if ( null === $priority ) {
+					$priority = self::get_path_lcp_priority();
+				}
+				$path = '/';
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$parts = wp_parse_url( $url );
+					$path  = isset( $parts['path'] ) && '' !== $parts['path'] ? (string) $parts['path'] : '/';
+				} elseif ( function_exists( 'parse_url' ) ) {
+					$parts = parse_url( $url ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url
+					$path  = isset( $parts['path'] ) && '' !== $parts['path'] ? (string) $parts['path'] : '/';
+				}
+				$path = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::normalize_rum_path( $path ) : $path;
+				$best = isset( $priority[ $path ] ) ? (float) $priority[ $path ] : 0.0;
+
+				if ( class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) && method_exists( 'PerformanceOptimise\Inc\Pagespeed', 'get_trends' ) && function_exists( 'esc_url_raw' ) && function_exists( 'get_option' ) ) {
+					$trends = \PerformanceOptimise\Inc\Pagespeed::get_trends();
+					if ( is_array( $trends ) ) {
+						$canonical = esc_url_raw( $url );
+						foreach ( array( 'mobile', 'desktop' ) as $strategy ) {
+							$key = md5( $canonical ) . '_' . $strategy;
+							if ( ! isset( $trends[ $key ] ) || ! is_array( $trends[ $key ] ) || empty( $trends[ $key ] ) ) {
+								continue;
+							}
+							$last = end( $trends[ $key ] );
+							if ( is_array( $last ) && isset( $last['lcp'] ) && is_numeric( $last['lcp'] ) ) {
+								$best = max( $best, (float) $last['lcp'] );
+							}
+						}
+					}
+				}
+				return $best >= 0 ? (float) $best : 0.0;
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+				return 0.0;
+			}
+		}
+
+		/**
 		 * Get field INP p75 segmented by device × template (read-only).
 		 *
 		 * Pure read path for RUM-gated INP-aware delay suggestions (issue
