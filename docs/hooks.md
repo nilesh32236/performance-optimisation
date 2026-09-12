@@ -1648,6 +1648,8 @@ Filters the ESI placeholder HTML rendered when ESI is unavailable. @since 2.0.0.
 ### `wppo_esi_fragment_html`
 Filters the rendered ESI fragment HTML before output. @since 2.0.0.
 
+Runs before the `wp_kses` sanitization contract (`wppo_esi_allowed_html`), so any markup added here must be permitted by that allowlist. The plugin's own `LiteSpeed_ESI::inject_nonce_replacement()` is attached to this filter: it rewrites `data-wppo-nonce` placeholders (including `__WPPO_ESI_NONCE__` / `__WPPO_NONCE__`) to a freshly minted nonce. A fragment supplied here carrying `data-wppo-nonce=""` therefore receives a real nonce automatically, and `data-*` attributes survive sanitization.
+
 **Parameters:**
 - `$fragment` *(string)* — Fragment markup.
 - `$block` *(string)* — Block name.
@@ -1656,6 +1658,8 @@ Filters the rendered ESI fragment HTML before output. @since 2.0.0.
 
 ### `wppo_esi_nonce_content`
 Filters the content rendered inside a nonce ESI fragment. @since 2.0.0.
+
+Applied by `LiteSpeed_ESI::inject_nonce_replacement()` after placeholder substitution. This is the content-level extension point; the never-applied `wppo_esi_nonce` / `wppo_litespeed_esi_nonce` names were removed in favour of the fragment filter above.
 
 **Parameters:**
 - `$content` *(string)* — Fragment content.

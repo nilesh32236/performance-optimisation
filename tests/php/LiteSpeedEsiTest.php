@@ -167,6 +167,59 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 		$this->assertContains( 'wppo_esi_nonces', $written, 'Wildcard allowlist transient must be wppo_-prefixed to avoid collisions.' );
 	}
 
+	/**
+	 * #1084 item 4: the injector must be attached to the filter that actually
+	 * carries fragment content, and must NOT sit on the never-applied
+	 * `wppo_esi_nonce` / `wppo_litespeed_esi_nonce` names.
+	 *
+	 * Those names were registered but nothing ever applied them, so the
+	 * injector never ran. They also cannot be reused for this method: it
+	 * applies `wppo_esi_nonce_content` internally, so registering it there
+	 * would recurse.
+	 */
+	public function test_init_registers_nonce_injector_on_fragment_html(): void {
+		$this->set_litespeed( true );
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $tag, $value = null ) {
+				if ( 'wppo_litespeed_esi_available' === $tag || 'wppo_esi_available' === $tag ) {
+					return false;
+				}
+				return $value;
+			}
+		);
+		Functions\when( 'get_option' )->justReturn( array() );
+
+		$filters = array();
+		Functions\when( 'add_filter' )->alias(
+			static function ( $hook, $cb, $prio = 10, $args = 1 ) use ( &$filters ) {
+				$filters[] = $hook;
+				return true;
+			}
+		);
+		Functions\when( 'add_action' )->justReturn( true );
+
+		LiteSpeed_ESI::init();
+
+		$this->assertContains( 'wppo_esi_fragment_html', $filters, 'Injector must run on the applied fragment-content filter.' );
+		$this->assertNotContains( 'wppo_esi_nonce', $filters, 'Dead hook name must no longer be registered.' );
+		$this->assertNotContains( 'wppo_litespeed_esi_nonce', $filters, 'Dead hook name must no longer be registered.' );
+	}
+
+	/**
+	 * #1084 item 4: now that the injector runs as a live filter, a non-string
+	 * value from an earlier filter must pass straight through rather than
+	 * throwing a TypeError and fataling fragment rendering.
+	 */
+	public function test_inject_nonce_replacement_passes_through_non_strings(): void {
+		$this->assertNull( LiteSpeed_ESI::inject_nonce_replacement( null ) );
+		$this->assertSame( array( 'a' ), LiteSpeed_ESI::inject_nonce_replacement( array( 'a' ) ) );
+		$this->assertSame( 42, LiteSpeed_ESI::inject_nonce_replacement( 42 ) );
+		$this->assertSame( '', LiteSpeed_ESI::inject_nonce_replacement( '' ) );
+		// A string without the placeholder is returned byte-identical.
+		$this->assertSame( '<div>x</div>', LiteSpeed_ESI::inject_nonce_replacement( '<div>x</div>' ) );
+	}
+
 	public function test_ajax_handler_returns_json_and_headers(): void {
 		$this->set_litespeed( true );
 		$headers = array();

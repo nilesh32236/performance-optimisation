@@ -755,12 +755,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * Replaces placeholder like __WPPO_ESI_NONCE__ or empty data-wppo-nonce with fresh nonce.
 		 * Stores 12h transient blog-prefixed.
 		 *
+		 * Runs as a `wppo_esi_fragment_html` filter, so `$content` is whatever
+		 * an earlier filter left behind. The parameter is deliberately untyped
+		 * and non-strings are passed straight back: a filter returning null or
+		 * an array must not turn fragment rendering into a TypeError fatal
+		 * (fail-open, matching the rest of the ESI path). Only content that
+		 * actually carries a `data-wppo-nonce` placeholder is rewritten.
+		 *
 		 * @since 2.0.0
-		 * @param string $content Content to inject.
-		 * @return string
+		 * @since NEXT Untyped parameter and non-string passthrough, now that this
+		 * runs as a live fragment filter.
+		 * @param mixed $content Content to inject.
+		 * @return mixed The rewritten content, or the input unchanged.
 		 */
-		public static function inject_nonce_replacement( string $content ): string {
-			if ( '' === $content || false === strpos( $content, 'data-wppo-nonce' ) ) {
+		public static function inject_nonce_replacement( $content ) {
+			if ( ! is_string( $content ) || '' === $content || false === strpos( $content, 'data-wppo-nonce' ) ) {
 				return $content;
 			}
 
@@ -932,18 +941,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 
 			// Only register ESI-specific hooks when enabled and available.
 			if ( ! self::is_enabled() && ! self::is_esi_available() ) {
-				// Still register generic ESI nonces filter for OLS? Allow.
-				// For OLS fallback we don't need litespeed_nonce, but keep nonce replacement filter.
-				add_filter( 'wppo_esi_nonce', array( self::class, 'inject_nonce_replacement' ), 10, 1 );
+				// OLS fallback: no litespeed_nonce action needed, but the
+				// nonce injector still runs on fragment output (below).
 				add_filter( 'litespeed_esi_nonces', array( self::class, 'filter_esi_nonces' ) );
+				self::register_nonce_injector();
 				return;
 			}
 
 			add_action( 'litespeed_nonce', array( self::class, 'handle_nonce' ), 10, 1 );
 			add_filter( 'litespeed_esi_nonces', array( self::class, 'filter_esi_nonces' ) );
-			add_filter( 'wppo_esi_nonce', array( self::class, 'inject_nonce_replacement' ), 10, 1 );
-			// Also filter content for nonce replacement on litespeed_nonce action.
-			add_filter( 'wppo_litespeed_esi_nonce', array( self::class, 'inject_nonce_replacement' ), 10, 1 );
+			self::register_nonce_injector();
+		}
+
+		/**
+		 * Attach the ESI nonce injector to the fragment-content filter.
+		 *
+		 * `inject_nonce_replacement()` rewrites `data-wppo-nonce` placeholders
+		 * in fragment markup to a fresh nonce, so it belongs on the hook that
+		 * actually carries fragment content: `wppo_esi_fragment_html`, applied
+		 * in `handle_ajax_fragment()` before the `wp_kses` contract runs (the
+		 * `data-*` allowlist there keeps the injected attribute). It runs
+		 * *before* sanitization, which is why the injected value must survive
+		 * `get_allowed_fragment_html()`.
+		 *
+		 * It previously sat on `wppo_esi_nonce` / `wppo_litespeed_esi_nonce`,
+		 * which nothing ever applies — the registration was dead, so the
+		 * injector never ran (issue #1084 item 4). Those names must not be
+		 * reused for this method: it *applies* `wppo_esi_nonce_content` and
+		 * `wppo_litespeed_esi_nonce_content` internally, so registering it on
+		 * those would recurse.
+		 *
+		 * Registered in both the enabled and the OLS-fallback branch, because
+		 * the fragment endpoint serves the hydration client either way.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private static function register_nonce_injector(): void {
+			add_filter( 'wppo_esi_fragment_html', array( self::class, 'inject_nonce_replacement' ), 10, 1 );
+			add_filter( 'wppo_litespeed_esi_fragment_html', array( self::class, 'inject_nonce_replacement' ), 10, 1 );
 		}
 
 		/**
