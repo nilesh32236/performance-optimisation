@@ -1,5 +1,9 @@
 import { useState, useRef, useEffect, useMemo } from '@wordpress/element';
-import { apiCall, fetchRecentActivities } from '../lib/apiRequest';
+import {
+	apiCall,
+	fetchRecentActivities,
+	isValidScanUrl,
+} from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
 import useUnsavedChanges from '../lib/useUnsavedChanges';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
@@ -310,29 +314,69 @@ const PluginSetting = ( { options } ) => {
 				.split( '\n' )
 				.map( ( url ) => url.trim() )
 				.filter( Boolean );
+			// Defense-in-depth: drop non-same-origin http(s) lines client-side
+			// (mirrors runPerformanceScan/queuePagespeedScan). Server-side host
+			// allowlisting + rate limiting remains authoritative.
+			const validUrls = urls.filter( isValidScanUrl );
+			const invalidUrls = urls.filter(
+				( url ) => ! isValidScanUrl( url )
+			);
+			if ( invalidUrls.length > 0 && validUrls.length === 0 ) {
+				notifyApiKey( {
+					type: 'error',
+					message: sprintf(
+						/* translators: %s: comma-separated list of rejected URLs */
+						__(
+							'No valid URLs to save. Rejected: %s. URLs must be same-origin http(s) URLs.',
+							'performance-optimisation'
+						),
+						invalidUrls.join( ', ' )
+					),
+				} );
+				return;
+			}
 			const response = await apiCall( 'update_settings', {
 				tab: 'performance_audit',
 				settings: {
 					...currentSettings,
 					server_timing_enabled: serverTimingEnabled,
 					rum_enabled: rumEnabled,
-					high_value_urls: urls,
+					high_value_urls: validUrls,
 				},
 			} );
 			if ( response.success ) {
+				const savedHighValueUrls = validUrls.join( '\n' );
+				if ( invalidUrls.length > 0 ) {
+					setHighValueUrls( savedHighValueUrls );
+				}
 				setBaseline( ( prev ) => ( {
 					...prev,
 					serverTimingEnabled,
 					rumEnabled,
-					highValueUrls,
+					highValueUrls: savedHighValueUrls,
 				} ) );
-				notifyApiKey( {
-					type: 'success',
-					message: __(
-						'Monitoring settings saved.',
-						'performance-optimisation'
-					),
-				} );
+				notifyApiKey(
+					invalidUrls.length > 0
+						? {
+								type: 'warning',
+								message: sprintf(
+									/* translators: 1: number of skipped URLs, 2: comma-separated list of skipped URLs */
+									__(
+										'Monitoring settings saved. Skipped %1$s invalid URL(s): %2$s.',
+										'performance-optimisation'
+									),
+									invalidUrls.length,
+									invalidUrls.join( ', ' )
+								),
+						  }
+						: {
+								type: 'success',
+								message: __(
+									'Monitoring settings saved.',
+									'performance-optimisation'
+								),
+						  }
+				);
 			} else {
 				notifyApiKey( {
 					type: 'error',

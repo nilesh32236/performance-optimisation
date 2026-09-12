@@ -246,7 +246,31 @@ describe( 'Lazy Load (lazyload.js)', () => {
 			).toBeInTheDocument();
 		} );
 
-		it( 'allows a "*" wildcard runtime allowlist entry', async () => {
+		it( 'ignores a window-only "*" wildcard unless the server allows it', async () => {
+			global.wppoAllowedScriptHosts = [ '*' ];
+			document.body.innerHTML =
+				'<script type="wppo/javascript" wppo-src="https://anything.example.dev/x.js"></script>';
+			await bootLazyload();
+
+			// A mutable window global must not silently disable the
+			// allowlist: the wildcard is ignored when the server list does
+			// not contain '*', so the untrusted host is blocked.
+			expect(
+				document.querySelector(
+					'script[src="https://anything.example.dev/x.js"]'
+				)
+			).toBeNull();
+			expect( consoleWarnSpy ).toHaveBeenCalledWith(
+				expect.stringContaining( 'wildcard is ignored' )
+			);
+		} );
+
+		it( 'honours a server-provided "*" wildcard', async () => {
+			global.wppoDelayConfig = {
+				idleTimeout: 3000,
+				defaultStrategy: 'interaction',
+				allowedScriptHosts: [ '*' ],
+			};
 			global.wppoAllowedScriptHosts = [ '*' ];
 			document.body.innerHTML =
 				'<script type="wppo/javascript" wppo-src="https://anything.example.dev/x.js"></script>';
