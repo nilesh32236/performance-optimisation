@@ -469,7 +469,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 */
 		private function get_script_type( string $attributes ): string {
 			if ( preg_match( '/\btype\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i', $attributes, $type_matches ) ) {
-				$type = '' !== $type_matches[2] ? $type_matches[2] : ( $type_matches[3] ?? '' );
+				// The unquoted alternative matches without groups 1-2, so
+				// $type_matches[2] can be unset; reading it directly emits an
+				// "Undefined array key" warning on PHP 8 for valueless or
+				// unquoted type attributes.
+				$type = '' !== ( $type_matches[2] ?? '' ) ? $type_matches[2] : ( $type_matches[3] ?? '' );
 				return strtolower( trim( $type ) );
 			}
 			return '';
