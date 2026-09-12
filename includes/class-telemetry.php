@@ -64,7 +64,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * bounded retry, and stale-while-revalidate copies (up to 24h old)
 		 * served under contention or rebuild failure. Callers that need to
 		 * distinguish fresh from stale should compare `scan_type`/timestamps,
-		 * not `is_cached` alone.
+		 * not `is_cached` alone. URL validation (`invalid_url` SSRF checks)
+		 * runs before the guard and bypasses stale-while-revalidate, so a
+		 * disallowed URL always returns `WP_Error`, never a stale payload.
 		 *
 		 * @since  1.5.0
 		 * @param  string $url       The URL to scan.
@@ -73,6 +75,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * @return array|\WP_Error   Associative array of metrics, or WP_Error on failure.
 		 */
 		public static function scan( string $url, string $scan_type = 'manual', bool $force = false ): array|\WP_Error {
+			// SSRF validation runs BEFORE the stampede guard (issue #1101):
+			// a disallowed URL returns WP_Error directly so the guard's
+			// stale-while-revalidate path can never mask a validation failure
+			// with a stale success payload. Only fetch/parse failures inside
+			// $rebuild are eligible for stale serves.
+			if ( ! wp_http_validate_url( $url ) ) {
+				return new \WP_Error( 'invalid_url', __( 'The provided URL is not allowed.', 'performance-optimisation' ) );
+			}
+			$parsed_url = wp_parse_url( $url );
+			$scheme     = $parsed_url['scheme'] ?? '';
+			if ( ! in_array( $scheme, array( 'http', 'https' ), true ) ) {
+				return new \WP_Error( 'invalid_url', __( 'Only http and https URLs are allowed.', 'performance-optimisation' ) );
+			}
+			$home_host = wp_parse_url( Util::cached_home_url(), PHP_URL_HOST );
+			if ( ( $parsed_url['host'] ?? '' ) !== $home_host ) {
+				return new \WP_Error( 'invalid_url', __( 'You can only scan URLs belonging to this website.', 'performance-optimisation' ) );
+			}
 			$cache_key = Util::transient_key( 'wppo_audit_' . md5( $url ) );
 			// Salted layer is only useful with a persistent object cache;
 			// otherwise the transient fallback keeps results across requests
@@ -1032,10 +1051,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * @return void
 		 */
 		public static function invalidate_audit_cache(): void {
+			// Stampede stale copies (issue #1101): the guard writes a 24h
+			// `<key>_stale` transient (registered in the same index) that must
+			// not survive an explicit purge — delete them on BOTH branches so
+			// the salted early-return below cannot leak day-old stale data.
+			$delete_stale = static function (): void {
+				try {
+					$index = get_option( 'wppo_transient_index', array() );
+					if ( is_array( $index ) && ! empty( $index ) ) {
+						foreach ( $index as $stored_key => $expiry ) {
+							if ( false !== strpos( (string) $stored_key, 'wppo_audit_' ) ) {
+								delete_transient( (string) $stored_key );
+							}
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			};
 			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
 				// Monotonic increment: two bumps within the same second must
 				// produce distinct salts (issue #882 review).
 				update_option( self::AUDIT_SALT_KEY, (int) get_option( self::AUDIT_SALT_KEY, 0 ) + 1, false );
+				$delete_stale();
 				return;
 			}
 			// Transient fallback (most single-site installs): delete the
@@ -1044,18 +1082,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 			// covers stampede `<key>_stale` copies (24h TTL, issue #1101), which
 			// are registered in the same index — an explicit purge must never
 			// let a later contention resurrect day-old stale data.
-			try {
-				$index = get_option( 'wppo_transient_index', array() );
-				if ( is_array( $index ) && ! empty( $index ) ) {
-					foreach ( $index as $stored_key => $expiry ) {
-						if ( false !== strpos( (string) $stored_key, 'wppo_audit_' ) ) {
-							delete_transient( (string) $stored_key );
-						}
-					}
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
+			$delete_stale();
 		}
 
 		/**

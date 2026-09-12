@@ -61,7 +61,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			delete_transient( Util::transient_key( 'wppo_total_js_css' ) );
 			// Stampede stale copy (issue #1101): the stats walk writes a 24h
 			// `<key>_stale` transient that must not survive an explicit purge.
-			delete_transient( Util::transient_key( 'wppo_cache_stats_stale' ) );
+			// stampede_stale_key() already resolves to this key on both
+			// single-site and multisite, so a single delete suffices.
 			delete_transient( Util::stampede_stale_key( Util::transient_key( 'wppo_cache_stats' ) ) );
 
 			// The salted object-cache layer (WP 6.9+ drop-in) derives entry
@@ -2424,11 +2425,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// owner check on release means a slow worker never deletes a
 			// successor's lock. Fail-open: lock failures skip the write for this
 			// request (the next request retries) — never fatal.
+			// Honors the operator opt-out (is_stampede_guard_enabled(), issue
+			// #1101): when disabled the write runs unguarded like the other
+			// three guarded paths.
+			$guard_enabled = true;
+			try {
+				$guard_enabled = Util::is_stampede_guard_enabled();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$guard_enabled = true;
+			}
 			$lock_key   = Util::transient_key( 'wppo_cache_write_' . md5( $file_path ) );
 			$lock_owner = Util::generate_stampede_owner();
 			$lock_ttl   = Util::stampede_lock_ttl();
-			if ( ! Util::acquire_stampede_lock( $lock_key, $lock_owner, $lock_ttl ) ) {
-				return;
+			$locked     = true;
+			if ( $guard_enabled ) {
+				$locked = Util::acquire_stampede_lock( $lock_key, $lock_owner, $lock_ttl );
+				if ( ! $locked ) {
+					return;
+				}
 			}
 
 			try {
@@ -2479,7 +2494,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					$this->delete_cache_files( trailingslashit( dirname( $file_path ) ) . '.wppo-no-cache' );
 				}
 			} finally {
-				Util::release_stampede_lock( $lock_key, $lock_owner );
+				if ( $guard_enabled ) {
+					Util::release_stampede_lock( $lock_key, $lock_owner );
+				}
 			}
 		}
 
@@ -3856,21 +3873,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$stats_locked = Util::acquire_stampede_lock( $stats_lock, $stats_owner, Util::stampede_lock_ttl() );
 			}
 			if ( ! $stats_locked ) {
-				$recheck = $read_fresh_stats();
-				if ( is_array( $recheck ) && isset( $recheck['size'], $recheck['count'] ) ) {
-					$stats['size']         = (string) $recheck['size'];
-					$stats['cached_pages'] = (int) $recheck['count'];
-				} else {
-					try {
-						$stale_hit = get_transient( $stale_stats_key );
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						$stale_hit = false;
+				// Bounded retry on the fresh key (parity with
+				// get_with_stampede_lock() losers, issue #1101): a directory
+				// walk takes longer than one re-read gap, so a single
+				// immediate re-read would almost always miss the winner.
+				for ( $i = 0; $i < 4; $i++ ) {
+					if ( function_exists( 'usleep' ) ) {
+						try {
+							usleep( 50000 );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
 					}
-					if ( is_array( $stale_hit ) && isset( $stale_hit['size'], $stale_hit['count'] ) ) {
-						$stats['size']         = (string) $stale_hit['size'];
-						$stats['cached_pages'] = (int) $stale_hit['count'];
+					$recheck = $read_fresh_stats();
+					if ( is_array( $recheck ) && isset( $recheck['size'], $recheck['count'] ) ) {
+						$stats['size']         = (string) $recheck['size'];
+						$stats['cached_pages'] = (int) $recheck['count'];
+						$stats['last_cleared'] = get_option( 'wppo_cache_last_cleared_time', '' );
+						return $stats;
 					}
+				}
+				try {
+					$stale_hit = get_transient( $stale_stats_key );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$stale_hit = false;
+				}
+				if ( is_array( $stale_hit ) && isset( $stale_hit['size'], $stale_hit['count'] ) ) {
+					$stats['size']         = (string) $stale_hit['size'];
+					$stats['cached_pages'] = (int) $stale_hit['count'];
 				}
 				$stats['last_cleared'] = get_option( 'wppo_cache_last_cleared_time', '' );
 				return $stats;
@@ -3892,6 +3923,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 				$stats['last_cleared'] = get_option( 'wppo_cache_last_cleared_time', '' );
 
+				return $stats;
+			} catch ( \Throwable $e ) {
+				// Fail-open (parity with the other guarded paths, issue #1101):
+				// a filesystem throwable serves the stale copy (or N/A) instead
+				// of propagating.
+				unset( $e );
+				try {
+					$stale_hit = get_transient( $stale_stats_key );
+				} catch ( \Throwable $inner ) {
+					unset( $inner );
+					$stale_hit = false;
+				}
+				if ( is_array( $stale_hit ) && isset( $stale_hit['size'], $stale_hit['count'] ) ) {
+					$stats['size']         = (string) $stale_hit['size'];
+					$stats['cached_pages'] = (int) $stale_hit['count'];
+				}
+				$stats['last_cleared'] = get_option( 'wppo_cache_last_cleared_time', '' );
 				return $stats;
 			} finally {
 				if ( $guard_enabled ) {

@@ -1861,7 +1861,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			// Fail-open: a missing transient API never breaks invalidation.
 			try {
 				if ( function_exists( 'delete_transient' ) ) {
-					delete_transient( Util::transient_key( 'wppo_db_cleanup_counts_stale' ) );
 					delete_transient( Util::stampede_stale_key( Util::transient_key( 'wppo_db_cleanup_counts' ) ) );
 				}
 			} catch ( \Throwable $e ) {
