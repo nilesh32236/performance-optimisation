@@ -1781,12 +1781,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		/**
 		 * Whether the stored used-CSS variant is fresh for a post (issue #1107).
 		 *
-		 * Fresh means: the variant file exists, its mtime is not older than
-		 * the post's last modification, and the .sha256 source-checksum
-		 * sidecar exists (same freshness bar as the frontend cache-hit path
-		 * in process_buffer()). Fail-open: any unresolvable permalink,
-		 * missing file, stat failure, or exception reports stale so work is
-		 * never dropped on uncertainty.
+		 * Fresh means: the variant file exists and its mtime is not older
+		 * than the post's last modification (post-modification freshness
+		 * only). The content-checksum verdict reuses is_checksum_stale(),
+		 * which is fail-open on a missing sidecar or missing checksum
+		 * signal, matching the frontend hit path in process_buffer().
+		 * Source-CSS drift with no post modification is still healed
+		 * lazily by process_buffer() on the next visit, not by this scan.
+		 * Fail-open: any unresolvable permalink, missing file, stat
+		 * failure, or exception reports stale so work is never dropped on
+		 * uncertainty.
 		 *
 		 * @param int    $post_id      Post ID.
 		 * @param string $modified_gmt Post modification time (GMT, Y-m-d H:i:s).
@@ -1820,11 +1824,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( $mtime < $modified ) {
 					return false;
 				}
-				$checksum_path = $this->get_checksum_path( $variant_path );
-				if ( '' === $checksum_path || ! file_exists( $checksum_path ) ) {
-					return false;
-				}
-				return true;
+				return ! $this->is_checksum_stale( $variant_path );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;
@@ -1835,13 +1835,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * Queue used-CSS regeneration for a single post (builder-drift requeue).
 		 *
 		 * De-duplicates via as_has_scheduled_action(). Skips queueing when
-		 * the stored variant is already fresh for the post (issue #1107) —
-		 * an explicit editor save bumps post_modified_gmt, so genuine
-		 * changes still enqueue. No-op when removeUnusedCSS is off or
-		 * Action Scheduler is unavailable.
+		 * the stored variant is already fresh for the post (issue #1107;
+		 * post-modification freshness only — source-CSS drift is healed
+		 * lazily by process_buffer() on the next visit) — an explicit
+		 * editor save bumps post_modified_gmt, so genuine changes still
+		 * enqueue. No-op when removeUnusedCSS is off or Action Scheduler
+		 * is unavailable.
 		 *
 		 * @param int $post_id Post ID to requeue.
-		 * @return bool True when a job is queued, already scheduled, or already fresh.
+		 * @return bool True when a job was queued or already scheduled; false when skipped as fresh or on failure.
 		 * @since 2.0.0
 		 */
 		public static function requeue_for_post( int $post_id ): bool {
@@ -1869,7 +1871,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 						}
 					}
 					if ( '' !== $modified_gmt && ( new self( $options ) )->is_variant_fresh_for_post( $post_id, $modified_gmt ) ) {
-						return true;
+						return false;
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
@@ -1976,9 +1978,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * Guards against queue churn (issue #1107): a coarse cooldown skips
 		 * repeat full scans within the window, and per-post freshness skips
 		 * posts whose stored variant is newer than their last modification
-		 * (same bar as the frontend cache-hit path). The pending-action
-		 * de-duplication is kept for concurrent queueing. Fail-open: any
-		 * uncertainty enqueues as before — freshness never drops work.
+		 * (post-modification freshness only; source-CSS drift with no post
+		 * edit is healed lazily by process_buffer() on the next visit).
+		 * The pending-action de-duplication is kept for concurrent
+		 * queueing. Fail-open: any uncertainty enqueues as before —
+		 * freshness never drops work.
 		 *
 		 * @param bool $force Bypass the cooldown (explicit operator paths:
 		 *                    builder purge after a wipe, manual triggers).
@@ -2004,6 +2008,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			$last_id = 0;
 
 			if ( empty( $post_types ) ) {
+				$this->mark_full_regen();
 				return 0;
 			}
 
@@ -2071,6 +2076,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			}
 
 			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- Intentional direct query, $placeholders is count-derived only.
+			$scan_ok = true;
 			do {
 				// Cursor pagination via ID > last_id avoids O(offset) MySQL scans.
 				$prepare_args   = array_values( $post_types );
@@ -2084,6 +2090,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					),
 					ARRAY_A
 				);
+				if ( false === $post_rows || null === $post_rows ) {
+					$scan_ok = false;
+					break;
+				}
 				if ( empty( $post_rows ) || ! is_array( $post_rows ) ) {
 					break;
 				}
@@ -2116,11 +2126,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					if ( isset( $modified[ $post_id ] ) && '' !== $modified[ $post_id ] && $this->is_variant_fresh_for_post( $post_id, $modified[ $post_id ] ) ) {
 						continue;
 					}
-					as_enqueue_async_action(
-						'wppo_used_css_generate',
-						array( 'post_id' => $post_id ),
-						'performance_optimisation'
-					);
+					try {
+						as_enqueue_async_action(
+							'wppo_used_css_generate',
+							array( 'post_id' => $post_id ),
+							'performance_optimisation'
+						);
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						continue;
+					}
 					$scheduled[ $post_id ] = true;
 					++$queued;
 				}
@@ -2132,7 +2147,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			} while ( count( $post_ids ) === $batch );
 			// phpcs:enable
 
-			$this->mark_full_regen();
+			if ( $scan_ok ) {
+				$this->mark_full_regen();
+			}
 
 			if ( $queued > 0 ) {
 				Log::add(

@@ -278,7 +278,7 @@ add_filter( 'wppo_used_css_regen_cooldown', function() {
 ---
 
 ### `wppo_builder_drift_requeue`
-Fires after builder-drift detection requeues used-CSS regeneration (issue #1023). Emitted by `Builder_Purge_Watcher::on_builder_drift()` (no args, Elementor CSS regen; full-site purge, at most once per request) and `Builder_Purge_Watcher::on_builder_drift_save( $post_id )` (explicit editor save; the save bumps the modification time so the variant-freshness skip in `Used_CSS::requeue_for_post()` still requeues — issue #1107; fires only when a job was queued or the variant is already fresh). @since 2.0.0.
+Fires after builder-drift detection requeues used-CSS regeneration (issue #1023). Emitted by `Builder_Purge_Watcher::on_builder_drift()` (no args, Elementor CSS regen; full-site purge, at most once per request) and `Builder_Purge_Watcher::on_builder_drift_save( $post_id )` (explicit editor save; the save bumps the modification time so the post-modification freshness check in `Used_CSS::requeue_for_post()` still requeues genuine changes — issue #1107; fires when a job was queued or already pending, not fired when the variant was skipped as fresh). @since 2.0.0.
 
 **Parameters:**
 - `$post_id` *(int, optional)* — Post ID saved in the builder (only for the editor-save variant).
