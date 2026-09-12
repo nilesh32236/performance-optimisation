@@ -1632,9 +1632,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 */
 		private static function contains_unsafe_css_tokens( string $css ): bool {
 			$decoded = self::decode_css_entities( $css );
-			// Note: behaviou?r only matches in property position (followed
-			// by a colon) so benign selectors like .behavior-badge pass.
-			return (bool) preg_match( '/<\/style|<script|<!--|-->|expression\s*\(|javascript\s*:|vbscript\s*:|behaviou?r(?=\s*:)|-moz-binding|&(lt|gt|amp|quot|#\d+|#x[0-9a-f]+);?/i', $decoded );
+			// Note: behaviou?r matches in property position (followed by a
+			// colon) AND only when it is the whole property name, so benign
+			// selectors like .behavior-badge pass and modern hyphenated
+			// properties like `scroll-behavior:` are not mistaken for the
+			// legacy IE behavior vector. Without the lookbehind, any
+			// stylesheet using `scroll-behavior: smooth` failed this gate
+			// closed, which silently disabled critical CSS site-wide.
+			return (bool) preg_match( '/<\/style|<script|<!--|-->|expression\s*\(|javascript\s*:|vbscript\s*:|(?<![-\w])behaviou?r(?=\s*:)|-moz-binding|&(lt|gt|amp|quot|#\d+|#x[0-9a-f]+);?/i', $decoded );
 		}
 
 		/**
@@ -1678,11 +1683,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					$css
 				);
 				// Scope behavior/behaviour to property position (followed by
-				// a colon) so benign selectors like .behavior-badge or
-				// #behaviour-list keep working. A callback emits the
+				// a colon) AND to a whole property name, so benign selectors
+				// like .behavior-badge or #behaviour-list keep working and
+				// modern hyphenated properties such as `scroll-behavior`
+				// are not rewritten into invalid CSS. A callback emits the
 				// backslash literally instead of a PCRE backreference.
 				$css = (string) preg_replace_callback(
-					'/behaviou?r(?=\s*:)/i',
+					'/(?<![-\w])behaviou?r(?=\s*:)/i',
 					static function (): string {
 						return 'behavio\\r';
 					},

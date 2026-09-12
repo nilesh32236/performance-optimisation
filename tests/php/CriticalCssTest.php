@@ -458,6 +458,33 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Modern hyphenated properties that merely end in `behavior` are not
+	 * the legacy IE vector. `scroll-behavior` previously tripped the
+	 * pre-cache gate, so every template failed closed and critical CSS was
+	 * silently disabled on any site using it; the sanitizer would also
+	 * have rewritten it into invalid CSS.
+	 *
+	 * @return void
+	 */
+	public function test_scroll_behavior_is_not_treated_as_the_legacy_vector(): void {
+		$css = 'html{scroll-behavior:smooth;scroll-padding-top:6rem}';
+
+		// Passes the gate and survives sanitization byte-for-byte.
+		$this->assertFalse( $this->invoke_private( 'contains_unsafe_css_tokens', $css ) );
+		$this->assertSame( $css, $this->invoke_private( 'sanitize_inline_css', $css ) );
+
+		// A custom property with the same suffix is equally benign.
+		$custom = ':root{--scroll-behavior:smooth}';
+		$this->assertFalse( $this->invoke_private( 'contains_unsafe_css_tokens', $custom ) );
+		$this->assertSame( $custom, $this->invoke_private( 'sanitize_inline_css', $custom ) );
+
+		// The real vector is still caught, in both spellings.
+		$this->assertTrue( $this->invoke_private( 'contains_unsafe_css_tokens', '.x{behavior:url(x.htc)}' ) );
+		$this->assertTrue( $this->invoke_private( 'contains_unsafe_css_tokens', '.x{behaviour:url(x.htc)}' ) );
+		$this->assertTrue( $this->invoke_private( 'contains_unsafe_css_tokens', '.x{;behavior:url(x.htc)}' ) );
+	}
+
+	/**
 	 * The pre-cache gate (issue #967) flags hostile vectors decoded from
 	 * entities, and passes clean CSS through.
 	 *
