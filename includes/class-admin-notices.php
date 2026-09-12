@@ -81,6 +81,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				update_user_meta( get_current_user_id(), 'wppo_litespeed_notice_dismissed', 1 );
 			}
 
+			if ( 'avif_webp_only' === $key ) {
+				update_user_meta( get_current_user_id(), 'wppo_avif_webp_only_dismissed', 1 );
+			}
+
 			if ( 'object_cache_circuit' === $key ) {
 				// Dismiss only this trip: persist its tripped_at timestamp so
 				// the next trip (newer timestamp) automatically re-arms the notice.
@@ -115,6 +119,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			$this->maybe_competing_plugins_notice();
 			$this->maybe_litespeed_coexistence_notice();
 			$this->maybe_object_cache_circuit_notice();
+			$this->maybe_avif_webp_only_notice();
 			$this->maybe_builder_purge_notice();
 			$this->maybe_review_notice();
 		}
@@ -275,6 +280,59 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			echo esc_html__( 'Both Performance Optimisation and LiteSpeed Cache are active. In Auto mode, file cache & minify/combine/defer are paused to avoid double processing.', 'performance-optimisation' ) . ' ';
 			echo esc_html__( 'Choose the cache owner in Performance → File Optimisation → Network → LiteSpeed.', 'performance-optimisation' );
 			echo ' <a href="' . esc_url( admin_url( 'admin.php?page=performance-optimisation' ) ) . '">' . esc_html__( 'Open settings', 'performance-optimisation' ) . '</a>';
+			echo ' &middot; <a href="' . esc_url( $dismiss ) . '">' . esc_html__( 'Dismiss', 'performance-optimisation' ) . '</a>';
+			echo '</p></div>';
+		}
+
+		/**
+		 * WebP-only fallback notice — AVIF requested but no encoder available.
+		 *
+		 * When image conversion targets AVIF (`conversionFormat` of `avif`
+		 * or `both`) but the host has neither GD `imageavif()` nor Imagick
+		 * with an AVIF delegate, conversion fails open to WebP (else the
+		 * original). Surface a dismissible info notice so the silent
+		 * fallback is visible. Dismissible per user.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private function maybe_avif_webp_only_notice(): void {
+			if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
+				return;
+			}
+
+			$options = class_exists( 'PerformanceOptimise\Inc\Util' ) ? Util::get_settings() : array();
+			if ( empty( $options['image_optimisation']['convertImg'] ) ) {
+				return;
+			}
+
+			$format = $options['image_optimisation']['conversionFormat'] ?? 'webp';
+			if ( ! in_array( $format, array( 'avif', 'both' ), true ) ) {
+				return;
+			}
+
+			try {
+				if ( Img_Converter::is_avif_encoder_available() ) {
+					return;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return;
+			}
+
+			$user_id = get_current_user_id();
+			if ( $user_id && get_user_meta( $user_id, 'wppo_avif_webp_only_dismissed', true ) ) {
+				return;
+			}
+
+			$dismiss = wp_nonce_url(
+				add_query_arg( 'wppo_dismiss', 'avif_webp_only' ),
+				'wppo_dismiss_notice',
+				'_wpnonce'
+			);
+
+			echo '<div class="notice notice-info is-dismissible" role="status" aria-live="polite"><p><strong>' . esc_html__( 'Performance Optimisation — WebP-only mode', 'performance-optimisation' ) . '</strong> — ';
+			echo esc_html__( 'AVIF conversion is requested but this server has no AVIF encoder (GD imageavif on PHP 8.2+ or Imagick with AVIF support). Images convert to WebP instead, with the original kept as fallback — no action needed.', 'performance-optimisation' );
 			echo ' &middot; <a href="' . esc_url( $dismiss ) . '">' . esc_html__( 'Dismiss', 'performance-optimisation' ) . '</a>';
 			echo '</p></div>';
 		}

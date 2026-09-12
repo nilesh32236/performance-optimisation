@@ -2302,6 +2302,44 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		}
 
 		/**
+		 * Whether next-gen rewrite is enabled for Apache/.htaccess context.
+		 *
+		 * Unlike is_nextgen_rewrite_enabled() (LiteSpeed-only), this is
+		 * server-agnostic: plain Apache reads `.htaccess` rewrites exactly
+		 * like LiteSpeed, so `convertImg` hosts without LiteSpeed still get
+		 * Accept-aware AVIF-before-WebP delivery with `Vary: Accept`.
+		 * Opt-in via enableNextGenRewrite, gated on convertImg. Filterable
+		 * via wppo_litespeed_nextgen_rewrite (and the legacy alias).
+		 *
+		 * @since NEXT
+		 * @return bool True if the htaccess next-gen block should be included.
+		 */
+		public static function is_nextgen_rewrite_enabled_for_apache(): bool {
+			try {
+				$options = Util::get_settings();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+			$enabled = ! empty( $options['litespeed_integration']['enableNextGenRewrite'] );
+			$convert = ! empty( $options['image_optimisation']['convertImg'] );
+			if ( ! $convert ) {
+				$enabled = false;
+			}
+
+			/**
+			 * Filter whether next-gen rewrite is enabled for Apache.
+			 *
+			 * @since NEXT
+			 * @param bool $enabled Whether next-gen rewrite is enabled.
+			 */
+			$enabled = (bool) apply_filters( 'wppo_litespeed_nextgen_rewrite', $enabled );
+			$enabled = (bool) apply_filters( 'wppo_litespeed_enable_nextgen_rewrite', $enabled );
+
+			return $enabled;
+		}
+
+		/**
 		 * Whether Brotli .br generation is enabled (LS-403).
 		 *
 		 * Opt-in via litespeed_integration.enableBrotli (default false).

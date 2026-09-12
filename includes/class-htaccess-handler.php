@@ -603,9 +603,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		/**
 		 * Retrieve the rules to be added to .htaccess.
 		 *
-		 * Includes LiteSpeed/Apache next-gen Vary:Accept rewrite (LS-401)
-		 * when enableNextGenRewrite is true, LiteSpeed is detected, and
-		 * convertImg is enabled. Opt-in default false. Filterable via
+		 * Includes the Accept-aware next-gen AVIF-before-WebP rewrite with
+		 * `Vary: Accept` when enableNextGenRewrite is true and convertImg
+		 * is enabled. Server-agnostic: plain Apache reads `.htaccess`
+		 * rewrites exactly like LiteSpeed, so non-LiteSpeed Apache hosts
+		 * get server-level negotiation (Firefox 65-92 matches only the
+		 * WebP branch, old Safari matches neither and keeps the original).
+		 * Opt-in default false. Filterable via
 		 * wppo_litespeed_nextgen_rewrite.
 		 *
 		 * @return array Array of rules.
@@ -671,16 +675,38 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			);
 
 			// LS-401: Next-gen Vary:Accept rewrite — sibling .webp/.avif.
+			// Server-agnostic (Apache + LiteSpeed both read .htaccess):
+			// prefer the Apache-aware gate so plain Apache hosts with
+			// convertImg on get Accept-aware AVIF-before-WebP delivery.
 			$use_nextgen = false;
-			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'is_nextgen_rewrite_enabled' ) ) {
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'is_nextgen_rewrite_enabled_for_apache' ) ) {
+				$use_nextgen = LiteSpeed_Integration::is_nextgen_rewrite_enabled_for_apache();
+			} elseif ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'is_nextgen_rewrite_enabled' ) ) {
 				$use_nextgen = LiteSpeed_Integration::is_nextgen_rewrite_enabled();
+				if ( ! $use_nextgen && class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) && method_exists( 'PerformanceOptimise\Inc\Server_Rules', 'get_server_type' ) ) {
+					// Legacy LiteSpeed-only gate misses plain Apache: fall
+					// back to the raw option check for Apache hosts.
+					$server = Server_Rules::get_server_type();
+					if ( 'apache' === $server ) {
+						$opts        = Util::get_settings();
+						$use_nextgen = ! empty( $opts['litespeed_integration']['enableNextGenRewrite'] ) && ! empty( $opts['image_optimisation']['convertImg'] );
+						/**
+						 * Filter whether next-gen rewrite is enabled (fallback).
+						 *
+						 * @since 2.0.0
+						 * @param bool $use_nextgen Whether next-gen rewrite is enabled.
+						 */
+						$use_nextgen = (bool) apply_filters( 'wppo_litespeed_nextgen_rewrite', $use_nextgen );
+					}
+				}
 			} else {
-				// Fallback when LiteSpeed_Integration not loaded: raw option check with filters.
+				// Fallback when LiteSpeed_Integration not loaded: raw option
+				// check with filters. Server-agnostic — .htaccess is only
+				// read by Apache/LiteSpeed hosts anyway.
 				$opts        = Util::get_settings();
 				$enabled     = ! empty( $opts['litespeed_integration']['enableNextGenRewrite'] );
 				$convert     = ! empty( $opts['image_optimisation']['convertImg'] );
-				$is_ls       = class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) && method_exists( 'PerformanceOptimise\Inc\Server_Rules', 'is_litespeed' ) ? Server_Rules::is_litespeed() : false;
-				$use_nextgen = $enabled && $convert && $is_ls;
+				$use_nextgen = $enabled && $convert;
 				/**
 				 * Filter whether next-gen rewrite is enabled (fallback).
 				 *

@@ -330,6 +330,126 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		}
 
 		/**
+		 * Whether Imagick alone can encode AVIF on this host.
+		 *
+		 * Split from is_avif_encoder_available() so callers can pick the
+		 * Imagick fallback when GD `imageavif()` is missing (Imagick-only
+		 * AVIF hosts). Fail-open: any probe failure means false.
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when Imagick reports an AVIF delegate.
+		 */
+		public static function is_imagick_avif_available(): bool {
+			if ( ! extension_loaded( 'imagick' ) || ! class_exists( 'Imagick' ) ) {
+				return false;
+			}
+
+			try {
+				$imagick = new \Imagick();
+				try {
+					if ( method_exists( $imagick, 'queryFormats' ) ) {
+						$formats = $imagick->queryFormats( 'AVIF*' );
+						return ! empty( $formats );
+					}
+				} finally {
+					if ( method_exists( $imagick, 'clear' ) ) {
+						$imagick->clear();
+					}
+					if ( method_exists( $imagick, 'destroy' ) ) {
+						$imagick->destroy();
+					}
+				}
+			} catch ( \Exception $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Probe only; absence means no Imagick AVIF support.
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Probe only; absence means no Imagick AVIF support.
+			}
+
+			return false;
+		}
+
+		/**
+		 * Encode a source image to AVIF via Imagick.
+		 *
+		 * Fallback for Imagick-only AVIF hosts where GD `imageavif()` is
+		 * unavailable. Reads the source file directly (never the GD
+		 * resource) so the generic JPEG/PNG path and the WebP-source path
+		 * share one implementation. Fail-open: returns false on any
+		 * failure; callers fall back to WebP, else the original.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $source_image Filesystem path to the source image.
+		 * @param string $dest_path    Filesystem path for the `.avif` output.
+		 * @param int    $quality      Encode quality (1-100).
+		 * @return bool True on success, false on any failure.
+		 */
+		public function encode_avif_via_imagick( string $source_image, string $dest_path, int $quality ): bool {
+			if ( '' === $source_image || '' === $dest_path ) {
+				return false;
+			}
+
+			if ( ! self::is_safe_write_path( $dest_path ) ) {
+				return false;
+			}
+
+			if ( ! file_exists( $source_image ) || ! is_readable( $source_image ) ) {
+				return false;
+			}
+
+			if ( ! extension_loaded( 'imagick' ) || ! class_exists( 'Imagick' ) ) {
+				return false;
+			}
+
+			if ( ! Util::prepare_cache_dir( dirname( $dest_path ) ) ) {
+				return false;
+			}
+
+			$quality = min( 100, max( 1, $quality ) );
+
+			try {
+				$imagick = new \Imagick();
+				try {
+					if ( method_exists( $imagick, 'setResourceLimit' ) ) {
+						try {
+							if ( defined( 'Imagick::RESOURCETYPE_MEMORY' ) ) {
+								$imagick->setResourceLimit( \Imagick::RESOURCETYPE_MEMORY, 256 * 1024 * 1024 );
+							}
+							if ( defined( 'Imagick::RESOURCETYPE_AREA' ) ) {
+								$imagick->setResourceLimit( \Imagick::RESOURCETYPE_AREA, $this->get_max_source_pixels() );
+							}
+						} catch ( \Throwable $limit_error ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: resource caps are best-effort hardening.
+						}
+					}
+
+					$imagick->readImage( $source_image );
+					$imagick->setImageFormat( 'avif' );
+					if ( method_exists( $imagick, 'setImageCompressionQuality' ) ) {
+						$imagick->setImageCompressionQuality( $quality );
+					}
+
+					return (bool) $imagick->writeImage( $dest_path );
+				} finally {
+					if ( isset( $imagick ) && $imagick instanceof \Imagick ) {
+						if ( method_exists( $imagick, 'clear' ) ) {
+							$imagick->clear();
+						}
+						if ( method_exists( $imagick, 'destroy' ) ) {
+							$imagick->destroy();
+						}
+					}
+				}
+			} catch ( \Exception $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: callers fall back to WebP/original.
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: callers fall back to WebP/original.
+			}
+
+			if ( self::is_safe_delete_path( $dest_path ) && file_exists( $dest_path ) && 0 === filesize( $dest_path ) && function_exists( 'wp_delete_file' ) ) {
+				wp_delete_file( $dest_path );
+			}
+
+			return false;
+		}
+
+		/**
 		 * Get the skip-small byte threshold for image conversion.
 		 *
 		 * Files at or under this size are skipped: re-encoding them wastes CPU
@@ -1056,7 +1176,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 					case IMAGETYPE_WEBP:
 						if ( in_array( $format, array( 'avif', 'both' ), true ) ) {
-							if ( ! self::is_avif_encoder_available() || ! function_exists( 'imageavif' ) ) {
+							if ( ! self::is_avif_encoder_available() ) {
 								$this->update_conversion_status( $source_image, 'failed', $format );
 								return false;
 							}
@@ -1104,7 +1224,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 									return false;
 								}
 
-								if ( imageavif( $image, $avif_path, $avif_quality ?? $quality ) ) {
+								if ( function_exists( 'imageavif' ) && imageavif( $image, $avif_path, $avif_quality ?? $quality ) ) {
+									$this->update_conversion_status( $source_image, 'completed', 'avif' );
+								} elseif ( ! function_exists( 'imageavif' ) && $this->encode_avif_via_imagick( $source_image, $avif_path, (int) ( $avif_quality ?? $quality ) ) ) {
+									// Imagick-only AVIF host: GD decoded the WebP
+									// source but cannot encode AVIF, so encode
+									// from the source file via Imagick instead.
 									$this->update_conversion_status( $source_image, 'completed', 'avif' );
 								} else {
 									if ( null !== $image && ( is_resource( $image ) || $image instanceof \GdImage ) ) {
@@ -1327,7 +1452,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 						$success = false;
 						$this->update_conversion_status( $source_image, 'failed', 'avif' );
 					} elseif ( ! file_exists( $avif_path ) ) {
-						if ( ! $avif_encoder || ! function_exists( 'imageavif' ) || ! Util::prepare_cache_dir( dirname( $avif_path ) ) || ! imageavif( $image, $avif_path, $avif_quality ?? $quality ) ) {
+						$avif_done = false;
+						if ( $avif_encoder && function_exists( 'imageavif' ) && Util::prepare_cache_dir( dirname( $avif_path ) ) && imageavif( $image, $avif_path, $avif_quality ?? $quality ) ) {
+							$avif_done = true;
+						} elseif ( $avif_encoder && ! function_exists( 'imageavif' ) && $this->encode_avif_via_imagick( $source_image, $avif_path, (int) ( $avif_quality ?? $quality ) ) ) {
+							// Imagick-only AVIF host: GD has no imageavif(),
+							// so encode from the source file via Imagick.
+							$avif_done = true;
+						}
+						if ( ! $avif_done ) {
 							$success = false;
 							$this->update_conversion_status( $source_image, 'failed', 'avif' );
 						} else {
