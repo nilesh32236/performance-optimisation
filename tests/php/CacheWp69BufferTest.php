@@ -257,6 +257,11 @@ class CacheWp69BufferTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'has_action' )->justReturn( false );
 		Functions\when( 'is_404' )->justReturn( false );
 		Functions\when( 'is_feed' )->justReturn( false );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_preview' )->justReturn( false );
+		Functions\when( 'is_customize_preview' )->justReturn( false );
+		Functions\when( 'wp_doing_ajax' )->justReturn( false );
+		Functions\when( 'wp_is_json_request' )->justReturn( false );
 		Functions\when( 'is_cart' )->justReturn( false );
 		Functions\when( 'is_checkout' )->justReturn( false );
 		Functions\when( 'is_account_page' )->justReturn( false );

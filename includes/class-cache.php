@@ -2127,6 +2127,78 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Whether the current request is an admin/editor-preview context.
+		 *
+		 * Unconditional static-cache bypass (issue #1097): wp-admin / login /
+		 * admin-ajax paths, `is_admin()`, `is_preview()`,
+		 * `is_customize_preview()`, Elementor preview mode, AJAX/REST/JSON,
+		 * and builder/core preview query params via
+		 * `Util::is_editor_preview_request()`. No re-allow filter by design:
+		 * editor output must never be written to or served from the static
+		 * cache. Fail-open: any detection failure bypasses the cache.
+		 *
+		 * @since NEXT
+		 * @return bool True when the request must bypass the cache.
+		 */
+		private function is_editor_preview_excluded(): bool {
+			if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_editor_preview_request' ) ) {
+				try {
+					return Util::is_editor_preview_request();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return true;
+				}
+			}
+			// Mixed-version fallback: inline the greppable preview signals so
+			// editor output still bypasses when the Util helper is unavailable.
+			try {
+				if ( function_exists( 'is_admin' ) ) {
+					try {
+						if ( is_admin() ) {
+							return true;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return true;
+					}
+				}
+				if ( function_exists( 'is_preview' ) ) {
+					try {
+						if ( is_preview() ) {
+							return true;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return true;
+					}
+				}
+				if ( function_exists( 'is_customize_preview' ) ) {
+					try {
+						if ( is_customize_preview() ) {
+							return true;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return true;
+					}
+				}
+				$fallback_path = wp_normalize_path( trim( rawurldecode( (string) wp_parse_url( $this->request_uri, PHP_URL_PATH ) ), '/' ) );
+				if ( (bool) preg_match( '#(^|/)(?:wp-admin|wp-login\.php|admin-ajax\.php)(/|$)#i', '/' . $fallback_path ) ) {
+					return true;
+				}
+				foreach ( array( 'elementor-preview', 'et_fb', 'et_pb_preview', 'vc_action', 'vc_editable', 'bricks', 'preview', 'preview_id', 'customize_changeset_uuid', 'customizer' ) as $key ) {
+					if ( isset( $_GET[ $key ] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
+						return true;
+					}
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
 		 * Check if the page is not cacheable.
 		 *
 		 * Note: for pages opted out via the DONOTCACHEPAGE constant this also records
@@ -2192,6 +2264,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return true;
 			}
 			if ( preg_match( '/(?:sitemap[^\/]*\.xml|wp-sitemap[^\/]*\.xml|\.xml)$/i', $local_url_path ) ) {
+				return true;
+			}
+
+			// Editor/admin bypass (issue #1097): wp-admin, login, AJAX/REST,
+			// Elementor/Divi/WPBakery/Bricks previews, and core previews are
+			// never cacheable — unconditional, no re-allow filter, survives a
+			// wppo_should_cache_request bypass above.
+			try {
+				if ( $this->is_editor_preview_excluded() ) {
+					return true;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 				return true;
 			}
 
@@ -2554,6 +2639,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				// Prevent empty domain caching which could occur after traversal sanitation.
 				// A Host mismatch or a rejected (traversal/absolute-form) path is
 				// served uncached and never stored under the forged host.
+				return false;
+			}
+
+			// Editor/admin storage parity (issue #1097): refuse storage for
+			// wp-admin, login, AJAX/REST, and builder/core previews even if
+			// is_not_cacheable() is bypassed via the wppo_should_cache_request
+			// filter. Unconditional, no re-allow filter.
+			try {
+				if ( $this->is_editor_preview_excluded() ) {
+					return false;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 				return false;
 			}
 
