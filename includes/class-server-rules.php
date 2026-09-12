@@ -61,6 +61,48 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) ) {
 		}
 
 		/**
+		 * Whether the current server reads `.htaccess` files.
+		 *
+		 * Only Apache and LiteSpeed/OpenLiteSpeed evaluate `.htaccess`.
+		 * Nginx (including multisite-on-Nginx, which shares the same server
+		 * software string network-wide) ignores it, so writing `.htaccess`
+		 * there is meaningless. Unknown servers fail open (true) to preserve
+		 * the legacy write behavior. Multisite-safe: pure server detection,
+		 * no options or transients touched, so no cross-site leakage.
+		 *
+		 * @since NEXT
+		 * @return bool True when an `.htaccess` write is meaningful.
+		 */
+		public static function supports_htaccess(): bool {
+			try {
+				return 'nginx' !== self::get_server_type();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
+		 * Whether `.htaccess` writes must be skipped on this server.
+		 *
+		 * Convenience inverse of supports_htaccess(): on Nginx (including
+		 * multisite) callers must skip the `.htaccess` write entirely and
+		 * surface the Nginx snippet (see get_nginx_rules() / the
+		 * `server_rules` REST endpoint) instead. Never fatal; guarded.
+		 *
+		 * @since NEXT
+		 * @return bool True when the `.htaccess` write must be skipped.
+		 */
+		public static function should_skip_htaccess_write(): bool {
+			try {
+				return ! self::supports_htaccess();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
 		 * Get performance rules for Nginx configuration.
 		 *
 		 * Includes LiteSpeed-style next-gen map (LS-402) when
