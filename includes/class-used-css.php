@@ -2740,6 +2740,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				return $buffer;
 			}
 
+			// Unified safe-mode kill switch (issue #1098): one-click recovery
+			// that preserves the removeUnusedCSS setting. Fail open to the
+			// full stylesheet.
+			if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'is_safe_mode_active' ) ) {
+				try {
+					if ( Main::is_safe_mode_active( $file_opts ) ) {
+						return $buffer;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return $buffer;
+				}
+			}
+			// Shared nocache bypass (issue #1098): ?nocache / DONOTCACHEPAGE /
+			// preview skips trimming, never fatal.
+			if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'is_aggressive_bypass_active' ) ) {
+				try {
+					if ( Main::is_aggressive_bypass_active() ) {
+						return $buffer;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return $buffer;
+				}
+			}
+
 			// WooCommerce dynamic pages (issue #962): cart / checkout /
 			// account, Store API, and endpoints stay excluded from
 			// remove-unused-CSS so checkout keeps full styles.

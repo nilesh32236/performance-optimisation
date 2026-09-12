@@ -363,6 +363,42 @@ add_filter( 'wppo_exclude_defer_js', function( $exclusions ) {
 
 ---
 
+### `wppo_safe_mode_enabled`
+Filters the unified safe-mode kill switch (issue #1098). When truthy, Delay-JS + Defer-JS + Remove-Unused-CSS (and Critical-CSS stylesheet deferral) are all disabled in one click while the underlying `delayJS` / `deferJS` / `removeUnusedCSS` settings are preserved untouched — turn safe mode back off to restore the previous configuration (one-click recovery). Guarded by `has_filter()` — the filter is only applied when a listener is present. @since NEXT.
+
+**Parameters:**
+- `$enabled` *(bool)* — Whether safe mode is on. Default from `file_optimisation.safeMode` (`false`).
+
+**Example:**
+```php
+add_filter( 'wppo_safe_mode_enabled', function( $enabled ) {
+    if ( is_page( 'checkout' ) ) {
+        return true; // Force safe mode on checkout.
+    }
+    return $enabled;
+} );
+```
+
+**Manual revert path:** if aggressive delay/defer/used-CSS breaks a page, recover without losing settings via any of (in order): 1) enable **Safe mode** in File Optimisation → JavaScript Loading (one click, settings preserved); 2) append `?nocache` (or `?wppo_nocache`) to preview the unoptimised page; 3) tick **Disable Delay JS / Disable Defer JS / Disable Used CSS on this page** in the post editor Asset Manager (per-page post meta `_wppo_delay_disabled` / `_wppo_defer_disabled` / `_wppo_used_css_disabled`, survives cache clears via single-URL purge); 4) as a last resort via WP-CLI: `wp option patch update wppo_settings file_optimisation '{"safeMode":true}'` then `wp wppo cache clear`.
+
+---
+
+### `wppo_defer_js_preset_exclusions`
+Filters the defer-JS preset exclusions (jQuery, Elementor/Divi, WooCommerce handles). The built-in preset stays un-deferred by default so carts, checkouts, and builders never break. Guarded by `has_filter()` — returns the built-in preset verbatim when no listener is present. Merged via `array_unique` with user `excludeDeferJS`. @since NEXT.
+
+**Parameters:**
+- `$preset` *(string[])* — Preset exclusion patterns.
+
+**Example:**
+```php
+add_filter( 'wppo_defer_js_preset_exclusions', function( $preset ) {
+    $preset[] = 'my-critical-slider';
+    return $preset;
+} );
+```
+
+---
+
 ### `wppo_cve_guard_handles`
 Filter-only (S scope) list of handle strings to auto-exclude from optimization when a CVE is known. Default empty (no auto-exclude). Merged with `array_unique` into `minify_js`/`minify_css` (`exclude_js`/`exclude_css`) and `exclude_defer_js`/`exclude_delay_js` inside `PerformanceOptimise\Inc\Main::setup_hooks()`; respects the existing `litespeed_can_optm` gate; no `wp_options` persistence and no cron. @since 2.0.0.
 

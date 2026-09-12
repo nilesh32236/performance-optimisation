@@ -2406,6 +2406,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				}
 			}
 
+			// Unified safe-mode kill switch + nocache bypass (issue #1098):
+			// one-click recovery preserving the criticalCSS setting; fail open
+			// to the full stylesheet, never fatal.
+			if ( class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
+				if ( method_exists( 'PerformanceOptimise\Inc\Main', 'is_safe_mode_active' ) ) {
+					try {
+						if ( \PerformanceOptimise\Inc\Main::is_safe_mode_active( $options['file_optimisation'] ?? array() ) ) {
+							return $tag;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return $tag;
+					}
+				}
+				if ( method_exists( 'PerformanceOptimise\Inc\Main', 'is_aggressive_bypass_active' ) ) {
+					try {
+						if ( \PerformanceOptimise\Inc\Main::is_aggressive_bypass_active() ) {
+							return $tag;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return $tag;
+					}
+				}
+			}
+
 			// Guard: when JS is deferred/delayed the onload swap never fires until JS runs.
 			// This leaves cached pages unstyled (media=print deadlock with removeUnusedCSS + criticalCSS + combineCSS).
 			// Keep media=all when either deferJS or delayJS is active so cached HTML stays styled.
