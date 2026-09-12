@@ -542,22 +542,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'	if ( \'cli\' === PHP_SAPI ) {' . PHP_EOL .
 			'		return;' . PHP_EOL .
 			'	}' . PHP_EOL .
-			'	if ( isset( $_SERVER[\'REQUEST_METHOD\'] ) && \'GET\' !== strtoupper( (string) $_SERVER[\'REQUEST_METHOD\'] ) ) {' . PHP_EOL .
-			'		return;' . PHP_EOL .
-			'	}' . PHP_EOL .
+			'	if ( isset( $_SERVER[\'REQUEST_METHOD\'] ) ) { $m = strtoupper( (string) $_SERVER[\'REQUEST_METHOD\'] ); if ( \'GET\' !== $m && \'HEAD\' !== $m ) { return; } }' . PHP_EOL .
 			'	if ( ! empty( $_SERVER[\'QUERY_STRING\'] ) ) {' . PHP_EOL .
 			'		return;' . PHP_EOL .
 			'	}' . PHP_EOL .
-			'	$interval = defined( \'WPPO_DROPIN_CRON_INTERVAL\' ) ? (int) WPPO_DROPIN_CRON_INTERVAL : 60;' . PHP_EOL .
-			'	if ( $interval < 10 ) {' . PHP_EOL .
-			'		$interval = 10;' . PHP_EOL .
-			'	}' . PHP_EOL .
-			'	$lock = WP_CONTENT_DIR . \'/cache/wppo/.wppo-cron-spawn-lock\';' . PHP_EOL .
-			'	if ( @file_exists( $lock ) && ( time() - (int) @filemtime( $lock ) ) < $interval ) {' . PHP_EOL .
-			'		return;' . PHP_EOL .
-			'	}' . PHP_EOL .
-			'	@touch( $lock );' . PHP_EOL .
-			'	if ( ! is_string( $site_url ) || \'\' === $site_url || 0 !== strpos( $site_url, \'http\' ) ) {' . PHP_EOL .
+			'	if ( ! is_string( $site_url ) || ( 0 !== strpos( $site_url, \'http://\' ) && 0 !== strpos( $site_url, \'https://\' ) ) ) {' . PHP_EOL .
 			'		return;' . PHP_EOL .
 			'	}' . PHP_EOL .
 			'	$cron_url = rtrim( $site_url, \'/\' ) . \'/wp-cron.php?doing_wp_cron=\' . time();' . PHP_EOL .
@@ -577,9 +566,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'	}' . PHP_EOL .
 			'	$path = isset( $parts[\'path\'] ) && \'\' !== (string) $parts[\'path\'] ? (string) $parts[\'path\'] : \'/wp-cron.php\';' . PHP_EOL .
 			'	if ( isset( $parts[\'query\'] ) && \'\' !== (string) $parts[\'query\'] ) { $path .= \'?\' . (string) $parts[\'query\']; }' . PHP_EOL .
+			'	$interval = defined( \'WPPO_DROPIN_CRON_INTERVAL\' ) ? (int) WPPO_DROPIN_CRON_INTERVAL : 60;' . PHP_EOL .
+			'	if ( $interval < 10 ) {' . PHP_EOL .
+			'		$interval = 10;' . PHP_EOL .
+			'	}' . PHP_EOL .
+			'	$lock = WP_CONTENT_DIR . \'/cache/wppo/.wppo-cron-spawn-lock\';' . PHP_EOL .
+			'	$lh = function_exists( \'fopen\' ) ? @fopen( $lock, \'c\' ) : false;' . PHP_EOL .
+			'	if ( is_resource( $lh ) ) {' . PHP_EOL .
+			'		if ( ! @flock( $lh, LOCK_EX | LOCK_NB ) ) { @fclose( $lh ); return; }' . PHP_EOL .
+			'		@clearstatcache( true, $lock );' . PHP_EOL .
+			'		$last = @filemtime( $lock );' . PHP_EOL .
+			'		$size = @filesize( $lock );' . PHP_EOL .
+			'		if ( false !== $last && false !== $size && $size > 0 && ( time() - (int) $last ) < $interval ) { @flock( $lh, LOCK_UN ); @fclose( $lh ); return; }' . PHP_EOL .
+			'		@ftruncate( $lh, 0 ); @fwrite( $lh, (string) time() ); @fflush( $lh );' . PHP_EOL .
+			'		@touch( $lock );' . PHP_EOL .
+			'		@flock( $lh, LOCK_UN ); @fclose( $lh );' . PHP_EOL .
+			'	} else {' . PHP_EOL .
+			'		if ( @file_exists( $lock ) && ( time() - (int) @filemtime( $lock ) ) < $interval ) {' . PHP_EOL .
+			'			return;' . PHP_EOL .
+			'		}' . PHP_EOL .
+			'		@touch( $lock );' . PHP_EOL .
+			'	}' . PHP_EOL .
 			'	if ( function_exists( \'fsockopen\' ) ) {' . PHP_EOL .
 			'		$fp_host = ( $is_ssl ? \'ssl://\' : \'\' ) . $host;' . PHP_EOL .
-			'		$fp = @fsockopen( $fp_host, $port, $errno, $errstr, 0.5 );' . PHP_EOL .
+			'		$fp = @fsockopen( $fp_host, $port, $errno, $errstr, 0.1 );' . PHP_EOL .
 			'		if ( is_resource( $fp ) ) {' . PHP_EOL .
 			'			@stream_set_timeout( $fp, 0, 100000 );' . PHP_EOL .
 			'			@fwrite( $fp, \'GET \' . $path . \' HTTP/1.0\' . "\r\n" . \'Host: \' . $host . "\r\n" . \'Connection: Close\' . "\r\n\r\n" );' . PHP_EOL .
@@ -588,7 +598,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'		}' . PHP_EOL .
 			'	}' . PHP_EOL .
 			'	if ( function_exists( \'stream_context_create\' ) && function_exists( \'file_get_contents\' ) ) {' . PHP_EOL .
-			'		$ctx = @stream_context_create( array( \'http\' => array( \'method\' => \'GET\', \'timeout\' => 1, \'ignore_errors\' => true ) ) );' . PHP_EOL .
+			'		$ctx = @stream_context_create( array( \'http\' => array( \'method\' => \'GET\', \'timeout\' => 0.1, \'ignore_errors\' => true ) ) );' . PHP_EOL .
 			'		if ( false !== $ctx ) { @file_get_contents( $cron_url, false, $ctx ); }' . PHP_EOL .
 			'	}' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
