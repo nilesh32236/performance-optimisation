@@ -211,6 +211,111 @@ if ( ! function_exists( 'wppo_cleanup_htaccess_artifacts' ) ) {
 	}
 }
 
+if ( ! function_exists( 'wppo_clear_scheduled_jobs' ) ) {
+	/**
+	 * Unschedule plugin WP-Cron events and Action Scheduler actions (fail-open).
+	 *
+	 * Standalone-safe: uninstall runs under WP_UNINSTALL_PLUGIN without the
+	 * plugin's classes autoloaded, so the hook lists below intentionally
+	 * mirror Cron::SCHEDULED_HOOKS + Cron::AS_HOOKS in includes/class-cron.php
+	 * (plus the legacy `wppo_img_conversation` misspelling and the
+	 * WP-Cron-fallback hooks `wppo_google_fonts_download` and
+	 * `wppo_builder_drift_purge`) instead of requiring the class. Runs
+	 * per-site inside wppo_cleanup_site() so the multisite loop below clears
+	 * every blog; never fatals and never touches foreign hooks/groups.
+	 *
+	 * @since NEXT
+	 * @return void
+	 */
+	function wppo_clear_scheduled_jobs(): void {
+		// WP-Cron path: remove every event for each plugin hook (recurring +
+		// single). Prefer wp_unschedule_hook() (all events for a hook); fall
+		// back to wp_clear_scheduled_hook() and finally to a bounded
+		// wp_next_scheduled()/wp_unschedule_event() loop for legacy WP.
+		// NOTE: This list must stay in sync with Cron::SCHEDULED_HOOKS in
+		// includes/class-cron.php (plus legacy/fallback extras below).
+		$hooks = array(
+			'wppo_page_cron_hook',
+			'wppo_page_cron_batch',
+			'wppo_generate_static_page',
+			'wppo_generate_static_url',
+			'wppo_img_conversion',
+			'wppo_database_cleanup_cron',
+			'wppo_web_vitals_rescan',
+			'wppo_llms_txt_daily',
+			'wppo_used_css_cron',
+			'wppo_ccss_regeneration',
+			'wppo_rum_flush',
+			'wppo_run_upgrades',
+			'wppo_litespeed_crawler_batch',
+			'wppo_crawler_warm',
+			'wppo_generate_ccss',
+			'wppo_object_cache_probe',
+			// Legacy misspelled image-conversion hook kept for BC.
+			'wppo_img_conversation',
+			// WP-Cron single-event fallbacks scheduled outside Cron class.
+			'wppo_google_fonts_download',
+			'wppo_builder_drift_purge',
+		);
+		foreach ( $hooks as $hook ) {
+			try {
+				if ( function_exists( 'wp_unschedule_hook' ) ) {
+					wp_unschedule_hook( $hook );
+					continue;
+				}
+				if ( function_exists( 'wp_clear_scheduled_hook' ) ) {
+					wp_clear_scheduled_hook( $hook );
+					continue;
+				}
+				if ( function_exists( 'wp_next_scheduled' ) && function_exists( 'wp_unschedule_event' ) ) {
+					$attempts = 0;
+					while ( $attempts < 50 ) {
+						$timestamp = wp_next_scheduled( $hook );
+						if ( false === $timestamp ) {
+							break;
+						}
+						wp_unschedule_event( (int) $timestamp, $hook );
+						++$attempts;
+					}
+				}
+			} catch ( \Throwable $ignored_cron ) {
+				unset( $ignored_cron );
+			}
+		}
+
+		// Action Scheduler path: skip silently when AS is absent; each clear
+		// is individually guarded so one failure never aborts the rest.
+		// NOTE: This list must stay in sync with Cron::AS_HOOKS in
+		// includes/class-cron.php (plus the drift-purge hook below).
+		if ( ! function_exists( 'as_unschedule_all_actions' ) ) {
+			return;
+		}
+		$as_hooks = array(
+			'wppo_convert_image_background',
+			'wppo_pagespeed_scan',
+			'wppo_used_css_generate',
+			'wppo_generate_ccss',
+			'wppo_litespeed_crawler_batch',
+			'wppo_crawler_warm',
+			'wppo_google_fonts_download',
+			'wppo_builder_drift_purge',
+		);
+		foreach ( $as_hooks as $as_hook ) {
+			try {
+				as_unschedule_all_actions( $as_hook );
+			} catch ( \Throwable $ignored_as ) {
+				unset( $ignored_as );
+			}
+		}
+		// Forward-compat net for future hooks in the plugin's AS group.
+		try {
+			as_unschedule_all_actions( '', array(), 'performance_optimisation' );
+		} catch ( \Throwable $ignored_group ) {
+			unset( $ignored_group );
+		}
+	}
+}
+
 if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 	/**
 	 * Clean up plugin data for a single site.
@@ -345,6 +450,11 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 		$like_site      = $wpdb->esc_like( '_site_transient_' ) . '%';
 		$like_wppo      = '%' . $wpdb->esc_like( 'wppo_' ) . '%';
 		$wpdb->query( "DELETE FROM {$wpdb->options} WHERE ( option_name LIKE '{$like_transient}' OR option_name LIKE '{$like_site}' ) AND option_name LIKE '{$like_wppo}'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+
+		// Unschedule plugin WP-Cron events + Action Scheduler actions for this
+		// site (fail-open: never fatals; runs per-site so the multisite loop
+		// below clears every blog and reinstall starts clean).
+		wppo_clear_scheduled_jobs();
 	}
 }
 
