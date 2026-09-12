@@ -3114,6 +3114,49 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Whether a script tag's type attribute is executable JavaScript.
+		 *
+		 * A tag with no `type` attribute is treated as executable because HTML
+		 * implies `text/javascript`. Executable JS types (including `module`,
+		 * which HTML treats as JavaScript) may be delay-rewritten; every other
+		 * type is a data block — `application/json`, `application/ld+json`,
+		 * `text/template`, `speculationrules`, and so on — that never executes
+		 * and whose `src` must not be moved to `wppo-src`.
+		 *
+		 * The leading `\s` in the pattern is what keeps `wppo-type="…"` from
+		 * matching: the character before `type` there is `-`, not whitespace.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $tag The script tag markup.
+		 * @return bool True when the tag may be delay-rewritten.
+		 */
+		private function is_executable_script_type( string $tag ): bool {
+			if ( ! preg_match( '/\stype\s*=\s*(["\']?)([^"\'>\s]*)\1(?=[\s>\/]|$)/i', $tag, $matches ) ) {
+				// No type attribute: HTML defaults to text/javascript.
+				return true;
+			}
+
+			$type = strtolower( trim( $matches[2] ) );
+			if ( '' === $type ) {
+				// type="" / type= behaves as the implied default.
+				return true;
+			}
+
+			return in_array(
+				$type,
+				array(
+					'text/javascript',
+					'application/javascript',
+					'text/ecmascript',
+					'application/ecmascript',
+					'module',
+				),
+				true
+			);
+		}
+
+		/**
 		 * Adds defer attribute to non-logged-in users' scripts.
 		 *
 		 * @since 1.0.0
@@ -3160,6 +3203,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					}
 				}
 				if ( ! $this->is_delay_excluded_handle( $handle ) ) {
+					// Non-executable <script> types are data blocks
+					// (application/json, application/ld+json, text/template,
+					// speculationrules, …). They never execute, so delaying
+					// them achieves nothing, and moving their src to wppo-src
+					// would corrupt the payload. Leave them untouched
+					// (issue #1094, item 1).
+					if ( ! $this->is_executable_script_type( (string) $tag ) ) {
+						return $tag;
+					}
+
 					// Fill-gaps-only: never emit a duplicate fetchpriority attribute
 					// when core or an earlier filter already stamped one. Anchored
 					// on a whitespace boundary so data-*fetchpriority attributes
@@ -3169,20 +3222,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						$tag = str_replace( '<script ', '<script fetchpriority="low" ', $tag );
 					}
 					$tag = str_replace( ' src', ' wppo-src', $tag );
-					$tag = preg_replace(
-						'/type=("|\')text\/javascript("|\')/',
-						'type="wppo/javascript" wppo-type="text/javascript"',
-						$tag
-					) ?? $tag;
+					// Normalise an executable JS type into the delay marker,
+					// carrying the ORIGINAL type through wppo-type so
+					// lazyload.js can restore it (type="module" becomes
+					// wppo-type="module"). Skipped when the marker is already
+					// present, and anchored on a whitespace boundary so
+					// wppo-type="text/javascript" cannot match its own value —
+					// without both guards, re-processing double-stamped
+					// wppo-type and produced duplicate attributes
+					// (issue #1094, item 2).
+					if ( false === strpos( $tag, 'wppo/javascript' ) ) {
+						$tag = preg_replace_callback(
+							'/\stype=(["\'])([^"\']*)\1/i',
+							static function ( $matches ) {
+								return ' type="wppo/javascript" wppo-type="' . $matches[2] . '"';
+							},
+							$tag
+						) ?? $tag;
+					}
 					// Fill-gaps-only (#1089): WP 6.3+ omits type="text/javascript"
 					// for defer/async-strategy scripts (and plain tags may carry
-					// no type at all), so the preg_replace above leaves those
-					// tags with wppo-src but no delay marker. Inject the marker
-					// when absent so every delayed tag stays self-describing.
-					// Never double-stamp a tag that already carries the marker.
+					// no type at all), so the rewrite above leaves those tags
+					// with wppo-src but no delay marker. Inject the marker when
+					// absent so every delayed tag stays self-describing; the
+					// HTML-implied default is text/javascript.
 					if ( false !== strpos( $tag, 'wppo-src' )
 						&& false === strpos( $tag, 'wppo/javascript' )
-						&& ! preg_match( '/\stype\s*=/i', $tag )
 					) {
 						$tag = str_replace( '<script ', '<script type="wppo/javascript" wppo-type="text/javascript" ', $tag );
 					}
