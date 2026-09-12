@@ -50,6 +50,10 @@ class MetaboxTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'disabled' )->justReturn( '' );
 		Functions\when( 'is_multisite' )->justReturn( false );
 		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		// get_raw_post_string() unslashes before its is_string() guard.
+		Functions\when( 'wp_unslash' )->returnArg();
+		Functions\when( 'sanitize_text_field' )->returnArg();
+		Functions\when( 'sanitize_textarea_field' )->returnArg();
 	}
 
 	/**
@@ -255,5 +259,72 @@ class MetaboxTest extends \PHPUnit\Framework\TestCase {
 		$this->assertArrayNotHasKey( 'empty-value', $result, 'Empty values should be skipped' );
 		$this->assertArrayNotHasKey( 'invalid-handle', $result, 'Handles not in valid_handles should be skipped' );
 		$this->assertArrayNotHasKey( 'invalid-value', $result, 'Values not in allowed_values should be skipped' );
+	}
+
+	/**
+	 * An array-shaped POST value must never reach sanitize_text_field().
+	 *
+	 * Regression: the nonce and preload-URL fields were read straight out of
+	 * $_POST behind only an isset() guard, so a crafted array value reached
+	 * sanitize_text_field()/sanitize_textarea_field() and threw a TypeError on
+	 * PHP 8 — fataling save_post instead of failing nonce verification.
+	 */
+	public function test_get_raw_post_string_rejects_non_string_values(): void {
+		$_POST['wppo_array_probe']  = array( 'nested' );
+		$_POST['wppo_scalar_probe'] = 'ok';
+
+		$metabox    = $this->make_metabox();
+		$reflection = new \ReflectionClass( $metabox );
+		$method     = $reflection->getMethod( 'get_raw_post_string' );
+
+		try {
+			$this->assertSame( '', $method->invokeArgs( $metabox, array( 'wppo_array_probe' ) ), 'Array input must coerce to an empty string' );
+			$this->assertSame( 'ok', $method->invokeArgs( $metabox, array( 'wppo_scalar_probe' ) ) );
+			$this->assertSame( '', $method->invokeArgs( $metabox, array( 'wppo_missing_probe' ) ) );
+		} finally {
+			unset( $_POST['wppo_array_probe'], $_POST['wppo_scalar_probe'] );
+		}
+	}
+
+	/**
+	 * Saving with array-shaped POST values must fail closed, not fatal.
+	 */
+	public function test_save_preload_image_urls_fails_closed_on_array_post_values(): void {
+		$_POST['wppo_preload_image_nonce'] = array( 'evil' );
+		$_POST['wppo_preload_image_url']   = array( 'https://example.com/a.jpg' );
+
+		Functions\when( 'wp_verify_nonce' )->justReturn( false );
+
+		$metabox    = $this->make_metabox();
+		$reflection = new \ReflectionClass( $metabox );
+		$method     = $reflection->getMethod( 'save_preload_image_urls' );
+
+		try {
+			// Reaching the assertion at all proves no TypeError was thrown.
+			$method->invokeArgs( $metabox, array( 123 ) );
+			$this->assertTrue( true, 'Array nonce must fail verification without a TypeError' );
+		} finally {
+			unset( $_POST['wppo_preload_image_nonce'], $_POST['wppo_preload_image_url'] );
+		}
+	}
+
+	/**
+	 * Saving the Asset Manager metabox with an array nonce must fail closed.
+	 */
+	public function test_save_asset_manager_settings_fails_closed_on_array_nonce(): void {
+		$_POST['wppo_asset_manager_nonce'] = array( 'evil' );
+
+		Functions\when( 'wp_verify_nonce' )->justReturn( false );
+
+		$metabox    = $this->make_metabox();
+		$reflection = new \ReflectionClass( $metabox );
+		$method     = $reflection->getMethod( 'save_asset_manager_settings' );
+
+		try {
+			$method->invokeArgs( $metabox, array( 123 ) );
+			$this->assertTrue( true, 'Array nonce must fail verification without a TypeError' );
+		} finally {
+			unset( $_POST['wppo_asset_manager_nonce'] );
+		}
 	}
 }

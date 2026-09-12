@@ -373,9 +373,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		 * @since 1.2.1
 		 */
 		private function save_preload_image_urls( $post_id ) {
+			// Read through get_raw_post_string(): a crafted array value for
+			// either field would otherwise reach sanitize_*() as an array and
+			// throw a TypeError on PHP 8, fataling save_post instead of
+			// failing nonce verification gracefully.
 			if (
 				! isset( $_POST['wppo_preload_image_nonce'] )
-				|| ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['wppo_preload_image_nonce'] ) ), 'save_preload_image_url' )
+				|| ! wp_verify_nonce( sanitize_text_field( $this->get_raw_post_string( 'wppo_preload_image_nonce' ) ), 'save_preload_image_url' )
 			) {
 				return;
 			}
@@ -384,7 +388,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 				return;
 			}
 
-			$preload_urls = sanitize_textarea_field( wp_unslash( $_POST['wppo_preload_image_url'] ) );
+			$preload_urls = sanitize_textarea_field( $this->get_raw_post_string( 'wppo_preload_image_url' ) );
 			update_post_meta( $post_id, '_wppo_preload_image_url', $preload_urls );
 		}
 
@@ -398,9 +402,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		 * @since 1.2.1
 		 */
 		private function save_asset_manager_settings( $post_id ) {
+			// get_raw_post_string() keeps an array-shaped POST value from
+			// reaching sanitize_text_field(), which would throw a TypeError
+			// on PHP 8 and fatal save_post before the nonce is checked.
 			if (
 				! isset( $_POST['wppo_asset_manager_nonce'] )
-				|| ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['wppo_asset_manager_nonce'] ) ), 'wppo_save_asset_manager' )
+				|| ! wp_verify_nonce( sanitize_text_field( $this->get_raw_post_string( 'wppo_asset_manager_nonce' ) ), 'wppo_save_asset_manager' )
 			) {
 				return;
 			}

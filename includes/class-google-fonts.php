@@ -125,6 +125,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 				return $tag;
 			}
 
+			// Guard before wp_parse_url(): style_loader_tag callbacks can hand
+			// back a non-string $href, and null reaches the string parameter
+			// of wp_parse_url() as a PHP 8.1+ deprecation.
+			if ( ! is_string( $href ) || '' === $href ) {
+				return $tag;
+			}
+
 			// Exact host allowlist — not strpos (prevents evil.com/fonts.googleapis.com or fonts.googleapis.com.evil.com).
 			// Caller: style_loader_tag filter; $href is the queued stylesheet URL.
 			// @since 2.0.0.
@@ -470,6 +477,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * @since 2.0.0
 		 */
 		private function normalize_google_fonts_url( $url ) {
+			// Guard before wp_parse_url(): the parameter is untyped, and
+			// passing null/false to its string parameter emits a
+			// "Passing null to parameter" deprecation on PHP 8.1+ on every
+			// request that reaches this path.
+			if ( ! is_string( $url ) || '' === $url ) {
+				return '';
+			}
 			// Exact host allowlist — replaces strpos substring check.
 			// @since 2.0.0.
 			$host = wp_parse_url( $url, PHP_URL_HOST );

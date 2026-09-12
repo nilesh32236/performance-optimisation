@@ -272,7 +272,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 							} elseif ( isset( $info['db0'] ) ) {
 								$db_info = $info['db0'];
 							}
-							if ( $db_info && preg_match( '/keys=([0-9]+)/', $db_info, $matches ) ) {
+							// is_string() guard: phpredis returns db0 as a string
+							// in some versions/modes and as a parsed array in
+							// others, and preg_match() on an array throws a
+							// TypeError on PHP 8, fataling the admin/REST status
+							// path. Fall through with keys=0 when it is not text.
+							if ( is_string( $db_info ) && '' !== $db_info && preg_match( '/keys=([0-9]+)/', $db_info, $matches ) ) {
 								$keys = (int) $matches[1];
 							}
 
