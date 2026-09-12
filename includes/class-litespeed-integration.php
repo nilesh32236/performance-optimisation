@@ -701,6 +701,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			 * @param string   $scope Scope.
 			 */
 			$tags = (array) apply_filters( 'wppo_litespeed_purge_tags', $tags, $scope );
+			// Re-sanitize after the filter: a compromised filter must not
+			// inject CRLF into X-LiteSpeed-Purge/Tag headers.
+			$tags = array_values( array_filter( array_map( fn( $t ) => preg_replace( '/[^A-Za-z0-9_\.\-]/', '', (string) $t ), $tags ) ) );
 
 			$key      = Util::transient_key( self::TAG_QUEUE );
 			$existing = get_transient( $key );

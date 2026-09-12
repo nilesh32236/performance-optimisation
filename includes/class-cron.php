@@ -886,6 +886,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			if ( '' === $url ) {
 				return;
 			}
+			if ( function_exists( 'wp_http_validate_url' ) && ! wp_http_validate_url( $url ) ) {
+				return;
+			}
+			// Same-host re-check at the sink: a scheduled URL must never turn
+			// into an off-host server-side GET.
+			if ( function_exists( 'wp_parse_url' ) && function_exists( 'home_url' ) ) {
+				$home_host = wp_parse_url( home_url(), PHP_URL_HOST );
+				if ( ( wp_parse_url( $url, PHP_URL_HOST ) ) !== $home_host ) {
+					return;
+				}
+			}
 
 			// Defensive Woo skip (issue #962): never warm dynamic routes.
 			if ( $this->is_woo_excluded_url( $url ) ) {
@@ -898,7 +909,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				return;
 			}
 
-			$response = wp_remote_get( $url, array( 'timeout' => 30 ) );
+			$response = wp_remote_get(
+				$url,
+				array(
+					'timeout'            => 30,
+					'reject_unsafe_urls' => true,
+				)
+			);
 			if ( is_wp_error( $response ) ) {
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log

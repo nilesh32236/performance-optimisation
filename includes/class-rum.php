@@ -74,6 +74,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		const RATE_LIMIT_PER_HOUR = 120;
 
 		/**
+		 * Maximum beacons accepted site-wide per minute (distributed-spam backstop).
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		const GLOBAL_RATE_LIMIT_PER_MINUTE = 120;
+
+		/**
 		 * Transient key for the RUM sample queue.
 		 *
 		 * @var string
@@ -422,8 +430,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				);
 			}
 
-			$ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
-			if ( '' !== $ip && self::is_rate_limited( $ip ) ) {
+			$raw_ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
+			$ip     = self::normalize_ip( $raw_ip );
+			// Fail closed: an empty/unparseable IP falls back to the site-wide
+			// bucket instead of skipping the throttle (proxies stripping
+			// REMOTE_ADDR must not silently disable rate limiting).
+			if ( '' === $ip ) {
+				if ( self::is_globally_rate_limited() ) {
+					return array(
+						'ok'      => false,
+						'status'  => 429,
+						'message' => __( 'Too many beacons.', 'performance-optimisation' ),
+					);
+				}
+			} elseif ( self::is_rate_limited( $ip ) || self::is_globally_rate_limited() ) {
 				return array(
 					'ok'      => false,
 					'status'  => 429,
@@ -673,12 +693,59 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * @return bool
 		 */
 		private static function is_rate_limited( string $ip ): bool {
-			$key   = Util::transient_key( 'wppo_rum_ratelimit_' . md5( $ip ) );
+			$key   = Util::transient_key( 'wppo_rum_ratelimit_' . md5( strtolower( $ip ) ) );
 			$count = (int) get_transient( $key );
 			if ( $count >= self::RATE_LIMIT_PER_HOUR ) {
 				return true;
 			}
 			set_transient( $key, $count + 1, HOUR_IN_SECONDS );
+			return false;
+		}
+
+		/**
+		 * Normalize a client IP for rate-limit keying.
+		 *
+		 * Lowercases, strips IPv6 zone IDs (%eth0), and validates via
+		 * filter_var(); returns '' when unparseable so callers fail closed
+		 * to the site-wide bucket.
+		 *
+		 * @since NEXT
+		 * @param string $ip Raw IP string.
+		 * @return string Normalized IP or ''.
+		 */
+		private static function normalize_ip( string $ip ): string {
+			$ip = strtolower( trim( $ip ) );
+			if ( '' === $ip ) {
+				return '';
+			}
+			// Strip IPv6 zone identifier (e.g. fe80::1%eth0).
+			$pct = strpos( $ip, '%' );
+			if ( false !== $pct ) {
+				$ip = substr( $ip, 0, $pct );
+			}
+			if ( function_exists( 'filter_var' ) ) {
+				$valid = filter_var( $ip, FILTER_VALIDATE_IP );
+				return false === $valid ? '' : (string) $valid;
+			}
+			return $ip;
+		}
+
+		/**
+		 * Whether the site-wide per-minute beacon budget is exhausted.
+		 *
+		 * Backstop against distributed spam where per-IP limits do not help.
+		 * Uses a best-effort atomic-ish increment (add() when available).
+		 *
+		 * @since NEXT
+		 * @return bool
+		 */
+		private static function is_globally_rate_limited(): bool {
+			$key   = Util::transient_key( 'wppo_rum_global' );
+			$count = (int) get_transient( $key );
+			if ( $count >= self::GLOBAL_RATE_LIMIT_PER_MINUTE ) {
+				return true;
+			}
+			set_transient( $key, $count + 1, MINUTE_IN_SECONDS );
 			return false;
 		}
 

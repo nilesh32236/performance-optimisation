@@ -806,6 +806,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * @return bool|\WP_Error `true` on success, `WP_Error` on failure (possible error codes: `missing_extension`, `foreign_dropin`, `write_error`).
 		 */
 		public function enable( $config ) {
+			// Defense-in-depth: authorization lives in REST/CLI callers, but a
+			// direct PHP call must not get privileged file writes.
+			if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) && ! wp_doing_cron() && ! ( defined( 'WP_CLI' ) && WP_CLI ) ) {
+				return new \WP_Error( 'forbidden', __( 'You are not allowed to manage the object cache.', 'performance-optimisation' ) );
+			}
 			if ( ! class_exists( 'Redis' ) ) {
 				return new \WP_Error( 'missing_extension', __( 'The PhpRedis extension is not installed.', 'performance-optimisation' ) );
 			}
@@ -862,6 +867,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				return new \WP_Error( 'write_error', __( 'Cannot write Redis configuration file.', 'performance-optimisation' ) );
 			}
 
+			// Defense-in-depth: the config file lives under web-reachable
+			// wp-content and only has an ABSPATH guard. Drop deny rules for
+			// it (Apache + OLS .htaccess, IIS web.config) so topology is
+			// not disclosed when PHP handling is disabled.
+			self::protect_config_file();
+
 			// Copy drop-in.
 			if ( ! $wp_filesystem->copy( $this->template_path, $this->dropin_path, true, FS_CHMOD_FILE ) ) {
 				$wp_filesystem->delete( $this->config_path );
@@ -894,6 +905,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * @return bool|\WP_Error True on success, WP_Error on failure.
 		 */
 		public function disable() {
+			if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) && ! wp_doing_cron() && ! ( defined( 'WP_CLI' ) && WP_CLI ) ) {
+				return new \WP_Error( 'forbidden', __( 'You are not allowed to manage the object cache.', 'performance-optimisation' ) );
+			}
 			$status = $this->get_status();
 			if ( $status['foreign_dropin'] ) {
 				return new \WP_Error( 'foreign_dropin', __( 'A foreign drop-in exists. We will not delete it for safety.', 'performance-optimisation' ) );
@@ -927,6 +941,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			}
 
 			return true;
+		}
+
+		/**
+		 * Write deny rules shielding the web-reachable redis config file.
+		 *
+		 * Best-effort only; failures never block enable().
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private static function protect_config_file(): void {
+			try {
+				$fs = Util::init_filesystem();
+				if ( ! $fs ) {
+					return;
+				}
+				$htaccess = wp_normalize_path( (string) WP_CONTENT_DIR ) . '/.htaccess';
+				$rule     = "<Files \"wppo-redis-config.php\">\nRequire all denied\n</Files>\n";
+				if ( function_exists( 'insert_with_markers' ) ) {
+					insert_with_markers( $htaccess, 'WPPO Redis Config', explode( "\n", trim( $rule ) ) );
+				}
+				$config = wp_normalize_path( (string) WP_CONTENT_DIR ) . '/web.config';
+				if ( ! $fs->exists( $config ) ) {
+					return;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 
 		/**

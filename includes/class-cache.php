@@ -2084,8 +2084,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				}
 
 				if ( ! $excluded && ! empty( $_COOKIE ) && is_array( $_COOKIE ) ) {
-					foreach ( $_COOKIE as $k => $v ) {
-						if ( 0 === strpos( (string) $k, 'wp_woocommerce_session_' ) && ! empty( $v ) ) {
+					$unslashed = function_exists( 'wp_unslash' ) ? wp_unslash( $_COOKIE ) : $_COOKIE;
+					foreach ( $unslashed as $k => $v ) {
+						$key = (string) $k;
+						if ( function_exists( 'sanitize_key' ) ) {
+							$key = sanitize_key( $key );
+						}
+						if ( 0 === strpos( $key, 'wp_woocommerce_session_' ) && ! empty( $v ) ) {
 							$excluded = true;
 							break;
 						}
@@ -3578,9 +3583,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Recursively delete files under an allowlisted swap dir via PHP API.
+		 *
+		 * @since NEXT
+		 * @param string $swap_dir Allowlisted directory.
+		 * @return void
+		 */
+		private static function delete_swap_dir_files( string $swap_dir ): void {
+			try {
+				$iterator = new \RecursiveIteratorIterator(
+					new \RecursiveDirectoryIterator( $swap_dir, \FilesystemIterator::SKIP_DOTS ),
+					\RecursiveIteratorIterator::CHILD_FIRST
+				);
+				foreach ( $iterator as $file ) {
+					$path = wp_normalize_path( (string) $file->getPathname() );
+					$root = wp_normalize_path( $swap_dir );
+					// Containment: never delete outside the allowlisted root.
+					if ( 0 !== strpos( $path, trailingslashit( $root ) ) && $path !== $root ) {
+						continue;
+					}
+					if ( $file->isFile() || $file->isLink() ) {
+						// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.file_system_operations_unlink,WordPress.WP.AlternativeFunctions.unlink_unlink
+						@unlink( $path );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
 		 * Fallback purge for LiteSpeed/OLS when LSCWP not active (P0).
 		 *
-		 * Attempts to clear /tmp/lshttpd/swap via find+delete and emits
+		 * Clears allowlisted swap dirs via PHP API and emits
 		 * X-LiteSpeed-Purge header. Gated by is_litespeed() and no-op when
 		 * has_action('litespeed_purge_all') exists (handled via sync above).
 		 * Filterable via wppo_litespeed_swap_purge.
@@ -3609,9 +3644,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 			$swap_dirs = array( '/tmp/lshttpd/swap', '/usr/local/lsws/cachedata' );
 			foreach ( $swap_dirs as $swap_dir ) {
+				// Allowlisted dirs only; containment asserted before delete.
+				if ( ! in_array( $swap_dir, array( '/tmp/lshttpd/swap', '/usr/local/lsws/cachedata' ), true ) ) {
+					continue;
+				}
 				if ( is_dir( $swap_dir ) && is_writable( $swap_dir ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_dir,WordPress.WP.AlternativeFunctions.file_system_operations_is_writable
-					// Best-effort: find and delete cached files. Suppressed on non-LS hosts.
-					@exec( 'find ' . escapeshellarg( $swap_dir ) . ' -type f -delete 2>/dev/null' ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_exec,WordPress.PHP.NoSilencedErrors.Discouraged
+					self::delete_swap_dir_files( $swap_dir );
 				}
 			}
 			// Stale/private split: decide scope for header.
@@ -3634,6 +3672,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					}
 				} else {
 					$clean = '/' . ltrim( (string) $url_path, '/' );
+					$clean = str_replace( array( "\r", "\n" ), '', $clean );
+					if ( '' !== $clean && 1 !== preg_match( '#^/[A-Za-z0-9/_\.\-?=&%]*$#', $clean ) ) {
+						$clean = '/';
+					}
 					header( 'X-LiteSpeed-Purge: ' . $clean );
 					if ( 'private' === $scope ) {
 						header( 'X-LiteSpeed-Purge: private,' . $clean, false );
@@ -3647,7 +3689,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( null === $url_path || '' === $url_path ) {
 					$tags[] = '*';
 				} else {
-					$clean  = '/' . ltrim( (string) $url_path, '/' );
+					$clean  = str_replace( array( "\r", "\n" ), '', '/' . ltrim( (string) $url_path, '/' ) );
 					$tags[] = $clean;
 				}
 					LiteSpeed_Integration::queue_purge_tags( $tags, 'stale' === $scope ? 'stale' : ( 'private' === $scope ? 'private' : 'public' ) );

@@ -249,6 +249,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since 2.0.0
 		 */
 		private static function get_ccss_file( string $template_hash ): string {
+			// Defense-in-depth: allow word chars + dash only so a caller
+			// passing ../../foo can never escape the ccss dir via this
+			// delete-capable sink (slashes, dots and NUL are rejected).
+			if ( '' === $template_hash || 1 !== preg_match( '/^[A-Za-z0-9_\-]{1,128}$/', $template_hash ) ) {
+				return '';
+			}
 			$dir = self::get_ccss_dir();
 			if ( '' === $dir ) {
 				return '';
@@ -1362,11 +1368,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since 2.0.0
 		 */
 		public static function generate( string $url, ?string &$source_css = null, ?array &$resolved_urls = null ) {
+			// SSRF guard: reuse the stylesheet allowlist (same-site + scheme).
+			// function_exists() keeps unit-test doubles working; production
+			// core always defines wp_http_validate_url().
+			if ( function_exists( 'wp_http_validate_url' ) && ! self::is_safe_stylesheet_url( $url ) ) {
+				return false;
+			}
+			// wp_remote_get() with reject_unsafe_urls (honored by WP_Http)
+			// keeps the SSRF backstop while preserving the wp_remote_get
+			// call shape the scheduler/worker doubles stub.
 			$response = wp_remote_get(
 				$url,
 				array(
-					'timeout'    => 30,
-					'user-agent' => 'WPPO Critical CSS Generator/' . WPPO_VERSION,
+					'timeout'            => 30,
+					'user-agent'         => 'WPPO Critical CSS Generator/' . WPPO_VERSION,
+					'reject_unsafe_urls' => true,
 				)
 			);
 

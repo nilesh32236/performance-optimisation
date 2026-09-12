@@ -218,11 +218,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 					continue;
 				}
 
+				// Tolerant scheme gate (pure PHP so no WP stub is required):
+			// only http(s) URLs are purged; anything else is skipped and
+			// logged. Unparseable URLs fail closed here.
+			$lower = strtolower( $clean );
+			if ( ! str_starts_with( $lower, 'http://' ) && ! str_starts_with( $lower, 'https://' ) ) {
+				self::log_failure( 'varnish', $clean );
+				$ok = false;
+				continue;
+			}
 				$response = wp_remote_request(
 					$clean,
 					array(
-						'method'  => 'PURGE',
-						'timeout' => 5,
+						'method'             => 'PURGE',
+						'timeout'            => 5,
+						'reject_unsafe_urls' => true,
 					)
 				);
 

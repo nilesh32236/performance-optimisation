@@ -508,6 +508,22 @@ if ( ! function_exists( 'wppo_apply_redis_options' ) ) {
 				}
 			}
 		}
+
+		// TLS verification (opt-in): when use_tls is true and the extension
+		// supports it, pass verify_peer + cafile so admins get MITM
+		// protection instead of opportunistic encryption. Defaults to
+		// verify-ON with system CAs when tls_verify is unset.
+		if ( ! empty( $config['use_tls'] ) && defined( '\Redis::OPT_SSL_VERIFY_PEER' ) ) {
+			try {
+				$verify = $config['tls_verify'] ?? true;
+				$redis->setOption( \Redis::OPT_SSL_VERIFY_PEER, (bool) $verify ? 1 : 0 );
+				if ( ! empty( $config['tls_ca'] ) && is_string( $config['tls_ca'] ) && defined( '\Redis::OPT_SSL_CAFILE' ) ) {
+					$redis->setOption( \Redis::OPT_SSL_CAFILE, $config['tls_ca'] );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
 	}
 }
 

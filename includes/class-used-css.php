@@ -1953,15 +1953,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				return;
 			}
 
-			$response = wp_remote_get(
-				$permalink,
-				array(
-					'timeout' => 30,
-					'headers' => array(
-						'X-WPPO-Used-CSS' => '1',
-					),
-				)
+			// Same-site guard: never let a filtered permalink turn the worker
+			// into an off-host fetch. Fail closed on helper errors.
+			try {
+				if ( function_exists( 'wp_parse_url' ) && function_exists( 'home_url' ) ) {
+					$home_host = wp_parse_url( home_url(), PHP_URL_HOST );
+					$perm_host = wp_parse_url( $permalink, PHP_URL_HOST );
+					if ( '' === $permalink || $perm_host !== $home_host ) {
+						return;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return;
+			}
+			$fetch_args = array(
+				'timeout'            => 15,
+				'reject_unsafe_urls' => true,
+				'headers'            => array(
+					'X-WPPO-Used-CSS' => '1',
+				),
 			);
+			$response   = function_exists( 'wp_safe_remote_get' ) ? wp_safe_remote_get( $permalink, $fetch_args ) : wp_remote_get( $permalink, $fetch_args );
 
 			if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {

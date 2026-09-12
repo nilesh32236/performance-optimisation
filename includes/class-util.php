@@ -1090,12 +1090,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				return false;
 			}
 
+			if ( ! is_string( $cache_dir ) || '' === $cache_dir ) {
+				return false;
+			}
+
+			$path = wp_normalize_path( $cache_dir );
+			// Fail closed on traversal: reject .. segments lexically.
+			$segments = explode( '/', trim( $path, '/' ) );
+			foreach ( $segments as $segment ) {
+				if ( '..' === $segment ) {
+					return false;
+				}
+			}
+			// Containment: must live under WP_CONTENT_DIR so a caller
+			// forwarding user-influenced input cannot create directories
+			// outside the content tree (uploads/cache/fonts subtrees).
+			$content = wp_normalize_path( (string) WP_CONTENT_DIR );
+			if ( $path !== $content && 0 !== strpos( $path, trailingslashit( $content ) ) ) {
+				return false;
+			}
+
 			if ( $fs->is_dir( $cache_dir ) ) {
 				return true;
 			}
 
 			// Build parent directories iteratively to avoid deep recursion.
-			$path  = wp_normalize_path( $cache_dir );
 			$parts = explode( '/', trim( $path, '/' ) );
 			$build = '';
 

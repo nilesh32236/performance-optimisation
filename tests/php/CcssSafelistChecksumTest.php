@@ -83,6 +83,7 @@ class CcssSafelistChecksumTest extends \PHPUnit\Framework\TestCase {
 		$this->http_calls    = 0;
 
 		Functions\when( 'apply_filters' )->returnArg( 2 );
+		Functions\when( 'wp_http_validate_url' )->justReturn( true );
 		Functions\when( 'add_action' )->justReturn( true );
 		Functions\when( 'untrailingslashit' )->returnArg();
 		Functions\when( 'trailingslashit' )->returnArg();

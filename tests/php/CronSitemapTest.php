@@ -202,10 +202,17 @@ class CronSitemapTest extends \PHPUnit\Framework\TestCase {
 			array(
 				'esc_url_raw',
 				'wp_remote_retrieve_response_code',
+				'wp_parse_url',
+				'home_url',
+				'wp_http_validate_url',
 			)
 		);
 		Functions\when( 'esc_url_raw' )->returnArg();
 		Functions\when( 'wp_remote_retrieve_response_code' )->justReturn( 200 );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		Functions\when( 'wp_http_validate_url' )->justReturn( true );
 
 		Functions\expect( 'wp_remote_get' )->once()->andReturn(
 			array( 'response' => array( 'code' => 200 ) )
