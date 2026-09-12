@@ -1994,4 +1994,26 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertStringContainsString( 'color:red;content-visibility:auto', $result );
 	}
+
+	/**
+	 * LCP window map stays aligned when script/comment regions hold div-like text.
+	 *
+	 * A `<div>` inside `<script>` RAWTEXT or an HTML comment is not a
+	 * real section, so it must not shift the window map: the second
+	 * real section carrying an LCP marker still stays eager.
+	 *
+	 * @since NEXT
+	 */
+	public function test_lazy_render_lcp_window_ignores_div_in_script_and_comment(): void {
+		$this->stub_lazy_render_functions();
+		$image_opt = $this->make_lazy_render_instance( true, false );
+
+		$html   = '<script type="text/template"><div class="fake">template</div></script>'
+			. '<!-- <div class="hero">commented out</div> -->'
+			. '<section class="wp-block-group"><p>Hero</p></section>'
+			. '<section class="wp-block-group"><img fetchpriority="high" src="hero.jpg"></section>';
+		$result = $image_opt->lazy_render_elements( $html );
+
+		$this->assertStringNotContainsString( 'content-visibility:auto', $result );
+	}
 }

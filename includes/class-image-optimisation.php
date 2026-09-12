@@ -5907,11 +5907,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Map section/div opening-tag order to scoped LCP presence.
 		 *
-		 * Splits the buffer at each `<section>`/`<div>` opening tag and
-		 * checks the scope up to the next such tag (capped at 16KB) for
-		 * LCP markers (`fetchpriority="high"`, `data-lcp`, `data-hero`).
-		 * Lets a plain container wrapping an LCP image still count as hero.
-		 * Fail-open: any failure returns an empty map (no scoped skips).
+		 * Walks the same `WP_HTML_Tag_Processor` tag stream the
+		 * `lazy_render_elements()` consumer loop walks (plain `next_tag()`,
+		 * which skips closers, comments, and RAWTEXT/RCDATA bodies such as
+		 * `<script>`/`<style>`/`<textarea>`/`<title>` contents), so the
+		 * sequence index cannot diverge from `$section_seq`: index `$i`
+		 * always describes the same opening tag in both enumerations.
+		 * Each window spans the tokens from one `<section>`/`<div>`
+		 * opener up to (but excluding) the next one, unbounded. A window
+		 * is marked when its opener or any tag inside it carries an LCP
+		 * marker (`fetchpriority="high"`, `data-lcp`, `data-hero`,
+		 * `data-od-hero`, `data-wppo-lcp` as real attributes on real
+		 * tags). Lets a plain container wrapping an LCP image still count
+		 * as hero. Fail-open: any failure returns an empty map (no scoped
+		 * skips). Note the marker check is intentionally narrower than a
+		 * raw substring search: marker-looking text inside comments,
+		 * script bodies, or plain text no longer marks a window, which
+		 * only removes false-positive skips (missed optimisation), never
+		 * mistags a hero.
 		 *
 		 * @since NEXT
 		 *
@@ -5923,37 +5936,62 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( '' === $buffer ) {
 					return array();
 				}
-				if ( ! preg_match_all( '#<(section|div)\b[^>]*>#i', $buffer, $matches, PREG_OFFSET_CAPTURE ) ) {
-					return array();
-				}
-				if ( empty( $matches[0] ) || ! is_array( $matches[0] ) ) {
-					return array();
-				}
-				$tags  = array_values( $matches[0] );
-				$total = count( $tags );
-				$len   = strlen( $buffer );
-				$map   = array();
-				for ( $i = 0; $i < $total; $i++ ) {
-					$start = isset( $tags[ $i ][1] ) ? (int) $tags[ $i ][1] : 0;
-					$next  = ( $i + 1 < $total && isset( $tags[ $i + 1 ][1] ) ) ? (int) $tags[ $i + 1 ][1] : $len;
-					$scope = $next - $start;
-					if ( $scope <= 0 ) {
-						$map[ $i ] = false;
+				$processor = new \WP_HTML_Tag_Processor( $buffer );
+				$map       = array();
+				$idx       = -1;
+				while ( $processor->next_tag() ) {
+					$tag = strtoupper( $processor->get_tag() ?? '' );
+					if ( 'SECTION' === $tag || 'DIV' === $tag ) {
+						++$idx;
+						$map[ $idx ] = $this->processor_tag_has_lcp_marker( $processor );
 						continue;
 					}
-					$window = substr( $buffer, $start, min( $scope, 16384 ) );
-					if ( ! is_string( $window ) || '' === $window ) {
-						$map[ $i ] = false;
+					if ( $idx < 0 || ! empty( $map[ $idx ] ) ) {
 						continue;
 					}
-					$map[ $i ] = (bool) preg_match( '/\sfetchpriority\s*=\s*["\']high["\']/i', $window )
-						|| false !== stripos( $window, 'data-lcp' )
-						|| false !== stripos( $window, 'data-hero' );
+					if ( $this->processor_tag_has_lcp_marker( $processor ) ) {
+						$map[ $idx ] = true;
+					}
 				}
 				return $map;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return array();
+			}
+		}
+
+		/**
+		 * Whether the processor's current tag carries an LCP marker attribute.
+		 *
+		 * Checks `fetchpriority="high"` and the `data-lcp`/`data-hero`/
+		 * `data-od-hero`/`data-wppo-lcp` attributes. Only real attributes
+		 * on real tags match: marker-looking text inside comments, script
+		 * bodies, or attribute values does not count.
+		 * Fail-safe: any failure returns false.
+		 *
+		 * @since NEXT
+		 *
+		 * @param mixed $processor Tag processor positioned on the current tag.
+		 * @return bool True when the current tag carries an LCP marker.
+		 */
+		private function processor_tag_has_lcp_marker( $processor ): bool {
+			try {
+				if ( ! is_object( $processor ) || ! method_exists( $processor, 'get_attribute' ) ) {
+					return false;
+				}
+				$fetchpriority = strtolower( (string) ( $processor->get_attribute( 'fetchpriority' ) ?? '' ) );
+				if ( 'high' === $fetchpriority ) {
+					return true;
+				}
+				foreach ( array( 'data-lcp', 'data-hero', 'data-od-hero', 'data-wppo-lcp' ) as $attr ) {
+					if ( null !== $processor->get_attribute( $attr ) ) {
+						return true;
+					}
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
 			}
 		}
 	}
