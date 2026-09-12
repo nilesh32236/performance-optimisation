@@ -705,4 +705,117 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertSame( $tag, Critical_CSS::defer_stylesheets( $tag, 'theme-style', 'http://example.com/theme.css' ) );
 	}
+
+	/**
+	 * Stub file_optimisation settings for the deferJS/delayJS suspension guard.
+	 *
+	 * @param array $file_optimisation File optimisation settings.
+	 * @return void
+	 */
+	private function stub_file_optimisation( array $file_optimisation ): void {
+		$this->option_map['wppo_settings'] = array( 'file_optimisation' => $file_optimisation );
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+	}
+
+	/**
+	 * Deferred JS suspends deferral: tags load normally (issue #1090).
+	 *
+	 * @return void
+	 */
+	public function test_defer_js_suspends_deferral(): void {
+		$this->stub_file_optimisation( array( 'deferJS' => true ) );
+		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- Fixture tag for the deferral filter.
+		$tag = '<link rel="stylesheet" id="theme-style-css" href="http://example.com/theme.css" media="all" />';
+
+		$this->assertSame( $tag, Critical_CSS::defer_stylesheets( $tag, 'theme-style', 'http://example.com/theme.css' ) );
+	}
+
+	/**
+	 * Delayed JS suspends deferral: tags load normally (issue #1090).
+	 *
+	 * @return void
+	 */
+	public function test_delay_js_suspends_deferral(): void {
+		$this->stub_file_optimisation( array( 'delayJS' => true ) );
+		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- Fixture tag for the deferral filter.
+		$tag = '<link rel="stylesheet" id="theme-style-css" href="http://example.com/theme.css" media="all" />';
+
+		$this->assertSame( $tag, Critical_CSS::defer_stylesheets( $tag, 'theme-style', 'http://example.com/theme.css' ) );
+	}
+
+	/**
+	 * Deferred JS suspends emission: no output and no queueing (issue #1090).
+	 *
+	 * @return void
+	 */
+	public function test_defer_js_suspends_inline_ccss(): void {
+		$this->stub_file_optimisation( array( 'deferJS' => true ) );
+
+		ob_start();
+		Critical_CSS::inline_ccss();
+		$output = ob_get_clean();
+
+		$this->assertSame( '', $output );
+	}
+
+	/**
+	 * Delayed JS suspends emission: no output and no queueing (issue #1090).
+	 *
+	 * @return void
+	 */
+	public function test_delay_js_suspends_inline_ccss(): void {
+		$this->stub_file_optimisation( array( 'delayJS' => true ) );
+
+		ob_start();
+		Critical_CSS::inline_ccss();
+		$output = ob_get_clean();
+
+		$this->assertSame( '', $output );
+	}
+
+	/**
+	 * The shared predicate reports ineffective CCSS under deferred JS (issue #1090).
+	 *
+	 * @return void
+	 */
+	public function test_is_ccss_effective_false_when_defer_js(): void {
+		$this->stub_file_optimisation( array( 'deferJS' => true ) );
+
+		$this->assertFalse( Critical_CSS::is_ccss_effective() );
+		$this->assertTrue( Critical_CSS::is_deferral_suspended_by_js() );
+	}
+
+	/**
+	 * The shared predicate stays effective without deferred/delayed JS.
+	 *
+	 * @return void
+	 */
+	public function test_is_ccss_effective_true_without_defer_or_delay_js(): void {
+		$this->stub_file_optimisation( array() );
+
+		$this->assertTrue( Critical_CSS::is_ccss_effective() );
+		$this->assertFalse( Critical_CSS::is_deferral_suspended_by_js() );
+	}
+
+	/**
+	 * Suspended regeneration queues nothing and preserves variants (issue #1090).
+	 *
+	 * @return void
+	 */
+	public function test_regenerate_all_suspended_returns_zero(): void {
+		$this->stub_file_optimisation( array( 'delayJS' => true ) );
+
+		$this->assertSame( 0, Critical_CSS::regenerate_all() );
+	}
+
+	/**
+	 * Suspended freshness probe does no work and reports no staleness (issue #1090).
+	 *
+	 * @return void
+	 */
+	public function test_stale_probe_suspended_under_defer_js(): void {
+		$this->stub_file_optimisation( array( 'deferJS' => true ) );
+
+		$this->assertFalse( Critical_CSS::maybe_check_stale_and_requeue( 'some-template-hash' ) );
+	}
 }

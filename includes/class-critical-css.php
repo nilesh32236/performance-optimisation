@@ -897,7 +897,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 
 			// Mirror inline_ccss(): operators who disabled plugin inlining get
 			// no critical-CSS pipeline at all, so skip the freshness probe too.
-			if ( ! self::is_inline_allowed() ) {
+			// Suspended while deferJS/delayJS is active: deferral is off so
+			// emission is off too — skip local-source reads/hashing (issue #1090).
+			if ( ! self::is_ccss_effective() ) {
 				return;
 			}
 
@@ -930,6 +932,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 */
 		public static function maybe_check_stale_and_requeue( string $template_hash ): bool {
 			if ( '' === $template_hash ) {
+				return false;
+			}
+			// Suspended while deferJS/delayJS is active: no emission, no
+			// freshness probe work (issue #1090).
+			if ( self::is_deferral_suspended_by_js() ) {
 				return false;
 			}
 			if ( array_key_exists( $template_hash, self::$stale_probe_memo ) ) {
@@ -995,6 +1002,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return true;
 			}
 			return (bool) apply_filters( 'wppo_inline_combined_css', true );
+		}
+
+		/**
+		 * Whether stylesheet deferral is suspended by deferred/delayed JS.
+		 *
+		 * When `file_optimisation.deferJS` or `file_optimisation.delayJS` is
+		 * active, the `media=print` + `onload` swap in defer_stylesheets()
+		 * never fires until JS runs, so deferral is skipped to keep cached
+		 * HTML styled. Critical CSS only helps when deferral is active, so
+		 * this predicate gates emission and generation too (issue #1090).
+		 *
+		 * @return bool True when deferJS or delayJS is enabled.
+		 * @since NEXT
+		 */
+		public static function is_deferral_suspended_by_js(): bool {
+			$options = Util::get_settings();
+			$fo      = $options['file_optimisation'] ?? array();
+			return ! empty( $fo['deferJS'] ) || ! empty( $fo['delayJS'] );
+		}
+
+		/**
+		 * Whether critical CSS is effective on this request.
+		 *
+		 * Single shared predicate for the Critical-CSS contract: inlining
+		 * must be allowed AND deferral must be available. When deferral is
+		 * suspended by deferred/delayed JS, emitting critical CSS only adds
+		 * redundant weight (issue #1090).
+		 *
+		 * @return bool True when CCSS emission and deferral should run.
+		 * @since NEXT
+		 */
+		public static function is_ccss_effective(): bool {
+			return self::is_inline_allowed() && ! self::is_deferral_suspended_by_js();
 		}
 
 		/**
@@ -2190,6 +2230,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Output decision, in order:
 		 * 1. Yield entirely when the `wppo_inline_combined_css` filter is
 		 *    falsy — stylesheets load normally (no inline, no deferral).
+		 * 1b. Yield entirely when deferJS or delayJS is active — deferral is
+		 *    suspended (media=print deadlock guard) so emitting critical CSS
+		 *    would only add redundant weight (issue #1090). No emission, no
+		 *    generation queueing, no loader stub.
 		 * 2. Missing/unreadable variant — fail-open: queue background
 		 *    generation and print the async loader stub (never fatal).
 		 * 3. Content under MIN_INLINE_SIZE — treated as a failed extraction.
@@ -2217,7 +2261,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// Operators who disabled plugin inlining (e.g. serving CSS from a
 			// CDN) get normally-enqueued stylesheets: skip inline output and
 			// leave deferral to defer_stylesheets(), which yields too.
-			if ( ! self::is_inline_allowed() ) {
+			// Suspended while deferJS/delayJS is active: deferral is off, so
+			// emission would be redundant weight — skip everything (issue #1090).
+			if ( ! self::is_ccss_effective() ) {
 				return;
 			}
 
@@ -2344,9 +2390,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// Guard: when JS is deferred/delayed the onload swap never fires until JS runs.
 			// This leaves cached pages unstyled (media=print deadlock with removeUnusedCSS + criticalCSS + combineCSS).
 			// Keep media=all when either deferJS or delayJS is active so cached HTML stays styled.
+			// Shared with inline_ccss() via is_deferral_suspended_by_js() (issue #1090).
 			// @since 2.0.0.
-			$fo = $options['file_optimisation'] ?? array();
-			if ( ! empty( $fo['deferJS'] ) || ! empty( $fo['delayJS'] ) ) {
+			if ( self::is_deferral_suspended_by_js() ) {
 				return $tag;
 			}
 
@@ -2397,6 +2443,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since 2.0.0
 		 */
 		public static function background_generate( array $args ): void {
+			// Suspended while deferJS/delayJS is active: generated variants
+			// could not be used (no deferral, no emission), so skip the work
+			// instead of logging per-template failures (issue #1090).
+			if ( self::is_deferral_suspended_by_js() ) {
+				return;
+			}
 			$template_hash = $args['template_hash'] ?? '';
 			if ( empty( $template_hash ) ) {
 				return;
@@ -2529,10 +2581,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		/**
 		 * Regenerate all template CCSS files via Action Scheduler.
 		 *
+		 * Skipped (returns 0, existing variants preserved) while deferJS or
+		 * delayJS is active: generated variants could not be used, and
+		 * deleting usable variants would be destructive if the operator later
+		 * disables deferred/delayed JS (issue #1090).
+		 *
 		 * @return int Number of jobs queued.
 		 * @since 2.0.0
 		 */
 		public static function regenerate_all(): int {
+			if ( self::is_deferral_suspended_by_js() ) {
+				return 0;
+			}
 			$templates = self::get_templates();
 			$queued    = 0;
 

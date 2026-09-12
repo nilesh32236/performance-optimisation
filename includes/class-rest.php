@@ -2140,6 +2140,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		public function regenerate_ccss( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			$queued = Critical_CSS::regenerate_all();
 
+			// Suspended while deferJS/delayJS is active: regenerate_all()
+			// preserves existing variants and queues nothing (issue #1090).
+			// Stay backward compatible (success + queued key) with an
+			// explanatory message instead of an HTTP error.
+			if ( 0 === $queued && method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'is_deferral_suspended_by_js' ) && Critical_CSS::is_deferral_suspended_by_js() ) {
+				return $this->send_response(
+					array( 'queued' => 0 ),
+					true,
+					200,
+					__( 'Critical CSS generation is suspended while deferred or delayed JavaScript is enabled.', 'performance-optimisation' )
+				);
+			}
+
 			return $this->send_response(
 				array( 'queued' => $queued ),
 				true,
