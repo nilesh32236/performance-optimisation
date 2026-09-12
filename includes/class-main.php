@@ -1516,6 +1516,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$old_nextgen     = isset( $old_value['litespeed_integration']['enableNextGenRewrite'] ) ? (bool) $old_value['litespeed_integration']['enableNextGenRewrite'] : false;
 			$new_nextgen     = isset( $value['litespeed_integration']['enableNextGenRewrite'] ) ? (bool) $value['litespeed_integration']['enableNextGenRewrite'] : false;
 			$nextgen_changed = $old_nextgen !== $new_nextgen;
+			// convertImg gates the next-gen block: toggling it while server
+			// rules + next-gen stay on must refresh .htaccess too.
+			$old_convert     = isset( $old_value['image_optimisation']['convertImg'] ) ? (bool) $old_value['image_optimisation']['convertImg'] : false;
+			$new_convert     = isset( $value['image_optimisation']['convertImg'] ) ? (bool) $value['image_optimisation']['convertImg'] : false;
+			$convert_changed = $old_convert !== $new_convert;
 
 			if ( $old_enable !== $new_enable ) {
 				$ok = Htaccess_Handler::update_rules( $new_enable );
@@ -1536,8 +1541,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 					add_action( 'admin_notices', array( __CLASS__, 'render_htaccess_failure_notice' ) );
 				}
-			} elseif ( $nextgen_changed && $new_enable ) {
-				// Next-gen toggle changed while server rules remain enabled — refresh htaccess to add/remove next-gen block.
+			} elseif ( ( $nextgen_changed || $convert_changed ) && $new_enable ) {
+				// Next-gen or convertImg toggle changed while server rules
+				// remain enabled — refresh htaccess to add/remove next-gen block.
 				$ok = Htaccess_Handler::update_rules( true );
 				if ( $ok && class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::is_litespeed() ) {
 					Log::add( __( 'Server rules updated on LiteSpeed — restart OpenLiteSpeed if changes do not appear immediately.', 'performance-optimisation' ) );
