@@ -10,6 +10,7 @@
  */
 
 use PerformanceOptimise\Inc\Main;
+use PerformanceOptimise\Inc\LiteSpeed_Integration;
 use Brain\Monkey\Functions;
 
 /**
@@ -32,6 +33,14 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	protected function setUp(): void {
 		$this->wppoSetUp();
 		Main::reset_delay_context_memo();
+		// LiteSpeed_Integration memoises is_lscache_active() and
+		// effective_mode() in static properties that survive tearDown(). A
+		// suite that runs earlier can leave is_lscache_active() === true, which
+		// makes should_disable_wppo_optimizer() true (effective_mode() is
+		// 'standalone' here) and add_defer_attribute() then returns every tag
+		// untouched. No amount of function stubbing can clear a static memo —
+		// the documented reset_cache() is the only lever (issue #1094, item 3).
+		LiteSpeed_Integration::reset_cache();
 	}
 
 	/**
@@ -41,6 +50,8 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	 */
 	protected function tearDown(): void {
 		Main::reset_delay_context_memo();
+		// Do not leak the LiteSpeed memos into later suites.
+		LiteSpeed_Integration::reset_cache();
 		unset( $GLOBALS['wp_version'], $GLOBALS['wp_scripts'] );
 		$this->wppoTearDown();
 	}
@@ -92,6 +103,42 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'is_cart' )->justReturn( false );
 		Functions\when( 'is_checkout' )->justReturn( false );
 		Functions\when( 'is_account_page' )->justReturn( false );
+
+		// Guard determinism for every add_defer_attribute() assertion
+		// (issue #1094, item 3). Brain Monkey eval-declares a function on first
+		// when()/stubs() and that declaration persists for the whole process,
+		// so a stub leaked from an earlier suite silently changes behaviour
+		// here and makes these tests order-dependent:
+		// - apply_filters returning its hook NAME is truthy, so
+		// LiteSpeed_Integration::should_disable_wppo_optimizer() reports
+		// "disabled" and add_defer_attribute() returns the tag untouched;
+		// - is_delay_js_safe_context() FAILS CLOSED, so any leaked probe
+		// (has_block, get_the_ID, is_wc_endpoint_url, …) disables delay
+		// rewriting for the rest of the run;
+		// - the per-page kill switch reads is_singular() / get_post_meta().
+		// Pinning them here keeps every delay test valid in isolation AND in a
+		// full-suite run. Individual tests still override as needed.
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook, $value = null ) {
+				// LiteSpeedIntegrationTest defines LSCWP_V, and a PHP constant
+				// can never be un-defined, so is_lscache_active() stays true for
+				// the rest of the process and should_disable_wppo_optimizer()
+				// reports "disabled" — which makes add_defer_attribute() return
+				// every tag untouched. This filter is the last word in that
+				// method, so pinning it false is the only reliable override;
+				// reset_cache() alone cannot clear a defined constant.
+				if ( 'wppo_litespeed_should_disable_optimizer' === $hook ) {
+					return false;
+				}
+				return $value;
+			}
+		);
+		Functions\when( 'is_singular' )->justReturn( false );
+		Functions\when( 'get_the_ID' )->justReturn( 0 );
+		Functions\when( 'get_post_meta' )->justReturn( '' );
+		Functions\when( 'has_block' )->justReturn( false );
+		Functions\when( 'is_wc_endpoint_url' )->justReturn( false );
 
 		// Only the target function_exists probes are faked; everything else is
 		// delegated to the real function_exists so the rest of the Main
@@ -357,6 +404,122 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		$result = $main->add_defer_attribute( $tag, 'my-deferred-script' );
 
 		$this->assertSame( $tag, $result );
+	}
+
+	/**
+	 * #1089: a tag with no type attribute still receives the delay marker.
+	 *
+	 * WP 6.3+ omits type="text/javascript" for defer/async-strategy scripts, so
+	 * the marker must be injected rather than only replacing an existing type.
+	 */
+	public function test_add_defer_attribute_injects_marker_when_type_absent(): void {
+		$this->stub_main_construction( array( 'delayJS' => true ) );
+
+		$main = new Main();
+
+		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for add_defer_attribute() tests.
+		$tag    = '<script src="https://example.com/app.js" id="app-js"></script>';
+		$result = $main->add_defer_attribute( $tag, 'app' );
+
+		$this->assertStringContainsString( 'wppo-src=', $result, 'src must be moved to wppo-src' );
+		$this->assertStringContainsString( 'type="wppo/javascript"', $result );
+		$this->assertStringContainsString( 'wppo-type="text/javascript"', $result, 'the HTML-implied default must be recorded' );
+	}
+
+	/**
+	 * #1094 item 1: an executable type is rewritten and the ORIGINAL type is
+	 * preserved in wppo-type so lazyload.js can restore it.
+	 *
+	 * @dataProvider provide_executable_script_types
+	 *
+	 * @param string $original Original type attribute value.
+	 */
+	public function test_add_defer_attribute_preserves_original_type( string $original ): void {
+		$this->stub_main_construction( array( 'delayJS' => true ) );
+
+		$main = new Main();
+
+		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for add_defer_attribute() tests.
+		$tag    = '<script src="https://example.com/m.js" type="' . $original . '"></script>';
+		$result = $main->add_defer_attribute( $tag, 'm' );
+
+		$this->assertStringContainsString( 'type="wppo/javascript"', $result );
+		$this->assertStringContainsString( 'wppo-type="' . $original . '"', $result );
+		// Exactly one real type attribute: a duplicate would let the browser
+		// pick the un-neutered value and execute the script immediately.
+		$this->assertSame( 1, preg_match_all( '/\stype=/i', $result ), 'exactly one type attribute may remain' );
+	}
+
+	/**
+	 * Executable script types that must be delay-rewritten.
+	 *
+	 * @return array<string, array{0: string}>
+	 */
+	public static function provide_executable_script_types(): array {
+		return array(
+			'text/javascript'        => array( 'text/javascript' ),
+			'module'                 => array( 'module' ),
+			'application/javascript' => array( 'application/javascript' ),
+			'text/ecmascript'        => array( 'text/ecmascript' ),
+		);
+	}
+
+	/**
+	 * #1094 item 1: non-executable data blocks must be left completely alone.
+	 *
+	 * Moving their src to wppo-src would corrupt a payload the browser never
+	 * executes, and they gain nothing from being delayed.
+	 *
+	 * @dataProvider provide_non_executable_script_types
+	 *
+	 * @param string $tag Fixture tag markup.
+	 */
+	public function test_add_defer_attribute_leaves_data_blocks_untouched( string $tag ): void {
+		$this->stub_main_construction( array( 'delayJS' => true ) );
+
+		$main = new Main();
+
+		$this->assertSame( $tag, $main->add_defer_attribute( $tag, 'data-block' ) );
+	}
+
+	/**
+	 * Non-executable script types that must never be rewritten.
+	 *
+	 * @return array<string, array{0: string}>
+	 */
+	public static function provide_non_executable_script_types(): array {
+		return array(
+			// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for add_defer_attribute() tests.
+			'application/json' => array( '<script src="https://example.com/d.json" type="application/json"></script>' ),
+			// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for add_defer_attribute() tests.
+			'text/template'    => array( '<script src="https://example.com/t.html" type="text/template"></script>' ),
+			// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for add_defer_attribute() tests.
+			'ld+json'          => array( '<script src="https://example.com/s.json" type="application/ld+json"></script>' ),
+		);
+	}
+
+	/**
+	 * #1094 item 2: re-processing an already-rewritten tag is a no-op.
+	 *
+	 * The old unanchored /type=("|')text\/javascript("|')/ pattern matched the
+	 * `type="text/javascript"` substring inside `wppo-type="text/javascript"`,
+	 * so a second pass produced a duplicate wppo-type attribute:
+	 *   ... type="wppo/javascript" wppo-type="wppo/javascript" wppo-type="text/javascript"
+	 */
+	public function test_add_defer_attribute_is_idempotent_for_rewritten_tags(): void {
+		$this->stub_main_construction( array( 'delayJS' => true ) );
+
+		$main = new Main();
+
+		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for add_defer_attribute() tests.
+		$already = '<script wppo-src="https://example.com/x.js" type="wppo/javascript" wppo-type="text/javascript"></script>';
+
+		$result = $main->add_defer_attribute( $already, 'x' );
+
+		$this->assertSame( $already, $result, 'a rewritten tag must survive re-processing unchanged' );
+		$this->assertSame( 1, substr_count( $result, 'wppo-type=' ), 'wppo-type must never be double-stamped' );
+		// Anchored on whitespace so the wppo-type attribute is not counted.
+		$this->assertSame( 1, preg_match_all( '/\stype=/i', $result ), 'type must never be double-stamped' );
 	}
 
 	/**
