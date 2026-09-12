@@ -549,7 +549,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'	if ( ! is_string( $site_url ) || ( 0 !== strpos( $site_url, \'http://\' ) && 0 !== strpos( $site_url, \'https://\' ) ) ) {' . PHP_EOL .
 			'		return;' . PHP_EOL .
 			'	}' . PHP_EOL .
-			'	$cron_url = rtrim( $site_url, \'/\' ) . \'/wp-cron.php?doing_wp_cron=\' . time();' . PHP_EOL .
+			// No doing_wp_cron parameter: wp-cron.php compares that value against
+			// the doing_cron transient and returns immediately on a mismatch. This
+			// drop-in runs before WordPress boots, so it cannot read or set that
+			// transient and any timestamp invented here could never match — the
+			// loopback would be a silent no-op and cron would still starve.
+			// Calling the file with no parameter takes core's documented
+			// "external script/job" path, which grabs the lock itself when it is
+			// free and returns when another runner holds it.
+			'	$cron_url = rtrim( $site_url, \'/\' ) . \'/wp-cron.php\';' . PHP_EOL .
 			'	$parts = parse_url( $cron_url );' . PHP_EOL .
 			'	if ( ! is_array( $parts ) || empty( $parts[\'host\'] ) ) {' . PHP_EOL .
 			'		return;' . PHP_EOL .
