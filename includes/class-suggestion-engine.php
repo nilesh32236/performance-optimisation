@@ -140,7 +140,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ) {
 
 			// --- Gzip/Brotli compression — strict boolean check ---
 			$comp_pass     = (bool) ( $telemetry['gzip_brotli_compression'] ?? false );
-			$comp_value    = (string) ( $telemetry['compression_value'] ?? ( $comp_pass ? 'pass' : 'fail' ) );
+			$comp_value    = sanitize_text_field( (string) ( $telemetry['compression_value'] ?? ( $comp_pass ? 'pass' : 'fail' ) ) );
 			$suggestions[] = self::make_boolean(
 				'gzip_brotli_compression',
 				$comp_pass,
@@ -154,7 +154,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ) {
 
 			// --- Cache-Control headers — strict boolean check ---
 			$cc_pass       = (bool) ( $telemetry['cache_control_headers'] ?? false );
-			$cc_value      = (string) ( $telemetry['cache_control_value'] ?? ( $cc_pass ? 'pass' : 'fail' ) );
+			$cc_value      = sanitize_text_field( (string) ( $telemetry['cache_control_value'] ?? ( $cc_pass ? 'pass' : 'fail' ) ) );
 			$suggestions[] = self::make_boolean(
 				'cache_control_headers',
 				$cc_pass,

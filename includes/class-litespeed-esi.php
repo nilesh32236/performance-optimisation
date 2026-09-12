@@ -698,6 +698,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 					$fragment = '<div class="wppo-adminbar">adminbar</div>';
 					break;
 				case 'nonce':
+					// No nonce oracle: only mint a fresh nonce when the caller
+					// presented a valid one; unauthenticated callers get 403.
+					if ( ! $nonce_valid ) {
+						Header_Emitter::emit_private_pair();
+						if ( function_exists( 'wp_send_json_error' ) ) {
+							wp_send_json_error( array( 'message' => 'Unauthorized' ), 403 );
+						}
+						return;
+					}
 					$fragment = function_exists( 'wp_create_nonce' ) ? wp_create_nonce( 'wppo_esi' ) : '';
 					break;
 				default:

@@ -59,6 +59,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 		/**
 		 * Add a new activity log entry.
 		 *
+		 * Authorization contract: callers (REST manage_options) must enforce
+		 * capability checks; this method performs no check so cron/CLI paths
+		 * keep working.
+		 *
 		 * @param string $activity The activity description to log.
 		 * @return void
 		 * @since 2.0.0

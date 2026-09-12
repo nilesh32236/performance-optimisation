@@ -485,6 +485,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		}
 
 		/**
+		 * Per-endpoint transient throttle for heavy admin endpoints.
+		 *
+		 * @since NEXT
+		 * @param string $endpoint Endpoint slug.
+		 * @param int    $limit    Max hits per window.
+		 * @param int    $window   Window in seconds.
+		 * @return bool True when throttled.
+		 */
+		private function is_endpoint_throttled( string $endpoint, int $limit = 10, int $window = 60 ): bool {
+			$key   = Util::transient_key( 'wppo_throttle_' . sanitize_key( $endpoint ) );
+			$count = (int) get_transient( $key );
+			if ( $count >= $limit ) {
+				return true;
+			}
+			set_transient( $key, $count + 1, $window );
+			return false;
+		}
+
+		/**
+		 * Same-site URL gate shared by readers and writers.
+		 *
+		 * @since NEXT
+		 * @param string $url URL to check.
+		 * @return bool
+		 */
+		private function is_same_site_url( string $url ): bool {
+			if ( '' === $url || ! wp_http_validate_url( $url ) ) {
+				return false;
+			}
+			$parsed = wp_parse_url( $url );
+			$scheme = $parsed['scheme'] ?? '';
+			if ( ! in_array( $scheme, array( 'http', 'https' ), true ) ) {
+				return false;
+			}
+			$home_host = wp_parse_url( Util::cached_home_url(), PHP_URL_HOST );
+			return ( $parsed['host'] ?? '' ) === $home_host;
+		}
+
+		/**
 		 * Clears the cache based on the given action.
 		 *
 		 * @param \WP_REST_Request $request The request object.
@@ -561,7 +600,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					$is_exact_match = ( $candidate_path === $normalized_cache_dir );
 					$is_under_dir   = ( 0 === strpos( $candidate_path, $normalized_cache_dir_trail ) );
 
-					if ( ( ! $is_exact_match && ! $is_under_dir ) || false !== strpos( $candidate_path, '..' ) ) {
+					$decoded       = rawurldecode( $candidate_path );
+					$has_traversal = false;
+					foreach ( explode( '/', $decoded ) as $segment ) {
+						if ( '..' === $segment ) {
+							$has_traversal = true;
+							break;
+						}
+					}
+					if ( ( ! $is_exact_match && ! $is_under_dir ) || $has_traversal ) {
 						return $this->send_response( null, false, 400, __( 'Invalid path provided.', 'performance-optimisation' ) );
 					}
 				}
@@ -1195,6 +1242,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @since 1.4.0
 		 */
 		public function database_cleanup( \WP_REST_Request $request ) {
+			if ( $this->is_endpoint_throttled( 'database_cleanup', 5, 60 ) ) {
+				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
+				$response->header( 'Retry-After', '60' );
+				return $response;
+			}
 			$params = $request->get_params();
 			$type   = isset( $params['type'] ) ? sanitize_text_field( $params['type'] ) : '';
 
@@ -1556,12 +1608,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			switch ( $key ) {
 				case 'host':
 				case 'master_name':
+					$host = sanitize_text_field( (string) $value );
+					$host = strtolower( trim( $host ) );
+					// Host allowlist: hostname/IP/socket path — no URL schemes or userinfo.
+					if ( '' !== $host && 1 !== preg_match( '/^(?:[a-z0-9](?:[a-z0-9\-\.]{0,251}[a-z0-9])?|\/[\w\/\.\-]+)$/', $host ) ) {
+						return '';
+					}
+					return substr( $host, 0, 255 );
 				case 'compression':
+					$compression = sanitize_text_field( (string) $value );
+					return in_array( $compression, array( '', 'none', 'lz4', 'zstd' ), true ) ? $compression : '';
 				case 'mode':
-					return sanitize_text_field( (string) $value );
+					$mode = sanitize_text_field( (string) $value );
+					return in_array( $mode, array( 'standalone', 'sentinel', 'cluster' ), true ) ? $mode : 'standalone';
 				case 'port':
+					return max( 1, min( 65535, (int) $value ) );
 				case 'database':
-					return (int) $value;
+					return max( 0, min( 15, (int) $value ) );
 				case 'password':
 					// When WPPO_REDIS_PASSWORD is defined the constant takes
 					// precedence: supplied passwords are dropped unless
@@ -1690,6 +1753,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function run_performance_scan( \WP_REST_Request $request ): \WP_REST_Response {
+			if ( $this->is_endpoint_throttled( 'performance_scan', 10, 60 ) ) {
+				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
+				$response->header( 'Retry-After', '60' );
+				return $response;
+			}
 			$params = $request->get_params();
 			$url    = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : Util::cached_home_url( '/' );
 
@@ -1738,6 +1806,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function queue_pagespeed_scan( \WP_REST_Request $request ): \WP_REST_Response {
+			if ( $this->is_endpoint_throttled( 'pagespeed_scan', 10, 60 ) ) {
+				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
+				$response->header( 'Retry-After', '60' );
+				return $response;
+			}
 			$params   = $request->get_params();
 			$url      = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : Util::cached_home_url( '/' );
 			$strategy = isset( $params['strategy'] ) ? sanitize_text_field( $params['strategy'] ) : 'mobile';
@@ -1834,8 +1907,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function get_pagespeed_results( \WP_REST_Request $request ): \WP_REST_Response {
-			$params   = $request->get_params();
-			$url      = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : Util::cached_home_url( '/' );
+			$params = $request->get_params();
+			$url    = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : Util::cached_home_url( '/' );
+			if ( '' !== $url && ! $this->is_same_site_url( $url ) ) {
+				return $this->send_response( null, false, 400, __( 'You can only query URLs belonging to this website.', 'performance-optimisation' ) );
+			}
 			$strategy = isset( $params['strategy'] ) ? sanitize_text_field( $params['strategy'] ) : 'mobile';
 
 			if ( ! in_array( $strategy, array( 'mobile', 'desktop' ), true ) ) {
@@ -1889,8 +1965,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function get_web_vitals_trends( \WP_REST_Request $request ): \WP_REST_Response {
-			$params   = $request->get_params();
-			$url      = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : '';
+			$params = $request->get_params();
+			$url    = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : '';
+			if ( '' !== $url && ! $this->is_same_site_url( $url ) ) {
+				return $this->send_response( null, false, 400, __( 'You can only query URLs belonging to this website.', 'performance-optimisation' ) );
+			}
 			$strategy = isset( $params['strategy'] ) ? sanitize_text_field( $params['strategy'] ) : '';
 
 			if ( ! in_array( $strategy, array( 'mobile', 'desktop', '' ), true ) ) {
@@ -1937,6 +2016,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		public function get_suggestions( \WP_REST_Request $request ): \WP_REST_Response {
 			$params = $request->get_params();
 			$url    = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : Util::cached_home_url( '/' );
+			if ( '' !== $url && ! $this->is_same_site_url( $url ) ) {
+				return $this->send_response( null, false, 400, __( 'You can only query URLs belonging to this website.', 'performance-optimisation' ) );
+			}
 
 			$transient_key = Util::transient_key( 'wppo_audit_' . md5( $url ) );
 			// Mirror Telemetry::scan() read path: the salted object-cache
@@ -1995,6 +2077,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function used_css_regenerate( \WP_REST_Request $request ): \WP_REST_Response {
+			if ( $this->is_endpoint_throttled( 'used_css_regenerate', 5, 60 ) ) {
+				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
+				$response->header( 'Retry-After', '60' );
+				return $response;
+			}
 			$params  = $request->get_params();
 			$post_id = isset( $params['post_id'] ) ? absint( $params['post_id'] ) : 0;
 
@@ -2138,6 +2225,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function regenerate_ccss( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			if ( $this->is_endpoint_throttled( 'regenerate_ccss', 5, 60 ) ) {
+				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
+				$response->header( 'Retry-After', '60' );
+				return $response;
+			}
 			$queued = Critical_CSS::regenerate_all();
 
 			// Suspended while deferJS/delayJS is active: regenerate_all()
@@ -2198,6 +2290,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @since 2.0.0
 		 */
 		public function ai_learn( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			if ( $this->is_endpoint_throttled( 'ai_learn', 5, 60 ) ) {
+				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
+				$response->header( 'Retry-After', '60' );
+				return $response;
+			}
 			$model = class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ? AI_Adaptive::learn() : array();
 			return $this->send_response( $model );
 		}

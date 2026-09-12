@@ -339,6 +339,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 				return;
 			}
 
+			// Never write per-page meta to revisions.
+			if ( function_exists( 'wp_is_post_revision' ) && wp_is_post_revision( $post_id ) ) {
+				return;
+			}
+
 			// Check the user's permissions.
 			if ( ! current_user_can( 'edit_post', $post_id ) ) {
 				return;

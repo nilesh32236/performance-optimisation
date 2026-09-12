@@ -249,6 +249,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since 2.0.0
 		 */
 		private static function get_ccss_file( string $template_hash ): string {
+			// Defense-in-depth: allow word chars + dash only so a caller
+			// passing ../../foo can never escape the ccss dir via this
+			// delete-capable sink (slashes, dots and NUL are rejected).
+			if ( '' === $template_hash || 1 !== preg_match( '/^[A-Za-z0-9_\-]{1,128}$/', $template_hash ) ) {
+				return '';
+			}
 			$dir = self::get_ccss_dir();
 			if ( '' === $dir ) {
 				return '';
@@ -1362,6 +1368,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since 2.0.0
 		 */
 		public static function generate( string $url, ?string &$source_css = null, ?array &$resolved_urls = null ) {
+			// SSRF guard: reuse the stylesheet allowlist (same-site + scheme).
+			// function_exists() keeps unit-test doubles working; production
+			// core always defines wp_http_validate_url().
+			if ( function_exists( 'wp_http_validate_url' ) && ! self::is_safe_stylesheet_url( $url ) ) {
+				return false;
+			}
+			// is_safe_stylesheet_url() above is the SSRF control and is
+			// stricter than WP's IP-range check. Do NOT also set
+			// reject_unsafe_urls: WP's validator rejects every private,
+			// loopback and non-dotted host, so it would break critical CSS
+			// generation on localhost/staging installs (and on any site
+			// whose own hostname resolves privately) without adding
+			// protection the same-site check does not already provide.
 			$response = wp_remote_get(
 				$url,
 				array(

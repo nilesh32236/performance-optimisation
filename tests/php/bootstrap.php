@@ -280,6 +280,7 @@ trait WPPO_Test_Bootstrap {
 		\Brain\Monkey\Functions\when( 'wp_using_ext_object_cache' )->justReturn( true );
 		\Brain\Monkey\Functions\when( 'WP_Filesystem' )->justReturn( false );
 		\Brain\Monkey\Functions\when( 'sanitize_text_field' )->returnArg();
+		\Brain\Monkey\Functions\when( 'sanitize_key' )->returnArg();
 		\Brain\Monkey\Functions\when( 'wp_unslash' )->returnArg();
 		\Brain\Monkey\Functions\when( 'content_url' )->alias(
 			static function ( $path = '' ) {

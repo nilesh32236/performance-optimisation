@@ -218,6 +218,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 					continue;
 				}
 
+				// Tolerant scheme gate (pure PHP so no WP stub is required):
+				// only http(s) URLs are purged; anything else is skipped and
+				// logged. Unparseable URLs fail closed here.
+				$lower = strtolower( $clean );
+				if ( ! str_starts_with( $lower, 'http://' ) && ! str_starts_with( $lower, 'https://' ) ) {
+					self::log_failure( 'varnish', $clean );
+					$ok = false;
+					continue;
+				}
+				// No reject_unsafe_urls here: the purge endpoint is an
+				// admin-configured CDN/Varnish host, which is normally an
+				// internal address (10.x/192.168.x) or an internal DNS name.
+				// WP's validator rejects every private, loopback and
+				// non-dotted host, so enabling it would silently stop all
+				// purges on the standard Varnish topology. The scheme gate
+				// above is the injection control.
 				$response = wp_remote_request(
 					$clean,
 					array(

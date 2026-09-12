@@ -1953,15 +1953,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				return;
 			}
 
-			$response = wp_remote_get(
-				$permalink,
-				array(
-					'timeout' => 30,
-					'headers' => array(
-						'X-WPPO-Used-CSS' => '1',
-					),
-				)
+			// Same-site guard: never let a filtered permalink turn the worker
+			// into an off-host fetch. Fail closed on helper errors.
+			try {
+				if ( function_exists( 'wp_parse_url' ) && function_exists( 'home_url' ) ) {
+					$home_host = wp_parse_url( home_url(), PHP_URL_HOST );
+					$perm_host = wp_parse_url( $permalink, PHP_URL_HOST );
+					if ( '' === $permalink || $perm_host !== $home_host ) {
+						return;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return;
+			}
+			// The same-site guard above is the SSRF control. Do NOT use
+			// wp_safe_remote_get()/reject_unsafe_urls here: WP's validator
+			// rejects every private, loopback and non-dotted host, which
+			// would silently break used-CSS generation on localhost and
+			// staging installs (and on any site whose own hostname resolves
+			// to a private address).
+			$fetch_args = array(
+				'timeout' => 15,
+				'headers' => array(
+					'X-WPPO-Used-CSS' => '1',
+				),
 			);
+			$response   = wp_remote_get( $permalink, $fetch_args );
 
 			if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {

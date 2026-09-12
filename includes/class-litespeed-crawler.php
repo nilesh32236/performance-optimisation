@@ -731,8 +731,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 				curl_setopt( $ch, CURLOPT_FOLLOWLOCATION, true ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_setopt -- crawler requires curl
 				$headers = array();
 				foreach ( $req['headers'] as $k => $v ) {
-					if ( '' !== $v ) {
-						$headers[] = $k . ': ' . $v;
+					// CRLF-strip filter-supplied headers to block response splitting.
+					$ck = str_replace( array( "\r", "\n" ), '', (string) $k );
+					$cv = str_replace( array( "\r", "\n" ), '', (string) $v );
+					if ( 1 !== preg_match( '/^[A-Za-z0-9-]+$/', $ck ) ) {
+						continue;
+					}
+					if ( '' !== $cv ) {
+						$headers[] = $ck . ': ' . substr( $cv, 0, 512 );
 					}
 				}
 				if ( ! empty( $headers ) ) {

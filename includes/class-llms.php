@@ -150,9 +150,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 			$which = $is_full ? 'full' : 'llms';
 			$path  = self::get_file_path( $which );
 
-			// Generate on-demand if missing.
+			// Generate on-demand if missing, rate-limited so unauthenticated
+			// hits cannot trigger unbounded file writes + sitemap fetches.
 			if ( ! file_exists( $path ) ) {
-				self::generate();
+				$lock = function_exists( 'get_transient' ) ? get_transient( 'wppo_llms_gen_lock' ) : false;
+				if ( false === $lock ) {
+					if ( function_exists( 'set_transient' ) ) {
+						set_transient( 'wppo_llms_gen_lock', 1, MINUTE_IN_SECONDS );
+					}
+					self::generate();
+				}
 			}
 
 			if ( ! file_exists( $path ) || ! is_readable( $path ) ) {

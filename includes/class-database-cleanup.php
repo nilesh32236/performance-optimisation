@@ -127,6 +127,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 *
 		 * @since 2.0.0
 		 *
+		 * Contract: $select_sql must be already-prepared internal SQL (never
+		 * pass user input); callers are the hardcoded clean_* methods only.
+		 * Destructive methods must only be reached via authorized callers
+		 * (REST manage_options, cron, WP-CLI) — direct PHP calls bypass
+		 * authorization.
+		 *
 		 * @param string $select_sql  SQL returning a single ID column (must include LIMIT).
 		 * @param string $meta_table  Fully-qualified meta table name (e.g. $wpdb->postmeta).
 		 * @param string $meta_column FK column in the meta table (e.g. post_id).
@@ -137,6 +143,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 */
 		private static function delete_in_batches( string $select_sql, string $meta_table, string $meta_column, string $main_table, string $id_column, int $batch = 1000 ): int|false {
 			global $wpdb;
+			// Allowlist identifiers (cannot use placeholders for table/column names).
+			$allowed_tables  = array( $wpdb->posts, $wpdb->postmeta, $wpdb->comments, $wpdb->commentmeta );
+			$allowed_columns = array( 'ID', 'comment_ID', 'post_id', 'comment_id' );
+			if ( ! in_array( $meta_table, $allowed_tables, true ) || ! in_array( $main_table, $allowed_tables, true ) ) {
+				return false;
+			}
+			if ( ! in_array( $meta_column, $allowed_columns, true ) || ! in_array( $id_column, $allowed_columns, true ) ) {
+				return false;
+			}
 			$deleted = 0;
 
 			do {
@@ -181,6 +196,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 
 		/**
 		 * Delete all post revisions from the database.
+		 *
+		 * Authorization contract: callers (REST/cron/CLI) must enforce
+		 * manage_options; this method performs no capability check so
+		 * scheduled/CLI paths keep working.
 		 *
 		 * @since 1.1.0
 		 * @return int|false The number of rows deleted, or `false` on SQL error.

@@ -806,6 +806,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * @return bool|\WP_Error `true` on success, `WP_Error` on failure (possible error codes: `missing_extension`, `foreign_dropin`, `write_error`).
 		 */
 		public function enable( $config ) {
+			// Defense-in-depth: authorization lives in REST/CLI callers, but a
+			// direct PHP call must not get privileged file writes.
+			if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) && ! wp_doing_cron() && ! ( defined( 'WP_CLI' ) && WP_CLI ) ) {
+				return new \WP_Error( 'forbidden', __( 'You are not allowed to manage the object cache.', 'performance-optimisation' ) );
+			}
 			if ( ! class_exists( 'Redis' ) ) {
 				return new \WP_Error( 'missing_extension', __( 'The PhpRedis extension is not installed.', 'performance-optimisation' ) );
 			}
@@ -862,6 +867,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				return new \WP_Error( 'write_error', __( 'Cannot write Redis configuration file.', 'performance-optimisation' ) );
 			}
 
+			// Defense-in-depth: the config file lives under web-reachable
+			// wp-content and only has an ABSPATH guard. Drop deny rules for
+			// it (Apache + OLS .htaccess, IIS web.config) so topology is
+			// not disclosed when PHP handling is disabled.
+			self::protect_config_file();
+
 			// Copy drop-in.
 			if ( ! $wp_filesystem->copy( $this->template_path, $this->dropin_path, true, FS_CHMOD_FILE ) ) {
 				$wp_filesystem->delete( $this->config_path );
@@ -894,6 +905,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * @return bool|\WP_Error True on success, WP_Error on failure.
 		 */
 		public function disable() {
+			if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) && ! wp_doing_cron() && ! ( defined( 'WP_CLI' ) && WP_CLI ) ) {
+				return new \WP_Error( 'forbidden', __( 'You are not allowed to manage the object cache.', 'performance-optimisation' ) );
+			}
 			$status = $this->get_status();
 			if ( $status['foreign_dropin'] ) {
 				return new \WP_Error( 'foreign_dropin', __( 'A foreign drop-in exists. We will not delete it for safety.', 'performance-optimisation' ) );
@@ -927,6 +941,49 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			}
 
 			return true;
+		}
+
+		/**
+		 * Write Apache/LiteSpeed deny rules shielding the redis config file.
+		 *
+		 * The config file lives under the web-reachable wp-content tree and
+		 * only carries an ABSPATH guard, so a server that stops handing .php
+		 * to PHP would serve it as plain text and disclose the Redis
+		 * topology. Adds a `<Files>` deny block to wp-content/.htaccess.
+		 *
+		 * Best-effort only; failures never block enable(). Apache and
+		 * OpenLiteSpeed both read this file; nginx and IIS ignore it, and
+		 * those deployments must deny the file at the server level (this
+		 * method does not write web.config).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private static function protect_config_file(): void {
+			try {
+				if ( ! function_exists( 'insert_with_markers' ) ) {
+					return;
+				}
+				$htaccess = wp_normalize_path( (string) WP_CONTENT_DIR ) . '/.htaccess';
+				// Both authz generations are emitted behind IfModule guards:
+				// a bare `Require all denied` is Apache 2.4-only syntax and a
+				// server without mod_authz_core answers 500 for the whole
+				// wp-content tree rather than ignoring the directive.
+				$rule = array(
+					'<Files "wppo-redis-config.php">',
+					'<IfModule mod_authz_core.c>',
+					'Require all denied',
+					'</IfModule>',
+					'<IfModule !mod_authz_core.c>',
+					'Order allow,deny',
+					'Deny from all',
+					'</IfModule>',
+					'</Files>',
+				);
+				insert_with_markers( $htaccess, 'WPPO Redis Config', $rule );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 
 		/**

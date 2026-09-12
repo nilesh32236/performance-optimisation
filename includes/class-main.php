@@ -529,9 +529,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( is_user_logged_in() ) {
 				$enable = ! empty( $this->options['cache_settings']['enableLoggedInCache'] ?? false );
 				if ( $enable ) {
-					$user = wp_get_current_user();
-					$hash = Util::get_role_hash( $user );
-					if ( '' !== $hash && ( ! isset( $_COOKIE['wppo_role_hash'] ) || $_COOKIE['wppo_role_hash'] !== $hash ) ) {
+					$user        = wp_get_current_user();
+					$hash        = Util::get_role_hash( $user );
+					$cookie_hash = isset( $_COOKIE['wppo_role_hash'] ) ? sanitize_text_field( wp_unslash( $_COOKIE['wppo_role_hash'] ) ) : null;
+					if ( '' !== $hash && ( null === $cookie_hash || $cookie_hash !== $hash ) ) {
 						setcookie( 'wppo_role_hash', $hash, time() + DAY_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), true );
 					}
 				}
@@ -2440,7 +2441,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 1.0.0
 		 */
 		public function enqueue_scripts() {
-			if ( is_admin_bar_showing() ) {
+			if ( is_admin_bar_showing() && current_user_can( 'manage_options' ) ) {
 				$this->enqueue_admin_bar_script();
 			}
 
@@ -6235,7 +6236,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return bool True if the file is minified, false otherwise.
 		 */
 		private function is_file_minified( $file_path, $type ) {
-			if ( empty( $file_path ) ) {
+			if ( empty( $file_path ) || ! is_string( $file_path ) ) {
+				return true;
+			}
+
+			// Containment: only stat files under WP_CONTENT_DIR/ABSPATH so a
+			// poisoned wppo_* filter returning an absolute path cannot cause
+			// arbitrary local file stat/read.
+			$normalized = wp_normalize_path( $file_path );
+			$content    = wp_normalize_path( (string) WP_CONTENT_DIR );
+			$base       = wp_normalize_path( (string) ABSPATH );
+			if ( 0 !== strpos( $normalized, $content . '/' ) && 0 !== strpos( $normalized, $base ) ) {
 				return true;
 			}
 

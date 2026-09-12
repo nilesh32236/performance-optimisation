@@ -683,6 +683,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		public static function execute_optimise_image( array $input ): array {
 			$attachment_id = isset( $input['attachment_id'] ) ? (int) $input['attachment_id'] : 0;
 			$format        = isset( $input['format'] ) ? sanitize_text_field( $input['format'] ) : 'webp';
+			if ( ! in_array( $format, array( 'webp', 'avif', 'both' ), true ) ) {
+				$format = 'webp';
+			}
 			if ( $attachment_id <= 0 ) {
 				return array( 'queued' => false );
 			}
