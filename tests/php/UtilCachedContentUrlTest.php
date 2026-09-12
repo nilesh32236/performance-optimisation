@@ -119,4 +119,65 @@ class UtilCachedContentUrlTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( $first, Util::cached_content_url( '/themes/blog-switch/' ) );
 		$this->assertSame( 2, $calls );
 	}
+
+	/**
+	 * Test that canonical_scheme() falls back to http when home_url() is absent.
+	 */
+	public function test_canonical_scheme_falls_back_to_http(): void {
+		$this->assertSame( 'http', Util::canonical_scheme() );
+	}
+
+	/**
+	 * Test that canonical_scheme() reads the scheme from home_url().
+	 */
+	public function test_canonical_scheme_reads_home_url_scheme(): void {
+		Functions\when( 'home_url' )->justReturn( 'https://example.com' );
+		Functions\when( 'wp_parse_url' )->alias(
+			static function ( $url, $component = -1 ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- This stub *is* the wp_parse_url replacement.
+				return parse_url( $url, $component );
+			}
+		);
+
+		$this->assertSame( 'https', Util::canonical_scheme() );
+	}
+
+	/**
+	 * Test that a site whose home_url() is http keeps http (no forced upgrade).
+	 */
+	public function test_canonical_scheme_keeps_http_site_on_http(): void {
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		Functions\when( 'wp_parse_url' )->alias(
+			static function ( $url, $component = -1 ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- This stub *is* the wp_parse_url replacement.
+				return parse_url( $url, $component );
+			}
+		);
+
+		$this->assertSame( 'http', Util::canonical_scheme() );
+	}
+
+	/**
+	 * Test that cached_content_url() pins the scheme to home_url()'s scheme.
+	 *
+	 * Regression: content_url() derives its scheme from is_ssl(), which is
+	 * false under WP-CLI/cron. The resulting http:// asset URLs were cached
+	 * into CSS on disk and then served to HTTPS visitors, where the browser
+	 * blocked them as mixed content (fonts/images never loaded).
+	 */
+	public function test_content_url_scheme_is_pinned_to_home_scheme(): void {
+		Functions\when( 'home_url' )->justReturn( 'https://example.com' );
+		Functions\when( 'wp_parse_url' )->alias(
+			static function ( $url, $component = -1 ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- This stub *is* the wp_parse_url replacement.
+				return parse_url( $url, $component );
+			}
+		);
+
+		// content_url() reports http, as it does in a CLI/cron context.
+		$url = Util::cached_content_url( '/themes/boltfolio/assets/fonts/' );
+
+		$this->assertStringStartsWith( 'https://', $url );
+		$this->assertStringNotContainsString( 'http://', $url );
+	}
 }

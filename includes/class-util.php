@@ -1683,6 +1683,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * may return context-dependent output), otherwise the base URL is resolved
 		 * once per site per request and reused across all call sites.
 		 *
+		 * The scheme is pinned to the site's canonical scheme (see
+		 * `canonical_scheme()`), because `content_url()` derives its scheme from
+		 * `is_ssl()`, which is false wherever `$_SERVER['HTTPS']` is absent —
+		 * notably WP-CLI and bare cron runs. Asset URLs built here are written
+		 * into cached CSS/JS on disk, so an `http://` result in one CLI run would
+		 * be served to HTTPS visitors as mixed content and the browser would
+		 * block the asset.
+		 *
 		 * @param string $path Path relative to the content directory.
 		 * @return string The content URL for the given path.
 		 * @since 2.0.0
@@ -1699,10 +1707,72 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				$cache[ $blog_id ] = array();
 			}
 			if ( ! isset( $cache[ $blog_id ][ $path ] ) ) {
-				$cache[ $blog_id ][ $path ] = content_url( $path );
+				$cache[ $blog_id ][ $path ] = self::pin_url_scheme( content_url( $path ) );
 			}
 
 			return $cache[ $blog_id ][ $path ];
+		}
+
+		/**
+		 * Rewrite a URL's scheme to the site's canonical scheme.
+		 *
+		 * Deliberately implemented with plain string handling rather than
+		 * `set_url_scheme()`: this runs while building cacheable asset URLs, so
+		 * it must stay callable from any context, including bootstraps where
+		 * only a subset of core functions is loaded. `set_url_scheme()` is
+		 * still honoured indirectly because `content_url()` already applied
+		 * the `content_url` filter before this point.
+		 *
+		 * Only `http`/`https` are touched; any other scheme (or a scheme-less
+		 * value) is returned unchanged.
+		 *
+		 * @since NEXT
+		 * @param string $url URL to normalize.
+		 * @return string URL carrying the canonical scheme.
+		 */
+		private static function pin_url_scheme( string $url ): string {
+			$scheme = self::canonical_scheme();
+
+			if ( 'https' === $scheme && 0 === stripos( $url, 'http://' ) ) {
+				return 'https://' . substr( $url, 7 );
+			}
+			if ( 'http' === $scheme && 0 === stripos( $url, 'https://' ) ) {
+				return 'http://' . substr( $url, 8 );
+			}
+
+			return $url;
+		}
+
+		/**
+		 * The site's canonical URL scheme, independent of the current request.
+		 *
+		 * Derived from `home_url()` rather than `is_ssl()`. `is_ssl()` reports
+		 * the scheme of the *current request* and is false in any context
+		 * without `$_SERVER['HTTPS']` — WP-CLI, a bare cron run, or a proxy
+		 * that does not forward the header. That makes it unsafe for building
+		 * URLs which are then written to disk and served to later visitors:
+		 * a single CLI-triggered cache write would bake `http://` asset URLs
+		 * into cached CSS/JS and the browser would block them as mixed
+		 * content on every HTTPS page.
+		 *
+		 * Always returns `'http'` or `'https'`, so the result is safe to pass
+		 * to `set_url_scheme()`.
+		 *
+		 * @since NEXT
+		 * @return string Either 'http' or 'https'.
+		 */
+		public static function canonical_scheme(): string {
+			$scheme = '';
+			try {
+				if ( function_exists( 'home_url' ) && function_exists( 'wp_parse_url' ) ) {
+					$scheme = (string) wp_parse_url( home_url(), PHP_URL_SCHEME );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$scheme = '';
+			}
+
+			return 'https' === strtolower( $scheme ) ? 'https' : 'http';
 		}
 
 		/**
