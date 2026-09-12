@@ -1621,91 +1621,162 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			// fallback keeps counts across requests otherwise (issue #882 review).
 			$has_salted = function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache();
 
-			if ( $has_salted ) {
-				$cached = wp_cache_get_salted( 'wppo_db_cleanup_counts', 'wppo', Util::cache_salt( self::SALT_KEY ) );
-				if ( false !== $cached ) {
-					return $cached;
-				}
-			} else {
-				$cached = get_transient( Util::transient_key( 'wppo_db_cleanup_counts' ) );
-				if ( false !== $cached ) {
-					return $cached;
-				}
-			}
+			$value_key = $has_salted ? 'wppo_db_cleanup_counts' : Util::transient_key( 'wppo_db_cleanup_counts' );
 
-			global $wpdb;
+			$get_cached = function ( string $k ) use ( $value_key, $has_salted ): mixed {
+				if ( $has_salted ) {
+					return wp_cache_get_salted( $value_key, 'wppo', Util::cache_salt( self::SALT_KEY ) );
+				}
+				return get_transient( $k );
+			};
+			$set_cached = function ( string $k, mixed $v, int $t ) use ( $value_key, $has_salted ): bool {
+				if ( $has_salted ) {
+					wp_cache_set_salted( $value_key, $v, 'wppo', Util::cache_salt( self::SALT_KEY ), $t );
+					return true;
+				}
+				return (bool) set_transient( $k, $v, $t );
+			};
 
-			$time = time();
+			$rebuild = function (): array|false {
+				global $wpdb;
+
+				$time = time();
 
 			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-			// Single UNION ALL round-trip (audit #982): this previously ran
-			// one query per cleanup type on a TTL miss. Predicates are verbatim
-			// copies of the originals (including the `comment_type != 'note'`
-			// exclusion from issue #884, the transient CONCAT self-JOIN, and
-			// the multisite `_site_transient_` skip). The 'expired_transients'
-			// label may appear twice (one row per prefix) — rows are summed
-			// per key.
-			$selects = array();
+				// Single UNION ALL round-trip (audit #982): this previously ran
+				// one query per cleanup type on a TTL miss. Predicates are verbatim
+				// copies of the originals (including the `comment_type != 'note'`
+				// exclusion from issue #884, the transient CONCAT self-JOIN, and
+				// the multisite `_site_transient_` skip). The 'expired_transients'
+				// label may appear twice (one row per prefix) — rows are summed
+				// per key.
+				$selects = array();
 
-			$selects[] = "SELECT 'revisions' AS k, COUNT(*) AS c FROM $wpdb->posts WHERE post_type = 'revision'";
-			$selects[] = "SELECT 'auto_drafts' AS k, COUNT(*) AS c FROM $wpdb->posts WHERE post_status = 'auto-draft'";
-			$selects[] = "SELECT 'trashed_posts' AS k, COUNT(*) AS c FROM $wpdb->posts WHERE post_status = 'trash'";
-			// Exclude WP 6.9+ Notes (`comment_type='note'`) so counts match what
-			// clean_spam_comments()/clean_trashed_comments() would actually delete (issue #884).
-			$selects[] = "SELECT 'spam_comments' AS k, COUNT(*) AS c FROM $wpdb->comments WHERE comment_approved = 'spam' AND COALESCE( comment_type, '' ) != 'note'";
-			$selects[] = "SELECT 'trashed_comments' AS k, COUNT(*) AS c FROM $wpdb->comments WHERE comment_approved = 'trash' AND COALESCE( comment_type, '' ) != 'note'";
+				$selects[] = "SELECT 'revisions' AS k, COUNT(*) AS c FROM $wpdb->posts WHERE post_type = 'revision'";
+				$selects[] = "SELECT 'auto_drafts' AS k, COUNT(*) AS c FROM $wpdb->posts WHERE post_status = 'auto-draft'";
+				$selects[] = "SELECT 'trashed_posts' AS k, COUNT(*) AS c FROM $wpdb->posts WHERE post_status = 'trash'";
+				// Exclude WP 6.9+ Notes (`comment_type='note'`) so counts match what
+				// clean_spam_comments()/clean_trashed_comments() would actually delete (issue #884).
+				$selects[] = "SELECT 'spam_comments' AS k, COUNT(*) AS c FROM $wpdb->comments WHERE comment_approved = 'spam' AND COALESCE( comment_type, '' ) != 'note'";
+				$selects[] = "SELECT 'trashed_comments' AS k, COUNT(*) AS c FROM $wpdb->comments WHERE comment_approved = 'trash' AND COALESCE( comment_type, '' ) != 'note'";
 
-			foreach ( array( '_transient_', '_site_transient_' ) as $prefix ) {
-				$is_multisite = false;
-				if ( function_exists( 'is_multisite' ) ) {
-					try {
-						$is_multisite = is_multisite();
-					} catch ( \Throwable $e ) {
-						$is_multisite = false;
+				foreach ( array( '_transient_', '_site_transient_' ) as $prefix ) {
+					$is_multisite = false;
+					if ( function_exists( 'is_multisite' ) ) {
+						try {
+							$is_multisite = is_multisite();
+						} catch ( \Throwable $e ) {
+							$is_multisite = false;
+						}
 					}
-				}
-				if ( '_site_transient_' === $prefix && $is_multisite ) {
-					continue;
-				}
-				$timeout_prefix = $prefix . 'timeout_';
-				$selects[]      = $wpdb->prepare(
-					"SELECT 'expired_transients' AS k, COUNT(*) AS c FROM $wpdb->options a
+					if ( '_site_transient_' === $prefix && $is_multisite ) {
+						continue;
+					}
+					$timeout_prefix = $prefix . 'timeout_';
+					$selects[]      = $wpdb->prepare(
+						"SELECT 'expired_transients' AS k, COUNT(*) AS c FROM $wpdb->options a
 						INNER JOIN $wpdb->options b ON b.option_name = CONCAT( %s, SUBSTRING( a.option_name, %d ) )
 						WHERE a.option_name LIKE %s
 						AND a.option_name NOT LIKE %s
 						AND b.option_value < %d",
-					$timeout_prefix,
-					strlen( $prefix ) + 1,
-					$wpdb->esc_like( $prefix ) . '%',
-					$wpdb->esc_like( $timeout_prefix ) . '%',
-					$time
-				);
-			}
+						$timeout_prefix,
+						strlen( $prefix ) + 1,
+						$wpdb->esc_like( $prefix ) . '%',
+						$wpdb->esc_like( $timeout_prefix ) . '%',
+						$time
+					);
+				}
 
-			$selects[] = "SELECT 'orphan_postmeta' AS k, COUNT(*) AS c FROM $wpdb->postmeta pm
+				$selects[] = "SELECT 'orphan_postmeta' AS k, COUNT(*) AS c FROM $wpdb->postmeta pm
 					LEFT JOIN $wpdb->posts p ON p.ID = pm.post_id
 					WHERE p.ID IS NULL";
-			$selects[] = "SELECT 'unattached_media' AS k, COUNT(*) AS c FROM $wpdb->posts
+				$selects[] = "SELECT 'unattached_media' AS k, COUNT(*) AS c FROM $wpdb->posts
 					WHERE post_type = 'attachment'
 					AND post_parent = 0
 					AND post_status = 'inherit'";
-			$selects[] = $wpdb->prepare(
-				"SELECT 'oembed_cache' AS k, COUNT(*) AS c FROM $wpdb->options WHERE option_name LIKE %s",
-				$wpdb->esc_like( '_oembed_' ) . '%'
+				$selects[] = $wpdb->prepare(
+					"SELECT 'oembed_cache' AS k, COUNT(*) AS c FROM $wpdb->options WHERE option_name LIKE %s",
+					$wpdb->esc_like( '_oembed_' ) . '%'
+				);
+
+				$sql  = implode( ' UNION ALL ', $selects );
+				$rows = $wpdb->get_results( $sql, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Each fragment with placeholders is prepared above; the rest are static.
+
+				// Distinguish a DB failure (false/null, or a drop-in that reports
+				// via $wpdb->last_error while returning an empty array) from a
+				// legitimately empty result (array()). On failure the all-zero
+				// counts are returned for this request but NOT cached, so a
+				// transient error is retried on the next request instead of
+				// serving stale zeros for 5 minutes.
+				$query_failed = ! is_array( $rows ) || ( '' !== trim( (string) ( $wpdb->last_error ?? '' ) ) );
+
+				$totals = array(
+					'revisions'          => 0,
+					'auto_drafts'        => 0,
+					'trashed_posts'      => 0,
+					'spam_comments'      => 0,
+					'trashed_comments'   => 0,
+					'expired_transients' => 0,
+					'orphan_postmeta'    => 0,
+					'unattached_media'   => 0,
+					'oembed_cache'       => 0,
+				);
+				if ( is_array( $rows ) ) {
+					foreach ( $rows as $row ) {
+						$k = is_array( $row ) ? ( $row['k'] ?? '' ) : '';
+						$c = is_array( $row ) ? (int) ( $row['c'] ?? 0 ) : 0;
+						if ( array_key_exists( $k, $totals ) ) {
+							$totals[ $k ] += $c;
+						}
+					}
+				}
+
+				$counts = array(
+					'revisions'          => (int) $totals['revisions'],
+					'auto_drafts'        => (int) $totals['auto_drafts'],
+					'trashed_posts'      => (int) $totals['trashed_posts'],
+					'spam_comments'      => (int) $totals['spam_comments'],
+					'trashed_comments'   => (int) $totals['trashed_comments'],
+					'expired_transients' => (int) $totals['expired_transients'],
+					'orphan_postmeta'    => (int) $totals['orphan_postmeta'],
+					'unattached_media'   => (int) $totals['unattached_media'],
+					'oembed_cache'       => (int) $totals['oembed_cache'],
+				);
+			// phpcs:enable
+
+				// Skip the cache write on a failed query so zeros are never served
+				// from a 5-minute cache after a transient DB error. Returning false
+				// lets the stampede guard serve stale (when available) instead of
+				// caching zeros; the caller maps false to uncached zeros below.
+				if ( $query_failed ) {
+					return false;
+				}
+
+				return $counts;
+			};
+
+			// Stampede guard (issue #1101): concurrent dashboard mounts on expiry
+			// collapse toward a single UNION ALL round-trip; losers bounded-retry
+			// the fresh key then serve the stale copy. Fail-open on lock/Redis
+			// failure (stale or dynamic zeros, never fatal).
+			$result = Util::get_with_stampede_lock(
+				$value_key,
+				$rebuild,
+				array(
+					'ttl'            => 5 * MINUTE_IN_SECONDS,
+					'stale_ttl'      => defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400,
+					'retries'        => 4,
+					'retry_delay_us' => 0,
+					'get_cached'     => $get_cached,
+					'set_cached'     => $set_cached,
+				)
 			);
 
-			$sql  = implode( ' UNION ALL ', $selects );
-			$rows = $wpdb->get_results( $sql, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Each fragment with placeholders is prepared above; the rest are static.
+			if ( is_array( $result ) ) {
+				return $result;
+			}
 
-			// Distinguish a DB failure (false/null, or a drop-in that reports
-			// via $wpdb->last_error while returning an empty array) from a
-			// legitimately empty result (array()). On failure the all-zero
-			// counts are returned for this request but NOT cached, so a
-			// transient error is retried on the next request instead of
-			// serving stale zeros for 5 minutes.
-			$query_failed = ! is_array( $rows ) || ( '' !== trim( (string) ( $wpdb->last_error ?? '' ) ) );
-
-			$totals = array(
+			return array(
 				'revisions'          => 0,
 				'auto_drafts'        => 0,
 				'trashed_posts'      => 0,
@@ -1716,41 +1787,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				'unattached_media'   => 0,
 				'oembed_cache'       => 0,
 			);
-			if ( is_array( $rows ) ) {
-				foreach ( $rows as $row ) {
-					$k = is_array( $row ) ? ( $row['k'] ?? '' ) : '';
-					$c = is_array( $row ) ? (int) ( $row['c'] ?? 0 ) : 0;
-					if ( array_key_exists( $k, $totals ) ) {
-						$totals[ $k ] += $c;
-					}
-				}
-			}
-
-			$counts = array(
-				'revisions'          => (int) $totals['revisions'],
-				'auto_drafts'        => (int) $totals['auto_drafts'],
-				'trashed_posts'      => (int) $totals['trashed_posts'],
-				'spam_comments'      => (int) $totals['spam_comments'],
-				'trashed_comments'   => (int) $totals['trashed_comments'],
-				'expired_transients' => (int) $totals['expired_transients'],
-				'orphan_postmeta'    => (int) $totals['orphan_postmeta'],
-				'unattached_media'   => (int) $totals['unattached_media'],
-				'oembed_cache'       => (int) $totals['oembed_cache'],
-			);
-			// phpcs:enable
-
-			// Skip the cache write on a failed query so zeros are never served
-			// from a 5-minute cache after a transient DB error.
-			if ( $query_failed ) {
-				return $counts;
-			}
-
-			if ( $has_salted ) {
-				wp_cache_set_salted( 'wppo_db_cleanup_counts', $counts, 'wppo', Util::cache_salt( self::SALT_KEY ), 5 * MINUTE_IN_SECONDS );
-			} else {
-				set_transient( Util::transient_key( 'wppo_db_cleanup_counts' ), $counts, 5 * MINUTE_IN_SECONDS );
-			}
-			return $counts;
 		}
 
 		/**

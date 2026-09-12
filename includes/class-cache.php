@@ -2414,13 +2414,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return;
 			}
 
-			// Stampede protection: transient lock per file path (5s). If another
-			// process is already writing the same cache file, skip this write.
-			$lock_key = Util::transient_key( 'wppo_cache_write_' . md5( $file_path ) );
-			if ( get_transient( $lock_key ) ) {
+			// Stampede protection: atomic owner lock per file path (2-5s TTL via
+			// Util::stampede_lock_ttl()). Only the lock owner writes; concurrent
+			// racers skip this write instead of interleaving put_contents. The
+			// owner check on release means a slow worker never deletes a
+			// successor's lock. Fail-open: lock failures skip the write for this
+			// request (the next request retries) — never fatal.
+			$lock_key   = Util::transient_key( 'wppo_cache_write_' . md5( $file_path ) );
+			$lock_owner = Util::generate_stampede_owner();
+			$lock_ttl   = Util::stampede_lock_ttl();
+			if ( ! Util::acquire_stampede_lock( $lock_key, $lock_owner, $lock_ttl ) ) {
 				return;
 			}
-			set_transient( $lock_key, 1, 5 );
 
 			try {
 				$this->atomic_put_contents( $file_path, $buffer );
@@ -2470,7 +2475,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					$this->delete_cache_files( trailingslashit( dirname( $file_path ) ) . '.wppo-no-cache' );
 				}
 			} finally {
-				delete_transient( $lock_key );
+				Util::release_stampede_lock( $lock_key, $lock_owner );
 			}
 		}
 
@@ -3800,24 +3805,43 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			// Cache miss: compute size and page count in a single recursive
 			// walk so large caches pay one filesystem enumeration, not two.
-			$dir_stats             = $instance->calculate_directory_stats( $cache_dir );
-			$total_size            = $dir_stats['size'];
-			$stats['size']         = size_format( $total_size );
-			$stats['cached_pages'] = $dir_stats['count'];
-			self::store_cache_stats(
-				array(
-					'size'  => $stats['size'],
-					'count' => $stats['cached_pages'],
-				),
-				$stats_key
-			);
-			// Also prime legacy keys for any external consumers still reading them.
-			set_transient( Util::transient_key( 'wppo_cache_size' ), $stats['size'], 15 * MINUTE_IN_SECONDS );
-			set_transient( Util::transient_key( 'wppo_cache_count' ), $stats['cached_pages'], 15 * MINUTE_IN_SECONDS );
+			// Stampede guard (issue #1101): concurrent misses collapse toward one
+			// walk; losers re-read the peer's fresh value and return stale/N/A
+			// without walking. Fail-open: the next request retries.
+			$stats_lock   = Util::transient_key( 'wppo_stampede_' . md5( $stats_key ) );
+			$stats_owner  = Util::generate_stampede_owner();
+			$stats_locked = Util::acquire_stampede_lock( $stats_lock, $stats_owner, Util::stampede_lock_ttl() );
+			if ( ! $stats_locked ) {
+				$recheck = get_transient( $stats_key );
+				if ( is_array( $recheck ) && isset( $recheck['size'], $recheck['count'] ) ) {
+					$stats['size']         = (string) $recheck['size'];
+					$stats['cached_pages'] = (int) $recheck['count'];
+				}
+				$stats['last_cleared'] = get_option( 'wppo_cache_last_cleared_time', '' );
+				return $stats;
+			}
+			try {
+				$dir_stats             = $instance->calculate_directory_stats( $cache_dir );
+				$total_size            = $dir_stats['size'];
+				$stats['size']         = size_format( $total_size );
+				$stats['cached_pages'] = $dir_stats['count'];
+				self::store_cache_stats(
+					array(
+						'size'  => $stats['size'],
+						'count' => $stats['cached_pages'],
+					),
+					$stats_key
+				);
+				// Also prime legacy keys for any external consumers still reading them.
+				set_transient( Util::transient_key( 'wppo_cache_size' ), $stats['size'], 15 * MINUTE_IN_SECONDS );
+				set_transient( Util::transient_key( 'wppo_cache_count' ), $stats['cached_pages'], 15 * MINUTE_IN_SECONDS );
 
-			$stats['last_cleared'] = get_option( 'wppo_cache_last_cleared_time', '' );
+				$stats['last_cleared'] = get_option( 'wppo_cache_last_cleared_time', '' );
 
-			return $stats;
+				return $stats;
+			} finally {
+				Util::release_stampede_lock( $stats_lock, $stats_owner );
+			}
 		}
 
 		/**
