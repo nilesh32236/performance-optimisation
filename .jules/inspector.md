@@ -74,10 +74,7 @@
 **Root Cause:** The `RedisSentinel` constructor requires specific positional arguments (host, port, timeout, persistent, retry_interval, read_timeout) according to the `phpredis` extension signature.
 **Test Added:** Replaced the array argument with the required positional arguments. Ensured the fourth argument `$persistent` is passed as an empty string `''` to retain the original non-persistent connection behavior instead of mistakenly passing `$master_name`.
 ## 2026-09-11 - [Resolve PHPStan Errors]
-**Bug/Gap:** PHPStan static analysis found unreachable boolean logic (, , ), missing defined check (), unused return type (), and redundant array manipulation ().
-**Root Cause:** The code evolved to make some constraints impossible to fail.
-**Test Added:** No new test added, but code refactored and tests run via PHPUnit which failed due to a missing Brain Monkey stub in `PhpDeprecationHygieneTest.php`. Fixed the test by properly mocking `__` function.
-## 2026-09-02 - [Resolve PHPStan Errors]
-**Bug/Gap:** PHPStan static analysis found unreachable boolean logic (`smallerOrEqual.alwaysFalse`, `booleanNot.alwaysTrue`, `greater.alwaysTrue`), missing defined check (`constant.notFound`), unused return type (`return.unusedType`), and redundant array manipulation (`arrayValues.list`).
-**Root Cause:** The code evolved to make some constraints impossible to fail.
-**Test Added:** Code refactored and tests run via PHPUnit which failed due to a missing Brain Monkey stub in `PhpDeprecationHygieneTest.php`. Fixed the test by properly mocking `__` function.
+**Bug/Gap:** PHPStan reported unreachable boolean logic (`smallerOrEqual.alwaysFalse`, `booleanNot.alwaysTrue`, `greater.alwaysTrue`), a missing `defined()` check (`constant.notFound`), an unused return type (`return.unusedType`), and redundant array manipulation (`arrayValues.list`). One report was a real defect rather than a style issue: `Cache::store_cache_stats()` called `wp_cache_set_salted()` while only guarding on `wp_cache_get_salted()`, so the write could fatal on a build with one function and not the other.
+**Root Cause:** The code evolved until some constraints became impossible to fail, leaving dead guards behind. The missing `wp_cache_set_salted()` guard was an independent oversight.
+**Fix:** Removed the dead guards, kept behaviour identical in each case (verified: `invalidate_woo_object()` already returns early for `$object_id <= 0`, `$kept` is already a list, `array_slice()` reindexes without `array_values()`), and added the missing `function_exists()` check for the salted cache write.
+**Test Added:** No new test; `PhpDeprecationHygieneTest` needed a `__()` Brain Monkey stub and now passes.
