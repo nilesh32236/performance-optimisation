@@ -160,6 +160,14 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 			$this->markTestSkipped( 'Requires phpredis Sentinel to be absent.' );
 		}
 
+		\Brain\Monkey\Functions\stubs(
+			array(
+				'__' => static function ( $text ) {
+					return $text;
+				},
+			)
+		);
+
 		$result = wppo_redis_connect_sentinel(
 			array(
 				'nodes' => array( '127.0.0.1:26379' ),

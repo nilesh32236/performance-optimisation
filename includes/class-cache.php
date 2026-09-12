@@ -354,7 +354,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$this->domain = $domain;
 
 			// Define cache root directory and URL. Guard empty WP_CONTENT_DIR to prevent writing to filesystem root.
-			if ( ! defined( 'WP_CONTENT_DIR' ) || '' === WP_CONTENT_DIR ) {
+			if ( ! defined( 'WP_CONTENT_DIR' ) || '' === WP_CONTENT_DIR || ! defined( 'WP_CONTENT_URL' ) ) {
 				$this->cache_root_dir = '';
 				$this->cache_root_url = '';
 			} else {
@@ -488,9 +488,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Lazily initializes and returns the WP_Filesystem object.
 		 *
-		 * @return object|false|null The filesystem object, false when
-		 *                           Util::init_filesystem() fails, or null
-		 *                           before the first initialization attempt.
+		 * @return object|null The filesystem object, or null
+		 *                     before the first initialization attempt.
 		 * @since 1.6.0
 		 */
 		private function get_filesystem() {
@@ -2033,7 +2032,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$excluded = false;
 
 				// Woo endpoint URLs (order-pay, view-order, downloads, …) are dynamic.
-				if ( ! $excluded && function_exists( 'is_wc_endpoint_url' ) ) {
+				if ( function_exists( 'is_wc_endpoint_url' ) ) {
 					try {
 						if ( is_wc_endpoint_url() ) {
 							$excluded = true;
@@ -2084,7 +2083,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					}
 				}
 
-				if ( ! $excluded && isset( $_COOKIE ) && is_array( $_COOKIE ) ) {
+				if ( ! $excluded && ! empty( $_COOKIE ) && is_array( $_COOKIE ) ) {
 					foreach ( $_COOKIE as $k => $v ) {
 						if ( 0 === strpos( (string) $k, 'wp_woocommerce_session_' ) && ! empty( $v ) ) {
 							$excluded = true;
@@ -3081,7 +3080,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					$skip_regen = true;
 				}
 			}
-			if ( ! $skip_regen && $object_id > 0 && function_exists( 'wp_next_scheduled' ) && function_exists( 'wp_schedule_single_event' ) && function_exists( 'wp_rand' ) ) {
+			if ( ! $skip_regen && function_exists( 'wp_next_scheduled' ) && function_exists( 'wp_schedule_single_event' ) && function_exists( 'wp_rand' ) ) {
 				if ( ! wp_next_scheduled( 'wppo_generate_static_page', array( $object_id ) ) ) {
 					wp_schedule_single_event( time() + wp_rand( 0, 5 ), 'wppo_generate_static_page', array( $object_id ) );
 				}
@@ -3837,7 +3836,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return void
 		 */
 		private static function store_cache_stats( array $unified, string $stats_key ): void {
-			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
+			if ( function_exists( 'wp_cache_set_salted' ) && function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
 				wp_cache_set_salted( 'wppo_cache_stats', $unified, 'wppo', Util::cache_salt( 'wppo_cache_last_cleared' ), 15 * MINUTE_IN_SECONDS );
 			}
 			set_transient( $stats_key, $unified, 15 * MINUTE_IN_SECONDS );
