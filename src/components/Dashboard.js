@@ -298,8 +298,10 @@ const Dashboard = ( {
 	}, [ fetchDbCounts ] );
 
 	const dbOverheadCount = useMemo( () => {
-		return Object.entries( dbCounts ).reduce( ( sum, [ key, val ] ) => {
-			if ( key === 'action_scheduler_health' ) {
+		return Object.entries( dbCounts ).reduce( ( sum, [ , val ] ) => {
+			// Skip object-valued payloads (e.g. action_scheduler_health)
+			// so they can never pollute the numeric total.
+			if ( val !== null && typeof val === 'object' ) {
 				return sum;
 			}
 			return sum + ( parseInt( val, 10 ) || 0 );

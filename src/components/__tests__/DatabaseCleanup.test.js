@@ -642,6 +642,130 @@ describe( 'DatabaseCleanup Component', () => {
 		} );
 	} );
 
+	it( 'renders the Action Scheduler card with queue health and excludes the health object from totals', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				revisions: 10,
+				action_scheduler: 42,
+				action_scheduler_health: {
+					available: true,
+					pending: 3,
+					failed: 1,
+					oldest_pending_age_seconds: 3600,
+					reclaimable: 42,
+					reclaimable_bytes: 1024,
+					total_bytes: 2048,
+				},
+			},
+		} );
+		render( <DatabaseCleanup /> );
+
+		// Wait for counts to load (health line only renders from payload).
+		expect(
+			await screen.findByText(
+				'Queue health: 3 pending, 1 failed, oldest pending 3600 seconds ago.'
+			)
+		).toBeInTheDocument();
+
+		expect(
+			screen.getByText( 'Action Scheduler Queue' )
+		).toBeInTheDocument();
+
+		// Reclaimable count on the card.
+		expect( screen.getAllByText( '42' ).length ).toBeGreaterThan( 0 );
+
+		// Total is 10 + 42 = 52 — the health object must not inflate it.
+		expect( screen.getByText( '52 items' ) ).toBeInTheDocument();
+	} );
+
+	it( 'hides the queue-health line when Action Scheduler is unavailable', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				revisions: 10,
+				action_scheduler: 0,
+				action_scheduler_health: {
+					available: false,
+					pending: 0,
+					failed: 0,
+					oldest_pending_age_seconds: null,
+					reclaimable: 0,
+					reclaimable_bytes: 0,
+					total_bytes: 0,
+				},
+			},
+		} );
+		render( <DatabaseCleanup /> );
+
+		// Wait for counts to load before asserting absence.
+		expect( await screen.findByText( '10 items' ) ).toBeInTheDocument();
+
+		expect(
+			screen.getByText( 'Action Scheduler Queue' )
+		).toBeInTheDocument();
+
+		expect( screen.queryByText( /Queue health:/ ) ).not.toBeInTheDocument();
+	} );
+
+	it( 'surfaces the REST note when the Action Scheduler cleaner is unavailable', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				revisions: 0,
+				// Stale nonzero count keeps the Clean button enabled while
+				// the health payload reports AS as unavailable.
+				action_scheduler: 5,
+				action_scheduler_health: {
+					available: false,
+					pending: 0,
+					failed: 0,
+					oldest_pending_age_seconds: null,
+					reclaimable: 0,
+					reclaimable_bytes: 0,
+					total_bytes: 0,
+				},
+			},
+		} );
+		render( <DatabaseCleanup /> );
+
+		// Wait for counts to load so the Clean button is enabled.
+		expect( await screen.findByText( '5 items' ) ).toBeInTheDocument();
+		expect(
+			screen.getByText( 'Action Scheduler Queue' )
+		).toBeInTheDocument();
+
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				type: 'action_scheduler',
+				deleted: 0,
+				action_scheduler_available: false,
+				note: 'Action Scheduler is not available or cleanup is disabled; nothing was purged.',
+			},
+		} );
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { revisions: 0, action_scheduler: 0 },
+		} );
+
+		const cleanButtons = screen.getAllByRole( 'button', {
+			name: /Clean/i,
+		} );
+		fireEvent.click( cleanButtons[ cleanButtons.length - 1 ] );
+
+		const confirmButton = screen.getByRole( 'button', { name: 'Delete' } );
+		fireEvent.click( confirmButton );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText(
+					'Action Scheduler is not available or cleanup is disabled; nothing was purged.'
+				)
+			).toBeInTheDocument();
+		} );
+	} );
+
 	it( 'aborts the in-flight counts request on unmount without notifying', async () => {
 		const consoleSpy = jest
 			.spyOn( console, 'error' )

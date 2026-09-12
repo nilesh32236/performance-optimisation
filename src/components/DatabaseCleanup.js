@@ -285,18 +285,28 @@ const DatabaseCleanup = ( { options = {} } ) => {
 		try {
 			const response = await apiCall( 'database_cleanup', { type } );
 			if ( response.success ) {
+				// When the Action Scheduler cleaner had nothing available to
+				// purge (AS absent or opted out), the REST response carries an
+				// explanatory note — surface it instead of a hollow "0 removed".
+				const asNote =
+					response.data?.action_scheduler_available === false &&
+					response.data?.note
+						? response.data.note
+						: null;
 				notify( {
-					type: 'success',
-					message: sprintf(
-						// translators: %d is the number of items removed during cleanup.
-						_n(
-							'Cleanup successful: %d item removed.',
-							'Cleanup successful: %d items removed.',
-							response.data?.deleted ?? 0,
-							'performance-optimisation'
+					type: asNote ? 'info' : 'success',
+					message:
+						asNote ||
+						sprintf(
+							// translators: %d is the number of items removed during cleanup.
+							_n(
+								'Cleanup successful: %d item removed.',
+								'Cleanup successful: %d items removed.',
+								response.data?.deleted ?? 0,
+								'performance-optimisation'
+							),
+							response.data?.deleted ?? 0
 						),
-						response.data?.deleted ?? 0
-					),
 					durationMs: 5000,
 				} );
 				// Cleanup changed the counts — invalidate the shared cache
@@ -359,15 +369,14 @@ const DatabaseCleanup = ( { options = {} } ) => {
 		typeof counts.action_scheduler_health === 'object'
 			? counts.action_scheduler_health
 			: null;
-	const totalItems = Object.entries( counts ).reduce(
-		( sum, [ key, val ] ) => {
-			if ( key === 'action_scheduler_health' ) {
-				return sum;
-			}
-			return sum + ( parseInt( val ) || 0 );
-		},
-		0
-	);
+	const totalItems = Object.entries( counts ).reduce( ( sum, [ , val ] ) => {
+		// Skip object-valued payloads (e.g. action_scheduler_health)
+		// so they can never pollute the numeric total.
+		if ( val !== null && typeof val === 'object' ) {
+			return sum;
+		}
+		return sum + ( parseInt( val, 10 ) || 0 );
+	}, 0 );
 
 	const handleExportTransients = async () => {
 		setExporting( true );
@@ -793,7 +802,8 @@ const DatabaseCleanup = ( { options = {} } ) => {
 									</span>
 								</div>
 								{ item.key === 'action_scheduler' &&
-									queueHealth && (
+									queueHealth &&
+									queueHealth.available !== false && (
 										<p className="wppo-text-muted wppo-text-small wppo-mt-10">
 											{ sprintf(
 												// translators: %1$d pending, %2$d failed, %3$s oldest pending age.
@@ -818,7 +828,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 													: sprintf(
 															// translators: %d is an age in seconds.
 															__(
-																'%d ago',
+																'%d seconds ago',
 																'performance-optimisation'
 															),
 															Number(

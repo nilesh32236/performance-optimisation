@@ -722,11 +722,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 				return array( 'cleaned' => $total );
 			}
 			if ( Database_Cleanup::ACTION_SCHEDULER_TYPE === $type ) {
-				$result = Database_Cleanup::clean_action_scheduler();
-				if ( is_wp_error( $result ) || false === $result ) {
-					return array( 'cleaned' => 0 );
-				}
-				return array( 'cleaned' => (int) $result );
+				// clean_action_scheduler() returns int only (fail-open 0).
+				return array( 'cleaned' => (int) Database_Cleanup::clean_action_scheduler() );
 			}
 			$method_map = Database_Cleanup::CLEANUP_METHOD_MAP;
 			$method     = $method_map[ $type ] ?? null;
