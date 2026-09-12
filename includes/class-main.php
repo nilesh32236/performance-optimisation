@@ -2604,6 +2604,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! in_array( 'wppo-lazyload', $excluded, true ) ) {
 				$excluded[] = 'wppo-lazyload';
 			}
+			// Interactivity runtime guard (issue #1095): never deprioritize or
+			// move the block-interactivity runtime. Covers the classic handle
+			// plus the 6.5+ module ids. Fail-open: unconditional append.
+			foreach ( array( 'wp-interactivity', '@wordpress/interactivity', '@wordpress/interactivity-router' ) as $runtime_handle ) {
+				if ( ! in_array( $runtime_handle, $excluded, true ) ) {
+					$excluded[] = $runtime_handle;
+				}
+			}
 
 			// Collect registered module ids, tolerating core version differences.
 			// Prefer the public get_print_queue() API; fall back to reading the
