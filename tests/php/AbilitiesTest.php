@@ -55,8 +55,9 @@ class AbilitiesTest extends \PHPUnit\Framework\TestCase {
 
 		$enum = $db_ability['args']['input_schema']['properties']['type']['enum'];
 
-		// Canonical keys are TABLE_MAP keys + 'all'.
-		$expected = array_merge( array_keys( Database_Cleanup::TABLE_MAP ), array( 'all' ) );
+		// Canonical keys are the valid cleanup types (TABLE_MAP keys plus the
+		// standalone action_scheduler branch + 'all').
+		$expected = Database_Cleanup::get_valid_cleanup_types();
 		sort( $enum );
 		sort( $expected );
 

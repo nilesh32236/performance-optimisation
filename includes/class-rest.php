@@ -1301,19 +1301,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				);
 			}
 
-			$method_map = Database_Cleanup::CLEANUP_METHOD_MAP;
-
-			$method = $method_map[ $type ] ?? null;
-
-			if ( ! $method ) {
-				return $this->send_response( array( 'deleted' => false ), false, 400, __( 'Invalid cleanup type.', 'performance-optimisation' ) );
-			}
-
-			if ( 'revisions' === $type ) {
-				list( $max_age, $keep_latest ) = Database_Cleanup::get_revision_defaults();
-				$result                        = Database_Cleanup::invoke_cleanup_method( $method, $max_age, $keep_latest );
+			// Standalone Action Scheduler branch: delegates to the AS cleaner,
+			// never a raw DELETE (issue #1106). Kept out of CLEANUP_METHOD_MAP.
+			if ( Database_Cleanup::ACTION_SCHEDULER_TYPE === $type ) {
+				$result = Database_Cleanup::clean_action_scheduler();
+				if ( false === $result ) {
+					return $this->send_response( null, false, 500, __( 'Database cleanup failed.', 'performance-optimisation' ) );
+				}
 			} else {
-				$result = Database_Cleanup::invoke_cleanup_method( $method );
+				$method_map = Database_Cleanup::CLEANUP_METHOD_MAP;
+
+				$method = $method_map[ $type ] ?? null;
+
+				if ( ! $method ) {
+					return $this->send_response( array( 'deleted' => false ), false, 400, __( 'Invalid cleanup type.', 'performance-optimisation' ) );
+				}
+
+				if ( 'revisions' === $type ) {
+					list( $max_age, $keep_latest ) = Database_Cleanup::get_revision_defaults();
+					$result                        = Database_Cleanup::invoke_cleanup_method( $method, $max_age, $keep_latest );
+				} else {
+					$result = Database_Cleanup::invoke_cleanup_method( $method );
+				}
 			}
 
 			if ( is_wp_error( $result ) ) {
@@ -1354,6 +1363,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 */
 		public function get_database_cleanup_counts( \WP_REST_Request $_request ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			$counts = Database_Cleanup::get_counts();
+			try {
+				$counts['action_scheduler_health'] = Database_Cleanup::get_action_scheduler_health();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$counts['action_scheduler_health'] = array(
+					'available'                  => false,
+					'pending'                    => 0,
+					'failed'                     => 0,
+					'oldest_pending_age_seconds' => null,
+					'reclaimable'                => 0,
+					'reclaimable_bytes'          => 0,
+					'total_bytes'                => 0,
+				);
+			}
 			return $this->send_response( $counts );
 		}
 

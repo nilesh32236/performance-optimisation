@@ -59,6 +59,10 @@ const RISK_BADGE_MAP = {
 		level: 'poor',
 		label: __( 'Review', 'performance-optimisation' ),
 	},
+	action_scheduler: {
+		level: 'good',
+		label: __( 'Safe', 'performance-optimisation' ),
+	},
 };
 
 const CLEANUP_TYPES = [
@@ -131,6 +135,14 @@ const CLEANUP_TYPES = [
 		label: __( 'oEmbed Cache', 'performance-optimisation' ),
 		description: __(
 			'Stored embed responses from YouTube, Twitter, Vimeo and other providers.',
+			'performance-optimisation'
+		),
+	},
+	{
+		key: 'action_scheduler',
+		label: __( 'Action Scheduler Queue', 'performance-optimisation' ),
+		description: __(
+			'Finished queue jobs past Action Scheduler retention. Only terminal jobs are purged via the Action Scheduler cleaner.',
 			'performance-optimisation'
 		),
 	},
@@ -342,8 +354,18 @@ const DatabaseCleanup = ( { options = {} } ) => {
 		}
 	};
 
-	const totalItems = Object.values( counts ).reduce(
-		( sum, val ) => sum + ( parseInt( val ) || 0 ),
+	const queueHealth =
+		counts.action_scheduler_health &&
+		typeof counts.action_scheduler_health === 'object'
+			? counts.action_scheduler_health
+			: null;
+	const totalItems = Object.entries( counts ).reduce(
+		( sum, [ key, val ] ) => {
+			if ( key === 'action_scheduler_health' ) {
+				return sum;
+			}
+			return sum + ( parseInt( val ) || 0 );
+		},
 		0
 	);
 
@@ -770,6 +792,42 @@ const DatabaseCleanup = ( { options = {} } ) => {
 										).toLocaleString() }
 									</span>
 								</div>
+								{ item.key === 'action_scheduler' &&
+									queueHealth && (
+										<p className="wppo-text-muted wppo-text-small wppo-mt-10">
+											{ sprintf(
+												// translators: %1$d pending, %2$d failed, %3$s oldest pending age.
+												__(
+													'Queue health: %1$d pending, %2$d failed, oldest pending %3$s.',
+													'performance-optimisation'
+												),
+												Number(
+													queueHealth.pending || 0
+												),
+												Number(
+													queueHealth.failed || 0
+												),
+												queueHealth.oldest_pending_age_seconds ===
+													null ||
+													queueHealth.oldest_pending_age_seconds ===
+														undefined
+													? __(
+															'n/a',
+															'performance-optimisation'
+													  )
+													: sprintf(
+															// translators: %d is an age in seconds.
+															__(
+																'%d ago',
+																'performance-optimisation'
+															),
+															Number(
+																queueHealth.oldest_pending_age_seconds
+															)
+													  )
+											) }
+										</p>
+									) }
 							</FeatureCard>
 						);
 					} ) }
