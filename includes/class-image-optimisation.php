@@ -1014,88 +1014,68 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$nesting      = 0;
 			$picture_html = '';
 
-			while ( $processor->next_token() ) {
-				$type = $processor->get_token_type();
+			try {
+				while ( $processor->next_token() ) {
+					$type = $processor->get_token_type();
 
-				if ( '#tag' !== $type ) {
-					$tok = $processor->serialize_token();
-					if ( $in_picture ) {
-						$picture_html .= $tok;
-					} else {
-						$out .= $tok;
-					}
-					continue;
-				}
-
-				$is_closer = $processor->is_tag_closer();
-				$tag       = $processor->get_tag();
-
-				if ( ! $in_picture && 'PICTURE' === $tag && ! $is_closer ) {
-					$in_picture   = true;
-					$nesting      = 1;
-					$picture_html = $processor->serialize_token();
-					continue;
-				}
-
-				if ( $in_picture ) {
-					$picture_html .= $processor->serialize_token();
-
-					if ( 'PICTURE' === $tag ) {
-						if ( ! $is_closer ) {
-							++$nesting;
+					if ( '#tag' !== $type ) {
+						$tok = (string) $processor->serialize_token();
+						if ( $in_picture ) {
+							$picture_html .= $tok;
 						} else {
-							--$nesting;
-							if ( 0 === $nesting ) {
-								// Extract inner <img> src via Tag Processor for correctness.
-								$src     = '';
-								$img_tag = '';
-								$tmp     = new \WP_HTML_Tag_Processor( $picture_html );
-								if ( $tmp->next_tag( array( 'tag_name' => 'img' ) ) ) {
-									$maybe_src = $tmp->get_attribute( 'data-src' );
-									if ( null === $maybe_src ) {
-										$maybe_src = $tmp->get_attribute( 'src' );
-									}
-									$src = is_string( $maybe_src ) ? $maybe_src : '';
-								}
-								if ( preg_match( '#<img\b[^>]*>#i', $picture_html, $m ) ) {
-									$img_tag = $m[0];
-								}
+							$out .= $tok;
+						}
+						continue;
+					}
 
-								if ( '' !== $img_tag && '' !== $src ) {
-									++$img_counter;
-									if ( $exclude_img_count >= $img_counter ) {
-										$exclude_imgs[] = $src;
-									}
-									$out .= $this->process_picture_tag( array( $picture_html ), $img_tag, $src, $exclude_imgs );
-								} elseif ( '' !== $img_tag ) {
-									// Fallback: extract src via regex when Tag Processor did not yield one.
-									if ( preg_match( '#<img\b[^>]*?(?:data-)?src=["\']([^"\']+)["\'][^>]*>#i', $picture_html, $img_matches ) ) {
-										$src = $img_matches[1];
+					$is_closer = $processor->is_tag_closer();
+					$tag       = $processor->get_tag();
+
+					if ( ! $in_picture && 'PICTURE' === $tag && ! $is_closer ) {
+						$in_picture   = true;
+						$nesting      = 1;
+						$picture_html = (string) $processor->serialize_token();
+						continue;
+					}
+
+					if ( $in_picture ) {
+						$picture_html .= (string) $processor->serialize_token();
+
+						if ( 'PICTURE' === $tag ) {
+							if ( ! $is_closer ) {
+								++$nesting;
+							} else {
+								--$nesting;
+								if ( 0 === $nesting ) {
+									list( $img_tag, $src ) = $this->extract_picture_img( $picture_html );
+
+									if ( '' !== $img_tag && '' !== $src ) {
 										++$img_counter;
 										if ( $exclude_img_count >= $img_counter ) {
 											$exclude_imgs[] = $src;
 										}
-										$out .= $this->process_picture_tag( array( $picture_html ), $img_matches[0], $src, $exclude_imgs );
+										$out .= $this->process_picture_tag( array( $picture_html ), $img_tag, $src, $exclude_imgs );
 									} else {
 										$out .= $picture_html;
 									}
-								} else {
-									$out .= $picture_html;
-								}
 
-								$in_picture   = false;
-								$picture_html = '';
-								$nesting      = 0;
+									$in_picture   = false;
+									$picture_html = '';
+									$nesting      = 0;
+								}
 							}
 						}
+						continue;
 					}
-					continue;
-				}
 
-				$out .= $processor->serialize_token();
+					$out .= (string) $processor->serialize_token();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $this->process_picture_blocks_regex( $buffer, $img_counter, $exclude_img_count, $exclude_imgs );
 			}
 
-			if ( null !== $processor->get_last_error() ) {
+			if ( method_exists( $processor, 'get_last_error' ) && null !== $processor->get_last_error() ) {
 				return $this->process_picture_blocks_regex( $buffer, $img_counter, $exclude_img_count, $exclude_imgs );
 			}
 
@@ -1104,6 +1084,54 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 
 			return $out;
+		}
+
+		/**
+		 * Extract the inner `<img>` tag and its src from a `<picture>` block.
+		 *
+		 * Strict fallback chain (issue #1120): Tag Processor first, then the
+		 * regex last-resort. Processor `null` returns cast to empty string so
+		 * malformed markup fails open to the unoptimised block, never fatal.
+		 * Guards `class_exists('WP_HTML_Tag_Processor')` so WP 6.2 behaviour
+		 * stays byte-identical when the Tag Processor is unavailable.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $picture_html Serialized `<picture>...</picture>` block.
+		 * @return array{0:string,1:string} Tuple of (img tag, src); empty strings when none found.
+		 */
+		private function extract_picture_img( string $picture_html ): array {
+			$src     = '';
+			$img_tag = '';
+			if ( class_exists( 'WP_HTML_Tag_Processor' ) ) {
+				try {
+					$tmp = new \WP_HTML_Tag_Processor( $picture_html );
+					if ( $tmp->next_tag( array( 'tag_name' => 'img' ) ) ) {
+						$maybe_src = $tmp->get_attribute( 'data-src' );
+						if ( null === $maybe_src ) {
+							$maybe_src = $tmp->get_attribute( 'src' );
+						}
+						$src = is_string( $maybe_src ) ? $maybe_src : '';
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$src = '';
+				}
+				if ( preg_match( '#<img\b[^>]*>#i', $picture_html, $m ) ) {
+					$img_tag = $m[0];
+				}
+				if ( '' !== $img_tag && '' !== $src ) {
+					return array( $img_tag, $src );
+				}
+			}
+			// Regex last-resort (also the WP 6.2 path).
+			if ( preg_match( '#<img\b[^>]*?(?:data-)?src=["\']([^"\']+)["\'][^>]*>#i', $picture_html, $img_matches ) ) {
+				return array( $img_matches[0], $img_matches[1] );
+			}
+			if ( '' === $img_tag && preg_match( '#<img\b[^>]*>#i', $picture_html, $m ) ) {
+				$img_tag = $m[0];
+			}
+			return array( $img_tag, $src );
 		}
 
 		/**
@@ -3953,33 +3981,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( false === stripos( $buffer, '<picture' ) ) {
 					return $buffer;
 				}
+				// WP 6.9+: extract <picture> blocks via the serialize_token()
+				// builder with depth tracking so nested/unbalanced markup is
+				// handled without PCRE; inner <source> promotion stays shared.
+				if ( $this->should_use_html_processor() ) {
+					$via_processor = $this->promote_eager_picture_sources_with_processor( $buffer );
+					if ( null !== $via_processor ) {
+						return $via_processor;
+					}
+				}
 				$updated = preg_replace_callback(
 					'#<picture\b[^>]*>.*?</picture>#is',
 					function ( array $m ): string {
-						$block = $m[0];
-						if ( false === stripos( $block, 'loading="eager"' ) && false === stripos( $block, "loading='eager'" ) ) {
-							return $block;
-						}
-						$rebuilt = preg_replace_callback(
-							'#<source\b[^>]*>#i',
-							function ( array $sm ): string {
-								try {
-									$source = new \WP_HTML_Tag_Processor( $sm[0] );
-									if ( ! $source->next_tag( array( 'tag_name' => 'source' ) ) ) {
-										return $sm[0];
-									}
-									if ( ! $this->restore_js_lazy_placeholders( $source ) ) {
-										return $sm[0];
-									}
-									return $source->get_updated_html();
-								} catch ( \Throwable $e ) {
-									unset( $e );
-									return $sm[0];
-								}
-							},
-							$block
-						);
-						return is_string( $rebuilt ) ? $rebuilt : $block;
+						return $this->promote_eager_sources_in_block( $m[0] );
 					},
 					$buffer
 				);
@@ -3987,6 +4001,123 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			} catch ( \Throwable $e ) {
 				return $buffer;
 			}
+		}
+
+		/**
+		 * Promote lazy `<source>` placeholders inside a single `<picture>` block.
+		 *
+		 * Shared by the `serialize_token()` builder path and the regex fallback
+		 * so both stay behaviorally identical: blocks without an eager image
+		 * pass through untouched, otherwise sibling `<source data-srcset>` /
+		 * `data-sizes` placeholders are promoted. Fail-open per tag.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $block Serialized `<picture>...</picture>` block.
+		 * @return string The block with eager-picture sources promoted.
+		 */
+		private function promote_eager_sources_in_block( string $block ): string {
+			if ( false === stripos( $block, 'loading="eager"' ) && false === stripos( $block, "loading='eager'" ) ) {
+				return $block;
+			}
+			$rebuilt = preg_replace_callback(
+				'#<source\b[^>]*>#i',
+				function ( array $sm ): string {
+					try {
+						if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
+							return $sm[0];
+						}
+						$source = new \WP_HTML_Tag_Processor( $sm[0] );
+						if ( ! $source->next_tag( array( 'tag_name' => 'source' ) ) ) {
+							return $sm[0];
+						}
+						if ( ! $this->restore_js_lazy_placeholders( $source ) ) {
+							return $sm[0];
+						}
+						return $source->get_updated_html();
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return $sm[0];
+					}
+				},
+				$block
+			);
+			return is_string( $rebuilt ) ? $rebuilt : $block;
+		}
+
+		/**
+		 * Promote eager-picture sources via the WP 6.9+ HTML API token stream.
+		 *
+		 * Walks tokens with `serialize_token()` and depth tracking to extract
+		 * each outer `<picture>` block, then delegates per-block promotion to
+		 * {@see promote_eager_sources_in_block()}. Returns null when the
+		 * processor is unavailable or the token stream ends with a parse
+		 * error so the caller falls back to the byte-identical regex path.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $buffer The HTML buffer.
+		 * @return string|null The buffer with sources promoted, or null on failure.
+		 */
+		private function promote_eager_picture_sources_with_processor( string $buffer ): ?string {
+			$processor = Util::create_html_processor( $buffer );
+			if ( null === $processor ) {
+				return null;
+			}
+			try {
+				$out          = '';
+				$in_picture   = false;
+				$nesting      = 0;
+				$picture_html = '';
+				while ( $processor->next_token() ) {
+					$type = $processor->get_token_type();
+					if ( '#tag' !== $type ) {
+						$tok = (string) $processor->serialize_token();
+						if ( $in_picture ) {
+							$picture_html .= $tok;
+						} else {
+							$out .= $tok;
+						}
+						continue;
+					}
+					$is_closer = $processor->is_tag_closer();
+					$tag       = $processor->get_tag();
+					if ( ! $in_picture && 'PICTURE' === $tag && ! $is_closer ) {
+						$in_picture   = true;
+						$nesting      = 1;
+						$picture_html = (string) $processor->serialize_token();
+						continue;
+					}
+					if ( $in_picture ) {
+						$picture_html .= (string) $processor->serialize_token();
+						if ( 'PICTURE' === $tag ) {
+							if ( ! $is_closer ) {
+								++$nesting;
+							} else {
+								--$nesting;
+								if ( 0 === $nesting ) {
+									$out         .= $this->promote_eager_sources_in_block( $picture_html );
+									$in_picture   = false;
+									$picture_html = '';
+									$nesting      = 0;
+								}
+							}
+						}
+						continue;
+					}
+					$out .= (string) $processor->serialize_token();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return null;
+			}
+			if ( method_exists( $processor, 'get_last_error' ) && null !== $processor->get_last_error() ) {
+				return null;
+			}
+			if ( $in_picture && '' !== $picture_html ) {
+				$out .= $this->promote_eager_sources_in_block( $picture_html );
+			}
+			return $out;
 		}
 
 		/**
@@ -4052,71 +4183,93 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return $buffer;
 			}
 
-			// WP 6.9+: stream tokens with WP_HTML_Processor and rebuild via serialize_token().
-			if ( method_exists( 'WP_HTML_Processor', 'serialize_token' ) && version_compare( get_bloginfo( 'version' ), '6.9', '>=' ) ) {
-				$processor = \WP_HTML_Processor::create_full_parser( $buffer );
+			// WP 6.9+: stream tokens via the shared guarded factory and rebuild
+			// with the serialize_token() builder. Falls back to the Tag Processor
+			// path below when the serializer is unavailable (WP <6.9) or the
+			// parse fails, preserving byte-identical legacy output.
+			if ( $this->should_use_html_processor() ) {
+				$processor = Util::create_html_processor( $buffer );
 				if ( null !== $processor ) {
-					$new_html = '';
-					$stamped  = false;
-					while ( $processor->next_token() ) {
-						if (
+					try {
+						$new_html = '';
+						$stamped  = false;
+						while ( $processor->next_token() ) {
+							if (
 							'#tag' === $processor->get_token_type() &&
 							'IMG' === $processor->get_tag() &&
 							! $processor->is_tag_closer() &&
 							! $stamped &&
 							$this->tag_matches_lcp_url( $processor, $lcp_url )
-						) {
-							$this->restore_js_lazy_placeholders( $processor );
-							$this->remove_lazy_classes( $processor );
-							if ( null === $processor->get_attribute( 'fetchpriority' ) ) {
-								$processor->set_attribute( 'fetchpriority', 'high' );
+							) {
+								$this->restore_js_lazy_placeholders( $processor );
+								$this->remove_lazy_classes( $processor );
+								if ( null === $processor->get_attribute( 'fetchpriority' ) ) {
+									$processor->set_attribute( 'fetchpriority', 'high' );
+								}
+								if ( 'lazy' === $processor->get_attribute( 'loading' ) ) {
+									$processor->remove_attribute( 'loading' );
+								}
+								if ( null === $processor->get_attribute( 'loading' ) ) {
+									$processor->set_attribute( 'loading', 'eager' );
+								}
+								if ( null === $processor->get_attribute( 'decoding' ) ) {
+									$processor->set_attribute( 'decoding', 'async' );
+								}
+								$stamped = true;
 							}
-							if ( 'lazy' === $processor->get_attribute( 'loading' ) ) {
-								$processor->remove_attribute( 'loading' );
-							}
-							if ( null === $processor->get_attribute( 'loading' ) ) {
-								$processor->set_attribute( 'loading', 'eager' );
-							}
-							if ( null === $processor->get_attribute( 'decoding' ) ) {
-								$processor->set_attribute( 'decoding', 'async' );
-							}
-							$stamped = true;
+							$new_html .= (string) $processor->serialize_token();
 						}
-						$new_html .= $processor->serialize_token();
-					}
 
-					// Parser bailed on unsupported markup; leave the buffer unchanged.
-					if ( null === $processor->get_last_error() ) {
-						return $stamped ? $this->promote_eager_picture_sources( $new_html ) : $buffer;
+						// Parser bailed on unsupported markup; fall through to the
+						// Tag Processor fallback instead of returning corrupt HTML.
+						$parse_ok = ! method_exists( $processor, 'get_last_error' ) || null === $processor->get_last_error();
+						if ( $parse_ok ) {
+							return $stamped ? $this->promote_eager_picture_sources( $new_html ) : $buffer;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
 					}
 				}
 			}
 
-			// Fallback: WP_HTML_Tag_Processor on all supported versions.
-			$tags    = new \WP_HTML_Tag_Processor( $buffer );
-			$stamped = false;
-			while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
-				if ( $this->tag_matches_lcp_url( $tags, $lcp_url ) ) {
-					$this->restore_js_lazy_placeholders( $tags );
-					$this->remove_lazy_classes( $tags );
-					if ( null === $tags->get_attribute( 'fetchpriority' ) ) {
-						$tags->set_attribute( 'fetchpriority', 'high' );
-					}
-					if ( 'lazy' === $tags->get_attribute( 'loading' ) ) {
-						$tags->remove_attribute( 'loading' );
-					}
-					if ( null === $tags->get_attribute( 'loading' ) ) {
-						$tags->set_attribute( 'loading', 'eager' );
-					}
-					if ( null === $tags->get_attribute( 'decoding' ) ) {
-						$tags->set_attribute( 'decoding', 'async' );
-					}
-					$stamped = true;
-					break;
-				}
+			// Fallback: WP_HTML_Tag_Processor on all supported versions; fail-open
+			// to the unmodified buffer when the Tag Processor is unavailable.
+			if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
+				return $buffer;
 			}
+			try {
+				$tags    = new \WP_HTML_Tag_Processor( $buffer );
+				$stamped = false;
+				while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
+					if ( $this->tag_matches_lcp_url( $tags, $lcp_url ) ) {
+						$this->restore_js_lazy_placeholders( $tags );
+						$this->remove_lazy_classes( $tags );
+						if ( null === $tags->get_attribute( 'fetchpriority' ) ) {
+							$tags->set_attribute( 'fetchpriority', 'high' );
+						}
+						if ( 'lazy' === $tags->get_attribute( 'loading' ) ) {
+							$tags->remove_attribute( 'loading' );
+						}
+						if ( null === $tags->get_attribute( 'loading' ) ) {
+							$tags->set_attribute( 'loading', 'eager' );
+						}
+						if ( null === $tags->get_attribute( 'decoding' ) ) {
+							$tags->set_attribute( 'decoding', 'async' );
+						}
+						$stamped = true;
+						break;
+					}
+				}
 
-			return $stamped ? $this->promote_eager_picture_sources( $tags->get_updated_html() ) : $buffer;
+				$updated = $tags->get_updated_html();
+				if ( ! is_string( $updated ) ) {
+					return $buffer;
+				}
+				return $stamped ? $this->promote_eager_picture_sources( $updated ) : $buffer;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $buffer;
+			}
 		}
 
 		/**

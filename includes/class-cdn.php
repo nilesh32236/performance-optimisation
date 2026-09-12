@@ -662,7 +662,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 					if ( '#tag' === $processor->get_token_type() && ! $processor->is_tag_closer() ) {
 						self::rewrite_tag_assets( $processor, $mappings, $site_url, $site_url_regex, $allowed_tags, $style_url_pattern );
 					}
-					$out .= $processor->serialize_token();
+					$out .= (string) $processor->serialize_token();
 				}
 			} catch ( \Throwable $e ) {
 				// A partial/throwing HTML API surface must not fatal inside the
@@ -671,7 +671,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 				return null;
 			}
 
-			if ( null !== $processor->get_last_error() ) {
+			if ( method_exists( $processor, 'get_last_error' ) && null !== $processor->get_last_error() ) {
 				return null;
 			}
 
@@ -714,7 +714,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 			$attrs = array( 'src', 'href', 'data-src', 'content', 'poster' );
 			foreach ( $attrs as $attr ) {
 				$val = $tags->get_attribute( $attr );
-				if ( $val && preg_match( $site_url_regex, $val ) ) {
+				// Cast null (missing attribute) to empty string per #1120: only
+				// non-empty strings ever reach preg_match()/substr().
+				if ( ! is_string( $val ) || '' === $val ) {
+					continue;
+				}
+				if ( preg_match( $site_url_regex, $val ) ) {
 					$match = self::find_cdn_match( $val, $mappings );
 					if ( null !== $match && self::mapping_allows_attr( $match['mapping'], $attr ) ) {
 						$origin = $match['mapping']['ori'] ?? '';
@@ -730,34 +735,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 			$srcset_attrs = array( 'srcset', 'data-srcset' );
 			foreach ( $srcset_attrs as $attr ) {
 				$srcset_attr = $tags->get_attribute( $attr );
-				if ( $srcset_attr ) {
-					$candidates = explode( ',', $srcset_attr );
-					$new_srcset = array();
-					foreach ( $candidates as $candidate ) {
-						$candidate = trim( $candidate );
-						$parts     = preg_split( '/\s+/', $candidate, 2 );
-						$url       = $parts[0];
-						$suffix    = isset( $parts[1] ) ? ' ' . $parts[1] : '';
-						if ( preg_match( $site_url_regex, $url ) ) {
-							$match = self::find_cdn_match( $url, $mappings );
-							if ( null !== $match && self::mapping_allows_attr( $match['mapping'], $attr ) ) {
-								$origin = $match['mapping']['ori'] ?? '';
-								if ( '' === $origin ) {
-									$origin = $site_url;
-								}
-								$url = $match['cdn'] . substr( $url, strlen( $origin ) );
-							}
-						}
-						$new_srcset[] = $url . $suffix;
-					}
-					$tags->set_attribute( $attr, implode( ', ', $new_srcset ) );
+				// Null (missing attribute) casts to empty string: skip non-strings.
+				if ( ! is_string( $srcset_attr ) || '' === $srcset_attr ) {
+					continue;
 				}
+				$candidates = explode( ',', $srcset_attr );
+				$new_srcset = array();
+				foreach ( $candidates as $candidate ) {
+					$candidate = trim( $candidate );
+					$parts     = preg_split( '/\s+/', $candidate, 2 );
+					if ( ! is_array( $parts ) || ! isset( $parts[0] ) || '' === $parts[0] ) {
+						continue;
+					}
+					$url    = $parts[0];
+					$suffix = isset( $parts[1] ) ? ' ' . $parts[1] : '';
+					if ( preg_match( $site_url_regex, $url ) ) {
+						$match = self::find_cdn_match( $url, $mappings );
+						if ( null !== $match && self::mapping_allows_attr( $match['mapping'], $attr ) ) {
+							$origin = $match['mapping']['ori'] ?? '';
+							if ( '' === $origin ) {
+								$origin = $site_url;
+							}
+							$url = $match['cdn'] . substr( $url, strlen( $origin ) );
+						}
+					}
+					$new_srcset[] = $url . $suffix;
+				}
+				$tags->set_attribute( $attr, implode( ', ', $new_srcset ) );
 			}
 
 			// style attribute url() handling inline (pattern precompiled
 			// once per buffer by rewrite_buffer()).
 			$style_val = $tags->get_attribute( 'style' );
-			if ( $style_val && false !== strpos( $style_val, 'url(' ) ) {
+			if ( is_string( $style_val ) && '' !== $style_val && false !== strpos( $style_val, 'url(' ) ) {
 				if ( '' === $style_url_pattern ) {
 					$style_url_pattern = '#url\s*\(\s*(["\']?)' . preg_quote( $site_url, '#' ) . '([^"\')\s]*)\1\s*\)#i';
 				}

@@ -3989,7 +3989,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			} else {
 				return null;
 			}
-			if ( null === $processor || is_wp_error( $processor ) || ! ( $processor instanceof \WP_HTML_Processor ) ) {
+			if ( null === $processor || ! ( $processor instanceof \WP_HTML_Processor ) ) {
+				return null;
+			}
+			// is_wp_error() is always defined in WP, but guard for unit-test
+			// bootstraps that stub the HTML API without loading pluggable.
+			if ( function_exists( 'is_wp_error' ) && is_wp_error( $processor ) ) {
 				return null;
 			}
 
