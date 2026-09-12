@@ -618,6 +618,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					continue;
 				}
 
+				// Editor/admin previews (issue #1097): never preload wp-admin or
+				// builder/core preview URLs.
+				if ( $this->is_editor_preview_url( $url ) ) {
+					continue;
+				}
+
 				if ( $this->is_hook_arg_scheduled( 'wppo_generate_static_url', array( $url ), $scheduled_urls ) ) {
 					continue;
 				}
@@ -687,6 +693,47 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				return true;
 			}
 			return false;
+		}
+
+		/**
+		 * Whether a preload URL targets an admin or editor-preview context.
+		 *
+		 * Wraps `Util::is_editor_preview_url()` so wp-admin and builder/core
+		 * preview URLs are never warmed (issue #1097). Fail-open: detection
+		 * failure skips the URL (never preload dynamic content).
+		 *
+		 * @since NEXT
+		 * @param string $url Absolute URL.
+		 * @return bool True when the URL must not be preloaded.
+		 */
+		private function is_editor_preview_url( string $url ): bool {
+			try {
+				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_editor_preview_url' ) ) {
+					return Util::is_editor_preview_url( $url );
+				}
+				// Mixed-version fallback: inline the greppable preview signals.
+				$path  = (string) wp_parse_url( $url, PHP_URL_PATH );
+				$query = (string) wp_parse_url( $url, PHP_URL_QUERY );
+				if ( (bool) preg_match( '#(^|/)(?:wp-admin|wp-login\.php|admin-ajax\.php)(/|$)#i', '/' . ltrim( $path, '/' ) ) ) {
+					return true;
+				}
+				if ( '' !== $query && (bool) preg_match( '/(?:^|&)(?:elementor-preview|et_fb|et_pb_preview|vc_action|vc_editable|bricks|preview|preview_id|customize_changeset_uuid|customizer)(?:=|&|$)/i', $query ) ) {
+					return true;
+				}
+				$params = array();
+				if ( '' !== $query ) {
+					parse_str( $query, $params );
+				}
+				foreach ( array( 'elementor-preview', 'et_fb', 'et_pb_preview', 'vc_action', 'vc_editable', 'bricks', 'preview', 'preview_id', 'customize_changeset_uuid', 'customizer' ) as $key ) {
+					if ( isset( $params[ $key ] ) ) {
+						return true;
+					}
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
 		}
 
 		/**
@@ -850,10 +897,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		public function process_page( $page_id ): void {
 			if ( $page_id ) {
 				// Defensive Woo skip (issue #962): never warm dynamic pages.
+				// Defensive editor skip (issue #1097): never warm previews.
 				try {
 					if ( function_exists( 'get_permalink' ) ) {
 						$permalink = get_permalink( $page_id );
-						if ( is_string( $permalink ) && '' !== $permalink && $this->is_woo_excluded_url( $permalink ) ) {
+						if ( is_string( $permalink ) && '' !== $permalink && ( $this->is_woo_excluded_url( $permalink ) || $this->is_editor_preview_url( $permalink ) ) ) {
 							$this->mark_page_as_processed( $page_id );
 							return;
 						}
@@ -899,7 +947,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			}
 
 			// Defensive Woo skip (issue #962): never warm dynamic routes.
-			if ( $this->is_woo_excluded_url( $url ) ) {
+			// Defensive editor skip (issue #1097): never warm previews.
+			if ( $this->is_woo_excluded_url( $url ) || $this->is_editor_preview_url( $url ) ) {
 				return;
 			}
 

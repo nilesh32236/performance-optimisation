@@ -164,6 +164,13 @@ class BufferCharacterizationTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'is_checkout' )->justReturn( false );
 		Functions\when( 'is_account_page' )->justReturn( false );
 		Functions\when( 'is_admin' )->justReturn( false );
+		// Pin the preview/AJAX/JSON tags too (issue #1097): the unconditional
+		// editor-preview bypass fails open on stale process-wide Brain Monkey
+		// declarations, so cacheable fixtures must pin them false.
+		Functions\when( 'is_preview' )->justReturn( false );
+		Functions\when( 'is_customize_preview' )->justReturn( false );
+		Functions\when( 'wp_doing_ajax' )->justReturn( false );
+		Functions\when( 'wp_is_json_request' )->justReturn( false );
 	}
 
 	/**

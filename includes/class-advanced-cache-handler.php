@@ -485,6 +485,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
 
+			'// Admin / login / AJAX entry points are never served from the static cache (issue #1097).' . PHP_EOL .
+			'// Explicit path guard: a /wp-admin/ URL without a query string would otherwise map to' . PHP_EOL .
+			'// cache/wppo/<host>/wp-admin/index.html and be served if such a file ever got written.' . PHP_EOL .
+			'if ( preg_match( \'#(^|/)(?:wp-admin|wp-login\\.php|admin-ajax\\.php)(/|$)#i\', $request_uri ) ) {' . PHP_EOL .
+			'	return;' . PHP_EOL .
+			'}' . PHP_EOL . PHP_EOL .
+
+			'// Editor / builder previews and core previews must never be served stale (issue #1097).' . PHP_EOL .
+			'// Defense-in-depth alongside the empty-QUERY_STRING gate below: an explicit param guard' . PHP_EOL .
+			'// so preview URLs stay dynamic even if the query gate ever changes.' . PHP_EOL .
+			'if ( isset( $_GET[\'elementor-preview\'] ) || isset( $_GET[\'et_fb\'] ) || isset( $_GET[\'et_pb_preview\'] ) || isset( $_GET[\'vc_action\'] ) || isset( $_GET[\'vc_editable\'] ) || isset( $_GET[\'bricks\'] ) || isset( $_GET[\'preview\'] ) || isset( $_GET[\'preview_id\'] ) || isset( $_GET[\'customize_changeset_uuid\'] ) || isset( $_GET[\'customizer\'] ) ) {' . PHP_EOL .
+			'	return;' . PHP_EOL .
+			'}' . PHP_EOL .
+			'if ( ! empty( $_SERVER[\'QUERY_STRING\'] ) && preg_match( \'/(?:^|&)(?:elementor-preview|et_fb|et_pb_preview|vc_action|vc_editable|bricks|preview|preview_id|customize_changeset_uuid|customizer)(?:=|&|$)/i\', $_SERVER[\'QUERY_STRING\'] ) ) {' . PHP_EOL .
+			'	return;' . PHP_EOL .
+			'}' . PHP_EOL . PHP_EOL .
+
 			'if ( preg_match( \'#^/(?:' . $woo_uri_pattern . ')(?:/|$)#i\', $request_uri ) || preg_match( \'/(?:sitemap[^\/]*\.xml|wp-sitemap[^\/]*\.xml|\.xml)$/i\', $request_uri ) ) {' . PHP_EOL .
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .

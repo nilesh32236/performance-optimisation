@@ -128,6 +128,15 @@ class WooSafeModeTest extends \PHPUnit\Framework\TestCase {
 		// throws MissingFunctionExpectations, which is_woo_excluded()
 		// (correctly) fails open on — flipping cacheable fixtures.
 		Functions\when( 'is_wc_endpoint_url' )->justReturn( false );
+		// Pin the editor/admin tags too (issue #1097): the unconditional
+		// editor-preview bypass in is_not_cacheable()/maybe_store_cache()
+		// fails open on the same stale-stub mechanism, so cacheable fixtures
+		// must pin them false.
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_preview' )->justReturn( false );
+		Functions\when( 'is_customize_preview' )->justReturn( false );
+		Functions\when( 'wp_doing_ajax' )->justReturn( false );
+		Functions\when( 'wp_is_json_request' )->justReturn( false );
 	}
 
 	/**

@@ -705,6 +705,250 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Whether a request path targets a wp-admin / login / AJAX entry point.
+		 *
+		 * Matches `wp-admin`, `wp-login.php`, and `admin-ajax.php` as full path
+		 * segments (case-insensitive) so `/wp-admin/`, `/wp-admin/admin-ajax.php`,
+		 * and subdirectory installs (`/subsite/wp-admin/`) all bypass the static
+		 * cache. Fail-open: detection failure returns true (never cached).
+		 *
+		 * @since NEXT
+		 * @param string $path Request path (leading slash optional).
+		 * @return bool True when the path is an admin entry point.
+		 */
+		public static function is_admin_path( string $path ): bool {
+			try {
+				$normalized = strtolower( trim( (string) $path, '/' ) );
+				if ( '' === $normalized ) {
+					return false;
+				}
+				return (bool) preg_match( '#(^|/)(?:wp-admin|wp-login\.php|admin-ajax\.php)(/|$)#i', '/' . $normalized );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
+		 * Whether path/query values indicate a builder or core preview context.
+		 *
+		 * Pure string check (no conditional tags): builder edit/preview params
+		 * (`elementor-preview`, `et_fb`, `et_pb_preview`, `vc_action`,
+		 * `vc_editable`, `bricks`), core preview params (`preview`,
+		 * `preview_id`, `customize_changeset_uuid`, `customizer`), plus admin
+		 * paths via {@see is_admin_path()}. Used by the static-cache serve/store
+		 * guards and by preload exclusion. Fail-open: detection failure returns
+		 * true (treated as preview, never cached).
+		 *
+		 * @since NEXT
+		 * @param string $path         Request path (leading slash optional).
+		 * @param string $query_string Raw query string (without leading `?`).
+		 * @param string $rest_route   Optional `rest_route` value (plain permalinks).
+		 * @return bool True when the values indicate a preview context.
+		 */
+		public static function is_editor_preview_path( string $path = '', string $query_string = '', string $rest_route = '' ): bool {
+			try {
+				if ( '' !== $path && self::is_admin_path( $path ) ) {
+					return true;
+				}
+				$params = array();
+				if ( '' !== $query_string ) {
+					$parsed = array();
+					parse_str( (string) $query_string, $parsed );
+					if ( is_array( $parsed ) ) {
+						$params = $parsed;
+					}
+				}
+				if ( '' !== $rest_route ) {
+					$parsed = array();
+					parse_str( ltrim( (string) $rest_route, '?&' ), $parsed );
+					if ( is_array( $parsed ) ) {
+						foreach ( $parsed as $k => $v ) {
+							if ( ! array_key_exists( (string) $k, $params ) ) {
+								$params[ (string) $k ] = $v;
+							}
+						}
+					}
+					// Plain-permalink rest_route value itself (e.g. `/`) carries no
+					// preview signal; only its query params matter (merged above).
+				}
+				// Superglobal fallback: query-only callers (Cron passes path only)
+				// still catch `?elementor-preview=` etc. on the current request.
+				if ( empty( $params ) && ( '' === $query_string ) ) {
+					foreach ( array( 'elementor-preview', 'et_fb', 'et_pb_preview', 'vc_action', 'vc_editable', 'bricks', 'preview', 'preview_id', 'customize_changeset_uuid', 'customizer' ) as $key ) {
+						if ( isset( $_GET[ $key ] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
+							return true;
+						}
+					}
+					return false;
+				}
+				foreach ( array( 'elementor-preview', 'et_fb', 'et_pb_preview', 'vc_action', 'vc_editable', 'bricks', 'preview', 'preview_id', 'customize_changeset_uuid', 'customizer' ) as $key ) {
+					if ( array_key_exists( $key, $params ) ) {
+						return true;
+					}
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
+		 * Whether an absolute URL targets an admin or preview context.
+		 *
+		 * Parses path + query (+ `rest_route` query value) and delegates to
+		 * {@see is_editor_preview_path()}. Used by preload scheduling so editor
+		 * previews and wp-admin URLs are never warmed. Fail-open: detection
+		 * failure returns true (never preload).
+		 *
+		 * @since NEXT
+		 * @param string $url Absolute URL.
+		 * @return bool True when the URL must bypass cache/preload.
+		 */
+		public static function is_editor_preview_url( string $url ): bool {
+			try {
+				if ( ! is_string( $url ) || '' === trim( $url ) ) {
+					return true;
+				}
+				$path  = '';
+				$query = '';
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$path  = (string) wp_parse_url( $url, PHP_URL_PATH );
+					$query = (string) wp_parse_url( $url, PHP_URL_QUERY );
+				} else {
+					$parts = parse_url( $url ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url() is unavailable.
+					if ( is_array( $parts ) ) {
+						$path  = isset( $parts['path'] ) ? (string) $parts['path'] : '';
+						$query = isset( $parts['query'] ) ? (string) $parts['query'] : '';
+					}
+				}
+				$rest_route = '';
+				if ( '' !== $query ) {
+					$parsed = array();
+					parse_str( $query, $parsed );
+					if ( isset( $parsed['rest_route'] ) && is_string( $parsed['rest_route'] ) ) {
+						$rest_route = $parsed['rest_route'];
+					}
+				}
+				return self::is_editor_preview_path( $path, $query, $rest_route );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
+		 * Whether the current request is an admin, AJAX/REST, or preview context.
+		 *
+		 * Unconditional static-cache bypass: wp-admin / login / admin-ajax paths,
+		 * `is_admin()`, `is_preview()`, `is_customize_preview()`, Elementor
+		 * preview mode (guarded by `class_exists`/`method_exists`), AJAX/REST/JSON
+		 * requests, and builder/core preview query params. Any detection failure
+		 * returns true (fail-open to uncached, never fatal). Multisite-safe:
+		 * per-request state only.
+		 *
+		 * @since NEXT
+		 * @return bool True when the current request must bypass the cache.
+		 */
+		public static function is_editor_preview_request(): bool {
+			try {
+				if ( function_exists( 'is_admin' ) ) {
+					try {
+						if ( is_admin() ) {
+							return true;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return true;
+					}
+				}
+				if ( function_exists( 'is_preview' ) ) {
+					try {
+						if ( is_preview() ) {
+							return true;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return true;
+					}
+				}
+				if ( function_exists( 'is_customize_preview' ) ) {
+					try {
+						if ( is_customize_preview() ) {
+							return true;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return true;
+					}
+				}
+				if ( function_exists( 'wp_doing_ajax' ) ) {
+					try {
+						if ( wp_doing_ajax() ) {
+							return true;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return true;
+					}
+				}
+				if ( ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+					return true;
+				}
+				if ( ( defined( 'DOING_AJAX' ) && DOING_AJAX ) ) {
+					return true;
+				}
+				if ( function_exists( 'wp_is_json_request' ) ) {
+					try {
+						if ( wp_is_json_request() ) {
+							return true;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return true;
+					}
+				}
+				// Elementor edit/preview mode (guarded for non-Elementor installs).
+				if ( class_exists( 'Elementor\Plugin', false ) ) {
+					try {
+						$elementor = \Elementor\Plugin::$instance ?? null;
+						if ( isset( $elementor->preview ) && is_object( $elementor->preview ) && method_exists( $elementor->preview, 'is_preview_mode' ) && $elementor->preview->is_preview_mode() ) {
+							return true;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return true;
+					}
+				}
+				$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? (string) wp_unslash( $_SERVER['REQUEST_URI'] ) : '/'; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Unslashed here; read-only routing check, no output.
+				$path        = '';
+				$query       = '';
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$path  = (string) wp_parse_url( $request_uri, PHP_URL_PATH );
+					$query = (string) wp_parse_url( $request_uri, PHP_URL_QUERY );
+				} else {
+					$parts = parse_url( $request_uri ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url() is unavailable.
+					if ( is_array( $parts ) ) {
+						$path  = isset( $parts['path'] ) ? (string) $parts['path'] : '';
+						$query = isset( $parts['query'] ) ? (string) $parts['query'] : '';
+					}
+				}
+				if ( '' === $query && isset( $_SERVER['QUERY_STRING'] ) ) {
+					$query = (string) wp_unslash( $_SERVER['QUERY_STRING'] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Unslashed here; read-only routing check, no output.
+				}
+				$rest_route = isset( $_GET['rest_route'] ) ? (string) wp_unslash( $_GET['rest_route'] ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Read-only routing check, no state change or output.
+				if ( '' !== $path && self::is_admin_path( $path ) ) {
+					return true;
+				}
+				return self::is_editor_preview_path( $path, $query, $rest_route );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
 		 * Verifiable WooCommerce cart/checkout cache-exclusion self-test.
 		 *
 		 * Trust-but-verify proof that dynamic Woo routes can never be served
@@ -731,7 +975,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * are written.
 		 *
 		 * @since 2.0.0
-		 * @return array{woo_active: bool, safe_mode: bool, runnable: bool, excluded_paths: string[], donotcachepage_honored: bool, checks: array<int, array{url: string, path: string, is_dynamic: bool, cacheable: bool, donotcachepage_honored: bool, pass: bool, error?: string}>, all_pass: bool} Structured self-test result.
+		 * @since NEXT Added additive `editor_checks` (wp-admin + builder/core preview bypass probes).
+		 * @return array{woo_active: bool, safe_mode: bool, runnable: bool, excluded_paths: string[], donotcachepage_honored: bool, checks: array<int, array{url: string, path: string, is_dynamic: bool, cacheable: bool, donotcachepage_honored: bool, pass: bool, error?: string}>, editor_checks: array<int, array{url: string, bypass: bool, cacheable: bool, donotcachepage_honored: bool, pass: bool, error?: string}>, all_pass: bool} Structured self-test result.
 		 */
 		public static function woo_cache_self_test(): array {
 			try {
@@ -792,11 +1037,63 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					}
 				}
 
-				$all_pass = ! empty( $checks );
+				// Editor/admin bypass probes (additive, issue #1097): wp-admin and
+				// builder/core preview URLs must never be cacheable. Pure path
+				// checks via is_editor_preview_url() so the self-test stays
+				// read-only and independent of conditional tags.
+				$editor_probes = array(
+					'/wp-admin/post.php?post=1&action=edit' => true,
+					'/?elementor-preview=1' => true,
+					'/?preview=true'        => true,
+					'/?et_fb=1'             => true,
+					'/?bricks=run'          => true,
+				);
+				$editor_checks = array();
+				foreach ( $editor_probes as $probe_url => $expected_bypass ) {
+					try {
+						try {
+							$probe_full = self::cached_home_url( (string) $probe_url );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$probe_full = (string) $probe_url;
+						}
+						if ( ! is_string( $probe_full ) || '' === $probe_full ) {
+							$probe_full = (string) $probe_url;
+						}
+						$bypass          = self::is_editor_preview_url( $probe_full );
+						$pass            = ( $bypass === $expected_bypass );
+						$editor_checks[] = array(
+							'url'                    => $probe_full,
+							'bypass'                 => $bypass,
+							'cacheable'              => ! $bypass,
+							'donotcachepage_honored' => true,
+							'pass'                   => $pass,
+						);
+					} catch ( \Throwable $e ) {
+						$editor_checks[] = array(
+							'url'                    => (string) $probe_url,
+							'bypass'                 => true,
+							'cacheable'              => false,
+							'donotcachepage_honored' => true,
+							'pass'                   => false,
+							'error'                  => get_class( $e ),
+						);
+					}
+				}
+
+				$all_pass = ! empty( $checks ) && ! empty( $editor_checks );
 				foreach ( $checks as $check ) {
 					if ( empty( $check['pass'] ) ) {
 						$all_pass = false;
 						break;
+					}
+				}
+				if ( $all_pass ) {
+					foreach ( $editor_checks as $check ) {
+						if ( empty( $check['pass'] ) ) {
+							$all_pass = false;
+							break;
+						}
 					}
 				}
 
@@ -807,6 +1104,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'excluded_paths'         => array_values( $excluded ),
 					'donotcachepage_honored' => true,
 					'checks'                 => $checks,
+					'editor_checks'          => $editor_checks,
 					'all_pass'               => $all_pass,
 				);
 			} catch ( \Throwable $e ) {
@@ -818,6 +1116,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'excluded_paths'         => array( 'cart', 'checkout', 'my-account' ),
 					'donotcachepage_honored' => true,
 					'checks'                 => array(),
+					'editor_checks'          => array(),
 					'all_pass'               => false,
 				);
 			}
