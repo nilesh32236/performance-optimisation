@@ -1281,11 +1281,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string $type The type attribute (optional).
 		 * @param string $media The media attribute (optional).
 		 * @param string $fetchpriority The fetchpriority attribute (optional).
+		 * @param string $imagesrcset Responsive srcset for image preloads (optional).
+		 * @param string $imagesizes Responsive sizes for image preloads (optional).
 		 * @since 1.0.0
 		 * @since 2.0.0 Echoes only in front-end HTML contexts; returns the tag and delegates building to get_preload_link().
+		 * @since NEXT Adds $imagesrcset/$imagesizes for LCP image preloads.
 		 */
-		public static function generate_preload_link( $href, $rel, $resource_type = '', $crossorigin = false, $type = '', $media = '', $fetchpriority = '' ) {
-			$link_tag = self::get_preload_link( $href, $rel, $resource_type, $crossorigin, $type, $media, $fetchpriority );
+		public static function generate_preload_link( $href, $rel, $resource_type = '', $crossorigin = false, $type = '', $media = '', $fetchpriority = '', $imagesrcset = '', $imagesizes = '' ) {
+			$link_tag = self::get_preload_link( $href, $rel, $resource_type, $crossorigin, $type, $media, $fetchpriority, $imagesrcset, $imagesizes );
 
 			// Only echo in front-end HTML contexts (wp_head / template rendering).
 			// Echoing during REST, AJAX, cron, CLI, or admin contexts can inject
@@ -1321,10 +1324,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string $type The type attribute (optional).
 		 * @param string $media The media attribute (optional).
 		 * @param string $fetchpriority The fetchpriority attribute (optional).
+		 * @param string $imagesrcset Responsive srcset for image preloads (optional).
+		 * @param string $imagesizes Responsive sizes for image preloads (optional).
 		 * @since 2.0.0
+		 * @since NEXT Adds $imagesrcset/$imagesizes for LCP image preloads.
 		 * @return string The sanitized `<link ...>` tag.
 		 */
-		public static function get_preload_link( $href, $rel, $resource_type = '', $crossorigin = false, $type = '', $media = '', $fetchpriority = '' ): string {
+		public static function get_preload_link( $href, $rel, $resource_type = '', $crossorigin = false, $type = '', $media = '', $fetchpriority = '', $imagesrcset = '', $imagesizes = '' ): string {
 			$attributes = array(
 				'rel'  => esc_attr( $rel ),
 				'href' => esc_url( $href ),
@@ -1345,6 +1351,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			if ( $fetchpriority ) {
 				$attributes['fetchpriority'] = esc_attr( $fetchpriority );
 			}
+			// Responsive preload hints: only meaningful for images, so an
+			// empty/invalid srcset (or a non-image `as`) emits the current
+			// tag unchanged (fail-open).
+			$imagesrcset = is_string( $imagesrcset ) ? trim( substr( $imagesrcset, 0, 4096 ) ) : '';
+			$imagesizes  = is_string( $imagesizes ) ? trim( substr( $imagesizes, 0, 1024 ) ) : '';
+			if ( '' !== $imagesrcset && 'image' === $resource_type ) {
+				$attributes['imagesrcset'] = esc_attr( $imagesrcset );
+				if ( '' !== $imagesizes ) {
+					$attributes['imagesizes'] = esc_attr( $imagesizes );
+				}
+			}
 
 			$link_tag = '<link ' . implode( ' ', array_map( fn ( $k, $v ) => $k . '="' . $v . '"', array_keys( $attributes ), $attributes ) ) . '>';
 
@@ -1357,6 +1374,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'type'          => array(),
 					'media'         => array(),
 					'fetchpriority' => array(),
+					'imagesrcset'   => array(),
+					'imagesizes'    => array(),
 				),
 			);
 

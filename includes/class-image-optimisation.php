@@ -400,7 +400,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					false,
 					Util::get_image_mime_type( $data['url'] ),
 					$data['media'] ?? '',
-					$data['priority'] ?? 'high'
+					$data['priority'] ?? 'high',
+					(string) ( $data['imagesrcset'] ?? '' ),
+					(string) ( $data['imagesizes'] ?? '' )
 				);
 			}
 		}
@@ -1606,8 +1608,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$image_optimisation = $this->options['image_optimisation'] ?? array();
 
 			$merged = array_merge(
-				$this->get_front_page_preload_data( $image_optimisation ),
 				$this->get_auto_lcp_preload_data(),
+				$this->get_front_page_preload_data( $image_optimisation ),
 				$this->get_meta_preload_data(),
 				$this->get_post_type_preload_data( $image_optimisation )
 			);
@@ -1635,18 +1637,234 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Whether a candidate URL is a plausible LCP image (text-LCP guard).
+		 *
+		 * Text-only LCP (PageSpeed `largest-contentful-paint-element` without
+		 * an image URL) must never produce a preload hint, so candidates are
+		 * rejected unless they look like an image: data/blob/javascript URIs
+		 * are refused, and the URL must either map to a known image MIME
+		 * type, carry an image file extension, or (for extensionless image
+		 * CDN URLs) carry image-ish query params. A non-image URL is never
+		 * preloaded. Any failure returns false.
+		 *
+		 * @since NEXT
+		 * @param string $url The candidate URL.
+		 * @return bool True when the URL may be preloaded as an image.
+		 */
+		private function is_image_lcp_url( string $url ): bool {
+			try {
+				$url = trim( $url );
+				if ( '' === $url ) {
+					return false;
+				}
+				$lower = strtolower( ltrim( $url ) );
+				if ( str_starts_with( $lower, 'data:' ) || str_starts_with( $lower, 'blob:' ) || str_starts_with( $lower, 'javascript:' ) || str_starts_with( $lower, 'vbscript:' ) ) {
+					return false;
+				}
+				if ( '' !== Util::get_image_mime_type( $url ) ) {
+					return true;
+				}
+				$path = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url, PHP_URL_PATH ) : ''; // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback only when wp_parse_url() is unavailable (unit contexts).
+				if ( is_string( $path ) && '' !== $path && 1 === preg_match( '/\.(jpe?g|png|gif|webp|avif|svg|heic|heif)$/i', $path ) ) {
+					return true;
+				}
+				// Extensionless image-CDN URLs (Cloudinary fetch, Photon,
+				// signed asset URLs): accept when the query carries image-ish
+				// params or an image extension so measured OD/PageSpeed heroes
+				// are not silently discarded.
+				$query = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url, PHP_URL_QUERY ) : ''; // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback only when wp_parse_url() is unavailable (unit contexts).
+				if ( is_string( $query ) && '' !== $query ) {
+					if ( 1 === preg_match( '/\.(jpe?g|png|gif|webp|avif|svg|heic|heif)/i', $query ) ) {
+						return true;
+					}
+					if ( 1 === preg_match( '/(^|&)(w|h|width|height|format|fit|crop|resize|quality|ssl|strip|url|src)(=|&|$)/i', $query ) ) {
+						return true;
+					}
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Resolve the single auto-detected LCP image URL for the current page.
+		 *
+		 * Unified priority chain (fail-open, never fatal):
+		 * P0 Optimization Detective real-visit data (guarded via
+		 * `class_exists('OD_URL_Metric')` / `function_exists('od_get_url_metrics')`
+		 * inside `OD_Bridge::is_enabled()` plus the `wppo_od_should_optimize`
+		 * filter), then stored PageSpeed LCP (via `get_current_lcp_url()`,
+		 * which covers RUM-field override + post-meta/front-page/transient
+		 * tiers), then the DOM-first heuristic (first non-trivial `<img src>`
+		 * in `$buffer` when provided — DOM order, not viewport-aware, and
+		 * only a fallback when no measured/stored data exists). Text-only LCP never resolves: every
+		 * candidate must pass `is_image_lcp_url()`. Multisite-safe: the
+		 * stored tier uses `Util::transient_key()` blog-aware keys.
+		 *
+		 * @since NEXT
+		 * @param string|null $buffer Optional HTML buffer for the heuristic fallback.
+		 * @return string The LCP image URL, or empty string when none resolves.
+		 */
+		private function resolve_auto_lcp_url( ?string $buffer = null ): string {
+			// P0: Optimization Detective — real-visit hero wins.
+			if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
+				try {
+					$od_available = class_exists( 'OD_URL_Metric' ) || function_exists( 'od_get_url_metrics' );
+					if ( $od_available ) {
+						$od_url = \PerformanceOptimise\Inc\OD_Bridge::get_lcp_url();
+						if ( is_string( $od_url ) && '' !== $od_url && $this->is_image_lcp_url( $od_url ) ) {
+							return $od_url;
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			// P1: Stored PageSpeed (+ RUM-field override) chain.
+			try {
+				$stored = $this->get_current_lcp_url();
+				if ( is_string( $stored ) && '' !== $stored && $this->is_image_lcp_url( $stored ) ) {
+					return $stored;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
+			// P2: DOM-first heuristic — first non-trivial image in the buffer.
+			if ( is_string( $buffer ) && '' !== $buffer && false !== strpos( $buffer, '<img' ) ) {
+				try {
+					$heuristic = $this->get_first_image_src_in_buffer( $buffer );
+					if ( '' !== $heuristic && $this->is_image_lcp_url( $heuristic ) ) {
+						return $heuristic;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			return '';
+		}
+
+		/**
+		 * Find the responsive srcset for an LCP URL inside an HTML buffer.
+		 *
+		 * Scans `<img>` tags for the first node whose `src`/`data-src`
+		 * matches the LCP URL via normalized-URL equality only (absolute vs
+		 * relative and size-suffix variants match; no substring fallback so
+		 * a short relative URL cannot attach an unrelated srcset) and
+		 * returns its `srcset` (or `data-srcset`) value. Returns an empty
+		 * string when no match or no srcset exists. Fail-open: any failure
+		 * returns ''.
+		 *
+		 * @since NEXT
+		 * @param string      $lcp_url The resolved LCP image URL.
+		 * @param string|null $buffer  Optional HTML buffer to scan.
+		 * @return string The srcset value, or empty string.
+		 */
+		private function get_lcp_srcset_for_url( string $lcp_url, ?string $buffer = null ): string {
+			if ( '' === $lcp_url || ! is_string( $buffer ) || '' === $buffer || false === strpos( $buffer, '<img' ) || ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
+				return '';
+			}
+			try {
+				$needle = $this->normalize_image_url( $lcp_url );
+				if ( '' === $needle ) {
+					return '';
+				}
+				$tags = new \WP_HTML_Tag_Processor( $buffer );
+				while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
+					$src      = $tags->get_attribute( 'src' );
+					$data_src = $tags->get_attribute( 'data-src' );
+					$match    = ( is_string( $src ) && '' !== $src ) ? $src : ( is_string( $data_src ) ? $data_src : '' );
+					if ( '' === $match ) {
+						continue;
+					}
+					if ( $this->normalize_image_url( (string) $match ) !== $needle ) {
+						continue;
+					}
+					$srcset = $tags->get_attribute( 'srcset' );
+					if ( is_string( $srcset ) && '' !== trim( $srcset ) ) {
+						return trim( substr( $srcset, 0, 4096 ) );
+					}
+					$data_srcset = $tags->get_attribute( 'data-srcset' );
+					if ( is_string( $data_srcset ) && '' !== trim( $data_srcset ) ) {
+						return trim( substr( $data_srcset, 0, 4096 ) );
+					}
+					return '';
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return '';
+		}
+
+		/**
+		 * Find the responsive sizes value for an LCP URL inside an HTML buffer.
+		 *
+		 * Mirrors `get_lcp_srcset_for_url()`: normalized-URL equality only,
+		 * `sizes` (then `data-sizes`) of the matching `<img>`. Returns an
+		 * empty string when no match or no sizes exists. Fail-open: any
+		 * failure returns ''.
+		 *
+		 * @since NEXT
+		 * @param string      $lcp_url The resolved LCP image URL.
+		 * @param string|null $buffer  Optional HTML buffer to scan.
+		 * @return string The sizes value, or empty string.
+		 */
+		private function get_lcp_sizes_for_url( string $lcp_url, ?string $buffer = null ): string {
+			if ( '' === $lcp_url || ! is_string( $buffer ) || '' === $buffer || false === strpos( $buffer, '<img' ) || ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
+				return '';
+			}
+			try {
+				$needle = $this->normalize_image_url( $lcp_url );
+				if ( '' === $needle ) {
+					return '';
+				}
+				$tags = new \WP_HTML_Tag_Processor( $buffer );
+				while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
+					$src      = $tags->get_attribute( 'src' );
+					$data_src = $tags->get_attribute( 'data-src' );
+					$match    = ( is_string( $src ) && '' !== $src ) ? $src : ( is_string( $data_src ) ? $data_src : '' );
+					if ( '' === $match ) {
+						continue;
+					}
+					if ( $this->normalize_image_url( (string) $match ) !== $needle ) {
+						continue;
+					}
+					$sizes = $tags->get_attribute( 'sizes' );
+					if ( is_string( $sizes ) && '' !== trim( $sizes ) ) {
+						return trim( substr( $sizes, 0, 1024 ) );
+					}
+					$data_sizes = $tags->get_attribute( 'data-sizes' );
+					if ( is_string( $data_sizes ) && '' !== trim( $data_sizes ) ) {
+						return trim( substr( $data_sizes, 0, 1024 ) );
+					}
+					return '';
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return '';
+		}
+
+		/**
 		 * Retrieves the single auto-detected LCP image preload item.
 		 *
-		 * Source order for the one LCP candidate (issue #991): Optimization
-		 * Detective stays Priority 0, then the single RUM-field → PageSpeed
-		 * candidate from `RUM::get_lcp_preload_candidate()` when the
-		 * `fieldLcpOverride` toggle is on, else the legacy
-		 * `get_current_lcp_url()` chain. Returns zero or one item via
-		 * `prepare_preload_item()` so "once per URL" holds; the item
-		 * participates in the normalized-URL + query + media dedup in
-		 * `get_all_preload_data()`. The toggle autoPreloadLCP must be enabled.
+		 * Resolves via the unified `resolve_auto_lcp_url()` chain
+		 * (P0 Optimization Detective real-visit data → P1 stored
+		 * PageSpeed/RUM-field → P2 DOM-first heuristic when a buffer is
+		 * available). Emits at most one item via `prepare_preload_item()`
+		 * so "once per URL" holds; the item is ordered first in
+		 * `get_all_preload_data()` so it is emitted ahead of manual
+		 * preloads and participates in the normalized-URL dedup first. The
+		 * toggle autoPreloadLCP must be enabled.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Resolves via the unified `resolve_auto_lcp_url()` chain
+		 * (OD → stored PageSpeed → heuristic) with a text-LCP guard; emits at
+		 * most one item.
 		 * @return array List of preload items (zero or one item).
 		 */
 		private function get_auto_lcp_preload_data(): array {
@@ -1655,32 +1873,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return array();
 			}
 
-			// Priority 0: Optimization Detective — must stay ahead of RUM.
-			if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
-				try {
-					$od_url = \PerformanceOptimise\Inc\OD_Bridge::get_lcp_url();
-					if ( '' !== $od_url ) {
-						return array( $this->prepare_preload_item( $od_url ) );
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-			}
-
-			// Single RUM-field → PageSpeed candidate when the field path applies.
-			if ( ! empty( $image_optimisation['fieldLcpOverride'] ) && class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_lcp_preload_candidate' ) ) {
-				try {
-					$candidate = \PerformanceOptimise\Inc\RUM::get_lcp_preload_candidate();
-					if ( is_array( $candidate ) && ! empty( $candidate['url'] ) && is_string( $candidate['url'] ) ) {
-						return array( $this->prepare_preload_item( $candidate['url'] ) );
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-			}
-
-			$lcp_url = $this->get_current_lcp_url();
-			if ( empty( $lcp_url ) ) {
+			$lcp_url = $this->resolve_auto_lcp_url();
+			if ( '' === $lcp_url ) {
 				return array();
 			}
 
@@ -1782,50 +1976,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Fail-open: any failure returns an empty string, never fatal.
 		 *
 		 * @since 2.0.0
-		 * @param array $image_optimisation Image optimisation settings.
+		 * @since NEXT Resolves via the unified `resolve_auto_lcp_url()` chain
+		 * so the never-lazy URL is always the same URL that gets preloaded.
+		 * The optional `$buffer` enables the P2 DOM-first heuristic tier so
+		 * `add_delay_load_img()` stays in parity with
+		 * `maybe_preload_hero_image()` (which resolves with the buffer);
+		 * without a buffer only the OD + stored tiers apply.
+		 * @param array       $image_optimisation Image optimisation settings.
+		 * @param string|null $buffer Optional HTML buffer for the heuristic tier.
 		 * @return string The candidate URL, or empty string when none applies.
 		 */
-		private function get_lazy_lcp_exclusion_url( array $image_optimisation ): string {
-			if ( null !== $this->lazy_lcp_exclusion_url ) {
+		private function get_lazy_lcp_exclusion_url( array $image_optimisation, ?string $buffer = null ): string {
+			if ( null === $buffer && null !== $this->lazy_lcp_exclusion_url ) {
 				return $this->lazy_lcp_exclusion_url;
 			}
-			$this->lazy_lcp_exclusion_url = '';
+			$resolved_url = '';
 			try {
-				if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
+				$gated = ! empty( $image_optimisation['fieldLcpOverride'] ) || ! empty( $image_optimisation['autoPreloadLCP'] ) || ! empty( $image_optimisation['prioritizeLCPImages'] );
+				if ( ! $gated ) {
 					return '';
 				}
-				if ( ! empty( $image_optimisation['fieldLcpOverride'] ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_field_lcp_url' ) ) {
-					try {
-						// Resolve the path exactly like get_current_lcp_url() so
-						// the lookup hits the same normalized RUM bucket the
-						// beacon store side wrote.
-						$parsed_path = function_exists( 'wp_parse_url' ) ? wp_parse_url( Util::get_current_url(), PHP_URL_PATH ) : '/';
-						$raw_path    = is_string( $parsed_path ) && '' !== $parsed_path ? $parsed_path : '/';
-						$field_path  = Util::normalize_rum_path( $raw_path );
-						$field       = \PerformanceOptimise\Inc\RUM::get_field_lcp_url( $field_path );
-						if ( is_array( $field ) && ! empty( $field['url'] ) && is_string( $field['url'] ) ) {
-							$this->lazy_lcp_exclusion_url = $field['url'];
-							return $this->lazy_lcp_exclusion_url;
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-				}
-				if ( ( ! empty( $image_optimisation['autoPreloadLCP'] ) || ! empty( $image_optimisation['prioritizeLCPImages'] ) )
-				&& method_exists( 'PerformanceOptimise\Inc\RUM', 'get_stored_pagespeed_lcp_url' ) ) {
-					try {
-						$stored = \PerformanceOptimise\Inc\RUM::get_stored_pagespeed_lcp_url();
-						if ( '' !== $stored ) {
-							$this->lazy_lcp_exclusion_url = $stored;
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
+				$resolved = $this->resolve_auto_lcp_url( $buffer );
+				if ( '' !== $resolved ) {
+					$resolved_url = $resolved;
+					if ( null === $buffer ) {
+						$this->lazy_lcp_exclusion_url = $resolved;
 					}
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
-			return $this->lazy_lcp_exclusion_url;
+			if ( null === $buffer && '' === $resolved_url ) {
+				$this->lazy_lcp_exclusion_url = '';
+			}
+			return $resolved_url;
 		}
 
 		/**
@@ -2089,10 +2273,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Prepares a URL for preloading, handling specific prefixes and resolving relative paths.
 		 *
 		 * @since 1.5.1
+		 * @since NEXT Adds optional $imagesrcset/$imagesizes for responsive LCP heroes.
 		 * @param string $img_url The original URL to prepare.
+		 * @param string $imagesrcset Optional responsive srcset for the preload link.
+		 * @param string $imagesizes Optional sizes for the preload link.
 		 * @return array Structured preload item.
 		 */
-		private function prepare_preload_item( string $img_url ): array {
+		private function prepare_preload_item( string $img_url, string $imagesrcset = '', string $imagesizes = '' ): array {
 			$img_url = trim( $img_url );
 			$media   = '';
 
@@ -2113,9 +2300,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 
 			return array(
-				'url'      => $img_url,
-				'media'    => $media,
-				'priority' => 'high',
+				'url'         => $img_url,
+				'media'       => $media,
+				'priority'    => 'high',
+				'imagesrcset' => $imagesrcset,
+				'imagesizes'  => $imagesizes,
 			);
 		}
 
@@ -2136,7 +2325,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				false,
 				Util::get_image_mime_type( $data['url'] ),
 				$data['media'] ?? '',
-				$data['priority'] ?? 'high'
+				$data['priority'] ?? 'high',
+				(string) ( $data['imagesrcset'] ?? '' ),
+				(string) ( $data['imagesizes'] ?? '' )
 			);
 		}
 
@@ -3938,6 +4129,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * are only filled. Fail-open: any failure returns the buffer unchanged.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Resolves via the unified `resolve_auto_lcp_url()` chain
+		 * (OD → stored PageSpeed → in-viewport heuristic) and emits at most
+		 * one preload link with `imagesrcset` when the hero carries a srcset.
 		 *
 		 * @param string $buffer             The HTML buffer.
 		 * @param array  $image_optimisation Image optimisation settings.
@@ -3952,10 +4146,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					return $buffer;
 				}
 
-				$lcp_url = $this->get_current_lcp_url();
-				if ( '' === $lcp_url ) {
-					$lcp_url = $this->get_first_image_src_in_buffer( $buffer );
-				}
+				$lcp_url = $this->resolve_auto_lcp_url( $buffer );
 				if ( '' === $lcp_url ) {
 					return $buffer;
 				}
@@ -3998,20 +4189,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$buffer = $this->promote_eager_picture_sources( $tags->get_updated_html() );
 				}
 
-				// Companion preload link (fetchpriority=high). Skip when a
+				// Companion preload link (fetchpriority=high, at most one). Skip when a
 				// matching preload link already exists (normalized-URL scan so
 				// absolute-vs-relative and size-suffix variants dedup).
 				if ( $this->buffer_has_image_preload( $buffer, $lcp_url ) ) {
 					return $buffer;
 				}
-				$link_tag = Util::get_preload_link(
+				$imagesrcset = $this->get_lcp_srcset_for_url( $lcp_url, $buffer );
+				$imagesizes  = '' !== $imagesrcset ? $this->get_lcp_sizes_for_url( $lcp_url, $buffer ) : '';
+				$link_tag    = Util::get_preload_link(
 					$lcp_url,
 					'preload',
 					'image',
 					false,
 					Util::get_image_mime_type( $lcp_url ),
 					'',
-					'high'
+					'high',
+					$imagesrcset,
+					$imagesizes
 				);
 				if ( '' === $link_tag ) {
 					return $buffer;
@@ -4030,6 +4225,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Get the first <img src> URL in the buffer (hero fallback).
 		 *
+		 * DOM-order only (not viewport-aware): iterates `<img>` tags and
+		 * returns the first non-trivial candidate, skipping tracking pixels,
+		 * hidden nodes, and tiny dimensions so a logo/pixel does not consume
+		 * the preload slot. Used only when no OD/stored LCP data exists.
+		 *
 		 * @since 2.0.0
 		 *
 		 * @param string $buffer The HTML buffer.
@@ -4037,21 +4237,68 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 */
 		private function get_first_image_src_in_buffer( string $buffer ): string {
 			try {
-				$tags = new \WP_HTML_Tag_Processor( $buffer );
+				$tags     = new \WP_HTML_Tag_Processor( $buffer );
+				$fallback = '';
 				while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
 					$src = $tags->get_attribute( 'src' );
-					if ( is_string( $src ) && '' !== $src ) {
-						return $src;
+					if ( ! is_string( $src ) || '' === $src ) {
+						$data_src = $tags->get_attribute( 'data-src' );
+						$src      = is_string( $data_src ) ? $data_src : '';
 					}
-					$data_src = $tags->get_attribute( 'data-src' );
-					if ( is_string( $data_src ) && '' !== $data_src ) {
-						return $data_src;
+					if ( ! is_string( $src ) || '' === trim( $src ) ) {
+						continue;
 					}
+					if ( '' === $fallback ) {
+						$fallback = $src;
+					}
+					if ( $this->is_trivial_heuristic_image( $tags, (string) $src ) ) {
+						continue;
+					}
+					return $src;
 				}
+				return $fallback;
 			} catch ( \Throwable $e ) {
 				return '';
 			}
 			return '';
+		}
+
+		/**
+		 * Whether a heuristic `<img>` candidate is trivial (pixel/hidden/tiny).
+		 *
+		 * Skips tracking pixels (`pixel`/`tracking`/`spacer`/`1x1` in the URL),
+		 * hidden nodes (`hidden` attribute or `display:none` /
+		 * `visibility:hidden` inline style), and tiny dimensions (`width` /
+		 * `height` attributes <= 10px). Fail-open: any failure returns false.
+		 *
+		 * @since NEXT
+		 * @param \WP_HTML_Tag_Processor $tags The tag processor on the candidate `<img>`.
+		 * @param string                 $src  The candidate src URL.
+		 * @return bool True when the candidate should be skipped.
+		 */
+		private function is_trivial_heuristic_image( $tags, string $src ): bool {
+			try {
+				if ( 1 === preg_match( '/pixel|tracking|spacer|transparent|1x1|beacon/i', $src ) ) {
+					return true;
+				}
+				if ( null !== $tags->get_attribute( 'hidden' ) ) {
+					return true;
+				}
+				$style = $tags->get_attribute( 'style' );
+				if ( is_string( $style ) && 1 === preg_match( '/display\s*:\s*none|visibility\s*:\s*hidden/i', $style ) ) {
+					return true;
+				}
+				foreach ( array( 'width', 'height' ) as $dim ) {
+					$val = $tags->get_attribute( $dim );
+					if ( ( is_string( $val ) || is_int( $val ) ) && is_numeric( $val ) && (int) $val > 0 && (int) $val <= 10 ) {
+						return true;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+			return false;
 		}
 
 		/**
@@ -4520,17 +4767,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					}
 				}
 
-				// Automatic LCP-candidate lazy exclusion (issue #991): the
-				// single RUM-field → PageSpeed candidate is never lazy-loaded.
+				// Automatic LCP-candidate lazy exclusion: the unified
+				// resolve_auto_lcp_url() candidate is never lazy-loaded.
 				// Gated on the LCP toggles (see get_lazy_lcp_exclusion_url())
 				// so default lazy behaviour is unchanged when all LCP features
-				// are off, and memoized per instance so the RUM aggregate and
-				// transients are not re-scanned on top of preload_images().
+				// are off. The buffer is threaded through so the P2 DOM-first
+				// heuristic tier stays in parity with maybe_preload_hero_image().
 				// Fail-open: any detection failure leaves the exclusion list
 				// untouched.
 				$candidate_lcp_normalized = '';
 				try {
-					$candidate_url = $this->get_lazy_lcp_exclusion_url( $image_optimisation );
+					$candidate_url = $this->get_lazy_lcp_exclusion_url( $image_optimisation, $buffer );
 					if ( '' !== $candidate_url ) {
 						if ( ! in_array( $candidate_url, $exclude_imgs, true ) ) {
 							$exclude_imgs[] = $candidate_url;
