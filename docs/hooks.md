@@ -60,7 +60,7 @@ add_action( 'wppo_after_builder_purge', function( $matched ) {
 ---
 
 ### `wppo_database_cleanup_completed`
-Fires after a database cleanup operation completes. Since NEXT, also fires per-type after each individual cleanup (before the `all` aggregate). @since 2.0.0 for per-type.
+Fires after a database cleanup operation completes. @since 2.0.0, also fires per-type after each individual cleanup (before the `all` aggregate). @since 2.0.0 for per-type.
 
 **Parameters:**
 - `$type` *(string)* — Cleanup type (`'all'`, `'revisions'`, `'auto_drafts'`, `'trashed_posts'`, `'spam_comments'`, `'trashed_comments'`, `'expired_transients'`, `'orphan_postmeta'`, `'unattached_media'`, `'oembed_cache'`).
@@ -1704,7 +1704,7 @@ jobs / WP-CLI and edited via `wp wppo settings` (or `import_settings`).
 
 ## ⚠️ Deprecated Features
 
-### `file_optimisation.removeQueryStrings` (removed NEXT, #925, formerly tracked in #904)
+### `file_optimisation.removeQueryStrings` (removed in 2.0.0, #925, formerly tracked in #904)
 Removed. The `?ver=` stripping path (`Main::strip_static_query_strings()` on
 `script_loader_src` / `style_loader_src`, the `is_plugin_cache_url()` helpers,
 the setting default, and the SPA toggle) is gone. `?ver=` **is** the

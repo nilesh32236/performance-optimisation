@@ -1615,10 +1615,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 			}
 
 			if ( ! $root_is_writable ) {
+				// WP-CLI often runs as a different user than the web process
+				// (e.g. CLI as `admin` while the cache dir is owned by
+				// `nobody`), so is_writable() under CLI is a false negative
+				// when the web user owns the dir and can write it. Classify
+				// owner-aware: warn for a foreign owner that can write, fail
+				// only when the dir is unwritable by everyone or un-stat-able.
+				$euid = null;
+				if ( function_exists( 'posix_geteuid' ) ) {
+					$euid = posix_geteuid();
+				}
+				// phpcs:disable WordPress.WP.AlternativeFunctions.file_system_operations_stat, WordPress.PHP.NoSilencedErrors.Discouraged -- stat() may warn for exotic dirs; the classifier handles false.
+				$stat = @stat( $root );
+				// phpcs:enable
+				$class = self::classify_unwritable_cache_root( $euid, $stat, $root );
 				return array(
 					'check'  => 'cache_dirs',
-					'status' => 'fail',
-					'detail' => 'cache root not writable: ' . $root,
+					'status' => $class['status'],
+					'detail' => $class['detail'],
 				);
 			}
 
@@ -1677,6 +1691,67 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				'check'  => 'cache_dirs',
 				'status' => 'pass',
 				'detail' => 'root writable; domain=' . $domain . ' min/ccss/fonts present' . $port_note,
+			);
+		}
+
+		/**
+		 * Classify a cache root that is not writable by the current process.
+		 *
+		 * Under WP-CLI the CLI user often differs from the web server user
+		 * (e.g. CLI as `admin`, cache dir owned by `nobody`), so a bare
+		 * is_writable() verdict is a false negative: the web process can still
+		 * write the cache through its own ownership. When the directory exists,
+		 * its owner differs from the current process AND that owner has write
+		 * permission — owner write bit, or group write for the owner's own
+		 * group — report `warn` (not `fail`) and explain the mismatch.
+		 *
+		 * `fail` is reserved for directories that are genuinely unwritable by
+		 * everyone (no write bits at all) or that cannot be stat'd.
+		 *
+		 * @since NEXT
+		 * @param int|null    $euid Effective UID of the current process (null when posix is unavailable).
+		 * @param array|false $stat stat() result for the directory (false when stat failed).
+		 * @param string      $root Absolute cache root path, used in the detail message.
+		 * @return array{status:string,detail:string} 'warn' when a foreign owner can write; 'fail' otherwise.
+		 */
+		public static function classify_unwritable_cache_root( $euid, $stat, string $root ): array {
+			if ( ! is_array( $stat ) || ! isset( $stat['uid'], $stat['gid'], $stat['mode'] ) ) {
+				return array(
+					'status' => 'fail',
+					/* translators: %s: Cache root path */
+					'detail' => sprintf( __( 'Cache root not writable and cannot be stat\'d: %s', 'performance-optimisation' ), $root ),
+				);
+			}
+
+			// stat()'s mode includes file-type bits in the high nibble; keep
+			// the permission bits. 0200 = owner write, 0020 = group write.
+			$perms           = (int) $stat['mode'] & 0777;
+			$owner_id        = (int) $stat['uid'];
+			$owner_can_write = ( 0 !== ( $perms & 0200 ) ) || ( 0 !== ( $perms & 0020 ) );
+
+			if ( null !== $euid && $owner_id !== $euid && $owner_can_write ) {
+				$owner_label = (string) $owner_id;
+				if ( function_exists( 'posix_getpwuid' ) ) {
+					$pwent = posix_getpwuid( $owner_id );
+					if ( is_array( $pwent ) && ! empty( $pwent['name'] ) ) {
+						$owner_label = (string) $pwent['name'];
+					}
+				}
+				return array(
+					'status' => 'warn',
+					'detail' => sprintf(
+						/* translators: 1: Cache root path, 2: Directory owner (user name or UID) */
+						__( 'Cache root %1$s is not writable by the CLI user, but its owner "%2$s" (likely the web user) can write it', 'performance-optimisation' ),
+						$root,
+						$owner_label
+					),
+				);
+			}
+
+			return array(
+				'status' => 'fail',
+				/* translators: %s: Cache root path */
+				'detail' => sprintf( __( 'Cache root not writable (no write permission for the current user or the directory owner): %s', 'performance-optimisation' ), $root ),
 			);
 		}
 

@@ -1894,7 +1894,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * vs values), so direct interpolation with allowlist check is the correct
 		 * WordPress pattern. Verified: no REST/CLI path forwards raw user input here.
 		 *
-		 * @since 2.0.0
 		 * @since 2.0.0 Added allowlist justification and verified no user input reaches interpolation.
 		 *
 		 * @param string $table Unprefixed table identifier (e.g. 'posts', 'postmeta').
@@ -1907,7 +1906,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				_doing_it_wrong(
 					__METHOD__,
 					esc_html__( 'Invalid table identifier passed to optimize_table.', 'performance-optimisation' ),
-					'1.9.0'
+					'2.0.0'
 				);
 				return false;
 			}
