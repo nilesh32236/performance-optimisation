@@ -184,6 +184,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 					unset( $e );
 				}
 			}
+			/**
+			 * Filters handles and URL fragments excluded from delay JS.
+			 *
+			 * Main::apply_per_page_delay_config() applies this filter to the
+			 * handle-level list it builds, but the rewrite that actually makes
+			 * a script inert (`type="wppo/javascript"` + `wppo-src`) happens
+			 * here. Without merging the filtered values into this list, an
+			 * exclusion registered by a theme or plugin has no effect on the
+			 * HTML rewrite: the script is still swapped to an inert type and
+			 * the browser never executes it, which silently breaks whichever
+			 * behaviour depended on it (a mobile menu, for example).
+			 *
+			 * Applying the filter to an empty array keeps append-style
+			 * callbacks working exactly as they do in Main.
+			 *
+			 * @since NEXT
+			 *
+			 * @param array<int, string> $exclusions Handles or URL fragments to keep eager.
+			 */
+			if ( has_filter( 'wppo_exclude_delay_js' ) ) {
+				try {
+					$this->exclude_delay_js = array_merge(
+						$this->exclude_delay_js,
+						(array) apply_filters( 'wppo_exclude_delay_js', array() )
+					);
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
 			$this->exclude_delay_js = array_values(
 				array_unique(
 					array_filter(

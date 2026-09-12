@@ -64,6 +64,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private array $exclude_delay_js = array();
 
 		/**
+		 * Memoized delay-JS exclusions with `wppo_exclude_delay_js` applied
+		 * at call time rather than at bootstrap. Null until first use.
+		 *
+		 * @var   array|null
+		 * @since NEXT
+		 */
+		private ?array $resolved_delay_exclusions = null;
+
+		/**
 		 * Default delay strategy: 'interaction', 'idle', or 'viewport'.
 		 *
 		 * @var   string
@@ -3177,10 +3186,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return bool True when the handle must stay un-delayed.
 		 */
 		private function is_delay_excluded_handle( string $handle ): bool {
-			if ( in_array( $handle, $this->exclude_delay_js, true ) ) {
+			$exclusions = $this->get_delay_exclusions();
+
+			if ( in_array( $handle, $exclusions, true ) ) {
 				return true;
 			}
-			foreach ( $this->exclude_delay_js as $pattern ) {
+			foreach ( $exclusions as $pattern ) {
 				$pattern = (string) $pattern;
 				if ( '' === $pattern ) {
 					continue;
@@ -3201,10 +3212,56 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 			// Word-boundary matching via one precompiled alternation per
 			// request instead of one preg_match compile per pattern per tag.
-			if ( $this->matches_any_delay_pattern( $handle, $this->exclude_delay_js ) ) {
+			if ( $this->matches_any_delay_pattern( $handle, $exclusions ) ) {
 				return true;
 			}
 			return false;
+		}
+
+		/**
+		 * Delay-JS exclusions with `wppo_exclude_delay_js` applied on first use.
+		 *
+		 * `setup_hooks()` applies the filter while the plugin bootstraps, and
+		 * plugins load before the active theme. A theme registering an
+		 * exclusion from functions.php therefore had no effect on the
+		 * handle-level rewrite, which silently leaves its script swapped to
+		 * `wppo-src` and never executed — a mobile menu that cannot open, for
+		 * instance. Re-applying here (during enqueue, after every plugin and
+		 * the theme have loaded) lets those late registrations count. The
+		 * result is memoized, so the filter still runs at most once per
+		 * request on this path.
+		 *
+		 * @since NEXT
+		 *
+		 * @return array<int, string>
+		 */
+		private function get_delay_exclusions(): array {
+			if ( null !== $this->resolved_delay_exclusions ) {
+				return $this->resolved_delay_exclusions;
+			}
+
+			$exclusions = $this->exclude_delay_js;
+
+			if ( has_filter( 'wppo_exclude_delay_js' ) ) {
+				try {
+					$exclusions = (array) apply_filters( 'wppo_exclude_delay_js', $exclusions );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			$this->resolved_delay_exclusions = array_values(
+				array_unique(
+					array_filter(
+						$exclusions,
+						static function ( $val ): bool {
+							return is_string( $val ) && '' !== $val;
+						}
+					)
+				)
+			);
+
+			return $this->resolved_delay_exclusions;
 		}
 
 		/**
@@ -3595,8 +3652,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$delay_priorities = get_post_meta( $post_id, '_wppo_delay_priorities', true );
 
 			if ( is_array( $delay_strategies ) ) {
+				$excluded_handles = $this->get_delay_exclusions();
 				foreach ( $delay_strategies as $handle => $strategy ) {
-					if ( ! in_array( $handle, $this->exclude_delay_js, true ) ) {
+					if ( ! in_array( $handle, $excluded_handles, true ) ) {
 						if ( 'interaction' === $strategy ) {
 							// Remove from other lists to make it interaction.
 							$this->delay_js_idle_list     = array_diff( $this->delay_js_idle_list, array( $handle ) );

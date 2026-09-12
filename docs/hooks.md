@@ -282,6 +282,8 @@ add_action( 'wppo_builder_drift_requeue', function( $post_id = 0 ) {
 ### `wppo_exclude_delay_js`
 Filters the list of script handles or URL substrings excluded from JavaScript delay loading.
 
+Exclusions apply to both halves of delay loading: the handle-level strategy assigned in `Main`, and the HTML rewrite that swaps a `<script>` to `type="wppo/javascript"` with the real source in `wppo-src`. A script is only genuinely eager when neither path rewrites it, so entries added here suppress both. @since NEXT the HTML rewrite honours this filter.
+
 **Parameters:**
 - `$exclusions` *(array)* — Array of excluded script handles/URLs.
 
@@ -293,6 +295,8 @@ add_filter( 'wppo_exclude_delay_js', function( $exclusions ) {
     return $exclusions;
 } );
 ```
+
+Use this for any script that must run before the first user interaction — a mobile navigation toggle, for example. A delayed script is inert until the visitor interacts, so the tap that was meant to open a menu gets consumed by the delay loader instead.
 
 ---
 
