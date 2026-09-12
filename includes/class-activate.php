@@ -96,7 +96,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 			$options             = Util::get_settings();
 			$enable_server_rules = isset( $options['file_optimisation']['enableServerRules'] ) ? (bool) $options['file_optimisation']['enableServerRules'] : false;
 
-			if ( $enable_server_rules ) {
+			// Server gate: on Nginx (including multisite) .htaccess is
+			// never evaluated — skip the write (update_rules() also gates
+			// itself) instead of surfacing a spurious failure notice.
+			$skip_htaccess = class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) && method_exists( 'PerformanceOptimise\Inc\Server_Rules', 'should_skip_htaccess_write' ) && Server_Rules::should_skip_htaccess_write();
+
+			if ( $enable_server_rules && ! $skip_htaccess ) {
 				$rules_updated = Htaccess_Handler::update_rules( true );
 				if ( ! $rules_updated ) {
 					$notices[] = __( 'Failed to update .htaccess rules during activation.', 'performance-optimisation' );

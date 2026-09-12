@@ -1632,8 +1632,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$new_convert     = isset( $value['image_optimisation']['convertImg'] ) ? (bool) $value['image_optimisation']['convertImg'] : false;
 			$convert_changed = $old_convert !== $new_convert;
 
+			// Server gate: on Nginx (including multisite) .htaccess is
+			// never evaluated — skip the write entirely (update_rules()
+			// also gates itself) and never roll back the setting. Nginx
+			// operators use the read-only snippet from the server_rules
+			// REST endpoint instead.
+			$skip_htaccess = class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) && method_exists( 'PerformanceOptimise\Inc\Server_Rules', 'should_skip_htaccess_write' ) && Server_Rules::should_skip_htaccess_write();
+
 			if ( $old_enable !== $new_enable ) {
-				$ok = Htaccess_Handler::update_rules( $new_enable );
+				$ok = $skip_htaccess ? true : Htaccess_Handler::update_rules( $new_enable );
 
 				// Log hint for OpenLiteSpeed operators: restart required.
 				if ( $ok && $new_enable && class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::is_litespeed() ) {
@@ -1654,7 +1661,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			} elseif ( ( $nextgen_changed || $convert_changed ) && $new_enable ) {
 				// Next-gen or convertImg toggle changed while server rules
 				// remain enabled — refresh htaccess to add/remove next-gen block.
-				$ok = Htaccess_Handler::update_rules( true );
+				// Skipped on Nginx (see the server gate above).
+				$ok = $skip_htaccess ? true : Htaccess_Handler::update_rules( true );
 				if ( $ok && class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::is_litespeed() ) {
 					Log::add( __( 'Server rules updated on LiteSpeed — restart OpenLiteSpeed if changes do not appear immediately.', 'performance-optimisation' ) );
 				}

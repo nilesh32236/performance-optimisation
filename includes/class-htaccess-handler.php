@@ -33,6 +33,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		private const MARKER = 'wppo_rules';
 
 		/**
+		 * Maximum length of a single .htaccess rule line.
+		 *
+		 * Lines longer than this are rejected by sanitize_rules() as
+		 * probable injection payloads; legitimate plugin rules are short.
+		 *
+		 * @var int
+		 * @since NEXT
+		 */
+		private const MAX_RULE_LINE_LENGTH = 4096;
+
+		/**
 		 * Updates the .htaccess rules based on plugin settings.
 		 *
 		 * Note on LiteSpeed ordering: `# BEGIN LSCACHE` must stay above
@@ -51,6 +62,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		 * @since 1.2.0
 		 */
 		public static function update_rules( bool $enable = true ): bool {
+			// Server gate: Nginx (including multisite-on-Nginx) ignores
+			// .htaccess, so skip the write entirely and report success —
+			// there is nothing to write and callers must not roll back the
+			// setting. The Nginx snippet is surfaced read-only via
+			// Server_Rules::get_nginx_rules() / the server_rules endpoint.
+			if ( ! self::supports_htaccess() ) {
+				return true;
+			}
+
 			if ( ! function_exists( 'insert_with_markers' ) ) {
 				require_once wp_normalize_path( ABSPATH . 'wp-admin/includes/misc.php' );
 			}
@@ -80,6 +100,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			if ( $enable ) {
 				$rules = self::get_rules();
 			}
+
+			// CRLF/response-splitting guard: reject filter-supplied rule
+			// input containing embedded newlines before touching the disk.
+			// Fail closed — the file stays unchanged.
+			$sanitized = self::sanitize_rules( $rules );
+			if ( false === $sanitized ) {
+				return false;
+			}
+			$rules = $sanitized;
 
 			// Backup prior rules so a failed write can restore them. Only the
 			// settings-save path calls update_rules() (Main::on_settings_update()),
@@ -206,6 +235,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		 */
 		public static function remove_rules(): bool {
 			try {
+				// Server gate (mirrors update_rules()): on Nginx the file
+				// is never evaluated, so sweep artifacts and report
+				// success without touching it.
+				if ( ! self::supports_htaccess() ) {
+					self::cleanup_backup_artifacts();
+					return true;
+				}
 				if ( ! self::has_rules() ) {
 					self::cleanup_backup_artifacts();
 					return true;
@@ -280,6 +316,66 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			} catch ( \Throwable $ignored ) {
 				unset( $ignored );
 			}
+		}
+
+		/**
+		 * Whether `.htaccess` writes are meaningful on this server.
+		 *
+		 * Delegates to Server_Rules when available (Apache and
+		 * LiteSpeed/OpenLiteSpeed evaluate `.htaccess`; Nginx ignores it,
+		 * including multisite-on-Nginx) and fails open to true when the
+		 * server cannot be detected, preserving the legacy write behavior.
+		 * Multisite-safe: pure server detection, no options or transients
+		 * touched, so no cross-site leakage; only the per-site `.htaccess`
+		 * path is ever written by update_rules().
+		 *
+		 * @since NEXT
+		 * @return bool True when an `.htaccess` write may proceed.
+		 */
+		public static function supports_htaccess(): bool {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) && method_exists( 'PerformanceOptimise\Inc\Server_Rules', 'supports_htaccess' ) ) {
+					return Server_Rules::supports_htaccess();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return true;
+		}
+
+		/**
+		 * Sanitize rule lines before an `.htaccess` write.
+		 *
+		 * Rejects (returns false) any payload that could split the marker
+		 * block or smuggle extra directives: non-string lines, embedded
+		 * CR/LF/NUL bytes (CRLF/response-splitting injection via the
+		 * `wppo_htaccess_rules`, `wppo_htaccess_nextgen_rules`, or
+		 * `wppo_htaccess_cache_vary_rules` filters), overlong lines, or
+		 * forged `# BEGIN`/`# END wppo_rules` markers that would break the
+		 * single-block assertion in verify_htaccess_contents(). Fail closed:
+		 * callers must abort the write and leave the file unchanged.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $rules Raw rules lines.
+		 * @return array|false The rules unchanged when valid, false when rejected.
+		 */
+		private static function sanitize_rules( array $rules ): array|false {
+			foreach ( $rules as $line ) {
+				if ( ! is_string( $line ) ) {
+					return false;
+				}
+				if ( strlen( $line ) > self::MAX_RULE_LINE_LENGTH ) {
+					return false;
+				}
+				if ( false !== strpos( $line, "\r" ) || false !== strpos( $line, "\n" ) || false !== strpos( $line, "\0" ) ) {
+					return false;
+				}
+				if ( 1 === preg_match( '/^\s*#\s*(BEGIN|END)\s+' . preg_quote( self::MARKER, '/' ) . '\b/i', $line ) ) {
+					return false;
+				}
+			}
+			return $rules;
 		}
 
 		/**
@@ -458,6 +554,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		 * @return bool|null True on success, false on verified failure, null when atomic write is unsupported.
 		 */
 		private static function atomic_write_verified( string $htaccess_file, $wp_filesystem, array $rules ): ?bool {
+			// Defense-in-depth CRLF guard: update_rules() already sanitizes,
+			// but this method is reachable via reflection/tests, so fail
+			// closed here too. Return false (verified failure, never null)
+			// so callers must NOT fall through to the non-atomic legacy
+			// insert_with_markers() path with tainted input.
+			$sanitized = self::sanitize_rules( $rules );
+			if ( false === $sanitized ) {
+				return false;
+			}
+			$rules = $sanitized;
+
 			$required = array( 'exists', 'get_contents', 'put_contents', 'move', 'copy', 'delete' );
 			foreach ( $required as $method ) {
 				if ( ! $wp_filesystem || ! method_exists( $wp_filesystem, $method ) ) {
@@ -489,11 +596,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				$wp_filesystem->copy( $htaccess_file, $backup_file, true );
 			}
 
-			// wp_rand() is wrapped in try/catch (mirroring
+			// Unique tmp suffix: wp_rand() is wrapped in try/catch (mirroring
 			// Advanced_Cache_Handler::atomic_write_dropin()): under Brain
 			// Monkey a stale wp_rand stub from another test can throw once
 			// its session tore down, and production filters must never let
-			// a suffix RNG failure break the write.
+			// a suffix RNG failure break the write. PID + uniqid segments
+			// widen the suffix space so two concurrent settings saves never
+			// share a tmp name and clobber each other (last-writer-wins on
+			// the rename is safe: both writers splice from current state
+			// and post-write verification checksums the winner).
 			if ( function_exists( 'wp_rand' ) ) {
 				try {
 					$suffix = (string) wp_rand( 100000, 999999 );
@@ -509,6 +620,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				$suffix = (string) mt_rand( 100000, 999999 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.rand_mt_rand -- Fallback when wp_rand() is unavailable.
 			} else {
 				return null;
+			}
+			$pid_part  = function_exists( 'getmypid' ) ? (int) getmypid() : 0;
+			$uniq_part = '';
+			try {
+				$uniq_part = substr( md5( uniqid( (string) microtime( true ), true ) ), 0, 8 );
+			} catch ( \Throwable $ignored_uniq ) {
+				unset( $ignored_uniq );
+			}
+			if ( '' !== $uniq_part ) {
+				$suffix .= '-' . $pid_part . '-' . $uniq_part;
 			}
 			$tmp_file = $htaccess_file . '.wppo-tmp-' . $suffix;
 
@@ -533,7 +654,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				return false;
 			}
 
-			if ( ! self::verify_htaccess_contents( $written, $expect_block ) ) {
+			// Byte-identical checksum plus structural verification: a torn
+			// rename or a concurrent writer interleaving must never leave a
+			// truncated or foreign body behind. On mismatch restore the
+			// backup (or the in-memory original) so the file stays intact.
+			if ( $written !== $new_contents || ! self::verify_htaccess_contents( $written, $expect_block ) ) {
 				$restored = false;
 				if ( $wp_filesystem->exists( $backup_file ) ) {
 					$restored = (bool) $wp_filesystem->copy( $backup_file, $htaccess_file, true );
