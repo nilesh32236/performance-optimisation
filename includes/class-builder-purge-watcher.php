@@ -278,10 +278,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		/**
 		 * Handle Elementor editor saves: requeue the saved post's used CSS.
 		 *
-		 * An explicit editor save always requeues (no mtime drift check): the
-		 * save itself proves the markup changed and the sidecar may not exist
-		 * yet for new posts, so a per-post regeneration job is queued directly
-		 * via Used_CSS::requeue_for_post(). This is the post-scoped fast path.
+		 * An explicit editor save requeues via Used_CSS::requeue_for_post():
+		 * the save bumps the modification time, so the variant-freshness
+		 * skip (issue #1107) still requeues genuine changes while repeat
+		 * signals without changes are skipped. The sidecar may not exist
+		 * yet for new posts, so the freshness probe fails open to queueing.
+		 * This is the post-scoped fast path.
 		 * The post-less elementor/core/files/clear_cache signal handled by
 		 * on_builder_drift() has no post context and schedules a background
 		 * full-site purge instead. The wppo_builder_drift_requeue action fires
@@ -719,7 +721,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 						// audit entry; write_purge_log() below adds the
 						// builder-purge summary. Two entries per update is
 						// intentional — distinct facts on a rare event.
-						( new Used_CSS( Util::get_settings() ) )->regenerate_all();
+						// Forced: the wipe above deleted every variant, so
+						// per-post freshness would find nothing fresh and
+						// the cooldown must not suppress the requeue (issue #1107).
+						( new Used_CSS( Util::get_settings() ) )->regenerate_all( true );
 					}
 				}
 			} catch ( \Throwable $e ) {

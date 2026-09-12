@@ -41,6 +41,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		private const USED_CSS_FILENAME = 'used-css.css';
 
 		/**
+		 * Option holding the last full-regeneration timestamp (issue #1107).
+		 *
+		 * Coarse cooldown so regenerate_all() cannot re-queue the whole
+		 * site on every call: Action Scheduler de-duplication only covers
+		 * pending jobs, so completed work was re-queued unconditionally.
+		 * Per-site option (core get_option is multisite-safe).
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		public const LAST_FULL_REGEN_OPTION = 'wppo_used_css_last_full_regen';
+
+		/**
+		 * Default full-regeneration cooldown in seconds (issue #1107).
+		 *
+		 * Matches the wppo_used_css_cron every-5-hours schedule; filterable
+		 * via wppo_used_css_regen_cooldown.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const FULL_REGEN_COOLDOWN_SECONDS = 18000;
+
+		/**
 		 * Plugin options.
 		 *
 		 * @var array
@@ -1677,13 +1701,147 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		}
 
 		/**
+		 * Effective full-regeneration cooldown in seconds (issue #1107).
+		 *
+		 * Fail-open: any failure returns the default.
+		 *
+		 * @return int Cooldown seconds (>= 0).
+		 * @since NEXT
+		 */
+		private function get_full_regen_cooldown(): int {
+			$default = defined( 'HOUR_IN_SECONDS' ) ? 5 * HOUR_IN_SECONDS : self::FULL_REGEN_COOLDOWN_SECONDS;
+			try {
+				if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_used_css_regen_cooldown' ) ) {
+					return (int) $default;
+				}
+				/**
+				 * Filter the used-CSS full-regeneration cooldown (issue #1107).
+				 *
+				 * Bounds how often regenerate_all() may queue site-wide work
+				 * when not forced. Explicit operator paths (builder purge
+				 * after a wipe, manual REST/ability triggers) pass $force.
+				 *
+				 * @since NEXT
+				 *
+				 * @param int $cooldown Cooldown in seconds. Default 5 hours.
+				 */
+				$cooldown = apply_filters( 'wppo_used_css_regen_cooldown', $default );
+				$cooldown = is_numeric( $cooldown ) ? (int) $cooldown : (int) $default;
+				return $cooldown >= 0 ? $cooldown : (int) $default;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return (int) $default;
+			}
+		}
+
+		/**
+		 * Whether a non-forced full regeneration is inside the cooldown window (issue #1107).
+		 *
+		 * Fail-open: an unreadable timestamp never blocks work.
+		 *
+		 * @return bool True when the last full regen is newer than the cooldown.
+		 * @since NEXT
+		 */
+		private function is_full_regen_cooled_down(): bool {
+			try {
+				if ( ! function_exists( 'get_option' ) ) {
+					return false;
+				}
+				$last = (int) get_option( self::LAST_FULL_REGEN_OPTION, 0 );
+				if ( $last <= 0 ) {
+					return false;
+				}
+				return ( time() - $last ) < $this->get_full_regen_cooldown();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Record a completed full-regeneration scan (issue #1107).
+		 *
+		 * Written whenever regenerate_all() performs a scan — whether it
+		 * queued jobs or correctly skipped every post as fresh — so repeat
+		 * callers hit the cooldown instead of re-scanning. Fail-open.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		private function mark_full_regen(): void {
+			try {
+				if ( function_exists( 'update_option' ) ) {
+					update_option( self::LAST_FULL_REGEN_OPTION, time(), false );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Whether the stored used-CSS variant is fresh for a post (issue #1107).
+		 *
+		 * Fresh means: the variant file exists, its mtime is not older than
+		 * the post's last modification, and the .sha256 source-checksum
+		 * sidecar exists (same freshness bar as the frontend cache-hit path
+		 * in process_buffer()). Fail-open: any unresolvable permalink,
+		 * missing file, stat failure, or exception reports stale so work is
+		 * never dropped on uncertainty.
+		 *
+		 * @param int    $post_id      Post ID.
+		 * @param string $modified_gmt Post modification time (GMT, Y-m-d H:i:s).
+		 * @return bool True when regeneration can be skipped for this post.
+		 * @since NEXT
+		 */
+		private function is_variant_fresh_for_post( int $post_id, string $modified_gmt ): bool {
+			try {
+				if ( $post_id <= 0 || '' === $modified_gmt || '0000-00-00 00:00:00' === $modified_gmt ) {
+					return false;
+				}
+				if ( ! function_exists( 'get_permalink' ) ) {
+					return false;
+				}
+				$permalink = get_permalink( $post_id );
+				if ( ! is_string( $permalink ) || '' === $permalink ) {
+					return false;
+				}
+				$variant_path = $this->get_used_css_path( $permalink );
+				if ( '' === $variant_path || ! file_exists( $variant_path ) ) {
+					return false;
+				}
+				$mtime = filemtime( $variant_path );
+				if ( false === $mtime ) {
+					return false;
+				}
+				$modified = strtotime( $modified_gmt . ' UTC' );
+				if ( false === $modified ) {
+					return false;
+				}
+				if ( $mtime < $modified ) {
+					return false;
+				}
+				$checksum_path = $this->get_checksum_path( $variant_path );
+				if ( '' === $checksum_path || ! file_exists( $checksum_path ) ) {
+					return false;
+				}
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
 		 * Queue used-CSS regeneration for a single post (builder-drift requeue).
 		 *
-		 * De-duplicates via as_has_scheduled_action(). No-op when
-		 * removeUnusedCSS is off or Action Scheduler is unavailable.
+		 * De-duplicates via as_has_scheduled_action(). Skips queueing when
+		 * the stored variant is already fresh for the post (issue #1107) —
+		 * an explicit editor save bumps post_modified_gmt, so genuine
+		 * changes still enqueue. No-op when removeUnusedCSS is off or
+		 * Action Scheduler is unavailable.
 		 *
 		 * @param int $post_id Post ID to requeue.
-		 * @return bool True when a job is queued or already scheduled.
+		 * @return bool True when a job is queued, already scheduled, or already fresh.
 		 * @since 2.0.0
 		 */
 		public static function requeue_for_post( int $post_id ): bool {
@@ -1701,6 +1859,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				$args = array( 'post_id' => $post_id );
 				if ( as_has_scheduled_action( 'wppo_used_css_generate', $args, 'performance_optimisation' ) ) {
 					return true;
+				}
+				try {
+					$modified_gmt = '';
+					if ( function_exists( 'get_post' ) ) {
+						$post = get_post( $post_id );
+						if ( is_object( $post ) && isset( $post->post_modified_gmt ) && is_string( $post->post_modified_gmt ) ) {
+							$modified_gmt = $post->post_modified_gmt;
+						}
+					}
+					if ( '' !== $modified_gmt && ( new self( $options ) )->is_variant_fresh_for_post( $post_id, $modified_gmt ) ) {
+						return true;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
 				}
 				as_enqueue_async_action( 'wppo_used_css_generate', $args, 'performance_optimisation' );
 				return true;
@@ -1801,11 +1973,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		/**
 		 * Queue background used-CSS regeneration for all published posts.
 		 *
+		 * Guards against queue churn (issue #1107): a coarse cooldown skips
+		 * repeat full scans within the window, and per-post freshness skips
+		 * posts whose stored variant is newer than their last modification
+		 * (same bar as the frontend cache-hit path). The pending-action
+		 * de-duplication is kept for concurrent queueing. Fail-open: any
+		 * uncertainty enqueues as before — freshness never drops work.
+		 *
+		 * @param bool $force Bypass the cooldown (explicit operator paths:
+		 *                    builder purge after a wipe, manual triggers).
+		 *                    Per-post freshness still applies.
 		 * @return int Number of jobs queued.
 		 * @since 1.9.0
+		 * @since NEXT Added $force parameter, cooldown, and per-post freshness skip.
 		 */
-		public function regenerate_all(): int {
+		public function regenerate_all( bool $force = false ): int {
 			if ( ! function_exists( 'as_enqueue_async_action' ) ) {
+				return 0;
+			}
+
+			if ( ! $force && $this->is_full_regen_cooled_down() ) {
 				return 0;
 			}
 
@@ -1889,13 +2076,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				$prepare_args   = array_values( $post_types );
 				$prepare_args[] = $last_id;
 				$prepare_args[] = $batch;
-				$post_ids       = $wpdb->get_col(
+				$post_rows      = $wpdb->get_results(
 					// phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- $placeholders is count-derived; $prepare_args holds post types + 2 ints via spread.
 					$wpdb->prepare(
-						"SELECT ID FROM {$wpdb->posts} WHERE post_type IN ($placeholders) AND post_status = 'publish' AND ID > %d ORDER BY ID ASC LIMIT %d",
+						"SELECT ID, post_modified_gmt FROM {$wpdb->posts} WHERE post_type IN ($placeholders) AND post_status = 'publish' AND ID > %d ORDER BY ID ASC LIMIT %d",
 						...$prepare_args
-					)
+					),
+					ARRAY_A
 				);
+				if ( empty( $post_rows ) || ! is_array( $post_rows ) ) {
+					break;
+				}
+
+				$post_ids = array();
+				$modified = array();
+				foreach ( $post_rows as $post_row ) {
+					if ( ! is_array( $post_row ) || ! isset( $post_row['ID'] ) ) {
+						continue;
+					}
+					$row_id              = (int) $post_row['ID'];
+					$post_ids[]          = $row_id;
+					$modified[ $row_id ] = isset( $post_row['post_modified_gmt'] ) ? (string) $post_row['post_modified_gmt'] : '';
+				}
 				if ( empty( $post_ids ) ) {
 					break;
 				}
@@ -1909,6 +2111,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					}
 					if ( ! $lookup_ok && function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => $post_id ), 'performance_optimisation' ) ) {
 						$scheduled[ $post_id ] = true;
+						continue;
+					}
+					if ( isset( $modified[ $post_id ] ) && '' !== $modified[ $post_id ] && $this->is_variant_fresh_for_post( $post_id, $modified[ $post_id ] ) ) {
 						continue;
 					}
 					as_enqueue_async_action(
@@ -1926,6 +2131,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- count() on batch is intentional for loop termination.
 			} while ( count( $post_ids ) === $batch );
 			// phpcs:enable
+
+			$this->mark_full_regen();
 
 			if ( $queued > 0 ) {
 				Log::add(
