@@ -233,6 +233,12 @@ if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
 		/**
 		 * Tokenize an HTML string into text and tag tokens.
 		 *
+		 * Mirrors WP_HTML_Tag_Processor semantics for the cases the tests
+		 * exercise: tag-looking text inside HTML comments and inside
+		 * RAWTEXT/RCDATA bodies (`<script>`, `<style>`, `<textarea>`,
+		 * `<title>`) is not a tag, and `<`/`>` inside quoted attribute
+		 * values does not split a tag.
+		 *
 		 * @param string $html The HTML buffer.
 		 * @return array<int, array<string, mixed>> List of tokens.
 		 */
@@ -240,10 +246,16 @@ if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
 			$tokens = array();
 			$last   = 0;
 
-			if ( preg_match_all( '#<(/?)([a-zA-Z][a-zA-Z0-9-]*)((?:\s[^<>]*?)?)(/?)>#s', $html, $matches, PREG_OFFSET_CAPTURE ) ) {
+			$skip = $this->non_tag_ranges( $html );
+
+			if ( preg_match_all( '#<(/?)([a-zA-Z][a-zA-Z0-9-]*)((?:\s+[a-zA-Z_:][a-zA-Z0-9_:.\-]*(?:\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s"\'<>`]+))?)*\s*/?)>#s', $html, $matches, PREG_OFFSET_CAPTURE ) ) {
 				foreach ( $matches[0] as $i => $full ) {
 					$full_str = $full[0];
 					$full_off = $full[1];
+
+					if ( $this->offset_in_ranges( $full_off, $skip ) ) {
+						continue;
+					}
 
 					if ( $full_off > $last ) {
 						$tokens[] = array(
@@ -274,6 +286,58 @@ if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
 			}
 
 			return $tokens;
+		}
+
+		/**
+		 * Ranges of the buffer that never contain real tags.
+		 *
+		 * Covers HTML comments and the inner content of RAWTEXT/RCDATA
+		 * elements (`script`, `style`, `textarea`, `title`). Opening and
+		 * closing tags themselves are not included, only what sits between
+		 * them.
+		 *
+		 * @param string $html The HTML buffer.
+		 * @return array<int, array<int, int>> List of [start, end) ranges.
+		 */
+		private function non_tag_ranges( $html ) {
+			$ranges = array();
+
+			if ( preg_match_all( '/<!--.*?-->/s', $html, $matches, PREG_OFFSET_CAPTURE ) ) {
+				foreach ( $matches[0] as $match ) {
+					$ranges[] = array( $match[1], $match[1] + strlen( $match[0] ) );
+				}
+			}
+
+			if ( preg_match_all( '#<(script|style|textarea|title)\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>.*?</\1\s*>#is', $html, $matches, PREG_OFFSET_CAPTURE ) ) {
+				foreach ( $matches[0] as $match ) {
+					$block     = $match[0];
+					$block_off = $match[1];
+					$open_end  = strpos( $block, '>' );
+					$close_at  = strrpos( $block, '<' );
+					if ( false === $open_end || false === $close_at || $close_at <= $open_end ) {
+						continue;
+					}
+					$ranges[] = array( $block_off + $open_end + 1, $block_off + $close_at );
+				}
+			}
+
+			return $ranges;
+		}
+
+		/**
+		 * Whether a byte offset falls inside one of the given ranges.
+		 *
+		 * @param int   $offset Byte offset to test.
+		 * @param array $ranges List of [start, end) ranges.
+		 * @return bool True when the offset is inside a range.
+		 */
+		private function offset_in_ranges( $offset, array $ranges ) {
+			foreach ( $ranges as $range ) {
+				if ( $offset >= $range[0] && $offset < $range[1] ) {
+					return true;
+				}
+			}
+			return false;
 		}
 
 		/**
