@@ -103,7 +103,44 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 * any replica.
 		 */
 		private function connect_redis() {
-			$config_file = ( defined( 'WP_CONTENT_DIR' ) ? WP_CONTENT_DIR : '' ) . '/wppo-redis-config.php';
+			static $connect_attempts = 0;
+			++$connect_attempts;
+
+			// Single-reconnect budget: initial connect + one reconnect max
+			// per request. Extra constructions on the same request (e.g.
+			// wp_cache_init() re-runs) fail open immediately instead of
+			// paying another connection timeout (~-150ms p50 when down).
+			if ( $connect_attempts > 2 ) {
+				$this->redis_connected = false;
+				$this->redis_replica   = null;
+				return;
+			}
+
+			if ( ! defined( 'WP_CONTENT_DIR' ) ) {
+				$this->redis_connected = false;
+				$this->redis_replica   = null;
+				return;
+			}
+
+			$content_dir = WP_CONTENT_DIR;
+
+			// Fast fail-open: the breaker already tripped but the drop-in
+			// is still in place (rename skipped/failed). Skip the ~0.5s
+			// connection timeout entirely and serve uncached.
+			if ( @file_exists( $content_dir . '/wppo-redis-disabled.json' ) || @file_exists( $content_dir . '/object-cache.php.wppo-disabled' ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+				$this->redis_connected = false;
+				$this->redis_replica   = null;
+				return;
+			}
+
+			// Extension fast-fail before touching the filesystem/helper.
+			if ( ! class_exists( 'Redis' ) && ! class_exists( 'RedisCluster' ) ) {
+				$this->redis_connected = false;
+				$this->redis_replica   = null;
+				return;
+			}
+
+			$config_file = $content_dir . '/wppo-redis-config.php';
 			$config      = array();
 
 			if ( file_exists( $config_file ) ) {
@@ -163,6 +200,12 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 			try {
 				$connection = wppo_redis_connect( $config );
 
+				// One reconnect max per request for connection-class
+				// errors; environment/config codes never retry.
+				if ( $connect_attempts < 2 && is_wp_error( $connection ) && ! in_array( $connection->get_error_code(), self::NON_CIRCUIT_ERROR_CODES, true ) ) {
+					$connection = wppo_redis_connect( $config );
+				}
+
 				if ( is_wp_error( $connection ) ) {
 					$this->redis_connected = false;
 					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
@@ -176,8 +219,9 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				$this->redis_connected = true;
 				$this->log_redis_recovery();
 
-				// Standalone replica support.
-				if ( 'standalone' === ( $config['mode'] ?? 'standalone' )
+				// Standalone replica support (best-effort; never fatal).
+				if ( class_exists( 'Redis' )
+					&& 'standalone' === ( $config['mode'] ?? 'standalone' )
 					&& ! empty( $config['replicas'] )
 					&& is_array( $config['replicas'] )
 				) {
@@ -223,6 +267,34 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 				$this->log_redis_failure_once( 'WPPO Redis object cache: boot connection error — ' . $e->getMessage() . ' Serving from memory.' );
 				$this->record_redis_failure( 'boot_exception', $e->getMessage() );
+			}
+		}
+
+		/**
+		 * Degrade to the in-memory fallback after a mid-request Redis error.
+		 *
+		 * Shared fail-open handler for every Redis-touching method: marks
+		 * the client disconnected, drops the replica handle (read methods
+		 * prefer it over the primary), logs once per outage window, and
+		 * counts toward the file-based circuit breaker. Never throws.
+		 *
+		 * @since NEXT
+		 * @param string $error_code Machine-readable failure code.
+		 * @param string $reason     Human-readable failure description.
+		 * @return void
+		 */
+		private function fail_open_to_memory( string $error_code, string $reason ): void {
+			$this->redis_connected = false;
+			$this->redis_replica   = null;
+			try {
+				$this->log_redis_failure_once( 'WPPO Redis object cache: operation failed — ' . $reason . ' Dropping to memory until next boot.' );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			try {
+				$this->record_redis_failure( $error_code, $reason );
+			} catch ( \Throwable $e ) {
+				unset( $e );
 			}
 		}
 
@@ -378,10 +450,11 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 			$content_dir   = WP_CONTENT_DIR;
 			$failures_file = $content_dir . '/wppo-redis-failures.json';
 
-			// Already tripped: the parked sibling is the open state. Skip
-			// counting so a restored-then-failing drop-in cannot double-trip
-			// and so the one final trip log line stays final.
-			if ( @file_exists( $content_dir . '/object-cache.php.wppo-disabled' ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			// Already tripped: either artefact proves a trip happened. Skip
+			// counting so a restored-then-failing drop-in cannot double-trip,
+			// the bridge from a failed rename is written exactly once, and
+			// subsequent boots short-circuit instead of rewriting state.
+			if ( @file_exists( $content_dir . '/object-cache.php.wppo-disabled' ) || @file_exists( $content_dir . '/wppo-redis-disabled.json' ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 				return;
 			}
 
@@ -602,17 +675,26 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 
 			$local_key = $this->get_key( $key, $group );
 
-			if ( $expire ) {
-				return $this->redis->set(
-					$local_key,
-					$data,
-					array(
-						'nx' => true,
-						'ex' => $expire,
-					)
-				);
+			try {
+				if ( $expire ) {
+					return $this->redis->set(
+						$local_key,
+						$data,
+						array(
+							'nx' => true,
+							'ex' => $expire,
+						)
+					);
+				}
+				return $this->redis->setnx( $local_key, $data );
+			} catch ( \Throwable $e ) {
+				$this->fail_open_to_memory( 'write_fail', $e->getMessage() );
+				if ( isset( $this->cache[ $local_key ] ) ) {
+					return false;
+				}
+				$this->cache[ $local_key ] = $data;
+				return true;
 			}
-			return $this->redis->setnx( $local_key, $data );
 		}
 
 		/**
@@ -680,8 +762,18 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				return $this->cache[ $local_key ];
 			}
 
-			$redis_instance = $this->redis_replica ? $this->redis_replica : $this->redis;
-			$value          = $redis_instance->get( $local_key );
+			try {
+				$redis_instance = $this->redis_replica ? $this->redis_replica : $this->redis;
+				$value          = $redis_instance->get( $local_key );
+			} catch ( \Throwable $e ) {
+				$this->fail_open_to_memory( 'read_fail', $e->getMessage() );
+				if ( isset( $this->cache[ $local_key ] ) ) {
+					$found = true;
+					return $this->cache[ $local_key ];
+				}
+				$found = false;
+				return false;
+			}
 
 			if ( false === $value ) {
 				$found = false;
@@ -736,8 +828,18 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				return $values;
 			}
 
-			$redis_instance = $this->redis_replica ? $this->redis_replica : $this->redis;
-			$redis_values   = $redis_instance->mGet( $formatted_keys );
+			try {
+				$redis_instance = $this->redis_replica ? $this->redis_replica : $this->redis;
+				$redis_values   = $redis_instance->mGet( $formatted_keys );
+			} catch ( \Throwable $e ) {
+				$this->fail_open_to_memory( 'read_fail', $e->getMessage() );
+				foreach ( $keys_to_fetch as $key ) {
+					if ( ! isset( $values[ $key ] ) ) {
+						$values[ $key ] = false;
+					}
+				}
+				return $values;
+			}
 
 			foreach ( $keys_to_fetch as $index => $key ) {
 				if ( isset( $redis_values[ $index ] ) && false !== $redis_values[ $index ] ) {
@@ -780,31 +882,39 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				return $results;
 			}
 
-			if ( $expire > 0 ) {
-				// We must use a pipeline for mSet with expiration.
-				$pipeline = $this->redis->multi( \Redis::PIPELINE );
-				foreach ( $formatted_data as $k => $v ) {
-					$pipeline->setex( $k, $expire, $v );
-				}
-				$replies = $pipeline->exec();
+			try {
+				if ( $expire > 0 ) {
+					// We must use a pipeline for mSet with expiration.
+					$pipeline = $this->redis->multi( defined( '\Redis::PIPELINE' ) ? \Redis::PIPELINE : 1 );
+					foreach ( $formatted_data as $k => $v ) {
+						$pipeline->setex( $k, $expire, $v );
+					}
+					$replies = $pipeline->exec();
 
-				if ( ! is_array( $replies ) ) {
-					return array_fill_keys( array_keys( $data ), false );
+					if ( ! is_array( $replies ) ) {
+						return array_fill_keys( array_keys( $data ), false );
+					}
+
+					$i = 0;
+					foreach ( $data as $key => $value ) {
+						$results[ $key ] = (bool) ( $replies[ $i ] ?? false );
+						++$i;
+					}
+					return $results;
 				}
 
-				$i = 0;
+				$ok = $this->redis->mSet( $formatted_data );
 				foreach ( $data as $key => $value ) {
-					$results[ $key ] = (bool) ( $replies[ $i ] ?? false );
-					++$i;
+					$results[ $key ] = $ok;
+				}
+				return $results;
+			} catch ( \Throwable $e ) {
+				$this->fail_open_to_memory( 'write_fail', $e->getMessage() );
+				foreach ( $data as $key => $value ) {
+					$results[ $key ] = true;
 				}
 				return $results;
 			}
-
-			$ok = $this->redis->mSet( $formatted_data );
-			foreach ( $data as $key => $value ) {
-				$results[ $key ] = $ok;
-			}
-			return $results;
 		}
 
 		/**
@@ -822,7 +932,11 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				return true;
 			}
 
-			$this->redis->del( $local_key );
+			try {
+				$this->redis->del( $local_key );
+			} catch ( \Throwable $e ) {
+				$this->fail_open_to_memory( 'delete_fail', $e->getMessage() );
+			}
 			return true;
 		}
 
@@ -856,11 +970,19 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 			// Redis DEL returns count of deleted keys, not per-key success.
 			// To match the contract strictly, we could use a pipeline, but standard DEL is more efficient.
 			// We'll use a pipeline to get individual results if strict contract is required.
-			$pipeline = $this->redis->multi( \Redis::PIPELINE );
-			foreach ( $formatted_keys as $k ) {
-				$pipeline->del( $k );
+			try {
+				$pipeline = $this->redis->multi( defined( '\Redis::PIPELINE' ) ? \Redis::PIPELINE : 1 );
+				foreach ( $formatted_keys as $k ) {
+					$pipeline->del( $k );
+				}
+				$replies = $pipeline->exec();
+			} catch ( \Throwable $e ) {
+				$this->fail_open_to_memory( 'delete_fail', $e->getMessage() );
+				foreach ( $keys as $key ) {
+					$results[ $key ] = true;
+				}
+				return $results;
 			}
-			$replies = $pipeline->exec();
 
 			foreach ( $keys as $i => $key ) {
 				$results[ $key ] = (bool) ( $replies[ $i ] ?? false );
@@ -885,7 +1007,12 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 
 			$formatted_key = $this->get_key( $key, $group );
 
-			if ( ! $this->redis->exists( $formatted_key ) ) {
+			try {
+				if ( ! $this->redis->exists( $formatted_key ) ) {
+					return false;
+				}
+			} catch ( \Throwable $e ) {
+				$this->fail_open_to_memory( 'read_fail', $e->getMessage() );
 				return false;
 			}
 
@@ -1098,7 +1225,17 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				return $this->cache[ $local_key ];
 			}
 
-			return $this->redis->incrBy( $this->get_key( $key, $group ), $offset );
+			try {
+				return $this->redis->incrBy( $this->get_key( $key, $group ), $offset );
+			} catch ( \Throwable $e ) {
+				$this->fail_open_to_memory( 'write_fail', $e->getMessage() );
+				$local_key = $this->get_key( $key, $group );
+				if ( ! isset( $this->cache[ $local_key ] ) ) {
+					$this->cache[ $local_key ] = 0;
+				}
+				$this->cache[ $local_key ] += $offset;
+				return $this->cache[ $local_key ];
+			}
 		}
 
 		/**
@@ -1119,7 +1256,17 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				return $this->cache[ $local_key ];
 			}
 
-			return $this->redis->decrBy( $this->get_key( $key, $group ), $offset );
+			try {
+				return $this->redis->decrBy( $this->get_key( $key, $group ), $offset );
+			} catch ( \Throwable $e ) {
+				$this->fail_open_to_memory( 'write_fail', $e->getMessage() );
+				$local_key = $this->get_key( $key, $group );
+				if ( ! isset( $this->cache[ $local_key ] ) ) {
+					$this->cache[ $local_key ] = 0;
+				}
+				$this->cache[ $local_key ] -= $offset;
+				return $this->cache[ $local_key ];
+			}
 		}
 
 		/**
@@ -1337,14 +1484,14 @@ function wp_cache_close() {
 		if ( $wp_object_cache->redis_connected && $wp_object_cache->redis ) {
 			try {
 				$wp_object_cache->redis->close();
-			} catch ( \Exception $e ) {
+			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
 		}
 		if ( $wp_object_cache->redis_replica ) {
 			try {
 				$wp_object_cache->redis_replica->close();
-			} catch ( \Exception $e ) {
+			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
 		}
