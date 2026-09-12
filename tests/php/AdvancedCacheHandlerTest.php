@@ -556,6 +556,58 @@ class AdvancedCacheHandlerTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that create() emits the WP-Cron spawn helper (issue #1088) with
+	 * the extended serve signature and one spawn call per serve branch.
+	 */
+	public function test_create_emits_cron_spawn_on_cache_hits(): void {
+		$fs                       = new WPPO_AdvancedCache_FS_Mock();
+		$fs->file_exists          = false;
+		$GLOBALS['wp_filesystem'] = $fs;
+
+		Functions\when( 'wp_normalize_path' )->returnArg();
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'absint' )->alias(
+			static function ( $value ) {
+				return abs( (int) $value );
+			}
+		);
+
+		$this->assertTrue( Advanced_Cache_Handler::create() );
+
+		// Helper is emitted.
+		$this->assertStringContainsString( 'function wppo_maybe_spawn_cron', $fs->put_contents );
+		// Extended 7-arg serve signature.
+		$this->assertStringContainsString(
+			'function wppo_serve_cache_file( $file_path, $gzip_file_path, $brotli_file_path, $cache_life, $accept_encoding, $site_url, $canonical_host )',
+			$fs->put_contents
+		);
+		// One spawn call per serve branch (brotli / gzip / plain).
+		$this->assertSame(
+			3,
+			substr_count( $fs->put_contents, 'wppo_maybe_spawn_cron( $site_url, $canonical_host );' )
+		);
+		// Validation happens before the rate-limit touch so bail paths do not
+		// refresh the throttle window.
+		$this->assertLessThan(
+			strpos( $fs->put_contents, '@touch( $lock );' ),
+			strpos( $fs->put_contents, 'strpos( $site_url,' )
+		);
+		// Strict scheme validation rejects non-URL 'http*' prefixes.
+		$this->assertStringContainsString( 'strpos( $site_url, \'http://\' )', $fs->put_contents );
+		$this->assertStringContainsString( 'strpos( $site_url, \'https://\' )', $fs->put_contents );
+		// HEAD hits spawn alongside GET.
+		$this->assertStringContainsString( "'HEAD'", $fs->put_contents );
+		// Hot-path timeouts stay sub-100ms so a dead loopback never delays a hit.
+		$this->assertStringContainsString( 'fsockopen( $fp_host, $port, $errno, $errstr, 0.1 )', $fs->put_contents );
+		$this->assertStringContainsString( "'timeout' => 0.1", $fs->put_contents );
+		// Atomic check-and-set via non-blocking flock.
+		$this->assertStringContainsString( 'LOCK_EX | LOCK_NB', $fs->put_contents );
+		// Generated drop-in is still valid PHP.
+		$this->assertSame( 0, strpos( ltrim( $fs->put_contents ), '<?php' ) );
+	}
+
+	/**
 	 * Test that create leaves a foreign drop-in untouched.
 	 */
 	public function test_create_skips_foreign_dropin(): void {
