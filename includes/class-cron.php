@@ -324,6 +324,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		public function ccss_regeneration_cron() {
 			$options = Util::get_settings();
 			if ( ! empty( $options['file_optimisation']['criticalCSS'] ) ) {
+				// Suspended while deferJS/delayJS is active: generated
+				// variants could not be used (issue #1090). Belt-and-braces
+				// alongside Critical_CSS::regenerate_all()'s own guard.
+				if ( method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'is_deferral_suspended_by_js' ) && Critical_CSS::is_deferral_suspended_by_js() ) {
+					return;
+				}
 				Critical_CSS::regenerate_all();
 			}
 		}
