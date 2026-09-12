@@ -59,6 +59,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * parses the HTML, calculates sizes using local filesystem paths, and
 		 * stores the result as a transient.
 		 *
+		 * The `is_cached` flag in the returned payload covers every non-rebuild
+		 * serve: fresh cache hits, a concurrent peer's fresh value served after
+		 * bounded retry, and stale-while-revalidate copies (up to 24h old)
+		 * served under contention or rebuild failure. Callers that need to
+		 * distinguish fresh from stale should compare `scan_type`/timestamps,
+		 * not `is_cached` alone.
+		 *
 		 * @since  1.5.0
 		 * @param  string $url       The URL to scan.
 		 * @param  string $scan_type Either 'manual' or 'scheduled'.
@@ -72,117 +79,151 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 			// (issue #882 review).
 			$has_salted = function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache();
 
-			if ( $has_salted ) {
-				$cached = wp_cache_get_salted( $cache_key, 'wppo', Util::cache_salt( self::AUDIT_SALT_KEY ) );
-			} else {
-				$cached = get_transient( $cache_key );
-			}
+			$get_cached = function ( string $k ) use ( $cache_key, $has_salted ): mixed {
+				if ( $has_salted ) {
+					return wp_cache_get_salted( $cache_key, 'wppo', Util::cache_salt( self::AUDIT_SALT_KEY ) );
+				}
+				return get_transient( $k );
+			};
+			$set_cached = function ( string $k, mixed $v, int $t ) use ( $cache_key, $has_salted ): bool {
+				if ( $has_salted ) {
+					wp_cache_set_salted( $cache_key, $v, 'wppo', Util::cache_salt( self::AUDIT_SALT_KEY ), $t );
+					return true;
+				}
+				$ok = set_transient( $k, $v, $t );
+				if ( $ok ) {
+					self::register_transient_key( $k );
+				}
+				return (bool) $ok;
+			};
 
-			if ( ! $force && false !== $cached ) {
-				$cached['is_cached'] = true;
-				return $cached;
-			}
+			$did_rebuild = false;
+			$rebuild     = function () use ( $url, $scan_type, &$did_rebuild ): array|\WP_Error {
+				$did_rebuild = true;
 
-			// SSRF protection: validate URL before making any network request.
-			if ( ! wp_http_validate_url( $url ) ) {
-				return new \WP_Error( 'invalid_url', __( 'The provided URL is not allowed.', 'performance-optimisation' ) );
-			}
-			$parsed_url = wp_parse_url( $url );
-			$scheme     = $parsed_url['scheme'] ?? '';
-			if ( ! in_array( $scheme, array( 'http', 'https' ), true ) ) {
-				return new \WP_Error( 'invalid_url', __( 'Only http and https URLs are allowed.', 'performance-optimisation' ) );
-			}
-
-			// SSRF protection: validate that the URL belongs to this website.
-			$home_host = wp_parse_url( Util::cached_home_url(), PHP_URL_HOST );
-			if ( ( $parsed_url['host'] ?? '' ) !== $home_host ) {
-				return new \WP_Error( 'invalid_url', __( 'You can only scan URLs belonging to this website.', 'performance-optimisation' ) );
-			}
-
-			$body      = '';
-			$headers   = array();
-			$timings   = array();
-			$load_time = 0;
-
-			// --- Primary fetch: raw cURL for granular network timings ---
-			// cURL is used here intentionally because wp_remote_get() does not expose
-			// DNS/connect/SSL timing data and does not support automatic content-encoding
-			// decoding (CURLOPT_ENCODING), which is required to parse gzip-compressed HTML.
-			if ( function_exists( 'curl_init' ) ) {
-				$curl_result = self::fetch_via_curl( $url );
-
-				if ( is_wp_error( $curl_result ) ) {
-					return $curl_result;
+				// SSRF protection: validate URL before making any network request.
+				if ( ! wp_http_validate_url( $url ) ) {
+					return new \WP_Error( 'invalid_url', __( 'The provided URL is not allowed.', 'performance-optimisation' ) );
+				}
+				$parsed_url = wp_parse_url( $url );
+				$scheme     = $parsed_url['scheme'] ?? '';
+				if ( ! in_array( $scheme, array( 'http', 'https' ), true ) ) {
+					return new \WP_Error( 'invalid_url', __( 'Only http and https URLs are allowed.', 'performance-optimisation' ) );
 				}
 
-				if ( null !== $curl_result ) {
-					$body      = $curl_result['body'];
-					$headers   = $curl_result['headers'];
-					$timings   = $curl_result['timings'];
-					$load_time = $curl_result['load_time'];
-				}
-			}
-
-			// --- Fallback: wp_remote_get() when cURL is unavailable or failed ---
-			if ( empty( $body ) ) {
-				$remote_result = self::fetch_via_wp_remote( $url );
-
-				if ( is_wp_error( $remote_result ) ) {
-					return $remote_result;
+				// SSRF protection: validate that the URL belongs to this website.
+				$home_host = wp_parse_url( Util::cached_home_url(), PHP_URL_HOST );
+				if ( ( $parsed_url['host'] ?? '' ) !== $home_host ) {
+					return new \WP_Error( 'invalid_url', __( 'You can only scan URLs belonging to this website.', 'performance-optimisation' ) );
 				}
 
-				$body      = $remote_result['body'];
-				$headers   = $remote_result['headers'];
-				$timings   = $remote_result['timings'];
-				$load_time = $remote_result['load_time'];
-			}
+				$body      = '';
+				$headers   = array();
+				$timings   = array();
+				$load_time = 0;
 
-			$resources    = self::parse_resources( $body );
-			$sizes        = self::calculate_sizes( $resources );
-			$lazy_images  = array_filter( $resources['images'], fn( $img ) => true === $img['lazy'] );
-			$eager_images = array_filter( $resources['images'], fn( $img ) => false === $img['lazy'] );
+				// --- Primary fetch: raw cURL for granular network timings ---
+				// cURL is used here intentionally because wp_remote_get() does not expose
+				// DNS/connect/SSL timing data and does not support automatic content-encoding
+				// decoding (CURLOPT_ENCODING), which is required to parse gzip-compressed HTML.
+				if ( function_exists( 'curl_init' ) ) {
+					$curl_result = self::fetch_via_curl( $url );
 
-			$result = array(
-				'page_url'                  => esc_url( $url ),
-				'load_time'                 => $load_time,
-				'ttfb'                      => $timings['ttfb'] ?? 0,
-				'server_wait_time'          => $timings['server_wait_time'] ?? 0,
-				'dns_lookup_time'           => $timings['dns'] ?? 0,
-				'connect_time'              => $timings['connect'] ?? 0,
-				'ssl_time'                  => $timings['ssl'] ?? 0,
-				'css_count'                 => count( $resources['css'] ),
-				'js_count'                  => count( $resources['js'] ),
-				'media_count'               => count( $resources['images'] ),
-				'lazy_image_count'          => count( $lazy_images ),
-				'eager_image_count'         => count( $eager_images ),
-				'css_total_size'            => $sizes['css'],
-				'js_total_size'             => $sizes['js'],
-				'media_total_size'          => $sizes['images'],
-				'total_size'                => $sizes['css'] + $sizes['js'] + $sizes['images'],
-				// Boolean/enum values — locale-independent so frontend comparisons work on any language.
-				'uses_https'                => self::check_https( $url ),
-				'uses_modern_image_formats' => self::check_modern_images( $resources['images'] ),
-				'image_alt_attributes'      => self::check_alt_attributes( $resources['images'] ),
-				'robots_txt_exists'         => self::check_robots_txt( $url ),
-				'gzip_brotli_compression'   => self::check_compression( $headers ),
-				'compression_value'         => self::get_compression_type( $headers ),
-				'cache_control_headers'     => self::check_cache_control( $headers ),
-				'cache_control_value'       => self::get_cache_control( $headers ),
-				'scan_type'                 => $scan_type,
-				// New metrics (Phase 1 refinements).
-				'dom_size'                  => $resources['dom_size'],
-				'unminified_assets_count'   => $resources['unminified_count'],
-				'third_party_scripts_count' => $resources['third_party_count'],
-				'is_cached'                 => false,
+					if ( is_wp_error( $curl_result ) ) {
+						return $curl_result;
+					}
+
+					if ( null !== $curl_result ) {
+						$body      = $curl_result['body'];
+						$headers   = $curl_result['headers'];
+						$timings   = $curl_result['timings'];
+						$load_time = $curl_result['load_time'];
+					}
+				}
+
+				// --- Fallback: wp_remote_get() when cURL is unavailable or failed ---
+				if ( empty( $body ) ) {
+					$remote_result = self::fetch_via_wp_remote( $url );
+
+					if ( is_wp_error( $remote_result ) ) {
+						return $remote_result;
+					}
+
+					$body      = $remote_result['body'];
+					$headers   = $remote_result['headers'];
+					$timings   = $remote_result['timings'];
+					$load_time = $remote_result['load_time'];
+				}
+
+				$resources    = self::parse_resources( $body );
+				$sizes        = self::calculate_sizes( $resources );
+				$lazy_images  = array_filter( $resources['images'], fn( $img ) => true === $img['lazy'] );
+				$eager_images = array_filter( $resources['images'], fn( $img ) => false === $img['lazy'] );
+
+				$result = array(
+					'page_url'                  => esc_url( $url ),
+					'load_time'                 => $load_time,
+					'ttfb'                      => $timings['ttfb'] ?? 0,
+					'server_wait_time'          => $timings['server_wait_time'] ?? 0,
+					'dns_lookup_time'           => $timings['dns'] ?? 0,
+					'connect_time'              => $timings['connect'] ?? 0,
+					'ssl_time'                  => $timings['ssl'] ?? 0,
+					'css_count'                 => count( $resources['css'] ),
+					'js_count'                  => count( $resources['js'] ),
+					'media_count'               => count( $resources['images'] ),
+					'lazy_image_count'          => count( $lazy_images ),
+					'eager_image_count'         => count( $eager_images ),
+					'css_total_size'            => $sizes['css'],
+					'js_total_size'             => $sizes['js'],
+					'media_total_size'          => $sizes['images'],
+					'total_size'                => $sizes['css'] + $sizes['js'] + $sizes['images'],
+					// Boolean/enum values — locale-independent so frontend comparisons work on any language.
+					'uses_https'                => self::check_https( $url ),
+					'uses_modern_image_formats' => self::check_modern_images( $resources['images'] ),
+					'image_alt_attributes'      => self::check_alt_attributes( $resources['images'] ),
+					'robots_txt_exists'         => self::check_robots_txt( $url ),
+					'gzip_brotli_compression'   => self::check_compression( $headers ),
+					'compression_value'         => self::get_compression_type( $headers ),
+					'cache_control_headers'     => self::check_cache_control( $headers ),
+					'cache_control_value'       => self::get_cache_control( $headers ),
+					'scan_type'                 => $scan_type,
+					// New metrics (Phase 1 refinements).
+					'dom_size'                  => $resources['dom_size'],
+					'unminified_assets_count'   => $resources['unminified_count'],
+					'third_party_scripts_count' => $resources['third_party_count'],
+					'is_cached'                 => false,
+				);
+
+				return $result;
+			};
+
+			// Stampede guard (issue #1101): atomic owner lock with bounded retry
+			// + stale-while-revalidate. Concurrent scans for the same URL collapse
+			// toward one fetch/parse; losers serve the peer's fresh value or the
+			// stale copy. Fail-open: Redis/lock failures serve stale or dynamic.
+			// Note: losers return with $did_rebuild=false, so `is_cached` below
+			// is true for stale serves too (documented on scan()).
+			$result = Util::get_with_stampede_lock(
+				$cache_key,
+				$rebuild,
+				array(
+					'ttl'            => HOUR_IN_SECONDS,
+					'stale_ttl'      => defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400,
+					'retries'        => 4,
+					'retry_delay_us' => 0,
+					'force'          => $force,
+					'get_cached'     => $get_cached,
+					'set_cached'     => $set_cached,
+				)
 			);
 
-			if ( $has_salted ) {
-				wp_cache_set_salted( $cache_key, $result, 'wppo', Util::cache_salt( self::AUDIT_SALT_KEY ), HOUR_IN_SECONDS );
-			} else {
-				set_transient( $cache_key, $result, HOUR_IN_SECONDS );
-				self::register_transient_key( $cache_key );
+			if ( $result instanceof \WP_Error || false === $result ) {
+				return $result;
 			}
-
+			if ( is_array( $result ) ) {
+				$result['is_cached'] = ! $did_rebuild;
+				return $result;
+			}
 			return $result;
 		}
 
@@ -999,7 +1040,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 			}
 			// Transient fallback (most single-site installs): delete the
 			// registered wppo_audit_* keys so settings changes do not leave
-			// stale audit data cached up to the 1h TTL.
+			// stale audit data cached up to the 1h TTL. The `strpos` match also
+			// covers stampede `<key>_stale` copies (24h TTL, issue #1101), which
+			// are registered in the same index — an explicit purge must never
+			// let a later contention resurrect day-old stale data.
 			try {
 				$index = get_option( 'wppo_transient_index', array() );
 				if ( is_array( $index ) && ! empty( $index ) ) {

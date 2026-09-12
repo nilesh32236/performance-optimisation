@@ -174,6 +174,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'cacheLife'           => 0,
 					'ttlOverrides'        => array(),
 					'wooSafeMode'         => true,
+					'stampedeGuard'       => true,
+					'stampedeLockTtl'     => 5,
 				),
 				'file_optimisation'     => array(
 					'enableServerRules'            => false,
@@ -2467,6 +2469,519 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			} catch ( \Throwable $e ) {
 				return $key;
 			}
+		}
+
+		/**
+		 * Whether the stampede guard is enabled.
+		 *
+		 * Operator opt-out via `wppo_settings['cache_settings']['stampedeGuard']`
+		 * (default true, additive key) or the `wppo_stampede_guard_enabled`
+		 * filter. When disabled, {@see get_with_stampede_lock()} degrades to a
+		 * plain get-or-rebuild without coalescing (fail-open).
+		 *
+		 * @since NEXT
+		 * @return bool True when coalescing is active.
+		 */
+		public static function is_stampede_guard_enabled(): bool {
+			try {
+				$settings = self::get_settings();
+				$guard    = $settings['cache_settings']['stampedeGuard'] ?? true;
+			} catch ( \Throwable $e ) {
+				$guard = true;
+			}
+			/**
+			 * Filters whether the stampede guard coalesces hot-key rebuilds.
+			 *
+			 * @since NEXT
+			 * @param bool $enabled Whether the guard is enabled.
+			 */
+			return (bool) apply_filters( 'wppo_stampede_guard_enabled', (bool) $guard );
+		}
+
+		/**
+		 * Effective stampede lock TTL in seconds, clamped to 2-5s.
+		 *
+		 * Reads `wppo_settings['cache_settings']['stampedeLockTtl']` (default 5,
+		 * additive key) with the `wppo_stampede_lock_ttl` filter applied last.
+		 * The tight bound keeps a crashed holder from stalling rebuilds while
+		 * still covering typical DB/HTTP rebuilds under herd. It is
+		 * best-effort: rebuilds slower than the TTL (slow-origin telemetry
+		 * fetches) may expire mid-rebuild and duplicate work rather than stall.
+		 *
+		 * @since NEXT
+		 * @return int Lock TTL clamped to 2-5 seconds.
+		 */
+		public static function stampede_lock_ttl(): int {
+			$ttl = 5;
+			try {
+				$settings = self::get_settings();
+				$raw      = $settings['cache_settings']['stampedeLockTtl'] ?? 5;
+				$ttl      = (int) $raw;
+			} catch ( \Throwable $e ) {
+				$ttl = 5;
+			}
+			/**
+			 * Filters the stampede lock TTL in seconds (clamped to 2-5s after filtering).
+			 *
+			 * @since NEXT
+			 * @param int $ttl Lock TTL in seconds.
+			 */
+			$ttl = (int) apply_filters( 'wppo_stampede_lock_ttl', $ttl );
+			if ( $ttl < 2 ) {
+				return 2;
+			}
+			if ( $ttl > 5 ) {
+				return 5;
+			}
+			return $ttl;
+		}
+
+		/**
+		 * Generate a unique stampede lock owner token.
+		 *
+		 * Prefers `wp_generate_uuid4()` with a `uniqid() + mt_rand()` fallback
+		 * so concurrent workers never share an owner (release is owner-checked).
+		 *
+		 * @since NEXT
+		 * @return string Unique owner token (never empty).
+		 */
+		public static function generate_stampede_owner(): string {
+			try {
+				if ( function_exists( 'wp_generate_uuid4' ) ) {
+					$uuid = (string) wp_generate_uuid4();
+					if ( '' !== $uuid ) {
+						return $uuid;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			try {
+				if ( function_exists( 'wp_rand' ) ) {
+					return uniqid( 'wppo-', true ) . '-' . wp_rand( 1, PHP_INT_MAX );
+				}
+				return uniqid( 'wppo-', true ) . '-' . random_int( 1, PHP_INT_MAX );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 'wppo-' . microtime( true ) . '-' . uniqid();
+			}
+		}
+
+		/**
+		 * Atomically acquire a named stampede lock.
+		 *
+		 * Uses `wp_cache_add()` (atomic `SET NX EX` on Redis/Memcached) with a
+		 * unique owner so only one worker wins — but only when a persistent
+		 * object cache is present (`wp_using_ext_object_cache()`). Without a
+		 * persistent cache `wp_cache_add()` is per-request in-memory only, so
+		 * every worker would "acquire" the lock; the transient check-and-set
+		 * fallback below is then used instead and is documented best-effort
+		 * (two workers can both observe a miss and both claim the lock — it
+		 * narrows the race but is not atomic unless serialized via an atomic
+		 * option/DB row). Fail-open: any throwable means "not acquired"
+		 * (caller serves stale).
+		 *
+		 * @since NEXT
+		 * @param string $lock_key Blog-aware lock key (use transient_key()).
+		 * @param string $owner    Unique owner token from generate_stampede_owner().
+		 * @param int    $ttl      Lock TTL in seconds (clamped to 2-5s; best-effort
+		 *                         bound — rebuilds slower than the TTL, e.g. a slow-
+		 *                         origin telemetry fetch, may let the lock expire
+		 *                         mid-rebuild and duplicate work).
+		 * @param string $group    Object-cache group for the lock.
+		 * @return bool True when this worker owns the lock.
+		 */
+		public static function acquire_stampede_lock( string $lock_key, string $owner, int $ttl = 5, string $group = 'wppo' ): bool {
+			if ( '' === $lock_key || '' === $owner ) {
+				return false;
+			}
+			if ( $ttl < 2 ) {
+				$ttl = 2;
+			} elseif ( $ttl > 5 ) {
+				$ttl = 5;
+			}
+			try {
+				$has_ext_cache = false;
+				if ( function_exists( 'wp_using_ext_object_cache' ) ) {
+					try {
+						$has_ext_cache = (bool) wp_using_ext_object_cache();
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$has_ext_cache = false;
+					}
+				}
+				if ( $has_ext_cache && function_exists( 'wp_cache_add' ) ) {
+					return (bool) wp_cache_add( $lock_key, $owner, $group, $ttl );
+				}
+				if ( function_exists( 'get_transient' ) && function_exists( 'set_transient' ) ) {
+					if ( false !== get_transient( $lock_key ) ) {
+						return false;
+					}
+					return (bool) set_transient( $lock_key, $owner, $ttl );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+			return false;
+		}
+
+		/**
+		 * Release a stampede lock only when this worker still owns it.
+		 *
+		 * Owner-checked so a slow worker never deletes a successor's lock after
+		 * its own TTL expired. Fail-open: throwables are swallowed (never fatal).
+		 *
+		 * @since NEXT
+		 * @param string $lock_key Blog-aware lock key.
+		 * @param string $owner    Owner token that acquired the lock.
+		 * @param string $group    Object-cache group for the lock.
+		 * @return void
+		 */
+		public static function release_stampede_lock( string $lock_key, string $owner, string $group = 'wppo' ): void {
+			if ( '' === $lock_key || '' === $owner ) {
+				return;
+			}
+			try {
+				$current = null;
+				$found   = false;
+				if ( function_exists( 'wp_cache_get' ) ) {
+					$current = wp_cache_get( $lock_key, $group );
+					$found   = ( $current === $owner );
+				} elseif ( function_exists( 'get_transient' ) ) {
+					$current = get_transient( $lock_key );
+					$found   = ( $current === $owner );
+				}
+				if ( ! $found ) {
+					// Fall back to the transient namespace: the lock may have
+					// been stored there when wp_cache_add() was unavailable.
+					if ( function_exists( 'get_transient' ) && $current !== $owner ) {
+						$transient_current = get_transient( $lock_key );
+						$found             = ( $transient_current === $owner );
+					}
+				}
+				if ( ! $found ) {
+					return;
+				}
+				if ( function_exists( 'wp_cache_delete' ) ) {
+					wp_cache_delete( $lock_key, $group );
+				}
+				if ( function_exists( 'delete_transient' ) ) {
+					delete_transient( $lock_key );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Derive the stale-copy transient key for a guarded value key.
+		 *
+		 * Callers pass an already blog-qualified `$key` (via transient_key()),
+		 * so naively prefixing again would produce a double blog prefix like
+		 * `3_3_wppo_audit_..._stale` on multisite. When `$key` already carries
+		 * the current blog prefix only `_stale` is appended; bare keys are
+		 * still qualified via {@see transient_key()} so they stay isolated.
+		 *
+		 * @since NEXT
+		 * @param string $key Value cache key as passed to get_with_stampede_lock().
+		 * @return string Stale-copy key.
+		 */
+		public static function stampede_stale_key( string $key ): string {
+			try {
+				if ( function_exists( 'is_multisite' ) && function_exists( 'get_current_blog_id' ) && is_multisite() ) {
+					$prefix = (string) get_current_blog_id() . '_';
+					if ( '' !== $prefix && str_starts_with( $key, $prefix ) ) {
+						return $key . '_stale';
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			// Single-site, or a bare key on multisite: qualify normally.
+			// On single-site transient_key() returns the key unchanged, so a
+			// caller-passed prefixed key is never double-prefixed there.
+			if ( function_exists( 'is_multisite' ) ) {
+				try {
+					if ( ! is_multisite() ) {
+						return $key . '_stale';
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return $key . '_stale';
+				}
+			}
+			return self::transient_key( $key . '_stale' );
+		}
+
+		/**
+		 * Best-effort registration of a stale-copy key in `wppo_transient_index`.
+		 *
+		 * The index lets purge paths (`invalidate_audit_cache()`,
+		 * `invalidate_counts_cache()`, `bump_stats_cache()`) find and delete
+		 * `<key>_stale` copies so an explicit purge cannot resurrect day-old
+		 * stale data on the next contention or failure. Failures are swallowed
+		 * (fail-open); a missing index entry only means the stale copy lives
+		 * out its TTL.
+		 *
+		 * @since NEXT
+		 * @param string $key Stale-copy transient key.
+		 * @param int    $ttl Stale TTL in seconds (converted to an absolute expiry).
+		 * @return void
+		 */
+		public static function register_transient_index_key( string $key, int $ttl ): void {
+			if ( '' === $key ) {
+				return;
+			}
+			try {
+				if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
+					return;
+				}
+				$index = get_option( 'wppo_transient_index', array() );
+				if ( ! is_array( $index ) ) {
+					$index = array();
+				}
+				$index[ $key ] = time() + max( 1, $ttl );
+				update_option( 'wppo_transient_index', $index, false );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Get a cached value or rebuild it under an atomic owner lock.
+		 *
+		 * Herd immunity for hot keys: on a cache miss exactly one worker
+		 * acquires the owner lock and rebuilds while the rest bounded-retry
+		 * the fresh key and then serve the stale copy (stale-while-revalidate).
+		 * The lock is atomic (`wp_cache_add()` `SET NX EX`) only with a
+		 * persistent object cache; without one the transient fallback is
+		 * best-effort. Fail-open throughout: lock/Redis failures serve stale
+		 * or dynamic uncached — never fatal, never 500.
+		 *
+		 * The 2-5s lock TTL is a best-effort bound: rebuilds slower than the
+		 * TTL (e.g. a slow-origin telemetry HTTP fetch) may let the lock
+		 * expire mid-rebuild so a second worker duplicates the work. No
+		 * lock-extension heartbeat is attempted; duplication is preferred over
+		 * stalling rebuilds behind a crashed holder.
+		 *
+		 * Multisite-safe: the lock key is derived via {@see transient_key()}
+		 * (blog-aware); the value key `$key` is used as given so callers keep
+		 * their existing salted/transient qualification. The stale key is
+		 * `$key . '_stale'` when `$key` is already blog-prefixed, otherwise
+		 * `transient_key( $key . '_stale' )`, so no double blog prefix is
+		 * produced while bare keys stay isolated.
+		 *
+		 * Stale lifecycle: every successful rebuild writes the `<key>_stale`
+		 * transient (24h TTL, best-effort registered in `wppo_transient_index`
+		 * so purges can find it). Callers must still delete the stale key
+		 * wherever they invalidate the fresh key (purge paths do so).
+		 *
+		 * @since NEXT
+		 * @param string   $key     Value cache key as read/written by $args get/set (caller-qualified).
+		 * @param callable $rebuild Zero-arg rebuild callback. Returning false or WP_Error means
+		 *                          "not cacheable" (stale served when available).
+		 * @param array    $args    Optional arguments accepting `ttl`, `stale_ttl`, `lock_ttl`,
+		 *                    `retries`, `retry_delay_us`, `group`, `force`,
+		 *                    `get_cached`, and `set_cached` keys.
+		 * @return mixed Fresh value, stale fallback, rebuild result, or false on total miss failure.
+		 */
+		public static function get_with_stampede_lock( string $key, callable $rebuild, array $args = array() ): mixed {
+			$defaults = array(
+				'ttl'            => 5 * MINUTE_IN_SECONDS,
+				'stale_ttl'      => defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400,
+				'lock_ttl'       => self::stampede_lock_ttl(),
+				'retries'        => 4,
+				'retry_delay_us' => 50000,
+				'group'          => 'wppo',
+				'force'          => false,
+				'get_cached'     => null,
+				'set_cached'     => null,
+			);
+			$args     = array_merge( $defaults, is_array( $args ) ? $args : array() );
+
+			$ttl       = max( 1, (int) $args['ttl'] );
+			$stale_ttl = max( 1, (int) $args['stale_ttl'] );
+			$lock_ttl  = (int) $args['lock_ttl'];
+			if ( $lock_ttl < 2 ) {
+				$lock_ttl = 2;
+			} elseif ( $lock_ttl > 5 ) {
+				$lock_ttl = 5;
+			}
+			$retries        = max( 0, (int) $args['retries'] );
+			$retry_delay_us = max( 0, (int) $args['retry_delay_us'] );
+			$group          = is_string( $args['group'] ) && '' !== $args['group'] ? $args['group'] : 'wppo';
+			$force          = ! empty( $args['force'] );
+			$get_cached     = is_callable( $args['get_cached'] ) ? $args['get_cached'] : null;
+			$set_cached     = is_callable( $args['set_cached'] ) ? $args['set_cached'] : null;
+
+			if ( null === $get_cached ) {
+				$get_cached = static function ( string $k ): mixed {
+					try {
+						if ( ! function_exists( 'get_transient' ) ) {
+							return false;
+						}
+						return get_transient( $k );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return false;
+					}
+				};
+			}
+			if ( null === $set_cached ) {
+				$set_cached = static function ( string $k, mixed $v, int $t ): bool {
+					try {
+						if ( ! function_exists( 'set_transient' ) ) {
+							return false;
+						}
+						return (bool) set_transient( $k, $v, $t );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return false;
+					}
+				};
+			}
+
+			$read_cached  = static function ( string $k ) use ( $get_cached ): mixed {
+				try {
+					return $get_cached( $k );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return false;
+				}
+			};
+			$write_cached = static function ( string $k, mixed $v, int $t ) use ( $set_cached ): bool {
+				try {
+					return (bool) $set_cached( $k, $v, $t );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return false;
+				}
+			};
+			$read_stale   = static function ( string $k ): mixed {
+				try {
+					if ( ! function_exists( 'get_transient' ) ) {
+						return false;
+					}
+					return get_transient( $k );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return false;
+				}
+			};
+			$write_stale  = static function ( string $k, mixed $v, int $t ): void {
+				try {
+					if ( function_exists( 'set_transient' ) ) {
+						set_transient( $k, $v, $t );
+						self::register_transient_index_key( $k, $t );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			};
+
+			$lock_key  = self::transient_key( 'wppo_stampede_' . md5( $key ) );
+			$stale_key = self::stampede_stale_key( $key );
+
+			// Fast path: no lock on hits.
+			if ( ! $force ) {
+				$cached = $read_cached( $key );
+				if ( false !== $cached ) {
+					return $cached;
+				}
+			}
+
+			// Guard disabled: plain rebuild without coalescing (fail-open).
+			$guard_enabled = true;
+			try {
+				$guard_enabled = self::is_stampede_guard_enabled();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$guard_enabled = true;
+			}
+			if ( ! $guard_enabled ) {
+				try {
+					$fresh = $rebuild();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$stale = $read_stale( $stale_key );
+					return false !== $stale ? $stale : false;
+				}
+				if ( $fresh instanceof \WP_Error || false === $fresh ) {
+					$stale = $read_stale( $stale_key );
+					return false !== $stale ? $stale : $fresh;
+				}
+				$write_cached( $key, $fresh, $ttl );
+				$write_stale( $stale_key, $fresh, $stale_ttl );
+				return $fresh;
+			}
+
+			// Contended path helpers.
+			$stale = $read_stale( $stale_key );
+
+			$owner    = self::generate_stampede_owner();
+			$acquired = self::acquire_stampede_lock( $lock_key, $owner, $lock_ttl, $group );
+
+			if ( $acquired ) {
+				try {
+					$fresh = $rebuild();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					self::release_stampede_lock( $lock_key, $owner, $group );
+					$stale_now = $read_stale( $stale_key );
+					return false !== $stale_now ? $stale_now : false;
+				}
+				if ( $fresh instanceof \WP_Error || false === $fresh ) {
+					self::release_stampede_lock( $lock_key, $owner, $group );
+					$stale_now = $read_stale( $stale_key );
+					return false !== $stale_now ? $stale_now : $fresh;
+				}
+				$write_cached( $key, $fresh, $ttl );
+				$write_stale( $stale_key, $fresh, $stale_ttl );
+				self::release_stampede_lock( $lock_key, $owner, $group );
+				return $fresh;
+			}
+
+			// Another worker rebuilds: bounded retry on the fresh key, then stale.
+			for ( $i = 0; $i < $retries; $i++ ) {
+				if ( $retry_delay_us > 0 && function_exists( 'usleep' ) ) {
+					try {
+						usleep( $retry_delay_us );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				$cached = $read_cached( $key );
+				if ( false !== $cached ) {
+					return $cached;
+				}
+			}
+
+			// Prefer the freshest stale copy: the winner may have refreshed
+			// the stale key during the retry loop, so re-read first and only
+			// fall back to the pre-lock snapshot when the re-read misses.
+			$stale_now = $read_stale( $stale_key );
+			if ( false !== $stale_now ) {
+				return $stale_now;
+			}
+			if ( false !== $stale ) {
+				return $stale;
+			}
+
+			// Cold start with no stale: fail-open direct rebuild (duplicate work
+			// is unavoidable exactly once); never fatal.
+			try {
+				$fresh = $rebuild();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+			if ( $fresh instanceof \WP_Error || false === $fresh ) {
+				return $fresh;
+			}
+			$write_cached( $key, $fresh, $ttl );
+			$write_stale( $stale_key, $fresh, $stale_ttl );
+			return $fresh;
 		}
 
 		/**
