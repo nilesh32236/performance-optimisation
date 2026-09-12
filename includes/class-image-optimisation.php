@@ -51,17 +51,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private const IMG_SIZE_CACHE_LIMIT = 100;
 
 		/**
-		 * Maximum number of preload links emitted per page.
-		 *
-		 * Caps the merged preload list (manual + auto LCP) so a media-heavy
-		 * page never floods the head with hints; the auto LCP hero itself
-		 * is always at most one item.
-		 *
-		 * @since NEXT
-		 */
-		private const MAX_PRELOAD_LINKS = 2;
-
-		/**
 		 * Configuration options for image optimization.
 		 *
 		 * @var array
@@ -395,11 +384,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		public function preload_images() {
 			$preload_data = $this->get_all_preload_data();
 
-			$emitted = 0;
 			foreach ( $preload_data as $data ) {
-				if ( $emitted >= self::MAX_PRELOAD_LINKS ) {
-					break;
-				}
 				if ( ! is_array( $data ) || empty( $data['url'] ) || ! is_string( $data['url'] ) ) {
 					continue;
 				}
@@ -408,7 +393,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					continue;
 				}
 				self::$preload_emitted[ $emitted_key ] = true;
-				++$emitted;
 				Util::generate_preload_link(
 					$data['url'],
 					'preload',
@@ -1647,9 +1631,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 				$seen[ $key ] = true;
 				$unique[]     = $item;
-				if ( count( $unique ) >= self::MAX_PRELOAD_LINKS ) {
-					break;
-				}
 			}
 
 			return $unique;
@@ -1876,9 +1857,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * PageSpeed/RUM-field → P2 DOM-first heuristic when a buffer is
 		 * available). Emits at most one item via `prepare_preload_item()`
 		 * so "once per URL" holds; the item is ordered first in
-		 * `get_all_preload_data()` so manual preloads can never starve the
-		 * auto-detected hero under the `MAX_PRELOAD_LINKS` cap. The toggle
-		 * autoPreloadLCP must be enabled.
+		 * `get_all_preload_data()` so it is emitted ahead of manual
+		 * preloads and participates in the normalized-URL dedup first. The
+		 * toggle autoPreloadLCP must be enabled.
 		 *
 		 * @since 2.0.0
 		 * @since NEXT Resolves via the unified `resolve_auto_lcp_url()` chain
