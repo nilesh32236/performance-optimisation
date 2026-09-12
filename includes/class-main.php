@@ -3019,6 +3019,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'type="wppo/javascript" wppo-type="text/javascript"',
 						$tag
 					) ?? $tag;
+					// Fill-gaps-only (#1089): WP 6.3+ omits type="text/javascript"
+					// for defer/async-strategy scripts (and plain tags may carry
+					// no type at all), so the preg_replace above leaves those
+					// tags with wppo-src but no delay marker. Inject the marker
+					// when absent so every delayed tag stays self-describing.
+					// Never double-stamp a tag that already carries the marker.
+					if ( false !== strpos( $tag, 'wppo-src' )
+						&& false === strpos( $tag, 'wppo/javascript' )
+						&& ! preg_match( '/\stype\s*=/i', $tag )
+					) {
+						$tag = str_replace( '<script ', '<script type="wppo/javascript" wppo-type="text/javascript" ', $tag );
+					}
 
 						// Determine delay strategy for this handle.
 						$strategy = $this->get_delay_strategy_for_handle( $handle );
