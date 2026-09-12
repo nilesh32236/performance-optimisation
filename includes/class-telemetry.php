@@ -59,6 +59,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * parses the HTML, calculates sizes using local filesystem paths, and
 		 * stores the result as a transient.
 		 *
+		 * The `is_cached` flag in the returned payload covers every non-rebuild
+		 * serve: fresh cache hits, a concurrent peer's fresh value served after
+		 * bounded retry, and stale-while-revalidate copies (up to 24h old)
+		 * served under contention or rebuild failure. Callers that need to
+		 * distinguish fresh from stale should compare `scan_type`/timestamps,
+		 * not `is_cached` alone.
+		 *
 		 * @since  1.5.0
 		 * @param  string $url       The URL to scan.
 		 * @param  string $scan_type Either 'manual' or 'scheduled'.
@@ -194,6 +201,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 			// + stale-while-revalidate. Concurrent scans for the same URL collapse
 			// toward one fetch/parse; losers serve the peer's fresh value or the
 			// stale copy. Fail-open: Redis/lock failures serve stale or dynamic.
+			// Note: losers return with $did_rebuild=false, so `is_cached` below
+			// is true for stale serves too (documented on scan()).
 			$result = Util::get_with_stampede_lock(
 				$cache_key,
 				$rebuild,
@@ -1031,7 +1040,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 			}
 			// Transient fallback (most single-site installs): delete the
 			// registered wppo_audit_* keys so settings changes do not leave
-			// stale audit data cached up to the 1h TTL.
+			// stale audit data cached up to the 1h TTL. The `strpos` match also
+			// covers stampede `<key>_stale` copies (24h TTL, issue #1101), which
+			// are registered in the same index — an explicit purge must never
+			// let a later contention resurrect day-old stale data.
 			try {
 				$index = get_option( 'wppo_transient_index', array() );
 				if ( is_array( $index ) && ! empty( $index ) ) {

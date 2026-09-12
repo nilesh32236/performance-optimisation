@@ -2485,7 +2485,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Reads `wppo_settings['cache_settings']['stampedeLockTtl']` (default 5,
 		 * additive key) with the `wppo_stampede_lock_ttl` filter applied last.
 		 * The tight bound keeps a crashed holder from stalling rebuilds while
-		 * still covering slow DB/HTTP rebuilds under herd.
+		 * still covering typical DB/HTTP rebuilds under herd. It is
+		 * best-effort: rebuilds slower than the TTL (slow-origin telemetry
+		 * fetches) may expire mid-rebuild and duplicate work rather than stall.
 		 *
 		 * @since NEXT
 		 * @return int Lock TTL clamped to 2-5 seconds.
@@ -2550,14 +2552,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Atomically acquire a named stampede lock.
 		 *
 		 * Uses `wp_cache_add()` (atomic `SET NX EX` on Redis/Memcached) with a
-		 * unique owner so only one worker wins. Falls back to a best-effort
-		 * transient check-and-set when the object-cache API is unavailable.
-		 * Fail-open: any throwable means "not acquired" (caller serves stale).
+		 * unique owner so only one worker wins — but only when a persistent
+		 * object cache is present (`wp_using_ext_object_cache()`). Without a
+		 * persistent cache `wp_cache_add()` is per-request in-memory only, so
+		 * every worker would "acquire" the lock; the transient check-and-set
+		 * fallback below is then used instead and is documented best-effort
+		 * (two workers can both observe a miss and both claim the lock — it
+		 * narrows the race but is not atomic unless serialized via an atomic
+		 * option/DB row). Fail-open: any throwable means "not acquired"
+		 * (caller serves stale).
 		 *
 		 * @since NEXT
 		 * @param string $lock_key Blog-aware lock key (use transient_key()).
 		 * @param string $owner    Unique owner token from generate_stampede_owner().
-		 * @param int    $ttl      Lock TTL in seconds (clamped to 2-5s).
+		 * @param int    $ttl      Lock TTL in seconds (clamped to 2-5s; best-effort
+		 *                         bound — rebuilds slower than the TTL, e.g. a slow-
+		 *                         origin telemetry fetch, may let the lock expire
+		 *                         mid-rebuild and duplicate work).
 		 * @param string $group    Object-cache group for the lock.
 		 * @return bool True when this worker owns the lock.
 		 */
@@ -2571,7 +2582,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				$ttl = 5;
 			}
 			try {
-				if ( function_exists( 'wp_cache_add' ) ) {
+				$has_ext_cache = false;
+				if ( function_exists( 'wp_using_ext_object_cache' ) ) {
+					try {
+						$has_ext_cache = (bool) wp_using_ext_object_cache();
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$has_ext_cache = false;
+					}
+				}
+				if ( $has_ext_cache && function_exists( 'wp_cache_add' ) ) {
 					return (bool) wp_cache_add( $lock_key, $owner, $group, $ttl );
 				}
 				if ( function_exists( 'get_transient' ) && function_exists( 'set_transient' ) ) {
@@ -2636,17 +2656,107 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Derive the stale-copy transient key for a guarded value key.
+		 *
+		 * Callers pass an already blog-qualified `$key` (via transient_key()),
+		 * so naively prefixing again would produce a double blog prefix like
+		 * `3_3_wppo_audit_..._stale` on multisite. When `$key` already carries
+		 * the current blog prefix only `_stale` is appended; bare keys are
+		 * still qualified via {@see transient_key()} so they stay isolated.
+		 *
+		 * @since NEXT
+		 * @param string $key Value cache key as passed to get_with_stampede_lock().
+		 * @return string Stale-copy key.
+		 */
+		public static function stampede_stale_key( string $key ): string {
+			try {
+				if ( function_exists( 'is_multisite' ) && function_exists( 'get_current_blog_id' ) && is_multisite() ) {
+					$prefix = (string) get_current_blog_id() . '_';
+					if ( '' !== $prefix && str_starts_with( $key, $prefix ) ) {
+						return $key . '_stale';
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			// Single-site, or a bare key on multisite: qualify normally.
+			// On single-site transient_key() returns the key unchanged, so a
+			// caller-passed prefixed key is never double-prefixed there.
+			if ( function_exists( 'is_multisite' ) ) {
+				try {
+					if ( ! is_multisite() ) {
+						return $key . '_stale';
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return $key . '_stale';
+				}
+			}
+			return self::transient_key( $key . '_stale' );
+		}
+
+		/**
+		 * Best-effort registration of a stale-copy key in `wppo_transient_index`.
+		 *
+		 * The index lets purge paths (`invalidate_audit_cache()`,
+		 * `invalidate_counts_cache()`, `bump_stats_cache()`) find and delete
+		 * `<key>_stale` copies so an explicit purge cannot resurrect day-old
+		 * stale data on the next contention or failure. Failures are swallowed
+		 * (fail-open); a missing index entry only means the stale copy lives
+		 * out its TTL.
+		 *
+		 * @since NEXT
+		 * @param string $key Stale-copy transient key.
+		 * @param int    $ttl Stale TTL in seconds (converted to an absolute expiry).
+		 * @return void
+		 */
+		public static function register_transient_index_key( string $key, int $ttl ): void {
+			if ( '' === $key ) {
+				return;
+			}
+			try {
+				if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
+					return;
+				}
+				$index = get_option( 'wppo_transient_index', array() );
+				if ( ! is_array( $index ) ) {
+					$index = array();
+				}
+				$index[ $key ] = time() + max( 1, $ttl );
+				update_option( 'wppo_transient_index', $index, false );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
 		 * Get a cached value or rebuild it under an atomic owner lock.
 		 *
 		 * Herd immunity for hot keys: on a cache miss exactly one worker
-		 * acquires the `wp_cache_add()` owner lock and rebuilds while the rest
-		 * bounded-retry the fresh key and then serve the stale copy
-		 * (stale-while-revalidate). Fail-open throughout: lock/Redis failures
-		 * serve stale or dynamic uncached — never fatal, never 500.
+		 * acquires the owner lock and rebuilds while the rest bounded-retry
+		 * the fresh key and then serve the stale copy (stale-while-revalidate).
+		 * The lock is atomic (`wp_cache_add()` `SET NX EX`) only with a
+		 * persistent object cache; without one the transient fallback is
+		 * best-effort. Fail-open throughout: lock/Redis failures serve stale
+		 * or dynamic uncached — never fatal, never 500.
 		 *
-		 * Multisite-safe: the lock key and stale key are derived via
-		 * {@see transient_key()} (blog-aware); the value key `$key` is used
-		 * as given so callers keep their existing salted/transient qualification.
+		 * The 2-5s lock TTL is a best-effort bound: rebuilds slower than the
+		 * TTL (e.g. a slow-origin telemetry HTTP fetch) may let the lock
+		 * expire mid-rebuild so a second worker duplicates the work. No
+		 * lock-extension heartbeat is attempted; duplication is preferred over
+		 * stalling rebuilds behind a crashed holder.
+		 *
+		 * Multisite-safe: the lock key is derived via {@see transient_key()}
+		 * (blog-aware); the value key `$key` is used as given so callers keep
+		 * their existing salted/transient qualification. The stale key is
+		 * `$key . '_stale'` when `$key` is already blog-prefixed, otherwise
+		 * `transient_key( $key . '_stale' )`, so no double blog prefix is
+		 * produced while bare keys stay isolated.
+		 *
+		 * Stale lifecycle: every successful rebuild writes the `<key>_stale`
+		 * transient (24h TTL, best-effort registered in `wppo_transient_index`
+		 * so purges can find it). Callers must still delete the stale key
+		 * wherever they invalidate the fresh key (purge paths do so).
 		 *
 		 * @since NEXT
 		 * @param string   $key     Value cache key as read/written by $args get/set (caller-qualified).
@@ -2744,6 +2854,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				try {
 					if ( function_exists( 'set_transient' ) ) {
 						set_transient( $k, $v, $t );
+						self::register_transient_index_key( $k, $t );
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
@@ -2751,7 +2862,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			};
 
 			$lock_key  = self::transient_key( 'wppo_stampede_' . md5( $key ) );
-			$stale_key = self::transient_key( $key . '_stale' );
+			$stale_key = self::stampede_stale_key( $key );
 
 			// Fast path: no lock on hits.
 			if ( ! $force ) {
@@ -2827,12 +2938,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				}
 			}
 
-			if ( false !== $stale ) {
-				return $stale;
-			}
+			// Prefer the freshest stale copy: the winner may have refreshed
+			// the stale key during the retry loop, so re-read first and only
+			// fall back to the pre-lock snapshot when the re-read misses.
 			$stale_now = $read_stale( $stale_key );
 			if ( false !== $stale_now ) {
 				return $stale_now;
+			}
+			if ( false !== $stale ) {
+				return $stale;
 			}
 
 			// Cold start with no stale: fail-open direct rebuild (duplicate work

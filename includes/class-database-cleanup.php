@@ -1621,7 +1621,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			// fallback keeps counts across requests otherwise (issue #882 review).
 			$has_salted = function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache();
 
-			$value_key = $has_salted ? 'wppo_db_cleanup_counts' : Util::transient_key( 'wppo_db_cleanup_counts' );
+			// Always blog-aware: the guard derives its lock key from this value
+			// (md5), so a bare key would make every blog of a multisite network
+			// contend on one lock while stale copies stay per-site. The salted
+			// get/set closures keep using this same qualified key.
+			$value_key = Util::transient_key( 'wppo_db_cleanup_counts' );
 
 			$get_cached = function ( string $k ) use ( $value_key, $has_salted ): mixed {
 				if ( $has_salted ) {
@@ -1851,6 +1855,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				update_option( self::SALT_KEY, (int) get_option( self::SALT_KEY, 0 ) + 1, false );
 			} else {
 				delete_transient( Util::transient_key( 'wppo_db_cleanup_counts' ) );
+			}
+			// Stampede stale copies (issue #1101): the guard writes a
+			// `<key>_stale` transient that must not survive an explicit purge.
+			// Fail-open: a missing transient API never breaks invalidation.
+			try {
+				if ( function_exists( 'delete_transient' ) ) {
+					delete_transient( Util::transient_key( 'wppo_db_cleanup_counts_stale' ) );
+					delete_transient( Util::stampede_stale_key( Util::transient_key( 'wppo_db_cleanup_counts' ) ) );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 			}
 		}
 
