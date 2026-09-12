@@ -191,6 +191,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 				$css_dir_url = site_url();
 			}
 
+			// These URLs are prefixed onto every relative url() and the result
+			// is cached to disk, so the scheme must not depend on is_ssl().
+			// site_url() derives its scheme from is_ssl(), which is false in
+			// WP-CLI/cron contexts; pin it to the site's canonical scheme so a
+			// CLI-triggered cache write can never bake http:// asset URLs into
+			// CSS that is later served to HTTPS visitors (mixed content, which
+			// browsers block outright).
+			$canonical = Util::canonical_scheme();
+			if ( 'https' === $canonical && 0 === stripos( $css_dir_url, 'http://' ) ) {
+				$css_dir_url = 'https://' . substr( $css_dir_url, 7 );
+			} elseif ( 'http' === $canonical && 0 === stripos( $css_dir_url, 'https://' ) ) {
+				$css_dir_url = 'http://' . substr( $css_dir_url, 8 );
+			}
+
 			$is_absolute_or_data = static function ( $path ) {
 				return 0 === stripos( $path, 'http://' )
 					|| 0 === stripos( $path, 'https://' )
