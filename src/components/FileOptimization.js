@@ -68,6 +68,7 @@ const FileOptimization = ( {
 	}, [] );
 
 	const defaultSettings = {
+		safeMode: options.safeMode !== undefined ? options.safeMode : false,
 		minifyJS: false,
 		excludeJS: '',
 		minifyCSS: false,
@@ -220,6 +221,7 @@ const FileOptimization = ( {
 		} );
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [
+		options.safeMode,
 		options.minifyJS,
 		options.excludeJS,
 		options.minifyCSS,
@@ -314,6 +316,7 @@ const FileOptimization = ( {
 		} );
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [
+		options.safeMode,
 		options.minifyJS,
 		options.excludeJS,
 		options.minifyCSS,
@@ -1468,6 +1471,36 @@ const FileOptimization = ( {
 								</div>
 							) }
 							<div className="wppo-field-group">
+								<SwitchField
+									label={ __(
+										'Safe mode — one-click recovery',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Instantly disable Delay JS, Defer JS and Remove Unused CSS without losing their settings. Turn off to restore your previous configuration. Per-page disables and ?nocache also bypass these optimisations.',
+										'performance-optimisation'
+									) }
+									name="safeMode"
+									checked={ settings.safeMode }
+									onChange={ handleChange( setSettings ) }
+									disabled={ optimizerDisabled }
+								/>
+								{ settings.safeMode && (
+									<NoticeBanner
+										type="warning"
+										message={ __(
+											'Safe mode is on — Delay, Defer and Used CSS are paused. Your settings are preserved.',
+											'performance-optimisation'
+										) }
+									/>
+								) }
+								{ notice && (
+									<NoticeBanner
+										type={ notice.type }
+										message={ notice.message }
+										onDismiss={ dismiss }
+									/>
+								) }
 								<Tooltip
 									content={
 										optimizerDisabled ? pausedTooltip : ''
@@ -1535,7 +1568,7 @@ const FileOptimization = ( {
 										/>
 										<p className="wppo-text-muted wppo-text-small wppo-mt-8">
 											{ __(
-												'One handle or partial URL per line.',
+												'One handle or partial URL per line. jQuery, Elementor and WooCommerce handles are excluded by a built-in preset (filter: wppo_defer_js_preset_exclusions).',
 												'performance-optimisation'
 											) }
 										</p>

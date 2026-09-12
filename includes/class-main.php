@@ -124,6 +124,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private bool $delay_disabled_for_page = false;
 
 		/**
+		 * Whether defer-JS is disabled for the current singular page.
+		 *
+		 * Set by apply_per_page_delay_config() from the `_wppo_defer_disabled`
+		 * post meta escape hatch (issue #1098). Checked in add_defer_strategy()
+		 * and add_defer_attribute_legacy().
+		 *
+		 * @var   bool
+		 * @since NEXT
+		 */
+		private bool $defer_disabled_for_page = false;
+
+		/**
+		 * Per-request cache for the `_wppo_defer_disabled` kill-switch lookups.
+		 *
+		 * Keyed by `blog_id:post_id` so multisite `switch_to_blog()` contexts
+		 * never leak one site's kill-switch state into another site sharing the
+		 * same post ID (#1098). Cleared per key by
+		 * {@see invalidate_aggressive_kill_switch_cache()}.
+		 *
+		 * @var array<string, bool>
+		 * @since NEXT
+		 */
+		private static array $defer_disabled_page_cache = array();
+
+		/**
 		 * Associative array of deferred script handles (keyed by handle for O(1) lookups).
 		 *
 		 * @var   array<string, bool>
@@ -364,6 +389,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 			if ( ! isset( $this->options['file_optimisation']['delayJSSafeMode'] ) ) {
 				$this->options['file_optimisation']['delayJSSafeMode'] = true;
+			}
+			// Unified safe-mode kill switch (issue #1098): additive key, defaults
+			// to off so existing installs keep current behaviour. In-memory only
+			// here (no front-end DB write); persisted via update_settings/REST.
+			if ( ! isset( $this->options['file_optimisation']['safeMode'] ) ) {
+				$this->options['file_optimisation']['safeMode'] = false;
 			}
 
 			// Existing installs whose stored settings predate the
@@ -641,6 +672,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'admin_init', array( $this, 'maybe_migrate_block_assets_setting' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_ccss_max_size' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_ccss_safelist' ) );
+			add_action( 'admin_init', array( $this, 'maybe_migrate_safe_mode' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_image_alt_edge_defaults' ) );
 			// One-time activity-log notice on admin_init.
 			if ( isset( $this->options['file_optimisation']['removeQueryStrings'] ) ) {
@@ -651,9 +683,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'wp_logout', array( $this, 'clear_role_hash_cookie' ) );
 			add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
 			add_action( 'wp_enqueue_scripts', array( $this, 'apply_module_loading_strategies' ), 10000 );
-			$has_delay_js = ! empty( $this->options['file_optimisation']['delayJS'] );
-			$has_defer_js = ! empty( $this->options['file_optimisation']['deferJS'] );
-			$wp_version   = (string) ( $GLOBALS['wp_version'] ?? get_bloginfo( 'version' ) );
+			// Unified safe-mode kill switch (issue #1098): one-click recovery
+			// that preserves delayJS/deferJS/removeUnusedCSS settings. Effective
+			// flags gate hook registration so safe mode disables all three
+			// without losing settings; per-tag guards below re-check for
+			// mid-request safety.
+			$safe_mode_off = ! self::is_safe_mode_active( $this->options['file_optimisation'] ?? array() );
+			$has_delay_js  = ! empty( $this->options['file_optimisation']['delayJS'] ) && $safe_mode_off;
+			$has_defer_js  = ! empty( $this->options['file_optimisation']['deferJS'] ) && $safe_mode_off;
+			$wp_version    = (string) ( $GLOBALS['wp_version'] ?? get_bloginfo( 'version' ) );
 			// The native 'strategy' script data added via wp_script_add_data() is only
 			// honoured by core since WP 6.3, so the native defer path is gated to 6.3+
 			// and older core (WP 6.2) uses the legacy script_loader_tag fallback.
@@ -667,9 +705,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			// Delay JS: the script_loader_tag filter performs the wppo-src/type rewriting
 			// on every supported version, so it is always registered when delay JS is on.
+			if ( $has_delay_js || ! empty( $this->options['file_optimisation']['deferJS'] ) ) {
+				add_action( 'wp', array( $this, 'apply_per_page_delay_config' ) );
+			}
 			if ( $has_delay_js ) {
 				add_filter( 'script_loader_tag', array( $this, 'add_defer_attribute' ), 10, 2 );
-				add_action( 'wp', array( $this, 'apply_per_page_delay_config' ) );
 			}
 
 			// Defer JS: use the native strategy on WP 6.3+, the script_loader_tag
@@ -710,16 +750,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// never stacks on top of an active core buffer.
 				add_action( 'template_redirect', array( $this->cache, 'start_output_buffer' ) );
 				add_action( 'save_post', array( $this, 'on_save_post_invalidate_cache' ), 10, 3 );
-				// Per-page delay kill-switch single-URL purge (#1037): programmatic
-				// `_wppo_delay_disabled` writes (REST, WP-CLI, imports) purge that
-				// URL only via invalidate_delay_kill_switch_cache() — never a
-				// full-cache wipe. The metabox save path is covered by save_post
-				// above plus the toggle check in Metabox::save_asset_manager_settings().
+				// Per-page delay kill-switch single-URL purge (#1037, extended #1098):
+				// programmatic `_wppo_delay_disabled` / `_wppo_defer_disabled` /
+				// `_wppo_used_css_disabled` writes (REST, WP-CLI, imports) purge
+				// that URL only via invalidate_aggressive_kill_switch_cache() —
+				// never a full-cache wipe. The metabox save path is covered by
+				// save_post above plus the toggle check in
+				// Metabox::save_asset_manager_settings().
 				// add_action() on these hooks is harmless when meta is untouched;
-				// callbacks ignore every key except `_wppo_delay_disabled`.
-				add_action( 'added_post_meta', array( $this, 'on_delay_kill_switch_meta_changed' ), 10, 3 );
-				add_action( 'updated_post_meta', array( $this, 'on_delay_kill_switch_meta_changed' ), 10, 3 );
-				add_action( 'deleted_post_meta', array( $this, 'on_delay_kill_switch_meta_changed' ), 10, 3 );
+				// callbacks ignore every key except the three kill-switches.
+				add_action( 'added_post_meta', array( $this, 'on_aggressive_kill_switch_meta_changed' ), 10, 3 );
+				add_action( 'updated_post_meta', array( $this, 'on_aggressive_kill_switch_meta_changed' ), 10, 3 );
+				add_action( 'deleted_post_meta', array( $this, 'on_aggressive_kill_switch_meta_changed' ), 10, 3 );
 				// WooCommerce surgical invalidation (issue #962): product /
 				// order / coupon changes purge only affected URLs — never a
 				// full-cache wipe. add_action() on unregistered hooks is
@@ -742,8 +784,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				add_action( 'wp_finalized_template_enhancement_output_buffer', array( $this, 'emit_server_timing_header' ), 0, 1 );
 			}
 
+			// Per-page aggressive kill-switch purge when page cache is off but
+			// used-CSS sidecars still exist (issue #1098): register the same
+			// single-URL purge outside the enableCache branch so
+			// `_wppo_used_css_disabled` / `_wppo_defer_disabled` toggles purge
+			// the URL even without the static HTML cache.
+			if ( empty( $this->options['cache_settings']['enableCache'] ) ) {
+				add_action( 'added_post_meta', array( $this, 'on_aggressive_kill_switch_meta_changed' ), 10, 3 );
+				add_action( 'updated_post_meta', array( $this, 'on_aggressive_kill_switch_meta_changed' ), 10, 3 );
+				add_action( 'deleted_post_meta', array( $this, 'on_aggressive_kill_switch_meta_changed' ), 10, 3 );
+			}
+
 			// Standalone used-CSS output buffer when page cache is disabled.
-			if ( empty( $this->options['cache_settings']['enableCache'] ) && ! empty( $this->options['file_optimisation']['removeUnusedCSS'] ) ) {
+			if ( empty( $this->options['cache_settings']['enableCache'] ) && ! empty( $this->options['file_optimisation']['removeUnusedCSS'] ) && $safe_mode_off ) {
 				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && $is_wp69_plus ) {
 					// WP 6.9+ template enhancement output buffer.
 					add_filter( 'wp_template_enhancement_output_buffer', array( $this, 'process_used_css_only' ), 20, 2 );
@@ -907,8 +960,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				} else {
 					$this->exclude_defer_js = $exclude_js;
 				}
-				$this->exclude_defer_js = apply_filters( 'wppo_exclude_defer_js', $this->exclude_defer_js );
-				$cve_handles            = $this->get_cve_guard_handles();
+				// Curated defer preset (issue #1098): jQuery/Elementor/Woo stay
+				// un-deferred by default. Filterable via
+				// wppo_defer_js_preset_exclusions. Preserves user excludes via
+				// array_unique merge.
+				$this->exclude_defer_js = array_values( array_unique( array_merge( $this->exclude_defer_js, self::get_defer_js_preset_exclusions() ) ) );
+				if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_exclude_defer_js' ) ) {
+					try {
+						$this->exclude_defer_js = (array) apply_filters( 'wppo_exclude_defer_js', $this->exclude_defer_js );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				} else {
+					$this->exclude_defer_js = apply_filters( 'wppo_exclude_defer_js', $this->exclude_defer_js );
+				}
+				$cve_handles = $this->get_cve_guard_handles();
 				if ( ! empty( $cve_handles ) ) {
 					$this->exclude_defer_js = array_values( array_unique( array_merge( $this->exclude_defer_js, $cve_handles ) ) );
 				}
@@ -997,8 +1063,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			new Asset_Manager();
 			new Abilities();
 
-			// Critical CSS hooks.
-			if ( ! empty( $this->options['file_optimisation']['criticalCSS'] ) ) {
+			// Critical CSS hooks. Safe mode (issue #1098) disables stylesheet
+			// deferral in one click while preserving the criticalCSS setting.
+			if ( ! empty( $this->options['file_optimisation']['criticalCSS'] ) && $safe_mode_off ) {
 				add_action( 'wp_head', array( 'PerformanceOptimise\Inc\Critical_CSS', 'inline_ccss' ), 0 );
 				// Checksum auto-regen (issue #1038) must run once $wp_styles->queue
 				// is final: the `wp_enqueue_scripts` action fires inside core's
@@ -1297,6 +1364,48 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$this->options['image_optimisation'] = array_merge( $this->options['image_optimisation'], $image );
 
 			Log::add( __( 'Added default image alt autofill and longest-edge cap settings.', 'performance-optimisation' ) );
+		}
+
+		/**
+		 * One-time backfill for the unified safe-mode kill switch (issue #1098).
+		 *
+		 * Runs on `admin_init` (not the constructor) so a cacheable front-end
+		 * request never triggers a settings write. Only installs whose stored
+		 * settings predate the `safeMode` key (key absent) are backfilled with
+		 * the off default (`false`, current behaviour kept); any stored
+		 * explicit value is preserved verbatim, and fresh installs with no
+		 * stored option are skipped because the constructor defaults already
+		 * match. The check is idempotent (key presence is the marker), so no
+		 * extra option row is needed. In-memory options are synced too so the
+		 * current request observes the backfilled value. Uses per-site
+		 * `get_option()` so multisite sites migrate independently with no
+		 * cross-site leakage.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public function maybe_migrate_safe_mode(): void {
+			// allowlist(settings-read-guard): deliberate direct read — must distinguish
+			// "no stored row" (false) from "stored array", which Util::get_settings()
+			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
+			$stored = get_option( 'wppo_settings' );
+			if ( ! is_array( $stored ) ) {
+				return;
+			}
+
+			$file = isset( $stored['file_optimisation'] ) && is_array( $stored['file_optimisation'] ) ? $stored['file_optimisation'] : array();
+
+			if ( array_key_exists( 'safeMode', $file ) ) {
+				return;
+			}
+
+			$stored['file_optimisation'] = $file + array( 'safeMode' => false );
+			update_option( 'wppo_settings', $stored );
+
+			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
+				$this->options['file_optimisation'] = array();
+			}
+			$this->options['file_optimisation']['safeMode'] = false;
 		}
 
 		/**
@@ -1859,6 +1968,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! $this->should_optimise_for_logged_in() || is_admin() ) {
 				return $filtered_output;
 			}
+			// Safe-mode kill switch + nocache bypass (issue #1098): fail open
+			// to the full stylesheet, settings preserved.
+			if ( self::is_safe_mode_active( $this->options['file_optimisation'] ?? array() ) || self::is_aggressive_bypass_active() ) {
+				return $filtered_output;
+			}
 
 			// Nesting balance (issue #881): run the used-CSS pipeline at most
 			// once per request (see Main::$used_css_buffer_enhanced).
@@ -2083,6 +2197,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 			if ( ! $this->should_optimise_for_logged_in() || is_admin() ) {
+				return;
+			}
+			// Safe-mode kill switch + nocache bypass (issue #1098).
+			if ( self::is_safe_mode_active( $this->options['file_optimisation'] ?? array() ) || self::is_aggressive_bypass_active() ) {
 				return;
 			}
 			ob_start( array( $this, 'process_used_css_capture' ) );
@@ -2878,6 +2996,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! $this->should_optimise_for_logged_in() ) {
 				return;
 			}
+			// Safe-mode kill switch + nocache bypass (issue #1098): fail open
+			// to original scripts, settings preserved.
+			if ( self::is_safe_mode_active( $this->options['file_optimisation'] ?? array() ) || self::is_aggressive_bypass_active() ) {
+				return;
+			}
+			// Per-page defer kill-switch (#1098).
+			if ( $this->defer_disabled_for_page || self::is_defer_disabled_for_page() ) {
+				return;
+			}
 
 			if ( empty( $this->options['file_optimisation']['deferJS'] ) ) {
 				return;
@@ -2982,6 +3109,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! $this->should_optimise_for_logged_in() ) {
 				return $tag;
 			}
+			// Safe-mode kill switch + nocache bypass (issue #1098): fail open
+			// to original scripts, settings preserved for one-click recovery.
+			if ( self::is_safe_mode_active( $this->options['file_optimisation'] ?? array() ) || self::is_aggressive_bypass_active() ) {
+				return $tag;
+			}
 
 			if ( ! empty( $this->options['file_optimisation']['delayJS'] ) ) {
 				// Woo / builder-context guardrail (#932): fail open to un-delayed
@@ -3078,6 +3210,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return $tag;
 			}
 			if ( ! $this->should_optimise_for_logged_in() ) {
+				return $tag;
+			}
+			// Safe-mode kill switch + nocache bypass + per-page defer disable
+			// (issue #1098): fail open to original tag.
+			if ( self::is_safe_mode_active( $this->options['file_optimisation'] ?? array() ) || self::is_aggressive_bypass_active() ) {
+				return $tag;
+			}
+			if ( $this->defer_disabled_for_page || self::is_defer_disabled_for_page() ) {
 				return $tag;
 			}
 
@@ -3660,6 +3800,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 
+			// Per-page defer kill-switch (#1098): skip all defer rewriting for
+			// this request. Post meta survives cache clears; the single-URL
+			// purge in invalidate_aggressive_kill_switch_cache() refreshes HTML.
+			if ( self::is_defer_disabled_for_page( (int) $post_id ) ) {
+				$this->defer_disabled_for_page = true;
+			}
+
 			$delay_strategies = get_post_meta( $post_id, '_wppo_delay_strategies', true );
 			$delay_priorities = get_post_meta( $post_id, '_wppo_delay_priorities', true );
 
@@ -4153,6 +4300,231 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Whether the unified safe-mode kill switch is enabled (issue #1098).
+		 *
+		 * When on, delay-JS + defer-JS + remove-unused-CSS (and Critical-CSS
+		 * stylesheet deferral) are all disabled in one click while the
+		 * underlying `delayJS` / `deferJS` / `removeUnusedCSS` settings are
+		 * preserved untouched, so turning safe mode back off restores the
+		 * previous configuration without re-entering settings (one-click
+		 * recovery). Additive `file_optimisation.safeMode` key, defaults to
+		 * off. Filterable via `wppo_safe_mode_enabled` (has_filter-guarded,
+		 * fail-open to the stored setting). Multisite-safe: per-site settings.
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when aggressive optimisations must be skipped.
+		 */
+		public function is_safe_mode_enabled(): bool {
+			return self::is_safe_mode_active( $this->options['file_optimisation'] ?? array() );
+		}
+
+		/**
+		 * Static safe-mode predicate shared by Main / Used_CSS / Critical_CSS.
+		 *
+		 * Reads `file_optimisation.safeMode` from the passed settings (or from
+		 * `Util::get_settings()` when empty) so static buffer callbacks that
+		 * have no Main instance can gate identically. Any failure fails open
+		 * to disabled (optimisations run) except an explicit stored `true`.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $file_optimisation Optional `file_optimisation` settings slice.
+		 * @return bool True when safe mode is on.
+		 */
+		public static function is_safe_mode_active( array $file_optimisation = array() ): bool {
+			try {
+				if ( empty( $file_optimisation ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					try {
+						$settings          = (array) Util::get_settings();
+						$file_optimisation = isset( $settings['file_optimisation'] ) && is_array( $settings['file_optimisation'] ) ? $settings['file_optimisation'] : array();
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				$enabled = ! empty( $file_optimisation['safeMode'] );
+				if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_safe_mode_enabled' ) ) {
+					try {
+						$filtered = apply_filters( 'wppo_safe_mode_enabled', $enabled );
+						return (bool) $filtered;
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return $enabled;
+					}
+				}
+				return $enabled;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Whether aggressive optimisations must be bypassed for this request.
+		 *
+		 * Shared nocache bypass (issue #1098) for delay + defer + used-CSS +
+		 * Critical-CSS deferral: `?nocache` / `?wppo_nocache` query args and
+		 * preview contexts (`is_preview()` when available,
+		 * function_exists-guarded for WP 6.2+ compat). `DONOTCACHEPAGE` is
+		 * intentionally NOT checked here: it gates page-cache storage (and
+		 * Used_CSS::process_buffer() keeps its own pre-existing explicit
+		 * check), while delay/defer rewriting still applies on such pages.
+		 * Any detection failure fails open to bypassed (unoptimised output,
+		 * never fatal). Multisite-safe: request-local only.
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when optimisations must be skipped for this request.
+		 */
+		public static function is_aggressive_bypass_active(): bool {
+			try {
+				if ( function_exists( 'is_preview' ) ) {
+					try {
+						if ( is_preview() ) {
+							return true;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( isset( $_GET['nocache'] ) || isset( $_GET['wppo_nocache'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only bypass check, no state change.
+					return true;
+				}
+				if ( ! empty( $_SERVER['QUERY_STRING'] ) && function_exists( 'wp_unslash' ) ) {
+					$qs = (string) wp_unslash( $_SERVER['QUERY_STRING'] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Read-only bypass check, no output.
+					if ( preg_match( '/(?:^|&)(nocache|wppo_nocache)(?:=|&|$)/i', $qs ) ) {
+						return true;
+					}
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
+		 * Curated defer-JS preset exclusions (issue #1098).
+		 *
+		 * Built-in jQuery + Elementor/Divi + WooCommerce handles stay un-deferred by
+		 * default so carts, checkouts, and builders never break. Filterable
+		 * via `wppo_defer_js_preset_exclusions` (has_filter-guarded, fail-open
+		 * to the built-in preset). Merged with user `excludeDeferJS` via
+		 * array_unique by callers. Per-site settings only; multisite-safe.
+		 *
+		 * @since NEXT
+		 *
+		 * @return string[]
+		 */
+		public static function get_defer_js_preset_exclusions(): array {
+			$preset = array(
+				'jquery',
+				'jquery-core',
+				'jquery-migrate',
+				'elementor-frontend',
+				'elementor-pro-frontend',
+				'elementor-common',
+				'et-core-api',
+				'divi-custom-script',
+				'wc-cart-fragments',
+				'wc-checkout',
+				'woocommerce',
+				'wc-add-to-cart',
+				'add-to-cart',
+				'cart-fragments',
+				'wc-blocks',
+				'wc-store',
+			);
+			/**
+			 * Filters defer-JS preset exclusions.
+			 *
+			 * @since NEXT
+			 * @param string[] $preset Defer preset exclusions.
+			 */
+			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_defer_js_preset_exclusions' ) ) {
+				return $preset;
+			}
+			try {
+				$raw = apply_filters( 'wppo_defer_js_preset_exclusions', $preset );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $preset;
+			}
+			if ( ! is_array( $raw ) ) {
+				return $preset;
+			}
+			return array_values(
+				array_unique(
+					array_filter(
+						array_map(
+							static function ( $val ): string {
+								return is_string( $val ) || is_numeric( $val ) ? (string) $val : '';
+							},
+							$raw
+						),
+						static function ( $val ): bool {
+							return '' !== $val;
+						}
+					)
+				)
+			);
+		}
+
+		/**
+		 * Whether defer-JS is disabled for a singular page (issue #1098).
+		 *
+		 * Reads the `_wppo_defer_disabled` post-meta kill-switch. Mirrors
+		 * {@see is_delay_disabled_for_page()} with its own blog-scoped
+		 * request cache so delay/defer states never cross-contaminate.
+		 * Fail-open: any detection failure returns false (defer stays enabled).
+		 *
+		 * @since NEXT
+		 *
+		 * @param int $post_id Optional post ID. Defaults to the current post.
+		 * @return bool True when defer must be skipped for this page.
+		 */
+		public static function is_defer_disabled_for_page( int $post_id = 0 ): bool {
+			try {
+				if ( function_exists( 'is_singular' ) && ! is_singular() && 0 === $post_id ) {
+					return false;
+				}
+				if ( 0 === $post_id ) {
+					if ( ! function_exists( 'get_the_ID' ) ) {
+						return false;
+					}
+					$post_id = (int) get_the_ID();
+				}
+				if ( $post_id <= 0 ) {
+					return false;
+				}
+				$blog_id = 0;
+				if ( function_exists( 'is_multisite' ) && function_exists( 'get_current_blog_id' ) ) {
+					try {
+						if ( is_multisite() ) {
+							$blog_id = (int) get_current_blog_id();
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$blog_id = 0;
+					}
+				}
+				$cache_key = $blog_id . ':' . $post_id;
+				if ( isset( self::$defer_disabled_page_cache[ $cache_key ] ) ) {
+					return self::$defer_disabled_page_cache[ $cache_key ];
+				}
+				if ( ! function_exists( 'get_post_meta' ) ) {
+					return false;
+				}
+				$disabled                                      = ! empty( get_post_meta( $post_id, '_wppo_defer_disabled', true ) );
+				self::$defer_disabled_page_cache[ $cache_key ] = $disabled;
+				return $disabled;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
 		 * Clear the per-page delay kill-switch request cache and purge that URL only.
 		 *
 		 * Called when the `_wppo_delay_disabled` meta toggles (metabox save or
@@ -4168,6 +4540,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return void
 		 */
 		public static function invalidate_delay_kill_switch_cache( int $post_id ): void {
+			self::invalidate_aggressive_kill_switch_cache( $post_id );
+		}
+
+		/**
+		 * Clear per-page aggressive-optimisation caches and purge that URL only.
+		 *
+		 * Unified single-URL purge (issue #1098) for the `_wppo_delay_disabled`,
+		 * `_wppo_defer_disabled`, and `_wppo_used_css_disabled` per-page
+		 * kill-switches so per-page state survives cache clears: post meta
+		 * itself is never stored in the page cache, and toggling any of the
+		 * three metas purges only that post URL's static HTML/CSS/used-CSS
+		 * sidecars via `Cache::invalidate_single_static_html()` — never a
+		 * full-cache wipe. Multisite-safe: per-site post/meta, domain-based
+		 * cache paths, no cross-site leakage. Fail-open: swallowed.
+		 *
+		 * @since NEXT
+		 * @param int $post_id Post ID whose kill-switch changed.
+		 * @return void
+		 */
+		public static function invalidate_aggressive_kill_switch_cache( int $post_id ): void {
 			try {
 				if ( $post_id <= 0 ) {
 					return;
@@ -4178,6 +4570,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				foreach ( array_keys( self::$delay_disabled_page_cache ) as $key ) {
 					if ( str_ends_with( (string) $key, ':' . (string) $post_id ) ) {
 						unset( self::$delay_disabled_page_cache[ $key ] );
+					}
+				}
+				foreach ( array_keys( self::$defer_disabled_page_cache ) as $key ) {
+					if ( str_ends_with( (string) $key, ':' . (string) $post_id ) ) {
+						unset( self::$defer_disabled_page_cache[ $key ] );
 					}
 				}
 				if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
@@ -4200,6 +4597,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Handle aggressive-optimisation meta writes for the per-page kill-switches.
+		 *
+		 * Wired to `added_post_meta` / `updated_post_meta` / `deleted_post_meta`
+		 * in `setup_hooks()` so programmatic meta changes (REST, WP-CLI, imports)
+		 * purge the single URL just like the metabox save path. Reacts to the
+		 * `_wppo_delay_disabled`, `_wppo_defer_disabled`, and
+		 * `_wppo_used_css_disabled` keys; everything else is ignored. Fail-open:
+		 * detection or purge failures never fatal the meta write.
+		 *
+		 * @since NEXT
+		 * @param mixed  $meta_id  Meta row ID for added/updated hooks, or an array of IDs for deleted_post_meta (unused, required by hook signature).
+		 * @param int    $post_id  Post ID the meta belongs to.
+		 * @param string $meta_key Meta key that was written.
+		 * @return void
+		 */
+		public function on_aggressive_kill_switch_meta_changed( $meta_id, $post_id, $meta_key ): void {
+			try {
+				$key = (string) $meta_key;
+				if ( '_wppo_delay_disabled' !== $key && '_wppo_defer_disabled' !== $key && '_wppo_used_css_disabled' !== $key ) {
+					return;
+				}
+				self::invalidate_aggressive_kill_switch_cache( (int) $post_id );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
 		 * Handle `_wppo_delay_disabled` meta writes for the per-page kill-switch.
 		 *
 		 * Wired to `added_post_meta` / `updated_post_meta` / `deleted_post_meta`
@@ -4215,14 +4640,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return void
 		 */
 		public function on_delay_kill_switch_meta_changed( $meta_id, $post_id, $meta_key ): void {
-			try {
-				if ( '_wppo_delay_disabled' !== (string) $meta_key ) {
-					return;
-				}
-				self::invalidate_delay_kill_switch_cache( (int) $post_id );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
+			$this->on_aggressive_kill_switch_meta_changed( $meta_id, $post_id, $meta_key );
 		}
 
 		/**

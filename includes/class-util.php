@@ -210,6 +210,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'deferJS'                      => false,
 					'delayJS'                      => false,
 					'delayJSSafeMode'              => true,
+					'safeMode'                     => false,
 					'combineCSS'                   => false,
 					'excludeJS'                    => '',
 					'excludeCSS'                   => '',

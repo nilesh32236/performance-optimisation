@@ -122,6 +122,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 			$delay_strategies  = get_post_meta( $post->ID, '_wppo_delay_strategies', true );
 			$delay_priorities  = get_post_meta( $post->ID, '_wppo_delay_priorities', true );
 			$delay_disabled    = get_post_meta( $post->ID, '_wppo_delay_disabled', true );
+			$defer_disabled    = get_post_meta( $post->ID, '_wppo_defer_disabled', true );
 			$used_css_disabled = get_post_meta( $post->ID, '_wppo_used_css_disabled', true );
 			$delay_notes       = get_post_meta( $post->ID, '_wppo_delay_notes', true );
 
@@ -158,6 +159,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 							<?php checked( ! empty( $used_css_disabled ) ); ?>
 						/>
 						<?php esc_html_e( 'Disable Used CSS on this page', 'performance-optimisation' ); ?>
+					</label>
+				</p>
+				<p>
+					<label for="wppo_defer_disabled">
+						<input
+							type="checkbox"
+							id="wppo_defer_disabled"
+							name="wppo_defer_disabled"
+							value="1"
+							<?php checked( ! empty( $defer_disabled ) ); ?>
+						/>
+						<?php esc_html_e( 'Disable Defer JS on this page', 'performance-optimisation' ); ?>
 					</label>
 				</p>
 				<p>
@@ -447,11 +460,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 
 			// Per-page Used CSS kill-switch (#988). Checkbox-only (no JS).
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_asset_manager_nonce.
-			$used_css_disabled = isset( $_POST['wppo_used_css_disabled'] ) && ! empty( $_POST['wppo_used_css_disabled'] );
+			$used_css_disabled     = isset( $_POST['wppo_used_css_disabled'] ) && ! empty( $_POST['wppo_used_css_disabled'] );
+			$had_used_css_disabled = ! empty( get_post_meta( $post_id, '_wppo_used_css_disabled', true ) );
 			if ( $used_css_disabled ) {
 				update_post_meta( $post_id, '_wppo_used_css_disabled', '1' );
 			} else {
 				delete_post_meta( $post_id, '_wppo_used_css_disabled' );
+			}
+
+			// Per-page Defer JS kill-switch (#1098). Checkbox-only (no JS).
+			// Post meta survives cache clears; toggle flips purge only this
+			// post URL's static cache so the new defer state renders without
+			// a full purge. Fail-open: purge failures never break the save.
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_asset_manager_nonce.
+			$defer_disabled     = isset( $_POST['wppo_defer_disabled'] ) && ! empty( $_POST['wppo_defer_disabled'] );
+			$had_defer_disabled = ! empty( get_post_meta( $post_id, '_wppo_defer_disabled', true ) );
+			if ( $defer_disabled ) {
+				update_post_meta( $post_id, '_wppo_defer_disabled', '1' );
+			} else {
+				delete_post_meta( $post_id, '_wppo_defer_disabled' );
+			}
+			if ( ( (bool) $used_css_disabled !== (bool) $had_used_css_disabled || (bool) $defer_disabled !== (bool) $had_defer_disabled ) && class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'invalidate_aggressive_kill_switch_cache' ) ) {
+				try {
+					Main::invalidate_aggressive_kill_switch_cache( (int) $post_id );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 			}
 
 	// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_asset_manager_nonce.
