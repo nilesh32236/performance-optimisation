@@ -155,8 +155,9 @@ let pendingLazyCount = 0;
  * explicitly. Extend without touching this bundle via the PHP
  * `wppo_delay_js_allowed_hosts` filter (mirrored into
  * `wppoDelayConfig.allowedScriptHosts`) or at runtime via
- * `window.wppoAllowedScriptHosts`. Set `window.wppoAllowedScriptHosts` to
- * `['*']` to allow any host (not recommended).
+ * `window.wppoAllowedScriptHosts`. A `'*'` wildcard is honoured only when
+ * present in the server-provided list; a window-only `'*'` is ignored
+ * (admin-only debug path, not recommended).
  *
  * @since 2.0.0
  * @type {string[]}
@@ -393,20 +394,53 @@ let wildcardWarned = false;
 
 /**
  * Collect the effective script-src host allowlist: the bundle constant plus
- * any runtime extension provided via window.wppoAllowedScriptHosts or the
- * PHP-provided wppoDelayConfig.allowedScriptHosts (see
- * `wppo_delay_js_allowed_hosts` filter). A `'*'` entry allows all hosts.
+ * the server-provided wppoDelayConfig.allowedScriptHosts (see
+ * `wppo_delay_js_allowed_hosts` filter) plus any runtime extension provided
+ * via window.wppoAllowedScriptHosts. The server list is authoritative: a
+ * `'*'` wildcard from `window` is ignored unless the server list also
+ * contains `'*'` (admin-only debug path). Only `'*'` from the server
+ * disables the allowlist.
  *
  * @since 2.0.0
  * @return {string[]|'*'} Allowlist entries, or '*' to allow everything.
  */
 const getScriptSrcHosts = () => {
-	const runtimeHosts =
-		( typeof window !== 'undefined' && window.wppoAllowedScriptHosts ) ||
-		( delayConfig && delayConfig.allowedScriptHosts ) ||
-		[];
+	const serverHosts =
+		delayConfig && Array.isArray( delayConfig.allowedScriptHosts )
+			? delayConfig.allowedScriptHosts.filter(
+					( host ) => typeof host === 'string' && host.length > 0
+			  )
+			: [];
+	const serverAllowsAll = serverHosts.includes( '*' );
+	const rawWindowHosts =
+		typeof window !== 'undefined'
+			? window.wppoAllowedScriptHosts
+			: undefined;
+	const windowHosts = Array.isArray( rawWindowHosts )
+		? rawWindowHosts.filter(
+				( host ) => typeof host === 'string' && host.length > 0
+		  )
+		: [];
+	if ( windowHosts.includes( '*' ) && ! serverAllowsAll ) {
+		// A mutable window global must not silently disable the allowlist:
+		// any third-party script running before load could set ['*'].
+		// Ignore the window wildcard (loudly) unless the server opted in.
+		if ( ! wildcardWarned ) {
+			wildcardWarned = true;
+			console.warn(
+				'WPPO: window.wppoAllowedScriptHosts contains "*": the wildcard is ignored because the server allowlist does not allow it. Remove the wildcard in production.'
+			);
+		}
+	}
+	const effectiveWindowHosts = windowHosts.filter(
+		( host ) => '*' !== host || serverAllowsAll
+	);
 	const hosts = Array.from(
-		new Set( [ ...SCRIPT_SRC_HOST_ALLOWLIST, ...runtimeHosts ] )
+		new Set( [
+			...SCRIPT_SRC_HOST_ALLOWLIST,
+			...serverHosts,
+			...effectiveWindowHosts,
+		] )
 	);
 	if ( hosts.includes( '*' ) ) {
 		// The '*' wildcard disables the deferred-script host allowlist
@@ -531,6 +565,35 @@ const isSafeSubresourceUrl = ( src ) => {
 	// Cross-origin subresources must be https (no mixed active content);
 	// http is tolerated only for same-origin dev/staging origins.
 	return 'https:' === url.protocol;
+};
+
+/**
+ * Validate a lazy srcset value from data-srcset before it is assigned to a
+ * live srcset sink. Every comma-separated candidate URL must individually
+ * pass isSafeSubresourceUrl(); a single unsafe candidate rejects the whole
+ * value so a tampered data-* attribute cannot force an unchecked
+ * cross-origin load (tracking beacon). `javascript:` in `img` does not
+ * execute script, so this is hardening rather than stored-XSS prevention.
+ *
+ * @since NEXT
+ * @param {string} value Raw data-srcset attribute value.
+ * @return {boolean} True when every candidate URL is safe to assign.
+ */
+const isSafeSrcsetValue = ( value ) => {
+	if ( ! value || typeof value !== 'string' ) {
+		return false;
+	}
+	const candidates = String( value )
+		.split( ',' )
+		.map( ( candidate ) => candidate.trim() )
+		.filter( Boolean );
+	if ( 0 === candidates.length ) {
+		return false;
+	}
+	return candidates.every( ( candidate ) => {
+		const urlToken = candidate.split( /\s+/ )[ 0 ];
+		return !! urlToken && isSafeSubresourceUrl( urlToken );
+	} );
 };
 
 /**
@@ -1252,14 +1315,28 @@ const restoreHeroImage = ( el ) => {
 	if ( el.hasAttribute( 'data-src' ) ) {
 		const dataSrc = el.getAttribute( 'data-src' );
 		if ( dataSrc ) {
-			el.src = dataSrc;
+			if ( ! isSafeSubresourceUrl( dataSrc ) ) {
+				console.warn(
+					'WPPO: blocked hero image src (scheme/origin not allowed):',
+					dataSrc
+				);
+			} else {
+				el.src = dataSrc;
+			}
 		}
 		el.removeAttribute( 'data-src' );
 	}
 	if ( el.hasAttribute( 'data-srcset' ) ) {
 		const dataSrcset = el.getAttribute( 'data-srcset' );
 		if ( dataSrcset ) {
-			el.srcset = dataSrcset;
+			if ( ! isSafeSrcsetValue( dataSrcset ) ) {
+				console.warn(
+					'WPPO: blocked hero image srcset (scheme/origin not allowed):',
+					dataSrcset
+				);
+			} else {
+				el.srcset = dataSrcset;
+			}
 		}
 		el.removeAttribute( 'data-srcset' );
 	}
@@ -1271,7 +1348,14 @@ const restoreHeroImage = ( el ) => {
 			if ( s.hasAttribute( 'data-srcset' ) ) {
 				const sourceSrcset = s.getAttribute( 'data-srcset' );
 				if ( sourceSrcset ) {
-					s.srcset = sourceSrcset;
+					if ( ! isSafeSrcsetValue( sourceSrcset ) ) {
+						console.warn(
+							'WPPO: blocked hero picture source srcset (scheme/origin not allowed):',
+							sourceSrcset
+						);
+					} else {
+						s.srcset = sourceSrcset;
+					}
 				}
 				s.removeAttribute( 'data-srcset' );
 			}
@@ -1406,8 +1490,22 @@ const loadImages = () => {
 									sources.forEach( ( s ) => {
 										restoreSizes( s );
 										if ( s.hasAttribute( 'data-srcset' ) ) {
-											s.srcset =
+											const pictureSrcset =
 												s.getAttribute( 'data-srcset' );
+											if ( pictureSrcset ) {
+												if (
+													! isSafeSrcsetValue(
+														pictureSrcset
+													)
+												) {
+													console.warn(
+														'WPPO: blocked lazy picture source srcset (scheme/origin not allowed):',
+														pictureSrcset
+													);
+												} else {
+													s.srcset = pictureSrcset;
+												}
+											}
 											s.removeAttribute( 'data-srcset' );
 										}
 									} );
@@ -1425,13 +1523,38 @@ const loadImages = () => {
 								restoreSizes( el );
 
 								if ( el.hasAttribute( 'data-src' ) ) {
-									el.src = el.getAttribute( 'data-src' );
+									const imgSrc =
+										el.getAttribute( 'data-src' );
+									if ( imgSrc ) {
+										if (
+											! isSafeSubresourceUrl( imgSrc )
+										) {
+											console.warn(
+												'WPPO: blocked lazy image src (scheme/origin not allowed):',
+												imgSrc
+											);
+										} else {
+											el.src = imgSrc;
+										}
+									}
 									el.removeAttribute( 'data-src' );
 								}
 
 								if ( el.hasAttribute( 'data-srcset' ) ) {
-									el.srcset =
+									const imgSrcset =
 										el.getAttribute( 'data-srcset' );
+									if ( imgSrcset ) {
+										if (
+											! isSafeSrcsetValue( imgSrcset )
+										) {
+											console.warn(
+												'WPPO: blocked lazy image srcset (scheme/origin not allowed):',
+												imgSrcset
+											);
+										} else {
+											el.srcset = imgSrcset;
+										}
+									}
 									el.removeAttribute( 'data-srcset' );
 								}
 							} else if ( el.tagName === 'IFRAME' ) {
@@ -1696,7 +1819,22 @@ const loadImages = () => {
 									s.removeAttribute( 'data-src' );
 								}
 								if ( s.hasAttribute( 'data-srcset' ) ) {
-									s.srcset = s.getAttribute( 'data-srcset' );
+									const fbSourceSrcset =
+										s.getAttribute( 'data-srcset' );
+									if ( fbSourceSrcset ) {
+										if (
+											! isSafeSrcsetValue(
+												fbSourceSrcset
+											)
+										) {
+											console.warn(
+												'WPPO: blocked lazy source srcset (scheme/origin not allowed):',
+												fbSourceSrcset
+											);
+										} else {
+											s.srcset = fbSourceSrcset;
+										}
+									}
 									s.removeAttribute( 'data-srcset' );
 								}
 							} );
@@ -1718,11 +1856,37 @@ const loadImages = () => {
 							restoreSizes( el );
 
 							if ( el.hasAttribute( 'data-src' ) ) {
-								el.src = el.getAttribute( 'data-src' );
+								const fallbackImgSrc =
+									el.getAttribute( 'data-src' );
+								if ( fallbackImgSrc ) {
+									if (
+										! isSafeSubresourceUrl( fallbackImgSrc )
+									) {
+										console.warn(
+											'WPPO: blocked lazy image src (scheme/origin not allowed):',
+											fallbackImgSrc
+										);
+									} else {
+										el.src = fallbackImgSrc;
+									}
+								}
 								el.removeAttribute( 'data-src' );
 							}
 							if ( el.hasAttribute( 'data-srcset' ) ) {
-								el.srcset = el.getAttribute( 'data-srcset' );
+								const fallbackImgSrcset =
+									el.getAttribute( 'data-srcset' );
+								if ( fallbackImgSrcset ) {
+									if (
+										! isSafeSrcsetValue( fallbackImgSrcset )
+									) {
+										console.warn(
+											'WPPO: blocked lazy image srcset (scheme/origin not allowed):',
+											fallbackImgSrcset
+										);
+									} else {
+										el.srcset = fallbackImgSrcset;
+									}
+								}
 								el.removeAttribute( 'data-srcset' );
 							}
 						}

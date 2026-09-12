@@ -3,10 +3,14 @@ import '@testing-library/jest-dom';
 // eslint-disable-next-line import/no-extraneous-dependencies -- React is required for JSX rendering in tests
 import React from 'react';
 
-jest.mock( '../../lib/apiRequest', () => ( {
-	apiCall: jest.fn(),
-	fetchRecentActivities: jest.fn(),
-} ) );
+jest.mock( '../../lib/apiRequest', () => {
+	const actual = jest.requireActual( '../../lib/apiRequest' );
+	return {
+		...actual,
+		apiCall: jest.fn(),
+		fetchRecentActivities: jest.fn(),
+	};
+} );
 
 jest.mock( '@fortawesome/react-fontawesome', () => ( {
 	FontAwesomeIcon: ( { icon } ) => (
@@ -218,6 +222,72 @@ describe( 'PluginSetting', () => {
 				} ),
 			} )
 		);
+	} );
+
+	it( 'drops invalid high-value URLs and warns', async () => {
+		global.wppoSettings = {
+			performance_audit: { pagespeedApiKeyConfigured: false },
+			homeUrl: 'http://example.com',
+			settings: {
+				performance_audit: {
+					server_timing_enabled: false,
+					high_value_urls: [],
+				},
+			},
+		};
+		apiCall.mockResolvedValueOnce( { success: true, data: {} } );
+
+		render( <PluginSetting options={ baseOptions } /> );
+
+		fireEvent.change( screen.getByLabelText( 'High-value URLs' ), {
+			target: {
+				value: 'http://example.com/about/\njavascript:alert(1)\nhttps://evil.example.org/x/',
+			},
+		} );
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Save Monitoring/i } )
+		);
+
+		await waitFor( () =>
+			expect( apiCall ).toHaveBeenCalledWith( 'update_settings', {
+				tab: 'performance_audit',
+				settings: expect.objectContaining( {
+					high_value_urls: [ 'http://example.com/about/' ],
+				} ),
+			} )
+		);
+		expect(
+			screen.getByText( /Skipped 2 invalid URL\(s\)/ )
+		).toBeInTheDocument();
+	} );
+
+	it( 'blocks saving when every high-value URL is invalid', async () => {
+		global.wppoSettings = {
+			performance_audit: { pagespeedApiKeyConfigured: false },
+			homeUrl: 'http://example.com',
+			settings: {
+				performance_audit: {
+					server_timing_enabled: false,
+					high_value_urls: [],
+				},
+			},
+		};
+
+		render( <PluginSetting options={ baseOptions } /> );
+
+		fireEvent.change( screen.getByLabelText( 'High-value URLs' ), {
+			target: { value: 'javascript:alert(1)' },
+		} );
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Save Monitoring/i } )
+		);
+
+		await waitFor( () =>
+			expect(
+				screen.getByText( /No valid URLs to save/ )
+			).toBeInTheDocument()
+		);
+		expect( apiCall ).not.toHaveBeenCalled();
 	} );
 
 	it( 'saves the real-user monitoring toggle', async () => {
