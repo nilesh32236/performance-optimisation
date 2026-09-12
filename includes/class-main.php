@@ -4657,12 +4657,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Fill-gaps-only: callers dedupe against pre-existing core patterns
 		 * so the core ruleset is never duplicated.
 		 *
-		 * Intentionally narrow: nonce/logout/add-to-cart are query-param
-		 * actions (`?_wpnonce=`, `?action=logout`, `?add-to-cart=`) already
+		 * Intentionally narrow: nonce/add-to-cart are query-param
+		 * actions (`?_wpnonce=`, `?add-to-cart=`) already
 		 * excluded by core's `?`-URL handling and by
 		 * {@see is_speculation_list_url_valid()}, so no `*substring*`
 		 * wildcard is emitted — such wildcards would also block legitimate
-		 * slugs (e.g. a post about "add to cart").
+		 * slugs (e.g. a post about "add to cart"). The `/logout/*` path
+		 * prefix guards document-rule `href_matches` for pretty logout
+		 * slugs; `?action=logout` list URLs stay covered by the `?`-URL
+		 * rejection in {@see is_speculation_list_url_valid()}.
 		 *
 		 * @since 2.0.0
 		 *
@@ -4675,6 +4678,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'/wp-login*',
 					'/wp-admin/*',
 					'/wp-json/*',
+					'/logout/*',
 					'/cart/*',
 					'/checkout/*',
 					'/my-account/*',
@@ -4773,6 +4777,47 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Whether prerender speculation mode is allowed for the current request.
+		 *
+		 * Prerender executes page JavaScript speculatively, so it requires
+		 * both guardrails: the plugin's static cache must be active (never
+		 * prerender uncached origin responses) and, when RUM gating is
+		 * enabled, real-user field data must qualify via
+		 * `AI_Adaptive::get_rum_gated_speculation_state()` (good p75).
+		 * Gating explicitly disabled honors the user's prerender choice.
+		 * Fail-safe: any failure or missing RUM signal means "not allowed",
+		 * degrading to conservative prefetch (unoptimised, never fatal).
+		 * Multisite-safe: per-site options and per-site RUM aggregates only.
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when prerender may be emitted.
+		 */
+		private function is_prerender_allowed(): bool {
+			try {
+				if ( empty( $this->options['cache_settings']['enableCache'] ) ) {
+					return false;
+				}
+				if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
+					return false;
+				}
+				if ( ! method_exists( 'PerformanceOptimise\Inc\AI_Adaptive', 'is_speculation_rum_gating_enabled' )
+					|| ! method_exists( 'PerformanceOptimise\Inc\AI_Adaptive', 'get_rum_gated_speculation_state' ) ) {
+					return false;
+				}
+				$gating_enabled = AI_Adaptive::is_speculation_rum_gating_enabled();
+				if ( ! $gating_enabled ) {
+					return true;
+				}
+				$state = AI_Adaptive::get_rum_gated_speculation_state( $gating_enabled );
+				return ! empty( $state['qualified'] );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
 		 * Applies the plugin's explicit speculation-rules configuration via the
 		 * `wp_speculation_rules_configuration` filter.
 		 *
@@ -4850,6 +4895,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					if ( ! in_array( $eagerness, array( 'conservative', 'moderate', 'eager' ), true ) ) {
 						$eagerness = 'conservative';
 					}
+				}
+				// Prerender guardrail: prerender executes page JavaScript
+				// speculatively and can inflate analytics and origin load on
+				// uncached routes, so it stays opt-in behind RUM gating (good
+				// real-user p75 qualifies) and the plugin's static cache. An
+				// unqualified prerender request degrades to conservative
+				// prefetch (unoptimised, never fatal); prefetch modes pass
+				// through untouched. Logged-in/no-store visitors already
+				// returned null above, so prerender never touches private paths.
+				if ( 'prerender' === $mode && ! $this->is_prerender_allowed() ) {
+					$mode      = 'prefetch';
+					$eagerness = 'conservative';
 				}
 				$config['mode']      = $mode;
 				$config['eagerness'] = $eagerness;
