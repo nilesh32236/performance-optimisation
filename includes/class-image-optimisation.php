@@ -5301,6 +5301,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * ignore the declarations. Any failure returns markup unmodified
 		 * (fail-open).
 		 *
+		 * Hero safety: the first matching section stays eager (positional),
+		 * and any later section carrying LCP-hero markers (`fetchpriority`
+		 * high, `data-lcp`/`data-hero`, hero/LCP class or id, or an LCP
+		 * image in its scope) is skipped too, so the LCP hero never gets
+		 * `content-visibility` regardless of which section carries it.
+		 * Skipping is fail-safe (unoptimised, never fatal).
+		 *
 		 * @since 2.0.0
 		 *
 		 * @param string $buffer The HTML buffer to process.
@@ -5361,12 +5368,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				);
 
 				$processor = new \WP_HTML_Tag_Processor( $buffer );
-				$seen      = 0;
+				// Per-section LCP windows (section/div document order) so an
+				// LCP image nested inside a plain container still marks its
+				// section as hero. Fail-open: empty on any failure, which
+				// degrades to positional + opening-tag marker detection.
+				$lcp_windows  = $this->get_lazy_render_lcp_windows( $buffer );
+				$section_seq  = -1;
+				$hero_skipped = false;
 
 				while ( $processor->next_tag() ) {
 					$tag = strtoupper( $processor->get_tag() ?? '' );
 					if ( 'SECTION' !== $tag && 'FOOTER' !== $tag && 'ASIDE' !== $tag && 'DIV' !== $tag ) {
 						continue;
+					}
+
+					// Sequence among section/div opening tags (all of them,
+					// not just targeted ones) to align with $lcp_windows.
+					if ( 'SECTION' === $tag || 'DIV' === $tag ) {
+						++$section_seq;
 					}
 
 					$class_attr = (string) ( $processor->get_attribute( 'class' ) ?? '' );
@@ -5405,14 +5424,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						}
 					}
 
-					// Keep the first matching section above the fold untouched
-					// so hero content always renders eagerly.
-					if ( 0 === $seen && ( 'SECTION' === $tag || 'DIV' === $tag ) && ! $is_footer_tag
+					// Keep hero content eager: the first matching section is
+					// always skipped (positional above-the-fold), and any
+					// later section carrying LCP-hero markers is skipped too
+					// so a hero built from a second section or a Gutenberg
+					// group with an LCP image never gets content-visibility.
+					// Footer/aside/comment nodes are never the hero: they are
+					// tagged whenever targeted (and never consume the hero
+					// skip, so a footer-first DOM still skips the hero).
+					if ( ! $is_footer_tag
 						&& false === strpos( $lower_cls, 'comment' ) && false === strpos( $lower_cls, 'footer' ) ) {
-						++$seen;
-						continue;
+						if ( ! $hero_skipped ) {
+							$hero_skipped = true;
+							continue;
+						}
+						if ( $this->is_lazy_render_hero_tag( $processor, $lower_cls ) ) {
+							continue;
+						}
+						if ( isset( $lcp_windows[ $section_seq ] ) && $lcp_windows[ $section_seq ] ) {
+							continue;
+						}
 					}
-					++$seen;
 
 					$style = (string) ( $processor->get_attribute( 'style' ) ?? '' );
 					if ( '' !== $style && preg_match( '#content-visibility\s*:#i', $style ) ) {
@@ -5431,6 +5463,97 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					do_action( 'wppo_debug_log', 'WPPO lazy render failed: ' . $e->getMessage(), array( 'exception' => $e ) );
 				}
 				return $buffer;
+			}
+		}
+
+		/**
+		 * Whether a lazy-render candidate carries LCP-hero markers on its opening tag.
+		 *
+		 * Checks `fetchpriority="high"`, `data-lcp`/`data-hero` attributes,
+		 * and hero/LCP tokens in the class/id string. Any match means the
+		 * node may hold above-fold LCP content and must stay eager.
+		 * Fail-safe: any failure returns false (caller falls back to the
+		 * positional skip and the scoped window check).
+		 *
+		 * @since NEXT
+		 *
+		 * @param mixed  $processor Tag processor positioned on the candidate tag.
+		 * @param string $lower_cls Lowercased class + id string of the candidate.
+		 * @return bool True when the opening tag itself marks an LCP hero.
+		 */
+		private function is_lazy_render_hero_tag( $processor, string $lower_cls ): bool {
+			try {
+				if ( is_object( $processor ) && method_exists( $processor, 'get_attribute' ) ) {
+					$fetchpriority = strtolower( (string) ( $processor->get_attribute( 'fetchpriority' ) ?? '' ) );
+					if ( 'high' === $fetchpriority ) {
+						return true;
+					}
+					foreach ( array( 'data-lcp', 'data-hero', 'data-od-hero', 'data-wppo-lcp' ) as $attr ) {
+						if ( null !== $processor->get_attribute( $attr ) ) {
+							return true;
+						}
+					}
+				}
+				if ( false !== strpos( $lower_cls, 'hero' ) || false !== strpos( $lower_cls, 'lcp' ) ) {
+					return true;
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Map section/div opening-tag order to scoped LCP presence.
+		 *
+		 * Splits the buffer at each `<section>`/`<div>` opening tag and
+		 * checks the scope up to the next such tag (capped at 16KB) for
+		 * LCP markers (`fetchpriority="high"`, `data-lcp`, `data-hero`).
+		 * Lets a plain container wrapping an LCP image still count as hero.
+		 * Fail-open: any failure returns an empty map (no scoped skips).
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $buffer The HTML buffer to scan.
+		 * @return bool[] LCP presence by section/div sequence index.
+		 */
+		private function get_lazy_render_lcp_windows( string $buffer ): array {
+			try {
+				if ( '' === $buffer ) {
+					return array();
+				}
+				if ( ! preg_match_all( '#<(section|div)\b[^>]*>#i', $buffer, $matches, PREG_OFFSET_CAPTURE ) ) {
+					return array();
+				}
+				if ( empty( $matches[0] ) || ! is_array( $matches[0] ) ) {
+					return array();
+				}
+				$tags  = array_values( $matches[0] );
+				$total = count( $tags );
+				$len   = strlen( $buffer );
+				$map   = array();
+				for ( $i = 0; $i < $total; $i++ ) {
+					$start = isset( $tags[ $i ][1] ) ? (int) $tags[ $i ][1] : 0;
+					$next  = ( $i + 1 < $total && isset( $tags[ $i + 1 ][1] ) ) ? (int) $tags[ $i + 1 ][1] : $len;
+					$scope = $next - $start;
+					if ( $scope <= 0 ) {
+						$map[ $i ] = false;
+						continue;
+					}
+					$window = substr( $buffer, $start, min( $scope, 16384 ) );
+					if ( ! is_string( $window ) || '' === $window ) {
+						$map[ $i ] = false;
+						continue;
+					}
+					$map[ $i ] = (bool) preg_match( '/\sfetchpriority\s*=\s*["\']high["\']/i', $window )
+						|| false !== stripos( $window, 'data-lcp' )
+						|| false !== stripos( $window, 'data-hero' );
+				}
+				return $map;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
 			}
 		}
 	}
