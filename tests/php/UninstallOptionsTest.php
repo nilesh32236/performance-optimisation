@@ -52,7 +52,7 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 	 * Completeness baseline: the 24 names that existed before audit #899 plus
 	 * the three audit #899 findings (img-scan cursors, blog-prefixed purge
 	 * queue) plus the issue #934 autoload-remediation priors option plus the
-	 * option-leak hardening additions.
+	 * option-leak hardening additions plus the issue #1107 regen timestamp.
 	 *
 	 * @var string[]
 	 */
@@ -96,6 +96,8 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 		'wppo_ai_anomaly_last_alarm',
 		'wppo_object_cache_circuit',
 		'wppo_object_cache_circuit_dismissed',
+		// Issue #1107 used-CSS full-regen cooldown timestamp.
+		'wppo_used_css_last_full_regen',
 	);
 
 	/**

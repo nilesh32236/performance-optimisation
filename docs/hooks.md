@@ -262,8 +262,23 @@ add_filter( 'wppo_used_css_safelist', function( $safelist ) {
 
 ---
 
+### `wppo_used_css_regen_cooldown`
+Filters the used-CSS full-regeneration cooldown in seconds (issue #1107). Bounds how often `Used_CSS::regenerate_all()` may queue site-wide work when not forced (default 5 hours, matching the `wppo_used_css_cron` schedule). Explicit operator paths (builder purge after a wipe, manual REST/ability triggers) pass `$force` and bypass the cooldown; per-post freshness still applies. @since NEXT.
+
+**Parameters:**
+- `$cooldown` *(int)* — Cooldown in seconds. Default 5 hours.
+
+**Example:**
+```php
+add_filter( 'wppo_used_css_regen_cooldown', function() {
+    return HOUR_IN_SECONDS;
+} );
+```
+
+---
+
 ### `wppo_builder_drift_requeue`
-Fires after builder-drift detection requeues used-CSS regeneration (issue #1023). Emitted by `Builder_Purge_Watcher::on_builder_drift()` (no args, Elementor CSS regen; full-site purge, at most once per request) and `Builder_Purge_Watcher::on_builder_drift_save( $post_id )` (explicit editor save, always requeues without an mtime check since the save itself proves the markup changed; fires only when a job was queued). @since 2.0.0.
+Fires after builder-drift detection requeues used-CSS regeneration (issue #1023). Emitted by `Builder_Purge_Watcher::on_builder_drift()` (no args, Elementor CSS regen; full-site purge, at most once per request) and `Builder_Purge_Watcher::on_builder_drift_save( $post_id )` (explicit editor save; the save bumps the modification time so the post-modification freshness check in `Used_CSS::requeue_for_post()` still requeues genuine changes — issue #1107; fires when a job was queued or already pending, not fired when the variant was skipped as fresh). @since 2.0.0.
 
 **Parameters:**
 - `$post_id` *(int, optional)* — Post ID saved in the builder (only for the editor-save variant).

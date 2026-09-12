@@ -288,6 +288,7 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 			'wppo_ai_anomaly_last_alarm',              // AI_Adaptive::ANOMALY_COOLDOWN_KEY.
 			'wppo_object_cache_circuit',               // Object_Cache::CIRCUIT_OPTION.
 			'wppo_object_cache_circuit_dismissed',     // Object_Cache::CIRCUIT_DISMISSED_OPTION.
+			'wppo_used_css_last_full_regen',           // Used_CSS::LAST_FULL_REGEN_OPTION (issue #1107).
 		);
 		foreach ( $wppo_options as $wppo_option ) {
 			delete_option( $wppo_option );

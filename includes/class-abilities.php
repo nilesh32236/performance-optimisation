@@ -1216,7 +1216,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 				);
 			}
 			$used_css = new Used_CSS();
-			$queued   = $used_css->regenerate_all();
+			// Forced: an explicit operator request bypasses the cooldown,
+			// while per-post freshness still skips up-to-date posts (issue #1107).
+			$queued = $used_css->regenerate_all( true );
 			return array( 'queued' => (int) $queued );
 		}
 
