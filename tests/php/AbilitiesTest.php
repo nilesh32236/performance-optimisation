@@ -55,12 +55,13 @@ class AbilitiesTest extends \PHPUnit\Framework\TestCase {
 
 		$enum = $db_ability['args']['input_schema']['properties']['type']['enum'];
 
-		// Canonical keys are TABLE_MAP keys + 'all'.
-		$expected = array_merge( array_keys( Database_Cleanup::TABLE_MAP ), array( 'all' ) );
+		// Canonical keys are the valid cleanup types (TABLE_MAP keys plus the
+		// standalone action_scheduler branch + 'all').
+		$expected = Database_Cleanup::get_valid_cleanup_types();
 		sort( $enum );
 		sort( $expected );
 
-		$this->assertSame( $expected, $enum, 'Ability enum must match Database_Cleanup::TABLE_MAP keys + all' );
+		$this->assertSame( $expected, $enum, 'Ability enum must match Database_Cleanup::get_valid_cleanup_types()' );
 
 		// Explicit regression: old value 'trash' must not appear; canonical 'trashed_posts' must.
 		$this->assertNotContains( 'trash', $enum, 'Ability enum must not contain legacy "trash" alias' );
@@ -71,6 +72,7 @@ class AbilitiesTest extends \PHPUnit\Framework\TestCase {
 		$this->assertContains( 'expired_transients', $enum );
 		$this->assertNotContains( 'orphans', $enum );
 		$this->assertContains( 'orphan_postmeta', $enum );
+		$this->assertContains( 'action_scheduler', $enum, 'Ability enum must contain the standalone "action_scheduler" branch' );
 	}
 
 	/**

@@ -359,6 +359,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				case 'oembed':
 					$cleaned_count = Database_Cleanup::clean_oembed_cache();
 					break;
+				case 'action_scheduler':
+					$cleaned_count = Database_Cleanup::clean_action_scheduler();
+					break;
 				default:
 					/* translators: %s: Cleanup type */
 					WP_CLI::error( sprintf( __( 'Invalid cleanup type "%s".', 'performance-optimisation' ), $type ) );

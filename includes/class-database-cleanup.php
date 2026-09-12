@@ -101,13 +101,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		}
 
 		/**
+		 * Standalone cleanup type for Action Scheduler queue health.
+		 *
+		 * Kept outside CLEANUP_METHOD_MAP/TABLE_MAP on purpose: those maps
+		 * assume `$wpdb` table/meta deletes, while AS purging must delegate
+		 * to `ActionScheduler_QueueCleaner` (issue #1106).
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		public const ACTION_SCHEDULER_TYPE = 'action_scheduler';
+
+		/**
 		 * Get valid cleanup types including 'all'.
+		 *
+		 * Includes the standalone `action_scheduler` type alongside the
+		 * CLEANUP_METHOD_MAP keys.
 		 *
 		 * @since 2.0.0
 		 * @return string[]
 		 */
 		public static function get_valid_cleanup_types(): array {
-			return array_merge( array_keys( self::CLEANUP_METHOD_MAP ), array( 'all' ) );
+			return array_merge( array_keys( self::CLEANUP_METHOD_MAP ), array( self::ACTION_SCHEDULER_TYPE, 'all' ) );
 		}
 
 		/**
@@ -1489,6 +1504,313 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		}
 
 		/**
+		 * Whether the Action Scheduler store/cleaner API is available.
+		 *
+		 * Fail-open helper: another plugin may have loaded a different AS
+		 * version (newest wins via `ActionScheduler::autoload()`), so every
+		 * AS touchpoint must guard on this first and never fatal.
+		 *
+		 * @since NEXT
+		 * @return bool True when the store + cleaner classes exist.
+		 */
+		public static function is_action_scheduler_available(): bool {
+			try {
+				return class_exists( 'ActionScheduler_Store' ) && class_exists( 'ActionScheduler_QueueCleaner' );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Resolve the Action Scheduler retention cutoffs using AS's own filters.
+		 *
+		 * Reads `action_scheduler_retention_period` (complete/canceled) and
+		 * `action_scheduler_retention_period_for_failed` verbatim so AS stays
+		 * the single source of truth — no plugin setting duplicates it
+		 * (issue #1106).
+		 *
+		 * @since NEXT
+		 * @return array{lifespan:int,lifespan_failed:int}
+		 */
+		private static function get_action_scheduler_retention(): array {
+			$month = 2678400;
+			try {
+				$lifespan = function_exists( 'apply_filters' ) ? apply_filters( 'action_scheduler_retention_period', $month ) : $month;
+				$lifespan = is_numeric( $lifespan ) ? max( 0, (int) $lifespan ) : $month;
+				// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- upstream AS filter, must stay verbatim.
+				$lifespan_failed = function_exists( 'apply_filters' ) ? apply_filters( 'action_scheduler_retention_period_for_failed', 3 * $month ) : 3 * $month;
+				$lifespan_failed = is_numeric( $lifespan_failed ) ? max( 0, (int) $lifespan_failed ) : 3 * $month;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$lifespan        = $month;
+				$lifespan_failed = 3 * $month;
+			}
+			return array(
+				'lifespan'        => $lifespan,
+				'lifespan_failed' => $lifespan_failed,
+			);
+		}
+
+		/**
+		 * Build a cutoff DateTime N seconds ago via AS when possible.
+		 *
+		 * @since NEXT
+		 * @param int $seconds Age in seconds.
+		 * @return \DateTime|null Null when no datetime API is available.
+		 */
+		private static function get_action_scheduler_cutoff( int $seconds ): ?\DateTime {
+			try {
+				if ( function_exists( 'as_get_datetime_object' ) ) {
+					$cutoff = as_get_datetime_object( $seconds . ' seconds ago' );
+					return $cutoff instanceof \DateTime ? $cutoff : null;
+				}
+				return new \DateTime( '@' . max( 0, time() - $seconds ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return null;
+			}
+		}
+
+		/**
+		 * Queue health for the Action Scheduler tables (read-only).
+		 *
+		 * Surfaces pending/failed counts, the oldest pending age, the
+		 * terminal-past-retention reclaimable count, and table sizes so a
+		 * retry storm is visible from the dashboard instead of only in the
+		 * database (issue #1106). Fail-open: returns zeros with
+		 * `available: false` when AS is absent or any query throws.
+		 *
+		 * @since NEXT
+		 * @return array{available:bool,pending:int,failed:int,oldest_pending_age_seconds:int|null,reclaimable:int,reclaimable_bytes:int,total_bytes:int}
+		 */
+		public static function get_action_scheduler_health(): array {
+			$empty = array(
+				'available'                  => false,
+				'pending'                    => 0,
+				'failed'                     => 0,
+				'oldest_pending_age_seconds' => null,
+				'reclaimable'                => 0,
+				'reclaimable_bytes'          => 0,
+				'total_bytes'                => 0,
+			);
+			if ( ! self::is_action_scheduler_available() ) {
+				return $empty;
+			}
+			try {
+				$store = \ActionScheduler_Store::instance();
+				if ( ! $store ) {
+					return $empty;
+				}
+				$counts  = $store->action_counts();
+				$pending = isset( $counts[ \ActionScheduler_Store::STATUS_PENDING ] ) ? (int) $counts[ \ActionScheduler_Store::STATUS_PENDING ] : 0;
+				$failed  = isset( $counts[ \ActionScheduler_Store::STATUS_FAILED ] ) ? (int) $counts[ \ActionScheduler_Store::STATUS_FAILED ] : 0;
+
+				$oldest_age = null;
+				if ( $pending > 0 ) {
+					$oldest = $store->query_actions(
+						array(
+							'status'   => \ActionScheduler_Store::STATUS_PENDING,
+							'per_page' => 1,
+							'offset'   => 0,
+							'orderby'  => 'date',
+							'order'    => 'ASC',
+						)
+					);
+					if ( is_array( $oldest ) && ! empty( $oldest ) ) {
+						$date = $store->get_date( $oldest[0] );
+						if ( $date instanceof \DateTime ) {
+							$oldest_age = max( 0, time() - $date->getTimestamp() );
+						}
+					}
+				}
+
+				$retention     = self::get_action_scheduler_retention();
+				$cutoff        = self::get_action_scheduler_cutoff( $retention['lifespan'] );
+				$cutoff_failed = self::get_action_scheduler_cutoff( $retention['lifespan_failed'] );
+
+				$reclaimable = 0;
+				if ( null !== $cutoff && null !== $cutoff_failed ) {
+					// Mirror the upstream cleaner's `action_scheduler_default_cleaner_statuses`
+					// filter so the advertised reclaimable count only covers statuses
+					// the cleaner would actually purge (non-array falls back to the
+					// defaults, exactly like upstream).
+					$default_statuses = array( \ActionScheduler_Store::STATUS_COMPLETE, \ActionScheduler_Store::STATUS_CANCELED );
+					// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- upstream AS filter, must stay verbatim.
+					$statuses_to_purge = function_exists( 'apply_filters' ) ? apply_filters( 'action_scheduler_default_cleaner_statuses', $default_statuses ) : $default_statuses;
+					if ( ! is_array( $statuses_to_purge ) ) {
+						$statuses_to_purge = $default_statuses;
+					}
+					/**
+					 * Filters whether failed actions count toward the reclaimable total.
+					 *
+					 * Mirrors the upstream `action_scheduler_enable_failed_action_cleanup`
+					 * toggle so operators who disabled failed-action purging do not
+					 * see those rows advertised as reclaimable.
+					 *
+					 * @since NEXT
+					 * @param bool $clean_failed Whether failed actions are purged.
+					 */
+					$clean_failed = function_exists( 'apply_filters' ) ? (bool) apply_filters( 'action_scheduler_enable_failed_action_cleanup', true ) : true; // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- upstream AS filter, must stay verbatim.
+					// Note: query_actions() with 'count' ignores per_page/LIMIT
+					// (the DB store only appends LIMIT for 'select'), so no
+					// per_page is passed here — the count is never capped.
+					if ( in_array( \ActionScheduler_Store::STATUS_COMPLETE, $statuses_to_purge, true ) ) {
+						$reclaimable += (int) $store->query_actions(
+							array(
+								'status'           => \ActionScheduler_Store::STATUS_COMPLETE,
+								'modified'         => $cutoff,
+								'modified_compare' => '<=',
+							),
+							'count'
+						);
+					}
+					if ( in_array( \ActionScheduler_Store::STATUS_CANCELED, $statuses_to_purge, true ) ) {
+						$reclaimable += (int) $store->query_actions(
+							array(
+								'status'           => \ActionScheduler_Store::STATUS_CANCELED,
+								'modified'         => $cutoff,
+								'modified_compare' => '<=',
+							),
+							'count'
+						);
+					}
+					if ( $clean_failed && ! in_array( \ActionScheduler_Store::STATUS_FAILED, $statuses_to_purge, true ) ) {
+						// Failed actions are purged on their own (longer) retention
+						// unless the statuses filter already includes them, in
+						// which case upstream purges them with the normal cutoff.
+						$reclaimable += (int) $store->query_actions(
+							array(
+								'status'           => \ActionScheduler_Store::STATUS_FAILED,
+								'modified'         => $cutoff_failed,
+								'modified_compare' => '<=',
+							),
+							'count'
+						);
+					} elseif ( in_array( \ActionScheduler_Store::STATUS_FAILED, $statuses_to_purge, true ) ) {
+						$reclaimable += (int) $store->query_actions(
+							array(
+								'status'           => \ActionScheduler_Store::STATUS_FAILED,
+								'modified'         => $cutoff,
+								'modified_compare' => '<=',
+							),
+							'count'
+						);
+					}
+				}
+
+				global $wpdb;
+				$total_bytes = 0;
+				$total_rows  = 0;
+				if ( isset( $wpdb->prefix ) ) {
+					$actions_table = $wpdb->prefix . 'actionscheduler_actions';
+					$logs_table    = $wpdb->prefix . 'actionscheduler_logs';
+					$total_bytes   = self::get_table_size( $actions_table ) + self::get_table_size( $logs_table );
+					foreach ( array( \ActionScheduler_Store::STATUS_COMPLETE, \ActionScheduler_Store::STATUS_CANCELED, \ActionScheduler_Store::STATUS_FAILED, \ActionScheduler_Store::STATUS_PENDING, \ActionScheduler_Store::STATUS_RUNNING ) as $status ) {
+						$total_rows += (int) ( $counts[ $status ] ?? 0 );
+					}
+				}
+				$reclaimable_bytes = 0;
+				if ( $reclaimable > 0 && $total_rows > 0 && $total_bytes > 0 ) {
+					$reclaimable_bytes = (int) ( $total_bytes * ( $reclaimable / $total_rows ) );
+				}
+
+				return array(
+					'available'                  => true,
+					'pending'                    => max( 0, $pending ),
+					'failed'                     => max( 0, $failed ),
+					'oldest_pending_age_seconds' => $oldest_age,
+					'reclaimable'                => max( 0, $reclaimable ),
+					'reclaimable_bytes'          => max( 0, $reclaimable_bytes ),
+					'total_bytes'                => max( 0, $total_bytes ),
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $empty;
+			}
+		}
+
+		/**
+		 * Purge terminal Action Scheduler actions past AS retention.
+		 *
+		 * Thin delegation to `ActionScheduler_QueueCleaner::delete_old_actions()`
+		 * — never raw DELETEs against the AS tables, so `delete_action()`
+		 * cascades to `actionscheduler_logs` and the upstream retention
+		 * filters (`action_scheduler_retention_period`,
+		 * `action_scheduler_retention_period_for_failed`,
+		 * `action_scheduler_default_cleaner_statuses`,
+		 * `action_scheduler_enable_failed_action_cleanup`,
+		 * `action_scheduler_cleanup_batch_size`) stay authoritative
+		 * (issue #1106). Only terminal statuses past their cutoffs are ever
+		 * touched by the upstream cleaner — pending/in-progress/claimed rows
+		 * are never purged. Fail-open: returns 0 when AS is absent, disabled
+		 * via filter, or the cleaner throws.
+		 *
+		 * A single upstream pass purges at most one batch (~20 per status by
+		 * default), so this loops `delete_old_actions()` until a pass deletes
+		 * nothing — bounded by an iteration cap and a wall-clock budget so a
+		 * 168 MB backlog is actually reclaimed in one invocation without
+		 * risking a REST timeout (issue #1106 review).
+		 *
+		 * @since NEXT
+		 * @return int Number of actions deleted (0 when AS absent, disabled, or nothing past retention).
+		 */
+		public static function clean_action_scheduler(): int {
+			if ( ! self::is_action_scheduler_available() ) {
+				return 0;
+			}
+			/**
+			 * Filters whether the plugin may delegate to Action Scheduler's cleaner.
+			 *
+			 * Cautious operators can return false to narrow the scope to a
+			 * no-op (visibility only); site-specific narrowing beyond that
+			 * should use the upstream `action_scheduler_*` filters.
+			 *
+			 * @since NEXT
+			 * @param bool $enabled Whether AS cleanup delegation is enabled.
+			 */
+			$enabled = function_exists( 'apply_filters' ) ? (bool) apply_filters( 'wppo_action_scheduler_cleanup_enabled', true ) : true;
+			if ( ! $enabled ) {
+				return 0;
+			}
+			try {
+				// A larger-than-default batch plus bounded looping: each pass
+				// still honors the upstream `action_scheduler_cleanup_batch_size`
+				// filter via the cleaner's get_batch_size(), the constructor
+				// value is only the default when the filter is unhooked.
+				$cleaner = new \ActionScheduler_QueueCleaner( null, 100 );
+				if ( ! method_exists( $cleaner, 'delete_old_actions' ) ) {
+					return 0;
+				}
+				$total          = 0;
+				$iterations     = 0;
+				$max_iterations = 10;
+				$deadline       = microtime( true ) + 15.0;
+				do {
+					$deleted = $cleaner->delete_old_actions();
+					$count   = is_array( $deleted ) ? count( $deleted ) : 0;
+					$total  += $count;
+					++$iterations;
+				} while ( $count > 0 && $iterations < $max_iterations && microtime( true ) < $deadline );
+				$count = $total;
+				if ( $count > 0 ) {
+					self::invalidate_counts_cache();
+					Log::add(
+						sprintf(
+							/* translators: %d: Number of Action Scheduler actions purged */
+							__( 'Action Scheduler cleanup: %d terminal actions purged via Action Scheduler cleaner.', 'performance-optimisation' ),
+							$count
+						)
+					);
+				}
+				return $count;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
+			}
+		}
+
+		/**
 		 * Execute all defined database cleanup routines and collect their results.
 		 *
 		 * @since 1.1.0
@@ -1526,6 +1848,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					}
 				}
 			}
+
+			// Standalone Action Scheduler branch (own method, not in CLEANUP_METHOD_MAP).
+			// clean_action_scheduler() returns int only (fail-open 0), so no
+			// is_wp_error()/false handling is needed here.
+			$as_result                              = self::clean_action_scheduler();
+			$results[ self::ACTION_SCHEDULER_TYPE ] = $as_result;
+			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- documented hook
+			do_action( 'wppo_database_cleanup_completed', self::ACTION_SCHEDULER_TYPE, (int) $as_result );
+			$total_deleted += (int) $as_result;
 
 			do_action( 'wppo_database_cleanup_completed', 'all', $total_deleted, $results );
 
@@ -1613,6 +1944,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				}
 			}
 
+			// Thin AS delegation so WP-Cron starvation does not leave the queue
+			// to grow unbounded (issue #1106). Fail-open: a 0 return is not a
+			// failure (AS absent, disabled, or nothing past retention), and
+			// clean_action_scheduler() returns int only, so there is no error
+			// branch to log here.
+			self::clean_action_scheduler();
+
 			$optimize_enabled = ! empty( $settings['dbOptimize'] );
 			self::maybe_optimize_tables( $affected_tables, $optimize_enabled );
 
@@ -1624,7 +1962,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 *
 		 * Returns an associative array keyed by cleanup type with integer counts for:
 		 * `revisions`, `auto_drafts`, `trashed_posts`, `spam_comments`, `trashed_comments`,
-		 * `expired_transients`, and `orphan_postmeta`.
+		 * `expired_transients`, `orphan_postmeta`, `unattached_media`, `oembed_cache`,
+		 * plus the standalone `action_scheduler` reclaimable count (terminal AS
+		 * actions past retention, issue #1106).
 		 *
 		 * The `spam_comments`/`trashed_comments` counts exclude WordPress 6.9+ Notes
 		 * (`comment_type='note'`) using the same predicate as
@@ -1633,6 +1973,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 *
 		 * @since 1.1.0
 		 * @since 2.0.0 Exclude WP 6.9+ Notes from spam/trashed comment counts.
+		 * @since NEXT Add `action_scheduler` reclaimable count.
 		 * @return array<string,int> Associative array mapping cleanup type to its current count.
 		 */
 		public static function get_counts() {
@@ -1775,6 +2116,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					return false;
 				}
 
+				// Standalone AS reclaimable count (own branch, not part of the
+				// UNION ALL above). Fail-open to 0 when AS is absent.
+				try {
+					$as_health                             = self::get_action_scheduler_health();
+					$counts[ self::ACTION_SCHEDULER_TYPE ] = isset( $as_health['reclaimable'] ) ? (int) $as_health['reclaimable'] : 0;
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$counts[ self::ACTION_SCHEDULER_TYPE ] = 0;
+				}
+
 				return $counts;
 			};
 
@@ -1809,6 +2160,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				'orphan_postmeta'    => 0,
 				'unattached_media'   => 0,
 				'oembed_cache'       => 0,
+				'action_scheduler'   => 0,
 			);
 		}
 

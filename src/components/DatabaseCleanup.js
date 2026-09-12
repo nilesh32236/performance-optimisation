@@ -59,6 +59,10 @@ const RISK_BADGE_MAP = {
 		level: 'poor',
 		label: __( 'Review', 'performance-optimisation' ),
 	},
+	action_scheduler: {
+		level: 'good',
+		label: __( 'Safe', 'performance-optimisation' ),
+	},
 };
 
 const CLEANUP_TYPES = [
@@ -131,6 +135,14 @@ const CLEANUP_TYPES = [
 		label: __( 'oEmbed Cache', 'performance-optimisation' ),
 		description: __(
 			'Stored embed responses from YouTube, Twitter, Vimeo and other providers.',
+			'performance-optimisation'
+		),
+	},
+	{
+		key: 'action_scheduler',
+		label: __( 'Action Scheduler Queue', 'performance-optimisation' ),
+		description: __(
+			'Finished queue jobs past Action Scheduler retention. Only terminal jobs are purged via the Action Scheduler cleaner.',
 			'performance-optimisation'
 		),
 	},
@@ -273,18 +285,28 @@ const DatabaseCleanup = ( { options = {} } ) => {
 		try {
 			const response = await apiCall( 'database_cleanup', { type } );
 			if ( response.success ) {
+				// When the Action Scheduler cleaner had nothing available to
+				// purge (AS absent or opted out), the REST response carries an
+				// explanatory note — surface it instead of a hollow "0 removed".
+				const asNote =
+					response.data?.action_scheduler_available === false &&
+					response.data?.note
+						? response.data.note
+						: null;
 				notify( {
-					type: 'success',
-					message: sprintf(
-						// translators: %d is the number of items removed during cleanup.
-						_n(
-							'Cleanup successful: %d item removed.',
-							'Cleanup successful: %d items removed.',
-							response.data?.deleted ?? 0,
-							'performance-optimisation'
+					type: asNote ? 'info' : 'success',
+					message:
+						asNote ||
+						sprintf(
+							// translators: %d is the number of items removed during cleanup.
+							_n(
+								'Cleanup successful: %d item removed.',
+								'Cleanup successful: %d items removed.',
+								response.data?.deleted ?? 0,
+								'performance-optimisation'
+							),
+							response.data?.deleted ?? 0
 						),
-						response.data?.deleted ?? 0
-					),
 					durationMs: 5000,
 				} );
 				// Cleanup changed the counts — invalidate the shared cache
@@ -342,10 +364,19 @@ const DatabaseCleanup = ( { options = {} } ) => {
 		}
 	};
 
-	const totalItems = Object.values( counts ).reduce(
-		( sum, val ) => sum + ( parseInt( val ) || 0 ),
-		0
-	);
+	const queueHealth =
+		counts.action_scheduler_health &&
+		typeof counts.action_scheduler_health === 'object'
+			? counts.action_scheduler_health
+			: null;
+	const totalItems = Object.entries( counts ).reduce( ( sum, [ , val ] ) => {
+		// Skip object-valued payloads (e.g. action_scheduler_health)
+		// so they can never pollute the numeric total.
+		if ( val !== null && typeof val === 'object' ) {
+			return sum;
+		}
+		return sum + ( parseInt( val, 10 ) || 0 );
+	}, 0 );
 
 	const handleExportTransients = async () => {
 		setExporting( true );
@@ -770,6 +801,43 @@ const DatabaseCleanup = ( { options = {} } ) => {
 										).toLocaleString() }
 									</span>
 								</div>
+								{ item.key === 'action_scheduler' &&
+									queueHealth &&
+									queueHealth.available !== false && (
+										<p className="wppo-text-muted wppo-text-small wppo-mt-10">
+											{ sprintf(
+												// translators: %1$d pending, %2$d failed, %3$s oldest pending age.
+												__(
+													'Queue health: %1$d pending, %2$d failed, oldest pending %3$s.',
+													'performance-optimisation'
+												),
+												Number(
+													queueHealth.pending || 0
+												),
+												Number(
+													queueHealth.failed || 0
+												),
+												queueHealth.oldest_pending_age_seconds ===
+													null ||
+													queueHealth.oldest_pending_age_seconds ===
+														undefined
+													? __(
+															'n/a',
+															'performance-optimisation'
+													  )
+													: sprintf(
+															// translators: %d is an age in seconds.
+															__(
+																'%d seconds ago',
+																'performance-optimisation'
+															),
+															Number(
+																queueHealth.oldest_pending_age_seconds
+															)
+													  )
+											) }
+										</p>
+									) }
 							</FeatureCard>
 						);
 					} ) }

@@ -298,10 +298,14 @@ const Dashboard = ( {
 	}, [ fetchDbCounts ] );
 
 	const dbOverheadCount = useMemo( () => {
-		return Object.values( dbCounts ).reduce(
-			( sum, val ) => sum + ( parseInt( val, 10 ) || 0 ),
-			0
-		);
+		return Object.entries( dbCounts ).reduce( ( sum, [ , val ] ) => {
+			// Skip object-valued payloads (e.g. action_scheduler_health)
+			// so they can never pollute the numeric total.
+			if ( val !== null && typeof val === 'object' ) {
+				return sum;
+			}
+			return sum + ( parseInt( val, 10 ) || 0 );
+		}, 0 );
 	}, [ dbCounts ] );
 
 	const pollJobStatus = useCallback( async () => {

@@ -528,7 +528,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 							'properties' => array(
 								'type' => array(
 									'type'        => 'string',
-									'enum'        => array( 'revisions', 'auto_drafts', 'trashed_posts', 'spam_comments', 'trashed_comments', 'expired_transients', 'orphan_postmeta', 'unattached_media', 'oembed_cache', 'all' ),
+									'enum'        => array( 'revisions', 'auto_drafts', 'trashed_posts', 'spam_comments', 'trashed_comments', 'expired_transients', 'orphan_postmeta', 'unattached_media', 'oembed_cache', 'action_scheduler', 'all' ),
 									'description' => __( 'Cleanup type.', 'performance-optimisation' ),
 								),
 							),
@@ -720,6 +720,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 					}
 				}
 				return array( 'cleaned' => $total );
+			}
+			if ( Database_Cleanup::ACTION_SCHEDULER_TYPE === $type ) {
+				// clean_action_scheduler() returns int only (fail-open 0).
+				return array( 'cleaned' => (int) Database_Cleanup::clean_action_scheduler() );
 			}
 			$method_map = Database_Cleanup::CLEANUP_METHOD_MAP;
 			$method     = $method_map[ $type ] ?? null;
