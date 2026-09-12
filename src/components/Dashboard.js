@@ -41,6 +41,17 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 
 /**
+ * Polling interval for image_job_status ticks.
+ */
+const POLL_INTERVAL_MS = 5000;
+
+/**
+ * Maximum number of image_job_status poll attempts before giving up
+ * (~5 minutes at 5s), matching PageSpeedPanel's cap.
+ */
+const MAX_POLL_ATTEMPTS = 60;
+
+/**
  * Normalize wppoSettings.image_info which stores arrays of file paths
  * into the {webp: count, avif: count} shape the component expects.
  * @param {Object} raw - Raw image info object.
@@ -229,6 +240,7 @@ const Dashboard = ( {
 	const pollingRef = useRef( null );
 	const pollAbortRef = useRef( null );
 	const pollRetryRef = useRef( 0 );
+	const pollAttemptsRef = useRef( 0 );
 	const submittingRef = useRef( false );
 	const [ confirmRemove, setConfirmRemove ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
@@ -294,6 +306,20 @@ const Dashboard = ( {
 
 	const pollJobStatus = useCallback( async () => {
 		const currentTimeout = pollingRef.current;
+		pollAttemptsRef.current += 1;
+		if ( pollAttemptsRef.current > MAX_POLL_ATTEMPTS ) {
+			setBgProcessing( false );
+			pollingRef.current = null;
+			notify( {
+				type: 'error',
+				message: __(
+					'Image optimisation timed out. Please try again.',
+					'performance-optimisation'
+				),
+				durationMs: 5000,
+			} );
+			return;
+		}
 		// Polls are strictly sequential: the next tick is only scheduled
 		// after the previous await settles, so there is no overlapping
 		// in-flight request to abort here. A fresh controller per tick lets
@@ -346,6 +372,7 @@ const Dashboard = ( {
 						durationMs: 5000,
 					} );
 					pollingRef.current = null;
+					pollAttemptsRef.current = 0;
 					return;
 				}
 			}
@@ -378,7 +405,7 @@ const Dashboard = ( {
 			} );
 		}
 		if ( pollingRef.current === currentTimeout ) {
-			pollingRef.current = setTimeout( pollJobStatus, 5000 );
+			pollingRef.current = setTimeout( pollJobStatus, POLL_INTERVAL_MS );
 		}
 	}, [ updateState, notify ] );
 
@@ -469,7 +496,12 @@ const Dashboard = ( {
 					if ( pollingRef.current ) {
 						clearTimeout( pollingRef.current );
 					}
-					pollingRef.current = setTimeout( pollJobStatus, 5000 );
+					pollAttemptsRef.current = 0;
+					pollRetryRef.current = 0;
+					pollingRef.current = setTimeout(
+						pollJobStatus,
+						POLL_INTERVAL_MS
+					);
 				} else {
 					// Synchronous path (Action Scheduler unavailable).
 					setBgJobsQueued( 0 );
