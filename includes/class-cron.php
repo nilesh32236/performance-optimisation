@@ -909,11 +909,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				return;
 			}
 
+			// The same-host check above is the SSRF control. Do NOT also set
+			// reject_unsafe_urls: WP's validator rejects every private,
+			// loopback and non-dotted host, so cache warming would silently
+			// stop on localhost/staging installs and on any site whose own
+			// hostname resolves to a private address.
 			$response = wp_remote_get(
 				$url,
 				array(
-					'timeout'            => 30,
-					'reject_unsafe_urls' => true,
+					'timeout' => 30,
 				)
 			);
 			if ( is_wp_error( $response ) ) {

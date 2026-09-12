@@ -1967,14 +1967,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				unset( $e );
 				return;
 			}
+			// The same-site guard above is the SSRF control. Do NOT use
+			// wp_safe_remote_get()/reject_unsafe_urls here: WP's validator
+			// rejects every private, loopback and non-dotted host, which
+			// would silently break used-CSS generation on localhost and
+			// staging installs (and on any site whose own hostname resolves
+			// to a private address).
 			$fetch_args = array(
-				'timeout'            => 15,
-				'reject_unsafe_urls' => true,
-				'headers'            => array(
+				'timeout' => 15,
+				'headers' => array(
 					'X-WPPO-Used-CSS' => '1',
 				),
 			);
-			$response   = function_exists( 'wp_safe_remote_get' ) ? wp_safe_remote_get( $permalink, $fetch_args ) : wp_remote_get( $permalink, $fetch_args );
+			$response   = wp_remote_get( $permalink, $fetch_args );
 
 			if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {

@@ -944,28 +944,43 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		}
 
 		/**
-		 * Write deny rules shielding the web-reachable redis config file.
+		 * Write Apache/LiteSpeed deny rules shielding the redis config file.
 		 *
-		 * Best-effort only; failures never block enable().
+		 * The config file lives under the web-reachable wp-content tree and
+		 * only carries an ABSPATH guard, so a server that stops handing .php
+		 * to PHP would serve it as plain text and disclose the Redis
+		 * topology. Adds a `<Files>` deny block to wp-content/.htaccess.
+		 *
+		 * Best-effort only; failures never block enable(). Apache and
+		 * OpenLiteSpeed both read this file; nginx and IIS ignore it, and
+		 * those deployments must deny the file at the server level (this
+		 * method does not write web.config).
 		 *
 		 * @since NEXT
 		 * @return void
 		 */
 		private static function protect_config_file(): void {
 			try {
-				$fs = Util::init_filesystem();
-				if ( ! $fs ) {
+				if ( ! function_exists( 'insert_with_markers' ) ) {
 					return;
 				}
 				$htaccess = wp_normalize_path( (string) WP_CONTENT_DIR ) . '/.htaccess';
-				$rule     = "<Files \"wppo-redis-config.php\">\nRequire all denied\n</Files>\n";
-				if ( function_exists( 'insert_with_markers' ) ) {
-					insert_with_markers( $htaccess, 'WPPO Redis Config', explode( "\n", trim( $rule ) ) );
-				}
-				$config = wp_normalize_path( (string) WP_CONTENT_DIR ) . '/web.config';
-				if ( ! $fs->exists( $config ) ) {
-					return;
-				}
+				// Both authz generations are emitted behind IfModule guards:
+				// a bare `Require all denied` is Apache 2.4-only syntax and a
+				// server without mod_authz_core answers 500 for the whole
+				// wp-content tree rather than ignoring the directive.
+				$rule = array(
+					'<Files "wppo-redis-config.php">',
+					'<IfModule mod_authz_core.c>',
+					'Require all denied',
+					'</IfModule>',
+					'<IfModule !mod_authz_core.c>',
+					'Order allow,deny',
+					'Deny from all',
+					'</IfModule>',
+					'</Files>',
+				);
+				insert_with_markers( $htaccess, 'WPPO Redis Config', $rule );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}

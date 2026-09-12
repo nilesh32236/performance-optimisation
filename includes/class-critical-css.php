@@ -1374,15 +1374,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			if ( function_exists( 'wp_http_validate_url' ) && ! self::is_safe_stylesheet_url( $url ) ) {
 				return false;
 			}
-			// wp_remote_get() with reject_unsafe_urls (honored by WP_Http)
-			// keeps the SSRF backstop while preserving the wp_remote_get
-			// call shape the scheduler/worker doubles stub.
+			// is_safe_stylesheet_url() above is the SSRF control and is
+			// stricter than WP's IP-range check. Do NOT also set
+			// reject_unsafe_urls: WP's validator rejects every private,
+			// loopback and non-dotted host, so it would break critical CSS
+			// generation on localhost/staging installs (and on any site
+			// whose own hostname resolves privately) without adding
+			// protection the same-site check does not already provide.
 			$response = wp_remote_get(
 				$url,
 				array(
-					'timeout'            => 30,
-					'user-agent'         => 'WPPO Critical CSS Generator/' . WPPO_VERSION,
-					'reject_unsafe_urls' => true,
+					'timeout'    => 30,
+					'user-agent' => 'WPPO Critical CSS Generator/' . WPPO_VERSION,
 				)
 			);
 
