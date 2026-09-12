@@ -24,19 +24,22 @@ Most performance plugins either do too little or overwhelm you with dozens of co
 
 ---
 
-## What's New in v1.9.0
+## What's New in v2.0.0
 
-- **Centralized `content_url()` Static Caching:** High-frequency asset minification loops now reuse static `content_url()` lookups via `Util::cached_content_url()`, keyed per site per request (`get_current_blog_id()`) for multisite safety under `switch_to_blog()`.
-- **WordPress 7.1+ Client-Side Media Processing Control:** Added `filter_client_side_supported_mime_types` setting to let site admins select in-browser Web Worker supported image formats, safely intersected with core capabilities.
-- **Size-Aware Image Quality & LQIP Isolation:** Integrated WP 7.1+ `wp_get_image_encode_quality()` and WP 6.7–7.0 `wp_image_quality()` for full WebP/AVIF conversions while preserving fixed low-quality (40) for LQIP placeholders.
-- **Core Resource Hints Migration:** Preconnect and DNS-prefetch link emission now leverage core's `wp_resource_hints` filter with automatic bare-hostname (`example.com` -> `//example.com`) normalization and `crossorigin` attribute preservation.
-- **Inline Combined CSS & Block Styles:** Combined CSS stylesheets can be inlined via `wp_maybe_inline_styles()`, and classic themes now load separate block styles on demand by default on WP 6.9+.
+- **LiteSpeed/OpenLiteSpeed Coexistence:** Auto/WPPO/LiteSpeed/Standalone modes with native `X-LiteSpeed-*` header protocol, purge sync, ESI punch-holing, per-page/per-post-type TTL overrides, and a background cache crawler.
+- **Edge Cache + CDN:** Purge fan-out for Cloudflare, Bunny, and Varnish, plus per-mapping CDN URL rewriting.
+- **Real-User Monitoring (RUM):** Anonymized field Web Vitals (LCP, INP, CLS) collected with trend charts in the dashboard.
+- **New WP-CLI self-verification:** `wp wppo verify` checks cache dirs, drop-ins, Redis, LiteSpeed state, settings schema, cron, and uninstall hygiene.
+- **Autoload Bloat Audit:** Largest-autoloaded-options report with dry-run/apply/revert remediation, plus a read-only expired-transients export.
+- **Safety & Reliability:** Redis object-cache circuit breaker, builder-update purge watcher (Elementor/Divi/Bricks/WPBakery), safe-by-default Used CSS and critical CSS hardening, delay-JS presets, bfcache for logged-in users, and a redesigned WCAG-AA dashboard.
+
+See the full [changelog](readme.txt) for the complete list.
 
 ---
 
 ## ⚡ Performance Showcase (Before vs After)
 
-Real-world test results measured on a standard WordPress installation (Astra theme, 5 images, comments):
+Illustrative results from a controlled test installation (Astra theme, 5 images, comments). **Your mileage varies** — actual numbers depend on your host, theme, plugins, and content.
 
 | Metric | Before | After | Improvement |
 | :--- | :--- | :--- | :--- |
@@ -45,7 +48,7 @@ Real-world test results measured on a standard WordPress installation (Astra the
 | **LCP (Largest Contentful Paint)** | 4.1 s | **1.2 s** | **-71%** |
 | **Total Page Size** | 3.2 MB | **820 KB** | **-74%** |
 
-See the complete methodology and detailed desktop/mobile breakdown in [PERFORMANCE.md](PERFORMANCE.md).
+See the methodology and detailed desktop/mobile breakdown in [PERFORMANCE.md](PERFORMANCE.md).
 
 ---
 

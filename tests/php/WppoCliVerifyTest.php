@@ -470,4 +470,107 @@ class WppoCliVerifyTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 'redis', $payload['checks'][0]['check'] );
 		$this->assertSame( 'pass', $payload['checks'][0]['status'] );
 	}
+
+	/**
+	 * Issue #1084: a cache root that is not writable by the CLI user but is
+	 * owned by a DIFFERENT user (e.g. the web user `nobody`) with the owner
+	 * write bit set must warn, not fail — is_writable() is a false negative
+	 * under WP-CLI.
+	 */
+	public function test_cache_dirs_unwritable_foreign_owner_warns(): void {
+		$root = '/tmp/wordpress/wp-content/cache/wppo';
+		$row  = WPPO_CLI_Command::classify_unwritable_cache_root(
+			1000, // CLI effective UID (admin).
+			array(
+				'uid'  => 65534, // Web user (nobody) owns the dir.
+				'gid'  => 65534,
+				'mode' => 040755, // Owner write bit set.
+			),
+			$root
+		);
+		$this->assertSame( 'warn', $row['status'] );
+		$this->assertStringContainsString( $root, $row['detail'] );
+		$this->assertStringContainsString( 'owner', $row['detail'] );
+		$this->assertStringContainsString( 'CLI user', $row['detail'] );
+	}
+
+	/**
+	 * Issue #1084: group write for the ownership group also means the foreign
+	 * owner can write, so this must warn as well.
+	 */
+	public function test_cache_dirs_unwritable_foreign_owner_group_write_warns(): void {
+		$row = WPPO_CLI_Command::classify_unwritable_cache_root(
+			1000,
+			array(
+				'uid'  => 33,        // www-data.
+				'gid'  => 33,
+				'mode' => 040775,    // Owner write + group write bits set.
+			),
+			'/tmp/wordpress/wp-content/cache/wppo'
+		);
+		$this->assertSame( 'warn', $row['status'] );
+		$this->assertMatchesRegularExpression( '/"(www-data|33)"/', $row['detail'] );
+	}
+
+	/**
+	 * Issue #1084: a directory with no write bits at all is genuinely
+	 * unwritable by everyone and must fail.
+	 */
+	public function test_cache_dirs_unwritable_no_write_bits_fails(): void {
+		$row = WPPO_CLI_Command::classify_unwritable_cache_root(
+			1000,
+			array(
+				'uid'  => 65534,
+				'gid'  => 65534,
+				'mode' => 040555, // Read+execute only — no write bits.
+			),
+			'/tmp/wordpress/wp-content/cache/wppo'
+		);
+		$this->assertSame( 'fail', $row['status'] );
+		$this->assertStringContainsString( 'no write permission', $row['detail'] );
+	}
+
+	/**
+	 * Issue #1084: an unwritable dir owned by the CLI user itself is a real
+	 * problem (no CLI/web-user mismatch to explain it) and must fail.
+	 */
+	public function test_cache_dirs_unwritable_same_owner_fails(): void {
+		$row = WPPO_CLI_Command::classify_unwritable_cache_root(
+			1000,
+			array(
+				'uid'  => 1000,
+				'gid'  => 1000,
+				'mode' => 040755,
+			),
+			'/tmp/wordpress/wp-content/cache/wppo'
+		);
+		$this->assertSame( 'fail', $row['status'] );
+	}
+
+	/**
+	 * Issue #1084: when the directory cannot be stat'd the classifier cannot
+	 * prove a foreign-owner mismatch and must fail.
+	 */
+	public function test_cache_dirs_unwritable_unstatable_fails(): void {
+		$row = WPPO_CLI_Command::classify_unwritable_cache_root( 1000, false, '/tmp/wordpress/wp-content/cache/wppo' );
+		$this->assertSame( 'fail', $row['status'] );
+		$this->assertStringContainsString( 'stat', $row['detail'] );
+	}
+
+	/**
+	 * Issue #1084: without posix_geteuid() the process cannot confirm the
+	 * owner differs, so the conservative verdict is fail.
+	 */
+	public function test_cache_dirs_unwritable_unknown_euid_fails(): void {
+		$row = WPPO_CLI_Command::classify_unwritable_cache_root(
+			null,
+			array(
+				'uid'  => 65534,
+				'gid'  => 65534,
+				'mode' => 040755,
+			),
+			'/tmp/wordpress/wp-content/cache/wppo'
+		);
+		$this->assertSame( 'fail', $row['status'] );
+	}
 }
