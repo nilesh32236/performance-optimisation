@@ -460,13 +460,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 				}
 				$response = wp_remote_get( $current, array( 'timeout' => 5 ) );
 				if ( is_wp_error( $response ) ) {
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+						// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+						error_log( 'WPPO sitemap discovery skipped ' . $current . ': ' . sanitize_text_field( str_replace( ABSPATH, '', $response->get_error_message() ) ) );
+					}
 					continue;
 				}
 				if ( function_exists( 'wp_remote_retrieve_response_code' ) && 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+						// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+						error_log( 'WPPO sitemap discovery skipped ' . $current . ': HTTP status ' . (int) wp_remote_retrieve_response_code( $response ) );
+					}
 					continue;
 				}
 				$body = wp_remote_retrieve_body( $response );
 				if ( '' === $body ) {
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+						// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+						error_log( 'WPPO sitemap discovery skipped ' . $current . ': empty body' );
+					}
 					continue;
 				}
 				$is_index = ( false !== strpos( $body, '<sitemapindex' ) );

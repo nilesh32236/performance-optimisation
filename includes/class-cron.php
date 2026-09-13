@@ -970,15 +970,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				)
 			);
 			if ( is_wp_error( $response ) ) {
+				$clean_error = sanitize_text_field( str_replace( ABSPATH, '', $response->get_error_message() ) );
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-					error_log( 'WPPO preload failed for URL ' . $url . ': ' . sanitize_text_field( str_replace( ABSPATH, '', $response->get_error_message() ) ) );
+					error_log( 'WPPO preload failed for URL ' . $url . ': ' . $clean_error );
 				}
+				// Translators: %1$s is the URL, %2$s is the error message.
+				Log::add( sprintf( __( 'Cache warmup failed for %1$s: %2$s', 'performance-optimisation' ), esc_url( $url ), $clean_error ) );
 			} elseif ( wp_remote_retrieve_response_code( $response ) >= 400 ) {
+				$http_code = (int) wp_remote_retrieve_response_code( $response );
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-					error_log( 'WPPO preload failed: HTTP status ' . (int) wp_remote_retrieve_response_code( $response ) . ' for ' . $url );
+					error_log( 'WPPO preload failed: HTTP status ' . $http_code . ' for ' . $url );
 				}
+				// Translators: %1$d is the HTTP status code, %2$s is the URL.
+				Log::add( sprintf( __( 'Cache warmup failed: HTTP %1$d for %2$s.', 'performance-optimisation' ), $http_code, esc_url( $url ) ) );
 			}
 		}
 

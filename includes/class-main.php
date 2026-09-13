@@ -2614,9 +2614,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						// the client as delayConfig.allowedScriptHosts.
 						$allowed_script_hosts = apply_filters( 'wppo_delay_js_allowed_hosts', array() );
 						if ( ! empty( $allowed_script_hosts ) ) {
-							$lazy_config['delayConfig']['allowedScriptHosts'] = array_values(
-								array_map( 'sanitize_text_field', (array) $allowed_script_hosts )
-							);
+							$validated_hosts = array();
+							foreach ( (array) $allowed_script_hosts as $host_entry ) {
+								if ( ! is_string( $host_entry ) ) {
+									continue;
+								}
+								$host_entry = sanitize_text_field( $host_entry );
+								if ( '' === $host_entry ) {
+									continue;
+								}
+								// Accept bare hostnames or full URLs; reduce URLs to their host part.
+								if ( false !== strpos( $host_entry, '://' ) ) {
+									$parsed_host = wp_parse_url( $host_entry, PHP_URL_HOST );
+									if ( ! is_string( $parsed_host ) || '' === $parsed_host ) {
+										continue;
+									}
+									$host_entry = $parsed_host;
+								}
+								$host_entry = strtolower( trim( $host_entry, '.' ) );
+								if ( 1 !== preg_match( '/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/', $host_entry ) ) {
+									continue;
+								}
+								$validated_hosts[] = $host_entry;
+							}
+							if ( ! empty( $validated_hosts ) ) {
+								$lazy_config['delayConfig']['allowedScriptHosts'] = array_values( array_unique( $validated_hosts ) );
+							}
 						}
 					}
 
@@ -2662,10 +2685,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						// below are consumed once at module init (src/lazyload.js) and
 						// are deleted again by window.wppoLazyloadTeardown() (audit
 						// #1077 finding 9). If this script element is ever removed
-						// dynamically, call window.wppoLazyloadTeardown() FIRST so the
-						// observers/interval and these config globals are released
-						// before the <script> is detached; nothing observes script
-						// removal automatically.
+						// dynamically (e.g. by a theme or optimizer detaching the
+						// wppo-lazyload <script>), call window.wppoLazyloadTeardown()
+						// FIRST so the observers/interval and these config globals
+						// are released before the <script> is detached; nothing
+						// observes script removal automatically, so removal without
+						// teardown leaks the IntersectionObserver/MutationObserver.
+						// See the wppo_delay_js_allowed_hosts docs (docs/hooks.md)
+						// for this teardown contract.
+						//
+						// CSP note: sites with a strict Content-Security-Policy can
+						// attach a nonce to these inline config scripts via the core
+						// wp_inline_script_attributes filter for handle wppo-lazyload
+						// (same escape hatch as the bfcache inline script).
 						wp_enqueue_script( 'wppo-lazyload', WPPO_PLUGIN_URL . 'build/lazyload.js', array(), WPPO_VERSION, array( 'in_footer' => true ) );
 
 						if ( $use_native_lazy ) {

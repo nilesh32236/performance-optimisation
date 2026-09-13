@@ -3224,6 +3224,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				</svg>
 			</button>';
 
+				// Accessibility contract (audit #1133): overrides of this filter must
+			// keep an accessible label (e.g. aria-label) on the play button so
+			// assistive-tech users can activate the placeholder.
 			$play_button = apply_filters( 'wppo_video_play_button_html', $play_button, $video_id, $video_type );
 
 			// Stored attrs mirror the client IFRAME_ATTR_ALLOWLIST exactly:
@@ -3246,14 +3249,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 			$attrs_json = ! empty( $stored_attrs ) ? wp_json_encode( $stored_attrs ) : '';
 
+			// Translators: %s is the YouTube video ID, used to distinguish multiple embeds for screen-reader users.
+			$thumbnail_alt    = sprintf( esc_attr__( 'Video thumbnail (%s)', 'performance-optimisation' ), esc_attr( $video_id ) );
 			$placeholder_html = '<div class="wppo-video-placeholder" data-wppo-video-src="' . esc_url( $original_src ) . '" data-wppo-video-type="' . esc_attr( $video_type ) . '"' . ( $attrs_json ? ' data-wppo-iframe-attrs="' . esc_attr( $attrs_json ) . '"' : '' ) . '>
 				' . $noscript_iframe . '
 				<picture>
-					<img src="' . esc_url( $thumbnail_url ) . '" alt="' . esc_attr__( 'Video thumbnail', 'performance-optimisation' ) . '" width="1280" height="720" loading="lazy" data-wppo-fallback="' . esc_url( $fallback_thumbnail_url ) . '">
+					<img src="' . esc_url( $thumbnail_url ) . '" alt="' . $thumbnail_alt . '" width="1280" height="720" loading="lazy" data-wppo-fallback="' . esc_url( $fallback_thumbnail_url ) . '">
 				</picture>
 				' . $play_button . '
 			</div>';
 
+			// Accessibility contract (audit #1133): overrides of this filter must
+			// preserve an accessible name for the play control (aria-label or
+			// text content) and a meaningful img alt so the placeholder stays
+			// operable for assistive-tech users.
 			return apply_filters( 'wppo_video_placeholder_html', $placeholder_html, $video_id, $video_type, $thumbnail_url );
 		}
 

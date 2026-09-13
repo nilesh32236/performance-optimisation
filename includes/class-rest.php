@@ -1816,7 +1816,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$result = Telemetry::scan( $url, 'manual', $force );
 
 			if ( is_wp_error( $result ) ) {
-				return $this->send_response( null, false, 500, __( 'Performance scan failed.', 'performance-optimisation' ) );
+				$detail = sanitize_text_field( str_replace( ABSPATH, '', $result->get_error_message() ) );
+				if ( '' === $detail ) {
+					$detail = __( 'Performance scan failed.', 'performance-optimisation' );
+				}
+				return $this->send_response( null, false, 500, $detail );
 			}
 
 			return $this->send_response( $result );
