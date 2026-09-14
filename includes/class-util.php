@@ -240,6 +240,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'disableOEmbedDiscovery'       => false,
 					'disableBlockWidgets'          => false,
 					'fontMetricFallback'           => false,
+					'fontSubset'                   => false,
+					'fontSubsetSubsets'            => 'latin',
 				),
 				'preload_settings'      => array(
 					'enablePreloadCache'       => false,

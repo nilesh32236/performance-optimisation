@@ -769,6 +769,53 @@ describe( 'FileOptimization Component', () => {
 		} );
 	} );
 
+	it( 'renders Font Subsetting switch and submits subsets correctly', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			message: 'Settings updated successfully.',
+		} );
+
+		render(
+			<FileOptimization
+				options={ { hostGoogleFontsLocally: true } }
+				serverRules={ {} }
+			/>
+		);
+
+		const subsetSwitch = screen.getByLabelText( /Font Subsetting/i );
+		expect( subsetSwitch ).toBeInTheDocument();
+		expect( subsetSwitch ).not.toBeChecked();
+
+		fireEvent.click( subsetSwitch );
+		expect( subsetSwitch ).toBeChecked();
+
+		const subsetsInput = screen.getByLabelText( /Font Subsets/i );
+		expect( subsetsInput ).toBeInTheDocument();
+		fireEvent.change( subsetsInput, {
+			target: { value: 'latin,latin-ext' },
+		} );
+
+		const submitButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+		await act( async () => {
+			fireEvent.click( submitButton );
+		} );
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				expect.objectContaining( {
+					tab: 'file_optimisation',
+					settings: expect.objectContaining( {
+						fontSubset: true,
+						fontSubsetSubsets: 'latin,latin-ext',
+					} ),
+				} )
+			);
+		} );
+	} );
+
 	it( 'renders delay JS strategy selector when delayJS is enabled', () => {
 		render(
 			<FileOptimization

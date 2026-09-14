@@ -1391,6 +1391,14 @@ Filters the generated size-adjust fallback CSS for a font family. @since 2.0.0.
 
 ---
 
+### `wppo_font_display`
+Filters the `font-display` value injected into self-hosted Google Fonts CSS and combined CSS (default `swap`). Return a falsy value to skip injection (opt-out). Unknown values fall back to `swap`. @since NEXT.
+
+**Parameters:**
+- `$display` *(string)* — Desired value (`swap|block|fallback|optional|auto`).
+
+---
+
 ### `wppo_skip_combine_on_small_block_theme`
 Filters whether combining styles is skipped for small block themes under the handle limit. Return falsy to always combine. @since 2.0.0.
 

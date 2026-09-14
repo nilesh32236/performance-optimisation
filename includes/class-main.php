@@ -396,6 +396,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['file_optimisation']['safeMode'] ) ) {
 				$this->options['file_optimisation']['safeMode'] = false;
 			}
+			// Font subsetting opt-in (issue #1145): additive keys, off by
+			// default so existing installs keep full-unicode behavior.
+			// In-memory only here (no front-end DB write).
+			if ( ! isset( $this->options['file_optimisation']['fontSubset'] ) ) {
+				$this->options['file_optimisation']['fontSubset'] = false;
+			}
+			if ( ! isset( $this->options['file_optimisation']['fontSubsetSubsets'] ) ) {
+				$this->options['file_optimisation']['fontSubsetSubsets'] = 'latin';
+			}
 
 			// Existing installs whose stored settings predate the
 			// speculationRumGating key (issue #1061) inherit the enabled
