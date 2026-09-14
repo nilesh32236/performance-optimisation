@@ -3825,8 +3825,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 				// Resolve the LCP URL once per buffer so Pass B and Pass C
 				// share it instead of re-reading options and the RUM
-				// aggregate option on every request.
-				$lcp_url = $prioritize_enabled ? $this->get_current_lcp_url() : '';
+				// aggregate option on every request. Uses the unified
+				// chain (OD → stored PageSpeed → DOM-first heuristic) so a
+				// detectable hero still preloads when stored data is absent.
+				// Fail-open: detection failure leaves $lcp_url empty and the
+				// markup unmodified, never fatal.
+				//
+				// @since NEXT Unified resolution via resolve_auto_lcp_url().
+				$lcp_url = '';
+				if ( $prioritize_enabled ) {
+					try {
+						if ( method_exists( $this, 'resolve_auto_lcp_url' ) ) {
+							$lcp_url = $this->resolve_auto_lcp_url( $filtered_output );
+						} else {
+							$lcp_url = $this->get_current_lcp_url();
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$lcp_url = '';
+					}
+					if ( ! is_string( $lcp_url ) ) {
+						$lcp_url = '';
+					}
+				}
 				if ( $prioritize_enabled ) {
 					// Pass A: un-lazy-load the first N above-the-fold images.
 					$buffer = $this->unlazyload_first_images( $buffer, $image_optimisation );
@@ -3839,11 +3860,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 				// Pass C: CSS background hero (issue #935) — exactly one preload
 				// link when the hero is a CSS background; no-ops unless the
-				// cssHeroPreload toggle is enabled.
+				// cssHeroPreload toggle is enabled. Shares the unified $lcp_url
+				// so all passes stamp/preload the same target.
 				$buffer = $this->maybe_inject_css_hero_preload( $buffer, ( $prioritize_enabled ? $lcp_url : null ) );
 
 				// Pass C: hero fallback + companion preload link (fail-open, never lazy).
-				$buffer = $this->maybe_preload_hero_image( $buffer, $image_optimisation );
+				// Shares the unified $lcp_url; falls back to buffer resolution
+				// when prioritization is off but the hero preload is enabled.
+				$buffer = $this->maybe_preload_hero_image( $buffer, $image_optimisation, ( $prioritize_enabled ? $lcp_url : null ) );
 
 				return $buffer;
 			} catch ( \Throwable $e ) {
@@ -4178,6 +4202,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * ignored by old browsers).
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Callers pass the unified `resolve_auto_lcp_url()` target so
+		 * the never-lazy/fetchpriority stamp always matches the preloaded URL.
 		 *
 		 * @param string      $buffer  The HTML buffer.
 		 * @param string|null $lcp_url Optional pre-resolved LCP URL. When null the
@@ -4294,12 +4320,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since NEXT Resolves via the unified `resolve_auto_lcp_url()` chain
 		 * (OD → stored PageSpeed → in-viewport heuristic) and emits at most
 		 * one preload link with `imagesrcset` when the hero carries a srcset.
+		 * Accepts a pre-resolved LCP URL so all buffer passes share one target.
 		 *
-		 * @param string $buffer             The HTML buffer.
-		 * @param array  $image_optimisation Image optimisation settings.
+		 * @param string      $buffer             The HTML buffer.
+		 * @param array       $image_optimisation Image optimisation settings.
+		 * @param string|null $lcp_url            Optional pre-resolved LCP URL. When null
+		 *                                        the URL is resolved via resolve_auto_lcp_url().
 		 * @return string The buffer with hero preload link injected.
 		 */
-		private function maybe_preload_hero_image( string $buffer, array $image_optimisation ): string {
+		private function maybe_preload_hero_image( string $buffer, array $image_optimisation, ?string $lcp_url = null ): string {
 			try {
 				if ( isset( $image_optimisation['lcpHeroPreload'] ) && empty( $image_optimisation['lcpHeroPreload'] ) ) {
 					return $buffer;
@@ -4308,7 +4337,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					return $buffer;
 				}
 
-				$lcp_url = $this->resolve_auto_lcp_url( $buffer );
+				if ( null === $lcp_url ) {
+					$lcp_url = $this->resolve_auto_lcp_url( $buffer );
+				}
 				if ( '' === $lcp_url ) {
 					return $buffer;
 				}
@@ -4781,16 +4812,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * equivalent preload link already exists.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Accepts a pre-resolved LCP URL so buffer passes share one
+		 * unified target instead of re-resolving stored data per pass.
 		 *
-		 * @param string $buffer The HTML buffer.
+		 * @param string      $buffer  The HTML buffer.
+		 * @param string|null $lcp_url Optional pre-resolved LCP URL. When null the
+		 *                             URL is resolved via get_current_lcp_url().
 		 * @return string The buffer with at most one added preload link.
 		 */
-		private function maybe_inject_css_hero_preload( string $buffer ): string {
+		private function maybe_inject_css_hero_preload( string $buffer, ?string $lcp_url = null ): string {
 			$image_optimisation = $this->options['image_optimisation'] ?? array();
 			if ( empty( $image_optimisation['cssHeroPreload'] ) ) {
 				return $buffer;
 			}
-			$lcp_url = $this->get_current_lcp_url();
+			if ( null === $lcp_url ) {
+				$lcp_url = $this->get_current_lcp_url();
+			}
 			if ( empty( $lcp_url ) ) {
 				return $buffer;
 			}
