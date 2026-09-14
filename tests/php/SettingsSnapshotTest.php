@@ -32,6 +32,7 @@ class SettingsSnapshotTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function install_option_stubs( bool $fail_writes = false ): void {
 		$this->options = array();
+		Util::clear_settings_cache();
 		Functions\when( 'get_option' )->alias(
 			function ( $name, $fallback = false ) {
 				return array_key_exists( $name, $this->options ) ? $this->options[ $name ] : $fallback;
@@ -73,7 +74,7 @@ class SettingsSnapshotTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * take_settings_snapshot() must persist the given settings with a timestamp.
+	 * Take_settings_snapshot() must persist the given settings with a timestamp.
 	 */
 	public function test_take_and_get_snapshot_round_trip(): void {
 		$this->install_option_stubs();
@@ -90,7 +91,7 @@ class SettingsSnapshotTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * get_settings_snapshot() must return null when absent or malformed.
+	 * Get_settings_snapshot() must return null when absent or malformed.
 	 */
 	public function test_get_snapshot_returns_null_when_absent_or_malformed(): void {
 		$this->install_option_stubs();
@@ -105,16 +106,16 @@ class SettingsSnapshotTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * restore_settings_snapshot() must write the snapshot back to wppo_settings.
+	 * Restore_settings_snapshot() must write the snapshot back to wppo_settings.
 	 */
 	public function test_restore_round_trip_returns_prior_settings(): void {
 		$this->install_option_stubs();
 
-		$prior = array( 'file_optimisation' => array( 'minifyHTML' => false ) );
+		$prior                          = array( 'file_optimisation' => array( 'minifyHTML' => false ) );
 		$this->options['wppo_settings'] = $prior;
 		$this->assertTrue( Util::take_settings_snapshot( $prior ) );
 
-		$new = array( 'file_optimisation' => array( 'minifyHTML' => true ) );
+		$new                            = array( 'file_optimisation' => array( 'minifyHTML' => true ) );
 		$this->options['wppo_settings'] = $new;
 		Util::clear_settings_cache();
 
@@ -125,13 +126,13 @@ class SettingsSnapshotTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * restore_settings_snapshot() must fail open (null, current settings
+	 * Restore_settings_snapshot() must fail open (null, current settings
 	 * intact) when no snapshot exists.
 	 */
 	public function test_restore_returns_null_without_snapshot(): void {
 		$this->install_option_stubs();
 
-		$current                          = array( 'file_optimisation' => array( 'minifyHTML' => true ) );
+		$current                        = array( 'file_optimisation' => array( 'minifyHTML' => true ) );
 		$this->options['wppo_settings'] = $current;
 
 		$this->assertNull( Util::restore_settings_snapshot() );
@@ -139,7 +140,7 @@ class SettingsSnapshotTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * restore_settings_snapshot() must fail open when the option write fails.
+	 * Restore_settings_snapshot() must fail open when the option write fails.
 	 */
 	public function test_restore_returns_null_when_write_fails(): void {
 		$this->install_option_stubs( true );
@@ -151,7 +152,7 @@ class SettingsSnapshotTest extends \PHPUnit\Framework\TestCase {
 			'settings' => $prior,
 			'taken_at' => 1234567890,
 		);
-		$current                          = array( 'file_optimisation' => array( 'minifyHTML' => true ) );
+		$current                        = array( 'file_optimisation' => array( 'minifyHTML' => true ) );
 		$this->options['wppo_settings'] = $current;
 
 		$this->assertNull( Util::restore_settings_snapshot() );

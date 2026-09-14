@@ -695,6 +695,7 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 	 * Test that update_settings snapshots the prior settings before saving (issue #1144).
 	 */
 	public function test_update_settings_snapshots_prior_settings(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
 		Functions\when( 'esc_url_raw' )->returnArg();
 		Functions\when( 'sanitize_textarea_field' )->alias(
 			static fn( $value ): string => trim( preg_replace( '/<[^>]*>/', '', (string) $value ) )
@@ -730,9 +731,54 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that a no-op update_settings save does not churn the single-slot snapshot (issue #1144).
+	 */
+	public function test_update_settings_noop_save_preserves_snapshot(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'sanitize_textarea_field' )->alias(
+			static fn( $value ): string => trim( preg_replace( '/<[^>]*>/', '', (string) $value ) )
+		);
+
+		$current      = array( 'file_optimisation' => array( 'minifyHTML' => true ) );
+		$old_snapshot = array(
+			'settings' => array( 'file_optimisation' => array( 'minifyHTML' => false ) ),
+			'taken_at' => 1111111111,
+		);
+		$store        = array(
+			'wppo_settings'          => $current,
+			'wppo_settings_snapshot' => $old_snapshot,
+		);
+		Functions\when( 'get_option' )->alias(
+			static function ( $name, $fallback = false ) use ( &$store ) {
+				return array_key_exists( $name, $store ) ? $store[ $name ] : $fallback;
+			}
+		);
+		Functions\when( 'update_option' )->alias(
+			static function ( $name, $value ) use ( &$store ) {
+				$store[ $name ] = $value;
+				return true;
+			}
+		);
+
+		$request = new WP_REST_Request(
+			array(
+				'tab'      => 'file_optimisation',
+				'settings' => array( 'minifyHTML' => true ),
+			)
+		);
+
+		$response = $this->rest->update_settings( $request );
+
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertSame( $old_snapshot, $store['wppo_settings_snapshot'], 'No-op saves must not overwrite the useful undo snapshot' );
+	}
+
+	/**
 	 * Test that import_settings snapshots the prior settings before merging (issue #1144).
 	 */
 	public function test_import_settings_snapshots_prior_settings(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
 		Functions\when( 'esc_url_raw' )->returnArg();
 		Functions\when( 'sanitize_textarea_field' )->alias(
 			static fn( $value ): string => trim( preg_replace( '/<[^>]*>/', '', (string) $value ) )
@@ -791,6 +837,7 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 	 * Test that restore_settings rolls settings back to the snapshot (issue #1144).
 	 */
 	public function test_restore_settings_restores_snapshot(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
 		Functions\when( 'absint' )->alias(
 			static function ( $value ) {
 				return abs( (int) $value );
@@ -827,6 +874,7 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 	 * Test that restore_settings fails open with a 404 when no snapshot exists (issue #1144).
 	 */
 	public function test_restore_settings_without_snapshot_returns_404(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
 		$store = array( 'wppo_settings' => array( 'file_optimisation' => array( 'minifyHTML' => true ) ) );
 		Functions\when( 'get_option' )->alias(
 			static function ( $name, $fallback = false ) use ( &$store ) {

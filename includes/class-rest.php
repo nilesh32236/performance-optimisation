@@ -688,14 +688,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			$options = Util::get_settings();
 
-			// One-click undo (issue #1144): snapshot the prior settings before
-			// overwriting. Fail-open: a snapshot failure must never block the save.
-			try {
-				Util::take_settings_snapshot( $options );
-			} catch ( \Throwable $snapshot_error ) {
-				unset( $snapshot_error );
-			}
-
 			// Preserve the pagespeed_api_key when the request omits it.
 			if ( 'performance_audit' === $tab && ! isset( $params['settings']['pagespeed_api_key'] ) && isset( $options['performance_audit']['pagespeed_api_key'] ) ) {
 				$sanitized_settings['pagespeed_api_key'] = sanitize_text_field( $options['performance_audit']['pagespeed_api_key'] );
@@ -766,7 +758,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				}
 			}
 
-			$options[ $tab ] = $sanitized_settings;
+			$merged_options         = $options;
+			$merged_options[ $tab ] = $sanitized_settings;
+
+			// One-click undo (issue #1144): snapshot the prior settings before
+			// overwriting, but skip no-op saves so an identical write does not
+			// churn the single-slot snapshot (mirrors import_settings). Fail-open:
+			// a snapshot failure must never block the save.
+			if ( $merged_options !== $options ) {
+				try {
+					Util::take_settings_snapshot( $options );
+				} catch ( \Throwable $snapshot_error ) {
+					unset( $snapshot_error );
+				}
+			}
+
+			$options = $merged_options;
 
 			update_option( 'wppo_settings', $options );
 

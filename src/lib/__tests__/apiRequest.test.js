@@ -603,6 +603,38 @@ describe( 'API Request library', () => {
 				existing: 'value',
 			} );
 		} );
+
+		it( 'should update global wppoSettings.settings on successful restore_settings', async () => {
+			const mockData = {
+				success: true,
+				data: { tab1: { setting: 'restored' } },
+			};
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( mockData ),
+			} );
+
+			await apiCall( 'restore_settings', {} );
+
+			expect( global.wppoSettings.settings ).toEqual( {
+				tab1: { setting: 'restored' },
+			} );
+		} );
+
+		it( 'should not mutate global settings on failed restore_settings', async () => {
+			global.wppoSettings.settings = { existing: 'value' };
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( {
+					success: false,
+					data: null,
+				} ),
+			} );
+
+			await apiCall( 'restore_settings', {} );
+
+			expect( global.wppoSettings.settings ).toEqual( {
+				existing: 'value',
+			} );
+		} );
 	} );
 
 	describe( 'fetchSuggestions', () => {

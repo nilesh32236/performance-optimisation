@@ -420,6 +420,7 @@ const PluginSetting = ( { options } ) => {
 				if ( invalidUrls.length > 0 ) {
 					setHighValueUrls( savedHighValueUrls );
 				}
+				setUndoAvailable( true );
 				setBaseline( ( prev ) => ( {
 					...prev,
 					serverTimingEnabled,
@@ -490,6 +491,7 @@ const PluginSetting = ( { options } ) => {
 			} );
 			if ( response.success ) {
 				setBaseline( ( prev ) => ( { ...prev, autoRescan } ) );
+				setUndoAvailable( true );
 				notifyApiKey( {
 					type: 'success',
 					message: __(
@@ -541,6 +543,7 @@ const PluginSetting = ( { options } ) => {
 			if ( response.success ) {
 				setNewApiKey( '' );
 				setApiKeyConfigured( true );
+				setUndoAvailable( true );
 				setBaseline( ( prev ) => ( { ...prev, newApiKey: '' } ) );
 				notifyApiKey( {
 					type: 'success',
@@ -746,6 +749,7 @@ const PluginSetting = ( { options } ) => {
 						} );
 						if ( data.success ) {
 							resetFileInput();
+							setUndoAvailable( true );
 						}
 					} )
 					.catch( () => {

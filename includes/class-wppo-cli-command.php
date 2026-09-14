@@ -738,11 +738,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 					$options[ $tab ] = array();
 				}
 
+				$prior_settings  = $options;
 				$options[ $tab ] = array_replace_recursive( $options[ $tab ], $new_settings );
 				// One-click undo (issue #1144): snapshot the prior settings before
 				// overwriting. Fail-open: a snapshot failure must never block the update.
 				try {
-					Util::take_settings_snapshot( Util::get_settings() );
+					Util::take_settings_snapshot( $prior_settings );
 				} catch ( \Throwable $snapshot_error ) {
 					unset( $snapshot_error );
 				}
