@@ -395,7 +395,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$raw_component = $this->request_uri;
 			}
 
-			$url_path = Util::sanitize_cache_url_path( (string) $raw_component );
+			$url_path = Util::sanitize_cache_url_path( (string) $raw_component, '' !== $domain ? $domain : null );
 
 			if ( $is_absolute_form || $is_drive_or_unc || ( '' === $url_path && '' !== trim( trim( (string) $raw_component ), '/' ) ) ) {
 				$this->path_rejected = true;
@@ -2821,7 +2821,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$sanitized = array();
 			foreach ( $urls as $u ) {
 				$u              = is_string( $u ) ? $u : (string) $u;
-				$sanitized_path = Util::sanitize_cache_url_path( $u );
+				$sanitized_path = Util::sanitize_cache_url_path( $u, '' !== $this->domain ? $this->domain : null );
 				if ( '' === $sanitized_path ) {
 					if ( function_exists( 'wp_parse_url' ) ) {
 						$raw_component = wp_parse_url( $u, PHP_URL_PATH );
@@ -2840,7 +2840,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$sanitized = array_values( array_unique( $sanitized ) );
 
 			// Purge collected URLs via filesystem; primary URL also clears css/used-css.
-			$primary_normalized = Util::sanitize_cache_url_path( (string) $path );
+			$primary_normalized = Util::sanitize_cache_url_path( (string) $path, '' !== $this->domain ? $this->domain : null );
 			foreach ( $sanitized as $url_path ) {
 				$html_file_path = $this->get_file_path( $url_path, 'html' );
 				if ( '' === $html_file_path ) {
@@ -3121,7 +3121,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// Shared-helper sanitization (single-decode, null-byte/dot-dot/
 			// drive/UNC rejection) so encoded vectors never reach delete.
 			if ( ! empty( $urls ) && is_string( $urls[0] ) ) {
-				$primary_normalized = Util::sanitize_cache_url_path( $urls[0] );
+				$primary_normalized = Util::sanitize_cache_url_path( $urls[0], '' !== $this->domain ? $this->domain : null );
 			}
 			foreach ( $urls as $u ) {
 				$u = is_string( $u ) ? $u : (string) $u;
@@ -3134,7 +3134,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( '' === trim( (string) $path_only, '/' ) && false !== strpos( $u, '?' ) ) {
 					continue;
 				}
-				$sanitized_path = Util::sanitize_cache_url_path( $u );
+				$sanitized_path = Util::sanitize_cache_url_path( $u, '' !== $this->domain ? $this->domain : null );
 				if ( '' === $sanitized_path ) {
 					continue;
 				}

@@ -85,6 +85,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				update_user_meta( get_current_user_id(), 'wppo_avif_webp_only_dismissed', 1 );
 			}
 
+			if ( 'htaccess_failure' === $key ) {
+				if ( class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
+					try {
+						Htaccess_Handler::clear_htaccess_failure();
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+			}
+
 			if ( 'object_cache_circuit' === $key ) {
 				// Dismiss only this trip: persist its tripped_at timestamp so
 				// the next trip (newer timestamp) automatically re-arms the notice.
@@ -116,6 +126,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			}
 
 			$this->maybe_activation_notices();
+			$this->maybe_htaccess_failure_notice();
 			$this->maybe_competing_plugins_notice();
 			$this->maybe_litespeed_coexistence_notice();
 			$this->maybe_object_cache_circuit_notice();
@@ -177,6 +188,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				echo '<li>' . wp_kses_post( $html ) . '</li>';
 			}
 			echo '</ul><p><a href="' . esc_url( $dismiss ) . '">' . esc_html__( 'Dismiss this notice', 'performance-optimisation' ) . '</a></p></div>';
+		}
+
+		/**
+		 * Persistent .htaccess failure warning — a write failed verification.
+		 *
+		 * The settings-save path surfaces a request-scoped notice that dies
+		 * with the saving request; this branch reads the persistent flag set
+		 * by Htaccess_Handler::update_rules() so the failure stays visible
+		 * until a verified write clears it or the admin dismisses it. A new
+		 * failure re-arms the notice automatically. Fail-open throughout:
+		 * the plugin keeps serving (cached or dynamic) either way.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private function maybe_htaccess_failure_notice(): void {
+			if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
+				return;
+			}
+
+			try {
+				if ( ! Htaccess_Handler::has_htaccess_failure() ) {
+					return;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return;
+			}
+
+			$dismiss = wp_nonce_url(
+				add_query_arg( 'wppo_dismiss', 'htaccess_failure' ),
+				'wppo_dismiss_notice',
+				'_wpnonce'
+			);
+
+			echo '<div class="notice notice-error" role="alert" aria-live="assertive"><p><strong>' . esc_html__( 'Performance Optimisation', 'performance-optimisation' ) . '</strong> — ';
+			echo esc_html__( 'Failed to update .htaccess rules. The previous file was left intact and the plugin keeps working. Please check file permissions, then re-save settings to retry.', 'performance-optimisation' );
+			echo ' &middot; <a href="' . esc_url( $dismiss ) . '">' . esc_html__( 'Dismiss', 'performance-optimisation' ) . '</a>';
+			echo '</p></div>';
 		}
 
 		/**

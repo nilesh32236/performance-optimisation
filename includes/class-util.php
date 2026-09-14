@@ -2245,17 +2245,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * `%252e` stays literal on disk and is never re-decoded, while
 		 * single-encoded `%2e%2e` / `%00` decode once and are then rejected),
 		 * and null bytes, remaining `..` segments, plus Windows drive (`C:`)
-		 * and UNC (`\\`) prefixes are rejected. Returns an empty string for
-		 * hostile or empty input; callers fail open (serve dynamic/uncached
-		 * and log a traversal probe) when the raw input was non-blank.
+		 * and UNC (`\\`) prefixes are rejected. Absolute-form inputs
+		 * (absolute URLs, protocol-relative `//host`, detected on the
+		 * authority part before `?`/`#` so query strings carrying URLs never
+		 * false-positive) are host-checked when `$allowed_host` is given: a
+		 * same-host absolute URL maps to its path, while a foreign-host (or
+		 * hostless protocol-relative/drive/UNC) input is refused outright so
+		 * direct callers can never map a foreign host onto the local tree.
+		 * Without `$allowed_host` the legacy path-only extraction applies.
+		 * Returns an empty string for hostile or empty input; callers fail
+		 * open (serve dynamic/uncached and log a traversal probe) when the
+		 * raw input was non-blank.
 		 *
 		 * Pure static helper: no I/O, no settings reads. Multisite-safe.
 		 *
-		 * @param string|null $url_path Raw URL path or URL.
+		 * @param string|null $url_path     Raw URL path or URL.
+		 * @param string|null $allowed_host Optional canonical host; same-host absolute URLs map to their path, others refuse.
 		 * @return string Sanitized relative path or empty string.
 		 * @since 2.0.0
+		 * @since NEXT Added the optional $allowed_host foreign-host refusal.
 		 */
-		public static function sanitize_cache_url_path( ?string $url_path ): string {
+		public static function sanitize_cache_url_path( ?string $url_path, ?string $allowed_host = null ): string {
 			$raw_input = (string) $url_path;
 
 			// Reject Windows drive prefixes and UNC roots before URL parsing
@@ -2264,6 +2274,44 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			$trimmed_raw = ltrim( $raw_input );
 			if ( '' !== $trimmed_raw && ( preg_match( '#^[a-zA-Z]:#', $trimmed_raw ) || 0 === strpos( $trimmed_raw, '\\\\' ) ) ) {
 				return '';
+			}
+
+			// Absolute-form detection on the authority part only (before
+			// `?`/`#`), mirroring Cache::__construct / sanitize_cache_path():
+			// a benign relative path whose query/fragment carries a URL
+			// (e.g. `/search?redirect=https://other`) must not false-positive.
+			// The split uses strcspn() (no process-global strtok() state).
+			// Both the raw and the single-decoded authority are inspected so
+			// an encoded scheme (`https%3a%2f%2f`) cannot smuggle past.
+			$authority         = substr( $trimmed_raw, 0, strcspn( $trimmed_raw, '?#' ) );
+			$decoded_authority = function_exists( 'rawurldecode' ) ? rawurldecode( $authority ) : $authority;
+			$has_absolute_form = false;
+			foreach ( array( $authority, $decoded_authority ) as $candidate ) {
+				$candidate_trimmed = ltrim( (string) $candidate );
+				if ( '' !== $candidate_trimmed && ( false !== strpos( $candidate_trimmed, '://' ) || 0 === strpos( $candidate_trimmed, '//' ) ) ) {
+					$has_absolute_form = true;
+					break;
+				}
+			}
+			if ( $has_absolute_form && null !== $allowed_host ) {
+				// Host-aware callers (domain context given) admit same-host
+				// absolute URLs while refusing foreign-host (or hostless)
+				// inputs outright, so a foreign host can never map onto the
+				// local tree. Legacy callers pass null and keep the
+				// historical path-only extraction below.
+				$expected = is_string( $allowed_host ) && '' !== $allowed_host ? self::normalize_cache_host( $allowed_host ) : '';
+				if ( '' === $expected ) {
+					return '';
+				}
+				$host_raw = null;
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$host_raw = wp_parse_url( $raw_input, PHP_URL_HOST );
+				} else {
+					$host_raw = parse_url( $raw_input, PHP_URL_HOST ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
+				}
+				if ( ! is_string( $host_raw ) || '' === $host_raw || self::normalize_cache_host( $host_raw ) !== $expected ) {
+					return '';
+				}
 			}
 
 			if ( function_exists( 'wp_parse_url' ) ) {
@@ -2412,7 +2460,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					return '';
 				}
 			}
-			$path = self::sanitize_cache_url_path( $raw_input );
+			$path = self::sanitize_cache_url_path( $raw_input, $domain );
 			if ( '' === $path ) {
 				$component = null;
 				if ( function_exists( 'wp_parse_url' ) ) {

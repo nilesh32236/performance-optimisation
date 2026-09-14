@@ -1209,10 +1209,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( null === $raw || false === $raw ) {
 					$raw = $request_uri;
 				}
-				return Util::sanitize_cache_url_path( (string) $raw );
+				return Util::sanitize_cache_url_path( (string) $raw, '' !== $this->domain ? $this->domain : null );
 			}
 
-			return Util::sanitize_cache_url_path( $url );
+			return Util::sanitize_cache_url_path( $url, '' !== $this->domain ? $this->domain : null );
 		}
 
 		/**

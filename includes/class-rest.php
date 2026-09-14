@@ -2195,7 +2195,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			$url_path = null;
 			if ( null !== $path && '' !== $path ) {
-				$sanitized = Util::sanitize_cache_url_path( wp_normalize_path( $path ) );
+				$canonical_host = class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_canonical_host' ) ? Util::get_canonical_host() : '';
+				$sanitized      = Util::sanitize_cache_url_path( wp_normalize_path( $path ), '' !== $canonical_host ? $canonical_host : null );
 				if ( '' === $sanitized ) {
 					return $this->send_response( null, false, 400, __( 'Invalid path provided.', 'performance-optimisation' ) );
 				}
