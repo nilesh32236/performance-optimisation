@@ -598,15 +598,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		public const LCP_P75_EAGER_THRESHOLD_MS = 3500.0;
 
 		/**
-		 * Read segmented field-LCP p75 rows (device × template) fail-open.
+		 * Read segmented field-LCP p75 rows (device × template × connection) fail-open.
 		 *
 		 * Thin wrapper over RUM::get_field_lcp_p75_by_segment() so
 		 * heuristic_learn() degrades to the global-average path when RUM is
 		 * unavailable. No option or transient writes; never throws.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Rows carry the `connection` segment dimension.
 		 * @param int $min_samples Minimum samples per segment (1 = observe all).
-		 * @return array[] Rows of array(path,device,template,n,p75).
+		 * @return array[] Rows of array(path,device,template,connection,n,p75).
 		 */
 		private static function segmented_field_lcp( int $min_samples = 1 ): array {
 			try {
@@ -622,15 +623,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		}
 
 		/**
-		 * Read segmented field-INP p75 rows (device × template) fail-open.
+		 * Read segmented field-INP p75 rows (device × template × connection) fail-open.
 		 *
 		 * Thin wrapper over RUM::get_field_inp_p75_by_segment() so
 		 * heuristic_learn() degrades gracefully when RUM is unavailable.
 		 * No option or transient writes; never throws.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Rows carry the `connection` segment dimension.
 		 * @param int $min_samples Minimum samples per segment (1 = observe all).
-		 * @return array[] Rows of array(path,device,template,n,p75).
+		 * @return array[] Rows of array(path,device,template,connection,n,p75).
 		 */
 		private static function segmented_field_inp( int $min_samples = 1 ): array {
 			try {
@@ -643,6 +645,49 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				unset( $e );
 				return array();
 			}
+		}
+
+		/**
+		 * Extract the connection segment from a RUM segment row fail-open.
+		 *
+		 * Rows stored before the connection dimension shipped (issue #1143)
+		 * carry no `connection` key and read back as `unknown`, keeping
+		 * segment-routed copy backward compatible.
+		 *
+		 * @since NEXT
+		 * @param mixed $row Segment row.
+		 * @return string Allowlisted connection type or 'unknown'.
+		 */
+		private static function segment_connection( $row ): string {
+			if ( ! is_array( $row ) || ! isset( $row['connection'] ) || ! is_string( $row['connection'] ) ) {
+				return 'unknown';
+			}
+			$candidate = strtolower( trim( substr( $row['connection'], 0, 16 ) ) );
+			if ( in_array( $candidate, array( 'slow-2g', '2g', '3g', '4g' ), true ) ) {
+				return $candidate;
+			}
+			return 'unknown';
+		}
+
+		/**
+		 * Build a segment descriptor from a RUM segment row fail-open.
+		 *
+		 * Always returns path/device/template/connection keys so suggestion
+		 * copy stays segment-routed even for models persisted before the
+		 * connection dimension shipped.
+		 *
+		 * @since NEXT
+		 * @param mixed $row Segment row.
+		 * @return array{path:string,device:string,template:string,connection:string} Segment descriptor.
+		 */
+		private static function segment_descriptor( $row ): array {
+			$row = is_array( $row ) ? $row : array();
+			return array(
+				'path'       => isset( $row['path'] ) ? (string) $row['path'] : '',
+				'device'     => isset( $row['device'] ) ? (string) $row['device'] : 'unknown',
+				'template'   => isset( $row['template'] ) ? (string) $row['template'] : 'unknown',
+				'connection' => self::segment_connection( $row ),
+			);
 		}
 
 		/**
@@ -782,14 +827,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 
 				// Anchor the copy on the crossed signal (prefer INP, the
 				// delay-JS lever); fall back to the LCP segment otherwise.
+				// Segment-routed (issue #1143): device/template/connection
+				// travel together so slow-connection advice never misfires
+				// as a global recommendation.
 				$anchor  = ( $crosses_inp && is_array( $top_inp ) ) ? $top_inp : $top_lcp;
 				$segment = null;
 				if ( is_array( $anchor ) ) {
-					$segment = array(
-						'path'     => isset( $anchor['path'] ) ? (string) $anchor['path'] : '',
-						'device'   => isset( $anchor['device'] ) ? (string) $anchor['device'] : 'unknown',
-						'template' => isset( $anchor['template'] ) ? (string) $anchor['template'] : 'unknown',
-					);
+					$segment = self::segment_descriptor( $anchor );
 				}
 				$samples = 0;
 				if ( is_array( $anchor ) && isset( $anchor['n'] ) ) {
@@ -1032,13 +1076,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				}
 			}
 
-			// Field-data-driven tuning (issue #986): route segmented device ×
-			// template p75 into the eagerness decision. Below the minimum
-			// threshold the global-average path above is used unchanged with
-			// no eagerness upgrade; at/above threshold the slowest-p75
-			// segment may upgrade eagerness via the same ladder (never
-			// downgrades the global result). Fail-open: RUM failures keep
-			// the global path.
+			// Field-data-driven tuning (issues #986, #1143): route segmented
+			// device × template × connection p75 into the eagerness decision.
+			// Below the minimum threshold the global-average path above is
+			// used unchanged with no eagerness upgrade; at/above threshold
+			// the slowest-p75 segment (slowest device/connection/template
+			// wins, so segment-skewed RUM cannot misfire as global advice)
+			// may upgrade eagerness via the same ladder (never downgrades
+			// the global result). Fail-open: RUM failures keep the global path.
 			$field_lcp_provisional = true;
 			$field_lcp_segment     = null;
 			$field_lcp_p75         = 0.0;
@@ -1094,11 +1139,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 							$eagerness = $segment_eagerness;
 						}
 						$field_lcp_provisional = false;
-						$field_lcp_segment     = array(
-							'path'     => isset( $slowest['path'] ) ? (string) $slowest['path'] : '',
-							'device'   => isset( $slowest['device'] ) ? (string) $slowest['device'] : 'unknown',
-							'template' => isset( $slowest['template'] ) ? (string) $slowest['template'] : 'unknown',
-						);
+						$field_lcp_segment     = self::segment_descriptor( $slowest );
 						$field_lcp_p75         = $segment_p75;
 						$field_lcp_samples     = isset( $slowest['n'] ) ? (int) $slowest['n'] : $max_n;
 					}
@@ -1869,10 +1910,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			// Guardrail (#908): allowlist stale values and never propose `eager`
 			// in commerce/auth contexts (covers models persisted before the cap).
 			$eagerness = self::normalize_eagerness( $eagerness );
-			// Field LCP segment context (issue #986): prefer persisted model
-			// keys, fall back to a live read-only lookup for models stored
-			// before the segmentation shipped. Fail-open to provisional.
-			$field_segment     = isset( $model['field_lcp_segment'] ) && is_array( $model['field_lcp_segment'] ) ? $model['field_lcp_segment'] : null;
+			// Field LCP segment context (issues #986, #1143): prefer persisted
+			// model keys, fall back to a live read-only lookup for models
+			// stored before the segmentation shipped. Fail-open to provisional.
+			// Pre-connection models are normalized to `connection: unknown`.
+			$field_segment     = isset( $model['field_lcp_segment'] ) && is_array( $model['field_lcp_segment'] ) ? self::segment_descriptor( $model['field_lcp_segment'] ) : null;
 			$field_p75         = isset( $model['field_lcp_p75'] ) ? (float) $model['field_lcp_p75'] : 0.0;
 			$field_provisional = array_key_exists( 'field_lcp_provisional', $model ) ? (bool) $model['field_lcp_provisional'] : true;
 			$field_samples     = isset( $model['field_lcp_samples'] ) ? (int) $model['field_lcp_samples'] : 0;
@@ -1899,11 +1941,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					}
 					if ( ! empty( $qualified ) && is_array( $qualified[0] ) ) {
 						$top               = $qualified[0];
-						$field_segment     = array(
-							'path'     => isset( $top['path'] ) ? (string) $top['path'] : '',
-							'device'   => isset( $top['device'] ) ? (string) $top['device'] : 'unknown',
-							'template' => isset( $top['template'] ) ? (string) $top['template'] : 'unknown',
-						);
+						$field_segment     = self::segment_descriptor( $top );
 						$field_p75         = isset( $top['p75'] ) ? (float) $top['p75'] : 0.0;
 						$field_samples     = isset( $top['n'] ) ? (int) $top['n'] : 0;
 						$field_provisional = false;
@@ -1919,12 +1957,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				$eagerness_value       = $eagerness;
 				$eagerness_description = __( 'AI: Speculation eagerness suggestion', 'performance-optimisation' );
 				if ( ! $field_provisional && is_array( $field_segment ) ) {
-					$seg_device   = isset( $field_segment['device'] ) ? (string) $field_segment['device'] : 'unknown';
-					$seg_template = isset( $field_segment['template'] ) ? (string) $field_segment['template'] : 'unknown';
-					/* translators: %1$s eagerness, %2$s device, %3$s template, %4$s p75. */
-					$eagerness_value = sprintf( __( '%1$s · %2$s · %3$s · p75 %4$s', 'performance-optimisation' ), $eagerness, $seg_device, $seg_template, self::format_p75_seconds( $field_p75 ) );
-					/* translators: %1$s device, %2$s template, %3$s p75 seconds. */
-					$eagerness_description = sprintf( __( 'AI: Speculation eagerness suggestion (field LCP %1$s/%2$s p75 %3$s)', 'performance-optimisation' ), $seg_device, $seg_template, self::format_p75_seconds( $field_p75 ) );
+					$seg_device     = isset( $field_segment['device'] ) ? (string) $field_segment['device'] : 'unknown';
+					$seg_template   = isset( $field_segment['template'] ) ? (string) $field_segment['template'] : 'unknown';
+					$seg_connection = self::segment_connection( $field_segment );
+					/* translators: %1$s eagerness, %2$s device, %3$s template, %4$s connection, %5$s p75. */
+					$eagerness_value = sprintf( __( '%1$s · %2$s · %3$s · %4$s · p75 %5$s', 'performance-optimisation' ), $eagerness, $seg_device, $seg_template, $seg_connection, self::format_p75_seconds( $field_p75 ) );
+					/* translators: %1$s device, %2$s template, %3$s connection, %4$s p75 seconds. */
+					$eagerness_description = sprintf( __( 'AI: Speculation eagerness suggestion (field LCP %1$s/%2$s/%3$s p75 %4$s)', 'performance-optimisation' ), $seg_device, $seg_template, $seg_connection, self::format_p75_seconds( $field_p75 ) );
 				}
 				$suggestions[] = array(
 					'metric'      => 'ai_speculation_eagerness',
@@ -1940,16 +1979,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				);
 			}
 
-			// Field LCP auto-tune suggestion (issue #986): at/above threshold
-			// the copy names device + template + p75; below threshold the
-			// copy reads provisional with no eagerness upgrade.
+			// Field LCP auto-tune suggestion (issues #986, #1143): at/above
+			// threshold the copy names device + template + connection + p75;
+			// below threshold the copy reads provisional with no eagerness upgrade.
 			if ( ! $field_provisional && is_array( $field_segment ) ) {
-				$seg_device   = isset( $field_segment['device'] ) ? (string) $field_segment['device'] : 'unknown';
-				$seg_template = isset( $field_segment['template'] ) ? (string) $field_segment['template'] : 'unknown';
-				/* translators: %1$s device, %2$s template, %3$s p75 seconds. */
-				$field_value = sprintf( __( '%1$s · %2$s · p75 %3$s', 'performance-optimisation' ), $seg_device, $seg_template, self::format_p75_seconds( $field_p75 ) );
-				/* translators: %1$s device, %2$s template, %3$s p75 seconds, %4$d sample count. */
-				$field_description = sprintf( __( 'AI: Field LCP tune for %1$s/%2$s (p75 %3$s, %4$d samples)', 'performance-optimisation' ), $seg_device, $seg_template, self::format_p75_seconds( $field_p75 ), $field_samples );
+				$seg_device     = isset( $field_segment['device'] ) ? (string) $field_segment['device'] : 'unknown';
+				$seg_template   = isset( $field_segment['template'] ) ? (string) $field_segment['template'] : 'unknown';
+				$seg_connection = self::segment_connection( $field_segment );
+				/* translators: %1$s device, %2$s template, %3$s connection, %4$s p75 seconds. */
+				$field_value = sprintf( __( '%1$s · %2$s · %3$s · p75 %4$s', 'performance-optimisation' ), $seg_device, $seg_template, $seg_connection, self::format_p75_seconds( $field_p75 ) );
+				/* translators: %1$s device, %2$s template, %3$s connection, %4$s p75 seconds, %5$d sample count. */
+				$field_description = sprintf( __( 'AI: Field LCP tune for %1$s/%2$s/%3$s (p75 %4$s, %5$d samples)', 'performance-optimisation' ), $seg_device, $seg_template, $seg_connection, self::format_p75_seconds( $field_p75 ), $field_samples );
 				$suggestions[]     = array(
 					'metric'      => 'ai_field_lcp_tune',
 					'value'       => $field_value,
@@ -2021,21 +2061,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					$delay_settings = class_exists( 'PerformanceOptimise\Inc\Util' ) ? Util::get_settings() : array();
 					$delay_enabled  = ! empty( $delay_settings['file_optimisation']['delayJS'] );
 					if ( ! $delay_enabled && ! self::is_suggestion_dismissed( 'ai_delay_js' ) ) {
-						$delay_device   = ( is_array( $delay_segment ) && isset( $delay_segment['device'] ) ) ? (string) $delay_segment['device'] : 'unknown';
-						$delay_template = ( is_array( $delay_segment ) && isset( $delay_segment['template'] ) ) ? (string) $delay_segment['template'] : 'unknown';
+						$delay_device     = ( is_array( $delay_segment ) && isset( $delay_segment['device'] ) ) ? (string) $delay_segment['device'] : 'unknown';
+						$delay_template   = ( is_array( $delay_segment ) && isset( $delay_segment['template'] ) ) ? (string) $delay_segment['template'] : 'unknown';
+						$delay_connection = self::segment_connection( $delay_segment );
 						// Anchor the copy on the crossed signal (prefer INP).
 						$crossed_inp      = (float) $delay_inp > self::INP_P75_DELAY_THRESHOLD_MS;
 						$delay_anchor_p75 = $crossed_inp ? (float) $delay_inp : (float) $delay_lcp;
 						if ( $crossed_inp ) {
-							/* translators: %1$s level, %2$s device, %3$s template, %4$s p75 seconds. */
-							$delay_value = sprintf( __( '%1$s · %2$s · %3$s · INP p75 %4$s', 'performance-optimisation' ), $delay_level, $delay_device, $delay_template, self::format_p75_seconds( (float) $delay_anchor_p75 ) );
-							/* translators: %1$s device, %2$s template, %3$s p75 seconds, %4$d sample count. */
-							$delay_description = sprintf( __( 'AI: Delay JavaScript suggestion for %1$s/%2$s (INP p75 %3$s, %4$d samples)', 'performance-optimisation' ), $delay_device, $delay_template, self::format_p75_seconds( (float) $delay_anchor_p75 ), (int) $delay_samples );
+							/* translators: %1$s level, %2$s device, %3$s template, %4$s connection, %5$s p75 seconds. */
+							$delay_value = sprintf( __( '%1$s · %2$s · %3$s · %4$s · INP p75 %5$s', 'performance-optimisation' ), $delay_level, $delay_device, $delay_template, $delay_connection, self::format_p75_seconds( (float) $delay_anchor_p75 ) );
+							/* translators: %1$s device, %2$s template, %3$s connection, %4$s p75 seconds, %5$d sample count. */
+							$delay_description = sprintf( __( 'AI: Delay JavaScript suggestion for %1$s/%2$s/%3$s (INP p75 %4$s, %5$d samples)', 'performance-optimisation' ), $delay_device, $delay_template, $delay_connection, self::format_p75_seconds( (float) $delay_anchor_p75 ), (int) $delay_samples );
 						} else {
-							/* translators: %1$s level, %2$s device, %3$s template, %4$s p75 seconds. */
-							$delay_value = sprintf( __( '%1$s · %2$s · %3$s · LCP p75 %4$s', 'performance-optimisation' ), $delay_level, $delay_device, $delay_template, self::format_p75_seconds( (float) $delay_anchor_p75 ) );
-							/* translators: %1$s device, %2$s template, %3$s p75 seconds, %4$d sample count. */
-							$delay_description = sprintf( __( 'AI: Delay JavaScript suggestion for %1$s/%2$s (LCP p75 %3$s, %4$d samples)', 'performance-optimisation' ), $delay_device, $delay_template, self::format_p75_seconds( (float) $delay_anchor_p75 ), (int) $delay_samples );
+							/* translators: %1$s level, %2$s device, %3$s template, %4$s connection, %5$s p75 seconds. */
+							$delay_value = sprintf( __( '%1$s · %2$s · %3$s · %4$s · LCP p75 %5$s', 'performance-optimisation' ), $delay_level, $delay_device, $delay_template, $delay_connection, self::format_p75_seconds( (float) $delay_anchor_p75 ) );
+							/* translators: %1$s device, %2$s template, %3$s connection, %4$s p75 seconds, %5$d sample count. */
+							$delay_description = sprintf( __( 'AI: Delay JavaScript suggestion for %1$s/%2$s/%3$s (LCP p75 %4$s, %5$d samples)', 'performance-optimisation' ), $delay_device, $delay_template, $delay_connection, self::format_p75_seconds( (float) $delay_anchor_p75 ), (int) $delay_samples );
 						}
 						$suggestions[] = array(
 							'metric'      => 'ai_delay_js',

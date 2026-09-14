@@ -1738,4 +1738,127 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$model = AI_Adaptive::learn();
 		$this->assertSame( 'heuristic', $model['source'] );
 	}
+
+	/**
+	 * Test slow-connection segments route connection into the suggestion copy.
+	 *
+	 * Given a qualified slow mobile/4g LCP segment, the field-LCP tune and
+	 * eagerness suggestions name the connection so segment-skewed RUM
+	 * cannot misfire as global advice. Commerce contexts still cap the
+	 * applied eagerness payload at moderate.
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_learn_routes_connection_segment_into_suggestions(): void {
+		// Force a non-commerce context: the Woo-presence test earlier in
+		// this file eval-declares Woo helpers process-wide, which would
+		// otherwise cap eagerness site-wide for every later test.
+		$this->install_stubs(
+			static function ( $hook, $value ) {
+				if ( 'wppo_ai_adaptive_commerce_context' === $hook ) {
+					return false;
+				}
+				return $value;
+			}
+		);
+		$today                                   = gmdate( 'Y-m-d' );
+		$this->options['wppo_web_vitals_rum']    = array(
+			$today => array(
+				'/fast/' => array(
+					'lcp' => array(
+						'n'   => 100,
+						'sum' => 100000,
+						'min' => 1000,
+						'max' => 1000,
+					),
+				),
+				'/slow/' => array(
+					'lcp'    => array(
+						'n'   => 5,
+						'sum' => 5000,
+						'min' => 1000,
+						'max' => 1000,
+					),
+					'lcpSeg' => array(
+						'mobile|single|4g' => array(
+							'device'     => 'mobile',
+							'template'   => 'single',
+							'connection' => '4g',
+							'n'          => 20,
+							'sum'        => 80000.0,
+							'min'        => 4000.0,
+							'max'        => 4000.0,
+							'samples'    => array_fill( 0, 20, 4000.0 ),
+						),
+					),
+				),
+			),
+		);
+		$this->options['wppo_web_vitals_trends'] = array();
+		$this->options['wppo_settings']          = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		Util::clear_settings_cache();
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$model = AI_Adaptive::learn();
+		$this->assertSame( 'eager', $model['eagerness'] );
+		$this->assertSame( '4g', $model['field_lcp_segment']['connection'] );
+
+		$suggestions = AI_Adaptive::get_suggestions();
+		$field       = $this->find_suggestion( $suggestions, 'ai_field_lcp_tune' );
+		$this->assertNotNull( $field );
+		$this->assertStringContainsString( '4g', $field['value'] );
+		$this->assertStringContainsString( 'mobile', $field['value'] );
+		$eagerness = $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' );
+		$this->assertNotNull( $eagerness );
+		$this->assertStringContainsString( '4g', $eagerness['value'] );
+		$this->assertSame( 'eager', $eagerness['ai_payload']['settings']['speculationEagerness'] );
+	}
+
+	/**
+	 * Test commerce contexts cap the connection-routed eagerness payload.
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_connection_routed_eagerness_caps_at_moderate_in_commerce_context(): void {
+		$this->install_stubs();
+		$today                                   = gmdate( 'Y-m-d' );
+		$this->options['wppo_web_vitals_rum']    = array(
+			$today => array(
+				'/slow/' => array(
+					'lcpSeg' => array(
+						'mobile|single|slow-2g' => array(
+							'device'     => 'mobile',
+							'template'   => 'single',
+							'connection' => 'slow-2g',
+							'n'          => 20,
+							'sum'        => 80000.0,
+							'min'        => 4000.0,
+							'max'        => 4000.0,
+							'samples'    => array_fill( 0, 20, 4000.0 ),
+						),
+					),
+				),
+			),
+		);
+		$this->options['wppo_web_vitals_trends'] = array();
+		$this->options['wppo_settings']          = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		Util::clear_settings_cache();
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( true );
+
+		$model = AI_Adaptive::learn();
+		$this->assertSame( 'moderate', $model['eagerness'] );
+
+		$suggestions = AI_Adaptive::get_suggestions();
+		$eagerness   = $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' );
+		$this->assertNotNull( $eagerness );
+		$this->assertStringContainsString( 'slow-2g', $eagerness['value'] );
+		$this->assertSame( 'moderate', $eagerness['ai_payload']['settings']['speculationEagerness'] );
+	}
 }
