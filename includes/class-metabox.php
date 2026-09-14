@@ -227,7 +227,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 									$priority     = $delay_priorities[ $script['handle'] ] ?? '';
 									$note_id      = 'wppo-protected-script-' . (int) $script_index;
 									?>
-								<tr<?php echo $is_protected ? ' style="opacity: 0.5;"' : ''; ?>>
+									<tr<?php echo $is_protected ? ' style="opacity: 0.5;"' : ''; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static attribute strings only. ?>>
 										<td>
 											<input
 												type="checkbox"
@@ -313,7 +313,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 									$is_disabled  = in_array( $style['handle'], $disabled_styles, true );
 									$note_id      = 'wppo-protected-style-' . (int) $style_index;
 									?>
-								<tr<?php echo $is_protected ? ' style="opacity: 0.5;"' : ''; ?>>
+									<tr<?php echo $is_protected ? ' style="opacity: 0.5;"' : ''; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static attribute strings only. ?>>
 										<td>
 											<input
 												type="checkbox"

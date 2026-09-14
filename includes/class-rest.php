@@ -1816,7 +1816,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$result = Telemetry::scan( $url, 'manual', $force );
 
 			if ( is_wp_error( $result ) ) {
-				$detail = sanitize_text_field( str_replace( ABSPATH, '', $result->get_error_message() ) );
+				// Strip local paths plus any embedded URLs (which may leak hostnames,
+				// IPs, or credentials from Telemetry/wp_remote errors) before the
+				// message is returned to the client and persisted via the activity log.
+				$detail = str_replace( array( ABSPATH, WP_CONTENT_DIR ), '', $result->get_error_message() );
+				$detail = preg_replace( '#https?://[^\s\'"]+#', '[url]', $detail );
+				if ( ! is_string( $detail ) ) {
+					$detail = '';
+				}
+				$detail = sanitize_text_field( $detail );
 				if ( '' === $detail ) {
 					$detail = __( 'Performance scan failed.', 'performance-optimisation' );
 				}

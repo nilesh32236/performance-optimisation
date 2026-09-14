@@ -971,20 +971,38 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			);
 			if ( is_wp_error( $response ) ) {
 				$clean_error = sanitize_text_field( str_replace( ABSPATH, '', $response->get_error_message() ) );
+				if ( '' === $clean_error ) {
+					$clean_error = __( 'Cache warmup failed.', 'performance-optimisation' );
+				}
+				// Strip CR/LF so a crafted URL cannot spoof debug.log lines.
+				$log_url = sanitize_text_field( str_replace( array( "\r", "\n" ), ' ', $url ) );
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-					error_log( 'WPPO preload failed for URL ' . $url . ': ' . $clean_error );
+					error_log( 'WPPO preload failed for URL ' . $log_url . ': ' . $clean_error );
 				}
-				// Translators: %1$s is the URL, %2$s is the error message.
-				Log::add( sprintf( __( 'Cache warmup failed for %1$s: %2$s', 'performance-optimisation' ), esc_url( $url ), $clean_error ) );
-			} elseif ( wp_remote_retrieve_response_code( $response ) >= 400 ) {
+				$warmup_failure = sprintf( /* translators: %1$s: URL, %2$s: error. */ __( 'Cache warmup failed for %1$s: %2$s', 'performance-optimisation' ), esc_url_raw( $url ), $clean_error );
+			} else {
 				$http_code = (int) wp_remote_retrieve_response_code( $response );
-				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-					error_log( 'WPPO preload failed: HTTP status ' . $http_code . ' for ' . $url );
+				if ( $http_code >= 400 ) {
+					// Strip CR/LF so a crafted URL cannot spoof debug.log lines.
+					$log_url = sanitize_text_field( str_replace( array( "\r", "\n" ), ' ', $url ) );
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+						// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+						error_log( 'WPPO preload failed: HTTP status ' . $http_code . ' for ' . $log_url );
+					}
+					$warmup_failure = sprintf( /* translators: %1$d: HTTP status code, %2$s: URL. */ __( 'Cache warmup failed: HTTP %1$d for %2$s.', 'performance-optimisation' ), $http_code, esc_url_raw( $url ) );
 				}
-				// Translators: %1$d is the HTTP status code, %2$s is the URL.
-				Log::add( sprintf( __( 'Cache warmup failed: HTTP %1$d for %2$s.', 'performance-optimisation' ), $http_code, esc_url( $url ) ) );
+			}
+			if ( isset( $warmup_failure ) ) {
+				// Cap activity-log writes per request so an origin outage cannot
+				// turn one cron batch (200 posts plus sitemap URL jobs) into
+				// hundreds of $wpdb->insert writes with unbounded
+				// wppo_activity_logs growth; debug logging above stays per URL.
+				static $wppo_warmup_logged = 0;
+				if ( $wppo_warmup_logged < 3 ) {
+					++$wppo_warmup_logged;
+					Log::add( $warmup_failure );
+				}
 			}
 		}
 
