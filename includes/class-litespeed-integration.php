@@ -1395,10 +1395,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			/**
 			 * Filter whether current request is cacheable for LiteSpeed.
 			 *
+			 * Note: the query-param poisoning guard below re-asserts after
+			 * this filter, so a functional/unknown query can never be
+			 * re-allowed as cacheable (parity with the file-cache layer,
+			 * where the read gate runs before wppo_should_cache_request).
+			 * Extend wppo_cache_query_allowlist for custom marketing params.
+			 *
 			 * @since 2.0.0
 			 * @param bool $is_cacheable Whether request is cacheable.
 			 */
 			self::$cached_is_cacheable = (bool) apply_filters( 'wppo_litespeed_is_cacheable', self::$cached_is_cacheable );
+
+			// Query-param poisoning guard (issue #1141) is a security
+			// property, not a preference: re-enforce after the filter so
+			// it cannot re-allow a functional query.
+			if ( self::$cached_is_cacheable ) {
+				try {
+					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'has_uncacheable_query' ) && Util::has_uncacheable_query() ) {
+						self::$cached_is_cacheable = false;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					self::$cached_is_cacheable = false;
+				}
+			}
 
 			return self::$cached_is_cacheable;
 		}

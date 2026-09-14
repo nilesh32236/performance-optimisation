@@ -2689,29 +2689,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return false;
 			}
 
-			if ( ! empty( $_SERVER['QUERY_STRING'] ) &&
-				preg_match( '/(?:^|&)(s|ver|v)(?:=|&|$)/', sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) ) )
-			) {
-				return false;
-			}
-
 			// Query-param poisoning guard (issue #1141): the cache key is
 			// path-only, so ANY query-bearing response stored here would
 			// land on the clean-URL file and poison it for later visitors
 			// (e.g. `/?utm_source=x` overwriting `/index.html`). The legacy
-			// `s|ver|v` gate above is kept verbatim for backward
-			// compatibility; this extends the refusal to tracking-only and
-			// unknown queries via the filterable allowlist helper. Tracked
-			// requests are still servable from the clean entry (read path)
-			// but never overwrite it. Fail-open: detection failure refuses
-			// the store (dynamic), never fatal.
+			// `s|ver|v` gate is subsumed by the shared helper below (which
+			// forces those params dynamic case-insensitively, plus any
+			// unknown/functional param), so a single parse covers both.
+			// Tracked requests are still servable from the clean entry
+			// (read path) but never overwrite it. Fail-open: detection
+			// failure refuses the store (dynamic), never fatal.
 			try {
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'has_uncacheable_query' ) ) {
 					if ( Util::has_uncacheable_query() ) {
 						return false;
 					}
-					$raw_qs = isset( $_SERVER['QUERY_STRING'] ) ? trim( sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) ) ) : '';
-					if ( '' !== $raw_qs ) {
+					// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- Sanitized below via wp_unslash()/sanitize_text_field() with function_exists() fallbacks.
+					$raw_qs = isset( $_SERVER['QUERY_STRING'] ) ? (string) $_SERVER['QUERY_STRING'] : '';
+					if ( function_exists( 'wp_unslash' ) ) {
+						$raw_qs = wp_unslash( $raw_qs );
+					}
+					if ( function_exists( 'sanitize_text_field' ) ) {
+						$raw_qs = sanitize_text_field( $raw_qs );
+					}
+					if ( '' !== trim( $raw_qs ) ) {
 						return false;
 					}
 				}

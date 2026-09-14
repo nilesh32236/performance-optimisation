@@ -2421,13 +2421,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				if ( '' === trim( (string) $query_string ) ) {
 					return false;
 				}
-				// Bound the parse: truncate runaway query strings and cap the
-				// param count so a malicious 1 MB query cannot DoS the gate.
+				// Bound the parse: fail closed on runaway query strings and cap
+				// the param count so a malicious 1 MB query cannot DoS the
+				// gate. Over-long input goes dynamic instead of being
+				// truncated (truncation would let padding hide a functional
+				// param past the cut).
+				if ( strlen( (string) $query_string ) > 5000 ) {
+					return true;
+				}
 				$query_string = substr( (string) $query_string, 0, 5000 );
 				$allowlist    = self::get_cache_query_allowlist();
 				$allowed      = array_flip( $allowlist );
-				$pairs        = explode( '&', $query_string );
-				$checked      = 0;
+				// Split on both '&' and ';': on hosts where
+				// arg_separator.input includes ';', PHP populates $_GET from
+				// semicolon-separated params, so each must be classified.
+				$pairs = preg_split( '/[&;]/', (string) $query_string );
+				if ( ! is_array( $pairs ) ) {
+					return true;
+				}
+				$checked = 0;
 				foreach ( $pairs as $pair ) {
 					$pair = trim( (string) $pair );
 					if ( '' === $pair ) {

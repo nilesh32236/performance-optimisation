@@ -296,4 +296,68 @@ class CacheQueryPoisoningTest extends \PHPUnit\Framework\TestCase {
 		$store->setAccessible( true );
 		$this->assertFalse( $store->invoke( $cache ) );
 	}
+
+	/**
+	 * Over-long queries fail closed (dynamic) instead of being truncated.
+	 *
+	 * Padding with allowlisted params must not hide a trailing functional
+	 * param past the 5 KB bound.
+	 */
+	public function test_overlong_query_fails_closed(): void {
+		$pad = str_repeat( 'a', 4990 );
+		$qs  = 'utm_source=' . $pad . '&foo=bar';
+		$this->assertGreaterThan( 5000, strlen( $qs ) );
+		$this->assertTrue( Util::has_uncacheable_query( $qs ) );
+		// Over-long tracking-only input also goes dynamic (fail closed).
+		$this->assertTrue( Util::has_uncacheable_query( str_repeat( 'utm_source=x&', 500 ) ) );
+	}
+
+	/**
+	 * The 200-param cap forces dynamic past the bound, not at it.
+	 */
+	public function test_param_count_cap_goes_dynamic(): void {
+		$pairs = array();
+		for ( $i = 0; $i < 201; $i++ ) {
+			$pairs[] = 'utm_source=x';
+		}
+		$this->assertTrue( Util::has_uncacheable_query( implode( '&', $pairs ) ) );
+		$this->assertFalse( Util::has_uncacheable_query( implode( '&', array_slice( $pairs, 0, 200 ) ) ) );
+	}
+
+	/**
+	 * Non-array filter output falls back to the defaults.
+	 */
+	public function test_non_array_filter_falls_back_to_defaults(): void {
+		Functions\when( 'has_filter' )->justReturn( true );
+		Functions\when( 'apply_filters' )->justReturn( 'not-an-array' );
+		$this->assertFalse( Util::has_uncacheable_query( 'utm_source=x' ) );
+		$this->assertTrue( Util::has_uncacheable_query( 'foo=bar' ) );
+	}
+
+	/**
+	 * Empty filter output falls back to the defaults.
+	 */
+	public function test_empty_filter_falls_back_to_defaults(): void {
+		Functions\when( 'has_filter' )->justReturn( true );
+		Functions\when( 'apply_filters' )->justReturn( array() );
+		$this->assertFalse( Util::has_uncacheable_query( 'gclid=abc' ) );
+		$this->assertTrue( Util::has_uncacheable_query( 'foo=bar' ) );
+	}
+
+	/**
+	 * Legacy params force dynamic case-insensitively.
+	 */
+	public function test_uppercase_legacy_params_force_dynamic(): void {
+		$this->assertTrue( Util::has_uncacheable_query( 'S=hello' ) );
+		$this->assertTrue( Util::has_uncacheable_query( 'VER=1.2' ) );
+		$this->assertTrue( Util::has_uncacheable_query( 'V=3' ) );
+	}
+
+	/**
+	 * Semicolon-separated params are each classified (arg_separator.input).
+	 */
+	public function test_semicolon_separated_params_are_classified(): void {
+		$this->assertTrue( Util::has_uncacheable_query( 'utm_source=x;foo=bar' ) );
+		$this->assertFalse( Util::has_uncacheable_query( 'utm_source=x;gclid=y' ) );
+	}
 }
