@@ -1653,20 +1653,25 @@ const Dashboard = ( {
 					/>
 				</div>
 				<div className="wppo-field">
-					<button
+					<LoadingSubmitButton
 						type="button"
 						className="wppo-button wppo-button--secondary"
 						onClick={ runWooCacheSelfTest }
-						disabled={ wooSelfTestLoading }
+						isLoading={ wooSelfTestLoading }
+						aria-describedby="wppo-woo-cache-self-test-desc"
+						label={ __(
+							'Run Woo Cache Self-Test',
+							'performance-optimisation'
+						) }
+						loadingLabel={ __(
+							'Running…',
+							'performance-optimisation'
+						) }
+					/>
+					<p
+						id="wppo-woo-cache-self-test-desc"
+						className="wppo-text-muted wppo-text-small"
 					>
-						{ wooSelfTestLoading
-							? __( 'Running…', 'performance-optimisation' )
-							: __(
-									'Run Woo Cache Self-Test',
-									'performance-optimisation'
-							  ) }
-					</button>
-					<p className="wppo-text-muted wppo-text-small">
 						{ __(
 							'Proves in one click that cart, checkout and account paths plus cart/checkout fragments (?wc-ajax=, ?add-to-cart=, plain-permalink Store API) bypass the static cache under path/query/safe-mode semantics, that faceted filter URLs are skipped by preload, and that a guest cart survives with page and object cache on (DONOTCACHEPAGE enforcement is assumed via Cache::is_not_cacheable(); the wppo_woo_cacheable override is out of scope). On failure, force-exclude dynamic routes plus cookie bypass (re-enable safe mode) and serve dynamic.',
 							'performance-optimisation'
