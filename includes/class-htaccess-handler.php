@@ -84,7 +84,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			// setting. The Nginx snippet is surfaced read-only via
 			// Server_Rules::get_nginx_rules() / the server_rules endpoint.
 			if ( ! self::supports_htaccess() ) {
-				self::clear_htaccess_failure();
+				// Guard the delete behind a has-check: the no-op fast path
+				// must not trade avoided filesystem churn for DB churn on
+				// every settings save.
+				if ( self::has_htaccess_failure() ) {
+					self::clear_htaccess_failure();
+				}
 				return true;
 			}
 
@@ -143,7 +148,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			$existing_normalized = self::normalize_rules( null === $backup ? array() : $backup );
 			$desired_normalized  = self::normalize_rules( $rules );
 			if ( implode( "\n", $existing_normalized ) === implode( "\n", $desired_normalized ) ) {
-				self::clear_htaccess_failure();
+				if ( self::has_htaccess_failure() ) {
+					self::clear_htaccess_failure();
+				}
 				return true;
 			}
 
@@ -152,7 +159,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			// writes (missing methods), in which case fall through to legacy.
 			$atomic = self::atomic_write_verified( $htaccess_file, $wp_filesystem, $rules );
 			if ( true === $atomic ) {
-				self::clear_htaccess_failure();
+				if ( self::has_htaccess_failure() ) {
+					self::clear_htaccess_failure();
+				}
 				return true;
 			}
 			if ( false === $atomic ) {
@@ -165,6 +174,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			if ( ! $result ) {
 				if ( null !== $backup ) {
 					insert_with_markers( $htaccess_file, self::MARKER, $backup );
+					self::verify_after_write( $htaccess_file, $wp_filesystem, array() !== self::normalize_rules( $backup ) );
 				}
 				self::flag_htaccess_failure();
 				return false;
@@ -173,12 +183,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			if ( ! self::verify_after_write( $htaccess_file, $wp_filesystem, array() !== $desired_normalized ) ) {
 				if ( null !== $backup ) {
 					insert_with_markers( $htaccess_file, self::MARKER, $backup );
+					// Re-read after the legacy-path restore so a torn
+					// restore (disk-full, racing writer) is not silently
+					// left behind as a truncated site-wide .htaccess.
+					self::verify_after_write( $htaccess_file, $wp_filesystem, array() !== self::normalize_rules( $backup ) );
 				}
 				self::flag_htaccess_failure();
 				return false;
 			}
 
-			self::clear_htaccess_failure();
+			if ( self::has_htaccess_failure() ) {
+				self::clear_htaccess_failure();
+			}
 			return (bool) $result;
 		}
 
@@ -268,6 +284,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				// is never evaluated, so sweep artifacts and report
 				// success without touching it.
 				if ( ! self::supports_htaccess() ) {
+					// Mirror update_rules(): a stale Apache-era failure flag
+					// must not survive teardown/migration to Nginx as a
+					// phantom error notice.
+					self::clear_htaccess_failure();
 					self::cleanup_backup_artifacts();
 					return true;
 				}
@@ -426,6 +446,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 					return;
 				}
 				$ttl = defined( 'MONTH_IN_SECONDS' ) ? MONTH_IN_SECONDS : 30 * 86400;
+				// Value is opaque (has_htaccess_failure() checks existence
+				// only); time() aids debugging but carries no age/expiry logic.
 				set_transient( self::get_failure_transient_key(), time(), $ttl );
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -765,7 +787,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			// Byte-identical checksum plus structural verification: a torn
 			// rename or a concurrent writer interleaving must never leave a
 			// truncated or foreign body behind. On mismatch restore the
-			// backup (or the in-memory original) so the file stays intact.
+			// backup (or the in-memory original) so the file stays intact,
+			// then re-read and verify the restore itself so a short-written
+			// restore (disk-full, racing writer) is surfaced instead of
+			// leaving a truncated site-wide .htaccess behind silently.
 			if ( $written !== $new_contents || ! self::verify_htaccess_contents( $written, $expect_block ) ) {
 				$restored = false;
 				if ( $wp_filesystem->exists( $backup_file ) ) {
@@ -774,10 +799,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				if ( ! $restored ) {
 					$restored = (bool) $wp_filesystem->put_contents( $htaccess_file, $current, $mode );
 				}
-				if ( ! $restored ) {
-					return false;
+				if ( $restored ) {
+					$re_read = $wp_filesystem->get_contents( $htaccess_file );
+					// The restored original carries a block exactly when the
+					// pre-write contents contained the marker.
+					$expect_restored_block = false !== strpos( $current, '# BEGIN ' . self::MARKER );
+					if ( ! is_string( $re_read ) || ! self::verify_htaccess_contents( $re_read, $expect_restored_block ) ) {
+						return false;
+					}
 				}
 				return false;
+			}
+
+			// Best-effort cleanup of the single backup generation: unlike
+			// atomic_write_php_verified() this writer kept its predictable
+			// `.htaccess.wppo-bak` sibling in the web root after success,
+			// where static hosts may serve it as text (info disclosure) and
+			// future restores could confuse it for fresh state.
+			if ( $wp_filesystem->exists( $backup_file ) ) {
+				$wp_filesystem->delete( $backup_file );
 			}
 
 			return true;

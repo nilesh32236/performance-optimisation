@@ -1132,6 +1132,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		private static array $home_url_cache = array();
 
 		/**
+		 * Per-blog memo for the canonical home host (see get_canonical_host()).
+		 *
+		 * @var array<int, string>
+		 * @since NEXT
+		 */
+		private static array $canonical_host_cache = array();
+
+		/**
+		 * Per-value memo for normalized cache hosts (see normalize_cache_host()).
+		 *
+		 * @var array<string, string>
+		 * @since NEXT
+		 */
+		private static array $normalized_host_cache = array();
+
+		/**
 		 * Per-request memo for wppo_settings to avoid repeated get_option deserialization.
 		 *
 		 * Keyed by blog ID for multisite correctness under switch_to_blog().
@@ -1155,7 +1171,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @since 2.0.0
 		 */
 		public static function reset_cached_home_urls(): void {
-			self::$home_url_cache = array();
+			self::$home_url_cache       = array();
+			self::$canonical_host_cache = array();
 		}
 
 		/**
@@ -2139,8 +2156,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @since 2.0.0
 		 */
 		public static function normalize_cache_host( string $raw_host ): string {
+			// Static memo: hot callers (sanitize loops, invalidation fan-out)
+			// pass the same already-canonical domain repeatedly; skip the
+			// trim + port-strip + idn_to_ascii + regex work on repeats.
+			if ( isset( self::$normalized_host_cache[ $raw_host ] ) ) {
+				return self::$normalized_host_cache[ $raw_host ];
+			}
 			$domain = trim( $raw_host );
 			if ( '' === $domain ) {
+				self::$normalized_host_cache[ $raw_host ] = '';
 				return '';
 			}
 
@@ -2152,13 +2176,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			if ( str_starts_with( $domain, '[' ) ) {
 				$bracket_end = strpos( $domain, ']' );
 				if ( false === $bracket_end ) {
-					return '';
+					return self::memoize_normalized_host( $raw_host, '' );
 				}
 				// Reject trailing garbage after the bracket (e.g. '[::1]evil'):
 				// only '' or a ':port' suffix is a well-formed bracketed host.
 				$rest = substr( $domain, $bracket_end + 1 );
 				if ( '' !== $rest && ':' !== substr( $rest, 0, 1 ) ) {
-					return '';
+					return self::memoize_normalized_host( $raw_host, '' );
 				}
 				$host = substr( $domain, 1, $bracket_end - 1 );
 			} elseif ( substr_count( $domain, ':' ) > 1 ) {
@@ -2167,7 +2191,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				$host = explode( ':', $domain, 2 )[0];
 			}
 			if ( '' === $host ) {
-				return '';
+				return self::memoize_normalized_host( $raw_host, '' );
 			}
 
 			if ( function_exists( 'idn_to_ascii' ) ) {
@@ -2190,10 +2214,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			);
 
 			if ( ! $valid ) {
-				return '';
+				return self::memoize_normalized_host( $raw_host, '' );
 			}
 
-			return strtolower( $host );
+			return self::memoize_normalized_host( $raw_host, strtolower( $host ) );
+		}
+
+		/**
+		 * Store a normalized host in the per-value memo (bounded size).
+		 *
+		 * @param string $raw_host Raw input key.
+		 * @param string $normalized Normalized result.
+		 * @return string The normalized result (passthrough for `return` sites).
+		 * @since NEXT
+		 */
+		private static function memoize_normalized_host( string $raw_host, string $normalized ): string {
+			if ( count( self::$normalized_host_cache ) > 64 ) {
+				self::$normalized_host_cache = array();
+			}
+			self::$normalized_host_cache[ $raw_host ] = $normalized;
+			return $normalized;
 		}
 
 		/**
@@ -2211,6 +2251,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @since 2.0.0
 		 */
 		public static function get_canonical_host(): string {
+			// Per-blog static memo mirroring cached_home_url(): every call
+			// otherwise repeats home_url() + wp_parse_url(HOST) +
+			// normalize_cache_host() (with idn_to_ascii), 2-3x per request
+			// (Cache + Used_CSS + REST). Not memoized when a home_url
+			// filter is present (context-dependent output).
+			$bid = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
+			if ( function_exists( 'has_filter' ) && false !== has_filter( 'home_url' ) ) {
+				return self::resolve_canonical_host();
+			}
+			if ( isset( self::$canonical_host_cache[ $bid ] ) ) {
+				return self::$canonical_host_cache[ $bid ];
+			}
+			$resolved                           = self::resolve_canonical_host();
+			self::$canonical_host_cache[ $bid ] = $resolved;
+			return $resolved;
+		}
+
+		/**
+		 * Uncached canonical-host resolution backing get_canonical_host().
+		 *
+		 * @return string Canonical lowercase host, or '' when unresolvable.
+		 * @since NEXT
+		 */
+		private static function resolve_canonical_host(): string {
 			if ( ! function_exists( 'home_url' ) || ! function_exists( 'wp_parse_url' ) ) {
 				return '';
 			}
@@ -2260,7 +2324,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Pure static helper: no I/O, no settings reads. Multisite-safe.
 		 *
 		 * @param string|null $url_path     Raw URL path or URL.
-		 * @param string|null $allowed_host Optional canonical host; same-host absolute URLs map to their path, others refuse.
+		 * @param string|null $allowed_host Optional canonical host (alias: $domain / $canonical_host at call-sites);
+		 *                                  same-host absolute URLs map to their path, others refuse.
 		 * @return string Sanitized relative path or empty string.
 		 * @since 2.0.0
 		 * @since NEXT Added the optional $allowed_host foreign-host refusal.
@@ -2282,15 +2347,48 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			// (e.g. `/search?redirect=https://other`) must not false-positive.
 			// The split uses strcspn() (no process-global strtok() state).
 			// Both the raw and the single-decoded authority are inspected so
-			// an encoded scheme (`https%3a%2f%2f`) cannot smuggle past.
-			$authority         = substr( $trimmed_raw, 0, strcspn( $trimmed_raw, '?#' ) );
-			$decoded_authority = function_exists( 'rawurldecode' ) ? rawurldecode( $authority ) : $authority;
+			// an encoded scheme (`https%3a%2f%2f`) cannot smuggle past. The
+			// test is scheme-anchored (parity with Cache::__construct) so a
+			// benign segment containing `://` (e.g. `/foo/a://b`) is not
+			// misclassified; a lingering `%3a` remnant after one decode
+			// (double-encoded scheme) still counts as absolute-form for
+			// detection only — the mapped path keeps single-decode semantics.
+			$authority = substr( $trimmed_raw, 0, strcspn( $trimmed_raw, '?#' ) );
+			// Fast path: 99% of inputs are plain paths with no `%`, so skip
+			// the decode and second candidate entirely in that case.
+			$decoded_authority = $authority;
+			if ( false !== strpos( $authority, '%' ) ) {
+				$decoded_authority = rawurldecode( $authority );
+			}
 			$has_absolute_form = false;
 			foreach ( array( $authority, $decoded_authority ) as $candidate ) {
 				$candidate_trimmed = ltrim( (string) $candidate );
-				if ( '' !== $candidate_trimmed && ( false !== strpos( $candidate_trimmed, '://' ) || 0 === strpos( $candidate_trimmed, '//' ) ) ) {
+				if ( '' === $candidate_trimmed ) {
+					continue;
+				}
+				if ( (bool) preg_match( '#^[a-zA-Z][a-zA-Z0-9+.-]*://#', $candidate_trimmed ) || 0 === strpos( $candidate_trimmed, '//' ) ) {
 					$has_absolute_form = true;
 					break;
+				}
+				// Double-encoded scheme remnant (e.g. `https%253A%252F%252F`
+				// decodes once to `https%3A%2F%2F`): treat as absolute-form
+				// for detection only so host extraction still runs.
+				if ( false !== stripos( $candidate_trimmed, '%3a' ) ) {
+					$has_absolute_form = true;
+					break;
+				}
+			}
+			// Parse once and reuse the parts for both host and path checks
+			// (wp_parse_url re-parses the string on every component call).
+			$parts = null;
+			if ( $has_absolute_form && null !== $allowed_host ) {
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$parts = wp_parse_url( $raw_input );
+				} else {
+					$parts = parse_url( $raw_input ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
+				}
+				if ( ! is_array( $parts ) ) {
+					$parts = null;
 				}
 			}
 			if ( $has_absolute_form && null !== $allowed_host ) {
@@ -2299,22 +2397,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				// inputs outright, so a foreign host can never map onto the
 				// local tree. Legacy callers pass null and keep the
 				// historical path-only extraction below.
+				// normalize_cache_host() is statically memoized, so the
+				// already-canonical domain hot callers pass costs nothing
+				// on repeats.
 				$expected = is_string( $allowed_host ) && '' !== $allowed_host ? self::normalize_cache_host( $allowed_host ) : '';
 				if ( '' === $expected ) {
 					return '';
 				}
-				$host_raw = null;
-				if ( function_exists( 'wp_parse_url' ) ) {
-					$host_raw = wp_parse_url( $raw_input, PHP_URL_HOST );
-				} else {
-					$host_raw = parse_url( $raw_input, PHP_URL_HOST ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
-				}
+				$host_raw = is_array( $parts ) ? ( $parts['host'] ?? null ) : null;
 				if ( ! is_string( $host_raw ) || '' === $host_raw || self::normalize_cache_host( $host_raw ) !== $expected ) {
 					return '';
 				}
 			}
 
-			if ( function_exists( 'wp_parse_url' ) ) {
+			if ( is_array( $parts ) && array_key_exists( 'path', $parts ) ) {
+				$parsed = $parts['path'];
+			} elseif ( function_exists( 'wp_parse_url' ) ) {
 				$parsed = wp_parse_url( $raw_input, PHP_URL_PATH );
 			} else {
 				$parsed = parse_url( $raw_input, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
@@ -2328,7 +2426,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			}
 			$path_component = (string) $parsed;
 
-			$decoded = function_exists( 'rawurldecode' ) ? rawurldecode( $path_component ) : $path_component;
+			$decoded = rawurldecode( $path_component );
 
 			if ( false !== strpos( $decoded, "\0" ) ) {
 				return '';
@@ -2340,7 +2438,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				$normalized = str_replace( '\\', '/', trim( $decoded, '/' ) );
 			}
 
-			if ( false !== strpos( $normalized, "\0" ) || false !== strpos( $normalized, '..' ) ) {
+			// Segment-only dot-dot check (parity with Rest): a benign
+			// filename containing `..` (e.g. `my..photo.jpg`) must not be
+			// over-blocked while real traversal segments still refuse.
+			if ( false !== strpos( $normalized, "\0" ) || 1 === preg_match( '#(^|/)\.\.(/|$)#', $normalized ) ) {
 				return '';
 			}
 
@@ -2442,7 +2543,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			// be misread as an absolute-form target. The split uses strcspn()
 			// (no process-global strtok() state).
 			$authority = substr( $trimmed, 0, strcspn( $trimmed, '?#' ) );
-			if ( '' !== $authority && ( false !== strpos( $authority, '://' ) || 0 === strpos( $authority, '//' ) || 0 === strpos( $authority, '\\\\' ) || (bool) preg_match( '#^[a-zA-Z]:#', $authority ) ) ) {
+			// Scheme-anchored absolute-form test (parity with
+			// sanitize_cache_url_path() / Cache::__construct): a benign
+			// relative path containing `://` in a segment (e.g.
+			// `/foo/a://b`) must not misclassify as absolute-form.
+			$authority_trimmed = ltrim( $authority );
+			if ( '' !== $authority_trimmed && ( (bool) preg_match( '#^[a-zA-Z][a-zA-Z0-9+.-]*://#', $authority_trimmed ) || 0 === strpos( $authority_trimmed, '//' ) || 0 === strpos( $authority_trimmed, '\\\\' ) || (bool) preg_match( '#^[a-zA-Z]:#', $authority_trimmed ) ) ) {
 				// Absolute-form target: only same-host absolute URLs may map
 				// to a path; drive/UNC/protocol-relative/foreign-host inputs
 				// are refused outright.
@@ -2471,7 +2577,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				if ( null === $component || false === $component ) {
 					$component = $raw_input;
 				}
-				if ( '' !== trim( trim( (string) $component ), '/' ) ) {
+				if ( '' !== trim( (string) $component, " \t\n\r\0\x0B/" ) ) {
 					return '';
 				}
 			}

@@ -2195,12 +2195,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			$url_path = null;
 			if ( null !== $path && '' !== $path ) {
-				$canonical_host = class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_canonical_host' ) ? Util::get_canonical_host() : '';
-				$sanitized      = Util::sanitize_cache_url_path( wp_normalize_path( $path ), '' !== $canonical_host ? $canonical_host : null );
-				if ( '' === $sanitized ) {
-					return $this->send_response( null, false, 400, __( 'Invalid path provided.', 'performance-optimisation' ) );
+				$canonical_host  = class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_canonical_host' ) ? Util::get_canonical_host() : '';
+				$normalized_path = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $path ) : (string) $path;
+				if ( '' === $canonical_host ) {
+					// Fail closed when the canonical host is unresolvable
+					// (early boot/CLI/misconfigured home_url): refuse
+					// absolute-form inputs instead of degrading to legacy
+					// path-only extraction that would map a foreign host
+					// onto the local tree.
+					$target = ltrim( substr( ltrim( $normalized_path ), 0, strcspn( ltrim( $normalized_path ), '?#' ) ) );
+					if ( (bool) preg_match( '#^[a-zA-Z][a-zA-Z0-9+.-]*://#', $target ) || 0 === strpos( $target, '//' ) || (bool) preg_match( '#^[a-zA-Z]:#', $target ) || 0 === strpos( $target, '\\\\' ) ) {
+						return $this->send_response( null, false, 400, __( 'Invalid path provided.', 'performance-optimisation' ) );
+					}
+					$sanitized = Util::sanitize_cache_url_path( $normalized_path, null );
+				} else {
+					$sanitized = Util::sanitize_cache_url_path( $normalized_path, $canonical_host );
 				}
-				$url_path = $sanitized;
+				if ( '' === $sanitized ) {
+					// '' is both the benign homepage ('/') and hostile
+					// input: only 400 when the raw path component is
+					// non-blank. A benign '/' purges just the homepage
+					// ('/' stays non-empty so clear_cache() takes the
+					// single-page branch instead of purge-all).
+					$component = function_exists( 'wp_parse_url' ) ? wp_parse_url( (string) $path, PHP_URL_PATH ) : parse_url( (string) $path, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
+					if ( null === $component || false === $component ) {
+						$component = $path;
+					}
+					if ( '' !== trim( (string) $component, " \t\n\r\0\x0B/" ) ) {
+						return $this->send_response( null, false, 400, __( 'Invalid path provided.', 'performance-optimisation' ) );
+					}
+					$url_path = '/';
+				} else {
+					$url_path = $sanitized;
+				}
 			}
 
 			$result  = Used_CSS::purge_coupled( $url_path );

@@ -208,8 +208,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				return;
 			}
 
+			// Per-request memo: the flag is rarely set but admin_notices
+			// renders on every wp-admin pageload — read the transient once.
+			static $has_failure = null;
 			try {
-				if ( ! Htaccess_Handler::has_htaccess_failure() ) {
+				if ( null === $has_failure ) {
+					$has_failure = Htaccess_Handler::has_htaccess_failure();
+				}
+				if ( ! $has_failure ) {
 					return;
 				}
 			} catch ( \Throwable $e ) {

@@ -395,7 +395,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$raw_component = $this->request_uri;
 			}
 
-			$url_path = Util::sanitize_cache_url_path( (string) $raw_component, '' !== $domain ? $domain : null );
+			// $raw_component is already path-only (PHP_URL_PATH extracted
+			// above); absolute-form is handled via $is_absolute_form, so no
+			// host context is passed here (it could never trigger).
+			$url_path = Util::sanitize_cache_url_path( (string) $raw_component );
 
 			if ( $is_absolute_form || $is_drive_or_unc || ( '' === $url_path && '' !== trim( trim( (string) $raw_component ), '/' ) ) ) {
 				$this->path_rejected = true;
@@ -2822,6 +2825,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			foreach ( $urls as $u ) {
 				$u              = is_string( $u ) ? $u : (string) $u;
 				$sanitized_path = Util::sanitize_cache_url_path( $u, '' !== $this->domain ? $this->domain : null );
+				// Homepage-vs-probe: only re-parse on the empty path (benign
+				// homepage '' is kept, hostile '' is skipped).
 				if ( '' === $sanitized_path ) {
 					if ( function_exists( 'wp_parse_url' ) ) {
 						$raw_component = wp_parse_url( $u, PHP_URL_PATH );
@@ -2831,12 +2836,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					if ( null === $raw_component || false === $raw_component ) {
 						$raw_component = $u;
 					}
-					if ( '' !== trim( trim( (string) $raw_component ), '/' ) ) {
+					if ( '' !== trim( (string) $raw_component, " \t\n\r\0\x0B/" ) ) {
 						continue;
 					}
 				}
 				$sanitized[] = $sanitized_path;
 			}
+			// TODO: add an $already_sanitized flag to get_file_path() /
+			// safe_path_for_url() so the purge loop below can skip the second
+			// sanitize pass instead of re-parsing each already-sanitized path.
 			$sanitized = array_values( array_unique( $sanitized ) );
 
 			// Purge collected URLs via filesystem; primary URL also clears css/used-css.
@@ -3131,11 +3139,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				} else {
 					$path_only = (string) parse_url( $u, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
 				}
-				if ( '' === trim( (string) $path_only, '/' ) && false !== strpos( $u, '?' ) ) {
+				if ( '' === trim( (string) $path_only, " \t\n\r\0\x0B/" ) && false !== strpos( $u, '?' ) ) {
 					continue;
 				}
 				$sanitized_path = Util::sanitize_cache_url_path( $u, '' !== $this->domain ? $this->domain : null );
-				if ( '' === $sanitized_path ) {
+				// Homepage-vs-probe: keep the benign homepage (''), skip
+				// hostile inputs that sanitize to ''.
+				if ( '' === $sanitized_path && '' !== trim( (string) $path_only, " \t\n\r\0\x0B/" ) ) {
 					continue;
 				}
 				$sanitized[] = $sanitized_path;
@@ -3234,11 +3244,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * helper so every file-writing surface normalizes identically.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Added the optional $allowed_host foreign-host refusal.
 		 * @param string|null $url_path Raw URL path or URL.
+		 * @param string|null $allowed_host Optional canonical host; threaded to the shared helper so
+		 *                                  absolute-form callers refuse foreign hosts.
 		 * @return string Sanitized relative path or empty string.
 		 */
-		private static function sanitize_cache_url_path( ?string $url_path ): string {
-			return Util::sanitize_cache_url_path( $url_path );
+		private static function sanitize_cache_url_path( ?string $url_path, ?string $allowed_host = null ): string {
+			return Util::sanitize_cache_url_path( $url_path, $allowed_host );
 		}
 
 		/**
@@ -3301,16 +3314,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( $this->path_rejected ) {
 				return '';
 			}
-			if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'normalize_cache_host' ) ) {
-				try {
-					$normalized_domain = Util::normalize_cache_host( $this->domain );
-				} catch ( \Throwable $e ) {
-					unset( $e );
-					$normalized_domain = '';
-				}
-				if ( '' === $normalized_domain ) {
-					return '';
-				}
+			// $this->domain is already pinned canonical in __construct —
+			// skip the idn_to_ascii + regex re-normalize per mapping and
+			// only guard the allowlist shape here (fail-closed on '').
+			if ( '' === $this->domain || false !== strpos( $this->domain, '/' ) || false !== strpos( $this->domain, '\\' ) || false !== strpos( $this->domain, '..' ) ) {
+				return '';
 			}
 			$leaf = (string) $filename;
 			if ( '' === $leaf || strlen( $leaf ) > 64 ) {
@@ -3384,9 +3392,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
-		 * Log a blocked cache path traversal probe (once per request).
+		 * Log a blocked cache path traversal probe (once per request + throttled across requests).
 		 *
-		 * Never throws: failures degrade silently to serving uncached.
+		 * The once-per-request static gate alone lets an unauthenticated
+		 * crawler insert one wppo_activity_logs row per request (log-table
+		 * bloat / DB DoS), so a short-TTL transient gate per probe hash
+		 * throttles cross-request repeats (mirroring the
+		 * log_inline_budget_drift throttle). Never throws: failures degrade
+		 * silently to serving uncached.
 		 *
 		 * @since 2.0.0
 		 * @param string $raw_input The hostile input that was rejected.
@@ -3401,6 +3414,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			try {
 				if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 					return;
+				}
+				// Cross-request throttle: one row per probe hash per hour.
+				if ( function_exists( 'get_transient' ) && function_exists( 'set_transient' ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {
+					$throttle_key = Util::transient_key( 'wppo_probe_' . md5( substr( (string) $raw_input, 0, 64 ) ) );
+					$ttl          = defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600;
+					// Strict miss check: a null return (unstubbed transport
+					// in tests) is a miss, not a throttle hit.
+					$throttled = get_transient( $throttle_key );
+					if ( false !== $throttled && null !== $throttled ) {
+						return;
+					}
+					set_transient( $throttle_key, 1, $ttl );
 				}
 				$snippet = str_replace( "\0", '', (string) $raw_input );
 				if ( function_exists( 'sanitize_text_field' ) ) {

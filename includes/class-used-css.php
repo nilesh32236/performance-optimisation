@@ -1209,7 +1209,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( null === $raw || false === $raw ) {
 					$raw = $request_uri;
 				}
-				return Util::sanitize_cache_url_path( (string) $raw, '' !== $this->domain ? $this->domain : null );
+				// Path-only input: no host context (same/foreign-host logic
+				// could never run on a bare path). Full URLs keep the domain
+				// below.
+				return Util::sanitize_cache_url_path( (string) $raw );
 			}
 
 			return Util::sanitize_cache_url_path( $url, '' !== $this->domain ? $this->domain : null );
@@ -1336,23 +1339,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			}
 
 			// A forged host embedded in the explicit $url (e.g. via a filtered
-			// permalink) is not covered by the ambient Host check above: refuse
-			// when the URL host is present and differs from the canonical domain.
-			// An absolute-looking $url whose host normalizes to '' (invalid host
-			// such as 'evil..com') is refused as well instead of being treated
-			// as a relative URL; relative URLs carry no host and still pass.
-			if ( '' !== $url && '' !== $this->domain && function_exists( 'wp_parse_url' ) ) {
-				$url_host_raw = wp_parse_url( $url, PHP_URL_HOST );
-				if ( is_string( $url_host_raw ) && '' !== $url_host_raw ) {
-					$url_host = Util::normalize_cache_host( $url_host_raw );
-					if ( $url_host !== $this->domain ) {
-						return false;
-					}
-				} elseif ( false !== strpos( $url, '://' ) || str_starts_with( ltrim( $url ), '//' ) ) {
-					return false;
-				}
-			}
-
+			// permalink) is not covered by the ambient Host check above.
+			// Host refusal lives in get_used_css_path() → sanitize_cache_path()
+			// (same-host absolute URLs map, foreign/hostless absolute-form
+			// refuses), so no separate parse + normalize happens here — that
+			// would duplicate the exact same work on the write path.
 			$file_path = $this->get_used_css_path( $url );
 			if ( '' === $file_path ) {
 				// Traversal probe or empty domain/root: refuse the write and
