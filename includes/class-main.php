@@ -505,7 +505,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// INP-first preset (#932): one-click 60s heartbeat via the existing
 			// disable_heartbeat path. In-memory only — an explicit user choice
 			// (disable_all/disable_ext) always wins, never overridden.
-			if ( ! empty( $this->options['file_optimisation']['delayJSINPPreset'] ) && ( $this->options['file_optimisation']['heartbeatControl'] ?? 'default' ) === 'default' ) {
+			if ( ! empty( $this->options['file_optimisation']['delayJSINPPreset'] ) && 'default' === ( $this->options['file_optimisation']['heartbeatControl'] ?? 'default' ) ) {
 				$this->options['file_optimisation']['heartbeatControl'] = '60s';
 				$file_optimisation_opts['heartbeatControl']             = '60s';
 			}
@@ -2430,7 +2430,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$resolved   = wp_normalize_path( realpath( $asset_file ) );
 
 			// Validate the resolved path is within the plugin directory before including.
-			if ( false !== $resolved && strpos( $resolved, (string) WPPO_PLUGIN_PATH ) === 0 ) {
+			if ( false !== $resolved && 0 === strpos( $resolved, (string) WPPO_PLUGIN_PATH ) ) {
 				$asset_data = require $resolved;
 			} else {
 				$asset_data = array(
@@ -6215,7 +6215,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		private function has_document_source_rule( array $rules ): bool {
 			foreach ( $rules as $rule ) {
-				if ( is_array( $rule ) && ( $rule['source'] ?? '' ) === 'document' ) {
+				if ( is_array( $rule ) && 'document' === ( $rule['source'] ?? '' ) ) {
 					return true;
 				}
 			}
@@ -6956,7 +6956,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$asset_file = WPPO_PLUGIN_PATH . 'build/main.asset.php';
 			$resolved   = wp_normalize_path( realpath( $asset_file ) );
 
-			if ( false !== $resolved && strpos( $resolved, (string) WPPO_PLUGIN_PATH ) === 0 ) {
+			if ( false !== $resolved && 0 === strpos( $resolved, (string) WPPO_PLUGIN_PATH ) ) {
 				$asset_data = require $resolved;
 			} else {
 				$asset_data = array(

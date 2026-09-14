@@ -1520,7 +1520,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 
 			if ( ! empty( $js_files ) ) {
 				foreach ( $js_files as $js_file ) {
-					if ( isset( $js_file['name'] ) && pathinfo( $js_file['name'], PATHINFO_EXTENSION ) === 'js' ) {
+					if ( isset( $js_file['name'] ) && 'js' === pathinfo( $js_file['name'], PATHINFO_EXTENSION ) ) {
 						++$total_js;
 					}
 				}
@@ -1530,7 +1530,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 
 			if ( ! empty( $css_files ) ) {
 				foreach ( $css_files as $css_file ) {
-					if ( isset( $css_file['name'] ) && pathinfo( $css_file['name'], PATHINFO_EXTENSION ) === 'css' ) {
+					if ( isset( $css_file['name'] ) && 'css' === pathinfo( $css_file['name'], PATHINFO_EXTENSION ) ) {
 						++$total_css;
 					}
 				}
