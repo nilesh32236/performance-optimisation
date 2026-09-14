@@ -6661,7 +6661,79 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					|| false !== strpos( $content, 'do_blocks' ) ) {
 					return true;
 				}
+				// Generic brackets (e.g. '[hello]', '[2024]') are not proof of
+				// a shortcode: only bail when a registered shortcode tag is
+				// present. Unregistered/plain-text brackets must not disable
+				// the optimization. Fail-open: when the Shortcode API is
+				// unavailable the generic match is kept as the bail signal.
+				if ( false === strpos( $content, '[' ) ) {
+					return false;
+				}
+				if ( function_exists( 'get_shortcode_regex' ) ) {
+					try {
+						$pattern = (string) get_shortcode_regex();
+						if ( '' === $pattern ) {
+							return false;
+						}
+						if ( 1 !== preg_match_all( '/' . $pattern . '/s', $content, $matches ) || empty( $matches[2] ) ) {
+							return false;
+						}
+						if ( function_exists( 'shortcode_exists' ) ) {
+							foreach ( $matches[2] as $tag ) {
+								if ( '' !== (string) $tag && shortcode_exists( (string) $tag ) ) {
+									return true;
+								}
+							}
+							return false;
+						}
+						return true;
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return true;
+					}
+				}
 				return 1 === preg_match( '/\[[a-zA-Z0-9_-]+(?:\s+[^\]]*)?\/?\]/', $content );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
+		 * Whether a block name is a registered block type.
+		 *
+		 * A `wp-block-<slug>` handle does not guarantee a matching
+		 * `core/<slug>` block type exists: core-registered handles without a
+		 * 1:1 block-type mapping never match {@see Util::content_has_block()}
+		 * and would otherwise always be omitted whenever queued. Fail-open in
+		 * the omission direction: when the registry API is unavailable or
+		 * throws, the type is treated as known so the legacy omission path is
+		 * unchanged; only a positive "not registered" answer keeps the asset.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $block_name Block name e.g. 'core/cover'.
+		 * @return bool True when the type is (or may be) registered.
+		 */
+		private function is_registered_block_type( $block_name ): bool {
+			try {
+				if ( ! class_exists( 'WP_Block_Type_Registry' ) ) {
+					return true;
+				}
+				if ( ! method_exists( 'WP_Block_Type_Registry', 'get_instance' ) ) {
+					return true;
+				}
+				$registry = \WP_Block_Type_Registry::get_instance(); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedClassFound
+				if ( ! is_object( $registry ) ) {
+					return true;
+				}
+				if ( method_exists( $registry, 'is_registered' ) ) {
+					return (bool) $registry->is_registered( (string) $block_name );
+				}
+				if ( method_exists( $registry, 'get_registered' ) ) {
+					return null !== $registry->get_registered( (string) $block_name );
+				}
+				return true;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return true;
@@ -6679,17 +6751,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * `wppo_allow_hidden_block_asset` filter (return truthy to keep the
 		 * asset for that block). The filter is only applied when a listener is
 		 * registered (`has_filter()` guard). Fail-open: missing content, missing
-		 * APIs, or any throwable returns false (keep the asset — degrade to
-		 * unoptimized, never fatal, never unstyled).
+		 * APIs, an unregistered block type, or any throwable returns false (keep
+		 * the asset — degrade to unoptimized, never fatal, never unstyled).
+		 * Callers may pass a shared `$presence` map so the content parse in
+		 * {@see Util::content_has_block()} runs at most once per block type per
+		 * pass instead of once per queued handle.
 		 *
 		 * @since NEXT
 		 *
 		 * @param string $block_name Block name e.g. 'core/cover'.
 		 * @param string $handle     Queued style handle e.g. 'wp-block-cover'.
 		 * @param string $content    Singular post content to check against.
+		 * @param array  $presence   Optional shared presence cache (block_name => bool), updated by reference.
 		 * @return bool True when the asset should be dequeued.
 		 */
-		private function should_omit_hidden_block_asset( $block_name, $handle, $content ): bool {
+		private function should_omit_hidden_block_asset( $block_name, $handle, $content, &$presence = array() ): bool {
 			try {
 				if ( '' === (string) $block_name || '' === (string) $handle ) {
 					return false;
@@ -6697,7 +6773,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( '' === (string) $content ) {
 					return false;
 				}
-				if ( Util::content_has_block( (string) $content, (string) $block_name ) ) {
+				if ( ! $this->is_registered_block_type( (string) $block_name ) ) {
+					return false;
+				}
+				$key = (string) $block_name;
+				if ( ! array_key_exists( $key, (array) $presence ) ) {
+					$presence[ $key ] = Util::content_has_block( (string) $content, (string) $block_name );
+				}
+				if ( ! empty( $presence[ $key ] ) ) {
 					return false;
 				}
 				$allowed = false;
@@ -6722,15 +6805,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Singular views only: a single `post_content` is authoritative only
 		 * there. Archives, blog-home, search, and other non-singular views bail
 		 * out immediately so stylesheets needed by other posts in the loop are
-		 * never stripped. Singular gating alone does not protect composite
+		 * never stripped. Block themes bail out as well: header/footer
+		 * template parts, site chrome, and widgets render outside
+		 * `post_content`, so type-absence cannot prove the asset is unused
+		 * there. Singular gating alone does not protect composite
 		 * sources: reusable blocks, patterns, template parts, widgets, and
 		 * shortcode/`do_blocks`-injected blocks can render stylesheets for
 		 * blocks absent from `post_content`, so the pass additionally bails
 		 * out entirely when the content references such out-of-content
 		 * sources (see {@see content_has_unresolvable_block_sources()}).
-		 * Blocks rendered purely from outside `post_content` (e.g. header /
-		 * footer template parts, widgets) remain a known limitation — use the
-		 * `wppo_allow_hidden_block_asset` filter to keep those assets.
+		 * Remaining outside-`post_content` rendering on classic themes is a
+		 * known limitation — use the `wppo_allow_hidden_block_asset` filter
+		 * to keep those assets.
 		 *
 		 * Runs on `wp_enqueue_scripts` at PHP_INT_MAX - 2: after core enqueues
 		 * but before `minify_queued_styles()` and `Cache::combine_css()`, so
@@ -6763,6 +6849,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// keep every asset.
 				if ( ! function_exists( 'is_singular' ) || ! is_singular() ) {
 					return;
+				}
+
+				// Fail-open for composite rendering contexts: on block themes
+				// the header/footer template parts and site chrome never live
+				// in post_content, so a queued gallery/cover stylesheet needed
+				// by the chrome would be misclassified as hidden. Bail out
+				// entirely (keep every asset) when a block theme is active.
+				if ( function_exists( 'wp_is_block_theme' ) ) {
+					try {
+						if ( wp_is_block_theme() ) {
+							return;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return;
+					}
 				}
 
 				// Defer to core instead of duplicating it: when the 6.9
@@ -6813,11 +6915,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 
 				// Memoize the omit decision per queued handle so the content
-				// parse in should_omit_hidden_block_asset() runs at most once
-				// per handle. Keyed by handle (not block name) because the
-				// wppo_allow_hidden_block_asset filter takes ($block_name,
-				// $handle) and must run per queued handle.
+				// parse runs at most once per block type per pass. $presence
+				// caches Util::content_has_block() results by block name
+				// (shared across handles); $decisions stays keyed by handle
+				// because the wppo_allow_hidden_block_asset filter takes
+				// ($block_name, $handle) and must run per queued handle.
 				$decisions = array();
+				$presence  = array();
 				foreach ( $wp_styles->queue as $handle ) {
 					if ( ! is_string( $handle ) || 0 !== strpos( $handle, 'wp-block-' ) ) {
 						continue;
@@ -6837,7 +6941,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					}
 					$block_name = 'core/' . $slug;
 					if ( ! array_key_exists( $handle, $decisions ) ) {
-						$decisions[ $handle ] = $this->should_omit_hidden_block_asset( $block_name, $handle, $content );
+						$decisions[ $handle ] = $this->should_omit_hidden_block_asset( $block_name, $handle, $content, $presence );
 					}
 					if ( $decisions[ $handle ] ) {
 						try {
