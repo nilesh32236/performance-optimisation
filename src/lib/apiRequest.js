@@ -82,7 +82,8 @@ const refreshNonce = async () => {
 /**
  * Make a REST API call to the Performance Optimisation plugin.
  *
- * Mutates wppoSettings.settings globally on successful `update_settings` calls.
+ * Mutates wppoSettings.settings globally on successful `update_settings` or
+ * `restore_settings` calls.
  *
  * @since 1.0.0
  * @param {string}      action   The REST endpoint action (e.g. 'update_settings').
@@ -138,7 +139,12 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 		// Mutates the global wppoSettings.settings so all components reading from it
 		// (e.g. WelcomePanel.STEPS.isEnabled) reflect the new state without re-rendering.
 		// This is an implicit coupling — the global serves as a shared reactive store.
-		if ( 'update_settings' === action && data.success && data.data ) {
+		// restore_settings returns the full restored settings payload, so it syncs too.
+		if (
+			( 'update_settings' === action || 'restore_settings' === action ) &&
+			data.success &&
+			data.data
+		) {
 			wppoSettings.settings = Object.freeze( data.data );
 		}
 		return data;

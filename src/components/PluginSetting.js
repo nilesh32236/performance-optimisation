@@ -15,6 +15,7 @@ import {
 	faExclamationCircle,
 	faHistory,
 	faTachometerAlt,
+	faUndo,
 } from '@fortawesome/free-solid-svg-icons';
 import ConfirmDialog from './common/ConfirmDialog';
 import FeatureHeader from './common/FeatureHeader';
@@ -209,6 +210,13 @@ const PluginSetting = ( { options } ) => {
 		notify: notifyImport,
 		dismiss: dismissImport,
 	} = useNotice();
+	const {
+		notice: undoNotice,
+		notify: notifyUndo,
+		dismiss: dismissUndo,
+	} = useNotice();
+	const [ undoAvailable, setUndoAvailable ] = useState( false );
+	const [ isRestoring, setIsRestoring ] = useState( false );
 	const [ confirmImport, setConfirmImport ] = useState( false );
 	const fileInputRef = useRef( null );
 	const cancelledRef = useRef( false );
@@ -233,6 +241,69 @@ const PluginSetting = ( { options } ) => {
 			readerRef.current = null;
 		};
 	}, [] );
+
+	// One-click undo: check whether a prior-settings snapshot exists.
+	// Best-effort — a failed check simply leaves the Undo button disabled.
+	// Wrapped in Promise.resolve() so a mocked apiCall returning a
+	// non-promise (e.g. undefined in Jest) cannot throw synchronously.
+	useEffect( () => {
+		let cancelled = false;
+		Promise.resolve( apiCall( 'settings_snapshot', {}, 'GET' ) )
+			.then( ( data ) => {
+				if ( cancelled ) {
+					return;
+				}
+				if ( data?.success && data?.data?.has_snapshot ) {
+					setUndoAvailable( true );
+				}
+			} )
+			.catch( () => {
+				// Ignore: no snapshot advertised.
+			} );
+		return () => {
+			cancelled = true;
+		};
+	}, [] );
+
+	const restoreSettings = async () => {
+		setIsRestoring( true );
+		dismissUndo();
+		try {
+			const data = await apiCall( 'restore_settings', {} );
+			if ( data?.success ) {
+				setUndoAvailable( false );
+				notifyUndo( {
+					type: 'success',
+					message:
+						data.message ||
+						__(
+							'Settings restored to the previous snapshot.',
+							'performance-optimisation'
+						),
+				} );
+			} else {
+				notifyUndo( {
+					type: 'error',
+					message:
+						data?.message ||
+						__(
+							'No settings snapshot available to restore.',
+							'performance-optimisation'
+						),
+				} );
+			}
+		} catch {
+			notifyUndo( {
+				type: 'error',
+				message: __(
+					'Error restoring settings.',
+					'performance-optimisation'
+				),
+			} );
+		} finally {
+			setIsRestoring( false );
+		}
+	};
 
 	// Phase 2 — PageSpeed API key state.
 	// Security: use boolean flag only, do not expose the actual key to the client.
@@ -1101,6 +1172,52 @@ const PluginSetting = ( { options } ) => {
 							'performance-optimisation'
 						) }
 					/>
+				</FeatureCard>
+
+				{ /* One-click undo — restores the prior settings snapshot. */ }
+				<FeatureCard
+					title={ __(
+						'Undo Last Settings Change',
+						'performance-optimisation'
+					) }
+					icon={ <FontAwesomeIcon icon={ faUndo } /> }
+				>
+					<p className="wppo-text-muted wppo-mb-16">
+						{ __(
+							'Restores your settings to how they were before the last save or import. Useful if a recent change broke your site.',
+							'performance-optimisation'
+						) }
+					</p>
+					{ undoNotice && (
+						<NoticeBanner
+							type={ undoNotice.type }
+							message={ undoNotice.message }
+							className="wppo-mb-16"
+							onDismiss={ dismissUndo }
+						/>
+					) }
+					<LoadingSubmitButton
+						className="wppo-button wppo-button--secondary"
+						onClick={ restoreSettings }
+						isLoading={ isRestoring }
+						disabled={ ! undoAvailable }
+						label={ __(
+							'Undo Last Change',
+							'performance-optimisation'
+						) }
+						loadingLabel={ __(
+							'Restoring…',
+							'performance-optimisation'
+						) }
+					/>
+					{ ! undoAvailable && ! undoNotice && (
+						<p className="wppo-text-muted wppo-text-small wppo-mt-10">
+							{ __(
+								'No snapshot available yet. A snapshot is saved automatically before each settings change.',
+								'performance-optimisation'
+							) }
+						</p>
+					) }
 				</FeatureCard>
 
 				<div className="wppo-grid-2-col">

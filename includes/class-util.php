@@ -129,6 +129,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			'wppo_object_cache_circuit',               // Object_Cache::CIRCUIT_OPTION.
 			'wppo_object_cache_circuit_dismissed',     // Object_Cache::CIRCUIT_DISMISSED_OPTION.
 			'wppo_used_css_last_full_regen',           // Used_CSS::LAST_FULL_REGEN_OPTION (issue #1107).
+			'wppo_settings_snapshot',                  // Single prior wppo_settings copy for one-click undo (issue #1144).
 		);
 
 		/**
@@ -154,6 +155,112 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Option name storing the single prior copy of `wppo_settings` for one-click undo.
+		 *
+		 * Written by {@see self::take_settings_snapshot()} before every settings
+		 * save (REST `update_settings`/`import_settings`, WP-CLI
+		 * `settings update`/`import`) and consumed by
+		 * {@see self::restore_settings_snapshot()}. Multisite-safe: stored via
+		 * plain per-site `get_option()`/`update_option()`, never network-wide.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		public const SETTINGS_SNAPSHOT_OPTION = 'wppo_settings_snapshot';
+
+		/**
+		 * Read the stored prior-settings snapshot.
+		 *
+		 * @since NEXT
+		 * @return array|null Snapshot array with `settings` + `taken_at` keys, or null when absent/malformed.
+		 */
+		public static function get_settings_snapshot(): ?array {
+			try {
+				if ( ! function_exists( 'get_option' ) ) {
+					return null;
+				}
+				$snapshot = get_option( self::SETTINGS_SNAPSHOT_OPTION, null );
+				if ( ! is_array( $snapshot ) || ! isset( $snapshot['settings'] ) || ! is_array( $snapshot['settings'] ) ) {
+					return null;
+				}
+				return $snapshot;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return null;
+			}
+		}
+
+		/**
+		 * Store the given settings as the one-click-undo snapshot.
+		 *
+		 * Fail-open: any failure returns false and must never block the
+		 * settings save that triggered it.
+		 *
+		 * @since NEXT
+		 * @param array|null $settings Settings to snapshot (defaults to the current stored settings).
+		 * @return bool True when the snapshot was written.
+		 */
+		public static function take_settings_snapshot( ?array $settings = null ): bool {
+			try {
+				if ( ! function_exists( 'update_option' ) ) {
+					return false;
+				}
+				if ( null === $settings ) {
+					$settings = self::get_settings();
+				}
+				$payload = array(
+					'settings' => $settings,
+					'taken_at' => function_exists( 'time' ) ? time() : 0,
+				);
+				return (bool) update_option( self::SETTINGS_SNAPSHOT_OPTION, $payload, false );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Restore `wppo_settings` from the stored snapshot.
+		 *
+		 * Fail-open: snapshot-restore failure leaves the current settings
+		 * intact and returns null; never fatal.
+		 *
+		 * @since NEXT
+		 * @return array|null The restored settings array, or null when no valid snapshot exists or the write failed.
+		 */
+		public static function restore_settings_snapshot(): ?array {
+			try {
+				$snapshot = self::get_settings_snapshot();
+				if ( null === $snapshot ) {
+					return null;
+				}
+				if ( ! function_exists( 'update_option' ) ) {
+					return null;
+				}
+				$restored = $snapshot['settings'];
+				// The memo holds the pre-restore DB state (kept fresh for
+				// same-request writes by the update_option_wppo_settings
+				// hook), so update_option()'s ambiguous false return can be
+				// disambiguated without a direct get_option() read: false
+				// with identical values means "unchanged" (success), false
+				// with differing values means the write failed.
+				$before  = self::get_settings();
+				$updated = update_option( 'wppo_settings', $restored );
+				self::set_settings_cache( $restored );
+				if ( ! $updated && $before !== $restored ) {
+					// Write failed: roll the memo back so it keeps
+					// describing the intact current settings (fail-open).
+					self::set_settings_cache( $before );
+					return null;
+				}
+				return $restored;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return null;
+			}
+		}
+
+		/**
 		 * Get default settings structure for fresh installs.
 		 *
 		 * Single source of truth for Main::__construct() defaults,
@@ -163,6 +270,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * empty (no defaults) for BC, database_cleanup carries only the
 		 * additive autoloadThreshold default (issue #934).
 		 *
+		 * Safe-by-default (issue #1144): fresh installs enable the page cache
+		 * only. Every aggressive pipeline key (JS/CSS merge, delay/defer,
+		 * unused-CSS removal, critical CSS, minification) stays OFF until
+		 * explicitly enabled. Existing sites are unaffected: stored options
+		 * are never rewritten by a defaults change.
+		 *
 		 * @since 2.0.0
 		 * @return array<string, array<string, mixed>> Default settings keyed by tab.
 		 */
@@ -171,7 +284,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				'cache_settings'        => array(
 					'enableLoggedInCache' => false,
 					'loggedInCacheRoles'  => array(),
-					'enableCache'         => false,
+					'enableCache'         => true,
 					'cacheLife'           => 0,
 					'ttlOverrides'        => array(),
 					'wooSafeMode'         => true,

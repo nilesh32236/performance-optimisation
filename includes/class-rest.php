@@ -111,6 +111,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+				'settings_snapshot'         => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'get_settings_snapshot' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
+				'restore_settings'          => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'restore_settings' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
 				'database_cleanup'          => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'database_cleanup' ),
@@ -676,6 +688,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			$options = Util::get_settings();
 
+			// One-click undo (issue #1144): snapshot the prior settings before
+			// overwriting. Fail-open: a snapshot failure must never block the save.
+			try {
+				Util::take_settings_snapshot( $options );
+			} catch ( \Throwable $snapshot_error ) {
+				unset( $snapshot_error );
+			}
+
 			// Preserve the pagespeed_api_key when the request omits it.
 			if ( 'performance_audit' === $tab && ! isset( $params['settings']['pagespeed_api_key'] ) && isset( $options['performance_audit']['pagespeed_api_key'] ) ) {
 				$sanitized_settings['pagespeed_api_key'] = sanitize_text_field( $options['performance_audit']['pagespeed_api_key'] );
@@ -1210,6 +1230,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				return $this->send_response( $response_settings, true, 200, __( 'No changes detected, settings are already up-to-date', 'performance-optimisation' ) );
 			}
 
+			// One-click undo (issue #1144): snapshot the prior settings before
+			// overwriting. Fail-open: a snapshot failure must never block the save.
+			try {
+				Util::take_settings_snapshot( $existing_settings );
+			} catch ( \Throwable $snapshot_error ) {
+				unset( $snapshot_error );
+			}
+
 			if ( ! update_option( 'wppo_settings', $merged_settings ) ) {
 				return $this->send_response( null, false, 500, __( 'Failed to update settings', 'performance-optimisation' ) );
 			}
@@ -1222,6 +1250,64 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$this->remove_sensitive_settings_from_response( $response_settings );
 
 			return $this->send_response( $response_settings, true, 200, __( 'Settings updated successfully', 'performance-optimisation' ) );
+		}
+
+		/**
+		 * Report whether a prior-settings snapshot exists for one-click undo.
+		 *
+		 * Read-only: exposes only the snapshot availability + timestamp, never
+		 * the snapshot payload itself.
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		public function get_settings_snapshot( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Signature must match the REST callback.
+			$snapshot = Util::get_settings_snapshot();
+
+			if ( ! is_array( $snapshot ) ) {
+				return $this->send_response(
+					array(
+						'has_snapshot' => false,
+						'taken_at'     => null,
+					)
+				);
+			}
+
+			return $this->send_response(
+				array(
+					'has_snapshot' => true,
+					'taken_at'     => isset( $snapshot['taken_at'] ) ? absint( $snapshot['taken_at'] ) : null,
+				)
+			);
+		}
+
+		/**
+		 * Restore `wppo_settings` from the prior-settings snapshot (one-click undo).
+		 *
+		 * Fail-open: a restore failure leaves the current settings intact and
+		 * returns an error notice; never fatal. The restore itself takes no new
+		 * snapshot, so a second undo cannot clobber the restored state.
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		public function restore_settings( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Signature must match the REST callback.
+			$restored = Util::restore_settings_snapshot();
+
+			if ( ! is_array( $restored ) ) {
+				return $this->send_response( null, false, 404, __( 'No settings snapshot available to restore.', 'performance-optimisation' ) );
+			}
+
+			if ( class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
+				Telemetry::invalidate_audit_cache();
+			}
+
+			$response_settings = $restored;
+			$this->remove_sensitive_settings_from_response( $response_settings );
+
+			return $this->send_response( $response_settings, true, 200, __( 'Settings restored successfully.', 'performance-optimisation' ) );
 		}
 
 		/**
