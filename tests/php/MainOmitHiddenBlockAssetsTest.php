@@ -482,4 +482,136 @@ class MainOmitHiddenBlockAssetsTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertSame( array(), $dequeued );
 	}
+
+	/**
+	 * Content referencing a reusable block bails out (fail-open).
+	 *
+	 * @return void
+	 */
+	public function test_reusable_block_content_bails_out(): void {
+		$dequeued = array();
+		$this->install_stubs(
+			array(
+				'content'    => '<!-- wp:block {"ref":123} /-->',
+				'queue'      => array( 'wp-block-gallery' ),
+				'registered' => array(
+					'wp-block-gallery' => $this->registered_style( 'http://example.com/wp-includes/blocks/gallery/style.css' ),
+				),
+			),
+			$dequeued
+		);
+
+		$this->make_main( $this->enabled_options() )->omit_hidden_block_assets();
+
+		$this->assertSame( array(), $dequeued );
+	}
+
+	/**
+	 * Content with a pattern reference bails out (fail-open).
+	 *
+	 * @return void
+	 */
+	public function test_pattern_content_bails_out(): void {
+		$dequeued = array();
+		$this->install_stubs(
+			array(
+				'content'    => '<!-- wp:pattern {"slug":"my-theme/my-pattern"} /-->',
+				'queue'      => array( 'wp-block-gallery' ),
+				'registered' => array(
+					'wp-block-gallery' => $this->registered_style( 'http://example.com/wp-includes/blocks/gallery/style.css' ),
+				),
+			),
+			$dequeued
+		);
+
+		$this->make_main( $this->enabled_options() )->omit_hidden_block_assets();
+
+		$this->assertSame( array(), $dequeued );
+	}
+
+	/**
+	 * Content with a shortcode bails out (fail-open).
+	 *
+	 * @return void
+	 */
+	public function test_shortcode_content_bails_out(): void {
+		$dequeued = array();
+		$this->install_stubs(
+			array(
+				'content'    => '<!-- wp:shortcode -->[my-gallery ids="1,2,3"]<!-- /wp:shortcode -->',
+				'queue'      => array( 'wp-block-gallery' ),
+				'registered' => array(
+					'wp-block-gallery' => $this->registered_style( 'http://example.com/wp-includes/blocks/gallery/style.css' ),
+				),
+			),
+			$dequeued
+		);
+
+		$this->make_main( $this->enabled_options() )->omit_hidden_block_assets();
+
+		$this->assertSame( array(), $dequeued );
+	}
+
+	/**
+	 * A plugin/theme file merely containing block-library in its path is kept.
+	 *
+	 * @return void
+	 */
+	public function test_block_library_path_requires_core_path(): void {
+		$dequeued = array();
+		$this->install_stubs(
+			array(
+				'content'    => '<!-- wp:core/cover --><!-- /wp:core/cover -->',
+				'queue'      => array( 'wp-block-gallery' ),
+				'registered' => array(
+					'wp-block-gallery' => $this->registered_style( 'http://example.com/wp-content/plugins/my-block-library/gallery.css' ),
+				),
+			),
+			$dequeued
+		);
+
+		$this->make_main( $this->enabled_options() )->omit_hidden_block_assets();
+
+		$this->assertSame( array(), $dequeued );
+	}
+
+	/**
+	 * The omit decision is memoized per handle so the filter runs per handle.
+	 *
+	 * @return void
+	 */
+	public function test_filter_runs_per_queued_handle(): void {
+		$dequeued = array();
+		$this->install_filter_registry();
+		$this->install_stubs(
+			array(
+				'content'    => '<!-- wp:core/cover --><!-- /wp:core/cover -->',
+				'queue'      => array( 'wp-block-gallery', 'wp-block-image' ),
+				'registered' => array(
+					'wp-block-gallery' => $this->registered_style( 'http://example.com/wp-includes/blocks/gallery/style.css' ),
+					'wp-block-image'   => $this->registered_style( 'http://example.com/wp-includes/blocks/image/style.css' ),
+				),
+			),
+			$dequeued
+		);
+		$seen = array();
+		add_filter(
+			'wppo_allow_hidden_block_asset',
+			static function ( $allowed, $block_name, $handle ) use ( &$seen ) {
+				unset( $allowed );
+				$seen[] = $block_name . '|' . $handle;
+				return false;
+			},
+			10,
+			3
+		);
+
+		$this->make_main( $this->enabled_options() )->omit_hidden_block_assets();
+
+		$this->assertSame(
+			array( 'core/gallery|wp-block-gallery', 'core/image|wp-block-image' ),
+			$seen
+		);
+		$this->assertSame( array( 'wp-block-gallery', 'wp-block-image' ), $dequeued );
+	}
 }

@@ -6618,12 +6618,53 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					return false;
 				}
 				if ( false !== strpos( $src, 'block-library' ) ) {
-					return true;
+					// Require a core path: a plugin/theme file merely
+					// containing 'block-library' in its path (e.g.
+					// /plugins/my-block-library/style.css) is not a core
+					// asset and must never be omitted.
+					return false !== strpos( $src, 'wp-includes' );
 				}
 				return false !== strpos( $src, 'wp-includes' ) && false !== strpos( $src, '/blocks/' );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;
+			}
+		}
+
+		/**
+		 * Whether singular post content references block sources outside itself.
+		 *
+		 * Reusable blocks (`wp:block` refs), patterns (`wp:pattern`),
+		 * template parts (`wp:template-part`), shortcode blocks
+		 * (`wp:shortcode`, generic `[...]` shortcodes, `do_blocks` output),
+		 * and similar markers render stylesheets for blocks absent from the
+		 * literal post content, so type-absence cannot prove the asset is
+		 * unused. Fail-open: any throwable (or a detected marker) reports
+		 * unresolvable (the caller bails and keeps every asset).
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $content Singular post content to check.
+		 * @return bool True when the content references out-of-content block sources.
+		 */
+		private function content_has_unresolvable_block_sources( $content ): bool {
+			try {
+				$content = (string) $content;
+				if ( '' === $content ) {
+					return false;
+				}
+				if ( false !== strpos( $content, '<!-- wp:block ' )
+					|| false !== strpos( $content, '<!-- wp:block/' )
+					|| false !== strpos( $content, 'wp:pattern' )
+					|| false !== strpos( $content, 'wp:template-part' )
+					|| false !== strpos( $content, 'wp:shortcode' )
+					|| false !== strpos( $content, 'do_blocks' ) ) {
+					return true;
+				}
+				return 1 === preg_match( '/\[[a-zA-Z0-9_-]+(?:\s+[^\]]*)?\/?\]/', $content );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
 			}
 		}
 
@@ -6680,9 +6721,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * Singular views only: a single `post_content` is authoritative only
 		 * there. Archives, blog-home, search, and other non-singular views bail
-		 * out immediately so stylesheets needed by other posts in the loop (or
-		 * by reusable blocks, patterns, template parts, widgets, and
-		 * shortcode/`do_blocks`-injected blocks) are never stripped.
+		 * out immediately so stylesheets needed by other posts in the loop are
+		 * never stripped. Singular gating alone does not protect composite
+		 * sources: reusable blocks, patterns, template parts, widgets, and
+		 * shortcode/`do_blocks`-injected blocks can render stylesheets for
+		 * blocks absent from `post_content`, so the pass additionally bails
+		 * out entirely when the content references such out-of-content
+		 * sources (see {@see content_has_unresolvable_block_sources()}).
+		 * Blocks rendered purely from outside `post_content` (e.g. header /
+		 * footer template parts, widgets) remain a known limitation — use the
+		 * `wppo_allow_hidden_block_asset` filter to keep those assets.
 		 *
 		 * Runs on `wp_enqueue_scripts` at PHP_INT_MAX - 2: after core enqueues
 		 * but before `minify_queued_styles()` and `Cache::combine_css()`, so
@@ -6711,7 +6759,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// Only a singular post_content is authoritative. On archives,
 				// home, search, and other composite views the queued stylesheet
 				// may belong to any post in the loop, so never omit there.
-				if ( function_exists( 'is_singular' ) && ! is_singular() ) {
+				// Fail-open: when singular cannot be verified (missing API),
+				// keep every asset.
+				if ( ! function_exists( 'is_singular' ) || ! is_singular() ) {
 					return;
 				}
 
@@ -6754,8 +6804,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					return;
 				}
 
-				// Memoize the omit decision per block name so the content parse in
-				// should_omit_hidden_block_asset() runs at most once per block type.
+				// Fail-open: reusable blocks, patterns, template parts, and
+				// shortcode-injected blocks render stylesheets for blocks
+				// absent from the literal post content, so type-absence cannot
+				// prove the asset is unused — keep everything on such pages.
+				if ( $this->content_has_unresolvable_block_sources( $content ) ) {
+					return;
+				}
+
+				// Memoize the omit decision per queued handle so the content
+				// parse in should_omit_hidden_block_asset() runs at most once
+				// per handle. Keyed by handle (not block name) because the
+				// wppo_allow_hidden_block_asset filter takes ($block_name,
+				// $handle) and must run per queued handle.
 				$decisions = array();
 				foreach ( $wp_styles->queue as $handle ) {
 					if ( ! is_string( $handle ) || 0 !== strpos( $handle, 'wp-block-' ) ) {
@@ -6775,10 +6836,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						continue;
 					}
 					$block_name = 'core/' . $slug;
-					if ( ! array_key_exists( $block_name, $decisions ) ) {
-						$decisions[ $block_name ] = $this->should_omit_hidden_block_asset( $block_name, $handle, $content );
+					if ( ! array_key_exists( $handle, $decisions ) ) {
+						$decisions[ $handle ] = $this->should_omit_hidden_block_asset( $block_name, $handle, $content );
 					}
-					if ( $decisions[ $block_name ] ) {
+					if ( $decisions[ $handle ] ) {
 						try {
 							wp_dequeue_style( $handle );
 						} catch ( \Throwable $e ) {
