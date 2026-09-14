@@ -304,6 +304,61 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
+		 * Built-in Critical CSS safelist presets (issue #1102).
+		 *
+		 * Above-fold extraction can never see hidden/dynamic selectors
+		 * (Elementor popups render in hidden containers / JS portals;
+		 * dynamic-token carriers only resolve at runtime), so these are
+		 * always preserved — even when the user `ccssSafelistExtra` setting
+		 * is empty. Mirrors the popup/Elementor subset of
+		 * {@see Used_CSS::get_safelist_presets()} so the two pipelines
+		 * cannot drift. Prefix entries ending in '-' or '*' match via
+		 * prefix in {@see matches_ccss_safelist()}; attribute entries match
+		 * by attribute-name substring. Filterable via the
+		 * `wppo_ccss_safelist_presets` filter. Local data only — no remote
+		 * fetch. Per-site settings make this multisite-safe by construction.
+		 *
+		 * Kept separate from {@see get_ccss_safelist()} (which stays
+		 * user-only) so the checksum freshness probe gate in
+		 * {@see maybe_check_stale_and_requeue()} keeps its pre-#1038
+		 * no-churn behaviour when no user safelist is configured.
+		 *
+		 * @return string[]
+		 * @since NEXT
+		 */
+		public static function get_ccss_safelist_presets(): array {
+			$presets = array(
+				'.elementor-',
+				'.elementor-popup-',
+				'.e-con*',
+				'.e-popup-',
+				'.dialog-',
+				'.popup-',
+				'.modal-',
+				'.mfp-',
+				'.swal2-',
+				'[data-elementor-type]',
+				'[data-elementor-type="popup"]',
+			);
+
+			/**
+			 * Filters the built-in Critical CSS safelist presets.
+			 *
+			 * @param string[] $presets Built-in safelisted selectors.
+			 * @since NEXT
+			 */
+			if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_ccss_safelist_presets' ) ) {
+				$filtered = apply_filters( 'wppo_ccss_safelist_presets', $presets );
+				if ( is_array( $filtered ) ) {
+					$filtered = array_filter( $filtered, 'is_string' );
+					$presets  = array_values( array_filter( array_unique( array_map( 'trim', $filtered ) ) ) );
+				}
+			}
+
+			return $presets;
+		}
+
+		/**
 		 * User safelist of selectors always kept in Critical CSS (issue #1038).
 		 *
 		 * Reads the additive `file_optimisation.ccssSafelistExtra` setting
@@ -414,6 +469,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			}
 
 			return false;
+		}
+
+		/**
+		 * Effective Critical CSS safelist: built-in presets + user entries.
+		 *
+		 * Merges {@see get_ccss_safelist_presets()} with the user
+		 * {@see get_ccss_safelist()} list (deduplicated). Extraction checks
+		 * both sources via {@see matches_above_fold_single()}; this helper
+		 * exposes the merged view for diagnostics and tests. Local data
+		 * only — no remote fetch.
+		 *
+		 * @return string[] Merged safelisted selectors.
+		 * @since NEXT
+		 */
+		public static function get_ccss_effective_safelist(): array {
+			try {
+				$merged = array_merge( self::get_ccss_safelist_presets(), self::get_ccss_safelist() );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+			return array_values( array_unique( array_filter( array_map( 'trim', $merged ) ) ) );
 		}
 
 		/**
@@ -2054,6 +2131,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// always kept. Empty safelist keeps current behaviour verbatim.
 			if ( self::matches_ccss_safelist( $selector, $safelist ) ) {
 				return true;
+			}
+
+			// Built-in presets (issue #1102): Elementor/popup/dynamic-token
+			// selectors are always preserved, even with an empty user
+			// safelist, so capped extraction can never break hidden content
+			// (popups, modals, dialogs). Same match semantics as the user
+			// safelist; fail-open on any filter failure.
+			try {
+				if ( self::matches_ccss_safelist( $selector, self::get_ccss_safelist_presets() ) ) {
+					return true;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 			}
 
 			// Remove pseudo-classes and pseudo-elements for matching.

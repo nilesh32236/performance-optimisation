@@ -3844,6 +3844,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			Used_CSS::delete_all_used_css();
 
+			// Purge-coupled CCSS invalidation (issue #1102): a full cache
+			// clear drops per-template critical-CSS variants alongside the
+			// page cache and used-CSS so stale above-fold output cannot
+			// survive a purge. Single-page clears leave CCSS alone (per
+			// template, not per URL — wiping it there would only churn).
+			// Fail-open: never fatal when the class is unavailable.
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
+					Critical_CSS::clear_all();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
 			return $res1 && $res2;
 		}
 
