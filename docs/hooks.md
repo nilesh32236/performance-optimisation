@@ -316,7 +316,7 @@ Use this for any script that must run before the first user interaction — a mo
 ---
 
 ### `wppo_delay_js_allowed_hosts`
-Filters the allowlist of additional remote hosts the lazyload bundle may load deferred external scripts from. Delay-JS hydration only executes a deferred script when its `wppo-src` URL uses http(s) and points at the same origin or an allowlisted host (a built-in list of common analytics/marketing/utility CDNs ships in `src/lazyload.js`). Hosts added here are mirrored to the client as `wppoDelayConfig.allowedScriptHosts`. @since 2.0.0.
+Filters the allowlist of additional remote hosts the lazyload bundle may load deferred external scripts from. Delay-JS hydration only executes a deferred script when its `wppo-src` URL uses http(s) and points at the same origin or an allowlisted host (a built-in list of common analytics/marketing/utility CDNs ships in `src/lazyload.js`). Hosts added here are mirrored to the client as `wppoDelayConfig.allowedScriptHosts`. Entries may be bare hostnames (Unicode IDN accepted), IP literals (IPv4/IPv6, optionally in brackets with a port), bare `host:port` pairs, full URLs, or scheme-relative URLs (all reduced to their host part); ports are stripped and entries are validated fail-closed — invalid entries are dropped before exposure to the client. A single `'*'` entry intentionally disables the deferred-script host allowlist (admin-only debug path, loud console warning in the bundle); never use it in production. If the `wppo-lazyload` script element is ever removed dynamically, call `window.wppoLazyloadTeardown()` FIRST so the IntersectionObserver/MutationObserver and config globals are released (removal without teardown leaks the observers). @since 2.0.0.
 
 **Parameters:**
 - `$hosts` *(string[])* — Array of hostnames (base domains include subdomains, e.g. `googletagmanager.com`).
@@ -1694,7 +1694,7 @@ Filters whether a video iframe may be replaced by a click-to-play placeholder. @
 ---
 
 ### `wppo_video_play_button_html`
-Filters the play-button markup in the video placeholder. @since 2.0.0.
+Filters the play-button markup in the video placeholder. Overrides must keep an accessible label (e.g. `aria-label`) on the button so assistive-tech users can activate the placeholder. @since 2.0.0.
 
 **Parameters:**
 - `$play_button` *(string)* — Button HTML.
@@ -1704,7 +1704,7 @@ Filters the play-button markup in the video placeholder. @since 2.0.0.
 ---
 
 ### `wppo_video_placeholder_html`
-Filters the final click-to-play placeholder markup. @since 2.0.0.
+Filters the final click-to-play placeholder markup. Overrides must preserve an accessible name for the play control (`aria-label` or text content) and a meaningful `img` alt so the placeholder stays operable for assistive-tech users. @since 2.0.0.
 
 **Parameters:**
 - `$placeholder_html` *(string)* — Placeholder HTML.

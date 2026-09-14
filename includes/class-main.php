@@ -2614,9 +2614,82 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						// the client as delayConfig.allowedScriptHosts.
 						$allowed_script_hosts = apply_filters( 'wppo_delay_js_allowed_hosts', array() );
 						if ( ! empty( $allowed_script_hosts ) ) {
-							$lazy_config['delayConfig']['allowedScriptHosts'] = array_values(
-								array_map( 'sanitize_text_field', (array) $allowed_script_hosts )
-							);
+							$validated_hosts = array();
+							foreach ( (array) $allowed_script_hosts as $host_entry ) {
+								if ( ! is_string( $host_entry ) ) {
+									continue;
+								}
+								// Parse the host first so display-text sanitization cannot
+								// mangle full-URL entries before host extraction.
+								$candidate = trim( $host_entry );
+								if ( '' === $candidate ) {
+									continue;
+								}
+								// A '*' wildcard from the server intentionally disables the
+								// deferred-script host allowlist (admin-only debug path,
+								// see getScriptSrcHosts() in src/lazyload.js).
+								if ( '*' === $candidate ) {
+									$validated_hosts[] = '*';
+									continue;
+								}
+								// Accept scheme-relative URLs (//host/path) for parsing.
+								if ( 0 === strpos( $candidate, '//' ) ) {
+									$candidate = 'https:' . $candidate;
+								}
+								// Accept bare hostnames or full URLs; reduce URLs to their host part.
+								if ( false !== strpos( $candidate, '://' ) ) {
+									$parsed_host = wp_parse_url( $candidate, PHP_URL_HOST );
+									if ( ! is_string( $parsed_host ) || '' === $parsed_host ) {
+										continue;
+									}
+									$candidate = $parsed_host;
+								}
+								$candidate = trim( $candidate );
+								// Unwrap IPv6 literals, optionally with a port ([::1]:8080).
+								if ( 0 === strpos( $candidate, '[' ) ) {
+									$bracket_end = strpos( $candidate, ']' );
+									if ( false === $bracket_end ) {
+										continue;
+									}
+									$remainder = substr( $candidate, $bracket_end + 1 );
+									if ( '' !== $remainder && 1 !== preg_match( '/^:\d+$/', $remainder ) ) {
+										continue;
+									}
+									$candidate = substr( $candidate, 1, $bracket_end - 1 );
+								} elseif ( 1 === preg_match( '/^(.*):(\d+)$/', $candidate, $port_match ) && false === strpos( $port_match[1], ':' ) ) {
+									// Strip a bare host:port suffix (no :// so the port
+									// survived URL parsing); IPv6 contains colons and
+									// never matches this branch.
+									$candidate = $port_match[1];
+								}
+								$candidate = sanitize_text_field( strtolower( trim( $candidate, '.' ) ) );
+								if ( '' === $candidate ) {
+									continue;
+								}
+								// Accept IP literals (IPv4 + IPv6) that the
+								// DNS-label regex below would otherwise reject.
+								if ( function_exists( 'filter_var' ) && filter_var( $candidate, FILTER_VALIDATE_IP ) ) {
+									$validated_hosts[] = $candidate;
+									continue;
+								}
+								// Map Unicode IDN to punycode for validation when intl
+								// is available; the original entry is preserved.
+								$ascii_candidate = $candidate;
+								if ( function_exists( 'idn_to_ascii' ) && defined( 'INTL_IDNA_VARIANT_UTS46' ) && defined( 'IDNA_DEFAULT' ) && 1 === preg_match( '/[^\x00-\x7F]/', $candidate ) ) {
+									$converted = idn_to_ascii( $candidate, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46 );
+									if ( ! is_string( $converted ) || '' === $converted ) {
+										continue;
+									}
+									$ascii_candidate = strtolower( $converted );
+								}
+								if ( 1 !== preg_match( '/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/', $ascii_candidate ) ) {
+									continue;
+								}
+								$validated_hosts[] = $candidate;
+							}
+							if ( ! empty( $validated_hosts ) ) {
+								$lazy_config['delayConfig']['allowedScriptHosts'] = array_values( array_unique( $validated_hosts ) );
+							}
 						}
 					}
 
@@ -2662,10 +2735,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						// below are consumed once at module init (src/lazyload.js) and
 						// are deleted again by window.wppoLazyloadTeardown() (audit
 						// #1077 finding 9). If this script element is ever removed
-						// dynamically, call window.wppoLazyloadTeardown() FIRST so the
-						// observers/interval and these config globals are released
-						// before the <script> is detached; nothing observes script
-						// removal automatically.
+						// dynamically (e.g. by a theme or optimizer detaching the
+						// wppo-lazyload <script>), call window.wppoLazyloadTeardown()
+						// FIRST so the observers/interval and these config globals
+						// are released before the <script> is detached; nothing
+						// observes script removal automatically, so removal without
+						// teardown leaks the IntersectionObserver/MutationObserver.
+						// See the wppo_delay_js_allowed_hosts docs (docs/hooks.md)
+						// for this teardown contract.
+						//
+						// CSP note: sites with a strict Content-Security-Policy can
+						// attach a nonce to these inline config scripts via the core
+						// wp_inline_script_attributes filter for handle wppo-lazyload
+						// (same escape hatch as the bfcache inline script).
 						wp_enqueue_script( 'wppo-lazyload', WPPO_PLUGIN_URL . 'build/lazyload.js', array(), WPPO_VERSION, array( 'in_footer' => true ) );
 
 						if ( $use_native_lazy ) {

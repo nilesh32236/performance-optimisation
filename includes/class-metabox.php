@@ -219,14 +219,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 								</tr>
 							</thead>
 							<tbody>
-								<?php foreach ( $assets['scripts'] as $script ) : ?>
+								<?php foreach ( $assets['scripts'] as $script_index => $script ) : ?>
 									<?php
 									$is_protected = in_array( $script['handle'], $protected_js, true );
 									$is_disabled  = in_array( $script['handle'], $disabled_scripts, true );
 									$strategy     = $delay_strategies[ $script['handle'] ] ?? '';
 									$priority     = $delay_priorities[ $script['handle'] ] ?? '';
+									$note_id      = 'wppo-protected-script-' . (int) $script_index;
 									?>
-									<tr<?php echo $is_protected ? ' style="opacity: 0.5;"' : ''; ?>>
+									<tr<?php echo $is_protected ? ' style="opacity: 0.5;"' : ''; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static attribute strings only. ?>>
 										<td>
 											<input
 												type="checkbox"
@@ -235,12 +236,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 												aria-label="<?php echo esc_attr( sprintf( /* translators: %s: script handle */ __( 'Disable script %s', 'performance-optimisation' ), $script['handle'] ) ); ?>"
 												<?php checked( $is_disabled ); ?>
 												<?php disabled( $is_protected ); ?>
+												<?php echo $is_protected ? 'aria-describedby="' . esc_attr( $note_id ) . '"' : ''; ?>
 											/>
 										</td>
 										<td>
 											<code><?php echo esc_html( $script['handle'] ); ?></code>
 											<?php if ( $is_protected ) : ?>
-												<em>(<?php esc_html_e( 'protected', 'performance-optimisation' ); ?>)</em>
+												<em id="<?php echo esc_attr( $note_id ); ?>">(<?php esc_html_e( 'protected', 'performance-optimisation' ); ?>)</em>
 											<?php endif; ?>
 										</td>
 										<td>
@@ -305,12 +307,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 								</tr>
 							</thead>
 							<tbody>
-								<?php foreach ( $assets['styles'] as $style ) : ?>
+								<?php foreach ( $assets['styles'] as $style_index => $style ) : ?>
 									<?php
 									$is_protected = in_array( $style['handle'], $protected_css, true );
 									$is_disabled  = in_array( $style['handle'], $disabled_styles, true );
+									$note_id      = 'wppo-protected-style-' . (int) $style_index;
 									?>
-									<tr<?php echo $is_protected ? ' style="opacity: 0.5;"' : ''; ?>>
+									<tr<?php echo $is_protected ? ' style="opacity: 0.5;"' : ''; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static attribute strings only. ?>>
 										<td>
 											<input
 												type="checkbox"
@@ -319,12 +322,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 												aria-label="<?php echo esc_attr( sprintf( /* translators: %s: style handle */ __( 'Disable style %s', 'performance-optimisation' ), $style['handle'] ) ); ?>"
 												<?php checked( $is_disabled ); ?>
 												<?php disabled( $is_protected ); ?>
+												<?php echo $is_protected ? 'aria-describedby="' . esc_attr( $note_id ) . '"' : ''; ?>
 											/>
 										</td>
 										<td>
 											<code><?php echo esc_html( $style['handle'] ); ?></code>
 											<?php if ( $is_protected ) : ?>
-												<em>(<?php esc_html_e( 'protected', 'performance-optimisation' ); ?>)</em>
+												<em id="<?php echo esc_attr( $note_id ); ?>">(<?php esc_html_e( 'protected', 'performance-optimisation' ); ?>)</em>
 											<?php endif; ?>
 										</td>
 										<td>
