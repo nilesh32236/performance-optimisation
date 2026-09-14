@@ -1400,20 +1400,25 @@ const Dashboard = ( {
 					onChange={ ( e ) => setWooSafeMode( e.target.checked ) }
 				/>
 				<div className="wppo-field">
-					<button
+					<LoadingSubmitButton
 						type="button"
 						className="wppo-button wppo-button--secondary"
 						onClick={ runWooCacheSelfTest }
-						disabled={ wooSelfTestLoading }
+						isLoading={ wooSelfTestLoading }
+						aria-describedby="wppo-woo-cache-self-test-desc"
+						label={ __(
+							'Run Woo Cache Self-Test',
+							'performance-optimisation'
+						) }
+						loadingLabel={ __(
+							'Running…',
+							'performance-optimisation'
+						) }
+					/>
+					<p
+						id="wppo-woo-cache-self-test-desc"
+						className="wppo-text-muted wppo-text-small"
 					>
-						{ wooSelfTestLoading
-							? __( 'Running…', 'performance-optimisation' )
-							: __(
-									'Run Woo Cache Self-Test',
-									'performance-optimisation'
-							  ) }
-					</button>
-					<p className="wppo-text-muted wppo-text-small">
 						{ __(
 							'Proves in one click that cart, checkout and account paths bypass the static cache under path/safe-mode semantics (DONOTCACHEPAGE enforcement is assumed via Cache::is_not_cacheable(); the wppo_woo_cacheable override is out of scope).',
 							'performance-optimisation'
