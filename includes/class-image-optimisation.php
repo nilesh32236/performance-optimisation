@@ -1280,8 +1280,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 										', ',
 										array_map(
 											function ( $srcset_item ) use ( $exclude_imgs, $supports_avif, $supports_webp ) {
-												list($url, $descriptor) = array_pad( preg_split( '/\s+/', trim( $srcset_item ), 2 ), 2, '' );
-												$new_url                = $this->replace_image_with_next_gen( $url, $exclude_imgs, $supports_avif, $supports_webp );
+												list( $url, $descriptor ) = array_pad( preg_split( '/\s+/', trim( $srcset_item ), 2 ), 2, '' );
+												$new_url                  = $this->replace_image_with_next_gen( $url, $exclude_imgs, $supports_avif, $supports_webp );
 												return $new_url . ( $descriptor ? " $descriptor" : '' );
 											},
 											explode( ',', $srcset )
@@ -1324,8 +1324,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 										', ',
 										array_map(
 											function ( $srcset_item ) use ( $exclude_imgs, $supports_avif, $supports_webp ) {
-												list($url, $descriptor) = array_pad( preg_split( '/\s+/', trim( $srcset_item ), 2 ), 2, '' );
-												$new_url                = $this->replace_image_with_next_gen( $url, $exclude_imgs, $supports_avif, $supports_webp );
+												list( $url, $descriptor ) = array_pad( preg_split( '/\s+/', trim( $srcset_item ), 2 ), 2, '' );
+												$new_url                  = $this->replace_image_with_next_gen( $url, $exclude_imgs, $supports_avif, $supports_webp );
 												return $new_url . ( $descriptor ? " $descriptor" : '' );
 											},
 											explode( ',', $srcset )
@@ -1946,7 +1946,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					}
 				} catch ( \Throwable $e ) {
 					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-						error_log( 'WPPO Image optimisation OD error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+						error_log( 'WPPO Image optimisation OD error: ' . str_replace( ABSPATH, '', $e->getMessage() ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 					}
 				}
 			}
@@ -1970,7 +1970,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						}
 					} catch ( \Throwable $e ) {
 						if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-							error_log( 'WPPO Image optimisation field LCP error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+							error_log( 'WPPO Image optimisation field LCP error: ' . str_replace( ABSPATH, '', $e->getMessage() ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 						}
 					}
 				}
@@ -1985,7 +1985,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					return $this->current_lcp_url;
 				} catch ( \Throwable $e ) {
 					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-						error_log( 'WPPO Image optimisation PageSpeed LCP error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+						error_log( 'WPPO Image optimisation PageSpeed LCP error: ' . str_replace( ABSPATH, '', $e->getMessage() ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 					}
 				}
 			}
@@ -2076,7 +2076,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					}
 				} catch ( \Throwable $e ) {
 					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-						error_log( 'WPPO Image optimisation OD error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+						error_log( 'WPPO Image optimisation OD error: ' . str_replace( ABSPATH, '', $e->getMessage() ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 					}
 				}
 			}
@@ -4895,7 +4895,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						}
 					} catch ( \Throwable $e ) {
 						if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-							error_log( 'WPPO Image optimisation OD error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+							error_log( 'WPPO Image optimisation OD error: ' . str_replace( ABSPATH, '', $e->getMessage() ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 						}
 					}
 				}

@@ -227,11 +227,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 									$priority     = $delay_priorities[ $script['handle'] ] ?? '';
 									$note_id      = 'wppo-protected-script-' . (int) $script_index;
 									?>
-									<tr<?php echo $is_protected ? ' style="opacity: 0.5;"' : ''; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static attribute strings only. ?>>
-										<td>
-											<input
-												type="checkbox"
-												name="wppo_disabled_scripts[]"
+								<tr
+									<?php if ( $is_protected ) : ?>
+									style="opacity: 0.5;"
+								<?php endif; ?>
+								>
+									<td>
+										<input
+											type="checkbox"
+											name="wppo_disabled_scripts[]"
 												value="<?php echo esc_attr( $script['handle'] ); ?>"
 												aria-label="<?php echo esc_attr( sprintf( /* translators: %s: script handle */ __( 'Disable script %s', 'performance-optimisation' ), $script['handle'] ) ); ?>"
 												<?php checked( $is_disabled ); ?>
@@ -313,11 +317,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 									$is_disabled  = in_array( $style['handle'], $disabled_styles, true );
 									$note_id      = 'wppo-protected-style-' . (int) $style_index;
 									?>
-									<tr<?php echo $is_protected ? ' style="opacity: 0.5;"' : ''; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static attribute strings only. ?>>
-										<td>
-											<input
-												type="checkbox"
-												name="wppo_disabled_styles[]"
+								<tr
+									<?php if ( $is_protected ) : ?>
+									style="opacity: 0.5;"
+								<?php endif; ?>
+								>
+									<td>
+										<input
+											type="checkbox"
+											name="wppo_disabled_styles[]"
 												value="<?php echo esc_attr( $style['handle'] ); ?>"
 												aria-label="<?php echo esc_attr( sprintf( /* translators: %s: style handle */ __( 'Disable style %s', 'performance-optimisation' ), $style['handle'] ) ); ?>"
 												<?php checked( $is_disabled ); ?>
@@ -449,7 +457,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 
 			// Per-page Delay JS kill-switch + notes (issue #966). Checkbox-only
 			// (no JS); notes capped at 2000 chars, informational only.
-	// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_asset_manager_nonce.
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_asset_manager_nonce.
 			$delay_disabled = isset( $_POST['wppo_delay_disabled'] ) && ! empty( $_POST['wppo_delay_disabled'] );
 			// Per-page kill-switch single-URL purge (#1037): when the toggle
 			// flips, purge only this post URL's static cache so the new delay
@@ -475,7 +483,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 			}
 
 			// Per-page Used CSS kill-switch (#988). Checkbox-only (no JS).
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_asset_manager_nonce.
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_asset_manager_nonce.
 			$used_css_disabled     = isset( $_POST['wppo_used_css_disabled'] ) && ! empty( $_POST['wppo_used_css_disabled'] );
 			$had_used_css_disabled = ! empty( get_post_meta( $post_id, '_wppo_used_css_disabled', true ) );
 			if ( $used_css_disabled ) {
@@ -488,7 +496,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 			// Post meta survives cache clears; toggle flips purge only this
 			// post URL's static cache so the new defer state renders without
 			// a full purge. Fail-open: purge failures never break the save.
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_asset_manager_nonce.
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_asset_manager_nonce.
 			$defer_disabled     = isset( $_POST['wppo_defer_disabled'] ) && ! empty( $_POST['wppo_defer_disabled'] );
 			$had_defer_disabled = ! empty( get_post_meta( $post_id, '_wppo_defer_disabled', true ) );
 			if ( $defer_disabled ) {
@@ -504,7 +512,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 				}
 			}
 
-	// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_asset_manager_nonce.
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_asset_manager_nonce.
 			$raw_notes = $this->get_raw_post_string( 'wppo_delay_notes' );
 			$notes     = is_string( $raw_notes ) ? sanitize_textarea_field( $raw_notes ) : '';
 			if ( function_exists( 'mb_strlen' ) && function_exists( 'mb_substr' ) ) {

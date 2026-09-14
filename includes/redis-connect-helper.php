@@ -113,7 +113,7 @@ if ( ! function_exists( 'wppo_redis_connect_cluster' ) ) {
 		if ( $use_tls ) {
 			$nodes = array_map(
 				function ( $node ) {
-					return ( strpos( $node, 'tls://' ) === 0 ) ? $node : 'tls://' . $node;
+					return ( 0 === strpos( $node, 'tls://' ) ) ? $node : 'tls://' . $node;
 				},
 				$nodes
 			);
@@ -264,7 +264,7 @@ if ( ! function_exists( 'wppo_redis_connect_standalone' ) ) {
 		$database = isset( $config['database'] ) ? (int) $config['database'] : 0;
 		$timeout  = 0.5;
 
-		if ( $use_tls && strpos( $host, 'tls://' ) !== 0 ) {
+		if ( $use_tls && 0 !== strpos( $host, 'tls://' ) ) {
 			$host = 'tls://' . $host;
 		}
 
@@ -308,7 +308,7 @@ if ( ! function_exists( 'wppo_parse_redis_node' ) ) {
 		// PHP 8.1+, so normalize any non-string input up front (fail-open to
 		// the invalid-node path handled by callers).
 		$node = is_string( $node ) ? $node : (string) $node;
-		if ( strpos( $node, '[' ) === 0 ) {
+		if ( 0 === strpos( $node, '[' ) ) {
 			$port_start = strpos( $node, ']:' );
 			if ( false !== $port_start ) {
 				$host = substr( $node, 1, $port_start - 1 );

@@ -785,7 +785,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					}
 					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 						// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-						error_log( 'Redis ping exception: ' . $e->getMessage() );
+						error_log( 'Redis ping exception: ' . str_replace( ABSPATH, '', $e->getMessage() ) );
 					}
 					$error = new \WP_Error( 'ping_exception', __( 'Redis connection failed.', 'performance-optimisation' ) );
 					$this->log_redis_failure( $error->get_error_code(), $error->get_error_message() );
