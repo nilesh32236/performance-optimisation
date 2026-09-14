@@ -57,7 +57,7 @@ class FontDisplaySwapTest extends \PHPUnit\Framework\TestCase {
 		$css     = "@font-face{font-family:'Inter';src:url('x.woff2');font-display: block;}";
 		$swapped = CSS::inject_font_display_swap( $css );
 		$this->assertStringContainsString( 'font-display: swap', $swapped );
-		$this->assertStringNotContainsString( 'block', $swapped );
+		$this->assertDoesNotMatchRegularExpression( '/font-display\s*:\s*block/i', $swapped );
 
 		$optional = CSS::inject_font_display_swap( $css, 'optional' );
 		$this->assertStringContainsString( 'font-display: optional', $optional );
@@ -125,5 +125,66 @@ class FontDisplaySwapTest extends \PHPUnit\Framework\TestCase {
 		)->maybe_subset_css( $css );
 		$this->assertStringContainsString( "url('a.woff2')", $filtered );
 		$this->assertStringNotContainsString( "url('b.woff2')", $filtered );
+	}
+
+	/**
+	 * Unknown display strings fail open to swap; string '0' is not an opt-out.
+	 */
+	public function test_inject_unknown_display_falls_back_to_swap(): void {
+		$css    = "@font-face{font-family:'Inter';src:url('inter.woff2') format('woff2');}";
+		$result = CSS::inject_font_display_swap( $css, 'bogus-value' );
+		$this->assertStringContainsString( 'font-display: swap', $result );
+
+		$zero = CSS::inject_font_display_swap( $css, '0' );
+		$this->assertStringContainsString( 'font-display: swap', $zero );
+	}
+
+	/**
+	 * Empty or whitespace-only subset lists are fail-open (CSS unchanged),
+	 * and subset matching is case-insensitive.
+	 */
+	public function test_subset_empty_and_case_insensitive(): void {
+		$css = "/* latin */@font-face{font-family:'Inter';src:url('a.woff2');}/* latin-ext */@font-face{font-family:'Inter';src:url('b.woff2');}";
+
+		$this->assertSame(
+			$css,
+			$this->make_fonts(
+				array(
+					'fontSubset'        => true,
+					'fontSubsetSubsets' => '',
+				)
+			)->maybe_subset_css( $css )
+		);
+		$this->assertSame(
+			$css,
+			$this->make_fonts(
+				array(
+					'fontSubset'        => true,
+					'fontSubsetSubsets' => '   ',
+				)
+			)->maybe_subset_css( $css )
+		);
+
+		$filtered = $this->make_fonts(
+			array(
+				'fontSubset'        => true,
+				'fontSubsetSubsets' => 'LATIN',
+			)
+		)->maybe_subset_css( $css );
+		$this->assertStringContainsString( "url('a.woff2')", $filtered );
+		$this->assertStringNotContainsString( "url('b.woff2')", $filtered );
+	}
+
+	/**
+	 * Double-quoted format("woff2") hints still reorder woff2 first, while a
+	 * woff URL that merely contains the woff2 substring is not misclassified.
+	 */
+	public function test_order_font_sources_format_hints(): void {
+		$css       = '@font-face{font-family:\'Inter\';src:url(\'inter.woff\') format("woff"),url(\'inter.woff2\') format("woff2");}';
+		$reordered = Google_Fonts::order_font_sources( $css );
+		$this->assertLessThan( strpos( $reordered, '.woff\'' ), strpos( $reordered, '.woff2' ) );
+
+		$tricky = "@font-face{font-family:'Inter';src:url('woff2-fallback.woff') format('woff'),url('inter.woff') format('woff');}";
+		$this->assertSame( $tricky, Google_Fonts::order_font_sources( $tricky ) );
 	}
 }

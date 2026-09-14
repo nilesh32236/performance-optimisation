@@ -766,7 +766,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				}
 			}
 			if ( '' !== $font_display ) {
-				$combined_css = preg_replace( '/font-display\s*:\s*block\s*;?/', 'font-display: ' . $font_display . ';', $combined_css );
+				$combined_css = preg_replace( '/font-display\s*:\s*block\s*;?/i', 'font-display: ' . $font_display . ';', $combined_css );
 				if ( null === $combined_css ) {
 					if ( $this->is_safe_css_combine_fallback_enabled() ) {
 						$this->log_combine_fallback( 'preg_error', $successful_handles );

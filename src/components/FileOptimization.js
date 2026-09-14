@@ -123,7 +123,10 @@ const FileOptimization = ( {
 		hostGoogleFontsLocally: false,
 		fontMetricFallback: false,
 		fontSubset: false,
-		fontSubsetSubsets: options.fontSubsetSubsets || 'latin',
+		fontSubsetSubsets:
+			typeof options.fontSubsetSubsets === 'string'
+				? options.fontSubsetSubsets
+				: 'latin',
 		cdnURL: '',
 		cdnMapping: options.cdnMapping || [],
 		removeUnusedCSS: false,
@@ -224,6 +227,10 @@ const FileOptimization = ( {
 				typeof options.ccssSafelistExtra === 'string'
 					? options.ccssSafelistExtra
 					: '',
+			fontSubsetSubsets:
+				typeof options.fontSubsetSubsets === 'string'
+					? options.fontSubsetSubsets
+					: 'latin',
 		} );
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [
@@ -1406,8 +1413,10 @@ const FileOptimization = ( {
 											id="fontSubsetSubsets"
 											name="fontSubsetSubsets"
 											value={
-												settings.fontSubsetSubsets ||
-												'latin'
+												typeof settings.fontSubsetSubsets ===
+												'string'
+													? settings.fontSubsetSubsets
+													: 'latin'
 											}
 											onChange={ handleChange(
 												setSettings

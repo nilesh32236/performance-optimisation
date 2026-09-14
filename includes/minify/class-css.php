@@ -288,8 +288,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 		 * combined-CSS path); other explicit values are left untouched.
 		 * Passing a falsy `$display` disables injection (filter opt-out).
 		 *
-		 * @param string      $css     The original CSS content.
-		 * @param string|null $display Desired font-display value (swap|block|fallback|optional|auto). Falsy disables.
+		 * @param string $css     The original CSS content.
+		 * @param mixed  $display Desired font-display value (swap|block|fallback|optional|auto). Falsy disables injection.
 		 * @return string The modified CSS content.
 		 * @since 2.0.0
 		 * @since NEXT Added optional $display parameter with block normalization.
@@ -304,7 +304,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 				'auto'     => true,
 			);
 			if ( '' === $display_validated || ! isset( $allowed_display[ $display_validated ] ) ) {
-				if ( empty( $display ) ) {
+				if ( false === $display || null === $display || '' === $display ) {
 					return $css;
 				}
 				$display_validated = 'swap';

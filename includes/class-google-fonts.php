@@ -168,7 +168,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 						$woff2 = array();
 						$rest  = array();
 						foreach ( $parts as $part ) {
-							if ( false !== stripos( $part, '.woff2' ) || false !== stripos( $part, 'woff2' ) ) {
+							if ( false !== stripos( $part, '.woff2' ) || false !== stripos( $part, "format('woff2'" ) || false !== stripos( $part, 'format("woff2"' ) ) {
 								$woff2[] = $part;
 							} else {
 								$rest[] = $part;
@@ -210,12 +210,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 				if ( empty( $file_opt['fontSubset'] ) ) {
 					return $css;
 				}
-				$raw  = isset( $file_opt['fontSubsetSubsets'] ) ? (string) $file_opt['fontSubsetSubsets'] : 'latin';
+				$raw  = strtolower( (string) ( $file_opt['fontSubsetSubsets'] ?? 'latin' ) );
+				$raw  = (string) preg_replace( '/[^a-z0-9-,\s]/', '', $raw );
+				$raw  = substr( $raw, 0, 200 );
 				$keep = array();
-				foreach ( explode( ',', strtolower( $raw ) ) as $subset ) {
+				foreach ( explode( ',', $raw ) as $subset ) {
 					$subset = trim( $subset );
 					if ( '' !== $subset ) {
 						$keep[ $subset ] = true;
+					}
+					if ( count( $keep ) >= 10 ) {
+						break;
 					}
 				}
 				if ( empty( $keep ) ) {

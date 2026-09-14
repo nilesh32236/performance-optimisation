@@ -1685,9 +1685,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			// Clear Google Fonts cache when the setting toggles.
-			$old_gf = $old_value['file_optimisation']['hostGoogleFontsLocally'] ?? false;
-			$new_gf = $value['file_optimisation']['hostGoogleFontsLocally'] ?? false;
-			if ( $old_gf !== $new_gf ) {
+			$old_gf   = $old_value['file_optimisation']['hostGoogleFontsLocally'] ?? false;
+			$new_gf   = $value['file_optimisation']['hostGoogleFontsLocally'] ?? false;
+			$old_sub  = $old_value['file_optimisation']['fontSubset'] ?? false;
+			$new_sub  = $value['file_optimisation']['fontSubset'] ?? false;
+			$old_subs = $old_value['file_optimisation']['fontSubsetSubsets'] ?? 'latin';
+			$new_subs = $value['file_optimisation']['fontSubsetSubsets'] ?? 'latin';
+			if ( $old_gf !== $new_gf || $old_sub !== $new_sub || $old_subs !== $new_subs ) {
 				Google_Fonts::clear_font_cache();
 			}
 		}
