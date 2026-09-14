@@ -471,6 +471,22 @@ add_filter( 'wppo_cache_page_html', function( $html, $url ) {
 
 ---
 
+### `wppo_cache_query_allowlist`
+Filters the list of cache-neutral (tracking/marketing) query params used by the query-poisoning guard (issue #1141). Guarded by `has_filter()` — the filter only runs when a listener is present. A request whose query params are all in this list (or carry the `utm_` prefix) may still be served from the clean-URL cache entry, but its response is never stored over the clean file; any other param (including the legacy `s`, `ver`, `v`, which always force dynamic even if added here) forces a dynamic uncached response. @since NEXT.
+
+**Parameters:**
+- `$allowlist` *(string[])* — Lowercase cache-neutral param names (defaults: `utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`, `utm_id`, `gclid`, `gbraid`, `wbraid`, `fbclid`, `msclkid`, `ttclid`, `li_fat_id`, `mc_cid`, `mc_eid`, `igshid`, `dclid`, `yclid`, `gclsrc`, `_ga`, `_gl`, `pk_campaign`, `pk_kwd`, `piwik_kwd`, `matomo`, plus Facebook `fb_action_ids`/`fb_action_types`/`fb_source`).
+
+**Example:**
+```php
+add_filter( 'wppo_cache_query_allowlist', function( $allowlist ) {
+    $allowlist[] = 'ref'; // Treat a custom marketing param as cache-neutral.
+    return $allowlist;
+} );
+```
+
+---
+
 ### `wppo_lazyload_iframe_allowed`
 Filters whether a specific `<iframe>` element should be processed for lazy loading.
 

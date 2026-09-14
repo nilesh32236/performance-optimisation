@@ -2304,6 +2304,163 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Filterable list of cache-neutral (tracking/marketing) query params.
+		 *
+		 * The static HTML cache key is path-only, so a request carrying only
+		 * these params maps to the same `index.html` as the clean URL. They
+		 * are safe to ignore for the *read* decision (the clean entry may be
+		 * served) but a query-bearing response is still never *stored* over
+		 * the clean file (see {@see Cache::maybe_store_cache()}), so
+		 * tracking params can never poison the canonical entry.
+		 *
+		 * Filterable via `wppo_cache_query_allowlist` (guarded by
+		 * `has_filter()` so the filter only runs when a listener exists).
+		 * The legacy uncacheable params (`s`, `ver`, `v`) are intentionally
+		 * NOT part of this list: they always force a dynamic response even
+		 * if a filter adds them here.
+		 *
+		 * Pure static helper: no I/O, no settings reads. Multisite-safe.
+		 *
+		 * @return string[] Lowercase cache-neutral query param names.
+		 * @since NEXT
+		 */
+		public static function get_cache_query_allowlist(): array {
+			$defaults = array(
+				'utm_source',
+				'utm_medium',
+				'utm_campaign',
+				'utm_term',
+				'utm_content',
+				'utm_id',
+				'gclid',
+				'gbraid',
+				'wbraid',
+				'fbclid',
+				'fb_action_ids',
+				'fb_action_types',
+				'fb_source',
+				'msclkid',
+				'ttclid',
+				'li_fat_id',
+				'mc_cid',
+				'mc_eid',
+				'igshid',
+				'dclid',
+				'yclid',
+				'gclsrc',
+				'_ga',
+				'_gl',
+				'pk_campaign',
+				'pk_kwd',
+				'piwik_kwd',
+				'matomo',
+			);
+			try {
+				if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) ) {
+					return $defaults;
+				}
+				if ( ! has_filter( 'wppo_cache_query_allowlist' ) ) {
+					return $defaults;
+				}
+				$filtered = apply_filters( 'wppo_cache_query_allowlist', $defaults );
+				if ( ! is_array( $filtered ) ) {
+					return $defaults;
+				}
+				$allowlist = array();
+				foreach ( $filtered as $name ) {
+					if ( ! is_string( $name ) || '' === trim( $name ) ) {
+						continue;
+					}
+					$allowlist[] = strtolower( trim( $name ) );
+				}
+				if ( empty( $allowlist ) ) {
+					return $defaults;
+				}
+				return array_values( array_unique( $allowlist ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $defaults;
+			}
+		}
+
+		/**
+		 * Whether a query string forces a dynamic (uncached) response.
+		 *
+		 * Returns false for an empty query and for tracking-only queries
+		 * (every param in {@see get_cache_query_allowlist()} or carrying the
+		 * `utm_` prefix, matched case-insensitively). Returns true when any
+		 * param is functional/unknown — including the legacy uncacheable
+		 * params `s`, `ver`, `v`, which always force dynamic even if a
+		 * filter allowlists them. Unknown params fail closed (dynamic) so a
+		 * future marketing param can only over-cache, never poison: the
+		 * write path ({@see Cache::maybe_store_cache()}) additionally
+		 * refuses to store ANY query-bearing response over the path-only
+		 * clean file.
+		 *
+		 * Pure static helper: no I/O, no settings reads. Multisite-safe.
+		 * Fail-open direction on error: detection failure returns true
+		 * (served dynamic, never cached).
+		 *
+		 * @param string|null $query_string Raw query string. Defaults to `$_SERVER['QUERY_STRING']`.
+		 * @return bool True when the request must bypass the cache.
+		 * @since NEXT
+		 */
+		public static function has_uncacheable_query( ?string $query_string = null ): bool {
+			try {
+				if ( null === $query_string ) {
+					// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- Sanitized below via wp_unslash()/sanitize_text_field() with function_exists() fallbacks.
+					$raw = isset( $_SERVER['QUERY_STRING'] ) ? (string) $_SERVER['QUERY_STRING'] : '';
+					if ( function_exists( 'wp_unslash' ) ) {
+						$raw = wp_unslash( $raw );
+					}
+					if ( function_exists( 'sanitize_text_field' ) ) {
+						$raw = sanitize_text_field( $raw );
+					}
+					$query_string = $raw;
+				}
+				if ( '' === trim( (string) $query_string ) ) {
+					return false;
+				}
+				// Bound the parse: truncate runaway query strings and cap the
+				// param count so a malicious 1 MB query cannot DoS the gate.
+				$query_string = substr( (string) $query_string, 0, 5000 );
+				$allowlist    = self::get_cache_query_allowlist();
+				$allowed      = array_flip( $allowlist );
+				$pairs        = explode( '&', $query_string );
+				$checked      = 0;
+				foreach ( $pairs as $pair ) {
+					$pair = trim( (string) $pair );
+					if ( '' === $pair ) {
+						continue;
+					}
+					$eq_pos = strpos( $pair, '=' );
+					$name   = false === $eq_pos ? $pair : substr( $pair, 0, $eq_pos );
+					$name   = strtolower( trim( (string) rawurldecode( $name ) ) );
+					if ( '' === $name ) {
+						continue;
+					}
+					++$checked;
+					if ( $checked > 200 ) {
+						return true;
+					}
+					// Legacy uncacheable params always force dynamic, even if
+					// a filter added them to the allowlist.
+					if ( 's' === $name || 'ver' === $name || 'v' === $name ) {
+						return true;
+					}
+					if ( isset( $allowed[ $name ] ) || 0 === strpos( $name, 'utm_' ) ) {
+						continue;
+					}
+					return true;
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
 		 * Whether an absolute path stays inside the cache tree.
 		 *
 		 * Centralized dual-prefix containment: the normalized path must start

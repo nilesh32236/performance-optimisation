@@ -1357,9 +1357,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			}
 
 			// LS-304: align with maybe_store_cache — query strings s|ver|v are not cacheable.
+			// Extended by issue #1141: any functional/unknown query forces
+			// dynamic via the shared filterable helper (superset of the
+			// legacy s|ver|v gate, which is preserved inside the helper).
+			// Tracking-only queries stay cacheable for the LS layer, exactly
+			// as before. Fail-open: helper failure forces dynamic.
 			if ( $cacheable && ! empty( $_SERVER['QUERY_STRING'] ) ) {
-				$qs = sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) );
-				if ( preg_match( '/(?:^|&)(s|ver|v)(?:=|&|$)/', $qs ) ) {
+				try {
+					if ( method_exists( 'PerformanceOptimise\Inc\Util', 'has_uncacheable_query' ) && Util::has_uncacheable_query() ) {
+						$cacheable = false;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
 					$cacheable = false;
 				}
 			}
