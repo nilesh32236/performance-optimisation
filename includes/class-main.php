@@ -953,6 +953,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			$this->register_block_assets_filters( function_exists( 'wp_load_classic_theme_block_styles_on_demand' ) );
 
+			// Block-asset on-demand interop (issue #1147): dequeue per-block
+			// stylesheets for blocks absent from the current post content. Runs
+			// late (after core enqueues) but before minify_queued_styles()
+			// (PHP_INT_MAX - 1) and Cache::combine_css() (PHP_INT_MAX) so
+			// dequeued handles never enter those pipelines (dequeue only, never
+			// re-enqueue/combine — cascade order of the survivors is untouched).
+			// The callback itself defers to core when the 6.9 template-enhancement
+			// buffer exists and otherwise runs the legacy omission path.
+			add_action( 'wp_enqueue_scripts', array( $this, 'omit_hidden_block_assets' ), PHP_INT_MAX - 2 );
+
 			if ( ! empty( $this->options['file_optimisation']['deferJS'] ) ) {
 				$exclude_js = array( 'wppo-lazyload' );
 				if ( ! empty( $this->options['file_optimisation']['excludeDeferJS'] ) ) {
@@ -6509,6 +6519,163 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;
+			}
+		}
+
+		/**
+		 * Whether core 6.9+ block-asset hoisting is active on this request.
+		 *
+		 * True only when the running core is 6.9+ (pre-release-inclusive
+		 * `6.9-alpha` floor, matching {@see is_core_block_asset_skipped()})
+		 * AND the separate-assets APIs exist AND core reports separate loading.
+		 * Callers use this to yield to core's on-demand hoisting instead of
+		 * duplicating it (e.g. {@see omit_hidden_block_assets()} returns early
+		 * when the template-enhancement buffer exists). Fail-open: any
+		 * throwable or missing API returns false (legacy path unchanged).
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when core owns on-demand block-asset hoisting.
+		 */
+		private function is_core_block_hoisting_active(): bool {
+			if ( isset( $GLOBALS['wp_version'] ) && version_compare( $GLOBALS['wp_version'], '6.9-alpha', '<' ) ) {
+				return false;
+			}
+			if ( ! function_exists( 'wp_should_output_buffer_template_for_enhancement' ) || ! function_exists( 'wp_should_load_separate_core_block_assets' ) ) {
+				return false;
+			}
+			try {
+				return (bool) wp_should_load_separate_core_block_assets();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Whether a queued core block asset should be omitted as hidden.
+		 *
+		 * A block asset counts as hidden when its block type is absent from the
+		 * current post content (type-absence definition: blocks present in
+		 * markup but never rendered still ship their per-block stylesheet, so
+		 * the stylesheet is unused by definition). Hidden assets are omitted by
+		 * default; a per-block re-enable is available via the
+		 * `wppo_allow_hidden_block_asset` filter (return truthy to keep the
+		 * asset for that block). The filter is only applied when a listener is
+		 * registered (`has_filter()` guard). Fail-open: missing content, missing
+		 * APIs, or any throwable returns false (keep the asset — degrade to
+		 * unoptimized, never fatal).
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $block_name Block name e.g. 'core/cover'.
+		 * @param string $handle     Queued style handle e.g. 'wp-block-cover'.
+		 * @return bool True when the asset should be dequeued.
+		 */
+		private function should_omit_hidden_block_asset( $block_name, $handle ): bool {
+			try {
+				if ( '' === (string) $block_name || '' === (string) $handle ) {
+					return false;
+				}
+				$content = '';
+				if ( function_exists( 'get_the_ID' ) && function_exists( 'get_post_field' ) ) {
+					$post_id = get_the_ID();
+					if ( ! empty( $post_id ) ) {
+						$content = (string) get_post_field( 'post_content', $post_id );
+					}
+				}
+				if ( '' === $content ) {
+					return false;
+				}
+				if ( Util::content_has_block( $content, (string) $block_name ) ) {
+					return false;
+				}
+				$allowed = false;
+				if ( function_exists( 'has_filter' ) && has_filter( 'wppo_allow_hidden_block_asset' ) ) {
+					try {
+						$allowed = apply_filters( 'wppo_allow_hidden_block_asset', false, (string) $block_name, (string) $handle );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return true;
+					}
+				}
+				return empty( $allowed );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Dequeue per-block stylesheets for blocks absent from the content.
+		 *
+		 * Runs on `wp_enqueue_scripts` at PHP_INT_MAX - 2: after core enqueues
+		 * but before `minify_queued_styles()` and `Cache::combine_css()`, so
+		 * omitted handles never enter the minify/combine pipelines and the
+		 * cascade order of the surviving stylesheets is preserved (dequeue
+		 * only — nothing is re-enqueued or folded into a monolith).
+		 *
+		 * Defers to core 6.9 hoisting: when {@see is_core_block_hoisting_active()}
+		 * is true and the template-enhancement buffer exists
+		 * (`wp_should_output_buffer_template_for_enhancement()`), this returns
+		 * immediately and core's conditional loading owns the output. Otherwise
+		 * the legacy omission path runs unchanged.
+		 *
+		 * @since NEXT
+		 *
+		 * @return void
+		 */
+		public function omit_hidden_block_assets(): void {
+			try {
+				// Defer to core instead of duplicating it: when the 6.9
+				// template-enhancement buffer exists, core hoists exactly the
+				// block assets the template needs.
+				if ( $this->is_core_block_hoisting_active() && function_exists( 'wp_should_output_buffer_template_for_enhancement' ) ) {
+					try {
+						if ( wp_should_output_buffer_template_for_enhancement() ) {
+							return;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+
+				global $wp_styles;
+				if ( ! is_object( $wp_styles ) || empty( $wp_styles->queue ) || ! is_array( $wp_styles->queue ) ) {
+					return;
+				}
+				if ( ! function_exists( 'wp_dequeue_style' ) ) {
+					return;
+				}
+
+				// Memoize the omit decision per block name so the content parse in
+				// should_omit_hidden_block_asset() runs at most once per block type.
+				$decisions = array();
+				foreach ( $wp_styles->queue as $handle ) {
+					if ( ! is_string( $handle ) || 0 !== strpos( $handle, 'wp-block-' ) ) {
+						continue;
+					}
+					// The combined monolith family is owned by core hoisting
+					// (and by the combine/minify skips); only per-block handles
+					// are candidates for hidden-block omission.
+					$slug = substr( $handle, strlen( 'wp-block-' ) );
+					if ( '' === $slug || 0 === strpos( $slug, 'library' ) ) {
+						continue;
+					}
+					$block_name = 'core/' . $slug;
+					if ( ! array_key_exists( $block_name, $decisions ) ) {
+						$decisions[ $block_name ] = $this->should_omit_hidden_block_asset( $block_name, $handle );
+					}
+					if ( $decisions[ $block_name ] ) {
+						try {
+							wp_dequeue_style( $handle );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 			}
 		}
 

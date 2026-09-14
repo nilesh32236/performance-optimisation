@@ -454,6 +454,26 @@ add_filter( 'wppo_exclude_minification', function( $exclude, $file_path, $handle
 
 ---
 
+### `wppo_allow_hidden_block_asset`
+Filters whether a hidden core block asset should be kept instead of omitted (issue #1147). On the frontend, `Main::omit_hidden_block_assets()` dequeues per-block `wp-block-*` stylesheets whose block type is absent from the current post content (hidden by default); return a truthy value to re-enable the asset for that block. The filter is only applied when a listener is registered (`has_filter()` guard). On WordPress 6.9+ with core block-asset hoisting active and the template-enhancement buffer present, the omission pass defers to core entirely and this filter does not run. @since NEXT.
+
+**Parameters:**
+- `$allowed` *(bool)* — Whether to keep the asset. Default `false` (omit).
+- `$block_name` *(string)* — Block name (e.g. `'core/cover'`).
+- `$handle` *(string)* — Queued style handle (e.g. `'wp-block-cover'`).
+
+**Example:**
+```php
+add_filter( 'wppo_allow_hidden_block_asset', function( $allowed, $block_name, $handle ) {
+    if ( 'core/cover' === $block_name ) {
+        return true; // Always keep the cover stylesheet (e.g. injected via shortcode).
+    }
+    return $allowed;
+}, 10, 3 );
+```
+
+---
+
 ### `wppo_cache_page_html`
 Filters the pre-rendered HTML content before it is saved to the static cache directory.
 
