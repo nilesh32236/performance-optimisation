@@ -1622,6 +1622,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @since 1.0.0
 		 */
 		public static function get_local_path( string $url ): string {
+			// Reject NUL bytes and stream wrappers before URL parsing so
+			// payloads such as "php://filter/..." or "file:///etc/passwd"
+			// can never map onto the local tree.
+			if ( false !== strpos( $url, "\0" ) ) {
+				return '';
+			}
+			$trimmed_url = ltrim( $url );
+			if ( (bool) preg_match( '#^[a-zA-Z][a-zA-Z0-9+.-]*://#i', $trimmed_url ) ) {
+				// Absolute http(s) URLs are legitimate asset sources; any
+				// other scheme (php://, file://, expect://, phar://, ...) is
+				// a wrapper probe and is refused outright.
+				if ( 0 !== stripos( $trimmed_url, 'http://' ) && 0 !== stripos( $trimmed_url, 'https://' ) ) {
+					return '';
+				}
+			} elseif ( (bool) preg_match( '#^[a-zA-Z][a-zA-Z0-9+.-]*:#i', $trimmed_url ) && ! (bool) preg_match( '#^[a-zA-Z]:[\\\\/]#', $trimmed_url ) ) {
+				// Scheme without "//" (e.g. "data:text/html,...") is never a
+				// local asset reference. The drive-letter carve-out keeps
+				// Windows paths ("C:\...") from false-positive matching.
+				return '';
+			}
+
 			// Parse the URL to get the path.
 			$parsed_url = wp_parse_url( $url );
 			if ( false === $parsed_url ) {
@@ -1632,6 +1653,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			$relative_path = wp_normalize_path( $parsed_url['path'] ?? '' );
 
 			if ( strpos( $relative_path, '..' ) !== false ) {
+				return '';
+			}
+
+			// Single-decode and re-check so an encoded traversal payload
+			// (e.g. "%2e%2e/%2e%2e/etc/passwd") cannot smuggle past the
+			// literal ".." check above. Double-encoding stays literal and
+			// therefore harmless (it never resolves to ".." on disk).
+			$decoded_path = rawurldecode( $relative_path );
+			if ( false !== strpos( $decoded_path, "\0" ) || false !== strpos( $decoded_path, '..' ) ) {
 				return '';
 			}
 
@@ -1656,6 +1686,169 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			}
 
 			return $full_path;
+		}
+
+		/**
+		 * Gets the allow-listed filesystem roots for minify/combine file serving.
+		 *
+		 * Defaults to ABSPATH, WP_CONTENT_DIR, and the current site's uploads
+		 * basedir (multisite-safe: wp_upload_dir() resolves per blog). Passes
+		 * the defaults through the `wppo_minify_allowed_roots` filter when a
+		 * listener is registered; invalid or empty filtered values fall back
+		 * to the defaults so a poisoned filter can never open the tree.
+		 *
+		 * @return string[] Normalized absolute root paths.
+		 * @since NEXT
+		 */
+		public static function get_minify_allowed_roots(): array {
+			$defaults = array();
+
+			if ( defined( 'ABSPATH' ) && is_string( ABSPATH ) && '' !== ABSPATH ) {
+				if ( function_exists( 'wp_normalize_path' ) ) {
+					$defaults[] = wp_normalize_path( ABSPATH );
+				} else {
+					$defaults[] = str_replace( '\\', '/', (string) ABSPATH );
+				}
+			}
+
+			if ( defined( 'WP_CONTENT_DIR' ) && is_string( WP_CONTENT_DIR ) && '' !== WP_CONTENT_DIR ) {
+				if ( function_exists( 'wp_normalize_path' ) ) {
+					$defaults[] = wp_normalize_path( WP_CONTENT_DIR );
+				} else {
+					$defaults[] = str_replace( '\\', '/', (string) WP_CONTENT_DIR );
+				}
+			}
+
+			if ( function_exists( 'wp_upload_dir' ) ) {
+				try {
+					$upload_dir = wp_upload_dir();
+					if ( is_array( $upload_dir ) && isset( $upload_dir['basedir'] ) && is_string( $upload_dir['basedir'] ) && '' !== $upload_dir['basedir'] ) {
+						if ( function_exists( 'wp_normalize_path' ) ) {
+							$defaults[] = wp_normalize_path( $upload_dir['basedir'] );
+						} else {
+							$defaults[] = str_replace( '\\', '/', $upload_dir['basedir'] );
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			$defaults = array_values( array_unique( array_filter( $defaults ) ) );
+
+			if ( function_exists( 'has_filter' ) && has_filter( 'wppo_minify_allowed_roots' ) ) {
+				$filtered = apply_filters( 'wppo_minify_allowed_roots', $defaults );
+				if ( is_array( $filtered ) && ! empty( $filtered ) ) {
+					$sanitized = array();
+					foreach ( $filtered as $root ) {
+						if ( ! is_string( $root ) || '' === trim( $root ) ) {
+							continue;
+						}
+						if ( function_exists( 'wp_normalize_path' ) ) {
+							$sanitized[] = wp_normalize_path( $root );
+						} else {
+							$sanitized[] = str_replace( '\\', '/', $root );
+						}
+					}
+					$sanitized = array_values( array_unique( array_filter( $sanitized ) ) );
+					if ( ! empty( $sanitized ) ) {
+						return $sanitized;
+					}
+				}
+			}
+
+			return $defaults;
+		}
+
+		/**
+		 * Whether a minify/combine source path is allowed to be read.
+		 *
+		 * Single auditable gate: rejects non-string/empty input, NUL bytes,
+		 * literal "..", stream wrappers (php://, file://, expect://,
+		 * phar://, data:, and any other "scheme:" prefix), and ".php"
+		 * targets; resolves symlinks via realpath() (guarded) and requires
+		 * the resolved path to sit inside one of
+		 * {@see Util::get_minify_allowed_roots()} with a trailing-slash
+		 * boundary so sibling-prefix directories cannot match.
+		 *
+		 * Never emits file bytes and never fatals — callers fail open to
+		 * uncombined/unoptimised output.
+		 *
+		 * @param mixed $path Candidate filesystem path.
+		 * @return bool True when the path resolves inside an allowed root.
+		 * @since NEXT
+		 */
+		public static function is_minify_path_allowed( $path ): bool {
+			return '' !== self::validate_minify_path( $path );
+		}
+
+		/**
+		 * Validates a minify/combine source path and returns its resolved form.
+		 *
+		 * Same gate as {@see Util::is_minify_path_allowed()} but returns the
+		 * realpath-resolved, normalized path on success or '' on failure.
+		 *
+		 * @param mixed $path Candidate filesystem path.
+		 * @return string Resolved allowed path, or '' when rejected.
+		 * @since NEXT
+		 */
+		public static function validate_minify_path( $path ): string {
+			if ( ! is_string( $path ) || '' === $path ) {
+				return '';
+			}
+
+			if ( false !== strpos( $path, "\0" ) ) {
+				return '';
+			}
+
+			if ( false !== strpos( $path, '..' ) ) {
+				return '';
+			}
+
+			$trimmed = ltrim( $path );
+			if ( (bool) preg_match( '#^[a-zA-Z][a-zA-Z0-9+.-]*://#i', $trimmed ) ) {
+				return '';
+			}
+			if ( 0 === stripos( $trimmed, 'data:' ) || 0 === stripos( $trimmed, 'phar:' ) ) {
+				return '';
+			}
+			if ( (bool) preg_match( '#^[a-zA-Z][a-zA-Z0-9+.-]*:#i', $trimmed ) && ! (bool) preg_match( '#^[a-zA-Z]:[\\\\/]#', $trimmed ) ) {
+				return '';
+			}
+
+			if ( 'php' === strtolower( pathinfo( $path, PATHINFO_EXTENSION ) ) ) {
+				return '';
+			}
+
+			if ( function_exists( 'realpath' ) ) {
+				$resolved = realpath( $path );
+				if ( false === $resolved ) {
+					return '';
+				}
+			} else {
+				$resolved = $path;
+			}
+
+			if ( function_exists( 'wp_normalize_path' ) ) {
+				$normalized = wp_normalize_path( $resolved );
+			} else {
+				$normalized = str_replace( '\\', '/', (string) $resolved );
+			}
+
+			if ( false !== strpos( $normalized, "\0" ) ) {
+				return '';
+			}
+
+			foreach ( self::get_minify_allowed_roots() as $root ) {
+				if ( ! is_string( $root ) || '' === $root ) {
+					continue;
+				}
+				if ( $normalized === $root || 0 === strpos( $normalized, rtrim( $root, '/' ) . '/' ) ) {
+					return (string) $resolved;
+				}
+			}
+
+			return '';
 		}
 
 		/**

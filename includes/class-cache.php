@@ -1703,7 +1703,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			$css_file = Util::get_local_path( $url );
-			$fs       = $this->get_filesystem();
+			if ( '' === $css_file ) {
+				return false;
+			}
+
+			// Second containment check after URL->path mapping (issue #1179):
+			// resolve symlinks via realpath() and require containment in an
+			// allow-listed root; reject wrappers and .php targets. Fail
+			// closed (no bytes) so the combine loop skips the handle and
+			// serves the original uncombined stylesheet.
+			if ( method_exists( 'PerformanceOptimise\Inc\Util', 'validate_minify_path' ) ) {
+				$validated = Util::validate_minify_path( $css_file );
+				if ( '' === $validated ) {
+					return false;
+				}
+				$css_file = $validated;
+			}
+			$fs = $this->get_filesystem();
 			if ( $fs ) {
 				// Stat first so a single huge theme CSS file is not fully
 				// buffered per handle in the combine loop.
