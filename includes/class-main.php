@@ -396,6 +396,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['file_optimisation']['safeMode'] ) ) {
 				$this->options['file_optimisation']['safeMode'] = false;
 			}
+			// Font subsetting opt-in (issue #1145): additive keys, off by
+			// default so existing installs keep full-unicode behavior.
+			// In-memory only here (no front-end DB write).
+			if ( ! isset( $this->options['file_optimisation']['fontSubset'] ) ) {
+				$this->options['file_optimisation']['fontSubset'] = false;
+			}
+			if ( ! isset( $this->options['file_optimisation']['fontSubsetSubsets'] ) ) {
+				$this->options['file_optimisation']['fontSubsetSubsets'] = 'latin';
+			}
 
 			// Existing installs whose stored settings predate the
 			// speculationRumGating key (issue #1061) inherit the enabled
@@ -1676,9 +1685,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			// Clear Google Fonts cache when the setting toggles.
-			$old_gf = $old_value['file_optimisation']['hostGoogleFontsLocally'] ?? false;
-			$new_gf = $value['file_optimisation']['hostGoogleFontsLocally'] ?? false;
-			if ( $old_gf !== $new_gf ) {
+			$old_gf   = $old_value['file_optimisation']['hostGoogleFontsLocally'] ?? false;
+			$new_gf   = $value['file_optimisation']['hostGoogleFontsLocally'] ?? false;
+			$old_sub  = $old_value['file_optimisation']['fontSubset'] ?? false;
+			$new_sub  = $value['file_optimisation']['fontSubset'] ?? false;
+			$old_subs = $old_value['file_optimisation']['fontSubsetSubsets'] ?? 'latin';
+			$new_subs = $value['file_optimisation']['fontSubsetSubsets'] ?? 'latin';
+			if ( $old_gf !== $new_gf || $old_sub !== $new_sub || $old_subs !== $new_subs ) {
 				Google_Fonts::clear_font_cache();
 			}
 		}

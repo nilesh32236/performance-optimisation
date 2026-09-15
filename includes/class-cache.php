@@ -756,15 +756,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return;
 			}
 
-			$combined_css = preg_replace( '/font-display\s*:\s*block\s*;?/', 'font-display: swap;', $combined_css );
-			if ( null === $combined_css ) {
-				if ( $this->is_safe_css_combine_fallback_enabled() ) {
-					$this->log_combine_fallback( 'preg_error', $successful_handles );
+			$font_display = 'swap';
+			if ( class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) && method_exists( 'PerformanceOptimise\Inc\Google_Fonts', 'get_font_display' ) ) {
+				try {
+					$font_display = Google_Fonts::get_font_display();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$font_display = 'swap';
 				}
-				return;
 			}
+			if ( '' !== $font_display ) {
+				$combined_css = preg_replace( '/font-display\s*:\s*block\s*;?/i', 'font-display: ' . $font_display . ';', $combined_css );
+				if ( null === $combined_css ) {
+					if ( $this->is_safe_css_combine_fallback_enabled() ) {
+						$this->log_combine_fallback( 'preg_error', $successful_handles );
+					}
+					return;
+				}
 
-			$combined_css = Minify\CSS::inject_font_display_swap( $combined_css );
+				$combined_css = Minify\CSS::inject_font_display_swap( $combined_css, $font_display );
+			}
 
 			$css_minifier = new CSSMinifier( $combined_css );
 			$combined_css = $css_minifier->minify();
