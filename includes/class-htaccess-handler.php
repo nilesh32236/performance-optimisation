@@ -771,41 +771,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				$wp_filesystem->copy( $htaccess_file, $backup_file, true );
 			}
 
-			// Unique tmp suffix: wp_rand() is wrapped in try/catch (mirroring
-			// Advanced_Cache_Handler::atomic_write_dropin()): under Brain
-			// Monkey a stale wp_rand stub from another test can throw once
-			// its session tore down, and production filters must never let
-			// a suffix RNG failure break the write. PID + uniqid segments
-			// widen the suffix space so two concurrent settings saves never
-			// share a tmp name and clobber each other (last-writer-wins on
-			// the rename is safe: both writers splice from current state
-			// and post-write verification checksums the winner).
-			if ( function_exists( 'wp_rand' ) ) {
-				try {
-					$suffix = (string) wp_rand( 100000, 999999 );
-				} catch ( \Throwable $ignored_rand ) {
-					unset( $ignored_rand );
-					if ( function_exists( 'mt_rand' ) ) {
-						$suffix = (string) mt_rand( 100000, 999999 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.rand_mt_rand -- Fallback when wp_rand() is unavailable or throws.
-					} else {
-						return null;
-					}
-				}
-			} elseif ( function_exists( 'mt_rand' ) ) {
-				$suffix = (string) mt_rand( 100000, 999999 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.rand_mt_rand -- Fallback when wp_rand() is unavailable.
-			} else {
-				return null;
-			}
-			$pid_part  = function_exists( 'getmypid' ) ? (int) getmypid() : 0;
-			$uniq_part = '';
-			try {
-				$uniq_part = substr( md5( uniqid( (string) microtime( true ), true ) ), 0, 8 );
-			} catch ( \Throwable $ignored_uniq ) {
-				unset( $ignored_uniq );
-			}
-			if ( '' !== $uniq_part ) {
-				$suffix .= '-' . $pid_part . '-' . $uniq_part;
-			}
 			// Secure tmp creation: prefer wp_tempnam() in the .htaccess
 			// directory (same filesystem, so the rename stays atomic) with a
 			// `.wppo-tmp-` prefix so orphan cleanup still matches, falling
@@ -830,6 +795,43 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				}
 			}
 			if ( '' === $tmp_file ) {
+				// Unique tmp suffix, generated lazily only for the legacy
+				// sibling fallback above: wp_rand() is wrapped in try/catch
+				// (mirroring Advanced_Cache_Handler::atomic_write_dropin()):
+				// under Brain Monkey a stale wp_rand stub from another test
+				// can throw once its session tore down, and production
+				// filters must never let a suffix RNG failure break the
+				// write. PID + uniqid segments widen the suffix space so two
+				// concurrent settings saves never share a tmp name and
+				// clobber each other (last-writer-wins on the rename is
+				// safe: both writers splice from current state and
+				// post-write verification checksums the winner).
+				if ( function_exists( 'wp_rand' ) ) {
+					try {
+						$suffix = (string) wp_rand( 100000, 999999 );
+					} catch ( \Throwable $ignored_rand ) {
+						unset( $ignored_rand );
+						if ( function_exists( 'mt_rand' ) ) {
+							$suffix = (string) mt_rand( 100000, 999999 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.rand_mt_rand -- Fallback when wp_rand() is unavailable or throws.
+						} else {
+							return null;
+						}
+					}
+				} elseif ( function_exists( 'mt_rand' ) ) {
+					$suffix = (string) mt_rand( 100000, 999999 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.rand_mt_rand -- Fallback when wp_rand() is unavailable.
+				} else {
+					return null;
+				}
+				$pid_part  = function_exists( 'getmypid' ) ? (int) getmypid() : 0;
+				$uniq_part = '';
+				try {
+					$uniq_part = substr( md5( uniqid( (string) microtime( true ), true ) ), 0, 8 );
+				} catch ( \Throwable $ignored_uniq ) {
+					unset( $ignored_uniq );
+				}
+				if ( '' !== $uniq_part ) {
+					$suffix .= '-' . $pid_part . '-' . $uniq_part;
+				}
 				$tmp_file = $htaccess_file . '.wppo-tmp-' . $suffix;
 			}
 
@@ -878,7 +880,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 
 			$written = $wp_filesystem->get_contents( $htaccess_file );
 			if ( ! is_string( $written ) ) {
-				$wp_filesystem->put_contents( $htaccess_file, $current, $mode );
+				// A failed restore must not rely on the caller's generic
+				// false handling alone: verify the in-memory original came
+				// back and flag the failure, mirroring the chmod branch.
+				$restore_ok = (bool) $wp_filesystem->put_contents( $htaccess_file, $current, $mode );
+				if ( $restore_ok ) {
+					$re_read    = $wp_filesystem->get_contents( $htaccess_file );
+					$restore_ok = is_string( $re_read ) && $re_read === $current;
+				}
+				if ( ! $restore_ok ) {
+					self::flag_htaccess_failure();
+				}
 				return false;
 			}
 

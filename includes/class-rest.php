@@ -636,7 +636,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$now    = time();
 			// Fixed window: the TTL is set only on the first increment; later
 			// hits re-store with the remaining TTL instead of extending it.
-			if ( ! is_array( $bucket ) || ! isset( $bucket['count'], $bucket['start'] ) || ( $now - (int) $bucket['start'] ) >= $window ) {
+			if ( ! is_array( $bucket ) || ! isset( $bucket['count'], $bucket['start'] ) || (int) $bucket['start'] > $now || ( $now - (int) $bucket['start'] ) >= $window ) {
 				set_transient(
 					$key,
 					array(
@@ -651,7 +651,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			if ( $count >= $limit ) {
 				return true;
 			}
-			$remaining = max( 1, $window - ( $now - (int) $bucket['start'] ) );
+			// Clamp into [1, $window]: a future-dated (corrupted or tampered)
+			// start would otherwise persist the bucket past one window. Future
+			// starts reset above; the min() cap bounds this call's TTL regardless.
+			$elapsed   = $now - (int) $bucket['start'];
+			$remaining = max( 1, min( $window, $window - $elapsed ) );
 			set_transient(
 				$key,
 				array(
@@ -678,7 +682,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @since NEXT
 		 * @return string Anon throttle suffix.
 		 */
-		private function throttle_client_suffix(): string {
+		private static function throttle_client_suffix(): string {
 			$remote = isset( $_SERVER['REMOTE_ADDR'] ) && is_string( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 			$xff    = '';
 			if ( isset( $_SERVER['HTTP_X_FORWARDED_FOR'] ) && is_string( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized

@@ -735,6 +735,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 					if ( isset( $item['node'] ) && is_array( $item['node'] ) && isset( $item['node']['snippet'] ) && is_scalar( $item['node']['snippet'] ) ) {
 						$row['node'] = array( 'snippet' => self::sanitize_snippet_for_lcp( (string) $item['node']['snippet'] ) );
 					}
+					if ( array() === $row ) {
+						continue;
+					}
 					$clean['items'][] = $row;
 				}
 			}
@@ -887,7 +890,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 				unset( $parts['query'] );
 			}
 			unset( $parts['fragment'] );
-			$rebuilt = ( $parts['scheme'] ?? 'https' ) . '://' . ( $parts['host'] ?? '' );
+			$rebuilt = strtolower( (string) ( $parts['scheme'] ?? 'https' ) ) . '://' . strtolower( (string) ( $parts['host'] ?? '' ) );
 			if ( isset( $parts['port'] ) ) {
 				// Strip default ports so http://example.com:80 compares
 				// equal to http://example.com (and :443 to https://…).

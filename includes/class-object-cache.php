@@ -829,7 +829,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				$content_real  = realpath( WP_CONTENT_DIR );
 				$content_dir   = is_string( $content_real ) ? wp_normalize_path( $content_real ) : wp_normalize_path( WP_CONTENT_DIR );
 				$config_normal = is_string( $config_real ) ? wp_normalize_path( $config_real ) : '';
-				$config_size   = ( '' !== $config_normal && 0 === strpos( $config_normal, $content_dir . '/' ) && is_readable( $this->config_path ) ) ? self::safe_filesize( $this->config_path ) : false; // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize
+				$config_size   = ( '' !== $config_normal && 0 === strpos( $config_normal, $content_dir . '/' ) && is_readable( $this->config_path ) ) ? self::safe_filesize( $this->config_path ) : false;
 				if ( false !== $config_size && $config_size > 0 && $config_size <= 65536 ) {
 					$config = include $this->config_path; // phpcs:ignore WPThemeReview.CoreFunctionality.FileInclude.FileIncludeFound
 				}

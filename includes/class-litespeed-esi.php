@@ -183,7 +183,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 					unset( $e );
 					return '';
 				}
-				if ( function_exists( 'update_option' ) ) {
+				if ( function_exists( 'add_option' ) ) {
+					// First writer wins: concurrent first-use requests must not
+					// last-write-wins invalidate each other's fallback nonces, so
+					// add (which fails when the option already exists) before
+					// falling back to update.
+					$added = add_option( 'wppo_esi_fallback_secret', $secret, '', false );
+					if ( ! $added ) {
+						$winner = function_exists( 'get_option' ) ? get_option( 'wppo_esi_fallback_secret', '' ) : '';
+						if ( is_string( $winner ) && '' !== $winner ) {
+							$secret = $winner;
+						} elseif ( function_exists( 'update_option' ) ) {
+							update_option( 'wppo_esi_fallback_secret', $secret, false );
+						} else {
+							return '';
+						}
+					}
+				} elseif ( function_exists( 'update_option' ) ) {
 					update_option( 'wppo_esi_fallback_secret', $secret, false );
 				} else {
 					return '';
@@ -1094,6 +1110,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		}
 
 		/**
+		 * Sanitize an ESI tag value through the canonical sanitizer when
+		 * available, with a local fallback otherwise.
+		 *
+		 * Single home for the emitter-unavailable path so handle_nonce()
+		 * no longer hand-mirrors Header_Emitter::sanitize_tag() inline: when
+		 * the emitter is loaded the canonical implementation is reused
+		 * directly, and the inline fallback below matches its contract
+		 * (strip ASCII controls incl. CR/LF/NUL, cap at 1024 chars),
+		 * failing closed to an empty tag on regex failure.
+		 *
+		 * @since NEXT
+		 * @param string $action Raw ESI action name.
+		 * @return string Sanitized tag value (max 1024 chars).
+		 */
+		private static function sanitize_esi_tag_value( string $action ): string {
+			if ( self::has_header_emitter() ) {
+				return Header_Emitter::sanitize_tag( $action );
+			}
+			$cleaned = preg_replace( '/[\x00-\x1F\x7F]/', '', $action );
+			if ( ! is_string( $cleaned ) ) {
+				return '';
+			}
+			return substr( $cleaned, 0, 1024 );
+		}
+
+		/**
 		 * Handle litespeed_nonce action for widget/cart hole-punching.
 		 *
 		 * @since 2.0.0
@@ -1118,14 +1160,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			if ( self::has_header_emitter() ) {
 				Header_Emitter::emit_esi_tag( $action );
 			} elseif ( function_exists( 'headers_sent' ) && ! headers_sent() ) {
-				$cleaned = preg_replace( '/[\x00-\x1F\x7F]/', '', $action );
-				// Mirror Header_Emitter::sanitize_tag(): on preg_replace()
-				// failure (null) fall back to stripping CR/LF/NUL from the
-				// raw action instead of emitting an empty tag header.
-				if ( ! is_string( $cleaned ) ) {
-					$cleaned = str_replace( array( "\r", "\n", "\0" ), '', $action );
-				}
-				$safe = substr( $cleaned, 0, 1024 );
+				$safe = self::sanitize_esi_tag_value( $action );
 				header( 'X-LiteSpeed-Tag: ESI.' . $safe, false );
 			}
 		}

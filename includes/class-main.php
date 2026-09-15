@@ -533,7 +533,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			$file_optimisation_opts = $this->options['file_optimisation'] ?? array();
 			if ( ! is_array( $file_optimisation_opts ) ) {
-				$file_optimisation_opts = array();
+				// Normalize the source option too: the preset branch below
+				// writes $this->options['file_optimisation']['heartbeatControl'],
+				// which fatals on a corrupted non-array (e.g. string from a bad
+				// import) unless the write target is an array as well.
+				$file_optimisation_opts             = array();
+				$this->options['file_optimisation'] = array();
 			}
 			// INP-first preset (#932): one-click 60s heartbeat via the existing
 			// disable_heartbeat path. In-memory only — an explicit user choice
@@ -720,16 +725,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'Util'                   => 'class-util.php',
 			);
 			spl_autoload_register(
-				static function ( $class ) use ( $fallback_map ): void {
+				static function ( $class_name ) use ( $fallback_map ): void {
 					$prefix = 'PerformanceOptimise\\Inc\\';
-					if ( 0 !== strpos( (string) $class, $prefix ) ) {
+					if ( 0 !== strpos( (string) $class_name, $prefix ) ) {
 						return;
 					}
-					$short = substr( (string) $class, strlen( $prefix ) );
+					$short = substr( (string) $class_name, strlen( $prefix ) );
 					if ( ! isset( $fallback_map[ $short ] ) ) {
 						return;
 					}
-					if ( class_exists( $class, false ) ) {
+					if ( class_exists( $class_name, false ) ) {
 						return;
 					}
 					$fallback_path = WPPO_PLUGIN_PATH . 'includes/' . $fallback_map[ $short ];

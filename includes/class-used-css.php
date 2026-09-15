@@ -604,8 +604,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 
 			while ( $offset < $length ) {
 				if ( '@' === $css[ $offset ] ) {
-					$semicolon_pos = strpos( $css, ';', $offset );
-					$at_rule_end   = strpos( $css, '{', $offset );
+					// Quote-aware prelude scan (mirrors the block scanners
+					// below): a naive strpos() for ';'/'{' mis-splits when
+					// the prelude holds a quoted string containing either
+					// character (e.g. @import url("a;b.css")).
+					list( $semicolon_pos, $at_rule_end ) = self::find_at_rule_prelude_end( $css, $offset, $length );
 
 					// Handle semicolon-terminated at-rules (@import, @charset, @namespace).
 					if ( false !== $semicolon_pos && ( false === $at_rule_end || $semicolon_pos < $at_rule_end ) ) {
@@ -727,6 +730,49 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			}
 
 			return $rules;
+		}
+
+		/**
+		 * Find the end of an at-rule prelude, skipping quoted segments.
+		 *
+		 * Returns the first unquoted ';' or '{' offset (whichever comes
+		 * first), so a semicolon/brace inside a quoted prelude string (e.g.
+		 * `@import url("a;b.css")`) never terminates the prelude early.
+		 * Backslash escapes inside quotes are honoured (e.g. "a\";b").
+		 *
+		 * @since NEXT
+		 * @param string $css    Full CSS content.
+		 * @param int    $offset At-rule start offset (the '@').
+		 * @param int    $length Length of $css.
+		 * @return array Indices 0 (semicolon offset or false) and 1 (brace offset or false).
+		 */
+		private static function find_at_rule_prelude_end( string $css, int $offset, int $length ): array {
+			$quote     = null;
+			$semicolon = false;
+			$brace     = false;
+			$pos       = $offset;
+			while ( $pos < $length ) {
+				$char = $css[ $pos ];
+				if ( null !== $quote ) {
+					if ( '\\' === $char ) {
+						$pos += 2;
+						continue;
+					}
+					if ( $char === $quote ) {
+						$quote = null;
+					}
+				} elseif ( '"' === $char || "'" === $char ) {
+					$quote = $char;
+				} elseif ( ';' === $char ) {
+					$semicolon = $pos;
+					break;
+				} elseif ( '{' === $char ) {
+					$brace = $pos;
+					break;
+				}
+				++$pos;
+			}
+			return array( $semicolon, $brace );
 		}
 
 		/**

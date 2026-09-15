@@ -623,6 +623,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 						return;
 					}
 					$json = wp_json_encode( $export_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES );
+					if ( ! is_string( $json ) || '' === $json ) {
+						WP_CLI::error( __( 'JSON encoding failed; settings not exported.', 'performance-optimisation' ) );
+						return;
+					}
 					if ( ! $wp_filesystem->put_contents( $file, $json, FS_CHMOD_FILE ) ) {
 						WP_CLI::error( __( 'Failed to write settings to file.', 'performance-optimisation' ) );
 						return;
@@ -630,7 +634,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 					/* translators: %s: File path */
 					WP_CLI::success( sprintf( __( 'Settings exported to %s', 'performance-optimisation' ), $file ) );
 				} else {
-					WP_CLI::log( (string) wp_json_encode( $export_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
+					self::log_json( $export_data );
 				}
 				return;
 			}
