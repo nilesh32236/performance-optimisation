@@ -906,7 +906,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 			// and each call otherwise re-scans wp_options.
 			$cache_key = Util::transient_key( 'wppo_abilities_autoloaded' );
 			$cached    = get_transient( $cache_key );
-			if ( is_array( $cached ) && isset( $cached['autoloaded_count'], $cached['autoloaded_size'] ) ) {
+			// Require options: pre-upgrade entries lack the list and must
+			// regenerate instead of returning a key-less payload.
+			if ( is_array( $cached ) && isset( $cached['autoloaded_count'], $cached['autoloaded_size'], $cached['options'] ) ) {
 				$result = array(
 					'autoloaded_count'   => (int) $cached['autoloaded_count'],
 					'autoloaded_size'    => (int) $cached['autoloaded_size'],

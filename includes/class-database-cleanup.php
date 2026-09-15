@@ -705,20 +705,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * @return string[]
 		 */
 		public static function get_autoloadable_values(): array {
-			if ( function_exists( 'wp_autoload_values_to_autoload' ) && self::is_wp_version_at_least( '6.6' ) ) {
-				return (array) wp_autoload_values_to_autoload();
-			}
-			// Known pre-6.6 core: only `yes` counts (yes/no legacy values).
-			if ( function_exists( 'get_bloginfo' ) && ! self::is_wp_version_at_least( '6.6' ) ) {
+			// Single filterable version read: is_wp_version_at_least() and
+			// the known-pre-6.6 check below must share one get_bloginfo()
+			// call instead of two round trips per audit query path.
+			$current = '';
+			if ( function_exists( 'get_bloginfo' ) ) {
 				try {
 					$current = (string) get_bloginfo( 'version' );
 				} catch ( \Throwable $e ) {
 					unset( $e );
 					$current = '';
 				}
-				if ( '' !== $current ) {
-					return array( 'yes' );
-				}
+			}
+			$is_66 = '' !== $current && version_compare( $current, '6.6', '>=' );
+			if ( function_exists( 'wp_autoload_values_to_autoload' ) && $is_66 ) {
+				return (array) wp_autoload_values_to_autoload();
+			}
+			// Known pre-6.6 core: only `yes` counts (yes/no legacy values).
+			if ( '' !== $current && ! $is_66 ) {
+				return array( 'yes' );
 			}
 			// Version unknown (or modern core without the helper, e.g. unit
 			// tests): fail open to the full 6.6 list for Site Health parity.
@@ -1192,12 +1197,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			$candidates = self::get_autoload_candidates( $threshold, $limit );
 			$saved      = 0;
 			$backup     = array();
+			// Hoisted: identical for every candidate, avoid up to 500 repeats.
+			$default = self::get_default_autoload_value();
 			foreach ( $candidates as $candidate ) {
 				$saved   += (int) $candidate['size'];
 				$backup[] = array(
 					'option_name' => (string) $candidate['option_name'],
 					'size'        => (int) $candidate['size'],
-					'prior'       => '' !== (string) ( $candidate['autoload'] ?? '' ) ? (string) $candidate['autoload'] : self::get_default_autoload_value(),
+					'prior'       => '' !== (string) ( $candidate['autoload'] ?? '' ) ? (string) $candidate['autoload'] : $default,
 				);
 			}
 			return array(
@@ -1353,16 +1360,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				return $result;
 			}
 
-			$legacy_fallback = ! function_exists( 'wp_set_option_autoload' ) || ! self::is_wp_version_at_least( '6.6' );
+			// Single supported() predicate so unknown versions behave the same
+			// here as in plan/supported reporting (no silent no-op apply).
+			$legacy_fallback = ! self::is_autoload_remediation_supported();
 			if ( $legacy_fallback ) {
 				// Legacy fallback keeps autoload yes: report candidates as failed
 				// (unsupported) without touching anything.
+				$default = self::get_default_autoload_value();
 				foreach ( $candidates as $candidate ) {
 					$result['failed'][] = $candidate['option_name'];
 					$result['backup'][] = array(
 						'option_name' => (string) $candidate['option_name'],
 						'size'        => (int) $candidate['size'],
-						'prior'       => '' !== (string) ( $candidate['autoload'] ?? '' ) ? (string) $candidate['autoload'] : self::get_default_autoload_value(),
+						'prior'       => '' !== (string) ( $candidate['autoload'] ?? '' ) ? (string) $candidate['autoload'] : $default,
 					);
 				}
 				return $result;
@@ -1372,6 +1382,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			$saved  = 0;
 			// Hoist the core list once: get_core_autoload_options() fires a filter.
 			$core_options = array_flip( self::get_core_autoload_options() );
+			// Hoisted: identical for every candidate, avoid up to 500 repeats.
+			$apply_default = self::get_default_autoload_value();
 			foreach ( $candidates as $candidate ) {
 				$name = $candidate['option_name'];
 				// Re-check core exclusion at apply time (filter may have changed).
@@ -1379,7 +1391,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					$result['failed'][] = $name;
 					continue;
 				}
-				$prior = '' !== (string) ( $candidate['autoload'] ?? '' ) ? (string) $candidate['autoload'] : self::get_default_autoload_value();
+				$prior = '' !== (string) ( $candidate['autoload'] ?? '' ) ? (string) $candidate['autoload'] : $apply_default;
 				if ( self::set_option_autoload_off( $name ) ) {
 					$priors[ $name ]     = $prior;
 					$result['applied'][] = array(
@@ -2362,6 +2374,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				if ( function_exists( 'delete_transient' ) ) {
 					delete_transient( Util::transient_key( 'wppo_db_cleanup_counts_stale' ) );
 					delete_transient( Util::stampede_stale_key( Util::transient_key( 'wppo_db_cleanup_counts' ) ) );
+					// Remediate/revert change autoload totals: the Abilities
+					// transient (10-min TTL) must not serve stale parity data.
+					delete_transient( Util::transient_key( 'wppo_abilities_autoloaded' ) );
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
