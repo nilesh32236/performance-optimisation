@@ -67,6 +67,21 @@ class MainSpeculationDocumentRulesTest extends \PHPUnit\Framework\TestCase {
 				return array_key_exists( $name, $this->options ) ? $this->options[ $name ] : $fallback;
 			}
 		);
+
+		// Force a deterministic non-commerce context: AiAdaptiveTest
+		// eval-declares Woo helpers process-wide (Brain Monkey cannot
+		// undeclare functions), which would otherwise cap eagerness
+		// site-wide for every later test file in the same process.
+		// Brain Monkey's native apply_filters() only serves expectations,
+		// so the override needs an explicit alias (passthrough otherwise).
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook, $value ) {
+				if ( 'wppo_ai_adaptive_commerce_context' === $hook ) {
+					return false;
+				}
+				return $value;
+			}
+		);
 	}
 
 	/**
@@ -184,6 +199,47 @@ class MainSpeculationDocumentRulesTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertNotEmpty( $eager_rules );
 		$this->assertSame( array( 'http://example.com/' ), $eager_rules[0]['urls'] );
+	}
+
+		/**
+	 * Commerce/auth contexts never emit eager rules (prefetch only).
+	 *
+	 * Both the singular home-link rule and the generic list rule degrade
+	 * from eager to moderate while still emitting the home URL.
+	 *
+	 * @return void
+	 */
+	public function test_commerce_context_caps_eager_to_moderate(): void {
+		$this->install_stubs( $this->default_settings() );
+		Functions\when( 'is_singular' )->justReturn( true );
+		// install_stubs() forces a non-commerce context via add_filter;
+		// override apply_filters for this test to force commerce instead
+		// (mirrors the AiAdaptiveTest commerce-filter pattern).
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook, $value ) {
+				if ( 'wppo_ai_adaptive_commerce_context' === $hook ) {
+					return true;
+				}
+				return $value;
+			}
+		);
+		$preload                         = $this->default_settings()['preload_settings'];
+		$preload['speculationEagerness'] = 'eager';
+		$main                            = $this->make_main( $preload );
+
+		$rules = $main->filter_speculation_list_rules( array() );
+
+		$this->assertNotEmpty( $rules );
+		foreach ( $rules as $rule ) {
+			$this->assertNotSame( 'eager', $rule['eagerness'] ?? null );
+		}
+		$list_urls = array();
+		foreach ( $rules as $rule ) {
+			if ( is_array( $rule ) && ( $rule['source'] ?? '' ) === 'list' && ! empty( $rule['urls'] ) && is_array( $rule['urls'] ) ) {
+				$list_urls = array_merge( $list_urls, $rule['urls'] );
+			}
+		}
+		$this->assertContains( 'http://example.com/', $list_urls );
 	}
 
 	/**

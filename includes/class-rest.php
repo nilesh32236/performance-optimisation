@@ -892,6 +892,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				}
 			}
 
+			// Preserve the RUM-weighted top-URL cap when the request omits
+			// it (issue #1183): same partial-save hazard as the gating flag
+			// above — an older client/partial save must not wipe the cap.
+			if ( 'preload_settings' === $tab && ! array_key_exists( 'speculationTopUrlsLimit', $settings ) && isset( $options['preload_settings']['speculationTopUrlsLimit'] ) ) {
+				$stored = $options['preload_settings']['speculationTopUrlsLimit'];
+				$limit  = is_numeric( $stored ) ? (int) $stored : 2;
+				if ( function_exists( 'absint' ) ) {
+					$limit = absint( $limit );
+				} else {
+					$limit = abs( (int) $limit );
+				}
+				$sanitized_settings['speculationTopUrlsLimit'] = ( $limit >= 1 && $limit <= 5 ) ? $limit : 2;
+			}
+
 			$merged_options         = $options;
 			$merged_options[ $tab ] = $sanitized_settings;
 
