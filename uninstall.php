@@ -54,6 +54,15 @@ if ( ! function_exists( 'wppo_cleanup_network_files' ) ) {
 			}
 		}
 
+		// Remove Redis circuit-breaker sidecars (JSON state + parked sibling)
+		// so a reinstall starts from a clean closed circuit (fail-open).
+		wppo_cleanup_redis_state_files();
+
+		// Remove the wp-content/.htaccess "WPPO Redis Config" deny block
+		// shielding wppo-redis-config.php (fail-open, insert_with_markers
+		// cleanup path with empty rules).
+		wppo_cleanup_redis_config_htaccess_block();
+
 		// Remove advanced-cache.php drop-in if it belongs to this plugin.
 		$advanced_cache = WP_CONTENT_DIR . '/advanced-cache.php';
 		if ( file_exists( $advanced_cache ) ) {
@@ -121,6 +130,137 @@ if ( ! function_exists( 'wppo_cleanup_dropin_artifacts' ) ) {
 					wp_delete_file( $tmp_file );
 				}
 			}
+		}
+	}
+}
+
+if ( ! function_exists( 'wppo_cleanup_redis_state_files' ) ) {
+	/**
+	 * Delete Redis circuit-breaker sidecar files (fail-open).
+	 *
+	 * Removes the JSON state/counter files and the parked drop-in sibling
+	 * written by Object_Cache::auto_disable_circuit() / clear_circuit_state()
+	 * and the drop-in trip path:
+	 * `WP_CONTENT_DIR/wppo-redis-disabled.json`,
+	 * `WP_CONTENT_DIR/wppo-redis-failures.json`, and
+	 * `WP_CONTENT_DIR/object-cache.php.wppo-disabled`.
+	 *
+	 * Standalone-safe: uninstall runs without the plugin's autoloader, so
+	 * paths are resolved from Object_Cache::get_uninstall_sidecar_paths()
+	 * when the class happens to be loadable (class_exists() +
+	 * method_exists() guarded), falling back to literal WP_CONTENT_DIR-joined
+	 * filenames. Deletes are constrained to the WP_CONTENT_DIR prefix, use
+	 * wp_delete_file() with one retry (mirroring the redis-config pattern),
+	 * and never fatal — missing files or methods count as success.
+	 *
+	 * @since NEXT
+	 * @return void
+	 */
+	function wppo_cleanup_redis_state_files(): void {
+		try {
+			$paths = array();
+			if ( class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) && method_exists( 'PerformanceOptimise\Inc\Object_Cache', 'get_uninstall_sidecar_paths' ) ) {
+				try {
+					$candidate = \PerformanceOptimise\Inc\Object_Cache::get_uninstall_sidecar_paths();
+					if ( is_array( $candidate ) ) {
+						$paths = $candidate;
+					}
+				} catch ( \Throwable $ignored_class ) {
+					unset( $ignored_class );
+					$paths = array();
+				}
+			}
+			if ( empty( $paths ) ) {
+				if ( ! defined( 'WP_CONTENT_DIR' ) ) {
+					return;
+				}
+				$paths = array(
+					WP_CONTENT_DIR . '/wppo-redis-disabled.json',
+					WP_CONTENT_DIR . '/wppo-redis-failures.json',
+					WP_CONTENT_DIR . '/object-cache.php.wppo-disabled',
+				);
+			}
+
+			$root = '';
+			if ( defined( 'WP_CONTENT_DIR' ) ) {
+				$root = (string) WP_CONTENT_DIR;
+				if ( function_exists( 'wp_normalize_path' ) ) {
+					$root = wp_normalize_path( $root );
+				}
+				$root = rtrim( $root, '/\\' ) . '/';
+			}
+
+			foreach ( $paths as $path ) {
+				try {
+					if ( ! is_string( $path ) || '' === $path ) {
+						continue;
+					}
+					$check = $path;
+					if ( function_exists( 'wp_normalize_path' ) ) {
+						$check = wp_normalize_path( $path );
+					}
+					// Containment guard: only delete inside WP_CONTENT_DIR.
+					if ( '' !== $root && 0 !== strpos( $check, $root ) ) {
+						continue;
+					}
+					if ( ! file_exists( $path ) ) {
+						continue;
+					}
+					if ( ! function_exists( 'wp_delete_file' ) ) {
+						continue;
+					}
+					wp_delete_file( $path );
+					if ( file_exists( $path ) ) {
+						wp_delete_file( $path );
+					}
+				} catch ( \Throwable $ignored_file ) {
+					unset( $ignored_file );
+				}
+			}
+		} catch ( \Throwable $ignored ) {
+			unset( $ignored );
+		}
+	}
+}
+
+if ( ! function_exists( 'wppo_cleanup_redis_config_htaccess_block' ) ) {
+	/**
+	 * Remove the orphan "WPPO Redis Config" deny block from wp-content/.htaccess (fail-open).
+	 *
+	 * Object_Cache::protect_config_file() writes the block via
+	 * insert_with_markers(); passing empty rules removes it while leaving
+	 * every other block intact. Guarded with function_exists() so uninstall
+	 * never fatals when admin file functions are unavailable; missing marker
+	 * or file counts as success.
+	 *
+	 * @since NEXT
+	 * @return void
+	 */
+	function wppo_cleanup_redis_config_htaccess_block(): void {
+		try {
+			if ( ! function_exists( 'insert_with_markers' ) ) {
+				return;
+			}
+			if ( ! defined( 'WP_CONTENT_DIR' ) ) {
+				return;
+			}
+			$marker = 'WPPO Redis Config';
+			if ( class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) && defined( 'PerformanceOptimise\Inc\Object_Cache::CONFIG_HTACCESS_MARKER' ) ) {
+				$marker = (string) \PerformanceOptimise\Inc\Object_Cache::CONFIG_HTACCESS_MARKER;
+				if ( '' === $marker ) {
+					$marker = 'WPPO Redis Config';
+				}
+			}
+			$htaccess = WP_CONTENT_DIR . '/.htaccess';
+			if ( function_exists( 'wp_normalize_path' ) ) {
+				$htaccess = wp_normalize_path( $htaccess );
+			}
+			insert_with_markers( $htaccess, $marker, array() );
+			if ( function_exists( 'wppo_cleanup_htaccess_artifacts' ) ) {
+				wppo_cleanup_htaccess_artifacts( $htaccess );
+			}
+		} catch ( \Throwable $ignored ) {
+			unset( $ignored );
 		}
 	}
 }
@@ -443,6 +583,13 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 		delete_transient( $transient_prefix . 'wppo_total_js_css' );
 		delete_transient( $transient_prefix . 'wppo_wp_cache_fix_checked' );
 		delete_transient( $transient_prefix . 'wppo_crawler_server_ip' );
+		// Redis circuit-breaker transients (Object_Cache::FAIL_TRANSIENT,
+		// ::CIRCUIT_NOTICE_TRANSIENT, ::LAST_FAILURE_TRANSIENT) are
+		// blog-prefixed via Util::transient_key() — delete the per-blog keys
+		// explicitly so switch_to_blog() cleanup leaves no cross-site state.
+		delete_transient( $transient_prefix . 'wppo_redis_failures' );
+		delete_transient( $transient_prefix . 'wppo_object_cache_circuit_notice' );
+		delete_transient( $transient_prefix . 'wppo_redis_last_failure' );
 
 		// Bulk-delete remaining plugin transients (per-URL crawler blacklist
 		// entries, rate-limit counters, CCSS statuses, ESI nonces, audit
