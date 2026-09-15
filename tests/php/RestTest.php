@@ -274,6 +274,12 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'update_option' )->justReturn( true );
 
 		$request = \Mockery::mock( \WP_REST_Request::class );
+		$request->shouldReceive( 'get_param' )->andReturn(
+			array(
+				'delayJS' => true,
+				'notAKey' => 'x',
+			)
+		);
 		$request->shouldReceive( 'get_params' )->andReturn(
 			array(
 				'settings' => array(
@@ -301,6 +307,9 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'update_option' )->justReturn( false );
 
 		$request = \Mockery::mock( \WP_REST_Request::class );
+		$request->shouldReceive( 'get_param' )->andReturn(
+			array( 'delayJS' => true )
+		);
 		$request->shouldReceive( 'get_params' )->andReturn(
 			array( 'settings' => array( 'delayJS' => true ) )
 		);
@@ -449,6 +458,37 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 		$this->assertTrue( ! empty( $data['data']['staged']['delayJS'] ) );
 		$this->assertTrue( ! empty( $data['data']['has_staged'] ) );
 		$this->assertStringContainsString( 'wppo_preview=assets', $data['data']['preview_url'] );
+		$this->assertStringContainsString( '_wppo_preview_nonce=abc123', $data['data']['preview_url'] );
+	}
+
+	/**
+	 * Test get_sandbox_preview with nothing staged reports has_staged false (issue #1163).
+	 */
+	public function test_get_sandbox_preview_without_staged_reports_empty(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		Functions\when( 'get_option' )->justReturn(
+			array(
+				'file_optimisation' => array(
+					'delayJS' => false,
+				),
+			)
+		);
+		Functions\when( 'home_url' )->justReturn( 'http://example.com/' );
+		Functions\when( 'wp_create_nonce' )->justReturn( 'abc123' );
+		Functions\when( 'add_query_arg' )->alias(
+			static function ( $args, $url ) {
+				return $url . '?' . http_build_query( $args );
+			}
+		);
+
+		$request  = \Mockery::mock( \WP_REST_Request::class );
+		$response = $this->rest->get_sandbox_preview( $request );
+		$data     = $response->get_data();
+		$this->assertTrue( $data['success'] );
+		$this->assertSame( array(), $data['data']['staged'] );
+		$this->assertFalse( $data['data']['has_staged'] );
+		$this->assertStringContainsString( 'wppo_preview=assets', $data['data']['preview_url'] );
+		$this->assertStringContainsString( '_wppo_preview_nonce=abc123', $data['data']['preview_url'] );
 	}
 
 	/**

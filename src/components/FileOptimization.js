@@ -266,7 +266,17 @@ const FileOptimization = ( {
 				) {
 					setSandboxStaged( status.data.staged );
 				}
-				if ( status.data.preview_url ) {
+				// Only advertise the admin preview link when an experiment is
+				// actually staged: get_preview_url() always builds a nonce URL,
+				// so setting it unconditionally would enable the preview/perf
+				// buttons with nothing staged, implying a staged measurement.
+				if (
+					status.data.preview_url &&
+					status.data.has_staged &&
+					status.data.staged &&
+					typeof status.data.staged === 'object' &&
+					Object.keys( status.data.staged ).length > 0
+				) {
 					setSandboxPreviewUrl( status.data.preview_url );
 				}
 			} catch {
@@ -321,10 +331,16 @@ const FileOptimization = ( {
 			} else {
 				notifySandbox( {
 					type: 'error',
-					message: __(
-						'Could not stage the preview.',
-						'performance-optimisation'
-					),
+					// Surface the server reason (validation/500 detail) like
+					// the promote handler does, instead of a fixed string.
+					message:
+						( res &&
+							typeof res.message === 'string' &&
+							res.message ) ||
+						__(
+							'Could not stage the preview.',
+							'performance-optimisation'
+						),
 				} );
 			}
 		} catch {
@@ -355,7 +371,12 @@ const FileOptimization = ( {
 						? res.data.file_optimisation
 						: sandboxStaged;
 				if ( promotedSlice && typeof promotedSlice === 'object' ) {
-					const synced = { ...promotedSlice };
+					// Omit the internal sandboxStaged key: it is staging
+					// metadata, not a production setting, and syncing it into
+					// the form would send it back via update_settings.
+					const { sandboxStaged: _omit, ...cleanSlice } =
+						promotedSlice;
+					const synced = { ...cleanSlice };
 					setSettings( ( prev ) => ( { ...prev, ...synced } ) );
 					setBaseline( ( prev ) => ( { ...prev, ...synced } ) );
 				}
@@ -410,10 +431,12 @@ const FileOptimization = ( {
 			} else {
 				notifySandbox( {
 					type: 'error',
-					message: __(
-						'Could not discard.',
-						'performance-optimisation'
-					),
+					// Surface the server reason like the promote handler does.
+					message:
+						( res &&
+							typeof res.message === 'string' &&
+							res.message ) ||
+						__( 'Could not discard.', 'performance-optimisation' ),
 				} );
 			}
 		} catch {

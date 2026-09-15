@@ -709,8 +709,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 			// Sandbox preview (issue #1163): a staged combineCSS=off must disable
 			// combining in preview (mirror minify_queued_styles logic), otherwise
-			// staged-disable can never be previewed.
+			// staged-disable can never be previewed. Conversely, visitors
+			// (non-preview) always require the production flag: the combine hook
+			// is registered when EITHER production or staged enables it (so a
+			// staged-enable preview renders), but without this gate visitors
+			// would get combined CSS from a staged experiment while production
+			// is off. Fail-open to production behaviour.
 			if ( $is_preview && empty( $file_opt_for_combine['combineCSS'] ) ) {
+				return;
+			}
+			if ( ! $is_preview && empty( $this->options['file_optimisation']['combineCSS'] ) ) {
 				return;
 			}
 

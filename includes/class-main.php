@@ -73,6 +73,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private ?array $resolved_delay_exclusions = null;
 
 		/**
+		 * Memoized staged defer excludes for the preview admin only.
+		 *
+		 * Null until first preview-gated use; visitors never populate this
+		 * (is_sandbox_preview_active() short-circuits first) so staged values
+		 * can never leak into visitor markup. Parsed from the staged
+		 * excludeDeferJS payload via Util::process_urls().
+		 *
+		 * @var   array|null
+		 * @since NEXT
+		 */
+		private ?array $preview_staged_defer_excludes = null;
+
+		/**
 		 * Default delay strategy: 'interaction', 'idle', or 'viewport'.
 		 *
 		 * @var   string
@@ -740,7 +753,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// for a preview-enable (production off, staged on) request.
 			// Enforcement stays in the late per-tag/render-time guards.
 			$staged_for_registration = array();
-			if ( class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_staged_settings' ) ) {
+			// Hot-path guard: visitors never carry the preview query var, so skip
+			// the staged settings read entirely for them (avoids an option read
+			// on every frontend request). Preview admins always carry
+			// ?wppo_preview=assets alongside the nonce.
+			$maybe_preview = isset( $_GET['wppo_preview'] ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only pre-check; the capability+nonce gate runs in Sandbox_Preview::is_preview_request().
+			if ( $maybe_preview && class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_staged_settings' ) ) {
 				try {
 					$staged_for_registration = Sandbox_Preview::get_staged_settings();
 					if ( ! is_array( $staged_for_registration ) ) {
@@ -1057,18 +1075,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// wppo_defer_js_preset_exclusions. Preserves user excludes via
 				// array_unique merge.
 				$this->exclude_defer_js = array_values( array_unique( array_merge( $this->exclude_defer_js, self::get_defer_js_preset_exclusions() ) ) );
-				// Sandbox preview (issue #1163): staged excludeDeferJS lines also
-				// suppress defer in preview only. Fail-open: matcher errors keep
-				// the production list. Staged presence (no auth gate) widens the
-				// list at registration; the per-tag guards enforce preview-only.
-				if ( ! empty( $staged_for_registration['excludeDeferJS'] ) ) {
-					try {
-						$staged_defer_excludes  = Util::process_urls( $staged_for_registration['excludeDeferJS'] );
-						$this->exclude_defer_js = array_values( array_unique( array_merge( $this->exclude_defer_js, (array) $staged_defer_excludes ) ) );
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-				}
+				// Sandbox preview (issue #1163): staged excludeDeferJS lines are
+				// NOT merged here on purpose. This list is shared with visitor
+				// (non-preview) requests, so merging staged values at
+				// registration would suppress defer for staged-excluded handles
+				// for everyone. Staged excludes are overlaid preview-only at
+				// render time via get_effective_defer_exclusions(). Fail-open.
 				if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_exclude_defer_js' ) ) {
 					try {
 						$this->exclude_defer_js = (array) apply_filters( 'wppo_exclude_defer_js', $this->exclude_defer_js );
@@ -1105,19 +1117,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( ! empty( $this->options['file_optimisation']['deferJS'] ) ) {
 					$this->exclude_delay_js = array_merge( $this->exclude_delay_js, $this->exclude_defer_js );
 				}
-				// Sandbox preview (issue #1163): staged excludeDelayJS lines also
-				// suppress the external-script delay rewrite in preview only
-				// (the inline path is overlaid in Minify\HTML). Fail-open.
-				// Staged presence (no auth gate) widens the list at
-				// registration; the per-tag guards enforce preview-only.
-				if ( ! empty( $staged_for_registration['excludeDelayJS'] ) ) {
-					try {
-						$staged_delay_excludes  = Util::process_urls( $staged_for_registration['excludeDelayJS'] );
-						$this->exclude_delay_js = array_values( array_unique( array_merge( $this->exclude_delay_js, (array) $staged_delay_excludes ) ) );
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-				}
+				// Sandbox preview (issue #1163): staged excludeDelayJS lines are
+				// NOT merged here on purpose. This list feeds visitor (non-preview)
+				// requests via is_delay_excluded_handle()/get_delay_exclusions(),
+				// so merging staged values at registration would suppress the
+				// production delay rewrite for everyone. Staged excludes are
+				// overlaid preview-only at render time in get_delay_exclusions().
+				// Fail-open.
 
 				$this->exclude_delay_js = apply_filters( 'wppo_exclude_delay_js', $this->exclude_delay_js );
 				$cve_handles            = $this->get_cve_guard_handles();
@@ -3376,7 +3382,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$is_wp69_plus = version_compare( (string) ( $GLOBALS['wp_version'] ?? get_bloginfo( 'version' ) ), '6.9-alpha', '>=' );
 
 			foreach ( $wp_scripts->queue as $handle ) {
-				if ( ! in_array( $handle, $this->exclude_defer_js, true ) ) {
+				if ( ! in_array( $handle, $this->get_effective_defer_exclusions(), true ) ) {
 					wp_script_add_data( $handle, 'strategy', 'defer' );
 					$this->deferred_handles[ $handle ] = true;
 					// Native fetchpriority on WP 6.9+ (Trac #61734); pre-6.9 is handled
@@ -3663,7 +3669,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return $tag;
 			}
 
-			if ( in_array( $handle, $this->exclude_defer_js, true ) ) {
+			if ( in_array( $handle, $this->get_effective_defer_exclusions(), true ) ) {
 				return $tag;
 			}
 
@@ -3813,6 +3819,75 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Staged defer excludes for the preview admin only (issue #1163).
+		 *
+		 * Returns an empty list for every non-preview request so staged
+		 * excludeDeferJS values can never suppress defer for visitors. The
+		 * result is memoized per instance; the preview verdict itself is
+		 * memoized per request, so one instance cannot mix verdicts.
+		 * Fail-open: any error returns an empty list (production behaviour).
+		 *
+		 * @since NEXT
+		 *
+		 * @return array<int, string>
+		 */
+		private function get_preview_staged_defer_excludes(): array {
+			if ( null !== $this->preview_staged_defer_excludes ) {
+				return $this->preview_staged_defer_excludes;
+			}
+			$this->preview_staged_defer_excludes = array();
+			if ( ! self::is_sandbox_preview_active() ) {
+				return $this->preview_staged_defer_excludes;
+			}
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_staged_settings' ) ) {
+					$staged = Sandbox_Preview::get_staged_settings();
+					if ( is_array( $staged ) && ! empty( $staged['excludeDeferJS'] ) ) {
+						$parsed = Util::process_urls( $staged['excludeDeferJS'] );
+						if ( is_array( $parsed ) ) {
+							$this->preview_staged_defer_excludes = array_values(
+								array_filter(
+									array_map( 'strval', $parsed ),
+									static function ( string $val ): bool {
+										return '' !== trim( $val );
+									}
+								)
+							);
+						}
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$this->preview_staged_defer_excludes = array();
+			}
+			return $this->preview_staged_defer_excludes;
+		}
+
+		/**
+		 * Defer-JS exclusions effective for the current request (issue #1163).
+		 *
+		 * Production list plus staged excludeDeferJS lines for validated
+		 * preview admins only; visitors always get the production list
+		 * unchanged. Fail-open to the production list.
+		 *
+		 * @since NEXT
+		 *
+		 * @return array<int, string>
+		 */
+		private function get_effective_defer_exclusions(): array {
+			$exclusions = is_array( $this->exclude_defer_js ) ? $this->exclude_defer_js : array();
+			try {
+				$staged = $this->get_preview_staged_defer_excludes();
+				if ( ! empty( $staged ) ) {
+					$exclusions = array_values( array_unique( array_merge( $exclusions, $staged ) ) );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $exclusions;
+		}
+
+		/**
 		 * Delay-JS exclusions with `wppo_exclude_delay_js` applied on first use.
 		 *
 		 * `setup_hooks()` applies the filter while the plugin bootstraps, and
@@ -3835,6 +3910,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			$exclusions = $this->exclude_delay_js;
+
+			// Sandbox preview (issue #1163): staged excludeDelayJS lines also
+			// suppress the delay rewrite for validated preview admins only.
+			// Visitors keep the production list: without this gate a staged
+			// experiment would alter production output. Fail-open.
+			if ( self::is_sandbox_preview_active() ) {
+				try {
+					if ( class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_staged_settings' ) ) {
+						$staged = Sandbox_Preview::get_staged_settings();
+						if ( is_array( $staged ) && ! empty( $staged['excludeDelayJS'] ) ) {
+							$parsed = Util::process_urls( $staged['excludeDelayJS'] );
+							if ( is_array( $parsed ) ) {
+								$exclusions = array_merge( $exclusions, $parsed );
+							}
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
 
 			if ( has_filter( 'wppo_exclude_delay_js' ) ) {
 				try {

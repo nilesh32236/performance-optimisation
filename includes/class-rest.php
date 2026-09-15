@@ -2648,8 +2648,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @since NEXT
 		 */
 		public function save_sandbox_preview( \WP_REST_Request $request ): \WP_REST_Response {
+		// Body-only staged payload (issue #1163): read `settings` from the
+		// request body (JSON/body params via get_param(), which prefers
+		// body sources) instead of the merged GET+body+query array, so
+		// staged values cannot arrive via URL query string and end up in
+		// access logs. The merged get_params() read is a back-compat
+		// fallback for non-JSON clients only.
+		$settings = null;
+		try {
+			$settings = $request->get_param( 'settings' );
+		} catch ( \Throwable $e ) {
+			unset( $e );
+			$settings = null;
+		}
+		if ( ! is_array( $settings ) ) {
 			$params   = $request->get_params();
 			$settings = isset( $params['settings'] ) && is_array( $params['settings'] ) ? $params['settings'] : array();
+		}
 			if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 				return $this->send_response( null, false, 500, __( 'Sandbox preview is unavailable.', 'performance-optimisation' ) );
 			}

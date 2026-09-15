@@ -314,15 +314,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 		 */
 		public static function save_staged( array $staged ): bool {
 			try {
-				if ( function_exists( 'current_user_can' ) ) {
-					try {
-						if ( ! current_user_can( 'manage_options' ) ) {
-							return false;
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
+				// Fail closed: when authorization cannot be verified (pluggable
+				// not loaded), deny the write rather than skipping the check.
+				if ( ! function_exists( 'current_user_can' ) ) {
+					return false;
+				}
+				try {
+					if ( ! current_user_can( 'manage_options' ) ) {
 						return false;
 					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return false;
 				}
 				if ( ! function_exists( 'update_option' ) || ! function_exists( 'get_option' ) ) {
 					return false;
@@ -385,15 +388,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 		 */
 		public static function promote_staged(): bool {
 			try {
-				if ( function_exists( 'current_user_can' ) ) {
-					try {
-						if ( ! current_user_can( 'manage_options' ) ) {
-							return false;
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
+				// Fail closed: when authorization cannot be verified (pluggable
+				// not loaded), deny the write rather than skipping the check.
+				if ( ! function_exists( 'current_user_can' ) ) {
+					return false;
+				}
+				try {
+					if ( ! current_user_can( 'manage_options' ) ) {
 						return false;
 					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return false;
 				}
 				if ( ! function_exists( 'update_option' ) || ! function_exists( 'get_option' ) ) {
 					return false;
@@ -470,15 +476,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 		 */
 		public static function discard_staged(): bool {
 			try {
-				if ( function_exists( 'current_user_can' ) ) {
-					try {
-						if ( ! current_user_can( 'manage_options' ) ) {
-							return false;
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
+				// Fail closed: when authorization cannot be verified (pluggable
+				// not loaded), deny the write rather than skipping the check.
+				if ( ! function_exists( 'current_user_can' ) ) {
+					return false;
+				}
+				try {
+					if ( ! current_user_can( 'manage_options' ) ) {
 						return false;
 					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return false;
 				}
 				if ( ! function_exists( 'update_option' ) || ! function_exists( 'get_option' ) ) {
 					return false;

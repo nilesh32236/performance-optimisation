@@ -683,13 +683,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			// delayJS; visitors always use production. Fail-open to production.
 			// Memoized per request: safe_minify_js runs per <script> tag, so the
 			// staged overlay (get_option via Util::get_settings) must happen once.
+			// Keyed by a hash of the production input: the static survives across
+			// Html instances in one process (and across PHPUnit tests), so an
+			// unkeyed cache would reuse the first instance's effective slice for
+			// later instances with different production options.
 			static $preview_effective_cache = null;
+			static $preview_effective_key   = null;
 			$file_opt_for_preview           = isset( $this->options['file_optimisation'] ) && is_array( $this->options['file_optimisation'] ) ? $this->options['file_optimisation'] : array();
 			try {
 				if ( class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_effective_file_optimisation' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'is_preview_request' ) ) {
 					if ( \PerformanceOptimise\Inc\Sandbox_Preview::is_preview_request() ) {
-						if ( null === $preview_effective_cache ) {
+						if ( function_exists( 'wp_json_encode' ) ) {
+							$preview_key = (string) wp_json_encode( $file_opt_for_preview );
+						} else {
+							$preview_parts = array();
+							foreach ( $file_opt_for_preview as $preview_k => $preview_v ) {
+								$preview_parts[] = (string) $preview_k . '=' . ( is_scalar( $preview_v ) ? (string) $preview_v : gettype( $preview_v ) );
+							}
+							$preview_key = implode( "\0", $preview_parts );
+						}
+						if ( null === $preview_effective_cache || $preview_key !== $preview_effective_key ) {
 							$preview_effective_cache = \PerformanceOptimise\Inc\Sandbox_Preview::get_effective_file_optimisation( $file_opt_for_preview );
+							$preview_effective_key   = $preview_key;
 						}
 						$file_opt_for_preview = $preview_effective_cache;
 					}

@@ -1386,6 +1386,32 @@ describe( 'FileOptimization Component', () => {
 		} );
 	} );
 
+	it( 'does not advertise a preview link when nothing is staged', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				staged: {},
+				has_staged: false,
+				preview_url: 'http://example.com/?wppo_preview=assets',
+			},
+		} );
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+		fireEvent.click( screen.getByRole( 'tab', { name: /Scripts/i } ) );
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith(
+				'sandbox_preview',
+				{},
+				'GET'
+			);
+		} );
+		await waitFor( () => {
+			expect(
+				screen.queryByRole( 'link', { name: /Open admin preview/i } )
+			).not.toBeInTheDocument();
+		} );
+	} );
+
 	it( 'runs the perf test against the production URL without preview params', async () => {
 		apiCall
 			.mockResolvedValueOnce( {

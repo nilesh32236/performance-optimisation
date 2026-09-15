@@ -387,6 +387,24 @@ class SandboxPreviewTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test promote_staged with an empty staged slot returns false.
+	 */
+	public function test_promote_staged_with_empty_staged_returns_false(): void {
+		Functions\when( 'get_option' )->justReturn(
+			array(
+				'file_optimisation' => array(
+					'delayJS'       => false,
+					'sandboxStaged' => array(),
+				),
+			)
+		);
+		Functions\expect( 'update_option' )->never();
+		Functions\when( 'current_user_can' )->justReturn( true );
+
+		$this->assertFalse( Sandbox_Preview::promote_staged() );
+	}
+
+	/**
 	 * Test preview url contains nonce.
 	 */
 	public function test_preview_url_contains_nonce(): void {
