@@ -10,12 +10,19 @@ import '@testing-library/jest-dom';
 import React from 'react';
 import FileOptimization from '../FileOptimization';
 
-// Mock the API request
-jest.mock( '../../lib/apiRequest', () => ( {
-	apiCall: jest.fn(),
-} ) );
+// Mock the API request (sandbox perf test goes through the validated
+// runPerformanceScan wrapper; keep the real isValidScanUrl so validation
+// behaviour is genuinely exercised).
+jest.mock( '../../lib/apiRequest', () => {
+	const actual = jest.requireActual( '../../lib/apiRequest' );
+	return {
+		...actual,
+		apiCall: jest.fn(),
+		runPerformanceScan: jest.fn(),
+	};
+} );
 
-import { apiCall } from '../../lib/apiRequest';
+import { apiCall, runPerformanceScan } from '../../lib/apiRequest';
 
 describe( 'FileOptimization Component', () => {
 	beforeEach( () => {
@@ -1387,20 +1394,19 @@ describe( 'FileOptimization Component', () => {
 	} );
 
 	it( 'runs the perf test against the production URL without preview params', async () => {
-		apiCall
-			.mockResolvedValueOnce( {
-				success: true,
-				data: {
-					staged: { delayJS: true },
-					has_staged: true,
-					preview_url:
-						'http://example.com/?wppo_preview=assets&_wppo_preview_nonce=abc',
-				},
-			} )
-			.mockResolvedValueOnce( {
-				success: true,
-				data: { score: 95 },
-			} );
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				staged: { delayJS: true },
+				has_staged: true,
+				preview_url:
+					'http://example.com/?wppo_preview=assets&_wppo_preview_nonce=abc',
+			},
+		} );
+		runPerformanceScan.mockResolvedValueOnce( {
+			success: true,
+			data: { score: 95 },
+		} );
 		render( <FileOptimization options={ {} } serverRules={ {} } /> );
 		fireEvent.click( screen.getByRole( 'tab', { name: /Scripts/i } ) );
 
@@ -1415,14 +1421,93 @@ describe( 'FileOptimization Component', () => {
 		} );
 
 		await waitFor( () => {
-			expect( apiCall ).toHaveBeenCalledWith( 'performance_scan', {
-				url: 'http://example.com/',
-			} );
+			expect( runPerformanceScan ).toHaveBeenCalledWith(
+				'http://example.com/'
+			);
 		} );
 		await waitFor( () => {
 			expect(
 				screen.getByText( /cannot use the admin preview session/i )
 			).toBeInTheDocument();
 		} );
+	} );
+
+	it( 'blocks the perf test when the preview URL fails validation', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				staged: { delayJS: true },
+				has_staged: true,
+				preview_url: 'javascript:alert(1)',
+			},
+		} );
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+		fireEvent.click( screen.getByRole( 'tab', { name: /Scripts/i } ) );
+
+		const perfButton = await screen.findByRole( 'button', {
+			name: /Run perf test \(production URL\)/i,
+		} );
+		await waitFor( () => {
+			expect( perfButton ).not.toBeDisabled();
+		} );
+		await act( async () => {
+			fireEvent.click( perfButton );
+		} );
+
+		// The tampered preview URL never reaches the scan endpoint.
+		await waitFor( () => {
+			expect(
+				screen.getByText( /not a valid same-origin http/i )
+			).toBeInTheDocument();
+		} );
+		expect( runPerformanceScan ).not.toHaveBeenCalled();
+		expect( apiCall ).not.toHaveBeenCalledWith(
+			'performance_scan',
+			expect.anything()
+		);
+	} );
+
+	it( 'does not render a clickable preview link for non-http(s) preview URLs', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				staged: { delayJS: true },
+				has_staged: true,
+				preview_url: 'javascript:alert(1)',
+			},
+		} );
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+		fireEvent.click( screen.getByRole( 'tab', { name: /Scripts/i } ) );
+
+		await screen.findByText( /A staged preview exists/i );
+		// No anchor is rendered for the javascript: URL — only plain text,
+		// so clicking can never execute it.
+		expect(
+			screen.queryByRole( 'link', { name: /Open admin preview/i } )
+		).toBeNull();
+		expect( screen.getByText( 'Open admin preview' ) ).toBeInTheDocument();
+	} );
+
+	it( 'renders a hardened preview link for valid http(s) preview URLs', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				staged: { delayJS: true },
+				has_staged: true,
+				preview_url:
+					'http://example.com/?wppo_preview=assets&_wppo_preview_nonce=abc',
+			},
+		} );
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+		fireEvent.click( screen.getByRole( 'tab', { name: /Scripts/i } ) );
+
+		const previewLink = await screen.findByRole( 'link', {
+			name: /Open admin preview/i,
+		} );
+		expect( previewLink ).toHaveAttribute(
+			'href',
+			'http://example.com/?wppo_preview=assets&_wppo_preview_nonce=abc'
+		);
+		expect( previewLink ).toHaveAttribute( 'rel', 'noopener noreferrer' );
 	} );
 } );

@@ -21,6 +21,34 @@ export const getWppoSettings = () => {
 	return wppoSettings;
 };
 
+/**
+ * Extract a safe log message from an error without leaking response bodies.
+ *
+ * Server error objects can embed response payloads (system info, settings);
+ * console output persists in devtools/extensions, so only the message is
+ * logged, never the full error/response object.
+ *
+ * @since NEXT
+ * @param {*} error Caught error value.
+ * @return {string} Safe message string.
+ */
+export const getErrorLogMessage = ( error ) => {
+	if ( error instanceof Error ) {
+		return error.message || 'Unknown error';
+	}
+	if ( typeof error === 'string' ) {
+		return error.slice( 0, 500 ) || 'Unknown error';
+	}
+	if ( error === null || typeof error === 'undefined' ) {
+		return 'Unknown error';
+	}
+	try {
+		return String( error ).slice( 0, 500 );
+	} catch {
+		return 'Unknown error';
+	}
+};
+
 let pendingRefresh = null;
 
 /**
@@ -67,7 +95,7 @@ const refreshNonce = async () => {
 			}
 			throw new Error( 'Nonce refresh returned invalid response' );
 		} catch ( e ) {
-			console.error( 'Nonce refresh failed:', e );
+			console.error( 'Nonce refresh failed:', getErrorLogMessage( e ) );
 			throw e;
 		}
 	} )();
@@ -154,7 +182,11 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 		const response = await doFetch( null );
 		return await handleResponse( response );
 	} catch ( error ) {
-		console.error( 'API call failed:', action, error );
+		console.error(
+			'API call failed:',
+			action,
+			getErrorLogMessage( error )
+		);
 		throw error;
 	}
 };

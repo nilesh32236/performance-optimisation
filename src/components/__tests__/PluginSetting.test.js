@@ -30,6 +30,8 @@ jest.mock( '@fortawesome/free-solid-svg-icons', () => ( {
 import PluginSetting, {
 	redactSecrets,
 	validateImportData,
+	isValidImportValue,
+	isPollutionKey,
 	MAX_IMPORT_TOP_KEYS,
 } from '../PluginSetting';
 import { apiCall, fetchRecentActivities } from '../../lib/apiRequest';
@@ -517,6 +519,63 @@ describe( 'PluginSetting', () => {
 		expect( validateImportData( { unknown_top_level_key: {} } ) ).toBe(
 			false
 		);
+	} );
+
+	it( 'rejects prototype-pollution keys at any depth', () => {
+		expect( isPollutionKey( '__proto__' ) ).toBe( true );
+		expect( isPollutionKey( 'constructor' ) ).toBe( true );
+		expect( isPollutionKey( 'prototype' ) ).toBe( true );
+		expect( isPollutionKey( 'minifyJS' ) ).toBe( false );
+		// Top-level proto keys (crafted via JSON.parse so __proto__ stays
+		// an own property) are rejected even though the allowlist would
+		// already exclude them.
+		expect(
+			validateImportData(
+				JSON.parse( '{"__proto__":{"polluted":true}}' )
+			)
+		).toBe( false );
+		// Nested proto keys inside an otherwise-valid payload are rejected.
+		expect(
+			validateImportData(
+				JSON.parse(
+					'{"file_optimisation":{"__proto__":{"polluted":true}}}'
+				)
+			)
+		).toBe( false );
+		expect(
+			validateImportData(
+				JSON.parse(
+					'{"file_optimisation":{"nested":{"constructor":{"prototype":{"polluted":true}}}}}'
+				)
+			)
+		).toBe( false );
+		expect(
+			isValidImportValue(
+				JSON.parse( '{"__proto__":{"polluted":true}}' ),
+				1
+			)
+		).toBe( false );
+		expect(
+			isValidImportValue( JSON.parse( '{"ok":1,"prototype":"x"}' ), 1 )
+		).toBe( false );
+		// Benign payloads still pass.
+		expect(
+			validateImportData( { file_optimisation: { minifyJS: true } } )
+		).toBe( true );
+	} );
+
+	it( 'drops pollution keys during redaction without polluting prototypes', () => {
+		const input = JSON.parse(
+			'{"file_optimisation":{"minifyJS":true,"__proto__":{"polluted":"yes"}},"__proto__":{"polluted":"top"}}'
+		);
+		const redacted = redactSecrets( input );
+		expect( Object.keys( redacted ) ).not.toContain( '__proto__' );
+		expect( Object.keys( redacted.file_optimisation ) ).not.toContain(
+			'__proto__'
+		);
+		expect( redacted.file_optimisation.minifyJS ).toBe( true );
+		expect( {}.polluted ).toBeUndefined();
+		expect( Object.prototype.polluted ).toBeUndefined();
 	} );
 
 	it( 'enables the Undo button when a snapshot exists', async () => {

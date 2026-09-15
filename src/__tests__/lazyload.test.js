@@ -246,6 +246,27 @@ describe( 'Lazy Load (lazyload.js)', () => {
 			).toBeInTheDocument();
 		} );
 
+		it( 'warns loudly when the runtime host list widens the allowlist', async () => {
+			// window.wppoAllowedScriptHosts is mutable by any third-party
+			// script running before load, so an effective widening must be
+			// loud rather than silent (server list stays authoritative).
+			global.wppoAllowedScriptHosts = [ 'custom-cdn.example.org' ];
+			document.body.innerHTML =
+				'<script type="wppo/javascript" wppo-src="https://custom-cdn.example.org/app.js"></script>';
+			await bootLazyload();
+
+			expect(
+				document.querySelector(
+					'script[src="https://custom-cdn.example.org/app.js"]'
+				)
+			).toBeInTheDocument();
+			expect( consoleWarnSpy ).toHaveBeenCalledWith(
+				expect.stringContaining(
+					'extends the deferred-script host allowlist'
+				)
+			);
+		} );
+
 		it( 'ignores a window-only "*" wildcard unless the server allows it', async () => {
 			global.wppoAllowedScriptHosts = [ '*' ];
 			document.body.innerHTML =
