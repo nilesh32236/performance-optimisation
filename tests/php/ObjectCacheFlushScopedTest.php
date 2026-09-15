@@ -110,6 +110,41 @@ class ObjectCacheFlushScopedTest extends \PHPUnit\Framework\TestCase {
 	public $added_filters = array();
 
 	/**
+	 * Callbacks registered via add_filter(), keyed by hook.
+	 *
+	 * @var array
+	 */
+	public $added_callbacks = array();
+
+	/**
+	 * Value of object_cache_allow_flush_all seen inside the stub flush.
+	 *
+	 * @var bool|null
+	 */
+	public $allow_flush_all_seen = null;
+
+	/**
+	 * Stubbed current blog ID.
+	 *
+	 * @var int
+	 */
+	public $blog_id = 1;
+
+	/**
+	 * What the stub cache flush() should return.
+	 *
+	 * @var bool
+	 */
+	public $flush_return = true;
+
+	/**
+	 * Whether the stub cache flush() should throw.
+	 *
+	 * @var bool
+	 */
+	public $flush_throw = false;
+
+	/**
 	 * Recorded remove_filter() calls as [hook, priority] pairs.
 	 *
 	 * @var array
@@ -167,6 +202,11 @@ class ObjectCacheFlushScopedTest extends \PHPUnit\Framework\TestCase {
 				return $test->multisite;
 			}
 		);
+		Functions\when( 'get_current_blog_id' )->alias(
+			function () use ( $test ) {
+				return $test->blog_id;
+			}
+		);
 		Functions\when( 'is_wp_error' )->alias(
 			static function ( $thing ) {
 				return $thing instanceof \WP_Error;
@@ -177,13 +217,21 @@ class ObjectCacheFlushScopedTest extends \PHPUnit\Framework\TestCase {
 				if ( 'wppo_object_cache_dropin_path' === $hook && null !== $test->dropin_override ) {
 					return $test->dropin_override;
 				}
+				if ( 'object_cache_allow_flush_all' === $hook && ! empty( $test->added_callbacks[ $hook ] ) ) {
+					foreach ( $test->added_callbacks[ $hook ] as $cb ) {
+						$value = call_user_func( $cb, $value );
+					}
+				}
 				return $value;
 			}
 		);
 		Functions\when( 'add_filter' )->alias(
 			function ( $hook, $callback = null, $priority = 10, $args = 1 ) use ( $test ) {
-				unset( $callback, $args );
+				unset( $args );
 				$test->added_filters[] = array( $hook, $priority );
+				if ( null !== $callback ) {
+					$test->added_callbacks[ $hook ][] = $callback;
+				}
 				return true;
 			}
 		);
@@ -275,13 +323,20 @@ class ObjectCacheFlushScopedTest extends \PHPUnit\Framework\TestCase {
 			}
 
 			/**
-			 * Record the flush and succeed.
+			 * Record the flush, route through the scope filter, and succeed.
 			 *
 			 * @return bool
+			 * @throws \Exception When flush_throw is set on the owning test.
 			 */
 			public function flush() {
 				++$this->test->cache_flush_calls;
-				return true;
+				if ( $this->test->flush_throw ) {
+					throw new \Exception( 'Foreign cache threw.' );
+				}
+				// Route through the opt-out filter like the real drop-in
+				// so tests prove the blog-prefix path was actually forced.
+				$this->test->allow_flush_all_seen = apply_filters( 'object_cache_allow_flush_all', true );
+				return $this->test->flush_return;
 			}
 		};
 		// phpcs:enable WordPress.WP.GlobalVariablesOverride.Prohibited
@@ -321,13 +376,18 @@ class ObjectCacheFlushScopedTest extends \PHPUnit\Framework\TestCase {
 			$this->content_dir_created = false;
 		}
 
-		$this->multisite         = false;
-		$this->dropin_override   = null;
-		$this->options           = array();
-		$this->transients        = array();
-		$this->added_filters     = array();
-		$this->removed_filters   = array();
-		$this->cache_flush_calls = 0;
+		$this->multisite            = false;
+		$this->dropin_override      = null;
+		$this->options              = array();
+		$this->transients           = array();
+		$this->added_filters        = array();
+		$this->added_callbacks      = array();
+		$this->allow_flush_all_seen = null;
+		$this->blog_id              = 1;
+		$this->flush_return         = true;
+		$this->flush_throw          = false;
+		$this->removed_filters      = array();
+		$this->cache_flush_calls    = 0;
 
 		\Brain\Monkey\tearDown();
 		parent::tearDown();
@@ -374,6 +434,7 @@ class ObjectCacheFlushScopedTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_multisite_scoped_flush_forces_filter_and_succeeds(): void {
 		$this->multisite = true;
+		$this->blog_id   = 3;
 
 		$manager = new Object_Cache();
 
@@ -389,7 +450,75 @@ class ObjectCacheFlushScopedTest extends \PHPUnit\Framework\TestCase {
 			$this->removed_filters,
 			'Multisite flush must release the forced scope filter afterwards.'
 		);
+		// Prove the recorded callback actually forces the blog-prefix path.
+		$this->assertNotEmpty( $this->added_callbacks['object_cache_allow_flush_all'] );
+		foreach ( $this->added_callbacks['object_cache_allow_flush_all'] as $cb ) {
+			$this->assertFalse( call_user_func( $cb, true ), 'Scope filter must force object_cache_allow_flush_all to false.' );
+		}
+		$this->assertFalse( $this->allow_flush_all_seen, 'Stub flush must observe the forced false scope filter.' );
 		$this->assertNull( $manager->get_last_flush_error() );
+	}
+
+	/**
+	 * Flush failure still releases the forced scope filter.
+	 */
+	public function test_multisite_flush_failure_releases_filter(): void {
+		$this->multisite    = true;
+		$this->blog_id      = 3;
+		$this->flush_return = false;
+
+		$manager = new Object_Cache();
+
+		$this->assertFalse( $manager->flush_scoped() );
+		$this->assertSame( 1, $this->cache_flush_calls );
+		$this->assertContains(
+			array( 'object_cache_allow_flush_all', PHP_INT_MAX ),
+			$this->added_filters
+		);
+		$this->assertContains(
+			array( 'object_cache_allow_flush_all', PHP_INT_MAX ),
+			$this->removed_filters,
+			'Failed flush must still release the forced scope filter.'
+		);
+		$this->assertInstanceOf( \WP_Error::class, $manager->get_last_flush_error() );
+	}
+
+	/**
+	 * A throwing cache backend is converted to false + last_flush_error.
+	 */
+	public function test_multisite_flush_exception_returns_false(): void {
+		$this->multisite   = true;
+		$this->blog_id     = 3;
+		$this->flush_throw = true;
+
+		$manager = new Object_Cache();
+
+		$this->assertFalse( $manager->flush_scoped() );
+		$this->assertContains(
+			array( 'object_cache_allow_flush_all', PHP_INT_MAX ),
+			$this->removed_filters,
+			'Throwing flush must still release the forced scope filter.'
+		);
+		$error = $manager->get_last_flush_error();
+		$this->assertInstanceOf( \WP_Error::class, $error );
+		$this->assertSame( 'flush_exception', $error->get_error_code() );
+	}
+
+	/**
+	 * Unknown multisite state falls back to single-site flush().
+	 */
+	public function test_unknown_multisite_state_falls_back_to_flush(): void {
+		Functions\when( 'is_multisite' )->alias(
+			static function () {
+				throw new \Exception( 'Boot too early.' );
+			}
+		);
+
+		$manager = new Object_Cache();
+
+		$this->assertTrue( $manager->flush_scoped() );
+		$this->assertSame( 1, $this->cache_flush_calls, 'Unknown multisite state must delegate to flush().' );
+		$this->assertSame( array(), $this->added_filters, 'Fallback flush must not force the scope filter.' );
 	}
 
 	/**

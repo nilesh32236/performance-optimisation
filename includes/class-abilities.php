@@ -960,6 +960,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * Execute callback: Flush Object Cache (operational).
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Uses Object_Cache::flush_scoped() for multisite scoping.
 		 *
 		 * @param array $input Unused input data.
 		 * @return array{flushed: bool}
@@ -967,8 +968,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		public static function execute_flush_object_cache( array $input = array() ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Ability API passes input even when empty.
 			$object_cache = new Object_Cache();
 			// Scoped flush on multisite (issue #1186): never flush sibling
-			// sites. Falls back to flush() when the new method is unavailable.
-			$flushed = method_exists( $object_cache, 'flush_scoped' ) ? $object_cache->flush_scoped() : $object_cache->flush();
+			// sites.
+			$flushed = $object_cache->flush_scoped();
 			return array( 'flushed' => (bool) $flushed );
 		}
 

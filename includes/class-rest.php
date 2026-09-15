@@ -1693,6 +1693,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $request The request object.
 		 * @since 1.4.0
+		 * @since NEXT Flush action uses Object_Cache::flush_scoped() for multisite scoping.
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function handle_object_cache( \WP_REST_Request $request ) {
@@ -1777,9 +1778,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			if ( 'flush' === $action ) {
 				// Scoped flush on multisite (issue #1186): never flush
-				// sibling sites. Falls back to flush() when the new method
-				// is unavailable.
-				$result = method_exists( $manager, 'flush_scoped' ) ? $manager->flush_scoped() : $manager->flush();
+				// sibling sites.
+				$result = $manager->flush_scoped();
 				if ( $result ) {
 					Log::add( __( 'Object Cache flushed.', 'performance-optimisation' ) );
 					return $this->send_response( true, true, 200, __( 'Object Cache flushed.', 'performance-optimisation' ) );
@@ -1790,6 +1790,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$flush_error = $manager->get_last_flush_error();
 				if ( ! ( $flush_error instanceof \WP_Error ) ) {
 					$flush_error = new \WP_Error( 'flush_fail', __( 'Flush reported failure.', 'performance-optimisation' ) );
+				} else {
+					$flush_error = $this->sanitize_flush_error( $flush_error );
 				}
 				return $this->send_response( $this->redis_error_payload( $flush_error, 'error' ), false, 400, __( 'Failed to flush object cache.', 'performance-optimisation' ) );
 			}
@@ -1917,6 +1919,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 			$nodes = sanitize_text_field( (string) $nodes );
 			return $nodes ? array( $nodes ) : array();
+		}
+
+		/**
+		 * Strip local paths from a flush WP_Error before REST surfacing.
+		 *
+		 * Flush messages are safe today (generic strings, blog_id cast to
+		 * int) but a future verbose Redis error could leak topology
+		 * (absolute paths). Mirrors the ABSPATH/WP_CONTENT_DIR stripping in
+		 * run_performance_scan(); verbose detail stays available under
+		 * WP_DEBUG via get_status().
+		 *
+		 * @since NEXT
+		 * @param \WP_Error $error Failing result.
+		 * @return \WP_Error Sanitized clone (same code, scrubbed message).
+		 */
+		private function sanitize_flush_error( $error ): \WP_Error {
+			$message = $error->get_error_message();
+			if ( defined( 'ABSPATH' ) && is_string( ABSPATH ) && '' !== ABSPATH ) {
+				$message = str_replace( array( ABSPATH, rtrim( ABSPATH, '/\\' ) ), '', $message );
+			}
+			if ( defined( 'WP_CONTENT_DIR' ) && is_string( WP_CONTENT_DIR ) && '' !== WP_CONTENT_DIR ) {
+				$message = str_replace( array( WP_CONTENT_DIR, rtrim( WP_CONTENT_DIR, '/\\' ) ), '', $message );
+			}
+			$message = sanitize_text_field( $message );
+			if ( '' === $message ) {
+				$message = __( 'Flush reported failure.', 'performance-optimisation' );
+			}
+			return new \WP_Error( $error->get_error_code(), $message, $error->get_error_data() );
 		}
 
 		/**

@@ -1123,6 +1123,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		private $last_flush_error = null;
 
 		/**
+		 * Memoized is_own_dropin() verdict for flush_scoped() retries.
+		 *
+		 * Avoids repeating the file_exists + filesystem + up-to-1MB read
+		 * on every retry within the same manager instance.
+		 *
+		 * @since NEXT
+		 * @var bool|null Null when not yet computed.
+		 */
+		private $own_dropin_memo = null;
+
+		/**
 		 * Read the latest recorded Redis failure for admin/REST surfacing.
 		 *
 		 * Fail-open: returns null when the transient is missing, malformed,
@@ -1228,23 +1239,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 *   SCAN+DEL path even when something opted into a full flush.
 		 *
 		 * On single-site installs this delegates straight to flush().
-		 * Fail-open: an unknown multisite state flushes via flush().
+		 *
+		 * Fail-open trade-off: when the multisite state cannot be determined
+		 * (is_multisite() undefined or throwing) this method treats the
+		 * install as single-site and delegates to flush(). That keeps an
+		 * admin-initiated flush working on a partially-booted stack, at the
+		 * cost of bypassing the foreign-drop-in refusal below; the decision
+		 * is logged via log_redis_failure() so it stays diagnosable.
+		 *
+		 * Capability: callers MUST gate on manage_options (REST and Abilities
+		 * do); this method performs no capability check so WP-CLI and cron
+		 * stays usable, mirroring flush().
+		 *
+		 * On failure sets last_flush_error (see get_last_flush_error()).
 		 *
 		 * @since NEXT
 		 * @return bool True when the scoped flush succeeded, false otherwise.
 		 */
-		public function flush_scoped() {
-			$is_multisite = false;
+		public function flush_scoped(): bool {
+			$multisite_unknown = false;
+			$is_multisite      = false;
 			if ( function_exists( 'is_multisite' ) ) {
 				try {
 					$is_multisite = (bool) is_multisite();
 				} catch ( \Throwable $e ) {
 					unset( $e );
-					$is_multisite = false;
+					$multisite_unknown = true;
+					$is_multisite      = false;
 				}
+			} else {
+				$multisite_unknown = true;
 			}
 
 			if ( ! $is_multisite ) {
+				if ( $multisite_unknown ) {
+					$this->log_redis_failure( 'flush_multisite_unknown', 'Multisite state unknown; scoped flush fell back to single-site flush().' );
+				}
 				return $this->flush();
 			}
 
@@ -1259,7 +1289,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			}
 
 			try {
-				$own_dropin = $this->is_own_dropin();
+				if ( null === $this->own_dropin_memo ) {
+					$this->own_dropin_memo = $this->is_own_dropin();
+				}
+				$own_dropin = $this->own_dropin_memo;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				$own_dropin = false;
@@ -1269,7 +1302,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				$this->last_flush_error = new \WP_Error(
 					'flush_foreign_dropin',
 					sprintf(
-						/* translators: %d: current blog ID */
+					/* translators: %d: current blog ID */
 						__( 'Object cache flush refused on site %d: a foreign object-cache.php drop-in is active, so a scoped flush cannot be guaranteed.', 'performance-optimisation' ),
 						$blog_id
 					)
@@ -1280,8 +1313,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 
 			$force_scoped = null;
 			if ( function_exists( 'add_filter' ) && function_exists( 'remove_filter' ) ) {
+				// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Filter signature requires the param.
 				$force_scoped = static function ( $allow ) {
-					unset( $allow );
 					return false;
 				};
 				add_filter( 'object_cache_allow_flush_all', $force_scoped, PHP_INT_MAX );
@@ -1289,6 +1322,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 
 			try {
 				return $this->flush();
+			} catch ( \Throwable $e ) {
+				$this->last_flush_error = new \WP_Error( 'flush_exception', __( 'Object cache flush failed.', 'performance-optimisation' ) );
+				$this->log_redis_failure( 'flush_exception', $e->getMessage() );
+				return false;
 			} finally {
 				if ( null !== $force_scoped ) {
 					try {
