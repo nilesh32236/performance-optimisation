@@ -928,7 +928,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				unset( $e );
 				return true;
 			}
-			return false;
 		}
 
 		/**
