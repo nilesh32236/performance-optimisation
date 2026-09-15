@@ -552,7 +552,58 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 2.0.0
 		 */
 		private function is_core_block_asset( $handle, bool $separate_block_assets ): bool {
+			if ( $separate_block_assets && $this->is_combined_core_block_monolith_forced() ) {
+				return false;
+			}
 			return $separate_block_assets && str_starts_with( (string) $handle, 'wp-block-' );
+		}
+
+		/**
+		 * Whether the operator forced the combined core block-assets monolith.
+		 *
+		 * Explicit, fail-open escape hatch for the on-demand block-styles
+		 * pipeline: when `blockAssetsOnDemand` is off or
+		 * `loadAllCoreBlockAssets` is on, core block styles (`wp-block-*`)
+		 * stay combinable even if `wp_should_load_separate_core_block_assets()`
+		 * reports separate loading. Mirrors the opt-out registered by
+		 * `Main::register_block_assets_filters()` so `Cache` never depends on
+		 * that filter's side effect (which is skipped on block themes and
+		 * never runs in unit-test isolation). Any throwable or missing
+		 * options structure returns false (legacy separate-assets path).
+		 *
+		 * @return bool True when the combined monolith is forced.
+		 * @since NEXT
+		 */
+		private function is_combined_core_block_monolith_forced(): bool {
+			try {
+				if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
+					return false;
+				}
+				$file_opt = $this->options['file_optimisation'];
+				return empty( $file_opt['blockAssetsOnDemand'] ) || ! empty( $file_opt['loadAllCoreBlockAssets'] );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Effective separate-assets state after the monolith escape hatch.
+		 *
+		 * Single funnel for every combine/preload loop: the core
+		 * `should_load_separate_core_block_assets` state from
+		 * {@see block_assets_are_separate()} forced off when
+		 * {@see is_combined_core_block_monolith_forced()} holds, so no
+		 * scattered skip site can disagree about block-asset ownership.
+		 *
+		 * @return bool True when core owns on-demand block styles on this request.
+		 * @since NEXT
+		 */
+		private function get_effective_separate_block_assets(): bool {
+			if ( $this->is_combined_core_block_monolith_forced() ) {
+				return false;
+			}
+			return $this->block_assets_are_separate();
 		}
 
 		/**
@@ -641,8 +692,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// core wins; combine is the fallback, not a competitor). The
 			// `should_load_separate_core_block_assets` opt-out filter is honoured
 			// via block_assets_are_separate(): an explicit opt-out restores the
-			// legacy monolith path.
-			$separate_block_assets = $this->block_assets_are_separate();
+			// legacy monolith path. The operator escape hatch
+			// (`blockAssetsOnDemand` off / `loadAllCoreBlockAssets` on) is applied
+			// explicitly via get_effective_separate_block_assets() so Cache never
+			// depends on Main's filter side effect.
+			$separate_block_assets = $this->get_effective_separate_block_assets();
 
 			// The effective separate-assets state is baked into the combined-CSS
 			// cache filename, so a 6.8 -> 6.9 upgrade (which flips separate block
@@ -938,7 +992,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private function get_combined_handles( $styles, $exclude_combine_css ): array {
 			global $wp_styles;
 
-			$separate_block_assets = $this->block_assets_are_separate();
+				$separate_block_assets = $this->get_effective_separate_block_assets();
 
 			$handles = array();
 			foreach ( $styles as $handle ) {
@@ -1434,11 +1488,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Whether the combined-CSS file should be skipped on small block-theme bundles.
 		 *
-		 * On block themes with a small total payload (≤ styles_inline_size_limit,
-		 * 40KB on WP 6.9+) core's greedy smallest-first inline budget will already
-		 * inline the eligible styles at their queue positions. Creating a combined
-		 * file would add an extra request without benefit, so it is skipped and the
-		 * styles are left enqueued for core to inline. Classic themes always combine.
+		 * On block themes with a small total payload (≤ the filtered
+		 * `styles_inline_size_limit` budget via {@see get_styles_inline_limit()},
+		 * 40KB default on WP 6.9+, 20KB legacy) core's greedy smallest-first
+		 * inline budget will already inline the eligible styles at their queue
+		 * positions. Creating a combined file would add an extra request
+		 * without benefit, so it is skipped and the styles are left enqueued
+		 * for core to inline. Sizes are measured with core's own accounting
+		 * (`path`-data filesize first, local `src` fallback via
+		 * {@see measure_style_byte_size()}) so the skip decision never
+		 * disagrees with {@see core_will_inline()}. Classic themes always
+		 * combine.
 		 *
 		 * Guards (issue #880):
 		 * - WP 6.9+ only: the 40KB default budget is what makes small bundles
@@ -1509,25 +1569,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			global $wp_styles;
 			$total = 0;
 			foreach ( $eligible_handles as $handle ) {
-				if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
-					continue;
-				}
-				$src = (string) ( $wp_styles->registered[ $handle ]->src ?? '' );
-				if ( '' === $src ) {
-					continue;
-				}
-				$path = Util::get_local_path( $src );
-				if ( '' === $path ) {
-					return false;
-				}
-				$stat = $this->get_cached_src_stat( $path );
-				if ( ! $stat['readable'] ) {
+				$size = $this->measure_style_byte_size( $handle );
+				if ( false === $size ) {
 					// Unreadable/remote styles cannot be measured — do not skip.
 					return false;
 				}
-				$size = $stat['size'];
-				if ( false === $size ) {
-					return false;
+				if ( 0 === $size ) {
+					continue;
 				}
 				if ( $size > $limit ) {
 					// A single handle exceeds the inline limit — core cannot inline it, so combine remains useful.
@@ -1539,6 +1587,66 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				}
 			}
 			return $total > 0 && $total <= $limit;
+		}
+
+		/**
+		 * Measure a style's byte size using core's inline-budget accounting.
+		 *
+		 * Core's `wp_maybe_inline_styles()` budgets the `path`-data filesize,
+		 * not the `src` URL filesize, so the skip heuristic must read the same
+		 * number `core_will_inline()` uses. When the handle carries readable
+		 * `path` data its filesize wins; otherwise the local `src` path is
+		 * measured as a fallback (pre-`path`-registration queues). Fail-open:
+		 * unregistered handles measure 0 (skipped), unmeasurable/remote
+		 * styles return false (caller keeps combining, never fatal).
+		 *
+		 * @param string $handle The registered style handle.
+		 * @return int|false Byte size, 0 when the handle contributes nothing, false when unmeasurable.
+		 * @since NEXT
+		 */
+		private function measure_style_byte_size( $handle ) {
+			global $wp_styles;
+			try {
+				if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
+					return 0;
+				}
+				$path_data = null;
+				if ( is_object( $wp_styles ) && method_exists( $wp_styles, 'get_data' ) ) {
+					try {
+						$path_data = $wp_styles->get_data( $handle, 'path' );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$path_data = null;
+					}
+				}
+				if ( is_string( $path_data ) && '' !== $path_data && is_file( $path_data ) ) {
+					$stat = $this->get_cached_src_stat( $path_data );
+					if ( ! $stat['readable'] || false === $stat['size'] ) {
+						return false;
+					}
+					return (int) $stat['size'];
+				}
+				$src = (string) ( $wp_styles->registered[ $handle ]->src ?? '' );
+				if ( '' === $src ) {
+					return 0;
+				}
+				$path = Util::get_local_path( $src );
+				if ( '' === $path ) {
+					return false;
+				}
+				$stat = $this->get_cached_src_stat( $path );
+				if ( ! $stat['readable'] ) {
+					return false;
+				}
+				$size = $stat['size'];
+				if ( false === $size ) {
+					return false;
+				}
+				return (int) $size;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
 		}
 
 		/**
