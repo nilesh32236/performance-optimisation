@@ -13,6 +13,7 @@
  */
 
 use PerformanceOptimise\Inc\Main;
+use Brain\Monkey\Functions;
 
 /**
  * Tests the wp_speculation_rules_configuration filter callback.
@@ -64,9 +65,24 @@ class MainSpeculationRulesTest extends \PHPUnit\Framework\TestCase {
 
 	/**
 	 * Clear overrides before each test so environment leaks cannot affect results.
+	 *
+	 * Also forces a deterministic non-commerce context: AiAdaptiveTest
+	 * eval-declares Woo helpers process-wide (Brain Monkey cannot undeclare
+	 * functions), which would otherwise cap eager to moderate site-wide for
+	 * every later test file in the same process (issue #1183 guardrail).
 	 */
 	protected function setUp(): void { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid
 		parent::setUp();
+		\Brain\Monkey\setUp();
+		$this->register_common_function_stubs();
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook, $value ) {
+				if ( 'wppo_ai_adaptive_commerce_context' === $hook ) {
+					return false;
+				}
+				return $value;
+			}
+		);
 		$this->clear_override_env();
 	}
 
@@ -75,6 +91,10 @@ class MainSpeculationRulesTest extends \PHPUnit\Framework\TestCase {
 	 */
 	protected function tearDown(): void { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid
 		$this->clear_override_env();
+		\Brain\Monkey\tearDown();
+		if ( class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
+			\PerformanceOptimise\Inc\Main::reset_instance();
+		}
 		parent::tearDown();
 	}
 
@@ -256,6 +276,10 @@ class MainSpeculationRulesTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that when the toggle is on, the user's chosen mode and eagerness are
 	 * applied regardless of core defaults or host overrides.
+	 *
+	 * Runs in the deterministic non-commerce context forced by setUp(), so
+	 * eager passes through untouched (issue #1183 guardrail only caps
+	 * commerce/auth contexts).
 	 */
 	public function test_toggle_on_applies_user_configuration(): void {
 		putenv( 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS=moderate' ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.runtime_configuration_putenv
@@ -281,6 +305,41 @@ class MainSpeculationRulesTest extends \PHPUnit\Framework\TestCase {
 			),
 			$result
 		);
+	}
+
+	/**
+	 * Test that the global configuration caps eager to moderate in
+	 * commerce/auth contexts (issue #1183), matching the singular/archive/
+	 * list rule paths.
+	 *
+	 * @return void
+	 */
+	public function test_toggle_on_caps_eager_in_commerce_context(): void {
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook, $value ) {
+				if ( 'wppo_ai_adaptive_commerce_context' === $hook ) {
+					return true;
+				}
+				return $value;
+			}
+		);
+		$main = $this->make_main( array() );
+
+		$result = $main->filter_speculation_rules_configuration(
+			array(
+				'mode'      => 'auto',
+				'eagerness' => 'auto',
+			),
+			array(
+				'enableSpeculationRules' => true,
+				'speculationMode'        => 'prefetch',
+				'speculationEagerness'   => 'eager',
+			),
+			true
+		);
+
+		$this->assertSame( 'prefetch', $result['mode'] );
+		$this->assertSame( 'moderate', $result['eagerness'] );
 	}
 
 	/**

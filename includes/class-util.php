@@ -371,6 +371,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'speculationMode'          => 'prefetch',
 					'speculationEagerness'     => 'conservative',
 					'speculationRumGating'     => true,
+					'speculationTopUrlsLimit'  => 2,
 					'speculationExcludeUrls'   => '',
 					'speculationDocumentRules' => true,
 					'preloadSitemap'           => false,
@@ -4509,6 +4510,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 						$edge                   = (int) $value;
 						$sanitized[ $safe_key ] = $edge < 0 ? 0 : $edge;
 					}
+					continue;
+				}
+
+				// RUM-weighted top-URL prefetch cap (issue #1183) — int clamped
+				// to 1-5 (footprint guard, ~0.15 KB per URL). Unrecognized
+				// values fail open to 2.
+				if ( 'speculationTopUrlsLimit' === $safe_key ) {
+					if ( is_array( $value ) ) {
+						$sanitized[ $safe_key ] = 2;
+						continue;
+					}
+					$limit                  = is_numeric( $value ) ? (int) $value : 2;
+					$sanitized[ $safe_key ] = ( $limit >= 1 && $limit <= 5 ) ? $limit : 2;
 					continue;
 				}
 

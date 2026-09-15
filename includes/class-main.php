@@ -425,6 +425,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['preload_settings']['speculationRumGating'] ) ) {
 				$this->options['preload_settings']['speculationRumGating'] = true;
 			}
+			// Existing installs whose stored settings predate the
+			// RUM-weighted top-URL cap (issue #1183) inherit the 2-URL
+			// default in-memory here (no database write on front-end
+			// requests). Multisite-safe: per-site wppo_settings only.
+			if ( ! isset( $this->options['preload_settings']['speculationTopUrlsLimit'] ) ) {
+				$this->options['preload_settings']['speculationTopUrlsLimit'] = 2;
+			}
 
 			if ( ! isset( $this->options['llms_txt'] ) || ! is_array( $this->options['llms_txt'] ) ) {
 				$this->options['llms_txt'] = array();
@@ -707,6 +714,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'admin_init', array( $this, 'maybe_migrate_ccss_max_size' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_ccss_safelist' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_css_queue_defaults' ) );
+			add_action( 'admin_init', array( $this, 'maybe_migrate_speculation_top_urls' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_safe_mode' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_sandbox_preview' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_image_alt_edge_defaults' ) );
@@ -1496,6 +1504,52 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			Log::add( __( 'Added default RUM-weighted CSS queue settings (capped per-run queue, single-variant behaviour kept).', 'performance-optimisation' ) );
+		}
+
+		/**
+		 * One-time backfill for the RUM-weighted top-URL prefetch cap (issue #1183).
+		 *
+		 * Runs on `admin_init` (not the constructor) so a cacheable front-end
+		 * request never triggers a settings write. Only installs whose stored
+		 * settings predate the `speculationTopUrlsLimit` key (key absent) are
+		 * backfilled with the 2-URL default; any stored explicit value is
+		 * preserved verbatim, and fresh installs with no stored option are
+		 * skipped because the constructor defaults already match. The check is
+		 * idempotent (key presence is the marker), so no extra option row is
+		 * needed. In-memory options are synced too so the current request
+		 * observes the backfilled value. Uses per-site `get_option()` so
+		 * multisite sites migrate independently with no cross-site leakage.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public function maybe_migrate_speculation_top_urls(): void {
+			// allowlist(settings-read-guard): deliberate direct read — must distinguish
+			// "no stored row" (false) from "stored array", which Util::get_settings()
+			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
+			$stored = get_option( 'wppo_settings' );
+			if ( ! is_array( $stored ) ) {
+				return;
+			}
+
+			$preload = isset( $stored['preload_settings'] ) && is_array( $stored['preload_settings'] ) ? $stored['preload_settings'] : array();
+
+			if ( array_key_exists( 'speculationTopUrlsLimit', $preload ) ) {
+				return;
+			}
+
+			$preload['speculationTopUrlsLimit'] = 2;
+			$stored['preload_settings']         = $preload;
+			update_option( 'wppo_settings', $stored );
+
+			if ( ! isset( $this->options['preload_settings'] ) || ! is_array( $this->options['preload_settings'] ) ) {
+				$this->options['preload_settings'] = array();
+			}
+			if ( ! array_key_exists( 'speculationTopUrlsLimit', $this->options['preload_settings'] ) ) {
+				$this->options['preload_settings']['speculationTopUrlsLimit'] = 2;
+			}
+
+			Log::add( __( 'Added default RUM-weighted top-URL prefetch limit (2 URLs, prerender stays guarded).', 'performance-optimisation' ) );
 		}
 
 		/**
@@ -5845,6 +5899,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					$mode      = 'prefetch';
 					$eagerness = 'conservative';
 				}
+				$eagerness = $this->maybe_cap_speculation_eagerness( $eagerness );
+				// Commerce/auth guardrail (issue #1183): prerender executes
+				// page JavaScript even at moderate eagerness, so a commerce
+				// context degrades prerender to prefetch (prefetch only,
+				// never eager) rather than emitting prerender/moderate.
+				if ( 'prerender' === $mode && $this->is_speculation_commerce_or_auth() ) {
+					$mode = 'prefetch';
+				}
 				$config['mode']      = $mode;
 				$config['eagerness'] = $eagerness;
 				return $config;
@@ -5871,16 +5933,259 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * RUM-weighted top-URL prefetch cap (issue #1183).
+		 *
+		 * Reads `preload_settings.speculationTopUrlsLimit` (default 2,
+		 * clamped to 1-5 as the footprint guard). Fail-open: any missing or
+		 * malformed value returns 2, never fatal.
+		 *
+		 * @since NEXT
+		 *
+		 * @return int Capped limit between 1 and 5.
+		 */
+		private function get_speculation_top_urls_limit(): int {
+			try {
+				$raw   = $this->options['preload_settings']['speculationTopUrlsLimit'] ?? 2;
+				$limit = is_numeric( $raw ) ? (int) $raw : 2;
+				if ( $limit < 1 || $limit > 5 ) {
+					return 2;
+				}
+				return $limit;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 2;
+			}
+		}
+
+		/**
+		 * Whether the current request is a commerce/auth context for speculation guardrails.
+		 *
+		 * Reuses `AI_Adaptive::is_commerce_or_auth_context()` when available
+		 * (guarded by class_exists/method_exists for backward compat), with a
+		 * conservative local fallback (WooCommerce presence, cart/checkout/
+		 * account conditionals, logged-in visitor, cart cookies). Fail-open:
+		 * any throwable means "not commerce".
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when eager speculation must be suppressed.
+		 */
+		private function is_speculation_commerce_or_auth(): bool {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) && method_exists( 'PerformanceOptimise\Inc\AI_Adaptive', 'is_commerce_or_auth_context' ) ) {
+					return (bool) AI_Adaptive::is_commerce_or_auth_context();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			try {
+				if ( class_exists( 'WooCommerce' ) || function_exists( 'WC' ) || function_exists( 'wc_get_checkout_url' ) ) {
+					return true;
+				}
+				foreach ( array( 'is_cart', 'is_checkout', 'is_account_page' ) as $conditional ) {
+					if ( function_exists( $conditional ) ) {
+						try {
+							if ( call_user_func( $conditional ) ) {
+								return true;
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+					}
+				}
+				if ( function_exists( 'is_user_logged_in' ) ) {
+					try {
+						// Frontend visitors only (mirrors
+						// AI_Adaptive::is_frontend_context()): admin/REST/cron/
+						// CLI/AJAX requests run with a logged-in admin present and
+						// never represent a visitor seeing speculation rules.
+						if ( $this->is_speculation_frontend_context() && is_user_logged_in() ) {
+							return true;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( ! empty( $_COOKIE['woocommerce_items_in_cart'] ) || ! empty( $_COOKIE['woocommerce_cart_hash'] ) ) {
+					return true;
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Whether the current request looks like a frontend visitor visit.
+		 *
+		 * Mirrors `AI_Adaptive::is_frontend_context()` for the local
+		 * commerce/auth fallback: admin, REST, AJAX, cron, and CLI requests
+		 * never represent a visitor seeing speculation rules. All probes are
+		 * function_exists-guarded so unit tests and minimal installs default
+		 * to frontend (true). Fail-open: any throwable means frontend.
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when the request looks like a frontend visit.
+		 */
+		private function is_speculation_frontend_context(): bool {
+			try {
+				if ( defined( 'WP_CLI' ) && WP_CLI ) {
+					return false;
+				}
+				if ( defined( 'DOING_CRON' ) && DOING_CRON ) {
+					return false;
+				}
+				if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+					return false;
+				}
+				if ( function_exists( 'wp_doing_cron' ) ) {
+					try {
+						if ( wp_doing_cron() ) {
+							return false;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( function_exists( 'is_admin' ) ) {
+					try {
+						if ( is_admin() ) {
+							return false;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( function_exists( 'wp_doing_ajax' ) ) {
+					try {
+						if ( wp_doing_ajax() ) {
+							return false;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
+		 * Cap a speculation eagerness value in commerce/auth contexts.
+		 *
+		 * Prerender-risk guardrail (issue #1183): `eager` becomes `moderate`
+		 * when {@see is_speculation_commerce_or_auth()} is true; every other
+		 * value passes through untouched. Invalid values fall back to
+		 * `conservative`. Manual user settings are never persisted — the cap
+		 * applies to the emitted rule only.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $eagerness Raw eagerness value.
+		 * @return string Capped eagerness value.
+		 */
+		private function maybe_cap_speculation_eagerness( string $eagerness ): string {
+			try {
+				if ( ! in_array( $eagerness, array( 'conservative', 'moderate', 'eager' ), true ) ) {
+					return 'conservative';
+				}
+				if ( 'eager' === $eagerness && $this->is_speculation_commerce_or_auth() ) {
+					return 'moderate';
+				}
+				return $eagerness;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 'conservative';
+			}
+		}
+
+		/**
+		 * RUM-weighted top URLs from the learned AI model (issue #1183).
+		 *
+		 * Reads the field-weighted model (`avgLCP*log(count)` scoring) via
+		 * `AI_Adaptive::get_model()` and sanitizes the full `prefetch_urls`
+		 * list here — rather than via `AI_Adaptive::get_prefetch_urls()`,
+		 * which pre-slices to 2 before validation, so an invalid entry
+		 * cannot waste a fill slot. Each URL is re-validated with
+		 * {@see is_speculation_list_url_valid()} (same-origin, no commerce/
+		 * admin/query), deduped, and capped at the `speculationTopUrlsLimit`
+		 * budget. Empty model, missing class, or any failure returns an empty
+		 * array so callers fall back to document-rule-only behavior (fail-open,
+		 * never fatal). Multisite-safe: per-site model via per-site options,
+		 * same-site host check prevents cross-site leakage.
+		 *
+		 * @since NEXT
+		 *
+		 * @param int $limit Maximum URLs to return.
+		 * @return string[] Validated absolute model URLs (possibly empty).
+		 */
+		private function get_model_weighted_speculation_urls( int $limit = 2 ): array {
+			try {
+				if ( $limit < 1 ) {
+					return array();
+				}
+				if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) || ! method_exists( 'PerformanceOptimise\Inc\AI_Adaptive', 'get_model' ) ) {
+					return array();
+				}
+				$model = AI_Adaptive::get_model();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+			if ( ! is_array( $model ) ) {
+				return array();
+			}
+			$raw = $model['prefetch_urls'] ?? array();
+			if ( ! is_array( $raw ) || empty( $raw ) ) {
+				return array();
+			}
+			try {
+				$urls = array();
+				foreach ( $raw as $candidate ) {
+					if ( ! is_string( $candidate ) || '' === $candidate ) {
+						continue;
+					}
+					$clean = function_exists( 'esc_url_raw' ) ? esc_url_raw( trim( $candidate ) ) : trim( $candidate );
+					if ( '' === $clean ) {
+						continue;
+					}
+					if ( in_array( $clean, $urls, true ) ) {
+						continue;
+					}
+					if ( ! $this->is_speculation_list_url_valid( $clean ) ) {
+						continue;
+					}
+					$urls[] = $clean;
+					if ( count( $urls ) >= $limit ) {
+						break;
+					}
+				}
+				return $urls;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
 		 * Collect high-value same-site URLs for the speculation list rule.
 		 *
 		 * Source: home URL first, then `performance_audit.high_value_urls`,
-		 * then RUM top URLs (real-visit winners via {@see get_rum_top_urls()}).
-		 * Each candidate is normalized via `esc_url_raw(trim())`, deduped,
-		 * same-site validated, and capped (keeps the ~1KB footprint).
-		 * Invalid URLs are skipped individually (fail-open); an empty array
-		 * means "emit nothing".
+		 * then RUM-weighted model top URLs (field-weighted via
+		 * {@see get_model_weighted_speculation_urls()}, capped at
+		 * `preload_settings.speculationTopUrlsLimit`), then RUM volume
+		 * winners via {@see get_rum_top_urls()} (same cap). Each candidate
+		 * is normalized via `esc_url_raw(trim())`, deduped, same-site
+		 * validated, and capped (keeps the ~1KB footprint). Invalid URLs
+		 * are skipped individually (fail-open); an empty array means "emit
+		 * nothing".
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Merge RUM-weighted model top URLs within the speculationTopUrlsLimit fill cap.
 		 *
 		 * @return string[] Validated absolute URLs (possibly empty).
 		 */
@@ -5921,10 +6226,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 			}
 
-			// RUM field-data winners fill the remaining budget (no extra cron
-			// load: one opportunistic get_option read with fail-open empty).
-			foreach ( $this->get_rum_top_urls() as $rum_url ) {
-				$candidates[] = $rum_url;
+			// RUM-weighted model winners first (field-weighted top URLs real
+			// users visit next, capped at the top-URL limit), then volume-
+			// ranked RUM winners fill any remaining fill budget (no extra
+			// cron load: opportunistic reads with fail-open empty). The
+			// combined RUM-weighted fill never exceeds the limit so home +
+			// explicit high-value URLs keep their budget.
+			$top_limit = $this->get_speculation_top_urls_limit();
+			// Over-fetch the model so a hit duplicating home/high-value URLs
+			// does not waste a fill slot (final dedupe would otherwise drop
+			// it and under-fill). Only genuinely new URLs count toward the
+			// combined RUM-weighted budget.
+			$model_urls = $this->get_model_weighted_speculation_urls( $top_limit + count( $candidates ) );
+			$seen       = array();
+			foreach ( $candidates as $prior ) {
+				if ( ! is_string( $prior ) ) {
+					continue;
+				}
+				$clean_prior = function_exists( 'esc_url_raw' ) ? esc_url_raw( trim( $prior ) ) : trim( $prior );
+				if ( '' !== $clean_prior && ! in_array( $clean_prior, $seen, true ) ) {
+					$seen[] = $clean_prior;
+				}
+			}
+			$kept = 0;
+			foreach ( $model_urls as $model_url ) {
+				if ( in_array( $model_url, $seen, true ) ) {
+					continue;
+				}
+				$seen[]       = $model_url;
+				$candidates[] = $model_url;
+				++$kept;
+				if ( $kept >= $top_limit ) {
+					break;
+				}
+			}
+			$remaining = $top_limit - $kept;
+			if ( $remaining > 0 ) {
+				foreach ( $this->get_rum_top_urls( $remaining ) as $rum_url ) {
+					$candidates[] = $rum_url;
+				}
 			}
 
 			$urls = array();
@@ -5967,10 +6307,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * empty array — never fatal, never white-screen.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Accept a fill-budget limit for the RUM-weighted portion.
 		 *
+		 * @param int $limit Maximum URLs to return.
 		 * @return string[] Validated absolute RUM winner URLs (possibly empty).
 		 */
-		private function get_rum_top_urls(): array {
+		private function get_rum_top_urls( int $limit = 10 ): array {
+			if ( $limit < 1 ) {
+				return array();
+			}
+			if ( $limit > 10 ) {
+				$limit = 10;
+			}
 			try {
 				if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'get_data' ) ) {
 					return array();
@@ -6052,7 +6400,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						continue;
 					}
 					$urls[] = $clean;
-					if ( count( $urls ) >= 10 ) {
+					if ( count( $urls ) >= $limit ) {
 						break;
 					}
 				}
@@ -6114,11 +6462,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * Returns a `{"source":"list"}` rule with `eager` eagerness for the
 		 * home URL only when the current view is singular (and the home URL
-		 * is present/valid). Returns null otherwise (non-singular, no home
+		 * is present/valid). Commerce/auth contexts degrade to `moderate`
+		 * via {@see maybe_cap_speculation_eagerness()} (prefetch only,
+		 * never eager). Returns null otherwise (non-singular, no home
 		 * link, logged-in visitor, document rules toggled off, or any
 		 * failure) — fail-open to "emit nothing", never fatal.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Cap eager to moderate in commerce/auth contexts.
 		 *
 		 * @return array<string,mixed>|null The singular rule, or null.
 		 */
@@ -6149,7 +6500,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return array(
 					'source'    => 'list',
 					'urls'      => array( $clean ),
-					'eagerness' => 'eager',
+					'eagerness' => $this->maybe_cap_speculation_eagerness( 'eager' ),
 				);
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -6226,6 +6577,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( ! in_array( $eagerness, array( 'conservative', 'moderate', 'eager' ), true ) ) {
 					$eagerness = 'conservative';
 				}
+				$eagerness = $this->maybe_cap_speculation_eagerness( $eagerness );
 
 				return array(
 					'source'    => 'document',
@@ -6502,6 +6854,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			} elseif ( ! in_array( $eagerness, array( 'conservative', 'moderate', 'eager' ), true ) ) {
 				$eagerness = 'conservative';
 			}
+			// Prerender-risk guardrail (issue #1183): never eager in
+			// commerce/auth contexts — prefetch/document only.
+			$eagerness = $this->maybe_cap_speculation_eagerness( $eagerness );
 
 			$new_rules = array();
 			if ( ! empty( $urls ) ) {

@@ -235,4 +235,64 @@ class MainSpeculationListRulesTest extends \PHPUnit\Framework\TestCase {
 		$this->assertCount( 1, $rules );
 		$this->assertSame( 'conservative', $rules[0]['eagerness'] );
 	}
+
+	/**
+	 * Test RUM-weighted model URLs merge within the top-URL fill cap.
+	 *
+	 * The field-weighted model top URLs are appended after explicit
+	 * high-value URLs; cross-site model URLs are dropped and the
+	 * RUM-weighted fill never exceeds `speculationTopUrlsLimit` (2).
+	 *
+	 * @return void
+	 */
+	public function test_model_weighted_urls_merge_within_top_two_cap(): void {
+		$settings = $this->default_settings();
+		$settings['performance_audit']['high_value_urls'] = array();
+		$this->install_stubs( $settings );
+		$this->options['wppo_ai_model'] = array(
+			'prefetch_urls' => array(
+				'http://example.com/model-a/',
+				'https://evil.test/steal/',
+				'http://example.com/model-b/',
+				'http://example.com/model-c/',
+			),
+		);
+		Util::clear_settings_cache();
+		$main = $this->make_main( $settings['preload_settings'] );
+
+		$urls = $main->get_speculation_list_urls();
+
+		$this->assertSame(
+			array(
+				'http://example.com/',
+				'http://example.com/model-a/',
+				'http://example.com/model-b/',
+			),
+			$urls
+		);
+	}
+
+	/**
+	 * Test an empty model falls back to home + high-value URLs only.
+	 *
+	 * @return void
+	 */
+	public function test_empty_model_falls_back_to_home_and_high_value(): void {
+		$settings = $this->default_settings();
+		$this->install_stubs( $settings );
+		$this->options['wppo_ai_model'] = array();
+		Util::clear_settings_cache();
+		$main = $this->make_main( $settings['preload_settings'] );
+
+		$urls = $main->get_speculation_list_urls();
+
+		$this->assertSame(
+			array(
+				'http://example.com/',
+				'http://example.com/pricing/',
+				'http://example.com/about/',
+			),
+			$urls
+		);
+	}
 }
