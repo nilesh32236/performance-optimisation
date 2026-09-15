@@ -774,7 +774,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			$now    = time();
 			// Fixed window: expiry is set only on the first increment; later
 			// hits re-store with the remaining TTL instead of extending it.
-			if ( ! is_array( $bucket ) || ! isset( $bucket['count'], $bucket['start'] ) || ( $now - (int) $bucket['start'] ) >= MINUTE_IN_SECONDS ) {
+			if ( ! is_array( $bucket ) || ! isset( $bucket['count'], $bucket['start'] ) || (int) $bucket['start'] > $now || ( $now - (int) $bucket['start'] ) >= MINUTE_IN_SECONDS ) {
 				set_transient(
 					$key,
 					array(
@@ -789,7 +789,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			if ( $count >= self::GLOBAL_RATE_LIMIT_PER_MINUTE ) {
 				return true;
 			}
-			$remaining = max( 1, MINUTE_IN_SECONDS - ( $now - (int) $bucket['start'] ) );
+			// Clamp into [1, MINUTE_IN_SECONDS]: a future-dated (corrupted or
+			// tampered) start would otherwise persist the bucket past one
+			// window. Future starts reset above; the min() cap bounds this
+			// call's TTL regardless.
+			$elapsed   = $now - (int) $bucket['start'];
+			$remaining = max( 1, min( MINUTE_IN_SECONDS, MINUTE_IN_SECONDS - $elapsed ) );
 			set_transient(
 				$key,
 				array(
@@ -1238,19 +1243,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 						if ( null !== $lcp_value ) {
 							// Re-sanitize even though the beacon sanitizes at
 							// intake: the queue transient is user-writable, so
-							// allowlist the device and text-sanitize the template
-							// before either is persisted into the aggregate option.
-							$raw_device = isset( $sample['device'] ) && is_string( $sample['device'] ) ? sanitize_text_field( $sample['device'] ) : '';
-							$device     = strtolower( trim( $raw_device ) );
-							if ( 'mobile' !== $device && 'desktop' !== $device ) {
-								$device = 'unknown';
-							}
-							$raw_template = isset( $sample['template'] ) && is_string( $sample['template'] ) ? sanitize_text_field( $sample['template'] ) : '';
-							$raw_template = strtolower( trim( substr( $raw_template, 0, 64 ) ) );
-							$raw_template = (string) preg_replace( '/[^a-z0-9_-]/', '', $raw_template );
-							$template     = '' !== $raw_template ? substr( $raw_template, 0, 64 ) : 'unknown';
-							$connection   = self::normalize_segment_connection( $sample['connection'] ?? 'unknown' );
-							$seg_key      = $device . '|' . $template . '|' . $connection;
+							// reuse the shared normalizers (same as
+							// sanitize_sample()) before persisting into the
+							// aggregate option.
+							$device     = self::normalize_segment_device( $sample['device'] ?? null );
+							$template   = self::normalize_segment_template( $sample['template'] ?? null );
+							$connection = self::normalize_segment_connection( $sample['connection'] ?? null );
+							$seg_key    = $device . '|' . $template . '|' . $connection;
 							if ( ! isset( $bucket['lcpSeg'] ) || ! is_array( $bucket['lcpSeg'] ) ) {
 								$bucket['lcpSeg'] = array();
 							}

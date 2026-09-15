@@ -712,6 +712,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'Pagespeed'              => 'class-pagespeed.php',
 				'Rest'                   => 'class-rest.php',
 				'RUM'                    => 'class-rum.php',
+				'Sandbox_Preview'        => 'class-sandbox-preview.php',
 				'Suggestion_Engine'      => 'class-suggestion-engine.php',
 				'System_Info'            => 'class-system-info.php',
 				'Telemetry'              => 'class-telemetry.php',

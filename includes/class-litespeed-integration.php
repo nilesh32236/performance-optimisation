@@ -1674,6 +1674,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * @return void
 		 */
 		public static function clear_lscache_vary_cookie(): void {
+			if ( function_exists( 'headers_sent' ) && headers_sent() ) {
+				return;
+			}
 			if ( isset( $_COOKIE['_lscache_vary'] ) ) {
 				setcookie( '_lscache_vary', '', time() - YEAR_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), true );
 			}

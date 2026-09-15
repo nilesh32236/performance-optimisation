@@ -834,7 +834,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			}
 
 			$mode = defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644;
-			if ( ! $wp_filesystem->put_contents( $tmp_file, $new_contents, 0600 ) ) {
+			// Only use a restrictive 0600 tmp mode when chmod-restore is
+			// available: without chmod() the rename would leave the live
+			// .htaccess at 0600 on split-user hosts (Apache unreadable).
+			$tmp_mode = $can_chmod ? 0600 : $mode;
+			if ( ! $wp_filesystem->put_contents( $tmp_file, $new_contents, $tmp_mode ) ) {
 				if ( $wp_filesystem->exists( $tmp_file ) ) {
 					$wp_filesystem->delete( $tmp_file );
 				}
@@ -858,7 +862,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			if ( $can_chmod ) {
 				$chmod_ok = $wp_filesystem->chmod( $htaccess_file, $mode );
 				if ( ! $chmod_ok ) {
-					$wp_filesystem->put_contents( $htaccess_file, $current, $mode );
+					$rollback_ok = (bool) $wp_filesystem->put_contents( $htaccess_file, $current, $mode );
+					if ( $rollback_ok ) {
+						$re_read     = $wp_filesystem->get_contents( $htaccess_file );
+						$rollback_ok = is_string( $re_read ) && $re_read === $current;
+					}
+					if ( ! $rollback_ok ) {
+						self::flag_htaccess_failure();
+						return false;
+					}
 					self::flag_htaccess_failure();
 					return false;
 				}

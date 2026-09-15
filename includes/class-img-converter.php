@@ -2347,6 +2347,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 			// Security Fix: Prevent File Size & Memory Bomb DoS (same limit as convert_image()).
 			$max_bytes = apply_filters( 'wppo_filesize_limit_bytes', 20 * 1024 * 1024 );
+			if ( ! is_numeric( $max_bytes ) || (int) $max_bytes < 1 ) {
+				$max_bytes = 20 * 1024 * 1024;
+			}
+				$max_bytes = (int) $max_bytes;
 			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- filesize() emits warnings on unreadable files; guarded with a false check below.
 			$upload_bytes = @filesize( $file );
 			if ( false === $upload_bytes || $upload_bytes > $max_bytes ) {

@@ -72,14 +72,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 
 			if ( ! is_string( $activity ) ) {
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG && function_exists( '_doing_it_wrong' ) ) {
-					_doing_it_wrong( __METHOD__, esc_html__( 'Log::add() expects a string activity description; non-string values are ignored.', 'performance-optimisation' ), 'NEXT' );
+					_doing_it_wrong( __METHOD__, __( 'Log::add() expects a string activity description; non-string values are ignored.', 'performance-optimisation' ), 'NEXT' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- _doing_it_wrong() handles output escaping internally; pre-escaping corrupts non-HTML contexts.
 				}
 				return;
 			}
+			// Sanitize first, then truncate: kses entity-encoding can expand
+			// length (& to &amp;), so truncating first could still exceed the
+			// varchar(255) column under strict mode.
+			$activity = wp_kses_post( $activity );
 			if ( function_exists( 'mb_substr' ) ) {
 				$activity = mb_substr( $activity, 0, 255, 'UTF-8' );
 			} else {
-				$activity = substr( $activity, 0, 255 );
+				// No mbstring: cut at a valid UTF-8 boundary so a multibyte
+				// sequence is never split mid-character into invalid UTF-8.
+				$activity      = substr( $activity, 0, 255 );
+				$utf8_attempts = 0;
+				while ( '' !== $activity && 1 !== preg_match( '//u', $activity ) && $utf8_attempts < 3 ) {
+					$activity = substr( $activity, 0, -1 );
+					++$utf8_attempts;
+				}
 			}
 			if ( '' === trim( $activity ) ) {
 				return;
@@ -92,7 +103,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 			$result = $wpdb->insert(
 				$table_name,
 				array(
-					'activity' => wp_kses_post( $activity ),
+					'activity' => $activity,
 				),
 				array(
 					'%s',

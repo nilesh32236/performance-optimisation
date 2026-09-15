@@ -256,7 +256,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ) {
 				);
 			}
 
-			return array_values( $suggestions );
+			return $suggestions;
 		}
 
 		/**

@@ -93,7 +93,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		 * @return bool True when no purge needed or all requests succeeded.
 		 */
 		public static function purge_all( $type = 'all', $url_path = null ): bool {
-			$type = ( 'single_page' === $type ) ? 'single_page' : 'all';
+			// Fail closed on unexpected types: only 'all'/'single_page'
+			// strings are accepted; garbage (null, array, typo) from a buggy
+			// third-party do_action payload must never coerce into a full
+			// edge purge (purge_everything is the most expensive path).
+			if ( 'single_page' === $type ) {
+				$type = 'single_page';
+			} elseif ( 'all' === $type ) {
+				$type = 'all';
+			} else {
+				return true;
+			}
 			if ( ! Edge_Cache::is_enabled() ) {
 				return true;
 			}
@@ -152,7 +162,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		 * home URL. Returns '' when unresolvable.
 		 *
 		 * @since 2.0.0
-		 * @param string|null $url_path Page path or absolute URL.
+		 * @param mixed $url_path Page path or absolute URL.
 		 * @return string Absolute URL or ''.
 		 */
 		private static function resolve_page_url( $url_path ): string {
@@ -297,9 +307,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 			// Fallback: when no wppo_debug_log listener is attached the
 			// failure would be silent, so mirror it to the activity log.
 			// Fail-open: logging must never break the purge path.
+			// Throttled to one activity-log row per lock window so a
+			// prolonged edge outage cannot spam wppo_activity_logs.
 			try {
 				if ( ! has_filter( 'wppo_debug_log' ) && class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
-					Log::add( 'Edge purge failed [' . $service . ']: ' . substr( $detail, 0, 200 ) );
+					$throttle_key = Util::transient_key( 'wppo_edge_purge_log_lock' );
+					if ( false === get_transient( $throttle_key ) ) {
+						set_transient( $throttle_key, 1, self::PURGE_LOCK_TTL );
+						Log::add( 'Edge purge failed [' . $service . ']: ' . substr( $detail, 0, 200 ) );
+					}
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );

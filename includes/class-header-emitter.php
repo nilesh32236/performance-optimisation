@@ -168,7 +168,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Header_Emitter' ) ) {
 		 * @return string Sanitized tag value.
 		 */
 		private static function sanitize_tag( string $tag ): string {
-			$cleaned = (string) preg_replace( '/[\x00-\x1F\x7F]/', '', $tag );
+			$cleaned = preg_replace( '/[\x00-\x1F\x7F]/', '', $tag );
+			if ( ! is_string( $cleaned ) ) {
+				// preg_replace() returns null on regex failure: fall back to
+				// strip_crlf() instead of emitting an empty tag header.
+				return substr( self::strip_crlf( $tag ), 0, 1024 );
+			}
 			return substr( $cleaned, 0, 1024 );
 		}
 	}

@@ -714,7 +714,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 							continue;
 						}
 						if ( 'snippet' === $field ) {
-							$row[ $field ] = sanitize_text_field( (string) $item[ $field ] );
+							$row[ $field ] = self::sanitize_snippet_for_lcp( (string) $item[ $field ] );
 						} elseif ( 'wastedMs' === $field || 'wastedBytes' === $field ) {
 							// Numeric-only: is_scalar alone admits bools and
 							// arbitrary strings into the transient/REST payload.
@@ -733,12 +733,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 					// falls back to parsing it for an <img> src when no
 					// structured url is present.
 					if ( isset( $item['node'] ) && is_array( $item['node'] ) && isset( $item['node']['snippet'] ) && is_scalar( $item['node']['snippet'] ) ) {
-						$row['node'] = array( 'snippet' => sanitize_text_field( (string) $item['node']['snippet'] ) );
+						$row['node'] = array( 'snippet' => self::sanitize_snippet_for_lcp( (string) $item['node']['snippet'] ) );
 					}
 					$clean['items'][] = $row;
 				}
 			}
 			return $clean;
+		}
+
+		/**
+		 * Sanitize an LCP snippet while preserving the <img src> the
+		 * extract_lcp_image_url() fallback regexes for.
+		 *
+		 * Plain text sanitization strips all tags, which would make the
+		 * Priority-2 snippet fallback unmatchable on sanitized diagnostics.
+		 * Allows only <img src> (length-capped) so stored transients stay
+		 * bounded without losing the parse target.
+		 *
+		 * @since NEXT
+		 * @param string $snippet Raw snippet from the API.
+		 * @return string Sanitized snippet.
+		 */
+		private static function sanitize_snippet_for_lcp( string $snippet ): string {
+			if ( function_exists( 'mb_substr' ) ) {
+				$snippet = mb_substr( $snippet, 0, 2000, 'UTF-8' );
+			} else {
+				$snippet = substr( $snippet, 0, 2000 );
+			}
+			if ( function_exists( 'wp_kses' ) ) {
+				return wp_kses( $snippet, array( 'img' => array( 'src' => true ) ) );
+			}
+			return sanitize_text_field( $snippet );
 		}
 
 		/**

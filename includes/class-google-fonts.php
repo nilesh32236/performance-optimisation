@@ -518,8 +518,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 				// WP_Filesystem, so no unlink is needed (avoids a TOCTOU
 				// window where concurrent hot-path readers see a missing
 				// file and queue duplicate work).
-				$cached = file_get_contents( $css_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local cache staleness probe, not a remote URL; writes still go through WP_Filesystem.
-				if ( ! is_string( $cached ) || false === strpos( $cached, 'fonts.gstatic.com' ) ) {
+				// Read through WP_Filesystem (FTP/SSH-method hosts) with a
+				// direct-read fallback; an unreadable cache is treated as
+				// unconverged (fall through and regenerate) rather than
+				// converged, so remote URLs can never get stuck.
+				$cached           = null;
+				$filesystem_probe = Util::init_filesystem();
+				if ( $filesystem_probe && method_exists( $filesystem_probe, 'get_contents' ) ) {
+					$probe = $filesystem_probe->get_contents( $css_file );
+					if ( is_string( $probe ) ) {
+						$cached = $probe;
+					}
+				}
+				if ( null === $cached ) {
+					$direct = file_get_contents( $css_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local cache staleness probe fallback when WP_Filesystem is unavailable; writes still go through WP_Filesystem.
+					if ( is_string( $direct ) ) {
+						$cached = $direct;
+					}
+				}
+				if ( ! is_string( $cached ) ) {
+					// Unreadable: fall through and regenerate below.
+				} elseif ( false === strpos( $cached, 'fonts.gstatic.com' ) ) {
 					return true;
 				}
 			}
@@ -562,9 +581,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			// the key is re-queued while remote URLs remain so later runs
 			// converge to fully local CSS without a manual cache clear.
 			$downloads = 0;
+			$succeeded = 0;
 			$css       = preg_replace_callback(
 				'#(url\()\s*(["\']?)(https://fonts\.gstatic\.com[^"\')]+)\2\s*\)#i',
-				function ( $matches ) use ( &$downloads ) {
+				function ( $matches ) use ( &$downloads, &$succeeded ) {
 					$file_url = $matches[3];
 					$hash     = md5( $file_url );
 					$local    = $this->font_cache_dir . '/files/' . $hash . '.woff2';
@@ -579,6 +599,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 					++$downloads;
 
 					if ( $this->download_font_file( $file_url, $local ) && file_exists( $local ) ) {
+						++$succeeded;
 						return 'url(' . $this->font_cache_url . '/files/' . $hash . '.woff2)';
 					}
 
@@ -616,8 +637,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			// Capped-run convergence: the per-run cap above can leave remote
 			// gstatic URLs in the CSS just written. Re-queue the key while
 			// remote URLs remain so later runs converge to fully local CSS
-			// without requiring a manual cache clear.
-			if ( is_string( $css ) && false !== strpos( $css, 'fonts.gstatic.com' ) ) {
+			// without requiring a manual cache clear. Convergence guard: only
+			// re-queue when at least one download succeeded this run — if
+			// gstatic fetches persistently fail, re-queueing every run would
+			// churn Action Scheduler forever (the failure sentinel backoff
+			// still applies to the next attempt).
+			if ( $succeeded > 0 && is_string( $css ) && false !== strpos( $css, 'fonts.gstatic.com' ) ) {
 				$this->maybe_queue_download( $key, $url );
 			}
 

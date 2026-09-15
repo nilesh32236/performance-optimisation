@@ -691,12 +691,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 
 					$offset = $pos;
 				} else {
-					$rule_end = strpos( $css, '}', $offset );
-					if ( false === $rule_end ) {
-						$rule_end = $length;
-					} else {
-						++$rule_end;
-					}
+					// Quote-aware scan (mirrors the at-rule block scanner
+					// above): a naive strpos( '}' ) truncates on a brace
+					// inside a quoted value (e.g. content:"}"), shifting the
+					// offset and cascading into subsequent rules.
+					$rule_end = self::find_rule_end( $css, $offset, $length );
 
 					$rule_text = substr( $css, $offset, $rule_end - $offset );
 					$rule_text = trim( $rule_text );
@@ -728,6 +727,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			}
 
 			return $rules;
+		}
+
+		/**
+		 * Find the end offset (one past '}') of a regular rule, skipping
+		 * quoted segments and backslash escapes.
+		 *
+		 * @since NEXT
+		 * @param string $css    Full CSS content.
+		 * @param int    $offset Rule start offset.
+		 * @param int    $length Length of $css.
+		 * @return int Offset one past the closing brace (or $length).
+		 */
+		private static function find_rule_end( string $css, int $offset, int $length ): int {
+			$quote = null;
+			$pos   = $offset;
+			while ( $pos < $length ) {
+				$char = $css[ $pos ];
+				if ( null !== $quote ) {
+					if ( '\\' === $char ) {
+						$pos += 2;
+						continue;
+					}
+					if ( $char === $quote ) {
+						$quote = null;
+					}
+				} elseif ( '"' === $char || "'" === $char ) {
+					$quote = $char;
+				} elseif ( '}' === $char ) {
+					return $pos + 1;
+				}
+				++$pos;
+			}
+			return $length;
 		}
 
 		/**

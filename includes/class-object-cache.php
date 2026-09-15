@@ -760,9 +760,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 */
 		private function connect_internal( $config ) {
 			if ( ! function_exists( 'wppo_redis_connect' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/redis-connect-helper.php';
+				$helper = defined( 'WPPO_PLUGIN_PATH' ) ? WPPO_PLUGIN_PATH . 'includes/redis-connect-helper.php' : '';
+				if ( '' === $helper || ! is_readable( $helper ) ) {
+					return new \WP_Error( 'missing_helper', __( 'The Redis connection helper is unavailable.', 'performance-optimisation' ) );
+				}
+				require_once $helper;
+			}
+			if ( ! function_exists( 'wppo_redis_connect' ) ) {
+				return new \WP_Error( 'missing_helper', __( 'The Redis connection helper is unavailable.', 'performance-optimisation' ) );
 			}
 			return wppo_redis_connect( $config );
+		}
+
+		/**
+		 * Race-tolerant filesize(): clears the stat cache and suppresses the
+		 * TOCTOU warning when the file vanishes between checks.
+		 *
+		 * @since NEXT
+		 * @param string $path File path.
+		 * @return int|false Size in bytes or false.
+		 */
+		private static function safe_filesize( string $path ) {
+			if ( function_exists( 'clearstatcache' ) ) {
+				clearstatcache( true, $path );
+			}
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- TOCTOU: file may vanish between is_readable() and filesize().
+			$size = @filesize( $path );
+			return $size;
 		}
 
 		/**
@@ -788,7 +812,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				$content_real  = realpath( WP_CONTENT_DIR );
 				$content_dir   = is_string( $content_real ) ? wp_normalize_path( $content_real ) : wp_normalize_path( WP_CONTENT_DIR );
 				$config_normal = is_string( $config_real ) ? wp_normalize_path( $config_real ) : '';
-				$config_size   = ( '' !== $config_normal && 0 === strpos( $config_normal, $content_dir . '/' ) && is_readable( $this->config_path ) ) ? filesize( $this->config_path ) : false; // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize
+				$config_size   = ( '' !== $config_normal && 0 === strpos( $config_normal, $content_dir . '/' ) && is_readable( $this->config_path ) ) ? self::safe_filesize( $this->config_path ) : false; // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize
 				if ( false !== $config_size && $config_size > 0 && $config_size <= 65536 ) {
 					$config = include $this->config_path; // phpcs:ignore WPThemeReview.CoreFunctionality.FileInclude.FileIncludeFound
 				}

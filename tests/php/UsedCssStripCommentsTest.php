@@ -73,6 +73,12 @@ class UsedCssStripCommentsTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_removes_adjacent_comments(): void {
 		$this->assertSame( 'a{}', $this->strip( '/*a*/a{}/*b*//*c*/' ) );
+	}
+
+	/**
+	 * Empty input stays empty.
+	 */
+	public function test_empty_input_returns_empty(): void {
 		$this->assertSame( '', $this->strip( '' ) );
 	}
 }
