@@ -518,13 +518,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * per-post picker (`_wppo_lcp_preload_url`) wins when `post_id` names
 		 * a singular post, then sample-gated RUM field data
 		 * (`RUM::get_field_lcp_url()`), then Optimization Detective
-		 * (guarded `function_exists()` / `has_filter()` on OD hooks), then
-		 * stored PageSpeed data (`RUM::get_stored_pagespeed_lcp_url()`).
+		 * (`OD_Bridge::get_lcp_url()`), then stored PageSpeed data
+		 * (`RUM::get_stored_pagespeed_lcp_url()`).
 		 * Optional GET params: `path` (page path, e.g.
 		 * `/about/`) and `post_id`. Fail-open: detection failure returns a
 		 * null candidate (never fatal), so the UI falls back to the manual
 		 * picker path. Multisite-safe: candidate lookups use
 		 * `Util::transient_key()` blog-aware keys.
+		 *
+		 * Note: the OD tier is current-request only and best-effort in admin
+		 * context — `OD_Bridge::get_lcp_url()` takes no URL argument and
+		 * resolves metrics for the current request (the admin REST URL when
+		 * called from this route), so it can rarely resolve the requested
+		 * page's hero. The `path` param is honoured by the RUM-field and
+		 * stored-PageSpeed tiers only.
 		 *
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
@@ -581,12 +588,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				}
 			}
 
-			// Optimization Detective real-visit hero (guarded OD hooks; filter-aware).
+			// Optimization Detective real-visit hero. OD_Bridge::is_enabled()
+			// already applies the wppo_od_should_optimize filter with the
+			// correct current URL, so no separate filter pre-check here.
 			if ( null === $candidate && class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) && method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'get_lcp_url' ) ) {
 				try {
 					$od_available = class_exists( 'OD_URL_Metric' ) || function_exists( 'od_get_url_metrics' );
-					$od_allowed   = ! function_exists( 'has_filter' ) || ! has_filter( 'wppo_od_should_optimize' ) || ( function_exists( 'apply_filters' ) && apply_filters( 'wppo_od_should_optimize', true, '' ) );
-					if ( $od_available && $od_allowed && method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'is_enabled' ) && \PerformanceOptimise\Inc\OD_Bridge::is_enabled() ) {
+					if ( $od_available && method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'is_enabled' ) && \PerformanceOptimise\Inc\OD_Bridge::is_enabled() ) {
 						$od_url = \PerformanceOptimise\Inc\OD_Bridge::get_lcp_url();
 						if ( is_string( $od_url ) && '' !== $od_url ) {
 							$candidate = array(
@@ -698,15 +706,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					unset( $e );
 				}
 				$path = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url, PHP_URL_PATH ) : parse_url( $url, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback only when wp_parse_url() is unavailable (unit contexts).
-				if ( is_string( $path ) && '' !== $path && 1 === preg_match( '/\.(jpe?g|png|gif|webp|avif|svg|heic|heif)$/i', $path ) ) {
+				if ( is_string( $path ) && '' !== $path && 1 === preg_match( '/\.(jpe?g|png|gif|webp|avif|svg|heic|heif|jxl)$/i', $path ) ) {
 					return true;
 				}
 				$query = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url, PHP_URL_QUERY ) : parse_url( $url, PHP_URL_QUERY ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback only when wp_parse_url() is unavailable (unit contexts).
 				if ( is_string( $query ) && '' !== $query ) {
-					if ( 1 === preg_match( '/\.(jpe?g|png|gif|webp|avif|svg|heic|heif)/i', $query ) ) {
+					if ( 1 === preg_match( '/\.(jpe?g|png|gif|webp|avif|svg|heic|heif|jxl)/i', $query ) ) {
 						return true;
 					}
-					if ( 1 === preg_match( '/(^|&)(w|h|width|height|format|fit|crop|resize|quality|ssl|strip|url|src)(=|&|$)/i', $query ) ) {
+					// Image-service keys only: generic keys (ssl, url, src,
+					// strip) also appear on non-image URLs and must not
+					// classify a page URL as a preloadable image.
+					if ( 1 === preg_match( '/(^|&)(w|h|width|height|format|fit|crop|resize|quality)(=|&|$)/i', $query ) ) {
 						return true;
 					}
 				}

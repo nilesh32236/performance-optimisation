@@ -381,6 +381,38 @@ class MetaboxTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * An array-shaped manual LCP URL must fail closed, not fatal.
+	 */
+	public function test_save_preload_image_urls_fails_closed_on_array_lcp_url(): void {
+		$_POST['wppo_preload_image_nonce'] = 'valid-nonce';
+		$_POST['wppo_preload_image_url']   = 'https://example.com/a.jpg';
+		$_POST['wppo_lcp_preload_url']     = array( 'https://example.com/pinned-hero.jpg' );
+
+		Functions\when( 'wp_verify_nonce' )->justReturn( true );
+		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'update_post_meta' )->justReturn( true );
+		$deleted = array();
+		Functions\when( 'delete_post_meta' )->alias(
+			function ( $post_id, $key ) use ( &$deleted ) {
+				$deleted[] = $key;
+				return true;
+			}
+		);
+
+		$metabox    = $this->make_metabox();
+		$reflection = new \ReflectionClass( $metabox );
+		$method     = $reflection->getMethod( 'save_preload_image_urls' );
+
+		try {
+			// Reaching the assertion at all proves no TypeError was thrown.
+			$method->invokeArgs( $metabox, array( 123 ) );
+			$this->assertContains( '_wppo_lcp_preload_url', $deleted );
+		} finally {
+			unset( $_POST['wppo_preload_image_nonce'], $_POST['wppo_preload_image_url'], $_POST['wppo_lcp_preload_url'] );
+		}
+	}
+
+	/**
 	 * An empty manual LCP URL deletes the meta instead of storing an empty string.
 	 */
 	public function test_save_preload_image_urls_deletes_manual_lcp_url_when_empty(): void {

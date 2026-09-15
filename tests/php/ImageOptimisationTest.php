@@ -332,6 +332,31 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that a non-image manual LCP picker value is rejected by the
+	 * is_image_lcp_url() guard and fails open to an empty string.
+	 */
+	public function test_get_manual_lcp_url_rejects_non_image_url(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Unit stub mirroring the bootstrap alias.
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		Functions\when( 'is_singular' )->justReturn( true );
+		Functions\when( 'get_the_ID' )->justReturn( 42 );
+		Functions\when( 'get_post_meta' )->alias(
+			static function ( $post_id, $key, $single ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+				return '_wppo_lcp_preload_url' === $key ? 'https://example.com/wp-content/uploads/document.pdf' : '';
+			}
+		);
+		Functions\when( 'esc_url_raw' )->returnArg();
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+
+		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'get_manual_lcp_url' );
+		$reflection->setAccessible( true );
+
+		$this->assertSame( '', $reflection->invoke( $image_opt ) );
+	}
+
+	/**
 	 * Test that the manual LCP picker returns empty outside singular views.
 	 */
 	public function test_get_manual_lcp_url_returns_empty_when_not_singular(): void {

@@ -232,7 +232,8 @@ describe( 'ImageOptimization Component', () => {
 
 	it( 'persists both lazy-render toggles via update_settings', async () => {
 		apiCall.mockImplementation( ( action ) =>
-			'lcp_preload_candidate' === action
+			typeof action === 'string' &&
+			action.startsWith( 'lcp_preload_candidate' )
 				? Promise.resolve( {
 						success: true,
 						data: { candidate: null, source: 'none' },
@@ -277,7 +278,10 @@ describe( 'ImageOptimization Component', () => {
 
 	it( 'surfaces the LCP candidate with a one-click preload action', async () => {
 		apiCall.mockImplementation( ( action ) => {
-			if ( 'lcp_preload_candidate' === action ) {
+			if (
+				typeof action === 'string' &&
+				action.startsWith( 'lcp_preload_candidate' )
+			) {
 				return Promise.resolve( {
 					success: true,
 					data: {
@@ -305,7 +309,7 @@ describe( 'ImageOptimization Component', () => {
 			screen.getByRole( 'button', { name: /Preload this image/i } )
 		).toBeInTheDocument();
 		expect( apiCall ).toHaveBeenCalledWith(
-			'lcp_preload_candidate',
+			'lcp_preload_candidate?path=' + encodeURIComponent( '/' ),
 			{},
 			'GET'
 		);
@@ -313,7 +317,10 @@ describe( 'ImageOptimization Component', () => {
 
 	it( 'one-click preload enables LCP auto-preload and prioritization', async () => {
 		apiCall.mockImplementation( ( action ) => {
-			if ( 'lcp_preload_candidate' === action ) {
+			if (
+				typeof action === 'string' &&
+				action.startsWith( 'lcp_preload_candidate' )
+			) {
 				return Promise.resolve( {
 					success: true,
 					data: {
@@ -361,7 +368,10 @@ describe( 'ImageOptimization Component', () => {
 
 	it( 'shows an error notice when the one-click LCP preload fails', async () => {
 		apiCall.mockImplementation( ( action ) => {
-			if ( 'lcp_preload_candidate' === action ) {
+			if (
+				typeof action === 'string' &&
+				action.startsWith( 'lcp_preload_candidate' )
+			) {
 				return Promise.resolve( {
 					success: true,
 					data: {
@@ -396,7 +406,10 @@ describe( 'ImageOptimization Component', () => {
 
 	it( 'shows an error notice when the one-click LCP preload rejects', async () => {
 		apiCall.mockImplementation( ( action ) => {
-			if ( 'lcp_preload_candidate' === action ) {
+			if (
+				typeof action === 'string' &&
+				action.startsWith( 'lcp_preload_candidate' )
+			) {
 				return Promise.resolve( {
 					success: true,
 					data: {
@@ -429,7 +442,10 @@ describe( 'ImageOptimization Component', () => {
 
 	it( 'falls back to the manual picker hint when no candidate resolves', async () => {
 		apiCall.mockImplementation( ( action ) => {
-			if ( 'lcp_preload_candidate' === action ) {
+			if (
+				typeof action === 'string' &&
+				action.startsWith( 'lcp_preload_candidate' )
+			) {
 				return Promise.resolve( {
 					success: true,
 					data: { candidate: null, source: 'none' },
@@ -448,5 +464,37 @@ describe( 'ImageOptimization Component', () => {
 		expect(
 			screen.queryByRole( 'button', { name: /Preload this image/i } )
 		).not.toBeInTheDocument();
+	} );
+
+	it( 'falls back to the manual picker hint when the candidate fetch rejects', async () => {
+		const spy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
+		apiCall.mockImplementation( ( action ) => {
+			if (
+				typeof action === 'string' &&
+				action.startsWith( 'lcp_preload_candidate' )
+			) {
+				return Promise.reject( new Error( 'Network error' ) );
+			}
+			return Promise.resolve( { success: true } );
+		} );
+
+		try {
+			render( <ImageOptimization /> );
+
+			await waitFor( () => {
+				expect(
+					screen.getByText( /No field-measured LCP candidate yet/i )
+				).toBeInTheDocument();
+			} );
+			expect(
+				screen.queryByRole( 'button', {
+					name: /Preload this image/i,
+				} )
+			).not.toBeInTheDocument();
+		} finally {
+			spy.mockRestore();
+		}
 	} );
 } );

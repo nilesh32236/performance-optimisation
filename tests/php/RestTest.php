@@ -266,6 +266,300 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that the LCP preload candidate endpoint surfaces the manual
+	 * per-post picker URL first (fallback path before auto-detect).
+	 */
+	public function test_get_lcp_preload_candidate_returns_manual_url_first(): void {
+		Functions\when( 'get_post_meta' )->justReturn( 'https://example.com/hero.jpg' );
+		Functions\when( 'esc_url_raw' )->returnArg();
+		// Order-independent: the manual image guard parses the URL, so pin
+		// wp_parse_url explicitly (a leaked stub from an earlier test in
+		// the same process could otherwise return null).
+		// phpcs:disable WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Test-only wp_parse_url stub.
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		// phpcs:enable WordPress.WP.AlternativeFunctions.parse_url_parse_url
+
+		$request  = new WP_REST_Request( array( 'post_id' => 123 ) );
+		$response = $this->rest->get_lcp_preload_candidate( $request );
+
+		$data = $response->get_data()['data'];
+		$this->assertSame( 'manual', $data['source'] );
+		$this->assertSame( 'https://example.com/hero.jpg', $data['candidate']['url'] );
+	}
+
+	/**
+	 * Test that a non-image manual picker value is rejected by the image
+	 * guard and fails open to a null candidate (never surfaced for preload).
+	 */
+	public function test_get_lcp_preload_candidate_rejects_non_image_manual_url(): void {
+		Functions\when( 'get_post_meta' )->justReturn( 'https://example.com/about/' );
+		Functions\when( 'get_option' )->justReturn( false );
+		Functions\when( 'get_transient' )->justReturn( false );
+		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'untrailingslashit' )->alias(
+			static function ( $url ) {
+				return is_string( $url ) ? rtrim( $url, '/' ) : $url;
+			}
+		);
+		// phpcs:disable WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Test-only wp_parse_url stub.
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		// phpcs:enable WordPress.WP.AlternativeFunctions.parse_url_parse_url
+
+		$request  = new WP_REST_Request(
+			array(
+				'post_id' => 123,
+				'path'    => '/no-data/',
+			)
+		);
+		$response = $this->rest->get_lcp_preload_candidate( $request );
+
+		$data = $response->get_data()['data'];
+		$this->assertNull( $data['candidate'] );
+		$this->assertSame( 'none', $data['source'] );
+	}
+
+	/**
+	 * Test that the LCP preload candidate endpoint fails open with a null
+	 * candidate when no manual, RUM, OD, or PageSpeed data resolves.
+	 */
+	public function test_get_lcp_preload_candidate_returns_null_candidate_fail_open(): void {
+		Functions\when( 'get_post_meta' )->justReturn( '' );
+		Functions\when( 'get_option' )->justReturn( false );
+		Functions\when( 'get_transient' )->justReturn( false );
+		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'untrailingslashit' )->alias(
+			static function ( $url ) {
+				return is_string( $url ) ? rtrim( $url, '/' ) : $url;
+			}
+		);
+		// Order-independent: the image guard parses URLs, so pin
+		// wp_parse_url explicitly like the sibling LCP tests.
+		// phpcs:disable WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Test-only wp_parse_url stub.
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		// phpcs:enable WordPress.WP.AlternativeFunctions.parse_url_parse_url
+
+		$request  = new WP_REST_Request( array( 'path' => '/no-data/' ) );
+		$response = $this->rest->get_lcp_preload_candidate( $request );
+
+		$data = $response->get_data()['data'];
+		$this->assertNull( $data['candidate'] );
+		$this->assertSame( 'none', $data['source'] );
+	}
+
+	/**
+	 * Install the fully-isolated stub set shared by the LCP tier tests.
+	 *
+	 * Each tier test then overrides get_transient (and, for the OD tier,
+	 * the OD metrics global) to steer exactly one tier to a hit while the
+	 * others miss, proving the documented manual > RUM > OD > PageSpeed
+	 * order instead of only covering manual-first and null fail-open.
+	 */
+	private function install_lcp_tier_stubs(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		if ( method_exists( 'PerformanceOptimise\Inc\RUM', 'clear_field_lcp_cache' ) ) {
+			\PerformanceOptimise\Inc\RUM::clear_field_lcp_cache();
+		}
+		Functions\when( 'get_post_meta' )->justReturn( '' );
+		Functions\when( 'get_option' )->justReturn( false );
+		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'untrailingslashit' )->alias(
+			static function ( $url ) {
+				return is_string( $url ) ? rtrim( $url, '/' ) : $url;
+			}
+		);
+		// phpcs:disable WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Test-only wp_parse_url stub.
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		// phpcs:enable WordPress.WP.AlternativeFunctions.parse_url_parse_url
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'home_url' )->alias(
+			static function ( $path = '' ) {
+				return 'https://example.com' . (string) $path;
+			}
+		);
+		Functions\when( 'is_singular' )->justReturn( false );
+		Functions\when( 'is_front_page' )->justReturn( false );
+		Functions\when( 'get_the_ID' )->justReturn( 0 );
+	}
+
+	/**
+	 * Test that sample-gated RUM field data surfaces as the candidate with
+	 * source 'rum' when no manual pin exists.
+	 */
+	public function test_get_lcp_preload_candidate_returns_rum_field_candidate(): void {
+		$this->install_lcp_tier_stubs();
+		Functions\when( 'get_transient' )->alias(
+			static function ( $key ) {
+				if ( is_string( $key ) && false !== strpos( $key, 'wppo_rum_top_' ) ) {
+					return array(
+						'url'      => 'https://example.com/wp-content/uploads/rum-hero.jpg',
+						'n'        => 25,
+						'lastSeen' => time(),
+					);
+				}
+				return false;
+			}
+		);
+		// OD globals may leak from OdBridgeTest in the same process; the RUM
+		// tier wins regardless, but keep them empty for determinism.
+		$previous_metrics           = $GLOBALS['od_metrics_stub'] ?? null;
+		$GLOBALS['od_metrics_stub'] = array();
+		$previous_collection        = $GLOBALS['od_url_metrics'] ?? null;
+		$GLOBALS['od_url_metrics']  = array();
+
+		try {
+			$request  = new WP_REST_Request( array( 'path' => '/rum-tier-page/' ) );
+			$response = $this->rest->get_lcp_preload_candidate( $request );
+
+			$data = $response->get_data()['data'];
+			$this->assertSame( 'rum', $data['source'] );
+			$this->assertSame( 'https://example.com/wp-content/uploads/rum-hero.jpg', $data['candidate']['url'] );
+		} finally {
+			if ( null === $previous_metrics ) {
+				unset( $GLOBALS['od_metrics_stub'] );
+			} else {
+				$GLOBALS['od_metrics_stub'] = $previous_metrics;
+			}
+			if ( null === $previous_collection ) {
+				unset( $GLOBALS['od_url_metrics'] );
+			} else {
+				$GLOBALS['od_url_metrics'] = $previous_collection;
+			}
+		}
+	}
+
+	/**
+	 * Test that the stored PageSpeed transient surfaces as the candidate
+	 * with source 'pagespeed' when RUM field data and OD both miss.
+	 */
+	public function test_get_lcp_preload_candidate_returns_pagespeed_candidate(): void {
+		$this->install_lcp_tier_stubs();
+		Functions\when( 'get_transient' )->alias(
+			static function ( $key ) {
+				if ( is_string( $key ) && false !== strpos( $key, 'wppo_lcp_url_' ) ) {
+					return 'https://example.com/wp-content/uploads/pagespeed-hero.jpg';
+				}
+				return false;
+			}
+		);
+		// OD globals may leak from OdBridgeTest in the same process: a stale
+		// metric would let the OD tier shadow PageSpeed, so empty them to
+		// prove the PageSpeed tier itself resolves.
+		$previous_metrics           = $GLOBALS['od_metrics_stub'] ?? null;
+		$GLOBALS['od_metrics_stub'] = array();
+		$previous_collection        = $GLOBALS['od_url_metrics'] ?? null;
+		$GLOBALS['od_url_metrics']  = array();
+
+		try {
+			$request  = new WP_REST_Request( array( 'path' => '/pagespeed-tier-page/' ) );
+			$response = $this->rest->get_lcp_preload_candidate( $request );
+
+			$data = $response->get_data()['data'];
+			$this->assertSame( 'pagespeed', $data['source'] );
+			$this->assertSame( 'https://example.com/wp-content/uploads/pagespeed-hero.jpg', $data['candidate']['url'] );
+		} finally {
+			if ( null === $previous_metrics ) {
+				unset( $GLOBALS['od_metrics_stub'] );
+			} else {
+				$GLOBALS['od_metrics_stub'] = $previous_metrics;
+			}
+			if ( null === $previous_collection ) {
+				unset( $GLOBALS['od_url_metrics'] );
+			} else {
+				$GLOBALS['od_url_metrics'] = $previous_collection;
+			}
+		}
+	}
+
+	/**
+	 * Ensure the OD stub API used by the OD tier test exists.
+	 *
+	 * Mirrors OdBridgeTest::ensure_od_class(): defines the OD_URL_Metric
+	 * class and od_get_url_metrics() only when absent, with the same shape,
+	 * so whichever file runs first in the process, both suites keep working.
+	 */
+	private function ensure_od_stubs_for_lcp_tier(): void {
+		if ( ! class_exists( 'OD_URL_Metric' ) ) {
+			eval( // phpcs:ignore Squiz.PHP.Eval.Discouraged -- Test-only OD stub, same as OdBridgeTest.
+				'
+                class OD_URL_Metric {
+                    private $data;
+                    public function __construct( $data = array() ) { $this->data = $data; }
+                    public function get_lcp_element() { return $this->data["lcp"] ?? null; }
+                    public function get_elements() { return $this->data["elements"] ?? array(); }
+                    public function get_viewport_width() { return $this->data["viewportWidth"] ?? 0; }
+                    public function get_url() { return $this->data["url"] ?? ""; }
+                    public function is_lcp() { return !empty($this->data["isLCP"]); }
+                    public function get_src() { return $this->data["src"] ?? ""; }
+                }
+                '
+			);
+		}
+
+		if ( ! function_exists( 'od_get_url_metrics' ) ) {
+			eval( // phpcs:ignore Squiz.PHP.Eval.Discouraged -- Test-only OD stub, same as OdBridgeTest.
+				'
+                function od_get_url_metrics( $url = "" ) {
+                    return $GLOBALS["od_metrics_stub"] ?? array();
+                }
+                '
+			);
+		}
+	}
+
+	/**
+	 * Test that Optimization Detective real-visit data surfaces as the
+	 * candidate with source 'od' when RUM field data misses, proving the OD
+	 * tier is reachable (manual > RUM field > OD > stored PageSpeed).
+	 */
+	public function test_get_lcp_preload_candidate_returns_od_candidate(): void {
+		$this->install_lcp_tier_stubs();
+		$this->ensure_od_stubs_for_lcp_tier();
+		Functions\when( 'get_transient' )->justReturn( false );
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook, $value ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- Test-only filter passthrough.
+				$args = func_get_args();
+				return $args[1];
+			}
+		);
+		Functions\when( 'add_query_arg' )->alias(
+			static function () {
+				return 'https://example.com/od-tier-page/';
+			}
+		);
+
+		global $wp;
+		$previous_wp = $wp ?? null;
+		$wp          = new \stdClass();
+		$wp->request = 'od-tier-page';
+
+		$previous_metrics           = $GLOBALS['od_metrics_stub'] ?? null;
+		$GLOBALS['od_metrics_stub'] = array(
+			new \OD_URL_Metric(
+				array(
+					'lcp' => array( 'src' => 'https://example.com/wp-content/uploads/od-hero.jpg' ),
+				)
+			),
+		);
+
+		try {
+			$request  = new WP_REST_Request( array( 'path' => '/od-tier-page/' ) );
+			$response = $this->rest->get_lcp_preload_candidate( $request );
+
+			$data = $response->get_data()['data'];
+			$this->assertSame( 'od', $data['source'] );
+			$this->assertSame( 'https://example.com/wp-content/uploads/od-hero.jpg', $data['candidate']['url'] );
+		} finally {
+			if ( null === $previous_metrics ) {
+				unset( $GLOBALS['od_metrics_stub'] );
+			} else {
+				$GLOBALS['od_metrics_stub'] = $previous_metrics;
+			}
+			$wp = $previous_wp;
+		}
+	}
+
+	/**
 	 * Test save_sandbox_preview persists staged settings (issue #1163).
 	 */
 	public function test_save_sandbox_preview_persists_staged(): void {
@@ -452,81 +746,6 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 		$this->assertStringContainsString( 'wppo_preview=assets', $data['data']['preview_url'] );
 	}
 
-	/**
-	 * Test that the LCP preload candidate endpoint surfaces the manual
-	 * per-post picker URL first (fallback path before auto-detect).
-	 */
-	public function test_get_lcp_preload_candidate_returns_manual_url_first(): void {
-		Functions\when( 'get_post_meta' )->justReturn( 'https://example.com/hero.jpg' );
-		Functions\when( 'esc_url_raw' )->returnArg();
-		// Order-independent: the manual image guard parses the URL, so pin
-		// wp_parse_url explicitly (a leaked stub from an earlier test in
-		// the same process could otherwise return null).
-		// phpcs:disable WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Test-only wp_parse_url stub.
-		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
-		// phpcs:enable WordPress.WP.AlternativeFunctions.parse_url_parse_url
-
-		$request  = new WP_REST_Request( array( 'post_id' => 123 ) );
-		$response = $this->rest->get_lcp_preload_candidate( $request );
-
-		$data = $response->get_data()['data'];
-		$this->assertSame( 'manual', $data['source'] );
-		$this->assertSame( 'https://example.com/hero.jpg', $data['candidate']['url'] );
-	}
-
-	/**
-	 * Test that a non-image manual picker value is rejected by the image
-	 * guard and fails open to a null candidate (never surfaced for preload).
-	 */
-	public function test_get_lcp_preload_candidate_rejects_non_image_manual_url(): void {
-		Functions\when( 'get_post_meta' )->justReturn( 'https://example.com/about/' );
-		Functions\when( 'get_option' )->justReturn( false );
-		Functions\when( 'get_transient' )->justReturn( false );
-		Functions\when( 'esc_url_raw' )->returnArg();
-		Functions\when( 'untrailingslashit' )->alias(
-			static function ( $url ) {
-				return is_string( $url ) ? rtrim( $url, '/' ) : $url;
-			}
-		);
-		// phpcs:disable WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Test-only wp_parse_url stub.
-		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
-		// phpcs:enable WordPress.WP.AlternativeFunctions.parse_url_parse_url
-
-		$request  = new WP_REST_Request(
-			array(
-				'post_id' => 123,
-				'path'    => '/no-data/',
-			)
-		);
-		$response = $this->rest->get_lcp_preload_candidate( $request );
-
-		$data = $response->get_data()['data'];
-		$this->assertNull( $data['candidate'] );
-		$this->assertSame( 'none', $data['source'] );
-	}
-
-	/**
-	 * Test that the LCP preload candidate endpoint fails open with a null
-	 * candidate when no manual, RUM, OD, or PageSpeed data resolves.
-	 */
-	public function test_get_lcp_preload_candidate_returns_null_candidate_fail_open(): void {
-		Functions\when( 'get_post_meta' )->justReturn( '' );
-		Functions\when( 'get_option' )->justReturn( false );
-		Functions\when( 'get_transient' )->justReturn( false );
-		Functions\when( 'esc_url_raw' )->returnArg();
-		Functions\when( 'untrailingslashit' )->alias(
-			static function ( $url ) {
-				return is_string( $url ) ? rtrim( $url, '/' ) : $url;
-			}
-		);
-
-		$request  = new WP_REST_Request( array( 'path' => '/no-data/' ) );
-		$response = $this->rest->get_lcp_preload_candidate( $request );
-
-		$data = $response->get_data()['data'];
-		$this->assertNull( $data['candidate'] );
-		$this->assertSame( 'none', $data['source'] );
-	}
 
 	/**
 	 * Test that the Woo cache self-test endpoint returns the read-only

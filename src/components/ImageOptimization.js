@@ -211,8 +211,17 @@ const ImageOptimization = ( { options = {} } ) => {
 		setIsCandidateLoading( true );
 		// Promise.resolve() so a mocked apiCall resolving to undefined
 		// (and any sync throw) still lands in the fail-open path.
+		// Default to the front page ('/'): without an explicit path the
+		// server resolves the admin REST context (REQUEST_URI of the
+		// wp-json route) and always misses, so no candidate would surface.
 		Promise.resolve()
-			.then( () => apiCall( 'lcp_preload_candidate', {}, 'GET' ) )
+			.then( () =>
+				apiCall(
+					'lcp_preload_candidate?path=' + encodeURIComponent( '/' ),
+					{},
+					'GET'
+				)
+			)
 			.then( ( res ) => {
 				if ( cancelled ) {
 					return;

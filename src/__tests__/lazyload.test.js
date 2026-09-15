@@ -765,6 +765,70 @@ describe( 'Lazy Load (lazyload.js)', () => {
 			expect( plainLink.hasAttribute( 'imagesrcset' ) ).toBe( false );
 			expect( plainLink.hasAttribute( 'imagesizes' ) ).toBe( false );
 		} );
+
+		it( 'prioritize_lcp() matches a srcset-URL candidate on a responsive-only hero', () => {
+			mockIntersectionObserver();
+			document.head.innerHTML = '';
+
+			const hero = document.createElement( 'img' );
+			hero.setAttribute(
+				'data-srcset',
+				'https://example.com/hero-300.jpg 300w, https://example.com/hero-1024.jpg 1024w'
+			);
+			hero.setAttribute( 'loading', 'lazy' );
+			document.body.appendChild( hero );
+
+			jest.isolateModules( () => {
+				require( '../lazyload' );
+			} );
+
+			const prioritize = window.__wppoPrioritizeLcp;
+			const resolved = prioritize( 'https://example.com/hero-1024.jpg' );
+			// No src/data-src exists, so the first srcset candidate resolves.
+			expect( resolved ).toBe( 'https://example.com/hero-300.jpg' );
+			const link = document.head.querySelector(
+				'link[data-wppo-lcp-preload][rel="preload"]'
+			);
+			expect( link ).not.toBeNull();
+			expect( link.getAttribute( 'href' ) ).toBe(
+				'https://example.com/hero-300.jpg'
+			);
+			expect( hero.getAttribute( 'loading' ) ).toBe( 'eager' );
+		} );
+
+		it( 'prioritize_lcp() skips the preload hint when PHP already emitted one for the same hero', () => {
+			mockIntersectionObserver();
+			document.head.innerHTML = '';
+
+			// Server-side preload hint (no JS-owned marker).
+			const serverLink = document.createElement( 'link' );
+			serverLink.setAttribute( 'rel', 'preload' );
+			serverLink.setAttribute( 'as', 'image' );
+			serverLink.setAttribute( 'href', 'https://example.com/hero.jpg' );
+			document.head.appendChild( serverLink );
+
+			const hero = document.createElement( 'img' );
+			hero.setAttribute( 'src', 'https://example.com/hero.jpg' );
+			hero.setAttribute( 'loading', 'lazy' );
+			document.body.appendChild( hero );
+
+			jest.isolateModules( () => {
+				require( '../lazyload' );
+			} );
+
+			const prioritize = window.__wppoPrioritizeLcp;
+			expect( prioritize( 'https://example.com/hero.jpg' ) ).toBe(
+				'https://example.com/hero.jpg'
+			);
+			// No duplicate hint, but the hero is still excluded from lazy.
+			expect(
+				document.head.querySelectorAll( 'link[rel="preload"]' ).length
+			).toBe( 1 );
+			expect(
+				document.head.querySelector( 'link[data-wppo-lcp-preload]' )
+			).toBeNull();
+			expect( hero.getAttribute( 'loading' ) ).toBe( 'eager' );
+		} );
 	} );
 
 	describe( 'loadImages()', () => {
