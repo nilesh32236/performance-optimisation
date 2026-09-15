@@ -785,10 +785,7 @@ const PluginSetting = ( { options } ) => {
 				>
 					{ ! logLoaded && (
 						<div className="wppo-log-trigger">
-							<p
-								id="wppo-activity-log-desc"
-								className="wppo-text-muted"
-							>
+							<p className="wppo-text-muted">
 								{ __(
 									'A full timestamped record of every cache clear, image optimisation, database cleanup, and settings change performed by the plugin.',
 									'performance-optimisation'
@@ -798,7 +795,6 @@ const PluginSetting = ( { options } ) => {
 								type="button"
 								className="wppo-button wppo-button--secondary"
 								onClick={ () => loadActivityLog( 1 ) }
-									aria-describedby="wppo-activity-log-desc"
 								isLoading={ logLoading }
 								loadingLabel={ __(
 									'Loading log…',
