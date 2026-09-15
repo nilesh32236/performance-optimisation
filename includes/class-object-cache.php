@@ -884,6 +884,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				return new \WP_Error( 'write_error', __( 'Cannot copy object-cache.php drop-in.', 'performance-optimisation' ) );
 			}
 
+			// The drop-in file changed — invalidate the memoized ownership
+			// verdict so a later flush_scoped() on this instance re-checks.
+			$this->own_dropin_memo = null;
+
 			// The drop-in changed — System Info's cached ownership verdict is
 			// stale (audit #888 finding 25). is_callable also covers a partially
 			// loaded class (Part 2 review round 2).
@@ -928,6 +932,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				if ( ! $wp_filesystem->delete( $this->dropin_path ) ) {
 					return new \WP_Error( 'delete_error', __( 'Cannot delete object-cache.php drop-in.', 'performance-optimisation' ) );
 				}
+				// The drop-in file changed — invalidate the memoized ownership
+				// verdict so a later flush_scoped() on this instance re-checks.
+				$this->own_dropin_memo = null;
 			}
 
 			if ( file_exists( $this->config_path ) ) {
@@ -1126,7 +1133,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * Memoized is_own_dropin() verdict for flush_scoped() retries.
 		 *
 		 * Avoids repeating the file_exists + filesystem + up-to-1MB read
-		 * on every retry within the same manager instance.
+		 * on every retry within the same manager instance. Reset to null
+		 * whenever the drop-in file changes (see enable()/disable()) so a
+		 * stale verdict can never bypass the foreign-drop-in refusal or
+		 * wrongly refuse after enable().
 		 *
 		 * @since NEXT
 		 * @var bool|null Null when not yet computed.

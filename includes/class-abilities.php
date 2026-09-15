@@ -560,7 +560,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 						'output_schema'       => array(
 							'type'       => 'object',
 							'properties' => array(
-								'flushed' => array( 'type' => 'boolean' ),
+								'flushed'       => array( 'type' => 'boolean' ),
+								'error_code'    => array( 'type' => array( 'string', 'null' ) ),
+								'error_message' => array( 'type' => array( 'string', 'null' ) ),
 							),
 						),
 						'permission_callback' => array( __CLASS__, 'permission_check' ),
@@ -961,16 +963,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 *
 		 * @since 2.0.0
 		 * @since NEXT Uses Object_Cache::flush_scoped() for multisite scoping.
+		 * @since NEXT Returns error_code/error_message on failure so Ability/MCP
+		 *        consumers can distinguish a multisite foreign-drop-in refusal
+		 *        (error_code `flush_foreign_dropin`) from a generic failure
+		 *        instead of retrying blindly. Both are null on success.
 		 *
 		 * @param array $input Unused input data.
-		 * @return array{flushed: bool}
+		 * @return array{flushed: bool, error_code: string|null, error_message: string|null}
 		 */
 		public static function execute_flush_object_cache( array $input = array() ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Ability API passes input even when empty.
 			$object_cache = new Object_Cache();
 			// Scoped flush on multisite (issue #1186): never flush sibling
 			// sites.
 			$flushed = $object_cache->flush_scoped();
-			return array( 'flushed' => (bool) $flushed );
+			if ( $flushed ) {
+				return array(
+					'flushed'       => true,
+					'error_code'    => null,
+					'error_message' => null,
+				);
+			}
+			$flush_error = $object_cache->get_last_flush_error();
+			return array(
+				'flushed'       => false,
+				'error_code'    => $flush_error instanceof \WP_Error ? $flush_error->get_error_code() : 'flush_fail',
+				'error_message' => $flush_error instanceof \WP_Error ? $flush_error->get_error_message() : __( 'Flush reported failure.', 'performance-optimisation' ),
+			);
 		}
 
 		/**

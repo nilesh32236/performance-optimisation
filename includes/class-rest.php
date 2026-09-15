@@ -1926,13 +1926,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * Flush messages are safe today (generic strings, blog_id cast to
 		 * int) but a future verbose Redis error could leak topology
-		 * (absolute paths). Mirrors the ABSPATH/WP_CONTENT_DIR stripping in
+		 * (absolute paths) via the message or the error data payload.
+		 * Mirrors the ABSPATH/WP_CONTENT_DIR stripping in
 		 * run_performance_scan(); verbose detail stays available under
 		 * WP_DEBUG via get_status().
 		 *
 		 * @since NEXT
 		 * @param \WP_Error $error Failing result.
-		 * @return \WP_Error Sanitized clone (same code, scrubbed message).
+		 * @return \WP_Error Sanitized clone (same code, scrubbed message and data).
 		 */
 		private function sanitize_flush_error( $error ): \WP_Error {
 			$message = $error->get_error_message();
@@ -1946,7 +1947,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			if ( '' === $message ) {
 				$message = __( 'Flush reported failure.', 'performance-optimisation' );
 			}
-			return new \WP_Error( $error->get_error_code(), $message, $error->get_error_data() );
+			return new \WP_Error( $error->get_error_code(), $message, $this->scrub_flush_error_data( $error->get_error_data() ) );
+		}
+
+		/**
+		 * Recursively strip local paths from flush error data.
+		 *
+		 * Strings are scrubbed of ABSPATH/WP_CONTENT_DIR; arrays are
+		 * scrubbed element-wise; scalars and null pass through untouched.
+		 * Objects and resources are dropped (replaced with null) since a
+		 * verbose backend could hide paths or topology inside them.
+		 *
+		 * @since NEXT
+		 * @param mixed $data Raw error data.
+		 * @return mixed Scrubbed error data.
+		 */
+		private function scrub_flush_error_data( $data ) {
+			if ( is_string( $data ) ) {
+				if ( defined( 'ABSPATH' ) && is_string( ABSPATH ) && '' !== ABSPATH ) {
+					$data = str_replace( array( ABSPATH, rtrim( ABSPATH, '/\\' ) ), '', $data );
+				}
+				if ( defined( 'WP_CONTENT_DIR' ) && is_string( WP_CONTENT_DIR ) && '' !== WP_CONTENT_DIR ) {
+					$data = str_replace( array( WP_CONTENT_DIR, rtrim( WP_CONTENT_DIR, '/\\' ) ), '', $data );
+				}
+				return $data;
+			}
+			if ( is_array( $data ) ) {
+				$scrubbed = array();
+				foreach ( $data as $key => $value ) {
+					$scrubbed[ $key ] = $this->scrub_flush_error_data( $value );
+				}
+				return $scrubbed;
+			}
+			if ( is_scalar( $data ) || null === $data ) {
+				return $data;
+			}
+			return null;
 		}
 
 		/**
