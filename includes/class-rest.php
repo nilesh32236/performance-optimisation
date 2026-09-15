@@ -742,6 +742,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$sanitized_settings['usedCssRumPriority'] = (bool) $options['file_optimisation']['usedCssRumPriority'];
 			}
 
+			// Preserve the RUM-weighted CSS queue keys when the request omits
+			// them (issue #1164): same partial-save hazard as the RUM-priority
+			// flags above — an older client/partial save must not wipe a
+			// custom per-run cap or the viewport-variant toggle.
+			if ( 'file_optimisation' === $tab && ! isset( $params['settings']['ccssQueueCap'] ) && isset( $options['file_optimisation']['ccssQueueCap'] ) ) {
+				$sanitized_settings['ccssQueueCap'] = absint( $options['file_optimisation']['ccssQueueCap'] );
+			}
+			if ( 'file_optimisation' === $tab && ! isset( $params['settings']['usedCssQueueCap'] ) && isset( $options['file_optimisation']['usedCssQueueCap'] ) ) {
+				$sanitized_settings['usedCssQueueCap'] = absint( $options['file_optimisation']['usedCssQueueCap'] );
+			}
+			if ( 'file_optimisation' === $tab && ! isset( $params['settings']['ccssViewportVariants'] ) && isset( $options['file_optimisation']['ccssViewportVariants'] ) ) {
+				$stored_variants                            = $options['file_optimisation']['ccssViewportVariants'];
+				$sanitized_settings['ccssViewportVariants'] = is_array( $stored_variants ) ? array_values( array_filter( array_map( 'sanitize_text_field', $stored_variants ) ) ) : (bool) $stored_variants;
+			}
+
 			// Preserve the RUM-gated speculation toggle when the request
 			// omits it (issue #1061): PreloadSettings save posts only the
 			// toggles it renders, so a save must not wipe the gating flag.

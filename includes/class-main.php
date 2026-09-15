@@ -496,6 +496,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['file_optimisation']['ccssSafelistExtra'] ) ) {
 				$this->options['file_optimisation']['ccssSafelistExtra'] = '';
 			}
+			// Existing installs whose stored settings predate the RUM-weighted
+			// CSS queue keys (issue #1164) inherit the defaults in-memory here
+			// (no database write on front-end requests); the persisted values
+			// are backfilled once by maybe_migrate_css_queue_defaults() on
+			// admin_init. Defaults keep current behaviour verbatim except the
+			// bounded per-run caps (fail-open to uncapped on invalid values).
+			if ( ! isset( $this->options['file_optimisation']['ccssQueueCap'] ) ) {
+				$this->options['file_optimisation']['ccssQueueCap'] = 5;
+			}
+			if ( ! isset( $this->options['file_optimisation']['usedCssQueueCap'] ) ) {
+				$this->options['file_optimisation']['usedCssQueueCap'] = 50;
+			}
+			if ( ! isset( $this->options['file_optimisation']['ccssViewportVariants'] ) ) {
+				$this->options['file_optimisation']['ccssViewportVariants'] = false;
+			}
 
 			$this->includes();
 			$this->image_optimisation = new Image_Optimisation( $this->options );
@@ -682,6 +697,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'admin_init', array( $this, 'maybe_migrate_block_assets_setting' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_ccss_max_size' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_ccss_safelist' ) );
+			add_action( 'admin_init', array( $this, 'maybe_migrate_css_queue_defaults' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_safe_mode' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_image_alt_edge_defaults' ) );
 			// One-time activity-log notice on admin_init.
@@ -1335,6 +1351,66 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$this->options['file_optimisation']['ccssSafelistExtra'] = '';
 
 			Log::add( __( 'Added default Critical CSS safelist (empty, current behaviour kept).', 'performance-optimisation' ) );
+		}
+
+		/**
+		 * One-time backfill for the RUM-weighted CSS queue keys (issue #1164).
+		 *
+		 * Runs on `admin_init` (not the constructor) so a cacheable front-end
+		 * request never triggers a settings write. Only installs whose stored
+		 * settings predate any of the `ccssQueueCap` / `usedCssQueueCap` /
+		 * `ccssViewportVariants` keys (key absent) are backfilled with the
+		 * fail-open defaults; any stored explicit value is preserved verbatim,
+		 * and fresh installs with no stored option are skipped because the
+		 * constructor defaults already match. The check is idempotent (key
+		 * presence is the marker), so no extra option row is needed.
+		 * In-memory options are synced too so the current request observes the
+		 * backfilled values. Uses per-site `get_option()` so multisite sites
+		 * migrate independently with no cross-site leakage.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public function maybe_migrate_css_queue_defaults(): void {
+			// allowlist(settings-read-guard): deliberate direct read — must distinguish
+			// "no stored row" (false) from "stored array", which Util::get_settings()
+			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
+			$stored = get_option( 'wppo_settings' );
+			if ( ! is_array( $stored ) ) {
+				return;
+			}
+
+			$file = isset( $stored['file_optimisation'] ) && is_array( $stored['file_optimisation'] ) ? $stored['file_optimisation'] : array();
+
+			$defaults = array(
+				'ccssQueueCap'         => 5,
+				'usedCssQueueCap'      => 50,
+				'ccssViewportVariants' => false,
+			);
+			$changed  = false;
+			foreach ( $defaults as $key => $default ) {
+				if ( ! array_key_exists( $key, $file ) ) {
+					$file[ $key ] = $default;
+					$changed      = true;
+				}
+			}
+			if ( ! $changed ) {
+				return;
+			}
+
+			$stored['file_optimisation'] = $file;
+			update_option( 'wppo_settings', $stored );
+
+			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
+				$this->options['file_optimisation'] = array();
+			}
+			foreach ( $defaults as $key => $default ) {
+				if ( ! array_key_exists( $key, $this->options['file_optimisation'] ) ) {
+					$this->options['file_optimisation'][ $key ] = $default;
+				}
+			}
+
+			Log::add( __( 'Added default RUM-weighted CSS queue settings (capped per-run queue, single-variant behaviour kept).', 'performance-optimisation' ) );
 		}
 
 		/**
