@@ -114,7 +114,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 			$is_llms      = false;
 			$is_full      = false;
 			$which        = 'llms';
-			$request_uri  = isset( $_SERVER['REQUEST_URI'] ) ? (string) wp_unslash( $_SERVER['REQUEST_URI'] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			$request_uri  = isset( $_SERVER['REQUEST_URI'] ) && is_string( $_SERVER['REQUEST_URI'] ) ? (string) wp_unslash( $_SERVER['REQUEST_URI'] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 			$request_path = wp_parse_url( $request_uri, PHP_URL_PATH );
 
 			// Prefer query var when rewrite flushed; fallback to URI check.
@@ -153,10 +153,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 			// Generate on-demand if missing, rate-limited so unauthenticated
 			// hits cannot trigger unbounded file writes + sitemap fetches.
 			if ( ! file_exists( $path ) ) {
-				$lock = function_exists( 'get_transient' ) ? get_transient( 'wppo_llms_gen_lock' ) : false;
+				$lock = function_exists( 'get_transient' ) ? get_transient( Util::transient_key( 'wppo_llms_gen_lock' ) ) : false;
 				if ( false === $lock ) {
 					if ( function_exists( 'set_transient' ) ) {
-						set_transient( 'wppo_llms_gen_lock', 1, MINUTE_IN_SECONDS );
+						set_transient( Util::transient_key( 'wppo_llms_gen_lock' ), 1, MINUTE_IN_SECONDS );
 					}
 					self::generate();
 				}
@@ -167,14 +167,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 			}
 
 			// ETag / 304 handling.
-			$etag = '"' . md5_file( $path ) . '"';
+			$hash = md5_file( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_md5_file
+			if ( false === $hash ) {
+				return;
+			}
+			$etag = '"' . $hash . '"';
 
 			if ( headers_sent() ) {
 				// Headers are gone: streaming the file now would append raw
 				// markdown to already-flushed output with no Content-Type and
 				// no ETag/304 contract. Bail and let the normal render
 				// continue instead of readfile()+exit (audit #888 finding 16).
-				Log::add( __( 'llms.txt could not be served: response headers already sent.', 'performance-optimisation' ) );
+				// No Log::add() here: serve() runs on the hot frontend path and
+				// every headers_sent() hit would otherwise cost a DB write.
 				return;
 			}
 
@@ -187,18 +192,38 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 				}
 			}
 
-			$if_none_match = isset( $_SERVER['HTTP_IF_NONE_MATCH'] ) ? trim( (string) wp_unslash( $_SERVER['HTTP_IF_NONE_MATCH'] ) ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-			if ( '' !== $if_none_match && ( $if_none_match === $etag || 'W/' . $etag === $if_none_match ) ) {
-				status_header( 304 );
-				header( 'ETag: ' . $etag );
-				exit;
+			$raw_if_none_match = isset( $_SERVER['HTTP_IF_NONE_MATCH'] ) && is_string( $_SERVER['HTTP_IF_NONE_MATCH'] ) ? wp_unslash( $_SERVER['HTTP_IF_NONE_MATCH'] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			$if_none_match     = '' !== $raw_if_none_match ? sanitize_text_field( $raw_if_none_match ) : '';
+			if ( '' !== $if_none_match ) {
+				$trimmed = trim( $if_none_match );
+				if ( '*' === $trimmed ) {
+					status_header( 304 );
+					header( 'ETag: ' . $etag );
+					exit;
+				}
+				$candidates = array_map( 'trim', explode( ',', $if_none_match ) );
+				foreach ( $candidates as $candidate ) {
+					// Strip weak validator prefix per RFC 7232 before comparing.
+					if ( 0 === strpos( $candidate, 'W/' ) ) {
+						$candidate = substr( $candidate, 2 );
+					}
+					$candidate = trim( $candidate );
+					if ( $candidate === $etag ) {
+						status_header( 304 );
+						header( 'ETag: ' . $etag );
+						exit;
+					}
+				}
 			}
 
 			status_header( 200 );
 			header( 'Content-Type: text/markdown; charset=utf-8' );
 			header( 'ETag: ' . $etag );
 			header( 'Cache-Control: public, max-age=3600' );
-			header( 'Content-Length: ' . filesize( $path ) );
+			$byte_size = filesize( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize
+			if ( false !== $byte_size ) {
+				header( 'Content-Length: ' . $byte_size );
+			}
 
 			readfile( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_readfile
 			exit;

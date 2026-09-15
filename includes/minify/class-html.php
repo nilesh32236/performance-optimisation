@@ -21,7 +21,7 @@ use PerformanceOptimise\Inc\Util;
 use PerformanceOptimise\Inc\Main;
 
 if ( ! defined( 'ABSPATH' ) ) {
-	die();
+	exit;
 }
 
 if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
@@ -576,15 +576,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 * @since 1.0.0
 		 */
 		private function restore_canonical_link( string $html ): string {
-			return preg_replace_callback(
+			$restored = preg_replace_callback(
 				'#<link\b[^>]*\brel=(?:["\']?)(canonical|shortlink)(?:["\']?)[^>]*>#i',
 				function ( $matches ) {
 					$link_tag = preg_replace( '/\bwppo-href\s*=/i', 'href=', $matches[0] );
 
-					return $link_tag;
+					return null !== $link_tag ? $link_tag : $matches[0];
 				},
 				$html
 			);
+
+			// PCRE failure: degrade to unoptimised markup, never fatal.
+			return null !== $restored ? $restored : $html;
 		}
 
 		/**

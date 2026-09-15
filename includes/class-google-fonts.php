@@ -253,13 +253,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 *
 		 * Hooked to style_loader_tag filter (priority 9, before minify_css at 10).
 		 *
-		 * @param string $tag    The link tag HTML.
-		 * @param string $handle The stylesheet handle.
-		 * @param string $href   The stylesheet URL.
+		 * @param mixed $tag    The link tag HTML.
+		 * @param mixed $handle The stylesheet handle.
+		 * @param mixed $href   The stylesheet URL (guarded with is_string: style_loader_tag can pass non-strings).
 		 * @return string Modified link tag with local URL or original tag.
 		 * @since 2.0.0
 		 */
-		public function process_style_tag( $tag, $handle, $href ) {
+		public function process_style_tag( $tag, $handle, $href ): string {
+			if ( ! is_string( $tag ) || '' === $tag ) {
+				return is_string( $tag ) ? $tag : '';
+			}
+			if ( ! is_string( $handle ) ) {
+				return $tag;
+			}
 			if ( is_admin() ) {
 				return $tag;
 			}
@@ -306,14 +312,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * @return string The modified HTML buffer.
 		 * @since 2.0.0
 		 */
-		public function process_buffer( $buffer ) {
+		public function process_buffer( string $buffer ): string {
 			$enabled = $this->options['file_optimisation']['hostGoogleFontsLocally'] ?? false;
 			if ( empty( $enabled ) ) {
 				return $buffer;
 			}
 
 			// Replace <link> tags with Google Fonts URLs.
-			$buffer = preg_replace_callback(
+			// preg_replace_callback() returns null on regex failure — bail
+			// with the original buffer so a PCRE error never wipes the page.
+			$replaced = preg_replace_callback(
 				'#<link\b[^>]*\bhref\s*=\s*["\']([^"\']*fonts\.googleapis\.com[^"\']*)["\'][^>]*>#is',
 				function ( $matches ) {
 					// Exact-host validation mirrors process_style_tag() so a
@@ -331,9 +339,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 				},
 				$buffer
 			);
+			if ( ! is_string( $replaced ) ) {
+				return $buffer;
+			}
+			$buffer = $replaced;
 
 			// Replace @import url(...) and @import '...' with Google Fonts URLs.
-			$buffer = preg_replace_callback(
+			$replaced = preg_replace_callback(
 				'#@import\s+(?:url\(\s*["\']?|["\'])([^"\';)]*fonts\.googleapis\.com[^"\';)]*)(?:["\']?\)\s*|["\'])\s*;#is',
 				function ( $matches ) {
 					if ( ! $this->is_google_fonts_url( $matches[1] ) ) {
@@ -347,6 +359,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 				},
 				$buffer
 			);
+			if ( ! is_string( $replaced ) ) {
+				return $buffer;
+			}
+			$buffer = $replaced;
 
 			return $buffer;
 		}
@@ -391,7 +407,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * @return string Local CSS URL on success, empty string on failure/cache-miss.
 		 * @since 2.0.0 Failure sentinel transient (wppo_gf_fail_*). Out-of-band download via Action Scheduler.
 		 */
-		public function download_and_rewrite( $url ) {
+		public function download_and_rewrite( $url ): string {
 			$url = $this->normalize_google_fonts_url( $url );
 			if ( '' === $url ) {
 				return '';
@@ -487,13 +503,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 				return false;
 			}
 
-			if ( file_exists( $css_file ) ) {
-				return true;
-			}
-
+			// Backed-off run must never delete the existing cached CSS: check
+			// the failure sentinel before touching the good capped file.
 			$fail_key = Util::transient_key( 'wppo_gf_fail_' . $key );
 			if ( get_transient( $fail_key ) ) {
 				return false;
+			}
+
+			if ( file_exists( $css_file ) ) {
+				// Capped runs leave remote gstatic URLs in the cached CSS
+				// (at most 3 files per run). When no remote URLs remain the
+				// cache is converged — return early. Otherwise fall through
+				// and regenerate: the write below overwrites $css_file via
+				// WP_Filesystem, so no unlink is needed (avoids a TOCTOU
+				// window where concurrent hot-path readers see a missing
+				// file and queue duplicate work).
+				// Read through WP_Filesystem (FTP/SSH-method hosts) with a
+				// direct-read fallback; an unreadable cache is treated as
+				// unconverged (fall through and regenerate) rather than
+				// converged, so remote URLs can never get stuck.
+				$cached           = null;
+				$filesystem_probe = Util::init_filesystem();
+				if ( $filesystem_probe && method_exists( $filesystem_probe, 'get_contents' ) ) {
+					$probe = $filesystem_probe->get_contents( $css_file );
+					if ( is_string( $probe ) ) {
+						$cached = $probe;
+					}
+				}
+				if ( null === $cached ) {
+					$direct = file_get_contents( $css_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local cache staleness probe fallback when WP_Filesystem is unavailable; writes still go through WP_Filesystem.
+					if ( is_string( $direct ) ) {
+						$cached = $direct;
+					}
+				}
+				if ( is_string( $cached ) && false === strpos( $cached, 'fonts.gstatic.com' ) ) {
+					return true;
+				}
+				// Otherwise fall through and regenerate below: an unreadable
+				// cache is treated as unconverged rather than converged, so
+				// remote URLs can never get stuck.
 			}
 
 			// Fetch CSS from Google Fonts API (out-of-band only).
@@ -527,9 +575,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			// exists; the queued job downloads missing files out-of-band
 			// and the original gstatic URL is kept until then so no
 			// request ever blocks on a 30s streamed fetch.
-			$css = preg_replace_callback(
+			// Per-run cap: at most 3 missing files are fetched per job so
+			// one Action Scheduler run never performs N sequential 30s
+			// remote fetches (worker starvation). Files beyond the cap keep
+			// their remote URL in the cached CSS — after the write below,
+			// the key is re-queued while remote URLs remain so later runs
+			// converge to fully local CSS without a manual cache clear.
+			$downloads = 0;
+			$succeeded = 0;
+			$css       = preg_replace_callback(
 				'#(url\()\s*(["\']?)(https://fonts\.gstatic\.com[^"\')]+)\2\s*\)#i',
-				function ( $matches ) {
+				function ( $matches ) use ( &$downloads, &$succeeded ) {
 					$file_url = $matches[3];
 					$hash     = md5( $file_url );
 					$local    = $this->font_cache_dir . '/files/' . $hash . '.woff2';
@@ -538,7 +594,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 						return 'url(' . $this->font_cache_url . '/files/' . $hash . '.woff2)';
 					}
 
+					if ( $downloads >= 3 ) {
+						return $matches[0];
+					}
+					++$downloads;
+
 					if ( $this->download_font_file( $file_url, $local ) && file_exists( $local ) ) {
+						++$succeeded;
 						return 'url(' . $this->font_cache_url . '/files/' . $hash . '.woff2)';
 					}
 
@@ -571,6 +633,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			} else {
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 				file_put_contents( $css_file, $css );
+			}
+
+			// Capped-run convergence: the per-run cap above can leave remote
+			// gstatic URLs in the CSS just written. Re-queue the key while
+			// remote URLs remain so later runs converge to fully local CSS
+			// without requiring a manual cache clear. Convergence guard: only
+			// re-queue when at least one download succeeded this run — if
+			// gstatic fetches persistently fail, re-queueing every run would
+			// churn Action Scheduler forever (the failure sentinel backoff
+			// still applies to the next attempt).
+			$has_remote = is_string( $css ) && false !== strpos( $css, 'fonts.gstatic.com' );
+			$retry_key  = Util::transient_key( 'wppo_gf_retry_' . $key );
+			if ( $has_remote && $succeeded > 0 ) {
+				// Progress was made: reset the zero-success retry budget and
+				// queue the follow-up run.
+				delete_transient( $retry_key );
+				$this->maybe_queue_download( $key, $url );
+			} elseif ( $has_remote ) {
+				// Zero-success stall guard: a run where every fetch failed
+				// schedules no follow-up above, and download_and_rewrite()
+				// short-circuits on file_exists() forever, leaving partial
+				// remote CSS until a manual clear. Re-queue with a bounded
+				// attempt counter so persistently failing hosts stop retrying.
+				$attempts = (int) get_transient( $retry_key );
+				if ( $attempts < 3 ) {
+					set_transient( $retry_key, $attempts + 1, DAY_IN_SECONDS );
+					$this->maybe_queue_download( $key, $url );
+				}
+			} else {
+				delete_transient( $retry_key );
 			}
 
 			return file_exists( $css_file );
@@ -674,6 +766,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * @since 2.0.0
 		 */
 		private function download_font_file( $url, $dest ) {
+			// Guard before wp_parse_url(): the parameter is untyped and a
+			// non-string/empty URL would raise a PHP 8.1+ deprecation.
+			if ( ! is_string( $url ) || '' === $url ) {
+				return false;
+			}
 			// Exact host allowlist — only fonts.gstatic.com may be fetched as a font file.
 			// @since 2.0.0.
 			if ( 'fonts.gstatic.com' !== wp_parse_url( $url, PHP_URL_HOST ) ) {
@@ -709,7 +806,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 				return false;
 			}
 
-			if ( ! file_exists( $tmp ) || 0 === filesize( $tmp ) ) {
+			if ( ! file_exists( $tmp ) ) {
+				set_transient( $fail_key, 1, self::backoff_ttl() );
+				return false;
+			}
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- filesize() emits warnings on races; guarded with a false check below.
+			$size = @filesize( $tmp );
+			if ( false === $size || 0 === $size ) {
 				if ( file_exists( $tmp ) ) {
 					wp_delete_file( $tmp );
 				}
@@ -783,12 +886,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 					'descent-override'  => '22%',
 					'line-gap-override' => '0%',
 				),
-				'nested'     => array(
-					'size-adjust'       => '100%',
-					'ascent-override'   => '90%',
-					'descent-override'  => '22%',
-					'line-gap-override' => '0%',
-				),
 			);
 			if ( ! isset( $metrics[ $family_key ] ) ) {
 				// Generic fallback for unknown fonts.
@@ -799,10 +896,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 					'line-gap-override' => '0%',
 				);
 			}
-			$m   = $metrics[ $family_key ];
+			$m = $metrics[ $family_key ];
+			// Allowlist-sanitize the family name before injecting it into
+			// the <style> block: esc_html() alone does not stop a crafted
+			// family from breaking out of the quoted font-family value
+			// (quotes, semicolons, braces are stripped here).
+			$sanitized_family = preg_replace( '/[^A-Za-z0-9 \-]/', '', $family );
+			if ( ! is_string( $sanitized_family ) ) {
+				return '';
+			}
+			$sanitized_family = trim( substr( $sanitized_family, 0, 100 ) );
+			if ( '' === $sanitized_family ) {
+				return '';
+			}
 			$css = sprintf(
 				"@font-face{font-family:'%s Fallback';src:local('Arial');size-adjust:%s;ascent-override:%s;descent-override:%s;line-gap-override:%s;}",
-				esc_html( $family ),
+				$sanitized_family,
 				$m['size-adjust'],
 				$m['ascent-override'],
 				$m['descent-override'],
@@ -839,13 +948,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			foreach ( $families as $fam ) {
 				$fallback_css .= $this->generate_metric_fallback( $fam ) . "\n";
 			}
-			if ( '' === $fallback_css ) {
+			// generate_metric_fallback() returns '' for fully-stripped
+			// (e.g. non-Latin) family names, so test the trimmed join:
+			// an '' comparison alone still injects an empty <style> of
+			// newlines.
+			if ( '' === trim( $fallback_css ) ) {
 				return $buffer;
 			}
 			$style_tag = '<style id="wppo-font-fallback">' . $fallback_css . '</style>';
 			// Inject before </head> if present, else prepend.
 			if ( false !== stripos( $buffer, '</head>' ) ) {
-				$buffer = preg_replace( '/<\/head>/i', $style_tag . '</head>', $buffer, 1 );
+				$out = preg_replace( '/<\/head>/i', $style_tag . '</head>', $buffer, 1 );
+				if ( ! is_string( $out ) ) {
+					return $buffer;
+				}
+				$buffer = $out;
 			} else {
 				$buffer = $style_tag . $buffer;
 			}

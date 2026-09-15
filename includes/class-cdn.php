@@ -24,13 +24,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 	final class CDN {
 
 		/**
-		 * Whether buffer already rewritten this request (idempotency guard).
-		 *
-		 * @var bool
-		 */
-		private static bool $buffer_rewritten = false;
-
-		/**
 		 * Per-request compiled-wildcard memo for wildcard2regex().
 		 *
 		 * Keyed by the trimmed pattern string; reset via reset_cache().
@@ -790,15 +783,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		}
 
 		/**
-		 * Reset idempotency guard (for testing).
+		 * Reset per-request memos (for testing).
 		 *
 		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function reset_cache(): void {
-			self::$buffer_rewritten = false;
-			self::$regex_cache      = array();
-			self::$mappings_cache   = array();
+			self::$regex_cache    = array();
+			self::$mappings_cache = array();
 		}
 	}
 }

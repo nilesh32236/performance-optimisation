@@ -88,13 +88,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cloudflare_Purger' ) ) {
 		/**
 		 * Surface a failed purge via wppo_debug_log.
 		 *
+		 * Keeps the historic 'CDN purge failed [...]' prefix so existing
+		 * debug-log filters, tests and runbooks matching that prefix keep
+		 * working; the $service tag ('cloudflare' vs 'cloudflare-edge')
+		 * still identifies the caller.
+		 *
 		 * @since 2.0.0
 		 * @param string $service Log tag (e.g. cloudflare, cloudflare-edge).
 		 * @param string $detail  Endpoint / reason.
 		 * @return void
 		 */
 		private static function log_failure( string $service, string $detail ): void {
-			do_action( 'wppo_debug_log', 'Cloudflare purge failed [' . $service . ']: ' . $detail );
+			do_action( 'wppo_debug_log', 'CDN purge failed [' . $service . ']: ' . $detail );
 		}
 	}
 }

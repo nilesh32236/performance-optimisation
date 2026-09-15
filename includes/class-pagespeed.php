@@ -329,19 +329,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		}
 
 		/**
-		 * Store a failure sentinel so the React poller gets a definitive error
-		 * instead of polling until MAX_POLL_ATTEMPTS is exhausted.
-		 *
-		 * The transient value is an array with 'error' => true so the REST handler
-		 * can distinguish it from a successful result.
-		 *
-		 * @since  1.6.0
-		 * @param  string $url      The scanned URL.
-		 * @param  string $strategy Either 'mobile' or 'desktop'.
-		 * @param  string $message  Human-readable error message.
-		 * @return void
-		 */
-		/**
 		 * Perform the PageSpeed API request (single attempt, no blocking retry).
 		 *
 		 * A transport failure is returned to the caller so run_scan() can
@@ -664,7 +651,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 				$diagnostics[ $id ] = array(
 					'score'         => isset( $audit['score'] ) ? (float) $audit['score'] : null,
 					'display_value' => isset( $audit['displayValue'] ) ? sanitize_text_field( $audit['displayValue'] ) : null,
-					'details'       => $audit['details'] ?? array(),
+					'details'       => self::sanitize_audit_details( $audit['details'] ?? array() ),
 				);
 			}
 
@@ -684,7 +671,102 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 				$return['lcp_image_url'] = $lcp;
 			}
 
+			// Cap the serialized payload (50KB) before it reaches set_transient:
+			// drop per-audit details first, keeping scores/values intact.
+			$encoded = function_exists( 'wp_json_encode' ) ? wp_json_encode( $return ) : false;
+			if ( is_string( $encoded ) && strlen( $encoded ) > 50 * 1024 ) {
+				foreach ( $return['diagnostics'] as $diag_id => $diag ) {
+					$return['diagnostics'][ $diag_id ]['details'] = array();
+				}
+			}
+
 			return $return;
+		}
+
+		/**
+		 * Whitelist and slice raw Lighthouse audit details.
+		 *
+		 * Keeps only the summary plus the first 5 table items with scalar
+		 * url/snippet/score fields, so unbounded API payloads (headings,
+		 * debugData, full node trees) never bloat the transient.
+		 *
+		 * @since NEXT
+		 * @param mixed $details Raw details array from the API.
+		 * @return array Sanitized details.
+		 */
+		private static function sanitize_audit_details( $details ): array {
+			if ( ! is_array( $details ) ) {
+				return array();
+			}
+			$clean = array();
+			if ( isset( $details['summary'] ) && is_scalar( $details['summary'] ) ) {
+				$clean['summary'] = sanitize_text_field( (string) $details['summary'] );
+			}
+			if ( isset( $details['items'] ) && is_array( $details['items'] ) ) {
+				$items = array_slice( $details['items'], 0, 5 );
+				foreach ( $items as $item ) {
+					if ( ! is_array( $item ) ) {
+						continue;
+					}
+					$row = array();
+					foreach ( array( 'snippet', 'score', 'wastedMs', 'wastedBytes' ) as $field ) {
+						if ( ! isset( $item[ $field ] ) || ! is_scalar( $item[ $field ] ) ) {
+							continue;
+						}
+						if ( 'snippet' === $field ) {
+							$row[ $field ] = self::sanitize_snippet_for_lcp( (string) $item[ $field ] );
+						} elseif ( 'wastedMs' === $field || 'wastedBytes' === $field ) {
+							// Numeric-only: is_scalar alone admits bools and
+							// arbitrary strings into the transient/REST payload.
+							if ( is_numeric( $item[ $field ] ) ) {
+								$row[ $field ] = 'wastedMs' === $field ? (float) $item[ $field ] : (int) $item[ $field ];
+							}
+						} elseif ( is_numeric( $item[ $field ] ) ) {
+							// score: numeric-only, cast to float (mirrors wastedMs/wastedBytes).
+							$row[ $field ] = (float) $item[ $field ];
+						}
+					}
+					if ( isset( $item['url'] ) && is_scalar( $item['url'] ) ) {
+						$row['url'] = esc_url_raw( (string) $item['url'] );
+					}
+					// Preserve node.snippet (scalar-only): extract_lcp_image_url()
+					// falls back to parsing it for an <img> src when no
+					// structured url is present.
+					if ( isset( $item['node'] ) && is_array( $item['node'] ) && isset( $item['node']['snippet'] ) && is_scalar( $item['node']['snippet'] ) ) {
+						$row['node'] = array( 'snippet' => self::sanitize_snippet_for_lcp( (string) $item['node']['snippet'] ) );
+					}
+					if ( array() === $row ) {
+						continue;
+					}
+					$clean['items'][] = $row;
+				}
+			}
+			return $clean;
+		}
+
+		/**
+		 * Sanitize an LCP snippet while preserving the <img src> the
+		 * extract_lcp_image_url() fallback regexes for.
+		 *
+		 * Plain text sanitization strips all tags, which would make the
+		 * Priority-2 snippet fallback unmatchable on sanitized diagnostics.
+		 * Allows only <img src> (length-capped) so stored transients stay
+		 * bounded without losing the parse target.
+		 *
+		 * @since NEXT
+		 * @param string $snippet Raw snippet from the API.
+		 * @return string Sanitized snippet.
+		 */
+		private static function sanitize_snippet_for_lcp( string $snippet ): string {
+			if ( function_exists( 'mb_substr' ) ) {
+				$snippet = mb_substr( $snippet, 0, 2000, 'UTF-8' );
+			} else {
+				$snippet = substr( $snippet, 0, 2000 );
+			}
+			if ( function_exists( 'wp_kses' ) ) {
+				return wp_kses( $snippet, array( 'img' => array( 'src' => true ) ) );
+			}
+			return sanitize_text_field( $snippet );
 		}
 
 		/**
@@ -758,8 +840,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			}
 
 			$strategy_suffix     = sanitize_key( $strategy );
-			$normalised_scan_url = untrailingslashit( esc_url_raw( add_query_arg( array(), $url ) ) );
-			$normalised_home     = untrailingslashit( Util::cached_home_url( '/' ) );
+			$normalised_scan_url = untrailingslashit( self::normalise_url_for_compare( $url ) );
+			$normalised_home     = untrailingslashit( self::normalise_url_for_compare( Util::cached_home_url( '/' ) ) );
 
 			// Case 1: Front page.
 			if ( $normalised_scan_url === $normalised_home ) {
@@ -781,6 +863,49 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			// Case 3: Arbitrary URL — store in transient keyed by strategy + URL hash.
 			$transient_key = Util::transient_key( 'wppo_lcp_url_' . $strategy_suffix . '_' . md5( $normalised_scan_url ) );
 			set_transient( $transient_key, $lcp_url, DAY_IN_SECONDS );
+		}
+
+		/**
+		 * Normalise a URL for front-page comparison.
+		 *
+		 * Drops empty query strings and fragments (e.g. `/?` or `/#top`)
+		 * so the scanned URL compares equal to the home URL; the previous
+		 * add_query_arg( array(), $url ) normalisation did this implicitly.
+		 *
+		 * @since NEXT
+		 * @param string $url Raw URL.
+		 * @return string Sanitised URL without empty query/fragment.
+		 */
+		private static function normalise_url_for_compare( string $url ): string {
+			$clean = esc_url_raw( $url );
+			if ( function_exists( 'wp_parse_url' ) ) {
+				$parts = wp_parse_url( $clean );
+			} else {
+				$parts = parse_url( $clean ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Non-WP bootstrap fallback; wp_parse_url() preferred above.
+			}
+			if ( ! is_array( $parts ) || empty( $parts['host'] ) ) {
+				return $clean;
+			}
+			if ( isset( $parts['query'] ) && '' === (string) $parts['query'] ) {
+				unset( $parts['query'] );
+			}
+			unset( $parts['fragment'] );
+			$rebuilt = strtolower( (string) ( $parts['scheme'] ?? 'https' ) ) . '://' . strtolower( (string) ( $parts['host'] ?? '' ) );
+			if ( isset( $parts['port'] ) ) {
+				// Strip default ports so http://example.com:80 compares
+				// equal to http://example.com (and :443 to https://…).
+				$scheme_lc  = strtolower( (string) ( $parts['scheme'] ?? 'https' ) );
+				$port       = (int) $parts['port'];
+				$is_default = ( 'http' === $scheme_lc && 80 === $port ) || ( 'https' === $scheme_lc && 443 === $port );
+				if ( ! $is_default ) {
+					$rebuilt .= ':' . $port;
+				}
+			}
+			$rebuilt .= $parts['path'] ?? '';
+			if ( isset( $parts['query'] ) && '' !== (string) $parts['query'] ) {
+				$rebuilt .= '?' . $parts['query'];
+			}
+			return esc_url_raw( $rebuilt );
 		}
 	}
 }

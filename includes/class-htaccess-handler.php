@@ -195,7 +195,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			if ( ! $result ) {
 				if ( null !== $backup ) {
 					insert_with_markers( $htaccess_file, self::MARKER, $backup );
-					self::verify_after_write( $htaccess_file, $wp_filesystem, array() !== self::normalize_rules( $backup ) );
+					// Check the restore verification result: a failed restore
+					// (disk-full, racing writer) must surface as failure, not
+					// be silently left behind as a truncated site-wide .htaccess.
+					$restore_ok = self::verify_after_write( $htaccess_file, $wp_filesystem, array() !== self::normalize_rules( $backup ) );
+					if ( ! $restore_ok ) {
+						self::flag_htaccess_failure();
+						return false;
+					}
 				}
 				self::flag_htaccess_failure();
 				return false;
@@ -207,7 +214,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 					// Re-read after the legacy-path restore so a torn
 					// restore (disk-full, racing writer) is not silently
 					// left behind as a truncated site-wide .htaccess.
-					self::verify_after_write( $htaccess_file, $wp_filesystem, array() !== self::normalize_rules( $backup ) );
+					$restore_ok = self::verify_after_write( $htaccess_file, $wp_filesystem, array() !== self::normalize_rules( $backup ) );
+					if ( ! $restore_ok ) {
+						self::flag_htaccess_failure();
+						return false;
+					}
 				}
 				self::flag_htaccess_failure();
 				return false;
@@ -334,7 +345,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		 * Best-effort only: failures are ignored so teardown never fails
 		 * because of stale artifacts. Removes `.htaccess.wppo-bak` (single
 		 * backup generation kept by atomic_write_verified()) and any
-		 * `.htaccess.wppo-tmp-*` orphans from crashed writes.
+		 * `.htaccess.wppo-tmp-*` orphans from crashed writes — both in the
+		 * .htaccess directory and in the system temp dir (the wp_tempnam()
+		 * fallback lands there when the docroot is not writable).
 		 *
 		 * @since 2.0.0
 		 *
@@ -381,6 +394,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 					$name = (string) $name;
 					if ( 0 === strpos( $name, $base . '.wppo-tmp-' ) ) {
 						$fs->delete( $dir . '/' . $name );
+					}
+				}
+				// The wp_tempnam( '' ) fallback in atomic_write_verified()
+				// creates orphans in the system temp dir that the .htaccess-dir
+				// scan above never sees — sweep those too when the temp dir
+				// differs from the .htaccess dir.
+				if ( function_exists( 'get_temp_dir' ) && method_exists( $fs, 'dirlist' ) ) {
+					$tmp_dir = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( get_temp_dir() ) : get_temp_dir();
+					if ( is_string( $tmp_dir ) && '' !== $tmp_dir && rtrim( $tmp_dir, '/' ) !== rtrim( $dir, '/' ) && $fs->exists( $tmp_dir ) ) {
+						$tmp_listing = $fs->dirlist( $tmp_dir );
+						if ( is_array( $tmp_listing ) ) {
+							// Bound the sweep on shared hosts where /tmp can hold
+							// thousands of entries: skip the scan when huge.
+							if ( count( $tmp_listing ) > 2000 ) {
+								return;
+							}
+							foreach ( $tmp_listing as $name => $info ) {
+								$name = (string) $name;
+								if ( 0 === strpos( $name, $base . '.wppo-tmp-' ) ) {
+									$fs->delete( rtrim( $tmp_dir, '/' ) . '/' . $name );
+								}
+							}
+						}
 					}
 				}
 			} catch ( \Throwable $ignored ) {
@@ -722,6 +758,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 					return null;
 				}
 			}
+			// chmod stays best-effort (not gated above): hosts whose
+			// filesystem lacks chmod() still get the atomic write, and the
+			// deployment-mode restore below is skipped when unavailable.
+			$can_chmod = $wp_filesystem && method_exists( $wp_filesystem, 'chmod' );
 
 			$current = '';
 			if ( $wp_filesystem->exists( $htaccess_file ) ) {
@@ -747,45 +787,76 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				$wp_filesystem->copy( $htaccess_file, $backup_file, true );
 			}
 
-			// Unique tmp suffix: wp_rand() is wrapped in try/catch (mirroring
-			// Advanced_Cache_Handler::atomic_write_dropin()): under Brain
-			// Monkey a stale wp_rand stub from another test can throw once
-			// its session tore down, and production filters must never let
-			// a suffix RNG failure break the write. PID + uniqid segments
-			// widen the suffix space so two concurrent settings saves never
-			// share a tmp name and clobber each other (last-writer-wins on
-			// the rename is safe: both writers splice from current state
-			// and post-write verification checksums the winner).
-			if ( function_exists( 'wp_rand' ) ) {
-				try {
-					$suffix = (string) wp_rand( 100000, 999999 );
-				} catch ( \Throwable $ignored_rand ) {
-					unset( $ignored_rand );
-					if ( function_exists( 'mt_rand' ) ) {
-						$suffix = (string) mt_rand( 100000, 999999 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.rand_mt_rand -- Fallback when wp_rand() is unavailable or throws.
-					} else {
-						return null;
+			// Secure tmp creation: prefer wp_tempnam() in the .htaccess
+			// directory (same filesystem, so the rename stays atomic) with a
+			// `.wppo-tmp-` prefix so orphan cleanup still matches, falling
+			// back to the system temp dir (degraded, non-atomic: move()
+			// becomes copy+unlink across filesystems, so concurrent saves
+			// can interleave and post-write verification below is the only
+			// guard) and finally to the legacy suffix-based sibling. The
+			// tmp file never lives at a predictable path in the docroot.
+			$tmp_file = '';
+			if ( function_exists( 'wp_tempnam' ) ) {
+				foreach ( array( dirname( $htaccess_file ), '' ) as $tmp_dir ) {
+					try {
+						$candidate = '' === $tmp_dir ? wp_tempnam( basename( $htaccess_file ) . '.wppo-tmp-' ) : wp_tempnam( basename( $htaccess_file ) . '.wppo-tmp-', $tmp_dir );
+					} catch ( \Throwable $ignored_tmp ) {
+						unset( $ignored_tmp );
+						$candidate = false;
+					}
+					if ( is_string( $candidate ) && '' !== $candidate ) {
+						$tmp_file = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $candidate ) : $candidate;
+						break;
 					}
 				}
-			} elseif ( function_exists( 'mt_rand' ) ) {
-				$suffix = (string) mt_rand( 100000, 999999 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.rand_mt_rand -- Fallback when wp_rand() is unavailable.
-			} else {
-				return null;
 			}
-			$pid_part  = function_exists( 'getmypid' ) ? (int) getmypid() : 0;
-			$uniq_part = '';
-			try {
-				$uniq_part = substr( md5( uniqid( (string) microtime( true ), true ) ), 0, 8 );
-			} catch ( \Throwable $ignored_uniq ) {
-				unset( $ignored_uniq );
+			if ( '' === $tmp_file ) {
+				// Unique tmp suffix, generated lazily only for the legacy
+				// sibling fallback above: wp_rand() is wrapped in try/catch
+				// (mirroring Advanced_Cache_Handler::atomic_write_dropin()):
+				// under Brain Monkey a stale wp_rand stub from another test
+				// can throw once its session tore down, and production
+				// filters must never let a suffix RNG failure break the
+				// write. PID + uniqid segments widen the suffix space so two
+				// concurrent settings saves never share a tmp name and
+				// clobber each other (last-writer-wins on the rename is
+				// safe: both writers splice from current state and
+				// post-write verification checksums the winner).
+				if ( function_exists( 'wp_rand' ) ) {
+					try {
+						$suffix = (string) wp_rand( 100000, 999999 );
+					} catch ( \Throwable $ignored_rand ) {
+						unset( $ignored_rand );
+						if ( function_exists( 'mt_rand' ) ) {
+							$suffix = (string) mt_rand( 100000, 999999 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.rand_mt_rand -- Fallback when wp_rand() is unavailable or throws.
+						} else {
+							return null;
+						}
+					}
+				} elseif ( function_exists( 'mt_rand' ) ) {
+					$suffix = (string) mt_rand( 100000, 999999 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.rand_mt_rand -- Fallback when wp_rand() is unavailable.
+				} else {
+					return null;
+				}
+				$pid_part  = function_exists( 'getmypid' ) ? (int) getmypid() : 0;
+				$uniq_part = '';
+				try {
+					$uniq_part = substr( md5( uniqid( (string) microtime( true ), true ) ), 0, 8 );
+				} catch ( \Throwable $ignored_uniq ) {
+					unset( $ignored_uniq );
+				}
+				if ( '' !== $uniq_part ) {
+					$suffix .= '-' . $pid_part . '-' . $uniq_part;
+				}
+				$tmp_file = $htaccess_file . '.wppo-tmp-' . $suffix;
 			}
-			if ( '' !== $uniq_part ) {
-				$suffix .= '-' . $pid_part . '-' . $uniq_part;
-			}
-			$tmp_file = $htaccess_file . '.wppo-tmp-' . $suffix;
 
 			$mode = defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644;
-			if ( ! $wp_filesystem->put_contents( $tmp_file, $new_contents, $mode ) ) {
+			// Only use a restrictive 0600 tmp mode when chmod-restore is
+			// available: without chmod() the rename would leave the live
+			// .htaccess at 0600 on split-user hosts (Apache unreadable).
+			$tmp_mode = $can_chmod ? 0600 : $mode;
+			if ( ! $wp_filesystem->put_contents( $tmp_file, $new_contents, $tmp_mode ) ) {
 				if ( $wp_filesystem->exists( $tmp_file ) ) {
 					$wp_filesystem->delete( $tmp_file );
 				}
@@ -799,9 +870,43 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				return null;
 			}
 
+			// The rename carries the tmp inode's 0600 mode onto the live file,
+			// which would lock out Apache when httpd runs as a different
+			// user/group — restore the deployment mode (FS_CHMOD_FILE) now
+			// that the tmp contents are never world-readable at any point.
+			// Best-effort: when chmod() is unavailable the restore is
+			// skipped, and when it fails the original contents are put
+			// back so a 0600 file never stays live (site-wide 500/403).
+			if ( $can_chmod ) {
+				$chmod_ok = $wp_filesystem->chmod( $htaccess_file, $mode );
+				if ( ! $chmod_ok ) {
+					$rollback_ok = (bool) $wp_filesystem->put_contents( $htaccess_file, $current, $mode );
+					if ( $rollback_ok ) {
+						$re_read     = $wp_filesystem->get_contents( $htaccess_file );
+						$rollback_ok = is_string( $re_read ) && $re_read === $current;
+					}
+					if ( ! $rollback_ok ) {
+						self::flag_htaccess_failure();
+						return false;
+					}
+					self::flag_htaccess_failure();
+					return false;
+				}
+			}
+
 			$written = $wp_filesystem->get_contents( $htaccess_file );
 			if ( ! is_string( $written ) ) {
-				$wp_filesystem->put_contents( $htaccess_file, $current, $mode );
+				// A failed restore must not rely on the caller's generic
+				// false handling alone: verify the in-memory original came
+				// back and flag the failure, mirroring the chmod branch.
+				$restore_ok = (bool) $wp_filesystem->put_contents( $htaccess_file, $current, $mode );
+				if ( $restore_ok ) {
+					$re_read    = $wp_filesystem->get_contents( $htaccess_file );
+					$restore_ok = is_string( $re_read ) && $re_read === $current;
+				}
+				if ( ! $restore_ok ) {
+					self::flag_htaccess_failure();
+				}
 				return false;
 			}
 
@@ -1011,7 +1116,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			}
 
 			if ( $use_nextgen ) {
-				$rules = array_merge(
+				$base_rules = $rules;
+				$rules      = array_merge(
 					$rules,
 					array(
 						'',
@@ -1048,10 +1154,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				/**
 				 * Filter the next-gen htaccess block.
 				 *
+				 * Return false to drop the next-gen block; return an array to
+				 * replace the rules, or a string with a single rule block
+				 * (wrapped into a one-element array, matching the
+				 * `wppo_htaccess_rules` contract). Any other return value
+				 * keeps the rules unchanged (a blind (array) cast would
+				 * coerce false into [false] and fail the write).
+				 *
 				 * @since 2.0.0
 				 * @param bool $use_nextgen Whether next-gen block was added.
 				 */
-				$rules = (array) apply_filters( 'wppo_htaccess_nextgen_rules', $rules );
+				$nextgen_filtered = apply_filters( 'wppo_htaccess_nextgen_rules', $rules );
+				if ( false === $nextgen_filtered ) {
+					$rules = $base_rules;
+				} elseif ( is_string( $nextgen_filtered ) ) {
+					$rules = array( $nextgen_filtered );
+				} elseif ( is_array( $nextgen_filtered ) ) {
+					$rules = $nextgen_filtered;
+				}
 			}
 
 			// LS-320: Cache-Vary bridge for mobile/webp vary groups.
@@ -1061,8 +1181,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			if ( $ls_active ) {
 				$groups = LiteSpeed_Integration::get_vary_groups();
 				if ( $groups['mobile'] || $groups['webp'] ) {
+					$vary_base  = $rules;
 					$cache_vary = array();
-					$env_values = array();
 					$rules[]    = '';
 					$rules[]    = '# WPPO LS-320 Cache-Vary bridge (mobile/webp) — Cache-Vary: ismobile,webp (LSCWP htaccess.cls.php:605)';
 					$rules[]    = '<IfModule mod_rewrite.c>';
@@ -1081,41 +1201,63 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 						$rules[]    = '    RewriteCond %{HTTP:Accept} image/webp [NC]';
 						$rules[]    = '    RewriteRule .* - [E=Cache-Vary:webp]';
 						$cache_vary = array( 'ismobile', 'webp' );
-						$env_values = array( 'ismobile', 'webp' );
 					} else {
 						if ( $groups['mobile'] ) {
 							$rules[]      = '    # Mobile detection — set Cache-Vary env for LSWS';
 							$rules[]      = '    RewriteCond %{HTTP_USER_AGENT} "Mobile|Android|Silk|Kindle|BlackBerry|Opera Mini|Opera Mobi" [NC]';
 							$rules[]      = '    RewriteRule .* - [E=Cache-Vary:ismobile]';
 							$cache_vary[] = 'ismobile';
-							$env_values[] = 'ismobile';
 						}
 						if ( $groups['webp'] ) {
 							$rules[]      = '    # WebP detection — set Cache-Vary env for LSWS';
 							$rules[]      = '    RewriteCond %{HTTP:Accept} image/webp [NC]';
 							$rules[]      = '    RewriteRule .* - [E=Cache-Vary:webp]';
 							$cache_vary[] = 'webp';
-							$env_values[] = 'webp';
 						}
 					}
 					$rules[] = '</IfModule>';
 					/**
 					 * Filter Cache-Vary htaccess rules.
 					 *
+					 * Return false to drop the Cache-Vary block; return an array
+					 * to replace the rules, or a string with a single rule
+					 * block (wrapped into a one-element array, matching the
+					 * `wppo_htaccess_rules` contract). Any other return value
+					 * keeps the rules unchanged (a blind (array) cast would
+					 * coerce false into [false] and fail the write).
+					 *
 					 * @since 2.0.0
 					 * @param array $cache_vary Active Cache-Vary groups.
 					 */
-					$rules = (array) apply_filters( 'wppo_htaccess_cache_vary_rules', $rules, $cache_vary );
+					$vary_filtered = apply_filters( 'wppo_htaccess_cache_vary_rules', $rules, $cache_vary );
+					if ( false === $vary_filtered ) {
+						$rules = $vary_base;
+					} elseif ( is_string( $vary_filtered ) ) {
+						$rules = array( $vary_filtered );
+					} elseif ( is_array( $vary_filtered ) ) {
+						$rules = $vary_filtered;
+					}
 				}
 			}
 
 			/**
 			 * Filter htaccess rules.
 			 *
+			 * Return an array to replace the rules, or a string with a single
+			 * rule block (wrapped into a one-element array for BC with filters
+			 * written against the pre-2.0 (array) cast). A false (or any other
+			 * non-array, non-string) return keeps the rules unchanged — a blind
+			 * (array) cast would coerce false into [false] and fail the write.
+			 *
 			 * @since 2.0.0
 			 * @param array $rules Htaccess rules.
 			 */
-			$rules = (array) apply_filters( 'wppo_htaccess_rules', $rules );
+			$final_filtered = apply_filters( 'wppo_htaccess_rules', $rules );
+			if ( is_string( $final_filtered ) ) {
+				$rules = array( $final_filtered );
+			} elseif ( is_array( $final_filtered ) ) {
+				$rules = $final_filtered;
+			}
 
 			return $rules;
 		}

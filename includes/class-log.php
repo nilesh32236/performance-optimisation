@@ -63,12 +63,38 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 		 * capability checks; this method performs no check so cron/CLI paths
 		 * keep working.
 		 *
-		 * @param string $activity The activity description to log.
+		 * @param mixed $activity The activity description to log; non-strings are ignored.
 		 * @return void
 		 * @since 2.0.0
 		 */
 		public static function add( $activity ): void {
 			global $wpdb;
+
+			if ( ! is_string( $activity ) ) {
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG && function_exists( '_doing_it_wrong' ) ) {
+					_doing_it_wrong( __METHOD__, __( 'Log::add() expects a string activity description; non-string values are ignored.', 'performance-optimisation' ), 'NEXT' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- _doing_it_wrong() handles output escaping internally; pre-escaping corrupts non-HTML contexts.
+				}
+				return;
+			}
+			// Sanitize first, then truncate: kses entity-encoding can expand
+			// length (& to &amp;), so truncating first could still exceed the
+			// varchar(255) column under strict mode.
+			$activity = wp_kses_post( $activity );
+			if ( function_exists( 'mb_substr' ) ) {
+				$activity = mb_substr( $activity, 0, 255, 'UTF-8' );
+			} else {
+				// No mbstring: cut at a valid UTF-8 boundary so a multibyte
+				// sequence is never split mid-character into invalid UTF-8.
+				$activity      = substr( $activity, 0, 255 );
+				$utf8_attempts = 0;
+				while ( '' !== $activity && 1 !== preg_match( '//u', $activity ) && $utf8_attempts < 3 ) {
+					$activity = substr( $activity, 0, -1 );
+					++$utf8_attempts;
+				}
+			}
+			if ( '' === trim( $activity ) ) {
+				return;
+			}
 
 			$table_name = $wpdb->prefix . 'wppo_activity_logs';
 
@@ -77,7 +103,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 			$result = $wpdb->insert(
 				$table_name,
 				array(
-					'activity' => wp_kses_post( $activity ),
+					'activity' => $activity,
 				),
 				array(
 					'%s',
@@ -141,7 +167,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 				);
 
 				// Calculate total pages.
-				$total_pages = ceil( $total_items / $per_page );
+				$total_pages = (int) ceil( $total_items / $per_page );
 
 				// Fetch paginated results. The `id DESC` secondary sort keeps
 				// pagination deterministic when rows share a timestamp (audit
@@ -158,7 +184,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 
 				// Prepare data for caching.
 				$data = array(
-					'activities'   => $results,
+					'activities'   => is_array( $results ) ? $results : array(),
 					'total_items'  => $total_items,
 					'current_page' => $page,
 					'total_pages'  => $total_pages,

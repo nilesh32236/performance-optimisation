@@ -537,7 +537,7 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 		$this->assertCount( 1, $this->esi_hook_state['enqueued'], 'ESI hydration client must be enqueued in OLS placeholder mode (audit #898)' );
 		$this->assertSame( 'wppo-esi', $this->esi_hook_state['enqueued'][0]['handle'] );
 		$this->assertSame( WPPO_PLUGIN_URL . 'build/esi.js', $this->esi_hook_state['enqueued'][0]['src'] );
-		$this->assertSame( array( 'in_footer' => true ), $this->esi_hook_state['enqueued'][0]['args'], 'Client must load in the footer' );
+		$this->assertSame( true, $this->esi_hook_state['enqueued'][0]['args'], 'Client must load in the footer (bool $in_footer keeps WP 6.2 compat; the array $args form needs WP 6.3+)' );
 		$this->assertIsString( $this->esi_hook_state['enqueued'][0]['ver'], 'Version must come from build/esi.asset.php' );
 		$this->assertNotSame( '', $this->esi_hook_state['enqueued'][0]['ver'] );
 		$this->assertIsArray( $this->esi_hook_state['enqueued'][0]['deps'] );

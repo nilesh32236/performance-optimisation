@@ -191,7 +191,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 		private static function is_logged_in_cookie_secure( int $user_id ): bool {
 			$secure                  = function_exists( 'is_ssl' ) ? is_ssl() : false;
 			$home                    = function_exists( 'get_option' ) ? get_option( 'home' ) : '';
-			$secure_logged_in_cookie = $secure && is_string( $home ) && 'https' === ( function_exists( 'wp_parse_url' ) ? wp_parse_url( $home, PHP_URL_SCHEME ) : wp_parse_url( $home, PHP_URL_SCHEME ) ); // phpcs:ignore WordPress.WP.DiscouragedFunctions.parse_url_parse_url -- fallback unreachable, wp_parse_url always exists when is_ssl does, kept for completeness
+			$secure_logged_in_cookie = $secure && is_string( $home ) && 'https' === ( function_exists( 'wp_parse_url' ) ? wp_parse_url( $home, PHP_URL_SCHEME ) : parse_url( $home, PHP_URL_SCHEME ) ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for contexts without the WP wrapper; wp_parse_url always exists when is_ssl does.
 			$secure                  = apply_filters( 'secure_auth_cookie', $secure, $user_id ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
 			return (bool) apply_filters( 'secure_logged_in_cookie', $secure_logged_in_cookie, $user_id, $secure ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
 		}
