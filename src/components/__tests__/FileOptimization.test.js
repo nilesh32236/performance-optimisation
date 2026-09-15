@@ -1141,4 +1141,58 @@ describe( 'FileOptimization Component', () => {
 			0
 		);
 	} );
+
+	it( 'renders sandbox preview controls with promote and discard', () => {
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+		fireEvent.click( screen.getByRole( 'tab', { name: /Scripts/i } ) );
+		expect(
+			screen.getByText( /Sandbox preview — test Delay/i )
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole( 'button', { name: /Stage preview/i } )
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole( 'button', { name: /^Promote$/i } )
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole( 'button', { name: /Discard/i } )
+		).toBeInTheDocument();
+	} );
+
+	it( 'stages sandbox preview then promotes', async () => {
+		apiCall
+			.mockResolvedValueOnce( {
+				success: true,
+				data: { staged: { delayJS: true } },
+			} )
+			.mockResolvedValueOnce( {
+				success: true,
+				data: {
+					staged: {},
+					preview_url: 'http://example.com/?wppo_preview=assets',
+				},
+			} )
+			.mockResolvedValueOnce( { success: true, data: {} } );
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+		fireEvent.click( screen.getByRole( 'tab', { name: /Scripts/i } ) );
+		await act( async () => {
+			fireEvent.click(
+				screen.getByRole( 'button', { name: /Stage preview/i } )
+			);
+		} );
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith(
+				'sandbox_save',
+				expect.objectContaining( { settings: expect.any( Object ) } )
+			);
+		} );
+		await act( async () => {
+			fireEvent.click(
+				screen.getByRole( 'button', { name: /^Promote$/i } )
+			);
+		} );
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith( 'sandbox_promote', {} );
+		} );
+	} );
 } );

@@ -396,6 +396,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['file_optimisation']['safeMode'] ) ) {
 				$this->options['file_optimisation']['safeMode'] = false;
 			}
+			// Sandbox preview staged values (issue #1163): additive key,
+			// defaults to empty so existing installs keep current behaviour.
+			// In-memory only here (no front-end DB write).
+			if ( ! isset( $this->options['file_optimisation']['sandboxStaged'] ) || ! is_array( $this->options['file_optimisation']['sandboxStaged'] ) ) {
+				$this->options['file_optimisation']['sandboxStaged'] = array();
+			}
 			// Font subsetting opt-in (issue #1145): additive keys, off by
 			// default so existing installs keep full-unicode behavior.
 			// In-memory only here (no front-end DB write).
@@ -683,6 +689,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'admin_init', array( $this, 'maybe_migrate_ccss_max_size' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_ccss_safelist' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_safe_mode' ) );
+			add_action( 'admin_init', array( $this, 'maybe_migrate_sandbox_preview' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_image_alt_edge_defaults' ) );
 			// One-time activity-log notice on admin_init.
 			if ( isset( $this->options['file_optimisation']['removeQueryStrings'] ) ) {
@@ -693,6 +700,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'wp_logout', array( $this, 'clear_role_hash_cookie' ) );
 			add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
 			add_action( 'wp_enqueue_scripts', array( $this, 'apply_module_loading_strategies' ), 10000 );
+			// Sandbox preview (issue #1163): visitor-safe admin preview honoring
+			// DONOTCACHEPAGE. Runs early so Cache::is_not_cacheable() sees it.
+			if ( class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
+				add_action( 'template_redirect', array( 'PerformanceOptimise\Inc\Sandbox_Preview', 'enforce_no_cache' ), 1 );
+			}
 			// Unified safe-mode kill switch (issue #1098): one-click recovery
 			// that preserves delayJS/deferJS/removeUnusedCSS settings. Effective
 			// flags gate hook registration so safe mode disables all three
@@ -701,7 +713,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$safe_mode_off = ! self::is_safe_mode_active( $this->options['file_optimisation'] ?? array() );
 			$has_delay_js  = ! empty( $this->options['file_optimisation']['delayJS'] ) && $safe_mode_off;
 			$has_defer_js  = ! empty( $this->options['file_optimisation']['deferJS'] ) && $safe_mode_off;
-			$wp_version    = (string) ( $GLOBALS['wp_version'] ?? get_bloginfo( 'version' ) );
+			// Sandbox preview widens hook registration for the preview admin
+			// only: when staged values enable delay/defer, register the same
+			// filters so the preview renders experimental output while
+			// visitors (is_preview_request() false) keep production markup
+			// via the per-tag guards below.
+			$is_sandbox_preview = self::is_sandbox_preview_active();
+			if ( $is_sandbox_preview && class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_staged_settings' ) ) {
+				try {
+					$staged = Sandbox_Preview::get_staged_settings();
+					if ( ! empty( $staged['delayJS'] ) ) {
+						$has_delay_js = true;
+					}
+					if ( ! empty( $staged['deferJS'] ) ) {
+						$has_defer_js = true;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			$wp_version = (string) ( $GLOBALS['wp_version'] ?? get_bloginfo( 'version' ) );
 			// The native 'strategy' script data added via wp_script_add_data() is only
 			// honoured by core since WP 6.3, so the native defer path is gated to 6.3+
 			// and older core (WP 6.2) uses the legacy script_loader_tag fallback.
@@ -847,7 +878,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// site or pre-clear state are re-verified (audit #888 finding 7).
 			add_action( 'switch_blog', array( 'PerformanceOptimise\Inc\Image_Optimisation', 'clear_runtime_caches' ) );
 			add_action( 'wppo_after_cache_clear', array( 'PerformanceOptimise\Inc\Image_Optimisation', 'clear_runtime_caches' ) );
-			if ( ! empty( $this->options['file_optimisation']['combineCSS'] ) ) {
+			$combine_for_registration = ! empty( $this->options['file_optimisation']['combineCSS'] );
+			if ( ! $combine_for_registration && $is_sandbox_preview && class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_staged_settings' ) ) {
+				try {
+					$staged_for_combine = Sandbox_Preview::get_staged_settings();
+					if ( ! empty( $staged_for_combine['combineCSS'] ) ) {
+						$combine_for_registration = true;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			if ( $combine_for_registration ) {
 				// TODO(#624): when WP 7.2 removes concatenation in favour of preloads,
 				// reassess whether combine_css() should defer to core preload emission
 				// or become an opt-in legacy toggle. No runtime change until then.
@@ -1432,6 +1474,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$this->options['file_optimisation'] = array();
 			}
 			$this->options['file_optimisation']['safeMode'] = false;
+		}
+
+		/**
+		 * Backfill the additive sandboxStaged key (issue #1163).
+		 *
+		 * Runs on admin_init; in-memory default is applied in __construct so
+		 * front-end requests never pay for a DB write.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public function maybe_migrate_sandbox_preview(): void {
+			// allowlist(settings-read-guard): deliberate direct read.
+			$stored = get_option( 'wppo_settings' );
+			if ( ! is_array( $stored ) ) {
+				return;
+			}
+			$file = isset( $stored['file_optimisation'] ) && is_array( $stored['file_optimisation'] ) ? $stored['file_optimisation'] : array();
+			if ( array_key_exists( 'sandboxStaged', $file ) ) {
+				return;
+			}
+			$stored['file_optimisation'] = $file + array( 'sandboxStaged' => array() );
+			update_option( 'wppo_settings', $stored );
+			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
+				$this->options['file_optimisation'] = array();
+			}
+			$this->options['file_optimisation']['sandboxStaged'] = array();
 		}
 
 		/**
@@ -3127,12 +3196,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( has_filter( 'litespeed_can_optm' ) && ! apply_filters( 'litespeed_can_optm', true ) ) {
 				return;
 			}
-			if ( ! $this->should_optimise_for_logged_in() ) {
+			if ( ! $this->should_optimise_for_logged_in() && ! self::is_sandbox_preview_active() ) {
 				return;
 			}
 			// Safe-mode kill switch + nocache bypass (issue #1098): fail open
-			// to original scripts, settings preserved.
-			if ( self::is_safe_mode_active( $this->options['file_optimisation'] ?? array() ) || self::is_aggressive_bypass_active() ) {
+			// to original scripts, settings preserved. Sandbox preview
+			// (issue #1163) bypasses safe mode for preview admins only.
+			if ( self::is_aggressive_bypass_active() ) {
+				return;
+			}
+			if ( ! self::is_sandbox_preview_active() && self::is_safe_mode_active( $this->options['file_optimisation'] ?? array() ) ) {
 				return;
 			}
 			// Per-page defer kill-switch (#1098).
@@ -3140,7 +3213,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 
-			if ( empty( $this->options['file_optimisation']['deferJS'] ) ) {
+			$file_opt_for_defer = self::get_effective_file_optimisation( $this->options['file_optimisation'] ?? array() );
+			if ( empty( $file_opt_for_defer['deferJS'] ) ) {
 				return;
 			}
 
@@ -3283,16 +3357,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( has_filter( 'litespeed_can_optm' ) && ! apply_filters( 'litespeed_can_optm', true ) ) {
 				return $tag;
 			}
-			if ( ! $this->should_optimise_for_logged_in() ) {
+			if ( ! $this->should_optimise_for_logged_in() && ! self::is_sandbox_preview_active() ) {
 				return $tag;
 			}
 			// Safe-mode kill switch + nocache bypass (issue #1098): fail open
 			// to original scripts, settings preserved for one-click recovery.
-			if ( self::is_safe_mode_active( $this->options['file_optimisation'] ?? array() ) || self::is_aggressive_bypass_active() ) {
+			// Sandbox preview (issue #1163): preview admins bypass safe mode
+			// so staged delay/defer renders; visitors still gate on safe mode.
+			// Aggressive bypass (?nocache) still applies in preview.
+			$file_opt_for_gate = self::get_effective_file_optimisation( $this->options['file_optimisation'] ?? array() );
+			if ( self::is_aggressive_bypass_active() ) {
+				return $tag;
+			}
+			if ( ! self::is_sandbox_preview_active() && self::is_safe_mode_active( $this->options['file_optimisation'] ?? array() ) ) {
 				return $tag;
 			}
 
-			if ( ! empty( $this->options['file_optimisation']['delayJS'] ) ) {
+			if ( ! empty( $file_opt_for_gate['delayJS'] ) ) {
 				// Woo / builder-context guardrail (#932): fail open to un-delayed
 				// scripts, never fatal. See is_delay_excluded_context().
 				if ( self::is_delay_excluded_context() || $this->is_delay_js_safe_context() ) {
@@ -3308,7 +3389,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// External-scripts-only mode (#966): leave inline scripts
 				// (no src attribute) untouched; only external handles delay.
 				// Anchored on whitespace so data-src=/wppo-src= don't match.
-				if ( ! empty( $this->options['file_optimisation']['delayJSExternalOnly'] ) ) {
+				if ( ! empty( $file_opt_for_gate['delayJSExternalOnly'] ) ) {
 					if ( ! preg_match( '/\ssrc\s*=/i', ' ' . (string) $tag ) ) {
 						return $tag;
 					}
@@ -3408,12 +3489,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( has_filter( 'litespeed_can_optm' ) && ! apply_filters( 'litespeed_can_optm', true ) ) {
 				return $tag;
 			}
-			if ( ! $this->should_optimise_for_logged_in() ) {
+			if ( ! $this->should_optimise_for_logged_in() && ! self::is_sandbox_preview_active() ) {
 				return $tag;
 			}
 			// Safe-mode kill switch + nocache bypass + per-page defer disable
-			// (issue #1098): fail open to original tag.
-			if ( self::is_safe_mode_active( $this->options['file_optimisation'] ?? array() ) || self::is_aggressive_bypass_active() ) {
+			// (issue #1098): fail open to original tag. Sandbox preview
+			// (issue #1163) bypasses safe mode for preview admins only.
+			if ( self::is_aggressive_bypass_active() ) {
+				return $tag;
+			}
+			if ( ! self::is_sandbox_preview_active() && self::is_safe_mode_active( $this->options['file_optimisation'] ?? array() ) ) {
 				return $tag;
 			}
 			if ( $this->defer_disabled_for_page || self::is_defer_disabled_for_page() ) {
@@ -4516,6 +4601,52 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		public function is_safe_mode_enabled(): bool {
 			return self::is_safe_mode_active( $this->options['file_optimisation'] ?? array() );
+		}
+
+		/**
+		 * Whether the current request is a valid sandbox asset-preview request.
+		 *
+		 * Delegates to Sandbox_Preview::is_preview_request() (admin-only query
+		 * param + nonce). Fail-open to false when the controller is missing.
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when experimental preview output may render.
+		 */
+		public static function is_sandbox_preview_active(): bool {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'is_preview_request' ) ) {
+					return (bool) Sandbox_Preview::is_preview_request();
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Effective file_optimisation slice for this request.
+		 *
+		 * Visitors get production unchanged; admin preview requests get
+		 * production overlaid with staged sandbox values. Fail-open to
+		 * production on any error.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $file_optimisation Production slice.
+		 * @return array Effective slice.
+		 */
+		public static function get_effective_file_optimisation( array $file_optimisation = array() ): array {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_effective_file_optimisation' ) ) {
+					return Sandbox_Preview::get_effective_file_optimisation( $file_optimisation );
+				}
+				return $file_optimisation;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $file_optimisation;
+			}
 		}
 
 		/**

@@ -207,6 +207,179 @@ const FileOptimization = ( {
 		notify: notifyPurge,
 		dismiss: dismissPurge,
 	} = useNotice();
+	// Sandbox preview (issue #1163): visitor-safe admin preview of
+	// delay/defer/combine with one-click promote/discard + in-preview perf test.
+	const [ sandboxStaged, setSandboxStaged ] = useState( null );
+	const [ sandboxPreviewUrl, setSandboxPreviewUrl ] = useState( '' );
+	const [ sandboxBusy, setSandboxBusy ] = useState( false );
+	const {
+		notice: sandboxNotice,
+		notify: notifySandbox,
+		dismiss: dismissSandbox,
+	} = useNotice();
+	const buildStagedFromForm = () => ( {
+		delayJS: !! settings.delayJS,
+		deferJS: !! settings.deferJS,
+		combineCSS: !! settings.combineCSS,
+		minifyJS: !! settings.minifyJS,
+		minifyCSS: !! settings.minifyCSS,
+		excludeDelayJS:
+			typeof settings.excludeDelayJS === 'string'
+				? settings.excludeDelayJS
+				: '',
+		excludeDeferJS:
+			typeof settings.excludeDeferJS === 'string'
+				? settings.excludeDeferJS
+				: '',
+		excludeCombineCSS:
+			typeof settings.excludeCombineCSS === 'string'
+				? settings.excludeCombineCSS
+				: '',
+	} );
+	const handleSandboxSave = async () => {
+		setSandboxBusy( true );
+		try {
+			const res = await apiCall( 'sandbox_save', {
+				settings: buildStagedFromForm(),
+			} );
+			if ( res && res.success ) {
+				setSandboxStaged( res.data ? res.data.staged || {} : {} );
+				try {
+					const status = await apiCall(
+						'sandbox_preview',
+						{},
+						'GET'
+					);
+					if ( status && status.success && status.data ) {
+						setSandboxPreviewUrl( status.data.preview_url || '' );
+					}
+				} catch {
+					// Preview link is best-effort; staged state above is enough.
+				}
+				notifySandbox( {
+					type: 'success',
+					message: __(
+						'Preview staged. Open the preview link as admin — visitors still see production markup.',
+						'performance-optimisation'
+					),
+				} );
+			} else {
+				notifySandbox( {
+					type: 'error',
+					message: __(
+						'Could not stage the preview.',
+						'performance-optimisation'
+					),
+				} );
+			}
+		} catch {
+			notifySandbox( {
+				type: 'error',
+				message: __(
+					'Could not stage the preview.',
+					'performance-optimisation'
+				),
+			} );
+		} finally {
+			setSandboxBusy( false );
+		}
+	};
+	const handleSandboxPromote = async () => {
+		setSandboxBusy( true );
+		try {
+			const res = await apiCall( 'sandbox_promote', {} );
+			if ( res && res.success ) {
+				setSandboxStaged( {} );
+				notifySandbox( {
+					type: 'success',
+					message: __(
+						'Preview promoted to production.',
+						'performance-optimisation'
+					),
+				} );
+			} else {
+				notifySandbox( {
+					type: 'error',
+					message:
+						( res && res.data ) ||
+						__( 'Could not promote.', 'performance-optimisation' ),
+				} );
+			}
+		} catch {
+			notifySandbox( {
+				type: 'error',
+				message: __( 'Could not promote.', 'performance-optimisation' ),
+			} );
+		} finally {
+			setSandboxBusy( false );
+		}
+	};
+	const handleSandboxDiscard = async () => {
+		setSandboxBusy( true );
+		try {
+			const res = await apiCall( 'sandbox_discard', {} );
+			if ( res && res.success ) {
+				setSandboxStaged( {} );
+				notifySandbox( {
+					type: 'success',
+					message: __(
+						'Preview discarded. Production settings unchanged.',
+						'performance-optimisation'
+					),
+				} );
+			} else {
+				notifySandbox( {
+					type: 'error',
+					message: __(
+						'Could not discard.',
+						'performance-optimisation'
+					),
+				} );
+			}
+		} catch {
+			notifySandbox( {
+				type: 'error',
+				message: __( 'Could not discard.', 'performance-optimisation' ),
+			} );
+		} finally {
+			setSandboxBusy( false );
+		}
+	};
+	const handleSandboxPerfTest = async () => {
+		if ( ! sandboxPreviewUrl ) {
+			return;
+		}
+		setSandboxBusy( true );
+		try {
+			const res = await apiCall( 'performance_scan', {
+				url: sandboxPreviewUrl,
+			} );
+			if ( res && res.success ) {
+				notifySandbox( {
+					type: 'success',
+					message: __(
+						'Perf test finished in preview.',
+						'performance-optimisation'
+					),
+				} );
+			} else {
+				notifySandbox( {
+					type: 'error',
+					message: __(
+						'Perf test failed.',
+						'performance-optimisation'
+					),
+				} );
+			}
+		} catch {
+			notifySandbox( {
+				type: 'error',
+				message: __( 'Perf test failed.', 'performance-optimisation' ),
+			} );
+		} finally {
+			setSandboxBusy( false );
+		}
+	};
 	const { setIsDirty } = useContext( UnsavedChangesContext );
 	const [ baseline, setBaseline ] = useState( defaultSettings );
 	// Baseline is intentionally derived per-key (not per-object-identity)
@@ -1573,6 +1746,99 @@ const FileOptimization = ( {
 										) }
 									/>
 								) }
+								<div className="wppo-field wppo-sandbox-preview">
+									<p className="wppo-field-label">
+										{ __(
+											'Sandbox preview — test Delay / Defer / Combine safely',
+											'performance-optimisation'
+										) }
+									</p>
+									<p className="wppo-field-description">
+										{ __(
+											'Stage the current Delay, Defer and Combine settings, preview them as admin via a no-cache link (visitors keep production markup), then promote or discard. A perf test can run inside the preview.',
+											'performance-optimisation'
+										) }
+									</p>
+									{ sandboxNotice && (
+										<NoticeBanner
+											type={ sandboxNotice.type }
+											message={ sandboxNotice.message }
+											onDismiss={ dismissSandbox }
+										/>
+									) }
+									<div className="wppo-sandbox-actions">
+										<button
+											type="button"
+											className="button button-secondary"
+											onClick={ handleSandboxSave }
+											disabled={ sandboxBusy }
+										>
+											{ __(
+												'Stage preview',
+												'performance-optimisation'
+											) }
+										</button>
+										{ sandboxPreviewUrl && (
+											<a
+												className="button button-secondary"
+												href={ sandboxPreviewUrl }
+												target="_blank"
+												rel="noreferrer"
+											>
+												{ __(
+													'Open admin preview',
+													'performance-optimisation'
+												) }
+											</a>
+										) }
+										<button
+											type="button"
+											className="button button-secondary"
+											onClick={ handleSandboxPerfTest }
+											disabled={
+												sandboxBusy ||
+												! sandboxPreviewUrl
+											}
+										>
+											{ __(
+												'Run perf test in preview',
+												'performance-optimisation'
+											) }
+										</button>
+										<button
+											type="button"
+											className="button button-primary"
+											onClick={ handleSandboxPromote }
+											disabled={ sandboxBusy }
+										>
+											{ __(
+												'Promote',
+												'performance-optimisation'
+											) }
+										</button>
+										<button
+											type="button"
+											className="button button-secondary"
+											onClick={ handleSandboxDiscard }
+											disabled={ sandboxBusy }
+										>
+											{ __(
+												'Discard',
+												'performance-optimisation'
+											) }
+										</button>
+									</div>
+									{ sandboxStaged &&
+										Object.keys( sandboxStaged ).length >
+											0 && (
+											<p className="wppo-field-description">
+												{ __(
+													'A staged preview exists. Visitors still see production markup.',
+													'performance-optimisation'
+												) }
+											</p>
+										) }
+								</div>
 								{ notice && (
 									<NoticeBanner
 										type={ notice.type }

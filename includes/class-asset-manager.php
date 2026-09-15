@@ -88,7 +88,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 		 * @since 1.1.0
 		 */
 		public function dequeue_selected_assets() {
-			if ( is_admin() || is_user_logged_in() ) {
+			$is_sandbox_preview = false;
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'is_preview_request' ) ) {
+					$is_sandbox_preview = (bool) Sandbox_Preview::is_preview_request();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$is_sandbox_preview = false;
+			}
+			if ( is_admin() ) {
+				return;
+			}
+			// Sandbox preview (issue #1163): preview admins render staged
+			// dequeue output; every other logged-in user keeps production
+			// markup so visitors never see experimental output.
+			if ( is_user_logged_in() && ! $is_sandbox_preview ) {
 				return;
 			}
 
