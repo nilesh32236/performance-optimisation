@@ -1227,10 +1227,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// re-arms the notice.
 			$version = isset( $GLOBALS['wp_version'] ) ? $GLOBALS['wp_version'] : 'unknown';
 			$log_key = Util::transient_key( 'wppo_inline_drift_' . md5( $handle . '|' . $version ) );
-			if ( get_transient( $log_key ) ) {
+			// Best-effort throttle (see is_throttled()): a throwing transient
+			// transport counts as a miss so the drift notice is still logged.
+			if ( $this->is_throttled( $log_key, DAY_IN_SECONDS ) ) {
 				return;
 			}
-			set_transient( $log_key, 1, DAY_IN_SECONDS );
 
 			Log::add(
 				sprintf(
@@ -3449,6 +3450,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Best-effort cross-request throttle check.
+		 *
+		 * Returns true only when the transient transport positively reports a
+		 * stored value. A missing transport, a miss (false/null), or a
+		 * throwing transport all count as "not throttled" so a broken
+		 * throttle can never suppress the log it guards (fail-open toward
+		 * logging).
+		 *
+		 * @since NEXT
+		 * @param string $throttle_key Throttle transient key.
+		 * @param int    $ttl          TTL in seconds when recording a fresh hit.
+		 * @return bool True when a previous hit is still recorded.
+		 */
+		private function is_throttled( string $throttle_key, int $ttl ): bool {
+			try {
+				if ( ! function_exists( 'get_transient' ) || ! function_exists( 'set_transient' ) ) {
+					return false;
+				}
+				// Strict miss check: a null return (unstubbed transport
+				// in tests) is a miss, not a throttle hit.
+				$throttled = get_transient( $throttle_key );
+				if ( false !== $throttled && null !== $throttled ) {
+					return true;
+				}
+				try {
+					set_transient( $throttle_key, 1, $ttl );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return false;
+		}
+
+		/**
 		 * Log a blocked cache path traversal probe (once per request + throttled across requests).
 		 *
 		 * The once-per-request static gate alone lets an unauthenticated
@@ -3473,16 +3510,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					return;
 				}
 				// Cross-request throttle: one row per probe hash per hour.
-				if ( function_exists( 'get_transient' ) && function_exists( 'set_transient' ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {
+				// Best-effort (see is_throttled()): a throwing transient
+				// transport counts as a miss so the probe is still logged.
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {
 					$throttle_key = Util::transient_key( 'wppo_probe_' . md5( substr( (string) $raw_input, 0, 64 ) ) );
 					$ttl          = defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600;
-					// Strict miss check: a null return (unstubbed transport
-					// in tests) is a miss, not a throttle hit.
-					$throttled = get_transient( $throttle_key );
-					if ( false !== $throttled && null !== $throttled ) {
+					if ( $this->is_throttled( $throttle_key, $ttl ) ) {
 						return;
 					}
-					set_transient( $throttle_key, 1, $ttl );
 				}
 				$snippet = str_replace( "\0", '', (string) $raw_input );
 				if ( function_exists( 'sanitize_text_field' ) ) {

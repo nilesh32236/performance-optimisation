@@ -14,6 +14,8 @@
 use PerformanceOptimise\Inc\Cache;
 use PerformanceOptimise\Inc\Main;
 use Brain\Monkey\Functions;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 
 /**
  * Tests for core inline-CSS (`path` data) integration.
@@ -455,7 +457,13 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that path data registered by core or a third party (outside the
 	 * plugin's min cache directory) is not exempted from legacy minification.
+	 *
+	 * Runs in a separate process: the overload mock below requires the real
+	 * Minify\CSS class to be unloaded, but other suites (e.g.
+	 * FontDisplaySwapTest) legitimately load it first in the shared process.
 	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
 	public function test_minify_css_minifies_third_party_path_data_handle(): void {
 		global $wp_styles;
 		$wp_styles = $this->make_wp_styles( array(), array(), '/var/www/themes/foo/style.css' );
@@ -964,7 +972,13 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that minify_queued_styles rewrites a style to its minified file and
 	 * registers core `path` data for inlining.
+	 *
+	 * Runs in a separate process: the overload mock below requires the real
+	 * Minify\CSS class to be unloaded, but other suites (e.g.
+	 * FontDisplaySwapTest) legitimately load it first in the shared process.
 	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
 	public function test_minify_queued_styles_rewrites_style_and_registers_path(): void {
 		Functions\when( 'wp_maybe_inline_styles' )->justReturn( '' );
 
