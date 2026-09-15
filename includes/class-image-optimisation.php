@@ -2117,8 +2117,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( isset( $loading_attrs['fetchpriority'] ) && is_string( $loading_attrs['fetchpriority'] ) && '' !== $loading_attrs['fetchpriority'] ) {
 					$verdict['fetchpriority'] = strtolower( $loading_attrs['fetchpriority'] );
 				}
-				if ( isset( $loading_attrs['decoding'] ) && is_string( $loading_attrs['decoding'] ) && '' !== $loading_attrs['decoding'] ) {
-					$verdict['decoding'] = strtolower( $loading_attrs['decoding'] );
+				if ( isset( $loading_attrs['decoding'] ) && is_string( $loading_attrs['decoding'] ) ) {
+					$candidate = strtolower( trim( $loading_attrs['decoding'] ) );
+					if ( in_array( $candidate, array( 'async', 'sync', 'auto' ), true ) ) {
+						$verdict['decoding'] = $candidate;
+					}
 				}
 				return $verdict;
 			} catch ( \Throwable $e ) {
@@ -4607,8 +4610,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Set fetchpriority="high" on the detected LCP image.
 		 *
-		 * Resolves the current LCP URL via get_current_lcp_url() and stamps
-		 * `fetchpriority="high"` on the matching <img> only when no fetchpriority
+		 * Stamps `fetchpriority="high"` on the matching <img> only when no fetchpriority
 		 * attribute already exists, so core's wp_get_loading_optimization_attributes()
 		 * output and the plugin's existing excludeFirstImages high-priority assignment
 		 * are never double-applied. The matched LCP image is also un-lazy-loaded so an
@@ -4623,12 +4625,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @param string      $buffer  The HTML buffer.
 		 * @param string|null $lcp_url Optional pre-resolved LCP URL. When null the
-		 *                             URL is resolved via get_current_lcp_url().
+		 *                             URL is resolved via resolve_auto_lcp_url()
+		 *                             (same-origin guarded OD/stored/heuristic
+		 *                             chain), with get_current_lcp_url() as a
+		 *                             legacy fallback only.
 		 * @return string The buffer with fetchpriority="high" on the LCP image.
 		 */
 		private function prioritize_lcp_image( string $buffer, ?string $lcp_url = null ): string {
 			if ( null === $lcp_url ) {
-				$lcp_url = $this->get_current_lcp_url();
+				$lcp_url = $this->resolve_auto_lcp_url( $buffer );
 			}
 			if ( empty( $lcp_url ) || false === stripos( $buffer, '<img' ) ) {
 				return $buffer;

@@ -1415,6 +1415,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 							self::$field_lcp_result_memo[ $memo_key ] = $cached_top;
 							return $cached_top;
 						}
+						// Cross-origin cached entry: evict the stale transient
+						// once (best-effort, guarded like the read-through
+						// write) so repeat visitors skip the poisoned read and
+						// fall straight to the aggregate scan / fresh write.
+						if ( function_exists( 'delete_transient' ) && class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
+							try {
+								delete_transient( Util::transient_key( $top_key ) );
+							} catch ( \Throwable $e ) {
+								unset( $e );
+							}
+						}
 					}
 					// Stale/under-sampled/cross-origin entry: fall through to the aggregate scan.
 				}
