@@ -920,6 +920,55 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		}
 
 		/**
+		 * Whether a URL is same-origin with this site (public emission guard).
+		 *
+		 * Re-validates stored/measured candidates on the LCP preload emission
+		 * path (issue #1180): intake-time validation alone cannot cover
+		 * legacy aggregate rows or PageSpeed values written before the intake
+		 * guard shipped. Root-relative paths are accepted; absolute URLs must
+		 * match the home host. Fail-open by design: when the origin cannot be
+		 * proven either way (missing `wp_parse_url()`, an undeterminable home
+		 * host, or any internal failure — e.g. unit contexts without the full
+		 * WP API), the candidate is accepted to preserve legacy behaviour.
+		 * A provable host mismatch still rejects. Never fatal.
+		 *
+		 * @since NEXT
+		 * @param string $url Candidate URL.
+		 * @return bool True when same-origin or unverifiable.
+		 */
+		public static function is_same_origin_url( string $url ): bool {
+			try {
+				if ( 0 === strpos( $url, '/' ) && 0 !== strpos( $url, '//' ) ) {
+					return true;
+				}
+				if ( ! function_exists( 'wp_parse_url' ) ) {
+					return true;
+				}
+				$host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
+				if ( '' === $host ) {
+					// Bare relative URL: resolves against the home URL, so it
+					// is same-origin by construction.
+					return true;
+				}
+				$home = '';
+				try {
+					$home_url = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::cached_home_url() : ( function_exists( 'home_url' ) ? home_url() : '' );
+					$home     = strtolower( (string) wp_parse_url( $home_url, PHP_URL_HOST ) );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				if ( '' === $home ) {
+					// Home host undeterminable: a cross-origin verdict cannot
+					// be proven, so fail open to legacy behaviour.
+					return true;
+				}
+				return $host === $home;
+			} catch ( \Throwable $e ) {
+				return true;
+			}
+		}
+
+		/**
 		 * Buffer a sample to a transient queue and flush periodically.
 		 *
 		 * Replaces the previous per-beacon get_option+update_option with a
@@ -1339,10 +1388,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					$cached_n    = (int) ( $cached_top['n'] ?? 0 );
 					$cached_seen = (int) ( $cached_top['lastSeen'] ?? 0 );
 					if ( $cached_n >= $min && $cached_seen > 0 && ( time() - $cached_seen ) <= self::FIELD_LCP_STALE_TTL ) {
-						self::$field_lcp_result_memo[ $memo_key ] = $cached_top;
-						return $cached_top;
+						// Emission-path origin re-check (issue #1180): cached
+						// entries may predate the intake guard. A cross-origin
+						// entry falls through to the aggregate scan instead of
+						// being served.
+						if ( is_string( $cached_top['url'] ) && self::is_same_origin_url( $cached_top['url'] ) ) {
+							self::$field_lcp_result_memo[ $memo_key ] = $cached_top;
+							return $cached_top;
+						}
 					}
-					// Stale/under-sampled entry: fall through to the aggregate scan.
+					// Stale/under-sampled/cross-origin entry: fall through to the aggregate scan.
 				}
 				$all = self::get_memoized_aggregate();
 				if ( ! is_array( $all ) || empty( $all ) ) {
@@ -1420,14 +1475,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					return null;
 				}
 				unset( $top['_raw_n'] );
-				self::$field_lcp_result_memo[ $memo_key ] = $top;
-				if ( function_exists( 'set_transient' ) && class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
-					try {
-						set_transient( Util::transient_key( $top_key ), $top, HOUR_IN_SECONDS );
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
+				// Emission-path origin re-check (issue #1180): aggregate rows
+				// written before the intake guard shipped may hold a
+				// cross-origin URL. Reject it so only same-origin heroes are
+				// ever preloaded.
+				if ( ! self::is_same_origin_url( $top['url'] ) ) {
+					self::$field_lcp_result_memo[ $memo_key ] = null;
+					return null;
 				}
+				// Read-only hot path (issue #1180): the per-request memo above
+				// is the only cache. No set_transient() here so frontend
+				// rendering performs zero extra DB writes; the transient index
+				// is invalidated by generation bump on flush instead.
+				self::$field_lcp_result_memo[ $memo_key ] = $top;
 				return $top;
 			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
 				return null;
@@ -1459,7 +1519,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					$path = self::resolve_current_path();
 				}
 				$field = self::get_field_lcp_url( $path );
-				if ( is_array( $field ) && ! empty( $field['url'] ) && is_string( $field['url'] ) ) {
+				if ( is_array( $field ) && ! empty( $field['url'] ) && is_string( $field['url'] ) && self::is_same_origin_url( $field['url'] ) ) {
 					return $field;
 				}
 			} catch ( \Throwable $e ) {
@@ -1467,7 +1527,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			}
 			try {
 				$fallback = self::get_stored_pagespeed_lcp_url( $path );
-				if ( '' !== $fallback ) {
+				if ( '' !== $fallback && self::is_same_origin_url( $fallback ) ) {
 					return array(
 						'url'      => $fallback,
 						'n'        => 0,
@@ -1540,7 +1600,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 							if ( ! empty( $post_id ) ) {
 								foreach ( $strategies as $strategy ) {
 									$meta_lcp = get_post_meta( $post_id, '_wppo_lcp_image_url_' . $strategy, true );
-									if ( ! empty( $meta_lcp ) && is_string( $meta_lcp ) ) {
+									// Same-origin only (issue #1180): a
+									// cross-origin tier value is skipped so a
+									// later same-origin tier can still win.
+									if ( ! empty( $meta_lcp ) && is_string( $meta_lcp ) && self::is_same_origin_url( $meta_lcp ) ) {
 										return $meta_lcp;
 									}
 								}
@@ -1558,7 +1621,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 						if ( is_front_page() ) {
 							foreach ( $strategies as $strategy ) {
 								$front_lcp = get_option( 'wppo_front_page_lcp_' . $strategy, '' );
-								if ( ! empty( $front_lcp ) && is_string( $front_lcp ) ) {
+								if ( ! empty( $front_lcp ) && is_string( $front_lcp ) && self::is_same_origin_url( $front_lcp ) ) {
 									return $front_lcp;
 								}
 							}
@@ -1598,7 +1661,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					} catch ( \Throwable $e ) {
 						continue;
 					}
-					if ( ! empty( $transient ) && is_string( $transient ) ) {
+					if ( ! empty( $transient ) && is_string( $transient ) && self::is_same_origin_url( $transient ) ) {
 						return $transient;
 					}
 				}
