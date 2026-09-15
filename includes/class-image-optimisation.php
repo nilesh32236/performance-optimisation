@@ -1914,6 +1914,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$image_optimisation = $this->options['image_optimisation'] ?? array();
 
 			$merged = array_merge(
+				$this->get_manual_lcp_preload_data(),
 				$this->get_auto_lcp_preload_data(),
 				$this->get_front_page_preload_data( $image_optimisation ),
 				$this->get_meta_preload_data(),
@@ -1971,19 +1972,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					return true;
 				}
 				$path = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url, PHP_URL_PATH ) : ''; // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback only when wp_parse_url() is unavailable (unit contexts).
-				if ( is_string( $path ) && '' !== $path && 1 === preg_match( '/\.(jpe?g|png|gif|webp|avif|svg|heic|heif)$/i', $path ) ) {
+				if ( is_string( $path ) && '' !== $path && 1 === preg_match( '/\.(jpe?g|png|gif|webp|avif|svg|heic|heif|jxl)$/i', $path ) ) {
 					return true;
 				}
 				// Extensionless image-CDN URLs (Cloudinary fetch, Photon,
 				// signed asset URLs): accept when the query carries image-ish
 				// params or an image extension so measured OD/PageSpeed heroes
-				// are not silently discarded.
+				// are not silently discarded. Generic keys (ssl, url, src,
+				// strip) also appear on non-image URLs and must not qualify.
 				$query = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url, PHP_URL_QUERY ) : ''; // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback only when wp_parse_url() is unavailable (unit contexts).
 				if ( is_string( $query ) && '' !== $query ) {
-					if ( 1 === preg_match( '/\.(jpe?g|png|gif|webp|avif|svg|heic|heif)/i', $query ) ) {
+					if ( 1 === preg_match( '/\.(jpe?g|png|gif|webp|avif|svg|heic|heif|jxl)/i', $query ) ) {
 						return true;
 					}
-					if ( 1 === preg_match( '/(^|&)(w|h|width|height|format|fit|crop|resize|quality|ssl|strip|url|src)(=|&|$)/i', $query ) ) {
+					if ( 1 === preg_match( '/(^|&)(w|h|width|height|format|fit|crop|resize|quality)(=|&|$)/i', $query ) ) {
 						return true;
 					}
 				}
@@ -1995,9 +1997,50 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Read the manual per-post LCP URL picker value (`_wppo_lcp_preload_url`).
+		 *
+		 * The manual picker is the fallback path: it wins over auto-detect
+		 * (RUM / Optimization Detective / PageSpeed / heuristic) so site owners
+		 * can pin the hero before field data exists. Returns an empty string
+		 * when not on a singular view, when the meta is absent, or when the
+		 * value fails the `is_image_lcp_url()` guard. Fail-open: any failure
+		 * returns an empty string, never fatal.
+		 *
+		 * @since NEXT
+		 * @return string The manual LCP image URL, or empty string.
+		 */
+		private function get_manual_lcp_url(): string {
+			try {
+				if ( ! function_exists( 'is_singular' ) || ! function_exists( 'get_the_ID' ) || ! function_exists( 'get_post_meta' ) ) {
+					return '';
+				}
+				if ( ! is_singular() ) {
+					return '';
+				}
+				$post_id = get_the_ID();
+				if ( empty( $post_id ) ) {
+					return '';
+				}
+				$raw = get_post_meta( $post_id, '_wppo_lcp_preload_url', true );
+				if ( ! is_string( $raw ) || '' === trim( $raw ) ) {
+					return '';
+				}
+				$url = function_exists( 'esc_url_raw' ) ? esc_url_raw( trim( substr( $raw, 0, 2048 ) ) ) : trim( substr( $raw, 0, 2048 ) );
+				if ( '' === $url || ! $this->is_image_lcp_url( $url ) ) {
+					return '';
+				}
+				return $url;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
 		 * Resolve the single auto-detected LCP image URL for the current page.
 		 *
 		 * Unified priority chain (fail-open, never fatal):
+		 * Manual per-post picker (`_wppo_lcp_preload_url`) wins first, then
 		 * P0 Optimization Detective real-visit data (guarded via
 		 * `class_exists('OD_URL_Metric')` / `function_exists('od_get_url_metrics')`
 		 * inside `OD_Bridge::is_enabled()` plus the `wppo_od_should_optimize`
@@ -2014,6 +2057,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The LCP image URL, or empty string when none resolves.
 		 */
 		private function resolve_auto_lcp_url( ?string $buffer = null ): string {
+			// Manual per-post LCP picker — pinned hero wins over auto-detect.
+			try {
+				$manual = $this->get_manual_lcp_url();
+				if ( '' !== $manual ) {
+					return $manual;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 			// P0: Optimization Detective — real-visit hero wins.
 			if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 				try {
@@ -2156,15 +2208,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Retrieves the manual per-post LCP image preload item.
+		 *
+		 * Emits the `_wppo_lcp_preload_url` picker value via
+		 * `prepare_preload_item()` so a pinned hero preloads with
+		 * fetchpriority high even before auto-detect (RUM / OD / PageSpeed)
+		 * has data — and even when the `autoPreloadLCP` toggle is off,
+		 * because pinning the URL is explicit opt-in. Ordered first in
+		 * `get_all_preload_data()` so it wins the normalized-URL dedup.
+		 * Fail-open: any failure returns an empty list.
+		 *
+		 * @since NEXT
+		 * @return array List of preload items (zero or one item).
+		 */
+		private function get_manual_lcp_preload_data(): array {
+			try {
+				$manual = $this->get_manual_lcp_url();
+				if ( '' === $manual ) {
+					return array();
+				}
+				return array( $this->prepare_preload_item( $manual ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
 		 * Retrieves the single auto-detected LCP image preload item.
 		 *
 		 * Resolves via the unified `resolve_auto_lcp_url()` chain
 		 * (P0 Optimization Detective real-visit data → P1 stored
 		 * PageSpeed/RUM-field → P2 DOM-first heuristic when a buffer is
 		 * available). Emits at most one item via `prepare_preload_item()`
-		 * so "once per URL" holds; the item is ordered first in
-		 * `get_all_preload_data()` so it is emitted ahead of manual
-		 * preloads and participates in the normalized-URL dedup first. The
+		 * so "once per URL" holds; the item is ordered ahead of front-page
+		 * and generic meta preloads (after the manual picker item) and
+		 * participates in the normalized-URL dedup. The
 		 * toggle autoPreloadLCP must be enabled.
 		 *
 		 * @since 2.0.0
@@ -2278,6 +2357,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * all LCP features are off: the field-measured branch needs
 		 * `fieldLcpOverride`, the stored-PageSpeed branch (shared read-only
 		 * lookup, no new scans) needs `autoPreloadLCP` or `prioritizeLCP`.
+		 * The manual per-post picker (`_wppo_lcp_preload_url`) is exempt from
+		 * the gate — pinning the hero is explicit opt-in, so the pinned URL
+		 * is always excluded from lazy load with width/height preserved.
 		 * Returns an empty string when no branch applies or nothing resolves.
 		 * Fail-open: any failure returns an empty string, never fatal.
 		 *
@@ -2287,7 +2369,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * The optional `$buffer` enables the P2 DOM-first heuristic tier so
 		 * `add_delay_load_img()` stays in parity with
 		 * `maybe_preload_hero_image()` (which resolves with the buffer);
-		 * without a buffer only the OD + stored tiers apply.
+		 * without a buffer only the manual + OD + stored tiers apply.
 		 * @param array       $image_optimisation Image optimisation settings.
 		 * @param string|null $buffer Optional HTML buffer for the heuristic tier.
 		 * @return string The candidate URL, or empty string when none applies.
@@ -2298,6 +2380,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 			$resolved_url = '';
 			try {
+				// Manual picker bypasses the toggle gate (explicit opt-in).
+				try {
+					$manual = $this->get_manual_lcp_url();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$manual = '';
+				}
+				if ( '' !== $manual ) {
+					if ( null === $buffer ) {
+						$this->lazy_lcp_exclusion_url = $manual;
+					}
+					return $manual;
+				}
 				$gated = ! empty( $image_optimisation['fieldLcpOverride'] ) || ! empty( $image_optimisation['autoPreloadLCP'] ) || ! empty( $image_optimisation['prioritizeLCPImages'] );
 				if ( ! $gated ) {
 					return '';

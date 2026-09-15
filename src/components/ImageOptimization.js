@@ -38,6 +38,17 @@ const DEFAULT_CLIENT_SIDE_MIME_TYPES = [
 ];
 
 /**
+ * Human-readable labels for LCP candidate sources. Unknown future sources
+ * fall back to the raw token at the render site.
+ */
+const lcpSourceLabels = {
+	manual: __( 'Manual pin', 'performance-optimisation' ),
+	rum: __( 'RUM field data', 'performance-optimisation' ),
+	od: __( 'Optimization Detective', 'performance-optimisation' ),
+	pagespeed: __( 'PageSpeed', 'performance-optimisation' ),
+};
+
+/**
  * Coerce the longest-edge cap to a non-negative integer.
  *
  * Mirrors the PHP sanitizer (2560 default, 0 disables): negatives,
@@ -187,6 +198,113 @@ const ImageOptimization = ( { options = {} } ) => {
 	const { notice, notify, dismiss } = useNotice();
 	const { setIsDirty } = useContext( UnsavedChangesContext );
 	const [ baseline, setBaseline ] = useState( defaultSettings );
+	// LCP preload candidate surfaced from RUM / Optimization Detective field
+	// data via the lcp_preload_candidate REST route. Null means no measured
+	// candidate yet — the manual per-post LCP URL picker remains the fallback.
+	const [ lcpCandidate, setLcpCandidate ] = useState( null );
+	const [ lcpCandidateSource, setLcpCandidateSource ] = useState( '' );
+	const [ isCandidateLoading, setIsCandidateLoading ] = useState( false );
+	const [ isApplyingLcp, setIsApplyingLcp ] = useState( false );
+
+	useEffect( () => {
+		let cancelled = false;
+		setIsCandidateLoading( true );
+		// Promise.resolve() so a mocked apiCall resolving to undefined
+		// (and any sync throw) still lands in the fail-open path.
+		// Default to the front page ('/'): without an explicit path the
+		// server resolves the admin REST context (REQUEST_URI of the
+		// wp-json route) and always misses, so no candidate would surface.
+		Promise.resolve()
+			.then( () =>
+				apiCall(
+					'lcp_preload_candidate?path=' + encodeURIComponent( '/' ),
+					{},
+					'GET'
+				)
+			)
+			.then( ( res ) => {
+				if ( cancelled ) {
+					return;
+				}
+				if (
+					res &&
+					res.success &&
+					res.data &&
+					res.data.candidate &&
+					res.data.candidate.url
+				) {
+					setLcpCandidate( res.data.candidate );
+					setLcpCandidateSource( res.data.source || '' );
+				}
+			} )
+			.catch( () => {
+				// Fail-open: no candidate is not an error state; the manual
+				// per-post picker path still works.
+			} )
+			.finally( () => {
+				if ( ! cancelled ) {
+					setIsCandidateLoading( false );
+				}
+			} );
+		return () => {
+			cancelled = true;
+		};
+	}, [] );
+
+	const applyLcpCandidate = async () => {
+		if ( ! lcpCandidate || ! lcpCandidate.url ) {
+			return;
+		}
+		setIsApplyingLcp( true );
+		try {
+			const next = {
+				...settings,
+				autoPreloadLCP: true,
+				prioritizeLCPImages: true,
+			};
+			const res = await apiCall( 'update_settings', {
+				tab: 'image_optimisation',
+				settings: next,
+			} );
+			if ( res && res.success ) {
+				setSettings( next );
+				setBaseline( { ...next } );
+				setIsDirty( false );
+				notify( {
+					type: 'success',
+					message: __(
+						'LCP auto-preload and prioritization enabled: measured heroes will preload with fetchpriority high and skip lazy loading.',
+						'performance-optimisation'
+					),
+					durationMs: 5000,
+				} );
+			} else {
+				notify( {
+					type: 'error',
+					message:
+						( res && res.message ) ||
+						__(
+							'Could not apply the LCP preload.',
+							'performance-optimisation'
+						),
+					durationMs: 5000,
+				} );
+			}
+		} catch ( error ) {
+			notify( {
+				type: 'error',
+				message:
+					( error && error.message ) ||
+					__(
+						'Could not apply the LCP preload.',
+						'performance-optimisation'
+					),
+				durationMs: 5000,
+			} );
+		} finally {
+			setIsApplyingLcp( false );
+		}
+	};
 	useEffect( () => {
 		setBaseline( {
 			...defaultSettings,
@@ -341,6 +459,60 @@ const ImageOptimization = ( { options = {} } ) => {
 			setIsLoading( false );
 		}
 	};
+
+	let lcpCandidateBody;
+	if ( isCandidateLoading ) {
+		lcpCandidateBody = (
+			<p className="wppo-text-muted wppo-text-small">
+				{ __(
+					'Looking for field-measured LCP data…',
+					'performance-optimisation'
+				) }
+			</p>
+		);
+	} else if ( lcpCandidate && lcpCandidate.url ) {
+		lcpCandidateBody = (
+			<>
+				<p className="wppo-text-small">
+					<code className="wppo-textarea--mono">
+						{ lcpCandidate.url }
+					</code>
+				</p>
+				{ lcpCandidateSource && (
+					<p className="wppo-text-muted wppo-text-small">
+						{ __( 'Source:', 'performance-optimisation' ) }{ ' ' }
+						{ lcpSourceLabels[ lcpCandidateSource ] ||
+							lcpCandidateSource }
+					</p>
+				) }
+				<LoadingSubmitButton
+					className="wppo-button wppo-button--secondary"
+					isLoading={ isApplyingLcp }
+					onClick={ applyLcpCandidate }
+					type="button"
+					label={ __(
+						'Preload this image',
+						'performance-optimisation'
+					) }
+				/>
+				<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+					{ __(
+						'One click enables LCP auto-preload and prioritization so measured heroes preload with fetchpriority high and skip lazy loading (width and height preserved). This saves the whole Image Optimisation form, including any other unsaved changes above.',
+						'performance-optimisation'
+					) }
+				</p>
+			</>
+		);
+	} else {
+		lcpCandidateBody = (
+			<p className="wppo-text-muted wppo-text-small">
+				{ __(
+					'No field-measured LCP candidate yet. Pin the hero with the per-post “LCP Image URL” picker, or run a PageSpeed scan and check back.',
+					'performance-optimisation'
+				) }
+			</p>
+		);
+	}
 
 	return (
 		<div className="wppo-dashboard-view">
@@ -1016,6 +1188,15 @@ const ImageOptimization = ( { options = {} } ) => {
 					icon={ <FontAwesomeIcon icon={ faCloudUploadAlt } /> }
 				>
 					<div className="wppo-stacked-cards">
+						<div className="wppo-field wppo-lcp-candidate">
+							<span className="wppo-field-label">
+								{ __(
+									'Detected LCP Candidate',
+									'performance-optimisation'
+								) }
+							</span>
+							{ lcpCandidateBody }
+						</div>
 						<div>
 							<SwitchField
 								label={ __(

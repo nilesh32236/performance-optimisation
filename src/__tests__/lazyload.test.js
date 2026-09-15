@@ -601,6 +601,234 @@ describe( 'Lazy Load (lazyload.js)', () => {
 			expect( observe ).not.toHaveBeenCalledWith( hero );
 			expect( observe ).toHaveBeenCalledWith( below );
 		} );
+
+		it( 'prioritize_lcp() emits a fetchpriority-high preload and excludes the candidate with dimensions preserved', () => {
+			mockIntersectionObserver();
+			document.head.innerHTML = '';
+
+			const hero = document.createElement( 'img' );
+			hero.setAttribute( 'data-src', 'https://example.com/hero.jpg' );
+			hero.setAttribute( 'width', '1200' );
+			hero.setAttribute( 'height', '800' );
+			hero.setAttribute( 'loading', 'lazy' );
+			hero.classList.add( 'lazyload' );
+			document.body.appendChild( hero );
+
+			jest.isolateModules( () => {
+				require( '../lazyload' );
+			} );
+
+			const prioritize = window.__wppoPrioritizeLcp;
+			expect( typeof prioritize ).toBe( 'function' );
+
+			const resolved = prioritize( 'https://example.com/hero.jpg' );
+			expect( resolved ).toBe( 'https://example.com/hero.jpg' );
+
+			const link = document.head.querySelector(
+				'link[data-wppo-lcp-preload][rel="preload"]'
+			);
+			expect( link ).not.toBeNull();
+			expect( link.getAttribute( 'as' ) ).toBe( 'image' );
+			expect( link.getAttribute( 'fetchpriority' ) ).toBe( 'high' );
+			expect( link.getAttribute( 'href' ) ).toBe(
+				'https://example.com/hero.jpg'
+			);
+
+			expect( hero.getAttribute( 'loading' ) ).toBe( 'eager' );
+			expect( hero.getAttribute( 'fetchpriority' ) ).toBe( 'high' );
+			expect( hero.getAttribute( 'width' ) ).toBe( '1200' );
+			expect( hero.getAttribute( 'height' ) ).toBe( '800' );
+			expect( hero.hasAttribute( 'data-src' ) ).toBe( false );
+		} );
+
+		it( 'prioritize_lcp() emits nothing and returns empty when no image resolves', () => {
+			mockIntersectionObserver();
+			document.head.innerHTML = '';
+
+			jest.isolateModules( () => {
+				require( '../lazyload' );
+			} );
+
+			const prioritize = window.__wppoPrioritizeLcp;
+			expect( prioritize() ).toBe( '' );
+			expect(
+				document.head.querySelector( 'link[data-wppo-lcp-preload]' )
+			).toBeNull();
+		} );
+
+		it( 'prioritize_lcp() fails open on an explicit miss instead of preloading another image', () => {
+			mockIntersectionObserver();
+			document.head.innerHTML = '';
+
+			const other = document.createElement( 'img' );
+			other.setAttribute( 'src', 'https://example.com/other.jpg' );
+			document.body.appendChild( other );
+
+			jest.isolateModules( () => {
+				require( '../lazyload' );
+			} );
+
+			const prioritize = window.__wppoPrioritizeLcp;
+			expect( prioritize( 'https://example.com/stale-hero.jpg' ) ).toBe(
+				''
+			);
+			expect(
+				document.head.querySelector( 'link[data-wppo-lcp-preload]' )
+			).toBeNull();
+			// The unrelated image is left untouched (still lazy).
+			expect( other.getAttribute( 'src' ) ).toBe(
+				'https://example.com/other.jpg'
+			);
+		} );
+
+		it( 'prioritize_lcp() matches normalized variants (relative, size suffix, query)', () => {
+			mockIntersectionObserver();
+			document.head.innerHTML = '';
+
+			const img = document.createElement( 'img' );
+			img.setAttribute(
+				'data-src',
+				'/wp-content/uploads/hero-300x200.jpg'
+			);
+			document.body.appendChild( img );
+
+			jest.isolateModules( () => {
+				require( '../lazyload' );
+			} );
+
+			const prioritize = window.__wppoPrioritizeLcp;
+			const resolved = prioritize(
+				'http://localhost/wp-content/uploads/hero.jpg?ver=123'
+			);
+			expect( resolved ).toBe( '/wp-content/uploads/hero-300x200.jpg' );
+			const link = document.head.querySelector(
+				'link[data-wppo-lcp-preload][rel="preload"]'
+			);
+			expect( link ).not.toBeNull();
+			expect( link.getAttribute( 'href' ) ).toBe(
+				'/wp-content/uploads/hero-300x200.jpg'
+			);
+		} );
+
+		it( 'prioritize_lcp() emits imagesrcset with imagesizes only when sizes is available', () => {
+			mockIntersectionObserver();
+			document.head.innerHTML = '';
+
+			const responsive = document.createElement( 'img' );
+			responsive.setAttribute( 'src', 'https://example.com/hero.jpg' );
+			responsive.setAttribute(
+				'srcset',
+				'https://example.com/hero-300.jpg 300w, https://example.com/hero-1024.jpg 1024w'
+			);
+			responsive.setAttribute(
+				'sizes',
+				'(max-width: 600px) 300px, 1024px'
+			);
+			document.body.appendChild( responsive );
+
+			const plain = document.createElement( 'img' );
+			plain.setAttribute( 'src', 'https://example.com/plain.jpg' );
+			plain.setAttribute(
+				'srcset',
+				'https://example.com/plain-300.jpg 300w'
+			);
+			document.body.appendChild( plain );
+
+			jest.isolateModules( () => {
+				require( '../lazyload' );
+			} );
+
+			const prioritize = window.__wppoPrioritizeLcp;
+			expect( prioritize( 'https://example.com/hero.jpg' ) ).toBe(
+				'https://example.com/hero.jpg'
+			);
+			const link = document.head.querySelector(
+				'link[data-wppo-lcp-preload][rel="preload"]'
+			);
+			expect( link ).not.toBeNull();
+			expect( link.getAttribute( 'imagesrcset' ) ).toBe(
+				'https://example.com/hero-300.jpg 300w, https://example.com/hero-1024.jpg 1024w'
+			);
+			expect( link.getAttribute( 'imagesizes' ) ).toBe(
+				'(max-width: 600px) 300px, 1024px'
+			);
+
+			// Without sizes, imagesrcset is omitted (no wrong-variant fetch).
+			document.head.innerHTML = '';
+			expect( prioritize( 'https://example.com/plain.jpg' ) ).toBe(
+				'https://example.com/plain.jpg'
+			);
+			const plainLink = document.head.querySelector(
+				'link[data-wppo-lcp-preload][rel="preload"]'
+			);
+			expect( plainLink ).not.toBeNull();
+			expect( plainLink.hasAttribute( 'imagesrcset' ) ).toBe( false );
+			expect( plainLink.hasAttribute( 'imagesizes' ) ).toBe( false );
+		} );
+
+		it( 'prioritize_lcp() matches a srcset-URL candidate on a responsive-only hero', () => {
+			mockIntersectionObserver();
+			document.head.innerHTML = '';
+
+			const hero = document.createElement( 'img' );
+			hero.setAttribute(
+				'data-srcset',
+				'https://example.com/hero-300.jpg 300w, https://example.com/hero-1024.jpg 1024w'
+			);
+			hero.setAttribute( 'loading', 'lazy' );
+			document.body.appendChild( hero );
+
+			jest.isolateModules( () => {
+				require( '../lazyload' );
+			} );
+
+			const prioritize = window.__wppoPrioritizeLcp;
+			const resolved = prioritize( 'https://example.com/hero-1024.jpg' );
+			// No src/data-src exists, so the first srcset candidate resolves.
+			expect( resolved ).toBe( 'https://example.com/hero-300.jpg' );
+			const link = document.head.querySelector(
+				'link[data-wppo-lcp-preload][rel="preload"]'
+			);
+			expect( link ).not.toBeNull();
+			expect( link.getAttribute( 'href' ) ).toBe(
+				'https://example.com/hero-300.jpg'
+			);
+			expect( hero.getAttribute( 'loading' ) ).toBe( 'eager' );
+		} );
+
+		it( 'prioritize_lcp() skips the preload hint when PHP already emitted one for the same hero', () => {
+			mockIntersectionObserver();
+			document.head.innerHTML = '';
+
+			// Server-side preload hint (no JS-owned marker).
+			const serverLink = document.createElement( 'link' );
+			serverLink.setAttribute( 'rel', 'preload' );
+			serverLink.setAttribute( 'as', 'image' );
+			serverLink.setAttribute( 'href', 'https://example.com/hero.jpg' );
+			document.head.appendChild( serverLink );
+
+			const hero = document.createElement( 'img' );
+			hero.setAttribute( 'src', 'https://example.com/hero.jpg' );
+			hero.setAttribute( 'loading', 'lazy' );
+			document.body.appendChild( hero );
+
+			jest.isolateModules( () => {
+				require( '../lazyload' );
+			} );
+
+			const prioritize = window.__wppoPrioritizeLcp;
+			expect( prioritize( 'https://example.com/hero.jpg' ) ).toBe(
+				'https://example.com/hero.jpg'
+			);
+			// No duplicate hint, but the hero is still excluded from lazy.
+			expect(
+				document.head.querySelectorAll( 'link[rel="preload"]' ).length
+			).toBe( 1 );
+			expect(
+				document.head.querySelector( 'link[data-wppo-lcp-preload]' )
+			).toBeNull();
+			expect( hero.getAttribute( 'loading' ) ).toBe( 'eager' );
+		} );
 	} );
 
 	describe( 'loadImages()', () => {

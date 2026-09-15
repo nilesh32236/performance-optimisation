@@ -251,6 +251,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+				'lcp_preload_candidate'     => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'get_lcp_preload_candidate' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
 				'autoloaded_options'        => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_autoloaded_options' ),
@@ -506,6 +512,130 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		}
 
 		/**
+		 * Retrieve the single LCP preload candidate for the settings UI.
+		 *
+		 * Surfaces the field-measured hero for one-click preload: the manual
+		 * per-post picker (`_wppo_lcp_preload_url`) wins when `post_id` names
+		 * a singular post, then sample-gated RUM field data
+		 * (`RUM::get_field_lcp_url()`), then Optimization Detective
+		 * (`OD_Bridge::get_lcp_url()`), then stored PageSpeed data
+		 * (`RUM::get_stored_pagespeed_lcp_url()`).
+		 * Optional GET params: `path` (page path, e.g.
+		 * `/about/`) and `post_id`. Fail-open: detection failure returns a
+		 * null candidate (never fatal), so the UI falls back to the manual
+		 * picker path. Multisite-safe: candidate lookups use
+		 * `Util::transient_key()` blog-aware keys.
+		 *
+		 * Note: the OD tier is current-request only and best-effort in admin
+		 * context — `OD_Bridge::get_lcp_url()` takes no URL argument and
+		 * resolves metrics for the current request (the admin REST URL when
+		 * called from this route), so it can rarely resolve the requested
+		 * page's hero. The `path` param is honoured by the RUM-field and
+		 * stored-PageSpeed tiers only.
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		public function get_lcp_preload_candidate( \WP_REST_Request $request ): \WP_REST_Response {
+			$params  = $request->get_params();
+			$path    = isset( $params['path'] ) && is_string( $params['path'] ) ? substr( trim( $params['path'] ), 0, 512 ) : null;
+			$post_id = isset( $params['post_id'] ) ? absint( $params['post_id'] ) : 0;
+			if ( is_string( $path ) && '' !== $path && '/' !== $path[0] ) {
+				$path = '/' . $path;
+			}
+
+			$candidate = null;
+			$source    = 'none';
+
+			// Manual per-post picker first (fallback path that works before auto-detect).
+			if ( $post_id > 0 && function_exists( 'get_post_meta' ) ) {
+				try {
+					$manual = get_post_meta( $post_id, '_wppo_lcp_preload_url', true );
+					if ( is_string( $manual ) && '' !== trim( $manual ) ) {
+						$sanitized = function_exists( 'esc_url_raw' ) ? esc_url_raw( trim( substr( $manual, 0, 2048 ) ) ) : trim( substr( $manual, 0, 2048 ) );
+						// esc_url_raw() refuses javascript:/data: URIs to an
+						// empty string, and non-image URLs must not surface as
+						// preload candidates (parity with the frontend
+						// pipeline's is_image_lcp_url() guard).
+						if ( '' !== $sanitized && $this->is_image_candidate_url( $sanitized ) ) {
+							$candidate = array(
+								'url'      => $sanitized,
+								'n'        => 0,
+								'lastSeen' => time(),
+							);
+							$source    = 'manual';
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			// RUM field data wins over lab guesses when it passes the sample gate.
+			// Field-only here: the stored-PageSpeed fallback lives in its own
+			// tier below so the Optimization Detective tier stays reachable
+			// (manual > RUM field > OD > stored PageSpeed).
+			if ( null === $candidate && class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_field_lcp_url' ) ) {
+				try {
+					$field = RUM::get_field_lcp_url( $path );
+					if ( is_array( $field ) && ! empty( $field['url'] ) && is_string( $field['url'] ) ) {
+						$candidate = $field;
+						$source    = 'rum';
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			// Optimization Detective real-visit hero. OD_Bridge::is_enabled()
+			// already applies the wppo_od_should_optimize filter with the
+			// correct current URL, so no separate filter pre-check here.
+			if ( null === $candidate && class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) && method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'get_lcp_url' ) ) {
+				try {
+					$od_available = class_exists( 'OD_URL_Metric' ) || function_exists( 'od_get_url_metrics' );
+					if ( $od_available && method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'is_enabled' ) && \PerformanceOptimise\Inc\OD_Bridge::is_enabled() ) {
+						$od_url = \PerformanceOptimise\Inc\OD_Bridge::get_lcp_url();
+						if ( is_string( $od_url ) && '' !== $od_url ) {
+							$candidate = array(
+								'url'      => $od_url,
+								'n'        => 0,
+								'lastSeen' => time(),
+							);
+							$source    = 'od';
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			// Stored PageSpeed candidate, last tier (fail-open to null candidate).
+			if ( null === $candidate && class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_stored_pagespeed_lcp_url' ) ) {
+				try {
+					$stored = RUM::get_stored_pagespeed_lcp_url( $path );
+					if ( is_string( $stored ) && '' !== $stored ) {
+						$candidate = array(
+							'url'      => $stored,
+							'n'        => 0,
+							'lastSeen' => time(),
+						);
+						$source    = 'pagespeed';
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			return $this->send_response(
+				array(
+					'candidate' => $candidate,
+					'source'    => $source,
+				)
+			);
+		}
+
+		/**
 		 * Resume the sitemap preload queue (re-schedule queued + failed URLs).
 		 *
 		 * @since NEXT
@@ -538,6 +668,64 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				200,
 				$rescheduled > 0 ? __( 'Preload queue resumed.', 'performance-optimisation' ) : __( 'Nothing to resume.', 'performance-optimisation' )
 			);
+		}
+
+		/**
+		 * Whether a candidate URL is a plausible LCP image (text-LCP guard).
+		 *
+		 * Mirrors the frontend pipeline's `is_image_lcp_url()` guard so the
+		 * settings UI never surfaces a `javascript:`/`data:`/non-image manual
+		 * picker value as a preload candidate: such URIs are refused, and the
+		 * URL must either map to a known image MIME type, carry an image file
+		 * extension, or (for extensionless image-CDN URLs) carry image-ish
+		 * query params. Fail-open: any failure returns false.
+		 *
+		 * @since NEXT
+		 * @param string $url The candidate URL.
+		 * @return bool True when the URL may be preloaded as an image.
+		 */
+		private function is_image_candidate_url( string $url ): bool {
+			try {
+				$url = trim( $url );
+				if ( '' === $url ) {
+					return false;
+				}
+				$lower = strtolower( ltrim( $url ) );
+				if ( str_starts_with( $lower, 'data:' ) || str_starts_with( $lower, 'blob:' ) || str_starts_with( $lower, 'javascript:' ) || str_starts_with( $lower, 'vbscript:' ) ) {
+					return false;
+				}
+				// Individually guarded: Util::get_image_mime_type() calls
+				// wp_parse_url() unguarded, so a missing WP shim (unit
+				// contexts) must fall through to the extension checks below
+				// instead of rejecting the candidate.
+				try {
+					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_image_mime_type' ) && '' !== Util::get_image_mime_type( $url ) ) {
+						return true;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				$path = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url, PHP_URL_PATH ) : parse_url( $url, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback only when wp_parse_url() is unavailable (unit contexts).
+				if ( is_string( $path ) && '' !== $path && 1 === preg_match( '/\.(jpe?g|png|gif|webp|avif|svg|heic|heif|jxl)$/i', $path ) ) {
+					return true;
+				}
+				$query = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url, PHP_URL_QUERY ) : parse_url( $url, PHP_URL_QUERY ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback only when wp_parse_url() is unavailable (unit contexts).
+				if ( is_string( $query ) && '' !== $query ) {
+					if ( 1 === preg_match( '/\.(jpe?g|png|gif|webp|avif|svg|heic|heif|jxl)/i', $query ) ) {
+						return true;
+					}
+					// Image-service keys only: generic keys (ssl, url, src,
+					// strip) also appear on non-image URLs and must not
+					// classify a page URL as a preloadable image.
+					if ( 1 === preg_match( '/(^|&)(w|h|width|height|format|fit|crop|resize|quality)(=|&|$)/i', $query ) ) {
+						return true;
+					}
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
 		}
 
 		/**

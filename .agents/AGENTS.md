@@ -34,7 +34,7 @@ npm run build           # wp-scripts build
 | `.distignore` | WordPress.org SVN exclusion rules |
 | `scripts/build-release.sh` | Builds release ZIP |
 | `includes/class-main.php` | Main orchestrator class (42 classes in `includes/`) |
-| `includes/class-rest.php` | 39 REST API endpoints (namespace `performance-optimisation/v1`, incl. `settings_snapshot` + `restore_settings` one-click undo, plus `sandbox_preview` + `sandbox_save` + `sandbox_promote` + `sandbox_discard` sandbox preview, plus `preload_status` + `preload_resume` preload progress) |
+| `includes/class-rest.php` | 40 REST API endpoints (namespace `performance-optimisation/v1`, incl. `settings_snapshot` + `restore_settings` one-click undo, plus `sandbox_preview` + `sandbox_save` + `sandbox_promote` + `sandbox_discard` sandbox preview, plus `preload_status` + `preload_resume` preload progress, plus `lcp_preload_candidate` LCP preload candidate) |
 | `includes/class-wppo-cli-command.php` | WP-CLI: 7 subcommands (`wp wppo: cache\|database\|image\|settings\|object-cache\|pagespeed\|system-info`) |
 
 ## Vendor Directory
