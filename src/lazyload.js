@@ -1408,16 +1408,50 @@ const restoreHeroImage = ( el ) => {
 };
 
 /**
+ * Normalize an image URL for LCP candidate matching.
+ *
+ * Mirrors the PHP `normalize_image_url()` pipeline: resolves relative URLs
+ * against the document base, drops the scheme and query string, lowercases
+ * the host, and strips WordPress generated size suffixes (-NNNxNNN,
+ * -scaled, -eNNN) so CDN rewrites, dimension-suffixed variants, and
+ * absolute-vs-relative forms of the same hero still match. Falls back to
+ * the trimmed raw value when parsing fails (fail-open, never fatal).
+ *
+ * @since NEXT
+ * @param {string} url The raw URL to normalize.
+ * @return {string} The normalized host + path, or an empty string.
+ */
+const normalizeLcpUrl = ( url ) => {
+	try {
+		const parsed = new URL( url, document.baseURI );
+		if ( ! parsed.pathname ) {
+			return '';
+		}
+		const path = parsed.pathname.replace(
+			/-(?:\d+x\d+|scaled|e\d+)(?=\.[A-Za-z0-9]+$)/,
+			''
+		);
+		return ( parsed.host || '' ).toLowerCase() + path;
+	} catch {
+		return ( url || '' ).trim();
+	}
+};
+
+/**
  * Prioritize the LCP candidate: emit a preload hint with fetchpriority high
  * and exclude the LCP image from lazy loading while preserving width/height.
  *
  * Resolution order: an explicit `candidateUrl` (the RUM/OD-measured hero
  * surfaced by the `lcp_preload_candidate` REST route) matched against
- * `src`/`data-src`, then the first hero image (`isHeroImage()`), then the
- * first image with a usable `src`/`data-src` as a last-resort fallback.
- * Detection failure emits nothing and leaves markup unoptimised (fail-open,
- * never fatal). Width/height attributes are never touched, so no CLS is
- * introduced; an explicit `fetchpriority="low"` is preserved.
+ * `src`/`data-src` (exact match first, then normalized-URL equality so
+ * absolute-vs-relative, CDN-rewritten, dimension-suffixed, or
+ * query-string variants still match), then the first hero image
+ * (`isHeroImage()`) when no explicit candidate was given. An explicit
+ * candidate that matches nothing fails open to no preload (a stale
+ * cross-page URL must never trigger a wrong-image download), and
+ * detection failure emits nothing and leaves markup unoptimised
+ * (fail-open, never fatal). Width/height attributes are never touched,
+ * so no CLS is introduced; an explicit `fetchpriority="low"` is preserved.
  *
  * @since NEXT
  * @param {string} [candidateUrl] Optional explicit LCP image URL.
@@ -1437,34 +1471,32 @@ const prioritize_lcp = ( candidateUrl ) => {
 		let target = null;
 
 		if ( normalizedCandidate ) {
+			const needle = normalizeLcpUrl( normalizedCandidate );
 			for ( const img of images ) {
 				const src = img.getAttribute( 'src' ) || '';
 				const dataSrc = img.getAttribute( 'data-src' ) || '';
 				if (
 					src === normalizedCandidate ||
-					dataSrc === normalizedCandidate
+					dataSrc === normalizedCandidate ||
+					( '' !== needle &&
+						( normalizeLcpUrl( src ) === needle ||
+							normalizeLcpUrl( dataSrc ) === needle ) )
 				) {
 					target = img;
 					break;
 				}
+			}
+			// Explicit miss: fail open with no preload instead of
+			// preloading an unrelated hero/first image (which would waste
+			// a full image download on the wrong asset and regress LCP).
+			if ( ! target ) {
+				return '';
 			}
 		}
 
 		if ( ! target ) {
 			for ( const img of images ) {
 				if ( isHeroImage( img ) ) {
-					target = img;
-					break;
-				}
-			}
-		}
-
-		if ( ! target ) {
-			for ( const img of images ) {
-				if (
-					img.getAttribute( 'src' ) ||
-					img.getAttribute( 'data-src' )
-				) {
 					target = img;
 					break;
 				}
@@ -1499,8 +1531,16 @@ const prioritize_lcp = ( candidateUrl ) => {
 				target.getAttribute( 'srcset' ) ||
 				target.getAttribute( 'data-srcset' ) ||
 				'';
-			if ( srcset && isSafeSrcsetValue( srcset ) ) {
+			// A responsive preload needs its slot width to pick the right
+			// variant: only emit imagesrcset together with imagesizes, and
+			// omit imagesrcset entirely when no sizes value is available.
+			const sizes =
+				target.getAttribute( 'sizes' ) ||
+				target.getAttribute( 'data-sizes' ) ||
+				'';
+			if ( srcset && sizes && isSafeSrcsetValue( srcset ) ) {
 				link.setAttribute( 'imagesrcset', srcset );
+				link.setAttribute( 'imagesizes', sizes );
 			}
 			document.head.appendChild( link );
 		}
@@ -2466,28 +2506,19 @@ const loadBackgrounds = () => {
 	elements.forEach( ( el ) => backgroundObserver.observe( el ) );
 };
 
-/**
- * Boot-time LCP fast path: only runs when PHP supplies a measured LCP URL
- * via module data. The no-argument heuristic inside `prioritize_lcp()` is
- * reserved for explicit callers (and tests) so default lazy behaviour is
- * unchanged when no candidate is known.
- */
-const maybePrioritizeLcpAtBoot = () => {
-	const candidate = moduleData.lcpUrl;
-	if ( typeof candidate === 'string' && candidate.trim() ) {
-		prioritize_lcp( candidate );
-	}
-};
+// Note: `prioritize_lcp()` stays an explicit-call API (via
+// `window.__wppoPrioritizeLcp`); there is no boot-time fast path because
+// PHP does not supply a measured LCP URL to this bundle (the server-side
+// pipeline already emits preload hints into the HTML), so auto-running a
+// heuristic here would risk preloading the wrong hero.
 
 if ( document.readyState === 'loading' ) {
 	document.addEventListener( 'DOMContentLoaded', () => {
-		maybePrioritizeLcpAtBoot();
 		loadImages();
 		loadBackgrounds();
 		initVideoPlaceholders();
 	} );
 } else {
-	maybePrioritizeLcpAtBoot();
 	loadImages();
 	loadBackgrounds();
 	initVideoPlaceholders();

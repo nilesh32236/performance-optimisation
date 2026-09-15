@@ -38,6 +38,17 @@ const DEFAULT_CLIENT_SIDE_MIME_TYPES = [
 ];
 
 /**
+ * Human-readable labels for LCP candidate sources. Unknown future sources
+ * fall back to the raw token at the render site.
+ */
+const lcpSourceLabels = {
+	manual: __( 'Manual pin', 'performance-optimisation' ),
+	rum: __( 'RUM field data', 'performance-optimisation' ),
+	od: __( 'Optimization Detective', 'performance-optimisation' ),
+	pagespeed: __( 'PageSpeed', 'performance-optimisation' ),
+};
+
+/**
  * Coerce the longest-edge cap to a non-negative integer.
  *
  * Mirrors the PHP sanitizer (2560 default, 0 disables): negatives,
@@ -253,7 +264,7 @@ const ImageOptimization = ( { options = {} } ) => {
 				notify( {
 					type: 'success',
 					message: __(
-						'LCP preload applied: the detected hero will preload with fetchpriority high and skip lazy loading.',
+						'LCP auto-preload and prioritization enabled: measured heroes will preload with fetchpriority high and skip lazy loading.',
 						'performance-optimisation'
 					),
 					durationMs: 5000,
@@ -461,7 +472,8 @@ const ImageOptimization = ( { options = {} } ) => {
 				{ lcpCandidateSource && (
 					<p className="wppo-text-muted wppo-text-small">
 						{ __( 'Source:', 'performance-optimisation' ) }{ ' ' }
-						{ lcpCandidateSource }
+						{ lcpSourceLabels[ lcpCandidateSource ] ||
+							lcpCandidateSource }
 					</p>
 				) }
 				<LoadingSubmitButton
@@ -476,7 +488,7 @@ const ImageOptimization = ( { options = {} } ) => {
 				/>
 				<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
 					{ __(
-						'One click enables LCP auto-preload and prioritization for this hero (preload with fetchpriority high, lazy exclusion with width and height preserved).',
+						'One click enables LCP auto-preload and prioritization so measured heroes preload with fetchpriority high and skip lazy loading (width and height preserved). This saves the whole Image Optimisation form, including any other unsaved changes above.',
 						'performance-optimisation'
 					) }
 				</p>

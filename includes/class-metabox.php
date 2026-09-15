@@ -405,15 +405,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 				return;
 			}
 
-			if ( ! isset( $_POST['wppo_preload_image_url'] ) ) {
-				return;
-			}
-
-			$preload_urls = sanitize_textarea_field( $this->get_raw_post_string( 'wppo_preload_image_url' ) );
-			update_post_meta( $post_id, '_wppo_preload_image_url', $preload_urls );
-
 			// Manual per-post LCP URL picker (fail-open single-URL fallback
-			// used before auto-detect in the preload pipeline).
+			// used before auto-detect in the preload pipeline). Saved
+			// independently of the preload-URLs textarea above so a request
+			// omitting one field still persists/deletes the other.
 			//
 			// @since NEXT.
 			if ( isset( $_POST['wppo_lcp_preload_url'] ) ) {
@@ -433,6 +428,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 					update_post_meta( $post_id, '_wppo_lcp_preload_url', $lcp_url );
 				}
 			}
+
+			if ( ! isset( $_POST['wppo_preload_image_url'] ) ) {
+				return;
+			}
+
+			$preload_urls = sanitize_textarea_field( $this->get_raw_post_string( 'wppo_preload_image_url' ) );
+			update_post_meta( $post_id, '_wppo_preload_image_url', $preload_urls );
 		}
 
 		/**

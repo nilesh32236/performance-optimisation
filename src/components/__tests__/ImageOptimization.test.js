@@ -300,6 +300,7 @@ describe( 'ImageOptimization Component', () => {
 				screen.getByText( 'https://example.com/hero.jpg' )
 			).toBeInTheDocument();
 		} );
+		expect( screen.getByText( /RUM field data/ ) ).toBeInTheDocument();
 		expect(
 			screen.getByRole( 'button', { name: /Preload this image/i } )
 		).toBeInTheDocument();
@@ -351,8 +352,78 @@ describe( 'ImageOptimization Component', () => {
 
 		await waitFor( () => {
 			expect(
-				screen.getByText( /LCP preload applied/i )
+				screen.getByText(
+					/LCP auto-preload and prioritization enabled/i
+				)
 			).toBeInTheDocument();
+		} );
+	} );
+
+	it( 'shows an error notice when the one-click LCP preload fails', async () => {
+		apiCall.mockImplementation( ( action ) => {
+			if ( 'lcp_preload_candidate' === action ) {
+				return Promise.resolve( {
+					success: true,
+					data: {
+						candidate: {
+							url: 'https://example.com/hero.jpg',
+							n: 25,
+							lastSeen: Date.now(),
+						},
+						source: 'rum',
+					},
+				} );
+			}
+			return Promise.resolve( { success: false } );
+		} );
+
+		render( <ImageOptimization /> );
+
+		const applyButton = await screen.findByRole( 'button', {
+			name: /Preload this image/i,
+		} );
+
+		await act( async () => {
+			fireEvent.click( applyButton );
+		} );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( /Could not apply the LCP preload/i )
+			).toBeInTheDocument();
+		} );
+	} );
+
+	it( 'shows an error notice when the one-click LCP preload rejects', async () => {
+		apiCall.mockImplementation( ( action ) => {
+			if ( 'lcp_preload_candidate' === action ) {
+				return Promise.resolve( {
+					success: true,
+					data: {
+						candidate: {
+							url: 'https://example.com/hero.jpg',
+							n: 25,
+							lastSeen: Date.now(),
+						},
+						source: 'rum',
+					},
+				} );
+			}
+			return Promise.reject( new Error( 'Network error' ) );
+		} );
+
+		render( <ImageOptimization /> );
+
+		const applyButton = await screen.findByRole( 'button', {
+			name: /Preload this image/i,
+		} );
+
+		await act( async () => {
+			fireEvent.click( applyButton );
+		} );
+
+		await waitFor( () => {
+			expect( screen.getByText( /Network error/i ) ).toBeInTheDocument();
 		} );
 	} );
 

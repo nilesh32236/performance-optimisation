@@ -459,6 +459,12 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 	public function test_get_lcp_preload_candidate_returns_manual_url_first(): void {
 		Functions\when( 'get_post_meta' )->justReturn( 'https://example.com/hero.jpg' );
 		Functions\when( 'esc_url_raw' )->returnArg();
+		// Order-independent: the manual image guard parses the URL, so pin
+		// wp_parse_url explicitly (a leaked stub from an earlier test in
+		// the same process could otherwise return null).
+		// phpcs:disable WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Test-only wp_parse_url stub.
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		// phpcs:enable WordPress.WP.AlternativeFunctions.parse_url_parse_url
 
 		$request  = new WP_REST_Request( array( 'post_id' => 123 ) );
 		$response = $this->rest->get_lcp_preload_candidate( $request );
@@ -466,6 +472,37 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 		$data = $response->get_data()['data'];
 		$this->assertSame( 'manual', $data['source'] );
 		$this->assertSame( 'https://example.com/hero.jpg', $data['candidate']['url'] );
+	}
+
+	/**
+	 * Test that a non-image manual picker value is rejected by the image
+	 * guard and fails open to a null candidate (never surfaced for preload).
+	 */
+	public function test_get_lcp_preload_candidate_rejects_non_image_manual_url(): void {
+		Functions\when( 'get_post_meta' )->justReturn( 'https://example.com/about/' );
+		Functions\when( 'get_option' )->justReturn( false );
+		Functions\when( 'get_transient' )->justReturn( false );
+		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'untrailingslashit' )->alias(
+			static function ( $url ) {
+				return is_string( $url ) ? rtrim( $url, '/' ) : $url;
+			}
+		);
+		// phpcs:disable WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Test-only wp_parse_url stub.
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		// phpcs:enable WordPress.WP.AlternativeFunctions.parse_url_parse_url
+
+		$request  = new WP_REST_Request(
+			array(
+				'post_id' => 123,
+				'path'    => '/no-data/',
+			)
+		);
+		$response = $this->rest->get_lcp_preload_candidate( $request );
+
+		$data = $response->get_data()['data'];
+		$this->assertNull( $data['candidate'] );
+		$this->assertSame( 'none', $data['source'] );
 	}
 
 	/**
