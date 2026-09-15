@@ -3046,6 +3046,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! function_exists( 'wp_script_modules' ) ) {
 				return;
 			}
+			if ( ! function_exists( 'wp_enqueue_script_module' ) ) {
+				return;
+			}
 			if ( ! class_exists( 'WP_Script_Modules' ) ) {
 				return;
 			}
@@ -3064,6 +3067,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( '' !== $raw ) {
 				$excluded = array_unique( array_merge( $excluded, Util::process_urls( $raw ) ) );
 			}
+			// Union the jQuery/commerce/builder preset explicitly: instances built
+			// without the setup_hooks() constructor path can miss the preset in
+			// $this->exclude_defer_js, but commerce/jQuery must stay excluded in
+			// both the classic and module paths. Fail-open append, multisite-safe,
+			// no option change.
+			//
+			// @since NEXT.
+			$excluded = array_unique( array_merge( $excluded, self::get_defer_js_preset_exclusions() ) );
 			if ( ! in_array( 'wppo-lazyload', $excluded, true ) ) {
 				$excluded[] = 'wppo-lazyload';
 			}
@@ -3377,7 +3388,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			foreach ( $wp_scripts->queue as $handle ) {
 				if ( ! in_array( $handle, $this->exclude_defer_js, true ) ) {
-					wp_script_add_data( $handle, 'strategy', 'defer' );
+					// Fill-gaps-only for the strategy itself (issue #1184): never
+					// overwrite an explicit async/defer strategy stamped by core,
+					// a theme, or another plugin — rewriting async to defer would
+					// change execution semantics. Core stores the strategy via
+					// wp_script_add_data( $handle, 'strategy', ... ), so read it
+					// back via WP_Scripts::get_data() (guarded; fail-open writes
+					// when the store is unreadable). Fetchpriority/in_footer below
+					// still apply to the already-deferred handle.
+					//
+					// @since NEXT.
+					$existing_strategy = method_exists( $wp_scripts, 'get_data' ) ? $wp_scripts->get_data( $handle, 'strategy' ) : false;
+					$has_strategy      = is_string( $existing_strategy ) && in_array( strtolower( trim( $existing_strategy ) ), array( 'async', 'defer' ), true );
+					if ( ! $has_strategy ) {
+						wp_script_add_data( $handle, 'strategy', 'defer' );
+					}
 					$this->deferred_handles[ $handle ] = true;
 					// Native fetchpriority on WP 6.9+ (Trac #61734); pre-6.9 is handled
 					// by the script_loader_tag regex fallback (add_fetchpriority_to_deferred).
@@ -3440,7 +3465,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						 * @param string $handle    Script handle.
 						 */
 						$in_footer = apply_filters( 'wppo_deferred_in_footer', true, $handle );
-						if ( $in_footer && 1 !== (int) $wp_scripts->get_data( $handle, 'group' ) ) {
+						$group     = method_exists( $wp_scripts, 'get_data' ) ? $wp_scripts->get_data( $handle, 'group' ) : false;
+						if ( $in_footer && 1 !== (int) $group ) {
 							wp_script_add_data( $handle, 'group', 1 );
 						}
 					}
