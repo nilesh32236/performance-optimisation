@@ -229,18 +229,17 @@ if ( ! function_exists( 'wppo_cleanup_redis_config_htaccess_block' ) ) {
 	 *
 	 * Object_Cache::protect_config_file() writes the block via
 	 * insert_with_markers(); passing empty rules removes it while leaving
-	 * every other block intact. Guarded with function_exists() so uninstall
-	 * never fatals when admin file functions are unavailable; missing marker
-	 * or file counts as success.
+	 * every other block intact. Attempts to load wp-admin/includes/misc.php
+	 * when insert_with_markers() is unavailable in the standalone uninstall
+	 * context, falling back to a native marker splice; skips when the file
+	 * does not exist so no new file is created. Missing marker or file
+	 * counts as success.
 	 *
 	 * @since NEXT
 	 * @return void
 	 */
 	function wppo_cleanup_redis_config_htaccess_block(): void {
 		try {
-			if ( ! function_exists( 'insert_with_markers' ) ) {
-				return;
-			}
 			if ( ! defined( 'WP_CONTENT_DIR' ) ) {
 				return;
 			}
@@ -255,8 +254,55 @@ if ( ! function_exists( 'wppo_cleanup_redis_config_htaccess_block' ) ) {
 			if ( function_exists( 'wp_normalize_path' ) ) {
 				$htaccess = wp_normalize_path( $htaccess );
 			}
-			insert_with_markers( $htaccess, $marker, array() );
+			// Missing file already means no orphan block — and some WP
+			// versions would create the file just to hold the empty marker.
+			if ( ! file_exists( $htaccess ) ) {
+				return;
+			}
+			// insert_with_markers() lives in wp-admin/includes/misc.php, which
+			// is not guaranteed loaded in the standalone uninstall context —
+			// attempt to load it before bailing so the orphan block is
+			// actually removed.
+			if ( ! function_exists( 'insert_with_markers' ) && defined( 'ABSPATH' ) ) {
+				$misc = ABSPATH . 'wp-admin/includes/misc.php';
+				if ( is_readable( $misc ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_readable
+					include_once $misc; // phpcs:ignore WPThemeReview.CoreFunctionality.FileInclude.FileIncludeFound
+				}
+			}
+			if ( function_exists( 'insert_with_markers' ) ) {
+				insert_with_markers( $htaccess, $marker, array() );
+			} elseif ( is_readable( $htaccess ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_readable
+				// Fallback native marker splice (mirrors
+				// wppo_remove_htaccess_rules()) when admin file functions
+				// stay unavailable.
+				$contents = file_get_contents( $htaccess ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+				if ( is_string( $contents ) ) {
+					$begin = '# BEGIN ' . $marker;
+					$end   = '# END ' . $marker;
+					$start = strpos( $contents, $begin );
+					$stop  = strpos( $contents, $end );
+					if ( false !== $start && false !== $stop && $stop > $start ) {
+						$line_end = strpos( $contents, "\n", $stop );
+						$head     = substr( $contents, 0, $start );
+						$tail     = false === $line_end ? '' : substr( $contents, $line_end + 1 );
+						if ( '' === trim( (string) $tail ) ) {
+							$new_contents = rtrim( (string) $head, "\r\n" );
+							if ( '' !== $new_contents ) {
+								$new_contents .= "\n";
+							}
+						} else {
+							$new_contents = rtrim( (string) $head, "\r\n" ) . "\n" . ltrim( (string) $tail, "\r\n" );
+						}
+						if ( is_writable( $htaccess ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_writable
+							file_put_contents( $htaccess, $new_contents, LOCK_EX ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+						}
+					}
+				}
+			}
 			if ( function_exists( 'wppo_cleanup_htaccess_artifacts' ) ) {
+				// Sweep wp-content/.htaccess backup/tmp siblings too: atomic
+				// writes of this same file may have left .wppo-bak /
+				// .wppo-tmp-* orphans even when the live block is gone.
 				wppo_cleanup_htaccess_artifacts( $htaccess );
 			}
 		} catch ( \Throwable $ignored ) {

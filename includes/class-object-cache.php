@@ -136,6 +136,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * class_exists() + method_exists() guards) and falls back to literal
 		 * WP_CONTENT_DIR-joined filenames when the class is not loadable.
 		 *
+		 * Canonical-only limitation: the live parked sibling derives from the
+		 * `wppo_object_cache_dropin_path`-filtered drop-in path, which is not
+		 * resolved here — filters are unavailable in the standalone uninstall
+		 * context, so a filtered install may leave its parked sibling behind.
+		 * Only the canonical WP_CONTENT_DIR/object-cache.php.wppo-disabled
+		 * path is returned.
+		 *
 		 * @since NEXT
 		 * @return string[] Absolute paths (empty when WP_CONTENT_DIR is undefined).
 		 */
