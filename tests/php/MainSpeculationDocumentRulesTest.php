@@ -201,7 +201,7 @@ class MainSpeculationDocumentRulesTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( array( 'http://example.com/' ), $eager_rules[0]['urls'] );
 	}
 
-		/**
+	/**
 	 * Commerce/auth contexts never emit eager rules (prefetch only).
 	 *
 	 * Both the singular home-link rule and the generic list rule degrade

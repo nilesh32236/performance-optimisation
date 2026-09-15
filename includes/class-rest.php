@@ -898,11 +898,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			if ( 'preload_settings' === $tab && ! array_key_exists( 'speculationTopUrlsLimit', $settings ) && isset( $options['preload_settings']['speculationTopUrlsLimit'] ) ) {
 				$stored = $options['preload_settings']['speculationTopUrlsLimit'];
 				$limit  = is_numeric( $stored ) ? (int) $stored : 2;
-				if ( function_exists( 'absint' ) ) {
-					$limit = absint( $limit );
-				} else {
-					$limit = abs( (int) $limit );
-				}
 				$sanitized_settings['speculationTopUrlsLimit'] = ( $limit >= 1 && $limit <= 5 ) ? $limit : 2;
 			}
 

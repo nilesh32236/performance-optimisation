@@ -5868,7 +5868,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					$mode      = 'prefetch';
 					$eagerness = 'conservative';
 				}
-				$eagerness           = $this->maybe_cap_speculation_eagerness( $eagerness );
+				$eagerness = $this->maybe_cap_speculation_eagerness( $eagerness );
+				// Commerce/auth guardrail (issue #1183): prerender executes
+				// page JavaScript even at moderate eagerness, so a commerce
+				// context degrades prerender to prefetch (prefetch only,
+				// never eager) rather than emitting prerender/moderate.
+				if ( 'prerender' === $mode && $this->is_speculation_commerce_or_auth() ) {
+					$mode = 'prefetch';
+				}
 				$config['mode']      = $mode;
 				$config['eagerness'] = $eagerness;
 				return $config;
@@ -5957,7 +5964,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 				if ( function_exists( 'is_user_logged_in' ) ) {
 					try {
-						if ( is_user_logged_in() ) {
+						// Frontend visitors only (mirrors
+						// AI_Adaptive::is_frontend_context()): admin/REST/cron/
+						// CLI/AJAX requests run with a logged-in admin present and
+						// never represent a visitor seeing speculation rules.
+						if ( $this->is_speculation_frontend_context() && is_user_logged_in() ) {
 							return true;
 						}
 					} catch ( \Throwable $e ) {
@@ -5971,6 +5982,64 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;
+			}
+		}
+
+		/**
+		 * Whether the current request looks like a frontend visitor visit.
+		 *
+		 * Mirrors `AI_Adaptive::is_frontend_context()` for the local
+		 * commerce/auth fallback: admin, REST, AJAX, cron, and CLI requests
+		 * never represent a visitor seeing speculation rules. All probes are
+		 * function_exists-guarded so unit tests and minimal installs default
+		 * to frontend (true). Fail-open: any throwable means frontend.
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when the request looks like a frontend visit.
+		 */
+		private function is_speculation_frontend_context(): bool {
+			try {
+				if ( defined( 'WP_CLI' ) && WP_CLI ) {
+					return false;
+				}
+				if ( defined( 'DOING_CRON' ) && DOING_CRON ) {
+					return false;
+				}
+				if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+					return false;
+				}
+				if ( function_exists( 'wp_doing_cron' ) ) {
+					try {
+						if ( wp_doing_cron() ) {
+							return false;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( function_exists( 'is_admin' ) ) {
+					try {
+						if ( is_admin() ) {
+							return false;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( function_exists( 'wp_doing_ajax' ) ) {
+					try {
+						if ( wp_doing_ajax() ) {
+							return false;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
 			}
 		}
 
@@ -6085,7 +6154,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * nothing".
 		 *
 		 * @since 2.0.0
-		 * @since NEXT Merge RUM-weighted model top URLs with a 2-URL fill cap.
+		 * @since NEXT Merge RUM-weighted model top URLs within the speculationTopUrlsLimit fill cap.
 		 *
 		 * @return string[] Validated absolute URLs (possibly empty).
 		 */
