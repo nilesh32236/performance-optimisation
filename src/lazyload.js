@@ -1495,7 +1495,7 @@ const prepareOneNativePlaceholder = ( img ) => {
 		img.removeEventListener( 'load', onLoad );
 		done();
 	};
-	if ( img.complete && img.naturalWidth > 0 ) {
+	if ( img.complete ) {
 		done();
 	} else {
 		img.addEventListener( 'load', onLoad, { once: true } );

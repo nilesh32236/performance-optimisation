@@ -1070,6 +1070,31 @@ describe( 'Lazy Load (lazyload.js)', () => {
 			);
 		} );
 
+		it( 'clears the placeholder for already-complete broken images', () => {
+			document.body.innerHTML =
+				'<img loading="lazy" src="cached-broken.jpg" data-wppo-lqip="1">';
+			const img = document.querySelector( 'img' );
+			// Simulate a cached 404: complete but never decoded.
+			Object.defineProperty( img, 'complete', {
+				value: true,
+				configurable: true,
+			} );
+			Object.defineProperty( img, 'naturalWidth', {
+				value: 0,
+				configurable: true,
+			} );
+
+			bootWithNativeImages();
+
+			// No load/error event will ever fire again, so the placeholder
+			// must already be settled.
+			expect( img.classList.contains( 'wppo-lqip-active' ) ).toBe(
+				false
+			);
+			expect( img.classList.contains( 'wppo-lqip-loaded' ) ).toBe( true );
+			expect( img.hasAttribute( 'data-wppo-lqip' ) ).toBe( false );
+		} );
+
 		it( 'prepares natively-lazy images injected after boot', async () => {
 			bootWithNativeImages();
 
