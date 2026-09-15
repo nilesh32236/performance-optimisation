@@ -1993,10 +1993,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return self::is_safe_stylesheet_url( $import_url ) ? $import_url : '';
 			}
 
-			// If protocol-relative, prepend the base scheme.
+			// If protocol-relative, prepend the base scheme and re-gate
+			// through the SSRF allowlist so `//169.254.169.254/x.css`
+			// cannot bypass the absolute-URL check above (issue #1181).
+			// The fetch layer validates again before requesting.
 			if ( 0 === strpos( $import_url, '//' ) ) {
-				$scheme = wp_parse_url( $base_url, PHP_URL_SCHEME );
-				return $scheme ? $scheme . ':' . $import_url : 'https:' . $import_url;
+				$scheme   = wp_parse_url( $base_url, PHP_URL_SCHEME );
+				$resolved = $scheme ? $scheme . ':' . $import_url : 'https:' . $import_url;
+				return self::is_safe_stylesheet_url( $resolved ) ? $resolved : '';
 			}
 
 			// Resolve relative URL against the base URL's directory.
@@ -2127,7 +2131,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// legacy IE behavior vector. Without the lookbehind, any
 			// stylesheet using `scroll-behavior: smooth` failed this gate
 			// closed, which silently disabled critical CSS site-wide.
-			return (bool) preg_match( '/<\/style|<script|<!--|-->|expression\s*\(|javascript\s*:|vbscript\s*:|(?<![-\w])behaviou?r(?=\s*:)|-moz-binding|&(lt|gt|amp|quot|#\d+|#x[0-9a-f]+);?/i', $decoded );
+			return (bool) preg_match( '/<\/style|<script|<!--|-->|expression\s*\(|javascript\s*:|vbscript\s*:|file\s*:|expect\s*:|data\s*:\s*image\/svg|data\s*:\s*text\/html|(?<![-\w])behaviou?r(?=\s*:)|-moz-binding|&(lt|gt|amp|quot|#\d+|#x[0-9a-f]+);?/i', $decoded );
 		}
 
 		/**
@@ -2163,7 +2167,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				// A callback builds the replacement so the backslash is never
 				// parsed as a PCRE backreference.
 				$css = (string) preg_replace_callback(
-					'/expression\s*\(|javascript\s*:|vbscript\s*:/i',
+					'/expression\s*\(|javascript\s*:|vbscript\s*:|file\s*:|expect\s*:/i',
+					static function ( array $matches ): string {
+						$token = $matches[0];
+						return substr( $token, 0, -1 ) . '\\' . substr( $token, -1 );
+					},
+					$css
+				);
+				// Neutralize script-capable data: URLs inside url() so a
+				// poisoned stylesheet cannot smuggle `url(data:image/svg…)`
+				// or `url(data:text/html…)` past the scheme break above
+				// (issue #1181). A callback emits the backslash literally.
+				$css = (string) preg_replace_callback(
+					'/data\s*:\s*image\/svg|data\s*:\s*text\/html/i',
 					static function ( array $matches ): string {
 						$token = $matches[0];
 						return substr( $token, 0, -1 ) . '\\' . substr( $token, -1 );
@@ -2631,7 +2647,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// Reject generated CSS that could break out of the <style> context when
 			// inlined — a poisoned source stylesheet must never reach the CCSS cache.
 			// Fail closed: drop the block instead of caching raw input.
+			// Fail-open rendering: the page serves unoptimised markup, never fatal.
 			if ( false === $critical_css || self::contains_unsafe_css_tokens( $critical_css ) ) {
+				self::set_status_cache( $template_hash, 'failed', DAY_IN_SECONDS );
+				return false;
+			}
+			// Defense-in-depth (issue #1181): sanitize before caching so the
+			// stored file itself carries no breakout tokens even if the gate
+			// above missed a novel vector; output is sanitized again in
+			// inline_ccss(). An empty result fails closed like a gate hit.
+			$critical_css = self::sanitize_inline_css( $critical_css );
+			if ( '' === trim( $critical_css ) || self::contains_unsafe_css_tokens( $critical_css ) ) {
 				self::set_status_cache( $template_hash, 'failed', DAY_IN_SECONDS );
 				return false;
 			}
