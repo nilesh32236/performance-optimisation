@@ -456,6 +456,22 @@ add_filter( 'wppo_exclude_minification', function( $exclude, $file_path, $handle
 
 ---
 
+### `wppo_minify_allowed_roots`
+Filters the allow-listed filesystem roots for minify/combine file serving (issue #1179). Every combine source path is canonicalized with `realpath()` and must resolve inside one of these roots (trailing-slash boundary) before any file bytes are read; out-of-root, symlink-escaped, wrapper-based, NUL-bearing, `..`-bearing, and `.php` targets are rejected and the asset degrades to its uncombined form. Guarded by `has_filter()` — the filter only runs when a listener is present; invalid or empty filtered values fall back to the defaults. @since NEXT.
+
+**Parameters:**
+- `$roots` *(string[])* — Allowed root paths. Defaults: `ABSPATH`, `WP_CONTENT_DIR`, and the current site's uploads basedir (multisite-safe, resolves per blog).
+
+**Example:**
+```php
+add_filter( 'wppo_minify_allowed_roots', function( $roots ) {
+    $roots[] = '/srv/shared-assets';
+    return $roots;
+} );
+```
+
+---
+
 ### `wppo_allow_hidden_block_asset`
 Filters whether a hidden core block asset should be kept instead of omitted (issue #1147). On singular frontend views, `Main::omit_hidden_block_assets()` dequeues per-block `wp-block-*` stylesheets whose block type is absent from the current post content (hidden by default); return a truthy value to re-enable the asset for that block. The filter is only applied when a listener is registered (`has_filter()` guard). The omission pass only runs when on-demand block assets are enabled (`blockAssetsOnDemand` on, `loadAllCoreBlockAssets` off), only on singular views (archives and other composite views are never touched), only for handles verifiably registered as core block styles, and never when WordPress 6.9+ core block-asset hoisting owns the output via the template-enhancement buffer — in that case this filter does not run. The pass additionally bails out entirely when the post content references out-of-content block sources (reusable blocks, patterns, template parts, shortcodes), and keeps every asset when singular cannot be verified. A throwing listener fails open (the asset is kept). @since NEXT.
 

@@ -70,17 +70,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\JS' ) ) {
 		 * @since 1.0.0
 		 */
 		public function __construct( $file_path, $cache_dir ) {
-			$real_path   = realpath( $file_path );
-			$content_dir = wp_normalize_path( defined( 'WP_CONTENT_DIR' ) ? WP_CONTENT_DIR : '' );
-			if ( false === $real_path ) {
-				$this->file_path = '';
+			// Traversal-safe by construction (issue #1179): the shared
+			// Util::validate_minify_path() gate rejects ../, NUL bytes,
+			// stream wrappers, and .php targets, resolves symlinks via
+			// realpath(), and requires containment in an allow-listed root
+			// (ABSPATH, WP_CONTENT_DIR, uploads dir) after resolution.
+			// Fail-closed to '' so minify() degrades to uncombined output.
+			if ( method_exists( 'PerformanceOptimise\Inc\Util', 'validate_minify_path' ) ) {
+				$this->file_path = Util::validate_minify_path( $file_path );
 			} else {
-				$real_path_normalized = wp_normalize_path( $real_path );
-				$is_inside            = ( '' !== $content_dir && 0 === strpos( $real_path_normalized, $content_dir ) && ( strlen( $real_path_normalized ) === strlen( $content_dir ) || '/' === substr( $real_path_normalized, strlen( $content_dir ), 1 ) ) );
-				if ( ! $is_inside ) {
+				$real_path   = function_exists( 'realpath' ) ? realpath( $file_path ) : $file_path;
+				$content_dir = wp_normalize_path( defined( 'WP_CONTENT_DIR' ) ? WP_CONTENT_DIR : '' );
+				if ( false === $real_path || ! is_string( $real_path ) ) {
 					$this->file_path = '';
 				} else {
-					$this->file_path = $real_path;
+					$real_path_normalized = wp_normalize_path( $real_path );
+					$is_inside            = ( '' !== $content_dir && 0 === strpos( $real_path_normalized, $content_dir ) && ( strlen( $real_path_normalized ) === strlen( $content_dir ) || '/' === substr( $real_path_normalized, strlen( $content_dir ), 1 ) ) );
+					if ( ! $is_inside ) {
+						$this->file_path = '';
+					} else {
+						$this->file_path = $real_path;
+					}
 				}
 			}
 			$this->cache_dir        = $cache_dir;
