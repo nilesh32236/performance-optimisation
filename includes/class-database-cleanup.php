@@ -695,17 +695,83 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Autoload values that count as "autoloaded" for the options audit.
 		 *
-		 * Uses the core API when available (WP 6.6+ introduced the `auto-on`
-		 * value) and falls back to the full historical list otherwise.
+		 * Mirrors Site Health / Performance Lab: on WP 6.6+ the core API
+		 * (`wp_autoload_values_to_autoload()`) defines the set (`yes`, `on`,
+		 * `auto`, `auto-on`); on older cores only `yes` counts (yes/no
+		 * legacy values). All 6.6 behavior is gated on `version_compare()`
+		 * plus `function_exists()` so WP 6.2-6.5 uses the legacy path.
 		 *
 		 * @since 2.0.0
 		 * @return string[]
 		 */
 		public static function get_autoloadable_values(): array {
-			if ( function_exists( 'wp_autoload_values_to_autoload' ) ) {
+			if ( function_exists( 'wp_autoload_values_to_autoload' ) && self::is_wp_version_at_least( '6.6' ) ) {
 				return (array) wp_autoload_values_to_autoload();
 			}
+			// Known pre-6.6 core: only `yes` counts (yes/no legacy values).
+			if ( function_exists( 'get_bloginfo' ) && ! self::is_wp_version_at_least( '6.6' ) ) {
+				try {
+					$current = (string) get_bloginfo( 'version' );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$current = '';
+				}
+				if ( '' !== $current ) {
+					return array( 'yes' );
+				}
+			}
+			// Version unknown (or modern core without the helper, e.g. unit
+			// tests): fail open to the full 6.6 list for Site Health parity.
 			return array( 'yes', 'on', 'auto', 'auto-on' );
+		}
+
+		/**
+		 * Whether the running WordPress version is at least the given version.
+		 *
+		 * Guarded helper for 6.6 Options-API gating: returns false when the
+		 * version cannot be determined so callers fail open to legacy paths.
+		 *
+		 * @since NEXT
+		 * @param string $version Minimum version (e.g. '6.6').
+		 * @return bool
+		 */
+		public static function is_wp_version_at_least( string $version ): bool {
+			if ( ! function_exists( 'get_bloginfo' ) ) {
+				return false;
+			}
+			try {
+				$current = (string) get_bloginfo( 'version' );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+			if ( '' === $current ) {
+				return false;
+			}
+			return (bool) version_compare( $current, $version, '>=' );
+		}
+
+		/**
+		 * Default autoload value for newly created options.
+		 *
+		 * Guarded wrapper around the 6.6 `wp_default_autoload_value()` helper
+		 * (see https://developer.wordpress.org/reference/functions/wp_default_autoload_value/).
+		 * Falls back to `'yes'` on older cores without the function.
+		 *
+		 * @since NEXT
+		 * @return string
+		 */
+		public static function get_default_autoload_value(): string {
+			if ( function_exists( 'wp_default_autoload_value' ) && self::is_wp_version_at_least( '6.6' ) ) {
+				try {
+					$value = (string) wp_default_autoload_value();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return 'yes';
+				}
+				return '' !== $value ? $value : 'yes';
+			}
+			return 'yes';
 		}
 
 		/**
@@ -972,6 +1038,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Get the total bytes currently held by autoloaded options.
 		 *
+		 * Uses {@see get_autoloadable_values()} so the total matches Site
+		 * Health within rounding (same WHERE predicate as core).
+		 *
 		 * @since 2.0.0
 		 * @return int Total bytes, or 0 on error.
 		 */
@@ -987,6 +1056,38 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				)
 			);
 			return null === $total ? 0 : (int) $total;
+		}
+
+		/**
+		 * Get the number of currently autoloaded options.
+		 *
+		 * Shares the {@see get_autoloadable_values()} predicate with
+		 * {@see get_autoload_total_bytes()} and {@see get_autoloaded_options()}
+		 * so all three agree with each other and with Site Health.
+		 *
+		 * @since NEXT
+		 * @return int Count, or 0 on error.
+		 */
+		public static function get_autoload_count(): int {
+			global $wpdb;
+			if ( ! isset( $wpdb->options ) ) {
+				return 0;
+			}
+			$autoload_values = self::get_autoloadable_values();
+			$placeholders    = implode( ',', array_fill( 0, count( $autoload_values ), '%s' ) );
+			try {
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Read-only diagnostic query.
+				$count = $wpdb->get_var(
+					$wpdb->prepare(
+						"SELECT COUNT(*) FROM {$wpdb->options} WHERE autoload IN ($placeholders)", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+						...$autoload_values
+					)
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
+			}
+			return null === $count ? 0 : (int) $count;
 		}
 
 		/**
@@ -1077,17 +1178,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Build a dry-run remediation report without changing anything.
 		 *
+		 * Includes a `backup` export payload (ordered `option_name`/`size`/`prior`
+		 * triples) so a dry_run response can be archived before `apply` and
+		 * later verified against `revert_all` for byte-identical restore.
+		 *
 		 * @since 2.0.0
 		 * @param int|null $threshold Optional threshold override (bytes).
 		 * @param int      $limit     Maximum number of candidates.
-		 * @return array{threshold:int,supported:bool,total_autoload_bytes:int,count:int,bytes_saved:int,options:array}
+		 * @return array{threshold:int,supported:bool,total_autoload_bytes:int,count:int,bytes_saved:int,options:array,backup:array}
 		 */
 		public static function plan_autoload_remediation( ?int $threshold = null, int $limit = self::AUTOLOAD_REMEDIATION_LIMIT ): array {
 			$threshold  = null === $threshold ? self::get_autoload_remediation_threshold() : self::clamp_autoload_threshold( $threshold );
 			$candidates = self::get_autoload_candidates( $threshold, $limit );
 			$saved      = 0;
+			$backup     = array();
 			foreach ( $candidates as $candidate ) {
-				$saved += (int) $candidate['size'];
+				$saved   += (int) $candidate['size'];
+				$backup[] = array(
+					'option_name' => (string) $candidate['option_name'],
+					'size'        => (int) $candidate['size'],
+					'prior'       => '' !== (string) ( $candidate['autoload'] ?? '' ) ? (string) $candidate['autoload'] : self::get_default_autoload_value(),
+				);
 			}
 			return array(
 				'threshold'            => $threshold,
@@ -1096,6 +1207,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				'count'                => count( $candidates ),
 				'bytes_saved'          => $saved,
 				'options'              => $candidates,
+				'backup'               => $backup,
 			);
 		}
 
@@ -1221,7 +1333,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * @since 2.0.0
 		 * @param int|null $threshold Optional threshold override (bytes).
 		 * @param int      $limit     Maximum number of options to flip.
-		 * @return array{threshold:int,supported:bool,applied:array,failed:array,bytes_saved:int,total_autoload_bytes:int}
+		 * @return array{threshold:int,supported:bool,applied:array,failed:array,bytes_saved:int,total_autoload_bytes:int,backup:array}
 		 */
 		public static function remediate_autoload( ?int $threshold = null, int $limit = self::AUTOLOAD_REMEDIATION_LIMIT ): array {
 			$threshold = null === $threshold ? self::get_autoload_remediation_threshold() : self::clamp_autoload_threshold( $threshold );
@@ -1233,6 +1345,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				'failed'               => array(),
 				'bytes_saved'          => 0,
 				'total_autoload_bytes' => self::get_autoload_total_bytes(),
+				'backup'               => array(),
 			);
 
 			$candidates = self::get_autoload_candidates( $threshold, $limit );
@@ -1240,12 +1353,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				return $result;
 			}
 
-			$legacy_fallback = ! function_exists( 'wp_set_option_autoload' );
+			$legacy_fallback = ! function_exists( 'wp_set_option_autoload' ) || ! self::is_wp_version_at_least( '6.6' );
 			if ( $legacy_fallback ) {
 				// Legacy fallback keeps autoload yes: report candidates as failed
 				// (unsupported) without touching anything.
 				foreach ( $candidates as $candidate ) {
 					$result['failed'][] = $candidate['option_name'];
+					$result['backup'][] = array(
+						'option_name' => (string) $candidate['option_name'],
+						'size'        => (int) $candidate['size'],
+						'prior'       => '' !== (string) ( $candidate['autoload'] ?? '' ) ? (string) $candidate['autoload'] : self::get_default_autoload_value(),
+					);
 				}
 				return $result;
 			}
@@ -1261,7 +1379,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					$result['failed'][] = $name;
 					continue;
 				}
-				$prior = '' !== $candidate['autoload'] ? $candidate['autoload'] : 'yes';
+				$prior = '' !== (string) ( $candidate['autoload'] ?? '' ) ? (string) $candidate['autoload'] : self::get_default_autoload_value();
 				if ( self::set_option_autoload_off( $name ) ) {
 					$priors[ $name ]     = $prior;
 					$result['applied'][] = array(
@@ -1281,6 +1399,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			}
 			$result['bytes_saved']          = $saved;
 			$result['total_autoload_bytes'] = self::get_autoload_total_bytes();
+			$result['backup']               = $result['applied'];
 
 			if ( ! empty( $result['applied'] ) ) {
 				Log::add(
@@ -1332,18 +1451,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * Revert all remediated options to their prior autoload values.
 		 *
 		 * Fail-open per option: failures are collected and reported while
-		 * successful reverts are still persisted.
+		 * successful reverts are still persisted. Each option is restored to
+		 * its exact stored prior string (byte-identical), not just bool
+		 * autoload-on semantics — see {@see restore_option_autoload()}.
 		 *
 		 * @since 2.0.0
-		 * @return array{reverted:string[],failed:string[]}
+		 * @return array{reverted:string[],failed:string[],restored:array,total_autoload_bytes:int}
 		 */
 		public static function revert_autoload_all(): array {
 			$priors   = self::get_remediated_options();
 			$reverted = array();
 			$failed   = array();
+			$restored = array();
 			foreach ( $priors as $name => $prior ) {
 				if ( self::restore_option_autoload( (string) $name, (string) $prior ) ) {
 					$reverted[] = (string) $name;
+					$restored[] = array(
+						'option_name' => (string) $name,
+						'prior'       => (string) $prior,
+					);
 				} else {
 					$failed[] = (string) $name;
 				}
@@ -1363,8 +1489,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				);
 			}
 			return array(
-				'reverted' => $reverted,
-				'failed'   => $failed,
+				'reverted'             => $reverted,
+				'failed'               => $failed,
+				'restored'             => $restored,
+				'total_autoload_bytes' => self::get_autoload_total_bytes(),
 			);
 		}
 

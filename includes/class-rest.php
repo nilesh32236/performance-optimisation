@@ -305,13 +305,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		}
 
 		/**
-		 * Handle one-click autoload-bloat remediation (dry run, apply, revert).
+		 * Handle one-click autoload-bloat remediation (dry run, apply, revert, revert_all).
 		 *
 		 * POST param `mode` controls the operation:
-		 * - `dry_run` (default): report candidates + bytes saved, changes nothing.
-		 * - `apply`: flip non-core options above the threshold to autoload off.
+		 * - `dry_run` (default): report candidates + bytes saved + backup export, changes nothing.
+		 * - `apply`: flip non-core options above the threshold to autoload off; response includes the backup export.
 		 * - `revert`: restore one option (`option` param) to its prior value.
-		 * - `revert_all`: restore every remediated option.
+		 * - `revert_all`: restore every remediated option to its exact prior
+		 *   value (byte-identical); response includes restored details + total.
 		 *
 		 * Optional params: `threshold` (bytes, 100..10MB), `limit` (1..500).
 		 *
