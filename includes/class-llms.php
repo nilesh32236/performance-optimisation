@@ -194,10 +194,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 
 			$raw_if_none_match = isset( $_SERVER['HTTP_IF_NONE_MATCH'] ) && is_string( $_SERVER['HTTP_IF_NONE_MATCH'] ) ? wp_unslash( $_SERVER['HTTP_IF_NONE_MATCH'] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 			$if_none_match     = '' !== $raw_if_none_match ? sanitize_text_field( $raw_if_none_match ) : '';
-			if ( '' !== $if_none_match && ( $if_none_match === $etag || 'W/' . $etag === $if_none_match ) ) {
-				status_header( 304 );
-				header( 'ETag: ' . $etag );
-				exit;
+			if ( '' !== $if_none_match ) {
+				$trimmed = trim( $if_none_match );
+				if ( '*' === $trimmed ) {
+					status_header( 304 );
+					header( 'ETag: ' . $etag );
+					exit;
+				}
+				$candidates = array_map( 'trim', explode( ',', $if_none_match ) );
+				foreach ( $candidates as $candidate ) {
+					// Strip weak validator prefix per RFC 7232 before comparing.
+					if ( 0 === strpos( $candidate, 'W/' ) ) {
+						$candidate = substr( $candidate, 2 );
+					}
+					$candidate = trim( $candidate );
+					if ( $candidate === $etag ) {
+						status_header( 304 );
+						header( 'ETag: ' . $etag );
+						exit;
+					}
+				}
 			}
 
 			status_header( 200 );

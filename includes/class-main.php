@@ -76,7 +76,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Default delay strategy: 'interaction', 'idle', or 'viewport'.
 		 *
 		 * @var   string
-		 * @since NEXT
+		 * @since 2.0.0
 		 */
 		private string $delay_js_default_strategy = 'interaction';
 
@@ -662,18 +662,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// file loads only when its class is still undeclared (no autoload
 			// trigger), so the classmap stays authoritative when healthy.
 			// Best-effort: covers the classes most likely needed outside the
-			// classmap; Composer remains the authoritative loader.
+			// classmap; Composer remains the authoritative loader. Classes
+			// already required unconditionally above (Server_Rules,
+			// Header_Emitter, LiteSpeed_Integration, LiteSpeed_Crawler,
+			// LiteSpeed_ESI, Llms, OD_Bridge, Bfcache, AI_Adaptive, Edge_Cache,
+			// Edge_Purger, CDN, Builder_Purge_Watcher) are intentionally omitted
+			// here to avoid duplicate file_exists() probes on the hot path.
 			$fallback_classes = array(
 				'Abilities'              => 'class-abilities.php',
 				'Activate'               => 'class-activate.php',
 				'Admin_Notices'          => 'class-admin-notices.php',
 				'Advanced_Cache_Handler' => 'class-advanced-cache-handler.php',
-				'AI_Adaptive'            => 'class-ai-adaptive.php',
 				'Asset_Manager'          => 'class-asset-manager.php',
-				'Bfcache'                => 'class-bfcache.php',
-				'Builder_Purge_Watcher'  => 'class-builder-purge-watcher.php',
 				'Cache'                  => 'class-cache.php',
-				'CDN'                    => 'class-cdn.php',
 				'CDN_Purger'             => 'class-cdn-purger.php',
 				'Cloudflare_Purger'      => 'class-cloudflare-purger.php',
 				'Core_Tweaks'            => 'class-core-tweaks.php',
@@ -681,25 +682,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'Cron'                   => 'class-cron.php',
 				'Database_Cleanup'       => 'class-database-cleanup.php',
 				'Deactivate'             => 'class-deactivate.php',
-				'Edge_Cache'             => 'class-edge-cache.php',
-				'Edge_Purger'            => 'class-edge-purger.php',
 				'Google_Fonts'           => 'class-google-fonts.php',
-				'Header_Emitter'         => 'class-header-emitter.php',
 				'Htaccess_Handler'       => 'class-htaccess-handler.php',
 				'Image_Optimisation'     => 'class-image-optimisation.php',
 				'Img_Converter'          => 'class-img-converter.php',
-				'LiteSpeed_Crawler'      => 'class-litespeed-crawler.php',
-				'LiteSpeed_ESI'          => 'class-litespeed-esi.php',
-				'LiteSpeed_Integration'  => 'class-litespeed-integration.php',
-				'Llms'                   => 'class-llms.php',
 				'Log'                    => 'class-log.php',
 				'Metabox'                => 'class-metabox.php',
 				'Object_Cache'           => 'class-object-cache.php',
-				'OD_Bridge'              => 'class-od-bridge.php',
 				'Pagespeed'              => 'class-pagespeed.php',
 				'Rest'                   => 'class-rest.php',
 				'RUM'                    => 'class-rum.php',
-				'Server_Rules'           => 'class-server-rules.php',
 				'Suggestion_Engine'      => 'class-suggestion-engine.php',
 				'System_Info'            => 'class-system-info.php',
 				'Telemetry'              => 'class-telemetry.php',
@@ -721,7 +713,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( file_exists( $cli_file ) ) {
 					require_once $cli_file;
 				}
-				if ( class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
+				if ( class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command', false ) ) {
 					\WP_CLI::add_command( 'wppo', 'PerformanceOptimise\Inc\WPPO_CLI_Command' );
 				}
 			}

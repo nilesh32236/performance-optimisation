@@ -46,6 +46,14 @@ class UsedCssStripCommentsTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Single-quoted strings are preserved too (content:'/* ... *\/').
+	 */
+	public function test_preserves_comment_markers_inside_single_quoted_strings(): void {
+		$css = ".x{content:'/* not a comment */';}";
+		$this->assertSame( $css, $this->strip( $css ) );
+	}
+
+	/**
 	 * Escaped quotes inside strings do not end the string early.
 	 */
 	public function test_handles_escaped_quotes(): void {

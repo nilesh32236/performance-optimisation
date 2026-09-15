@@ -105,7 +105,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 *
 		 * Single guard for every Header_Emitter call site below: the ESI
 		 * bridge can run on admin-ajax/early hooks where the emitter file
-		 * may not be loaded yet, so header emission must fail open.
+		 * may not be loaded yet, so header emission must fail closed.
 		 *
 		 * @since NEXT
 		 * @return bool True when Header_Emitter can be called safely.
@@ -133,8 +133,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			if ( function_exists( 'headers_sent' ) && headers_sent() ) {
 				return;
 			}
-			header( 'Cache-Control: private, no-cache, no-store' );
-			header( 'X-LiteSpeed-Cache-Control: private, no-vary' );
+			header( 'Cache-Control: private,no-cache' );
+			header( 'X-LiteSpeed-Cache-Control: private,no-vary' );
 		}
 
 		/**
@@ -1093,12 +1093,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			if ( '' === $action ) {
 				return;
 			}
-			// Tag ESI nonce for purge: ESI. + W.{id} pattern.
+			// Tag ESI nonce for purge: ESI. + W.{id} pattern. The purge queue
+			// above is authoritative; the response tag header below is
+			// best-effort observability, mirrored via direct header() when the
+			// emitter is unavailable (fail-closed, like the privacy paths).
 			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				LiteSpeed_Integration::queue_purge_tags( array( 'ESI.' . $action, 'W.' . md5( $action ) ), 'private' );
 			}
 			if ( self::has_header_emitter() ) {
 				Header_Emitter::emit_esi_tag( $action );
+			} elseif ( function_exists( 'headers_sent' ) && ! headers_sent() ) {
+				$cleaned = preg_replace( '/[\x00-\x1F\x7F]/', '', $action );
+				$safe    = substr( is_string( $cleaned ) ? $cleaned : $action, 0, 1024 );
+				header( 'X-LiteSpeed-Tag: ESI.' . $safe, false );
 			}
 		}
 

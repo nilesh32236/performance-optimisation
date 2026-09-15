@@ -71,12 +71,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 			global $wpdb;
 
 			if ( ! is_string( $activity ) ) {
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG && function_exists( '_doing_it_wrong' ) ) {
+					_doing_it_wrong( __METHOD__, esc_html__( 'Log::add() expects a string activity description; non-string values are ignored.', 'performance-optimisation' ), '2.0.0' );
+				}
 				return;
 			}
 			if ( function_exists( 'mb_substr' ) ) {
-				$activity = mb_substr( $activity, 0, 1000, 'UTF-8' );
+				$activity = mb_substr( $activity, 0, 255, 'UTF-8' );
 			} else {
-				$activity = substr( $activity, 0, 1000 );
+				$activity = substr( $activity, 0, 255 );
 			}
 
 			$table_name = $wpdb->prefix . 'wppo_activity_logs';
