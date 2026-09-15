@@ -49,3 +49,7 @@
 ## 2024-06-03 - Replacing Hardcoded Text Colors Properly
 **Learning:** When replacing hardcoded text colors like `#fff` in SCSS to ensure compatibility with WordPress themes (especially potential dark modes), using a background variable like `--wppo-bg-card` for a text `color` property is semantically incorrect and creates accessibility contrast failures.
 **Action:** Always map white-on-brand text to var(--wppo-text-sidebar-active, #fff) and never use background tokens (e.g. --wppo-bg-card) for the `color` property.
+
+## 2024-10-24 - Accessible descriptions for action buttons
+**Learning:** Found action buttons (like Load Activity Log) lacking explicit `aria-describedby` associations with their preceding descriptive text, causing context loss for screen readers.
+**Action:** Always link action buttons to accompanying helper text by giving the text an ID and using `aria-describedby` on the button element.
