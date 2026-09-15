@@ -809,7 +809,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The modified buffer.
 		 */
 		private function post_process_auto_sizes( string $buffer ): string {
-			// Note: when core's Enhanced Responsive Images delivers accurate
+			// Note (see #624): when core's Enhanced Responsive Images delivers accurate
 			// Gallery-block sizes and native <picture>/srcset handling, re-evaluate
 			// this sizes="auto" prefilling for redundancy with core. sizes_attribute_includes_auto()
 			// still delegates to wp_sizes_attribute_includes_valid_auto() when present. No runtime change.

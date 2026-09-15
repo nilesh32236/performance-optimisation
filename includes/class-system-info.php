@@ -243,8 +243,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 						: null
 				),
 				// php_uname() can be disabled via disable_functions; fall back
-				// to the always-available PHP_OS constant.
-				'os'              => PHP_OS . ' ' . ( function_exists( 'php_uname' ) ? (string) php_uname( 'r' ) : '' ),
+				// to the always-available PHP_OS constant (trimmed so a missing
+				// release does not leave a trailing space).
+				'os'              => trim( PHP_OS . ' ' . ( function_exists( 'php_uname' ) ? (string) php_uname( 'r' ) : '' ) ),
 				'architecture'    => function_exists( 'php_uname' ) ? (string) php_uname( 'm' ) : PHP_OS,
 			);
 		}
@@ -547,17 +548,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 
 			$info = array(
 				'status'     => ! empty( $opcache['opcache_enabled'] )
-					? esc_html__( 'Enabled', 'performance-optimisation' )
-					: esc_html__( 'Disabled', 'performance-optimisation' ),
+					? __( 'Enabled', 'performance-optimisation' )
+					: __( 'Disabled', 'performance-optimisation' ),
 				'cache_full' => ! empty( $opcache['cache_full'] )
-					? esc_html__( 'Yes', 'performance-optimisation' )
-					: esc_html__( 'No', 'performance-optimisation' ),
+					? __( 'Yes', 'performance-optimisation' )
+					: __( 'No', 'performance-optimisation' ),
 			);
 
 			if ( isset( $opcache['memory_usage']['used_memory'], $opcache['memory_usage']['free_memory'] ) ) {
 				$info['memory_usage'] = sprintf(
 					/* translators: 1: Used memory, 2: Total memory */
-					esc_html__( '%1$s of %2$s', 'performance-optimisation' ),
+					__( '%1$s of %2$s', 'performance-optimisation' ),
 					size_format( $opcache['memory_usage']['used_memory'] ),
 					size_format( $opcache['memory_usage']['free_memory'] + $opcache['memory_usage']['used_memory'] )
 				);
@@ -569,7 +570,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			) {
 				$info['interned_strings'] = sprintf(
 					/* translators: 1: Percentage used, 2: Total memory, 3: Free memory */
-					esc_html__( '%1$s%% of %2$s (%3$s free)', 'performance-optimisation' ),
+					__( '%1$s%% of %2$s (%3$s free)', 'performance-optimisation' ),
 					number_format_i18n( ( $opcache['interned_strings_usage']['used_memory'] / $opcache['interned_strings_usage']['buffer_size'] ) * 100, 2 ),
 					size_format( $opcache['interned_strings_usage']['buffer_size'] ),
 					size_format( isset( $opcache['interned_strings_usage']['free_memory'] ) ? $opcache['interned_strings_usage']['free_memory'] : 0 )
@@ -579,7 +580,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			if ( isset( $opcache['opcache_statistics']['opcache_hit_rate'] ) ) {
 				$info['hit_rate'] = sprintf(
 					/* translators: %s: Hit rate percentage */
-					esc_html__( '%s%%', 'performance-optimisation' ),
+					__( '%s%%', 'performance-optimisation' ),
 					number_format_i18n( $opcache['opcache_statistics']['opcache_hit_rate'], 2 )
 				);
 			}

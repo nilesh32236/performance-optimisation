@@ -766,7 +766,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			// Fixed window: expiry is set only on the first increment; later
 			// hits re-store with the remaining TTL instead of extending it.
 			if ( ! is_array( $bucket ) || ! isset( $bucket['count'], $bucket['start'] ) || ( $now - (int) $bucket['start'] ) >= MINUTE_IN_SECONDS ) {
-				set_transient( $key, array( 'count' => 1, 'start' => $now ), MINUTE_IN_SECONDS );
+				set_transient(
+					$key,
+					array(
+						'count' => 1,
+						'start' => $now,
+					),
+					MINUTE_IN_SECONDS
+				);
 				return false;
 			}
 			$count = (int) $bucket['count'];
@@ -774,7 +781,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				return true;
 			}
 			$remaining = max( 1, MINUTE_IN_SECONDS - ( $now - (int) $bucket['start'] ) );
-			set_transient( $key, array( 'count' => $count + 1, 'start' => (int) $bucket['start'] ), $remaining );
+			set_transient(
+				$key,
+				array(
+					'count' => $count + 1,
+					'start' => (int) $bucket['start'],
+				),
+				$remaining
+			);
 			return false;
 		}
 
@@ -859,14 +873,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			// Optional effective-connection-type segmentation (issue #1143).
 			// Fail-open: missing/invalid values bucket as `unknown` and never
 			// reject the sample — the numeric path above is unchanged.
-			$connection = 'unknown';
-			if ( isset( $params['connection'] ) && is_string( $params['connection'] ) ) {
-				$candidate = strtolower( trim( substr( $params['connection'], 0, 16 ) ) );
-				if ( in_array( $candidate, self::ALLOWED_CONNECTIONS, true ) ) {
-					$connection = $candidate;
-				}
-			}
-			$sample['connection'] = $connection;
+			$sample['connection'] = self::normalize_segment_connection( $params['connection'] ?? null );
 
 			return $sample;
 		}
@@ -932,7 +939,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			if ( ! is_string( $raw ) ) {
 				return 'unknown';
 			}
-			$candidate = strtolower( trim( substr( sanitize_text_field( $raw ), 0, 16 ) ) );
+			$cleaned   = function_exists( 'sanitize_text_field' ) ? sanitize_text_field( $raw ) : $raw;
+			$candidate = strtolower( trim( substr( $cleaned, 0, 16 ) ) );
 			if ( in_array( $candidate, self::ALLOWED_CONNECTIONS, true ) ) {
 				return $candidate;
 			}
@@ -1127,10 +1135,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 						// user-writable, so allowlist the device and the
 						// template before either is persisted into the
 						// aggregate option.
-						$device       = self::normalize_segment_device( $sample['device'] ?? null );
-						$template     = self::normalize_segment_template( $sample['template'] ?? null );
-						$connection   = self::normalize_segment_connection( $sample['connection'] ?? 'unknown' );
-						$seg_key      = $device . '|' . $template . '|' . $connection;
+						$device     = self::normalize_segment_device( $sample['device'] ?? null );
+						$template   = self::normalize_segment_template( $sample['template'] ?? null );
+						$connection = self::normalize_segment_connection( $sample['connection'] ?? 'unknown' );
+						$seg_key    = $device . '|' . $template . '|' . $connection;
 						if ( ! isset( $bucket['lcpSeg'] ) || ! is_array( $bucket['lcpSeg'] ) ) {
 							$bucket['lcpSeg'] = array();
 						}
@@ -1184,12 +1192,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					// byte-budget loop below. No new option or transient names.
 					// Fail-open: any malformed queue entry is skipped, never fatal.
 					if ( isset( $sample['inp'] ) ) {
-						$inp_value      = (float) $sample['inp'];
+						$inp_value = (float) $sample['inp'];
 						// Same intake allowlist normalization as lcpSeg above.
 						$device_inp     = self::normalize_segment_device( $sample['device'] ?? null );
 						$template_inp   = self::normalize_segment_template( $sample['template'] ?? null );
 						$connection_inp = self::normalize_segment_connection( $sample['connection'] ?? 'unknown' );
-						$inp_seg_key      = $device_inp . '|' . $template_inp . '|' . $connection_inp;
+						$inp_seg_key    = $device_inp . '|' . $template_inp . '|' . $connection_inp;
 						if ( ! isset( $bucket['inpSeg'] ) || ! is_array( $bucket['inpSeg'] ) ) {
 							$bucket['inpSeg'] = array();
 						}

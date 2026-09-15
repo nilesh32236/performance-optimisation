@@ -628,9 +628,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 					}
 				}
 			} else {
-			// --- Fallback: regex-based parsing ---
-			$dom_size = preg_match_all( '/<[a-zA-Z]/', $html );
-			$dom_size = is_int( $dom_size ) ? $dom_size : 0;
+				// --- Fallback: regex-based parsing ---
+				$dom_size = preg_match_all( '/<[a-zA-Z]/', $html );
+				$dom_size = is_int( $dom_size ) ? $dom_size : 0;
 
 				// Match stylesheets with rel="stylesheet" appearing in any order.
 				preg_match_all(
@@ -846,8 +846,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 			}
 			// Parse comma-separated Content-Encoding tokens and match exactly:
 			// a substring search for 'br' false-positives on values like
-			// 'braille' or 'x-bruh', so each token is compared whole.
-			$allowed = array( 'gzip', 'br', 'brotli', 'zstd', 'deflate', 'compress' );
+			// 'braille' or 'x-bruh', so each token is compared whole. 'br' is
+			// the registered wire token for Brotli (not 'brotli'); 'x-gzip'
+			// and 'x-compress' are legacy aliases still sent by some servers.
+			$allowed = array( 'gzip', 'x-gzip', 'br', 'zstd', 'deflate', 'compress', 'x-compress' );
 			foreach ( explode( ',', $encoding ) as $token ) {
 				if ( in_array( strtolower( trim( $token ) ), $allowed, true ) ) {
 					return true;

@@ -218,6 +218,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		 * @return bool
 		 */
 		private static function purge_cloudflare( string $zone, string $token ): bool {
+			$body = wp_json_encode( array( 'purge_everything' => true ) );
+			if ( false === $body ) {
+				self::log_failure( 'cloudflare-edge', $zone . ': JSON encoding failed' );
+				return false;
+			}
 			$response = wp_remote_request(
 				'https://api.cloudflare.com/client/v4/zones/' . rawurlencode( $zone ) . '/purge_cache',
 				array(
@@ -226,7 +231,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 						'Authorization' => 'Bearer ' . $token,
 						'Content-Type'  => 'application/json',
 					),
-					'body'    => (string) wp_json_encode( array( 'purge_everything' => true ) ),
+					'body'    => $body,
 					'timeout' => 10,
 				)
 			);

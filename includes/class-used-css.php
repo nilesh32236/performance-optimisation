@@ -592,32 +592,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					$at_rule_name = substr( $css, $offset, $at_rule_end - $offset );
 					$at_rule_name = trim( $at_rule_name );
 
-				$brace_depth = 1;
-				$block_start = $at_rule_end;
-				$pos         = $at_rule_end + 1;
-				$scan_quote  = null;
+					$brace_depth = 1;
+					$block_start = $at_rule_end;
+					$pos         = $at_rule_end + 1;
+					$scan_quote  = null;
 
-				while ( $pos < $length && $brace_depth > 0 ) {
-					$scan_char = $css[ $pos ];
-					if ( null !== $scan_quote ) {
-						// Inside a quoted segment: braces are literal. A
-						// backslash escapes the next char (e.g. content: '}').
-						if ( '\\' === $scan_char ) {
-							$pos += 2;
-							continue;
+					while ( $pos < $length && $brace_depth > 0 ) {
+						$scan_char = $css[ $pos ];
+						if ( null !== $scan_quote ) {
+							// Inside a quoted segment: braces are literal. A
+							// backslash escapes the next char (e.g. content: '}').
+							if ( '\\' === $scan_char ) {
+								$pos += 2;
+								continue;
+							}
+							if ( $scan_char === $scan_quote ) {
+								$scan_quote = null;
+							}
+						} elseif ( '"' === $scan_char || "'" === $scan_char ) {
+							$scan_quote = $scan_char;
+						} elseif ( '{' === $scan_char ) {
+							++$brace_depth;
+						} elseif ( '}' === $scan_char ) {
+							--$brace_depth;
 						}
-						if ( $scan_char === $scan_quote ) {
-							$scan_quote = null;
-						}
-					} elseif ( '"' === $scan_char || "'" === $scan_char ) {
-						$scan_quote = $scan_char;
-					} elseif ( '{' === $scan_char ) {
-						++$brace_depth;
-					} elseif ( '}' === $scan_char ) {
-						--$brace_depth;
+						++$pos;
 					}
-					++$pos;
-				}
 
 					$block_content = substr( $css, $block_start + 1, $pos - $block_start - 2 );
 
@@ -2374,7 +2374,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			// "alternate stylesheet") and matching is ASCII case-insensitive.
 			$is_stylesheet = false;
 			if ( is_string( $rel ) ) {
-				foreach ( preg_split( '/\s+/', strtolower( $rel ) ) as $token ) {
+				$tokens = preg_split( '/\s+/', strtolower( $rel ) );
+				foreach ( is_array( $tokens ) ? $tokens : array() as $token ) {
 					if ( 'stylesheet' === $token ) {
 						$is_stylesheet = true;
 						break;

@@ -182,36 +182,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) ) {
 				if ( ! empty( $rules ) ) {
 					$rules[] = '';
 				}
-			$rules[] = '# WPPO Next-gen delivery (Nginx) — sibling .webp/.avif + wppo/ fallback via Accept header';
-			$rules[] = '# Note: WPPO converter writes to wp-content/wppo/ by default; sibling and wppo/ mirrors both checked.';
-			// http context: map directives are only valid in the http block,
-			// never inside server/location — pasting them there fails
-			// `nginx -t`. Keep them grouped under this banner.
-			$rules[] = '# --- http context (place inside the http { } block) ---';
-			$rules[] = 'map $http_accept $wppo_avif_suffix {';
-			$rules[] = '    default "";';
-			$rules[] = '    "~*image/avif" ".avif";';
-			$rules[] = '}';
-			$rules[] = 'map $http_accept $wppo_webp_suffix {';
-			$rules[] = '    default "";';
-			$rules[] = '    "~*image/webp" ".webp";';
-			$rules[] = '}';
-			// server context: the location block below goes inside the site's
-			// existing server { } block — do not create a second server block
-			// or the variables above will be out of scope.
-			$rules[] = '# --- server context (place inside your existing server { } block) ---';
-			$rules[] = 'location ~* \.(jpe?g|png)$ {';
-			$rules[] = '    # Try avif first (sibling), then wppo/ mirror, then webp sibling/mirror, then original';
-			$rules[] = '    try_files $uri$wppo_avif_suffix /wp-content/wppo$uri$wppo_avif_suffix $uri$wppo_webp_suffix /wp-content/wppo$uri$wppo_webp_suffix $uri =404;';
-			$rules[] = '    add_header Vary Accept;';
-			$rules[] = '}';
-			/**
-			 * Filter nginx next-gen rules.
-			 *
-			 * @since 2.0.0
-			 * @param string[] $rules Nginx configuration lines.
-			 */
-			$rules = (array) apply_filters( 'wppo_nginx_nextgen_rules', $rules );
+				$rules[] = '# WPPO Next-gen delivery (Nginx) — sibling .webp/.avif + wppo/ fallback via Accept header';
+				$rules[] = '# Note: WPPO converter writes to wp-content/wppo/ by default; sibling and wppo/ mirrors both checked.';
+				// http context: map directives are only valid in the http block,
+				// never inside server/location — pasting them there fails
+				// `nginx -t`. Keep them grouped under this banner.
+				$rules[] = '# --- http context (place inside the http { } block) ---';
+				$rules[] = 'map $http_accept $wppo_avif_suffix {';
+				$rules[] = '    default "";';
+				$rules[] = '    "~*image/avif" ".avif";';
+				$rules[] = '}';
+				$rules[] = 'map $http_accept $wppo_webp_suffix {';
+				$rules[] = '    default "";';
+				$rules[] = '    "~*image/webp" ".webp";';
+				$rules[] = '}';
+				// server context: the location block below goes inside the site's
+				// existing server { } block — do not create a second server block
+				// or the variables above will be out of scope.
+				$rules[] = '# --- server context (place inside your existing server { } block) ---';
+				$rules[] = 'location ~* \.(jpe?g|png)$ {';
+				$rules[] = '    # Try avif first (sibling), then wppo/ mirror, then webp sibling/mirror, then original';
+				$rules[] = '    try_files $uri$wppo_avif_suffix /wp-content/wppo$uri$wppo_avif_suffix $uri$wppo_webp_suffix /wp-content/wppo$uri$wppo_webp_suffix $uri =404;';
+				$rules[] = '    add_header Vary Accept;';
+				$rules[] = '}';
+				/**
+				 * Filter nginx next-gen rules.
+				 *
+				 * @since 2.0.0
+				 * @param string[] $rules Nginx configuration lines.
+				 */
+				$rules = (array) apply_filters( 'wppo_nginx_nextgen_rules', $rules );
 			}
 
 			// LS-320: Nginx Cache-Vary map for mobile/webp when on LiteSpeed (ensure nginx map ok even for litespeed server_type).

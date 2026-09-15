@@ -63,7 +63,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 		 * capability checks; this method performs no check so cron/CLI paths
 		 * keep working.
 		 *
-		 * @param string $activity The activity description to log.
+		 * @param mixed $activity The activity description to log; non-strings are ignored.
 		 * @return void
 		 * @since 2.0.0
 		 */
@@ -149,8 +149,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 					"SELECT COUNT(*) FROM {$wpdb->prefix}wppo_activity_logs"
 				);
 
-			// Calculate total pages.
-			$total_pages = (int) ceil( $total_items / $per_page );
+				// Calculate total pages.
+				$total_pages = (int) ceil( $total_items / $per_page );
 
 				// Fetch paginated results. The `id DESC` secondary sort keeps
 				// pagination deterministic when rows share a timestamp (audit
@@ -165,9 +165,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 				);
 				/* phpcs:enable */
 
-			// Prepare data for caching.
-			$data = array(
-				'activities'   => is_array( $results ) ? $results : array(),
+				// Prepare data for caching.
+				$data = array(
+					'activities'   => is_array( $results ) ? $results : array(),
 					'total_items'  => $total_items,
 					'current_page' => $page,
 					'total_pages'  => $total_pages,

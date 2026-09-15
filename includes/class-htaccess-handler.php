@@ -198,7 +198,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 					// Re-read after the legacy-path restore so a torn
 					// restore (disk-full, racing writer) is not silently
 					// left behind as a truncated site-wide .htaccess.
-					self::verify_after_write( $htaccess_file, $wp_filesystem, array() !== self::normalize_rules( $backup ) );
+					$restore_ok = self::verify_after_write( $htaccess_file, $wp_filesystem, array() !== self::normalize_rules( $backup ) );
+					if ( ! $restore_ok ) {
+						self::flag_htaccess_failure();
+						return false;
+					}
 				}
 				self::flag_htaccess_failure();
 				return false;
@@ -325,7 +329,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		 * Best-effort only: failures are ignored so teardown never fails
 		 * because of stale artifacts. Removes `.htaccess.wppo-bak` (single
 		 * backup generation kept by atomic_write_verified()) and any
-		 * `.htaccess.wppo-tmp-*` orphans from crashed writes.
+		 * `.htaccess.wppo-tmp-*` orphans from crashed writes — both in the
+		 * .htaccess directory and in the system temp dir (the wp_tempnam()
+		 * fallback lands there when the docroot is not writable).
 		 *
 		 * @since 2.0.0
 		 *
@@ -372,6 +378,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 					$name = (string) $name;
 					if ( 0 === strpos( $name, $base . '.wppo-tmp-' ) ) {
 						$fs->delete( $dir . '/' . $name );
+					}
+				}
+				// The wp_tempnam( '' ) fallback in atomic_write_verified()
+				// creates orphans in the system temp dir that the .htaccess-dir
+				// scan above never sees — sweep those too when the temp dir
+				// differs from the .htaccess dir.
+				if ( function_exists( 'get_temp_dir' ) && method_exists( $fs, 'dirlist' ) ) {
+					$tmp_dir = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( get_temp_dir() ) : get_temp_dir();
+					if ( is_string( $tmp_dir ) && '' !== $tmp_dir && rtrim( $tmp_dir, '/' ) !== rtrim( $dir, '/' ) && $fs->exists( $tmp_dir ) ) {
+						$tmp_listing = $fs->dirlist( $tmp_dir );
+						if ( is_array( $tmp_listing ) ) {
+							foreach ( $tmp_listing as $name => $info ) {
+								$name = (string) $name;
+								if ( 0 === strpos( $name, $base . '.wppo-tmp-' ) ) {
+									$fs->delete( rtrim( $tmp_dir, '/' ) . '/' . $name );
+								}
+							}
+						}
 					}
 				}
 			} catch ( \Throwable $ignored ) {
@@ -799,17 +823,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			}
 
 			$mode = defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644;
-			if ( ! $wp_filesystem->put_contents( $tmp_file, $new_contents, $mode ) ) {
+			if ( ! $wp_filesystem->put_contents( $tmp_file, $new_contents, 0600 ) ) {
 				if ( $wp_filesystem->exists( $tmp_file ) ) {
 					$wp_filesystem->delete( $tmp_file );
 				}
 				return null;
-			}
-
-			// Restrict the tmp file to owner-only: it carries full .htaccess
-			// contents in the docroot until the rename below.
-			if ( method_exists( $wp_filesystem, 'chmod' ) ) {
-				$wp_filesystem->chmod( $tmp_file, 0600 );
 			}
 
 			if ( ! $wp_filesystem->move( $tmp_file, $htaccess_file, true ) ) {
@@ -817,6 +835,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 					$wp_filesystem->delete( $tmp_file );
 				}
 				return null;
+			}
+
+			// The rename carries the tmp inode's 0600 mode onto the live file,
+			// which would lock out Apache when httpd runs as a different
+			// user/group — restore the deployment mode (FS_CHMOD_FILE) now
+			// that the tmp contents are never world-readable at any point.
+			if ( method_exists( $wp_filesystem, 'chmod' ) ) {
+				$wp_filesystem->chmod( $htaccess_file, $mode );
 			}
 
 			$written = $wp_filesystem->get_contents( $htaccess_file );
@@ -1150,15 +1176,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			/**
 			 * Filter htaccess rules.
 			 *
-			 * Return an array to replace the rules. A false (or any other
-			 * non-array) return keeps the rules unchanged — a blind (array)
-			 * cast would coerce false into [false] and fail the write.
+			 * Return an array to replace the rules, or a string with a single
+			 * rule block (wrapped into a one-element array for BC with filters
+			 * written against the pre-2.0 (array) cast). A false (or any other
+			 * non-array, non-string) return keeps the rules unchanged — a blind
+			 * (array) cast would coerce false into [false] and fail the write.
 			 *
 			 * @since 2.0.0
 			 * @param array $rules Htaccess rules.
 			 */
 			$final_filtered = apply_filters( 'wppo_htaccess_rules', $rules );
-			if ( is_array( $final_filtered ) ) {
+			if ( is_string( $final_filtered ) ) {
+				$rules = array( $final_filtered );
+			} elseif ( is_array( $final_filtered ) ) {
 				$rules = $final_filtered;
 			}
 

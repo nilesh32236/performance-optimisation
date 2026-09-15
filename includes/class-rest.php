@@ -518,7 +518,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// Fixed window: the TTL is set only on the first increment; later
 			// hits re-store with the remaining TTL instead of extending it.
 			if ( ! is_array( $bucket ) || ! isset( $bucket['count'], $bucket['start'] ) || ( $now - (int) $bucket['start'] ) >= $window ) {
-				set_transient( $key, array( 'count' => 1, 'start' => $now ), $window );
+				set_transient(
+					$key,
+					array(
+						'count' => 1,
+						'start' => $now,
+					),
+					$window
+				);
 				return false;
 			}
 			$count = (int) $bucket['count'];
@@ -526,7 +533,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				return true;
 			}
 			$remaining = max( 1, $window - ( $now - (int) $bucket['start'] ) );
-			set_transient( $key, array( 'count' => $count + 1, 'start' => (int) $bucket['start'] ), $remaining );
+			set_transient(
+				$key,
+				array(
+					'count' => $count + 1,
+					'start' => (int) $bucket['start'],
+				),
+				$remaining
+			);
 			return false;
 		}
 

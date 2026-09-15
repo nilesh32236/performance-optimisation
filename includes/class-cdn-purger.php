@@ -40,13 +40,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 		 * own static files and deliberately skip the edge purge: wiping the
 		 * whole zone for one page would be disproportionate.
 		 *
-		 * @param string      $type     Clear type ('all' or 'single_page').
-		 * @param string|null $url_path Page path for single-page clears (unused; edge purges are all-or-nothing).
+		 * The $url_path parameter is deliberately untyped: this method runs
+		 * as a WP hook callback (wppo_after_cache_clear via
+		 * Cache::clear_cache(), untyped) and must stay tolerant of
+		 * non-string payloads instead of throwing a TypeError.
+		 *
+		 * @param string $type     Clear type ('all' or 'single_page').
+		 * @param mixed  $url_path Page path for single-page clears (unused; edge purges are all-or-nothing).
 		 * @return bool True when no purge was needed or all requests succeeded.
 		 *
 		 * @since 2.0.0 The $type and $url_path parameters were added.
 		 */
-		public static function purge_all( string $type = 'all', ?string $url_path = null ): bool {
+		public static function purge_all( string $type = 'all', $url_path = null ): bool {
 			// LS-203: LiteSpeed purge sync — always attempt before the
 			// 'all'-only early return so single-page clears also sync when
 			// purgeSync is enabled (loop-safe via Util::transient_key lock).
@@ -166,6 +171,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 				return false;
 			}
 
+			// Defensive: isolated tests or partial-release builds may load
+			// this file without the Cloudflare_Purger transport.
+			if ( ! class_exists( 'PerformanceOptimise\Inc\Cloudflare_Purger' ) ) {
+				return false;
+			}
 			// Single implementation lives in Cloudflare_Purger::purge().
 			return Cloudflare_Purger::purge( $zone, $token, 'cloudflare' );
 		}

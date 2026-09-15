@@ -498,7 +498,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			}
 
 			if ( file_exists( $css_file ) ) {
-				return true;
+				// Capped runs leave remote gstatic URLs in the cached CSS
+				// (at most 3 files per run). Re-queue the key while remote
+				// URLs remain so later runs converge to fully local CSS
+				// without requiring a manual cache clear.
+				$cached = file_get_contents( $css_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local cache staleness probe, not a remote URL; writes still go through WP_Filesystem.
+				if ( ! is_string( $cached ) || false === strpos( $cached, 'fonts.gstatic.com' ) ) {
+					return true;
+				}
+				unlink( $css_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Stale capped CSS must be regenerated; failure falls through to the fetch below.
 			}
 
 			$fail_key = Util::transient_key( 'wppo_gf_fail_' . $key );
@@ -879,7 +887,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			foreach ( $families as $fam ) {
 				$fallback_css .= $this->generate_metric_fallback( $fam ) . "\n";
 			}
-			if ( '' === $fallback_css ) {
+			// generate_metric_fallback() returns '' for fully-stripped
+			// (e.g. non-Latin) family names, so test the trimmed join:
+			// an '' comparison alone still injects an empty <style> of
+			// newlines.
+			if ( '' === trim( $fallback_css ) ) {
 				return $buffer;
 			}
 			$style_tag = '<style id="wppo-font-fallback">' . $fallback_css . '</style>';

@@ -709,10 +709,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 						continue;
 					}
 					$row = array();
-					foreach ( array( 'url', 'snippet', 'score', 'wastedMs', 'wastedBytes' ) as $field ) {
-						if ( isset( $item[ $field ] ) && is_scalar( $item[ $field ] ) ) {
-							$row[ $field ] = 'url' === $field || 'snippet' === $field ? sanitize_text_field( (string) $item[ $field ] ) : $item[ $field ];
+					foreach ( array( 'snippet', 'score', 'wastedMs', 'wastedBytes' ) as $field ) {
+						if ( ! isset( $item[ $field ] ) || ! is_scalar( $item[ $field ] ) ) {
+							continue;
 						}
+						if ( 'snippet' === $field ) {
+							$row[ $field ] = sanitize_text_field( (string) $item[ $field ] );
+						} elseif ( 'wastedMs' === $field || 'wastedBytes' === $field ) {
+							// Numeric-only: is_scalar alone admits bools and
+							// arbitrary strings into the transient/REST payload.
+							if ( is_numeric( $item[ $field ] ) ) {
+								$row[ $field ] = 'wastedMs' === $field ? (float) $item[ $field ] : (int) $item[ $field ];
+							}
+						} else {
+							$row[ $field ] = $item[ $field ];
+						}
+					}
+					if ( isset( $item['url'] ) && is_scalar( $item['url'] ) ) {
+						$row['url'] = esc_url_raw( (string) $item['url'] );
+					}
+					// Preserve node.snippet (scalar-only): extract_lcp_image_url()
+					// falls back to parsing it for an <img> src when no
+					// structured url is present.
+					if ( isset( $item['node'] ) && is_array( $item['node'] ) && isset( $item['node']['snippet'] ) && is_scalar( $item['node']['snippet'] ) ) {
+						$row['node'] = array( 'snippet' => sanitize_text_field( (string) $item['node']['snippet'] ) );
 					}
 					$clean['items'][] = $row;
 				}
@@ -791,8 +811,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			}
 
 			$strategy_suffix     = sanitize_key( $strategy );
-			$normalised_scan_url = untrailingslashit( esc_url_raw( $url ) );
-			$normalised_home     = untrailingslashit( Util::cached_home_url( '/' ) );
+			$normalised_scan_url = untrailingslashit( self::normalise_url_for_compare( $url ) );
+			$normalised_home     = untrailingslashit( self::normalise_url_for_compare( Util::cached_home_url( '/' ) ) );
 
 			// Case 1: Front page.
 			if ( $normalised_scan_url === $normalised_home ) {
@@ -814,6 +834,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			// Case 3: Arbitrary URL — store in transient keyed by strategy + URL hash.
 			$transient_key = Util::transient_key( 'wppo_lcp_url_' . $strategy_suffix . '_' . md5( $normalised_scan_url ) );
 			set_transient( $transient_key, $lcp_url, DAY_IN_SECONDS );
+		}
+
+		/**
+		 * Normalise a URL for front-page comparison.
+		 *
+		 * Drops empty query strings and fragments (e.g. `/?` or `/#top`)
+		 * so the scanned URL compares equal to the home URL; the previous
+		 * add_query_arg( array(), $url ) normalisation did this implicitly.
+		 *
+		 * @since NEXT
+		 * @param string $url Raw URL.
+		 * @return string Sanitised URL without empty query/fragment.
+		 */
+		private static function normalise_url_for_compare( string $url ): string {
+			$clean = esc_url_raw( $url );
+			if ( function_exists( 'wp_parse_url' ) ) {
+				$parts = wp_parse_url( $clean );
+			} else {
+				$parts = parse_url( $clean ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Non-WP bootstrap fallback; wp_parse_url() preferred above.
+			}
+			if ( ! is_array( $parts ) ) {
+				return $clean;
+			}
+			if ( isset( $parts['query'] ) && '' === (string) $parts['query'] ) {
+				unset( $parts['query'] );
+			}
+			unset( $parts['fragment'] );
+			$rebuilt = ( $parts['scheme'] ?? 'https' ) . '://' . ( $parts['host'] ?? '' );
+			if ( isset( $parts['port'] ) ) {
+				$rebuilt .= ':' . (int) $parts['port'];
+			}
+			$rebuilt .= $parts['path'] ?? '';
+			if ( isset( $parts['query'] ) && '' !== (string) $parts['query'] ) {
+				$rebuilt .= '?' . $parts['query'];
+			}
+			return esc_url_raw( $rebuilt );
 		}
 	}
 }

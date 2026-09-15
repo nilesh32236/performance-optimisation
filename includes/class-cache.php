@@ -606,7 +606,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( $this->should_bypass_for_litespeed() ) {
 				return;
 			}
-			// Note: when core removes script/style concatenation in favour
+			// Note (see #624): when core removes script/style concatenation in favour
 			// of core preload emission, reassess whether this concat pipeline should
 			// be dropped / relegated to an opt-in legacy toggle in favour of core
 			// preloads (wp_resource_hints). No runtime change until the core API lands.
@@ -858,7 +858,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 2.0.0
 		 */
 		public function maybe_preload_combine_css(): void {
-			// Note: once core removes concatenation in favour of preloads,
+			// Note (see #553, #829): once core removes concatenation in favour of preloads,
 			// reassess whether this plugin-emitted preload should defer to core
 			// preload emission (wp_resource_hints) instead. No runtime change.
 			if ( '' === $this->combine_css_preload_url ) {
@@ -1572,10 +1572,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				}
 				$css_content = $fs->get_contents( $css_file );
 
-			if ( false !== $css_content ) {
-				$rewritten = CSS::update_image_paths( $css_content, $css_file );
-				return null !== $rewritten ? $rewritten : $css_content;
-			}
+				if ( false !== $css_content ) {
+					$rewritten = CSS::update_image_paths( $css_content, $css_file );
+					return null !== $rewritten ? $rewritten : $css_content;
+				}
 			}
 
 			return false;
@@ -1621,7 +1621,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return;
 			}
 
-			// Note: legacy fallback kept until minimum supported WP is raised.
+			// Note (see #553, #829): legacy fallback kept until minimum supported WP is raised.
 			// Blocked until `Requires at least: 6.9` — keep the legacy fallback.
 			if ( ! $this->is_cache_allowed_for_current_user() || $this->is_not_cacheable() ) {
 				return;
@@ -2893,7 +2893,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 			// Note: the purge loop below re-parses each already-sanitized path;
 			// an $already_sanitized flag on get_file_path() /
-			// safe_path_for_url() could skip that second pass.
+			// safe_path_for_url() could skip that second pass (see #553).
 			$sanitized = array_values( array_unique( $sanitized ) );
 
 			// Purge collected URLs via filesystem; primary URL also clears css/used-css.

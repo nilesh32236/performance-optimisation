@@ -1824,9 +1824,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 					if ( false !== $self_prio ) {
 						remove_filter( 'litespeed_vary', $self_cb, (int) $self_prio );
 					}
-					$has_external = (bool) has_filter( 'litespeed_vary' );
-					if ( false !== $self_prio ) {
-						add_filter( 'litespeed_vary', $self_cb, (int) $self_prio, 1 );
+					try {
+						$has_external = (bool) has_filter( 'litespeed_vary' );
+					} finally {
+						if ( false !== $self_prio ) {
+							add_filter( 'litespeed_vary', $self_cb, (int) $self_prio, 1 );
+						}
 					}
 				}
 				if ( ! $has_external && ! $headers_sent ) {

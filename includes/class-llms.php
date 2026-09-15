@@ -153,11 +153,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 			// Generate on-demand if missing, rate-limited so unauthenticated
 			// hits cannot trigger unbounded file writes + sitemap fetches.
 			if ( ! file_exists( $path ) ) {
-			$lock = function_exists( 'get_transient' ) ? get_transient( Util::transient_key( 'wppo_llms_gen_lock' ) ) : false;
-			if ( false === $lock ) {
-				if ( function_exists( 'set_transient' ) ) {
-					set_transient( Util::transient_key( 'wppo_llms_gen_lock' ), 1, MINUTE_IN_SECONDS );
-				}
+				$lock = function_exists( 'get_transient' ) ? get_transient( Util::transient_key( 'wppo_llms_gen_lock' ) ) : false;
+				if ( false === $lock ) {
+					if ( function_exists( 'set_transient' ) ) {
+						set_transient( Util::transient_key( 'wppo_llms_gen_lock' ), 1, MINUTE_IN_SECONDS );
+					}
 					self::generate();
 				}
 			}
@@ -166,22 +166,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 				return;
 			}
 
-		// ETag / 304 handling.
-		$hash = md5_file( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_md5_file
-		if ( false === $hash ) {
-			return;
-		}
-		$etag = '"' . $hash . '"';
+			// ETag / 304 handling.
+			$hash = md5_file( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_md5_file
+			if ( false === $hash ) {
+				return;
+			}
+			$etag = '"' . $hash . '"';
 
-		if ( headers_sent() ) {
-			// Headers are gone: streaming the file now would append raw
-			// markdown to already-flushed output with no Content-Type and
-			// no ETag/304 contract. Bail and let the normal render
-			// continue instead of readfile()+exit (audit #888 finding 16).
-			// No Log::add() here: serve() runs on the hot frontend path and
-			// every headers_sent() hit would otherwise cost a DB write.
-			return;
-		}
+			if ( headers_sent() ) {
+				// Headers are gone: streaming the file now would append raw
+				// markdown to already-flushed output with no Content-Type and
+				// no ETag/304 contract. Bail and let the normal render
+				// continue instead of readfile()+exit (audit #888 finding 16).
+				// No Log::add() here: serve() runs on the hot frontend path and
+				// every headers_sent() hit would otherwise cost a DB write.
+				return;
+			}
 
 			// End any open output buffers (page cache / minify) so the file
 			// body is emitted raw alongside the correct headers.
@@ -193,7 +193,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 			}
 
 			$raw_if_none_match = isset( $_SERVER['HTTP_IF_NONE_MATCH'] ) && is_string( $_SERVER['HTTP_IF_NONE_MATCH'] ) ? wp_unslash( $_SERVER['HTTP_IF_NONE_MATCH'] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-		$if_none_match     = '' !== $raw_if_none_match ? sanitize_text_field( $raw_if_none_match ) : '';
+			$if_none_match     = '' !== $raw_if_none_match ? sanitize_text_field( $raw_if_none_match ) : '';
 			if ( '' !== $if_none_match && ( $if_none_match === $etag || 'W/' . $etag === $if_none_match ) ) {
 				status_header( 304 );
 				header( 'ETag: ' . $etag );
@@ -203,11 +203,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 			status_header( 200 );
 			header( 'Content-Type: text/markdown; charset=utf-8' );
 			header( 'ETag: ' . $etag );
-		header( 'Cache-Control: public, max-age=3600' );
-		$byte_size = filesize( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize
-		if ( false !== $byte_size ) {
-			header( 'Content-Length: ' . $byte_size );
-		}
+			header( 'Cache-Control: public, max-age=3600' );
+			$byte_size = filesize( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize
+			if ( false !== $byte_size ) {
+				header( 'Content-Length: ' . $byte_size );
+			}
 
 			readfile( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_readfile
 			exit;
