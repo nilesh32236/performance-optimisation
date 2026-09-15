@@ -1033,6 +1033,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// wppo_defer_js_preset_exclusions. Preserves user excludes via
 				// array_unique merge.
 				$this->exclude_defer_js = array_values( array_unique( array_merge( $this->exclude_defer_js, self::get_defer_js_preset_exclusions() ) ) );
+				// Sandbox preview (issue #1163): staged excludeDeferJS lines also
+				// suppress defer in preview only. Fail-open: matcher errors keep
+				// the production list.
+				if ( $is_sandbox_preview && class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_staged_settings' ) ) {
+					try {
+						$staged_for_defer = Sandbox_Preview::get_staged_settings();
+						if ( ! empty( $staged_for_defer['excludeDeferJS'] ) ) {
+							$staged_defer_excludes  = Util::process_urls( $staged_for_defer['excludeDeferJS'] );
+							$this->exclude_defer_js = array_values( array_unique( array_merge( $this->exclude_defer_js, (array) $staged_defer_excludes ) ) );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
 				if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_exclude_defer_js' ) ) {
 					try {
 						$this->exclude_defer_js = (array) apply_filters( 'wppo_exclude_defer_js', $this->exclude_defer_js );
@@ -1068,6 +1082,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// apply_per_page_delay_config() skip deferred scripts entirely.
 				if ( ! empty( $this->options['file_optimisation']['deferJS'] ) ) {
 					$this->exclude_delay_js = array_merge( $this->exclude_delay_js, $this->exclude_defer_js );
+				}
+				// Sandbox preview (issue #1163): staged excludeDelayJS lines also
+				// suppress the external-script delay rewrite in preview only
+				// (the inline path is overlaid in Minify\HTML). Fail-open.
+				if ( $is_sandbox_preview && class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_staged_settings' ) ) {
+					try {
+						$staged_for_delay = Sandbox_Preview::get_staged_settings();
+						if ( ! empty( $staged_for_delay['excludeDelayJS'] ) ) {
+							$staged_delay_excludes  = Util::process_urls( $staged_for_delay['excludeDelayJS'] );
+							$this->exclude_delay_js = array_values( array_unique( array_merge( $this->exclude_delay_js, (array) $staged_delay_excludes ) ) );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
 				}
 
 				$this->exclude_delay_js = apply_filters( 'wppo_exclude_delay_js', $this->exclude_delay_js );
@@ -7120,12 +7148,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 
-			if ( ! $this->should_optimise_for_logged_in() ) {
+			// Sandbox preview (issue #1163): the preview admin renders staged
+			// output even without logged-in cache enabled; visitors keep the
+			// production gate.
+			$is_preview = self::is_sandbox_preview_active();
+			if ( ! $this->should_optimise_for_logged_in() && ! $is_preview ) {
 				return;
 			}
 
 			// The combine feature owns the whole pipeline; let it handle these handles.
-			if ( ! empty( $this->options['file_optimisation']['combineCSS'] ) ) {
+			// In preview the staged combineCSS flag wins so the two pipelines
+			// cannot run on the same handles.
+			$file_opt_for_minify = $is_preview ? self::get_effective_file_optimisation( $this->options['file_optimisation'] ?? array() ) : ( $this->options['file_optimisation'] ?? array() );
+			if ( ! empty( $file_opt_for_minify['combineCSS'] ) ) {
 				return;
 			}
 

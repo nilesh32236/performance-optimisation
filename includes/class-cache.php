@@ -610,7 +610,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// of core preload emission, reassess whether this concat pipeline should
 			// be dropped / relegated to an opt-in legacy toggle in favour of core
 			// preloads (wp_resource_hints). No runtime change until the core API lands.
-			if ( ! $this->is_cache_allowed_for_current_user() || is_404() || $this->is_not_cacheable() ) {
+			// Sandbox preview (issue #1163): the preview admin renders staged
+			// combineCSS even without logged-in cache enabled. is_not_cacheable()
+			// is also bypassed: the preview defines DONOTCACHEPAGE and carries a
+			// query string by design, both of which force that gate. Visitors
+			// keep the production gates. 404s never combine.
+			$is_preview = false;
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'is_sandbox_preview_active' ) ) {
+					$is_preview = Main::is_sandbox_preview_active();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			if ( ( ! $this->is_cache_allowed_for_current_user() && ! $is_preview ) || is_404() || ( $this->is_not_cacheable() && ! $is_preview ) ) {
 				return;
 			}
 
@@ -627,8 +640,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			$exclude_combine_css = array();
-			if ( ! empty( $this->options['file_optimisation']['excludeCombineCSS'] ) ) {
-				$exclude_combine_css = Util::process_urls( $this->options['file_optimisation']['excludeCombineCSS'] );
+			// Sandbox preview (issue #1163): staged excludeCombineCSS lines
+			// also exclude in preview only. Util::process_urls() is
+			// array-safe (string or array payload).
+			$file_opt_for_combine = isset( $this->options['file_optimisation'] ) && is_array( $this->options['file_optimisation'] ) ? $this->options['file_optimisation'] : array();
+			if ( $is_preview ) {
+				try {
+					if ( class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_effective_file_optimisation' ) ) {
+						$file_opt_for_combine = Sandbox_Preview::get_effective_file_optimisation( $file_opt_for_combine );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			if ( ! empty( $file_opt_for_combine['excludeCombineCSS'] ) ) {
+				$exclude_combine_css = Util::process_urls( $file_opt_for_combine['excludeCombineCSS'] );
 			}
 
 			// On WP 6.9+ with separate (on-demand) core block assets active, never
@@ -648,7 +674,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// cache filename, so a 6.8 -> 6.9 upgrade (which flips separate block
 			// assets on by default for classic themes) cannot keep serving a stale
 			// combined monolith built while wp-block-library was still in the queue.
+			// Sandbox preview (issue #1163) gets its own `-preview` variant so
+			// staged combine output can never overwrite the production file.
 			$css_variant = $separate_block_assets ? 'separate' : '';
+			if ( $is_preview ) {
+				$css_variant .= '' === $css_variant ? 'preview' : '-preview';
+			}
 
 			// The set of handles this request would pull into the combined file. The
 			// same skip rules are applied below during generation so the two branches
@@ -807,8 +838,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			// Fresh combined CSS changes the total-asset stats — do not let
 			// the dashboard show stale numbers until the TTL expires (audit
-			// #874 finding 6).
-			self::bump_stats_cache();
+			// #874 finding 6). Skipped in sandbox preview: preview output must
+			// not invalidate production stats.
+			if ( ! $is_preview ) {
+				self::bump_stats_cache();
+			}
 
 			foreach ( $successful_handles as $handle ) {
 				wp_dequeue_style( $handle );

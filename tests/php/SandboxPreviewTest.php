@@ -191,6 +191,57 @@ class SandboxPreviewTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test minify keys have no staged preview path and are dropped.
+	 */
+	public function test_sanitize_staged_drops_minify_without_preview_path(): void {
+		$clean = Sandbox_Preview::sanitize_staged(
+			array(
+				'delayJS'   => true,
+				'minifyJS'  => true,
+				'minifyCSS' => true,
+			)
+		);
+		$this->assertArrayHasKey( 'delayJS', $clean );
+		$this->assertArrayNotHasKey( 'minifyJS', $clean );
+		$this->assertArrayNotHasKey( 'minifyCSS', $clean );
+	}
+
+	/**
+	 * Test save_staged reports a real write failure instead of always true.
+	 */
+	public function test_save_staged_reports_write_failure(): void {
+		$stored = array(
+			'file_optimisation' => array(
+				'delayJS'       => false,
+				'sandboxStaged' => array(),
+			),
+		);
+		Functions\when( 'get_option' )->justReturn( $stored );
+		Functions\when( 'update_option' )->justReturn( false );
+		Functions\when( 'current_user_can' )->justReturn( true );
+
+		$this->assertFalse( Sandbox_Preview::save_staged( array( 'delayJS' => true ) ) );
+	}
+
+	/**
+	 * Test save_staged treats unchanged stored values as success.
+	 */
+	public function test_save_staged_no_change_counts_as_success(): void {
+		$clean  = Sandbox_Preview::sanitize_staged( array( 'delayJS' => true ) );
+		$stored = array(
+			'file_optimisation' => array(
+				'delayJS'       => false,
+				'sandboxStaged' => $clean,
+			),
+		);
+		Functions\when( 'get_option' )->justReturn( $stored );
+		Functions\when( 'update_option' )->justReturn( false );
+		Functions\when( 'current_user_can' )->justReturn( true );
+
+		$this->assertTrue( Sandbox_Preview::save_staged( array( 'delayJS' => true ) ) );
+	}
+
+	/**
 	 * Test preview url contains nonce.
 	 */
 	public function test_preview_url_contains_nonce(): void {

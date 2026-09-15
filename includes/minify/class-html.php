@@ -739,19 +739,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				}
 				// Sandbox preview staged excludes (issue #1163): staged
 				// excludeDelayJS lines also suppress delay in preview only.
-				if ( ! $skip_delay && ! $should_exclude && ! empty( $file_opt_for_preview['excludeDelayJS'] ) && is_string( $file_opt_for_preview['excludeDelayJS'] ) ) {
+				// Util::process_urls() is array-safe (string or array payload),
+				// matching the constructor path for production excludes.
+				if ( ! $skip_delay && ! $should_exclude && ! empty( $file_opt_for_preview['excludeDelayJS'] ) ) {
 					try {
-						$staged_lines = preg_split( '/[\r\n,]+/', (string) $file_opt_for_preview['excludeDelayJS'] );
-						if ( is_array( $staged_lines ) ) {
-							foreach ( $staged_lines as $exclude ) {
-								$exclude = trim( (string) $exclude );
-								if ( '' === $exclude ) {
-									continue;
-								}
-								if ( false !== strpos( $attributes, $exclude ) || false !== strpos( $content, $exclude ) ) {
-									$should_exclude = true;
-									break;
-								}
+						$staged_lines = Util::process_urls( $file_opt_for_preview['excludeDelayJS'] );
+						foreach ( $staged_lines as $exclude ) {
+							$exclude = trim( (string) $exclude );
+							if ( '' === $exclude ) {
+								continue;
+							}
+							if ( false !== strpos( $attributes, $exclude ) || false !== strpos( $content, $exclude ) ) {
+								$should_exclude = true;
+								break;
 							}
 						}
 					} catch ( \Throwable $e ) {

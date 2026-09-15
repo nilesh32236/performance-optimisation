@@ -2502,8 +2502,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * Get sandbox preview status (issue #1163).
 		 *
 		 * Returns staged values, the admin-only preview URL, and whether a
-		 * staged experiment exists. Read-only; perf tests run in the preview
-		 * URL itself (performance_scan accepts the preview URL).
+		 * staged experiment exists. Read-only; perf tests cannot run inside
+		 * the preview (server-side scans are unauthenticated) and always
+		 * measure the production URL — staged output is verified visually
+		 * via the admin preview link.
 		 *
 		 * @param \WP_REST_Request $_request The request object.
 		 * @return \WP_REST_Response The response object.

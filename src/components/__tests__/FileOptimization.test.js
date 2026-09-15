@@ -1163,6 +1163,14 @@ describe( 'FileOptimization Component', () => {
 		apiCall
 			.mockResolvedValueOnce( {
 				success: true,
+				data: {
+					staged: {},
+					has_staged: false,
+					preview_url: '',
+				},
+			} )
+			.mockResolvedValueOnce( {
+				success: true,
 				data: { staged: { delayJS: true } },
 			} )
 			.mockResolvedValueOnce( {
@@ -1193,6 +1201,72 @@ describe( 'FileOptimization Component', () => {
 		} );
 		await waitFor( () => {
 			expect( apiCall ).toHaveBeenCalledWith( 'sandbox_promote', {} );
+		} );
+	} );
+
+	it( 'hydrates sandbox status when the Scripts tab opens', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				staged: { delayJS: true },
+				has_staged: true,
+				preview_url: 'http://example.com/?wppo_preview=assets',
+			},
+		} );
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+		fireEvent.click( screen.getByRole( 'tab', { name: /Scripts/i } ) );
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith(
+				'sandbox_preview',
+				{},
+				'GET'
+			);
+		} );
+		await waitFor( () => {
+			expect(
+				screen.getByText( /A staged preview exists/i )
+			).toBeInTheDocument();
+		} );
+	} );
+
+	it( 'runs the perf test against the production URL without preview params', async () => {
+		apiCall
+			.mockResolvedValueOnce( {
+				success: true,
+				data: {
+					staged: { delayJS: true },
+					has_staged: true,
+					preview_url:
+						'http://example.com/?wppo_preview=assets&_wppo_preview_nonce=abc',
+				},
+			} )
+			.mockResolvedValueOnce( {
+				success: true,
+				data: { score: 95 },
+			} );
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+		fireEvent.click( screen.getByRole( 'tab', { name: /Scripts/i } ) );
+
+		const perfButton = await screen.findByRole( 'button', {
+			name: /Run perf test \(production URL\)/i,
+		} );
+		await waitFor( () => {
+			expect( perfButton ).not.toBeDisabled();
+		} );
+		await act( async () => {
+			fireEvent.click( perfButton );
+		} );
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith( 'performance_scan', {
+				url: 'http://example.com/',
+			} );
+		} );
+		await waitFor( () => {
+			expect(
+				screen.getByText( /cannot use the admin preview session/i )
+			).toBeInTheDocument();
 		} );
 	} );
 } );

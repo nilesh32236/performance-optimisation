@@ -221,8 +221,6 @@ const FileOptimization = ( {
 		delayJS: !! settings.delayJS,
 		deferJS: !! settings.deferJS,
 		combineCSS: !! settings.combineCSS,
-		minifyJS: !! settings.minifyJS,
-		minifyCSS: !! settings.minifyCSS,
 		excludeDelayJS:
 			typeof settings.excludeDelayJS === 'string'
 				? settings.excludeDelayJS
@@ -236,6 +234,55 @@ const FileOptimization = ( {
 				? settings.excludeCombineCSS
 				: '',
 	} );
+	// Hydrate sandbox state when the Scripts tab opens so a staged
+	// experiment from a prior session is visible without re-staging.
+	useEffect( () => {
+		if ( activeSubTab !== 'scripts' ) {
+			return;
+		}
+		let cancelled = false;
+		( async () => {
+			try {
+				const status = await apiCall( 'sandbox_preview', {}, 'GET' );
+				if (
+					cancelled ||
+					! status ||
+					! status.success ||
+					! status.data
+				) {
+					return;
+				}
+				if (
+					status.data.staged &&
+					typeof status.data.staged === 'object'
+				) {
+					setSandboxStaged( status.data.staged );
+				}
+				if ( status.data.preview_url ) {
+					setSandboxPreviewUrl( status.data.preview_url );
+				}
+			} catch {
+				// Best-effort: the stage/promote/discard controls still work
+				// without prior status.
+			}
+		} )();
+		return () => {
+			cancelled = true;
+		};
+	}, [ activeSubTab ] );
+	// Server-side scans run unauthenticated, so they can never carry the
+	// admin preview session: strip the preview query args and scan the
+	// plain production URL instead of implying a staged measurement.
+	const stripPreviewParams = ( url ) => {
+		try {
+			const parsed = new URL( url, window.location.origin );
+			parsed.searchParams.delete( 'wppo_preview' );
+			parsed.searchParams.delete( '_wppo_preview_nonce' );
+			return parsed.toString();
+		} catch {
+			return url;
+		}
+	};
 	const handleSandboxSave = async () => {
 		setSandboxBusy( true );
 		try {
@@ -352,13 +399,13 @@ const FileOptimization = ( {
 		setSandboxBusy( true );
 		try {
 			const res = await apiCall( 'performance_scan', {
-				url: sandboxPreviewUrl,
+				url: stripPreviewParams( sandboxPreviewUrl ),
 			} );
 			if ( res && res.success ) {
 				notifySandbox( {
 					type: 'success',
 					message: __(
-						'Perf test finished in preview.',
+						'Perf test finished on the production URL. Server-side scans cannot use the admin preview session, so staged settings were not measured — open the admin preview link to verify visually.',
 						'performance-optimisation'
 					),
 				} );
@@ -1801,7 +1848,7 @@ const FileOptimization = ( {
 											}
 										>
 											{ __(
-												'Run perf test in preview',
+												'Run perf test (production URL)',
 												'performance-optimisation'
 											) }
 										</button>
@@ -1838,6 +1885,12 @@ const FileOptimization = ( {
 												) }
 											</p>
 										) }
+									<p className="wppo-field-description">
+										{ __(
+											'Perf tests run server-side without your admin session, so they always measure the production URL — staged settings are previewed visually via the admin link above, not via the perf test.',
+											'performance-optimisation'
+										) }
+									</p>
 								</div>
 								{ notice && (
 									<NoticeBanner

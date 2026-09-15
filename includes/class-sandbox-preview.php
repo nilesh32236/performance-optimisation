@@ -70,6 +70,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 		/**
 		 * Asset keys that may be staged (production keys are never renamed).
 		 *
+		 * Only keys with a preview render path are allowlisted: delay/defer
+		 * widen their hook registration and bypass the logged-in/safe-mode
+		 * gates for preview admins, combine_css() bypasses its eligibility
+		 * gate and overlays staged excludes, and the HTML minifier overlays
+		 * staged delay excludes. External minifyJS/minifyCSS have no staged
+		 * widening (filters register on production flags only), so they are
+		 * deliberately excluded until a preview path exists.
+		 *
 		 * @since NEXT
 		 * @var string[]
 		 */
@@ -77,8 +85,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 			'delayJS',
 			'deferJS',
 			'combineCSS',
-			'minifyJS',
-			'minifyCSS',
 			'excludeDelayJS',
 			'excludeDeferJS',
 			'excludeCombineCSS',
@@ -323,7 +329,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 						unset( $e );
 					}
 				}
-				return (bool) $updated || true;
+				if ( $updated ) {
+					return true;
+				}
+				// update_option() returns false both on failure and when the
+				// stored value is unchanged: read back and treat "staged slot
+				// already holds these values" as success so a no-op re-stage
+				// is not reported as an error, while a real write failure
+				// still returns false.
+				try {
+					// allowlist(settings-read-guard): deliberate direct read — verify the write above.
+					$verify = get_option( 'wppo_settings' );
+					if ( is_array( $verify )
+					&& isset( $verify['file_optimisation'][ self::STAGED_KEY ] )
+					&& $verify['file_optimisation'][ self::STAGED_KEY ] === $clean ) {
+						return true;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				return false;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;
