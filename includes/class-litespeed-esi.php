@@ -101,6 +101,114 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		}
 
 		/**
+		 * Whether the Header_Emitter bridge is loaded.
+		 *
+		 * Single guard for every Header_Emitter call site below: the ESI
+		 * bridge can run on admin-ajax/early hooks where the emitter file
+		 * may not be loaded yet, so header emission must fail closed.
+		 *
+		 * @since NEXT
+		 * @return bool True when Header_Emitter can be called safely.
+		 */
+		private static function has_header_emitter(): bool {
+			return class_exists( 'PerformanceOptimise\Inc\Header_Emitter' );
+		}
+
+		/**
+		 * Emit the private pair, fail-closed when the emitter is unavailable.
+		 *
+		 * The ESI bridge can run on admin-ajax/early hooks where the emitter
+		 * file may not be loaded yet — silently skipping would leave a
+		 * cart/checkout/adminbar response publicly cacheable, so fall back
+		 * to direct PHP header() emission instead of skipping.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private static function emit_private_fail_closed(): void {
+			if ( self::has_header_emitter() ) {
+				Header_Emitter::emit_private_pair();
+				return;
+			}
+			if ( function_exists( 'headers_sent' ) && headers_sent() ) {
+				return;
+			}
+			header( 'Cache-Control: private,no-cache' );
+			header( 'X-LiteSpeed-Cache-Control: private,no-vary' );
+		}
+
+		/**
+		 * Emit the no-cache pair, fail-closed when the emitter is unavailable.
+		 *
+		 * Same fail-closed contract as emit_private_fail_closed() for the
+		 * admin / no-cache path.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private static function emit_nocache_fail_closed(): void {
+			if ( self::has_header_emitter() ) {
+				Header_Emitter::emit_nocache_pair();
+				return;
+			}
+			if ( function_exists( 'headers_sent' ) && headers_sent() ) {
+				return;
+			}
+			header( 'Cache-Control: no-cache' );
+			header( 'X-LiteSpeed-Cache-Control: no-cache' );
+		}
+
+		/**
+		 * Fallback nonce seed when pluggable functions are unavailable.
+		 *
+		 * Prefers wp_salt() when it exists; otherwise uses a per-install
+		 * secret persisted in the options table so the fallback nonce is
+		 * not md5(block + static-string) predictable from source. When no
+		 * persistence is available either, returns an empty string and
+		 * callers must treat the nonce as invalid (fail closed).
+		 *
+		 * @since NEXT
+		 * @param string $context Nonce context (block name).
+		 * @return string MD5 seed for the fallback nonce, or '' when no secret exists.
+		 */
+		private static function fallback_nonce_seed( string $context ): string {
+			if ( function_exists( 'wp_salt' ) ) {
+				return md5( $context . wp_salt() );
+			}
+			$secret = function_exists( 'get_option' ) ? get_option( 'wppo_esi_fallback_secret', '' ) : '';
+			if ( ! is_string( $secret ) || '' === $secret ) {
+				try {
+					$secret = function_exists( 'wp_generate_password' ) ? wp_generate_password( 64, true, true ) : bin2hex( random_bytes( 32 ) );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return '';
+				}
+				if ( function_exists( 'add_option' ) ) {
+					// First writer wins: concurrent first-use requests must not
+					// last-write-wins invalidate each other's fallback nonces, so
+					// add (which fails when the option already exists) before
+					// falling back to update.
+					$added = add_option( 'wppo_esi_fallback_secret', $secret, '', false );
+					if ( ! $added ) {
+						$winner = function_exists( 'get_option' ) ? get_option( 'wppo_esi_fallback_secret', '' ) : '';
+						if ( is_string( $winner ) && '' !== $winner ) {
+							$secret = $winner;
+						} elseif ( function_exists( 'update_option' ) ) {
+							update_option( 'wppo_esi_fallback_secret', $secret, false );
+						} else {
+							return '';
+						}
+					}
+				} elseif ( function_exists( 'update_option' ) ) {
+					update_option( 'wppo_esi_fallback_secret', $secret, false );
+				} else {
+					return '';
+				}
+			}
+			return md5( $context . $secret );
+		}
+
+		/**
 		 * Enqueue the ESI hydration client (build/esi.js) for OLS placeholder mode.
 		 *
 		 * On OpenLiteSpeed there is no native ESI, so the server renders
@@ -162,7 +270,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 				$version = isset( $asset['version'] ) ? $asset['version'] : WPPO_VERSION;
 			}
 
-			wp_enqueue_script( 'wppo-esi', WPPO_PLUGIN_URL . 'build/esi.js', $deps, $version, array( 'in_footer' => true ) );
+			// Bool $in_footer (not the array $args form, which needs WP 6.3+)
+			// so the client still loads in the footer on WP 6.2.
+			wp_enqueue_script( 'wppo-esi', WPPO_PLUGIN_URL . 'build/esi.js', $deps, $version, true );
 		}
 
 		/**
@@ -215,7 +325,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 							unset( $e );
 						}
 					}
-					if ( ! empty( $_COOKIE['woocommerce_items_in_cart'] ) || ! empty( $_COOKIE['woocommerce_cart_hash'] ) ) {
+					// Unslash + sanitize raw cookie input before trusting it.
+					// is_string guards: an array-valued cookie would otherwise
+					// reach wp_unslash()/sanitize_text_field() as an array.
+					$cart_cookie = isset( $_COOKIE['woocommerce_items_in_cart'] ) && is_string( $_COOKIE['woocommerce_items_in_cart'] ) ? sanitize_text_field( wp_unslash( $_COOKIE['woocommerce_items_in_cart'] ) ) : '';
+					$hash_cookie = isset( $_COOKIE['woocommerce_cart_hash'] ) && is_string( $_COOKIE['woocommerce_cart_hash'] ) ? sanitize_text_field( wp_unslash( $_COOKIE['woocommerce_cart_hash'] ) ) : '';
+					if ( '' !== $cart_cookie || '' !== $hash_cookie ) {
 						return true;
 					}
 					return false;
@@ -343,7 +458,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			 */
 			$block = (string) apply_filters( 'wppo_esi_block', $block, $attrs );
 
-			$nonce = function_exists( 'wp_create_nonce' ) ? wp_create_nonce( 'wppo_esi' ) : md5( $block . wp_salt() );
+			$nonce = function_exists( 'wp_create_nonce' ) ? wp_create_nonce( 'wppo_esi' ) : self::fallback_nonce_seed( $block );
+			// Fail closed per fallback_nonce_seed() contract: an empty seed
+			// means no usable secret exists, so never embed or store an
+			// empty nonce — render an inert marker instead (fragment
+			// verification rejects empty nonces, so hydration stays denied).
+			if ( '' === $nonce ) {
+				return '<!-- wppo-esi:unavailable -->';
+			}
 			// Store 12h transient blog-prefixed.
 			$transient_key = Util::transient_key( 'wppo_esi_nonce_' . md5( $nonce . $block ) );
 			set_transient( $transient_key, $nonce, 12 * HOUR_IN_SECONDS );
@@ -668,7 +790,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			$nonce_valid = function_exists( 'wp_verify_nonce' ) ? wp_verify_nonce( $nonce, 'wppo_esi' ) : false;
 
 			if ( ! $nonce_valid && 'cart' !== $block && 'nonce' !== $block ) {
-				Header_Emitter::emit_private_pair();
+				self::emit_private_fail_closed();
 				if ( function_exists( 'wp_send_json_error' ) ) {
 					wp_send_json_error( array( 'message' => 'Unauthorized' ), 403 );
 				}
@@ -678,7 +800,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			// For adminbar, require logged-in.
 			if ( 'adminbar' === $block || 'admin_bar' === $block || 'admin-bar' === $block ) {
 				if ( ! is_user_logged_in() ) {
-					Header_Emitter::emit_private_pair();
+					self::emit_private_fail_closed();
 					if ( function_exists( 'wp_send_json_error' ) ) {
 						wp_send_json_error( array( 'message' => 'Unauthorized' ), 401 );
 					}
@@ -686,7 +808,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 				}
 			}
 
-			$fragment = '<span>cart(3)</span>';
 			// Allow per-block fragment generation.
 			switch ( $block ) {
 				case 'cart':
@@ -701,7 +822,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 					// No nonce oracle: only mint a fresh nonce when the caller
 					// presented a valid one; unauthenticated callers get 403.
 					if ( ! $nonce_valid ) {
-						Header_Emitter::emit_private_pair();
+						self::emit_private_fail_closed();
 						if ( function_exists( 'wp_send_json_error' ) ) {
 							wp_send_json_error( array( 'message' => 'Unauthorized' ), 403 );
 						}
@@ -735,7 +856,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 				array( 'http', 'https', 'mailto', 'tel', 'relative' )
 			);
 
-			Header_Emitter::emit_private_pair();
+			self::emit_private_fail_closed();
 
 			if ( function_exists( 'wp_send_json_success' ) ) {
 				wp_send_json_success( array( 'html' => $fragment ) );
@@ -773,8 +894,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 				return $content;
 			}
 
-			$nonce = function_exists( 'wp_create_nonce' ) ? wp_create_nonce( 'wppo_esi' ) : md5( wp_salt() . 'wppo_esi' );
-			$key   = Util::transient_key( 'wppo_esi_nonce_' . md5( $nonce ) );
+			$nonce = function_exists( 'wp_create_nonce' ) ? wp_create_nonce( 'wppo_esi' ) : self::fallback_nonce_seed( 'wppo_esi' );
+			// Fail closed per fallback_nonce_seed() contract: never inject
+			// or store an empty nonce — leave the placeholder untouched so
+			// verification (which rejects empty nonces) stays denied.
+			if ( '' === $nonce ) {
+				return $content;
+			}
+			$key = Util::transient_key( 'wppo_esi_nonce_' . md5( $nonce ) );
 			set_transient( $key, $nonce, 12 * HOUR_IN_SECONDS );
 			// Wildcard allowlist transient for ESI (wppo_-prefixed to avoid
 			// collisions with other plugins on shared object-cache backends).
@@ -872,7 +999,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 
 			// Cart / checkout / account → private,no-vary.
 			if ( $is_cart || $is_checkout || $is_account ) {
-				Header_Emitter::emit_private_pair();
+				self::emit_private_fail_closed();
 				/**
 				 * Filter ESI private header decision.
 				 *
@@ -885,14 +1012,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 
 			// Admin → no-cache.
 			if ( $is_admin ) {
-				Header_Emitter::emit_nocache_pair();
+				self::emit_nocache_fail_closed();
 				do_action( 'wppo_esi_private_headers_sent', 'no-cache' );
 				return;
 			}
 
 			// Also check should_punch_hole for generic private.
 			if ( self::should_punch_hole( 'cart' ) || self::should_punch_hole( 'checkout' ) || self::should_punch_hole( 'account' ) || self::should_punch_hole( 'adminbar' ) ) {
-				Header_Emitter::emit_private_pair();
+				self::emit_private_fail_closed();
 				do_action( 'wppo_esi_private_headers_sent', 'private' );
 			}
 		}
@@ -983,6 +1110,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		}
 
 		/**
+		 * Sanitize an ESI tag value through the canonical sanitizer when
+		 * available, with a local fallback otherwise.
+		 *
+		 * Single home for the emitter-unavailable path so handle_nonce()
+		 * no longer hand-mirrors Header_Emitter::sanitize_tag() inline: when
+		 * the emitter is loaded the canonical implementation is reused
+		 * directly, and the inline fallback below matches its contract
+		 * (strip ASCII controls incl. CR/LF/NUL, cap at 1024 chars),
+		 * failing closed to an empty tag on regex failure.
+		 *
+		 * @since NEXT
+		 * @param string $action Raw ESI action name.
+		 * @return string Sanitized tag value (max 1024 chars).
+		 */
+		private static function sanitize_esi_tag_value( string $action ): string {
+			if ( self::has_header_emitter() ) {
+				return Header_Emitter::sanitize_tag( $action );
+			}
+			$cleaned = preg_replace( '/[\x00-\x1F\x7F]/', '', $action );
+			if ( ! is_string( $cleaned ) ) {
+				return '';
+			}
+			return substr( $cleaned, 0, 1024 );
+		}
+
+		/**
 		 * Handle litespeed_nonce action for widget/cart hole-punching.
 		 *
 		 * @since 2.0.0
@@ -997,11 +1150,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			if ( '' === $action ) {
 				return;
 			}
-			// Tag ESI nonce for purge: ESI. + W.{id} pattern.
+			// Tag ESI nonce for purge: ESI. + W.{id} pattern. The purge queue
+			// above is authoritative; the response tag header below is
+			// best-effort observability, mirrored via direct header() when the
+			// emitter is unavailable (fail-closed, like the privacy paths).
 			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				LiteSpeed_Integration::queue_purge_tags( array( 'ESI.' . $action, 'W.' . md5( $action ) ), 'private' );
 			}
-			Header_Emitter::emit_esi_tag( $action );
+			if ( self::has_header_emitter() ) {
+				Header_Emitter::emit_esi_tag( $action );
+			} elseif ( function_exists( 'headers_sent' ) && ! headers_sent() ) {
+				$safe = self::sanitize_esi_tag_value( $action );
+				header( 'X-LiteSpeed-Tag: ESI.' . $safe, false );
+			}
 		}
 
 		/**
@@ -1057,6 +1218,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			}
 			if ( ! defined( 'DONOTCACHEPAGE' ) ) {
 				define( 'DONOTCACHEPAGE', true );
+			}
+			// The constant alone is read too late by some stacks — also send
+			// no-cache headers now (guarded: never emit after headers sent).
+			$headers_sent = function_exists( 'headers_sent' ) ? headers_sent() : true;
+			if ( ! $headers_sent ) {
+				if ( function_exists( 'nocache_headers' ) ) {
+					nocache_headers();
+				} else {
+					self::emit_nocache_fail_closed();
+				}
 			}
 			return $fragment;
 		}

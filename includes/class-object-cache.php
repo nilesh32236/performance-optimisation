@@ -617,7 +617,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				if ( $wp_filesystem ) {
 					$wp_filesystem->delete( $path );
 				} else {
-					@unlink( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.unlink_unlink
+					@unlink( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.unlink_unlink -- Stale state files are best-effort cleanup.
 				}
 			}
 		}
@@ -759,8 +759,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * @return \Redis|\RedisCluster|\WP_Error
 		 */
 		private function connect_internal( $config ) {
-			require_once WPPO_PLUGIN_PATH . 'includes/redis-connect-helper.php';
+			if ( ! self::ensure_redis_helper( 'wppo_redis_connect' ) ) {
+				return new \WP_Error( 'missing_helper', __( 'The Redis connection helper is unavailable.', 'performance-optimisation' ) );
+			}
 			return wppo_redis_connect( $config );
+		}
+
+		/**
+		 * Ensure the Redis connection helper file is loaded and a helper
+		 * function from it is available.
+		 *
+		 * Shared guard for connect_internal(), enable() and
+		 * get_serializer_support(): a missing WPPO_PLUGIN_PATH constant or
+		 * an unreadable/absent helper file returns false instead of
+		 * fataling on a bare require_once.
+		 *
+		 * @since NEXT
+		 * @param string $helper_function Helper function name that must exist after loading.
+		 * @return bool True when the helper function is available.
+		 */
+		private static function ensure_redis_helper( string $helper_function ): bool {
+			if ( function_exists( $helper_function ) ) {
+				return true;
+			}
+			$helper = defined( 'WPPO_PLUGIN_PATH' ) ? WPPO_PLUGIN_PATH . 'includes/redis-connect-helper.php' : '';
+			if ( '' !== $helper && is_readable( $helper ) ) {
+				require_once $helper;
+			}
+			return function_exists( $helper_function );
+		}
+
+		/**
+		 * Race-tolerant filesize(): clears the stat cache and suppresses the
+		 * TOCTOU warning when the file vanishes between checks.
+		 *
+		 * @since NEXT
+		 * @param string $path File path.
+		 * @return int|false Size in bytes or false.
+		 */
+		private static function safe_filesize( string $path ) {
+			if ( function_exists( 'clearstatcache' ) ) {
+				clearstatcache( true, $path );
+			}
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.file_system_operations_filesize -- TOCTOU: file may vanish between is_readable() and filesize().
+			$size = @filesize( $path );
+			return $size;
 		}
 
 		/**
@@ -777,7 +820,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			$config  = isset( $options['object_cache'] ) ? $options['object_cache'] : array();
 
 			if ( empty( $config ) && file_exists( $this->config_path ) ) {
-				$config = include $this->config_path; // phpcs:ignore WPThemeReview.CoreFunctionality.FileInclude.FileIncludeFound
+				// Containment + size guard before include: the config path lives
+				// under wp-content but must never escape it via symlink, and an
+				// unexpectedly large file is rejected instead of executed.
+				// Both sides are realpath()ed so a symlinked wp-content does
+				// not false-reject a legitimate config.
+				$config_real   = realpath( $this->config_path );
+				$content_real  = realpath( WP_CONTENT_DIR );
+				$content_dir   = is_string( $content_real ) ? wp_normalize_path( $content_real ) : wp_normalize_path( WP_CONTENT_DIR );
+				$config_normal = is_string( $config_real ) ? wp_normalize_path( $config_real ) : '';
+				$config_size   = ( '' !== $config_normal && 0 === strpos( $config_normal, $content_dir . '/' ) && is_readable( $this->config_path ) ) ? self::safe_filesize( $this->config_path ) : false;
+				if ( false !== $config_size && $config_size > 0 && $config_size <= 65536 ) {
+					$config = include $this->config_path; // phpcs:ignore WPThemeReview.CoreFunctionality.FileInclude.FileIncludeFound
+				}
 				if ( ! is_array( $config ) ) {
 					$config = array();
 				}
@@ -889,7 +944,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 
 			// Format nodes as array for the config file if it's a string.
 			if ( ! empty( $config['nodes'] ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/redis-connect-helper.php';
+				if ( ! self::ensure_redis_helper( 'wppo_parse_nodes' ) ) {
+					return new \WP_Error( 'missing_helper', __( 'The Redis connection helper is unavailable.', 'performance-optimisation' ) );
+				}
 				$config['nodes'] = wppo_parse_nodes( $config['nodes'] );
 			}
 
@@ -1142,7 +1199,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			);
 
 			try {
-				require_once WPPO_PLUGIN_PATH . 'includes/redis-connect-helper.php';
+				if ( ! self::ensure_redis_helper( 'wppo_resolve_redis_serializer' ) ) {
+					return $support;
+				}
 				if ( function_exists( 'wppo_resolve_redis_serializer' ) ) {
 					$resolved          = wppo_resolve_redis_serializer();
 					$support['active'] = isset( $resolved['name'] ) ? (string) $resolved['name'] : 'php';

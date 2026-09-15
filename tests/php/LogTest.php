@@ -127,7 +127,7 @@ class LogTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 2, count( $data['activities'] ) );
 		$this->assertSame( 25, $data['total_items'] );
 		$this->assertSame( 1, $data['current_page'] );
-		$this->assertSame( 3.0, $data['total_pages'] );
+		$this->assertSame( 3, $data['total_pages'] );
 		$this->assertSame( 10, $data['per_page'] );
 	}
 

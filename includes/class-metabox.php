@@ -38,7 +38,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 			// Hook into WordPress to add the metaboxes.
 			add_action( 'add_meta_boxes', array( $this, 'add_metabox' ) );
 			// Hook to save the metabox data.
-			add_action( 'save_post', array( $this, 'save_metabox' ) );
+			add_action( 'save_post', array( $this, 'save_metabox' ), 10, 3 );
 		}
 
 		/**
@@ -49,13 +49,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		public function add_metabox() {
 			$post_types = get_post_types( array( 'public' => true ), 'names' );
 			$excluded   = array( 'attachment' );
-			$post_types = array_diff( $post_types, $excluded );
+			$post_types = array_values( array_diff( $post_types, $excluded ) );
 
 			add_meta_box(
 				'preload_image_metabox',
 				__( 'Preload Image URL', 'performance-optimisation' ),
 				array( $this, 'render_metabox' ),
-				'',
+				$post_types,
 				'side',
 				'default'
 			);
@@ -364,10 +364,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		/**
 		 * Saves metabox data when the post is saved.
 		 *
-		 * @param int $post_id The ID of the post being saved.
+		 * @param int           $post_id The ID of the post being saved.
+		 * @param \WP_Post|null $post    The post object being saved (null in unit-test direct calls).
+		 * @param bool          $update  Whether this is an update of an existing post.
 		 * @since 1.0.0
 		 */
-		public function save_metabox( $post_id ) {
+		public function save_metabox( $post_id, $post = null, $update = false ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter -- save_post passes $post/$update; signature must accept all 3 args.
 			// Prevent autosave from overwriting.
 			if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
 				return;

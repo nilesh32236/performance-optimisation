@@ -1231,8 +1231,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			}
 
 			// Security Fix: Prevent File Size & Memory Bomb DoS.
+			// The filter value is untrusted: coerce to a positive int with
+			// fallback to the 20MB default so a 0/negative/non-numeric/array
+			// return can neither disable the guard nor block all conversions.
 			$max_bytes = apply_filters( 'wppo_filesize_limit_bytes', 20 * 1024 * 1024 );
-			if ( filesize( $source_image ) > $max_bytes ) {
+			if ( ! is_numeric( $max_bytes ) || (int) $max_bytes < 1 ) {
+				$max_bytes = 20 * 1024 * 1024;
+			}
+			$max_bytes = (int) $max_bytes;
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- filesize() emits warnings on unreadable files; guarded with a false check below.
+			$bytes = @filesize( $source_image );
+			if ( false === $bytes || $bytes > $max_bytes ) {
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 					error_log( 'WPPO Error: Image exceeds maximum filesize limit' );
@@ -1705,8 +1714,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 */
 		private function convert_palette_to_truecolor( $image ) {
 			if ( ! imageistruecolor( $image ) ) {
-				$width     = imagesx( $image );
-				$height    = imagesy( $image );
+				$width  = imagesx( $image );
+				$height = imagesy( $image );
+				if ( ! is_int( $width ) || ! is_int( $height ) || $width < 1 || $height < 1 ) {
+					return $image;
+				}
 				$truecolor = imagecreatetruecolor( $width, $height );
 				if ( false === $truecolor ) {
 					return $image;
@@ -1714,7 +1726,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				imagealphablending( $truecolor, false );
 				imagesavealpha( $truecolor, true );
 				$transparent = imagecolorallocatealpha( $truecolor, 255, 255, 255, 127 );
-				imagefill( $truecolor, 0, 0, $transparent );
+				if ( false !== $transparent ) {
+					imagefill( $truecolor, 0, 0, $transparent );
+				}
 				imagecopy( $truecolor, $image, 0, 0, 0, 0, $width, $height );
 				Util::destroy_gd_image( $image );
 				return $truecolor;
@@ -1810,7 +1824,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 			// Fill with white to avoid black background for transparent PNG/GIF sources.
 			$white = imagecolorallocate( $thumb, 255, 255, 255 );
-			imagefill( $thumb, 0, 0, $white );
+			if ( false !== $white ) {
+				imagefill( $thumb, 0, 0, $white );
+			}
 
 			imagecopyresampled( $thumb, $image, 0, 0, 0, 0, $thumb_width, $thumb_height, $orig_width, $orig_height );
 
@@ -2505,7 +2521,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 			// Security Fix: Prevent File Size & Memory Bomb DoS (same limit as convert_image()).
 			$max_bytes = apply_filters( 'wppo_filesize_limit_bytes', 20 * 1024 * 1024 );
-			if ( filesize( $file ) > $max_bytes ) {
+			if ( ! is_numeric( $max_bytes ) || (int) $max_bytes < 1 ) {
+				$max_bytes = 20 * 1024 * 1024;
+			}
+			$max_bytes = (int) $max_bytes;
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- filesize() emits warnings on unreadable files; guarded with a false check below.
+			$upload_bytes = @filesize( $file );
+			if ( false === $upload_bytes || $upload_bytes > $max_bytes ) {
 				return;
 			}
 

@@ -529,6 +529,57 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		}
 
 		/**
+		 * Strip CSS comments while preserving quoted segments.
+		 *
+		 * A character scanner that tracks single/double-quote state (with
+		 * backslash escapes), so comment markers inside strings never open
+		 * or close a comment. Unterminated comments are dropped (fail-open).
+		 *
+		 * @since NEXT
+		 * @param string $css Raw CSS content.
+		 * @return string CSS without comments.
+		 */
+		private static function strip_css_comments( string $css ): string {
+			$length = strlen( $css );
+			$out    = '';
+			$quote  = null;
+			$i      = 0;
+			while ( $i < $length ) {
+				$char = $css[ $i ];
+				if ( null !== $quote ) {
+					$out .= $char;
+					if ( '\\' === $char && $i + 1 < $length ) {
+						$out .= $css[ $i + 1 ];
+						$i   += 2;
+						continue;
+					}
+					if ( $char === $quote ) {
+						$quote = null;
+					}
+					++$i;
+					continue;
+				}
+				if ( '"' === $char || "'" === $char ) {
+					$quote = $char;
+					$out  .= $char;
+					++$i;
+					continue;
+				}
+				if ( '/' === $char && $i + 1 < $length && '*' === $css[ $i + 1 ] ) {
+					$end = strpos( $css, '*/', $i + 2 );
+					if ( false === $end ) {
+						break;
+					}
+					$i = $end + 2;
+					continue;
+				}
+				$out .= $char;
+				++$i;
+			}
+			return $out;
+		}
+
+		/**
 		 * Parse CSS content into structured rules.
 		 *
 		 * @param string $css Raw CSS content.
@@ -536,14 +587,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @since 1.9.0
 		 */
 		public function parse_css( string $css ): array {
-			// Strip CSS comments. Note: this simple regex does not handle
-			// string contents (e.g. content: "/* not a comment */") correctly.
-			// CSS values containing "/*" inside strings would be incorrectly
-			// truncated. This is a known v1 limitation.
-			$stripped = preg_replace( '/\/\*.*?\*\//s', '', $css );
-			if ( null !== $stripped ) {
-				$css = $stripped;
-			}
+			// Strip CSS comments with a string-aware scanner: comment markers
+			// inside quoted segments (e.g. content: "/* not a comment */")
+			// are preserved instead of being treated as comment boundaries.
+			$css = self::strip_css_comments( $css );
 
 			$rules = array();
 
@@ -557,8 +604,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 
 			while ( $offset < $length ) {
 				if ( '@' === $css[ $offset ] ) {
-					$semicolon_pos = strpos( $css, ';', $offset );
-					$at_rule_end   = strpos( $css, '{', $offset );
+					// Quote-aware prelude scan (mirrors the block scanners
+					// below): a naive strpos() for ';'/'{' mis-splits when
+					// the prelude holds a quoted string containing either
+					// character (e.g. @import url("a;b.css")).
+					list( $semicolon_pos, $at_rule_end ) = self::find_at_rule_prelude_end( $css, $offset, $length );
 
 					// Handle semicolon-terminated at-rules (@import, @charset, @namespace).
 					if ( false !== $semicolon_pos && ( false === $at_rule_end || $semicolon_pos < $at_rule_end ) ) {
@@ -580,11 +630,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					$brace_depth = 1;
 					$block_start = $at_rule_end;
 					$pos         = $at_rule_end + 1;
+					$scan_quote  = null;
 
 					while ( $pos < $length && $brace_depth > 0 ) {
-						if ( '{' === $css[ $pos ] ) {
+						$scan_char = $css[ $pos ];
+						if ( null !== $scan_quote ) {
+							// Inside a quoted segment: braces are literal. A
+							// backslash escapes the next char (e.g. content: '}').
+							if ( '\\' === $scan_char ) {
+								$pos += 2;
+								continue;
+							}
+							if ( $scan_char === $scan_quote ) {
+								$scan_quote = null;
+							}
+						} elseif ( '"' === $scan_char || "'" === $scan_char ) {
+							$scan_quote = $scan_char;
+						} elseif ( '{' === $scan_char ) {
 							++$brace_depth;
-						} elseif ( '}' === $css[ $pos ] ) {
+						} elseif ( '}' === $scan_char ) {
 							--$brace_depth;
 						}
 						++$pos;
@@ -630,12 +694,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 
 					$offset = $pos;
 				} else {
-					$rule_end = strpos( $css, '}', $offset );
-					if ( false === $rule_end ) {
-						$rule_end = $length;
-					} else {
-						++$rule_end;
-					}
+					// Quote-aware scan (mirrors the at-rule block scanner
+					// above): a naive strpos( '}' ) truncates on a brace
+					// inside a quoted value (e.g. content:"}"), shifting the
+					// offset and cascading into subsequent rules.
+					$rule_end = self::find_rule_end( $css, $offset, $length );
 
 					$rule_text = substr( $css, $offset, $rule_end - $offset );
 					$rule_text = trim( $rule_text );
@@ -667,6 +730,82 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			}
 
 			return $rules;
+		}
+
+		/**
+		 * Find the end of an at-rule prelude, skipping quoted segments.
+		 *
+		 * Returns the first unquoted ';' or '{' offset (whichever comes
+		 * first), so a semicolon/brace inside a quoted prelude string (e.g.
+		 * `@import url("a;b.css")`) never terminates the prelude early.
+		 * Backslash escapes inside quotes are honoured (e.g. "a\";b").
+		 *
+		 * @since NEXT
+		 * @param string $css    Full CSS content.
+		 * @param int    $offset At-rule start offset (the '@').
+		 * @param int    $length Length of $css.
+		 * @return array Indices 0 (semicolon offset or false) and 1 (brace offset or false).
+		 */
+		private static function find_at_rule_prelude_end( string $css, int $offset, int $length ): array {
+			$quote     = null;
+			$semicolon = false;
+			$brace     = false;
+			$pos       = $offset;
+			while ( $pos < $length ) {
+				$char = $css[ $pos ];
+				if ( null !== $quote ) {
+					if ( '\\' === $char ) {
+						$pos += 2;
+						continue;
+					}
+					if ( $char === $quote ) {
+						$quote = null;
+					}
+				} elseif ( '"' === $char || "'" === $char ) {
+					$quote = $char;
+				} elseif ( ';' === $char ) {
+					$semicolon = $pos;
+					break;
+				} elseif ( '{' === $char ) {
+					$brace = $pos;
+					break;
+				}
+				++$pos;
+			}
+			return array( $semicolon, $brace );
+		}
+
+		/**
+		 * Find the end offset (one past '}') of a regular rule, skipping
+		 * quoted segments and backslash escapes.
+		 *
+		 * @since NEXT
+		 * @param string $css    Full CSS content.
+		 * @param int    $offset Rule start offset.
+		 * @param int    $length Length of $css.
+		 * @return int Offset one past the closing brace (or $length).
+		 */
+		private static function find_rule_end( string $css, int $offset, int $length ): int {
+			$quote = null;
+			$pos   = $offset;
+			while ( $pos < $length ) {
+				$char = $css[ $pos ];
+				if ( null !== $quote ) {
+					if ( '\\' === $char ) {
+						$pos += 2;
+						continue;
+					}
+					if ( $char === $quote ) {
+						$quote = null;
+					}
+				} elseif ( '"' === $char || "'" === $char ) {
+					$quote = $char;
+				} elseif ( '}' === $char ) {
+					return $pos + 1;
+				}
+				++$pos;
+			}
+			return $length;
 		}
 
 		/**
@@ -1732,7 +1871,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @since NEXT
 		 */
 		private function get_full_regen_cooldown(): int {
-			$default = defined( 'HOUR_IN_SECONDS' ) ? 5 * HOUR_IN_SECONDS : self::FULL_REGEN_COOLDOWN_SECONDS;
+			// The class constant is the default (5 hours); the filter below
+			// may override it per site.
+			$default = self::FULL_REGEN_COOLDOWN_SECONDS;
 			try {
 				if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_used_css_regen_cooldown' ) ) {
 					return (int) $default;
@@ -2573,7 +2714,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 */
 		private static function collect_css_asset_from_tag( \WP_HTML_Tag_Processor $tags, array &$assets ): void {
 			$rel = $tags->get_attribute( 'rel' );
-			if ( 'stylesheet' !== $rel ) {
+			// Token check: rel is a space-separated list ("stylesheet",
+			// "alternate stylesheet") and matching is ASCII case-insensitive.
+			$is_stylesheet = false;
+			if ( is_string( $rel ) ) {
+				$tokens = preg_split( '/\s+/', strtolower( $rel ) );
+				foreach ( is_array( $tokens ) ? $tokens : array() as $token ) {
+					if ( 'stylesheet' === $token ) {
+						$is_stylesheet = true;
+						break;
+					}
+				}
+			}
+			if ( ! $is_stylesheet ) {
 				return;
 			}
 			$href = $tags->get_attribute( 'href' );

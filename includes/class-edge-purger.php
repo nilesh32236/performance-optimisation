@@ -86,11 +86,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		 * (or purge_files for single_page).
 		 *
 		 * @since 2.0.0
-		 * @param string      $type     Clear type ('all' or 'single_page').
-		 * @param string|null $url_path Page path (or absolute URL) for single-page clears.
+		 * @param mixed $type     Clear type ('all' or 'single_page').
+		 * @param mixed $url_path Page path (or absolute URL) for single-page clears. Both params are deliberately untyped:
+		 *                        this method runs as a WP hook callback (wppo_after_cache_clear via Cache::clear_cache(),
+		 *                        untyped) and must stay tolerant of non-string payloads instead of throwing a TypeError.
 		 * @return bool True when no purge needed or all requests succeeded.
 		 */
-		public static function purge_all( string $type = 'all', $url_path = null ): bool {
+		public static function purge_all( $type = 'all', $url_path = null ): bool {
+			// Fail closed on unexpected types: only 'all'/'single_page'
+			// strings are accepted; garbage (null, array, typo) from a buggy
+			// third-party do_action payload must never coerce into a full
+			// edge purge (purge_everything is the most expensive path).
+			if ( 'single_page' === $type ) {
+				$type = 'single_page';
+			} elseif ( 'all' === $type ) {
+				$type = 'all';
+			} else {
+				return true;
+			}
 			if ( ! Edge_Cache::is_enabled() ) {
 				return true;
 			}
@@ -149,7 +162,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		 * home URL. Returns '' when unresolvable.
 		 *
 		 * @since 2.0.0
-		 * @param string|null $url_path Page path or absolute URL.
+		 * @param mixed $url_path Page path or absolute URL.
 		 * @return string Absolute URL or ''.
 		 */
 		private static function resolve_page_url( $url_path ): string {
@@ -180,6 +193,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		 * @return bool
 		 */
 		private static function purge_cloudflare_files( string $zone, string $token, string $url ): bool {
+			$body = wp_json_encode( array( 'files' => array( $url ) ) );
+			if ( false === $body ) {
+				self::log_failure( 'cloudflare-edge', $zone . ': JSON encoding failed' );
+				return false;
+			}
 			$response = wp_remote_request(
 				'https://api.cloudflare.com/client/v4/zones/' . rawurlencode( $zone ) . '/purge_cache',
 				array(
@@ -188,7 +206,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 						'Authorization' => 'Bearer ' . $token,
 						'Content-Type'  => 'application/json',
 					),
-					'body'    => (string) wp_json_encode( array( 'files' => array( $url ) ) ),
+					'body'    => $body,
 					'timeout' => 10,
 				)
 			);
@@ -213,6 +231,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		 * @return bool
 		 */
 		private static function purge_cloudflare( string $zone, string $token ): bool {
+			$body = wp_json_encode( array( 'purge_everything' => true ) );
+			if ( false === $body ) {
+				self::log_failure( 'cloudflare-edge', $zone . ': JSON encoding failed' );
+				return false;
+			}
 			$response = wp_remote_request(
 				'https://api.cloudflare.com/client/v4/zones/' . rawurlencode( $zone ) . '/purge_cache',
 				array(
@@ -221,7 +244,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 						'Authorization' => 'Bearer ' . $token,
 						'Content-Type'  => 'application/json',
 					),
-					'body'    => (string) wp_json_encode( array( 'purge_everything' => true ) ),
+					'body'    => $body,
 					'timeout' => 10,
 				)
 			);
@@ -281,6 +304,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		 */
 		private static function log_failure( string $service, string $detail ): void {
 			do_action( 'wppo_debug_log', 'Edge purge failed [' . $service . ']: ' . $detail );
+			// Fallback: when no wppo_debug_log listener is attached the
+			// failure would be silent, so mirror it to the activity log.
+			// Fail-open: logging must never break the purge path.
+			// Throttled to one activity-log row per lock window so a
+			// prolonged edge outage cannot spam wppo_activity_logs.
+			try {
+				if ( ! has_filter( 'wppo_debug_log' ) && class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
+					// Per-service throttle key: a shared key would suppress
+					// a Bunny failure logged within the same window as a
+					// Cloudflare failure, hiding the second backend outage.
+					$service_slug = strtolower( (string) preg_replace( '/[^a-z0-9]+/', '-', (string) $service ) );
+					$service_slug = trim( substr( $service_slug, 0, 32 ), '-' );
+					if ( '' === $service_slug ) {
+						$service_slug = 'edge';
+					}
+					$throttle_key = Util::transient_key( 'wppo_edge_purge_log_lock_' . $service_slug );
+					if ( false === get_transient( $throttle_key ) ) {
+						set_transient( $throttle_key, 1, self::PURGE_LOCK_TTL );
+						Log::add( 'Edge purge failed [' . $service . ']: ' . substr( $detail, 0, 200 ) );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 	}
 }

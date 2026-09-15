@@ -23,14 +23,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 		 *
 		 * @var array
 		 */
-		private $settings;
+		private array $settings = array();
 
 		/**
 		 * Constructor.
 		 *
 		 * @param array $settings File optimization settings.
 		 */
-		public function __construct( $settings = array() ) {
+		public function __construct( array $settings = array() ) {
 			$this->settings = $settings;
 
 			if ( ! empty( $this->settings['disableEmojis'] ) ) {
@@ -197,7 +197,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 		 *
 		 * @param array  $urls          URLs to print for resource hints.
 		 * @param string $relation_type The relation type the URLs are printed for.
-		 * @return array Difference betwen the two arrays.
+		 * @return array Difference between the two arrays.
 		 */
 		public function disable_emojis_remove_dns_prefetch( $urls, $relation_type ) {
 			if ( 'dns-prefetch' === $relation_type && is_array( $urls ) ) {
@@ -339,20 +339,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 			if ( $result instanceof \WP_Error || ! $result instanceof \WP_REST_Response ) {
 				return $result;
 			}
-			if ( $result instanceof \WP_REST_Response ) {
-				// WP_REST_Response has no remove_header() (that lives on WP_REST_Server),
-				// so rewrite the header list without Link (case-insensitive).
-				$headers = $result->get_headers();
-				$found   = false;
-				foreach ( array_keys( $headers ) as $key ) {
-					if ( 'link' === strtolower( $key ) ) {
-						unset( $headers[ $key ] );
-						$found = true;
-					}
+			// $result is a WP_REST_Response here (WP_Error excluded above),
+			// which has no remove_header() (that lives on WP_REST_Server),
+			// so rewrite the header list without Link (case-insensitive).
+			$headers = $result->get_headers();
+			$found   = false;
+			foreach ( array_keys( $headers ) as $key ) {
+				if ( 'link' === strtolower( $key ) ) {
+					unset( $headers[ $key ] );
+					$found = true;
 				}
-				if ( $found ) {
-					$result->set_headers( $headers );
-				}
+			}
+			if ( $found ) {
+				$result->set_headers( $headers );
 			}
 			return $result;
 		}

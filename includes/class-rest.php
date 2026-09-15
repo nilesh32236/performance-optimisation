@@ -813,13 +813,80 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return bool True when throttled.
 		 */
 		private function is_endpoint_throttled( string $endpoint, int $limit = 10, int $window = 60 ): bool {
-			$key   = Util::transient_key( 'wppo_throttle_' . sanitize_key( $endpoint ) );
-			$count = (int) get_transient( $key );
+			// Per-user/IP key so one actor cannot exhaust the budget for
+			// everyone sharing the endpoint slug.
+			$suffix = function_exists( 'get_current_user_id' ) ? (int) get_current_user_id() : 0;
+			if ( 0 === $suffix ) {
+				$suffix = self::throttle_client_suffix();
+			}
+			$key    = Util::transient_key( 'wppo_throttle_' . sanitize_key( $endpoint ) . '_' . md5( (string) $suffix ) );
+			$bucket = get_transient( $key );
+			$now    = time();
+			// Fixed window: the TTL is set only on the first increment; later
+			// hits re-store with the remaining TTL instead of extending it.
+			if ( ! is_array( $bucket ) || ! isset( $bucket['count'], $bucket['start'] ) || (int) $bucket['start'] > $now || ( $now - (int) $bucket['start'] ) >= $window ) {
+				set_transient(
+					$key,
+					array(
+						'count' => 1,
+						'start' => $now,
+					),
+					$window
+				);
+				return false;
+			}
+			$count = (int) $bucket['count'];
 			if ( $count >= $limit ) {
 				return true;
 			}
-			set_transient( $key, $count + 1, $window );
+			// Clamp into [1, $window]: a future-dated (corrupted or tampered)
+			// start would otherwise persist the bucket past one window. Future
+			// starts reset above; the min() cap bounds this call's TTL regardless.
+			$elapsed   = $now - (int) $bucket['start'];
+			$remaining = max( 1, min( $window, $window - $elapsed ) );
+			set_transient(
+				$key,
+				array(
+					'count' => $count + 1,
+					'start' => (int) $bucket['start'],
+				),
+				$remaining
+			);
 			return false;
+		}
+
+		/**
+		 * Client suffix for the anonymous endpoint-throttle bucket.
+		 *
+		 * REMOTE_ADDR alone collapses all visitors behind a proxy/CDN edge
+		 * IP into one bucket. The left-most X-Forwarded-For entry (the
+		 * client-facing address added by the first proxy) separates those
+		 * buckets. Only the X-Forwarded-For half is filter_var()-validated;
+		 * REMOTE_ADDR is server-set and kept unvalidated in the hashed key
+		 * (no blind proxy trust: a spoofed header
+		 * can only add buckets, never impersonate another client). Mirrors
+		 * the REMOTE_ADDR-first resolution used by RUM rate limiting.
+		 *
+		 * @since NEXT
+		 * @return string Anon throttle suffix.
+		 */
+		private static function throttle_client_suffix(): string {
+			$remote = isset( $_SERVER['REMOTE_ADDR'] ) && is_string( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			$xff    = '';
+			if ( isset( $_SERVER['HTTP_X_FORWARDED_FOR'] ) && is_string( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+				$parts = explode( ',', wp_unslash( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+				$first = isset( $parts[0] ) ? trim( sanitize_text_field( $parts[0] ) ) : '';
+				if ( '' !== $first ) {
+					if ( function_exists( 'filter_var' ) ) {
+						$valid = filter_var( $first, FILTER_VALIDATE_IP );
+						$xff   = false === $valid ? '' : (string) $valid;
+					} else {
+						$xff = $first;
+					}
+				}
+			}
+			$combined = trim( $remote . '|' . $xff, '|' );
+			return '' !== $combined ? $combined : 'anon';
 		}
 
 		/**
@@ -1138,7 +1205,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @param array $settings The settings array passed by reference.
 		 * @return void
 		 */
-		private function remove_sensitive_settings_from_response( array &$settings ) { // phpcs:ignore Squiz.Commenting.FunctionComment.MissingReturn -- no void type for PHP 7.0 compat
+		private function remove_sensitive_settings_from_response( array &$settings ): void {
 			if ( isset( $settings['performance_audit'] ) ) {
 				unset( $settings['performance_audit']['pagespeed_api_key'] );
 			}
@@ -1700,7 +1767,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				Log::add(
 					sprintf(
 						/* translators: %d: Number of items cleaned */
-						__( 'Database cleanup (all): %d items removed on ', 'performance-optimisation' ),
+						__( 'Database cleanup (all): %d items removed', 'performance-optimisation' ),
 						$total
 					)
 				);
@@ -2112,7 +2179,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 */
 		private function sanitize_nodes( $nodes ) {
 			if ( is_array( $nodes ) ) {
-				return array_values( array_filter( array_map( 'sanitize_text_field', $nodes ) ) );
+				return array_values(
+					array_filter(
+						array_map(
+							static function ( $node ) {
+								return ( is_string( $node ) || is_numeric( $node ) ) ? sanitize_text_field( (string) $node ) : '';
+							},
+							$nodes
+						)
+					)
+				);
 			}
 			$nodes = sanitize_text_field( (string) $nodes );
 			return $nodes ? array( $nodes ) : array();
@@ -2513,7 +2589,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			// Filter when either url or strategy is provided.
 			if ( ! empty( $url ) || ! empty( $strategy ) ) {
-				$url_key = '' !== $url ? md5( $url ) : null;
+				$url_key = '' !== $url ? md5( esc_url_raw( $url ) ) : null;
 				$trends  = array_filter(
 					$trends,
 					static function ( $k ) use ( $url_key, $strategy ) {
@@ -2970,10 +3046,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Dismisses the welcome panel for the current user.
 		 *
+		 * @param \WP_REST_Request|null $request The request object (unused; present for route-callback signature parity).
 		 * @since 2.0.0
 		 * @return \WP_REST_Response The response object.
 		 */
-		public function dismiss_welcome(): \WP_REST_Response {
+		public function dismiss_welcome( ?\WP_REST_Request $request = null ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- REST route callbacks receive the request object.
 			if ( get_current_user_id() ) {
 				update_user_meta( get_current_user_id(), 'wppo_welcome_dismissed', 1 );
 			}

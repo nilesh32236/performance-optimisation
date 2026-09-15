@@ -238,12 +238,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 				// Security: report the normalized server family instead of the
 				// raw SERVER_SOFTWARE banner, which embeds exact versions.
 				'server_software' => self::normalize_server_software(
-					isset( $_SERVER['SERVER_SOFTWARE'] )
+					isset( $_SERVER['SERVER_SOFTWARE'] ) && is_string( $_SERVER['SERVER_SOFTWARE'] )
 						? sanitize_text_field( wp_unslash( $_SERVER['SERVER_SOFTWARE'] ) )
 						: null
 				),
-				'os'              => PHP_OS . ' ' . php_uname( 'r' ),
-				'architecture'    => php_uname( 'm' ),
+				// php_uname() can be disabled via disable_functions; fall back
+				// to the always-available PHP_OS constant (trimmed so a missing
+				// release does not leave a trailing space).
+				'os'              => trim( PHP_OS . ' ' . ( function_exists( 'php_uname' ) ? (string) php_uname( 'r' ) : '' ) ),
+				'architecture'    => function_exists( 'php_uname' ) ? (string) php_uname( 'm' ) : __( 'unknown', 'performance-optimisation' ),
 			);
 		}
 
@@ -261,7 +264,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 *     @type string           $active_cache_plugin  Slug of active cache plugin or 'None'.
 		 *     @type string           $peak_memory_usage    Human-readable peak memory usage.
 		 *     @type string           $current_memory_usage Human-readable current memory usage.
-		 *     @type string[]|null    $woocommerce_presets  WooCommerce high-value URL presets, or null.
 		 * }
 		 */
 		public static function get_cache(): array {
@@ -529,7 +531,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		public static function get_opcache(): array {
 			if ( ! function_exists( 'opcache_get_status' ) ) {
 				return array(
-					'status' => esc_html__( 'Disabled', 'performance-optimisation' ),
+					'status' => __( 'Disabled', 'performance-optimisation' ),
 					'detail' => 'not available',
 				);
 			}
@@ -539,24 +541,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 
 			if ( false === $opcache ) {
 				return array(
-					'status' => esc_html__( 'Disabled by configuration', 'performance-optimisation' ),
+					'status' => __( 'Disabled by configuration', 'performance-optimisation' ),
 					'detail' => 'not available',
 				);
 			}
 
 			$info = array(
 				'status'     => ! empty( $opcache['opcache_enabled'] )
-					? esc_html__( 'Enabled', 'performance-optimisation' )
-					: esc_html__( 'Disabled', 'performance-optimisation' ),
+					? __( 'Enabled', 'performance-optimisation' )
+					: __( 'Disabled', 'performance-optimisation' ),
 				'cache_full' => ! empty( $opcache['cache_full'] )
-					? esc_html__( 'Yes', 'performance-optimisation' )
-					: esc_html__( 'No', 'performance-optimisation' ),
+					? __( 'Yes', 'performance-optimisation' )
+					: __( 'No', 'performance-optimisation' ),
 			);
 
 			if ( isset( $opcache['memory_usage']['used_memory'], $opcache['memory_usage']['free_memory'] ) ) {
 				$info['memory_usage'] = sprintf(
 					/* translators: 1: Used memory, 2: Total memory */
-					esc_html__( '%1$s of %2$s', 'performance-optimisation' ),
+					__( '%1$s of %2$s', 'performance-optimisation' ),
 					size_format( $opcache['memory_usage']['used_memory'] ),
 					size_format( $opcache['memory_usage']['free_memory'] + $opcache['memory_usage']['used_memory'] )
 				);
@@ -568,7 +570,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			) {
 				$info['interned_strings'] = sprintf(
 					/* translators: 1: Percentage used, 2: Total memory, 3: Free memory */
-					esc_html__( '%1$s%% of %2$s (%3$s free)', 'performance-optimisation' ),
+					__( '%1$s%% of %2$s (%3$s free)', 'performance-optimisation' ),
 					number_format_i18n( ( $opcache['interned_strings_usage']['used_memory'] / $opcache['interned_strings_usage']['buffer_size'] ) * 100, 2 ),
 					size_format( $opcache['interned_strings_usage']['buffer_size'] ),
 					size_format( isset( $opcache['interned_strings_usage']['free_memory'] ) ? $opcache['interned_strings_usage']['free_memory'] : 0 )
@@ -578,7 +580,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			if ( isset( $opcache['opcache_statistics']['opcache_hit_rate'] ) ) {
 				$info['hit_rate'] = sprintf(
 					/* translators: %s: Hit rate percentage */
-					esc_html__( '%s%%', 'performance-optimisation' ),
+					__( '%s%%', 'performance-optimisation' ),
 					number_format_i18n( $opcache['opcache_statistics']['opcache_hit_rate'], 2 )
 				);
 			}
@@ -660,7 +662,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 				}
 			}
 
-			return esc_html__( 'None', 'performance-optimisation' );
+			return __( 'None', 'performance-optimisation' );
 		}
 
 		/**

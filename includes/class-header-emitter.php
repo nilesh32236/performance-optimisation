@@ -111,7 +111,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Header_Emitter' ) ) {
 		 * @return bool True when emitted, false when headers were already sent.
 		 */
 		public static function emit_purge_tag( string $tag_str ): bool {
-			return self::emit( 'X-LiteSpeed-Purge: tag=' . $tag_str, false );
+			return self::emit( 'X-LiteSpeed-Purge: tag=' . self::sanitize_tag( $tag_str ), false );
 		}
 
 		/**
@@ -122,7 +122,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Header_Emitter' ) ) {
 		 * @return bool True when emitted, false when headers were already sent.
 		 */
 		public static function emit_tag( string $tag ): bool {
-			return self::emit( 'X-LiteSpeed-Tag: ' . $tag, false );
+			return self::emit( 'X-LiteSpeed-Tag: ' . self::sanitize_tag( $tag ), false );
 		}
 
 		/**
@@ -133,7 +133,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Header_Emitter' ) ) {
 		 * @return bool True when emitted, false when headers were already sent.
 		 */
 		public static function emit_esi_tag( string $action ): bool {
-			return self::emit( 'X-LiteSpeed-Tag: ESI.' . $action, false );
+			return self::emit( 'X-LiteSpeed-Tag: ESI.' . self::sanitize_tag( $action ), false );
 		}
 
 		/**
@@ -153,6 +153,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Header_Emitter' ) ) {
 				header_remove( 'Cache-Control' );
 				header_remove( 'Pragma' );
 			}
+		}
+
+		/**
+		 * Allowlist a LiteSpeed tag value to the safe header charset.
+		 *
+		 * Tags travel in response headers, so ASCII control characters
+		 * (including CR/LF) are stripped while printable characters —
+		 * including the `: ` separators and spaces used by tag lists —
+		 * are preserved. Result is capped at 1024 chars. Public so ESI
+		 * fallback paths can reuse the canonical sanitizer instead of
+		 * hand-mirroring it (see LiteSpeed_ESI::sanitize_esi_tag_value()).
+		 *
+		 * @since NEXT
+		 * @param string $tag Raw tag value.
+		 * @return string Sanitized tag value.
+		 */
+		public static function sanitize_tag( string $tag ): string {
+			$cleaned = preg_replace( '/[\x00-\x1F\x7F]/', '', $tag );
+			if ( ! is_string( $cleaned ) ) {
+				// preg_replace() returns null on regex failure: fall back to
+				// strip_crlf() instead of emitting an empty tag header.
+				return substr( self::strip_crlf( $tag ), 0, 1024 );
+			}
+			return substr( $cleaned, 0, 1024 );
 		}
 	}
 }

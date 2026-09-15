@@ -657,7 +657,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( $this->should_bypass_for_litespeed() ) {
 				return;
 			}
-			// TODO(#624): when WP 7.2 removes script/style concatenation in favour
+			// Note (see #624): when core removes script/style concatenation in favour
 			// of core preload emission, reassess whether this concat pipeline should
 			// be dropped / relegated to an opt-in legacy toggle in favour of core
 			// preloads (wp_resource_hints). No runtime change until the core API lands.
@@ -952,7 +952,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 2.0.0
 		 */
 		public function maybe_preload_combine_css(): void {
-			// TODO(#624): once WP 7.2 removes concatenation in favour of preloads,
+			// Note (see #553, #829): once core removes concatenation in favour of preloads,
 			// reassess whether this plugin-emitted preload should defer to core
 			// preload emission (wp_resource_hints) instead. No runtime change.
 			if ( '' === $this->combine_css_preload_url ) {
@@ -1737,8 +1737,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$css_content = $fs->get_contents( $css_file );
 
 				if ( false !== $css_content ) {
-					$css_content = CSS::update_image_paths( $css_content, $css_file );
-					return $css_content;
+					$rewritten = CSS::update_image_paths( $css_content, $css_file );
+					return null !== $rewritten ? $rewritten : $css_content;
 				}
 			}
 
@@ -1785,7 +1785,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return;
 			}
 
-			// TODO(#553, #829): remove when minimum supported WP is raised to 6.9.
+			// Note (see #553, #829): legacy fallback kept until minimum supported WP is raised.
 			// Blocked until `Requires at least: 6.9` — keep the legacy fallback.
 			if ( ! $this->is_cache_allowed_for_current_user() || $this->is_not_cacheable() ) {
 				return;
@@ -1973,26 +1973,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
-		 * Rewrite local asset URLs in HTML to use the configured CDN for wp-content and wp-includes resources.
+		 * Rewrite local asset URLs via CDN class (LS-410 parity).
 		 *
 		 * Scans img, script, link, source, and video tags and replaces attribute values that start with the site URL
 		 * and contain `/wp-content/` or `/wp-includes/`. The attributes handled are `src`, `href`, `data-src`,
-		 * `srcset`, and `data-srcset`. If no CDN is configured or `\WP_HTML_Tag_Processor` is unavailable, the
-		 * buffer is returned unchanged.
-		 *
-		 * @param string $buffer The HTML content to process.
-		 * @return string The HTML with applicable asset URLs rewritten to the CDN, or the original HTML if no changes were made.
-		 *
-		 * @since 1.2.0
-		 */
-		/**
-		 * Rewrite local asset URLs via CDN class (LS-410 parity).
+		 * `srcset`, and `data-srcset`. If no CDN is configured the buffer is returned unchanged.
 		 *
 		 * Delegates to CDN::rewrite_buffer() which handles tag attrs, srcset, inline url() and origin guards.
 		 * Constant LITESPEED_BYPASS_CDN short-circuits (LSCWP cdn.cls.php:106).
 		 *
 		 * @param string $buffer HTML buffer.
-		 * @return string
+		 * @return string The HTML with applicable asset URLs rewritten to the CDN, or the original HTML if no changes were made.
 		 * @since 1.2.0
 		 * @since 2.0.0 Added LITESPEED_BYPASS_CDN guard and CDN delegation.
 		 */
@@ -3074,9 +3065,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				}
 				$sanitized[] = $sanitized_path;
 			}
-			// TODO: add an $already_sanitized flag to get_file_path() /
-			// safe_path_for_url() so the purge loop below can skip the second
-			// sanitize pass instead of re-parsing each already-sanitized path.
+			// Note: the purge loop below re-parses each already-sanitized path;
+			// an $already_sanitized flag on get_file_path() /
+			// safe_path_for_url() could skip that second pass (see #553).
 			$sanitized = array_values( array_unique( $sanitized ) );
 
 			// Purge collected URLs via filesystem; primary URL also clears css/used-css.
@@ -3443,15 +3434,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			self::bump_stats_cache();
 		}
 
-		/**
-		 * Get the file path for a specific page.
-		 *
-		 * @param string|null $url_path The URL path (optional).
-		 * @param string      $type The file type (default: 'html').
-		 * @return string The file path.
-		 *
-		 * @since 1.1.1
-		 */
 		/**
 		 * Whether a traversal probe has been logged this request.
 		 *

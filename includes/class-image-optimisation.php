@@ -993,7 +993,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The modified buffer.
 		 */
 		private function post_process_auto_sizes( string $buffer ): string {
-			// TODO(#624): when core's Enhanced Responsive Images delivers accurate
+			// Note (see #624): when core's Enhanced Responsive Images delivers accurate
 			// Gallery-block sizes and native <picture>/srcset handling, re-evaluate
 			// this sizes="auto" prefilling for redundancy with core. sizes_attribute_includes_auto()
 			// still delegates to wp_sizes_attribute_includes_valid_auto() when present. No runtime change.
@@ -1424,7 +1424,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The modified buffer.
 		 */
 		private function process_picture_blocks_regex( string $buffer, int $img_counter, int $exclude_img_count, array $exclude_imgs ): string {
-			return preg_replace_callback(
+			$result = preg_replace_callback(
 				'#<picture\b[^>]*>.*?</picture>#is',
 				function ( $matches ) use ( $img_counter, $exclude_img_count, $exclude_imgs ) {
 					preg_match( '#<img\b[^>]*?(?:data-)?src=["\']([^"\']+)["\'][^>]*>#i', $matches[0], $img_matches );
@@ -1439,6 +1439,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				},
 				$buffer
 			);
+			// preg_replace_callback() returns null on regex failure — keep
+			// the original buffer so a PCRE error never wipes the page.
+			return null !== $result ? $result : $buffer;
 		}
 
 		/**
@@ -4194,7 +4197,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The processed <picture> or <img> HTML fragment (or the original fragment if unchanged).
 		 */
 		public function process_picture_tag( $matches, $img_tag, $original_src, $exclude_imgs ) {
-			// TODO(#624): when core's Enhanced Responsive Images ships native
+			// Note (see #624): when core's Enhanced Responsive Images ships native
 			// <picture>/srcset handling and accurate Gallery-block sizes, reassess
 			// whether this <picture>-wrap remains necessary or should defer to core.
 			// No runtime change until the core API lands.

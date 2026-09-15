@@ -30,7 +30,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 		 *
 		 * @var string
 		 */
-		const TOKEN_CONSTANT = 'WPPO_CLOUDFLARE_API_TOKEN';
+		public const TOKEN_CONSTANT = 'WPPO_CLOUDFLARE_API_TOKEN';
 
 		/**
 		 * Purge the configured third-party cache.
@@ -40,8 +40,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 		 * own static files and deliberately skip the edge purge: wiping the
 		 * whole zone for one page would be disproportionate.
 		 *
-		 * @param string      $type     Clear type ('all' or 'single_page').
-		 * @param string|null $url_path Page path for single-page clears (unused; edge purges are all-or-nothing).
+		 * The $url_path parameter is deliberately untyped: this method runs
+		 * as a WP hook callback (wppo_after_cache_clear via
+		 * Cache::clear_cache(), untyped) and must stay tolerant of
+		 * non-string payloads instead of throwing a TypeError.
+		 *
+		 * @param string $type     Clear type ('all' or 'single_page').
+		 * @param mixed  $url_path Page path for single-page clears (unused; edge purges are all-or-nothing).
 		 * @return bool True when no purge was needed or all requests succeeded.
 		 *
 		 * @since 2.0.0 The $type and $url_path parameters were added.
@@ -166,30 +171,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 				return false;
 			}
 
-			$response = wp_remote_request(
-				'https://api.cloudflare.com/client/v4/zones/' . rawurlencode( $zone ) . '/purge_cache',
-				array(
-					'method'  => 'POST',
-					'headers' => array(
-						'Authorization' => 'Bearer ' . $token,
-						'Content-Type'  => 'application/json',
-					),
-					'body'    => (string) wp_json_encode( array( 'purge_everything' => true ) ),
-					'timeout' => 10,
-				)
-			);
-
-			if ( is_wp_error( $response ) ) {
-				self::log_failure( 'cloudflare', $zone . ': ' . $response->get_error_message() );
+			// Defensive: isolated tests or partial-release builds may load
+			// this file without the Cloudflare_Purger transport.
+			if ( ! class_exists( 'PerformanceOptimise\Inc\Cloudflare_Purger' ) ) {
 				return false;
 			}
-
-			$code = (int) wp_remote_retrieve_response_code( $response );
-			if ( $code < 200 || $code >= 300 ) {
-				self::log_failure( 'cloudflare', $zone . ' (HTTP ' . $code . ')' );
-				return false;
-			}
-			return true;
+			// Single implementation lives in Cloudflare_Purger::purge().
+			return Cloudflare_Purger::purge( $zone, $token, 'cloudflare' );
 		}
 
 		/**
