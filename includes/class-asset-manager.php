@@ -90,8 +90,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 		public function dequeue_selected_assets() {
 			$is_sandbox_preview = false;
 			try {
-				if ( class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'is_preview_request' ) ) {
-					$is_sandbox_preview = (bool) Sandbox_Preview::is_preview_request();
+				if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'is_sandbox_preview_active' ) ) {
+					$is_sandbox_preview = (bool) Main::is_sandbox_preview_active();
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );

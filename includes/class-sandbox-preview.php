@@ -74,9 +74,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 		 * widen their hook registration and bypass the logged-in/safe-mode
 		 * gates for preview admins, combine_css() bypasses its eligibility
 		 * gate and overlays staged excludes, and the HTML minifier overlays
-		 * staged delay excludes. External minifyJS/minifyCSS have no staged
-		 * widening (filters register on production flags only), so they are
-		 * deliberately excluded until a preview path exists.
+		 * staged delay excludes plus delayJSExternalOnly/minifyInlineJS.
+		 * External minifyJS/minifyCSS have no staged widening (filters
+		 * register on production flags only), so they are deliberately
+		 * excluded until a preview path exists.
 		 *
 		 * @since NEXT
 		 * @var string[]
@@ -85,6 +86,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 			'delayJS',
 			'deferJS',
 			'combineCSS',
+			'delayJSExternalOnly',
+			'minifyInlineJS',
 			'excludeDelayJS',
 			'excludeDeferJS',
 			'excludeCombineCSS',
@@ -134,7 +137,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 					return false;
 				}
 				if ( ! function_exists( 'current_user_can' ) || ! function_exists( 'wp_verify_nonce' ) ) {
-					self::$preview_memo = false;
+					// Early boot (pluggable not loaded, user unresolved): the
+					// result is indeterminate, so return false WITHOUT memoizing.
+					// Memoizing here would poison the per-request cache and make
+					// every later template_redirect / per-tag check return stale
+					// false even for a valid admin preview.
 					return false;
 				}
 				try {
@@ -279,7 +286,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 				// malformed import) would otherwise survive as a truthy
 				// non-empty string and later !empty() checks would enable a
 				// feature the caller meant to disable. Fail-safe to false.
-				foreach ( array( 'delayJS', 'deferJS', 'combineCSS' ) as $bool_key ) {
+				foreach ( array( 'delayJS', 'deferJS', 'combineCSS', 'delayJSExternalOnly', 'minifyInlineJS' ) as $bool_key ) {
 					if ( array_key_exists( $bool_key, $staged ) && ! is_bool( $staged[ $bool_key ] ) ) {
 						$bool                = filter_var( $staged[ $bool_key ], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
 						$staged[ $bool_key ] = null === $bool ? false : $bool;

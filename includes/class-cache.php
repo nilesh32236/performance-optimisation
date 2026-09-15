@@ -656,6 +656,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( ! empty( $file_opt_for_combine['excludeCombineCSS'] ) ) {
 				$exclude_combine_css = Util::process_urls( $file_opt_for_combine['excludeCombineCSS'] );
 			}
+			// Sandbox preview (issue #1163): a staged combineCSS=off must disable
+			// combining in preview (mirror minify_queued_styles logic), otherwise
+			// staged-disable can never be previewed.
+			if ( $is_preview && empty( $file_opt_for_combine['combineCSS'] ) ) {
+				return;
+			}
 
 			// On WP 6.9+ with separate (on-demand) core block assets active, never
 			// fold any core block-asset stylesheet into the combined file — doing so

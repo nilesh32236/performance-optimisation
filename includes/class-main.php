@@ -717,23 +717,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// only: when staged values enable delay/defer, register the same
 			// filters so the preview renders experimental output while
 			// visitors (is_preview_request() false) keep production markup
-			// via the per-tag guards below.
-			$is_sandbox_preview = self::is_sandbox_preview_active();
-			// Staged defer for the per-page kill-switch registration below.
-			$staged_defer_js = false;
-			if ( $is_sandbox_preview && class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_staged_settings' ) ) {
+			// via the per-tag guards below. Staged presence is read WITHOUT the
+			// capability/nonce gate: setup_hooks() runs at plugin-file load
+			// before pluggable/auth resolve, when is_preview_request() always
+			// returns false — snapshotting it here would never register hooks
+			// for a preview-enable (production off, staged on) request.
+			// Enforcement stays in the late per-tag/render-time guards.
+			$staged_for_registration = array();
+			if ( class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_staged_settings' ) ) {
 				try {
-					$staged = Sandbox_Preview::get_staged_settings();
-					if ( ! empty( $staged['delayJS'] ) ) {
-						$has_delay_js = true;
-					}
-					if ( ! empty( $staged['deferJS'] ) ) {
-						$has_defer_js    = true;
-						$staged_defer_js = true;
+					$staged_for_registration = Sandbox_Preview::get_staged_settings();
+					if ( ! is_array( $staged_for_registration ) ) {
+						$staged_for_registration = array();
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
+					$staged_for_registration = array();
 				}
+			}
+			// Staged defer for the per-page kill-switch registration below.
+			$staged_defer_js = ! empty( $staged_for_registration['deferJS'] );
+			if ( ! empty( $staged_for_registration['delayJS'] ) ) {
+				$has_delay_js = true;
+			}
+			if ( $staged_defer_js ) {
+				$has_defer_js = true;
 			}
 			$wp_version = (string) ( $GLOBALS['wp_version'] ?? get_bloginfo( 'version' ) );
 			// The native 'strategy' script data added via wp_script_add_data() is only
@@ -886,15 +894,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'switch_blog', array( 'PerformanceOptimise\Inc\Image_Optimisation', 'clear_runtime_caches' ) );
 			add_action( 'wppo_after_cache_clear', array( 'PerformanceOptimise\Inc\Image_Optimisation', 'clear_runtime_caches' ) );
 			$combine_for_registration = ! empty( $this->options['file_optimisation']['combineCSS'] );
-			if ( ! $combine_for_registration && $is_sandbox_preview && class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_staged_settings' ) ) {
-				try {
-					$staged_for_combine = Sandbox_Preview::get_staged_settings();
-					if ( ! empty( $staged_for_combine['combineCSS'] ) ) {
-						$combine_for_registration = true;
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
+			if ( ! $combine_for_registration && ! empty( $staged_for_registration['combineCSS'] ) ) {
+				$combine_for_registration = true;
 			}
 			if ( $combine_for_registration ) {
 				// TODO(#624): when WP 7.2 removes concatenation in favour of preloads,
@@ -1042,14 +1043,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$this->exclude_defer_js = array_values( array_unique( array_merge( $this->exclude_defer_js, self::get_defer_js_preset_exclusions() ) ) );
 				// Sandbox preview (issue #1163): staged excludeDeferJS lines also
 				// suppress defer in preview only. Fail-open: matcher errors keep
-				// the production list.
-				if ( $is_sandbox_preview && class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_staged_settings' ) ) {
+				// the production list. Staged presence (no auth gate) widens the
+				// list at registration; the per-tag guards enforce preview-only.
+				if ( ! empty( $staged_for_registration['excludeDeferJS'] ) ) {
 					try {
-						$staged_for_defer = Sandbox_Preview::get_staged_settings();
-						if ( ! empty( $staged_for_defer['excludeDeferJS'] ) ) {
-							$staged_defer_excludes  = Util::process_urls( $staged_for_defer['excludeDeferJS'] );
-							$this->exclude_defer_js = array_values( array_unique( array_merge( $this->exclude_defer_js, (array) $staged_defer_excludes ) ) );
-						}
+						$staged_defer_excludes  = Util::process_urls( $staged_for_registration['excludeDeferJS'] );
+						$this->exclude_defer_js = array_values( array_unique( array_merge( $this->exclude_defer_js, (array) $staged_defer_excludes ) ) );
 					} catch ( \Throwable $e ) {
 						unset( $e );
 					}
@@ -1093,13 +1092,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// Sandbox preview (issue #1163): staged excludeDelayJS lines also
 				// suppress the external-script delay rewrite in preview only
 				// (the inline path is overlaid in Minify\HTML). Fail-open.
-				if ( $is_sandbox_preview && class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_staged_settings' ) ) {
+				// Staged presence (no auth gate) widens the list at
+				// registration; the per-tag guards enforce preview-only.
+				if ( ! empty( $staged_for_registration['excludeDelayJS'] ) ) {
 					try {
-						$staged_for_delay = Sandbox_Preview::get_staged_settings();
-						if ( ! empty( $staged_for_delay['excludeDelayJS'] ) ) {
-							$staged_delay_excludes  = Util::process_urls( $staged_for_delay['excludeDelayJS'] );
-							$this->exclude_delay_js = array_values( array_unique( array_merge( $this->exclude_delay_js, (array) $staged_delay_excludes ) ) );
-						}
+						$staged_delay_excludes  = Util::process_urls( $staged_for_registration['excludeDelayJS'] );
+						$this->exclude_delay_js = array_values( array_unique( array_merge( $this->exclude_delay_js, (array) $staged_delay_excludes ) ) );
 					} catch ( \Throwable $e ) {
 						unset( $e );
 					}

@@ -420,6 +420,36 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test get_sandbox_preview returns staged/has_staged/preview_url (issue #1163).
+	 */
+	public function test_get_sandbox_preview_returns_staged_envelope(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		Functions\when( 'get_option' )->justReturn(
+			array(
+				'file_optimisation' => array(
+					'delayJS'       => false,
+					'sandboxStaged' => array( 'delayJS' => true ),
+				),
+			)
+		);
+		Functions\when( 'home_url' )->justReturn( 'http://example.com/' );
+		Functions\when( 'wp_create_nonce' )->justReturn( 'abc123' );
+		Functions\when( 'add_query_arg' )->alias(
+			static function ( $args, $url ) {
+				return $url . '?' . http_build_query( $args );
+			}
+		);
+
+		$request  = \Mockery::mock( \WP_REST_Request::class );
+		$response = $this->rest->get_sandbox_preview( $request );
+		$data     = $response->get_data();
+		$this->assertTrue( $data['success'] );
+		$this->assertTrue( ! empty( $data['data']['staged']['delayJS'] ) );
+		$this->assertTrue( ! empty( $data['data']['has_staged'] ) );
+		$this->assertStringContainsString( 'wppo_preview=assets', $data['data']['preview_url'] );
+	}
+
+	/**
 	 * Test that the Woo cache self-test endpoint returns the read-only
 	 * Util::woo_cache_self_test() result (issue #1020).
 	 */

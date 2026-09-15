@@ -75,7 +75,7 @@ Frontend lazy loading: `src/lazyload.js` (vanilla JS, not React) — Intersectio
 Admin bar cache clearing: `src/main.js` — two buttons ("Clear All Cache", "Clear This Page") with automatic nonce refresh on 403.
 
 ### REST API
-Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (33 routes). All require `manage_options` capability + `X-WP-Nonce` except `rum_collect` (public, token + IP rate-limited). The authoritative 33-route table lives in `.agents/AGENTS.md`; the summary table below lists the most-used routes.
+Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (37 routes). All require `manage_options` capability + `X-WP-Nonce` except `rum_collect` (public, token + IP rate-limited). The authoritative 37-route table lives in `.agents/AGENTS.md`; the summary table below lists the most-used routes.
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -106,6 +106,10 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (3
 | `autoloaded_options` | GET | Largest autoloaded options (option-bloat audit) |
 | `autoload_remediate` | POST | Autoload-bloat remediation (dry_run/apply/revert/revert_all) |
 | `expired_transients_export` | GET | Expired transients pre-run export (read-only JSON) |
+| `sandbox_preview` | GET | Staged sandbox settings + admin preview URL |
+| `sandbox_save` | POST | Stage sandbox asset settings |
+| `sandbox_promote` | POST | Promote staged sandbox settings to production |
+| `sandbox_discard` | POST | Discard staged sandbox settings |
 
 ### PHP backend
 42 class files in `includes/` (+ `includes/minify/` wrappers and `includes/redis-connect-helper.php`). The authoritative per-class responsibility table lives in `.agents/AGENTS.md`; the summary table below covers the core classes:
@@ -122,7 +126,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (3
 | `class-cron.php` | WP-Cron: preload (5h), image conversion (hourly), DB cleanup (daily), web vitals rescan, used/critical CSS, llms.txt |
 | `class-img-converter.php` | WebP/AVIF conversion (GD, Imagick), deferred option commits |
 | `class-image-optimisation.php` | Next-gen serving, lazy load, picture wrap, preload, video lazy |
-| `class-rest.php` | All 33 REST API endpoints |
+| `class-rest.php` | All 37 REST API endpoints |
 | `class-pagespeed.php` | Google PageSpeed Insights API + Action Scheduler job |
 | `class-suggestion-engine.php` | Performance suggestions from telemetry + PageSpeed |
 | `class-telemetry.php` | Local cURL-based performance scanner |

@@ -681,11 +681,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 
 			// Sandbox preview (issue #1163): preview admins render staged
 			// delayJS; visitors always use production. Fail-open to production.
-			$file_opt_for_preview = isset( $this->options['file_optimisation'] ) && is_array( $this->options['file_optimisation'] ) ? $this->options['file_optimisation'] : array();
+			// Memoized per request: safe_minify_js runs per <script> tag, so the
+			// staged overlay (get_option via Util::get_settings) must happen once.
+			static $preview_effective_cache = null;
+			$file_opt_for_preview           = isset( $this->options['file_optimisation'] ) && is_array( $this->options['file_optimisation'] ) ? $this->options['file_optimisation'] : array();
 			try {
 				if ( class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_effective_file_optimisation' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'is_preview_request' ) ) {
 					if ( \PerformanceOptimise\Inc\Sandbox_Preview::is_preview_request() ) {
-						$file_opt_for_preview = \PerformanceOptimise\Inc\Sandbox_Preview::get_effective_file_optimisation( $file_opt_for_preview );
+						if ( null === $preview_effective_cache ) {
+							$preview_effective_cache = \PerformanceOptimise\Inc\Sandbox_Preview::get_effective_file_optimisation( $file_opt_for_preview );
+						}
+						$file_opt_for_preview = $preview_effective_cache;
 					}
 				}
 			} catch ( \Throwable $e ) {
@@ -747,7 +753,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 					try {
 						static $staged_excludes_cache = null;
 						static $staged_excludes_key   = null;
-						$staged_raw = $file_opt_for_preview['excludeDelayJS'];
+						$staged_raw                   = $file_opt_for_preview['excludeDelayJS'];
 						if ( is_string( $staged_raw ) ) {
 							$staged_key = $staged_raw;
 						} elseif ( is_array( $staged_raw ) ) {

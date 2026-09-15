@@ -336,6 +336,9 @@ class SandboxPreviewTest extends \PHPUnit\Framework\TestCase {
 	 * Test sanitize_staged normalizes string booleans fail-safe.
 	 */
 	public function test_sanitize_staged_normalizes_string_booleans(): void {
+		Functions\when( 'sanitize_text_field' )->returnArg();
+		Functions\when( 'sanitize_textarea_field' )->returnArg();
+		Functions\when( 'esc_url_raw' )->returnArg();
 		$clean = Sandbox_Preview::sanitize_staged(
 			array(
 				'delayJS'    => 'false',

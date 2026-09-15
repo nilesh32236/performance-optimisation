@@ -41,8 +41,8 @@ class SettingsReadGuardTest extends \PHPUnit\Framework\TestCase {
 			'reason' => 'Bare reads distinguishing "no row" from "stored array" in migrate_block_assets_setting(), maybe_migrate_ccss_max_size(), maybe_migrate_ccss_safelist(), maybe_migrate_safe_mode(), maybe_migrate_image_alt_edge_defaults(), and maybe_migrate_sandbox_preview().',
 		),
 		'includes/class-sandbox-preview.php' => array(
-			'count'  => 4,
-			'reason' => 'Bare reads distinguishing "no row" from "stored array" in save_staged() (persist plus write verification), promote_staged(), and discard_staged().',
+			'count'  => 6,
+			'reason' => 'Bare reads distinguishing "no row" from "stored array" in save_staged() (persist plus write verification), promote_staged() (read plus write verification), and discard_staged() (read plus write verification).',
 		),
 	);
 

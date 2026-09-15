@@ -1180,7 +1180,13 @@ describe( 'FileOptimization Component', () => {
 					preview_url: 'http://example.com/?wppo_preview=assets',
 				},
 			} )
-			.mockResolvedValueOnce( { success: true, data: {} } );
+			.mockResolvedValueOnce( {
+				success: true,
+				data: {
+					file_optimisation: { delayJS: true },
+					staged: {},
+				},
+			} );
 		render( <FileOptimization options={ {} } serverRules={ {} } /> );
 		fireEvent.click( screen.getByRole( 'tab', { name: /Scripts/i } ) );
 		await act( async () => {
@@ -1194,6 +1200,12 @@ describe( 'FileOptimization Component', () => {
 				expect.objectContaining( { settings: expect.any( Object ) } )
 			);
 		} );
+		// Staged-exists note appears after staging.
+		await waitFor( () => {
+			expect(
+				screen.getByText( /A staged preview exists/i )
+			).toBeInTheDocument();
+		} );
 		await act( async () => {
 			fireEvent.click(
 				screen.getByRole( 'button', { name: /^Promote$/i } )
@@ -1201,6 +1213,18 @@ describe( 'FileOptimization Component', () => {
 		} );
 		await waitFor( () => {
 			expect( apiCall ).toHaveBeenCalledWith( 'sandbox_promote', {} );
+		} );
+		// Post-promote form sync: the promoted Delay JS value reaches the
+		// production form control and the staged-exists note clears.
+		await waitFor( () => {
+			expect(
+				screen.getByLabelText( /Delay JavaScript Execution/i )
+			).toBeChecked();
+		} );
+		await waitFor( () => {
+			expect(
+				screen.queryByText( /A staged preview exists/i )
+			).not.toBeInTheDocument();
 		} );
 	} );
 

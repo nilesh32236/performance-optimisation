@@ -217,6 +217,17 @@ const FileOptimization = ( {
 		notify: notifySandbox,
 		dismiss: dismissSandbox,
 	} = useNotice();
+	// Newline-delimited excludes: sanitize/process_urls normalization can
+	// produce arrays, so join them instead of clearing to empty string.
+	const toExcludeLines = ( value ) => {
+		if ( typeof value === 'string' ) {
+			return value;
+		}
+		if ( Array.isArray( value ) ) {
+			return value.join( '\n' );
+		}
+		return '';
+	};
 	const buildStagedFromForm = () => ( {
 		delayJS: !! settings.delayJS,
 		deferJS: !! settings.deferJS,
@@ -227,18 +238,9 @@ const FileOptimization = ( {
 		// toggles from the admin preview.
 		delayJSExternalOnly: !! settings.delayJSExternalOnly,
 		minifyInlineJS: !! settings.minifyInlineJS,
-		excludeDelayJS:
-			typeof settings.excludeDelayJS === 'string'
-				? settings.excludeDelayJS
-				: '',
-		excludeDeferJS:
-			typeof settings.excludeDeferJS === 'string'
-				? settings.excludeDeferJS
-				: '',
-		excludeCombineCSS:
-			typeof settings.excludeCombineCSS === 'string'
-				? settings.excludeCombineCSS
-				: '',
+		excludeDelayJS: toExcludeLines( settings.excludeDelayJS ),
+		excludeDeferJS: toExcludeLines( settings.excludeDeferJS ),
+		excludeCombineCSS: toExcludeLines( settings.excludeCombineCSS ),
 	} );
 	// Hydrate sandbox state when the Scripts tab opens so a staged
 	// experiment from a prior session is visible without re-staging.
