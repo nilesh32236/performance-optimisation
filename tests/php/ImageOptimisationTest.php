@@ -1161,6 +1161,83 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that an excluded image is never lazy, even when core says lazy (issue #1182).
+	 *
+	 * The exclusion wins over core's loading verdict; the high-priority
+	 * default still applies and no loading=lazy + fetchpriority=high pair
+	 * is ever emitted.
+	 */
+	public function test_excluded_image_never_lazy_even_when_core_says_lazy(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'is_multisite' )->justReturn( false );
+		if ( ! function_exists( 'wp_get_loading_optimization_attributes' ) ) {
+			eval( 'function wp_get_loading_optimization_attributes($tag,$attrs,$ctx){ if(isset($GLOBALS["wppo_mock_fetchpriority"])){ return array("loading"=>"lazy","fetchpriority"=>$GLOBALS["wppo_mock_fetchpriority"]); } return array("loading"=>"lazy","fetchpriority"=>"low"); }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged
+		}
+		$GLOBALS['wppo_mock_fetchpriority'] = 'high';
+		Functions\when( 'esc_attr' )->returnArg();
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+
+		$img_tag = '<img src="https://example.com/excluded.jpg" alt="excluded"/>';
+		$result  = $image_opt->process_img_tag( $img_tag, 'https://example.com/excluded.jpg', array( 'excluded.jpg' ) );
+		$this->assertStringNotContainsString( 'loading="lazy"', $result );
+		$this->assertStringContainsString( 'fetchpriority="high"', $result );
+		$this->assertFalse( false !== strpos( $result, 'loading="lazy"' ) && false !== strpos( $result, 'fetchpriority="high"' ) );
+	}
+
+	/**
+	 * Test that sanitize_loading_triple() drops the forbidden lazy+high pair (issue #1182).
+	 */
+	public function test_sanitize_loading_triple_drops_high_with_lazy(): void {
+		$image_opt = new Image_Optimisation( $this->default_options );
+		$method    = new \ReflectionMethod( Image_Optimisation::class, 'sanitize_loading_triple' );
+		$method->setAccessible( true );
+
+		$sanitized = $method->invoke(
+			$image_opt,
+			array(
+				'loading'       => 'lazy',
+				'fetchpriority' => 'high',
+				'decoding'      => 'async',
+			)
+		);
+		$this->assertSame( 'lazy', $sanitized['loading'] );
+		$this->assertArrayNotHasKey( 'fetchpriority', $sanitized );
+		$this->assertSame( 'async', $sanitized['decoding'] );
+
+		$hero = $method->invoke(
+			$image_opt,
+			array(
+				'loading'       => 'eager',
+				'fetchpriority' => 'high',
+			)
+		);
+		$this->assertSame( 'high', $hero['fetchpriority'] );
+	}
+
+	/**
+	 * Test that merge_core_loading_attributes() only returns the known triple keys (issue #1182).
+	 */
+	public function test_merge_core_loading_attributes_returns_triple_only(): void {
+		if ( ! function_exists( 'wp_get_loading_optimization_attributes' ) ) {
+			eval( 'function wp_get_loading_optimization_attributes($tag,$attrs,$ctx){ return array("loading"=>"lazy","fetchpriority"=>"low","decoding"=>"async","sizes"=>"auto"); }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged
+		}
+		$image_opt = new Image_Optimisation( $this->default_options );
+		$method    = new \ReflectionMethod( Image_Optimisation::class, 'merge_core_loading_attributes' );
+		$method->setAccessible( true );
+
+		$merged = $method->invoke( $image_opt, array( 'src' => 'https://example.com/a.jpg' ), 'wppo-loading-attributes' );
+		$this->assertIsArray( $merged );
+		foreach ( array_keys( $merged ) as $key ) {
+			$this->assertContains( $key, array( 'loading', 'fetchpriority', 'decoding', 'sizes' ) );
+		}
+	}
+
+	/**
 	 * Test that native lazy path also gets occluded low.
 	 */
 	public function test_occluded_native_lazy_gets_fetchpriority_low(): void {

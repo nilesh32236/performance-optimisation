@@ -884,10 +884,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// The CSS background hero preload (issue #935) shares this buffer, so
 			// the hook is registered when either toggle is enabled.
 			if ( ! empty( $this->options['image_optimisation']['prioritizeLCPImages'] ) || ! empty( $this->options['image_optimisation']['cssHeroPreload'] ) ) {
-				// TODO(#624): when core's Enhanced Responsive Images ships, reassess
-				// whether this buffer-level LCP prioritization / fetchpriority stamping
-				// can defer to core-provided attributes (wp_get_loading_optimization_attributes()
-				// output is already honoured). No runtime change until the core API lands.
+				// Core-parity by delegation (issue #1182): this buffer-level LCP
+				// prioritization stamps fetchpriority=high + loading=eager on the
+				// hero node only; all loading/fetchpriority/decoding gap-fills
+				// defer to core's wp_get_loading_optimization_attributes() output
+				// via Image_Optimisation::merge_core_loading_attributes(), and
+				// loading="lazy" + fetchpriority="high" pairs are never emitted.
 				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && $is_wp69_plus ) {
 					// WP 6.9+ template enhancement output buffer. Runs after cache (10) and used-CSS (20).
 					add_filter( 'wp_template_enhancement_output_buffer', array( $this->image_optimisation, 'prioritize_lcp_in_buffer' ), 30, 2 );

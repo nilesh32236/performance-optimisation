@@ -2676,6 +2676,61 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Query core for its loading/fetchpriority/decoding decision for an image.
+		 *
+		 * Single-sourced wrapper around `wp_get_loading_optimization_attributes()`
+		 * (WP 6.3+). All call-sites route through here so core owns the loading
+		 * decision (threshold/exception rules included) and the plugin only
+		 * fills gaps. Fail-open: returns an empty array when the function is
+		 * missing or throws, so callers fall back to internal lazy/high logic
+		 * and markup is emitted unoptimised, never fatal. Output transform
+		 * only, hence multisite-safe by construction.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array  $tag_attr Image attributes (src/width/height/loading/decoding/fetchpriority).
+		 * @param string $context  Context string passed to core (kept per call-site:
+		 *                         'wp-html-tag-processor', 'regex-fallback', or
+		 *                         'performance_optimisation_delay_load').
+		 * @return array Core's loading/fetchpriority/decoding/sizes triple (possibly empty).
+		 */
+		private function merge_core_loading_attributes( array $tag_attr, string $context ): array {
+			if ( ! function_exists( 'wp_get_loading_optimization_attributes' ) ) {
+				return array();
+			}
+			try {
+				$loading_attrs = wp_get_loading_optimization_attributes( 'img', $tag_attr, $context );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+			if ( ! is_array( $loading_attrs ) ) {
+				return array();
+			}
+			$allowed = array( 'loading', 'fetchpriority', 'decoding', 'sizes' );
+			return array_intersect_key( $loading_attrs, array_flip( $allowed ) );
+		}
+
+		/**
+		 * Enforce one valid loading/fetchpriority/decoding triple per element.
+		 *
+		 * Core-parity invariant: never pair `loading="lazy"` with
+		 * `fetchpriority="high"`. When both are present the high hint is
+		 * dropped so the hero gets high+eager and below-fold gets lazy.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $attrs Triple to sanitize (loading/fetchpriority/decoding).
+		 * @return array Sanitized triple.
+		 */
+		private function sanitize_loading_triple( array $attrs ): array {
+			if ( isset( $attrs['loading'], $attrs['fetchpriority'] ) && 'lazy' === $attrs['loading'] && 'high' === $attrs['fetchpriority'] ) {
+				unset( $attrs['fetchpriority'] );
+			}
+			return $attrs;
+		}
+
+		/**
 		 * Sets loading optimization attributes (fetchpriority, decoding) on a tag processor.
 		 *
 		 * Uses wp_get_loading_optimization_attributes() (WP 6.7+) when available,
@@ -2684,12 +2739,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * below-fold images.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Excluded images pass `$allow_lazy = false` so core's
+		 * `loading="lazy"` is never stamped on an image the user excluded from
+		 * lazy-loading; the exclusion wins and the high-priority default applies.
 		 *
-		 * @param \WP_HTML_Tag_Processor $tags    The tag processor instance.
-		 * @param array                  $defaults Default attributes to set if core function is unavailable.
+		 * @param \WP_HTML_Tag_Processor $tags       The tag processor instance.
+		 * @param array                  $defaults   Default attributes to set if core function is unavailable.
+		 * @param bool                   $allow_lazy Whether core may contribute `loading="lazy"`.
 		 * @return void
 		 */
-		private function set_loading_optimization_attributes( $tags, array $defaults = array() ): void {
+		private function set_loading_optimization_attributes( $tags, array $defaults = array(), bool $allow_lazy = true ): void {
+			$loading_attrs = array();
 			if ( function_exists( 'wp_get_loading_optimization_attributes' ) ) {
 				$tag_attr = array();
 				$src      = $tags->get_attribute( 'src' );
@@ -2716,11 +2776,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( null !== $fetchpriority ) {
 					$tag_attr['fetchpriority'] = $fetchpriority;
 				}
-				$loading_attrs = wp_get_loading_optimization_attributes(
-					'img',
-					$tag_attr,
-					'wp-html-tag-processor'
-				);
+				$loading_attrs = $this->merge_core_loading_attributes( $tag_attr, 'wp-html-tag-processor' );
+				$loading_attrs = $this->sanitize_loading_triple( $loading_attrs );
+				if ( ! $allow_lazy && isset( $loading_attrs['loading'] ) && 'lazy' === $loading_attrs['loading'] ) {
+					// Excluded from lazy-loading: drop core's lazy verdict, keep
+					// its fetchpriority/decoding hints.
+					unset( $loading_attrs['loading'] );
+				}
 				if ( isset( $loading_attrs['loading'] ) && null === $tags->get_attribute( 'loading' ) ) {
 					$tags->set_attribute( 'loading', $loading_attrs['loading'] );
 				}
@@ -2737,10 +2799,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 			}
 			if ( isset( $defaults['fetchpriority'] ) && null === $tags->get_attribute( 'fetchpriority' ) ) {
-				$tags->set_attribute( 'fetchpriority', $defaults['fetchpriority'] );
+				// Never pair loading=lazy with fetchpriority=high (excluded images
+				// for which core decided lazy keep core's loading and skip the high default).
+				if ( ! ( 'lazy' === $tags->get_attribute( 'loading' ) && 'high' === $defaults['fetchpriority'] ) ) {
+					$tags->set_attribute( 'fetchpriority', $defaults['fetchpriority'] );
+				}
 			}
 			if ( isset( $defaults['decoding'] ) && null === $tags->get_attribute( 'decoding' ) ) {
 				$tags->set_attribute( 'decoding', $defaults['decoding'] );
+			}
+			// Final guard: one valid triple per element, hero high+eager, below-fold lazy.
+			if ( 'lazy' === $tags->get_attribute( 'loading' ) && 'high' === $tags->get_attribute( 'fetchpriority' ) ) {
+				$tags->remove_attribute( 'fetchpriority' );
 			}
 		}
 
@@ -3070,7 +3140,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 									array(
 										'fetchpriority' => 'high',
 										'decoding'      => 'sync',
-									)
+									),
+									false
 								);
 								$this->maybe_autofill_alt_processor( $tags, $original_src );
 								return $tags->get_updated_html();
@@ -3094,9 +3165,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					// Skip base64 images to avoid rewriting them.
 					if ( ! preg_match( '#^data:image/#i', $original_src_decoded ) ) {
 						if ( $use_native_lazy || 'lazy' === $tags->get_attribute( 'loading' ) ) {
-							// Native lazy loading or pre-existing core loading="lazy": preserve loading="lazy" and decoding="async" instead of data-src swapping.
+							// Native lazy loading or pre-existing core loading="lazy": defer to
+							// core's loading decision (WP 6.3+) — first-N/header (hero)
+							// images must not be forced lazy. Gaps only are filled.
 							if ( null === $tags->get_attribute( 'loading' ) ) {
-								$tags->set_attribute( 'loading', 'lazy' );
+								$should_lazy = true;
+								if ( function_exists( 'wp_get_loading_optimization_attributes' ) ) {
+									$test_attr = array();
+									$src_attr  = $tags->get_attribute( 'src' );
+									if ( null !== $src_attr ) {
+										$test_attr['src'] = $src_attr;
+									}
+									$w_attr = $tags->get_attribute( 'width' );
+									if ( null !== $w_attr ) {
+										$test_attr['width'] = (int) $w_attr;
+									}
+									$h_attr = $tags->get_attribute( 'height' );
+									if ( null !== $h_attr ) {
+										$test_attr['height'] = (int) $h_attr;
+									}
+									$core_attrs  = $this->merge_core_loading_attributes( $test_attr, 'wp-html-tag-processor' );
+									$should_lazy = isset( $core_attrs['loading'] );
+								}
+								if ( $should_lazy ) {
+									$tags->set_attribute( 'loading', 'lazy' );
+								}
 							}
 							if ( null === $tags->get_attribute( 'decoding' ) ) {
 								$tags->set_attribute( 'decoding', 'async' );
@@ -3233,7 +3326,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 								if ( preg_match( '/\bfetchpriority=(["\'])([^"\']+)\1/i', $img_tag, $m ) ) {
 									$tag_attr['fetchpriority'] = $m[2];
 								}
-								$loading_attrs = wp_get_loading_optimization_attributes( 'img', $tag_attr, 'regex-fallback' );
+								$loading_attrs = $this->sanitize_loading_triple( $this->merge_core_loading_attributes( $tag_attr, 'regex-fallback' ) );
+								// Excluded from lazy-loading: the exclusion wins over core's
+								// lazy verdict; fetchpriority/decoding hints are still merged.
+								if ( isset( $loading_attrs['loading'] ) && 'lazy' === $loading_attrs['loading'] ) {
+									unset( $loading_attrs['loading'] );
+								}
 								if ( isset( $loading_attrs['loading'] ) && false === strpos( $img_tag, 'loading' ) ) {
 									$img_tag = preg_replace( '#<img\b([^>]*?)#i', '<img $1 loading="' . esc_attr( $loading_attrs['loading'] ) . '"', $img_tag );
 								}
@@ -3241,7 +3339,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 									$img_tag = preg_replace( '#<img\b([^>]*?)#i', '<img $1 decoding="' . esc_attr( $loading_attrs['decoding'] ) . '"', $img_tag );
 								}
 								if ( isset( $loading_attrs['fetchpriority'] ) && false === strpos( $img_tag, 'fetchpriority' ) ) {
-									$img_tag = preg_replace( '#<img\b([^>]*?)#i', '<img $1 fetchpriority="' . esc_attr( $loading_attrs['fetchpriority'] ) . '"', $img_tag );
+									// Never emit lazy+high on excluded images: skip a high
+									// hint when the tag (or core) already decided lazy.
+									$is_lazy = false !== stripos( $img_tag, 'loading="lazy"' ) || false !== stripos( $img_tag, "loading='lazy'" );
+									if ( ! ( $is_lazy && 'high' === $loading_attrs['fetchpriority'] ) ) {
+										$img_tag = preg_replace( '#<img\b([^>]*?)#i', '<img $1 fetchpriority="' . esc_attr( $loading_attrs['fetchpriority'] ) . '"', $img_tag );
+									}
 								}
 							} else {
 								if ( false === strpos( $img_tag, 'decoding' ) ) {
@@ -3271,7 +3374,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 					if ( $use_native_lazy || 1 === preg_match( '/\bloading=["\']lazy["\']/i', $img_tag ) ) {
 						if ( false === stripos( $img_tag, 'loading=' ) ) {
-							$img_tag = preg_replace( '#<img\b#i', '<img loading="lazy"', $img_tag );
+							// Defer to core (WP 6.3+): only stamp lazy when core returns a
+							// loading decision; hero (first-N/header) images are left eager.
+							$should_lazy = true;
+							if ( function_exists( 'wp_get_loading_optimization_attributes' ) ) {
+								$test_attr = array( 'src' => $original_src );
+								if ( preg_match( '/\bwidth=(["\'])(\d+)\1/i', $img_tag, $m ) ) {
+									$test_attr['width'] = (int) $m[2];
+								}
+								if ( preg_match( '/\bheight=(["\'])(\d+)\1/i', $img_tag, $m ) ) {
+									$test_attr['height'] = (int) $m[2];
+								}
+								$core_attrs  = $this->merge_core_loading_attributes( $test_attr, 'regex-fallback' );
+								$should_lazy = isset( $core_attrs['loading'] );
+							}
+							if ( $should_lazy ) {
+								$img_tag = preg_replace( '#<img\b#i', '<img loading="lazy"', $img_tag );
+							}
 						}
 						if ( false === stripos( $img_tag, 'decoding=' ) ) {
 							$img_tag = preg_replace( '#<img\b#i', '<img decoding="async"', $img_tag );
@@ -3292,7 +3411,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 								if ( preg_match( '/\bdecoding=(["\'])([^"\']+)\1/i', $img_tag, $m ) ) {
 									$tag_attr['decoding'] = $m[2];
 								}
-								$loading_attrs = wp_get_loading_optimization_attributes( 'img', $tag_attr, 'regex-fallback' );
+								$loading_attrs = $this->sanitize_loading_triple( $this->merge_core_loading_attributes( $tag_attr, 'regex-fallback' ) );
 								if ( isset( $loading_attrs['fetchpriority'] ) && false === stripos( $img_tag, 'fetchpriority' ) ) {
 									$img_tag = preg_replace( '#<img\b([^>]*?)#i', '<img $1 fetchpriority="' . esc_attr( $loading_attrs['fetchpriority'] ) . '"', $img_tag );
 								}
@@ -3318,7 +3437,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 								if ( preg_match( '/\bdecoding=(["\'])([^"\']+)\1/i', $img_tag, $m ) ) {
 									$tag_attr['decoding'] = $m[2];
 								}
-								$loading_attrs = wp_get_loading_optimization_attributes( 'img', $tag_attr, 'regex-fallback' );
+								$loading_attrs = $this->sanitize_loading_triple( $this->merge_core_loading_attributes( $tag_attr, 'regex-fallback' ) );
 								if ( isset( $loading_attrs['fetchpriority'] ) && false === stripos( $img_tag, 'fetchpriority' ) ) {
 									$img_tag = preg_replace( '#<img\b([^>]*?)#i', '<img $1 fetchpriority="' . esc_attr( $loading_attrs['fetchpriority'] ) . '"', $img_tag );
 								}
@@ -4445,6 +4564,69 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Stamp the hero (LCP) triple: high fetchpriority + eager loading.
+		 *
+		 * Merges core's fetchpriority/decoding decision first (gap-fill only,
+		 * never core's loading value), then forces eager + high so the hero is
+		 * never lazy. Guarantees one valid triple per element (never lazy+high).
+		 *
+		 * @since NEXT
+		 *
+		 * @param object $tags Tag/HTML processor positioned on the hero <img>.
+		 * @return bool True when any attribute was added, changed, or removed.
+		 */
+		private function stamp_hero_loading_triple( $tags ): bool {
+			$changed = false;
+			// Merge core's decision first (gap-fill only, never core's loading
+			// value), but stamp in legacy order: fetchpriority, loading, decoding.
+			$core_decoding      = null;
+			$core_fetchpriority = null;
+			if ( function_exists( 'wp_get_loading_optimization_attributes' ) && null === $tags->get_attribute( 'decoding' ) ) {
+				$tag_attr = array();
+				$src      = $tags->get_attribute( 'src' );
+				if ( null === $src ) {
+					$src = $tags->get_attribute( 'data-src' );
+				}
+				if ( null !== $src ) {
+					$tag_attr['src'] = $src;
+				}
+				$core = $this->sanitize_loading_triple( $this->merge_core_loading_attributes( $tag_attr, 'wp-html-tag-processor' ) );
+				if ( isset( $core['fetchpriority'] ) && 'high' === $core['fetchpriority'] ) {
+					// Core only ever marks the hero high; a non-high hint means
+					// core did not recognise this node as LCP, so the hero keeps
+					// fetchpriority=high below.
+					$core_fetchpriority = 'high';
+				}
+				if ( isset( $core['decoding'] ) ) {
+					$core_decoding = $core['decoding'];
+				}
+			}
+			if ( $this->restore_js_lazy_placeholders( $tags ) ) {
+				$changed = true;
+			}
+			if ( $this->remove_lazy_classes( $tags ) ) {
+				$changed = true;
+			}
+			if ( null === $tags->get_attribute( 'fetchpriority' ) ) {
+				$tags->set_attribute( 'fetchpriority', null !== $core_fetchpriority ? $core_fetchpriority : 'high' );
+				$changed = true;
+			}
+			if ( 'lazy' === $tags->get_attribute( 'loading' ) ) {
+				$tags->remove_attribute( 'loading' );
+				$changed = true;
+			}
+			if ( null === $tags->get_attribute( 'loading' ) ) {
+				$tags->set_attribute( 'loading', 'eager' );
+				$changed = true;
+			}
+			if ( null === $tags->get_attribute( 'decoding' ) ) {
+				$tags->set_attribute( 'decoding', null !== $core_decoding ? $core_decoding : 'async' );
+				$changed = true;
+			}
+			return $changed;
+		}
+
+		/**
 		 * Set fetchpriority="high" on the detected LCP image.
 		 *
 		 * Resolves the current LCP URL via get_current_lcp_url() and stamps
@@ -4492,20 +4674,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							! $stamped &&
 							$this->tag_matches_lcp_url( $processor, $lcp_url )
 							) {
-								$this->restore_js_lazy_placeholders( $processor );
-								$this->remove_lazy_classes( $processor );
-								if ( null === $processor->get_attribute( 'fetchpriority' ) ) {
-									$processor->set_attribute( 'fetchpriority', 'high' );
-								}
-								if ( 'lazy' === $processor->get_attribute( 'loading' ) ) {
-									$processor->remove_attribute( 'loading' );
-								}
-								if ( null === $processor->get_attribute( 'loading' ) ) {
-									$processor->set_attribute( 'loading', 'eager' );
-								}
-								if ( null === $processor->get_attribute( 'decoding' ) ) {
-									$processor->set_attribute( 'decoding', 'async' );
-								}
+								$this->stamp_hero_loading_triple( $processor );
 								$stamped = true;
 							}
 							$new_html .= (string) $processor->serialize_token();
@@ -4533,20 +4702,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$stamped = false;
 				while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
 					if ( $this->tag_matches_lcp_url( $tags, $lcp_url ) ) {
-						$this->restore_js_lazy_placeholders( $tags );
-						$this->remove_lazy_classes( $tags );
-						if ( null === $tags->get_attribute( 'fetchpriority' ) ) {
-							$tags->set_attribute( 'fetchpriority', 'high' );
-						}
-						if ( 'lazy' === $tags->get_attribute( 'loading' ) ) {
-							$tags->remove_attribute( 'loading' );
-						}
-						if ( null === $tags->get_attribute( 'loading' ) ) {
-							$tags->set_attribute( 'loading', 'eager' );
-						}
-						if ( null === $tags->get_attribute( 'decoding' ) ) {
-							$tags->set_attribute( 'decoding', 'async' );
-						}
+						$this->stamp_hero_loading_triple( $tags );
 						$stamped = true;
 						break;
 					}
@@ -4611,26 +4767,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$changed = false;
 				while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
 					if ( $this->tag_matches_lcp_url( $tags, $lcp_url ) ) {
-						if ( $this->restore_js_lazy_placeholders( $tags ) ) {
-							$changed = true;
-						}
-						if ( $this->remove_lazy_classes( $tags ) ) {
-							$changed = true;
-						}
-						if ( 'lazy' === $tags->get_attribute( 'loading' ) ) {
-							$tags->remove_attribute( 'loading' );
-							$changed = true;
-						}
-						if ( null === $tags->get_attribute( 'loading' ) ) {
-							$tags->set_attribute( 'loading', 'eager' );
-							$changed = true;
-						}
-						if ( null === $tags->get_attribute( 'fetchpriority' ) ) {
-							$tags->set_attribute( 'fetchpriority', 'high' );
-							$changed = true;
-						}
-						if ( null === $tags->get_attribute( 'decoding' ) ) {
-							$tags->set_attribute( 'decoding', 'async' );
+						if ( $this->stamp_hero_loading_triple( $tags ) ) {
 							$changed = true;
 						}
 						if ( null === $tags->get_attribute( 'data-wppo-hero' ) ) {
@@ -5392,7 +5529,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 									array(
 										'fetchpriority' => 'high',
 										'decoding'      => 'sync',
-									)
+									),
+									false
 								);
 								$this->maybe_autofill_alt_processor( $wppo_tags, $match_src );
 								continue;
@@ -5427,8 +5565,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 										if ( null !== $h_attr ) {
 											$test_attr['height'] = (int) $h_attr;
 										}
-										$loading_attrs = wp_get_loading_optimization_attributes( 'img', $test_attr, 'performance_optimisation_delay_load' );
-										if ( ! isset( $loading_attrs['loading'] ) ) {
+										$core_attrs = $this->merge_core_loading_attributes( $test_attr, 'performance_optimisation_delay_load' );
+										if ( ! isset( $core_attrs['loading'] ) ) {
 											$should_lazy = false;
 										}
 									}
