@@ -588,6 +588,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 			}
 
+			if ( class_exists( 'WP_HTML_Tag_Processor' ) ) {
+				$processed = $this->post_process_placeholders_with_tag_processor( $buffer );
+				if ( null !== $processed ) {
+					return $processed;
+				}
+			}
+
 			$result = preg_replace_callback(
 				'#<img\b[^>]*\sdata-src=["\']([^"\']+)["\'][^>]*>#i',
 				function ( $matches ) {
@@ -692,6 +699,98 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Processor-based placeholder injection using WP_HTML_Tag_Processor (WP 6.2+).
+		 *
+		 * Middle tier between the WP 6.9+ `WP_HTML_Processor::serialize_token()`
+		 * fast path and the legacy regex fallback: single-pass `next_tag()`
+		 * traversal with `get_attribute()`/`set_attribute()` plus
+		 * `get_updated_html()`, so the WP 6.2-6.8 happy path never runs
+		 * `preg_replace` on `<img>` tags. Mirrors
+		 * `post_process_placeholders_with_processor()` exactly (placeholder
+		 * validity gate, extra data attrs). `data:` placeholder sources are
+		 * staged through a sentinel URL plus `str_replace()` because the Tag
+		 * Processor blocks `data:` URIs in `src`. Fail-open: returns null on
+		 * any failure so the caller falls through to the regex fallback.
+		 *
+		 * @since NEXT
+		 * @param string $buffer The HTML buffer.
+		 * @return string|null Processed buffer or null on failure (triggers regex fallback).
+		 */
+		private function post_process_placeholders_with_tag_processor( string $buffer ): ?string {
+			if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
+				return null;
+			}
+			try {
+				$tags      = new \WP_HTML_Tag_Processor( $buffer );
+				$sentinels = array();
+				$seq       = 0;
+				while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
+					$data_src = $tags->get_attribute( 'data-src' );
+					$src      = $tags->get_attribute( 'src' );
+					if ( null === $data_src || null !== $src ) {
+						continue;
+					}
+					$decoded = (string) $data_src;
+					if ( ! $this->is_valid_lazy_placeholder_candidate( $decoded ) ) {
+						continue;
+					}
+					$width  = $tags->get_attribute( 'width' );
+					$height = $tags->get_attribute( 'height' );
+					$proxy  = '<img';
+					if ( is_string( $width ) || is_int( $width ) ) {
+						$proxy .= ' width="' . (string) $width . '"';
+					}
+					if ( is_string( $height ) || is_int( $height ) ) {
+						$proxy .= ' height="' . (string) $height . '"';
+					}
+					$proxy      .= '>';
+					$placeholder = $this->get_placeholder_src_for_image( $proxy, $decoded );
+					if ( empty( $placeholder['src'] ) ) {
+						continue;
+					}
+					$target = (string) $placeholder['src'];
+					if ( 0 === stripos( ltrim( $target ), 'data:' ) ) {
+						$sentinel = 'https://wppo.invalid/__wppo_ph_' . $seq . '__';
+						++$seq;
+						$sentinels[ $sentinel ] = $target;
+						$target                 = $sentinel;
+					}
+					$tags->set_attribute( 'src', $target );
+					// Per-tag fail-open (mirrors the _with_processor() manual
+					// inject + continue): when the encoder rejects this tag's
+					// src (e.g. a blocked data: URI), skip only this tag so
+					// prior tag updates are preserved. The src check runs
+					// before extra attrs are staged so a skipped tag is left
+					// fully untouched rather than partially stamped.
+					if ( null === $tags->get_attribute( 'src' ) ) {
+						continue;
+					}
+					foreach ( $placeholder['attrs'] as $attr_name => $attr_value ) {
+						$tags->set_attribute( $this->normalize_data_attribute_name( $attr_name ), $attr_value );
+					}
+				}
+				$updated = $tags->get_updated_html();
+				if ( ! is_string( $updated ) ) {
+					return null;
+				}
+				if ( ! empty( $sentinels ) ) {
+					foreach ( $sentinels as $sentinel => $actual ) {
+						$safe = function_exists( 'esc_attr' ) ? esc_attr( $actual ) : htmlspecialchars( $actual, ENT_QUOTES, 'UTF-8' );
+						// Replace only the quoted attribute-value form so a
+						// sentinel-looking string in text nodes, comments or
+						// scripts can never be rewritten.
+						$updated = str_replace( '"' . $sentinel . '"', '"' . $safe . '"', $updated );
+						$updated = str_replace( "'" . $sentinel . "'", "'" . $safe . "'", $updated );
+					}
+				}
+				return $updated;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return null;
+			}
+		}
+
+		/**
 		 * Post-processes the serialized buffer to add missing width/height attributes to lazy-loaded images.
 		 *
 		 * @since 2.0.0
@@ -702,6 +801,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private function post_process_img_dimensions( string $buffer ): string {
 			if ( $this->should_use_html_processor() ) {
 				$processed = $this->post_process_img_dimensions_with_processor( $buffer );
+				if ( null !== $processed ) {
+					return $processed;
+				}
+			}
+
+			if ( class_exists( 'WP_HTML_Tag_Processor' ) ) {
+				$processed = $this->post_process_img_dimensions_with_tag_processor( $buffer );
 				if ( null !== $processed ) {
 					return $processed;
 				}
@@ -794,6 +900,62 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Processor-based dimension injection using WP_HTML_Tag_Processor (WP 6.2+).
+		 *
+		 * Middle tier between the WP 6.9+ serializer fast path and the legacy
+		 * regex fallback: single `next_tag()` pass over `<img>` with
+		 * `get_attribute()`/`set_attribute()` plus `get_updated_html()`.
+		 * Mirrors `post_process_img_dimensions_with_processor()` (cached file
+		 * existence + LRU size lookup). Fail-open: returns null so the caller
+		 * falls through to the regex fallback.
+		 *
+		 * @since NEXT
+		 * @param string $buffer The HTML buffer.
+		 * @return string|null Processed buffer or null on failure.
+		 */
+		private function post_process_img_dimensions_with_tag_processor( string $buffer ): ?string {
+			if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
+				return null;
+			}
+			try {
+				$tags = new \WP_HTML_Tag_Processor( $buffer );
+				while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
+					$data_src = $tags->get_attribute( 'data-src' );
+					if ( null === $data_src ) {
+						continue;
+					}
+					// Mirror the regex fallback's quoted-numeric gate: empty,
+					// boolean or non-numeric values (e.g. width="auto") count
+					// as missing so both tiers inject the looked-up size.
+					$has_width  = is_numeric( $tags->get_attribute( 'width' ) );
+					$has_height = is_numeric( $tags->get_attribute( 'height' ) );
+					if ( $has_width && $has_height ) {
+						continue;
+					}
+					$local_path = Util::get_local_path( (string) $data_src );
+					if ( empty( $local_path ) || ! $this->cached_file_exists( $local_path ) || ! is_readable( $local_path ) || ! is_file( $local_path ) ) {
+						continue;
+					}
+					$size = $this->get_cached_image_size( $local_path );
+					if ( ! is_array( $size ) ) {
+						continue;
+					}
+					if ( ! $has_width ) {
+						$tags->set_attribute( 'width', (string) (int) $size[0] );
+					}
+					if ( ! $has_height ) {
+						$tags->set_attribute( 'height', (string) (int) $size[1] );
+					}
+				}
+				$updated = $tags->get_updated_html();
+				return is_string( $updated ) ? $updated : null;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return null;
+			}
+		}
+
+		/**
 		 * Post-processes lazy-loaded images and <picture> sources to enable auto-sizes (WP 6.7+).
 		 *
 		 * Runs after post_process_img_dimensions() so width/height are guaranteed to be
@@ -819,6 +981,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 			if ( $this->should_use_html_processor() ) {
 				$processed = $this->post_process_auto_sizes_with_processor( $buffer );
+				if ( null !== $processed ) {
+					return $processed;
+				}
+			}
+
+			if ( class_exists( 'WP_HTML_Tag_Processor' ) ) {
+				$processed = $this->post_process_auto_sizes_with_tag_processor( $buffer );
 				if ( null !== $processed ) {
 					return $processed;
 				}
@@ -938,6 +1107,93 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 
 			return $out;
+		}
+
+		/**
+		 * Processor-based auto-sizes upgrade using WP_HTML_Tag_Processor (WP 6.2+).
+		 *
+		 * Middle tier between the WP 6.9+ serializer fast path and the legacy
+		 * regex fallback: one filtered `next_tag()` pass per tag name over
+		 * `<img>` and `<source>` with `get_attribute()`/`set_attribute()`
+		 * plus `get_updated_html()`.
+		 * Mirrors `post_process_auto_sizes_with_processor()` (lazy gate,
+		 * srcset presence, `<img>` width/height CLS gate, `data-sizes` auto
+		 * handling). Fail-open: returns null so the caller falls through to
+		 * the regex fallback.
+		 *
+		 * @since NEXT
+		 * @param string $buffer The HTML buffer.
+		 * @return string|null Processed buffer or null on failure.
+		 */
+		private function post_process_auto_sizes_with_tag_processor( string $buffer ): ?string {
+			if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
+				return null;
+			}
+			try {
+				// One filtered pass per tag name so the traversal visits only
+				// <img>/<source> nodes instead of every tag in the document;
+				// passes chain via the progressively updated buffer.
+				foreach ( array( 'img', 'source' ) as $tag_name ) {
+					$tags = new \WP_HTML_Tag_Processor( $buffer );
+					while ( $tags->next_tag( array( 'tag_name' => $tag_name ) ) ) {
+						$this->apply_auto_sizes_to_tag( $tags, 'img' === $tag_name );
+					}
+					$updated = $tags->get_updated_html();
+					if ( ! is_string( $updated ) ) {
+						return null;
+					}
+					$buffer = $updated;
+				}
+				return $buffer;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return null;
+			}
+		}
+
+		/**
+		 * Apply the auto-sizes upgrade to the current Tag Processor tag.
+		 *
+		 * Shared per-tag step for the filtered `<img>`/`<source>` passes in
+		 * `post_process_auto_sizes_with_tag_processor()`: lazy gate, srcset
+		 * presence, `<img>` width/height CLS gate, then `data-sizes` auto
+		 * handling. Mirrors `post_process_auto_sizes_with_processor()` and the
+		 * regex fallback (which requires quoted-numeric dimensions, so empty,
+		 * boolean or non-numeric values count as missing here too).
+		 *
+		 * @since NEXT
+		 * @param \WP_HTML_Tag_Processor $tags   The tag processor on an `<img>` or `<source>` tag.
+		 * @param bool                   $is_img Whether the current tag is an `<img>` (vs `<source>`).
+		 * @return void
+		 */
+		private function apply_auto_sizes_to_tag( $tags, bool $is_img ): void {
+			$has_lazy = null !== $tags->get_attribute( 'data-src' ) || null !== $tags->get_attribute( 'data-srcset' );
+			if ( ! $has_lazy ) {
+				return;
+			}
+			$has_srcset = null !== $tags->get_attribute( 'srcset' ) || null !== $tags->get_attribute( 'data-srcset' );
+			if ( ! $has_srcset ) {
+				return;
+			}
+			if ( $is_img ) {
+				$has_width  = is_numeric( $tags->get_attribute( 'width' ) );
+				$has_height = is_numeric( $tags->get_attribute( 'height' ) );
+				if ( ! $has_width || ! $has_height ) {
+					return;
+				}
+			}
+			$current = $tags->get_attribute( 'data-sizes' );
+			if ( null !== $current ) {
+				if ( $this->sizes_attribute_includes_auto( (string) $current ) ) {
+					return;
+				}
+				$tags->set_attribute( 'data-sizes', 'auto, ' . (string) $current );
+				return;
+			}
+			if ( ! $is_img ) {
+				return;
+			}
+			$tags->set_attribute( 'data-sizes', 'auto' );
 		}
 
 		/**
@@ -4345,6 +4601,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 
 				// Never lazy: strip loading=lazy + stamp fetchpriority high on the hero tag only when absent.
+				// Guarded Tag Processor use (WP 6.2+): fail-open to the
+				// unmodified buffer when the HTML API is unavailable, so the
+				// OD-stamped LCP node is never double-stamped or corrupted.
+				if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
+					return $buffer;
+				}
 				$tags    = new \WP_HTML_Tag_Processor( $buffer );
 				$changed = false;
 				while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
@@ -4429,6 +4691,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string First image src, or empty string when none found.
 		 */
 		private function get_first_image_src_in_buffer( string $buffer ): string {
+			if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
+				return '';
+			}
 			try {
 				$tags     = new \WP_HTML_Tag_Processor( $buffer );
 				$fallback = '';
@@ -4453,7 +4718,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			} catch ( \Throwable $e ) {
 				return '';
 			}
-			return '';
 		}
 
 		/**
@@ -4522,6 +4786,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$needle_exact     = $this->normalize_image_url( $url, false );
 				$needle_has_sizes = ( '' !== $needle_exact && $needle_exact !== $needle );
 				$needle_query     = $this->get_url_query( $url );
+				if ( class_exists( 'WP_HTML_Tag_Processor' ) ) {
+					$found = $this->buffer_has_image_preload_with_tag_processor( $buffer, $needle, $needle_exact, $needle_has_sizes, $needle_query );
+					if ( null !== $found ) {
+						return $found;
+					}
+				}
 				if ( ! preg_match_all( '#<link\b[^>]*>#i', $buffer, $links ) ) {
 					return false;
 				}
@@ -4554,6 +4824,75 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return false;
 			}
 			return false;
+		}
+
+		/**
+		 * Tag Processor scan for an existing image preload link (WP 6.2+).
+		 *
+		 * Single-pass `next_tag()` traversal over `<link>` with
+		 * `get_attribute()` reads, so the happy path never runs `preg_replace`
+		 * on `<link>` tags. Mirrors the regex fallback matching exactly (rel
+		 * token list contains `preload`, any present quoted `as` value —
+		 * including an empty string — must equal `image` while an absent or
+		 * boolean `as` counts as image-eligible, normalized-href plus
+		 * raw-query comparison with size-suffix rules).
+		 * Returns null when the processor is unavailable or throws so the
+		 * caller falls through to the regex fallback. Fail-open: any parse
+		 * failure returns null (caller then runs the legacy scan).
+		 *
+		 * @since NEXT
+		 * @param string $buffer           The HTML buffer.
+		 * @param string $needle           Normalized target URL.
+		 * @param string $needle_exact     Normalized target URL without size-suffix collapsing.
+		 * @param bool   $needle_has_sizes Whether the target itself carries a size suffix.
+		 * @param string $needle_query     Raw query string of the target URL.
+		 * @return bool|null True/false on success, null on failure (fallback).
+		 */
+		private function buffer_has_image_preload_with_tag_processor( string $buffer, string $needle, string $needle_exact, bool $needle_has_sizes, string $needle_query ): ?bool {
+			if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
+				return null;
+			}
+			try {
+				if ( false === stripos( $buffer, '<link' ) ) {
+					return false;
+				}
+				$tags = new \WP_HTML_Tag_Processor( $buffer );
+				while ( $tags->next_tag( array( 'tag_name' => 'link' ) ) ) {
+					$rel = $tags->get_attribute( 'rel' );
+					if ( ! is_string( $rel ) || '' === trim( $rel ) ) {
+						continue;
+					}
+					$rel_tokens = preg_split( '/\s+/', strtolower( trim( $rel ) ), -1, PREG_SPLIT_NO_EMPTY );
+					if ( ! is_array( $rel_tokens ) || ! in_array( 'preload', $rel_tokens, true ) ) {
+						continue;
+					}
+					$as = $tags->get_attribute( 'as' );
+					// Mirror the regex fallback exactly: any present quoted value
+					// (including an empty string) must equal 'image', while an
+					// absent or boolean `as` counts as image-eligible.
+					if ( is_string( $as ) && 'image' !== strtolower( trim( $as ) ) ) {
+						continue;
+					}
+					$href = $tags->get_attribute( 'href' );
+					if ( ! is_string( $href ) || '' === $href ) {
+						continue;
+					}
+					if ( $this->normalize_image_url( $href ) !== $needle ) {
+						continue;
+					}
+					if ( ! $needle_has_sizes && $this->normalize_image_url( $href, false ) !== $needle_exact ) {
+						continue;
+					}
+					if ( $this->get_url_query( $href ) !== $needle_query ) {
+						continue;
+					}
+					return true;
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return null;
+			}
 		}
 
 		/**

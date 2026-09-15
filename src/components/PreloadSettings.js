@@ -43,6 +43,9 @@ const PreloadSettings = ( { options = {} } ) => {
 	const { notice, notify, dismiss } = useNotice();
 	const { setIsDirty } = useContext( UnsavedChangesContext );
 	const [ baseline, setBaseline ] = useState( defaultSettings );
+	const [ preload, setPreload ] = useState( null );
+	const [ cacheCap, setCacheCap ] = useState( null );
+	const [ isResuming, setIsResuming ] = useState( false );
 	// Keep baseline in sync with incoming options on mount / prop change.
 	// Per-key deps (not object identity) so parent re-renders with an
 	// identical payload do not reset the baseline.
@@ -67,6 +70,60 @@ const PreloadSettings = ( { options = {} } ) => {
 		options.speculationExcludeUrls,
 	] );
 	useUnsavedChanges( settings, baseline );
+
+	const fetchPreloadStatus = async () => {
+		try {
+			const res = await apiCall( 'preload_status', {}, 'GET' );
+			const payload = res && res.data ? res.data : res;
+			if ( payload && payload.preload ) {
+				setPreload( payload.preload );
+			}
+			if ( payload && payload.cache ) {
+				setCacheCap( payload.cache );
+			}
+		} catch ( err ) {
+			console.error( 'Failed fetching preload status', err );
+		}
+	};
+
+	useEffect( () => {
+		fetchPreloadStatus();
+	}, [] );
+
+	const handleResume = async () => {
+		if ( isResuming ) {
+			return;
+		}
+		setIsResuming( true );
+		try {
+			const res = await apiCall( 'preload_resume', {} );
+			const payload = res && res.data ? res.data : res;
+			if ( payload && payload.preload ) {
+				setPreload( payload.preload );
+			} else {
+				await fetchPreloadStatus();
+			}
+			notify( {
+				type: 'success',
+				message:
+					res.message ||
+					__( 'Preload queue resumed.', 'performance-optimisation' ),
+				durationMs: 5000,
+			} );
+		} catch ( err ) {
+			console.error( 'Failed resuming preload queue', err );
+			notify( {
+				type: 'error',
+				message: __(
+					'An unexpected error occurred.',
+					'performance-optimisation'
+				),
+				durationMs: 5000,
+			} );
+		} finally {
+			setIsResuming( false );
+		}
+	};
 
 	useEffect( () => {
 		if ( ! options || Object.keys( options ).length === 0 ) {
@@ -255,6 +312,51 @@ const PreloadSettings = ( { options = {} } ) => {
 							checked={ settings.preloadSitemap }
 							onChange={ handleChange( setSettings ) }
 						/>
+						{ cacheCap && 'warn' === cacheCap.state && (
+							<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+								{ __(
+									'Cache size is approaching its cap. Oldest entries will be evicted once the cap is reached.',
+									'performance-optimisation'
+								) }
+							</p>
+						) }
+						{ cacheCap && 'over' === cacheCap.state && (
+							<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+								{ __(
+									'Cache size cap reached. Enforcing by evicting oldest entries.',
+									'performance-optimisation'
+								) }
+							</p>
+						) }
+						{ preload && (
+							<div className="wppo-field wppo-mt-20">
+								<p className="wppo-text-muted wppo-text-small">
+									{ sprintf(
+										/* translators: %1$d: queued count, %2$d: done count, %3$d: failed count. */
+										__(
+											'Preload progress — queued: %1$d, done: %2$d, failed: %3$d.',
+											'performance-optimisation'
+										),
+										preload.queued || 0,
+										preload.done || 0,
+										preload.failed || 0
+									) }
+								</p>
+								{ ( preload.queued > 0 ||
+									preload.failed > 0 ) && (
+									<LoadingSubmitButton
+										className="wppo-button wppo-button--secondary"
+										isLoading={ isResuming }
+										onClick={ handleResume }
+										type="button"
+										label={ __(
+											'Resume Preload',
+											'performance-optimisation'
+										) }
+									/>
+								) }
+							</div>
+						) }
 					</div>
 				</FeatureCard>
 

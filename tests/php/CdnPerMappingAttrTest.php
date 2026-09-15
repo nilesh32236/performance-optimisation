@@ -30,8 +30,7 @@ class CdnPerMappingAttrTest extends \PHPUnit\Framework\TestCase {
 	protected function setUp(): void {
 		parent::setUp();
 		\Brain\Monkey\setUp();
-		\PerformanceOptimise\Inc\Util::reset_cached_home_urls();
-		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		\PerformanceOptimise\Inc\Util::reset_runtime_caches();
 		$this->register_common_function_stubs();
 		Functions\when( 'has_filter' )->justReturn( false );
 		Functions\when( 'untrailingslashit' )->alias(

@@ -51,6 +51,7 @@ audit:
     - "performance"
     - "code-quality"
     - "javascript"
+    - "maintainability"
   targetDirs:
     - "includes"
     - "src"

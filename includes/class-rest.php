@@ -269,6 +269,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+				'preload_status'            => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'get_preload_status' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
+				'preload_resume'            => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'resume_preload' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
 				'ai_model'                  => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_ai_model' ),
@@ -329,13 +341,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		}
 
 		/**
-		 * Handle one-click autoload-bloat remediation (dry run, apply, revert).
+		 * Handle one-click autoload-bloat remediation (dry run, apply, revert, revert_all).
 		 *
 		 * POST param `mode` controls the operation:
-		 * - `dry_run` (default): report candidates + bytes saved, changes nothing.
-		 * - `apply`: flip non-core options above the threshold to autoload off.
+		 * - `dry_run` (default): report candidates + bytes saved + backup export, changes nothing.
+		 * - `apply`: flip non-core options above the threshold to autoload off; response includes the backup export.
 		 * - `revert`: restore one option (`option` param) to its prior value.
-		 * - `revert_all`: restore every remediated option.
+		 * - `revert_all`: restore every remediated option to its exact prior
+		 *   value (byte-identical); response includes restored details + total.
 		 *
 		 * Optional params: `threshold` (bytes, 100..10MB), `limit` (1..500).
 		 *
@@ -443,6 +456,88 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 */
 		public function get_rum_data( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			return $this->send_response( RUM::get_data() );
+		}
+
+		/**
+		 * Resumable sitemap preload progress plus bounded-cache cap status.
+		 *
+		 * Fail-open: queue/cache failures return idle/ok payloads, never fatal.
+		 *
+		 * @since NEXT
+		 * @param \WP_REST_Request $request The request object.
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function get_preload_status( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			$preload = array(
+				'queued'      => 0,
+				'done'        => 0,
+				'failed'      => 0,
+				'total'       => 0,
+				'status'      => 'idle',
+				'failed_urls' => array(),
+			);
+			$cache   = array(
+				'bytes'     => 0,
+				'cap_bytes' => 0,
+				'state'     => 'ok',
+				'enforce'   => true,
+				'max_mb'    => 0,
+			);
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Cron' ) && method_exists( 'PerformanceOptimise\Inc\Cron', 'get_preload_status' ) ) {
+					$preload = Cron::get_preload_status();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) && method_exists( 'PerformanceOptimise\Inc\Cache', 'get_cache_cap_status' ) ) {
+					$cache = Cache::get_cache_cap_status();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $this->send_response(
+				array(
+					'preload' => $preload,
+					'cache'   => $cache,
+				)
+			);
+		}
+
+		/**
+		 * Resume the sitemap preload queue (re-schedule queued + failed URLs).
+		 *
+		 * @since NEXT
+		 * @param \WP_REST_Request $request The request object.
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function resume_preload( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			$rescheduled = 0;
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Cron' ) && method_exists( 'PerformanceOptimise\Inc\Cron', 'resume_preload_queue' ) ) {
+					$rescheduled = Cron::resume_preload_queue();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			$status = array();
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Cron' ) && method_exists( 'PerformanceOptimise\Inc\Cron', 'get_preload_status' ) ) {
+					$status = Cron::get_preload_status();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $this->send_response(
+				array(
+					'rescheduled' => $rescheduled,
+					'preload'     => $status,
+				),
+				true,
+				200,
+				$rescheduled > 0 ? __( 'Preload queue resumed.', 'performance-optimisation' ) : __( 'Nothing to resume.', 'performance-optimisation' )
+			);
 		}
 
 		/**
@@ -764,6 +859,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 			if ( 'file_optimisation' === $tab && ! isset( $params['settings']['usedCssRumPriority'] ) && isset( $options['file_optimisation']['usedCssRumPriority'] ) ) {
 				$sanitized_settings['usedCssRumPriority'] = (bool) $options['file_optimisation']['usedCssRumPriority'];
+			}
+
+			// Preserve the RUM-weighted CSS queue keys when the request omits
+			// them (issue #1164): same partial-save hazard as the RUM-priority
+			// flags above — an older client/partial save must not wipe a
+			// custom per-run cap or the viewport-variant toggle.
+			if ( 'file_optimisation' === $tab && ! isset( $params['settings']['ccssQueueCap'] ) && isset( $options['file_optimisation']['ccssQueueCap'] ) ) {
+				$sanitized_settings['ccssQueueCap'] = absint( $options['file_optimisation']['ccssQueueCap'] );
+			}
+			if ( 'file_optimisation' === $tab && ! isset( $params['settings']['usedCssQueueCap'] ) && isset( $options['file_optimisation']['usedCssQueueCap'] ) ) {
+				$sanitized_settings['usedCssQueueCap'] = absint( $options['file_optimisation']['usedCssQueueCap'] );
+			}
+			if ( 'file_optimisation' === $tab && ! isset( $params['settings']['ccssViewportVariants'] ) && isset( $options['file_optimisation']['ccssViewportVariants'] ) ) {
+				$stored_variants                            = $options['file_optimisation']['ccssViewportVariants'];
+				$sanitized_settings['ccssViewportVariants'] = is_array( $stored_variants ) ? array_values( array_filter( array_map( 'sanitize_text_field', $stored_variants ) ) ) : (bool) $stored_variants;
 			}
 
 			// Preserve the RUM-gated speculation toggle when the request

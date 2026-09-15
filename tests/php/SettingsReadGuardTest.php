@@ -37,8 +37,8 @@ class SettingsReadGuardTest extends \PHPUnit\Framework\TestCase {
 			'reason' => 'Null-distinguishing fresh-install check in maybe_seed_settings().',
 		),
 		'includes/class-main.php'            => array(
-			'count'  => 6,
-			'reason' => 'Bare reads distinguishing "no row" from "stored array" in migrate_block_assets_setting(), maybe_migrate_ccss_max_size(), maybe_migrate_ccss_safelist(), maybe_migrate_safe_mode(), maybe_migrate_image_alt_edge_defaults(), and maybe_migrate_sandbox_preview().',
+			'count'  => 7,
+			'reason' => 'Bare reads distinguishing "no row" from "stored array" in migrate_block_assets_setting(), maybe_migrate_ccss_max_size(), maybe_migrate_ccss_safelist(), maybe_migrate_safe_mode(), maybe_migrate_image_alt_edge_defaults(), maybe_migrate_css_queue_defaults(), and maybe_migrate_sandbox_preview().',
 		),
 		'includes/class-sandbox-preview.php' => array(
 			'count'  => 6,

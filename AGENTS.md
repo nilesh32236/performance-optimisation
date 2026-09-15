@@ -75,7 +75,7 @@ Frontend lazy loading: `src/lazyload.js` (vanilla JS, not React) — Intersectio
 Admin bar cache clearing: `src/main.js` — two buttons ("Clear All Cache", "Clear This Page") with automatic nonce refresh on 403.
 
 ### REST API
-Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (37 routes). All require `manage_options` capability + `X-WP-Nonce` except `rum_collect` (public, token + IP rate-limited). The authoritative 37-route table lives in `.agents/AGENTS.md`; the summary table below lists the most-used routes.
+Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (39 routes). All require `manage_options` capability + `X-WP-Nonce` except `rum_collect` (public, token + IP rate-limited). The authoritative 39-route table lives in `.agents/AGENTS.md`; the summary table below lists the most-used routes.
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -110,6 +110,8 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (3
 | `sandbox_save` | POST | Stage sandbox asset settings |
 | `sandbox_promote` | POST | Promote staged sandbox settings to production |
 | `sandbox_discard` | POST | Discard staged sandbox settings |
+| `preload_status` | GET | Honest preload progress (bounded cache) |
+| `preload_resume` | POST | Resume a stalled preload queue |
 
 ### PHP backend
 42 class files in `includes/` (+ `includes/minify/` wrappers and `includes/redis-connect-helper.php`). The authoritative per-class responsibility table lives in `.agents/AGENTS.md`; the summary table below covers the core classes:
@@ -126,7 +128,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (3
 | `class-cron.php` | WP-Cron: preload (5h), image conversion (hourly), DB cleanup (daily), web vitals rescan, used/critical CSS, llms.txt |
 | `class-img-converter.php` | WebP/AVIF conversion (GD, Imagick), deferred option commits |
 | `class-image-optimisation.php` | Next-gen serving, lazy load, picture wrap, preload, video lazy |
-| `class-rest.php` | All 37 REST API endpoints |
+| `class-rest.php` | All 39 REST API endpoints |
 | `class-pagespeed.php` | Google PageSpeed Insights API + Action Scheduler job |
 | `class-suggestion-engine.php` | Performance suggestions from telemetry + PageSpeed |
 | `class-telemetry.php` | Local cURL-based performance scanner |

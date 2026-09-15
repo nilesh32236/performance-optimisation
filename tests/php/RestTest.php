@@ -252,10 +252,12 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			'sandbox_save',
 			'sandbox_promote',
 			'sandbox_discard',
+			'preload_status',
+			'preload_resume',
 		);
 
-		// Keep in sync with the AGENTS.md endpoint count (33 + 4 sandbox preview routes).
-		$this->assertCount( 37, $routes, 'REST route count drifted from the documented endpoint count' );
+		// Keep in sync with the AGENTS.md endpoint count (33 + 4 sandbox preview + 2 preload routes).
+		$this->assertCount( 39, $routes, 'REST route count drifted from the documented endpoint count' );
 
 		foreach ( $expected as $route ) {
 			$this->assertArrayHasKey( $route, $routes, "Missing route: {$route}" );
