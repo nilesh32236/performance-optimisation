@@ -3528,7 +3528,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The processed <picture> or <img> HTML fragment (or the original fragment if unchanged).
 		 */
 		public function process_picture_tag( $matches, $img_tag, $original_src, $exclude_imgs ) {
-			// Note: when core's Enhanced Responsive Images ships native
+			// Note (see #624): when core's Enhanced Responsive Images ships native
 			// <picture>/srcset handling and accurate Gallery-block sizes, reassess
 			// whether this <picture>-wrap remains necessary or should defer to core.
 			// No runtime change until the core API lands.

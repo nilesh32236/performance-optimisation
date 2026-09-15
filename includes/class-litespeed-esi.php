@@ -1103,8 +1103,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			if ( self::has_header_emitter() ) {
 				Header_Emitter::emit_esi_tag( $action );
 			} elseif ( function_exists( 'headers_sent' ) && ! headers_sent() ) {
-				$cleaned = preg_replace( '/[\x00-\x1F\x7F]/', '', $action );
-				$safe    = substr( is_string( $cleaned ) ? $cleaned : $action, 0, 1024 );
+			$cleaned = preg_replace( '/[\x00-\x1F\x7F]/', '', $action );
+			$safe    = substr( is_string( $cleaned ) ? $cleaned : '', 0, 1024 );
 				header( 'X-LiteSpeed-Tag: ESI.' . $safe, false );
 			}
 		}

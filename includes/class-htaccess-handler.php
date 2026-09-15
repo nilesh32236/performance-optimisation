@@ -384,12 +384,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				// creates orphans in the system temp dir that the .htaccess-dir
 				// scan above never sees — sweep those too when the temp dir
 				// differs from the .htaccess dir.
-				if ( function_exists( 'get_temp_dir' ) && method_exists( $fs, 'dirlist' ) ) {
-					$tmp_dir = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( get_temp_dir() ) : get_temp_dir();
-					if ( is_string( $tmp_dir ) && '' !== $tmp_dir && rtrim( $tmp_dir, '/' ) !== rtrim( $dir, '/' ) && $fs->exists( $tmp_dir ) ) {
-						$tmp_listing = $fs->dirlist( $tmp_dir );
-						if ( is_array( $tmp_listing ) ) {
-							foreach ( $tmp_listing as $name => $info ) {
+			if ( function_exists( 'get_temp_dir' ) && method_exists( $fs, 'dirlist' ) ) {
+				$tmp_dir = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( get_temp_dir() ) : get_temp_dir();
+				if ( is_string( $tmp_dir ) && '' !== $tmp_dir && rtrim( $tmp_dir, '/' ) !== rtrim( $dir, '/' ) && $fs->exists( $tmp_dir ) ) {
+					$tmp_listing = $fs->dirlist( $tmp_dir );
+					if ( is_array( $tmp_listing ) ) {
+						// Bound the sweep on shared hosts where /tmp can hold
+						// thousands of entries: skip the scan when huge.
+						if ( count( $tmp_listing ) > 2000 ) {
+							return;
+						}
+						foreach ( $tmp_listing as $name => $info ) {
 								$name = (string) $name;
 								if ( 0 === strpos( $name, $base . '.wppo-tmp-' ) ) {
 									$fs->delete( rtrim( $tmp_dir, '/' ) . '/' . $name );
@@ -731,7 +736,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			}
 			$rules = $sanitized;
 
-			$required = array( 'exists', 'get_contents', 'put_contents', 'move', 'copy', 'delete' );
+			$required = array( 'exists', 'get_contents', 'put_contents', 'move', 'copy', 'delete', 'chmod' );
 			foreach ( $required as $method ) {
 				if ( ! $wp_filesystem || ! method_exists( $wp_filesystem, $method ) ) {
 					return null;
@@ -841,9 +846,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			// which would lock out Apache when httpd runs as a different
 			// user/group — restore the deployment mode (FS_CHMOD_FILE) now
 			// that the tmp contents are never world-readable at any point.
-			if ( method_exists( $wp_filesystem, 'chmod' ) ) {
-				$wp_filesystem->chmod( $htaccess_file, $mode );
-			}
+			// chmod is in the atomic-path capability check above, so this
+			// method always exists here.
+			$wp_filesystem->chmod( $htaccess_file, $mode );
 
 			$written = $wp_filesystem->get_contents( $htaccess_file );
 			if ( ! is_string( $written ) ) {

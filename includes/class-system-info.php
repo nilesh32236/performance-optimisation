@@ -246,7 +246,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 				// to the always-available PHP_OS constant (trimmed so a missing
 				// release does not leave a trailing space).
 				'os'              => trim( PHP_OS . ' ' . ( function_exists( 'php_uname' ) ? (string) php_uname( 'r' ) : '' ) ),
-				'architecture'    => function_exists( 'php_uname' ) ? (string) php_uname( 'm' ) : PHP_OS,
+				'architecture'    => function_exists( 'php_uname' ) ? (string) php_uname( 'm' ) : 'unknown',
 			);
 		}
 

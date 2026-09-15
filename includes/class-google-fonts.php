@@ -253,13 +253,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 *
 		 * Hooked to style_loader_tag filter (priority 9, before minify_css at 10).
 		 *
-		 * @param string $tag    The link tag HTML.
-		 * @param string $handle The stylesheet handle.
-		 * @param string $href   The stylesheet URL.
-		 * @return string Modified link tag with local URL or original tag.
-		 * @since 2.0.0
-		 */
-		public function process_style_tag( string $tag, string $handle, $href ): string {
+	 * @param mixed $tag    The link tag HTML.
+	 * @param mixed $handle The stylesheet handle.
+	 * @param string $href   The stylesheet URL.
+	 * @return string Modified link tag with local URL or original tag.
+	 * @since 2.0.0
+	 */
+	public function process_style_tag( $tag, $handle, $href ): string {
+		if ( ! is_string( $tag ) || '' === $tag ) {
+			return is_string( $tag ) ? $tag : '';
+		}
+		if ( ! is_string( $handle ) ) {
+			return $tag;
+		}
 			if ( is_admin() ) {
 				return $tag;
 			}
@@ -491,28 +497,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 				return false;
 			}
 
-			$css_file = $this->font_cache_dir . '/css/' . $key . '.css';
-			$css_url  = $this->font_cache_url . '/css/' . $key . '.css';
-			if ( '' === $css_url ) {
+		$css_file = $this->font_cache_dir . '/css/' . $key . '.css';
+		$css_url  = $this->font_cache_url . '/css/' . $key . '.css';
+		if ( '' === $css_url ) {
+			return false;
+		}
+
+		// Backed-off run must never delete the existing cached CSS: check
+		// the failure sentinel before touching the good capped file.
+		$fail_key = Util::transient_key( 'wppo_gf_fail_' . $key );
+		if ( get_transient( $fail_key ) ) {
+			return false;
+		}
+
+		if ( file_exists( $css_file ) ) {
+			// Capped runs leave remote gstatic URLs in the cached CSS
+			// (at most 3 files per run). Re-queue the key while remote
+			// URLs remain so later runs converge to fully local CSS
+			// without requiring a manual cache clear.
+			$cached = file_get_contents( $css_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local cache staleness probe, not a remote URL; writes still go through WP_Filesystem.
+			if ( ! is_string( $cached ) || false === strpos( $cached, 'fonts.gstatic.com' ) ) {
+				return true;
+			}
+			$unlinked = unlink( $css_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Stale capped CSS must be regenerated before re-fetch.
+			if ( ! $unlinked && file_exists( $css_file ) && ! is_writable( $css_file ) ) {
 				return false;
 			}
-
-			if ( file_exists( $css_file ) ) {
-				// Capped runs leave remote gstatic URLs in the cached CSS
-				// (at most 3 files per run). Re-queue the key while remote
-				// URLs remain so later runs converge to fully local CSS
-				// without requiring a manual cache clear.
-				$cached = file_get_contents( $css_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local cache staleness probe, not a remote URL; writes still go through WP_Filesystem.
-				if ( ! is_string( $cached ) || false === strpos( $cached, 'fonts.gstatic.com' ) ) {
-					return true;
-				}
-				unlink( $css_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Stale capped CSS must be regenerated; failure falls through to the fetch below.
-			}
-
-			$fail_key = Util::transient_key( 'wppo_gf_fail_' . $key );
-			if ( get_transient( $fail_key ) ) {
-				return false;
-			}
+		}
 
 			// Fetch CSS from Google Fonts API (out-of-band only).
 			$response = wp_remote_get(

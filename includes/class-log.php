@@ -76,11 +76,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 				}
 				return;
 			}
-			if ( function_exists( 'mb_substr' ) ) {
-				$activity = mb_substr( $activity, 0, 255, 'UTF-8' );
-			} else {
-				$activity = substr( $activity, 0, 255 );
-			}
+		if ( function_exists( 'mb_substr' ) ) {
+			$activity = mb_substr( $activity, 0, 255, 'UTF-8' );
+		} else {
+			$activity = substr( $activity, 0, 255 );
+		}
+		if ( '' === trim( $activity ) ) {
+			return;
+		}
 
 			$table_name = $wpdb->prefix . 'wppo_activity_logs';
 
