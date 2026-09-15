@@ -1290,11 +1290,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Resets the home_url static cache for testing isolation.
 		 *
+		 * Also clears the canonical-host and normalized-host memos, which
+		 * are host-related state derived from the same stubs.
+		 *
 		 * @since 2.0.0
 		 */
 		public static function reset_cached_home_urls(): void {
-			self::$home_url_cache       = array();
-			self::$canonical_host_cache = array();
+			self::$home_url_cache        = array();
+			self::$canonical_host_cache  = array();
+			self::$normalized_host_cache = array();
+		}
+
+		/**
+		 * Resets all Util runtime memos (test-isolation entry point).
+		 *
+		 * Covers settings, home, canonical-host, normalized-host, and
+		 * permalink memos. Prefer this over calling the individual
+		 * resetters so future memos are not silently missed by test
+		 * setUp() methods.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_runtime_caches(): void {
+			self::reset_cached_home_urls();
+			self::clear_settings_cache();
+			self::clear_permalink_cache();
 		}
 
 		/**

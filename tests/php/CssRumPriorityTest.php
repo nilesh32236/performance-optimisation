@@ -45,8 +45,7 @@ class CssRumPriorityTest extends \PHPUnit\Framework\TestCase {
 		parent::setUp();
 		\Brain\Monkey\setUp();
 		$this->register_common_function_stubs();
-		Util::reset_cached_home_urls();
-		Util::clear_settings_cache();
+		Util::reset_runtime_caches();
 		RUM::clear_field_lcp_cache();
 		Critical_CSS::reset_ccss_memo();
 
