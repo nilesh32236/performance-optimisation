@@ -83,6 +83,21 @@ describe( 'ImageOptimization Component', () => {
 		expect( toggle ).not.toBeChecked();
 	} );
 
+	it( 'reveals the discard-oversized-conversions toggle when auto convert is enabled', () => {
+		render( <ImageOptimization /> );
+		expect(
+			screen.queryByLabelText( /Discard Oversized Conversions/i )
+		).not.toBeInTheDocument();
+
+		fireEvent.click( screen.getByLabelText( /Auto Convert Formats/i ) );
+
+		const toggle = screen.getByLabelText(
+			/Discard Oversized Conversions/i
+		);
+		expect( toggle ).toBeInTheDocument();
+		expect( toggle ).toBeChecked();
+	} );
+
 	it( 'renders the client-side processing notice when WP 7.1+ media processing is active', () => {
 		global.wppoSettings.client_side_media_processing_enabled = true;
 

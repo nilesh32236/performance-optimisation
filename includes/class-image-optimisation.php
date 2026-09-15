@@ -219,6 +219,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private ?string $current_lcp_url = null;
 
 		/**
+		 * Cached placeholder info (dominant color + LQIP) from Img_Converter.
+		 *
+		 * Class property (not a function-static) so clear_runtime_caches()
+		 * can flush it on switch_blog / cache-clear and in tests. Null until
+		 * first placeholder lookup per request.
+		 *
+		 * @var array|null
+		 * @since NEXT
+		 */
+		private static $placeholder_info_cache = null;
+
+		/**
+		 * Data-src URL => ABSPATH-relative path cache for placeholder lookups.
+		 *
+		 * @var array<string, string>
+		 * @since NEXT
+		 */
+		private static $placeholder_path_cache = array();
+
+		/**
 		 * Clear the per-request runtime caches (file_exists + image sizes).
 		 *
 		 * Called on switch_blog (absolute paths from another site must not be
@@ -231,9 +251,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return void
 		 */
 		public static function clear_runtime_caches(): void {
-			self::$file_exists_cache = array();
-			self::$img_size_cache    = array();
-			self::$preload_emitted   = array();
+			self::$file_exists_cache      = array();
+			self::$img_size_cache         = array();
+			self::$preload_emitted        = array();
+			self::$placeholder_info_cache = null;
+			self::$placeholder_path_cache = array();
 		}
 
 		/**
@@ -2858,6 +2880,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 									$tags->set_attribute( 'fetchpriority', 'low' );
 								}
 							}
+							// Native-lazy placeholders (issue #1158): keep the
+							// real src and emit only the local placeholder
+							// attributes (zero external HTTP, LCP hero
+							// excluded from blur via the exclusion list).
+							if ( 'none' !== $this->get_placeholder_type() ) {
+								$native_attrs = $this->get_native_lazy_placeholder_attrs( $original_src_decoded, $exclude_imgs );
+								foreach ( $native_attrs as $native_attr_name => $native_attr_value ) {
+									if ( null === $tags->get_attribute( $native_attr_name ) ) {
+										$tags->set_attribute( $this->normalize_data_attribute_name( $native_attr_name ), $native_attr_value );
+									}
+								}
+							}
 						} else {
 							// JS-lazy path: consult core for occluded/fetchpriority before stripping src.
 							if ( function_exists( 'wp_get_loading_optimization_attributes' ) && null === $tags->get_attribute( 'fetchpriority' ) ) {
@@ -5114,6 +5148,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 										$wppo_tags->set_attribute( 'fetchpriority', 'low' );
 									}
 								}
+								// Native-lazy placeholders (issue #1158): the real
+								// src is kept (the browser defers it), so only
+								// the local placeholder attributes
+								// (dominant-color wash / LQIP blur hook) are
+								// emitted -- zero external HTTP, LCP hero
+								// explicitly excluded from blur.
+								if ( $enable_placeholder ) {
+									$native_attrs = $this->get_native_lazy_placeholder_attrs( $original_src_decoded, $exclude_imgs, $od_lcp_normalized, $candidate_lcp_normalized );
+									foreach ( $native_attrs as $native_attr_name => $native_attr_value ) {
+										if ( null === $wppo_tags->get_attribute( $native_attr_name ) ) {
+											$wppo_tags->set_attribute( $this->normalize_data_attribute_name( $native_attr_name ), $native_attr_value );
+										}
+									}
+								}
 							} else {
 								// JS-lazy path: consult core for occluded/fetchpriority before stripping src,
 								// so hidden/below-fold images still hint low priority.
@@ -5363,9 +5411,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return array{src: string, attrs: array<string, string>} Placeholder src and extra attributes.
 		 */
 		private function get_placeholder_src_for_image( string $img_tag, string $data_src ): array {
-			static $placeholder_cache = null;
-			static $path_cache        = array();
-
 			$result = array(
 				'src'   => '',
 				'attrs' => array(),
@@ -5379,20 +5424,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 			// Resolve data-src to a local path key for looking up placeholder data.
 			$rel_path = '';
-			if ( ! isset( $path_cache[ $data_src ] ) ) {
+			if ( ! isset( self::$placeholder_path_cache[ $data_src ] ) ) {
 				$local_path = Util::get_local_path( $data_src );
 				if ( ! empty( $local_path ) ) {
-					$path_cache[ $data_src ] = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $local_path ) );
+					self::$placeholder_path_cache[ $data_src ] = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $local_path ) );
 				} else {
-					$path_cache[ $data_src ] = '';
+					self::$placeholder_path_cache[ $data_src ] = '';
 				}
 			}
-			$rel_path = $path_cache[ $data_src ];
+			$rel_path = self::$placeholder_path_cache[ $data_src ];
 
 			// Load placeholder data from the shared wppo_img_info option.
-			if ( null === $placeholder_cache ) {
-				$placeholder_cache = Img_Converter::get_placeholder_info();
+			if ( null === self::$placeholder_info_cache ) {
+				self::$placeholder_info_cache = Img_Converter::get_placeholder_info();
 			}
+			$placeholder_cache = self::$placeholder_info_cache;
 
 			if ( 'svg' === $placeholder_type ) {
 				$result['src'] = $this->generate_svg_base64( $img_tag );
@@ -5422,6 +5468,123 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 
 			return $result;
+		}
+
+		/**
+		 * Whether a URL is the LCP hero image (explicit blur-exclusion check).
+		 *
+		 * Centralizes the hero matching used by add_delay_load_img(): substring
+		 * membership in the never-lazy exclusion list plus normalized-URL
+		 * equality against the OD and candidate LCP URLs (covers http/https
+		 * and WordPress size-suffix variants). Used to keep the LCP hero out
+		 * of LQIP blur even if it ever reaches the placeholder path.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string   $url                  The image URL to test.
+		 * @param string[] $exclude_imgs         The never-lazy exclusion list.
+		 * @param string   $od_lcp_normalized    Normalized OD LCP URL (or '').
+		 * @param string   $candidate_normalized Normalized candidate LCP URL (or '').
+		 * @return bool True when the URL is the LCP hero.
+		 */
+		private function is_lcp_hero_url( string $url, array $exclude_imgs, string $od_lcp_normalized = '', string $candidate_normalized = '' ): bool {
+			if ( '' === $url ) {
+				return false;
+			}
+
+			if ( '' !== $od_lcp_normalized || '' !== $candidate_normalized ) {
+				try {
+					$src_normalized = Util::normalize_url( $url );
+					if ( ( '' !== $od_lcp_normalized && $src_normalized === $od_lcp_normalized )
+						|| ( '' !== $candidate_normalized && $src_normalized === $candidate_normalized ) ) {
+						return true;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			foreach ( $exclude_imgs as $exclude_img ) {
+				if ( '' !== $exclude_img && false !== strpos( $url, $exclude_img ) ) {
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		/**
+		 * Whether the local LQIP placeholder pipeline is enabled.
+		 *
+		 * Shares the `wppo_smart_pipeline_enabled` kill-switch filter with the
+		 * converter's size-compare path (issue #1158) so one filter disables
+		 * both features. Placeholders are server-side only (inline data-URI /
+		 * dominant-color attributes) — zero external HTTP either way.
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when LQIP placeholder emission is enabled.
+		 */
+		private function is_local_lqip_pipeline_enabled(): bool {
+			if ( function_exists( 'apply_filters' ) && function_exists( 'has_filter' ) && has_filter( 'wppo_smart_pipeline_enabled' ) ) {
+				/**
+				 * Filter the size-compare smart-compress + local LQIP pipeline.
+				 *
+				 * @since NEXT
+				 * @param bool $enabled Whether the pipeline is enabled.
+				 */
+				return (bool) apply_filters( 'wppo_smart_pipeline_enabled', true );
+			}
+
+			return true;
+		}
+
+		/**
+		 * Placeholder attributes for a native-lazy (`loading="lazy"`) image.
+		 *
+		 * The JS-lazy path swaps `src` for a placeholder via
+		 * post_process_placeholders(); native-lazy keeps the real `src` (the
+		 * browser defers it), so only the extra attributes are emitted:
+		 * `data-wppo-dominant-color` (background wash) and `data-wppo-lqip`
+		 * (blur hook consumed by lazyload.js). The LCP hero is explicitly
+		 * excluded from blur; data: URIs are never touched. Fail-open:
+		 * returns an empty array on any failure or when disabled.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string   $src_url              The image src URL.
+		 * @param string[] $exclude_imgs         The never-lazy exclusion list.
+		 * @param string   $od_lcp_normalized    Normalized OD LCP URL (or '').
+		 * @param string   $candidate_normalized Normalized candidate LCP URL (or '').
+		 * @return array<string, string> Extra attributes (empty when none apply).
+		 */
+		private function get_native_lazy_placeholder_attrs( string $src_url, array $exclude_imgs, string $od_lcp_normalized = '', string $candidate_normalized = '' ): array {
+			try {
+				if ( ! $this->is_local_lqip_pipeline_enabled() ) {
+					return array();
+				}
+
+				if ( 'none' === $this->get_placeholder_type() ) {
+					return array();
+				}
+
+				if ( 1 === preg_match( '#^data:image/#i', htmlspecialchars_decode( $src_url, ENT_QUOTES ) ) ) {
+					return array();
+				}
+
+				// Explicit LCP-hero blur exclusion (issue #1158): the hero is
+				// normally excluded from lazy rewrites upstream, but this
+				// guard keeps it blur-free even if it reaches this path.
+				if ( $this->is_lcp_hero_url( $src_url, $exclude_imgs, $od_lcp_normalized, $candidate_normalized ) ) {
+					return array();
+				}
+
+				$placeholder = $this->get_placeholder_src_for_image( '<img>', $src_url );
+				return is_array( $placeholder['attrs'] ?? null ) ? $placeholder['attrs'] : array();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
 		}
 
 		/**

@@ -978,4 +978,69 @@ describe( 'Lazy Load (lazyload.js)', () => {
 			expect( 'wppoDelayConfig' in window ).toBe( false );
 		} );
 	} );
+
+	describe( 'native placeholders (local LQIP)', () => {
+		const bootWithNativeImages = () => {
+			jest.isolateModules( () => {
+				require( '../lazyload' );
+			} );
+		};
+
+		beforeEach( () => {
+			global.wppoNativeLazy = true;
+		} );
+
+		it( 'applies the dominant-color wash and LQIP blur to native lazy images', () => {
+			document.body.innerHTML =
+				'<img loading="lazy" src="wash.jpg" data-wppo-dominant-color="#aabbcc">' +
+				'<img loading="lazy" src="blur.jpg" data-wppo-lqip="1">';
+
+			bootWithNativeImages();
+
+			const images = document.querySelectorAll( 'img' );
+			expect( images[ 0 ].style.backgroundColor ).toBe(
+				'rgb(170, 187, 204)'
+			);
+			expect(
+				images[ 1 ].classList.contains( 'wppo-lqip-active' )
+			).toBe( true );
+		} );
+
+		it( 'clears the blur hook once the native image loads', () => {
+			document.body.innerHTML =
+				'<img loading="lazy" src="blur.jpg" data-wppo-lqip="1">';
+
+			bootWithNativeImages();
+
+			const img = document.querySelector( 'img' );
+			expect( img.classList.contains( 'wppo-lqip-active' ) ).toBe(
+				true
+			);
+
+			img.dispatchEvent( new Event( 'load' ) );
+
+			expect( img.classList.contains( 'wppo-lqip-active' ) ).toBe(
+				false
+			);
+			expect( img.classList.contains( 'wppo-lqip-loaded' ) ).toBe(
+				true
+			);
+			expect( img.hasAttribute( 'data-wppo-lqip' ) ).toBe( false );
+		} );
+
+		it( 'leaves images without placeholder attributes untouched', () => {
+			// The LCP hero never carries placeholder attributes
+			// (excluded server-side), so it must gain no blur classes.
+			document.body.innerHTML =
+				'<img loading="eager" fetchpriority="high" src="hero.jpg">';
+
+			bootWithNativeImages();
+
+			const img = document.querySelector( 'img' );
+			expect( img.classList.contains( 'wppo-lqip-active' ) ).toBe(
+				false
+			);
+			expect( img.style.backgroundColor ).toBe( '' );
+		} );
+	} );
 } );

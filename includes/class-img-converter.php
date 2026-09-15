@@ -904,7 +904,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 */
 		public function get_smart_quality( string $mime, array $size = array() ): int {
 			$smart = $this->options['image_optimisation']['smartQuality'] ?? true;
-			if ( function_exists( 'apply_filters' ) ) {
+			if ( function_exists( 'apply_filters' ) && function_exists( 'has_filter' ) && has_filter( 'wppo_smart_quality' ) ) {
 				/**
 				 * Filter whether smart quality mapping is applied.
 				 *
@@ -915,12 +915,160 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			}
 
 			if ( $smart && 'image/avif' === $mime ) {
+				// Guarded encoder check (issue #1158): when no AVIF encoder is
+				// available on this host, fall through to the WebP quality
+				// instead of the AVIF-mapped value so callers that fall back
+				// to WebP encoding use the right quality. Fail-open: the
+				// probe itself never fatals (see is_avif_encoder_available()).
+				if ( ! self::is_avif_encoder_available() ) {
+					return $this->resolve_encode_quality( 'image/webp', 82, $size );
+				}
 				$webp_quality = $this->resolve_encode_quality( 'image/webp', 82, $size );
 				$quality      = max( 1, $webp_quality - 20 );
 				return min( 100, max( 1, $quality ) );
 			}
 
 			return $this->resolve_encode_quality( $mime, 82, $size );
+		}
+
+		/**
+		 * Whether the size-compare smart-compress pipeline is enabled.
+		 *
+		 * Additive `discardOversizedSibling` setting (default true) plus the
+		 * shared `wppo_smart_pipeline_enabled` kill-switch filter that also
+		 * gates local LQIP placeholder emission (issue #1158). Fail-open:
+		 * any probe failure returns true so conversion behaviour is unchanged.
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when oversized siblings should be discarded.
+		 */
+		public function is_smart_compress_enabled(): bool {
+			$enabled = $this->options['image_optimisation']['discardOversizedSibling'] ?? true;
+			if ( function_exists( 'apply_filters' ) && function_exists( 'has_filter' ) && has_filter( 'wppo_smart_pipeline_enabled' ) ) {
+				/**
+				 * Filter the size-compare smart-compress + local LQIP pipeline.
+				 *
+				 * @since NEXT
+				 * @param bool $enabled Whether the pipeline is enabled.
+				 */
+				$enabled = apply_filters( 'wppo_smart_pipeline_enabled', (bool) $enabled );
+			}
+
+			return (bool) $enabled;
+		}
+
+		/**
+		 * Whether a converted sibling should be discarded for exceeding its source.
+		 *
+		 * Size-compare guarantee (issue #1158): a sibling at or above the
+		 * source byte size is never kept — the source is served instead.
+		 * Fail-open (returns false) when the pipeline is disabled, when
+		 * either file is missing/unreadable, or when sizes cannot be measured.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $source_path  Filesystem path to the source image.
+		 * @param string $sibling_path Filesystem path to the converted sibling.
+		 * @return bool True when the sibling must be discarded.
+		 */
+		public function should_discard_oversized_sibling( string $source_path, string $sibling_path ): bool {
+			if ( ! $this->is_smart_compress_enabled() ) {
+				return false;
+			}
+
+			if ( '' === $source_path || '' === $sibling_path ) {
+				return false;
+			}
+
+			if ( ! file_exists( $source_path ) || ! file_exists( $sibling_path ) ) {
+				return false;
+			}
+
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- filesize() emits warnings on unreadable files; silenced for race safety, fail-open below.
+			$source_size = @filesize( $source_path );
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- filesize() emits warnings on unreadable files; silenced for race safety, fail-open below.
+			$sibling_size = @filesize( $sibling_path );
+			if ( false === $source_size || false === $sibling_size || 0 >= $source_size ) {
+				return false;
+			}
+
+			/**
+			 * Filter whether an oversized converted sibling is discarded.
+			 *
+			 * @since NEXT
+			 * @param bool   $discard      Whether to discard the sibling.
+			 * @param string $source_path  Filesystem path to the source image.
+			 * @param string $sibling_path Filesystem path to the converted sibling.
+			 */
+			if ( function_exists( 'apply_filters' ) && function_exists( 'has_filter' ) && has_filter( 'wppo_discard_oversized_sibling' ) ) {
+				return (bool) apply_filters( 'wppo_discard_oversized_sibling', (int) $sibling_size >= (int) $source_size, $source_path, $sibling_path );
+			}
+
+			return (int) $sibling_size >= (int) $source_size;
+		}
+
+		/**
+		 * Discard a converted sibling that exceeds its source byte size.
+		 *
+		 * Strict delete containment: only unlinks when the sibling is inside
+		 * the uploads/wppo allowlist (see is_safe_delete_path()), so a
+		 * traversal path can never delete outside it. Fail-open keeps the
+		 * file intact on any failure.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $source_path  Filesystem path to the source image.
+		 * @param string $sibling_path Filesystem path to the converted sibling.
+		 * @return bool True when the sibling was discarded.
+		 */
+		public function discard_oversized_sibling( string $source_path, string $sibling_path ): bool {
+			if ( ! $this->should_discard_oversized_sibling( $source_path, $sibling_path ) ) {
+				return false;
+			}
+
+			if ( ! self::is_safe_delete_path( $sibling_path ) ) {
+				return false;
+			}
+
+			if ( function_exists( 'wp_delete_file' ) ) {
+				wp_delete_file( $sibling_path );
+			} elseif ( function_exists( 'unlink' ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Fallback when wp_delete_file() is unavailable; path is allowlist-contained above.
+				unlink( $sibling_path );
+			} else {
+				return false;
+			}
+
+			return ! file_exists( $sibling_path );
+		}
+
+		/**
+		 * Record a freshly encoded (or pre-existing) sibling as completed,
+		 * discarding it first when it exceeds its source byte size.
+		 *
+		 * Size-compare guarantee (issue #1158): oversized siblings are
+		 * deleted and recorded as `skipped` (source kept, never regressed)
+		 * instead of `completed`, so they are never served and never counted
+		 * in the savings report. Fail-open: any discard failure keeps the
+		 * legacy `completed` behaviour.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $source_image Filesystem path to the source image.
+		 * @param string $sibling_path Filesystem path to the converted sibling.
+		 * @param string $type         Conversion type ('webp' or 'avif').
+		 * @param bool   $success      Conversion success flag, set to false when discarded.
+		 * @return void
+		 */
+		private function record_encoded_sibling( string $source_image, string $sibling_path, string $type, bool &$success ): void {
+			if ( $this->discard_oversized_sibling( $source_image, $sibling_path ) ) {
+				$success = false;
+				$this->update_conversion_status( $source_image, 'skipped', $type );
+				return;
+			}
+
+			$this->update_conversion_status( $source_image, 'completed', $type );
 		}
 
 		/**
@@ -1464,10 +1612,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 							$success = false;
 							$this->update_conversion_status( $source_image, 'failed', 'avif' );
 						} else {
-							$this->update_conversion_status( $source_image, 'completed', 'avif' );
+							$this->record_encoded_sibling( $source_image, $avif_path, 'avif', $success );
 						}
 					} else {
-						$this->update_conversion_status( $source_image, 'completed', 'avif' );
+						$this->record_encoded_sibling( $source_image, $avif_path, 'avif', $success );
 					}
 				}
 
@@ -1482,10 +1630,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 							$success = false;
 							$this->update_conversion_status( $source_image, 'failed', 'webp' );
 						} else {
-							$this->update_conversion_status( $source_image, 'completed', 'webp' );
+							$this->record_encoded_sibling( $source_image, $webp_path, 'webp', $success );
 						}
 					} else {
-						$this->update_conversion_status( $source_image, 'completed', 'webp' );
+						$this->record_encoded_sibling( $source_image, $webp_path, 'webp', $success );
 					}
 				}
 
@@ -2604,6 +2752,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 							if ( false !== $key ) {
 								unset( $img_info['pending'][ $type ][ $key ] );
 							}
+						}
+
+						if ( 'skipped' === $status ) {
+							// A skipped image has no converted output (never
+							// encoded, core-owned, or an oversized sibling was
+							// discarded per issue #1158): drop any stale
+							// completed/failed entries and recorded sizes so
+							// the savings report never counts a sibling that
+							// is not served.
+							foreach ( array( 'completed', 'failed' ) as $list ) {
+								if ( isset( $img_info[ $list ][ $type ] ) ) {
+									$key = array_search( $img_path, $img_info[ $list ][ $type ], true );
+									if ( false !== $key ) {
+										unset( $img_info[ $list ][ $type ][ $key ] );
+									}
+								}
+							}
+							unset( $img_info['sizes'][ $type ][ $img_path ] );
 						}
 					}
 

@@ -1439,6 +1439,33 @@ const observeElement = ( el ) => {
 };
 
 /**
+ * Apply local placeholder styling to natively-deferred images.
+ *
+ * Natively lazy-loaded images (`loading="lazy"` without `data-src`) keep
+ * their real `src` while the browser defers fetching, so the
+ * IntersectionObserver path never touches them. This prepares the
+ * server-emitted local placeholder attributes (`data-wppo-dominant-color` /
+ * `data-wppo-lqip`, zero external HTTP) and clears them once the real image
+ * loads. The LCP hero never carries these attributes (excluded server-side).
+ *
+ * @since NEXT
+ * @return {void}
+ */
+const prepareNativePlaceholders = () => {
+	const selector =
+		'img[loading="lazy"][data-wppo-dominant-color]:not([data-src]), img[loading="lazy"][data-wppo-lqip]:not([data-src])';
+	document.querySelectorAll( selector ).forEach( ( img ) => {
+		applyPlaceholderBeforeLoad( img );
+		const done = makePlaceholderLoadHandler( img );
+		if ( img.complete && img.naturalWidth > 0 ) {
+			done();
+		} else {
+			img.addEventListener( 'load', done );
+		}
+	} );
+};
+
+/**
  * Initialise lazy-loading for images, iframes, and videos.
  *
  * Uses IntersectionObserver with a 200px root margin. Falls back to
@@ -1468,6 +1495,11 @@ const loadImages = () => {
 			iframe.removeAttribute( 'data-src' );
 		} );
 	}
+
+	// Native-lazy placeholders run regardless of the observer path below:
+	// natively-deferred images keep their real src, so the server-emitted
+	// local placeholder attributes need no IntersectionObserver.
+	prepareNativePlaceholders();
 
 	// When native lazy is active and no video lazy elements exist, skip observer setup entirely.
 	if ( USE_NATIVE_LAZY && ! document.querySelector( getLazySelector() ) ) {
