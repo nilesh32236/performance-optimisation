@@ -1776,14 +1776,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			if ( 'flush' === $action ) {
-				$result = $manager->flush();
+				// Scoped flush on multisite (issue #1186): never flush
+				// sibling sites. Falls back to flush() when the new method
+				// is unavailable.
+				$result = method_exists( $manager, 'flush_scoped' ) ? $manager->flush_scoped() : $manager->flush();
 				if ( $result ) {
 					Log::add( __( 'Object Cache flushed.', 'performance-optimisation' ) );
 					return $this->send_response( true, true, 200, __( 'Object Cache flushed.', 'performance-optimisation' ) );
 				}
-				// No Log::add here: Object_Cache::flush() already recorded
-				// the failure in-app. Forward the manager's real error so
-				// the SPA notice keeps its specificity.
+				// No Log::add here: Object_Cache::flush()/flush_scoped()
+				// already recorded the failure in-app. Forward the
+				// manager's real error so the SPA notice keeps its specificity.
 				$flush_error = $manager->get_last_flush_error();
 				if ( ! ( $flush_error instanceof \WP_Error ) ) {
 					$flush_error = new \WP_Error( 'flush_fail', __( 'Flush reported failure.', 'performance-optimisation' ) );

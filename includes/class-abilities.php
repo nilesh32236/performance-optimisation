@@ -966,7 +966,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 */
 		public static function execute_flush_object_cache( array $input = array() ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Ability API passes input even when empty.
 			$object_cache = new Object_Cache();
-			$flushed      = $object_cache->flush();
+			// Scoped flush on multisite (issue #1186): never flush sibling
+			// sites. Falls back to flush() when the new method is unavailable.
+			$flushed = method_exists( $object_cache, 'flush_scoped' ) ? $object_cache->flush_scoped() : $object_cache->flush();
 			return array( 'flushed' => (bool) $flushed );
 		}
 

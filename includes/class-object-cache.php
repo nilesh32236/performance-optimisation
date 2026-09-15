@@ -1213,6 +1213,94 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		}
 
 		/**
+		 * Flush the object cache scoped to the current blog on multisite.
+		 *
+		 * The WPPO drop-in's flush() already sweeps only the current blog
+		 * prefix (see templates/object-cache.php), but a foreign or absent
+		 * drop-in may expose a global FLUSHDB behind wp_cache_flush(). On
+		 * multisite this method therefore:
+		 *
+		 * - refuses to flush while a foreign object-cache.php drop-in is
+		 *   active (fail closed with a WP_Error instead of risking
+		 *   sibling-site data);
+		 * - temporarily forces the `object_cache_allow_flush_all` opt-out
+		 *   filter to false so the WPPO drop-in takes its blog-prefix
+		 *   SCAN+DEL path even when something opted into a full flush.
+		 *
+		 * On single-site installs this delegates straight to flush().
+		 * Fail-open: an unknown multisite state flushes via flush().
+		 *
+		 * @since NEXT
+		 * @return bool True when the scoped flush succeeded, false otherwise.
+		 */
+		public function flush_scoped() {
+			$is_multisite = false;
+			if ( function_exists( 'is_multisite' ) ) {
+				try {
+					$is_multisite = (bool) is_multisite();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$is_multisite = false;
+				}
+			}
+
+			if ( ! $is_multisite ) {
+				return $this->flush();
+			}
+
+			$blog_id = 0;
+			if ( function_exists( 'get_current_blog_id' ) ) {
+				try {
+					$blog_id = (int) get_current_blog_id();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$blog_id = 0;
+				}
+			}
+
+			try {
+				$own_dropin = $this->is_own_dropin();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$own_dropin = false;
+			}
+
+			if ( ! $own_dropin ) {
+				$this->last_flush_error = new \WP_Error(
+					'flush_foreign_dropin',
+					sprintf(
+						/* translators: %d: current blog ID */
+						__( 'Object cache flush refused on site %d: a foreign object-cache.php drop-in is active, so a scoped flush cannot be guaranteed.', 'performance-optimisation' ),
+						$blog_id
+					)
+				);
+				$this->log_redis_failure( 'flush_foreign_dropin', sprintf( 'Scoped flush refused for blog %d: foreign object-cache drop-in active.', $blog_id ) );
+				return false;
+			}
+
+			$force_scoped = null;
+			if ( function_exists( 'add_filter' ) && function_exists( 'remove_filter' ) ) {
+				$force_scoped = static function ( $allow ) {
+					unset( $allow );
+					return false;
+				};
+				add_filter( 'object_cache_allow_flush_all', $force_scoped, PHP_INT_MAX );
+			}
+
+			try {
+				return $this->flush();
+			} finally {
+				if ( null !== $force_scoped ) {
+					try {
+						remove_filter( 'object_cache_allow_flush_all', $force_scoped, PHP_INT_MAX );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+			}
+		}
+
+		/**
 		 * Read Redis used_memory in bytes via INFO (best-effort).
 		 *
 		 * @since 2.0.0

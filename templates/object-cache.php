@@ -1025,6 +1025,9 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 * Uses a SCAN loop to find and delete keys matching this site's prefix,
 		 * avoiding a global FLUSH. Operators may opt in to a full flushDb() via
 		 * the 'object_cache_allow_flush_all' filter for single-site/isolated setups.
+		 * Multisite callers that must never touch sibling sites should go through
+		 * Object_Cache::flush_scoped(), which forces this filter to false for the
+		 * duration of the flush so the prefix-scoped path is always taken.
 		 * After deletion a bounded post-flush verification sample re-scans the
 		 * prefix: leftover keys trigger one retry sweep, and a still-dirty
 		 * prefix returns false so callers can surface stale keys instead of
@@ -1032,6 +1035,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 * degrades to uncached (false) rather than fatal.
 		 *
 		 * @since 2.0.0 Post-flush verification sample added; returns false when stale keys remain.
+		 * @since NEXT Multisite scoping note for the object_cache_allow_flush_all filter added.
 		 * @return bool True when the prefix verifies clean, false otherwise.
 		 */
 		public function flush() {
