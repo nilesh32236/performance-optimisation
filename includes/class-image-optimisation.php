@@ -756,11 +756,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						$target                 = $sentinel;
 					}
 					$tags->set_attribute( 'src', $target );
+					// Per-tag fail-open (mirrors the _with_processor() manual
+					// inject + continue): when the encoder rejects this tag's
+					// src (e.g. a blocked data: URI), skip only this tag so
+					// prior tag updates are preserved. The src check runs
+					// before extra attrs are staged so a skipped tag is left
+					// fully untouched rather than partially stamped.
+					if ( null === $tags->get_attribute( 'src' ) ) {
+						continue;
+					}
 					foreach ( $placeholder['attrs'] as $attr_name => $attr_value ) {
 						$tags->set_attribute( $this->normalize_data_attribute_name( $attr_name ), $attr_value );
-					}
-					if ( null === $tags->get_attribute( 'src' ) ) {
-						return null;
 					}
 				}
 				$updated = $tags->get_updated_html();
@@ -769,8 +775,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 				if ( ! empty( $sentinels ) ) {
 					foreach ( $sentinels as $sentinel => $actual ) {
-						$safe    = function_exists( 'esc_attr' ) ? esc_attr( $actual ) : htmlspecialchars( $actual, ENT_QUOTES, 'UTF-8' );
-						$updated = str_replace( $sentinel, $safe, $updated );
+						$safe = function_exists( 'esc_attr' ) ? esc_attr( $actual ) : htmlspecialchars( $actual, ENT_QUOTES, 'UTF-8' );
+						// Replace only the quoted attribute-value form so a
+						// sentinel-looking string in text nodes, comments or
+						// scripts can never be rewritten.
+						$updated = str_replace( '"' . $sentinel . '"', '"' . $safe . '"', $updated );
+						$updated = str_replace( "'" . $sentinel . "'", "'" . $safe . "'", $updated );
 					}
 				}
 				return $updated;
@@ -914,8 +924,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					if ( null === $data_src ) {
 						continue;
 					}
-					$has_width  = null !== $tags->get_attribute( 'width' );
-					$has_height = null !== $tags->get_attribute( 'height' );
+					// Mirror the regex fallback's quoted-numeric gate: empty,
+					// boolean or non-numeric values (e.g. width="auto") count
+					// as missing so both tiers inject the looked-up size.
+					$has_width  = is_numeric( $tags->get_attribute( 'width' ) );
+					$has_height = is_numeric( $tags->get_attribute( 'height' ) );
 					if ( $has_width && $has_height ) {
 						continue;
 					}
@@ -1100,8 +1113,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Processor-based auto-sizes upgrade using WP_HTML_Tag_Processor (WP 6.2+).
 		 *
 		 * Middle tier between the WP 6.9+ serializer fast path and the legacy
-		 * regex fallback: single-pass traversal over `<img>` and `<source>`
-		 * with `get_attribute()`/`set_attribute()` plus `get_updated_html()`.
+		 * regex fallback: one filtered `next_tag()` pass per tag name over
+		 * `<img>` and `<source>` with `get_attribute()`/`set_attribute()`
+		 * plus `get_updated_html()`.
 		 * Mirrors `post_process_auto_sizes_with_processor()` (lazy gate,
 		 * srcset presence, `<img>` width/height CLS gate, `data-sizes` auto
 		 * handling). Fail-open: returns null so the caller falls through to
@@ -1116,47 +1130,70 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return null;
 			}
 			try {
-				$tags = new \WP_HTML_Tag_Processor( $buffer );
-				while ( $tags->next_tag() ) {
-					$tag_name = strtolower( (string) $tags->get_tag() );
-					if ( 'img' !== $tag_name && 'source' !== $tag_name ) {
-						continue;
+				// One filtered pass per tag name so the traversal visits only
+				// <img>/<source> nodes instead of every tag in the document;
+				// passes chain via the progressively updated buffer.
+				foreach ( array( 'img', 'source' ) as $tag_name ) {
+					$tags = new \WP_HTML_Tag_Processor( $buffer );
+					while ( $tags->next_tag( array( 'tag_name' => $tag_name ) ) ) {
+						$this->apply_auto_sizes_to_tag( $tags, 'img' === $tag_name );
 					}
-					$is_img   = 'img' === $tag_name;
-					$has_lazy = null !== $tags->get_attribute( 'data-src' ) || null !== $tags->get_attribute( 'data-srcset' );
-					if ( ! $has_lazy ) {
-						continue;
+					$updated = $tags->get_updated_html();
+					if ( ! is_string( $updated ) ) {
+						return null;
 					}
-					$has_srcset = null !== $tags->get_attribute( 'srcset' ) || null !== $tags->get_attribute( 'data-srcset' );
-					if ( ! $has_srcset ) {
-						continue;
-					}
-					if ( $is_img ) {
-						$has_width  = null !== $tags->get_attribute( 'width' );
-						$has_height = null !== $tags->get_attribute( 'height' );
-						if ( ! $has_width || ! $has_height ) {
-							continue;
-						}
-					}
-					$current = $tags->get_attribute( 'data-sizes' );
-					if ( null !== $current ) {
-						if ( $this->sizes_attribute_includes_auto( (string) $current ) ) {
-							continue;
-						}
-						$tags->set_attribute( 'data-sizes', 'auto, ' . (string) $current );
-						continue;
-					}
-					if ( ! $is_img ) {
-						continue;
-					}
-					$tags->set_attribute( 'data-sizes', 'auto' );
+					$buffer = $updated;
 				}
-				$updated = $tags->get_updated_html();
-				return is_string( $updated ) ? $updated : null;
+				return $buffer;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return null;
 			}
+		}
+
+		/**
+		 * Apply the auto-sizes upgrade to the current Tag Processor tag.
+		 *
+		 * Shared per-tag step for the filtered `<img>`/`<source>` passes in
+		 * `post_process_auto_sizes_with_tag_processor()`: lazy gate, srcset
+		 * presence, `<img>` width/height CLS gate, then `data-sizes` auto
+		 * handling. Mirrors `post_process_auto_sizes_with_processor()` and the
+		 * regex fallback (which requires quoted-numeric dimensions, so empty,
+		 * boolean or non-numeric values count as missing here too).
+		 *
+		 * @since NEXT
+		 * @param \WP_HTML_Tag_Processor $tags   The tag processor on an `<img>` or `<source>` tag.
+		 * @param bool                   $is_img Whether the current tag is an `<img>` (vs `<source>`).
+		 * @return void
+		 */
+		private function apply_auto_sizes_to_tag( $tags, bool $is_img ): void {
+			$has_lazy = null !== $tags->get_attribute( 'data-src' ) || null !== $tags->get_attribute( 'data-srcset' );
+			if ( ! $has_lazy ) {
+				return;
+			}
+			$has_srcset = null !== $tags->get_attribute( 'srcset' ) || null !== $tags->get_attribute( 'data-srcset' );
+			if ( ! $has_srcset ) {
+				return;
+			}
+			if ( $is_img ) {
+				$has_width  = is_numeric( $tags->get_attribute( 'width' ) );
+				$has_height = is_numeric( $tags->get_attribute( 'height' ) );
+				if ( ! $has_width || ! $has_height ) {
+					return;
+				}
+			}
+			$current = $tags->get_attribute( 'data-sizes' );
+			if ( null !== $current ) {
+				if ( $this->sizes_attribute_includes_auto( (string) $current ) ) {
+					return;
+				}
+				$tags->set_attribute( 'data-sizes', 'auto, ' . (string) $current );
+				return;
+			}
+			if ( ! $is_img ) {
+				return;
+			}
+			$tags->set_attribute( 'data-sizes', 'auto' );
 		}
 
 		/**
@@ -4681,7 +4718,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			} catch ( \Throwable $e ) {
 				return '';
 			}
-			return '';
 		}
 
 		/**
@@ -4796,8 +4832,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Single-pass `next_tag()` traversal over `<link>` with
 		 * `get_attribute()` reads, so the happy path never runs `preg_replace`
 		 * on `<link>` tags. Mirrors the regex fallback matching exactly (rel
-		 * token list contains `preload`, `as` is `image` or absent,
-		 * normalized-href plus raw-query comparison with size-suffix rules).
+		 * token list contains `preload`, any present quoted `as` value —
+		 * including an empty string — must equal `image` while an absent or
+		 * boolean `as` counts as image-eligible, normalized-href plus
+		 * raw-query comparison with size-suffix rules).
 		 * Returns null when the processor is unavailable or throws so the
 		 * caller falls through to the regex fallback. Fail-open: any parse
 		 * failure returns null (caller then runs the legacy scan).
@@ -4829,7 +4867,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						continue;
 					}
 					$as = $tags->get_attribute( 'as' );
-					if ( is_string( $as ) && '' !== trim( $as ) && 'image' !== strtolower( trim( $as ) ) ) {
+					// Mirror the regex fallback exactly: any present quoted value
+					// (including an empty string) must equal 'image', while an
+					// absent or boolean `as` counts as image-eligible.
+					if ( is_string( $as ) && 'image' !== strtolower( trim( $as ) ) ) {
 						continue;
 					}
 					$href = $tags->get_attribute( 'href' );
