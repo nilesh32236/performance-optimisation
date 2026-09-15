@@ -1979,12 +1979,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * real-visit data, and the DOM-first heuristic flow into the single
 		 * `<link rel="preload" as="image" fetchpriority="high">` unchecked
 		 * today — only the RUM beacon intake validates origin. Absolute URLs
-		 * are validated via `RUM::is_same_origin_url()` (guarded, with a
-		 * fail-open fallback when RUM is unavailable); root-relative and bare
+		 * are validated via `RUM::is_same_origin_url()`; root-relative and bare
 		 * relative paths resolve against the home URL and are same-origin by
 		 * construction, except scheme-like values (`data:`, `blob:`,
-		 * `javascript:`, `mailto:`, …) which are rejected. Fail-open for the
-		 * page: any failure returns false (candidate skipped), never fatal.
+		 * `javascript:`, `mailto:`, …) which are rejected. Fail-closed for the
+		 * page: any failure (including an unavailable RUM class, consistent
+		 * with the catch block below — `resolve_auto_lcp_url()` already
+		 * fails open by falling through to the next tier) returns false
+		 * (candidate skipped), never fatal.
 		 *
 		 * @since NEXT
 		 * @param string $url The candidate URL.
@@ -2016,7 +2018,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'is_same_origin_url' ) ) {
 					return \PerformanceOptimise\Inc\RUM::is_same_origin_url( $url );
 				}
-				return true;
+				// RUM unavailable: fail closed (reject the absolute URL) so a
+				// possibly cross-origin candidate is never preloaded. The
+				// caller (`resolve_auto_lcp_url()`) falls through to the next
+				// tier, preserving fail-open page behaviour.
+				return false;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;
@@ -2064,13 +2070,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Ask core for its loading-optimization verdict on the current tag.
 		 *
 		 * Gap-fill companion to `is_core_loading_optimization_available()`:
-		 * builds the tag-attribute array core expects and returns core's
-		 * verdict (`fetchpriority`/`decoding` when offered), or null when
-		 * core is unavailable, throws, or offers no verdict. Callers honour
-		 * a core `high` fetchpriority verdict (no double-stamp, no fight);
-		 * any other outcome keeps our measured-hero `high` stamp because
-		 * field truth beats the heuristic, while `decoding` defers to core
-		 * whenever core offers a value. Fail-open: any failure returns null.
+		 * builds the tag-attribute array core expects and returns the
+		 * `wp_loading_optimization_attributes` filter verdict
+		 * (`fetchpriority`/`decoding` when offered), or null when core is
+		 * unavailable, throws, or offers no verdict. The filter — not
+		 * `wp_get_loading_optimization_attributes()` — is consulted on
+		 * purpose: the latter runs core's stateful per-context image
+		 * counter, so a second direct call from the buffer path would
+		 * double-count this image and skew core's later lazy/eager
+		 * decisions (and core never returns `high` for our synthetic
+		 * context anyway). The filter lets hooked optimizers weigh in
+		 * without touching the counter; the already-stamped
+		 * `fetchpriority` attribute check in callers remains the
+		 * authoritative no-double-stamp guard. Callers always stamp the
+		 * measured hero `high` (field truth beats the heuristic), while
+		 * `decoding` defers to the verdict whenever one is offered.
+		 * Fail-open: any failure returns null.
 		 *
 		 * @since NEXT
 		 * @param mixed $tags Tag processor positioned on an `<img>` node.
@@ -2078,6 +2093,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 */
 		private function get_core_loading_verdict_for_tag( $tags ): ?array {
 			if ( ! $this->is_core_loading_optimization_available() ) {
+				return null;
+			}
+			if ( ! function_exists( 'apply_filters' ) ) {
 				return null;
 			}
 			try {
@@ -2091,7 +2109,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						$tag_attr[ $attr ] = ( 'width' === $attr || 'height' === $attr ) && is_numeric( $value ) ? (int) $value : $value;
 					}
 				}
-				$loading_attrs = wp_get_loading_optimization_attributes( 'img', $tag_attr, 'performance_optimisation_lcp' );
+				$loading_attrs = apply_filters( 'wp_loading_optimization_attributes', array(), 'img', $tag_attr, 'performance_optimisation_lcp' );
 				if ( ! is_array( $loading_attrs ) ) {
 					return null;
 				}
@@ -4639,17 +4657,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 								// Explicit core-stamp guard (issue #1180): an
 								// already-stamped fetchpriority (core, theme,
 								// or prior pass) is never overridden. When
-								// absent the measured hero keeps `high` — a
-								// core `high` verdict is honoured as-is while
-								// any other verdict is overruled because field
-								// truth beats the heuristic.
+								// absent the measured hero keeps `high`
+								// (field truth beats the core heuristic).
 								$core_verdict = $this->get_core_loading_verdict_for_tag( $processor );
 								if ( null === $processor->get_attribute( 'fetchpriority' ) ) {
-									$core_priority = is_array( $core_verdict ) ? ( $core_verdict['fetchpriority'] ?? null ) : null;
-									// Honour a core `high` verdict as-is; any
-									// other verdict is overruled for the
-									// measured hero (field truth wins).
-									$processor->set_attribute( 'fetchpriority', 'high' === $core_priority ? $core_priority : 'high' );
+									$processor->set_attribute( 'fetchpriority', 'high' );
 								}
 								if ( 'lazy' === $processor->get_attribute( 'loading' ) ) {
 									$processor->remove_attribute( 'loading' );
@@ -4691,13 +4703,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						$this->restore_js_lazy_placeholders( $tags );
 						$this->remove_lazy_classes( $tags );
 						// Explicit core-stamp guard (issue #1180): never
-						// override an already-stamped fetchpriority; honour a
-						// core `high` verdict as-is and overrule any other
-						// verdict for the measured hero (field truth wins).
+						// override an already-stamped fetchpriority; when
+						// absent the measured hero keeps `high`
+						// (field truth beats the core heuristic).
 						$core_verdict = $this->get_core_loading_verdict_for_tag( $tags );
 						if ( null === $tags->get_attribute( 'fetchpriority' ) ) {
-							$core_priority = is_array( $core_verdict ) ? ( $core_verdict['fetchpriority'] ?? null ) : null;
-							$tags->set_attribute( 'fetchpriority', 'high' === $core_priority ? $core_priority : 'high' );
+							$tags->set_attribute( 'fetchpriority', 'high' );
 						}
 						if ( 'lazy' === $tags->get_attribute( 'loading' ) ) {
 							$tags->remove_attribute( 'loading' );
@@ -4788,13 +4799,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							$changed = true;
 						}
 						// Explicit core-stamp guard (issue #1180): never
-						// override an already-stamped fetchpriority; honour a
-						// core `high` verdict as-is and overrule any other
-						// verdict for the measured hero (field truth wins).
+						// override an already-stamped fetchpriority; when
+						// absent the measured hero keeps `high`
+						// (field truth beats the core heuristic).
 						$core_verdict = $this->get_core_loading_verdict_for_tag( $tags );
 						if ( null === $tags->get_attribute( 'fetchpriority' ) ) {
-							$core_priority = is_array( $core_verdict ) ? ( $core_verdict['fetchpriority'] ?? null ) : null;
-							$tags->set_attribute( 'fetchpriority', 'high' === $core_priority ? $core_priority : 'high' );
+							$tags->set_attribute( 'fetchpriority', 'high' );
 							$changed = true;
 						}
 						if ( null === $tags->get_attribute( 'decoding' ) ) {

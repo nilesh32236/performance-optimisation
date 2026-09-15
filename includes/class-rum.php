@@ -926,7 +926,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * path (issue #1180): intake-time validation alone cannot cover
 		 * legacy aggregate rows or PageSpeed values written before the intake
 		 * guard shipped. Root-relative paths are accepted; absolute URLs must
-		 * match the home host. Fail-open by design: when the origin cannot be
+		 * match the home host. Bare relative paths are accepted unless
+		 * scheme-like (`data:`, `blob:`, `javascript:`, …, or any value
+		 * with a colon before the first slash), which are rejected to
+		 * match the intake guard. Fail-open by design: when the origin cannot be
 		 * proven either way (missing `wp_parse_url()`, an undeterminable home
 		 * host, or any internal failure — e.g. unit contexts without the full
 		 * WP API), the candidate is accepted to preserve legacy behaviour.
@@ -946,8 +949,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				}
 				$host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
 				if ( '' === $host ) {
-					// Bare relative URL: resolves against the home URL, so it
-					// is same-origin by construction.
+					// No parseable host: only a bare relative URL (no scheme,
+					// no leading `//`) resolves against the home URL and is
+					// same-origin by construction. Scheme-like values (`data:`,
+					// `blob:`, `javascript:`, `mailto:`, …) carry no host yet
+					// never resolve same-origin, matching the intake guard
+					// (`is_same_origin_lcp_url()`) which rejects every
+					// empty-host URL.
+					$lower = strtolower( ltrim( $url ) );
+					if ( str_starts_with( $lower, 'data:' ) || str_starts_with( $lower, 'blob:' ) || str_starts_with( $lower, 'javascript:' ) || str_starts_with( $lower, 'vbscript:' ) || str_starts_with( $lower, 'mailto:' ) ) {
+						return false;
+					}
+					if ( 0 === strpos( ltrim( $url ), '//' ) ) {
+						return false;
+					}
+					$before_slash = strtok( $url, '/\\?#' );
+					if ( is_string( $before_slash ) && false !== strpos( $before_slash, ':' ) ) {
+						return false;
+					}
 					return true;
 				}
 				$home = '';
@@ -1483,11 +1502,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					self::$field_lcp_result_memo[ $memo_key ] = null;
 					return null;
 				}
-				// Read-only hot path (issue #1180): the per-request memo above
-				// is the only cache. No set_transient() here so frontend
-				// rendering performs zero extra DB writes; the transient index
-				// is invalidated by generation bump on flush instead.
+				// Read-through cache (issue #1180): the fresh aggregate scan
+				// result is written back to the bounded per-path transient so
+				// repeat visitors for a known path skip the full-aggregate
+				// scan. Guarded and best-effort: a broken object-cache backend
+				// must never discard a successful in-request computation.
 				self::$field_lcp_result_memo[ $memo_key ] = $top;
+				if ( function_exists( 'set_transient' ) && class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
+					try {
+						set_transient( Util::transient_key( $top_key ), $top, HOUR_IN_SECONDS );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
 				return $top;
 			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
 				return null;
