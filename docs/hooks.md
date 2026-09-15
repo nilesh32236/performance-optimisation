@@ -99,6 +99,8 @@ add_filter( 'wppo_should_cache_request', function( $should, $request_uri, $is_mo
 
 **WooCommerce safe mode (issue #922, extended by #962):** when `cache_settings.wooSafeMode` is `true` (default), `cart`/`checkout`/`my-account` endpoints (plus any configured custom WooCommerce page slugs resolved via `Util::get_woo_excluded_paths()`, including nested paths like `shop/basket`), Woo endpoint URLs (`is_wc_endpoint_url()`: order-pay, view-order, downloads, …), `wc-ajax` and `?add-to-cart` requests, and Woo session cookies (`wp_woocommerce_session_*` + cart fragments) are never served as cache HIT. Store API routes (`wc/store`, `wcstore`, `wp-json/wc/store*`, `wp-json/wcstore*`, including the plain-permalink `?rest_route=/wc/store/...` form) are never cached unconditionally (safe-mode independent), at serve time, write time, and in the pre-boot drop-in. The same dynamic set is auto-excluded from script delay, remove-unused-CSS, and preload scheduling. Product/order/coupon updates purge only affected URLs via `Cache::invalidate_woo_object()` (product → own permalink + category/tag archives + shop page; order/coupon → own permalink only) — never a full-cache wipe. The per-URL override below (`wppo_woo_cacheable`) applies only after WordPress boots (Cache layer); the pre-boot `advanced-cache.php` drop-in cannot run the filter and instead bakes the toggle and the configured Woo paths in at generation time — disabling safe mode (`wooSafeMode => false` via `wppo_settings`, e.g. `wp wppo settings` or import) regenerates the drop-in with only the pre-#922 guards plus the unconditional Store API guard, restoring master behaviour.
 
+**Query-param poisoning guard (issue #1141):** the query gate (`Util::has_uncacheable_query()`) runs **before** this filter as a security property, so this filter can no longer re-allow a functional/unknown query param (e.g. `?ref=`, `?currency=`) as cacheable — such requests always go dynamic. To treat a custom marketing param as cache-neutral, extend `wppo_cache_query_allowlist` instead (e.g. `$allowlist[] = 'ref';`). The legacy `s`/`ver`/`v` params always force dynamic even if allowlisted.
+
 ---
 
 ### `wppo_invalidation_urls`
@@ -454,6 +456,26 @@ add_filter( 'wppo_exclude_minification', function( $exclude, $file_path, $handle
 
 ---
 
+### `wppo_allow_hidden_block_asset`
+Filters whether a hidden core block asset should be kept instead of omitted (issue #1147). On singular frontend views, `Main::omit_hidden_block_assets()` dequeues per-block `wp-block-*` stylesheets whose block type is absent from the current post content (hidden by default); return a truthy value to re-enable the asset for that block. The filter is only applied when a listener is registered (`has_filter()` guard). The omission pass only runs when on-demand block assets are enabled (`blockAssetsOnDemand` on, `loadAllCoreBlockAssets` off), only on singular views (archives and other composite views are never touched), only for handles verifiably registered as core block styles, and never when WordPress 6.9+ core block-asset hoisting owns the output via the template-enhancement buffer — in that case this filter does not run. The pass additionally bails out entirely when the post content references out-of-content block sources (reusable blocks, patterns, template parts, shortcodes), and keeps every asset when singular cannot be verified. A throwing listener fails open (the asset is kept). @since NEXT.
+
+**Parameters:**
+- `$allowed` *(bool)* — Whether to keep the asset. Default `false` (omit).
+- `$block_name` *(string)* — Block name (e.g. `'core/cover'`).
+- `$handle` *(string)* — Queued style handle (e.g. `'wp-block-cover'`).
+
+**Example:**
+```php
+add_filter( 'wppo_allow_hidden_block_asset', function( $allowed, $block_name, $handle ) {
+    if ( 'core/cover' === $block_name ) {
+        return true; // Always keep the cover stylesheet (e.g. injected via shortcode).
+    }
+    return $allowed;
+}, 10, 3 );
+```
+
+---
+
 ### `wppo_cache_page_html`
 Filters the pre-rendered HTML content before it is saved to the static cache directory.
 
@@ -467,6 +489,22 @@ add_filter( 'wppo_cache_page_html', function( $html, $url ) {
     // Inject custom HTML signature comment
     return $html . "\n<!-- Cached by Performance Optimisation at " . date( 'c' ) . " -->";
 }, 10, 2 );
+```
+
+---
+
+### `wppo_cache_query_allowlist`
+Filters the list of cache-neutral (tracking/marketing) query params used by the query-poisoning guard (issue #1141). Guarded by `has_filter()` — the filter only runs when a listener is present. A request whose query params are all in this list (or carry the `utm_` prefix) may still be served from the clean-URL cache entry, but its response is never stored over the clean file; any other param (including the legacy `s`, `ver`, `v`, which always force dynamic even if added here) forces a dynamic uncached response. @since NEXT.
+
+**Parameters:**
+- `$allowlist` *(string[])* — Lowercase cache-neutral param names (defaults: `utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`, `utm_id`, `gclid`, `gbraid`, `wbraid`, `fbclid`, `msclkid`, `ttclid`, `li_fat_id`, `mc_cid`, `mc_eid`, `igshid`, `dclid`, `yclid`, `gclsrc`, `_ga`, `_gl`, `pk_campaign`, `pk_kwd`, `piwik_kwd`, `matomo`, plus Facebook `fb_action_ids`/`fb_action_types`/`fb_source`).
+
+**Example:**
+```php
+add_filter( 'wppo_cache_query_allowlist', function( $allowlist ) {
+    $allowlist[] = 'ref'; // Treat a custom marketing param as cache-neutral.
+    return $allowlist;
+} );
 ```
 
 ---
@@ -558,6 +596,8 @@ Filters sanitized `ttlOverrides` array after allowlist (`post|page|product` + `0
 
 ### `wppo_litespeed_is_cacheable`
 Filters whether the current request is considered cacheable for the LiteSpeed layer. @since 2.0.0.
+
+**Query-param poisoning guard (issue #1141):** like the file-cache layer, this filter cannot re-allow a functional/unknown query param — the guard (`Util::has_uncacheable_query()`) is re-enforced after the filter, so such requests always go dynamic. Extend `wppo_cache_query_allowlist` for custom marketing params.
 
 ---
 
@@ -1388,6 +1428,14 @@ Filters the generated size-adjust fallback CSS for a font family. @since 2.0.0.
 **Parameters:**
 - `$css` *(string)* — Fallback `@font-face` CSS.
 - `$family` *(string)* — Font family name.
+
+---
+
+### `wppo_font_display`
+Filters the `font-display` value injected into self-hosted Google Fonts CSS and combined CSS (default `swap`). Return a falsy value to skip injection (opt-out). Unknown values fall back to `swap`. @since NEXT.
+
+**Parameters:**
+- `$display` *(string)* — Desired value (`swap|block|fallback|optional|auto`).
 
 ---
 

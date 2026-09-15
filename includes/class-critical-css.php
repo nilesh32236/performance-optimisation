@@ -2291,11 +2291,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			}
 
 			$filesystem = Util::init_filesystem();
-			if ( $filesystem ) {
-				$filesystem->put_contents( self::get_ccss_file( $template_hash ), $critical_css, FS_CHMOD_FILE );
-			} else {
-				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
-				file_put_contents( self::get_ccss_file( $template_hash ), $critical_css );
+			$file       = self::get_ccss_file( $template_hash );
+
+			// Atomic write via the shared tmp+rename helper (unique tmp
+			// name, no non-atomic fallback) so interrupted writes never
+			// leave a truncated live file behind. Fail closed: keep the
+			// prior file in place and mark the status failed.
+			$written = $filesystem ? Util::atomic_file_put_contents( $filesystem, $file, $critical_css ) : false;
+			if ( ! $written ) {
+				self::set_status_cache( $template_hash, 'failed', DAY_IN_SECONDS );
+				return false;
 			}
 
 			// Baseline the canonical SOURCE checksum — not the generated

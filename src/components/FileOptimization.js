@@ -122,6 +122,11 @@ const FileOptimization = ( {
 				: '',
 		hostGoogleFontsLocally: false,
 		fontMetricFallback: false,
+		fontSubset: false,
+		fontSubsetSubsets:
+			typeof options.fontSubsetSubsets === 'string'
+				? options.fontSubsetSubsets
+				: 'latin',
 		cdnURL: '',
 		cdnMapping: options.cdnMapping || [],
 		removeUnusedCSS: false,
@@ -188,6 +193,10 @@ const FileOptimization = ( {
 		typeof options.ccssSafelistExtra === 'string'
 			? options.ccssSafelistExtra
 			: '';
+	defaultSettings.fontSubsetSubsets =
+		typeof options.fontSubsetSubsets === 'string'
+			? options.fontSubsetSubsets
+			: 'latin';
 
 	const [ settings, setSettings ] = useState( defaultSettings );
 	const [ isLoading, setIsLoading ] = useState( false );
@@ -218,6 +227,10 @@ const FileOptimization = ( {
 				typeof options.ccssSafelistExtra === 'string'
 					? options.ccssSafelistExtra
 					: '',
+			fontSubsetSubsets:
+				typeof options.fontSubsetSubsets === 'string'
+					? options.fontSubsetSubsets
+					: 'latin',
 		} );
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [
@@ -254,6 +267,8 @@ const FileOptimization = ( {
 		options.ccssSafelistExtra,
 		options.hostGoogleFontsLocally,
 		options.fontMetricFallback,
+		options.fontSubset,
+		options.fontSubsetSubsets,
 		options.cdnURL,
 		options.cdnMapping,
 		options.removeUnusedCSS,
@@ -312,6 +327,9 @@ const FileOptimization = ( {
 			if ( typeof next.ccssSafelistExtra !== 'string' ) {
 				next.ccssSafelistExtra = '';
 			}
+			if ( typeof next.fontSubsetSubsets !== 'string' ) {
+				next.fontSubsetSubsets = 'latin';
+			}
 			return next;
 		} );
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -349,6 +367,8 @@ const FileOptimization = ( {
 		options.ccssSafelistExtra,
 		options.hostGoogleFontsLocally,
 		options.fontMetricFallback,
+		options.fontSubset,
+		options.fontSubsetSubsets,
 		options.cdnURL,
 		options.cdnMapping,
 		options.removeUnusedCSS,
@@ -1356,6 +1376,65 @@ const FileOptimization = ( {
 										disabled={ optimizerDisabled }
 									/>
 								</Tooltip>
+								<Tooltip
+									content={
+										optimizerDisabled ? pausedTooltip : ''
+									}
+								>
+									<SwitchField
+										label={ __(
+											'Font Subsetting',
+											'performance-optimisation'
+										) }
+										description={ __(
+											'Keep only selected unicode subsets (default: latin) in self-hosted Google Fonts CSS to reduce font weight. Off by default.',
+											'performance-optimisation'
+										) }
+										name="fontSubset"
+										checked={ settings.fontSubset }
+										onChange={ handleChange( setSettings ) }
+										disabled={ optimizerDisabled }
+									/>
+								</Tooltip>
+								{ settings.fontSubset && (
+									<div className="wppo-field wppo-mt-16">
+										<label
+											className="wppo-field-label"
+											htmlFor="fontSubsetSubsets"
+										>
+											{ __(
+												'Font Subsets',
+												'performance-optimisation'
+											) }
+										</label>
+										<input
+											className="wppo-input"
+											type="text"
+											id="fontSubsetSubsets"
+											name="fontSubsetSubsets"
+											value={
+												typeof settings.fontSubsetSubsets ===
+												'string'
+													? settings.fontSubsetSubsets
+													: 'latin'
+											}
+											onChange={ handleChange(
+												setSettings
+											) }
+											disabled={ optimizerDisabled }
+											aria-describedby="fontSubsetSubsets-desc"
+										/>
+										<p
+											id="fontSubsetSubsets-desc"
+											className="wppo-text-muted wppo-mt-8 wppo-text-small"
+										>
+											{ __(
+												'Comma-separated unicode subsets to keep (e.g. latin,latin-ext).',
+												'performance-optimisation'
+											) }
+										</p>
+									</div>
+								) }
 							</div>
 						</FeatureCard>
 

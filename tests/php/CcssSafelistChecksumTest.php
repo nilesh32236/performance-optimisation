@@ -151,6 +151,7 @@ class CcssSafelistChecksumTest extends \PHPUnit\Framework\TestCase {
 	 */
 	protected function tearDown(): void {
 		unset( $GLOBALS['wp_styles'] );
+		unset( $GLOBALS['wp_filesystem'] );
 		if ( class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			\PerformanceOptimise\Inc\Critical_CSS::reset_ccss_memo();
 		}
@@ -379,6 +380,7 @@ class CcssSafelistChecksumTest extends \PHPUnit\Framework\TestCase {
 			}
 		);
 		Functions\when( 'wp_mkdir_p' )->justReturn( true );
+		$this->stub_ccss_filesystem();
 
 		// Frontend queue order matches document order: b then a.
 		$styles               = new \stdClass();
@@ -726,6 +728,169 @@ class CcssSafelistChecksumTest extends \PHPUnit\Framework\TestCase {
 			}
 		);
 		Functions\when( 'wp_mkdir_p' )->justReturn( true );
+		$this->stub_ccss_filesystem();
+	}
+
+	/**
+	 * Atomic-write failure keeps the prior file and marks the status failed.
+	 *
+	 * Simulates a torn-write window (disk-full / denied tmp): the shared
+	 * atomic helper reports false, so generate_and_store() must early-return
+	 * failed before baselining any checksum, leaving the prior live file
+	 * byte-identical in place.
+	 *
+	 * @return void
+	 */
+	public function test_generate_and_store_atomic_failure_keeps_prior_file(): void {
+		$hash = 'ccssatomic' . substr( md5( uniqid( 'wppo', true ) ), 0, 8 );
+
+		$this->option_map['wppo_settings'] = array(
+			'file_optimisation' => array(
+				'ccssSafelistExtra' => '.modal-open',
+			),
+		);
+		Util::clear_settings_cache();
+
+		$theme_dir = wp_normalize_path( WP_CONTENT_DIR . '/themes/wppo-ccss-atomic' );
+		if ( ! is_dir( $theme_dir ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
+			mkdir( $theme_dir, 0775, true );
+		}
+		$file_a = $theme_dir . '/a.css';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+		file_put_contents( $file_a, 'h1{font-size:2em}' );
+		$url_a = 'http://example.com/wp-content/themes/wppo-ccss-atomic/a.css';
+
+		$html = '<html><head><style>body{margin:0}</style>'
+			// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- Test fixture HTML.
+			. '<link rel="stylesheet" href="' . $url_a . '" />'
+			. '</head><body></body></html>';
+
+		$this->stub_generation_fetch( $html );
+
+		$entry_a              = new \stdClass();
+		$entry_a->src         = $url_a;
+		$styles               = new \stdClass();
+		$styles->queue        = array( 'wppo-fixture-a' );
+		$styles->registered   = array( 'wppo-fixture-a' => $entry_a );
+		$GLOBALS['wp_styles'] = $styles;
+
+		$ccss_file = $this->prepare_ccss_dir( $hash );
+		$prior     = 'body{color:blue}';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+		file_put_contents( $ccss_file, $prior );
+
+		// Filesystem whose writes always fail (disk-full / denied tmp).
+		$GLOBALS['wp_filesystem'] = new class() {
+			/**
+			 * Fail the tmp write.
+			 *
+			 * @param string $path     Path.
+			 * @param string $contents Contents.
+			 * @param int    $chmod    Mode.
+			 * @return bool
+			 */
+			public function put_contents( $path, $contents, $chmod = 0644 ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+				return false;
+			}
+
+			/**
+			 * Fail the rename.
+			 *
+			 * @param string $from      Source.
+			 * @param string $to        Destination.
+			 * @param bool   $overwrite Overwrite.
+			 * @return bool
+			 */
+			public function move( $from, $to, $overwrite = false ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+				return false;
+			}
+
+			/**
+			 * Best-effort tmp cleanup.
+			 *
+			 * @param string $path Path.
+			 * @return bool
+			 */
+			public function delete( $path ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+				return true;
+			}
+		};
+		Functions\when( 'WP_Filesystem' )->justReturn( true );
+
+		Critical_CSS::reset_ccss_memo();
+		try {
+			$this->assertFalse( $this->invoke_private( 'generate_and_store', $hash, 'index' ) );
+			$this->assertFileExists( $ccss_file );
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Test assertion.
+			$this->assertSame( $prior, file_get_contents( $ccss_file ), 'Failed atomic write must leave the prior live file untouched' );
+		} finally {
+			$this->cleanup_ccss_fixture( $ccss_file, array( $file_a ), $theme_dir );
+		}
+	}
+
+	/**
+	 * Install a real-disk filesystem double for generate_and_store() fixtures.
+	 *
+	 * Production writes via Util::atomic_file_put_contents(), which requires
+	 * a filesystem object exposing put_contents()/move()/delete(). The common
+	 * bootstrap stubs WP_Filesystem() to false, so without this double the
+	 * atomic write fails closed and generate_and_store() returns false.
+	 *
+	 * @return void
+	 */
+	private function stub_ccss_filesystem(): void {
+		$GLOBALS['wp_filesystem'] = new class() {
+			/**
+			 * Write contents to a path.
+			 *
+			 * @param string $path     Path.
+			 * @param string $contents Contents.
+			 * @param int    $chmod    Mode.
+			 * @return bool
+			 */
+			public function put_contents( $path, $contents, $chmod = 0644 ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test filesystem stand-in.
+				$written = file_put_contents( $path, $contents );
+				if ( false === $written ) {
+					return false;
+				}
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_chmod -- Test filesystem stand-in.
+				chmod( $path, $chmod );
+				return true;
+			}
+
+			/**
+			 * Atomically move a file.
+			 *
+			 * @param string $from      Source.
+			 * @param string $to        Destination.
+			 * @param bool   $overwrite Overwrite.
+			 * @return bool
+			 */
+			public function move( $from, $to, $overwrite = false ) {
+				if ( ! $overwrite && file_exists( $to ) ) {
+					return false;
+				}
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename -- Test filesystem stand-in (atomic rename).
+				return rename( $from, $to );
+			}
+
+			/**
+			 * Delete a file.
+			 *
+			 * @param string $path Path.
+			 * @return bool
+			 */
+			public function delete( $path ) {
+				if ( ! file_exists( $path ) ) {
+					return true;
+				}
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test filesystem stand-in.
+				return unlink( $path );
+			}
+		};
+		Functions\when( 'WP_Filesystem' )->justReturn( true );
 	}
 
 	/**

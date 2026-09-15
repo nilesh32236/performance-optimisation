@@ -43,6 +43,38 @@ export const classifyDeviceWidth = ( screenWidth, viewportWidth ) => {
 };
 
 /**
+ * Allowlisted effective connection types for RUM segmentation.
+ *
+ * Mirrors the server-side allowlist in `RUM::sanitize_sample()` — any other
+ * value is omitted client-side so unknown/slow-2g variants never pollute
+ * the stored aggregates.
+ *
+ * @since NEXT
+ * @type {string[]}
+ */
+export const RUM_ALLOWED_CONNECTIONS = [ 'slow-2g', '2g', '3g', '4g' ];
+
+/**
+ * Normalize a raw effective connection type to the segmentation allowlist.
+ *
+ * Fail-open: returns null for missing/invalid values so callers omit the
+ * field and the numeric beacon path is unchanged.
+ *
+ * @since NEXT
+ * @param {*} raw Raw `navigator.connection.effectiveType` value.
+ * @return {string|null} Allowlisted connection type or null.
+ */
+export const classifyConnectionType = ( raw ) => {
+	if ( typeof raw !== 'string' ) {
+		return null;
+	}
+	const normalized = raw.toLowerCase().trim().slice( 0, 16 );
+	return RUM_ALLOWED_CONNECTIONS.indexOf( normalized ) !== -1
+		? normalized
+		: null;
+};
+
+/**
  * Upper bound (ms) accepted for time-based Web Vitals metrics before the
  * beacon is sent. Mirrors the server-side 0–60000 range enforced by
  * `RUM::sanitize_sample()` — extreme observer values (or forged beacons
@@ -215,6 +247,22 @@ export const sanitizeRumValues = ( raw ) => {
 			}
 		} catch {
 			// Template passthrough unavailable; field omitted.
+		}
+		try {
+			if (
+				typeof navigator !== 'undefined' &&
+				navigator.connection &&
+				typeof navigator.connection.effectiveType === 'string'
+			) {
+				const connection = classifyConnectionType(
+					navigator.connection.effectiveType
+				);
+				if ( connection ) {
+					extra.connection = connection;
+				}
+			}
+		} catch {
+			// Connection detection unavailable; field omitted.
 		}
 
 		const payload = JSON.stringify( {

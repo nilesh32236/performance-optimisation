@@ -396,6 +396,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['file_optimisation']['safeMode'] ) ) {
 				$this->options['file_optimisation']['safeMode'] = false;
 			}
+			// Font subsetting opt-in (issue #1145): additive keys, off by
+			// default so existing installs keep full-unicode behavior.
+			// In-memory only here (no front-end DB write).
+			if ( ! isset( $this->options['file_optimisation']['fontSubset'] ) ) {
+				$this->options['file_optimisation']['fontSubset'] = false;
+			}
+			if ( ! isset( $this->options['file_optimisation']['fontSubsetSubsets'] ) ) {
+				$this->options['file_optimisation']['fontSubsetSubsets'] = 'latin';
+			}
 
 			// Existing installs whose stored settings predate the
 			// speculationRumGating key (issue #1061) inherit the enabled
@@ -505,7 +514,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// INP-first preset (#932): one-click 60s heartbeat via the existing
 			// disable_heartbeat path. In-memory only — an explicit user choice
 			// (disable_all/disable_ext) always wins, never overridden.
-			if ( ! empty( $this->options['file_optimisation']['delayJSINPPreset'] ) && ( $this->options['file_optimisation']['heartbeatControl'] ?? 'default' ) === 'default' ) {
+			if ( ! empty( $this->options['file_optimisation']['delayJSINPPreset'] ) && 'default' === ( $this->options['file_optimisation']['heartbeatControl'] ?? 'default' ) ) {
 				$this->options['file_optimisation']['heartbeatControl'] = '60s';
 				$file_optimisation_opts['heartbeatControl']             = '60s';
 			}
@@ -952,6 +961,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			$this->register_block_assets_filters( function_exists( 'wp_load_classic_theme_block_styles_on_demand' ) );
+
+			// Block-asset on-demand interop (issue #1147): dequeue per-block
+			// stylesheets for blocks absent from the current singular post
+			// content. Runs late (after core enqueues) but before
+			// minify_queued_styles() (PHP_INT_MAX - 1) and Cache::combine_css()
+			// (PHP_INT_MAX) so dequeued handles never enter those pipelines
+			// (dequeue only, never re-enqueue/combine — cascade order of the
+			// survivors is untouched). Only registered when the on-demand
+			// opt-out is off (blockAssetsOnDemand on, loadAllCoreBlockAssets
+			// off), mirroring register_block_assets_filters(). The callback
+			// itself re-checks the gate and defers to core when the 6.9
+			// template-enhancement buffer exists, and otherwise runs the
+			// legacy omission path.
+			if ( $this->is_hidden_block_asset_omission_enabled() ) {
+				add_action( 'wp_enqueue_scripts', array( $this, 'omit_hidden_block_assets' ), PHP_INT_MAX - 2 );
+			}
 
 			if ( ! empty( $this->options['file_optimisation']['deferJS'] ) ) {
 				$exclude_js = array( 'wppo-lazyload' );
@@ -1676,9 +1701,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			// Clear Google Fonts cache when the setting toggles.
-			$old_gf = $old_value['file_optimisation']['hostGoogleFontsLocally'] ?? false;
-			$new_gf = $value['file_optimisation']['hostGoogleFontsLocally'] ?? false;
-			if ( $old_gf !== $new_gf ) {
+			$old_gf   = $old_value['file_optimisation']['hostGoogleFontsLocally'] ?? false;
+			$new_gf   = $value['file_optimisation']['hostGoogleFontsLocally'] ?? false;
+			$old_sub  = $old_value['file_optimisation']['fontSubset'] ?? false;
+			$new_sub  = $value['file_optimisation']['fontSubset'] ?? false;
+			$old_subs = $old_value['file_optimisation']['fontSubsetSubsets'] ?? 'latin';
+			$new_subs = $value['file_optimisation']['fontSubsetSubsets'] ?? 'latin';
+			if ( $old_gf !== $new_gf || $old_sub !== $new_sub || $old_subs !== $new_subs ) {
 				Google_Fonts::clear_font_cache();
 			}
 		}
@@ -2430,7 +2459,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$resolved   = wp_normalize_path( realpath( $asset_file ) );
 
 			// Validate the resolved path is within the plugin directory before including.
-			if ( false !== $resolved && strpos( $resolved, (string) WPPO_PLUGIN_PATH ) === 0 ) {
+			if ( false !== $resolved && 0 === strpos( $resolved, (string) WPPO_PLUGIN_PATH ) ) {
 				$asset_data = require $resolved;
 			} else {
 				$asset_data = array(
@@ -6215,7 +6244,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		private function has_document_source_rule( array $rules ): bool {
 			foreach ( $rules as $rule ) {
-				if ( is_array( $rule ) && ( $rule['source'] ?? '' ) === 'document' ) {
+				if ( is_array( $rule ) && 'document' === ( $rule['source'] ?? '' ) ) {
 					return true;
 				}
 			}
@@ -6498,6 +6527,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return bool True when core owns the handle under separate-assets mode.
 		 */
 		private function is_core_block_asset_skipped( $handle ): bool {
+			if ( ! $this->is_core_separate_block_assets_active() ) {
+				return false;
+			}
+			try {
+				return str_starts_with( (string) $handle, 'wp-block-' );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Whether WP 6.9+ core reports separate (on-demand) block-asset loading.
+		 *
+		 * Shared predicate for {@see is_core_block_asset_skipped()} and
+		 * {@see is_core_block_hoisting_active()} so the 6.9-alpha floor +
+		 * API-exists + fail-open check cannot drift between the two call sites.
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when core loads separate core block assets on demand.
+		 */
+		private function is_core_separate_block_assets_active(): bool {
 			if ( isset( $GLOBALS['wp_version'] ) && version_compare( $GLOBALS['wp_version'], '6.9-alpha', '<' ) ) {
 				return false;
 			}
@@ -6505,10 +6557,415 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return false;
 			}
 			try {
-				return (bool) wp_should_load_separate_core_block_assets() && str_starts_with( (string) $handle, 'wp-block-' );
+				return (bool) wp_should_load_separate_core_block_assets();
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;
+			}
+		}
+
+		/**
+		 * Whether the hidden-block-asset omission pass may run.
+		 *
+		 * Mirrors the opt-out state honored by
+		 * {@see register_block_assets_filters()}: the omission pass only runs
+		 * when on-demand block assets are enabled (`blockAssetsOnDemand` on) and
+		 * the combined monolith is not forced (`loadAllCoreBlockAssets` off).
+		 * Users who explicitly disabled on-demand assets keep the legacy
+		 * monolith untouched.
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when hidden block assets may be omitted.
+		 */
+		private function is_hidden_block_asset_omission_enabled(): bool {
+			return ! empty( $this->options['file_optimisation']['blockAssetsOnDemand'] )
+			&& empty( $this->options['file_optimisation']['loadAllCoreBlockAssets'] );
+		}
+
+		/**
+		 * Whether core 6.9+ block-asset hoisting is active on this request.
+		 *
+		 * True only when {@see is_core_separate_block_assets_active()} holds AND
+		 * the template-enhancement buffer API exists. Callers use this to yield
+		 * to core's on-demand hoisting instead of duplicating it (e.g.
+		 * {@see omit_hidden_block_assets()} returns early when the
+		 * template-enhancement buffer exists). Fail-open: any throwable or
+		 * missing API returns false (legacy path unchanged).
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when core owns on-demand block-asset hoisting.
+		 */
+		private function is_core_block_hoisting_active(): bool {
+			if ( ! function_exists( 'wp_should_output_buffer_template_for_enhancement' ) ) {
+				return false;
+			}
+			return $this->is_core_separate_block_assets_active();
+		}
+
+		/**
+		 * Whether a queued style handle is a core per-block stylesheet.
+		 *
+		 * The `wp-block-*` prefix alone is not proof of core ownership:
+		 * third-party or theme stylesheets may share the prefix without a 1:1
+		 * block-type mapping. A handle only counts as a core per-block asset
+		 * when its registered `src` points at core's block styles
+		 * (`wp-includes` + `block-library` or `/blocks/`). Fail-open: an
+		 * unregistered handle or an unverifiable `src` returns false (keep the
+		 * asset — degrade to unoptimized, never unstyled).
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $handle Queued style handle e.g. 'wp-block-cover'.
+		 * @return bool True when the handle is verifiably a core per-block asset.
+		 */
+		private function is_core_per_block_style_handle( $handle ): bool {
+			try {
+				global $wp_styles;
+				if ( ! is_object( $wp_styles ) || ! isset( $wp_styles->registered[ $handle ] ) ) {
+					return false;
+				}
+				$src = (string) ( $wp_styles->registered[ $handle ]->src ?? '' );
+				if ( '' === $src ) {
+					return false;
+				}
+				if ( false !== strpos( $src, 'block-library' ) ) {
+					// Require a core path: a plugin/theme file merely
+					// containing 'block-library' in its path (e.g.
+					// /plugins/my-block-library/style.css) is not a core
+					// asset and must never be omitted.
+					return false !== strpos( $src, 'wp-includes' );
+				}
+				return false !== strpos( $src, 'wp-includes' ) && false !== strpos( $src, '/blocks/' );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Whether singular post content references block sources outside itself.
+		 *
+		 * Reusable blocks (`wp:block` refs), patterns (`wp:pattern`),
+		 * template parts (`wp:template-part`), shortcode blocks
+		 * (`wp:shortcode`, generic `[...]` shortcodes, `do_blocks` output),
+		 * and similar markers render stylesheets for blocks absent from the
+		 * literal post content, so type-absence cannot prove the asset is
+		 * unused. Fail-open: any throwable (or a detected marker) reports
+		 * unresolvable (the caller bails and keeps every asset).
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $content Singular post content to check.
+		 * @return bool True when the content references out-of-content block sources.
+		 */
+		private function content_has_unresolvable_block_sources( $content ): bool {
+			try {
+				$content = (string) $content;
+				if ( '' === $content ) {
+					return false;
+				}
+				if ( false !== strpos( $content, '<!-- wp:block ' )
+					|| false !== strpos( $content, '<!-- wp:block/' )
+					|| false !== strpos( $content, 'wp:pattern' )
+					|| false !== strpos( $content, 'wp:template-part' )
+					|| false !== strpos( $content, 'wp:shortcode' )
+					|| false !== strpos( $content, 'do_blocks' ) ) {
+					return true;
+				}
+				// Generic brackets (e.g. '[hello]', '[2024]') are not proof of
+				// a shortcode: only bail when a registered shortcode tag is
+				// present. Unregistered/plain-text brackets must not disable
+				// the optimization. Fail-open: when the Shortcode API is
+				// unavailable the generic match is kept as the bail signal.
+				if ( false === strpos( $content, '[' ) ) {
+					return false;
+				}
+				if ( function_exists( 'get_shortcode_regex' ) ) {
+					try {
+						$pattern = (string) get_shortcode_regex();
+						if ( '' === $pattern ) {
+							return false;
+						}
+						if ( 1 !== preg_match_all( '/' . $pattern . '/s', $content, $matches ) || empty( $matches[2] ) ) {
+							return false;
+						}
+						if ( function_exists( 'shortcode_exists' ) ) {
+							foreach ( $matches[2] as $tag ) {
+								if ( '' !== (string) $tag && shortcode_exists( (string) $tag ) ) {
+									return true;
+								}
+							}
+							return false;
+						}
+						return true;
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return true;
+					}
+				}
+				return 1 === preg_match( '/\[[a-zA-Z0-9_-]+(?:\s+[^\]]*)?\/?\]/', $content );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
+		 * Whether a block name is a registered block type.
+		 *
+		 * A `wp-block-<slug>` handle does not guarantee a matching
+		 * `core/<slug>` block type exists: core-registered handles without a
+		 * 1:1 block-type mapping never match {@see Util::content_has_block()}
+		 * and would otherwise always be omitted whenever queued. Fail-open in
+		 * the omission direction: when the registry API is unavailable or
+		 * throws, the type is treated as known so the legacy omission path is
+		 * unchanged; only a positive "not registered" answer keeps the asset.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $block_name Block name e.g. 'core/cover'.
+		 * @return bool True when the type is (or may be) registered.
+		 */
+		private function is_registered_block_type( $block_name ): bool {
+			try {
+				if ( ! class_exists( 'WP_Block_Type_Registry' ) ) {
+					return true;
+				}
+				if ( ! method_exists( 'WP_Block_Type_Registry', 'get_instance' ) ) {
+					return true;
+				}
+				$registry = \WP_Block_Type_Registry::get_instance(); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedClassFound
+				if ( ! is_object( $registry ) ) {
+					return true;
+				}
+				if ( method_exists( $registry, 'is_registered' ) ) {
+					return (bool) $registry->is_registered( (string) $block_name );
+				}
+				if ( method_exists( $registry, 'get_registered' ) ) {
+					return null !== $registry->get_registered( (string) $block_name );
+				}
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
+		 * Whether a queued core block asset should be omitted as hidden.
+		 *
+		 * A block asset counts as hidden when its block type is absent from the
+		 * given singular post content (type-absence definition: blocks present in
+		 * markup but never rendered still ship their per-block stylesheet, so
+		 * the stylesheet is unused by definition). Hidden assets are omitted by
+		 * default; a per-block re-enable is available via the
+		 * `wppo_allow_hidden_block_asset` filter (return truthy to keep the
+		 * asset for that block). The filter is only applied when a listener is
+		 * registered (`has_filter()` guard). Fail-open: missing content, missing
+		 * APIs, an unregistered block type, or any throwable returns false (keep
+		 * the asset — degrade to unoptimized, never fatal, never unstyled).
+		 * Callers may pass a shared `$presence` map so the content parse in
+		 * {@see Util::content_has_block()} runs at most once per block type per
+		 * pass instead of once per queued handle.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $block_name Block name e.g. 'core/cover'.
+		 * @param string $handle     Queued style handle e.g. 'wp-block-cover'.
+		 * @param string $content    Singular post content to check against.
+		 * @param array  $presence   Optional shared presence cache (block_name => bool), updated by reference.
+		 * @return bool True when the asset should be dequeued.
+		 */
+		private function should_omit_hidden_block_asset( $block_name, $handle, $content, &$presence = array() ): bool {
+			try {
+				if ( '' === (string) $block_name || '' === (string) $handle ) {
+					return false;
+				}
+				if ( '' === (string) $content ) {
+					return false;
+				}
+				if ( ! $this->is_registered_block_type( (string) $block_name ) ) {
+					return false;
+				}
+				$key = (string) $block_name;
+				if ( ! array_key_exists( $key, (array) $presence ) ) {
+					$presence[ $key ] = Util::content_has_block( (string) $content, (string) $block_name );
+				}
+				if ( ! empty( $presence[ $key ] ) ) {
+					return false;
+				}
+				$allowed = false;
+				if ( function_exists( 'has_filter' ) && has_filter( 'wppo_allow_hidden_block_asset' ) ) {
+					try {
+						$allowed = apply_filters( 'wppo_allow_hidden_block_asset', false, (string) $block_name, (string) $handle );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return false;
+					}
+				}
+				return empty( $allowed );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Dequeue per-block stylesheets for blocks absent from the content.
+		 *
+		 * Singular views only: a single `post_content` is authoritative only
+		 * there. Archives, blog-home, search, and other non-singular views bail
+		 * out immediately so stylesheets needed by other posts in the loop are
+		 * never stripped. Block themes bail out as well: header/footer
+		 * template parts, site chrome, and widgets render outside
+		 * `post_content`, so type-absence cannot prove the asset is unused
+		 * there. Singular gating alone does not protect composite
+		 * sources: reusable blocks, patterns, template parts, widgets, and
+		 * shortcode/`do_blocks`-injected blocks can render stylesheets for
+		 * blocks absent from `post_content`, so the pass additionally bails
+		 * out entirely when the content references such out-of-content
+		 * sources (see {@see content_has_unresolvable_block_sources()}).
+		 * Remaining outside-`post_content` rendering on classic themes is a
+		 * known limitation — use the `wppo_allow_hidden_block_asset` filter
+		 * to keep those assets.
+		 *
+		 * Runs on `wp_enqueue_scripts` at PHP_INT_MAX - 2: after core enqueues
+		 * but before `minify_queued_styles()` and `Cache::combine_css()`, so
+		 * omitted handles never enter the minify/combine pipelines and the
+		 * cascade order of the surviving stylesheets is preserved (dequeue
+		 * only — nothing is re-enqueued or folded into a monolith).
+		 *
+		 * Defers to core 6.9 hoisting: when {@see is_core_block_hoisting_active()}
+		 * is true and the template-enhancement buffer exists
+		 * (`wp_should_output_buffer_template_for_enhancement()`), this returns
+		 * immediately and core's conditional loading owns the output. The pass
+		 * is also skipped when the on-demand opt-out is active
+		 * ({@see is_hidden_block_asset_omission_enabled()}). Otherwise the
+		 * legacy omission path runs unchanged.
+		 *
+		 * @since NEXT
+		 *
+		 * @return void
+		 */
+		public function omit_hidden_block_assets(): void {
+			try {
+				if ( ! $this->is_hidden_block_asset_omission_enabled() ) {
+					return;
+				}
+
+				// Only a singular post_content is authoritative. On archives,
+				// home, search, and other composite views the queued stylesheet
+				// may belong to any post in the loop, so never omit there.
+				// Fail-open: when singular cannot be verified (missing API),
+				// keep every asset.
+				if ( ! function_exists( 'is_singular' ) || ! is_singular() ) {
+					return;
+				}
+
+				// Fail-open for composite rendering contexts: on block themes
+				// the header/footer template parts and site chrome never live
+				// in post_content, so a queued gallery/cover stylesheet needed
+				// by the chrome would be misclassified as hidden. Bail out
+				// entirely (keep every asset) when a block theme is active.
+				if ( function_exists( 'wp_is_block_theme' ) ) {
+					try {
+						if ( wp_is_block_theme() ) {
+							return;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return;
+					}
+				}
+
+				// Defer to core instead of duplicating it: when the 6.9
+				// template-enhancement buffer exists, core hoists exactly the
+				// block assets the template needs.
+				if ( $this->is_core_block_hoisting_active() && function_exists( 'wp_should_output_buffer_template_for_enhancement' ) ) {
+					try {
+						if ( wp_should_output_buffer_template_for_enhancement() ) {
+							return;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+
+				global $wp_styles;
+				if ( ! is_object( $wp_styles ) || empty( $wp_styles->queue ) || ! is_array( $wp_styles->queue ) ) {
+					return;
+				}
+				if ( ! function_exists( 'wp_dequeue_style' ) ) {
+					return;
+				}
+
+				// Fetch the singular post content once for the whole pass
+				// (fail-open: empty/unresolvable content keeps every asset).
+				$content = '';
+				if ( function_exists( 'get_the_ID' ) && function_exists( 'get_post_field' ) ) {
+					try {
+						$post_id = get_the_ID();
+						if ( ! empty( $post_id ) ) {
+							$content = (string) get_post_field( 'post_content', $post_id );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return;
+					}
+				}
+				if ( '' === $content ) {
+					return;
+				}
+
+				// Fail-open: reusable blocks, patterns, template parts, and
+				// shortcode-injected blocks render stylesheets for blocks
+				// absent from the literal post content, so type-absence cannot
+				// prove the asset is unused — keep everything on such pages.
+				if ( $this->content_has_unresolvable_block_sources( $content ) ) {
+					return;
+				}
+
+				// Memoize the omit decision per queued handle so the content
+				// parse runs at most once per block type per pass. $presence
+				// caches Util::content_has_block() results by block name
+				// (shared across handles); $decisions stays keyed by handle
+				// because the wppo_allow_hidden_block_asset filter takes
+				// ($block_name, $handle) and must run per queued handle.
+				$decisions = array();
+				$presence  = array();
+				foreach ( $wp_styles->queue as $handle ) {
+					if ( ! is_string( $handle ) || 0 !== strpos( $handle, 'wp-block-' ) ) {
+						continue;
+					}
+					// The combined monolith family is owned by core hoisting
+					// (and by the combine/minify skips); only per-block handles
+					// are candidates for hidden-block omission.
+					$slug = substr( $handle, strlen( 'wp-block-' ) );
+					if ( '' === $slug || 0 === strpos( $slug, 'library' ) ) {
+						continue;
+					}
+					// Only omit handles verifiably registered as core block
+					// styles; third-party/theme handles sharing the prefix are
+					// never candidates.
+					if ( ! $this->is_core_per_block_style_handle( $handle ) ) {
+						continue;
+					}
+					$block_name = 'core/' . $slug;
+					if ( ! array_key_exists( $handle, $decisions ) ) {
+						$decisions[ $handle ] = $this->should_omit_hidden_block_asset( $block_name, $handle, $content, $presence );
+					}
+					if ( $decisions[ $handle ] ) {
+						try {
+							wp_dequeue_style( $handle );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 			}
 		}
 
@@ -6956,7 +7413,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$asset_file = WPPO_PLUGIN_PATH . 'build/main.asset.php';
 			$resolved   = wp_normalize_path( realpath( $asset_file ) );
 
-			if ( false !== $resolved && strpos( $resolved, (string) WPPO_PLUGIN_PATH ) === 0 ) {
+			if ( false !== $resolved && 0 === strpos( $resolved, (string) WPPO_PLUGIN_PATH ) ) {
 				$asset_data = require $resolved;
 			} else {
 				$asset_data = array(

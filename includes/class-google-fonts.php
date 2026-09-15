@@ -100,6 +100,155 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		}
 
 		/**
+		 * Resolve the configured font-display value for self-hosted CSS.
+		 *
+		 * Defaults to `swap`; filterable via `wppo_font_display` for opt-out
+		 * (return a falsy value to skip injection) or an alternate strategy.
+		 * Fail-open: unknown values fall back to `swap`, any throwable
+		 * returns `swap` so fonts never block rendering.
+		 *
+		 * @since NEXT
+		 * @return string font-display value, or '' when injection is disabled.
+		 */
+		public static function get_font_display(): string {
+			try {
+				$display = 'swap';
+				if ( function_exists( 'apply_filters' ) ) {
+					$filtered = apply_filters( 'wppo_font_display', $display );
+					if ( empty( $filtered ) ) {
+						return '';
+					}
+					$display = $filtered;
+				}
+				if ( ! is_string( $display ) ) {
+					return 'swap';
+				}
+				$display = strtolower( trim( $display ) );
+				$allowed = array(
+					'swap'     => true,
+					'block'    => true,
+					'fallback' => true,
+					'optional' => true,
+					'auto'     => true,
+				);
+				return isset( $allowed[ $display ] ) ? $display : 'swap';
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 'swap';
+			}
+		}
+
+		/**
+		 * Reorder @font-face src lists so WOFF2 sources come first.
+		 *
+		 * Stable reorder only: no entries are added or dropped, so a
+		 * woff-only block is untouched and metric-fallback + preload
+		 * behavior is unchanged (no FOUT regression).
+		 *
+		 * @since NEXT
+		 * @param string $css Stylesheet CSS.
+		 * @return string CSS with woff2-first src ordering.
+		 */
+		public static function order_font_sources( string $css ): string {
+			try {
+				if ( '' === $css ) {
+					return $css;
+				}
+				$reordered = preg_replace_callback(
+					'/src\s*:\s*([^;{}]+);/i',
+					static function ( $matches ) {
+						$src = $matches[1];
+						if ( false === stripos( $src, '.woff2' ) && false === stripos( $src, "format('woff2')" ) && false === stripos( $src, 'format("woff2")' ) ) {
+							return $matches[0];
+						}
+						$parts = preg_split( '/,(?![^(]*\))/', $src );
+						if ( ! is_array( $parts ) || count( $parts ) < 2 ) {
+							return $matches[0];
+						}
+						$woff2 = array();
+						$rest  = array();
+						foreach ( $parts as $part ) {
+							if ( false !== stripos( $part, '.woff2' ) || false !== stripos( $part, "format('woff2'" ) || false !== stripos( $part, 'format("woff2"' ) ) {
+								$woff2[] = $part;
+							} else {
+								$rest[] = $part;
+							}
+						}
+						if ( empty( $woff2 ) || empty( $rest ) ) {
+							return $matches[0];
+						}
+						return 'src:' . implode( ',', array_merge( $woff2, $rest ) ) . ';';
+					},
+					$css
+				);
+				return is_string( $reordered ) ? $reordered : $css;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $css;
+			}
+		}
+
+		/**
+		 * Optionally keep only requested unicode-range subsets.
+		 *
+		 * Opt-in via `file_optimisation.fontSubset` (default off). Google CSS
+		 * annotates each @font-face block with a `/* subset *\/` comment; when
+		 * enabled, blocks whose comment is not in `fontSubsetSubsets`
+		 * (comma-separated, default `latin`) are dropped. Fail-open: disabled
+		 * by default, and any parse failure returns the CSS unchanged.
+		 *
+		 * @since NEXT
+		 * @param string $css Stylesheet CSS.
+		 * @return string Possibly subset-filtered CSS.
+		 */
+		public function maybe_subset_css( string $css ): string {
+			try {
+				if ( '' === $css ) {
+					return $css;
+				}
+				$file_opt = $this->options['file_optimisation'] ?? array();
+				if ( empty( $file_opt['fontSubset'] ) ) {
+					return $css;
+				}
+				$raw  = strtolower( (string) ( $file_opt['fontSubsetSubsets'] ?? 'latin' ) );
+				$raw  = (string) preg_replace( '/[^a-z0-9-,\s]/', '', $raw );
+				$raw  = substr( $raw, 0, 200 );
+				$keep = array();
+				foreach ( explode( ',', $raw ) as $subset ) {
+					$subset = trim( $subset );
+					if ( '' !== $subset ) {
+						$keep[ $subset ] = true;
+					}
+					if ( count( $keep ) >= 10 ) {
+						break;
+					}
+				}
+				if ( empty( $keep ) ) {
+					return $css;
+				}
+				$filtered = preg_replace_callback(
+					'~/\*\s*([a-z0-9-]+)\s*\*/\s*(@font-face\s*\{[^}]+\})~i',
+					static function ( $matches ) use ( $keep ) {
+						return isset( $keep[ strtolower( $matches[1] ) ] ) ? $matches[0] : '';
+					},
+					$css
+				);
+				if ( ! is_string( $filtered ) || '' === trim( $filtered ) ) {
+					return $css;
+				}
+				// Only blocks carrying a subset comment were considered; if
+				// none matched the pattern, keep the original CSS untouched.
+				if ( trim( (string) preg_replace( '~/\*\s*[a-z0-9-]+\s*\*/\s*@font-face\s*\{[^}]+\}~i', '', $css ) ) === trim( $css ) ) {
+					return $css;
+				}
+				return $filtered;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $css;
+			}
+		}
+
+		/**
 		 * Process a stylesheet <link> tag to replace Google Fonts URL with local cache.
 		 *
 		 * Hooked to style_loader_tag filter (priority 9, before minify_css at 10).
@@ -402,8 +551,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 				return false;
 			}
 
-			// Inject font-display: swap.
-			$css = Minify\CSS::inject_font_display_swap( $css );
+			// Serve WOFF2 first (WOFF fallback preserved) without touching
+			// metric-fallback or preload behavior (no FOUT regression).
+			$css = self::order_font_sources( $css );
+
+			// Opt-in unicode-range subsetting (default off, fail-open).
+			$css = $this->maybe_subset_css( $css );
+
+			// Inject font-display: swap by default (opt-out via wppo_font_display).
+			$font_display = self::get_font_display();
+			if ( '' !== $font_display ) {
+				$css = Minify\CSS::inject_font_display_swap( $css, $font_display );
+			}
 
 			// Save the rewritten CSS.
 			$filesystem = Util::init_filesystem();

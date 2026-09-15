@@ -395,6 +395,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$raw_component = $this->request_uri;
 			}
 
+			// $raw_component is already path-only (PHP_URL_PATH extracted
+			// above); absolute-form is handled via $is_absolute_form, so no
+			// host context is passed here (it could never trigger).
 			$url_path = Util::sanitize_cache_url_path( (string) $raw_component );
 
 			if ( $is_absolute_form || $is_drive_or_unc || ( '' === $url_path && '' !== trim( trim( (string) $raw_component ), '/' ) ) ) {
@@ -756,15 +759,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return;
 			}
 
-			$combined_css = preg_replace( '/font-display\s*:\s*block\s*;?/', 'font-display: swap;', $combined_css );
-			if ( null === $combined_css ) {
-				if ( $this->is_safe_css_combine_fallback_enabled() ) {
-					$this->log_combine_fallback( 'preg_error', $successful_handles );
+			$font_display = 'swap';
+			if ( class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) && method_exists( 'PerformanceOptimise\Inc\Google_Fonts', 'get_font_display' ) ) {
+				try {
+					$font_display = Google_Fonts::get_font_display();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$font_display = 'swap';
 				}
-				return;
 			}
+			if ( '' !== $font_display ) {
+				$combined_css = preg_replace( '/font-display\s*:\s*block\s*;?/i', 'font-display: ' . $font_display . ';', $combined_css );
+				if ( null === $combined_css ) {
+					if ( $this->is_safe_css_combine_fallback_enabled() ) {
+						$this->log_combine_fallback( 'preg_error', $successful_handles );
+					}
+					return;
+				}
 
-			$combined_css = Minify\CSS::inject_font_display_swap( $combined_css );
+				$combined_css = Minify\CSS::inject_font_display_swap( $combined_css, $font_display );
+			}
 
 			$css_minifier = new CSSMinifier( $combined_css );
 			$combined_css = $css_minifier->minify();
@@ -2240,6 +2254,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return true;
 			}
 
+			// Query-param poisoning guard (issue #1141): the cache key is
+			// path-only, so a functional query (`?s=`, `?add-to-cart=`, or
+			// any unknown param) must never be served the clean-URL file.
+			// Tracking-only queries (`utm_*`, `gclid`, … — see
+			// Util::get_cache_query_allowlist()) stay servable from the
+			// clean entry; the write path below additionally refuses to
+			// store ANY query-bearing response, so tracking params can
+			// never overwrite the canonical file. Unconditional (runs
+			// before wppo_should_cache_request) because cache poisoning is
+			// a security property, not a preference. Fail-open: detection
+			// failure bypasses the cache (dynamic), never fatal.
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'has_uncacheable_query' ) && Util::has_uncacheable_query() ) {
+					return true;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+
 			/**
 			 * Filters whether the current request should be cached.
 			 *
@@ -2669,9 +2703,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return false;
 			}
 
-			if ( ! empty( $_SERVER['QUERY_STRING'] ) &&
-				preg_match( '/(?:^|&)(s|ver|v)(?:=|&|$)/', sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) ) )
-			) {
+			// Query-param poisoning guard (issue #1141): the cache key is
+			// path-only, so ANY query-bearing response stored here would
+			// land on the clean-URL file and poison it for later visitors
+			// (e.g. `/?utm_source=x` overwriting `/index.html`). The legacy
+			// `s|ver|v` gate is subsumed by the shared helper below (which
+			// forces those params dynamic case-insensitively, plus any
+			// unknown/functional param), so a single parse covers both.
+			// Tracked requests are still servable from the clean entry
+			// (read path) but never overwrite it. Fail-open: detection
+			// failure refuses the store (dynamic), never fatal.
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'has_uncacheable_query' ) ) {
+					if ( Util::has_uncacheable_query() ) {
+						return false;
+					}
+					// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- Sanitized below via wp_unslash()/sanitize_text_field() with function_exists() fallbacks.
+					$raw_qs = isset( $_SERVER['QUERY_STRING'] ) ? (string) $_SERVER['QUERY_STRING'] : '';
+					if ( function_exists( 'wp_unslash' ) ) {
+						$raw_qs = wp_unslash( $raw_qs );
+					}
+					if ( function_exists( 'sanitize_text_field' ) ) {
+						$raw_qs = sanitize_text_field( $raw_qs );
+					}
+					if ( '' !== trim( $raw_qs ) ) {
+						return false;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 				return false;
 			}
 
@@ -2821,7 +2881,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$sanitized = array();
 			foreach ( $urls as $u ) {
 				$u              = is_string( $u ) ? $u : (string) $u;
-				$sanitized_path = Util::sanitize_cache_url_path( $u );
+				$sanitized_path = Util::sanitize_cache_url_path( $u, '' !== $this->domain ? $this->domain : null );
+				// Homepage-vs-probe: only re-parse on the empty path (benign
+				// homepage '' is kept, hostile '' is skipped).
 				if ( '' === $sanitized_path ) {
 					if ( function_exists( 'wp_parse_url' ) ) {
 						$raw_component = wp_parse_url( $u, PHP_URL_PATH );
@@ -2831,16 +2893,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					if ( null === $raw_component || false === $raw_component ) {
 						$raw_component = $u;
 					}
-					if ( '' !== trim( trim( (string) $raw_component ), '/' ) ) {
+					if ( '' !== trim( (string) $raw_component, " \t\n\r\0\x0B/" ) ) {
 						continue;
 					}
 				}
 				$sanitized[] = $sanitized_path;
 			}
+			// TODO: add an $already_sanitized flag to get_file_path() /
+			// safe_path_for_url() so the purge loop below can skip the second
+			// sanitize pass instead of re-parsing each already-sanitized path.
 			$sanitized = array_values( array_unique( $sanitized ) );
 
 			// Purge collected URLs via filesystem; primary URL also clears css/used-css.
-			$primary_normalized = Util::sanitize_cache_url_path( (string) $path );
+			$primary_normalized = Util::sanitize_cache_url_path( (string) $path, '' !== $this->domain ? $this->domain : null );
 			foreach ( $sanitized as $url_path ) {
 				$html_file_path = $this->get_file_path( $url_path, 'html' );
 				if ( '' === $html_file_path ) {
@@ -3121,7 +3186,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// Shared-helper sanitization (single-decode, null-byte/dot-dot/
 			// drive/UNC rejection) so encoded vectors never reach delete.
 			if ( ! empty( $urls ) && is_string( $urls[0] ) ) {
-				$primary_normalized = Util::sanitize_cache_url_path( $urls[0] );
+				$primary_normalized = Util::sanitize_cache_url_path( $urls[0], '' !== $this->domain ? $this->domain : null );
 			}
 			foreach ( $urls as $u ) {
 				$u = is_string( $u ) ? $u : (string) $u;
@@ -3131,11 +3196,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				} else {
 					$path_only = (string) parse_url( $u, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback for very old WP.
 				}
-				if ( '' === trim( (string) $path_only, '/' ) && false !== strpos( $u, '?' ) ) {
+				if ( '' === trim( (string) $path_only, " \t\n\r\0\x0B/" ) && false !== strpos( $u, '?' ) ) {
 					continue;
 				}
-				$sanitized_path = Util::sanitize_cache_url_path( $u );
-				if ( '' === $sanitized_path ) {
+				$sanitized_path = Util::sanitize_cache_url_path( $u, '' !== $this->domain ? $this->domain : null );
+				// Homepage-vs-probe: keep the benign homepage (''), skip
+				// hostile inputs that sanitize to ''.
+				if ( '' === $sanitized_path && '' !== trim( (string) $path_only, " \t\n\r\0\x0B/" ) ) {
 					continue;
 				}
 				$sanitized[] = $sanitized_path;
@@ -3234,11 +3301,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * helper so every file-writing surface normalizes identically.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Added the optional $allowed_host foreign-host refusal.
 		 * @param string|null $url_path Raw URL path or URL.
+		 * @param string|null $allowed_host Optional canonical host; threaded to the shared helper so
+		 *                                  absolute-form callers refuse foreign hosts.
 		 * @return string Sanitized relative path or empty string.
 		 */
-		private static function sanitize_cache_url_path( ?string $url_path ): string {
-			return Util::sanitize_cache_url_path( $url_path );
+		private static function sanitize_cache_url_path( ?string $url_path, ?string $allowed_host = null ): string {
+			return Util::sanitize_cache_url_path( $url_path, $allowed_host );
 		}
 
 		/**
@@ -3301,16 +3371,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( $this->path_rejected ) {
 				return '';
 			}
-			if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'normalize_cache_host' ) ) {
-				try {
-					$normalized_domain = Util::normalize_cache_host( $this->domain );
-				} catch ( \Throwable $e ) {
-					unset( $e );
-					$normalized_domain = '';
-				}
-				if ( '' === $normalized_domain ) {
-					return '';
-				}
+			// $this->domain is already pinned canonical in __construct —
+			// skip the idn_to_ascii + regex re-normalize per mapping and
+			// only guard the allowlist shape here (fail-closed on '').
+			if ( '' === $this->domain || false !== strpos( $this->domain, '/' ) || false !== strpos( $this->domain, '\\' ) || false !== strpos( $this->domain, '..' ) ) {
+				return '';
 			}
 			$leaf = (string) $filename;
 			if ( '' === $leaf || strlen( $leaf ) > 64 ) {
@@ -3384,9 +3449,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
-		 * Log a blocked cache path traversal probe (once per request).
+		 * Log a blocked cache path traversal probe (once per request + throttled across requests).
 		 *
-		 * Never throws: failures degrade silently to serving uncached.
+		 * The once-per-request static gate alone lets an unauthenticated
+		 * crawler insert one wppo_activity_logs row per request (log-table
+		 * bloat / DB DoS), so a short-TTL transient gate per probe hash
+		 * throttles cross-request repeats (mirroring the
+		 * log_inline_budget_drift throttle). Never throws: failures degrade
+		 * silently to serving uncached.
 		 *
 		 * @since 2.0.0
 		 * @param string $raw_input The hostile input that was rejected.
@@ -3401,6 +3471,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			try {
 				if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 					return;
+				}
+				// Cross-request throttle: one row per probe hash per hour.
+				if ( function_exists( 'get_transient' ) && function_exists( 'set_transient' ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {
+					$throttle_key = Util::transient_key( 'wppo_probe_' . md5( substr( (string) $raw_input, 0, 64 ) ) );
+					$ttl          = defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600;
+					// Strict miss check: a null return (unstubbed transport
+					// in tests) is a miss, not a throttle hit.
+					$throttled = get_transient( $throttle_key );
+					if ( false !== $throttled && null !== $throttled ) {
+						return;
+					}
+					set_transient( $throttle_key, 1, $ttl );
 				}
 				$snippet = str_replace( "\0", '', (string) $raw_input );
 				if ( function_exists( 'sanitize_text_field' ) ) {

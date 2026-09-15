@@ -117,10 +117,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		public const MAX_LCP_URLS_PER_PATH = 10;
 
 		/**
-		 * Maximum device × template segments tracked per path bucket.
+		 * Maximum device × template × connection segments tracked per path bucket.
 		 *
 		 * Bounds the `lcpSeg` map added for field-LCP p75 routing
-		 * (issue #986) so the aggregate option stays within its byte budget.
+		 * (issues #986, #1143) so the aggregate option stays within its byte budget.
 		 *
 		 * @since 2.0.0
 		 * @var int
@@ -139,10 +139,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		public const MAX_LCP_SAMPLES_PER_SEGMENT = 100;
 
 		/**
-		 * Maximum distinct INP device × template segments tracked per path bucket.
+		 * Maximum distinct INP device × template × connection segments tracked per path bucket.
 		 *
 		 * Bounds the `inpSeg` map added for RUM-gated INP-aware delay
-		 * suggestions (issue #1036) so the aggregate option stays within its
+		 * suggestions (issues #1036, #1143) so the aggregate option stays within its
 		 * byte budget. Mirrors MAX_LCP_SEGMENTS_PER_PATH.
 		 *
 		 * @since 2.0.0
@@ -168,6 +168,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * @var int
 		 */
 		public const LCP_URL_MAX_LENGTH = 2048;
+
+		/**
+		 * Allowlisted effective connection types for RUM segmentation.
+		 *
+		 * Mirrors the client-side allowlist (`classifyConnectionType` in
+		 * src/rum.js). Anything else buckets as `unknown` so stored
+		 * aggregates stay bounded and backward compatible.
+		 *
+		 * @since NEXT
+		 * @var string[]
+		 */
+		public const ALLOWED_CONNECTIONS = array( 'slow-2g', '2g', '3g', '4g' );
 
 		/**
 		 * Default sample gate for the field-measured LCP override.
@@ -839,7 +851,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			}
 			$sample['template'] = $template;
 
+			// Optional effective-connection-type segmentation (issue #1143).
+			// Fail-open: missing/invalid values bucket as `unknown` and never
+			// reject the sample — the numeric path above is unchanged.
+			$connection = 'unknown';
+			if ( isset( $params['connection'] ) && is_string( $params['connection'] ) ) {
+				$candidate = strtolower( trim( substr( $params['connection'], 0, 16 ) ) );
+				if ( in_array( $candidate, self::ALLOWED_CONNECTIONS, true ) ) {
+					$connection = $candidate;
+				}
+			}
+			$sample['connection'] = $connection;
+
 			return $sample;
+		}
+
+		/**
+		 * Normalize a queued-sample connection value to the segment allowlist.
+		 *
+		 * The queue transient is user-writable, so the value is re-sanitized at
+		 * flush time even though the beacon sanitizes at intake. Anything
+		 * outside the allowlist buckets as `unknown` (backward compatible with
+		 * rows stored before the connection dimension shipped).
+		 *
+		 * @since NEXT
+		 * @param mixed $raw Raw connection value from a queued sample.
+		 * @return string Allowlisted connection type or 'unknown'.
+		 */
+		private static function normalize_segment_connection( $raw ): string {
+			if ( ! is_string( $raw ) ) {
+				return 'unknown';
+			}
+			$candidate = strtolower( trim( substr( sanitize_text_field( $raw ), 0, 16 ) ) );
+			if ( in_array( $candidate, self::ALLOWED_CONNECTIONS, true ) ) {
+				return $candidate;
+			}
+			return 'unknown';
 		}
 
 		/**
@@ -1015,12 +1062,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 						}
 					}
 
-					// Device × template LCP segments (issue #986): bounded per-path
-					// `lcpSeg` map keyed `{device}|{template}` holding n/sum/
-					// min/max plus a capped most-recent reservoir for p75.
-					// Evicts the lowest-n segment when over budget. Reuses the
-					// existing option byte-budget loop below so the size cap
-					// still holds; no new option or transient names.
+					// Device × template × connection LCP segments (issues #986, #1143):
+					// bounded per-path `lcpSeg` map keyed
+					// `{device}|{template}|{connection}` holding n/sum/min/max
+					// plus a capped most-recent reservoir for p75. Evicts the
+					// lowest-n segment when over budget. Reuses the existing
+					// option byte-budget loop below so the size cap still holds;
+					// no new option or transient names. Rows stored before the
+					// connection dimension read back as `unknown`.
 					if ( isset( $sample['lcp'] ) ) {
 						$lcp_value = (float) $sample['lcp'];
 						// Re-sanitize even though the beacon sanitizes at
@@ -1034,19 +1083,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 						}
 						$raw_template = isset( $sample['template'] ) && is_string( $sample['template'] ) ? sanitize_text_field( $sample['template'] ) : '';
 						$template     = '' !== trim( $raw_template ) ? substr( $raw_template, 0, 64 ) : 'unknown';
-						$seg_key      = $device . '|' . $template;
+						$connection   = self::normalize_segment_connection( $sample['connection'] ?? 'unknown' );
+						$seg_key      = $device . '|' . $template . '|' . $connection;
 						if ( ! isset( $bucket['lcpSeg'] ) || ! is_array( $bucket['lcpSeg'] ) ) {
 							$bucket['lcpSeg'] = array();
 						}
 						if ( ! isset( $bucket['lcpSeg'][ $seg_key ] ) || ! is_array( $bucket['lcpSeg'][ $seg_key ] ) ) {
 							$bucket['lcpSeg'][ $seg_key ] = array(
-								'device'   => $device,
-								'template' => $template,
-								'n'        => 0,
-								'sum'      => 0.0,
-								'min'      => $lcp_value,
-								'max'      => $lcp_value,
-								'samples'  => array(),
+								'device'     => $device,
+								'template'   => $template,
+								'connection' => $connection,
+								'n'          => 0,
+								'sum'        => 0.0,
+								'min'        => $lcp_value,
+								'max'        => $lcp_value,
+								'samples'    => array(),
 							);
 						}
 						++$bucket['lcpSeg'][ $seg_key ]['n'];
@@ -1078,13 +1129,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 						}
 					}
 
-					// Device × template INP segments (issue #1036): bounded per-path
-					// `inpSeg` map keyed `{device}|{template}` holding n/sum/
-					// min/max plus a capped most-recent reservoir for p75.
-					// Mirrors the `lcpSeg` block above; reuses the same device/
-					// template sanitization and the existing option byte-budget
-					// loop below. No new option or transient names. Fail-open:
-					// any malformed queue entry is skipped, never fatal.
+					// Device × template × connection INP segments (issues #1036, #1143):
+					// bounded per-path `inpSeg` map keyed
+					// `{device}|{template}|{connection}` holding n/sum/min/max
+					// plus a capped most-recent reservoir for p75. Mirrors the
+					// `lcpSeg` block above; reuses the same device/template/
+					// connection sanitization and the existing option
+					// byte-budget loop below. No new option or transient names.
+					// Fail-open: any malformed queue entry is skipped, never fatal.
 					if ( isset( $sample['inp'] ) ) {
 						$inp_value      = (float) $sample['inp'];
 						$raw_device_inp = isset( $sample['device'] ) && is_string( $sample['device'] ) ? sanitize_text_field( $sample['device'] ) : '';
@@ -1094,19 +1146,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 						}
 						$raw_template_inp = isset( $sample['template'] ) && is_string( $sample['template'] ) ? sanitize_text_field( $sample['template'] ) : '';
 						$template_inp     = '' !== trim( $raw_template_inp ) ? substr( $raw_template_inp, 0, 64 ) : 'unknown';
-						$inp_seg_key      = $device_inp . '|' . $template_inp;
+						$connection_inp   = self::normalize_segment_connection( $sample['connection'] ?? 'unknown' );
+						$inp_seg_key      = $device_inp . '|' . $template_inp . '|' . $connection_inp;
 						if ( ! isset( $bucket['inpSeg'] ) || ! is_array( $bucket['inpSeg'] ) ) {
 							$bucket['inpSeg'] = array();
 						}
 						if ( ! isset( $bucket['inpSeg'][ $inp_seg_key ] ) || ! is_array( $bucket['inpSeg'][ $inp_seg_key ] ) ) {
 							$bucket['inpSeg'][ $inp_seg_key ] = array(
-								'device'   => $device_inp,
-								'template' => $template_inp,
-								'n'        => 0,
-								'sum'      => 0.0,
-								'min'      => $inp_value,
-								'max'      => $inp_value,
-								'samples'  => array(),
+								'device'     => $device_inp,
+								'template'   => $template_inp,
+								'connection' => $connection_inp,
+								'n'          => 0,
+								'sum'        => 0.0,
+								'min'        => $inp_value,
+								'max'        => $inp_value,
+								'samples'    => array(),
 							);
 						}
 						++$bucket['inpSeg'][ $inp_seg_key ]['n'];
@@ -1609,18 +1663,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		}
 
 		/**
-		 * Get field LCP p75 segmented by device × template (read-only).
+		 * Get field LCP p75 segmented by device × template × connection (read-only).
 		 *
-		 * Pure read path for AI-Adaptive auto-tune (issue #986): reads the
+		 * Pure read path for AI-Adaptive auto-tune (issues #986, #1143): reads the
 		 * aggregate option only via get_option() — never flushes the queue
 		 * and never calls update_option/set_transient, so the frontend
 		 * incurs no new writes. Segments across all retained days are merged
-		 * by `{path}|{device}|{template}`; only segments with n >=
-		 * $min_samples are returned. Fail-open: any failure returns array().
+		 * by `{path}|{device}|{template}|{connection}`; only segments with n >=
+		 * $min_samples are returned. Rows stored before the connection
+		 * dimension shipped read back with `connection: 'unknown'`.
+		 * Fail-open: any failure returns array().
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Added the `connection` segment dimension.
 		 * @param int|null $min_samples Minimum samples per segment. Null resolves via get_field_lcp_min_samples().
-		 * @return array[] Rows of array(path,device,template,n,p75).
+		 * @return array[] Rows of array(path,device,template,connection,n,p75).
 		 */
 		public static function get_field_lcp_p75_by_segment( ?int $min_samples = null ): array {
 			try {
@@ -1652,16 +1709,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 							if ( ! is_array( $seg ) ) {
 								continue;
 							}
-							$device   = isset( $seg['device'] ) && is_string( $seg['device'] ) ? $seg['device'] : 'unknown';
-							$template = isset( $seg['template'] ) && is_string( $seg['template'] ) && '' !== $seg['template'] ? $seg['template'] : 'unknown';
-							$key      = $path . '|' . $device . '|' . $template;
+							$device     = isset( $seg['device'] ) && is_string( $seg['device'] ) ? $seg['device'] : 'unknown';
+							$template   = isset( $seg['template'] ) && is_string( $seg['template'] ) && '' !== $seg['template'] ? $seg['template'] : 'unknown';
+							$connection = isset( $seg['connection'] ) && is_string( $seg['connection'] ) && in_array( $seg['connection'], self::ALLOWED_CONNECTIONS, true ) ? $seg['connection'] : 'unknown';
+							$key        = $path . '|' . $device . '|' . $template . '|' . $connection;
 							if ( ! isset( $merged[ $key ] ) ) {
 								$merged[ $key ] = array(
-									'path'     => $path,
-									'device'   => $device,
-									'template' => $template,
-									'n'        => 0,
-									'samples'  => array(),
+									'path'       => $path,
+									'device'     => $device,
+									'template'   => $template,
+									'connection' => $connection,
+									'n'          => 0,
+									'samples'    => array(),
 								);
 							}
 							$merged[ $key ]['n'] += isset( $seg['n'] ) ? (int) $seg['n'] : 0;
@@ -1689,11 +1748,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					}
 					$p75    = self::compute_p75( $entry['samples'] );
 					$rows[] = array(
-						'path'     => $entry['path'],
-						'device'   => $entry['device'],
-						'template' => $entry['template'],
-						'n'        => $n,
-						'p75'      => $p75,
+						'path'       => $entry['path'],
+						'device'     => $entry['device'],
+						'template'   => $entry['template'],
+						'connection' => $entry['connection'] ?? 'unknown',
+						'n'          => $n,
+						'p75'        => $p75,
 					);
 				}
 				usort(
@@ -1824,23 +1884,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		}
 
 		/**
-		 * Get field INP p75 segmented by device × template (read-only).
+		 * Get field INP p75 segmented by device × template × connection (read-only).
 		 *
-		 * Pure read path for RUM-gated INP-aware delay suggestions (issue
-		 * #1036): reads the aggregate option only via get_option() — never
+		 * Pure read path for RUM-gated INP-aware delay suggestions (issues
+		 * #1036, #1143): reads the aggregate option only via get_option() — never
 		 * flushes the queue and never calls update_option/set_transient, so
 		 * the frontend incurs no new writes. Mirrors
 		 * get_field_lcp_p75_by_segment() over the bounded `inpSeg` reservoir
 		 * written by flush_queue(). Segments across all retained days are
-		 * merged by `{path}|{device}|{template}`; only segments with n >=
-		 * $min_samples are returned, slowest-first. Fail-open: any failure
-		 * returns array(). No PII: aggregates only (n/samples), no IP/URL
-		 * params stored. Multisite-safe: get_option() is inherently
-		 * site-specific; queue/lock keys go through Util::transient_key().
+		 * merged by `{path}|{device}|{template}|{connection}`; only segments with n >=
+		 * $min_samples are returned, slowest-first. Rows stored before the
+		 * connection dimension shipped read back with `connection: 'unknown'`.
+		 * Fail-open: any failure returns array(). No PII: aggregates only
+		 * (n/samples), no IP/URL params stored. Multisite-safe: get_option() is
+		 * inherently site-specific; queue/lock keys go through
+		 * Util::transient_key().
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Added the `connection` segment dimension.
 		 * @param int|null $min_samples Minimum samples per segment. Null resolves via get_field_lcp_min_samples() (shared gate, default 20).
-		 * @return array[] Rows of array(path,device,template,n,p75).
+		 * @return array[] Rows of array(path,device,template,connection,n,p75).
 		 */
 		public static function get_field_inp_p75_by_segment( ?int $min_samples = null ): array {
 			try {
@@ -1872,16 +1935,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 							if ( ! is_array( $seg ) ) {
 								continue;
 							}
-							$device   = isset( $seg['device'] ) && is_string( $seg['device'] ) ? $seg['device'] : 'unknown';
-							$template = isset( $seg['template'] ) && is_string( $seg['template'] ) && '' !== $seg['template'] ? $seg['template'] : 'unknown';
-							$key      = $path . '|' . $device . '|' . $template;
+							$device     = isset( $seg['device'] ) && is_string( $seg['device'] ) ? $seg['device'] : 'unknown';
+							$template   = isset( $seg['template'] ) && is_string( $seg['template'] ) && '' !== $seg['template'] ? $seg['template'] : 'unknown';
+							$connection = isset( $seg['connection'] ) && is_string( $seg['connection'] ) && in_array( $seg['connection'], self::ALLOWED_CONNECTIONS, true ) ? $seg['connection'] : 'unknown';
+							$key        = $path . '|' . $device . '|' . $template . '|' . $connection;
 							if ( ! isset( $merged[ $key ] ) ) {
 								$merged[ $key ] = array(
-									'path'     => $path,
-									'device'   => $device,
-									'template' => $template,
-									'n'        => 0,
-									'samples'  => array(),
+									'path'       => $path,
+									'device'     => $device,
+									'template'   => $template,
+									'connection' => $connection,
+									'n'          => 0,
+									'samples'    => array(),
 								);
 							}
 							$merged[ $key ]['n'] += isset( $seg['n'] ) ? (int) $seg['n'] : 0;
@@ -1909,11 +1974,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					}
 					$p75    = self::compute_p75( $entry['samples'] );
 					$rows[] = array(
-						'path'     => $entry['path'],
-						'device'   => $entry['device'],
-						'template' => $entry['template'],
-						'n'        => $n,
-						'p75'      => $p75,
+						'path'       => $entry['path'],
+						'device'     => $entry['device'],
+						'template'   => $entry['template'],
+						'connection' => $entry['connection'] ?? 'unknown',
+						'n'          => $n,
+						'p75'        => $p75,
 					);
 				}
 				usort(

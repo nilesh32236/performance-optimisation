@@ -280,16 +280,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 		}
 
 		/**
-		 * Injects font-display: swap into font-face declarations safely.
+		 * Injects font-display into font-face declarations safely.
 		 *
 		 * Tracks brace depth to correctly handle string literals, escaped quotes,
-		 * and nested blocks within CSS content.
+		 * and nested blocks within CSS content. Existing `font-display: block`
+		 * declarations are normalized to the configured value (mirrors the
+		 * combined-CSS path); other explicit values are left untouched.
+		 * Passing a falsy `$display` disables injection (filter opt-out).
 		 *
-		 * @param string $css The original CSS content.
+		 * @param string $css     The original CSS content.
+		 * @param mixed  $display Desired font-display value (swap|block|fallback|optional|auto). Falsy disables injection.
 		 * @return string The modified CSS content.
 		 * @since 2.0.0
+		 * @since NEXT Added optional $display parameter with block normalization.
 		 */
-		public static function inject_font_display_swap( $css ) {
+		public static function inject_font_display_swap( $css, $display = 'swap' ) {
+			$display_validated = is_string( $display ) ? strtolower( trim( $display ) ) : '';
+			$allowed_display   = array(
+				'swap'     => true,
+				'block'    => true,
+				'fallback' => true,
+				'optional' => true,
+				'auto'     => true,
+			);
+			if ( '' === $display_validated || ! isset( $allowed_display[ $display_validated ] ) ) {
+				if ( false === $display || null === $display || '' === $display ) {
+					return $css;
+				}
+				$display_validated = 'swap';
+			}
 			$offset = 0;
 			while ( true ) {
 				$pos = stripos( $css, '@font-face', $offset );
@@ -340,9 +359,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 				$block = substr( $css, $pos, $end_pos - $pos + 1 );
 
 				if ( stripos( $block, 'font-display' ) === false ) {
-					$modified_block = substr( $block, 0, -1 ) . 'font-display: swap;}';
+					$modified_block = substr( $block, 0, -1 ) . 'font-display: ' . $display_validated . ';}';
 					$css            = substr_replace( $css, $modified_block, $pos, $end_pos - $pos + 1 );
 					$offset         = $pos + strlen( $modified_block );
+				} elseif ( preg_match( '/font-display\s*:\s*block\s*;?/i', $block ) ) {
+					$modified_block = preg_replace( '/font-display\s*:\s*block\s*;?/i', 'font-display: ' . $display_validated . ';', $block );
+					if ( is_string( $modified_block ) ) {
+						$css    = substr_replace( $css, $modified_block, $pos, $end_pos - $pos + 1 );
+						$offset = $pos + strlen( $modified_block );
+					} else {
+						$offset = $end_pos + 1;
+					}
 				} else {
 					$offset = $end_pos + 1;
 				}
