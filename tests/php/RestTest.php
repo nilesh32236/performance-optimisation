@@ -240,6 +240,7 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			'dismiss_welcome',
 			'rum_collect',
 			'rum_data',
+			'lcp_preload_candidate',
 			'autoloaded_options',
 			'autoload_remediate',
 			'expired_transients_export',
@@ -256,8 +257,8 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			'preload_resume',
 		);
 
-		// Keep in sync with the AGENTS.md endpoint count (33 + 4 sandbox preview + 2 preload routes).
-		$this->assertCount( 39, $routes, 'REST route count drifted from the documented endpoint count' );
+		// Keep in sync with the AGENTS.md endpoint count (33 + 4 sandbox preview + 2 preload + 1 LCP candidate routes).
+		$this->assertCount( 40, $routes, 'REST route count drifted from the documented endpoint count' );
 
 		foreach ( $expected as $route ) {
 			$this->assertArrayHasKey( $route, $routes, "Missing route: {$route}" );
@@ -449,6 +450,45 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 		$this->assertTrue( ! empty( $data['data']['staged']['delayJS'] ) );
 		$this->assertTrue( ! empty( $data['data']['has_staged'] ) );
 		$this->assertStringContainsString( 'wppo_preview=assets', $data['data']['preview_url'] );
+	}
+
+	/**
+	 * Test that the LCP preload candidate endpoint surfaces the manual
+	 * per-post picker URL first (fallback path before auto-detect).
+	 */
+	public function test_get_lcp_preload_candidate_returns_manual_url_first(): void {
+		Functions\when( 'get_post_meta' )->justReturn( 'https://example.com/hero.jpg' );
+		Functions\when( 'esc_url_raw' )->returnArg();
+
+		$request  = new WP_REST_Request( array( 'post_id' => 123 ) );
+		$response = $this->rest->get_lcp_preload_candidate( $request );
+
+		$data = $response->get_data()['data'];
+		$this->assertSame( 'manual', $data['source'] );
+		$this->assertSame( 'https://example.com/hero.jpg', $data['candidate']['url'] );
+	}
+
+	/**
+	 * Test that the LCP preload candidate endpoint fails open with a null
+	 * candidate when no manual, RUM, OD, or PageSpeed data resolves.
+	 */
+	public function test_get_lcp_preload_candidate_returns_null_candidate_fail_open(): void {
+		Functions\when( 'get_post_meta' )->justReturn( '' );
+		Functions\when( 'get_option' )->justReturn( false );
+		Functions\when( 'get_transient' )->justReturn( false );
+		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'untrailingslashit' )->alias(
+			static function ( $url ) {
+				return is_string( $url ) ? rtrim( $url, '/' ) : $url;
+			}
+		);
+
+		$request  = new WP_REST_Request( array( 'path' => '/no-data/' ) );
+		$response = $this->rest->get_lcp_preload_candidate( $request );
+
+		$data = $response->get_data()['data'];
+		$this->assertNull( $data['candidate'] );
+		$this->assertSame( 'none', $data['source'] );
 	}
 
 	/**

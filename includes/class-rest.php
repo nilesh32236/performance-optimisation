@@ -251,6 +251,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+				'lcp_preload_candidate'     => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'get_lcp_preload_candidate' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
 				'autoloaded_options'        => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_autoloaded_options' ),
@@ -501,6 +507,93 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				array(
 					'preload' => $preload,
 					'cache'   => $cache,
+				)
+			);
+		}
+
+		/**
+		 * Retrieve the single LCP preload candidate for the settings UI.
+		 *
+		 * Surfaces the field-measured hero for one-click preload: the manual
+		 * per-post picker (`_wppo_lcp_preload_url`) wins when `post_id` names
+		 * a singular post, then RUM field data, then Optimization Detective
+		 * (guarded `function_exists()` / `has_filter()` on OD hooks), then
+		 * stored PageSpeed data. Optional GET params: `path` (page path, e.g.
+		 * `/about/`) and `post_id`. Fail-open: detection failure returns a
+		 * null candidate (never fatal), so the UI falls back to the manual
+		 * picker path. Multisite-safe: candidate lookups use
+		 * `Util::transient_key()` blog-aware keys.
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		public function get_lcp_preload_candidate( \WP_REST_Request $request ): \WP_REST_Response {
+			$params  = $request->get_params();
+			$path    = isset( $params['path'] ) && is_string( $params['path'] ) ? substr( trim( $params['path'] ), 0, 512 ) : null;
+			$post_id = isset( $params['post_id'] ) ? absint( $params['post_id'] ) : 0;
+			if ( is_string( $path ) && '' !== $path && '/' !== $path[0] ) {
+				$path = '/' . $path;
+			}
+
+			$candidate = null;
+			$source    = 'none';
+
+			// Manual per-post picker first (fallback path that works before auto-detect).
+			if ( $post_id > 0 && function_exists( 'get_post_meta' ) ) {
+				try {
+					$manual = get_post_meta( $post_id, '_wppo_lcp_preload_url', true );
+					if ( is_string( $manual ) && '' !== trim( $manual ) ) {
+						$candidate = array(
+							'url'      => function_exists( 'esc_url_raw' ) ? esc_url_raw( trim( substr( $manual, 0, 2048 ) ) ) : trim( substr( $manual, 0, 2048 ) ),
+							'n'        => 0,
+							'lastSeen' => time(),
+						);
+						$source    = 'manual';
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			// RUM field data wins over lab guesses when it passes the sample gate.
+			if ( null === $candidate && class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_lcp_preload_candidate' ) ) {
+				try {
+					$field = RUM::get_lcp_preload_candidate( $path );
+					if ( is_array( $field ) && ! empty( $field['url'] ) && is_string( $field['url'] ) ) {
+						$candidate = $field;
+						$source    = ( isset( $field['n'] ) && (int) $field['n'] > 0 ) ? 'rum' : 'pagespeed';
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			// Optimization Detective real-visit hero (guarded OD hooks; filter-aware).
+			if ( null === $candidate && class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) && method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'get_lcp_url' ) ) {
+				try {
+					$od_available = class_exists( 'OD_URL_Metric' ) || function_exists( 'od_get_url_metrics' );
+					$od_allowed   = ! function_exists( 'has_filter' ) || ! has_filter( 'wppo_od_should_optimize' ) || ( function_exists( 'apply_filters' ) && apply_filters( 'wppo_od_should_optimize', true, '' ) );
+					if ( $od_available && $od_allowed && method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'is_enabled' ) && \PerformanceOptimise\Inc\OD_Bridge::is_enabled() ) {
+						$od_url = \PerformanceOptimise\Inc\OD_Bridge::get_lcp_url();
+						if ( is_string( $od_url ) && '' !== $od_url ) {
+							$candidate = array(
+								'url'      => $od_url,
+								'n'        => 0,
+								'lastSeen' => time(),
+							);
+							$source    = 'od';
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			return $this->send_response(
+				array(
+					'candidate' => $candidate,
+					'source'    => $source,
 				)
 			);
 		}

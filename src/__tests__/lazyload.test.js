@@ -601,6 +601,60 @@ describe( 'Lazy Load (lazyload.js)', () => {
 			expect( observe ).not.toHaveBeenCalledWith( hero );
 			expect( observe ).toHaveBeenCalledWith( below );
 		} );
+
+		it( 'prioritize_lcp() emits a fetchpriority-high preload and excludes the candidate with dimensions preserved', () => {
+			mockIntersectionObserver();
+			document.head.innerHTML = '';
+
+			const hero = document.createElement( 'img' );
+			hero.setAttribute( 'data-src', 'https://example.com/hero.jpg' );
+			hero.setAttribute( 'width', '1200' );
+			hero.setAttribute( 'height', '800' );
+			hero.setAttribute( 'loading', 'lazy' );
+			hero.classList.add( 'lazyload' );
+			document.body.appendChild( hero );
+
+			jest.isolateModules( () => {
+				require( '../lazyload' );
+			} );
+
+			const prioritize = window.__wppoPrioritizeLcp;
+			expect( typeof prioritize ).toBe( 'function' );
+
+			const resolved = prioritize( 'https://example.com/hero.jpg' );
+			expect( resolved ).toBe( 'https://example.com/hero.jpg' );
+
+			const link = document.head.querySelector(
+				'link[data-wppo-lcp-preload][rel="preload"]'
+			);
+			expect( link ).not.toBeNull();
+			expect( link.getAttribute( 'as' ) ).toBe( 'image' );
+			expect( link.getAttribute( 'fetchpriority' ) ).toBe( 'high' );
+			expect( link.getAttribute( 'href' ) ).toBe(
+				'https://example.com/hero.jpg'
+			);
+
+			expect( hero.getAttribute( 'loading' ) ).toBe( 'eager' );
+			expect( hero.getAttribute( 'fetchpriority' ) ).toBe( 'high' );
+			expect( hero.getAttribute( 'width' ) ).toBe( '1200' );
+			expect( hero.getAttribute( 'height' ) ).toBe( '800' );
+			expect( hero.hasAttribute( 'data-src' ) ).toBe( false );
+		} );
+
+		it( 'prioritize_lcp() emits nothing and returns empty when no image resolves', () => {
+			mockIntersectionObserver();
+			document.head.innerHTML = '';
+
+			jest.isolateModules( () => {
+				require( '../lazyload' );
+			} );
+
+			const prioritize = window.__wppoPrioritizeLcp;
+			expect( prioritize() ).toBe( '' );
+			expect(
+				document.head.querySelector( 'link[data-wppo-lcp-preload]' )
+			).toBeNull();
+		} );
 	} );
 
 	describe( 'loadImages()', () => {

@@ -148,6 +148,28 @@ class MetaboxTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that the preload metabox renders the manual per-post LCP URL picker.
+	 *
+	 * The single-URL `_wppo_lcp_preload_url` input is the fallback path that
+	 * works before auto-detect (RUM / OD / PageSpeed) has data. Output stays
+	 * server-side with no inline scripts.
+	 */
+	public function test_render_metabox_outputs_manual_lcp_url_picker(): void {
+		Functions\when( 'get_post_meta' )->alias(
+			static function ( $post_id, $key, $single ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+				return '_wppo_lcp_preload_url' === $key ? 'https://example.com/pinned-hero.jpg' : '';
+			}
+		);
+		Functions\when( 'wp_nonce_field' )->echoArg( 2 );
+
+		$output = $this->capture_render( array( $this->make_metabox(), 'render_metabox' ) );
+
+		$this->assertStringContainsString( 'wppo_lcp_preload_url', $output );
+		$this->assertStringContainsString( 'https://example.com/pinned-hero.jpg', $output );
+		$this->assertStringNotContainsString( '<script', $output );
+	}
+
+	/**
 	 * Test the Asset Manager metabox empty state when no assets are captured.
 	 *
 	 * The empty-state message and the "Visit Page to Capture Assets" link are
@@ -325,6 +347,67 @@ class MetaboxTest extends \PHPUnit\Framework\TestCase {
 			$this->assertTrue( true, 'Array nonce must fail verification without a TypeError' );
 		} finally {
 			unset( $_POST['wppo_asset_manager_nonce'] );
+		}
+	}
+
+	/**
+	 * Saving the preload metabox persists the manual per-post LCP URL.
+	 */
+	public function test_save_preload_image_urls_persists_manual_lcp_url(): void {
+		$_POST['wppo_preload_image_nonce'] = 'valid-nonce';
+		$_POST['wppo_preload_image_url']   = 'https://example.com/a.jpg';
+		$_POST['wppo_lcp_preload_url']     = 'https://example.com/pinned-hero.jpg';
+
+		Functions\when( 'wp_verify_nonce' )->justReturn( true );
+		Functions\when( 'esc_url_raw' )->returnArg();
+		$saved = array();
+		Functions\when( 'update_post_meta' )->alias(
+			function ( $post_id, $key, $value ) use ( &$saved ) {
+				$saved[ $key ] = $value;
+				return true;
+			}
+		);
+
+		$metabox    = $this->make_metabox();
+		$reflection = new \ReflectionClass( $metabox );
+		$method     = $reflection->getMethod( 'save_preload_image_urls' );
+
+		try {
+			$method->invokeArgs( $metabox, array( 123 ) );
+			$this->assertSame( 'https://example.com/pinned-hero.jpg', $saved['_wppo_lcp_preload_url'] );
+		} finally {
+			unset( $_POST['wppo_preload_image_nonce'], $_POST['wppo_preload_image_url'], $_POST['wppo_lcp_preload_url'] );
+		}
+	}
+
+	/**
+	 * An empty manual LCP URL deletes the meta instead of storing an empty string.
+	 */
+	public function test_save_preload_image_urls_deletes_manual_lcp_url_when_empty(): void {
+		$_POST['wppo_preload_image_nonce'] = 'valid-nonce';
+		$_POST['wppo_preload_image_url']   = 'https://example.com/a.jpg';
+		$_POST['wppo_lcp_preload_url']     = '   ';
+
+		Functions\when( 'wp_verify_nonce' )->justReturn( true );
+		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'update_post_meta' )->justReturn( true );
+		$deleted = array();
+		Functions\when( 'delete_post_meta' )->alias(
+			function ( $post_id, $key ) use ( &$deleted ) {
+				$deleted[] = $key;
+				return true;
+			}
+		);
+
+		$metabox    = $this->make_metabox();
+		$reflection = new \ReflectionClass( $metabox );
+		$method     = $reflection->getMethod( 'save_preload_image_urls' );
+
+		try {
+			$method->invokeArgs( $metabox, array( 123 ) );
+			$this->assertContains( '_wppo_lcp_preload_url', $deleted );
+		} finally {
+			unset( $_POST['wppo_preload_image_nonce'], $_POST['wppo_preload_image_url'], $_POST['wppo_lcp_preload_url'] );
 		}
 	}
 }

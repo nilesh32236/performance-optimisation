@@ -231,10 +231,17 @@ describe( 'ImageOptimization Component', () => {
 	} );
 
 	it( 'persists both lazy-render toggles via update_settings', async () => {
-		apiCall.mockResolvedValueOnce( {
-			success: true,
-			message: 'Settings updated successfully.',
-		} );
+		apiCall.mockImplementation( ( action ) =>
+			'lcp_preload_candidate' === action
+				? Promise.resolve( {
+						success: true,
+						data: { candidate: null, source: 'none' },
+				  } )
+				: Promise.resolve( {
+						success: true,
+						message: 'Settings updated successfully.',
+				  } )
+		);
 
 		render( <ImageOptimization /> );
 
@@ -266,5 +273,109 @@ describe( 'ImageOptimization Component', () => {
 				screen.getByText( 'Settings updated successfully.' )
 			).toBeInTheDocument();
 		} );
+	} );
+
+	it( 'surfaces the LCP candidate with a one-click preload action', async () => {
+		apiCall.mockImplementation( ( action ) => {
+			if ( 'lcp_preload_candidate' === action ) {
+				return Promise.resolve( {
+					success: true,
+					data: {
+						candidate: {
+							url: 'https://example.com/hero.jpg',
+							n: 25,
+							lastSeen: Date.now(),
+						},
+						source: 'rum',
+					},
+				} );
+			}
+			return Promise.resolve( { success: true } );
+		} );
+
+		render( <ImageOptimization /> );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'https://example.com/hero.jpg' )
+			).toBeInTheDocument();
+		} );
+		expect(
+			screen.getByRole( 'button', { name: /Preload this image/i } )
+		).toBeInTheDocument();
+		expect( apiCall ).toHaveBeenCalledWith(
+			'lcp_preload_candidate',
+			{},
+			'GET'
+		);
+	} );
+
+	it( 'one-click preload enables LCP auto-preload and prioritization', async () => {
+		apiCall.mockImplementation( ( action ) => {
+			if ( 'lcp_preload_candidate' === action ) {
+				return Promise.resolve( {
+					success: true,
+					data: {
+						candidate: {
+							url: 'https://example.com/hero.jpg',
+							n: 0,
+							lastSeen: Date.now(),
+						},
+						source: 'pagespeed',
+					},
+				} );
+			}
+			return Promise.resolve( { success: true } );
+		} );
+
+		render( <ImageOptimization /> );
+
+		const applyButton = await screen.findByRole( 'button', {
+			name: /Preload this image/i,
+		} );
+
+		await act( async () => {
+			fireEvent.click( applyButton );
+		} );
+
+		expect( apiCall ).toHaveBeenCalledWith(
+			'update_settings',
+			expect.objectContaining( {
+				tab: 'image_optimisation',
+				settings: expect.objectContaining( {
+					autoPreloadLCP: true,
+					prioritizeLCPImages: true,
+				} ),
+			} )
+		);
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( /LCP preload applied/i )
+			).toBeInTheDocument();
+		} );
+	} );
+
+	it( 'falls back to the manual picker hint when no candidate resolves', async () => {
+		apiCall.mockImplementation( ( action ) => {
+			if ( 'lcp_preload_candidate' === action ) {
+				return Promise.resolve( {
+					success: true,
+					data: { candidate: null, source: 'none' },
+				} );
+			}
+			return Promise.resolve( { success: true } );
+		} );
+
+		render( <ImageOptimization /> );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( /No field-measured LCP candidate yet/i )
+			).toBeInTheDocument();
+		} );
+		expect(
+			screen.queryByRole( 'button', { name: /Preload this image/i } )
+		).not.toBeInTheDocument();
 	} );
 } );

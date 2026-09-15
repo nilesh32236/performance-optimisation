@@ -88,6 +88,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		public function render_metabox( $post ) {
 			// Retrieve current meta value.
 			$preload_urls = get_post_meta( $post->ID, '_wppo_preload_image_url', true );
+			$lcp_url      = get_post_meta( $post->ID, '_wppo_lcp_preload_url', true );
+			if ( ! is_string( $lcp_url ) ) {
+				$lcp_url = '';
+			}
 
 			// Add a nonce for security.
 			wp_nonce_field( 'save_preload_image_url', 'wppo_preload_image_nonce' );
@@ -95,6 +99,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 			<p>
 				<label for="wppo_preload_image_url"><?php esc_html_e( 'Preload Image URL:', 'performance-optimisation' ); ?></label>
 				<textarea id="wppo_preload_image_url" name="wppo_preload_image_url" rows="5" style="width: 100%;" placeholder="https://example.com/image1.jpg&#10;https://example.com/image2.jpg"><?php echo esc_textarea( $preload_urls ); ?></textarea>
+			</p>
+			<p>
+				<label for="wppo_lcp_preload_url"><?php esc_html_e( 'LCP Image URL (manual override):', 'performance-optimisation' ); ?></label>
+				<input type="url" id="wppo_lcp_preload_url" name="wppo_lcp_preload_url" style="width: 100%;" maxlength="2048" placeholder="https://example.com/hero.jpg" value="<?php echo esc_attr( $lcp_url ); ?>" />
+				<span class="description"><?php esc_html_e( 'Optional single hero URL. Wins over auto-detect (RUM / Optimization Detective / PageSpeed) and is preloaded with fetchpriority high. Leave empty to use auto-detect.', 'performance-optimisation' ); ?></span>
 			</p>
 			<?php
 		}
@@ -402,6 +411,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 
 			$preload_urls = sanitize_textarea_field( $this->get_raw_post_string( 'wppo_preload_image_url' ) );
 			update_post_meta( $post_id, '_wppo_preload_image_url', $preload_urls );
+
+			// Manual per-post LCP URL picker (fail-open single-URL fallback
+			// used before auto-detect in the preload pipeline).
+			//
+			// @since NEXT.
+			if ( isset( $_POST['wppo_lcp_preload_url'] ) ) {
+				$raw_lcp = $this->get_raw_post_string( 'wppo_lcp_preload_url' );
+				$raw_lcp = trim( $raw_lcp );
+				if ( function_exists( 'mb_strlen' ) && function_exists( 'mb_substr' ) ) {
+					if ( mb_strlen( $raw_lcp, 'UTF-8' ) > 2048 ) {
+						$raw_lcp = mb_substr( $raw_lcp, 0, 2048, 'UTF-8' );
+					}
+				} elseif ( strlen( $raw_lcp ) > 2048 ) {
+					$raw_lcp = substr( $raw_lcp, 0, 2048 );
+				}
+				$lcp_url = function_exists( 'esc_url_raw' ) ? esc_url_raw( $raw_lcp ) : $raw_lcp;
+				if ( '' === $lcp_url ) {
+					delete_post_meta( $post_id, '_wppo_lcp_preload_url' );
+				} else {
+					update_post_meta( $post_id, '_wppo_lcp_preload_url', $lcp_url );
+				}
+			}
 		}
 
 		/**

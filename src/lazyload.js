@@ -1408,6 +1408,121 @@ const restoreHeroImage = ( el ) => {
 };
 
 /**
+ * Prioritize the LCP candidate: emit a preload hint with fetchpriority high
+ * and exclude the LCP image from lazy loading while preserving width/height.
+ *
+ * Resolution order: an explicit `candidateUrl` (the RUM/OD-measured hero
+ * surfaced by the `lcp_preload_candidate` REST route) matched against
+ * `src`/`data-src`, then the first hero image (`isHeroImage()`), then the
+ * first image with a usable `src`/`data-src` as a last-resort fallback.
+ * Detection failure emits nothing and leaves markup unoptimised (fail-open,
+ * never fatal). Width/height attributes are never touched, so no CLS is
+ * introduced; an explicit `fetchpriority="low"` is preserved.
+ *
+ * @since NEXT
+ * @param {string} [candidateUrl] Optional explicit LCP image URL.
+ * @return {string} The resolved LCP URL, or an empty string when none resolved.
+ */
+// eslint-disable-next-line camelcase -- Snake-case name matches the PHP pipeline (prioritize_lcp_in_buffer) and the issue fingerprint.
+const prioritize_lcp = ( candidateUrl ) => {
+	try {
+		const images = document.querySelectorAll( 'img' );
+		if ( ! images.length ) {
+			return '';
+		}
+
+		const normalizedCandidate =
+			typeof candidateUrl === 'string' ? candidateUrl.trim() : '';
+
+		let target = null;
+
+		if ( normalizedCandidate ) {
+			for ( const img of images ) {
+				const src = img.getAttribute( 'src' ) || '';
+				const dataSrc = img.getAttribute( 'data-src' ) || '';
+				if (
+					src === normalizedCandidate ||
+					dataSrc === normalizedCandidate
+				) {
+					target = img;
+					break;
+				}
+			}
+		}
+
+		if ( ! target ) {
+			for ( const img of images ) {
+				if ( isHeroImage( img ) ) {
+					target = img;
+					break;
+				}
+			}
+		}
+
+		if ( ! target ) {
+			for ( const img of images ) {
+				if (
+					img.getAttribute( 'src' ) ||
+					img.getAttribute( 'data-src' )
+				) {
+					target = img;
+					break;
+				}
+			}
+		}
+
+		if ( ! target ) {
+			return '';
+		}
+
+		const resolvedUrl =
+			target.getAttribute( 'src' ) ||
+			target.getAttribute( 'data-src' ) ||
+			'';
+		if ( ! resolvedUrl || ! isSafeSubresourceUrl( resolvedUrl ) ) {
+			return '';
+		}
+
+		// Emit at most one preload hint with fetchpriority high (~+1 KB).
+		if (
+			! document.querySelector(
+				'link[data-wppo-lcp-preload][rel="preload"]'
+			)
+		) {
+			const link = document.createElement( 'link' );
+			link.setAttribute( 'rel', 'preload' );
+			link.setAttribute( 'as', 'image' );
+			link.setAttribute( 'href', resolvedUrl );
+			link.setAttribute( 'fetchpriority', 'high' );
+			link.setAttribute( 'data-wppo-lcp-preload', '1' );
+			const srcset =
+				target.getAttribute( 'srcset' ) ||
+				target.getAttribute( 'data-srcset' ) ||
+				'';
+			if ( srcset && isSafeSrcsetValue( srcset ) ) {
+				link.setAttribute( 'imagesrcset', srcset );
+			}
+			document.head.appendChild( link );
+		}
+
+		// Lazy exclusion with width/height preserved (no CLS): restore the
+		// eager source, drop lazy markers, force eager + high priority.
+		restoreHeroImage( target );
+
+		return resolvedUrl;
+	} catch {
+		return '';
+	}
+};
+
+// Test hook: the bundle has no module exports (side-effect script), so Jest
+// reaches the pipeline through this handle instead.
+if ( typeof window !== 'undefined' ) {
+	// eslint-disable-next-line camelcase -- See the declaration above.
+	window.__wppoPrioritizeLcp = prioritize_lcp;
+}
+
+/**
  * Register an element for lazy-load observation if it has data-* attributes.
  *
  * @since 1.0.0
@@ -2351,13 +2466,28 @@ const loadBackgrounds = () => {
 	elements.forEach( ( el ) => backgroundObserver.observe( el ) );
 };
 
+/**
+ * Boot-time LCP fast path: only runs when PHP supplies a measured LCP URL
+ * via module data. The no-argument heuristic inside `prioritize_lcp()` is
+ * reserved for explicit callers (and tests) so default lazy behaviour is
+ * unchanged when no candidate is known.
+ */
+const maybePrioritizeLcpAtBoot = () => {
+	const candidate = moduleData.lcpUrl;
+	if ( typeof candidate === 'string' && candidate.trim() ) {
+		prioritize_lcp( candidate );
+	}
+};
+
 if ( document.readyState === 'loading' ) {
 	document.addEventListener( 'DOMContentLoaded', () => {
+		maybePrioritizeLcpAtBoot();
 		loadImages();
 		loadBackgrounds();
 		initVideoPlaceholders();
 	} );
 } else {
+	maybePrioritizeLcpAtBoot();
 	loadImages();
 	loadBackgrounds();
 	initVideoPlaceholders();
