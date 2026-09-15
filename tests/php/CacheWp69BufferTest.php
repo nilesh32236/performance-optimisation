@@ -30,9 +30,7 @@ class CacheWp69BufferTest extends \PHPUnit\Framework\TestCase {
 		\Brain\Monkey\setUp();
 		$this->register_common_function_stubs();
 		// Mirror the trait's per-test cache resets (issue #882 review).
-		\PerformanceOptimise\Inc\Util::reset_cached_home_urls();
-		\PerformanceOptimise\Inc\Util::clear_settings_cache();
-		\PerformanceOptimise\Inc\Util::clear_permalink_cache();
+		\PerformanceOptimise\Inc\Util::reset_runtime_caches();
 		\PerformanceOptimise\Inc\Util::reset_html_processor_memo();
 		\PerformanceOptimise\Inc\CDN::reset_cache();
 		Functions\when( 'get_transient' )->justReturn( false );

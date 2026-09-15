@@ -892,30 +892,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		/**
 		 * Execute callback: Get Autoloaded Options (operational).
 		 *
+		 * Delegates to Database_Cleanup so the total/count match Site Health
+		 * (WP 6.6+ `yes/on/auto/auto-on` via `get_autoloadable_values()`)
+		 * within rounding, instead of the legacy hardcoded `autoload = 'yes'`.
+		 *
 		 * @since 2.0.0
 		 *
 		 * @param array $input Unused input data.
 		 * @return array Autoloaded options data.
 		 */
 		public static function execute_get_autoloaded_options( array $input = array() ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
-			global $wpdb;
-			// Cache the two scalars: the underlying table changes slowly and
-			// each call otherwise re-scans wp_options twice.
+			// Cache scalars + top-N list: the underlying table changes slowly
+			// and each call otherwise re-scans wp_options.
 			$cache_key = Util::transient_key( 'wppo_abilities_autoloaded' );
 			$cached    = get_transient( $cache_key );
-			if ( is_array( $cached ) && isset( $cached['autoloaded_count'], $cached['autoloaded_size'] ) ) {
-				return array(
+			// Require options: pre-upgrade entries lack the list and must
+			// regenerate instead of returning a key-less payload.
+			if ( is_array( $cached ) && isset( $cached['autoloaded_count'], $cached['autoloaded_size'], $cached['options'] ) ) {
+				$result = array(
 					'autoloaded_count'   => (int) $cached['autoloaded_count'],
 					'autoloaded_size'    => (int) $cached['autoloaded_size'],
 					'autoloaded_size_mb' => round( (int) $cached['autoloaded_size'] / ( 1024 * 1024 ), 2 ),
 				);
+				if ( isset( $cached['options'] ) && is_array( $cached['options'] ) ) {
+					$result['options'] = $cached['options'];
+				}
+				return $result;
 			}
-			$autoloaded    = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->options} WHERE autoload = 'yes'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Auditing query, results cached in transient below.
-			$autoload_size = (int) $wpdb->get_var( "SELECT SUM(LENGTH(option_value)) FROM {$wpdb->options} WHERE autoload = 'yes'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Auditing query, results cached in transient below.
-			$result        = array(
+			try {
+				$autoloaded    = Database_Cleanup::get_autoload_count();
+				$autoload_size = Database_Cleanup::get_autoload_total_bytes();
+				$options       = Database_Cleanup::get_autoloaded_options( 20 );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array(
+					'autoloaded_count'   => 0,
+					'autoloaded_size'    => 0,
+					'autoloaded_size_mb' => 0.0,
+					'options'            => array(),
+				);
+			}
+			$result = array(
 				'autoloaded_count'   => $autoloaded,
 				'autoloaded_size'    => $autoload_size,
 				'autoloaded_size_mb' => round( $autoload_size / ( 1024 * 1024 ), 2 ),
+				'options'            => $options,
 			);
 			set_transient( $cache_key, $result, 10 * MINUTE_IN_SECONDS );
 			return $result;

@@ -65,6 +65,38 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		private const FULL_REGEN_COOLDOWN_SECONDS = 18000;
 
 		/**
+		 * Default per-run cap for the RUM-weighted used-CSS queue (issue #1164).
+		 *
+		 * Bounds the 200-row cursor loop per run; RUM-worst-first ordering
+		 * ensures the slowest pages are queued first. Overridable per site
+		 * via `file_optimisation.usedCssQueueCap`.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const DEFAULT_USED_CSS_QUEUE_CAP = 50;
+
+		/**
+		 * Hard upper bound for the used-CSS per-run cap read.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const MAX_USED_CSS_QUEUE_CAP = 500;
+
+		/**
+		 * Viewport-split variant slugs (issue #1164).
+		 *
+		 * Stored as `used-css.{variant}.css` next to `used-css.css`. Missing
+		 * or stale variant files fall back to the single file (or the
+		 * deferred full stylesheet) — never fatal.
+		 *
+		 * @since NEXT
+		 * @var string[]
+		 */
+		public const VIEWPORT_VARIANTS = array( 'mobile', 'desktop' );
+
+		/**
 		 * Plugin options.
 		 *
 		 * @var array
@@ -2027,6 +2059,219 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		}
 
 		/**
+		 * Read the configured per-run used-CSS queue cap (issue #1164).
+		 *
+		 * The single source of truth is `Util::get_default_settings()`
+		 * (`file_optimisation.usedCssQueueCap`, default 50). Fail-open: a
+		 * missing key falls back to the default; a non-positive / non-numeric
+		 * value means uncapped (current behaviour) so a rogue setting can
+		 * never starve the queue. Oversized values are clamped to
+		 * MAX_USED_CSS_QUEUE_CAP.
+		 *
+		 * @return int Per-run cap, or PHP_INT_MAX when uncapped.
+		 * @since NEXT
+		 */
+		public static function get_used_css_queue_cap(): int {
+			try {
+				$options = Util::get_settings();
+				if ( ! isset( $options['file_optimisation']['usedCssQueueCap'] ) ) {
+					return self::DEFAULT_USED_CSS_QUEUE_CAP;
+				}
+				$raw = $options['file_optimisation']['usedCssQueueCap'];
+				if ( ! is_numeric( $raw ) ) {
+					return PHP_INT_MAX;
+				}
+				$cap = (int) $raw;
+				if ( $cap <= 0 ) {
+					return PHP_INT_MAX;
+				}
+				return min( $cap, self::MAX_USED_CSS_QUEUE_CAP );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return PHP_INT_MAX;
+			}
+		}
+
+		/**
+		 * Whether viewport-split used-CSS variants are enabled (issue #1164).
+		 *
+		 * Shares the additive `file_optimisation.ccssViewportVariants` flag
+		 * with Critical_CSS (default false = current single-file behaviour
+		 * verbatim). Fail-open: any error returns false.
+		 *
+		 * @return bool True when split variants should be emitted/served.
+		 * @since NEXT
+		 */
+		public static function is_viewport_variants_enabled(): bool {
+			try {
+				$options = Util::get_settings();
+				$raw     = $options['file_optimisation']['ccssViewportVariants'] ?? false;
+				if ( is_array( $raw ) ) {
+					return ! empty( $raw );
+				}
+				return (bool) $raw;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Get the viewport-split variant filename for a base filename.
+		 *
+		 * Only `mobile` / `desktop` slugs are accepted; anything else returns
+		 * ''. `used-css.css` maps to `used-css.{variant}.css`.
+		 *
+		 * @param string $variant Variant slug ('mobile'|'desktop').
+		 * @return string Variant filename, or '' when refused.
+		 * @since NEXT
+		 */
+		public static function get_variant_filename( string $variant ): string {
+			if ( ! in_array( $variant, self::VIEWPORT_VARIANTS, true ) ) {
+				return '';
+			}
+			return 'used-css.' . $variant . '.css';
+		}
+
+		/**
+		 * Get the used-CSS variant file path for a URL (issue #1164).
+		 *
+		 * Fail-open: returns '' when variants are disabled or the URL is
+		 * refused, so callers fall back to {@see get_used_css_path()}.
+		 *
+		 * @param string $url     Page URL.
+		 * @param string $variant Variant slug ('mobile'|'desktop').
+		 * @return string Filesystem path, or '' when refused/disabled.
+		 * @since NEXT
+		 */
+		public function get_used_css_variant_path( string $url = '', string $variant = 'mobile' ): string {
+			try {
+				if ( ! self::is_viewport_variants_enabled() ) {
+					return '';
+				}
+				$filename = self::get_variant_filename( $variant );
+				if ( '' === $filename || '' === $this->cache_root_dir || '' === $this->domain ) {
+					return '';
+				}
+				$effective = ( '' === $url ) ? $this->get_url_path( $url ) : $url;
+				return Util::sanitize_cache_path( $this->cache_root_dir, $this->domain, $effective, $filename );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Resolve the usable used-CSS path with fail-open fallback (issue #1164).
+		 *
+		 * Prefers the `{variant}` sidecar when it exists and is not stale
+		 * (mtime >= single-file mtime); otherwise returns the single
+		 * `used-css.css` path. Returns '' only when no usable path exists —
+		 * callers then serve the deferred full stylesheet (never fatal).
+		 *
+		 * @param string $url     Page URL.
+		 * @param string $variant Variant slug ('mobile'|'desktop').
+		 * @return string Usable filesystem path, or '' when none.
+		 * @since NEXT
+		 */
+		public function resolve_used_css_path( string $url = '', string $variant = 'mobile' ): string {
+			try {
+				$single = $this->get_used_css_path( $url );
+				if ( ! self::is_viewport_variants_enabled() ) {
+					return $single;
+				}
+				$variant_path = $this->get_used_css_variant_path( $url, $variant );
+				if ( '' === $variant_path || ! file_exists( $variant_path ) ) {
+					return $single;
+				}
+				if ( '' !== $single && file_exists( $single ) ) {
+					$variant_mtime = filemtime( $variant_path );
+					$single_mtime  = filemtime( $single );
+					if ( false === $variant_mtime || false === $single_mtime || $variant_mtime < $single_mtime ) {
+						return $single;
+					}
+				}
+				if ( ! Util::css_file_valid( $variant_path ) ) {
+					return $single;
+				}
+				return $variant_path;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				try {
+					return $this->get_used_css_path( $url );
+				} catch ( \Throwable $inner ) {
+					unset( $inner );
+					return '';
+				}
+			}
+		}
+
+		/**
+		 * Whether a stylesheet handle is safe to strip when a block-library
+		 * stylesheet is present (issue #1164).
+		 *
+		 * The core `wp-block-library` handle (and its minified/block variants)
+		 * must never be stripped without a verified used-CSS replacement:
+		 * otherwise blocks flash unstyled (FOUC). Returns false for the
+		 * block-library family so callers keep the original link.
+		 *
+		 * @param string $handle Stylesheet handle.
+		 * @return bool True when stripping is safe; false for block-library.
+		 * @since NEXT
+		 */
+		public static function is_safe_to_strip_handle( string $handle ): bool {
+			if ( '' === trim( $handle ) ) {
+				return true;
+			}
+			if ( 'wp-block-library' === $handle || 0 === strpos( $handle, 'wp-block-library' ) ) {
+				return false;
+			}
+			if ( false !== strpos( $handle, 'block-library' ) ) {
+				return false;
+			}
+			return true;
+		}
+
+		/**
+		 * Elementor smoke check for used-CSS output (issue #1164).
+		 *
+		 * Pages carrying Elementor markers (`data-elementor-type`,
+		 * `elementor-widget`) must keep builder coverage in the purged CSS;
+		 * otherwise the candidate is rejected and the full stylesheet is
+		 * served (no FOUC). Non-builder pages always pass. Fail-open: any
+		 * error passes so output is never dropped on uncertainty — except an
+		 * empty candidate on a builder page, which fails closed to the full
+		 * stylesheet.
+		 *
+		 * @param string $html       Page HTML.
+		 * @param string $purged_css Purged CSS candidate.
+		 * @return bool True when it is safe to serve the purged CSS.
+		 * @since NEXT
+		 */
+		public static function passes_elementor_smoke( string $html, string $purged_css ): bool {
+			try {
+				if ( '' === $html ) {
+					return true;
+				}
+				$has_builder = false !== strpos( $html, 'data-elementor-type' )
+					|| false !== strpos( $html, 'elementor-widget' )
+					|| false !== strpos( $html, 'elementor-popup' );
+				if ( ! $has_builder ) {
+					return true;
+				}
+				if ( '' === trim( $purged_css ) ) {
+					return false;
+				}
+				return false !== strpos( $purged_css, '.elementor' )
+					|| false !== strpos( $purged_css, 'elementor-' )
+					|| false !== strpos( $purged_css, 'data-elementor-type' );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
 		 * Queue background used-CSS regeneration for all published posts.
 		 *
 		 * Guards against queue churn (issue #1107): a coarse cooldown skips
@@ -2044,6 +2289,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @return int Number of jobs queued.
 		 * @since 1.9.0
 		 * @since NEXT Added $force parameter, cooldown, and per-post freshness skip.
+		 * @since NEXT Capped per-run queue with RUM-worst-first ordering (issue #1164).
 		 */
 		public function regenerate_all( bool $force = false ): int {
 			if ( ! function_exists( 'as_enqueue_async_action' ) ) {
@@ -2053,6 +2299,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			if ( ! $force && $this->is_full_regen_cooled_down() ) {
 				return 0;
 			}
+
+			// Per-run cap (issue #1164): RUM-worst-first batches are queued
+			// only up to the cap so one run cannot flood the scheduler; the
+			// next cron run picks up the remainder. Fail-open: an invalid cap
+			// enqueues everything (current behaviour).
+			$queue_cap = self::get_used_css_queue_cap();
 
 			$post_types = get_post_types( array( 'public' => true ), 'names' );
 			$post_types = array_diff( $post_types, array( 'attachment' ) );
@@ -2131,6 +2383,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 
 			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- Intentional direct query, $placeholders is count-derived only.
 			$scan_ok = true;
+			$capped  = false;
 			do {
 				// Cursor pagination via ID > last_id avoids O(offset) MySQL scans.
 				$prepare_args   = array_values( $post_types );
@@ -2169,6 +2422,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				$batch_ids = self::order_post_ids_by_rum_priority( array_values( array_map( 'intval', $post_ids ) ) );
 
 				foreach ( $batch_ids as $post_id ) {
+					// Per-run cap: stop enqueueing once the cap is reached
+					// (outer loop breaks below, so no further cursor batches
+					// are fetched either).
+					if ( $queued >= $queue_cap ) {
+						break;
+					}
 					$post_id = (int) $post_id;
 					if ( isset( $scheduled[ $post_id ] ) ) {
 						continue;
@@ -2195,13 +2454,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				}
 
 				$last_id = (int) end( $post_ids );
+				// Per-run cap reached: stop cursor pagination so the next cron
+				// run resumes the remainder (fail-open: uncapped runs paginate
+				// to exhaustion as before).
+				if ( $queued >= $queue_cap ) {
+					$capped = true;
+					break;
+				}
 				// Terminate only when last batch was partial; when total is exact multiple of $batch
 				// the next SELECT returns empty and breaks at the top of the loop (one wasted query in that edge case).
 				// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- count() on batch is intentional for loop termination.
 			} while ( count( $post_ids ) === $batch );
 			// phpcs:enable
 
-			if ( $scan_ok ) {
+			if ( $scan_ok && ! $capped ) {
 				$this->mark_full_regen();
 			}
 
@@ -2547,8 +2813,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			}
 
 			// Build the set of URLs to remove, including minified variants.
+			// Block-library FOUC guard (issue #1164): core block styles are
+			// never stripped — their <link> stays so blocks never flash
+			// unstyled even when a used-CSS sidecar is injected.
 			$removal_urls = array();
 			foreach ( $handles as $handle ) {
+				if ( ! self::is_safe_to_strip_handle( (string) $handle ) ) {
+					continue;
+				}
 				if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
 					continue;
 				}
@@ -2937,6 +3209,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 
 			$purged_css = $this->generate_used_css( $buffer, $css_assets );
 			if ( empty( $purged_css ) ) {
+				return $buffer;
+			}
+
+			// Elementor smoke guard (issue #1164): builder pages whose purged
+			// CSS lost builder coverage keep the full stylesheet (no FOUC).
+			if ( ! self::passes_elementor_smoke( $buffer, $purged_css ) ) {
+				if ( $this->is_safe_fallback_enabled() ) {
+					$this->log_used_css_fallback( 'elementor_smoke', array_keys( $css_assets ) );
+				}
 				return $buffer;
 			}
 

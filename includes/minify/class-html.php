@@ -682,7 +682,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				return '<script' . $attributes . '>' . $content . '</script>';
 			}
 
-			if ( ! empty( $this->options['file_optimisation']['delayJS'] ) && ! self::is_delay_excluded_context() ) {
+			// Sandbox preview (issue #1163): preview admins render staged
+			// delayJS; visitors always use production. Fail-open to production.
+			// Memoized per request: safe_minify_js runs per <script> tag, so the
+			// staged overlay (get_option via Util::get_settings) must happen once.
+			static $preview_effective_cache = null;
+			$file_opt_for_preview           = isset( $this->options['file_optimisation'] ) && is_array( $this->options['file_optimisation'] ) ? $this->options['file_optimisation'] : array();
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_effective_file_optimisation' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'is_preview_request' ) ) {
+					if ( \PerformanceOptimise\Inc\Sandbox_Preview::is_preview_request() ) {
+						if ( null === $preview_effective_cache ) {
+							$preview_effective_cache = \PerformanceOptimise\Inc\Sandbox_Preview::get_effective_file_optimisation( $file_opt_for_preview );
+						}
+						$file_opt_for_preview = $preview_effective_cache;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
+			if ( ! empty( $file_opt_for_preview['delayJS'] ) && ! self::is_delay_excluded_context() ) {
 				// Per-page kill-switch (#966) and external-only mode only skip
 				// the delay rewrite below; inline-JS minification still runs.
 				$skip_delay = false;
@@ -701,7 +720,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				// External-scripts-only mode (#966): inline scripts (no src
 				// attribute) stay un-delayed; only external scripts delay.
 				// Fail-open: leave the tag untouched by the delay rewrite.
-				if ( ! $skip_delay && ! empty( $this->options['file_optimisation']['delayJSExternalOnly'] ) ) {
+				if ( ! $skip_delay && ! empty( $file_opt_for_preview['delayJSExternalOnly'] ) ) {
 					if ( ! preg_match( '/\ssrc\s*=/i', ' ' . (string) $attributes ) ) {
 						$skip_delay = true;
 					}
@@ -725,6 +744,43 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 							$should_exclude = true;
 							break;
 						}
+					}
+				}
+				// Sandbox preview staged excludes (issue #1163): staged
+				// excludeDelayJS lines also suppress delay in preview only.
+				// Util::process_urls() is array-safe (string or array payload),
+				// matching the constructor path for production excludes. Parsed
+				// once per request (keyed by the raw staged value) instead of on
+				// every <script> tag, since safe_minify_js runs per tag.
+				if ( ! $skip_delay && ! $should_exclude && ! empty( $file_opt_for_preview['excludeDelayJS'] ) ) {
+					try {
+						static $staged_excludes_cache = null;
+						static $staged_excludes_key   = null;
+						$staged_raw                   = $file_opt_for_preview['excludeDelayJS'];
+						if ( is_string( $staged_raw ) ) {
+							$staged_key = $staged_raw;
+						} elseif ( is_array( $staged_raw ) ) {
+							$staged_key = function_exists( 'wp_json_encode' ) ? (string) wp_json_encode( $staged_raw ) : implode( "\0", array_map( 'strval', $staged_raw ) );
+						} else {
+							$staged_key = (string) $staged_raw;
+						}
+						if ( null === $staged_excludes_cache || $staged_key !== $staged_excludes_key ) {
+							$staged_excludes_cache = Util::process_urls( $staged_raw );
+							$staged_excludes_key   = $staged_key;
+						}
+						$staged_lines = $staged_excludes_cache;
+						foreach ( $staged_lines as $exclude ) {
+							$exclude = trim( (string) $exclude );
+							if ( '' === $exclude ) {
+								continue;
+							}
+							if ( false !== strpos( $attributes, $exclude ) || false !== strpos( $content, $exclude ) ) {
+								$should_exclude = true;
+								break;
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
 					}
 				}
 
@@ -755,7 +811,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				}
 			}
 
-			if ( ! empty( $this->options['file_optimisation']['minifyInlineJS'] ) ) {
+			if ( ! empty( $file_opt_for_preview['minifyInlineJS'] ) ) {
 				// Unified fail-open safe-mode (#1037): any engine throwable
 				// (`\Exception` or `\Error`) returns the pristine buffer so
 				// Elementor/Woo inline scripts survive minify failures.

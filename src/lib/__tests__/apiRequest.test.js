@@ -1,4 +1,9 @@
-import { apiCall, fetchRecentActivities, getWppoSettings } from '../apiRequest';
+import {
+	apiCall,
+	fetchRecentActivities,
+	getWppoSettings,
+	getErrorLogMessage,
+} from '../apiRequest';
 
 const originalFetch = global.fetch;
 
@@ -208,7 +213,7 @@ describe( 'API Request library', () => {
 
 			expect( console.error ).toHaveBeenCalledWith(
 				'Nonce refresh failed:',
-				refreshError
+				'Refresh error'
 			);
 		} );
 	} );
@@ -881,7 +886,7 @@ describe( 'API Request library', () => {
 			expect( console.error ).toHaveBeenCalledWith(
 				'API call failed:',
 				'recent_activities?page=1',
-				mockError
+				'Failed to fetch'
 			);
 		} );
 
@@ -916,6 +921,52 @@ describe( 'API Request library', () => {
 					}
 				);
 			}
+		} );
+	} );
+
+	describe( 'getErrorLogMessage', () => {
+		it( 'returns the message for Error instances', () => {
+			expect( getErrorLogMessage( new Error( 'boom' ) ) ).toBe( 'boom' );
+		} );
+
+		it( 'never leaks full response objects to the console', async () => {
+			// An error carrying a server response body (system info,
+			// settings) must only contribute its message to console output.
+			const leaky = new Error( 'Network error' );
+			leaky.response = {
+				system_info: { php: '8.2', secret: 's3cr3t' },
+			};
+			global.fetch.mockRejectedValueOnce( leaky );
+
+			await expect( apiCall( 'system_info', {}, 'GET' ) ).rejects.toThrow(
+				'Network error'
+			);
+			expect( console.error ).toHaveBeenCalledWith(
+				'API call failed:',
+				'system_info',
+				'Network error'
+			);
+			const logged = console.error.mock.calls
+				.flat()
+				.map( ( arg ) => {
+					try {
+						return JSON.stringify( arg );
+					} catch {
+						return '';
+					}
+				} )
+				.join( ' ' );
+			expect( logged ).not.toContain( 's3cr3t' );
+		} );
+
+		it( 'coerces non-Error values without throwing', () => {
+			expect( getErrorLogMessage( 'plain failure' ) ).toBe(
+				'plain failure'
+			);
+			expect( getErrorLogMessage( undefined ) ).toBe( 'Unknown error' );
+			expect( getErrorLogMessage( { custom: 'object' } ) ).not.toContain(
+				'custom'
+			);
 		} );
 	} );
 } );

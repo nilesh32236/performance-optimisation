@@ -86,8 +86,7 @@ class SaltedCacheCoverageTest extends \PHPUnit\Framework\TestCase {
 
 		// Replicate the trait's per-test cache resets for isolation (issue
 		// #882 review).
-		Util::reset_cached_home_urls();
-		Util::clear_settings_cache();
+		Util::reset_runtime_caches();
 		Util::reset_html_processor_memo();
 		Critical_CSS::reset_ccss_memo();
 

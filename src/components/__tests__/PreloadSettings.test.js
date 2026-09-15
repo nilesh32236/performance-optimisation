@@ -12,9 +12,36 @@ jest.mock( '../../lib/apiRequest', () => ( {
 import { apiCall } from '../../lib/apiRequest';
 
 describe( 'PreloadSettings Component', () => {
+	const idleStatusResponse = {
+		success: true,
+		data: {
+			preload: {
+				queued: 0,
+				done: 0,
+				failed: 0,
+				total: 0,
+				status: 'idle',
+				failed_urls: [],
+			},
+			cache: { state: 'ok' },
+		},
+	};
+
 	beforeEach( () => {
 		global.wppoSettings = {};
 		jest.clearAllMocks();
+		// The component fetches preload_status on mount via apiCall; default
+		// it to idle so update_settings mocks are not consumed by the mount
+		// fetch (issue #1162 progress panel).
+		apiCall.mockImplementation( async ( action ) => {
+			if ( 'preload_status' === action ) {
+				return idleStatusResponse;
+			}
+			return {
+				success: true,
+				message: 'Settings updated successfully.',
+			};
+		} );
 	} );
 
 	it( 'renders default fields correctly', () => {
@@ -199,9 +226,14 @@ describe( 'PreloadSettings Component', () => {
 	} );
 
 	it( 'handles API failure (success: false)', async () => {
-		apiCall.mockResolvedValueOnce( {
-			success: false,
-			message: 'Custom error from API.',
+		apiCall.mockImplementation( async ( action ) => {
+			if ( 'preload_status' === action ) {
+				return idleStatusResponse;
+			}
+			return {
+				success: false,
+				message: 'Custom error from API.',
+			};
 		} );
 
 		render( <PreloadSettings /> );
@@ -218,7 +250,12 @@ describe( 'PreloadSettings Component', () => {
 	} );
 
 	it( 'handles network failure gracefully', async () => {
-		apiCall.mockRejectedValueOnce( new Error( 'Network error' ) );
+		apiCall.mockImplementation( async ( action ) => {
+			if ( 'preload_status' === action ) {
+				return idleStatusResponse;
+			}
+			throw new Error( 'Network error' );
+		} );
 
 		render( <PreloadSettings /> );
 
@@ -430,5 +467,96 @@ describe( 'PreloadSettings Component', () => {
 		expect(
 			screen.queryByText( /While speculative loading is disabled here/i )
 		).not.toBeInTheDocument();
+	} );
+
+	it( 'renders preload progress with queued, done and failed counts', async () => {
+		apiCall.mockImplementation( async ( action ) => {
+			if ( 'preload_status' === action ) {
+				return {
+					success: true,
+					data: {
+						preload: {
+							queued: 3,
+							done: 7,
+							failed: 1,
+							total: 11,
+							status: 'running',
+							failed_urls: [],
+						},
+						cache: { state: 'ok' },
+					},
+				};
+			}
+			return {
+				success: true,
+				message: 'Settings updated successfully.',
+			};
+		} );
+
+		render( <PreloadSettings /> );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( /queued: 3, done: 7, failed: 1/i )
+			).toBeInTheDocument();
+		} );
+		expect(
+			screen.getByRole( 'button', { name: /Resume Preload/i } )
+		).toBeInTheDocument();
+	} );
+
+	it( 'resumes the preload queue via the resume button', async () => {
+		apiCall.mockImplementation( async ( action ) => {
+			if ( 'preload_status' === action ) {
+				return {
+					success: true,
+					data: {
+						preload: {
+							queued: 2,
+							done: 5,
+							failed: 1,
+							total: 8,
+							status: 'running',
+							failed_urls: [],
+						},
+						cache: { state: 'ok' },
+					},
+				};
+			}
+			if ( 'preload_resume' === action ) {
+				return {
+					success: true,
+					message: 'Preload queue resumed.',
+					data: {
+						rescheduled: 3,
+						preload: {
+							queued: 3,
+							done: 5,
+							failed: 0,
+							total: 8,
+							status: 'running',
+						},
+					},
+				};
+			}
+			return {
+				success: true,
+				message: 'Settings updated successfully.',
+			};
+		} );
+
+		render( <PreloadSettings /> );
+
+		const resumeButton = await screen.findByRole( 'button', {
+			name: /Resume Preload/i,
+		} );
+		fireEvent.click( resumeButton );
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith( 'preload_resume', {} );
+			expect(
+				screen.getByText( /Preload queue resumed/i )
+			).toBeInTheDocument();
+		} );
 	} );
 } );

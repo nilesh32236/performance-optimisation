@@ -102,11 +102,11 @@ class CacheSafePathTest extends \PHPUnit\Framework\TestCase {
 		parent::setUp();
 		\Brain\Monkey\setUp();
 		$this->register_common_function_stubs();
-		Util::clear_settings_cache();
-		// Reset host memos (canonical/normalized) alongside settings: stubs
-		// for home_url()/HTTP_HOST change per test and stale memos make the
-		// Cache constructor pin a previous test's domain.
-		Util::reset_cached_home_urls();
+		// Single entry point covering settings/home/canonical/normalized/
+		// permalink memos: stubs for home_url()/HTTP_HOST change per test
+		// and stale memos make the Cache constructor pin a previous test's
+		// domain.
+		Util::reset_runtime_caches();
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Test-only backup.
 		$this->server_backup['HTTP_HOST'] = isset( $_SERVER['HTTP_HOST'] ) ? $_SERVER['HTTP_HOST'] : null;
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Test-only backup.

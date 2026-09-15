@@ -220,9 +220,7 @@ trait WPPO_Test_Bootstrap {
 	protected function setUp(): void { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid
 		parent::setUp();
 		\Brain\Monkey\setUp();
-		\PerformanceOptimise\Inc\Util::reset_cached_home_urls();
-		\PerformanceOptimise\Inc\Util::clear_settings_cache();
-		\PerformanceOptimise\Inc\Util::clear_permalink_cache();
+		\PerformanceOptimise\Inc\Util::reset_runtime_caches();
 		if ( class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			\PerformanceOptimise\Inc\Image_Optimisation::clear_runtime_caches();
 		}

@@ -585,7 +585,12 @@ jobs:
             Do not guess future versions like 2.0.0 or 3.8.0.
 
   # ── 4. AUTO-MERGE ────────────────────────────────────────────────────────────
-  # Squash-merges and deletes the branch when "autofix:ready" label is added.
+  # Squash-merges and deletes the branch when "autofix:ready" label is added —
+  # but ONLY after every check run is green. Neither repo enables branch
+  # protection, so `gh pr merge --auto` would merge immediately regardless of
+  # CI state; this job therefore polls statusCheckRollup itself (up to ~20
+  # min) and performs a direct merge only on full green. Anything else is a
+  # warning (the hourly orchestrator / a later label event retries).
   auto-merge:
     name: Auto-Merge Approved PR
     if: |
@@ -593,20 +598,49 @@ jobs:
       github.event.action == 'labeled' &&
       github.event.label.name == 'autofix:ready'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
 
     steps:
-      - name: Squash merge PR
+      - name: Wait for green checks, then squash merge PR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER="${{ github.event.pull_request.number }}"
-          echo "Merging PR #${PR_NUMBER} (autofix:ready)..."
+          REPO="${{ github.repository }}"
+          ATTEMPTS=0
+          PENDING=1
+          FAILED=0
+          while [ "$ATTEMPTS" -lt 20 ]; do
+            # statusCheckRollup mixes CheckRuns ({name,status,conclusion}) and
+            # legacy StatusContexts ({context,state}): normalize both shapes.
+            READY=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json statusCheckRollup --jq '
+              [.statusCheckRollup[] |
+                if .__typename == "StatusContext" then
+                  {done: (.state != "PENDING"), bad: (.state == "FAILURE" or .state == "ERROR")}
+                else
+                  {done: (.status == "COMPLETED"), bad: (.conclusion as $c | $c != null and (["SUCCESS","SKIPPED","NEUTRAL"] | index($c) | not))}
+                end] |
+              {pending: ([.[] | select(.done | not)] | length), failed: ([.[] | select(.bad)] | length)}')
+            PENDING=$(printf '%s' "$READY" | jq -r .pending)
+            FAILED=$(printf '%s' "$READY" | jq -r .failed)
+            if [ "$PENDING" -eq 0 ]; then break; fi
+            ATTEMPTS=$((ATTEMPTS + 1))
+            echo "Waiting for $PENDING check(s)... (attempt $ATTEMPTS/20)"
+            sleep 60
+          done
+          if [ "$PENDING" -ne 0 ]; then
+            echo "::warning::Auto-merge skipped — PR #${PR_NUMBER} still has $PENDING pending check(s) after ~20 min"
+            exit 0
+          fi
+          if [ "$FAILED" -ne 0 ]; then
+            echo "::warning::Auto-merge blocked — PR #${PR_NUMBER} has $FAILED failing check(s)"
+            exit 0
+          fi
+          echo "All checks green — merging PR #${PR_NUMBER} (autofix:ready)..."
           gh pr merge "$PR_NUMBER" \
-            --repo "${{ github.repository }}" \
+            --repo "$REPO" \
             --squash \
-            --delete-branch \
-            --auto || {
+            --delete-branch || {
             echo "::warning::Auto-merge failed — PR #${PR_NUMBER} may need manual merge"
           }
 

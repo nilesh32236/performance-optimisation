@@ -20,6 +20,34 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	const fallbackTimers = new Set();
 
 	/**
+	 * Extract a safe log message from an error without leaking response
+	 * bodies. Server error objects can embed settings/status payloads and
+	 * console output persists for any extension/devtools user, so only the
+	 * message is logged, never the full error object. Mirrors
+	 * getErrorLogMessage() in src/lib/apiRequest.js; kept local so this
+	 * entry stays standalone (no SPA bundle coupling).
+	 *
+	 * @param {*} error Caught error value.
+	 * @return {string} Safe message string.
+	 */
+	const getErrorLogMessage = ( error ) => {
+		if ( error instanceof Error ) {
+			return error.message || 'Unknown error';
+		}
+		if ( 'string' === typeof error ) {
+			return error.slice( 0, 500 ) || 'Unknown error';
+		}
+		if ( error === null || 'undefined' === typeof error ) {
+			return 'Unknown error';
+		}
+		try {
+			return String( error ).slice( 0, 500 );
+		} catch {
+			return 'Unknown error';
+		}
+	};
+
+	/**
 	 * Shared helper for POST JSON requests.
 	 *
 	 * @param {string}  endpointPath The endpoint path.
@@ -80,7 +108,10 @@ document.addEventListener( 'DOMContentLoaded', function () {
 				} );
 			} )
 			.catch( ( error ) => {
-				console.error( `Error calling ${ endpointPath }: `, error );
+				console.error(
+					`Error calling ${ endpointPath }: `,
+					getErrorLogMessage( error )
+				);
 				throw error;
 			} );
 	};
@@ -126,7 +157,10 @@ document.addEventListener( 'DOMContentLoaded', function () {
 				return false;
 			} )
 			.catch( ( error ) => {
-				console.error( 'Failed to refresh nonce:', error );
+				console.error(
+					'Failed to refresh nonce:',
+					getErrorLogMessage( error )
+				);
 				return false;
 			} );
 
@@ -279,7 +313,10 @@ document.addEventListener( 'DOMContentLoaded', function () {
 					}
 				} )
 				.catch( ( error ) => {
-					console.error( 'Cache clear failed: ', error );
+					console.error(
+						'Cache clear failed: ',
+						getErrorLogMessage( error )
+					);
 					showNotice(
 						getNoticeString(
 							'clearRetry',
@@ -338,7 +375,10 @@ document.addEventListener( 'DOMContentLoaded', function () {
 					}
 				} )
 				.catch( ( error ) => {
-					console.error( 'Page cache clear failed: ', error );
+					console.error(
+						'Page cache clear failed: ',
+						getErrorLogMessage( error )
+					);
 					showNotice(
 						getNoticeString(
 							'pageRetry',

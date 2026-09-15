@@ -7,7 +7,7 @@ import {
 	useCallback,
 } from '@wordpress/element';
 import { handleChange } from '../lib/util';
-import { apiCall } from '../lib/apiRequest';
+import { apiCall, isValidScanUrl, runPerformanceScan } from '../lib/apiRequest';
 import { modeLabel } from '../lib/litespeed';
 import useNotice from '../lib/useNotice';
 import useUnsavedChanges from '../lib/useUnsavedChanges';
@@ -207,6 +207,307 @@ const FileOptimization = ( {
 		notify: notifyPurge,
 		dismiss: dismissPurge,
 	} = useNotice();
+	// Sandbox preview (issue #1163): visitor-safe admin preview of
+	// delay/defer/combine with one-click promote/discard + in-preview perf test.
+	const [ sandboxStaged, setSandboxStaged ] = useState( null );
+	const [ sandboxPreviewUrl, setSandboxPreviewUrl ] = useState( '' );
+	const [ sandboxBusy, setSandboxBusy ] = useState( false );
+	const {
+		notice: sandboxNotice,
+		notify: notifySandbox,
+		dismiss: dismissSandbox,
+	} = useNotice();
+	// Newline-delimited excludes: sanitize/process_urls normalization can
+	// produce arrays, so join them instead of clearing to empty string.
+	const toExcludeLines = ( value ) => {
+		if ( typeof value === 'string' ) {
+			return value;
+		}
+		if ( Array.isArray( value ) ) {
+			return value.join( '\n' );
+		}
+		return '';
+	};
+	const buildStagedFromForm = () => ( {
+		delayJS: !! settings.delayJS,
+		deferJS: !! settings.deferJS,
+		combineCSS: !! settings.combineCSS,
+		// Staging must mirror what the preview renderer consumes:
+		// safe_minify_js reads delayJSExternalOnly and minifyInlineJS from
+		// the effective slice, so omitting them would silently drop the
+		// toggles from the admin preview.
+		delayJSExternalOnly: !! settings.delayJSExternalOnly,
+		minifyInlineJS: !! settings.minifyInlineJS,
+		excludeDelayJS: toExcludeLines( settings.excludeDelayJS ),
+		excludeDeferJS: toExcludeLines( settings.excludeDeferJS ),
+		excludeCombineCSS: toExcludeLines( settings.excludeCombineCSS ),
+	} );
+	// Hydrate sandbox state when the Scripts tab opens so a staged
+	// experiment from a prior session is visible without re-staging.
+	useEffect( () => {
+		if ( activeSubTab !== 'scripts' ) {
+			return;
+		}
+		let cancelled = false;
+		( async () => {
+			try {
+				const status = await apiCall( 'sandbox_preview', {}, 'GET' );
+				if (
+					cancelled ||
+					! status ||
+					! status.success ||
+					! status.data
+				) {
+					return;
+				}
+				if (
+					status.data.staged &&
+					typeof status.data.staged === 'object'
+				) {
+					setSandboxStaged( status.data.staged );
+				}
+				if ( status.data.preview_url ) {
+					setSandboxPreviewUrl( status.data.preview_url );
+				}
+			} catch {
+				// Best-effort: the stage/promote/discard controls still work
+				// without prior status.
+			}
+		} )();
+		return () => {
+			cancelled = true;
+		};
+	}, [ activeSubTab ] );
+	// Server-side scans run unauthenticated, so they can never carry the
+	// admin preview session: strip the preview query args and scan the
+	// plain production URL instead of implying a staged measurement.
+	//
+	// Only absolute http(s) URLs are accepted: relative paths, protocol-
+	// relative values and non-http(s) schemes (javascript:, data:, …)
+	// return '' so callers can abort instead of forwarding a tampered
+	// server-provided preview_url to the resource-intensive scan endpoint.
+	// Server-side host allowlisting + rate limiting remains authoritative.
+	const stripPreviewParams = ( url ) => {
+		if ( ! url || typeof url !== 'string' ) {
+			return '';
+		}
+		try {
+			const parsed = new URL( url );
+			if ( 'http:' !== parsed.protocol && 'https:' !== parsed.protocol ) {
+				return '';
+			}
+			parsed.searchParams.delete( 'wppo_preview' );
+			parsed.searchParams.delete( '_wppo_preview_nonce' );
+			return parsed.toString();
+		} catch {
+			return '';
+		}
+	};
+	/**
+	 * Whether a URL is safe to render as an external link href (http(s) only).
+	 *
+	 * Mirrors the isHttpUrl gate in LlmsPanel: a tampered server-provided
+	 * preview_url such as javascript:alert(1) must never reach <a href>.
+	 *
+	 * @since NEXT
+	 * @param {string} url Raw URL.
+	 * @return {boolean} True when the URL parses as http(s).
+	 */
+	const isSafePreviewUrl = ( url ) => {
+		if ( ! url || typeof url !== 'string' ) {
+			return false;
+		}
+		try {
+			const parsed = new URL( url );
+			return 'http:' === parsed.protocol || 'https:' === parsed.protocol;
+		} catch {
+			return false;
+		}
+	};
+	const handleSandboxSave = async () => {
+		setSandboxBusy( true );
+		try {
+			const res = await apiCall( 'sandbox_save', {
+				settings: buildStagedFromForm(),
+			} );
+			if ( res && res.success ) {
+				setSandboxStaged( res.data ? res.data.staged || {} : {} );
+				try {
+					const status = await apiCall(
+						'sandbox_preview',
+						{},
+						'GET'
+					);
+					if ( status && status.success && status.data ) {
+						setSandboxPreviewUrl( status.data.preview_url || '' );
+					}
+				} catch {
+					// Preview link is best-effort; staged state above is enough.
+				}
+				notifySandbox( {
+					type: 'success',
+					message: __(
+						'Preview staged. Open the preview link as admin — visitors still see production markup.',
+						'performance-optimisation'
+					),
+				} );
+			} else {
+				notifySandbox( {
+					type: 'error',
+					message: __(
+						'Could not stage the preview.',
+						'performance-optimisation'
+					),
+				} );
+			}
+		} catch {
+			notifySandbox( {
+				type: 'error',
+				message: __(
+					'Could not stage the preview.',
+					'performance-optimisation'
+				),
+			} );
+		} finally {
+			setSandboxBusy( false );
+		}
+	};
+	const handleSandboxPromote = async () => {
+		setSandboxBusy( true );
+		try {
+			const res = await apiCall( 'sandbox_promote', {} );
+			if ( res && res.success ) {
+				// Sync the production baseline so the form reflects the
+				// promoted values: prefer the production slice returned by
+				// the endpoint, falling back to the last staged values.
+				const promotedSlice =
+					res.data &&
+					typeof res.data === 'object' &&
+					res.data.file_optimisation &&
+					typeof res.data.file_optimisation === 'object'
+						? res.data.file_optimisation
+						: sandboxStaged;
+				if ( promotedSlice && typeof promotedSlice === 'object' ) {
+					const synced = { ...promotedSlice };
+					setSettings( ( prev ) => ( { ...prev, ...synced } ) );
+					setBaseline( ( prev ) => ( { ...prev, ...synced } ) );
+				}
+				setSandboxStaged( {} );
+				setSandboxPreviewUrl( '' );
+				notifySandbox( {
+					type: 'success',
+					message: __(
+						'Preview promoted to production.',
+						'performance-optimisation'
+					),
+				} );
+			} else {
+				notifySandbox( {
+					type: 'error',
+					// The REST envelope is { data, success, message }: data
+					// is null on failure (or an object on validation-style
+					// failures), so prefer the string message to avoid
+					// rendering [object Object].
+					message:
+						( res &&
+							typeof res.message === 'string' &&
+							res.message ) ||
+						__( 'Could not promote.', 'performance-optimisation' ),
+				} );
+			}
+		} catch {
+			notifySandbox( {
+				type: 'error',
+				message: __( 'Could not promote.', 'performance-optimisation' ),
+			} );
+		} finally {
+			setSandboxBusy( false );
+		}
+	};
+	const handleSandboxDiscard = async () => {
+		setSandboxBusy( true );
+		try {
+			const res = await apiCall( 'sandbox_discard', {} );
+			if ( res && res.success ) {
+				setSandboxStaged( {} );
+				// Clear the stale preview link (its nonce and staged values
+				// no longer exist) so it cannot be reopened.
+				setSandboxPreviewUrl( '' );
+				notifySandbox( {
+					type: 'success',
+					message: __(
+						'Preview discarded. Production settings unchanged.',
+						'performance-optimisation'
+					),
+				} );
+			} else {
+				notifySandbox( {
+					type: 'error',
+					message: __(
+						'Could not discard.',
+						'performance-optimisation'
+					),
+				} );
+			}
+		} catch {
+			notifySandbox( {
+				type: 'error',
+				message: __( 'Could not discard.', 'performance-optimisation' ),
+			} );
+		} finally {
+			setSandboxBusy( false );
+		}
+	};
+	const handleSandboxPerfTest = async () => {
+		if ( ! sandboxPreviewUrl ) {
+			return;
+		}
+		// Route through the shared validated wrapper: isValidScanUrl enforces
+		// an absolute same-origin http(s) URL before the resource-intensive
+		// performance_scan endpoint is hit. A tampered preview_url (or a
+		// javascript:/data: value) is rejected client-side instead of being
+		// forwarded; server-side allowlisting + rate limiting stays
+		// authoritative.
+		const scanUrl = stripPreviewParams( sandboxPreviewUrl );
+		if ( ! isValidScanUrl( scanUrl ) ) {
+			notifySandbox( {
+				type: 'error',
+				message: __(
+					'Perf test blocked: the preview URL is not a valid same-origin http(s) URL.',
+					'performance-optimisation'
+				),
+			} );
+			return;
+		}
+		setSandboxBusy( true );
+		try {
+			const res = await runPerformanceScan( scanUrl );
+			if ( res && res.success ) {
+				notifySandbox( {
+					type: 'success',
+					message: __(
+						'Perf test finished on the production URL. Server-side scans cannot use the admin preview session, so staged settings were not measured — open the admin preview link to verify visually.',
+						'performance-optimisation'
+					),
+				} );
+			} else {
+				notifySandbox( {
+					type: 'error',
+					message: __(
+						'Perf test failed.',
+						'performance-optimisation'
+					),
+				} );
+			}
+		} catch {
+			notifySandbox( {
+				type: 'error',
+				message: __( 'Perf test failed.', 'performance-optimisation' ),
+			} );
+		} finally {
+			setSandboxBusy( false );
+		}
+	};
 	const { setIsDirty } = useContext( UnsavedChangesContext );
 	const [ baseline, setBaseline ] = useState( defaultSettings );
 	// Baseline is intentionally derived per-key (not per-object-identity)
@@ -1573,6 +1874,118 @@ const FileOptimization = ( {
 										) }
 									/>
 								) }
+								<div className="wppo-field wppo-sandbox-preview">
+									<p className="wppo-field-label">
+										{ __(
+											'Sandbox preview — test Delay / Defer / Combine safely',
+											'performance-optimisation'
+										) }
+									</p>
+									<p className="wppo-field-description">
+										{ __(
+											'Stage the current Delay, Defer and Combine settings, preview them as admin via a no-cache link (visitors keep production markup), then promote or discard. The perf test below always measures the production URL; staged settings are verified visually via the admin preview link.',
+											'performance-optimisation'
+										) }
+									</p>
+									{ sandboxNotice && (
+										<NoticeBanner
+											type={ sandboxNotice.type }
+											message={ sandboxNotice.message }
+											onDismiss={ dismissSandbox }
+										/>
+									) }
+									<div className="wppo-sandbox-actions">
+										<button
+											type="button"
+											className="button button-secondary"
+											onClick={ handleSandboxSave }
+											disabled={ sandboxBusy }
+										>
+											{ __(
+												'Stage preview',
+												'performance-optimisation'
+											) }
+										</button>
+										{ sandboxPreviewUrl &&
+											( isSafePreviewUrl(
+												sandboxPreviewUrl
+											) ? (
+												<a
+													className="button button-secondary"
+													href={ sandboxPreviewUrl }
+													target="_blank"
+													rel="noopener noreferrer"
+												>
+													{ __(
+														'Open admin preview',
+														'performance-optimisation'
+													) }
+												</a>
+											) : (
+												<span
+													className="button button-secondary"
+													aria-disabled="true"
+												>
+													{ __(
+														'Open admin preview',
+														'performance-optimisation'
+													) }
+												</span>
+											) ) }
+										<button
+											type="button"
+											className="button button-secondary"
+											onClick={ handleSandboxPerfTest }
+											disabled={
+												sandboxBusy ||
+												! sandboxPreviewUrl
+											}
+										>
+											{ __(
+												'Run perf test (production URL)',
+												'performance-optimisation'
+											) }
+										</button>
+										<button
+											type="button"
+											className="button button-primary"
+											onClick={ handleSandboxPromote }
+											disabled={ sandboxBusy }
+										>
+											{ __(
+												'Promote',
+												'performance-optimisation'
+											) }
+										</button>
+										<button
+											type="button"
+											className="button button-secondary"
+											onClick={ handleSandboxDiscard }
+											disabled={ sandboxBusy }
+										>
+											{ __(
+												'Discard',
+												'performance-optimisation'
+											) }
+										</button>
+									</div>
+									{ sandboxStaged &&
+										Object.keys( sandboxStaged ).length >
+											0 && (
+											<p className="wppo-field-description">
+												{ __(
+													'A staged preview exists. Visitors still see production markup.',
+													'performance-optimisation'
+												) }
+											</p>
+										) }
+									<p className="wppo-field-description">
+										{ __(
+											'Perf tests run server-side without your admin session, so they always measure the production URL — staged settings are previewed visually via the admin link above, not via the perf test.',
+											'performance-optimisation'
+										) }
+									</p>
+								</div>
 								{ notice && (
 									<NoticeBanner
 										type={ notice.type }

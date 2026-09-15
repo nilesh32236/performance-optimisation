@@ -130,6 +130,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			'wppo_object_cache_circuit_dismissed',     // Object_Cache::CIRCUIT_DISMISSED_OPTION.
 			'wppo_used_css_last_full_regen',           // Used_CSS::LAST_FULL_REGEN_OPTION (issue #1107).
 			'wppo_settings_snapshot',                  // Single prior wppo_settings copy for one-click undo (issue #1144).
+			'wppo_preload_queue',                      // Resumable sitemap preload queue (issue #1162).
 		);
 
 		/**
@@ -290,6 +291,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'wooSafeMode'         => true,
 					'stampedeGuard'       => true,
 					'stampedeLockTtl'     => 5,
+					'cacheMaxSizeMB'      => 512,
+					'cacheSizeWarnRatio'  => 0.8,
+					'cacheSizeEnforce'    => true,
 				),
 				'file_optimisation'     => array(
 					'enableServerRules'            => false,
@@ -305,6 +309,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'ccssSafelistExtra'            => '',
 					'ccssRumPriority'              => true,
 					'usedCssRumPriority'           => true,
+					'ccssQueueCap'                 => 5,
+					'usedCssQueueCap'              => 50,
+					'ccssViewportVariants'         => false,
 					'hostGoogleFontsLocally'       => false,
 					'blockAssetsOnDemand'          => function_exists( 'wp_load_classic_theme_block_styles_on_demand' ),
 					'loadAllCoreBlockAssets'       => false,
@@ -327,6 +334,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'delayJS'                      => false,
 					'delayJSSafeMode'              => true,
 					'safeMode'                     => false,
+					'sandboxStaged'                => array(),
 					'combineCSS'                   => false,
 					'excludeJS'                    => '',
 					'excludeCSS'                   => '',
@@ -1283,11 +1291,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Resets the home_url static cache for testing isolation.
 		 *
+		 * Also clears the canonical-host and normalized-host memos, which
+		 * are host-related state derived from the same stubs.
+		 *
 		 * @since 2.0.0
 		 */
 		public static function reset_cached_home_urls(): void {
-			self::$home_url_cache       = array();
-			self::$canonical_host_cache = array();
+			self::$home_url_cache        = array();
+			self::$canonical_host_cache  = array();
+			self::$normalized_host_cache = array();
+		}
+
+		/**
+		 * Resets all Util runtime memos (test-isolation entry point).
+		 *
+		 * Covers settings, home, canonical-host, normalized-host, and
+		 * permalink memos. Prefer this over calling the individual
+		 * resetters so future memos are not silently missed by test
+		 * setUp() methods.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_runtime_caches(): void {
+			self::reset_cached_home_urls();
+			self::clear_settings_cache();
+			self::clear_permalink_cache();
 		}
 
 		/**

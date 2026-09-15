@@ -62,9 +62,7 @@ class CcssSafelistChecksumTest extends \PHPUnit\Framework\TestCase {
 		parent::setUp();
 		\Brain\Monkey\setUp();
 		$this->register_common_function_stubs();
-		Util::reset_cached_home_urls();
-		Util::clear_settings_cache();
-		Util::clear_permalink_cache();
+		Util::reset_runtime_caches();
 		if ( class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			\PerformanceOptimise\Inc\Critical_CSS::reset_ccss_memo();
 		}

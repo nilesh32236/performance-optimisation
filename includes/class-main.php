@@ -396,6 +396,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['file_optimisation']['safeMode'] ) ) {
 				$this->options['file_optimisation']['safeMode'] = false;
 			}
+			// Sandbox preview staged values (issue #1163): additive key,
+			// defaults to empty so existing installs keep current behaviour.
+			// In-memory only here (no front-end DB write).
+			if ( ! isset( $this->options['file_optimisation']['sandboxStaged'] ) || ! is_array( $this->options['file_optimisation']['sandboxStaged'] ) ) {
+				$this->options['file_optimisation']['sandboxStaged'] = array();
+			}
 			// Font subsetting opt-in (issue #1145): additive keys, off by
 			// default so existing installs keep full-unicode behavior.
 			// In-memory only here (no front-end DB write).
@@ -495,6 +501,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// current extraction behaviour verbatim (fail-open).
 			if ( ! isset( $this->options['file_optimisation']['ccssSafelistExtra'] ) ) {
 				$this->options['file_optimisation']['ccssSafelistExtra'] = '';
+			}
+			// Existing installs whose stored settings predate the RUM-weighted
+			// CSS queue keys (issue #1164) inherit the defaults in-memory here
+			// (no database write on front-end requests); the persisted values
+			// are backfilled once by maybe_migrate_css_queue_defaults() on
+			// admin_init. Defaults keep current behaviour verbatim except the
+			// bounded per-run caps (fail-open to uncapped on invalid values).
+			if ( ! isset( $this->options['file_optimisation']['ccssQueueCap'] ) ) {
+				$this->options['file_optimisation']['ccssQueueCap'] = 5;
+			}
+			if ( ! isset( $this->options['file_optimisation']['usedCssQueueCap'] ) ) {
+				$this->options['file_optimisation']['usedCssQueueCap'] = 50;
+			}
+			if ( ! isset( $this->options['file_optimisation']['ccssViewportVariants'] ) ) {
+				$this->options['file_optimisation']['ccssViewportVariants'] = false;
 			}
 
 			$this->includes();
@@ -753,7 +774,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'admin_init', array( $this, 'maybe_migrate_block_assets_setting' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_ccss_max_size' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_ccss_safelist' ) );
+			add_action( 'admin_init', array( $this, 'maybe_migrate_css_queue_defaults' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_safe_mode' ) );
+			add_action( 'admin_init', array( $this, 'maybe_migrate_sandbox_preview' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_image_alt_edge_defaults' ) );
 			// One-time activity-log notice on admin_init.
 			if ( isset( $this->options['file_optimisation']['removeQueryStrings'] ) ) {
@@ -764,6 +787,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'wp_logout', array( $this, 'clear_role_hash_cookie' ) );
 			add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
 			add_action( 'wp_enqueue_scripts', array( $this, 'apply_module_loading_strategies' ), 10000 );
+			// Sandbox preview (issue #1163): visitor-safe admin preview honoring
+			// DONOTCACHEPAGE. Runs early so Cache::is_not_cacheable() sees it.
+			if ( class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
+				add_action( 'template_redirect', array( 'PerformanceOptimise\Inc\Sandbox_Preview', 'enforce_no_cache' ), 1 );
+			}
 			// Unified safe-mode kill switch (issue #1098): one-click recovery
 			// that preserves delayJS/deferJS/removeUnusedCSS settings. Effective
 			// flags gate hook registration so safe mode disables all three
@@ -772,7 +800,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$safe_mode_off = ! self::is_safe_mode_active( $this->options['file_optimisation'] ?? array() );
 			$has_delay_js  = ! empty( $this->options['file_optimisation']['delayJS'] ) && $safe_mode_off;
 			$has_defer_js  = ! empty( $this->options['file_optimisation']['deferJS'] ) && $safe_mode_off;
-			$wp_version    = (string) ( $GLOBALS['wp_version'] ?? get_bloginfo( 'version' ) );
+			// Sandbox preview widens hook registration for the preview admin
+			// only: when staged values enable delay/defer, register the same
+			// filters so the preview renders experimental output while
+			// visitors (is_preview_request() false) keep production markup
+			// via the per-tag guards below. Staged presence is read WITHOUT the
+			// capability/nonce gate: setup_hooks() runs at plugin-file load
+			// before pluggable/auth resolve, when is_preview_request() always
+			// returns false — snapshotting it here would never register hooks
+			// for a preview-enable (production off, staged on) request.
+			// Enforcement stays in the late per-tag/render-time guards.
+			$staged_for_registration = array();
+			if ( class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_staged_settings' ) ) {
+				try {
+					$staged_for_registration = Sandbox_Preview::get_staged_settings();
+					if ( ! is_array( $staged_for_registration ) ) {
+						$staged_for_registration = array();
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$staged_for_registration = array();
+				}
+			}
+			// Staged defer for the per-page kill-switch registration below.
+			$staged_defer_js = ! empty( $staged_for_registration['deferJS'] );
+			if ( ! empty( $staged_for_registration['delayJS'] ) ) {
+				$has_delay_js = true;
+			}
+			if ( $staged_defer_js ) {
+				$has_defer_js = true;
+			}
+			$wp_version = (string) ( $GLOBALS['wp_version'] ?? get_bloginfo( 'version' ) );
 			// The native 'strategy' script data added via wp_script_add_data() is only
 			// honoured by core since WP 6.3, so the native defer path is gated to 6.3+
 			// and older core (WP 6.2) uses the legacy script_loader_tag fallback.
@@ -786,7 +844,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			// Delay JS: the script_loader_tag filter performs the wppo-src/type rewriting
 			// on every supported version, so it is always registered when delay JS is on.
-			if ( $has_delay_js || ! empty( $this->options['file_optimisation']['deferJS'] ) ) {
+			// Sandbox preview (issue #1163): the per-page kill-switch hook sets
+			// both delay_disabled_for_page and defer_disabled_for_page, so the
+			// second disjunct also honors staged defer — otherwise a
+			// staged-defer-only preview would defer even on kill-switched pages.
+			if ( $has_delay_js || ! empty( $this->options['file_optimisation']['deferJS'] ) || $staged_defer_js ) {
 				add_action( 'wp', array( $this, 'apply_per_page_delay_config' ) );
 			}
 			if ( $has_delay_js ) {
@@ -918,7 +980,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// site or pre-clear state are re-verified (audit #888 finding 7).
 			add_action( 'switch_blog', array( 'PerformanceOptimise\Inc\Image_Optimisation', 'clear_runtime_caches' ) );
 			add_action( 'wppo_after_cache_clear', array( 'PerformanceOptimise\Inc\Image_Optimisation', 'clear_runtime_caches' ) );
-			if ( ! empty( $this->options['file_optimisation']['combineCSS'] ) ) {
+			$combine_for_registration = ! empty( $this->options['file_optimisation']['combineCSS'] );
+			if ( ! $combine_for_registration && ! empty( $staged_for_registration['combineCSS'] ) ) {
+				$combine_for_registration = true;
+			}
+			if ( $combine_for_registration ) {
 				// TODO(#624): when WP 7.2 removes concatenation in favour of preloads,
 				// reassess whether combine_css() should defer to core preload emission
 				// or become an opt-in legacy toggle. No runtime change until then.
@@ -1062,6 +1128,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// wppo_defer_js_preset_exclusions. Preserves user excludes via
 				// array_unique merge.
 				$this->exclude_defer_js = array_values( array_unique( array_merge( $this->exclude_defer_js, self::get_defer_js_preset_exclusions() ) ) );
+				// Sandbox preview (issue #1163): staged excludeDeferJS lines also
+				// suppress defer in preview only. Fail-open: matcher errors keep
+				// the production list. Staged presence (no auth gate) widens the
+				// list at registration; the per-tag guards enforce preview-only.
+				if ( ! empty( $staged_for_registration['excludeDeferJS'] ) ) {
+					try {
+						$staged_defer_excludes  = Util::process_urls( $staged_for_registration['excludeDeferJS'] );
+						$this->exclude_defer_js = array_values( array_unique( array_merge( $this->exclude_defer_js, (array) $staged_defer_excludes ) ) );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
 				if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_exclude_defer_js' ) ) {
 					try {
 						$this->exclude_defer_js = (array) apply_filters( 'wppo_exclude_defer_js', $this->exclude_defer_js );
@@ -1097,6 +1175,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// apply_per_page_delay_config() skip deferred scripts entirely.
 				if ( ! empty( $this->options['file_optimisation']['deferJS'] ) ) {
 					$this->exclude_delay_js = array_merge( $this->exclude_delay_js, $this->exclude_defer_js );
+				}
+				// Sandbox preview (issue #1163): staged excludeDelayJS lines also
+				// suppress the external-script delay rewrite in preview only
+				// (the inline path is overlaid in Minify\HTML). Fail-open.
+				// Staged presence (no auth gate) widens the list at
+				// registration; the per-tag guards enforce preview-only.
+				if ( ! empty( $staged_for_registration['excludeDelayJS'] ) ) {
+					try {
+						$staged_delay_excludes  = Util::process_urls( $staged_for_registration['excludeDelayJS'] );
+						$this->exclude_delay_js = array_values( array_unique( array_merge( $this->exclude_delay_js, (array) $staged_delay_excludes ) ) );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
 				}
 
 				$this->exclude_delay_js = apply_filters( 'wppo_exclude_delay_js', $this->exclude_delay_js );
@@ -1201,6 +1292,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'update_option_siteurl', array( __CLASS__, 'on_site_url_change' ), 10, 3 );
 			add_action( 'activated_plugin', array( __CLASS__, 'clear_all_cache' ) );
 			add_action( 'deactivated_plugin', array( __CLASS__, 'clear_all_cache' ) );
+			// Bounded-cache stability (issue #1162): any plugin/theme update
+			// auto-purges minify output + page cache so layout never goes
+			// stale. Fail-open via on_extension_update(); builder-specific
+			// purges stay in Builder_Purge_Watcher.
+			add_action( 'upgrader_process_complete', array( __CLASS__, 'on_extension_update' ), 20, 2 );
 
 			add_action( 'wp_ajax_wppo_get_nonce', array( $rest, 'ajax_get_nonce' ) );
 
@@ -1409,6 +1505,66 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * One-time backfill for the RUM-weighted CSS queue keys (issue #1164).
+		 *
+		 * Runs on `admin_init` (not the constructor) so a cacheable front-end
+		 * request never triggers a settings write. Only installs whose stored
+		 * settings predate any of the `ccssQueueCap` / `usedCssQueueCap` /
+		 * `ccssViewportVariants` keys (key absent) are backfilled with the
+		 * fail-open defaults; any stored explicit value is preserved verbatim,
+		 * and fresh installs with no stored option are skipped because the
+		 * constructor defaults already match. The check is idempotent (key
+		 * presence is the marker), so no extra option row is needed.
+		 * In-memory options are synced too so the current request observes the
+		 * backfilled values. Uses per-site `get_option()` so multisite sites
+		 * migrate independently with no cross-site leakage.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public function maybe_migrate_css_queue_defaults(): void {
+			// allowlist(settings-read-guard): deliberate direct read — must distinguish
+			// "no stored row" (false) from "stored array", which Util::get_settings()
+			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
+			$stored = get_option( 'wppo_settings' );
+			if ( ! is_array( $stored ) ) {
+				return;
+			}
+
+			$file = isset( $stored['file_optimisation'] ) && is_array( $stored['file_optimisation'] ) ? $stored['file_optimisation'] : array();
+
+			$defaults = array(
+				'ccssQueueCap'         => 5,
+				'usedCssQueueCap'      => 50,
+				'ccssViewportVariants' => false,
+			);
+			$changed  = false;
+			foreach ( $defaults as $key => $default ) {
+				if ( ! array_key_exists( $key, $file ) ) {
+					$file[ $key ] = $default;
+					$changed      = true;
+				}
+			}
+			if ( ! $changed ) {
+				return;
+			}
+
+			$stored['file_optimisation'] = $file;
+			update_option( 'wppo_settings', $stored );
+
+			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
+				$this->options['file_optimisation'] = array();
+			}
+			foreach ( $defaults as $key => $default ) {
+				if ( ! array_key_exists( $key, $this->options['file_optimisation'] ) ) {
+					$this->options['file_optimisation'][ $key ] = $default;
+				}
+			}
+
+			Log::add( __( 'Added default RUM-weighted CSS queue settings (capped per-run queue, single-variant behaviour kept).', 'performance-optimisation' ) );
+		}
+
+		/**
 		 * One-time backfill for the missing-alt autofill toggle and the
 		 * longest-edge downscale cap (issue #985).
 		 *
@@ -1503,6 +1659,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$this->options['file_optimisation'] = array();
 			}
 			$this->options['file_optimisation']['safeMode'] = false;
+		}
+
+		/**
+		 * Backfill the additive sandboxStaged key (issue #1163).
+		 *
+		 * Runs on admin_init; in-memory default is applied in __construct so
+		 * front-end requests never pay for a DB write.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public function maybe_migrate_sandbox_preview(): void {
+			// allowlist(settings-read-guard): deliberate direct read.
+			$stored = get_option( 'wppo_settings' );
+			if ( ! is_array( $stored ) ) {
+				return;
+			}
+			$file = isset( $stored['file_optimisation'] ) && is_array( $stored['file_optimisation'] ) ? $stored['file_optimisation'] : array();
+			if ( array_key_exists( 'sandboxStaged', $file ) ) {
+				return;
+			}
+			$stored['file_optimisation'] = $file + array( 'sandboxStaged' => array() );
+			update_option( 'wppo_settings', $stored );
+			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
+				$this->options['file_optimisation'] = array();
+			}
+			$this->options['file_optimisation']['sandboxStaged'] = array();
 		}
 
 		/**
@@ -1808,6 +1991,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		public static function clear_all_cache() {
 			Cache::clear_cache();
+		}
+
+		/**
+		 * Auto-purge minify + page cache after any plugin/theme update.
+		 *
+		 * Hooks `upgrader_process_complete` (priority 20, after the builder
+		 * watcher). Only fires for `action=update` + `type=plugin|theme`;
+		 * every other upgrade path (core, translation, install) is ignored.
+		 * Fail-open: purge failure degrades to the current manual-clear
+		 * behavior and is never fatal.
+		 *
+		 * @since NEXT
+		 * @param mixed $upgrader   Upgrader instance (unused).
+		 * @param mixed $hook_extra Update context (action/type/plugin/plugins/theme/themes).
+		 * @return void
+		 */
+		public static function on_extension_update( $upgrader = null, $hook_extra = null ): void {
+			unset( $upgrader );
+			try {
+				if ( ! is_array( $hook_extra ) ) {
+					return;
+				}
+				if ( 'update' !== ( $hook_extra['action'] ?? '' ) ) {
+					return;
+				}
+				if ( ! in_array( ( $hook_extra['type'] ?? '' ), array( 'plugin', 'theme' ), true ) ) {
+					return;
+				}
+				$has_target = ! empty( $hook_extra['plugin'] ) || ! empty( $hook_extra['plugins'] ) || ! empty( $hook_extra['theme'] ) || ! empty( $hook_extra['themes'] ) || ! empty( $hook_extra['bulk'] );
+				if ( ! $has_target ) {
+					return;
+				}
+				self::clear_all_cache();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 
 		/**
@@ -2898,6 +3117,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! function_exists( 'wp_script_modules' ) ) {
 				return;
 			}
+			if ( ! function_exists( 'wp_enqueue_script_module' ) ) {
+				return;
+			}
 			if ( ! class_exists( 'WP_Script_Modules' ) ) {
 				return;
 			}
@@ -2916,6 +3138,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( '' !== $raw ) {
 				$excluded = array_unique( array_merge( $excluded, Util::process_urls( $raw ) ) );
 			}
+			// Union the jQuery/commerce/builder preset explicitly: instances built
+			// without the setup_hooks() constructor path can miss the preset in
+			// $this->exclude_defer_js, but commerce/jQuery must stay excluded in
+			// both the classic and module paths. Fail-open append, multisite-safe,
+			// no option change.
+			//
+			// @since NEXT.
+			$excluded = array_unique( array_merge( $excluded, self::get_defer_js_preset_exclusions() ) );
 			if ( ! in_array( 'wppo-lazyload', $excluded, true ) ) {
 				$excluded[] = 'wppo-lazyload';
 			}
@@ -3198,12 +3428,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( has_filter( 'litespeed_can_optm' ) && ! apply_filters( 'litespeed_can_optm', true ) ) {
 				return;
 			}
-			if ( ! $this->should_optimise_for_logged_in() ) {
+			if ( ! $this->should_optimise_for_logged_in() && ! self::is_sandbox_preview_active() ) {
 				return;
 			}
 			// Safe-mode kill switch + nocache bypass (issue #1098): fail open
-			// to original scripts, settings preserved.
-			if ( self::is_safe_mode_active( $this->options['file_optimisation'] ?? array() ) || self::is_aggressive_bypass_active() ) {
+			// to original scripts, settings preserved. Sandbox preview
+			// (issue #1163) bypasses safe mode for preview admins only.
+			if ( self::is_aggressive_bypass_active() ) {
+				return;
+			}
+			if ( ! self::is_sandbox_preview_active() && self::is_safe_mode_active( $this->options['file_optimisation'] ?? array() ) ) {
 				return;
 			}
 			// Per-page defer kill-switch (#1098).
@@ -3211,7 +3445,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 
-			if ( empty( $this->options['file_optimisation']['deferJS'] ) ) {
+			$file_opt_for_defer = self::get_effective_file_optimisation( $this->options['file_optimisation'] ?? array() );
+			if ( empty( $file_opt_for_defer['deferJS'] ) ) {
 				return;
 			}
 
@@ -3224,7 +3459,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			foreach ( $wp_scripts->queue as $handle ) {
 				if ( ! in_array( $handle, $this->exclude_defer_js, true ) ) {
-					wp_script_add_data( $handle, 'strategy', 'defer' );
+					// Fill-gaps-only for the strategy itself (issue #1184): never
+					// overwrite an explicit async/defer strategy stamped by core,
+					// a theme, or another plugin — rewriting async to defer would
+					// change execution semantics. Core stores the strategy via
+					// wp_script_add_data( $handle, 'strategy', ... ), so read it
+					// back via WP_Scripts::get_data() (guarded; fail-open writes
+					// when the store is unreadable). Fetchpriority/in_footer below
+					// still apply to the already-deferred handle.
+					//
+					// @since NEXT.
+					$existing_strategy = method_exists( $wp_scripts, 'get_data' ) ? $wp_scripts->get_data( $handle, 'strategy' ) : false;
+					$has_strategy      = is_string( $existing_strategy ) && in_array( strtolower( trim( $existing_strategy ) ), array( 'async', 'defer' ), true );
+					if ( ! $has_strategy ) {
+						wp_script_add_data( $handle, 'strategy', 'defer' );
+					}
 					$this->deferred_handles[ $handle ] = true;
 					// Native fetchpriority on WP 6.9+ (Trac #61734); pre-6.9 is handled
 					// by the script_loader_tag regex fallback (add_fetchpriority_to_deferred).
@@ -3287,7 +3536,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						 * @param string $handle    Script handle.
 						 */
 						$in_footer = apply_filters( 'wppo_deferred_in_footer', true, $handle );
-						if ( $in_footer && 1 !== (int) $wp_scripts->get_data( $handle, 'group' ) ) {
+						$group     = method_exists( $wp_scripts, 'get_data' ) ? $wp_scripts->get_data( $handle, 'group' ) : false;
+						if ( $in_footer && 1 !== (int) $group ) {
 							wp_script_add_data( $handle, 'group', 1 );
 						}
 					}
@@ -3354,16 +3604,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( has_filter( 'litespeed_can_optm' ) && ! apply_filters( 'litespeed_can_optm', true ) ) {
 				return $tag;
 			}
-			if ( ! $this->should_optimise_for_logged_in() ) {
+			if ( ! $this->should_optimise_for_logged_in() && ! self::is_sandbox_preview_active() ) {
 				return $tag;
 			}
 			// Safe-mode kill switch + nocache bypass (issue #1098): fail open
 			// to original scripts, settings preserved for one-click recovery.
-			if ( self::is_safe_mode_active( $this->options['file_optimisation'] ?? array() ) || self::is_aggressive_bypass_active() ) {
+			// Sandbox preview (issue #1163): preview admins bypass safe mode
+			// so staged delay/defer renders; visitors still gate on safe mode.
+			// Aggressive bypass (?nocache) still applies in preview.
+			$file_opt_for_gate = self::get_effective_file_optimisation( $this->options['file_optimisation'] ?? array() );
+			if ( self::is_aggressive_bypass_active() ) {
+				return $tag;
+			}
+			if ( ! self::is_sandbox_preview_active() && self::is_safe_mode_active( $this->options['file_optimisation'] ?? array() ) ) {
 				return $tag;
 			}
 
-			if ( ! empty( $this->options['file_optimisation']['delayJS'] ) ) {
+			if ( ! empty( $file_opt_for_gate['delayJS'] ) ) {
 				// Woo / builder-context guardrail (#932): fail open to un-delayed
 				// scripts, never fatal. See is_delay_excluded_context().
 				if ( self::is_delay_excluded_context() || $this->is_delay_js_safe_context() ) {
@@ -3379,7 +3636,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// External-scripts-only mode (#966): leave inline scripts
 				// (no src attribute) untouched; only external handles delay.
 				// Anchored on whitespace so data-src=/wppo-src= don't match.
-				if ( ! empty( $this->options['file_optimisation']['delayJSExternalOnly'] ) ) {
+				if ( ! empty( $file_opt_for_gate['delayJSExternalOnly'] ) ) {
 					if ( ! preg_match( '/\ssrc\s*=/i', ' ' . (string) $tag ) ) {
 						return $tag;
 					}
@@ -3479,15 +3736,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( has_filter( 'litespeed_can_optm' ) && ! apply_filters( 'litespeed_can_optm', true ) ) {
 				return $tag;
 			}
-			if ( ! $this->should_optimise_for_logged_in() ) {
+			if ( ! $this->should_optimise_for_logged_in() && ! self::is_sandbox_preview_active() ) {
 				return $tag;
 			}
 			// Safe-mode kill switch + nocache bypass + per-page defer disable
-			// (issue #1098): fail open to original tag.
-			if ( self::is_safe_mode_active( $this->options['file_optimisation'] ?? array() ) || self::is_aggressive_bypass_active() ) {
+			// (issue #1098): fail open to original tag. Sandbox preview
+			// (issue #1163) bypasses safe mode for preview admins only.
+			if ( self::is_aggressive_bypass_active() ) {
+				return $tag;
+			}
+			if ( ! self::is_sandbox_preview_active() && self::is_safe_mode_active( $this->options['file_optimisation'] ?? array() ) ) {
 				return $tag;
 			}
 			if ( $this->defer_disabled_for_page || self::is_defer_disabled_for_page() ) {
+				return $tag;
+			}
+			// Sandbox preview (issue #1163): the legacy path is registered on the
+			// production flag, so gate on the effective (production + staged)
+			// deferJS flag like the native path does — a staged deferJS=off must
+			// disable defer in preview instead of deferring every tag.
+			$file_opt_for_legacy = self::get_effective_file_optimisation( $this->options['file_optimisation'] ?? array() );
+			if ( empty( $file_opt_for_legacy['deferJS'] ) ) {
 				return $tag;
 			}
 
@@ -4587,6 +4856,52 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		public function is_safe_mode_enabled(): bool {
 			return self::is_safe_mode_active( $this->options['file_optimisation'] ?? array() );
+		}
+
+		/**
+		 * Whether the current request is a valid sandbox asset-preview request.
+		 *
+		 * Delegates to Sandbox_Preview::is_preview_request() (admin-only query
+		 * param + nonce). Fail-open to false when the controller is missing.
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when experimental preview output may render.
+		 */
+		public static function is_sandbox_preview_active(): bool {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'is_preview_request' ) ) {
+					return (bool) Sandbox_Preview::is_preview_request();
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Effective file_optimisation slice for this request.
+		 *
+		 * Visitors get production unchanged; admin preview requests get
+		 * production overlaid with staged sandbox values. Fail-open to
+		 * production on any error.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $file_optimisation Production slice.
+		 * @return array Effective slice.
+		 */
+		public static function get_effective_file_optimisation( array $file_optimisation = array() ): array {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_effective_file_optimisation' ) ) {
+					return Sandbox_Preview::get_effective_file_optimisation( $file_optimisation );
+				}
+				return $file_optimisation;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $file_optimisation;
+			}
 		}
 
 		/**
@@ -7060,12 +7375,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 
-			if ( ! $this->should_optimise_for_logged_in() ) {
+			// Sandbox preview (issue #1163): the preview admin renders staged
+			// output even without logged-in cache enabled; visitors keep the
+			// production gate.
+			$is_preview = self::is_sandbox_preview_active();
+			if ( ! $this->should_optimise_for_logged_in() && ! $is_preview ) {
 				return;
 			}
 
 			// The combine feature owns the whole pipeline; let it handle these handles.
-			if ( ! empty( $this->options['file_optimisation']['combineCSS'] ) ) {
+			// In preview the staged combineCSS flag wins so the two pipelines
+			// cannot run on the same handles.
+			$file_opt_for_minify = $is_preview ? self::get_effective_file_optimisation( $this->options['file_optimisation'] ?? array() ) : ( $this->options['file_optimisation'] ?? array() );
+			if ( ! empty( $file_opt_for_minify['combineCSS'] ) ) {
 				return;
 			}
 
