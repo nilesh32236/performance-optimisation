@@ -310,8 +310,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 						}
 					}
 					// Unslash + sanitize raw cookie input before trusting it.
-					$cart_cookie = isset( $_COOKIE['woocommerce_items_in_cart'] ) ? sanitize_text_field( wp_unslash( $_COOKIE['woocommerce_items_in_cart'] ) ) : '';
-					$hash_cookie = isset( $_COOKIE['woocommerce_cart_hash'] ) ? sanitize_text_field( wp_unslash( $_COOKIE['woocommerce_cart_hash'] ) ) : '';
+					// is_string guards: an array-valued cookie would otherwise
+					// reach wp_unslash()/sanitize_text_field() as an array.
+					$cart_cookie = isset( $_COOKIE['woocommerce_items_in_cart'] ) && is_string( $_COOKIE['woocommerce_items_in_cart'] ) ? sanitize_text_field( wp_unslash( $_COOKIE['woocommerce_items_in_cart'] ) ) : '';
+					$hash_cookie = isset( $_COOKIE['woocommerce_cart_hash'] ) && is_string( $_COOKIE['woocommerce_cart_hash'] ) ? sanitize_text_field( wp_unslash( $_COOKIE['woocommerce_cart_hash'] ) ) : '';
 					if ( '' !== $cart_cookie || '' !== $hash_cookie ) {
 						return true;
 					}
@@ -1117,7 +1119,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 				Header_Emitter::emit_esi_tag( $action );
 			} elseif ( function_exists( 'headers_sent' ) && ! headers_sent() ) {
 				$cleaned = preg_replace( '/[\x00-\x1F\x7F]/', '', $action );
-				$safe    = substr( is_string( $cleaned ) ? $cleaned : '', 0, 1024 );
+				// Mirror Header_Emitter::sanitize_tag(): on preg_replace()
+				// failure (null) fall back to stripping CR/LF/NUL from the
+				// raw action instead of emitting an empty tag header.
+				if ( ! is_string( $cleaned ) ) {
+					$cleaned = str_replace( array( "\r", "\n", "\0" ), '', $action );
+				}
+				$safe = substr( $cleaned, 0, 1024 );
 				header( 'X-LiteSpeed-Tag: ESI.' . $safe, false );
 			}
 		}

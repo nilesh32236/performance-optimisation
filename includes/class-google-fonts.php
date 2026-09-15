@@ -536,11 +536,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 						$cached = $direct;
 					}
 				}
-				if ( ! is_string( $cached ) ) {
-					// Unreadable: fall through and regenerate below.
-				} elseif ( false === strpos( $cached, 'fonts.gstatic.com' ) ) {
+				if ( is_string( $cached ) && false === strpos( $cached, 'fonts.gstatic.com' ) ) {
 					return true;
 				}
+				// Otherwise fall through and regenerate below: an unreadable
+				// cache is treated as unconverged rather than converged, so
+				// remote URLs can never get stuck.
 			}
 
 			// Fetch CSS from Google Fonts API (out-of-band only).
@@ -642,8 +643,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			// gstatic fetches persistently fail, re-queueing every run would
 			// churn Action Scheduler forever (the failure sentinel backoff
 			// still applies to the next attempt).
-			if ( $succeeded > 0 && is_string( $css ) && false !== strpos( $css, 'fonts.gstatic.com' ) ) {
+			$has_remote = is_string( $css ) && false !== strpos( $css, 'fonts.gstatic.com' );
+			$retry_key  = Util::transient_key( 'wppo_gf_retry_' . $key );
+			if ( $has_remote && $succeeded > 0 ) {
+				// Progress was made: reset the zero-success retry budget and
+				// queue the follow-up run.
+				delete_transient( $retry_key );
 				$this->maybe_queue_download( $key, $url );
+			} elseif ( $has_remote ) {
+				// Zero-success stall guard: a run where every fetch failed
+				// schedules no follow-up above, and download_and_rewrite()
+				// short-circuits on file_exists() forever, leaving partial
+				// remote CSS until a manual clear. Re-queue with a bounded
+				// attempt counter so persistently failing hosts stop retrying.
+				$attempts = (int) get_transient( $retry_key );
+				if ( $attempts < 3 ) {
+					set_transient( $retry_key, $attempts + 1, DAY_IN_SECONDS );
+					$this->maybe_queue_download( $key, $url );
+				}
+			} else {
+				delete_transient( $retry_key );
 			}
 
 			return file_exists( $css_file );

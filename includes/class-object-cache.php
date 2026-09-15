@@ -759,17 +759,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * @return \Redis|\RedisCluster|\WP_Error
 		 */
 		private function connect_internal( $config ) {
-			if ( ! function_exists( 'wppo_redis_connect' ) ) {
-				$helper = defined( 'WPPO_PLUGIN_PATH' ) ? WPPO_PLUGIN_PATH . 'includes/redis-connect-helper.php' : '';
-				if ( '' === $helper || ! is_readable( $helper ) ) {
-					return new \WP_Error( 'missing_helper', __( 'The Redis connection helper is unavailable.', 'performance-optimisation' ) );
-				}
-				require_once $helper;
-			}
-			if ( ! function_exists( 'wppo_redis_connect' ) ) {
+			if ( ! self::ensure_redis_helper( 'wppo_redis_connect' ) ) {
 				return new \WP_Error( 'missing_helper', __( 'The Redis connection helper is unavailable.', 'performance-optimisation' ) );
 			}
 			return wppo_redis_connect( $config );
+		}
+
+		/**
+		 * Ensure the Redis connection helper file is loaded and a helper
+		 * function from it is available.
+		 *
+		 * Shared guard for connect_internal(), enable() and
+		 * get_serializer_support(): a missing WPPO_PLUGIN_PATH constant or
+		 * an unreadable/absent helper file returns false instead of
+		 * fataling on a bare require_once.
+		 *
+		 * @since NEXT
+		 * @param string $helper_function Helper function name that must exist after loading.
+		 * @return bool True when the helper function is available.
+		 */
+		private static function ensure_redis_helper( string $helper_function ): bool {
+			if ( function_exists( $helper_function ) ) {
+				return true;
+			}
+			$helper = defined( 'WPPO_PLUGIN_PATH' ) ? WPPO_PLUGIN_PATH . 'includes/redis-connect-helper.php' : '';
+			if ( '' !== $helper && is_readable( $helper ) ) {
+				require_once $helper;
+			}
+			return function_exists( $helper_function );
 		}
 
 		/**
@@ -784,7 +801,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			if ( function_exists( 'clearstatcache' ) ) {
 				clearstatcache( true, $path );
 			}
-			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- TOCTOU: file may vanish between is_readable() and filesize().
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.file_system_operations_filesize -- TOCTOU: file may vanish between is_readable() and filesize().
 			$size = @filesize( $path );
 			return $size;
 		}
@@ -927,8 +944,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 
 			// Format nodes as array for the config file if it's a string.
 			if ( ! empty( $config['nodes'] ) ) {
-				if ( ! function_exists( 'wppo_parse_nodes' ) ) {
-					require_once WPPO_PLUGIN_PATH . 'includes/redis-connect-helper.php';
+				if ( ! self::ensure_redis_helper( 'wppo_parse_nodes' ) ) {
+					return new \WP_Error( 'missing_helper', __( 'The Redis connection helper is unavailable.', 'performance-optimisation' ) );
 				}
 				$config['nodes'] = wppo_parse_nodes( $config['nodes'] );
 			}
@@ -1175,8 +1192,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			);
 
 			try {
-				if ( ! function_exists( 'wppo_resolve_redis_serializer' ) ) {
-					require_once WPPO_PLUGIN_PATH . 'includes/redis-connect-helper.php';
+				if ( ! self::ensure_redis_helper( 'wppo_resolve_redis_serializer' ) ) {
+					return $support;
 				}
 				if ( function_exists( 'wppo_resolve_redis_serializer' ) ) {
 					$resolved          = wppo_resolve_redis_serializer();

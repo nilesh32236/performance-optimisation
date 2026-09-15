@@ -669,8 +669,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * REMOTE_ADDR alone collapses all visitors behind a proxy/CDN edge
 		 * IP into one bucket. The left-most X-Forwarded-For entry (the
 		 * client-facing address added by the first proxy) separates those
-		 * buckets. Both halves are filter_var()-validated and REMOTE_ADDR
-		 * always stays in the key (no blind proxy trust: a spoofed header
+		 * buckets. Only the X-Forwarded-For half is filter_var()-validated;
+		 * REMOTE_ADDR is server-set and kept unvalidated in the hashed key
+		 * (no blind proxy trust: a spoofed header
 		 * can only add buckets, never impersonate another client). Mirrors
 		 * the REMOTE_ADDR-first resolution used by RUM rate limiting.
 		 *

@@ -1143,7 +1143,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					$date = gmdate( 'Y-m-d', $ts );
 					$path = $qpath;
 
-					if ( ! isset( $all[ $date ] ) ) {
+					if ( ! isset( $all[ $date ] ) || ! is_array( $all[ $date ] ) ) {
 						$all[ $date ] = array();
 					}
 					$day    = $all[ $date ];
@@ -1311,17 +1311,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 							$inp_value = max( 0, min( 60000, $inp_value ) );
 						}
 						if ( null !== $inp_value ) {
-							$raw_device_inp = isset( $sample['device'] ) && is_string( $sample['device'] ) ? sanitize_text_field( $sample['device'] ) : '';
-							$device_inp     = strtolower( trim( $raw_device_inp ) );
-							if ( 'mobile' !== $device_inp && 'desktop' !== $device_inp ) {
-								$device_inp = 'unknown';
-							}
-							$raw_template_inp = isset( $sample['template'] ) && is_string( $sample['template'] ) ? sanitize_text_field( $sample['template'] ) : '';
-							$raw_template_inp = strtolower( trim( substr( $raw_template_inp, 0, 64 ) ) );
-							$raw_template_inp = (string) preg_replace( '/[^a-z0-9_-]/', '', $raw_template_inp );
-							$template_inp     = '' !== $raw_template_inp ? substr( $raw_template_inp, 0, 64 ) : 'unknown';
-							$connection_inp   = self::normalize_segment_connection( $sample['connection'] ?? 'unknown' );
-							$inp_seg_key      = $device_inp . '|' . $template_inp . '|' . $connection_inp;
+							// Re-sanitize even though the beacon sanitizes at
+							// intake: the queue transient is user-writable, so
+							// reuse the shared normalizers (same as
+							// sanitize_sample() and the lcpSeg block above)
+							// before persisting into the aggregate option.
+							$device_inp     = self::normalize_segment_device( $sample['device'] ?? null );
+							$template_inp   = self::normalize_segment_template( $sample['template'] ?? null );
+							$connection_inp = self::normalize_segment_connection( $sample['connection'] ?? null );
+							$inp_seg_key    = $device_inp . '|' . $template_inp . '|' . $connection_inp;
 							if ( ! isset( $bucket['inpSeg'] ) || ! is_array( $bucket['inpSeg'] ) ) {
 								$bucket['inpSeg'] = array();
 							}

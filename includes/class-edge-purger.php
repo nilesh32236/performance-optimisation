@@ -311,7 +311,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 			// prolonged edge outage cannot spam wppo_activity_logs.
 			try {
 				if ( ! has_filter( 'wppo_debug_log' ) && class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
-					$throttle_key = Util::transient_key( 'wppo_edge_purge_log_lock' );
+					// Per-service throttle key: a shared key would suppress
+					// a Bunny failure logged within the same window as a
+					// Cloudflare failure, hiding the second backend outage.
+					$service_slug = strtolower( (string) preg_replace( '/[^a-z0-9]+/', '-', (string) $service ) );
+					$service_slug = trim( substr( $service_slug, 0, 32 ), '-' );
+					if ( '' === $service_slug ) {
+						$service_slug = 'edge';
+					}
+					$throttle_key = Util::transient_key( 'wppo_edge_purge_log_lock_' . $service_slug );
 					if ( false === get_transient( $throttle_key ) ) {
 						set_transient( $throttle_key, 1, self::PURGE_LOCK_TTL );
 						Log::add( 'Edge purge failed [' . $service . ']: ' . substr( $detail, 0, 200 ) );
