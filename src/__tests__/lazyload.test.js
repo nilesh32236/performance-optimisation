@@ -1001,9 +1001,9 @@ describe( 'Lazy Load (lazyload.js)', () => {
 			expect( images[ 0 ].style.backgroundColor ).toBe(
 				'rgb(170, 187, 204)'
 			);
-			expect(
-				images[ 1 ].classList.contains( 'wppo-lqip-active' )
-			).toBe( true );
+			expect( images[ 1 ].classList.contains( 'wppo-lqip-active' ) ).toBe(
+				true
+			);
 		} );
 
 		it( 'clears the blur hook once the native image loads', () => {
@@ -1013,18 +1013,14 @@ describe( 'Lazy Load (lazyload.js)', () => {
 			bootWithNativeImages();
 
 			const img = document.querySelector( 'img' );
-			expect( img.classList.contains( 'wppo-lqip-active' ) ).toBe(
-				true
-			);
+			expect( img.classList.contains( 'wppo-lqip-active' ) ).toBe( true );
 
 			img.dispatchEvent( new Event( 'load' ) );
 
 			expect( img.classList.contains( 'wppo-lqip-active' ) ).toBe(
 				false
 			);
-			expect( img.classList.contains( 'wppo-lqip-loaded' ) ).toBe(
-				true
-			);
+			expect( img.classList.contains( 'wppo-lqip-loaded' ) ).toBe( true );
 			expect( img.hasAttribute( 'data-wppo-lqip' ) ).toBe( false );
 		} );
 
@@ -1041,6 +1037,64 @@ describe( 'Lazy Load (lazyload.js)', () => {
 				false
 			);
 			expect( img.style.backgroundColor ).toBe( '' );
+		} );
+
+		it( 'clears the blur hook when the native image fails to load', () => {
+			document.body.innerHTML =
+				'<img loading="lazy" src="broken.jpg" data-wppo-lqip="1">';
+
+			bootWithNativeImages();
+
+			const img = document.querySelector( 'img' );
+			expect( img.classList.contains( 'wppo-lqip-active' ) ).toBe( true );
+
+			img.dispatchEvent( new Event( 'error' ) );
+
+			expect( img.classList.contains( 'wppo-lqip-active' ) ).toBe(
+				false
+			);
+			expect( img.hasAttribute( 'data-wppo-lqip' ) ).toBe( false );
+		} );
+
+		it( 'skips JS-lazy images carrying only data-srcset', () => {
+			// A data-srcset image is handled by the IntersectionObserver
+			// path, so the native pass must not restyle it.
+			document.body.innerHTML =
+				'<img loading="lazy" data-srcset="deferred.jpg 1x" data-wppo-lqip="1">';
+
+			bootWithNativeImages();
+
+			const img = document.querySelector( 'img' );
+			expect( img.classList.contains( 'wppo-lqip-active' ) ).toBe(
+				false
+			);
+		} );
+
+		it( 'prepares natively-lazy images injected after boot', async () => {
+			bootWithNativeImages();
+
+			const img = document.createElement( 'img' );
+			img.setAttribute( 'loading', 'lazy' );
+			img.setAttribute( 'src', 'dynamic.jpg' );
+			img.setAttribute( 'data-wppo-lqip', '1' );
+			document.body.appendChild( img );
+
+			// MutationObserver delivery is a microtask in jsdom: flush
+			// microtasks only (never yield to macrotasks, so stale
+			// loadImages() timers from earlier-booted module copies — which
+			// throw while IntersectionObserver is undefined — cannot
+			// interleave here).
+			await Promise.resolve();
+			await Promise.resolve();
+
+			expect( img.classList.contains( 'wppo-lqip-active' ) ).toBe( true );
+
+			img.dispatchEvent( new Event( 'load' ) );
+
+			expect( img.classList.contains( 'wppo-lqip-active' ) ).toBe(
+				false
+			);
+			expect( img.classList.contains( 'wppo-lqip-loaded' ) ).toBe( true );
 		} );
 	} );
 } );

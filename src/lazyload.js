@@ -1108,6 +1108,10 @@ const teardownLazyload = () => {
 		mutationObserver.disconnect();
 		mutationObserver = null;
 	}
+	if ( nativePlaceholderObserver ) {
+		nativePlaceholderObserver.disconnect();
+		nativePlaceholderObserver = null;
+	}
 	if ( globalObserver ) {
 		globalObserver.disconnect();
 		globalObserver = null;
@@ -1439,6 +1443,67 @@ const observeElement = ( el ) => {
 };
 
 /**
+ * MutationObserver instance tracking dynamically added native placeholders.
+ *
+ * Installed separately from the data-src observer so natively-deferred
+ * images are covered even in full native-lazy mode (where loadImages()
+ * returns early and the main observer never installs).
+ *
+ * @type {MutationObserver|null}
+ */
+let nativePlaceholderObserver = null;
+
+/**
+ * Selector for natively-deferred images carrying local placeholder attributes.
+ *
+ * Both deferred attributes are excluded so JS-lazy images (data-src /
+ * data-srcset) never get double placeholder setup here — they are handled
+ * by the IntersectionObserver path instead.
+ *
+ * @since NEXT
+ * @type {string}
+ */
+const NATIVE_PLACEHOLDER_SELECTOR =
+	'img[loading="lazy"][data-wppo-dominant-color]:not([data-src]):not([data-srcset]), img[loading="lazy"][data-wppo-lqip]:not([data-src]):not([data-srcset])';
+
+/**
+ * Prepare one natively-deferred image: apply the local placeholder styling
+ * and clear it once the real image loads — or fails to load.
+ *
+ * Idempotent via a dataset flag so repeated loadImages() calls (and the
+ * dynamic-content observer below) never stack duplicate listeners.
+ *
+ * @since NEXT
+ * @param {Element} img The IMG element to prepare.
+ * @return {void}
+ */
+const prepareOneNativePlaceholder = ( img ) => {
+	if ( ! img || 'IMG' !== img.tagName ) {
+		return;
+	}
+	if ( img.dataset.wppoNativePlaceholder ) {
+		return;
+	}
+	img.dataset.wppoNativePlaceholder = '1';
+	applyPlaceholderBeforeLoad( img );
+	const done = makePlaceholderLoadHandler( img );
+	const onLoad = () => {
+		img.removeEventListener( 'error', onError );
+		done();
+	};
+	const onError = () => {
+		img.removeEventListener( 'load', onLoad );
+		done();
+	};
+	if ( img.complete && img.naturalWidth > 0 ) {
+		done();
+	} else {
+		img.addEventListener( 'load', onLoad, { once: true } );
+		img.addEventListener( 'error', onError, { once: true } );
+	}
+};
+
+/**
  * Apply local placeholder styling to natively-deferred images.
  *
  * Natively lazy-loaded images (`loading="lazy"` without `data-src`) keep
@@ -1452,16 +1517,64 @@ const observeElement = ( el ) => {
  * @return {void}
  */
 const prepareNativePlaceholders = () => {
-	const selector =
-		'img[loading="lazy"][data-wppo-dominant-color]:not([data-src]), img[loading="lazy"][data-wppo-lqip]:not([data-src])';
-	document.querySelectorAll( selector ).forEach( ( img ) => {
-		applyPlaceholderBeforeLoad( img );
-		const done = makePlaceholderLoadHandler( img );
-		if ( img.complete && img.naturalWidth > 0 ) {
-			done();
-		} else {
-			img.addEventListener( 'load', done );
-		}
+	document
+		.querySelectorAll( NATIVE_PLACEHOLDER_SELECTOR )
+		.forEach( prepareOneNativePlaceholder );
+};
+
+/**
+ * Prepare native placeholders for a dynamically added node and its descendants.
+ *
+ * Covers natively-lazy images injected later via infinite-scroll/AJAX.
+ * Safe to call for any node type; non-matching nodes are ignored.
+ *
+ * @since NEXT
+ * @param {Node} node The added DOM node to scan.
+ * @return {void}
+ */
+const prepareNativePlaceholdersForNode = ( node ) => {
+	if ( ! node || 1 !== node.nodeType ) {
+		return;
+	}
+	if (
+		'function' === typeof node.matches &&
+		node.matches( NATIVE_PLACEHOLDER_SELECTOR )
+	) {
+		prepareOneNativePlaceholder( node );
+	}
+	if ( 'function' === typeof node.querySelectorAll ) {
+		node.querySelectorAll( NATIVE_PLACEHOLDER_SELECTOR ).forEach(
+			prepareOneNativePlaceholder
+		);
+	}
+};
+
+/**
+ * Observe dynamically added native-lazy images (infinite-scroll/AJAX).
+ *
+ * Singleton — safe to call repeatedly. Runs independently of the data-src
+ * observer so placeholders resolve in full native-lazy mode too.
+ *
+ * @since NEXT
+ * @return {void}
+ */
+const observeNativePlaceholders = () => {
+	if ( nativePlaceholderObserver ) {
+		return;
+	}
+	if ( ! ( 'MutationObserver' in window ) ) {
+		return;
+	}
+	nativePlaceholderObserver = new MutationObserver( ( mutations ) => {
+		mutations.forEach( ( mutation ) => {
+			mutation.addedNodes.forEach( ( node ) => {
+				prepareNativePlaceholdersForNode( node );
+			} );
+		} );
+	} );
+	nativePlaceholderObserver.observe( document.body, {
+		childList: true,
+		subtree: true,
 	} );
 };
 
@@ -1498,8 +1611,11 @@ const loadImages = () => {
 
 	// Native-lazy placeholders run regardless of the observer path below:
 	// natively-deferred images keep their real src, so the server-emitted
-	// local placeholder attributes need no IntersectionObserver.
+	// local placeholder attributes need no IntersectionObserver. The dynamic
+	// observer covers images injected later (infinite-scroll/AJAX), including
+	// full native-lazy mode where the data-src observer below never installs.
 	prepareNativePlaceholders();
+	observeNativePlaceholders();
 
 	// When native lazy is active and no video lazy elements exist, skip observer setup entirely.
 	if ( USE_NATIVE_LAZY && ! document.querySelector( getLazySelector() ) ) {
@@ -1739,6 +1855,10 @@ const loadImages = () => {
 						if ( 1 !== node.nodeType ) {
 							return;
 						}
+						// Natively-deferred images never enter observeElement()
+						// (no data-src), so prepare their placeholders here too
+						// (idempotent — the dedicated native observer agrees).
+						prepareNativePlaceholdersForNode( node );
 						if (
 							node.tagName === 'IMG' ||
 							node.tagName === 'IFRAME' ||

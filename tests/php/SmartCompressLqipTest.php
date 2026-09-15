@@ -260,12 +260,15 @@ class SmartCompressLqipTest extends \PHPUnit\Framework\TestCase {
 		$source    = $this->make_sized_file( 'wppo-record.jpg', 100 );
 		$sibling   = $this->make_sized_file( 'wppo-record.webp', 200 );
 
-		$method = new ReflectionMethod( Img_Converter::class, 'record_encoded_sibling' );
-		$method->setAccessible( true );
-
 		$success = true;
-		$args    = array( $source, $sibling, 'webp', &$success );
-		$method->invokeArgs( $converter, $args );
+		$record  = \Closure::bind(
+			function ( string $source_image, string $sibling_path, string $type, bool &$flag ): void {
+				$this->record_encoded_sibling( $source_image, $sibling_path, $type, $flag );
+			},
+			$converter,
+			Img_Converter::class
+		);
+		$record( $source, $sibling, 'webp', $success );
 
 		$this->assertFalse( $success );
 		$this->assertFileDoesNotExist( $sibling );
@@ -286,12 +289,15 @@ class SmartCompressLqipTest extends \PHPUnit\Framework\TestCase {
 		$source    = $this->make_sized_file( 'wppo-record-ok.jpg', 200 );
 		$sibling   = $this->make_sized_file( 'wppo-record-ok.webp', 100 );
 
-		$method = new ReflectionMethod( Img_Converter::class, 'record_encoded_sibling' );
-		$method->setAccessible( true );
-
 		$success = true;
-		$args    = array( $source, $sibling, 'webp', &$success );
-		$method->invokeArgs( $converter, $args );
+		$record  = \Closure::bind(
+			function ( string $source_image, string $sibling_path, string $type, bool &$flag ): void {
+				$this->record_encoded_sibling( $source_image, $sibling_path, $type, $flag );
+			},
+			$converter,
+			Img_Converter::class
+		);
+		$record( $source, $sibling, 'webp', $success );
 
 		$this->assertTrue( $success );
 		$this->assertFileExists( $sibling );
@@ -425,6 +431,173 @@ class SmartCompressLqipTest extends \PHPUnit\Framework\TestCase {
 		$this->assertFalse( $method->invoke( $instance, '', array( $hero ), '', '' ) );
 		$this->assertFalse(
 			$method->invoke( $instance, 'http://example.com/wp-content/uploads/2026/08/other.jpg', array( $hero ), '', '' )
+		);
+	}
+
+	/**
+	 * Delete containment: an oversized sibling outside the uploads/wppo
+	 * allowlist is flagged by size but never unlinked.
+	 */
+	public function test_delete_containment_refuses_outside_allowlist(): void {
+		$converter = new Img_Converter( $this->options );
+		$source    = $this->make_sized_file( 'wppo-allowlist-src.jpg', 100 );
+		$outside   = tempnam( sys_get_temp_dir(), 'wppo-outside-' );
+		$this->assertNotFalse( $outside );
+		file_put_contents( $outside, str_repeat( 'x', 200 ) ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+		clearstatcache();
+
+		$this->assertTrue( $converter->should_discard_oversized_sibling( $source, $outside ), 'Size comparison must flag the oversized sibling' );
+		$this->assertFalse( $converter->discard_oversized_sibling( $source, $outside ), 'Containment must refuse deletion outside the allowlist' );
+		$this->assertFileExists( $outside, 'Outside-allowlist file must survive' );
+
+		wp_delete_file( $source );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture outside the plugin allowlist.
+		unlink( $outside );
+	}
+
+	/**
+	 * The kill-switch filter disables size-compare discarding.
+	 */
+	public function test_smart_pipeline_kill_switch_disables_discard(): void {
+		Functions\when( 'has_filter' )->justReturn( true );
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook, $value ) {
+				if ( 'wppo_smart_pipeline_enabled' === $hook ) {
+					return false;
+				}
+				return $value;
+			}
+		);
+
+		$converter = new Img_Converter( $this->options );
+		$source    = $this->make_sized_file( 'wppo-kill.jpg', 100 );
+		$sibling   = $this->make_sized_file( 'wppo-kill.webp', 200 );
+
+		$this->assertFalse( $converter->is_smart_compress_enabled() );
+		$this->assertFalse( $converter->should_discard_oversized_sibling( $source, $sibling ) );
+		$this->assertFalse( $converter->discard_oversized_sibling( $source, $sibling ) );
+		$this->assertFileExists( $sibling );
+
+		wp_delete_file( $source );
+		wp_delete_file( $sibling );
+	}
+
+	/**
+	 * The per-sibling filter can force discarding and override it.
+	 */
+	public function test_discard_filter_can_force_and_override(): void {
+		$converter = new Img_Converter( $this->options );
+		$source    = $this->make_sized_file( 'wppo-force-src.jpg', 200 );
+		$smaller   = $this->make_sized_file( 'wppo-force-small.webp', 100 );
+
+		// Force: a smaller sibling is flagged when the filter says so.
+		Functions\when( 'has_filter' )->justReturn( true );
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook, $value ) {
+				if ( 'wppo_discard_oversized_sibling' === $hook ) {
+					return true;
+				}
+				return $value;
+			}
+		);
+		$this->assertTrue( $converter->should_discard_oversized_sibling( $source, $smaller ) );
+
+		// Override: an oversized sibling is kept when the filter vetoes.
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook, $value ) {
+				if ( 'wppo_discard_oversized_sibling' === $hook ) {
+					return false;
+				}
+				return $value;
+			}
+		);
+		$oversized = $this->make_sized_file( 'wppo-force-big.webp', 400 );
+		$this->assertFalse( $converter->should_discard_oversized_sibling( $source, $oversized ) );
+		$this->assertFalse( $converter->discard_oversized_sibling( $source, $oversized ) );
+		$this->assertFileExists( $oversized );
+
+		wp_delete_file( $source );
+		wp_delete_file( $smaller );
+		wp_delete_file( $oversized );
+	}
+
+	/**
+	 * Disabling the setting also disables LQIP emission (shared toggle).
+	 */
+	public function test_lqip_disabled_setting_disables_emission(): void {
+		$options = $this->options;
+		$options['image_optimisation']['discardOversizedSibling'] = false;
+		$url = 'http://example.com/wp-content/uploads/2026/08/wash-off.jpg';
+		$this->seed_placeholder_data( $url );
+
+		$instance = new Image_Optimisation( $options );
+		$this->assertSame( array(), $this->native_attrs( $instance, $url ) );
+	}
+
+	/**
+	 * The kill-switch filter disables LQIP placeholder emission.
+	 */
+	public function test_lqip_kill_switch_disables_emission(): void {
+		Functions\when( 'has_filter' )->justReturn( true );
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook, $value ) {
+				if ( 'wppo_smart_pipeline_enabled' === $hook ) {
+					return false;
+				}
+				return $value;
+			}
+		);
+
+		$url = 'http://example.com/wp-content/uploads/2026/08/wash-kill.jpg';
+		$this->seed_placeholder_data( $url );
+
+		$instance = new Image_Optimisation( $this->options );
+		$this->assertSame( array(), $this->native_attrs( $instance, $url ) );
+	}
+
+	/**
+	 * Data-URI sources never receive placeholder attributes.
+	 */
+	public function test_native_lazy_data_uri_emits_nothing(): void {
+		$instance = new Image_Optimisation( $this->options );
+
+		$this->assertSame( array(), $this->native_attrs( $instance, 'data:image/jpeg;base64,/9j/placeholder' ) );
+	}
+
+	/**
+	 * The svg placeholder type emits no native-lazy attributes.
+	 */
+	public function test_native_lazy_svg_type_emits_nothing(): void {
+		$options = $this->options;
+		$options['image_optimisation']['placeholderType'] = 'svg';
+		$url = 'http://example.com/wp-content/uploads/2026/08/vector.jpg';
+		$this->seed_placeholder_data( $url );
+
+		$instance = new Image_Optimisation( $options );
+		$this->assertSame( array(), $this->native_attrs( $instance, $url ) );
+	}
+
+	/**
+	 * The hero matcher honours normalized OD/candidate LCP URLs, including
+	 * WordPress size-suffix variants, and rejects non-matches.
+	 */
+	public function test_is_lcp_hero_url_normalized_matching(): void {
+		$instance = new Image_Optimisation( $this->options );
+		$method   = new ReflectionMethod( Image_Optimisation::class, 'is_lcp_hero_url' );
+		$method->setAccessible( true );
+
+		$hero       = 'http://example.com/wp-content/uploads/2026/08/lcp-hero.jpg';
+		$normalized = Util::normalize_url( $hero );
+		$this->assertNotSame( '', $normalized );
+
+		$this->assertTrue( $method->invoke( $instance, $hero, array(), $normalized, '' ) );
+		$this->assertTrue( $method->invoke( $instance, $hero, array(), '', $normalized ) );
+		// Size-suffix variant normalizes to the same key.
+		$this->assertTrue(
+			$method->invoke( $instance, 'http://example.com/wp-content/uploads/2026/08/lcp-hero-300x200.jpg', array(), $normalized, '' )
+		);
+		$this->assertFalse(
+			$method->invoke( $instance, 'http://example.com/wp-content/uploads/2026/08/other.jpg', array(), $normalized, '' )
 		);
 	}
 }

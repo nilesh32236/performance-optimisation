@@ -1053,6 +1053,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * in the savings report. Fail-open: any discard failure keeps the
 		 * legacy `completed` behaviour.
 		 *
+		 * Note on `both`-format conversions: `$success` is set to false when
+		 * any sibling is discarded — both outputs must be smaller than the
+		 * source for the overall conversion to report success. A partially
+		 * kept conversion still records the kept sibling as `completed` (and
+		 * the discarded one as `skipped`); only the aggregate return value
+		 * reflects the both-must-win contract.
+		 *
 		 * @since NEXT
 		 *
 		 * @param string $source_image Filesystem path to the source image.
@@ -1373,12 +1380,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 								}
 
 								if ( function_exists( 'imageavif' ) && imageavif( $image, $avif_path, $avif_quality ?? $quality ) ) {
-									$this->update_conversion_status( $source_image, 'completed', 'avif' );
+									$webp_source_success = true;
+									$this->record_encoded_sibling( $source_image, $avif_path, 'avif', $webp_source_success );
 								} elseif ( ! function_exists( 'imageavif' ) && $this->encode_avif_via_imagick( $source_image, $avif_path, (int) ( $avif_quality ?? $quality ) ) ) {
 									// Imagick-only AVIF host: GD decoded the WebP
 									// source but cannot encode AVIF, so encode
 									// from the source file via Imagick instead.
-									$this->update_conversion_status( $source_image, 'completed', 'avif' );
+									// Size-compared like every other path (issue
+									// #1158): an oversized AVIF is discarded and
+									// marked skipped instead of completed.
+									$webp_source_success = true;
+									$this->record_encoded_sibling( $source_image, $avif_path, 'avif', $webp_source_success );
 								} else {
 									if ( null !== $image && ( is_resource( $image ) || $image instanceof \GdImage ) ) {
 										Util::destroy_gd_image( $image );
@@ -1423,6 +1435,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 							Util::destroy_gd_image( $image );
 						}
 
+						if ( isset( $webp_source_success ) ) {
+							return $webp_source_success;
+						}
+
 						return true;
 					case IMAGETYPE_GIF:
 						if ( ! extension_loaded( 'imagick' ) ) {
@@ -1448,8 +1464,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 								return false;
 							}
 							if ( file_exists( $webp_path ) ) {
-								$this->update_conversion_status( $source_image, 'completed', 'webp' );
-								return true;
+								// Size-check the pre-existing sibling (issue
+								// #1158): a stale oversized WebP must not keep
+								// being served as completed — discard it and
+								// record skipped instead.
+								$gif_sibling_success = true;
+								$this->record_encoded_sibling( $source_image, $webp_path, 'webp', $gif_sibling_success );
+								return $gif_sibling_success;
 							}
 							// Initialize Imagick and read the image file.
 							// Do not hard-clamp Imagick depth to 8-bit — core's
@@ -1521,10 +1542,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 							}
 
 							Util::prepare_cache_dir( dirname( $webp_path ) );
-							// Write the WebP file.
+							// Write the WebP file. Lossless transparent GIF
+							// output is frequently larger than the source, so
+							// the fresh write is size-compared like every
+							// other path (issue #1158).
+							$gif_write_success = true;
 							if ( $imagick->writeImages( $webp_path, true ) ) {
-								$this->update_conversion_status( $source_image, 'completed', 'webp' );
+								$this->record_encoded_sibling( $source_image, $webp_path, 'webp', $gif_write_success );
 							} else {
+								$gif_write_success = false;
 								$this->update_conversion_status( $source_image, 'failed', 'webp' );
 								return false;
 							}
@@ -1548,7 +1574,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 							}
 
 							$imagick->clear();
-							return true;
+							return $gif_write_success;
 						} catch ( \Exception $e ) {
 							if ( isset( $imagick ) && $imagick instanceof \Imagick ) {
 								$imagick->clear();

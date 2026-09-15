@@ -5518,7 +5518,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * Shares the `wppo_smart_pipeline_enabled` kill-switch filter with the
 		 * converter's size-compare path (issue #1158) so one filter disables
-		 * both features. Placeholders are server-side only (inline data-URI /
+		 * both features, and defaults from the
+		 * `image_optimisation.discardOversizedSibling` setting (like
+		 * `Img_Converter::is_smart_compress_enabled()`) so one toggle
+		 * disables both. Placeholders are server-side only (inline data-URI /
 		 * dominant-color attributes) — zero external HTTP either way.
 		 *
 		 * @since NEXT
@@ -5526,6 +5529,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return bool True when LQIP placeholder emission is enabled.
 		 */
 		private function is_local_lqip_pipeline_enabled(): bool {
+			$enabled = (bool) ( $this->options['image_optimisation']['discardOversizedSibling'] ?? true );
 			if ( function_exists( 'apply_filters' ) && function_exists( 'has_filter' ) && has_filter( 'wppo_smart_pipeline_enabled' ) ) {
 				/**
 				 * Filter the size-compare smart-compress + local LQIP pipeline.
@@ -5533,10 +5537,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				 * @since NEXT
 				 * @param bool $enabled Whether the pipeline is enabled.
 				 */
-				return (bool) apply_filters( 'wppo_smart_pipeline_enabled', true );
+				return (bool) apply_filters( 'wppo_smart_pipeline_enabled', $enabled );
 			}
 
-			return true;
+			return $enabled;
 		}
 
 		/**
