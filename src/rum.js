@@ -6,6 +6,15 @@
  * Vitals with PerformanceObserver and sends a single aggregated beacon after
  * the page settles or on pagehide.
  *
+ * Security note: `window.wppoRum.token` is page-visible by design, so forged
+ * beacons replaying a harvested token cannot be stopped client-side and no
+ * client-side throttle is attempted. The real defenses are server-side and
+ * authoritative: per-path token validation plus per-IP rate limiting in
+ * `RUM` (see includes/class-rum.php). Client-side magnitude caps
+ * (sanitizeRumValues) only keep extreme observer values out of the payload;
+ * never rely on them for abuse prevention. Consider rotating the beacon
+ * token periodically server-side.
+ *
  * The collector is a plain ES module (no dependencies) so it can be served
  * from the static build directory on cached pages.
  */
@@ -266,6 +275,9 @@ export const sanitizeRumValues = ( raw ) => {
 		}
 
 		const payload = JSON.stringify( {
+			// Page-visible by design: the public rum_collect endpoint
+			// validates this per-path token server-side (with per-IP rate
+			// limiting); see the module docblock above.
 			token: config.token,
 			path: config.path,
 			...metrics,

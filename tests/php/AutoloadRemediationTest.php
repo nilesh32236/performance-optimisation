@@ -168,12 +168,15 @@ class AutoloadRemediationTest extends \PHPUnit\Framework\TestCase {
 			}
 
 			/**
-			 * Return the fixture total.
+			 * Return the fixture total for SUM queries, count for COUNT queries.
 			 *
 			 * @param string|null $query SQL query.
 			 * @return int
 			 */
 			public function get_var( $query = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+				if ( is_string( $query ) && false !== strpos( $query, 'COUNT(' ) ) {
+					return $this->test->get_count_rows();
+				}
 				return $this->test->get_total_bytes();
 			}
 		};
@@ -227,6 +230,15 @@ class AutoloadRemediationTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function get_total_bytes(): int {
 		return $this->total_bytes;
+	}
+
+	/**
+	 * Get fixture autoload count (COUNT(*) stub).
+	 *
+	 * @return int
+	 */
+	public function get_count_rows(): int {
+		return 3;
 	}
 
 	/**
@@ -362,6 +374,103 @@ class AutoloadRemediationTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( '_transient_timeout_expired_one', $rows[0]['timeout_option'] );
 		$this->assertSame( 42, $rows[0]['size'] );
 		$this->assertSame( array(), $this->autoload_calls, 'Export must be read-only' );
+	}
+
+	/**
+	 * Pre-6.6 cores must use the yes-only legacy predicate.
+	 */
+	public function test_get_autoloadable_values_pre_66_returns_yes_only(): void {
+		Functions\when( 'get_bloginfo' )->justReturn( '6.5' );
+
+		$this->assertSame( array( 'yes' ), Database_Cleanup::get_autoloadable_values() );
+	}
+
+	/**
+	 * Undetectable versions must fail open to the full 6.6 list.
+	 */
+	public function test_get_autoloadable_values_unknown_version_fail_open(): void {
+		Functions\when( 'get_bloginfo' )->justReturn( '' );
+
+		$values = Database_Cleanup::get_autoloadable_values();
+
+		$this->assertContains( 'yes', $values );
+		$this->assertContains( 'on', $values );
+		$this->assertContains( 'auto', $values );
+		$this->assertContains( 'auto-on', $values );
+	}
+
+	/**
+	 * Count must share the stub predicate and return the COUNT fixture.
+	 */
+	public function test_get_autoload_count_agrees_with_shared_predicate(): void {
+		$this->assertSame( 3, Database_Cleanup::get_autoload_count() );
+		$this->assertSame( $this->total_bytes, Database_Cleanup::get_autoload_total_bytes() );
+	}
+
+	/**
+	 * Plan backup must carry ordered option_name/size/prior triples.
+	 */
+	public function test_plan_backup_shape(): void {
+		$report = Database_Cleanup::plan_autoload_remediation( 1024, 100 );
+
+		$this->assertArrayHasKey( 'backup', $report );
+		$this->assertCount( 1, $report['backup'] );
+		$this->assertSame( 'big_plugin_blob', $report['backup'][0]['option_name'] );
+		$this->assertSame( 1048576, $report['backup'][0]['size'] );
+		$this->assertSame( 'yes', $report['backup'][0]['prior'] );
+	}
+
+	/**
+	 * Apply backup must mirror the applied list for archive/verify.
+	 */
+	public function test_apply_backup_mirrors_applied(): void {
+		$result = Database_Cleanup::remediate_autoload( 1024, 100 );
+
+		$this->assertArrayHasKey( 'backup', $result );
+		$this->assertSame( $result['applied'], $result['backup'] );
+		$this->assertSame( 'big_plugin_blob', $result['backup'][0]['option_name'] );
+		$this->assertSame( 'yes', $result['backup'][0]['prior'] );
+	}
+
+	/**
+	 * Revert-all must restore exact priors and report the post-revert total.
+	 */
+	public function test_revert_all_restores_exact_priors_with_total(): void {
+		$this->option_store[ Database_Cleanup::REMEDIATED_OPTION ] = array(
+			'big_plugin_blob' => 'auto-on',
+			'another_blob'    => 'yes',
+		);
+		Functions\when( 'delete_transient' )->justReturn( true );
+
+		$result = Database_Cleanup::revert_autoload_all();
+
+		$this->assertSame( array(), $result['failed'] );
+		$this->assertContains( 'big_plugin_blob', $result['reverted'] );
+		$this->assertContains( 'another_blob', $result['reverted'] );
+		$this->assertArrayHasKey( 'restored', $result );
+		$this->assertArrayHasKey( 'total_autoload_bytes', $result );
+		$this->assertSame( $this->total_bytes, $result['total_autoload_bytes'] );
+		$priors = array_column( $result['restored'], 'prior', 'option_name' );
+		$this->assertSame( 'auto-on', $priors['big_plugin_blob'] );
+		$this->assertSame( 'yes', $priors['another_blob'] );
+		$this->assertSame( array(), $this->read_option( Database_Cleanup::REMEDIATED_OPTION, array() ) );
+	}
+
+	/**
+	 * Remediate must clear the Abilities autoload transient for parity.
+	 */
+	public function test_remediate_clears_abilities_transient(): void {
+		$deleted = array();
+		Functions\when( 'delete_transient' )->alias(
+			function ( $key ) use ( &$deleted ) {
+				$deleted[] = (string) $key;
+				return true;
+			}
+		);
+
+		Database_Cleanup::remediate_autoload( 1024, 100 );
+
+		$this->assertContains( 'wppo_abilities_autoloaded', $deleted );
 	}
 }
 

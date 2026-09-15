@@ -1163,7 +1163,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'wp_script_modules' )->justReturn( $fake );
 		Functions\when( 'function_exists' )->alias(
 			static function ( $function_name ) use ( $fake ) {
-				if ( 'wp_script_modules' === $function_name ) {
+				if ( 'wp_script_modules' === $function_name || 'wp_enqueue_script_module' === $function_name ) {
 					return true;
 				}
 				return \function_exists( $function_name );

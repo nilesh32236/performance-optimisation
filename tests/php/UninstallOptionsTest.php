@@ -101,6 +101,8 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 		'wppo_used_css_last_full_regen',
 		// Issue #1144 one-click-undo snapshot (Util::SETTINGS_SNAPSHOT_OPTION).
 		'wppo_settings_snapshot',
+		// Issue #1162 resumable sitemap preload queue.
+		'wppo_preload_queue',
 	);
 
 	/**

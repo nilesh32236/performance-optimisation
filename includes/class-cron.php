@@ -42,6 +42,232 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 */
 
 		/**
+		 * Option name storing the resumable sitemap preload queue.
+		 *
+		 * Shape: `array{queued: string[], done: int, failed: string[], total: int, status: string, updated_at: int}`.
+		 * Multisite-safe via per-site options; deleted on uninstall and on
+		 * {@see clear_cron_jobs()}. Fail-open: malformed values reset to idle.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		public const PRELOAD_QUEUE_OPTION = 'wppo_preload_queue';
+
+		/**
+		 * Read the resumable sitemap preload queue.
+		 *
+		 * @since NEXT
+		 * @return array{queued:string[],done:int,failed:string[],total:int,status:string,updated_at:int}
+		 */
+		public static function get_preload_queue(): array {
+			$defaults = array(
+				'queued'     => array(),
+				'done'       => 0,
+				'failed'     => array(),
+				'total'      => 0,
+				'status'     => 'idle',
+				'updated_at' => 0,
+			);
+			try {
+				if ( ! function_exists( 'get_option' ) ) {
+					return $defaults;
+				}
+				$stored = get_option( self::PRELOAD_QUEUE_OPTION, $defaults );
+				if ( ! is_array( $stored ) ) {
+					return $defaults;
+				}
+				$queue           = array_merge( $defaults, $stored );
+				$queue['queued'] = array_values( array_filter( array_map( 'strval', (array) $queue['queued'] ) ) );
+				$queue['failed'] = array_values( array_filter( array_map( 'strval', (array) $queue['failed'] ) ) );
+				$queue['done']   = max( 0, (int) $queue['done'] );
+				$queue['total']  = max( 0, (int) $queue['total'] );
+				if ( ! in_array( $queue['status'], array( 'idle', 'running', 'complete' ), true ) ) {
+					$queue['status'] = 'idle';
+				}
+				$queue['updated_at'] = (int) $queue['updated_at'];
+				return $queue;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $defaults;
+			}
+		}
+
+		/**
+		 * Persist the preload queue (fail-open, never fatal).
+		 *
+		 * @since NEXT
+		 * @param array $queue Queue payload.
+		 * @return void
+		 */
+		private static function save_preload_queue( array $queue ): void {
+			try {
+				if ( ! function_exists( 'update_option' ) ) {
+					return;
+				}
+				$queue['updated_at'] = function_exists( 'time' ) ? time() : 0;
+				update_option( self::PRELOAD_QUEUE_OPTION, $queue, false );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Seed or extend the preload queue with freshly scheduled URLs.
+		 *
+		 * Merges deduplicated; done/failed counters are preserved so a
+		 * mid-run kill resumes instead of restarting. When the merged queue
+		 * is empty the status resets to idle.
+		 *
+		 * @since NEXT
+		 * @param string[] $urls Freshly scheduled sitemap URLs.
+		 * @return void
+		 */
+		public static function init_preload_queue( array $urls ): void {
+			try {
+				$queue = self::get_preload_queue();
+				$fresh = array_values( array_unique( array_filter( array_map( 'strval', $urls ) ) ) );
+				if ( empty( $fresh ) && empty( $queue['queued'] ) && 0 === (int) $queue['done'] && empty( $queue['failed'] ) ) {
+					return;
+				}
+				$merged = array_values( array_unique( array_merge( $queue['queued'], $fresh ) ) );
+				// Drop URLs already resolved in this cycle.
+				$merged          = array_values( array_diff( $merged, $queue['failed'] ) );
+				$queue['queued'] = array_values( array_slice( $merged, 0, 500 ) );
+				$queue['total']  = count( $queue['queued'] ) + (int) $queue['done'] + count( $queue['failed'] );
+				$queue['status'] = empty( $queue['queued'] ) ? 'complete' : 'running';
+				self::save_preload_queue( $queue );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Mark a sitemap URL as done (removes it from queued, bumps done).
+		 *
+		 * Only counts URLs that were actually queued, so non-queue warmups
+		 * never inflate the progress counters.
+		 *
+		 * @since NEXT
+		 * @param string $url Preloaded URL.
+		 * @return void
+		 */
+		public static function mark_preload_done( string $url ): void {
+			try {
+				if ( '' === $url ) {
+					return;
+				}
+				$queue = self::get_preload_queue();
+				if ( ! in_array( $url, $queue['queued'], true ) ) {
+					return;
+				}
+				$queue['queued'] = array_values( array_diff( $queue['queued'], array( $url ) ) );
+				++$queue['done'];
+				if ( empty( $queue['queued'] ) ) {
+					$queue['status'] = 'complete';
+				}
+				self::save_preload_queue( $queue );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Mark a sitemap URL as failed (removes it from queued).
+		 *
+		 * Failed URLs are capped at 500 entries (oldest dropped first) so
+		 * the option stays bounded.
+		 *
+		 * @since NEXT
+		 * @param string $url Failed URL.
+		 * @return void
+		 */
+		public static function mark_preload_failed( string $url ): void {
+			try {
+				if ( '' === $url ) {
+					return;
+				}
+				$queue = self::get_preload_queue();
+				if ( ! in_array( $url, $queue['queued'], true ) ) {
+					return;
+				}
+				$queue['queued'] = array_values( array_diff( $queue['queued'], array( $url ) ) );
+				if ( ! in_array( $url, $queue['failed'], true ) ) {
+					$queue['failed'][] = $url;
+					if ( count( $queue['failed'] ) > 500 ) {
+						$queue['failed'] = array_values( array_slice( $queue['failed'], -500 ) );
+					}
+				}
+				if ( empty( $queue['queued'] ) ) {
+					$queue['status'] = 'complete';
+				}
+				self::save_preload_queue( $queue );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Honest preload progress counters for the SPA.
+		 *
+		 * @since NEXT
+		 * @return array{queued:int,done:int,failed:int,total:int,status:string,failed_urls:string[]}
+		 */
+		public static function get_preload_status(): array {
+			$queue = self::get_preload_queue();
+			return array(
+				'queued'      => count( $queue['queued'] ),
+				'done'        => (int) $queue['done'],
+				'failed'      => count( $queue['failed'] ),
+				'total'       => (int) $queue['total'],
+				'status'      => (string) $queue['status'],
+				'failed_urls' => array_values( array_slice( $queue['failed'], 0, 50 ) ),
+			);
+		}
+
+		/**
+		 * Resume the preload queue by re-scheduling queued + failed URLs.
+		 *
+		 * Failed URLs move back to queued so a resume retries them once.
+		 * Fail-open: scheduler failures simply leave the queue untouched.
+		 *
+		 * @since NEXT
+		 * @return int Number of URLs re-scheduled.
+		 */
+		public static function resume_preload_queue(): int {
+			$rescheduled = 0;
+			try {
+				if ( ! function_exists( 'wp_schedule_single_event' ) ) {
+					return 0;
+				}
+				$queue   = self::get_preload_queue();
+				$pending = array_values( array_unique( array_merge( $queue['queued'], $queue['failed'] ) ) );
+				if ( empty( $pending ) ) {
+					return 0;
+				}
+				foreach ( $pending as $url ) {
+					try {
+						$delay = function_exists( 'wp_rand' ) ? wp_rand( 0, 300 ) : 60;
+						if ( wp_schedule_single_event( time() + (int) $delay, 'wppo_generate_static_url', array( $url ) ) ) {
+							++$rescheduled;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( $rescheduled > 0 ) {
+					$queue['queued'] = $pending;
+					$queue['failed'] = array();
+					$queue['total']  = count( $pending ) + (int) $queue['done'];
+					$queue['status'] = 'running';
+					self::save_preload_queue( $queue );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $rescheduled;
+		}
+
+		/**
 		 * Maximum number of child sitemaps to fetch from an index.
 		 *
 		 * @since 2.0.0
@@ -607,6 +833,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			// an in-memory lookup instead of up to 500 cron-array scans.
 			$scheduled_urls = $this->get_scheduled_args_set( 'wppo_generate_static_url' );
 
+			$newly_scheduled = array();
+
 			foreach ( $sitemap_urls as $url ) {
 				if ( Util::is_url_excluded( $url, $exclude_urls ) ) {
 					continue;
@@ -631,6 +859,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				if ( is_array( $scheduled_urls ) ) {
 					$scheduled_urls[ wp_json_encode( array( $url ) ) ] = true;
 				}
+				$newly_scheduled[] = $url;
+			}
+
+			// Resumable queue (issue #1162): persist freshly scheduled URLs
+			// so the SPA can render queued/done/failed with a resume action.
+			// Fail-open: queue failure never blocks scheduling above.
+			if ( ! empty( $newly_scheduled ) ) {
+				self::init_preload_queue( $newly_scheduled );
 			}
 		}
 
@@ -881,6 +1117,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			delete_option( 'wppo_preload_cron_offset' );
 			delete_option( 'wppo_preload_cron_last_id' );
 			delete_option( 'wppo_preload_cron_migrated' );
+			delete_option( self::PRELOAD_QUEUE_OPTION );
 			delete_transient( Util::transient_key( 'wppo_preload_cron_lock' ) );
 			delete_transient( Util::transient_key( 'wppo_used_css_lock' ) );
 			delete_transient( Util::transient_key( 'wppo_object_cache_probe_lock' ) );
@@ -942,6 +1179,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			if ( function_exists( 'wp_parse_url' ) && function_exists( 'home_url' ) ) {
 				$home_host = wp_parse_url( home_url(), PHP_URL_HOST );
 				if ( ( wp_parse_url( $url, PHP_URL_HOST ) ) !== $home_host ) {
+					self::mark_preload_done( $url );
 					return;
 				}
 			}
@@ -949,12 +1187,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			// Defensive Woo skip (issue #962): never warm dynamic routes.
 			// Defensive editor skip (issue #1097): never warm previews.
 			if ( $this->is_woo_excluded_url( $url ) || $this->is_editor_preview_url( $url ) ) {
+				self::mark_preload_done( $url );
 				return;
 			}
 
 			// P4 lane: use crawler when on LiteSpeed.
 			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) && class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::is_litespeed() ) {
 				LiteSpeed_Crawler::crawl_single( $url );
+				self::mark_preload_done( $url );
 				return;
 			}
 
@@ -1003,6 +1243,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					++$wppo_warmup_logged;
 					Log::add( $warmup_failure );
 				}
+				self::mark_preload_failed( $url );
+			} else {
+				self::mark_preload_done( $url );
 			}
 		}
 

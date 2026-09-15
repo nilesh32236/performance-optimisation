@@ -552,7 +552,58 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 2.0.0
 		 */
 		private function is_core_block_asset( $handle, bool $separate_block_assets ): bool {
+			if ( $separate_block_assets && $this->is_combined_core_block_monolith_forced() ) {
+				return false;
+			}
 			return $separate_block_assets && str_starts_with( (string) $handle, 'wp-block-' );
+		}
+
+		/**
+		 * Whether the operator forced the combined core block-assets monolith.
+		 *
+		 * Explicit, fail-open escape hatch for the on-demand block-styles
+		 * pipeline: when `blockAssetsOnDemand` is off or
+		 * `loadAllCoreBlockAssets` is on, core block styles (`wp-block-*`)
+		 * stay combinable even if `wp_should_load_separate_core_block_assets()`
+		 * reports separate loading. Mirrors the opt-out registered by
+		 * `Main::register_block_assets_filters()` so `Cache` never depends on
+		 * that filter's side effect (which is skipped on block themes and
+		 * never runs in unit-test isolation). Any throwable or missing
+		 * options structure returns false (legacy separate-assets path).
+		 *
+		 * @return bool True when the combined monolith is forced.
+		 * @since NEXT
+		 */
+		private function is_combined_core_block_monolith_forced(): bool {
+			try {
+				if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
+					return false;
+				}
+				$file_opt = $this->options['file_optimisation'];
+				return empty( $file_opt['blockAssetsOnDemand'] ) || ! empty( $file_opt['loadAllCoreBlockAssets'] );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Effective separate-assets state after the monolith escape hatch.
+		 *
+		 * Single funnel for every combine/preload loop: the core
+		 * `should_load_separate_core_block_assets` state from
+		 * {@see block_assets_are_separate()} forced off when
+		 * {@see is_combined_core_block_monolith_forced()} holds, so no
+		 * scattered skip site can disagree about block-asset ownership.
+		 *
+		 * @return bool True when core owns on-demand block styles on this request.
+		 * @since NEXT
+		 */
+		private function get_effective_separate_block_assets(): bool {
+			if ( $this->is_combined_core_block_monolith_forced() ) {
+				return false;
+			}
+			return $this->block_assets_are_separate();
 		}
 
 		/**
@@ -610,7 +661,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// of core preload emission, reassess whether this concat pipeline should
 			// be dropped / relegated to an opt-in legacy toggle in favour of core
 			// preloads (wp_resource_hints). No runtime change until the core API lands.
-			if ( ! $this->is_cache_allowed_for_current_user() || is_404() || $this->is_not_cacheable() ) {
+			// Sandbox preview (issue #1163): the preview admin renders staged
+			// combineCSS even without logged-in cache enabled. is_not_cacheable()
+			// is also bypassed: the preview defines DONOTCACHEPAGE and carries a
+			// query string by design, both of which force that gate. Visitors
+			// keep the production gates. 404s never combine.
+			$is_preview = false;
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'is_sandbox_preview_active' ) ) {
+					$is_preview = Main::is_sandbox_preview_active();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			if ( ( ! $this->is_cache_allowed_for_current_user() && ! $is_preview ) || is_404() || ( $this->is_not_cacheable() && ! $is_preview ) ) {
 				return;
 			}
 
@@ -627,8 +691,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			$exclude_combine_css = array();
-			if ( ! empty( $this->options['file_optimisation']['excludeCombineCSS'] ) ) {
-				$exclude_combine_css = Util::process_urls( $this->options['file_optimisation']['excludeCombineCSS'] );
+			// Sandbox preview (issue #1163): staged excludeCombineCSS lines
+			// also exclude in preview only. Util::process_urls() is
+			// array-safe (string or array payload).
+			$file_opt_for_combine = isset( $this->options['file_optimisation'] ) && is_array( $this->options['file_optimisation'] ) ? $this->options['file_optimisation'] : array();
+			if ( $is_preview ) {
+				try {
+					if ( class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_effective_file_optimisation' ) ) {
+						$file_opt_for_combine = Sandbox_Preview::get_effective_file_optimisation( $file_opt_for_combine );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			if ( ! empty( $file_opt_for_combine['excludeCombineCSS'] ) ) {
+				$exclude_combine_css = Util::process_urls( $file_opt_for_combine['excludeCombineCSS'] );
+			}
+			// Sandbox preview (issue #1163): a staged combineCSS=off must disable
+			// combining in preview (mirror minify_queued_styles logic), otherwise
+			// staged-disable can never be previewed.
+			if ( $is_preview && empty( $file_opt_for_combine['combineCSS'] ) ) {
+				return;
 			}
 
 			// On WP 6.9+ with separate (on-demand) core block assets active, never
@@ -641,14 +724,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// core wins; combine is the fallback, not a competitor). The
 			// `should_load_separate_core_block_assets` opt-out filter is honoured
 			// via block_assets_are_separate(): an explicit opt-out restores the
-			// legacy monolith path.
-			$separate_block_assets = $this->block_assets_are_separate();
+			// legacy monolith path. The operator escape hatch
+			// (`blockAssetsOnDemand` off / `loadAllCoreBlockAssets` on) is applied
+			// explicitly via get_effective_separate_block_assets() so Cache never
+			// depends on Main's filter side effect.
+			$separate_block_assets = $this->get_effective_separate_block_assets();
 
 			// The effective separate-assets state is baked into the combined-CSS
 			// cache filename, so a 6.8 -> 6.9 upgrade (which flips separate block
 			// assets on by default for classic themes) cannot keep serving a stale
 			// combined monolith built while wp-block-library was still in the queue.
+			// Sandbox preview (issue #1163) gets its own `-preview` variant so
+			// staged combine output can never overwrite the production file.
 			$css_variant = $separate_block_assets ? 'separate' : '';
+			if ( $is_preview ) {
+				$css_variant .= '' === $css_variant ? 'preview' : '-preview';
+			}
 
 			// The set of handles this request would pull into the combined file. The
 			// same skip rules are applied below during generation so the two branches
@@ -807,8 +898,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			// Fresh combined CSS changes the total-asset stats — do not let
 			// the dashboard show stale numbers until the TTL expires (audit
-			// #874 finding 6).
-			self::bump_stats_cache();
+			// #874 finding 6). Skipped in sandbox preview: preview output must
+			// not invalidate production stats.
+			if ( ! $is_preview ) {
+				self::bump_stats_cache();
+			}
 
 			foreach ( $successful_handles as $handle ) {
 				wp_dequeue_style( $handle );
@@ -938,7 +1032,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private function get_combined_handles( $styles, $exclude_combine_css ): array {
 			global $wp_styles;
 
-			$separate_block_assets = $this->block_assets_are_separate();
+				$separate_block_assets = $this->get_effective_separate_block_assets();
 
 			$handles = array();
 			foreach ( $styles as $handle ) {
@@ -1434,11 +1528,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Whether the combined-CSS file should be skipped on small block-theme bundles.
 		 *
-		 * On block themes with a small total payload (≤ styles_inline_size_limit,
-		 * 40KB on WP 6.9+) core's greedy smallest-first inline budget will already
-		 * inline the eligible styles at their queue positions. Creating a combined
-		 * file would add an extra request without benefit, so it is skipped and the
-		 * styles are left enqueued for core to inline. Classic themes always combine.
+		 * On block themes with a small total payload (≤ the filtered
+		 * `styles_inline_size_limit` budget via {@see get_styles_inline_limit()},
+		 * 40KB default on WP 6.9+, 20KB legacy) core's greedy smallest-first
+		 * inline budget will already inline the eligible styles at their queue
+		 * positions. Creating a combined file would add an extra request
+		 * without benefit, so it is skipped and the styles are left enqueued
+		 * for core to inline. Sizes are measured with core's own accounting
+		 * (`path`-data filesize first, local `src` fallback via
+		 * {@see measure_style_byte_size()}) so the skip decision never
+		 * disagrees with {@see core_will_inline()}. Classic themes always
+		 * combine.
 		 *
 		 * Guards (issue #880):
 		 * - WP 6.9+ only: the 40KB default budget is what makes small bundles
@@ -1509,25 +1609,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			global $wp_styles;
 			$total = 0;
 			foreach ( $eligible_handles as $handle ) {
-				if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
-					continue;
-				}
-				$src = (string) ( $wp_styles->registered[ $handle ]->src ?? '' );
-				if ( '' === $src ) {
-					continue;
-				}
-				$path = Util::get_local_path( $src );
-				if ( '' === $path ) {
-					return false;
-				}
-				$stat = $this->get_cached_src_stat( $path );
-				if ( ! $stat['readable'] ) {
+				$size = $this->measure_style_byte_size( $handle );
+				if ( false === $size ) {
 					// Unreadable/remote styles cannot be measured — do not skip.
 					return false;
 				}
-				$size = $stat['size'];
-				if ( false === $size ) {
-					return false;
+				if ( 0 === $size ) {
+					continue;
 				}
 				if ( $size > $limit ) {
 					// A single handle exceeds the inline limit — core cannot inline it, so combine remains useful.
@@ -1539,6 +1627,66 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				}
 			}
 			return $total > 0 && $total <= $limit;
+		}
+
+		/**
+		 * Measure a style's byte size using core's inline-budget accounting.
+		 *
+		 * Core's `wp_maybe_inline_styles()` budgets the `path`-data filesize,
+		 * not the `src` URL filesize, so the skip heuristic must read the same
+		 * number `core_will_inline()` uses. When the handle carries readable
+		 * `path` data its filesize wins; otherwise the local `src` path is
+		 * measured as a fallback (pre-`path`-registration queues). Fail-open:
+		 * unregistered handles measure 0 (skipped), unmeasurable/remote
+		 * styles return false (caller keeps combining, never fatal).
+		 *
+		 * @param string $handle The registered style handle.
+		 * @return int|false Byte size, 0 when the handle contributes nothing, false when unmeasurable.
+		 * @since NEXT
+		 */
+		private function measure_style_byte_size( $handle ) {
+			global $wp_styles;
+			try {
+				if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
+					return 0;
+				}
+				$path_data = null;
+				if ( is_object( $wp_styles ) && method_exists( $wp_styles, 'get_data' ) ) {
+					try {
+						$path_data = $wp_styles->get_data( $handle, 'path' );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$path_data = null;
+					}
+				}
+				if ( is_string( $path_data ) && '' !== $path_data && is_file( $path_data ) ) {
+					$stat = $this->get_cached_src_stat( $path_data );
+					if ( ! $stat['readable'] || false === $stat['size'] ) {
+						return false;
+					}
+					return (int) $stat['size'];
+				}
+				$src = (string) ( $wp_styles->registered[ $handle ]->src ?? '' );
+				if ( '' === $src ) {
+					return 0;
+				}
+				$path = Util::get_local_path( $src );
+				if ( '' === $path ) {
+					return false;
+				}
+				$stat = $this->get_cached_src_stat( $path );
+				if ( ! $stat['readable'] ) {
+					return false;
+				}
+				$size = $stat['size'];
+				if ( false === $size ) {
+					return false;
+				}
+				return (int) $size;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
 		}
 
 		/**
@@ -2605,6 +2753,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				}
 			} finally {
 				Util::release_stampede_lock( $lock_key, $lock_owner );
+			}
+
+			// Bounded cache (issue #1162): warn-before-enforce size cap runs
+			// after the write so the frontend is never blocked. Fail-open.
+			if ( 'html' === $type ) {
+				try {
+					self::maybe_enforce_cache_cap();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 			}
 		}
 
@@ -4289,6 +4447,301 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private function count_cached_pages( string $directory, int $depth = 0 ): int {
 			$stats = $this->calculate_directory_stats( $directory, $depth );
 			return $stats['count'];
+		}
+
+		/**
+		 * Read the bounded-cache cap settings with fail-safe defaults.
+		 *
+		 * Additive `cache_settings` keys (issue #1162): `cacheMaxSizeMB`
+		 * (default 512), `cacheSizeWarnRatio` (default 0.8),
+		 * `cacheSizeEnforce` (default true). Missing or malformed stored
+		 * values fall back to defaults; enforcement never blocks the
+		 * frontend — the cap only warns first, then evicts oldest entries.
+		 *
+		 * @since NEXT
+		 * @return array{max_mb:int,warn_ratio:float,enforce:bool}
+		 */
+		public static function get_cache_cap_settings(): array {
+			$defaults = array(
+				'max_mb'     => 512,
+				'warn_ratio' => 0.8,
+				'enforce'    => true,
+			);
+			try {
+				$settings = array();
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					$all      = Util::get_settings();
+					$settings = isset( $all['cache_settings'] ) && is_array( $all['cache_settings'] ) ? $all['cache_settings'] : array();
+				}
+				if ( isset( $settings['cacheMaxSizeMB'] ) && is_numeric( $settings['cacheMaxSizeMB'] ) ) {
+					$max_mb = (int) $settings['cacheMaxSizeMB'];
+					if ( $max_mb > 0 && $max_mb <= 10240 ) {
+						$defaults['max_mb'] = $max_mb;
+					}
+				}
+				if ( isset( $settings['cacheSizeWarnRatio'] ) && is_numeric( $settings['cacheSizeWarnRatio'] ) ) {
+					$ratio = (float) $settings['cacheSizeWarnRatio'];
+					if ( $ratio > 0 && $ratio < 1 ) {
+						$defaults['warn_ratio'] = $ratio;
+					}
+				}
+				if ( array_key_exists( 'cacheSizeEnforce', $settings ) ) {
+					$parsed = filter_var( $settings['cacheSizeEnforce'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+					if ( null !== $parsed ) {
+						$defaults['enforce'] = $parsed;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $defaults;
+		}
+
+		/**
+		 * Total static-cache size in bytes for the current domain.
+		 *
+		 * Fail-open: returns 0 when the filesystem or directory is
+		 * unavailable. Uses the single-walk {@see calculate_directory_stats()}
+		 * helper so size accounting matches the dashboard stats.
+		 *
+		 * @since NEXT
+		 * @return int Bytes used, or 0 on failure.
+		 */
+		public static function get_cache_size_bytes(): int {
+			try {
+				$instance = new self();
+				if ( ! $instance->get_filesystem() ) {
+					return 0;
+				}
+				$dir = trailingslashit( $instance->cache_root_dir );
+				if ( '' !== $instance->domain ) {
+					$dir .= $instance->domain;
+				}
+				if ( ! $instance->filesystem->is_dir( $dir ) ) {
+					return 0;
+				}
+				$stats = $instance->calculate_directory_stats( $dir );
+				return max( 0, (int) ( $stats['size'] ?? 0 ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
+			}
+		}
+
+		/**
+		 * Warn-before-enforce cap status for the current domain cache.
+		 *
+		 * States: `ok` (under warn threshold), `warn` (over warn threshold
+		 * but under cap, or over cap with enforcement off), `over` (over cap
+		 * with enforcement on). Never fatal; all failures report `ok`.
+		 *
+		 * @since NEXT
+		 * @return array{bytes:int,cap_bytes:int,warn_bytes:int,state:string,enforce:bool,max_mb:int}
+		 */
+		public static function get_cache_cap_status(): array {
+			$cap        = self::get_cache_cap_settings();
+			$cap_bytes  = $cap['max_mb'] * 1024 * 1024;
+			$warn_bytes = (int) ( $cap_bytes * $cap['warn_ratio'] );
+			$status     = array(
+				'bytes'      => 0,
+				'cap_bytes'  => $cap_bytes,
+				'warn_bytes' => $warn_bytes,
+				'state'      => 'ok',
+				'enforce'    => $cap['enforce'],
+				'max_mb'     => $cap['max_mb'],
+			);
+			try {
+				$bytes           = self::get_cache_size_bytes();
+				$status['bytes'] = $bytes;
+				if ( $bytes >= $cap_bytes ) {
+					$status['state'] = $cap['enforce'] ? 'over' : 'warn';
+				} elseif ( $bytes >= $warn_bytes ) {
+					$status['state'] = 'warn';
+				}
+				// Surface a persisted warning flag so the SPA can render it
+				// without re-walking the directory on every admin request.
+				$warn_key = '';
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {
+					$warn_key = Util::transient_key( 'wppo_cache_size_warning' );
+				}
+				if ( '' !== $warn_key && function_exists( 'get_transient' ) ) {
+					$flag = get_transient( $warn_key );
+					if ( 'warn' === $status['state'] || 'over' === $status['state'] ) {
+						$status['warning'] = true;
+					} elseif ( false !== $flag ) {
+						$status['warning'] = true;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $status;
+		}
+
+		/**
+		 * Warn-before-enforce size-cap check after a cache write.
+		 *
+		 * Throttled to at most one directory walk per 5 minutes via a
+		 * transient lock so frontend writes stay cheap. When usage passes
+		 * the warn threshold a warning transient is set (honest UI signal);
+		 * when usage passes the cap and enforcement is on, the oldest
+		 * entries are evicted until back under the cap. Never blocks the
+		 * frontend: every failure path returns silently.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function maybe_enforce_cache_cap(): void {
+			try {
+				if ( ! function_exists( 'get_transient' ) || ! function_exists( 'set_transient' ) ) {
+					return;
+				}
+				$lock_key = '';
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {
+					$lock_key = Util::transient_key( 'wppo_cache_cap_check_lock' );
+				} else {
+					return;
+				}
+				if ( false !== get_transient( $lock_key ) ) {
+					return;
+				}
+				set_transient( $lock_key, 1, 5 * MINUTE_IN_SECONDS );
+
+				$status   = self::get_cache_cap_status();
+				$bytes    = (int) $status['bytes'];
+				$warn_key = Util::transient_key( 'wppo_cache_size_warning' );
+				if ( $bytes >= (int) $status['warn_bytes'] ) {
+					set_transient( $warn_key, 1, 12 * HOUR_IN_SECONDS );
+				} else {
+					delete_transient( $warn_key );
+					return;
+				}
+				if ( $bytes < (int) $status['cap_bytes'] ) {
+					return;
+				}
+				if ( empty( $status['enforce'] ) ) {
+					return;
+				}
+				$to_free = $bytes - (int) $status['cap_bytes'];
+				if ( $to_free > 0 ) {
+					self::evict_oldest_cache_entries( $to_free );
+					self::bump_stats_cache();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Evict oldest cached pages until at least the given bytes are freed.
+		 *
+		 * Deletes `index.html` plus its `.gz`/`.br` siblings, oldest mtime
+		 * first, bounded to 2000 entries per run so a single request cannot
+		 * stall on a massive cache. Fail-open: filesystem failures stop the
+		 * walk silently.
+		 *
+		 * @since NEXT
+		 * @param int $bytes_to_free Minimum bytes to reclaim.
+		 * @return int Bytes actually freed (best effort).
+		 */
+		public static function evict_oldest_cache_entries( int $bytes_to_free ): int {
+			$freed = 0;
+			try {
+				$instance = new self();
+				if ( ! $instance->get_filesystem() ) {
+					return 0;
+				}
+				$dir = trailingslashit( $instance->cache_root_dir );
+				if ( '' !== $instance->domain ) {
+					$dir .= $instance->domain;
+				}
+				$entries = $instance->collect_cache_entries_by_age( $dir );
+				if ( empty( $entries ) ) {
+					return 0;
+				}
+				usort(
+					$entries,
+					static function ( $a, $b ) {
+						return ( (int) ( $a['mtime'] ?? 0 ) ) <=> ( (int) ( $b['mtime'] ?? 0 ) );
+					}
+				);
+				$budget = min( count( $entries ), 2000 );
+				for ( $i = 0; $i < $budget && $freed < $bytes_to_free; ++$i ) {
+					$file = (string) ( $entries[ $i ]['path'] ?? '' );
+					if ( '' === $file || ! $instance->is_path_contained( $file ) ) {
+						continue;
+					}
+					$size = (int) ( $entries[ $i ]['size'] ?? 0 );
+					$instance->delete_cache_files( $file );
+					$freed += $size;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return max( 0, $freed );
+		}
+
+		/**
+		 * Collect cache `index.html` entries with mtime + size for eviction.
+		 *
+		 * Recursive `$fs->dirlist()` walk capped at depth 20 and 5000
+		 * entries so eviction stays bounded on huge caches.
+		 *
+		 * @since NEXT
+		 * @param string $directory Directory to scan.
+		 * @param int    $depth     Recursion depth guard.
+		 * @param array  $out       Accumulator (passed by reference).
+		 * @return array<int, array{path:string,mtime:int,size:int}> Collected entries.
+		 */
+		private function collect_cache_entries_by_age( string $directory, int $depth = 0, array &$out = array() ): array {
+			try {
+				if ( $depth > 20 || count( $out ) >= 5000 ) {
+					return $out;
+				}
+				$fs = $this->get_filesystem();
+				if ( ! $fs ) {
+					return $out;
+				}
+				$files = $fs->dirlist( $directory );
+				if ( ! $files ) {
+					return $out;
+				}
+				foreach ( $files as $file ) {
+					if ( count( $out ) >= 5000 ) {
+						break;
+					}
+					$file_path = trailingslashit( $directory ) . $file['name'];
+					if ( 'd' === $file['type'] ) {
+						$this->collect_cache_entries_by_age( $file_path, $depth + 1, $out );
+						continue;
+					}
+					if ( 'index.html' !== $file['name'] ) {
+						continue;
+					}
+					$size  = isset( $file['size'] ) && is_numeric( $file['size'] ) ? (int) $file['size'] : (int) $fs->size( $file_path );
+					$mtime = 0;
+					if ( isset( $file['lastmodunix'] ) && is_numeric( $file['lastmodunix'] ) ) {
+						$mtime = (int) $file['lastmodunix'];
+					} else {
+						$mtime = (int) $fs->mtime( $file_path );
+					}
+					$siblings = $size;
+					foreach ( array( '.gz', '.br' ) as $suffix ) {
+						$sibling = $file_path . $suffix;
+						if ( $fs->exists( $sibling ) ) {
+							$siblings += (int) $fs->size( $sibling );
+						}
+					}
+					$out[] = array(
+						'path'  => $file_path,
+						'mtime' => $mtime,
+						'size'  => $siblings,
+					);
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $out;
 		}
 
 		/**

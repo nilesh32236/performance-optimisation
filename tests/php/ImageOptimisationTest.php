@@ -2016,4 +2016,184 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertStringNotContainsString( 'content-visibility:auto', $result );
 	}
+	/**
+	 * Tag Processor placeholder tier stages data: sources through a sentinel
+	 * and swaps only the quoted src value back.
+	 *
+	 * The svg placeholder is itself a data: URI, which the Tag Processor
+	 * blocks in src, so the tier stages a sentinel URL and restores the
+	 * real payload afterwards. A sentinel-looking string in a text node
+	 * must survive untouched (quoted-attribute anchoring).
+	 *
+	 * @since NEXT
+	 */
+	public function test_placeholders_with_tag_processor_sentinel_round_trip(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		$this->stub_local_path_resolution();
+		Functions\when( 'esc_attr' )->returnArg();
+		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'untrailingslashit' )->returnArg();
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+
+		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'post_process_placeholders_with_tag_processor' );
+		$reflection->setAccessible( true );
+
+		// The first staged sentinel is deterministic (__wppo_ph_0__): plant
+		// the same string in a text node to prove the quoted-only swap
+		// leaves non-attribute occurrences untouched.
+		$buffer = '<p>talk about https://wppo.invalid/__wppo_ph_0__ here</p>'
+			. '<img data-src="http://example.com/wp-content/uploads/photo.jpg" alt="Photo" />';
+
+		$result = $reflection->invoke( $image_opt, $buffer );
+
+		$this->assertIsString( $result );
+		$this->assertStringContainsString( 'src="data:image/svg+xml;base64,', $result );
+		$this->assertStringContainsString( '<p>talk about https://wppo.invalid/__wppo_ph_0__ here</p>', $result );
+		$this->assertSame( 1, substr_count( $result, 'data:image/svg+xml;base64,' ) );
+	}
+
+	/**
+	 * Tag Processor preload scan treats present-but-empty as="" as non-image.
+	 *
+	 * Mirrors the regex fallback exactly: any present quoted as value
+	 * (including an empty string) must equal 'image', while an absent as
+	 * still dedups. Both the direct tier and the combined scan agree.
+	 *
+	 * @since NEXT
+	 */
+	public function test_buffer_has_image_preload_with_tag_processor_empty_as_parity(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		$this->stub_local_path_resolution();
+		Functions\when( 'untrailingslashit' )->returnArg();
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+		$url       = 'http://example.com/wp-content/uploads/hero.jpg';
+
+		$scan = new \ReflectionMethod( Image_Optimisation::class, 'buffer_has_image_preload' );
+		$scan->setAccessible( true );
+
+		$direct = new \ReflectionMethod( Image_Optimisation::class, 'buffer_has_image_preload_with_tag_processor' );
+		$direct->setAccessible( true );
+
+		$normalize = new \ReflectionMethod( Image_Optimisation::class, 'normalize_image_url' );
+		$normalize->setAccessible( true );
+		$query = new \ReflectionMethod( Image_Optimisation::class, 'get_url_query' );
+		$query->setAccessible( true );
+
+		$needle           = $normalize->invoke( $image_opt, $url );
+		$needle_exact     = $normalize->invoke( $image_opt, $url, false );
+		$needle_has_sizes = ( '' !== $needle_exact && $needle_exact !== $needle );
+		$needle_query     = $query->invoke( $image_opt, $url );
+
+		// Present-but-empty as="" must NOT dedup (regex parity).
+		$empty_as = '<link rel="preload" as="" href="http://example.com/wp-content/uploads/hero.jpg">';
+		$this->assertFalse( $direct->invoke( $image_opt, $empty_as, $needle, $needle_exact, $needle_has_sizes, $needle_query ) );
+		$this->assertFalse( $scan->invoke( $image_opt, $empty_as, $url ) );
+
+		// as="image" and an absent as DO dedup.
+		$as_image = '<link rel="preload" as="image" href="http://example.com/wp-content/uploads/hero.jpg">';
+		$this->assertTrue( $direct->invoke( $image_opt, $as_image, $needle, $needle_exact, $needle_has_sizes, $needle_query ) );
+		$this->assertTrue( $scan->invoke( $image_opt, $as_image, $url ) );
+
+		$no_as = '<link rel="preload" href="http://example.com/wp-content/uploads/hero.jpg">';
+		$this->assertTrue( $direct->invoke( $image_opt, $no_as, $needle, $needle_exact, $needle_has_sizes, $needle_query ) );
+		$this->assertTrue( $scan->invoke( $image_opt, $no_as, $url ) );
+	}
+
+	/**
+	 * Tag Processor dimension tier requires numeric width/height like the regex.
+	 *
+	 * A non-numeric width="auto" (empty/boolean alike) counts as missing, so
+	 * the looked-up size is injected, while numeric dimensions are kept.
+	 *
+	 * @since NEXT
+	 */
+	public function test_img_dimensions_with_tag_processor_numeric_gate(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		$this->stub_local_path_resolution();
+		Functions\when( 'untrailingslashit' )->returnArg();
+
+		$upload_dir = '/tmp/wordpress/wp-content/uploads';
+		if ( ! is_dir( $upload_dir ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir
+			mkdir( $upload_dir, 0777, true );
+		}
+
+		$temp_file = $upload_dir . '/dim-tag-numeric.jpg';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+		file_put_contents( $temp_file, 'not-a-real-jpeg' );
+
+		Functions\when( 'getimagesize' )->alias(
+			static function () {
+				return array( 640, 480, 2, 'width="640" height="480"', 'image/jpeg' );
+			}
+		);
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+
+		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'post_process_img_dimensions_with_tag_processor' );
+		$reflection->setAccessible( true );
+
+		try {
+			// width="auto" is non-numeric: like the regex fallback, the
+			// Tag Processor tier treats it as missing and injects.
+			$result = $reflection->invoke( $image_opt, '<img data-src="http://example.com/wp-content/uploads/dim-tag-numeric.jpg" width="auto" />' );
+
+			$this->assertIsString( $result );
+			$this->assertStringContainsString( 'width="640"', $result );
+			$this->assertStringContainsString( 'height="480"', $result );
+			$this->assertStringNotContainsString( 'width="auto"', $result );
+
+			// Numeric dimensions on both axes are respected (no injection).
+			$untouched = $reflection->invoke( $image_opt, '<img data-src="http://example.com/wp-content/uploads/dim-tag-numeric.jpg" width="200" height="100" />' );
+
+			$this->assertIsString( $untouched );
+			$this->assertStringContainsString( 'width="200"', $untouched );
+			$this->assertStringContainsString( 'height="100"', $untouched );
+			$this->assertStringNotContainsString( 'width="640"', $untouched );
+		} finally {
+			if ( file_exists( $temp_file ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Cleanup of temp fixture file.
+				unlink( $temp_file );
+			}
+		}
+	}
+
+	/**
+	 * Tag Processor auto-sizes tier honors the width/height CLS gate.
+	 *
+	 * Lazy tags with srcset plus numeric dimensions gain data-sizes="auto"
+	 * (or an auto-prefixed value); dimension-less images, pre-stamped auto
+	 * values, and <source> nodes are left untouched.
+	 *
+	 * @since NEXT
+	 */
+	public function test_auto_sizes_with_tag_processor_cls_gate(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+
+		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'post_process_auto_sizes_with_tag_processor' );
+		$reflection->setAccessible( true );
+
+		$buffer = '<div><p>copy</p></div>'
+			. '<img data-src="http://example.com/a.jpg" data-srcset="http://example.com/a.jpg 100w" width="100" height="100" />'
+			. '<img data-src="http://example.com/b.jpg" data-srcset="http://example.com/b.jpg 100w" />'
+			. '<img data-src="http://example.com/c.jpg" data-srcset="http://example.com/c.jpg 100w" width="100" height="100" data-sizes="100vw" />'
+			. '<img data-src="http://example.com/d.jpg" data-srcset="http://example.com/d.jpg 100w" width="100" height="100" data-sizes="auto, 100vw" />'
+			. '<picture><source data-srcset="http://example.com/e.webp" /></picture>';
+
+		$result = $reflection->invoke( $image_opt, $buffer );
+
+		$this->assertIsString( $result );
+		// a.jpg gains bare auto, c.jpg gains the auto prefix, d.jpg keeps
+		// its pre-stamped value: exactly three data-sizes attributes.
+		$this->assertSame( 3, substr_count( $result, 'data-sizes' ) );
+		$this->assertStringContainsString( 'data-sizes="auto"', $result );
+		$this->assertSame( 2, substr_count( $result, 'data-sizes="auto, 100vw"' ) );
+		// b.jpg (no dimensions) and the <source> node stay untouched.
+		$this->assertStringContainsString( '<img data-src="http://example.com/b.jpg" data-srcset="http://example.com/b.jpg 100w" />', $result );
+		$this->assertStringContainsString( '<source data-srcset="http://example.com/e.webp" />', $result );
+	}
 }

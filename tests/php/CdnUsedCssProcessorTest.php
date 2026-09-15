@@ -44,8 +44,7 @@ class CdnUsedCssProcessorTest extends \PHPUnit\Framework\TestCase {
 	protected function setUp(): void {
 		parent::setUp();
 		\Brain\Monkey\setUp();
-		\PerformanceOptimise\Inc\Util::reset_cached_home_urls();
-		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		\PerformanceOptimise\Inc\Util::reset_runtime_caches();
 		$this->register_common_function_stubs();
 		// Minimal functional WP_HTML_* stand-ins (same pattern as
 		// ImageOptimisationTest) so the processor path engages, then re-probe

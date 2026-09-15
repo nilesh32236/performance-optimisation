@@ -31,8 +31,7 @@ class UtilCoreApiHelpersTest extends \PHPUnit\Framework\TestCase {
 		// Replicate the trait's per-test cache resets for isolation (issue
 		// #882 review), then re-probe the HTML processor availability with the
 		// stubs loaded.
-		Util::reset_cached_home_urls();
-		Util::clear_settings_cache();
+		Util::reset_runtime_caches();
 		Util::reset_html_processor_memo();
 		// Minimal functional WP_HTML_* stand-ins (same pattern as
 		// ImageOptimisationTest) so the processor helpers can be exercised.

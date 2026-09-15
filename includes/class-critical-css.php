@@ -167,6 +167,38 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		private const DEFAULT_CCSS_MAX_SIZE = 20480;
 
 		/**
+		 * Default per-run cap for the RUM-weighted CCSS queue (issue #1164).
+		 *
+		 * Templates are ~5 + custom page templates, so 5 bounds one cron run
+		 * while RUM-worst-first ordering ensures the render-blocking bytes go
+		 * first. Overridable per site via `file_optimisation.ccssQueueCap`.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const DEFAULT_CCSS_QUEUE_CAP = 5;
+
+		/**
+		 * Hard upper bound for the CCSS per-run cap read.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const MAX_CCSS_QUEUE_CAP = 100;
+
+		/**
+		 * Viewport-split variant slugs (issue #1164).
+		 *
+		 * Stored as `{hash}.{variant}.css` next to the single `{hash}.css`
+		 * variant. Missing or stale variant files fall back to the single
+		 * CCSS (or the deferred full stylesheet) — never fatal.
+		 *
+		 * @since NEXT
+		 * @var string[]
+		 */
+		public const VIEWPORT_VARIANTS = array( 'mobile', 'desktop' );
+
+		/**
 		 * Minimum CCSS payload worth inlining.
 		 *
 		 * Shorter output is treated as a failed extraction: the async loader
@@ -301,6 +333,326 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return '';
 			}
 			return substr( $css, 0, $cut + 1 );
+		}
+
+		/**
+		 * Read the configured per-run CCSS queue cap (issue #1164).
+		 *
+		 * The single source of truth is `Util::get_default_settings()`
+		 * (`file_optimisation.ccssQueueCap`, default 5). Fail-open: a missing
+		 * key falls back to the default; a non-positive / non-numeric value
+		 * means uncapped (current behaviour) so a rogue setting can never
+		 * starve the queue. Oversized values are clamped to MAX_CCSS_QUEUE_CAP.
+		 *
+		 * @return int Per-run cap, or PHP_INT_MAX when uncapped.
+		 * @since NEXT
+		 */
+		public static function get_css_queue_cap(): int {
+			try {
+				$options = Util::get_settings();
+				if ( ! isset( $options['file_optimisation']['ccssQueueCap'] ) ) {
+					return self::DEFAULT_CCSS_QUEUE_CAP;
+				}
+				$raw = $options['file_optimisation']['ccssQueueCap'];
+				if ( ! is_numeric( $raw ) ) {
+					return PHP_INT_MAX;
+				}
+				$cap = (int) $raw;
+				if ( $cap <= 0 ) {
+					return PHP_INT_MAX;
+				}
+				return min( $cap, self::MAX_CCSS_QUEUE_CAP );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return PHP_INT_MAX;
+			}
+		}
+
+		/**
+		 * Whether viewport-split CCSS variants are enabled (issue #1164).
+		 *
+		 * Additive `file_optimisation.ccssViewportVariants` setting (bool or
+		 * list of variant slugs, default false = current single-variant
+		 * behaviour verbatim). Fail-open: any error returns false.
+		 *
+		 * @return bool True when split variants should be emitted/served.
+		 * @since NEXT
+		 */
+		public static function is_viewport_variants_enabled(): bool {
+			try {
+				$options = Util::get_settings();
+				$raw     = $options['file_optimisation']['ccssViewportVariants'] ?? false;
+				if ( is_array( $raw ) ) {
+					return ! empty( $raw );
+				}
+				return (bool) $raw;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Get the CCSS file path for a viewport-split variant.
+		 *
+		 * Only `mobile` / `desktop` slugs are accepted; anything else returns
+		 * '' so callers fall back to the single variant. Same traversal guard
+		 * as {@see get_ccss_file()}.
+		 *
+		 * @param string $template_hash Template hash.
+		 * @param string $variant       Variant slug ('mobile'|'desktop').
+		 * @return string Full file path, or '' when refused.
+		 * @since NEXT
+		 */
+		public static function get_ccss_variant_file( string $template_hash, string $variant ): string {
+			if ( ! in_array( $variant, self::VIEWPORT_VARIANTS, true ) ) {
+				return '';
+			}
+			if ( '' === $template_hash || 1 !== preg_match( '/^[A-Za-z0-9_\-]{1,128}$/', $template_hash ) ) {
+				return '';
+			}
+			$dir = self::get_ccss_dir();
+			if ( '' === $dir ) {
+				return '';
+			}
+			return $dir . '/' . $template_hash . '.' . $variant . '.css';
+		}
+
+		/**
+		 * Read a viewport-split variant with fail-open fallback (issue #1164).
+		 *
+		 * When variants are disabled, or the variant file is missing, stale
+		 * (older than the single variant), empty, or unreadable, the existing
+		 * single CCSS is returned instead. Returns null only when no usable
+		 * CSS exists at all — callers then serve the deferred full stylesheet
+		 * (never fatal, never white-screen).
+		 *
+		 * @param string $template_hash Template hash.
+		 * @param string $variant       Variant slug ('mobile'|'desktop').
+		 * @return string|null Variant or single CCSS content, or null when missing.
+		 * @since NEXT
+		 */
+		public static function get_ccss_variant_content( string $template_hash, string $variant ): ?string {
+			try {
+				$single = self::get_ccss_content( $template_hash );
+				if ( ! self::is_viewport_variants_enabled() ) {
+					return $single;
+				}
+				$file = self::get_ccss_variant_file( $template_hash, $variant );
+				if ( '' === $file || ! file_exists( $file ) ) {
+					return $single;
+				}
+				if ( self::is_variant_stale( $template_hash, $variant ) ) {
+					return $single;
+				}
+				$size = filesize( $file );
+				if ( false === $size || $size <= 0 || $size > 1048576 ) {
+					return $single;
+				}
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local cache file outside the WP filesystem abstraction.
+				$content = file_get_contents( $file );
+				if ( ! is_string( $content ) || '' === $content ) {
+					return $single;
+				}
+				return $content;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				try {
+					return self::get_ccss_content( $template_hash );
+				} catch ( \Throwable $inner ) {
+					unset( $inner );
+					return null;
+				}
+			}
+		}
+
+		/**
+		 * Whether a viewport-split variant is stale (issue #1164).
+		 *
+		 * A variant is stale when the single `{hash}.css` file exists and is
+		 * newer than the `{hash}.{variant}.css` file, or when the variant is
+		 * missing/unstatable. Missing single variant is not stale — there is
+		 * nothing to fall back to yet.
+		 *
+		 * @param string $template_hash Template hash.
+		 * @param string $variant       Variant slug ('mobile'|'desktop').
+		 * @return bool True when the variant must not be served.
+		 * @since NEXT
+		 */
+		public static function is_variant_stale( string $template_hash, string $variant ): bool {
+			try {
+				$variant_file = self::get_ccss_variant_file( $template_hash, $variant );
+				if ( '' === $variant_file || ! file_exists( $variant_file ) ) {
+					return true;
+				}
+				$single_file = self::get_ccss_file( $template_hash );
+				if ( '' === $single_file || ! file_exists( $single_file ) ) {
+					return false;
+				}
+				$variant_mtime = filemtime( $variant_file );
+				$single_mtime  = filemtime( $single_file );
+				if ( false === $variant_mtime || false === $single_mtime ) {
+					return true;
+				}
+				return $variant_mtime < $single_mtime;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
+		 * Delete stale viewport-split variants for a template (issue #1164).
+		 *
+		 * Fail-open: any error leaves files in place; serving still falls back
+		 * to the single variant via {@see get_ccss_variant_content()}.
+		 *
+		 * @param string $template_hash Template hash.
+		 * @return void
+		 * @since NEXT
+		 */
+		public static function invalidate_stale_variants( string $template_hash ): void {
+			try {
+				foreach ( self::VIEWPORT_VARIANTS as $variant ) {
+					if ( ! self::is_variant_stale( $template_hash, $variant ) ) {
+						continue;
+					}
+					// Only delete a variant that is stale *against* a newer
+					// single file; a variant with no single file yet is kept
+					// (is_variant_stale returns false there, so unreachable).
+					$variant_file = self::get_ccss_variant_file( $template_hash, $variant );
+					$single_file  = self::get_ccss_file( $template_hash );
+					if ( '' === $variant_file || '' === $single_file || ! file_exists( $single_file ) ) {
+						continue;
+					}
+					if ( ! file_exists( $variant_file ) ) {
+						continue;
+					}
+					$filesystem = Util::init_filesystem();
+					if ( $filesystem ) {
+						$filesystem->delete( $variant_file );
+					} else {
+						// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Local cache invalidation fallback.
+						unlink( $variant_file );
+					}
+					self::invalidate_ccss_memo( $template_hash );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Whether a stylesheet handle is exempt from CCSS deferral (issue #1164).
+		 *
+		 * The combined core block-library stylesheet (`wp-block-library`)
+		 * must never be deferred: deferring it flashes unstyled blocks
+		 * (FOUC) on first paint before the deferred swap runs. Mirrors the
+		 * SKIP_DEFER_HANDLES allowlist so unit tests can assert the guard
+		 * without rendering tags.
+		 *
+		 * @param string $handle Stylesheet handle.
+		 * @param string $href   Stylesheet URL (optional, substring match).
+		 * @return bool True when the handle must load normally.
+		 * @since NEXT
+		 */
+		public static function is_block_library_defer_exempt( string $handle, string $href = '' ): bool {
+			foreach ( self::SKIP_DEFER_HANDLES as $skip ) {
+				if ( $handle === $skip ) {
+					return true;
+				}
+				if ( '' !== $href && false !== strpos( $href, $skip ) ) {
+					return true;
+				}
+			}
+			if ( 'wp-block-library' === $handle ) {
+				return true;
+			}
+			if ( '' !== $href && false !== strpos( $href, 'wp-block-library' ) ) {
+				return true;
+			}
+			return false;
+		}
+
+		/**
+		 * Whether the current request is an Elementor context (issue #1164).
+		 *
+		 * Elementor pages (editor preview, `_elementor_data` post meta, or
+		 * `data-elementor-type` markup) keep full stylesheets: deferring or
+		 * purging builder CSS risks FOUC on popups/dialogs that render in
+		 * hidden containers. Fail-open: any error returns false (no exemption).
+		 *
+		 * @param int|null $post_id Optional post ID to inspect.
+		 * @return bool True when Elementor handling applies.
+		 * @since NEXT
+		 */
+		public static function is_elementor_context( ?int $post_id = null ): bool {
+			try {
+				if ( class_exists( 'Elementor\Plugin' ) ) {
+					return true;
+				}
+				if ( function_exists( 'elementor_pro_load_plugin' ) || defined( 'ELEMENTOR_VERSION' ) ) {
+					return true;
+				}
+				if ( null !== $post_id && $post_id > 0 && function_exists( 'get_post_meta' ) ) {
+					$data = get_post_meta( $post_id, '_elementor_data', true );
+					if ( ! empty( $data ) ) {
+						return true;
+					}
+					if ( function_exists( 'get_post_meta' ) ) {
+						$edit_mode = get_post_meta( $post_id, '_elementor_edit_mode', true );
+						if ( ! empty( $edit_mode ) ) {
+							return true;
+						}
+					}
+				}
+				if ( isset( $_GET['elementor-preview'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
+					return true;
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Elementor smoke check: purged CSS must still cover builder markers (issue #1164).
+		 *
+		 * Scans HTML for Elementor markers (`data-elementor-type`,
+		 * `elementor-widget`, `elementor-popup`) and requires the purged CSS
+		 * to retain at least one `.elementor` / `[data-elementor-type]` rule.
+		 * Pages without builder markup always pass. Fail-open: any error or
+		 * empty purged CSS on a non-builder page passes; empty purged CSS on
+		 * a builder page fails so callers serve the full stylesheet instead
+		 * of flashing unstyled content.
+		 *
+		 * @param string $html       Page HTML.
+		 * @param string $purged_css Purged/used CSS candidate.
+		 * @return bool True when it is safe to serve the purged CSS.
+		 * @since NEXT
+		 */
+		public static function passes_elementor_smoke( string $html, string $purged_css ): bool {
+			try {
+				if ( '' === $html ) {
+					return true;
+				}
+				$has_builder = false !== strpos( $html, 'data-elementor-type' )
+					|| false !== strpos( $html, 'elementor-widget' )
+					|| false !== strpos( $html, 'elementor-popup' );
+				if ( ! $has_builder ) {
+					return true;
+				}
+				if ( '' === trim( $purged_css ) ) {
+					return false;
+				}
+				return false !== strpos( $purged_css, '.elementor' )
+					|| false !== strpos( $purged_css, 'elementor-' )
+					|| false !== strpos( $purged_css, 'data-elementor-type' );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
 		}
 
 		/**
@@ -1641,10 +1993,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return self::is_safe_stylesheet_url( $import_url ) ? $import_url : '';
 			}
 
-			// If protocol-relative, prepend the base scheme.
+			// If protocol-relative, prepend the base scheme and re-gate
+			// through the SSRF allowlist so `//169.254.169.254/x.css`
+			// cannot bypass the absolute-URL check above (issue #1181).
+			// The fetch layer validates again before requesting.
 			if ( 0 === strpos( $import_url, '//' ) ) {
-				$scheme = wp_parse_url( $base_url, PHP_URL_SCHEME );
-				return $scheme ? $scheme . ':' . $import_url : 'https:' . $import_url;
+				$scheme   = wp_parse_url( $base_url, PHP_URL_SCHEME );
+				$resolved = $scheme ? $scheme . ':' . $import_url : 'https:' . $import_url;
+				return self::is_safe_stylesheet_url( $resolved ) ? $resolved : '';
 			}
 
 			// Resolve relative URL against the base URL's directory.
@@ -1775,7 +2131,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// legacy IE behavior vector. Without the lookbehind, any
 			// stylesheet using `scroll-behavior: smooth` failed this gate
 			// closed, which silently disabled critical CSS site-wide.
-			return (bool) preg_match( '/<\/style|<script|<!--|-->|expression\s*\(|javascript\s*:|vbscript\s*:|(?<![-\w])behaviou?r(?=\s*:)|-moz-binding|&(lt|gt|amp|quot|#\d+|#x[0-9a-f]+);?/i', $decoded );
+			return (bool) preg_match( '/<\/style|<script|<!--|-->|expression\s*\(|javascript\s*:|vbscript\s*:|file\s*:|expect\s*:|data\s*:\s*image\/svg|data\s*:\s*text\/html|(?<![-\w])behaviou?r(?=\s*:)|-moz-binding|&(lt|gt|amp|quot|#\d+|#x[0-9a-f]+);?/i', $decoded );
 		}
 
 		/**
@@ -1811,7 +2167,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				// A callback builds the replacement so the backslash is never
 				// parsed as a PCRE backreference.
 				$css = (string) preg_replace_callback(
-					'/expression\s*\(|javascript\s*:|vbscript\s*:/i',
+					'/expression\s*\(|javascript\s*:|vbscript\s*:|file\s*:|expect\s*:/i',
+					static function ( array $matches ): string {
+						$token = $matches[0];
+						return substr( $token, 0, -1 ) . '\\' . substr( $token, -1 );
+					},
+					$css
+				);
+				// Neutralize script-capable data: URLs inside url() so a
+				// poisoned stylesheet cannot smuggle `url(data:image/svg…)`
+				// or `url(data:text/html…)` past the scheme break above
+				// (issue #1181). A callback emits the backslash literally.
+				$css = (string) preg_replace_callback(
+					'/data\s*:\s*image\/svg|data\s*:\s*text\/html/i',
 					static function ( array $matches ): string {
 						$token = $matches[0];
 						return substr( $token, 0, -1 ) . '\\' . substr( $token, -1 );
@@ -2279,7 +2647,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// Reject generated CSS that could break out of the <style> context when
 			// inlined — a poisoned source stylesheet must never reach the CCSS cache.
 			// Fail closed: drop the block instead of caching raw input.
+			// Fail-open rendering: the page serves unoptimised markup, never fatal.
 			if ( false === $critical_css || self::contains_unsafe_css_tokens( $critical_css ) ) {
+				self::set_status_cache( $template_hash, 'failed', DAY_IN_SECONDS );
+				return false;
+			}
+			// Defense-in-depth (issue #1181): sanitize before caching so the
+			// stored file itself carries no breakout tokens even if the gate
+			// above missed a novel vector; output is sanitized again in
+			// inline_ccss(). An empty result fails closed like a gate hit.
+			$critical_css = self::sanitize_inline_css( $critical_css );
+			if ( '' === trim( $critical_css ) || self::contains_unsafe_css_tokens( $critical_css ) ) {
 				self::set_status_cache( $template_hash, 'failed', DAY_IN_SECONDS );
 				return false;
 			}
@@ -2324,6 +2702,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// the other templates' memo entries.
 			self::invalidate_ccss_memo( $template_hash );
 			clearstatcache( true, self::get_ccss_file( $template_hash ) );
+
+			// Viewport-split variants (issue #1164): when enabled, mirror the
+			// single output to `{hash}.mobile.css` / `{hash}.desktop.css` so
+			// the first run populates both splits. Later extractions overwrite
+			// both; a variant older than the single file is stale and falls
+			// back via get_ccss_variant_content(). Fail-open: variant write
+			// failures never fail the single-variant store.
+			if ( self::is_viewport_variants_enabled() ) {
+				try {
+					foreach ( self::VIEWPORT_VARIANTS as $variant ) {
+						$variant_file = self::get_ccss_variant_file( $template_hash, $variant );
+						if ( '' !== $variant_file && $filesystem ) {
+							Util::atomic_file_put_contents( $filesystem, $variant_file, $critical_css );
+						}
+					}
+					clearstatcache();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
 
 			if ( self::ccss_exists( $template_hash ) ) {
 				self::set_status_cache( $template_hash, 'ready', WEEK_IN_SECONDS );
@@ -2542,6 +2940,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				}
 			}
 
+			// Block-library FOUC guard (issue #1164): the combined core
+			// block-library stylesheet must always load normally, even if a
+			// future handle rename bypasses the allowlist above.
+			if ( self::is_block_library_defer_exempt( $handle, $href ) ) {
+				return $tag;
+			}
+
 			// Yield when operators disabled plugin inlining via the
 			// wppo_inline_combined_css falsy filter: stylesheets load normally
 			// (mirrors the inline_ccss() early return).
@@ -2726,8 +3131,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * deleting usable variants would be destructive if the operator later
 		 * disables deferred/delayed JS (issue #1090).
 		 *
+		 * The RUM-ordered queue is capped per run (issue #1164): only the
+		 * first N RUM-worst templates are queued so one run cannot flood the
+		 * scheduler; the next cron run picks up the remainder. Fail-open: an
+		 * invalid cap queues everything (current behaviour).
+		 *
 		 * @return int Number of jobs queued.
 		 * @since 2.0.0
+		 * @since NEXT Capped per-run queue with RUM-worst-first ordering.
 		 */
 		public static function regenerate_all(): int {
 			if ( self::is_deferral_suspended_by_js() ) {
@@ -2739,6 +3150,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			self::clear_all();
 
 			$templates = self::order_templates_by_rum_priority( $templates );
+
+			try {
+				$cap = self::get_css_queue_cap();
+				if ( PHP_INT_MAX !== $cap && count( $templates ) > $cap ) {
+					$templates = array_slice( $templates, 0, $cap, true );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 
 			foreach ( $templates as $template => $label ) {
 				$hash = self::get_template_hash( $template );

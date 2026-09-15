@@ -248,12 +248,10 @@ class ObjectCacheCircuitBreakerTest extends \PHPUnit\Framework\TestCase {
 		$this->register_common_function_stubs();
 
 		// The trait's setUp() is shadowed by this method, so repeat its
-		// static-cache resets here. Without clear_settings_cache(),
+		// static-cache resets here. Without reset_runtime_caches(),
 		// Util::get_settings() would serve a stale (empty) config cached by
 		// an earlier test and probe tests would miss stored Redis settings.
-		Util::reset_cached_home_urls();
-		Util::clear_settings_cache();
-		Util::clear_permalink_cache();
+		Util::reset_runtime_caches();
 
 		$test = $this;
 

@@ -495,10 +495,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'// Editor / builder previews and core previews must never be served stale (issue #1097).' . PHP_EOL .
 			'// Defense-in-depth alongside the empty-QUERY_STRING gate below: an explicit param guard' . PHP_EOL .
 			'// so preview URLs stay dynamic even if the query gate ever changes.' . PHP_EOL .
-			'if ( isset( $_GET[\'elementor-preview\'] ) || isset( $_GET[\'et_fb\'] ) || isset( $_GET[\'et_pb_preview\'] ) || isset( $_GET[\'vc_action\'] ) || isset( $_GET[\'vc_editable\'] ) || isset( $_GET[\'bricks\'] ) || isset( $_GET[\'preview\'] ) || isset( $_GET[\'preview_id\'] ) || isset( $_GET[\'customize_changeset_uuid\'] ) || isset( $_GET[\'customizer\'] ) ) {' . PHP_EOL .
+			'if ( isset( $_GET[\'elementor-preview\'] ) || isset( $_GET[\'et_fb\'] ) || isset( $_GET[\'et_pb_preview\'] ) || isset( $_GET[\'vc_action\'] ) || isset( $_GET[\'vc_editable\'] ) || isset( $_GET[\'bricks\'] ) || isset( $_GET[\'preview\'] ) || isset( $_GET[\'preview_id\'] ) || isset( $_GET[\'customize_changeset_uuid\'] ) || isset( $_GET[\'customizer\'] ) || isset( $_GET[\'wppo_preview\'] ) || isset( $_GET[\'_wppo_preview_nonce\'] ) ) {' . PHP_EOL .
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL .
-			'if ( ! empty( $_SERVER[\'QUERY_STRING\'] ) && preg_match( \'/(?:^|&)(?:elementor-preview|et_fb|et_pb_preview|vc_action|vc_editable|bricks|preview|preview_id|customize_changeset_uuid|customizer)(?:=|&|$)/i\', $_SERVER[\'QUERY_STRING\'] ) ) {' . PHP_EOL .
+			'if ( ! empty( $_SERVER[\'QUERY_STRING\'] ) && preg_match( \'/(?:^|&)(?:elementor-preview|et_fb|et_pb_preview|vc_action|vc_editable|bricks|preview|preview_id|customize_changeset_uuid|customizer|wppo_preview|_wppo_preview_nonce)(?:=|&|$)/i\', $_SERVER[\'QUERY_STRING\'] ) ) {' . PHP_EOL .
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
 

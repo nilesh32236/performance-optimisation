@@ -248,14 +248,207 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			'ai_suggestions',
 			'settings_snapshot',
 			'restore_settings',
+			'sandbox_preview',
+			'sandbox_save',
+			'sandbox_promote',
+			'sandbox_discard',
+			'preload_status',
+			'preload_resume',
 		);
 
-		// Keep in sync with the AGENTS.md endpoint count (33).
-		$this->assertCount( 33, $routes, 'REST route count drifted from the documented endpoint count' );
+		// Keep in sync with the AGENTS.md endpoint count (33 + 4 sandbox preview + 2 preload routes).
+		$this->assertCount( 39, $routes, 'REST route count drifted from the documented endpoint count' );
 
 		foreach ( $expected as $route ) {
 			$this->assertArrayHasKey( $route, $routes, "Missing route: {$route}" );
 		}
+	}
+
+	/**
+	 * Test save_sandbox_preview persists staged settings (issue #1163).
+	 */
+	public function test_save_sandbox_preview_persists_staged(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		Functions\when( 'current_user_can' )->justReturn( true );
+		Functions\when( 'get_option' )->justReturn( array( 'file_optimisation' => array( 'delayJS' => false ) ) );
+		Functions\when( 'update_option' )->justReturn( true );
+
+		$request = \Mockery::mock( \WP_REST_Request::class );
+		$request->shouldReceive( 'get_params' )->andReturn(
+			array(
+				'settings' => array(
+					'delayJS' => true,
+					'notAKey' => 'x',
+				),
+			)
+		);
+
+		$response = $this->rest->save_sandbox_preview( $request );
+		$data     = $response->get_data();
+		$this->assertTrue( $data['success'] );
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertTrue( ! empty( $data['data']['staged']['delayJS'] ) );
+		$this->assertArrayNotHasKey( 'notAKey', $data['data']['staged'] );
+	}
+
+	/**
+	 * Test save_sandbox_preview returns 500 on write failure (issue #1163).
+	 */
+	public function test_save_sandbox_preview_returns_500_on_write_failure(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		Functions\when( 'current_user_can' )->justReturn( true );
+		Functions\when( 'get_option' )->justReturn( array( 'file_optimisation' => array( 'delayJS' => false ) ) );
+		Functions\when( 'update_option' )->justReturn( false );
+
+		$request = \Mockery::mock( \WP_REST_Request::class );
+		$request->shouldReceive( 'get_params' )->andReturn(
+			array( 'settings' => array( 'delayJS' => true ) )
+		);
+
+		$response = $this->rest->save_sandbox_preview( $request );
+		$data     = $response->get_data();
+		$this->assertFalse( $data['success'] );
+		$this->assertSame( 500, $response->get_status() );
+	}
+
+	/**
+	 * Test promote_sandbox_preview promotes staged settings (issue #1163).
+	 */
+	public function test_promote_sandbox_preview_promotes_staged(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		Functions\when( 'current_user_can' )->justReturn( true );
+		Functions\when( 'get_option' )->justReturn(
+			array(
+				'file_optimisation' => array(
+					'delayJS'       => false,
+					'sandboxStaged' => array( 'delayJS' => true ),
+				),
+			)
+		);
+		Functions\when( 'update_option' )->justReturn( true );
+
+		$request  = \Mockery::mock( \WP_REST_Request::class );
+		$response = $this->rest->promote_sandbox_preview( $request );
+		$data     = $response->get_data();
+		$this->assertTrue( $data['success'] );
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertTrue( ! empty( $data['data']['file_optimisation']['delayJS'] ) );
+		$this->assertEmpty( $data['data']['file_optimisation']['sandboxStaged'] );
+	}
+
+	/**
+	 * Test promote_sandbox_preview returns 400 when nothing is staged (issue #1163).
+	 */
+	public function test_promote_sandbox_preview_returns_400_when_nothing_staged(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		Functions\when( 'current_user_can' )->justReturn( true );
+		Functions\when( 'get_option' )->justReturn( array( 'file_optimisation' => array( 'delayJS' => false ) ) );
+
+		$request  = \Mockery::mock( \WP_REST_Request::class );
+		$response = $this->rest->promote_sandbox_preview( $request );
+		$data     = $response->get_data();
+		$this->assertFalse( $data['success'] );
+		$this->assertSame( 400, $response->get_status() );
+	}
+
+	/**
+	 * Test promote_sandbox_preview returns 500 on write failure (issue #1163).
+	 */
+	public function test_promote_sandbox_preview_returns_500_on_write_failure(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		Functions\when( 'current_user_can' )->justReturn( true );
+		Functions\when( 'get_option' )->justReturn(
+			array(
+				'file_optimisation' => array(
+					'delayJS'       => false,
+					'sandboxStaged' => array( 'delayJS' => true ),
+				),
+			)
+		);
+		Functions\when( 'update_option' )->justReturn( false );
+
+		$request  = \Mockery::mock( \WP_REST_Request::class );
+		$response = $this->rest->promote_sandbox_preview( $request );
+		$data     = $response->get_data();
+		$this->assertFalse( $data['success'] );
+		$this->assertSame( 500, $response->get_status() );
+	}
+
+	/**
+	 * Test discard_sandbox_preview clears staged settings (issue #1163).
+	 */
+	public function test_discard_sandbox_preview_clears_staged(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		Functions\when( 'current_user_can' )->justReturn( true );
+		Functions\when( 'get_option' )->justReturn(
+			array(
+				'file_optimisation' => array(
+					'delayJS'       => true,
+					'sandboxStaged' => array( 'delayJS' => true ),
+				),
+			)
+		);
+		Functions\when( 'update_option' )->justReturn( true );
+
+		$request  = \Mockery::mock( \WP_REST_Request::class );
+		$response = $this->rest->discard_sandbox_preview( $request );
+		$data     = $response->get_data();
+		$this->assertTrue( $data['success'] );
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertSame( array(), $data['data']['staged'] );
+	}
+
+	/**
+	 * Test discard_sandbox_preview returns 500 on write failure (issue #1163).
+	 */
+	public function test_discard_sandbox_preview_returns_500_on_write_failure(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		Functions\when( 'current_user_can' )->justReturn( true );
+		Functions\when( 'get_option' )->justReturn(
+			array(
+				'file_optimisation' => array(
+					'delayJS'       => true,
+					'sandboxStaged' => array( 'delayJS' => true ),
+				),
+			)
+		);
+		Functions\when( 'update_option' )->justReturn( false );
+
+		$request  = \Mockery::mock( \WP_REST_Request::class );
+		$response = $this->rest->discard_sandbox_preview( $request );
+		$data     = $response->get_data();
+		$this->assertFalse( $data['success'] );
+		$this->assertSame( 500, $response->get_status() );
+	}
+
+	/**
+	 * Test get_sandbox_preview returns staged/has_staged/preview_url (issue #1163).
+	 */
+	public function test_get_sandbox_preview_returns_staged_envelope(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		Functions\when( 'get_option' )->justReturn(
+			array(
+				'file_optimisation' => array(
+					'delayJS'       => false,
+					'sandboxStaged' => array( 'delayJS' => true ),
+				),
+			)
+		);
+		Functions\when( 'home_url' )->justReturn( 'http://example.com/' );
+		Functions\when( 'wp_create_nonce' )->justReturn( 'abc123' );
+		Functions\when( 'add_query_arg' )->alias(
+			static function ( $args, $url ) {
+				return $url . '?' . http_build_query( $args );
+			}
+		);
+
+		$request  = \Mockery::mock( \WP_REST_Request::class );
+		$response = $this->rest->get_sandbox_preview( $request );
+		$data     = $response->get_data();
+		$this->assertTrue( $data['success'] );
+		$this->assertTrue( ! empty( $data['data']['staged']['delayJS'] ) );
+		$this->assertTrue( ! empty( $data['data']['has_staged'] ) );
+		$this->assertStringContainsString( 'wppo_preview=assets', $data['data']['preview_url'] );
 	}
 
 	/**

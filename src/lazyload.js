@@ -393,13 +393,24 @@ const hostInAllowlist = ( hostname, hosts ) =>
 let wildcardWarned = false;
 
 /**
+ * Whether the runtime window-host extension warning has been emitted.
+ * getScriptSrcHosts runs per deferred script, so this warning must also
+ * fire once, not per script.
+ *
+ * @since NEXT
+ * @type {boolean}
+ */
+let windowHostsWarned = false;
+
+/**
  * Collect the effective script-src host allowlist: the bundle constant plus
  * the server-provided wppoDelayConfig.allowedScriptHosts (see
  * `wppo_delay_js_allowed_hosts` filter) plus any runtime extension provided
  * via window.wppoAllowedScriptHosts. The server list is authoritative: a
  * `'*'` wildcard from `window` is ignored unless the server list also
- * contains `'*'` (admin-only debug path). Only `'*'` from the server
- * disables the allowlist.
+ * contains `'*'` (admin-only debug path), and any effective runtime widening
+ * is reported via console.warn (once) because the window global is mutable
+ * by third-party scripts. Only `'*'` from the server disables the allowlist.
  *
  * @since 2.0.0
  * @return {string[]|'*'} Allowlist entries, or '*' to allow everything.
@@ -435,6 +446,18 @@ const getScriptSrcHosts = () => {
 	const effectiveWindowHosts = windowHosts.filter(
 		( host ) => '*' !== host || serverAllowsAll
 	);
+	// window.wppoAllowedScriptHosts is a mutable page-level global: any
+	// third-party script running before load can set it and silently widen
+	// which origins may execute delayed scripts. The server-provided
+	// delayConfig.allowedScriptHosts stays authoritative — runtime hosts are
+	// still honored for backward compatibility, but any effective widening
+	// is reported loudly (once) so it cannot pass unnoticed.
+	if ( effectiveWindowHosts.length > 0 && ! windowHostsWarned ) {
+		windowHostsWarned = true;
+		console.warn(
+			'WPPO: window.wppoAllowedScriptHosts extends the deferred-script host allowlist at runtime. The server-provided allowedScriptHosts list is authoritative; audit any runtime extension because third-party scripts can set this global before load.'
+		);
+	}
 	const hosts = Array.from(
 		new Set( [
 			...SCRIPT_SRC_HOST_ALLOWLIST,

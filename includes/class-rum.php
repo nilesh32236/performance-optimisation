@@ -442,6 +442,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				);
 			}
 
+			// Security (issue #1181): rate limiting trusts REMOTE_ADDR only.
+			// X-Forwarded-For / X-Real-IP are attacker-controlled and must
+			// never bypass limits.
 			$raw_ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
 			$ip     = self::normalize_ip( $raw_ip );
 			// Fail closed: an empty/unparseable IP falls back to the site-wide
@@ -781,6 +784,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			if ( class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				$path = \PerformanceOptimise\Inc\Util::normalize_rum_path( $path );
 			}
+			// Hardened (issue #1181): a crafted beacon path must never carry
+			// markup into the stored bucket key. Reject angle brackets,
+			// quotes, backticks, and style/script breakout tokens outright.
+			if ( false !== strpbrk( $path, '<>"\'`' ) || 1 === preg_match( '/<\/style|<script|<!--|-->|javascript\s*:|vbscript\s*:|data\s*:/i', $path ) ) {
+				return null;
+			}
 
 			$ranges = array(
 				'ttfb' => array( 0, 60000 ),
@@ -809,21 +818,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			}
 
 			// Optional field-measured LCP element URL (issue #935). Rides along
-			// with a valid numeric sample; never a substitute for one. Rejects
-			// data:/javascript:/blob: URIs and caps length so a crafted beacon
-			// cannot bloat the aggregate option. Only same-origin URLs are
-			// accepted (root-relative or matching the home host) so an
-			// anonymous client holding the public per-path page token cannot
-			// steer the site's LCP preload to an attacker-chosen host.
+			// with a valid numeric sample; never a substitute for one. Hardened
+			// (issue #1181, modeled on CVE-2026-5934 / CVE-2026-84761): dangerous
+			// schemes are rejected case-insensitively, script-capable SVG data
+			// URLs and style/script breakout tokens are dropped, and only
+			// same-origin URLs are accepted (root-relative or matching the home
+			// host) so an anonymous client holding the public per-path page
+			// token cannot steer the site's LCP preload to an attacker host.
+			// Stored lcpUrl is escaped downstream via esc_url() in
+			// Util::get_preload_link().
 			if ( isset( $params['lcpUrl'] ) && is_string( $params['lcpUrl'] ) ) {
 				$lcp_url = trim( substr( $params['lcpUrl'], 0, self::LCP_URL_MAX_LENGTH ) );
-				if ( '' !== $lcp_url
-				&& 0 !== strpos( $lcp_url, 'data:' )
-				&& 0 !== stripos( $lcp_url, 'javascript:' )
-				&& 0 !== strpos( $lcp_url, 'blob:' )
-				&& ( 0 === strpos( $lcp_url, 'http://' ) || 0 === strpos( $lcp_url, 'https://' ) || 0 === strpos( $lcp_url, '/' ) )
-				&& self::is_same_origin_lcp_url( $lcp_url )
-				) {
+				if ( '' !== $lcp_url && self::is_safe_lcp_url( $lcp_url ) ) {
 					$sample['lcpUrl'] = $lcp_url;
 				}
 			}
@@ -887,6 +893,55 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				return $candidate;
 			}
 			return 'unknown';
+		}
+
+		/**
+		 * Whether a candidate LCP element URL is safe to store.
+		 *
+		 * Hardened intake gate (issue #1181, modeled on CVE-2026-5934 /
+		 * CVE-2026-84761): scheme checks are case-insensitive and strip
+		 * leading whitespace/control characters so `  JaVaScRiPt:` cannot
+		 * bypass; `data:`/`blob:`/`vbscript:`/`file:`/`expect:` schemes are
+		 * rejected outright with an explicit `data:image/svg+xml` guard
+		 * (script-capable SVG); style/script breakout tokens and raw
+		 * angle brackets/quotes are rejected; only http(s)/root-relative
+		 * same-origin targets pass. Fail-closed: anything unexpected is
+		 * unsafe. Shared by sanitize_sample() and flush_queue() so a
+		 * directly-written queue transient cannot bypass intake.
+		 *
+		 * @since NEXT
+		 * @param string $lcp_url Candidate LCP URL (already trimmed + length-capped).
+		 * @return bool True when safe to store.
+		 */
+		private static function is_safe_lcp_url( string $lcp_url ): bool {
+			if ( '' === $lcp_url ) {
+				return false;
+			}
+			// Raw markup can never appear in a stored preload URL.
+			if ( false !== strpbrk( $lcp_url, '<>"\'`' ) ) {
+				return false;
+			}
+			if ( false !== stripos( $lcp_url, '</style' ) || false !== stripos( $lcp_url, '<script' ) || false !== stripos( $lcp_url, '<!--' ) || false !== strpos( $lcp_url, '-->' ) ) {
+				return false;
+			}
+			// Strip leading whitespace/control characters before scheme
+			// checks so obfuscated `  javascript:` cannot bypass.
+			$trimmed = ltrim( $lcp_url, " \t\n\r\0\x0B" );
+			if ( '' === $trimmed ) {
+				return false;
+			}
+			if ( 1 === preg_match( '/^(javascript|vbscript|data|blob|file|expect)\s*:/i', $trimmed ) ) {
+				return false;
+			}
+			// Explicit script-capable SVG guard (defense-in-depth: covered
+			// by the data: rejection above, kept explicit for auditability).
+			if ( false !== stripos( $trimmed, 'data:image/svg' ) ) {
+				return false;
+			}
+			if ( 0 !== stripos( $trimmed, 'http://' ) && 0 !== stripos( $trimmed, 'https://' ) && 0 !== strpos( $trimmed, '/' ) ) {
+				return false;
+			}
+			return self::is_same_origin_lcp_url( $trimmed );
 		}
 
 		/**
@@ -987,10 +1042,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					$all = array();
 				}
 
+				$ranges = array(
+					'ttfb' => array( 0, 60000 ),
+					'fcp'  => array( 0, 60000 ),
+					'lcp'  => array( 0, 60000 ),
+					'inp'  => array( 0, 60000 ),
+					'cls'  => array( 0, 1 ),
+				);
+
 				foreach ( $queue as $sample ) {
+					// Hardened (issue #1181): the queue transient is
+					// attacker-writable, so every queued field is
+					// re-validated here — intake validation alone can be
+					// bypassed by writing the transient directly. Fail-open:
+					// malformed entries are skipped, never fatal.
+					if ( ! is_array( $sample ) ) {
+						continue;
+					}
+					$raw_qpath = isset( $sample['path'] ) && is_string( $sample['path'] ) ? substr( $sample['path'], 0, 512 ) : '';
+					if ( '' === $raw_qpath ) {
+						continue;
+					}
+					$qpath = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::normalize_rum_path( $raw_qpath ) : $raw_qpath;
+					if ( false !== strpbrk( $qpath, '<>"\'`' ) || 1 === preg_match( '/<\/style|<script|<!--|-->|javascript\s*:|vbscript\s*:|data\s*:/i', $qpath ) ) {
+						continue;
+					}
 					$ts   = isset( $sample['_ts'] ) ? (int) $sample['_ts'] : time();
 					$date = gmdate( 'Y-m-d', $ts );
-					$path = $sample['path'];
+					$path = $qpath;
 
 					if ( ! isset( $all[ $date ] ) ) {
 						$all[ $date ] = array();
@@ -999,10 +1078,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					$bucket = isset( $day[ $path ] ) ? $day[ $path ] : array();
 
 					foreach ( array( 'ttfb', 'fcp', 'lcp', 'inp', 'cls' ) as $metric ) {
-						if ( ! isset( $sample[ $metric ] ) ) {
+						if ( ! isset( $sample[ $metric ] ) || ! is_numeric( $sample[ $metric ] ) ) {
 							continue;
 						}
 						$value = (float) $sample[ $metric ];
+						if ( ! is_finite( $value ) ) {
+							continue;
+						}
+						$value = max( $ranges[ $metric ][0], min( $ranges[ $metric ][1], $value ) );
 						if ( ! isset( $bucket[ $metric ] ) ) {
 							$bucket[ $metric ] = array(
 								'n'   => 0,
@@ -1022,8 +1105,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					// first-seen raw URL for preload output. Evicts the
 					// lowest-count/oldest entry when over budget.
 					if ( isset( $sample['lcpUrl'] ) && is_string( $sample['lcpUrl'] ) && '' !== $sample['lcpUrl'] ) {
-						$normalized = ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'normalize_url' ) )
-						? \PerformanceOptimise\Inc\Util::normalize_url( $sample['lcpUrl'] )
+						// Re-validate: the queue transient is user-writable,
+						// so a hostile lcpUrl smuggled past intake (or
+						// written directly) is dropped here before it can
+						// reach the aggregate option / preload output.
+						$queued_lcp = trim( substr( $sample['lcpUrl'], 0, self::LCP_URL_MAX_LENGTH ) );
+						if ( ! self::is_safe_lcp_url( $queued_lcp ) ) {
+							$queued_lcp = '';
+						}
+						$normalized = ( '' !== $queued_lcp && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'normalize_url' ) )
+						? \PerformanceOptimise\Inc\Util::normalize_url( $queued_lcp )
 						: '';
 						if ( '' !== $normalized ) {
 							if ( ! isset( $bucket['lcpUrls'] ) || ! is_array( $bucket['lcpUrls'] ) ) {
@@ -1034,7 +1125,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 								$bucket['lcpUrls'][ $normalized ]['lastSeen'] = $ts;
 							} else {
 								$bucket['lcpUrls'][ $normalized ] = array(
-									'url'      => substr( $sample['lcpUrl'], 0, self::LCP_URL_MAX_LENGTH ),
+									'url'      => $queued_lcp,
 									'n'        => 1,
 									'lastSeen' => $ts,
 								);
@@ -1070,62 +1161,71 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					// option byte-budget loop below so the size cap still holds;
 					// no new option or transient names. Rows stored before the
 					// connection dimension read back as `unknown`.
-					if ( isset( $sample['lcp'] ) ) {
+					if ( isset( $sample['lcp'] ) && is_numeric( $sample['lcp'] ) ) {
 						$lcp_value = (float) $sample['lcp'];
-						// Re-sanitize even though the beacon sanitizes at
-						// intake: the queue transient is user-writable, so
-						// allowlist the device and text-sanitize the template
-						// before either is persisted into the aggregate option.
-						$raw_device = isset( $sample['device'] ) && is_string( $sample['device'] ) ? sanitize_text_field( $sample['device'] ) : '';
-						$device     = strtolower( trim( $raw_device ) );
-						if ( 'mobile' !== $device && 'desktop' !== $device ) {
-							$device = 'unknown';
+						if ( ! is_finite( $lcp_value ) ) {
+							$lcp_value = null;
+						} else {
+							$lcp_value = max( 0, min( 60000, $lcp_value ) );
 						}
-						$raw_template = isset( $sample['template'] ) && is_string( $sample['template'] ) ? sanitize_text_field( $sample['template'] ) : '';
-						$template     = '' !== trim( $raw_template ) ? substr( $raw_template, 0, 64 ) : 'unknown';
-						$connection   = self::normalize_segment_connection( $sample['connection'] ?? 'unknown' );
-						$seg_key      = $device . '|' . $template . '|' . $connection;
-						if ( ! isset( $bucket['lcpSeg'] ) || ! is_array( $bucket['lcpSeg'] ) ) {
-							$bucket['lcpSeg'] = array();
-						}
-						if ( ! isset( $bucket['lcpSeg'][ $seg_key ] ) || ! is_array( $bucket['lcpSeg'][ $seg_key ] ) ) {
-							$bucket['lcpSeg'][ $seg_key ] = array(
-								'device'     => $device,
-								'template'   => $template,
-								'connection' => $connection,
-								'n'          => 0,
-								'sum'        => 0.0,
-								'min'        => $lcp_value,
-								'max'        => $lcp_value,
-								'samples'    => array(),
-							);
-						}
-						++$bucket['lcpSeg'][ $seg_key ]['n'];
-						$bucket['lcpSeg'][ $seg_key ]['sum'] += $lcp_value;
-						$bucket['lcpSeg'][ $seg_key ]['min']  = min( $bucket['lcpSeg'][ $seg_key ]['min'], $lcp_value );
-						$bucket['lcpSeg'][ $seg_key ]['max']  = max( $bucket['lcpSeg'][ $seg_key ]['max'], $lcp_value );
-						$samples                              = isset( $bucket['lcpSeg'][ $seg_key ]['samples'] ) && is_array( $bucket['lcpSeg'][ $seg_key ]['samples'] ) ? $bucket['lcpSeg'][ $seg_key ]['samples'] : array();
-						$samples[]                            = $lcp_value;
-						if ( count( $samples ) > self::MAX_LCP_SAMPLES_PER_SEGMENT ) {
-							$samples = array_slice( $samples, -self::MAX_LCP_SAMPLES_PER_SEGMENT );
-						}
-						$bucket['lcpSeg'][ $seg_key ]['samples'] = array_values( $samples );
-						$lcp_seg_count                           = count( $bucket['lcpSeg'] );
-						while ( $lcp_seg_count > self::MAX_LCP_SEGMENTS_PER_PATH ) {
-							$evict_key = null;
-							$evict_n   = null;
-							foreach ( $bucket['lcpSeg'] as $key => $entry ) {
-								$entry_n = isset( $entry['n'] ) ? (int) $entry['n'] : 0;
-								if ( null === $evict_key || $entry_n < $evict_n ) {
-									$evict_key = $key;
-									$evict_n   = $entry_n;
+						if ( null !== $lcp_value ) {
+							// Re-sanitize even though the beacon sanitizes at
+							// intake: the queue transient is user-writable, so
+							// allowlist the device and text-sanitize the template
+							// before either is persisted into the aggregate option.
+							$raw_device = isset( $sample['device'] ) && is_string( $sample['device'] ) ? sanitize_text_field( $sample['device'] ) : '';
+							$device     = strtolower( trim( $raw_device ) );
+							if ( 'mobile' !== $device && 'desktop' !== $device ) {
+								$device = 'unknown';
+							}
+							$raw_template = isset( $sample['template'] ) && is_string( $sample['template'] ) ? sanitize_text_field( $sample['template'] ) : '';
+							$raw_template = strtolower( trim( substr( $raw_template, 0, 64 ) ) );
+							$raw_template = (string) preg_replace( '/[^a-z0-9_-]/', '', $raw_template );
+							$template     = '' !== $raw_template ? substr( $raw_template, 0, 64 ) : 'unknown';
+							$connection   = self::normalize_segment_connection( $sample['connection'] ?? 'unknown' );
+							$seg_key      = $device . '|' . $template . '|' . $connection;
+							if ( ! isset( $bucket['lcpSeg'] ) || ! is_array( $bucket['lcpSeg'] ) ) {
+								$bucket['lcpSeg'] = array();
+							}
+							if ( ! isset( $bucket['lcpSeg'][ $seg_key ] ) || ! is_array( $bucket['lcpSeg'][ $seg_key ] ) ) {
+								$bucket['lcpSeg'][ $seg_key ] = array(
+									'device'     => $device,
+									'template'   => $template,
+									'connection' => $connection,
+									'n'          => 0,
+									'sum'        => 0.0,
+									'min'        => $lcp_value,
+									'max'        => $lcp_value,
+									'samples'    => array(),
+								);
+							}
+							++$bucket['lcpSeg'][ $seg_key ]['n'];
+							$bucket['lcpSeg'][ $seg_key ]['sum'] += $lcp_value;
+							$bucket['lcpSeg'][ $seg_key ]['min']  = min( $bucket['lcpSeg'][ $seg_key ]['min'], $lcp_value );
+							$bucket['lcpSeg'][ $seg_key ]['max']  = max( $bucket['lcpSeg'][ $seg_key ]['max'], $lcp_value );
+							$samples                              = isset( $bucket['lcpSeg'][ $seg_key ]['samples'] ) && is_array( $bucket['lcpSeg'][ $seg_key ]['samples'] ) ? $bucket['lcpSeg'][ $seg_key ]['samples'] : array();
+							$samples[]                            = $lcp_value;
+							if ( count( $samples ) > self::MAX_LCP_SAMPLES_PER_SEGMENT ) {
+								$samples = array_slice( $samples, -self::MAX_LCP_SAMPLES_PER_SEGMENT );
+							}
+							$bucket['lcpSeg'][ $seg_key ]['samples'] = array_values( $samples );
+							$lcp_seg_count                           = count( $bucket['lcpSeg'] );
+							while ( $lcp_seg_count > self::MAX_LCP_SEGMENTS_PER_PATH ) {
+								$evict_key = null;
+								$evict_n   = null;
+								foreach ( $bucket['lcpSeg'] as $key => $entry ) {
+									$entry_n = isset( $entry['n'] ) ? (int) $entry['n'] : 0;
+									if ( null === $evict_key || $entry_n < $evict_n ) {
+										$evict_key = $key;
+										$evict_n   = $entry_n;
+									}
 								}
+								if ( null === $evict_key ) {
+									break;
+								}
+								unset( $bucket['lcpSeg'][ $evict_key ] );
+								--$lcp_seg_count;
 							}
-							if ( null === $evict_key ) {
-								break;
-							}
-							unset( $bucket['lcpSeg'][ $evict_key ] );
-							--$lcp_seg_count;
 						}
 					}
 
@@ -1137,58 +1237,67 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					// connection sanitization and the existing option
 					// byte-budget loop below. No new option or transient names.
 					// Fail-open: any malformed queue entry is skipped, never fatal.
-					if ( isset( $sample['inp'] ) ) {
-						$inp_value      = (float) $sample['inp'];
-						$raw_device_inp = isset( $sample['device'] ) && is_string( $sample['device'] ) ? sanitize_text_field( $sample['device'] ) : '';
-						$device_inp     = strtolower( trim( $raw_device_inp ) );
-						if ( 'mobile' !== $device_inp && 'desktop' !== $device_inp ) {
-							$device_inp = 'unknown';
+					if ( isset( $sample['inp'] ) && is_numeric( $sample['inp'] ) ) {
+						$inp_value = (float) $sample['inp'];
+						if ( ! is_finite( $inp_value ) ) {
+							$inp_value = null;
+						} else {
+							$inp_value = max( 0, min( 60000, $inp_value ) );
 						}
-						$raw_template_inp = isset( $sample['template'] ) && is_string( $sample['template'] ) ? sanitize_text_field( $sample['template'] ) : '';
-						$template_inp     = '' !== trim( $raw_template_inp ) ? substr( $raw_template_inp, 0, 64 ) : 'unknown';
-						$connection_inp   = self::normalize_segment_connection( $sample['connection'] ?? 'unknown' );
-						$inp_seg_key      = $device_inp . '|' . $template_inp . '|' . $connection_inp;
-						if ( ! isset( $bucket['inpSeg'] ) || ! is_array( $bucket['inpSeg'] ) ) {
-							$bucket['inpSeg'] = array();
-						}
-						if ( ! isset( $bucket['inpSeg'][ $inp_seg_key ] ) || ! is_array( $bucket['inpSeg'][ $inp_seg_key ] ) ) {
-							$bucket['inpSeg'][ $inp_seg_key ] = array(
-								'device'     => $device_inp,
-								'template'   => $template_inp,
-								'connection' => $connection_inp,
-								'n'          => 0,
-								'sum'        => 0.0,
-								'min'        => $inp_value,
-								'max'        => $inp_value,
-								'samples'    => array(),
-							);
-						}
-						++$bucket['inpSeg'][ $inp_seg_key ]['n'];
-						$bucket['inpSeg'][ $inp_seg_key ]['sum'] += $inp_value;
-						$bucket['inpSeg'][ $inp_seg_key ]['min']  = min( $bucket['inpSeg'][ $inp_seg_key ]['min'], $inp_value );
-						$bucket['inpSeg'][ $inp_seg_key ]['max']  = max( $bucket['inpSeg'][ $inp_seg_key ]['max'], $inp_value );
-						$inp_samples                              = isset( $bucket['inpSeg'][ $inp_seg_key ]['samples'] ) && is_array( $bucket['inpSeg'][ $inp_seg_key ]['samples'] ) ? $bucket['inpSeg'][ $inp_seg_key ]['samples'] : array();
-						$inp_samples[]                            = $inp_value;
-						if ( count( $inp_samples ) > self::MAX_INP_SAMPLES_PER_SEGMENT ) {
-							$inp_samples = array_slice( $inp_samples, -self::MAX_INP_SAMPLES_PER_SEGMENT );
-						}
-						$bucket['inpSeg'][ $inp_seg_key ]['samples'] = array_values( $inp_samples );
-						$inp_seg_count                               = count( $bucket['inpSeg'] );
-						while ( $inp_seg_count > self::MAX_INP_SEGMENTS_PER_PATH ) {
-							$evict_key = null;
-							$evict_n   = null;
-							foreach ( $bucket['inpSeg'] as $key => $entry ) {
-								$entry_n = isset( $entry['n'] ) ? (int) $entry['n'] : 0;
-								if ( null === $evict_key || $entry_n < $evict_n ) {
-									$evict_key = $key;
-									$evict_n   = $entry_n;
+						if ( null !== $inp_value ) {
+							$raw_device_inp = isset( $sample['device'] ) && is_string( $sample['device'] ) ? sanitize_text_field( $sample['device'] ) : '';
+							$device_inp     = strtolower( trim( $raw_device_inp ) );
+							if ( 'mobile' !== $device_inp && 'desktop' !== $device_inp ) {
+								$device_inp = 'unknown';
+							}
+							$raw_template_inp = isset( $sample['template'] ) && is_string( $sample['template'] ) ? sanitize_text_field( $sample['template'] ) : '';
+							$raw_template_inp = strtolower( trim( substr( $raw_template_inp, 0, 64 ) ) );
+							$raw_template_inp = (string) preg_replace( '/[^a-z0-9_-]/', '', $raw_template_inp );
+							$template_inp     = '' !== $raw_template_inp ? substr( $raw_template_inp, 0, 64 ) : 'unknown';
+							$connection_inp   = self::normalize_segment_connection( $sample['connection'] ?? 'unknown' );
+							$inp_seg_key      = $device_inp . '|' . $template_inp . '|' . $connection_inp;
+							if ( ! isset( $bucket['inpSeg'] ) || ! is_array( $bucket['inpSeg'] ) ) {
+								$bucket['inpSeg'] = array();
+							}
+							if ( ! isset( $bucket['inpSeg'][ $inp_seg_key ] ) || ! is_array( $bucket['inpSeg'][ $inp_seg_key ] ) ) {
+								$bucket['inpSeg'][ $inp_seg_key ] = array(
+									'device'     => $device_inp,
+									'template'   => $template_inp,
+									'connection' => $connection_inp,
+									'n'          => 0,
+									'sum'        => 0.0,
+									'min'        => $inp_value,
+									'max'        => $inp_value,
+									'samples'    => array(),
+								);
+							}
+							++$bucket['inpSeg'][ $inp_seg_key ]['n'];
+							$bucket['inpSeg'][ $inp_seg_key ]['sum'] += $inp_value;
+							$bucket['inpSeg'][ $inp_seg_key ]['min']  = min( $bucket['inpSeg'][ $inp_seg_key ]['min'], $inp_value );
+							$bucket['inpSeg'][ $inp_seg_key ]['max']  = max( $bucket['inpSeg'][ $inp_seg_key ]['max'], $inp_value );
+							$inp_samples                              = isset( $bucket['inpSeg'][ $inp_seg_key ]['samples'] ) && is_array( $bucket['inpSeg'][ $inp_seg_key ]['samples'] ) ? $bucket['inpSeg'][ $inp_seg_key ]['samples'] : array();
+							$inp_samples[]                            = $inp_value;
+							if ( count( $inp_samples ) > self::MAX_INP_SAMPLES_PER_SEGMENT ) {
+								$inp_samples = array_slice( $inp_samples, -self::MAX_INP_SAMPLES_PER_SEGMENT );
+							}
+							$bucket['inpSeg'][ $inp_seg_key ]['samples'] = array_values( $inp_samples );
+							$inp_seg_count                               = count( $bucket['inpSeg'] );
+							while ( $inp_seg_count > self::MAX_INP_SEGMENTS_PER_PATH ) {
+								$evict_key = null;
+								$evict_n   = null;
+								foreach ( $bucket['inpSeg'] as $key => $entry ) {
+									$entry_n = isset( $entry['n'] ) ? (int) $entry['n'] : 0;
+									if ( null === $evict_key || $entry_n < $evict_n ) {
+										$evict_key = $key;
+										$evict_n   = $entry_n;
+									}
 								}
+								if ( null === $evict_key ) {
+									break;
+								}
+								unset( $bucket['inpSeg'][ $evict_key ] );
+								--$inp_seg_count;
 							}
-							if ( null === $evict_key ) {
-								break;
-							}
-							unset( $bucket['inpSeg'][ $evict_key ] );
-							--$inp_seg_count;
 						}
 					}
 

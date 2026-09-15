@@ -42,9 +42,7 @@ class BufferCharacterizationTest extends \PHPUnit\Framework\TestCase {
 		parent::setUp();
 		\Brain\Monkey\setUp();
 		$this->register_common_function_stubs();
-		\PerformanceOptimise\Inc\Util::reset_cached_home_urls();
-		\PerformanceOptimise\Inc\Util::clear_settings_cache();
-		\PerformanceOptimise\Inc\Util::clear_permalink_cache();
+		\PerformanceOptimise\Inc\Util::reset_runtime_caches();
 		\PerformanceOptimise\Inc\Util::reset_html_processor_memo();
 		\PerformanceOptimise\Inc\CDN::reset_cache();
 		if ( class_exists( LiteSpeed_Integration::class ) ) {
