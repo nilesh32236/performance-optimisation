@@ -115,6 +115,53 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		public const ALLOWED_KEYS = array( 'mode', 'host', 'port', 'password', 'database', 'timeout', 'prefix', 'nodes', 'master_name', 'use_tls', 'persistent', 'compression' );
 
 		/**
+		 * Marker used for the wp-content/.htaccess deny block shielding the
+		 * Redis config file (see protect_config_file()).
+		 *
+		 * Exposed so the standalone uninstall context can remove the orphan
+		 * block without hard-coding the string.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		public const CONFIG_HTACCESS_MARKER = 'WPPO Redis Config';
+
+		/**
+		 * Canonical circuit-breaker sidecar paths for uninstall cleanup.
+		 *
+		 * Standalone-safe: static, no instance, no filesystem, no filters —
+		 * derived purely from WP_CONTENT_DIR plus the DISABLED_STATE_FILE /
+		 * FAILURES_FILE constants and the canonical drop-in location plus
+		 * PARKED_SUFFIX. The uninstall script prefers this helper (via
+		 * class_exists() + method_exists() guards) and falls back to literal
+		 * WP_CONTENT_DIR-joined filenames when the class is not loadable.
+		 *
+		 * Canonical-only limitation: the live parked sibling derives from the
+		 * `wppo_object_cache_dropin_path`-filtered drop-in path, which is not
+		 * resolved here — filters are unavailable in the standalone uninstall
+		 * context, so a filtered install may leave its parked sibling behind.
+		 * Only the canonical WP_CONTENT_DIR/object-cache.php.wppo-disabled
+		 * path is returned.
+		 *
+		 * @since NEXT
+		 * @return string[] Absolute paths (empty when WP_CONTENT_DIR is undefined).
+		 */
+		public static function get_uninstall_sidecar_paths(): array {
+			if ( ! defined( 'WP_CONTENT_DIR' ) ) {
+				return array();
+			}
+			$content_dir = (string) WP_CONTENT_DIR;
+			if ( '' === $content_dir ) {
+				return array();
+			}
+			return array(
+				$content_dir . '/' . self::DISABLED_STATE_FILE,
+				$content_dir . '/' . self::FAILURES_FILE,
+				$content_dir . '/object-cache.php' . self::PARKED_SUFFIX,
+			);
+		}
+
+		/**
 		 * Path to the object cache drop-in.
 		 *
 		 * @var string
@@ -685,6 +732,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * @return string
 		 */
 		private function get_disabled_state_path(): string {
+			if ( ! defined( 'WP_CONTENT_DIR' ) ) {
+				return '';
+			}
 			return WP_CONTENT_DIR . '/' . self::DISABLED_STATE_FILE;
 		}
 
@@ -695,6 +745,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * @return string
 		 */
 		private function get_failures_path(): string {
+			if ( ! defined( 'WP_CONTENT_DIR' ) ) {
+				return '';
+			}
 			return WP_CONTENT_DIR . '/' . self::FAILURES_FILE;
 		}
 
@@ -985,7 +1038,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					'</IfModule>',
 					'</Files>',
 				);
-				insert_with_markers( $htaccess, 'WPPO Redis Config', $rule );
+				insert_with_markers( $htaccess, self::CONFIG_HTACCESS_MARKER, $rule );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
