@@ -2037,6 +2037,166 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Whether a preload candidate URL is same-origin with this site.
+		 *
+		 * Emission-path guard (issue #1180): stored PageSpeed values, OD
+		 * real-visit data, and the DOM-first heuristic flow into the single
+		 * `<link rel="preload" as="image" fetchpriority="high">` unchecked
+		 * today — only the RUM beacon intake validates origin. Absolute URLs
+		 * are validated via `RUM::is_same_origin_url()`; root-relative and bare
+		 * relative paths resolve against the home URL and are same-origin by
+		 * construction, except scheme-like values (`data:`, `blob:`,
+		 * `javascript:`, `mailto:`, …) which are rejected. Fail-closed for the
+		 * page: any failure (including an unavailable RUM class, consistent
+		 * with the catch block below — `resolve_auto_lcp_url()` already
+		 * fails open by falling through to the next tier) returns false
+		 * (candidate skipped), never fatal.
+		 *
+		 * @since NEXT
+		 * @param string $url The candidate URL.
+		 * @return bool True when the URL may be preloaded.
+		 */
+		private function is_same_origin_preload_url( string $url ): bool {
+			try {
+				$url = trim( $url );
+				if ( '' === $url ) {
+					return false;
+				}
+				$lower = strtolower( ltrim( $url ) );
+				if ( str_starts_with( $lower, 'data:' ) || str_starts_with( $lower, 'blob:' ) || str_starts_with( $lower, 'javascript:' ) || str_starts_with( $lower, 'vbscript:' ) ) {
+					return false;
+				}
+				// Root-relative paths are same-origin by construction.
+				if ( 0 === strpos( $url, '/' ) && 0 !== strpos( $url, '//' ) ) {
+					return true;
+				}
+				// Bare relative paths (no scheme, no leading slash) resolve
+				// against the home URL — same-origin — unless scheme-like.
+				if ( false === strpos( $url, '://' ) && 0 !== strpos( $url, '//' ) ) {
+					$before_slash = strtok( $url, '/\\?#' );
+					if ( is_string( $before_slash ) && false !== strpos( $before_slash, ':' ) ) {
+						return false;
+					}
+					return true;
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'is_same_origin_url' ) ) {
+					return \PerformanceOptimise\Inc\RUM::is_same_origin_url( $url );
+				}
+				// RUM unavailable: fail closed (reject the absolute URL) so a
+				// possibly cross-origin candidate is never preloaded. The
+				// caller (`resolve_auto_lcp_url()`) falls through to the next
+				// tier, preserving fail-open page behaviour.
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Whether core's loading-optimization API is available.
+		 *
+		 * Explicit guard (issue #1180) for the decoding gap-fill: core is
+		 * consulted for gap-fill input (`decoding`) only, while the
+		 * measured hero keeps `fetchpriority="high"` (field truth beats
+		 * the core heuristic) and an already-stamped fetchpriority is
+		 * never overridden. Requires
+		 * `wp_get_loading_optimization_attributes()` plus WordPress 6.2+
+		 * (the HTML API era); every call is guarded with `function_exists()`
+		 * and `version_compare()` with a legacy fallback to the unmodified
+		 * gap-fill behaviour. Fail-open: any failure returns false.
+		 *
+		 * @since NEXT
+		 * @return bool True when core may be consulted for a node verdict.
+		 */
+		private function is_core_loading_optimization_available(): bool {
+			try {
+				if ( ! function_exists( 'wp_get_loading_optimization_attributes' ) ) {
+					return false;
+				}
+				$wp_version = '';
+				if ( isset( $GLOBALS['wp_version'] ) && is_string( $GLOBALS['wp_version'] ) && '' !== $GLOBALS['wp_version'] ) {
+					$wp_version = $GLOBALS['wp_version'];
+				} elseif ( function_exists( 'get_bloginfo' ) ) {
+					$wp_version = (string) get_bloginfo( 'version' );
+				}
+				if ( '' === $wp_version ) {
+					// Function presence alone implies availability when the
+					// version string is unreachable (e.g. unit contexts).
+					return true;
+				}
+				return version_compare( $wp_version, '6.2', '>=' );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Ask core for its loading-optimization verdict on the current tag.
+		 *
+		 * Gap-fill companion to `is_core_loading_optimization_available()`:
+		 * builds the tag-attribute array core expects and returns the
+		 * `wp_loading_optimization_attributes` filter verdict
+		 * (`decoding` when offered), or null when core is
+		 * unavailable, throws, or offers no verdict. The filter — not
+		 * `wp_get_loading_optimization_attributes()` — is consulted on
+		 * purpose: the latter runs core's stateful per-context image
+		 * counter, so a second direct call from the buffer path would
+		 * double-count this image and skew core's later lazy/eager
+		 * decisions (and core never returns `high` for our synthetic
+		 * context anyway). The filter lets hooked optimizers weigh in
+		 * without touching the counter; the already-stamped
+		 * `fetchpriority` attribute check in callers remains the
+		 * authoritative no-double-stamp guard. Callers always stamp the
+		 * measured hero `high` (field truth beats the heuristic), while
+		 * `decoding` defers to the verdict whenever one is offered.
+		 * `fetchpriority` is intentionally not collected: no caller reads
+		 * it (the stamp is unconditional when absent), so returning it
+		 * would be dead data inviting future misuse.
+		 * Fail-open: any failure returns null.
+		 *
+		 * @since NEXT
+		 * @param mixed $tags Tag processor positioned on an `<img>` node.
+		 * @return array{decoding?:string}|null Core's verdict, or null.
+		 */
+		private function get_core_loading_verdict_for_tag( $tags ): ?array {
+			if ( ! $this->is_core_loading_optimization_available() ) {
+				return null;
+			}
+			if ( ! function_exists( 'apply_filters' ) ) {
+				return null;
+			}
+			try {
+				if ( ! is_object( $tags ) || ! method_exists( $tags, 'get_attribute' ) ) {
+					return null;
+				}
+				$tag_attr = array();
+				foreach ( array( 'src', 'width', 'height', 'loading', 'decoding', 'fetchpriority' ) as $attr ) {
+					$value = $tags->get_attribute( $attr );
+					if ( is_string( $value ) && '' !== $value ) {
+						$tag_attr[ $attr ] = ( 'width' === $attr || 'height' === $attr ) && is_numeric( $value ) ? (int) $value : $value;
+					}
+				}
+				$loading_attrs = apply_filters( 'wp_loading_optimization_attributes', array(), 'img', $tag_attr, 'performance_optimisation_lcp' );
+				if ( ! is_array( $loading_attrs ) ) {
+					return null;
+				}
+				$verdict = array();
+				if ( isset( $loading_attrs['decoding'] ) && is_string( $loading_attrs['decoding'] ) ) {
+					$candidate = strtolower( trim( $loading_attrs['decoding'] ) );
+					if ( in_array( $candidate, array( 'async', 'sync', 'auto' ), true ) ) {
+						$verdict['decoding'] = $candidate;
+					}
+				}
+				return ( array() === $verdict ) ? null : $verdict;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return null;
+		}
+
+		/**
 		 * Resolve the single auto-detected LCP image URL for the current page.
 		 *
 		 * Unified priority chain (fail-open, never fatal):
@@ -2049,7 +2209,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * tiers), then the DOM-first heuristic (first non-trivial `<img src>`
 		 * in `$buffer` when provided — DOM order, not viewport-aware, and
 		 * only a fallback when no measured/stored data exists). Text-only LCP never resolves: every
-		 * candidate must pass `is_image_lcp_url()`. Multisite-safe: the
+		 * candidate must pass `is_image_lcp_url()`. Cross-origin candidates never resolve either:
+		 * every tier must pass `is_same_origin_preload_url()` so at most one
+		 * same-origin `<link rel="preload" as="image" fetchpriority="high">`
+		 * is ever emitted. Multisite-safe: the
 		 * stored tier uses `Util::transient_key()` blog-aware keys.
 		 *
 		 * @since NEXT
@@ -2072,7 +2235,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$od_available = class_exists( 'OD_URL_Metric' ) || function_exists( 'od_get_url_metrics' );
 					if ( $od_available ) {
 						$od_url = \PerformanceOptimise\Inc\OD_Bridge::get_lcp_url();
-						if ( is_string( $od_url ) && '' !== $od_url && $this->is_image_lcp_url( $od_url ) ) {
+						if ( is_string( $od_url ) && '' !== $od_url && $this->is_image_lcp_url( $od_url ) && $this->is_same_origin_preload_url( $od_url ) ) {
 							return $od_url;
 						}
 					}
@@ -2084,7 +2247,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			// P1: Stored PageSpeed (+ RUM-field override) chain.
 			try {
 				$stored = $this->get_current_lcp_url();
-				if ( is_string( $stored ) && '' !== $stored && $this->is_image_lcp_url( $stored ) ) {
+				if ( is_string( $stored ) && '' !== $stored && $this->is_image_lcp_url( $stored ) && $this->is_same_origin_preload_url( $stored ) ) {
 					return $stored;
 				}
 			} catch ( \Throwable $e ) {
@@ -2095,7 +2258,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			if ( is_string( $buffer ) && '' !== $buffer && false !== strpos( $buffer, '<img' ) ) {
 				try {
 					$heuristic = $this->get_first_image_src_in_buffer( $buffer );
-					if ( '' !== $heuristic && $this->is_image_lcp_url( $heuristic ) ) {
+					if ( '' !== $heuristic && $this->is_image_lcp_url( $heuristic ) && $this->is_same_origin_preload_url( $heuristic ) ) {
 						return $heuristic;
 					}
 				} catch ( \Throwable $e ) {
@@ -2867,7 +3030,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 */
 		private function set_loading_optimization_attributes( $tags, array $defaults = array(), bool $allow_lazy = true ): void {
 			$loading_attrs = array();
-			if ( function_exists( 'wp_get_loading_optimization_attributes' ) ) {
+			// Explicit version-gated core guard (issue #1180): consult core
+			// only when its loading-optimization API is available.
+			if ( $this->is_core_loading_optimization_available() ) {
 				$tag_attr = array();
 				$src      = $tags->get_attribute( 'src' );
 				if ( null !== $src ) {
@@ -4758,8 +4923,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Set fetchpriority="high" on the detected LCP image.
 		 *
-		 * Resolves the current LCP URL via get_current_lcp_url() and stamps
-		 * `fetchpriority="high"` on the matching <img> only when no fetchpriority
+		 * Stamps `fetchpriority="high"` on the matching <img> only when no fetchpriority
 		 * attribute already exists, so core's wp_get_loading_optimization_attributes()
 		 * output and the plugin's existing excludeFirstImages high-priority assignment
 		 * are never double-applied. The matched LCP image is also un-lazy-loaded so an
@@ -4774,12 +4938,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @param string      $buffer  The HTML buffer.
 		 * @param string|null $lcp_url Optional pre-resolved LCP URL. When null the
-		 *                             URL is resolved via get_current_lcp_url().
+		 *                             URL is resolved via resolve_auto_lcp_url()
+		 *                             (same-origin guarded OD/stored/heuristic
+		 *                             chain; the stored tier internally reads
+		 *                             get_current_lcp_url()).
 		 * @return string The buffer with fetchpriority="high" on the LCP image.
 		 */
 		private function prioritize_lcp_image( string $buffer, ?string $lcp_url = null ): string {
 			if ( null === $lcp_url ) {
-				$lcp_url = $this->get_current_lcp_url();
+				$lcp_url = $this->resolve_auto_lcp_url( $buffer );
 			}
 			if ( empty( $lcp_url ) || false === stripos( $buffer, '<img' ) ) {
 				return $buffer;
@@ -4803,7 +4970,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							! $stamped &&
 							$this->tag_matches_lcp_url( $processor, $lcp_url )
 							) {
-								$this->stamp_hero_loading_triple( $processor );
+								$this->restore_js_lazy_placeholders( $processor );
+								$this->remove_lazy_classes( $processor );
+								// Explicit core-stamp guard (issue #1180): an
+								// already-stamped fetchpriority (core, theme,
+								// or prior pass) is never overridden. When
+								// absent the measured hero keeps `high`
+								// (field truth beats the core heuristic).
+								$core_verdict = $this->get_core_loading_verdict_for_tag( $processor );
+								if ( null === $processor->get_attribute( 'fetchpriority' ) ) {
+									$processor->set_attribute( 'fetchpriority', 'high' );
+								}
+								if ( 'lazy' === $processor->get_attribute( 'loading' ) ) {
+									$processor->remove_attribute( 'loading' );
+								}
+								if ( null === $processor->get_attribute( 'loading' ) ) {
+									$processor->set_attribute( 'loading', 'eager' );
+								}
+								if ( null === $processor->get_attribute( 'decoding' ) ) {
+									$core_decoding = is_array( $core_verdict ) ? ( $core_verdict['decoding'] ?? null ) : null;
+									$processor->set_attribute( 'decoding', is_string( $core_decoding ) && '' !== $core_decoding ? $core_decoding : 'async' );
+								}
 								$stamped = true;
 							}
 							$new_html .= (string) $processor->serialize_token();
@@ -4831,7 +5018,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$stamped = false;
 				while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
 					if ( $this->tag_matches_lcp_url( $tags, $lcp_url ) ) {
-						$this->stamp_hero_loading_triple( $tags );
+						$this->restore_js_lazy_placeholders( $tags );
+						$this->remove_lazy_classes( $tags );
+						// Explicit core-stamp guard (issue #1180): never
+						// override an already-stamped fetchpriority; when
+						// absent the measured hero keeps `high`
+						// (field truth beats the core heuristic).
+						$core_verdict = $this->get_core_loading_verdict_for_tag( $tags );
+						if ( null === $tags->get_attribute( 'fetchpriority' ) ) {
+							$tags->set_attribute( 'fetchpriority', 'high' );
+						}
+						if ( 'lazy' === $tags->get_attribute( 'loading' ) ) {
+							$tags->remove_attribute( 'loading' );
+						}
+						if ( null === $tags->get_attribute( 'loading' ) ) {
+							$tags->set_attribute( 'loading', 'eager' );
+						}
+						if ( null === $tags->get_attribute( 'decoding' ) ) {
+							$core_decoding = is_array( $core_verdict ) ? ( $core_verdict['decoding'] ?? null ) : null;
+							$tags->set_attribute( 'decoding', is_string( $core_decoding ) && '' !== $core_decoding ? $core_decoding : 'async' );
+						}
 						$stamped = true;
 						break;
 					}
@@ -4896,7 +5102,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$changed = false;
 				while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
 					if ( $this->tag_matches_lcp_url( $tags, $lcp_url ) ) {
-						if ( $this->stamp_hero_loading_triple( $tags ) ) {
+						if ( $this->restore_js_lazy_placeholders( $tags ) ) {
+							$changed = true;
+						}
+						if ( $this->remove_lazy_classes( $tags ) ) {
+							$changed = true;
+						}
+						if ( 'lazy' === $tags->get_attribute( 'loading' ) ) {
+							$tags->remove_attribute( 'loading' );
+							$changed = true;
+						}
+						if ( null === $tags->get_attribute( 'loading' ) ) {
+							$tags->set_attribute( 'loading', 'eager' );
+							$changed = true;
+						}
+						// Explicit core-stamp guard (issue #1180): never
+						// override an already-stamped fetchpriority; when
+						// absent the measured hero keeps `high`
+						// (field truth beats the core heuristic).
+						$core_verdict = $this->get_core_loading_verdict_for_tag( $tags );
+						if ( null === $tags->get_attribute( 'fetchpriority' ) ) {
+							$tags->set_attribute( 'fetchpriority', 'high' );
+							$changed = true;
+						}
+						if ( null === $tags->get_attribute( 'decoding' ) ) {
+							$core_decoding = is_array( $core_verdict ) ? ( $core_verdict['decoding'] ?? null ) : null;
+							$tags->set_attribute( 'decoding', is_string( $core_decoding ) && '' !== $core_decoding ? $core_decoding : 'async' );
 							$changed = true;
 						}
 						if ( null === $tags->get_attribute( 'data-wppo-hero' ) ) {
@@ -4912,8 +5143,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 				// Companion preload link (fetchpriority=high, at most one). Skip when a
 				// matching preload link already exists (normalized-URL scan so
-				// absolute-vs-relative and size-suffix variants dedup).
+				// absolute-vs-relative and size-suffix variants dedup) or when
+				// the `wp_head` path (`preload_images()`) already emitted the
+				// same URL this request (issue #1180). Read-only check: the
+				// buffer path never records into `$preload_emitted` (in
+				// production `wp_head` always precedes buffer finalization, so
+				// the reverse order cannot double-emit).
 				if ( $this->buffer_has_image_preload( $buffer, $lcp_url ) ) {
+					return $buffer;
+				}
+				// Cross-path dedup (issue #1180): the `wp_head` path records
+				// manual mobile:/desktop: emissions with a non-empty media
+				// string, so checking only the empty-media key would miss them
+				// and double-emit the same hero. Check every media variant the
+				// wp_head path can record for this URL.
+				$hero_emitted = false;
+				foreach ( array( '', '(max-width: 768px)', '(min-width: 768px)' ) as $hero_media ) {
+					if ( isset( self::$preload_emitted[ $this->get_preload_dedup_key( $lcp_url, $hero_media ) ] ) ) {
+						$hero_emitted = true;
+						break;
+					}
+				}
+				if ( $hero_emitted ) {
 					return $buffer;
 				}
 				$imagesrcset = $this->get_lcp_srcset_for_url( $lcp_url, $buffer );
@@ -5422,7 +5673,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @param string      $buffer  The HTML buffer.
 		 * @param string|null $lcp_url Optional pre-resolved LCP URL. When null the
-		 *                             URL is resolved via get_current_lcp_url().
+		 *                             URL is resolved via resolve_auto_lcp_url()
+		 *                             (same-origin guarded OD/stored/heuristic
+		 *                             chain), matching every other emission path.
 		 * @return string The buffer with at most one added preload link.
 		 */
 		private function maybe_inject_css_hero_preload( string $buffer, ?string $lcp_url = null ): string {
@@ -5431,9 +5684,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return $buffer;
 			}
 			if ( null === $lcp_url ) {
-				$lcp_url = $this->get_current_lcp_url();
+				try {
+					if ( method_exists( $this, 'resolve_auto_lcp_url' ) ) {
+						$lcp_url = $this->resolve_auto_lcp_url( $buffer );
+					} else {
+						$lcp_url = $this->get_current_lcp_url();
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return $buffer;
+				}
 			}
 			if ( empty( $lcp_url ) ) {
+				return $buffer;
+			}
+			// Same-origin guarded chain parity (issue #1180): a caller-passed
+			// legacy URL that bypassed resolve_auto_lcp_url() must still
+			// prove itself an image and same-origin before it may preload.
+			try {
+				if ( ! $this->is_image_lcp_url( $lcp_url ) || ! $this->is_same_origin_preload_url( $lcp_url ) ) {
+					return $buffer;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 				return $buffer;
 			}
 			if ( $this->buffer_has_matching_img( $buffer, $lcp_url ) ) {
