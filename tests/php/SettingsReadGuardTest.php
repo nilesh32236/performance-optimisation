@@ -28,17 +28,21 @@ class SettingsReadGuardTest extends \PHPUnit\Framework\TestCase {
 	 * @var array<string, array{count: int, reason: string}>
 	 */
 	private const ALLOWLIST = array(
-		'includes/class-util.php'     => array(
+		'includes/class-util.php'            => array(
 			'count'  => 1,
 			'reason' => 'Canonical read inside Util::get_settings().',
 		),
-		'includes/class-activate.php' => array(
+		'includes/class-activate.php'        => array(
 			'count'  => 1,
 			'reason' => 'Null-distinguishing fresh-install check in maybe_seed_settings().',
 		),
-		'includes/class-main.php'     => array(
+		'includes/class-main.php'            => array(
+			'count'  => 7,
+			'reason' => 'Bare reads distinguishing "no row" from "stored array" in migrate_block_assets_setting(), maybe_migrate_ccss_max_size(), maybe_migrate_ccss_safelist(), maybe_migrate_safe_mode(), maybe_migrate_image_alt_edge_defaults(), maybe_migrate_css_queue_defaults(), and maybe_migrate_sandbox_preview().',
+		),
+		'includes/class-sandbox-preview.php' => array(
 			'count'  => 6,
-			'reason' => 'Bare reads distinguishing "no row" from "stored array" in migrate_block_assets_setting(), maybe_migrate_ccss_max_size(), maybe_migrate_ccss_safelist(), maybe_migrate_safe_mode(), maybe_migrate_image_alt_edge_defaults(), and maybe_migrate_css_queue_defaults().',
+			'reason' => 'Bare reads distinguishing "no row" from "stored array" in save_staged() (persist plus write verification), promote_staged() (read plus write verification), and discard_staged() (read plus write verification).',
 		),
 	);
 

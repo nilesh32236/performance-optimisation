@@ -299,6 +299,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+				'sandbox_preview'           => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'get_sandbox_preview' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
+				'sandbox_save'              => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'save_sandbox_preview' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
+				'sandbox_promote'           => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'promote_sandbox_preview' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
+				'sandbox_discard'           => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'discard_sandbox_preview' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
 			);
 		}
 
@@ -2582,6 +2606,99 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		public function get_ai_suggestions( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			$suggestions = class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ? Suggestion_Engine::from_ai_adaptive() : array();
 			return $this->send_response( array( 'suggestions' => $suggestions ) );
+		}
+
+		/**
+		 * Get sandbox preview status (issue #1163).
+		 *
+		 * Returns staged values, the admin-only preview URL, and whether a
+		 * staged experiment exists. Read-only; perf tests cannot run inside
+		 * the preview (server-side scans are unauthenticated) and always
+		 * measure the production URL — staged output is verified visually
+		 * via the admin preview link.
+		 *
+		 * @param \WP_REST_Request $_request The request object.
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		public function get_sandbox_preview( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			$staged      = class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ? Sandbox_Preview::get_staged_settings() : array();
+			$preview_url = '';
+			if ( class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_preview_url' ) ) {
+				$home        = function_exists( 'home_url' ) ? (string) home_url( '/' ) : '';
+				$preview_url = Sandbox_Preview::get_preview_url( $home );
+			}
+			return $this->send_response(
+				array(
+					'staged'      => $staged,
+					'has_staged'  => ! empty( $staged ),
+					'preview_url' => $preview_url,
+				)
+			);
+		}
+
+		/**
+		 * Save staged sandbox settings (issue #1163).
+		 *
+		 * POST param `settings` holds the experimental asset slice; only
+		 * allowlisted keys persist to `file_optimisation.sandboxStaged`.
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		public function save_sandbox_preview( \WP_REST_Request $request ): \WP_REST_Response {
+			$params   = $request->get_params();
+			$settings = isset( $params['settings'] ) && is_array( $params['settings'] ) ? $params['settings'] : array();
+			if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
+				return $this->send_response( null, false, 500, __( 'Sandbox preview is unavailable.', 'performance-optimisation' ) );
+			}
+			$ok = Sandbox_Preview::save_staged( $settings );
+			if ( ! $ok ) {
+				return $this->send_response( null, false, 500, __( 'Could not save sandbox settings.', 'performance-optimisation' ) );
+			}
+			return $this->send_response( array( 'staged' => Sandbox_Preview::get_staged_settings() ) );
+		}
+
+		/**
+		 * Promote staged sandbox settings to production (issue #1163).
+		 *
+		 * @param \WP_REST_Request $_request The request object.
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		public function promote_sandbox_preview( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
+				return $this->send_response( null, false, 500, __( 'Sandbox preview is unavailable.', 'performance-optimisation' ) );
+			}
+			if ( ! Sandbox_Preview::is_staged_available() ) {
+				return $this->send_response( null, false, 400, __( 'No staged sandbox settings to promote.', 'performance-optimisation' ) );
+			}
+			$ok = Sandbox_Preview::promote_staged();
+			if ( ! $ok ) {
+				return $this->send_response( null, false, 500, __( 'Could not promote sandbox settings.', 'performance-optimisation' ) );
+			}
+			$options = Util::get_settings();
+			$this->remove_sensitive_settings_from_response( $options );
+			return $this->send_response( $options );
+		}
+
+		/**
+		 * Discard staged sandbox settings (issue #1163).
+		 *
+		 * @param \WP_REST_Request $_request The request object.
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		public function discard_sandbox_preview( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
+				return $this->send_response( null, false, 500, __( 'Sandbox preview is unavailable.', 'performance-optimisation' ) );
+			}
+			$ok = Sandbox_Preview::discard_staged();
+			if ( ! $ok ) {
+				return $this->send_response( null, false, 500, __( 'Could not discard sandbox settings.', 'performance-optimisation' ) );
+			}
+			return $this->send_response( array( 'staged' => array() ) );
 		}
 
 		/**
