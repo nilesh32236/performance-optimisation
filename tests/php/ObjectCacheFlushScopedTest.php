@@ -8,64 +8,17 @@
  * object-cache.php drop-in is active.
  *
  * @package PerformanceOptimise\Tests
- *
- * @phpcs:disable Generic.Files.OneObjectStructurePerFile -- Test doubles are co-located by convention.
- * @phpcs:disable WordPress.Files.FileName -- Declares a minimal WP_Error stand-in required for instanceof checks in error-path tests.
  */
 
 use Brain\Monkey\Functions;
 use PerformanceOptimise\Inc\Object_Cache;
 use PerformanceOptimise\Inc\Util;
 
+// The plugin constructs core's WP_Error on error paths; the unit environment
+// has no WP core, so reuse the guarded stand-in co-located in TelemetryTest.php
+// (require_once keeps it a single declaration whichever file loads first).
 if ( ! class_exists( 'WP_Error' ) ) {
-	/**
-	 * Minimal WP_Error stand-in for error-path tests.
-	 *
-	 * Mirrors the core API surface used by the plugin: code and message.
-	 */
-	class WP_Error {
-
-		/**
-		 * Error codes mapped to messages.
-		 *
-		 * @var array
-		 */
-		public $errors = array();
-
-		/**
-		 * Constructor.
-		 *
-		 * @param string $code    Error code.
-		 * @param string $message Error message.
-		 * @param mixed  $data    Optional error data (ignored).
-		 */
-		public function __construct( $code = '', $message = '', $data = null ) {
-			unset( $data );
-			if ( '' !== $code ) {
-				$this->errors[ (string) $code ] = (string) $message;
-			}
-		}
-
-		/**
-		 * First error code, or empty string.
-		 *
-		 * @return string
-		 */
-		public function get_error_code() {
-			$keys = array_keys( $this->errors );
-			return array() === $keys ? '' : (string) $keys[0];
-		}
-
-		/**
-		 * First error message, or empty string.
-		 *
-		 * @return string
-		 */
-		public function get_error_message() {
-			$values = array_values( $this->errors );
-			return array() === $values ? '' : (string) $values[0];
-		}
-	}
+	require_once __DIR__ . '/TelemetryTest.php';
 }
 
 /**
