@@ -219,7 +219,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * @since 1.1.0
 		 * @return int|false The number of rows deleted, or `false` on SQL error.
 		 */
-		public static function clean_revisions() {
+		public static function clean_revisions(): int|false {
 			global $wpdb;
 			return self::delete_in_batches(
 				"SELECT ID FROM {$wpdb->posts} WHERE post_type = 'revision' LIMIT 1000",
@@ -1823,7 +1823,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			$total_deleted   = 0;
 			$affected_tables = array();
 
-				list( $rev_max_age, $rev_keep ) = self::get_revision_defaults();
+			list( $rev_max_age, $rev_keep ) = self::get_revision_defaults();
 			foreach ( $methods as $key => $method ) {
 				if ( 'revisions' === $key ) {
 					$res = self::invoke_cleanup_method( $method, $rev_max_age, $rev_keep );

@@ -30,7 +30,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 		 *
 		 * @var string
 		 */
-		const TOKEN_CONSTANT = 'WPPO_CLOUDFLARE_API_TOKEN';
+		public const TOKEN_CONSTANT = 'WPPO_CLOUDFLARE_API_TOKEN';
 
 		/**
 		 * Purge the configured third-party cache.
@@ -46,7 +46,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 		 *
 		 * @since 2.0.0 The $type and $url_path parameters were added.
 		 */
-		public static function purge_all( string $type = 'all', $url_path = null ): bool {
+		public static function purge_all( string $type = 'all', ?string $url_path = null ): bool {
 			// LS-203: LiteSpeed purge sync — always attempt before the
 			// 'all'-only early return so single-page clears also sync when
 			// purgeSync is enabled (loop-safe via Util::transient_key lock).
@@ -166,30 +166,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 				return false;
 			}
 
-			$response = wp_remote_request(
-				'https://api.cloudflare.com/client/v4/zones/' . rawurlencode( $zone ) . '/purge_cache',
-				array(
-					'method'  => 'POST',
-					'headers' => array(
-						'Authorization' => 'Bearer ' . $token,
-						'Content-Type'  => 'application/json',
-					),
-					'body'    => (string) wp_json_encode( array( 'purge_everything' => true ) ),
-					'timeout' => 10,
-				)
-			);
-
-			if ( is_wp_error( $response ) ) {
-				self::log_failure( 'cloudflare', $zone . ': ' . $response->get_error_message() );
-				return false;
-			}
-
-			$code = (int) wp_remote_retrieve_response_code( $response );
-			if ( $code < 200 || $code >= 300 ) {
-				self::log_failure( 'cloudflare', $zone . ' (HTTP ' . $code . ')' );
-				return false;
-			}
-			return true;
+			// Single implementation lives in Cloudflare_Purger::purge().
+			return Cloudflare_Purger::purge( $zone, $token, 'cloudflare' );
 		}
 
 		/**

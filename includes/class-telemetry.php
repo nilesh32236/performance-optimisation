@@ -628,8 +628,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 					}
 				}
 			} else {
-				// --- Fallback: regex-based parsing ---
-				$dom_size = preg_match_all( '/<[a-zA-Z]/', $html );
+			// --- Fallback: regex-based parsing ---
+			$dom_size = preg_match_all( '/<[a-zA-Z]/', $html );
+			$dom_size = is_int( $dom_size ) ? $dom_size : 0;
 
 				// Match stylesheets with rel="stylesheet" appearing in any order.
 				preg_match_all(
@@ -741,7 +742,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 			 * @return int File size in bytes, or 0 if not resolvable locally.
 			 */
 			$get_size = function ( string $url ): int {
-				$local_path = Util::get_local_path( $url );
+				// Direct file_exists()/filesize() (not WP_Filesystem): this
+				// closure runs up to N times per scan on the request thread,
+				// so initializing the filesystem abstraction per asset would
+				// dominate the scan cost; reads are local-only and fail-open.
+				$local_path = Util::get_local_path( $url ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_exists,WordPress.WP.AlternativeFunctions.file_system_operations_filesize -- Local read-only size probe on the scan hot path; WP_Filesystem init per asset is disproportionate, failures return 0.
 				if ( $local_path && file_exists( $local_path ) ) {
 					return (int) filesize( $local_path );
 				}
@@ -836,11 +841,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 */
 		private static function check_compression( $headers ): bool {
 			$encoding = self::get_header_value( $headers, 'content-encoding' );
-
-			return false !== stripos( $encoding, 'gzip' )
-				|| false !== stripos( $encoding, 'br' )
-				|| false !== stripos( $encoding, 'zstd' )
-				|| false !== stripos( $encoding, 'deflate' );
+			if ( '' === $encoding ) {
+				return false;
+			}
+			// Parse comma-separated Content-Encoding tokens and match exactly:
+			// a substring search for 'br' false-positives on values like
+			// 'braille' or 'x-bruh', so each token is compared whole.
+			$allowed = array( 'gzip', 'br', 'brotli', 'zstd', 'deflate', 'compress' );
+			foreach ( explode( ',', $encoding ) as $token ) {
+				if ( in_array( strtolower( trim( $token ) ), $allowed, true ) ) {
+					return true;
+				}
+			}
+			return false;
 		}
 
 		/**

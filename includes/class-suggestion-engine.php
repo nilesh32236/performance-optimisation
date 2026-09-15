@@ -166,7 +166,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ) {
 				$suggestions[ count( $suggestions ) - 1 ]['value'] = $cc_value;
 			}
 
-			return array_values( array_filter( $suggestions ) );
+			return array_values( $suggestions );
 		}
 
 		/**
@@ -254,7 +254,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ) {
 				);
 			}
 
-			return array_values( array_filter( $suggestions ) );
+			return array_values( $suggestions );
 		}
 
 		/**

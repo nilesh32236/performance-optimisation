@@ -70,6 +70,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 		public static function add( $activity ): void {
 			global $wpdb;
 
+			if ( ! is_string( $activity ) ) {
+				return;
+			}
+			if ( function_exists( 'mb_substr' ) ) {
+				$activity = mb_substr( $activity, 0, 1000, 'UTF-8' );
+			} else {
+				$activity = substr( $activity, 0, 1000 );
+			}
+
 			$table_name = $wpdb->prefix . 'wppo_activity_logs';
 
 			/* phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery */
@@ -140,8 +149,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 					"SELECT COUNT(*) FROM {$wpdb->prefix}wppo_activity_logs"
 				);
 
-				// Calculate total pages.
-				$total_pages = ceil( $total_items / $per_page );
+			// Calculate total pages.
+			$total_pages = (int) ceil( $total_items / $per_page );
 
 				// Fetch paginated results. The `id DESC` secondary sort keeps
 				// pagination deterministic when rows share a timestamp (audit
@@ -156,9 +165,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 				);
 				/* phpcs:enable */
 
-				// Prepare data for caching.
-				$data = array(
-					'activities'   => $results,
+			// Prepare data for caching.
+			$data = array(
+				'activities'   => is_array( $results ) ? $results : array(),
 					'total_items'  => $total_items,
 					'current_page' => $page,
 					'total_pages'  => $total_pages,

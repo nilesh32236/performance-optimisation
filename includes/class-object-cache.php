@@ -567,11 +567,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				if ( ! file_exists( $path ) ) {
 					continue;
 				}
-				if ( $wp_filesystem ) {
-					$wp_filesystem->delete( $path );
-				} else {
-					@unlink( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.unlink_unlink
-				}
+			if ( $wp_filesystem ) {
+				$wp_filesystem->delete( $path );
+			} elseif ( ! @unlink( $path ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.unlink_unlink
+				continue;
+			}
 			}
 		}
 
@@ -706,7 +706,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * @return \Redis|\RedisCluster|\WP_Error
 		 */
 		private function connect_internal( $config ) {
-			require_once WPPO_PLUGIN_PATH . 'includes/redis-connect-helper.php';
+			if ( ! function_exists( 'wppo_redis_connect' ) ) {
+				require_once WPPO_PLUGIN_PATH . 'includes/redis-connect-helper.php';
+			}
 			return wppo_redis_connect( $config );
 		}
 
@@ -723,12 +725,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			$options = Util::get_settings();
 			$config  = isset( $options['object_cache'] ) ? $options['object_cache'] : array();
 
-			if ( empty( $config ) && file_exists( $this->config_path ) ) {
+		if ( empty( $config ) && file_exists( $this->config_path ) ) {
+			// Containment + size guard before include: the config path lives
+			// under wp-content but must never escape it via symlink, and an
+			// unexpectedly large file is rejected instead of executed.
+			$config_real   = realpath( $this->config_path );
+			$content_dir   = wp_normalize_path( WP_CONTENT_DIR );
+			$config_normal = is_string( $config_real ) ? wp_normalize_path( $config_real ) : '';
+			$config_size   = ( '' !== $config_normal && 0 === strpos( $config_normal, $content_dir . '/' ) && is_readable( $this->config_path ) ) ? filesize( $this->config_path ) : false; // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize
+			if ( false !== $config_size && $config_size > 0 && $config_size <= 65536 ) {
 				$config = include $this->config_path; // phpcs:ignore WPThemeReview.CoreFunctionality.FileInclude.FileIncludeFound
-				if ( ! is_array( $config ) ) {
-					$config = array();
-				}
 			}
+			if ( ! is_array( $config ) ) {
+				$config = array();
+			}
+		}
 
 			/**
 			 * Filter the Redis object cache configuration.
@@ -834,11 +845,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				return new \WP_Error( 'redis_unreachable', __( 'Cannot connect to Redis with provided settings.', 'performance-optimisation' ) );
 			}
 
-			// Format nodes as array for the config file if it's a string.
-			if ( ! empty( $config['nodes'] ) ) {
+		// Format nodes as array for the config file if it's a string.
+		if ( ! empty( $config['nodes'] ) ) {
+			if ( ! function_exists( 'wppo_parse_nodes' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/redis-connect-helper.php';
-				$config['nodes'] = wppo_parse_nodes( $config['nodes'] );
 			}
+			$config['nodes'] = wppo_parse_nodes( $config['nodes'] );
+		}
 
 			$config_data = $config;
 
@@ -1081,9 +1094,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				'php'      => true,
 			);
 
-			try {
+		try {
+			if ( ! function_exists( 'wppo_resolve_redis_serializer' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/redis-connect-helper.php';
-				if ( function_exists( 'wppo_resolve_redis_serializer' ) ) {
+			}
+			if ( function_exists( 'wppo_resolve_redis_serializer' ) ) {
 					$resolved          = wppo_resolve_redis_serializer();
 					$support['active'] = isset( $resolved['name'] ) ? (string) $resolved['name'] : 'php';
 				}

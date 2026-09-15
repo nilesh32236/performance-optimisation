@@ -169,12 +169,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				return false;
 			}
 
+			// Legacy path: core insert_with_markers() writes the file directly
+			// instead of going through WP_Filesystem. This is intentional for
+			// the fallback only — it preserves the pre-atomic-writer behavior
+			// byte-for-byte; routing this path through WP_Filesystem is out of
+			// scope (the preferred atomic path above already uses it).
 			$result = insert_with_markers( $htaccess_file, self::MARKER, $rules );
 
 			if ( ! $result ) {
 				if ( null !== $backup ) {
 					insert_with_markers( $htaccess_file, self::MARKER, $backup );
-					self::verify_after_write( $htaccess_file, $wp_filesystem, array() !== self::normalize_rules( $backup ) );
+					// Check the restore verification result: a failed restore
+					// (disk-full, racing writer) must surface as failure, not
+					// be silently left behind as a truncated site-wide .htaccess.
+					$restore_ok = self::verify_after_write( $htaccess_file, $wp_filesystem, array() !== self::normalize_rules( $backup ) );
+					if ( ! $restore_ok ) {
+						self::flag_htaccess_failure();
+						return false;
+					}
 				}
 				self::flag_htaccess_failure();
 				return false;
@@ -761,7 +773,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			if ( '' !== $uniq_part ) {
 				$suffix .= '-' . $pid_part . '-' . $uniq_part;
 			}
-			$tmp_file = $htaccess_file . '.wppo-tmp-' . $suffix;
+			// Secure tmp creation: prefer wp_tempnam() in the .htaccess
+			// directory (same filesystem, so the rename stays atomic) with a
+			// `.wppo-tmp-` prefix so orphan cleanup still matches, falling
+			// back to the system temp dir and finally to the legacy
+			// suffix-based sibling. The tmp file never lives at a
+			// predictable path in the docroot.
+			$tmp_file = '';
+			if ( function_exists( 'wp_tempnam' ) ) {
+				foreach ( array( dirname( $htaccess_file ), '' ) as $tmp_dir ) {
+					try {
+						$candidate = '' === $tmp_dir ? wp_tempnam( basename( $htaccess_file ) . '.wppo-tmp-' ) : wp_tempnam( basename( $htaccess_file ) . '.wppo-tmp-', $tmp_dir );
+					} catch ( \Throwable $ignored_tmp ) {
+						unset( $ignored_tmp );
+						$candidate = false;
+					}
+					if ( is_string( $candidate ) && '' !== $candidate ) {
+						$tmp_file = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $candidate ) : $candidate;
+						break;
+					}
+				}
+			}
+			if ( '' === $tmp_file ) {
+				$tmp_file = $htaccess_file . '.wppo-tmp-' . $suffix;
+			}
 
 			$mode = defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644;
 			if ( ! $wp_filesystem->put_contents( $tmp_file, $new_contents, $mode ) ) {
@@ -769,6 +804,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 					$wp_filesystem->delete( $tmp_file );
 				}
 				return null;
+			}
+
+			// Restrict the tmp file to owner-only: it carries full .htaccess
+			// contents in the docroot until the rename below.
+			if ( method_exists( $wp_filesystem, 'chmod' ) ) {
+				$wp_filesystem->chmod( $tmp_file, 0600 );
 			}
 
 			if ( ! $wp_filesystem->move( $tmp_file, $htaccess_file, true ) ) {
@@ -990,7 +1031,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			}
 
 			if ( $use_nextgen ) {
-				$rules = array_merge(
+				$base_rules = $rules;
+				$rules      = array_merge(
 					$rules,
 					array(
 						'',
@@ -1027,10 +1069,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				/**
 				 * Filter the next-gen htaccess block.
 				 *
+				 * Return false to drop the next-gen block; return an array to
+				 * replace the rules. Any other return value keeps the rules
+				 * unchanged (a blind (array) cast would coerce false into
+				 * [false] and fail the write).
+				 *
 				 * @since 2.0.0
 				 * @param bool $use_nextgen Whether next-gen block was added.
 				 */
-				$rules = (array) apply_filters( 'wppo_htaccess_nextgen_rules', $rules );
+				$nextgen_filtered = apply_filters( 'wppo_htaccess_nextgen_rules', $rules );
+				if ( false === $nextgen_filtered ) {
+					$rules = $base_rules;
+				} elseif ( is_array( $nextgen_filtered ) ) {
+					$rules = $nextgen_filtered;
+				}
 			}
 
 			// LS-320: Cache-Vary bridge for mobile/webp vary groups.
@@ -1040,8 +1092,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			if ( $ls_active ) {
 				$groups = LiteSpeed_Integration::get_vary_groups();
 				if ( $groups['mobile'] || $groups['webp'] ) {
+					$vary_base  = $rules;
 					$cache_vary = array();
-					$env_values = array();
 					$rules[]    = '';
 					$rules[]    = '# WPPO LS-320 Cache-Vary bridge (mobile/webp) — Cache-Vary: ismobile,webp (LSCWP htaccess.cls.php:605)';
 					$rules[]    = '<IfModule mod_rewrite.c>';
@@ -1060,41 +1112,55 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 						$rules[]    = '    RewriteCond %{HTTP:Accept} image/webp [NC]';
 						$rules[]    = '    RewriteRule .* - [E=Cache-Vary:webp]';
 						$cache_vary = array( 'ismobile', 'webp' );
-						$env_values = array( 'ismobile', 'webp' );
 					} else {
 						if ( $groups['mobile'] ) {
 							$rules[]      = '    # Mobile detection — set Cache-Vary env for LSWS';
 							$rules[]      = '    RewriteCond %{HTTP_USER_AGENT} "Mobile|Android|Silk|Kindle|BlackBerry|Opera Mini|Opera Mobi" [NC]';
 							$rules[]      = '    RewriteRule .* - [E=Cache-Vary:ismobile]';
 							$cache_vary[] = 'ismobile';
-							$env_values[] = 'ismobile';
 						}
 						if ( $groups['webp'] ) {
 							$rules[]      = '    # WebP detection — set Cache-Vary env for LSWS';
 							$rules[]      = '    RewriteCond %{HTTP:Accept} image/webp [NC]';
 							$rules[]      = '    RewriteRule .* - [E=Cache-Vary:webp]';
 							$cache_vary[] = 'webp';
-							$env_values[] = 'webp';
 						}
 					}
 					$rules[] = '</IfModule>';
 					/**
 					 * Filter Cache-Vary htaccess rules.
 					 *
+					 * Return false to drop the Cache-Vary block; return an array
+					 * to replace the rules. Any other return value keeps the
+					 * rules unchanged (a blind (array) cast would coerce false
+					 * into [false] and fail the write).
+					 *
 					 * @since 2.0.0
 					 * @param array $cache_vary Active Cache-Vary groups.
 					 */
-					$rules = (array) apply_filters( 'wppo_htaccess_cache_vary_rules', $rules, $cache_vary );
+					$vary_filtered = apply_filters( 'wppo_htaccess_cache_vary_rules', $rules, $cache_vary );
+					if ( false === $vary_filtered ) {
+						$rules = $vary_base;
+					} elseif ( is_array( $vary_filtered ) ) {
+						$rules = $vary_filtered;
+					}
 				}
 			}
 
 			/**
 			 * Filter htaccess rules.
 			 *
+			 * Return an array to replace the rules. A false (or any other
+			 * non-array) return keeps the rules unchanged — a blind (array)
+			 * cast would coerce false into [false] and fail the write.
+			 *
 			 * @since 2.0.0
 			 * @param array $rules Htaccess rules.
 			 */
-			$rules = (array) apply_filters( 'wppo_htaccess_rules', $rules );
+			$final_filtered = apply_filters( 'wppo_htaccess_rules', $rules );
+			if ( is_array( $final_filtered ) ) {
+				$rules = $final_filtered;
+			}
 
 			return $rules;
 		}

@@ -101,6 +101,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		}
 
 		/**
+		 * Whether the Header_Emitter bridge is loaded.
+		 *
+		 * Single guard for every Header_Emitter call site below: the ESI
+		 * bridge can run on admin-ajax/early hooks where the emitter file
+		 * may not be loaded yet, so header emission must fail open.
+		 *
+		 * @since NEXT
+		 * @return bool True when Header_Emitter can be called safely.
+		 */
+		private static function has_header_emitter(): bool {
+			return class_exists( 'PerformanceOptimise\Inc\Header_Emitter' );
+		}
+
+		/**
+		 * Fallback nonce seed when pluggable functions are unavailable.
+		 *
+		 * Prefers wp_salt() when it exists; otherwise uses a static
+		 * fallback string so md5() never fatals on an undefined function.
+		 *
+		 * @since NEXT
+		 * @param string $context Nonce context (block name).
+		 * @return string MD5 seed for the fallback nonce.
+		 */
+		private static function fallback_nonce_seed( string $context ): string {
+			$salt = function_exists( 'wp_salt' ) ? wp_salt() : 'wppo_esi_fallback';
+			return md5( $context . $salt );
+		}
+
+		/**
 		 * Enqueue the ESI hydration client (build/esi.js) for OLS placeholder mode.
 		 *
 		 * On OpenLiteSpeed there is no native ESI, so the server renders
@@ -162,7 +191,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 				$version = isset( $asset['version'] ) ? $asset['version'] : WPPO_VERSION;
 			}
 
-			wp_enqueue_script( 'wppo-esi', WPPO_PLUGIN_URL . 'build/esi.js', $deps, $version, array( 'in_footer' => true ) );
+			// Bool $in_footer (not the array $args form, which needs WP 6.3+)
+			// so the client still loads in the footer on WP 6.2.
+			wp_enqueue_script( 'wppo-esi', WPPO_PLUGIN_URL . 'build/esi.js', $deps, $version, true );
 		}
 
 		/**
@@ -215,7 +246,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 							unset( $e );
 						}
 					}
-					if ( ! empty( $_COOKIE['woocommerce_items_in_cart'] ) || ! empty( $_COOKIE['woocommerce_cart_hash'] ) ) {
+					// Unslash + sanitize raw cookie input before trusting it.
+					$cart_cookie = isset( $_COOKIE['woocommerce_items_in_cart'] ) ? sanitize_text_field( wp_unslash( $_COOKIE['woocommerce_items_in_cart'] ) ) : '';
+					$hash_cookie = isset( $_COOKIE['woocommerce_cart_hash'] ) ? sanitize_text_field( wp_unslash( $_COOKIE['woocommerce_cart_hash'] ) ) : '';
+					if ( '' !== $cart_cookie || '' !== $hash_cookie ) {
 						return true;
 					}
 					return false;
@@ -343,7 +377,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			 */
 			$block = (string) apply_filters( 'wppo_esi_block', $block, $attrs );
 
-			$nonce = function_exists( 'wp_create_nonce' ) ? wp_create_nonce( 'wppo_esi' ) : md5( $block . wp_salt() );
+			$nonce = function_exists( 'wp_create_nonce' ) ? wp_create_nonce( 'wppo_esi' ) : self::fallback_nonce_seed( $block );
 			// Store 12h transient blog-prefixed.
 			$transient_key = Util::transient_key( 'wppo_esi_nonce_' . md5( $nonce . $block ) );
 			set_transient( $transient_key, $nonce, 12 * HOUR_IN_SECONDS );
@@ -668,7 +702,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			$nonce_valid = function_exists( 'wp_verify_nonce' ) ? wp_verify_nonce( $nonce, 'wppo_esi' ) : false;
 
 			if ( ! $nonce_valid && 'cart' !== $block && 'nonce' !== $block ) {
-				Header_Emitter::emit_private_pair();
+				if ( self::has_header_emitter() ) {
+					Header_Emitter::emit_private_pair();
+				}
 				if ( function_exists( 'wp_send_json_error' ) ) {
 					wp_send_json_error( array( 'message' => 'Unauthorized' ), 403 );
 				}
@@ -678,7 +714,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			// For adminbar, require logged-in.
 			if ( 'adminbar' === $block || 'admin_bar' === $block || 'admin-bar' === $block ) {
 				if ( ! is_user_logged_in() ) {
-					Header_Emitter::emit_private_pair();
+					if ( self::has_header_emitter() ) {
+						Header_Emitter::emit_private_pair();
+					}
 					if ( function_exists( 'wp_send_json_error' ) ) {
 						wp_send_json_error( array( 'message' => 'Unauthorized' ), 401 );
 					}
@@ -686,7 +724,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 				}
 			}
 
-			$fragment = '<span>cart(3)</span>';
 			// Allow per-block fragment generation.
 			switch ( $block ) {
 				case 'cart':
@@ -701,7 +738,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 					// No nonce oracle: only mint a fresh nonce when the caller
 					// presented a valid one; unauthenticated callers get 403.
 					if ( ! $nonce_valid ) {
-						Header_Emitter::emit_private_pair();
+						if ( self::has_header_emitter() ) {
+							Header_Emitter::emit_private_pair();
+						}
 						if ( function_exists( 'wp_send_json_error' ) ) {
 							wp_send_json_error( array( 'message' => 'Unauthorized' ), 403 );
 						}
@@ -735,7 +774,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 				array( 'http', 'https', 'mailto', 'tel', 'relative' )
 			);
 
-			Header_Emitter::emit_private_pair();
+			if ( self::has_header_emitter() ) {
+				Header_Emitter::emit_private_pair();
+			}
 
 			if ( function_exists( 'wp_send_json_success' ) ) {
 				wp_send_json_success( array( 'html' => $fragment ) );
@@ -773,7 +814,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 				return $content;
 			}
 
-			$nonce = function_exists( 'wp_create_nonce' ) ? wp_create_nonce( 'wppo_esi' ) : md5( wp_salt() . 'wppo_esi' );
+			$nonce = function_exists( 'wp_create_nonce' ) ? wp_create_nonce( 'wppo_esi' ) : self::fallback_nonce_seed( 'wppo_esi' );
 			$key   = Util::transient_key( 'wppo_esi_nonce_' . md5( $nonce ) );
 			set_transient( $key, $nonce, 12 * HOUR_IN_SECONDS );
 			// Wildcard allowlist transient for ESI (wppo_-prefixed to avoid
@@ -872,7 +913,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 
 			// Cart / checkout / account → private,no-vary.
 			if ( $is_cart || $is_checkout || $is_account ) {
-				Header_Emitter::emit_private_pair();
+				if ( self::has_header_emitter() ) {
+					Header_Emitter::emit_private_pair();
+				}
 				/**
 				 * Filter ESI private header decision.
 				 *
@@ -885,14 +928,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 
 			// Admin → no-cache.
 			if ( $is_admin ) {
-				Header_Emitter::emit_nocache_pair();
+				if ( self::has_header_emitter() ) {
+					Header_Emitter::emit_nocache_pair();
+				}
 				do_action( 'wppo_esi_private_headers_sent', 'no-cache' );
 				return;
 			}
 
 			// Also check should_punch_hole for generic private.
 			if ( self::should_punch_hole( 'cart' ) || self::should_punch_hole( 'checkout' ) || self::should_punch_hole( 'account' ) || self::should_punch_hole( 'adminbar' ) ) {
-				Header_Emitter::emit_private_pair();
+				if ( self::has_header_emitter() ) {
+					Header_Emitter::emit_private_pair();
+				}
 				do_action( 'wppo_esi_private_headers_sent', 'private' );
 			}
 		}
@@ -1001,7 +1048,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				LiteSpeed_Integration::queue_purge_tags( array( 'ESI.' . $action, 'W.' . md5( $action ) ), 'private' );
 			}
-			Header_Emitter::emit_esi_tag( $action );
+			if ( self::has_header_emitter() ) {
+				Header_Emitter::emit_esi_tag( $action );
+			}
 		}
 
 		/**
@@ -1057,6 +1106,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			}
 			if ( ! defined( 'DONOTCACHEPAGE' ) ) {
 				define( 'DONOTCACHEPAGE', true );
+			}
+			// The constant alone is read too late by some stacks — also send
+			// no-cache headers now (guarded: never emit after headers sent).
+			$headers_sent = function_exists( 'headers_sent' ) ? headers_sent() : true;
+			if ( ! $headers_sent ) {
+				if ( function_exists( 'nocache_headers' ) ) {
+					nocache_headers();
+				} elseif ( self::has_header_emitter() ) {
+					Header_Emitter::emit_nocache_pair();
+				}
 			}
 			return $fragment;
 		}

@@ -238,12 +238,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 				// Security: report the normalized server family instead of the
 				// raw SERVER_SOFTWARE banner, which embeds exact versions.
 				'server_software' => self::normalize_server_software(
-					isset( $_SERVER['SERVER_SOFTWARE'] )
+					isset( $_SERVER['SERVER_SOFTWARE'] ) && is_string( $_SERVER['SERVER_SOFTWARE'] )
 						? sanitize_text_field( wp_unslash( $_SERVER['SERVER_SOFTWARE'] ) )
 						: null
 				),
-				'os'              => PHP_OS . ' ' . php_uname( 'r' ),
-				'architecture'    => php_uname( 'm' ),
+				// php_uname() can be disabled via disable_functions; fall back
+				// to the always-available PHP_OS constant.
+				'os'              => PHP_OS . ' ' . ( function_exists( 'php_uname' ) ? (string) php_uname( 'r' ) : '' ),
+				'architecture'    => function_exists( 'php_uname' ) ? (string) php_uname( 'm' ) : PHP_OS,
 			);
 		}
 
@@ -261,7 +263,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 *     @type string           $active_cache_plugin  Slug of active cache plugin or 'None'.
 		 *     @type string           $peak_memory_usage    Human-readable peak memory usage.
 		 *     @type string           $current_memory_usage Human-readable current memory usage.
-		 *     @type string[]|null    $woocommerce_presets  WooCommerce high-value URL presets, or null.
 		 * }
 		 */
 		public static function get_cache(): array {
@@ -529,7 +530,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		public static function get_opcache(): array {
 			if ( ! function_exists( 'opcache_get_status' ) ) {
 				return array(
-					'status' => esc_html__( 'Disabled', 'performance-optimisation' ),
+					'status' => __( 'Disabled', 'performance-optimisation' ),
 					'detail' => 'not available',
 				);
 			}
@@ -539,7 +540,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 
 			if ( false === $opcache ) {
 				return array(
-					'status' => esc_html__( 'Disabled by configuration', 'performance-optimisation' ),
+					'status' => __( 'Disabled by configuration', 'performance-optimisation' ),
 					'detail' => 'not available',
 				);
 			}
@@ -660,7 +661,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 				}
 			}
 
-			return esc_html__( 'None', 'performance-optimisation' );
+			return __( 'None', 'performance-optimisation' );
 		}
 
 		/**

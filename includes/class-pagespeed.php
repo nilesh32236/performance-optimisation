@@ -329,19 +329,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		}
 
 		/**
-		 * Store a failure sentinel so the React poller gets a definitive error
-		 * instead of polling until MAX_POLL_ATTEMPTS is exhausted.
-		 *
-		 * The transient value is an array with 'error' => true so the REST handler
-		 * can distinguish it from a successful result.
-		 *
-		 * @since  1.6.0
-		 * @param  string $url      The scanned URL.
-		 * @param  string $strategy Either 'mobile' or 'desktop'.
-		 * @param  string $message  Human-readable error message.
-		 * @return void
-		 */
-		/**
 		 * Perform the PageSpeed API request (single attempt, no blocking retry).
 		 *
 		 * A transport failure is returned to the caller so run_scan() can
@@ -664,7 +651,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 				$diagnostics[ $id ] = array(
 					'score'         => isset( $audit['score'] ) ? (float) $audit['score'] : null,
 					'display_value' => isset( $audit['displayValue'] ) ? sanitize_text_field( $audit['displayValue'] ) : null,
-					'details'       => $audit['details'] ?? array(),
+					'details'       => self::sanitize_audit_details( $audit['details'] ?? array() ),
 				);
 			}
 
@@ -684,7 +671,53 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 				$return['lcp_image_url'] = $lcp;
 			}
 
+			// Cap the serialized payload (50KB) before it reaches set_transient:
+			// drop per-audit details first, keeping scores/values intact.
+			$encoded = function_exists( 'wp_json_encode' ) ? wp_json_encode( $return ) : false;
+			if ( is_string( $encoded ) && strlen( $encoded ) > 50 * 1024 ) {
+				foreach ( $return['diagnostics'] as $diag_id => $diag ) {
+					$return['diagnostics'][ $diag_id ]['details'] = array();
+				}
+			}
+
 			return $return;
+		}
+
+		/**
+		 * Whitelist and slice raw Lighthouse audit details.
+		 *
+		 * Keeps only the summary plus the first 5 table items with scalar
+		 * url/snippet/score fields, so unbounded API payloads (headings,
+		 * debugData, full node trees) never bloat the transient.
+		 *
+		 * @since NEXT
+		 * @param mixed $details Raw details array from the API.
+		 * @return array Sanitized details.
+		 */
+		private static function sanitize_audit_details( $details ): array {
+			if ( ! is_array( $details ) ) {
+				return array();
+			}
+			$clean = array();
+			if ( isset( $details['summary'] ) && is_scalar( $details['summary'] ) ) {
+				$clean['summary'] = sanitize_text_field( (string) $details['summary'] );
+			}
+			if ( isset( $details['items'] ) && is_array( $details['items'] ) ) {
+				$items = array_slice( $details['items'], 0, 5 );
+				foreach ( $items as $item ) {
+					if ( ! is_array( $item ) ) {
+						continue;
+					}
+					$row = array();
+					foreach ( array( 'url', 'snippet', 'score', 'wastedMs', 'wastedBytes' ) as $field ) {
+						if ( isset( $item[ $field ] ) && is_scalar( $item[ $field ] ) ) {
+							$row[ $field ] = 'url' === $field || 'snippet' === $field ? sanitize_text_field( (string) $item[ $field ] ) : $item[ $field ];
+						}
+					}
+					$clean['items'][] = $row;
+				}
+			}
+			return $clean;
 		}
 
 		/**
@@ -758,7 +791,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			}
 
 			$strategy_suffix     = sanitize_key( $strategy );
-			$normalised_scan_url = untrailingslashit( esc_url_raw( add_query_arg( array(), $url ) ) );
+			$normalised_scan_url = untrailingslashit( esc_url_raw( $url ) );
 			$normalised_home     = untrailingslashit( Util::cached_home_url( '/' ) );
 
 			// Case 1: Front page.

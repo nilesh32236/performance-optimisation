@@ -696,7 +696,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 					if ( class_exists( 'Spyc' ) ) {
 						WP_CLI::log( \Spyc::YAMLDump( $data, 2, 0 ) );
 					} elseif ( function_exists( 'yaml_emit' ) ) {
-						WP_CLI::log( yaml_emit( $data ) );
+						// yaml_emit() returns the YAML string or false on failure
+						// (e.g. unrepresentable types) — fall back to JSON so the
+						// command never prints an empty result.
+						$yaml = yaml_emit( $data );
+						if ( ! is_string( $yaml ) || '' === $yaml ) {
+							WP_CLI::warning( __( 'YAML encoding failed; falling back to JSON format.', 'performance-optimisation' ) );
+							WP_CLI::log( (string) wp_json_encode( $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
+						} else {
+							WP_CLI::log( $yaml );
+						}
 					} else {
 						WP_CLI::warning( __( 'YAML dumper not available; falling back to JSON format.', 'performance-optimisation' ) );
 						WP_CLI::log( (string) wp_json_encode( $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );

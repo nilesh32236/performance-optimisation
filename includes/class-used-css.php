@@ -497,6 +497,57 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		}
 
 		/**
+		 * Strip CSS comments while preserving quoted segments.
+		 *
+		 * A character scanner that tracks single/double-quote state (with
+		 * backslash escapes), so comment markers inside strings never open
+		 * or close a comment. Unterminated comments are dropped (fail-open).
+		 *
+		 * @since NEXT
+		 * @param string $css Raw CSS content.
+		 * @return string CSS without comments.
+		 */
+		private static function strip_css_comments( string $css ): string {
+			$length = strlen( $css );
+			$out    = '';
+			$quote  = null;
+			$i      = 0;
+			while ( $i < $length ) {
+				$char = $css[ $i ];
+				if ( null !== $quote ) {
+					$out .= $char;
+					if ( '\\' === $char && $i + 1 < $length ) {
+						$out .= $css[ $i + 1 ];
+						$i   += 2;
+						continue;
+					}
+					if ( $char === $quote ) {
+						$quote = null;
+					}
+					++$i;
+					continue;
+				}
+				if ( '"' === $char || "'" === $char ) {
+					$quote = $char;
+					$out  .= $char;
+					++$i;
+					continue;
+				}
+				if ( '/' === $char && $i + 1 < $length && '*' === $css[ $i + 1 ] ) {
+					$end = strpos( $css, '*/', $i + 2 );
+					if ( false === $end ) {
+						break;
+					}
+					$i = $end + 2;
+					continue;
+				}
+				$out .= $char;
+				++$i;
+			}
+			return $out;
+		}
+
+		/**
 		 * Parse CSS content into structured rules.
 		 *
 		 * @param string $css Raw CSS content.
@@ -504,14 +555,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @since 1.9.0
 		 */
 		public function parse_css( string $css ): array {
-			// Strip CSS comments. Note: this simple regex does not handle
-			// string contents (e.g. content: "/* not a comment */") correctly.
-			// CSS values containing "/*" inside strings would be incorrectly
-			// truncated. This is a known v1 limitation.
-			$stripped = preg_replace( '/\/\*.*?\*\//s', '', $css );
-			if ( null !== $stripped ) {
-				$css = $stripped;
-			}
+			// Strip CSS comments with a string-aware scanner: comment markers
+			// inside quoted segments (e.g. content: "/* not a comment */")
+			// are preserved instead of being treated as comment boundaries.
+			$css = self::strip_css_comments( $css );
 
 			$rules = array();
 
@@ -545,18 +592,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					$at_rule_name = substr( $css, $offset, $at_rule_end - $offset );
 					$at_rule_name = trim( $at_rule_name );
 
-					$brace_depth = 1;
-					$block_start = $at_rule_end;
-					$pos         = $at_rule_end + 1;
+				$brace_depth = 1;
+				$block_start = $at_rule_end;
+				$pos         = $at_rule_end + 1;
+				$scan_quote  = null;
 
-					while ( $pos < $length && $brace_depth > 0 ) {
-						if ( '{' === $css[ $pos ] ) {
-							++$brace_depth;
-						} elseif ( '}' === $css[ $pos ] ) {
-							--$brace_depth;
+				while ( $pos < $length && $brace_depth > 0 ) {
+					$scan_char = $css[ $pos ];
+					if ( null !== $scan_quote ) {
+						// Inside a quoted segment: braces are literal. A
+						// backslash escapes the next char (e.g. content: '}').
+						if ( '\\' === $scan_char ) {
+							$pos += 2;
+							continue;
 						}
-						++$pos;
+						if ( $scan_char === $scan_quote ) {
+							$scan_quote = null;
+						}
+					} elseif ( '"' === $scan_char || "'" === $scan_char ) {
+						$scan_quote = $scan_char;
+					} elseif ( '{' === $scan_char ) {
+						++$brace_depth;
+					} elseif ( '}' === $scan_char ) {
+						--$brace_depth;
 					}
+					++$pos;
+				}
 
 					$block_content = substr( $css, $block_start + 1, $pos - $block_start - 2 );
 
@@ -1700,7 +1761,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @since NEXT
 		 */
 		private function get_full_regen_cooldown(): int {
-			$default = defined( 'HOUR_IN_SECONDS' ) ? 5 * HOUR_IN_SECONDS : self::FULL_REGEN_COOLDOWN_SECONDS;
+			// The class constant is the default (5 hours); the filter below
+			// may override it per site.
+			$default = self::FULL_REGEN_COOLDOWN_SECONDS;
 			try {
 				if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_used_css_regen_cooldown' ) ) {
 					return (int) $default;
@@ -2307,7 +2370,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 */
 		private static function collect_css_asset_from_tag( \WP_HTML_Tag_Processor $tags, array &$assets ): void {
 			$rel = $tags->get_attribute( 'rel' );
-			if ( 'stylesheet' !== $rel ) {
+			// Token check: rel is a space-separated list ("stylesheet",
+			// "alternate stylesheet") and matching is ASCII case-insensitive.
+			$is_stylesheet = false;
+			if ( is_string( $rel ) ) {
+				foreach ( preg_split( '/\s+/', strtolower( $rel ) ) as $token ) {
+					if ( 'stylesheet' === $token ) {
+						$is_stylesheet = true;
+						break;
+					}
+				}
+			}
+			if ( ! $is_stylesheet ) {
 				return;
 			}
 			$href = $tags->get_attribute( 'href' );

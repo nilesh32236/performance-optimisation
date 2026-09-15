@@ -1342,14 +1342,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 
 			$cacheable = false;
 			try {
+				// Prefer the public Cache::is_page_cacheable() API; when it
+				// is unavailable (older drop-in) leave the request
+				// non-cacheable instead of reaching into private methods
+				// via reflection.
 				if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					$cache = new Cache();
 					if ( method_exists( $cache, 'is_page_cacheable' ) ) {
 						$cacheable = $cache->is_page_cacheable();
-					} else {
-						$ref = new \ReflectionMethod( Cache::class, 'is_not_cacheable' );
-						$ref->setAccessible( true );
-						$cacheable = ! $ref->invoke( $cache );
 					}
 				}
 			} catch ( \Throwable $e ) {
@@ -1607,6 +1607,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			$value   = (string) apply_filters( 'wppo_litespeed_lscache_vary_value', $value, $payload );
 			$current = isset( $_COOKIE['_lscache_vary'] ) ? sanitize_text_field( wp_unslash( $_COOKIE['_lscache_vary'] ) ) : '';
 			if ( $current !== $value ) {
+				// Never emit setcookie() after headers went out (cron/early
+				// flush races) — PHP would raise a "headers already sent"
+				// warning on every such request.
+				if ( function_exists( 'headers_sent' ) && headers_sent() ) {
+					return;
+				}
 				setcookie( '_lscache_vary', $value, time() + DAY_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), true );
 			}
 		}
@@ -1618,14 +1624,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * @return string Role value (99 for admin, role hash otherwise).
 		 */
 		private static function get_vary_role_value(): string {
-			if ( is_multisite() && is_super_admin() ) {
-				return '99';
+			try {
+				if ( function_exists( 'is_multisite' ) && function_exists( 'is_super_admin' ) && is_multisite() && is_super_admin() ) {
+					return '99';
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 			}
 			// Use capability check instead of is_admin() for accuracy (LSCWP parity).
-			if ( function_exists( 'current_user_can' ) && current_user_can( 'manage_options' ) ) {
-				return '99';
+			if ( function_exists( 'current_user_can' ) ) {
+				try {
+					if ( current_user_can( 'manage_options' ) ) {
+						return '99';
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 			}
-			$user = wp_get_current_user();
+			$user = null;
+			if ( function_exists( 'wp_get_current_user' ) ) {
+				try {
+					$user = wp_get_current_user();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$user = null;
+				}
+			}
+			if ( ! $user instanceof \WP_User ) {
+				return '';
+			}
 			return Util::get_role_hash( $user );
 		}
 
@@ -1657,9 +1684,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 *
 		 * Internal shim delegating to {@see Header_Emitter::strip_crlf()}
 		 * (issue #905) so pre-existing internal call sites keep working;
-		 * new code should call Header_Emitter directly. Temporary — planned
-		 * for removal in a follow-up once the migration is fully soaked.
+		 * new code should call Header_Emitter directly.
 		 *
+		 * @deprecated NEXT Use Header_Emitter::strip_crlf() directly.
 		 * @since 2.0.0
 		 * @param string $value Header value to clean.
 		 * @return string Value without header-breaking control characters.
@@ -1782,26 +1809,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			$needs_vary        = $groups_for_header['role'] || $groups_for_header['guest'] || $groups_for_header['mobile'] || $groups_for_header['webp'];
 			if ( $needs_vary ) {
 				$has_external = false;
-				if ( function_exists( 'has_filter' ) ) {
-					global $wp_filter;
-					if ( isset( $wp_filter['litespeed_vary'] ) && is_object( $wp_filter['litespeed_vary'] ) ) {
-						$callbacks = $wp_filter['litespeed_vary']->callbacks ?? array();
-						$only_self = true;
-						foreach ( $callbacks as $prio => $cbs ) {
-							foreach ( $cbs as $cb ) {
-								$fn = $cb['function'] ?? null;
-								if ( is_array( $fn ) && isset( $fn[0], $fn[1] ) && 'PerformanceOptimise\\Inc\\LiteSpeed_Integration' === $fn[0] && 'filter_litespeed_vary' === $fn[1] ) {
-									continue;
-								}
-								$only_self    = false;
-								$has_external = true;
-							}
-						}
-						if ( $only_self ) {
-							$has_external = false;
-						}
-					} else {
-						$has_external = false;
+				if ( function_exists( 'has_filter' ) && function_exists( 'remove_filter' ) && function_exists( 'add_filter' ) ) {
+					// Public-API probe for vary subscribers beyond our own
+					// filter_litespeed_vary (registered by init() at priority
+					// 10): detach ours, probe the hook with has_filter(), then
+					// re-attach at the same priority. has_filter() alone cannot
+					// distinguish "only ours" from "ours plus others", and
+					// reaching into $wp_filter internals is fragile across WP
+					// versions. Same-priority FIFO order among third parties is
+					// not preserved by the re-attach, but vary entries are an
+					// unordered set so emission is unaffected.
+					$self_cb   = array( self::class, 'filter_litespeed_vary' );
+					$self_prio = has_filter( 'litespeed_vary', $self_cb );
+					if ( false !== $self_prio ) {
+						remove_filter( 'litespeed_vary', $self_cb, (int) $self_prio );
+					}
+					$has_external = (bool) has_filter( 'litespeed_vary' );
+					if ( false !== $self_prio ) {
+						add_filter( 'litespeed_vary', $self_cb, (int) $self_prio, 1 );
 					}
 				}
 				if ( ! $has_external && ! $headers_sent ) {
@@ -1978,17 +2003,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 					unset( $e );
 				}
 			}
-			// PGS: paged archives.
-			if ( function_exists( 'is_paged' ) ) {
+			// PGS: paged archives (default-included for purge fan-out when
+			// the conditional is unavailable).
+			if ( ! function_exists( 'is_paged' ) ) {
+				if ( ! in_array( 'PGS', $tags, true ) ) {
+					$tags[] = 'PGS';
+				}
+			} else {
 				try {
-					if ( is_paged() ) {
+					if ( is_paged() && ! in_array( 'PGS', $tags, true ) ) {
 						$tags[] = 'PGS';
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
-			} elseif ( ! in_array( 'PGS', $tags, true ) ) { // Default include PGS for purge fan-out (covers paginated archives).
-				$tags[] = 'PGS';
 			}
 			// Ensure F/H/PGS are always in fan-out for singular invalidation (LSCWP src/tag.cls.php:16).
 			if ( function_exists( 'is_singular' ) ) {

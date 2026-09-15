@@ -60,7 +60,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 		 * @param string $file_path  Path to the CSS file to be minified.
 		 * @param string $cache_dir  Directory where the minified file will be cached.
 		 */
-		public function __construct( $file_path, $cache_dir ) {
+		public function __construct( string $file_path, string $cache_dir ) {
 			$real_path   = realpath( $file_path );
 			$content_dir = wp_normalize_path( defined( 'WP_CONTENT_DIR' ) ? WP_CONTENT_DIR : '' );
 			if ( false === $real_path ) {
@@ -171,10 +171,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 		 *
 		 * @param string $css_content The CSS content to modify.
 		 * @param string $file_path The file path of the original CSS file.
-		 * @return string The updated CSS content with modified image paths.
+		 * @return string|null The updated CSS content with modified image paths, or null on PCRE failure.
 		 * @since 1.0.0
 		 */
-		public static function update_image_paths( $css_content, $file_path ) {
+		public static function update_image_paths( string $css_content, string $file_path ): ?string {
 			$file_path   = wp_normalize_path( $file_path );
 			$pattern     = '/url\(\s*([\'"]?)(.*?)\s*\1\s*\)/';
 			$css_dir     = wp_normalize_path( dirname( $file_path ) );

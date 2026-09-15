@@ -69,7 +69,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\JS' ) ) {
 		 *
 		 * @since 1.0.0
 		 */
-		public function __construct( $file_path, $cache_dir ) {
+		public function __construct( string $file_path, string $cache_dir ) {
 			$real_path   = realpath( $file_path );
 			$content_dir = wp_normalize_path( defined( 'WP_CONTENT_DIR' ) ? WP_CONTENT_DIR : '' );
 			if ( false === $real_path ) {

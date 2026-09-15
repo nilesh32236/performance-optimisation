@@ -73,11 +73,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private ?array $resolved_delay_exclusions = null;
 
 		/**
-		 * Default delay strategy: 'interaction', 'idle', or 'viewport'.
-		 *
-		 * @var   string
-		 * @since 2.0.0
-		 */
+	 * Default delay strategy: 'interaction', 'idle', or 'viewport'.
+	 *
+	 * @var   string
+	 * @since NEXT
+	 */
 		private string $delay_js_default_strategy = 'interaction';
 
 		/**
@@ -511,6 +511,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			$file_optimisation_opts = $this->options['file_optimisation'] ?? array();
+			if ( ! is_array( $file_optimisation_opts ) ) {
+				$file_optimisation_opts = array();
+			}
 			// INP-first preset (#932): one-click 60s heartbeat via the existing
 			// disable_heartbeat path. In-memory only — an explicit user choice
 			// (disable_all/disable_ext) always wins, never overridden.
@@ -572,9 +575,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					$user        = wp_get_current_user();
 					$hash        = Util::get_role_hash( $user );
 					$cookie_hash = isset( $_COOKIE['wppo_role_hash'] ) ? sanitize_text_field( wp_unslash( $_COOKIE['wppo_role_hash'] ) ) : null;
-					if ( '' !== $hash && ( null === $cookie_hash || $cookie_hash !== $hash ) ) {
+				if ( '' !== $hash && ( null === $cookie_hash || $cookie_hash !== $hash ) ) {
+					if ( ! headers_sent() ) {
 						setcookie( 'wppo_role_hash', $hash, time() + DAY_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), true );
 					}
+				}
 				}
 			}
 		}
@@ -586,7 +591,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return void
 		 */
 		public function clear_role_hash_cookie(): void {
-			if ( isset( $_COOKIE['wppo_role_hash'] ) ) {
+			if ( isset( $_COOKIE['wppo_role_hash'] ) && ! headers_sent() ) {
 				setcookie( 'wppo_role_hash', '', time() - YEAR_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), true );
 			}
 		}
@@ -648,13 +653,65 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-cdn.php' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-cdn.php';
 			}
-			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-builder-purge-watcher.php' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-builder-purge-watcher.php';
-			}
+		if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-builder-purge-watcher.php' ) ) {
+			require_once WPPO_PLUGIN_PATH . 'includes/class-builder-purge-watcher.php';
+		}
 
-			if ( defined( 'WP_CLI' ) && WP_CLI ) {
+		// Fallback loader for the remaining core classes when the Composer
+		// classmap is stale or unavailable (partial release builds). Each
+		// file loads only when its class is still undeclared (no autoload
+		// trigger), so the classmap stays authoritative when healthy.
+		$fallback_classes = array(
+			'Abilities'              => 'class-abilities.php',
+			'Activate'               => 'class-activate.php',
+			'Admin_Notices'          => 'class-admin-notices.php',
+			'Advanced_Cache_Handler' => 'class-advanced-cache-handler.php',
+			'Asset_Manager'          => 'class-asset-manager.php',
+			'Cache'                  => 'class-cache.php',
+			'CDN_Purger'             => 'class-cdn-purger.php',
+			'Cloudflare_Purger'      => 'class-cloudflare-purger.php',
+			'Core_Tweaks'            => 'class-core-tweaks.php',
+			'Critical_CSS'           => 'class-critical-css.php',
+			'Cron'                   => 'class-cron.php',
+			'Database_Cleanup'       => 'class-database-cleanup.php',
+			'Deactivate'             => 'class-deactivate.php',
+			'Edge_Cache'             => 'class-edge-cache.php',
+			'Edge_Purger'            => 'class-edge-purger.php',
+			'Google_Fonts'           => 'class-google-fonts.php',
+			'Htaccess_Handler'       => 'class-htaccess-handler.php',
+			'Image_Optimisation'     => 'class-image-optimisation.php',
+			'Img_Converter'          => 'class-img-converter.php',
+			'Log'                    => 'class-log.php',
+			'Metabox'                => 'class-metabox.php',
+			'Object_Cache'           => 'class-object-cache.php',
+			'Pagespeed'              => 'class-pagespeed.php',
+			'Rest'                   => 'class-rest.php',
+			'RUM'                    => 'class-rum.php',
+			'Suggestion_Engine'      => 'class-suggestion-engine.php',
+			'System_Info'            => 'class-system-info.php',
+			'Telemetry'              => 'class-telemetry.php',
+			'Used_CSS'               => 'class-used-css.php',
+			'Util'                   => 'class-util.php',
+		);
+		foreach ( $fallback_classes as $class_name => $file_name ) {
+			if ( class_exists( 'PerformanceOptimise\\Inc\\' . $class_name, false ) ) {
+				continue;
+			}
+			$fallback_path = WPPO_PLUGIN_PATH . 'includes/' . $file_name;
+			if ( file_exists( $fallback_path ) ) {
+				require_once $fallback_path;
+			}
+		}
+
+		if ( defined( 'WP_CLI' ) && WP_CLI ) {
+			$cli_file = WPPO_PLUGIN_PATH . 'includes/class-wppo-cli-command.php';
+			if ( file_exists( $cli_file ) ) {
+				require_once $cli_file;
+			}
+			if ( class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				\WP_CLI::add_command( 'wppo', 'PerformanceOptimise\Inc\WPPO_CLI_Command' );
 			}
+		}
 		}
 
 		/**
@@ -2339,10 +2396,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				__( 'Performance Optimisation', 'performance-optimisation' ),
 				'manage_options',
 				'performance-optimisation',
-				array( $this, 'admin_page' ),
-				'dashicons-admin-post',
-				'2.1', // @phpstan-ignore argument.type
-			);
+			array( $this, 'admin_page' ),
+			'dashicons-admin-post',
+			2.1,
+		);
 		}
 
 		/**

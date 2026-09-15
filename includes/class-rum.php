@@ -570,7 +570,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * @return bool
 		 */
 		private static function supports_script_strategy(): bool {
-			$wp_version = (string) ( $GLOBALS['wp_version'] ?? get_bloginfo( 'version' ) );
+			$wp_version = isset( $GLOBALS['wp_version'] ) && is_string( $GLOBALS['wp_version'] ) && '' !== $GLOBALS['wp_version'] ? $GLOBALS['wp_version'] : ( function_exists( 'get_bloginfo' ) ? (string) get_bloginfo( 'version' ) : '' );
 			return version_compare( $wp_version, '6.3-alpha', '>=' );
 		}
 
@@ -618,7 +618,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP
 			) . ';';
 
-			wp_print_inline_script_tag( $javascript, array( 'id' => 'wppo-rum-config' ) );
+			if ( function_exists( 'wp_print_inline_script_tag' ) ) {
+				wp_print_inline_script_tag( $javascript, array( 'id' => 'wppo-rum-config' ) );
+				return;
+			}
+			// Fallback for very old core without wp_print_inline_script_tag():
+			// the payload above is JSON_HEX-escaped (<, >, quotes and &
+			// encoded), so it cannot break out of the <script> element and
+			// the id attribute is a static allowlisted string.
+			echo '<script id="wppo-rum-config">' . $javascript . "</script>\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $javascript is JSON_HEX_TAG/APOS/QUOT/AMP encoded; esc_js() would mangle the JS.
 		}
 
 		/**
@@ -752,12 +760,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * @return bool
 		 */
 		private static function is_globally_rate_limited(): bool {
-			$key   = Util::transient_key( 'wppo_rum_global' );
-			$count = (int) get_transient( $key );
+			$key    = Util::transient_key( 'wppo_rum_global' );
+			$bucket = get_transient( $key );
+			$now    = time();
+			// Fixed window: expiry is set only on the first increment; later
+			// hits re-store with the remaining TTL instead of extending it.
+			if ( ! is_array( $bucket ) || ! isset( $bucket['count'], $bucket['start'] ) || ( $now - (int) $bucket['start'] ) >= MINUTE_IN_SECONDS ) {
+				set_transient( $key, array( 'count' => 1, 'start' => $now ), MINUTE_IN_SECONDS );
+				return false;
+			}
+			$count = (int) $bucket['count'];
 			if ( $count >= self::GLOBAL_RATE_LIMIT_PER_MINUTE ) {
 				return true;
 			}
-			set_transient( $key, $count + 1, MINUTE_IN_SECONDS );
+			$remaining = max( 1, MINUTE_IN_SECONDS - ( $now - (int) $bucket['start'] ) );
+			set_transient( $key, array( 'count' => $count + 1, 'start' => (int) $bucket['start'] ), $remaining );
 			return false;
 		}
 
@@ -796,6 +813,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				if ( ! isset( $params[ $metric ] ) ) {
 					continue;
 				}
+				// is_scalar + is_numeric first: casting an array to float
+				// yields 1 with a PHP 8 warning and would poison aggregates.
+				if ( ! is_scalar( $params[ $metric ] ) || ! is_numeric( $params[ $metric ] ) ) {
+					continue;
+				}
 				$value = (float) $params[ $metric ];
 				if ( ! is_finite( $value ) ) {
 					return null;
@@ -831,25 +853,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			// Optional device × template segmentation (issue #986). Fail-open:
 			// missing/invalid values fall back to `unknown` and never reject
 			// the sample — the numeric path above is unchanged.
-			$device = 'unknown';
-			if ( isset( $params['device'] ) && is_string( $params['device'] ) ) {
-				$candidate = strtolower( trim( substr( $params['device'], 0, 16 ) ) );
-				if ( 'mobile' === $candidate || 'desktop' === $candidate ) {
-					$device = $candidate;
-				}
-			}
-			$sample['device'] = $device;
-
-			$template = 'unknown';
-			if ( isset( $params['template'] ) && is_string( $params['template'] ) ) {
-				$raw = function_exists( 'sanitize_text_field' ) ? sanitize_text_field( $params['template'] ) : $params['template'];
-				$raw = strtolower( trim( substr( $raw, 0, 64 ) ) );
-				$raw = function_exists( 'preg_replace' ) ? (string) preg_replace( '/[^a-z0-9_-]/', '', $raw ) : $raw;
-				if ( '' !== $raw ) {
-					$template = substr( $raw, 0, 64 );
-				}
-			}
-			$sample['template'] = $template;
+			$sample['device']   = self::normalize_segment_device( $params['device'] ?? null );
+			$sample['template'] = self::normalize_segment_template( $params['template'] ?? null );
 
 			// Optional effective-connection-type segmentation (issue #1143).
 			// Fail-open: missing/invalid values bucket as `unknown` and never
@@ -864,6 +869,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			$sample['connection'] = $connection;
 
 			return $sample;
+		}
+
+		/**
+		 * Normalize a device value to the segment allowlist.
+		 *
+		 * Shared by beacon intake and queue flush (the queue transient is
+		 * user-writable, so flush re-normalizes instead of trusting it).
+		 * Anything outside mobile/desktop buckets as `unknown`.
+		 *
+		 * @since NEXT
+		 * @param mixed $raw Raw device value.
+		 * @return string Allowlisted device or 'unknown'.
+		 */
+		private static function normalize_segment_device( $raw ): string {
+			if ( ! is_string( $raw ) ) {
+				return 'unknown';
+			}
+			$candidate = strtolower( trim( substr( $raw, 0, 16 ) ) );
+			if ( 'mobile' === $candidate || 'desktop' === $candidate ) {
+				return $candidate;
+			}
+			return 'unknown';
+		}
+
+		/**
+		 * Normalize a template slug to the segment allowlist shape.
+		 *
+		 * Shared by beacon intake and queue flush (the queue transient is
+		 * user-writable, so flush re-normalizes instead of trusting it).
+		 *
+		 * @since NEXT
+		 * @param mixed $raw Raw template value.
+		 * @return string Sanitized template slug (max 64 chars) or 'unknown'.
+		 */
+		private static function normalize_segment_template( $raw ): string {
+			if ( ! is_string( $raw ) ) {
+				return 'unknown';
+			}
+			$cleaned = function_exists( 'sanitize_text_field' ) ? sanitize_text_field( $raw ) : $raw;
+			$cleaned = strtolower( trim( substr( $cleaned, 0, 64 ) ) );
+			$cleaned = (string) preg_replace( '/[^a-z0-9_-]/', '', $cleaned );
+			if ( '' === $cleaned ) {
+				return 'unknown';
+			}
+			return substr( $cleaned, 0, 64 );
 		}
 
 		/**
@@ -996,7 +1046,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 						$all[ $date ] = array();
 					}
 					$day    = $all[ $date ];
-					$bucket = isset( $day[ $path ] ) ? $day[ $path ] : array();
+					$bucket = isset( $day[ $path ] ) && is_array( $day[ $path ] ) ? $day[ $path ] : array();
 
 					foreach ( array( 'ttfb', 'fcp', 'lcp', 'inp', 'cls' ) as $metric ) {
 						if ( ! isset( $sample[ $metric ] ) ) {
@@ -1072,17 +1122,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					// connection dimension read back as `unknown`.
 					if ( isset( $sample['lcp'] ) ) {
 						$lcp_value = (float) $sample['lcp'];
-						// Re-sanitize even though the beacon sanitizes at
-						// intake: the queue transient is user-writable, so
-						// allowlist the device and text-sanitize the template
-						// before either is persisted into the aggregate option.
-						$raw_device = isset( $sample['device'] ) && is_string( $sample['device'] ) ? sanitize_text_field( $sample['device'] ) : '';
-						$device     = strtolower( trim( $raw_device ) );
-						if ( 'mobile' !== $device && 'desktop' !== $device ) {
-							$device = 'unknown';
-						}
-						$raw_template = isset( $sample['template'] ) && is_string( $sample['template'] ) ? sanitize_text_field( $sample['template'] ) : '';
-						$template     = '' !== trim( $raw_template ) ? substr( $raw_template, 0, 64 ) : 'unknown';
+						// Reuse the intake allowlist normalization even though the
+						// beacon sanitizes at intake: the queue transient is
+						// user-writable, so allowlist the device and the
+						// template before either is persisted into the
+						// aggregate option.
+						$device       = self::normalize_segment_device( $sample['device'] ?? null );
+						$template     = self::normalize_segment_template( $sample['template'] ?? null );
 						$connection   = self::normalize_segment_connection( $sample['connection'] ?? 'unknown' );
 						$seg_key      = $device . '|' . $template . '|' . $connection;
 						if ( ! isset( $bucket['lcpSeg'] ) || ! is_array( $bucket['lcpSeg'] ) ) {
@@ -1139,14 +1185,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					// Fail-open: any malformed queue entry is skipped, never fatal.
 					if ( isset( $sample['inp'] ) ) {
 						$inp_value      = (float) $sample['inp'];
-						$raw_device_inp = isset( $sample['device'] ) && is_string( $sample['device'] ) ? sanitize_text_field( $sample['device'] ) : '';
-						$device_inp     = strtolower( trim( $raw_device_inp ) );
-						if ( 'mobile' !== $device_inp && 'desktop' !== $device_inp ) {
-							$device_inp = 'unknown';
-						}
-						$raw_template_inp = isset( $sample['template'] ) && is_string( $sample['template'] ) ? sanitize_text_field( $sample['template'] ) : '';
-						$template_inp     = '' !== trim( $raw_template_inp ) ? substr( $raw_template_inp, 0, 64 ) : 'unknown';
-						$connection_inp   = self::normalize_segment_connection( $sample['connection'] ?? 'unknown' );
+						// Same intake allowlist normalization as lcpSeg above.
+						$device_inp     = self::normalize_segment_device( $sample['device'] ?? null );
+						$template_inp   = self::normalize_segment_template( $sample['template'] ?? null );
+						$connection_inp = self::normalize_segment_connection( $sample['connection'] ?? 'unknown' );
 						$inp_seg_key      = $device_inp . '|' . $template_inp . '|' . $connection_inp;
 						if ( ! isset( $bucket['inpSeg'] ) || ! is_array( $bucket['inpSeg'] ) ) {
 							$bucket['inpSeg'] = array();

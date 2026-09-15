@@ -4039,7 +4039,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		public static function sanitize_settings_recursively( $settings ) {
 			$sanitized = array();
 			foreach ( $settings as $key => $value ) {
-				$safe_key = preg_replace( '/[^a-zA-Z0-9_\-]/', '', $key );
+				$safe_key = preg_replace( '/[^a-zA-Z0-9_\-]/', '', (string) $key );
+				if ( ! is_string( $safe_key ) ) {
+					continue;
+				}
 
 				// Skip keys that become empty after sanitization so that
 				// settings are never stored under an empty-string key.

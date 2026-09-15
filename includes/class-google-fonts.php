@@ -259,7 +259,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * @return string Modified link tag with local URL or original tag.
 		 * @since 2.0.0
 		 */
-		public function process_style_tag( $tag, $handle, $href ) {
+		public function process_style_tag( string $tag, string $handle, $href ): string {
 			if ( is_admin() ) {
 				return $tag;
 			}
@@ -306,14 +306,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * @return string The modified HTML buffer.
 		 * @since 2.0.0
 		 */
-		public function process_buffer( $buffer ) {
+		public function process_buffer( string $buffer ): string {
 			$enabled = $this->options['file_optimisation']['hostGoogleFontsLocally'] ?? false;
 			if ( empty( $enabled ) ) {
 				return $buffer;
 			}
 
 			// Replace <link> tags with Google Fonts URLs.
-			$buffer = preg_replace_callback(
+			// preg_replace_callback() returns null on regex failure — bail
+			// with the original buffer so a PCRE error never wipes the page.
+			$replaced = preg_replace_callback(
 				'#<link\b[^>]*\bhref\s*=\s*["\']([^"\']*fonts\.googleapis\.com[^"\']*)["\'][^>]*>#is',
 				function ( $matches ) {
 					// Exact-host validation mirrors process_style_tag() so a
@@ -331,9 +333,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 				},
 				$buffer
 			);
+			if ( ! is_string( $replaced ) ) {
+				return $buffer;
+			}
+			$buffer = $replaced;
 
 			// Replace @import url(...) and @import '...' with Google Fonts URLs.
-			$buffer = preg_replace_callback(
+			$replaced = preg_replace_callback(
 				'#@import\s+(?:url\(\s*["\']?|["\'])([^"\';)]*fonts\.googleapis\.com[^"\';)]*)(?:["\']?\)\s*|["\'])\s*;#is',
 				function ( $matches ) {
 					if ( ! $this->is_google_fonts_url( $matches[1] ) ) {
@@ -347,6 +353,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 				},
 				$buffer
 			);
+			if ( ! is_string( $replaced ) ) {
+				return $buffer;
+			}
+			$buffer = $replaced;
 
 			return $buffer;
 		}
@@ -391,7 +401,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * @return string Local CSS URL on success, empty string on failure/cache-miss.
 		 * @since 2.0.0 Failure sentinel transient (wppo_gf_fail_*). Out-of-band download via Action Scheduler.
 		 */
-		public function download_and_rewrite( $url ) {
+		public function download_and_rewrite( $url ): string {
 			$url = $this->normalize_google_fonts_url( $url );
 			if ( '' === $url ) {
 				return '';
@@ -527,9 +537,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			// exists; the queued job downloads missing files out-of-band
 			// and the original gstatic URL is kept until then so no
 			// request ever blocks on a 30s streamed fetch.
-			$css = preg_replace_callback(
+			// Per-run cap: at most 3 missing files are fetched per job so
+			// one Action Scheduler run never performs N sequential 30s
+			// remote fetches (worker starvation). Files beyond the cap keep
+			// their remote URL in the cached CSS — the CSS file is written
+			// once per key and later runs short-circuit on file_exists(),
+			// so uncapped downloading would only re-run after a cache
+			// clear; separate per-file jobs were deemed out of scope.
+			$downloads = 0;
+			$css       = preg_replace_callback(
 				'#(url\()\s*(["\']?)(https://fonts\.gstatic\.com[^"\')]+)\2\s*\)#i',
-				function ( $matches ) {
+				function ( $matches ) use ( &$downloads ) {
 					$file_url = $matches[3];
 					$hash     = md5( $file_url );
 					$local    = $this->font_cache_dir . '/files/' . $hash . '.woff2';
@@ -537,6 +555,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 					if ( file_exists( $local ) ) {
 						return 'url(' . $this->font_cache_url . '/files/' . $hash . '.woff2)';
 					}
+
+					if ( $downloads >= 3 ) {
+						return $matches[0];
+					}
+					++$downloads;
 
 					if ( $this->download_font_file( $file_url, $local ) && file_exists( $local ) ) {
 						return 'url(' . $this->font_cache_url . '/files/' . $hash . '.woff2)';
@@ -674,6 +697,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * @since 2.0.0
 		 */
 		private function download_font_file( $url, $dest ) {
+			// Guard before wp_parse_url(): the parameter is untyped and a
+			// non-string/empty URL would raise a PHP 8.1+ deprecation.
+			if ( ! is_string( $url ) || '' === $url ) {
+				return false;
+			}
 			// Exact host allowlist — only fonts.gstatic.com may be fetched as a font file.
 			// @since 2.0.0.
 			if ( 'fonts.gstatic.com' !== wp_parse_url( $url, PHP_URL_HOST ) ) {
@@ -709,7 +737,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 				return false;
 			}
 
-			if ( ! file_exists( $tmp ) || 0 === filesize( $tmp ) ) {
+			if ( ! file_exists( $tmp ) ) {
+				set_transient( $fail_key, 1, self::backoff_ttl() );
+				return false;
+			}
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- filesize() emits warnings on races; guarded with a false check below.
+			$size = @filesize( $tmp );
+			if ( false === $size || 0 === $size ) {
 				if ( file_exists( $tmp ) ) {
 					wp_delete_file( $tmp );
 				}
@@ -783,12 +817,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 					'descent-override'  => '22%',
 					'line-gap-override' => '0%',
 				),
-				'nested'     => array(
-					'size-adjust'       => '100%',
-					'ascent-override'   => '90%',
-					'descent-override'  => '22%',
-					'line-gap-override' => '0%',
-				),
 			);
 			if ( ! isset( $metrics[ $family_key ] ) ) {
 				// Generic fallback for unknown fonts.
@@ -799,10 +827,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 					'line-gap-override' => '0%',
 				);
 			}
-			$m   = $metrics[ $family_key ];
+			$m = $metrics[ $family_key ];
+			// Allowlist-sanitize the family name before injecting it into
+			// the <style> block: esc_html() alone does not stop a crafted
+			// family from breaking out of the quoted font-family value
+			// (quotes, semicolons, braces are stripped here).
+			$sanitized_family = preg_replace( '/[^A-Za-z0-9 \-]/', '', $family );
+			if ( ! is_string( $sanitized_family ) ) {
+				return '';
+			}
+			$sanitized_family = trim( substr( $sanitized_family, 0, 100 ) );
+			if ( '' === $sanitized_family ) {
+				return '';
+			}
 			$css = sprintf(
 				"@font-face{font-family:'%s Fallback';src:local('Arial');size-adjust:%s;ascent-override:%s;descent-override:%s;line-gap-override:%s;}",
-				esc_html( $family ),
+				$sanitized_family,
 				$m['size-adjust'],
 				$m['ascent-override'],
 				$m['descent-override'],
@@ -845,7 +885,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			$style_tag = '<style id="wppo-font-fallback">' . $fallback_css . '</style>';
 			// Inject before </head> if present, else prepend.
 			if ( false !== stripos( $buffer, '</head>' ) ) {
-				$buffer = preg_replace( '/<\/head>/i', $style_tag . '</head>', $buffer, 1 );
+				$out = preg_replace( '/<\/head>/i', $style_tag . '</head>', $buffer, 1 );
+				if ( ! is_string( $out ) ) {
+					return $buffer;
+				}
+				$buffer = $out;
 			} else {
 				$buffer = $style_tag . $buffer;
 			}
