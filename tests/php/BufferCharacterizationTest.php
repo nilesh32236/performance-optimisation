@@ -667,7 +667,11 @@ class BufferCharacterizationTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * LiteSpeed cacheability is stricter than page cacheability (QS gate).
+	 * Query-param poisoning guard (issue #1141): functional queries bypass
+	 * both the page-level predicate and the LiteSpeed layer. The page-level
+	 * read gate matches the pre-boot drop-in, which never serves query
+	 * URLs, so `?s=` is dynamic end-to-end instead of being served the
+	 * clean-URL file (the old storage-only gate left the read path open).
 	 */
 	public function test_litespeed_cacheable_adds_query_string_gate(): void {
 		$this->stub_front_end_html();
@@ -676,10 +680,11 @@ class BufferCharacterizationTest extends \PHPUnit\Framework\TestCase {
 		$_SERVER['SERVER_SOFTWARE'] = 'LiteSpeed';
 		$_SERVER['QUERY_STRING']    = 's=test';
 		LiteSpeed_Integration::reset_cache();
-		// Page-level predicate ignores search QS (storage gate handles it).
+		// Page-level predicate refuses functional queries (read gate); the
+		// storage gate additionally refuses any query-bearing response.
 		$page_cacheable = ( $this->make_cache( array(), '/?s=test' ) )->is_page_cacheable();
-		$this->assertTrue( $page_cacheable );
-		// LiteSpeed layer adds the s|ver|v gate on top.
+		$this->assertFalse( $page_cacheable );
+		// LiteSpeed layer mirrors the same gate.
 		$this->assertFalse( LiteSpeed_Integration::is_request_cacheable() );
 		unset( $_SERVER['QUERY_STRING'] );
 		LiteSpeed_Integration::reset_cache();

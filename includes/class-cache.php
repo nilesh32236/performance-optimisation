@@ -2240,6 +2240,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return true;
 			}
 
+			// Query-param poisoning guard (issue #1141): the cache key is
+			// path-only, so a functional query (`?s=`, `?add-to-cart=`, or
+			// any unknown param) must never be served the clean-URL file.
+			// Tracking-only queries (`utm_*`, `gclid`, … — see
+			// Util::get_cache_query_allowlist()) stay servable from the
+			// clean entry; the write path below additionally refuses to
+			// store ANY query-bearing response, so tracking params can
+			// never overwrite the canonical file. Unconditional (runs
+			// before wppo_should_cache_request) because cache poisoning is
+			// a security property, not a preference. Fail-open: detection
+			// failure bypasses the cache (dynamic), never fatal.
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'has_uncacheable_query' ) && Util::has_uncacheable_query() ) {
+					return true;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+
 			/**
 			 * Filters whether the current request should be cached.
 			 *
@@ -2669,9 +2689,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return false;
 			}
 
-			if ( ! empty( $_SERVER['QUERY_STRING'] ) &&
-				preg_match( '/(?:^|&)(s|ver|v)(?:=|&|$)/', sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) ) )
-			) {
+			// Query-param poisoning guard (issue #1141): the cache key is
+			// path-only, so ANY query-bearing response stored here would
+			// land on the clean-URL file and poison it for later visitors
+			// (e.g. `/?utm_source=x` overwriting `/index.html`). The legacy
+			// `s|ver|v` gate is subsumed by the shared helper below (which
+			// forces those params dynamic case-insensitively, plus any
+			// unknown/functional param), so a single parse covers both.
+			// Tracked requests are still servable from the clean entry
+			// (read path) but never overwrite it. Fail-open: detection
+			// failure refuses the store (dynamic), never fatal.
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'has_uncacheable_query' ) ) {
+					if ( Util::has_uncacheable_query() ) {
+						return false;
+					}
+					// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- Sanitized below via wp_unslash()/sanitize_text_field() with function_exists() fallbacks.
+					$raw_qs = isset( $_SERVER['QUERY_STRING'] ) ? (string) $_SERVER['QUERY_STRING'] : '';
+					if ( function_exists( 'wp_unslash' ) ) {
+						$raw_qs = wp_unslash( $raw_qs );
+					}
+					if ( function_exists( 'sanitize_text_field' ) ) {
+						$raw_qs = sanitize_text_field( $raw_qs );
+					}
+					if ( '' !== trim( $raw_qs ) ) {
+						return false;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 				return false;
 			}
 
