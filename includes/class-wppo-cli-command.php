@@ -664,6 +664,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 
 				$existing_settings = Util::get_settings();
 				$merged_settings   = array_replace_recursive( $existing_settings, $new_settings );
+				// One-click undo (issue #1144): snapshot the prior settings before
+				// overwriting. Fail-open: a snapshot failure must never block the import.
+				try {
+					Util::take_settings_snapshot( $existing_settings );
+				} catch ( \Throwable $snapshot_error ) {
+					unset( $snapshot_error );
+				}
 				update_option( 'wppo_settings', $merged_settings );
 
 				Log::add( __( 'Settings imported via WP-CLI', 'performance-optimisation' ) );
@@ -731,7 +738,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 					$options[ $tab ] = array();
 				}
 
+				$prior_settings  = $options;
 				$options[ $tab ] = array_replace_recursive( $options[ $tab ], $new_settings );
+				// One-click undo (issue #1144): snapshot the prior settings before
+				// overwriting. Fail-open: a snapshot failure must never block the update.
+				try {
+					Util::take_settings_snapshot( $prior_settings );
+				} catch ( \Throwable $snapshot_error ) {
+					unset( $snapshot_error );
+				}
 				update_option( 'wppo_settings', $options );
 
 				/* translators: %s: Settings tab name */

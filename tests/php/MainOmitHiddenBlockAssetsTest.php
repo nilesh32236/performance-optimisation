@@ -164,6 +164,10 @@ class MainOmitHiddenBlockAssetsTest extends \PHPUnit\Framework\TestCase {
 		);
 		Functions\when( 'wp_should_load_separate_core_block_assets' )->justReturn( $args['separate'] ?? false );
 		Functions\when( 'wp_should_output_buffer_template_for_enhancement' )->justReturn( $args['buffer'] ?? false );
+		// Classic-theme default: the omission pass bails on block themes, and
+		// other suites leave a Brain Monkey-defined wp_is_block_theme() behind
+		// whose missing expectation would throw (caught as fail-open bail).
+		Functions\when( 'wp_is_block_theme' )->justReturn( $args['block_theme'] ?? false );
 
 		global $wp_styles;
 		$wp_styles             = new \stdClass();

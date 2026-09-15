@@ -246,10 +246,12 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			'ai_model',
 			'ai_learn',
 			'ai_suggestions',
+			'settings_snapshot',
+			'restore_settings',
 		);
 
-		// Keep in sync with the AGENTS.md endpoint count (31).
-		$this->assertCount( 31, $routes, 'REST route count drifted from the documented endpoint count' );
+		// Keep in sync with the AGENTS.md endpoint count (33).
+		$this->assertCount( 33, $routes, 'REST route count drifted from the documented endpoint count' );
 
 		foreach ( $expected as $route ) {
 			$this->assertArrayHasKey( $route, $routes, "Missing route: {$route}" );
@@ -687,6 +689,214 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertSame( 200, $response->get_status() );
 		$this->assertTrue( $response->get_data()['success'] );
+	}
+
+	/**
+	 * Test that update_settings snapshots the prior settings before saving (issue #1144).
+	 */
+	public function test_update_settings_snapshots_prior_settings(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'sanitize_textarea_field' )->alias(
+			static fn( $value ): string => trim( preg_replace( '/<[^>]*>/', '', (string) $value ) )
+		);
+
+		$prior = array( 'file_optimisation' => array( 'minifyHTML' => false ) );
+		$store = array( 'wppo_settings' => $prior );
+		Functions\when( 'get_option' )->alias(
+			static function ( $name, $fallback = false ) use ( &$store ) {
+				return array_key_exists( $name, $store ) ? $store[ $name ] : $fallback;
+			}
+		);
+		Functions\when( 'update_option' )->alias(
+			static function ( $name, $value ) use ( &$store ) {
+				$store[ $name ] = $value;
+				return true;
+			}
+		);
+
+		$request = new WP_REST_Request(
+			array(
+				'tab'      => 'file_optimisation',
+				'settings' => array( 'minifyHTML' => true ),
+			)
+		);
+
+		$response = $this->rest->update_settings( $request );
+
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertArrayHasKey( 'wppo_settings_snapshot', $store, 'Prior settings must be snapshotted before the save' );
+		$this->assertSame( $prior, $store['wppo_settings_snapshot']['settings'] );
+		$this->assertTrue( $store['wppo_settings']['file_optimisation']['minifyHTML'] );
+	}
+
+	/**
+	 * Test that a no-op update_settings save does not churn the single-slot snapshot (issue #1144).
+	 */
+	public function test_update_settings_noop_save_preserves_snapshot(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'sanitize_textarea_field' )->alias(
+			static fn( $value ): string => trim( preg_replace( '/<[^>]*>/', '', (string) $value ) )
+		);
+
+		$current      = array( 'file_optimisation' => array( 'minifyHTML' => true ) );
+		$old_snapshot = array(
+			'settings' => array( 'file_optimisation' => array( 'minifyHTML' => false ) ),
+			'taken_at' => 1111111111,
+		);
+		$store        = array(
+			'wppo_settings'          => $current,
+			'wppo_settings_snapshot' => $old_snapshot,
+		);
+		Functions\when( 'get_option' )->alias(
+			static function ( $name, $fallback = false ) use ( &$store ) {
+				return array_key_exists( $name, $store ) ? $store[ $name ] : $fallback;
+			}
+		);
+		Functions\when( 'update_option' )->alias(
+			static function ( $name, $value ) use ( &$store ) {
+				$store[ $name ] = $value;
+				return true;
+			}
+		);
+
+		$request = new WP_REST_Request(
+			array(
+				'tab'      => 'file_optimisation',
+				'settings' => array( 'minifyHTML' => true ),
+			)
+		);
+
+		$response = $this->rest->update_settings( $request );
+
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertSame( $old_snapshot, $store['wppo_settings_snapshot'], 'No-op saves must not overwrite the useful undo snapshot' );
+	}
+
+	/**
+	 * Test that import_settings snapshots the prior settings before merging (issue #1144).
+	 */
+	public function test_import_settings_snapshots_prior_settings(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'sanitize_textarea_field' )->alias(
+			static fn( $value ): string => trim( preg_replace( '/<[^>]*>/', '', (string) $value ) )
+		);
+
+		$prior = array( 'file_optimisation' => array( 'minifyHTML' => false ) );
+		$store = array( 'wppo_settings' => $prior );
+		Functions\when( 'get_option' )->alias(
+			static function ( $name, $fallback = false ) use ( &$store ) {
+				return array_key_exists( $name, $store ) ? $store[ $name ] : $fallback;
+			}
+		);
+		Functions\when( 'update_option' )->alias(
+			static function ( $name, $value ) use ( &$store ) {
+				$store[ $name ] = $value;
+				return true;
+			}
+		);
+
+		$request = new WP_REST_Request(
+			array(
+				'action'   => 'import_settings',
+				'settings' => array(
+					'file_optimisation' => array( 'minifyHTML' => true ),
+				),
+			)
+		);
+
+		$response = $this->rest->import_settings( $request );
+
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertArrayHasKey( 'wppo_settings_snapshot', $store, 'Prior settings must be snapshotted before the import' );
+		$this->assertSame( $prior, $store['wppo_settings_snapshot']['settings'] );
+		$this->assertTrue( $store['wppo_settings']['file_optimisation']['minifyHTML'] );
+	}
+
+	/**
+	 * Test that the settings_snapshot endpoint reports availability (issue #1144).
+	 */
+	public function test_get_settings_snapshot_reports_availability(): void {
+		Functions\when( 'absint' )->alias(
+			static function ( $value ) {
+				return abs( (int) $value );
+			}
+		);
+
+		Functions\when( 'get_option' )->justReturn( null );
+		$response = $this->rest->get_settings_snapshot( new WP_REST_Request() );
+		$data     = $response->get_data();
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertFalse( $data['data']['has_snapshot'] );
+		$this->assertNull( $data['data']['taken_at'] );
+	}
+
+	/**
+	 * Test that restore_settings rolls settings back to the snapshot (issue #1144).
+	 */
+	public function test_restore_settings_restores_snapshot(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		Functions\when( 'absint' )->alias(
+			static function ( $value ) {
+				return abs( (int) $value );
+			}
+		);
+
+		$prior = array( 'file_optimisation' => array( 'minifyHTML' => false ) );
+		$store = array(
+			'wppo_settings'          => array( 'file_optimisation' => array( 'minifyHTML' => true ) ),
+			'wppo_settings_snapshot' => array(
+				'settings' => $prior,
+				'taken_at' => 1234567890,
+			),
+		);
+		Functions\when( 'get_option' )->alias(
+			static function ( $name, $fallback = false ) use ( &$store ) {
+				return array_key_exists( $name, $store ) ? $store[ $name ] : $fallback;
+			}
+		);
+		Functions\when( 'update_option' )->alias(
+			static function ( $name, $value ) use ( &$store ) {
+				$store[ $name ] = $value;
+				return true;
+			}
+		);
+
+		$response = $this->rest->restore_settings( new WP_REST_Request() );
+
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertSame( $prior, $store['wppo_settings'], 'Stored settings must be rolled back to the snapshot' );
+	}
+
+	/**
+	 * Test that restore_settings fails open with a 404 when no snapshot exists (issue #1144).
+	 */
+	public function test_restore_settings_without_snapshot_returns_404(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		$store = array( 'wppo_settings' => array( 'file_optimisation' => array( 'minifyHTML' => true ) ) );
+		Functions\when( 'get_option' )->alias(
+			static function ( $name, $fallback = false ) use ( &$store ) {
+				return array_key_exists( $name, $store ) ? $store[ $name ] : $fallback;
+			}
+		);
+		Functions\when( 'update_option' )->alias(
+			static function ( $name, $value ) use ( &$store ) {
+				$store[ $name ] = $value;
+				return true;
+			}
+		);
+
+		$response = $this->rest->restore_settings( new WP_REST_Request() );
+
+		$this->assertSame( 404, $response->get_status() );
+		$this->assertFalse( $response->get_data()['success'] );
+		$this->assertSame(
+			array( 'file_optimisation' => array( 'minifyHTML' => true ) ),
+			$store['wppo_settings'],
+			'Current settings must stay intact when no snapshot exists'
+		);
 	}
 }
 

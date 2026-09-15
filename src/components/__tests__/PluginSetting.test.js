@@ -110,6 +110,11 @@ describe( 'PluginSetting', () => {
 	} );
 
 	it( 'saves a new API key on success', async () => {
+		// First call is the mount-time settings_snapshot probe.
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { has_snapshot: false },
+		} );
 		apiCall.mockResolvedValueOnce( { success: true } );
 
 		render( <PluginSetting options={ baseOptions } /> );
@@ -131,6 +136,11 @@ describe( 'PluginSetting', () => {
 	} );
 
 	it( 'shows an error notice when the API key save fails', async () => {
+		// First call is the mount-time settings_snapshot probe.
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { has_snapshot: false },
+		} );
 		apiCall.mockResolvedValueOnce( {
 			success: false,
 			message: 'Rejected',
@@ -158,6 +168,10 @@ describe( 'PluginSetting', () => {
 			},
 			settings: { performance_audit: {} },
 		};
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { has_snapshot: false },
+		} );
 		apiCall.mockResolvedValueOnce( {
 			success: true,
 			message: 'Auto-rescan frequency saved.',
@@ -194,6 +208,10 @@ describe( 'PluginSetting', () => {
 				},
 			},
 		};
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { has_snapshot: false },
+		} );
 		apiCall.mockResolvedValueOnce( { success: true, data: {} } );
 
 		render( <PluginSetting options={ baseOptions } /> );
@@ -235,6 +253,10 @@ describe( 'PluginSetting', () => {
 				},
 			},
 		};
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { has_snapshot: false },
+		} );
 		apiCall.mockResolvedValueOnce( { success: true, data: {} } );
 
 		render( <PluginSetting options={ baseOptions } /> );
@@ -287,7 +309,16 @@ describe( 'PluginSetting', () => {
 				screen.getByText( /No valid URLs to save/ )
 			).toBeInTheDocument()
 		);
-		expect( apiCall ).not.toHaveBeenCalled();
+		// The mount-time settings_snapshot probe may have fired, but no
+		// settings write must have been attempted.
+		expect( apiCall ).not.toHaveBeenCalledWith(
+			'update_settings',
+			expect.anything()
+		);
+		expect( apiCall ).not.toHaveBeenCalledWith(
+			'import_settings',
+			expect.anything()
+		);
 	} );
 
 	it( 'saves the real-user monitoring toggle', async () => {
@@ -297,6 +328,10 @@ describe( 'PluginSetting', () => {
 				performance_audit: { rum_enabled: false },
 			},
 		};
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { has_snapshot: false },
+		} );
 		apiCall.mockResolvedValueOnce( { success: true, data: {} } );
 
 		render( <PluginSetting options={ baseOptions } /> );
@@ -482,5 +517,134 @@ describe( 'PluginSetting', () => {
 		expect( validateImportData( { unknown_top_level_key: {} } ) ).toBe(
 			false
 		);
+	} );
+
+	it( 'enables the Undo button when a snapshot exists', async () => {
+		// Mount-time probe reports a snapshot; no restore attempted yet.
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { has_snapshot: true, taken_at: 1234567890 },
+		} );
+
+		render( <PluginSetting options={ baseOptions } /> );
+
+		await waitFor( () =>
+			expect(
+				screen.getByRole( 'button', { name: /Undo Last Change/i } )
+			).toBeEnabled()
+		);
+		expect( apiCall ).toHaveBeenCalledWith(
+			'settings_snapshot',
+			{},
+			'GET'
+		);
+	} );
+
+	it( 'restores settings on Undo success', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { has_snapshot: true, taken_at: 1234567890 },
+		} );
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {},
+			message: 'Settings restored successfully.',
+		} );
+
+		render( <PluginSetting options={ baseOptions } /> );
+
+		const undoButton = await screen.findByRole( 'button', {
+			name: /Undo Last Change/i,
+		} );
+		// The button enables only after the snapshot check resolves; await
+		// the enabled state (React 19 flushes the effect later than 18).
+		await waitFor( () => expect( undoButton ).toBeEnabled() );
+		fireEvent.click( undoButton );
+
+		await waitFor( () =>
+			expect(
+				screen.getByText( 'Settings restored successfully.' )
+			).toBeInTheDocument()
+		);
+		expect( apiCall ).toHaveBeenCalledWith( 'restore_settings', {} );
+	} );
+
+	it( 'shows an error notice when no snapshot exists to restore', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { has_snapshot: true, taken_at: 1234567890 },
+		} );
+		apiCall.mockResolvedValueOnce( {
+			success: false,
+			message: 'No settings snapshot available to restore.',
+		} );
+		const errorSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
+
+		render( <PluginSetting options={ baseOptions } /> );
+
+		const undoButton = await screen.findByRole( 'button', {
+			name: /Undo Last Change/i,
+		} );
+		// Await the enabled state: clicking a still-disabled button is a
+		// no-op, which starves the restore call (flaky on React 19).
+		await waitFor( () => expect( undoButton ).toBeEnabled() );
+		fireEvent.click( undoButton );
+
+		await waitFor( () =>
+			expect(
+				screen.getByText( 'No settings snapshot available to restore.' )
+			).toBeInTheDocument()
+		);
+
+		errorSpy.mockRestore();
+	} );
+
+	it( 'shows an error notice when the restore request fails', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { has_snapshot: true, taken_at: 1234567890 },
+		} );
+		apiCall.mockRejectedValueOnce( new Error( 'network down' ) );
+		const errorSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
+
+		render( <PluginSetting options={ baseOptions } /> );
+
+		const undoButton = await screen.findByRole( 'button', {
+			name: /Undo Last Change/i,
+		} );
+		// Await the enabled state: clicking a still-disabled button is a
+		// no-op, which starves the restore call (flaky on React 19).
+		await waitFor( () => expect( undoButton ).toBeEnabled() );
+		fireEvent.click( undoButton );
+
+		await waitFor( () =>
+			expect(
+				screen.getByText( 'Error restoring settings.' )
+			).toBeInTheDocument()
+		);
+
+		errorSpy.mockRestore();
+	} );
+
+	it( 'disables the Undo button when no snapshot exists', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { has_snapshot: false, taken_at: null },
+		} );
+
+		render( <PluginSetting options={ baseOptions } /> );
+
+		await waitFor( () =>
+			expect(
+				screen.getByText( /No snapshot available yet/ )
+			).toBeInTheDocument()
+		);
+		expect(
+			screen.getByRole( 'button', { name: /Undo Last Change/i } )
+		).toBeDisabled();
 	} );
 } );
