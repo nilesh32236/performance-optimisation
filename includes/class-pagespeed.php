@@ -721,12 +721,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 							if ( is_numeric( $item[ $field ] ) ) {
 								$row[ $field ] = 'wastedMs' === $field ? (float) $item[ $field ] : (int) $item[ $field ];
 							}
-					} else {
-						// score: numeric-only, cast to float (mirrors wastedMs/wastedBytes).
-						if ( is_numeric( $item[ $field ] ) ) {
+						} elseif ( is_numeric( $item[ $field ] ) ) {
+							// score: numeric-only, cast to float (mirrors wastedMs/wastedBytes).
 							$row[ $field ] = (float) $item[ $field ];
 						}
-					}
 					}
 					if ( isset( $item['url'] ) && is_scalar( $item['url'] ) ) {
 						$row['url'] = esc_url_raw( (string) $item['url'] );
@@ -857,16 +855,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			} else {
 				$parts = parse_url( $clean ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Non-WP bootstrap fallback; wp_parse_url() preferred above.
 			}
-		if ( ! is_array( $parts ) || empty( $parts['host'] ) ) {
-			return $clean;
-		}
+			if ( ! is_array( $parts ) || empty( $parts['host'] ) ) {
+				return $clean;
+			}
 			if ( isset( $parts['query'] ) && '' === (string) $parts['query'] ) {
 				unset( $parts['query'] );
 			}
 			unset( $parts['fragment'] );
 			$rebuilt = ( $parts['scheme'] ?? 'https' ) . '://' . ( $parts['host'] ?? '' );
 			if ( isset( $parts['port'] ) ) {
-				$rebuilt .= ':' . (int) $parts['port'];
+				// Strip default ports so http://example.com:80 compares
+				// equal to http://example.com (and :443 to https://…).
+				$scheme_lc  = strtolower( (string) ( $parts['scheme'] ?? 'https' ) );
+				$port       = (int) $parts['port'];
+				$is_default = ( 'http' === $scheme_lc && 80 === $port ) || ( 'https' === $scheme_lc && 443 === $port );
+				if ( ! $is_default ) {
+					$rebuilt .= ':' . $port;
+				}
 			}
 			$rebuilt .= $parts['path'] ?? '';
 			if ( isset( $parts['query'] ) && '' !== (string) $parts['query'] ) {

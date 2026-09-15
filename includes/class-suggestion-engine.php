@@ -166,7 +166,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ) {
 				$suggestions[ count( $suggestions ) - 1 ]['value'] = $cc_value;
 			}
 
-			return array_values( $suggestions );
+			// make()/make_score()/make_boolean() always append sequential
+			// entries, so the list is already indexed 0..n with no gaps.
+			return $suggestions;
 		}
 
 		/**

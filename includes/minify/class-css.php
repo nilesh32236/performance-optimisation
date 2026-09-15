@@ -57,6 +57,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 		/**
 		 * Constructor for the CSS class.
 		 *
+		 * Strict string types are deliberate (audit hardening): callers must
+		 * pass strings — non-string input throws a TypeError instead of
+		 * being silently coerced. Internal callers always pass strings.
+		 *
 		 * @param string $file_path  Path to the CSS file to be minified.
 		 * @param string $cache_dir  Directory where the minified file will be cached.
 		 */

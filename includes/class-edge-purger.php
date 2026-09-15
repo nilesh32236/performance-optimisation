@@ -85,14 +85,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		 * api.cloudflare.com/client/v4/zones/{id}/purge_cache purge_everything
 		 * (or purge_files for single_page).
 		 *
-	 * @since 2.0.0
-	 * @param string $type     Clear type ('all' or 'single_page').
-	 * @param mixed  $url_path Page path (or absolute URL) for single-page clears. Deliberately untyped: this method runs
-	 *                         as a WP hook callback (wppo_after_cache_clear via Cache::clear_cache(), untyped) and must
-	 *                         stay tolerant of non-string payloads instead of throwing a TypeError.
-	 * @return bool True when no purge needed or all requests succeeded.
-	 */
-	public static function purge_all( string $type = 'all', $url_path = null ): bool {
+		 * @since 2.0.0
+		 * @param mixed $type     Clear type ('all' or 'single_page').
+		 * @param mixed $url_path Page path (or absolute URL) for single-page clears. Both params are deliberately untyped:
+		 *                        this method runs as a WP hook callback (wppo_after_cache_clear via Cache::clear_cache(),
+		 *                        untyped) and must stay tolerant of non-string payloads instead of throwing a TypeError.
+		 * @return bool True when no purge needed or all requests succeeded.
+		 */
+		public static function purge_all( $type = 'all', $url_path = null ): bool {
+			$type = ( 'single_page' === $type ) ? 'single_page' : 'all';
 			if ( ! Edge_Cache::is_enabled() ) {
 				return true;
 			}

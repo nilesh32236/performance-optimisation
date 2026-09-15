@@ -748,7 +748,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				// dominate the scan cost; reads are local-only and fail-open.
 				$local_path = Util::get_local_path( $url ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_exists,WordPress.WP.AlternativeFunctions.file_system_operations_filesize -- Local read-only size probe on the scan hot path; WP_Filesystem init per asset is disproportionate, failures return 0.
 				if ( $local_path && file_exists( $local_path ) ) {
-					return (int) filesize( $local_path );
+					// Race guard: the file can vanish between file_exists()
+					// and filesize(), which would emit a warning — return 0
+					// quietly instead.
+					$size = @filesize( $local_path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Guarded with a false check below; races between file_exists() and filesize() must not emit warnings.
+					if ( false === $size ) {
+						return 0;
+					}
+					return (int) $size;
 				}
 
 				// Non-local assets return 0 — Phase 1 is local-only per docblock.

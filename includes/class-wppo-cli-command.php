@@ -510,6 +510,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		}
 
 		/**
+		 * Log data as JSON, warning loudly when encoding fails.
+		 *
+		 * The JSON encoder returns false for unencodable values (resources,
+		 * INF/NAN, recursion) — a bare (string) cast would log an empty
+		 * string with no error signal.
+		 *
+		 * @since NEXT
+		 * @param mixed $data Data to encode and log.
+		 * @return void
+		 */
+		private static function log_json( $data ): void {
+			$json = wp_json_encode( $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES );
+			if ( ! is_string( $json ) || '' === $json ) {
+				WP_CLI::warning( __( 'JSON encoding failed; output omitted.', 'performance-optimisation' ) );
+				return;
+			}
+			WP_CLI::log( $json );
+		}
+
+		/**
 		 * View, update, export, or import plugin settings.
 		 *
 		 * ## OPTIONS
@@ -702,16 +722,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 						$yaml = yaml_emit( $data );
 						if ( ! is_string( $yaml ) || '' === $yaml ) {
 							WP_CLI::warning( __( 'YAML encoding failed; falling back to JSON format.', 'performance-optimisation' ) );
-							WP_CLI::log( (string) wp_json_encode( $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
+							self::log_json( $data );
 						} else {
 							WP_CLI::log( $yaml );
 						}
 					} else {
 						WP_CLI::warning( __( 'YAML dumper not available; falling back to JSON format.', 'performance-optimisation' ) );
-						WP_CLI::log( (string) wp_json_encode( $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
+						self::log_json( $data );
 					}
 				} else {
-					WP_CLI::log( (string) wp_json_encode( $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
+					self::log_json( $data );
 				}
 				return;
 			}

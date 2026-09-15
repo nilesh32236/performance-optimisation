@@ -570,7 +570,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * @return bool
 		 */
 		private static function supports_script_strategy(): bool {
-			$wp_version = isset( $GLOBALS['wp_version'] ) && is_string( $GLOBALS['wp_version'] ) && '' !== $GLOBALS['wp_version'] ? $GLOBALS['wp_version'] : ( function_exists( 'get_bloginfo' ) ? (string) get_bloginfo( 'version' ) : '' );
+			if ( isset( $GLOBALS['wp_version'] ) && is_string( $GLOBALS['wp_version'] ) && '' !== $GLOBALS['wp_version'] ) {
+				$wp_version = $GLOBALS['wp_version'];
+			} elseif ( function_exists( 'get_bloginfo' ) ) {
+				$wp_version = (string) get_bloginfo( 'version' );
+			} else {
+				$wp_version = '';
+			}
 			return version_compare( $wp_version, '6.3-alpha', '>=' );
 		}
 
@@ -916,11 +922,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			}
 			$cleaned = function_exists( 'sanitize_text_field' ) ? sanitize_text_field( $raw ) : $raw;
 			$cleaned = strtolower( trim( substr( $cleaned, 0, 64 ) ) );
+			// Single length cap lives here, after the allowlist replace
+			// below (preg_replace only removes characters, so one cap
+			// after it is sufficient and cannot be lengthened past 64).
 			$cleaned = (string) preg_replace( '/[^a-z0-9_-]/', '', $cleaned );
 			if ( '' === $cleaned ) {
 				return 'unknown';
 			}
-			return substr( $cleaned, 0, 64 );
+			return $cleaned;
 		}
 
 		/**

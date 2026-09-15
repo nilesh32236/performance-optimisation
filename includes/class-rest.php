@@ -305,13 +305,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		}
 
 		/**
-		 * Handle one-click autoload-bloat remediation (dry run, apply, revert).
+		 * Handle one-click autoload-bloat remediation (dry run, apply, revert, revert_all).
 		 *
 		 * POST param `mode` controls the operation:
-		 * - `dry_run` (default): report candidates + bytes saved, changes nothing.
-		 * - `apply`: flip non-core options above the threshold to autoload off.
+		 * - `dry_run` (default): report candidates + bytes saved + backup export, changes nothing.
+		 * - `apply`: flip non-core options above the threshold to autoload off; response includes the backup export.
 		 * - `revert`: restore one option (`option` param) to its prior value.
-		 * - `revert_all`: restore every remediated option.
+		 * - `revert_all`: restore every remediated option to its exact prior
+		 *   value (byte-identical); response includes restored details + total.
 		 *
 		 * Optional params: `threshold` (bytes, 100..10MB), `limit` (1..500).
 		 *
@@ -510,7 +511,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// everyone sharing the endpoint slug.
 			$suffix = function_exists( 'get_current_user_id' ) ? (int) get_current_user_id() : 0;
 			if ( 0 === $suffix ) {
-				$suffix = isset( $_SERVER['REMOTE_ADDR'] ) && is_string( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : 'anon'; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+				$suffix = self::throttle_client_suffix();
 			}
 			$key    = Util::transient_key( 'wppo_throttle_' . sanitize_key( $endpoint ) . '_' . md5( (string) $suffix ) );
 			$bucket = get_transient( $key );
@@ -542,6 +543,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$remaining
 			);
 			return false;
+		}
+
+		/**
+		 * Client suffix for the anonymous endpoint-throttle bucket.
+		 *
+		 * REMOTE_ADDR alone collapses all visitors behind a proxy/CDN edge
+		 * IP into one bucket. The left-most X-Forwarded-For entry (the
+		 * client-facing address added by the first proxy) separates those
+		 * buckets. Both halves are filter_var()-validated and REMOTE_ADDR
+		 * always stays in the key (no blind proxy trust: a spoofed header
+		 * can only add buckets, never impersonate another client). Mirrors
+		 * the REMOTE_ADDR-first resolution used by RUM rate limiting.
+		 *
+		 * @since NEXT
+		 * @return string Anon throttle suffix.
+		 */
+		private function throttle_client_suffix(): string {
+			$remote = isset( $_SERVER['REMOTE_ADDR'] ) && is_string( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			$xff    = '';
+			if ( isset( $_SERVER['HTTP_X_FORWARDED_FOR'] ) && is_string( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+				$parts = explode( ',', wp_unslash( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+				$first = isset( $parts[0] ) ? trim( sanitize_text_field( $parts[0] ) ) : '';
+				if ( '' !== $first ) {
+					if ( function_exists( 'filter_var' ) ) {
+						$valid = filter_var( $first, FILTER_VALIDATE_IP );
+						$xff   = false === $valid ? '' : (string) $valid;
+					} else {
+						$xff = $first;
+					}
+				}
+			}
+			$combined = trim( $remote . '|' . $xff, '|' );
+			return '' !== $combined ? $combined : 'anon';
 		}
 
 		/**
@@ -2519,7 +2553,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @since 2.0.0
 		 * @return \WP_REST_Response The response object.
 		 */
-		public function dismiss_welcome( \WP_REST_Request $request = null ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- REST route callbacks receive the request object.
+		public function dismiss_welcome( ?\WP_REST_Request $request = null ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- REST route callbacks receive the request object.
 			if ( get_current_user_id() ) {
 				update_user_meta( get_current_user_id(), 'wppo_welcome_dismissed', 1 );
 			}

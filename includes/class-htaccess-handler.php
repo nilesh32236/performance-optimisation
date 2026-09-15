@@ -384,17 +384,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				// creates orphans in the system temp dir that the .htaccess-dir
 				// scan above never sees — sweep those too when the temp dir
 				// differs from the .htaccess dir.
-			if ( function_exists( 'get_temp_dir' ) && method_exists( $fs, 'dirlist' ) ) {
-				$tmp_dir = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( get_temp_dir() ) : get_temp_dir();
-				if ( is_string( $tmp_dir ) && '' !== $tmp_dir && rtrim( $tmp_dir, '/' ) !== rtrim( $dir, '/' ) && $fs->exists( $tmp_dir ) ) {
-					$tmp_listing = $fs->dirlist( $tmp_dir );
-					if ( is_array( $tmp_listing ) ) {
-						// Bound the sweep on shared hosts where /tmp can hold
-						// thousands of entries: skip the scan when huge.
-						if ( count( $tmp_listing ) > 2000 ) {
-							return;
-						}
-						foreach ( $tmp_listing as $name => $info ) {
+				if ( function_exists( 'get_temp_dir' ) && method_exists( $fs, 'dirlist' ) ) {
+					$tmp_dir = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( get_temp_dir() ) : get_temp_dir();
+					if ( is_string( $tmp_dir ) && '' !== $tmp_dir && rtrim( $tmp_dir, '/' ) !== rtrim( $dir, '/' ) && $fs->exists( $tmp_dir ) ) {
+						$tmp_listing = $fs->dirlist( $tmp_dir );
+						if ( is_array( $tmp_listing ) ) {
+							// Bound the sweep on shared hosts where /tmp can hold
+							// thousands of entries: skip the scan when huge.
+							if ( count( $tmp_listing ) > 2000 ) {
+								return;
+							}
+							foreach ( $tmp_listing as $name => $info ) {
 								$name = (string) $name;
 								if ( 0 === strpos( $name, $base . '.wppo-tmp-' ) ) {
 									$fs->delete( rtrim( $tmp_dir, '/' ) . '/' . $name );
@@ -736,12 +736,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			}
 			$rules = $sanitized;
 
-			$required = array( 'exists', 'get_contents', 'put_contents', 'move', 'copy', 'delete', 'chmod' );
+			$required = array( 'exists', 'get_contents', 'put_contents', 'move', 'copy', 'delete' );
 			foreach ( $required as $method ) {
 				if ( ! $wp_filesystem || ! method_exists( $wp_filesystem, $method ) ) {
 					return null;
 				}
 			}
+			// chmod stays best-effort (not gated above): hosts whose
+			// filesystem lacks chmod() still get the atomic write, and the
+			// deployment-mode restore below is skipped when unavailable.
+			$can_chmod = $wp_filesystem && method_exists( $wp_filesystem, 'chmod' );
 
 			$current = '';
 			if ( $wp_filesystem->exists( $htaccess_file ) ) {
@@ -805,9 +809,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			// Secure tmp creation: prefer wp_tempnam() in the .htaccess
 			// directory (same filesystem, so the rename stays atomic) with a
 			// `.wppo-tmp-` prefix so orphan cleanup still matches, falling
-			// back to the system temp dir and finally to the legacy
-			// suffix-based sibling. The tmp file never lives at a
-			// predictable path in the docroot.
+			// back to the system temp dir (degraded, non-atomic: move()
+			// becomes copy+unlink across filesystems, so concurrent saves
+			// can interleave and post-write verification below is the only
+			// guard) and finally to the legacy suffix-based sibling. The
+			// tmp file never lives at a predictable path in the docroot.
 			$tmp_file = '';
 			if ( function_exists( 'wp_tempnam' ) ) {
 				foreach ( array( dirname( $htaccess_file ), '' ) as $tmp_dir ) {
@@ -846,9 +852,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			// which would lock out Apache when httpd runs as a different
 			// user/group — restore the deployment mode (FS_CHMOD_FILE) now
 			// that the tmp contents are never world-readable at any point.
-			// chmod is in the atomic-path capability check above, so this
-			// method always exists here.
-			$wp_filesystem->chmod( $htaccess_file, $mode );
+			// Best-effort: when chmod() is unavailable the restore is
+			// skipped, and when it fails the original contents are put
+			// back so a 0600 file never stays live (site-wide 500/403).
+			if ( $can_chmod ) {
+				$chmod_ok = $wp_filesystem->chmod( $htaccess_file, $mode );
+				if ( ! $chmod_ok ) {
+					$wp_filesystem->put_contents( $htaccess_file, $current, $mode );
+					self::flag_htaccess_failure();
+					return false;
+				}
+			}
 
 			$written = $wp_filesystem->get_contents( $htaccess_file );
 			if ( ! is_string( $written ) ) {
@@ -1101,9 +1115,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				 * Filter the next-gen htaccess block.
 				 *
 				 * Return false to drop the next-gen block; return an array to
-				 * replace the rules. Any other return value keeps the rules
-				 * unchanged (a blind (array) cast would coerce false into
-				 * [false] and fail the write).
+				 * replace the rules, or a string with a single rule block
+				 * (wrapped into a one-element array, matching the
+				 * `wppo_htaccess_rules` contract). Any other return value
+				 * keeps the rules unchanged (a blind (array) cast would
+				 * coerce false into [false] and fail the write).
 				 *
 				 * @since 2.0.0
 				 * @param bool $use_nextgen Whether next-gen block was added.
@@ -1111,6 +1127,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				$nextgen_filtered = apply_filters( 'wppo_htaccess_nextgen_rules', $rules );
 				if ( false === $nextgen_filtered ) {
 					$rules = $base_rules;
+				} elseif ( is_string( $nextgen_filtered ) ) {
+					$rules = array( $nextgen_filtered );
 				} elseif ( is_array( $nextgen_filtered ) ) {
 					$rules = $nextgen_filtered;
 				}
@@ -1162,9 +1180,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 					 * Filter Cache-Vary htaccess rules.
 					 *
 					 * Return false to drop the Cache-Vary block; return an array
-					 * to replace the rules. Any other return value keeps the
-					 * rules unchanged (a blind (array) cast would coerce false
-					 * into [false] and fail the write).
+					 * to replace the rules, or a string with a single rule
+					 * block (wrapped into a one-element array, matching the
+					 * `wppo_htaccess_rules` contract). Any other return value
+					 * keeps the rules unchanged (a blind (array) cast would
+					 * coerce false into [false] and fail the write).
 					 *
 					 * @since 2.0.0
 					 * @param array $cache_vary Active Cache-Vary groups.
@@ -1172,6 +1192,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 					$vary_filtered = apply_filters( 'wppo_htaccess_cache_vary_rules', $rules, $cache_vary );
 					if ( false === $vary_filtered ) {
 						$rules = $vary_base;
+					} elseif ( is_string( $vary_filtered ) ) {
+						$rules = array( $vary_filtered );
 					} elseif ( is_array( $vary_filtered ) ) {
 						$rules = $vary_filtered;
 					}

@@ -441,6 +441,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			$block = (string) apply_filters( 'wppo_esi_block', $block, $attrs );
 
 			$nonce = function_exists( 'wp_create_nonce' ) ? wp_create_nonce( 'wppo_esi' ) : self::fallback_nonce_seed( $block );
+			// Fail closed per fallback_nonce_seed() contract: an empty seed
+			// means no usable secret exists, so never embed or store an
+			// empty nonce — render an inert marker instead (fragment
+			// verification rejects empty nonces, so hydration stays denied).
+			if ( '' === $nonce ) {
+				return '<!-- wppo-esi:unavailable -->';
+			}
 			// Store 12h transient blog-prefixed.
 			$transient_key = Util::transient_key( 'wppo_esi_nonce_' . md5( $nonce . $block ) );
 			set_transient( $transient_key, $nonce, 12 * HOUR_IN_SECONDS );
@@ -870,7 +877,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			}
 
 			$nonce = function_exists( 'wp_create_nonce' ) ? wp_create_nonce( 'wppo_esi' ) : self::fallback_nonce_seed( 'wppo_esi' );
-			$key   = Util::transient_key( 'wppo_esi_nonce_' . md5( $nonce ) );
+			// Fail closed per fallback_nonce_seed() contract: never inject
+			// or store an empty nonce — leave the placeholder untouched so
+			// verification (which rejects empty nonces) stays denied.
+			if ( '' === $nonce ) {
+				return $content;
+			}
+			$key = Util::transient_key( 'wppo_esi_nonce_' . md5( $nonce ) );
 			set_transient( $key, $nonce, 12 * HOUR_IN_SECONDS );
 			// Wildcard allowlist transient for ESI (wppo_-prefixed to avoid
 			// collisions with other plugins on shared object-cache backends).
@@ -1103,8 +1116,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			if ( self::has_header_emitter() ) {
 				Header_Emitter::emit_esi_tag( $action );
 			} elseif ( function_exists( 'headers_sent' ) && ! headers_sent() ) {
-			$cleaned = preg_replace( '/[\x00-\x1F\x7F]/', '', $action );
-			$safe    = substr( is_string( $cleaned ) ? $cleaned : '', 0, 1024 );
+				$cleaned = preg_replace( '/[\x00-\x1F\x7F]/', '', $action );
+				$safe    = substr( is_string( $cleaned ) ? $cleaned : '', 0, 1024 );
 				header( 'X-LiteSpeed-Tag: ESI.' . $safe, false );
 			}
 		}

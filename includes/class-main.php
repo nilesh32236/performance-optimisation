@@ -657,64 +657,65 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-builder-purge-watcher.php';
 			}
 
-		// Fallback loader for the remaining core classes when the Composer
-		// classmap is stale or unavailable (partial release builds). Lazy:
-		// registered as an spl autoloader so healthy requests pay nothing on
-		// the hot path — a file is required only on an actual missing-class
-		// failure. Classes already required unconditionally above
-		// (Server_Rules, Header_Emitter, LiteSpeed_Integration,
-		// LiteSpeed_Crawler, LiteSpeed_ESI, Llms, OD_Bridge, Bfcache,
-		// AI_Adaptive, Edge_Cache, Edge_Purger, CDN, Builder_Purge_Watcher)
-		// are intentionally omitted here to avoid duplicate probes.
-		$fallback_map = array(
-			'Abilities'              => 'class-abilities.php',
-			'Activate'               => 'class-activate.php',
-			'Admin_Notices'          => 'class-admin-notices.php',
-			'Advanced_Cache_Handler' => 'class-advanced-cache-handler.php',
-			'Asset_Manager'          => 'class-asset-manager.php',
-			'Cache'                  => 'class-cache.php',
-			'CDN_Purger'             => 'class-cdn-purger.php',
-			'Cloudflare_Purger'      => 'class-cloudflare-purger.php',
-			'Core_Tweaks'            => 'class-core-tweaks.php',
-			'Critical_CSS'           => 'class-critical-css.php',
-			'Cron'                   => 'class-cron.php',
-			'Database_Cleanup'       => 'class-database-cleanup.php',
-			'Deactivate'             => 'class-deactivate.php',
-			'Google_Fonts'           => 'class-google-fonts.php',
-			'Htaccess_Handler'       => 'class-htaccess-handler.php',
-			'Image_Optimisation'     => 'class-image-optimisation.php',
-			'Img_Converter'          => 'class-img-converter.php',
-			'Log'                    => 'class-log.php',
-			'Metabox'                => 'class-metabox.php',
-			'Object_Cache'           => 'class-object-cache.php',
-			'Pagespeed'              => 'class-pagespeed.php',
-			'Rest'                   => 'class-rest.php',
-			'RUM'                    => 'class-rum.php',
-			'Suggestion_Engine'      => 'class-suggestion-engine.php',
-			'System_Info'            => 'class-system-info.php',
-			'Telemetry'              => 'class-telemetry.php',
-			'Used_CSS'               => 'class-used-css.php',
-			'Util'                   => 'class-util.php',
-		);
-		spl_autoload_register(
-			static function ( $class ) use ( $fallback_map ): void {
-				$prefix = 'PerformanceOptimise\\Inc\\';
-				if ( 0 !== strpos( (string) $class, $prefix ) ) {
-					return;
+			// Fallback loader for the remaining core classes when the Composer
+			// classmap is stale or unavailable (partial release builds). Lazy:
+			// registered as an spl autoloader so healthy requests pay nothing on
+			// the hot path — a file is required only on an actual missing-class
+			// failure. Classes already required unconditionally above
+			// (Server_Rules, Header_Emitter, LiteSpeed_Integration,
+			// LiteSpeed_Crawler, LiteSpeed_ESI, Llms, OD_Bridge, Bfcache,
+			// AI_Adaptive, Edge_Cache, Edge_Purger, CDN, Builder_Purge_Watcher,
+			// Perf_Translations) are intentionally omitted here to avoid
+			// duplicate probes.
+			$fallback_map = array(
+				'Abilities'              => 'class-abilities.php',
+				'Activate'               => 'class-activate.php',
+				'Admin_Notices'          => 'class-admin-notices.php',
+				'Advanced_Cache_Handler' => 'class-advanced-cache-handler.php',
+				'Asset_Manager'          => 'class-asset-manager.php',
+				'Cache'                  => 'class-cache.php',
+				'CDN_Purger'             => 'class-cdn-purger.php',
+				'Cloudflare_Purger'      => 'class-cloudflare-purger.php',
+				'Core_Tweaks'            => 'class-core-tweaks.php',
+				'Critical_CSS'           => 'class-critical-css.php',
+				'Cron'                   => 'class-cron.php',
+				'Database_Cleanup'       => 'class-database-cleanup.php',
+				'Deactivate'             => 'class-deactivate.php',
+				'Google_Fonts'           => 'class-google-fonts.php',
+				'Htaccess_Handler'       => 'class-htaccess-handler.php',
+				'Image_Optimisation'     => 'class-image-optimisation.php',
+				'Img_Converter'          => 'class-img-converter.php',
+				'Log'                    => 'class-log.php',
+				'Metabox'                => 'class-metabox.php',
+				'Object_Cache'           => 'class-object-cache.php',
+				'Pagespeed'              => 'class-pagespeed.php',
+				'Rest'                   => 'class-rest.php',
+				'RUM'                    => 'class-rum.php',
+				'Suggestion_Engine'      => 'class-suggestion-engine.php',
+				'System_Info'            => 'class-system-info.php',
+				'Telemetry'              => 'class-telemetry.php',
+				'Used_CSS'               => 'class-used-css.php',
+				'Util'                   => 'class-util.php',
+			);
+			spl_autoload_register(
+				static function ( $class ) use ( $fallback_map ): void {
+					$prefix = 'PerformanceOptimise\\Inc\\';
+					if ( 0 !== strpos( (string) $class, $prefix ) ) {
+						return;
+					}
+					$short = substr( (string) $class, strlen( $prefix ) );
+					if ( ! isset( $fallback_map[ $short ] ) ) {
+						return;
+					}
+					if ( class_exists( $class, false ) ) {
+						return;
+					}
+					$fallback_path = WPPO_PLUGIN_PATH . 'includes/' . $fallback_map[ $short ];
+					if ( file_exists( $fallback_path ) ) {
+						require_once $fallback_path;
+					}
 				}
-				$short = substr( (string) $class, strlen( $prefix ) );
-				if ( ! isset( $fallback_map[ $short ] ) ) {
-					return;
-				}
-				if ( class_exists( $class, false ) ) {
-					return;
-				}
-				$fallback_path = WPPO_PLUGIN_PATH . 'includes/' . $fallback_map[ $short ];
-				if ( file_exists( $fallback_path ) ) {
-					require_once $fallback_path;
-				}
-			}
-		);
+			);
 
 			if ( defined( 'WP_CLI' ) && WP_CLI ) {
 				$cli_file = WPPO_PLUGIN_PATH . 'includes/class-wppo-cli-command.php';

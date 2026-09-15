@@ -67,4 +67,12 @@ class UsedCssStripCommentsTest extends \PHPUnit\Framework\TestCase {
 	public function test_drops_unterminated_comment(): void {
 		$this->assertSame( 'a{}', $this->strip( 'a{}/* never closed' ) );
 	}
+
+	/**
+	 * Adjacent and multiple comments are all removed (scanner loop reset).
+	 */
+	public function test_removes_adjacent_comments(): void {
+		$this->assertSame( 'a{}', $this->strip( '/*a*/a{}/*b*//*c*/' ) );
+		$this->assertSame( '', $this->strip( '' ) );
+	}
 }

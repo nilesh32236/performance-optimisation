@@ -567,11 +567,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				if ( ! file_exists( $path ) ) {
 					continue;
 				}
-			if ( $wp_filesystem ) {
-				$wp_filesystem->delete( $path );
-			} else {
-				@unlink( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.unlink_unlink -- Stale state files are best-effort cleanup.
-			}
+				if ( $wp_filesystem ) {
+					$wp_filesystem->delete( $path );
+				} else {
+					@unlink( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.unlink_unlink -- Stale state files are best-effort cleanup.
+				}
 			}
 		}
 
