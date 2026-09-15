@@ -1890,6 +1890,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param \WP_REST_Request $request The request object.
 		 * @since 1.4.0
+		 * @since NEXT Flush action uses Object_Cache::flush_scoped() for multisite scoping.
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function handle_object_cache( \WP_REST_Request $request ) {
@@ -1973,17 +1974,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			if ( 'flush' === $action ) {
-				$result = $manager->flush();
+				// Scoped flush on multisite (issue #1186): never flush
+				// sibling sites.
+				$result = $manager->flush_scoped();
 				if ( $result ) {
 					Log::add( __( 'Object Cache flushed.', 'performance-optimisation' ) );
 					return $this->send_response( true, true, 200, __( 'Object Cache flushed.', 'performance-optimisation' ) );
 				}
-				// No Log::add here: Object_Cache::flush() already recorded
-				// the failure in-app. Forward the manager's real error so
-				// the SPA notice keeps its specificity.
+				// No Log::add here: Object_Cache::flush()/flush_scoped()
+				// already recorded the failure in-app. Forward the
+				// manager's real error so the SPA notice keeps its specificity.
 				$flush_error = $manager->get_last_flush_error();
 				if ( ! ( $flush_error instanceof \WP_Error ) ) {
 					$flush_error = new \WP_Error( 'flush_fail', __( 'Flush reported failure.', 'performance-optimisation' ) );
+				} else {
+					$flush_error = $this->sanitize_flush_error( $flush_error );
 				}
 				return $this->send_response( $this->redis_error_payload( $flush_error, 'error' ), false, 400, __( 'Failed to flush object cache.', 'performance-optimisation' ) );
 			}
@@ -2111,6 +2116,70 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 			$nodes = sanitize_text_field( (string) $nodes );
 			return $nodes ? array( $nodes ) : array();
+		}
+
+		/**
+		 * Strip local paths from a flush WP_Error before REST surfacing.
+		 *
+		 * Flush messages are safe today (generic strings, blog_id cast to
+		 * int) but a future verbose Redis error could leak topology
+		 * (absolute paths) via the message or the error data payload.
+		 * Mirrors the ABSPATH/WP_CONTENT_DIR stripping in
+		 * run_performance_scan(); verbose detail stays available under
+		 * WP_DEBUG via get_status().
+		 *
+		 * @since NEXT
+		 * @param \WP_Error $error Failing result.
+		 * @return \WP_Error Sanitized clone (same code, scrubbed message and data).
+		 */
+		private function sanitize_flush_error( $error ): \WP_Error {
+			$message = $error->get_error_message();
+			if ( defined( 'ABSPATH' ) && is_string( ABSPATH ) && '' !== ABSPATH ) {
+				$message = str_replace( array( ABSPATH, rtrim( ABSPATH, '/\\' ) ), '', $message );
+			}
+			if ( defined( 'WP_CONTENT_DIR' ) && is_string( WP_CONTENT_DIR ) && '' !== WP_CONTENT_DIR ) {
+				$message = str_replace( array( WP_CONTENT_DIR, rtrim( WP_CONTENT_DIR, '/\\' ) ), '', $message );
+			}
+			$message = sanitize_text_field( $message );
+			if ( '' === $message ) {
+				$message = __( 'Flush reported failure.', 'performance-optimisation' );
+			}
+			return new \WP_Error( $error->get_error_code(), $message, $this->scrub_flush_error_data( $error->get_error_data() ) );
+		}
+
+		/**
+		 * Recursively strip local paths from flush error data.
+		 *
+		 * Strings are scrubbed of ABSPATH/WP_CONTENT_DIR; arrays are
+		 * scrubbed element-wise; scalars and null pass through untouched.
+		 * Objects and resources are dropped (replaced with null) since a
+		 * verbose backend could hide paths or topology inside them.
+		 *
+		 * @since NEXT
+		 * @param mixed $data Raw error data.
+		 * @return mixed Scrubbed error data.
+		 */
+		private function scrub_flush_error_data( $data ) {
+			if ( is_string( $data ) ) {
+				if ( defined( 'ABSPATH' ) && is_string( ABSPATH ) && '' !== ABSPATH ) {
+					$data = str_replace( array( ABSPATH, rtrim( ABSPATH, '/\\' ) ), '', $data );
+				}
+				if ( defined( 'WP_CONTENT_DIR' ) && is_string( WP_CONTENT_DIR ) && '' !== WP_CONTENT_DIR ) {
+					$data = str_replace( array( WP_CONTENT_DIR, rtrim( WP_CONTENT_DIR, '/\\' ) ), '', $data );
+				}
+				return $data;
+			}
+			if ( is_array( $data ) ) {
+				$scrubbed = array();
+				foreach ( $data as $key => $value ) {
+					$scrubbed[ $key ] = $this->scrub_flush_error_data( $value );
+				}
+				return $scrubbed;
+			}
+			if ( is_scalar( $data ) || null === $data ) {
+				return $data;
+			}
+			return null;
 		}
 
 		/**

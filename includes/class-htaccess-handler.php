@@ -101,6 +101,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				require_once wp_normalize_path( ABSPATH . 'wp-admin/includes/file.php' );
 			}
 
+			// Call-site guards (issue #1186): the require_once lines above
+			// are best-effort — a missing/corrupt wp-admin include leaves
+			// the function undefined and an unguarded call below would
+			// fatal. Fail closed before touching the disk.
+			if ( ! function_exists( 'get_home_path' ) ) {
+				self::flag_htaccess_failure();
+				return false;
+			}
+
 			$htaccess_file = wp_normalize_path( get_home_path() . '.htaccess' );
 
 			$wp_filesystem = Util::init_filesystem();
@@ -165,6 +174,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				return true;
 			}
 			if ( false === $atomic ) {
+				self::flag_htaccess_failure();
+				return false;
+			}
+
+			// Call-site guard (issue #1186): atomic_write_verified()
+			// returned null (atomic path unsupported), so the legacy
+			// insert_with_markers() fallback below is live. The
+			// require_once at the top of this method is best-effort — if
+			// misc.php is missing the function stays undefined and an
+			// unguarded call would fatal with a half-planned write.
+			// Fail closed: previous rules stay intact.
+			if ( ! function_exists( 'insert_with_markers' ) ) {
 				self::flag_htaccess_failure();
 				return false;
 			}
