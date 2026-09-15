@@ -269,6 +269,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+				'preload_status'            => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'get_preload_status' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
+				'preload_resume'            => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'resume_preload' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
 				'ai_model'                  => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_ai_model' ),
@@ -419,6 +431,88 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 */
 		public function get_rum_data( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			return $this->send_response( RUM::get_data() );
+		}
+
+		/**
+		 * Resumable sitemap preload progress plus bounded-cache cap status.
+		 *
+		 * Fail-open: queue/cache failures return idle/ok payloads, never fatal.
+		 *
+		 * @since NEXT
+		 * @param \WP_REST_Request $request The request object.
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function get_preload_status( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			$preload = array(
+				'queued'      => 0,
+				'done'        => 0,
+				'failed'      => 0,
+				'total'       => 0,
+				'status'      => 'idle',
+				'failed_urls' => array(),
+			);
+			$cache   = array(
+				'bytes'     => 0,
+				'cap_bytes' => 0,
+				'state'     => 'ok',
+				'enforce'   => true,
+				'max_mb'    => 0,
+			);
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Cron' ) && method_exists( 'PerformanceOptimise\Inc\Cron', 'get_preload_status' ) ) {
+					$preload = Cron::get_preload_status();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) && method_exists( 'PerformanceOptimise\Inc\Cache', 'get_cache_cap_status' ) ) {
+					$cache = Cache::get_cache_cap_status();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $this->send_response(
+				array(
+					'preload' => $preload,
+					'cache'   => $cache,
+				)
+			);
+		}
+
+		/**
+		 * Resume the sitemap preload queue (re-schedule queued + failed URLs).
+		 *
+		 * @since NEXT
+		 * @param \WP_REST_Request $request The request object.
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function resume_preload( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			$rescheduled = 0;
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Cron' ) && method_exists( 'PerformanceOptimise\Inc\Cron', 'resume_preload_queue' ) ) {
+					$rescheduled = Cron::resume_preload_queue();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			$status = array();
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Cron' ) && method_exists( 'PerformanceOptimise\Inc\Cron', 'get_preload_status' ) ) {
+					$status = Cron::get_preload_status();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $this->send_response(
+				array(
+					'rescheduled' => $rescheduled,
+					'preload'     => $status,
+				),
+				true,
+				200,
+				$rescheduled > 0 ? __( 'Preload queue resumed.', 'performance-optimisation' ) : __( 'Nothing to resume.', 'performance-optimisation' )
+			);
 		}
 
 		/**

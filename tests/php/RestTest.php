@@ -248,10 +248,12 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			'ai_suggestions',
 			'settings_snapshot',
 			'restore_settings',
+			'preload_status',
+			'preload_resume',
 		);
 
-		// Keep in sync with the AGENTS.md endpoint count (33).
-		$this->assertCount( 33, $routes, 'REST route count drifted from the documented endpoint count' );
+		// Keep in sync with the AGENTS.md endpoint count (35).
+		$this->assertCount( 35, $routes, 'REST route count drifted from the documented endpoint count' );
 
 		foreach ( $expected as $route ) {
 			$this->assertArrayHasKey( $route, $routes, "Missing route: {$route}" );

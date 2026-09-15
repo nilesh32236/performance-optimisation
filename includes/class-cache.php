@@ -2606,6 +2606,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			} finally {
 				Util::release_stampede_lock( $lock_key, $lock_owner );
 			}
+
+			// Bounded cache (issue #1162): warn-before-enforce size cap runs
+			// after the write so the frontend is never blocked. Fail-open.
+			if ( 'html' === $type ) {
+				try {
+					self::maybe_enforce_cache_cap();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
 		}
 
 		/**
@@ -4289,6 +4299,301 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private function count_cached_pages( string $directory, int $depth = 0 ): int {
 			$stats = $this->calculate_directory_stats( $directory, $depth );
 			return $stats['count'];
+		}
+
+		/**
+		 * Read the bounded-cache cap settings with fail-safe defaults.
+		 *
+		 * Additive `cache_settings` keys (issue #1162): `cacheMaxSizeMB`
+		 * (default 512), `cacheSizeWarnRatio` (default 0.8),
+		 * `cacheSizeEnforce` (default true). Missing or malformed stored
+		 * values fall back to defaults; enforcement never blocks the
+		 * frontend — the cap only warns first, then evicts oldest entries.
+		 *
+		 * @since NEXT
+		 * @return array{max_mb:int,warn_ratio:float,enforce:bool}
+		 */
+		public static function get_cache_cap_settings(): array {
+			$defaults = array(
+				'max_mb'     => 512,
+				'warn_ratio' => 0.8,
+				'enforce'    => true,
+			);
+			try {
+				$settings = array();
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					$all      = Util::get_settings();
+					$settings = isset( $all['cache_settings'] ) && is_array( $all['cache_settings'] ) ? $all['cache_settings'] : array();
+				}
+				if ( isset( $settings['cacheMaxSizeMB'] ) && is_numeric( $settings['cacheMaxSizeMB'] ) ) {
+					$max_mb = (int) $settings['cacheMaxSizeMB'];
+					if ( $max_mb > 0 && $max_mb <= 10240 ) {
+						$defaults['max_mb'] = $max_mb;
+					}
+				}
+				if ( isset( $settings['cacheSizeWarnRatio'] ) && is_numeric( $settings['cacheSizeWarnRatio'] ) ) {
+					$ratio = (float) $settings['cacheSizeWarnRatio'];
+					if ( $ratio > 0 && $ratio < 1 ) {
+						$defaults['warn_ratio'] = $ratio;
+					}
+				}
+				if ( array_key_exists( 'cacheSizeEnforce', $settings ) ) {
+					$parsed = filter_var( $settings['cacheSizeEnforce'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+					if ( null !== $parsed ) {
+						$defaults['enforce'] = $parsed;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $defaults;
+		}
+
+		/**
+		 * Total static-cache size in bytes for the current domain.
+		 *
+		 * Fail-open: returns 0 when the filesystem or directory is
+		 * unavailable. Uses the single-walk {@see calculate_directory_stats()}
+		 * helper so size accounting matches the dashboard stats.
+		 *
+		 * @since NEXT
+		 * @return int Bytes used, or 0 on failure.
+		 */
+		public static function get_cache_size_bytes(): int {
+			try {
+				$instance = new self();
+				if ( ! $instance->get_filesystem() ) {
+					return 0;
+				}
+				$dir = trailingslashit( $instance->cache_root_dir );
+				if ( '' !== $instance->domain ) {
+					$dir .= $instance->domain;
+				}
+				if ( ! $instance->filesystem->is_dir( $dir ) ) {
+					return 0;
+				}
+				$stats = $instance->calculate_directory_stats( $dir );
+				return max( 0, (int) ( $stats['size'] ?? 0 ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
+			}
+		}
+
+		/**
+		 * Warn-before-enforce cap status for the current domain cache.
+		 *
+		 * States: `ok` (under warn threshold), `warn` (over warn threshold
+		 * but under cap, or over cap with enforcement off), `over` (over cap
+		 * with enforcement on). Never fatal; all failures report `ok`.
+		 *
+		 * @since NEXT
+		 * @return array{bytes:int,cap_bytes:int,warn_bytes:int,state:string,enforce:bool,max_mb:int}
+		 */
+		public static function get_cache_cap_status(): array {
+			$cap        = self::get_cache_cap_settings();
+			$cap_bytes  = $cap['max_mb'] * 1024 * 1024;
+			$warn_bytes = (int) ( $cap_bytes * $cap['warn_ratio'] );
+			$status     = array(
+				'bytes'      => 0,
+				'cap_bytes'  => $cap_bytes,
+				'warn_bytes' => $warn_bytes,
+				'state'      => 'ok',
+				'enforce'    => $cap['enforce'],
+				'max_mb'     => $cap['max_mb'],
+			);
+			try {
+				$bytes           = self::get_cache_size_bytes();
+				$status['bytes'] = $bytes;
+				if ( $bytes >= $cap_bytes ) {
+					$status['state'] = $cap['enforce'] ? 'over' : 'warn';
+				} elseif ( $bytes >= $warn_bytes ) {
+					$status['state'] = 'warn';
+				}
+				// Surface a persisted warning flag so the SPA can render it
+				// without re-walking the directory on every admin request.
+				$warn_key = '';
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {
+					$warn_key = Util::transient_key( 'wppo_cache_size_warning' );
+				}
+				if ( '' !== $warn_key && function_exists( 'get_transient' ) ) {
+					$flag = get_transient( $warn_key );
+					if ( 'warn' === $status['state'] || 'over' === $status['state'] ) {
+						$status['warning'] = true;
+					} elseif ( false !== $flag ) {
+						$status['warning'] = true;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $status;
+		}
+
+		/**
+		 * Warn-before-enforce size-cap check after a cache write.
+		 *
+		 * Throttled to at most one directory walk per 5 minutes via a
+		 * transient lock so frontend writes stay cheap. When usage passes
+		 * the warn threshold a warning transient is set (honest UI signal);
+		 * when usage passes the cap and enforcement is on, the oldest
+		 * entries are evicted until back under the cap. Never blocks the
+		 * frontend: every failure path returns silently.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function maybe_enforce_cache_cap(): void {
+			try {
+				if ( ! function_exists( 'get_transient' ) || ! function_exists( 'set_transient' ) ) {
+					return;
+				}
+				$lock_key = '';
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {
+					$lock_key = Util::transient_key( 'wppo_cache_cap_check_lock' );
+				} else {
+					return;
+				}
+				if ( false !== get_transient( $lock_key ) ) {
+					return;
+				}
+				set_transient( $lock_key, 1, 5 * MINUTE_IN_SECONDS );
+
+				$status   = self::get_cache_cap_status();
+				$bytes    = (int) $status['bytes'];
+				$warn_key = Util::transient_key( 'wppo_cache_size_warning' );
+				if ( $bytes >= (int) $status['warn_bytes'] ) {
+					set_transient( $warn_key, 1, 12 * HOUR_IN_SECONDS );
+				} else {
+					delete_transient( $warn_key );
+					return;
+				}
+				if ( $bytes < (int) $status['cap_bytes'] ) {
+					return;
+				}
+				if ( empty( $status['enforce'] ) ) {
+					return;
+				}
+				$to_free = $bytes - (int) $status['cap_bytes'];
+				if ( $to_free > 0 ) {
+					self::evict_oldest_cache_entries( $to_free );
+					self::bump_stats_cache();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Evict oldest cached pages until at least the given bytes are freed.
+		 *
+		 * Deletes `index.html` plus its `.gz`/`.br` siblings, oldest mtime
+		 * first, bounded to 2000 entries per run so a single request cannot
+		 * stall on a massive cache. Fail-open: filesystem failures stop the
+		 * walk silently.
+		 *
+		 * @since NEXT
+		 * @param int $bytes_to_free Minimum bytes to reclaim.
+		 * @return int Bytes actually freed (best effort).
+		 */
+		public static function evict_oldest_cache_entries( int $bytes_to_free ): int {
+			$freed = 0;
+			try {
+				$instance = new self();
+				if ( ! $instance->get_filesystem() ) {
+					return 0;
+				}
+				$dir = trailingslashit( $instance->cache_root_dir );
+				if ( '' !== $instance->domain ) {
+					$dir .= $instance->domain;
+				}
+				$entries = $instance->collect_cache_entries_by_age( $dir );
+				if ( empty( $entries ) ) {
+					return 0;
+				}
+				usort(
+					$entries,
+					static function ( $a, $b ) {
+						return ( (int) ( $a['mtime'] ?? 0 ) ) <=> ( (int) ( $b['mtime'] ?? 0 ) );
+					}
+				);
+				$budget = min( count( $entries ), 2000 );
+				for ( $i = 0; $i < $budget && $freed < $bytes_to_free; ++$i ) {
+					$file = (string) ( $entries[ $i ]['path'] ?? '' );
+					if ( '' === $file || ! $instance->is_path_contained( $file ) ) {
+						continue;
+					}
+					$size = (int) ( $entries[ $i ]['size'] ?? 0 );
+					$instance->delete_cache_files( $file );
+					$freed += $size;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return max( 0, $freed );
+		}
+
+		/**
+		 * Collect cache `index.html` entries with mtime + size for eviction.
+		 *
+		 * Recursive `$fs->dirlist()` walk capped at depth 20 and 5000
+		 * entries so eviction stays bounded on huge caches.
+		 *
+		 * @since NEXT
+		 * @param string $directory Directory to scan.
+		 * @param int    $depth     Recursion depth guard.
+		 * @param array  $out       Accumulator (passed by reference).
+		 * @return array<int, array{path:string,mtime:int,size:int}> Collected entries.
+		 */
+		private function collect_cache_entries_by_age( string $directory, int $depth = 0, array &$out = array() ): array {
+			try {
+				if ( $depth > 20 || count( $out ) >= 5000 ) {
+					return $out;
+				}
+				$fs = $this->get_filesystem();
+				if ( ! $fs ) {
+					return $out;
+				}
+				$files = $fs->dirlist( $directory );
+				if ( ! $files ) {
+					return $out;
+				}
+				foreach ( $files as $file ) {
+					if ( count( $out ) >= 5000 ) {
+						break;
+					}
+					$file_path = trailingslashit( $directory ) . $file['name'];
+					if ( 'd' === $file['type'] ) {
+						$this->collect_cache_entries_by_age( $file_path, $depth + 1, $out );
+						continue;
+					}
+					if ( 'index.html' !== $file['name'] ) {
+						continue;
+					}
+					$size  = isset( $file['size'] ) && is_numeric( $file['size'] ) ? (int) $file['size'] : (int) $fs->size( $file_path );
+					$mtime = 0;
+					if ( isset( $file['lastmodunix'] ) && is_numeric( $file['lastmodunix'] ) ) {
+						$mtime = (int) $file['lastmodunix'];
+					} else {
+						$mtime = (int) $fs->mtime( $file_path );
+					}
+					$siblings = $size;
+					foreach ( array( '.gz', '.br' ) as $suffix ) {
+						$sibling = $file_path . $suffix;
+						if ( $fs->exists( $sibling ) ) {
+							$siblings += (int) $fs->size( $sibling );
+						}
+					}
+					$out[] = array(
+						'path'  => $file_path,
+						'mtime' => $mtime,
+						'size'  => $siblings,
+					);
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $out;
 		}
 
 		/**

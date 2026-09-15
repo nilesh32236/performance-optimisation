@@ -1130,6 +1130,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'update_option_siteurl', array( __CLASS__, 'on_site_url_change' ), 10, 3 );
 			add_action( 'activated_plugin', array( __CLASS__, 'clear_all_cache' ) );
 			add_action( 'deactivated_plugin', array( __CLASS__, 'clear_all_cache' ) );
+			// Bounded-cache stability (issue #1162): any plugin/theme update
+			// auto-purges minify output + page cache so layout never goes
+			// stale. Fail-open via on_extension_update(); builder-specific
+			// purges stay in Builder_Purge_Watcher.
+			add_action( 'upgrader_process_complete', array( __CLASS__, 'on_extension_update' ), 20, 2 );
 
 			add_action( 'wp_ajax_wppo_get_nonce', array( $rest, 'ajax_get_nonce' ) );
 
@@ -1737,6 +1742,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		public static function clear_all_cache() {
 			Cache::clear_cache();
+		}
+
+		/**
+		 * Auto-purge minify + page cache after any plugin/theme update.
+		 *
+		 * Hooks `upgrader_process_complete` (priority 20, after the builder
+		 * watcher). Only fires for `action=update` + `type=plugin|theme`;
+		 * every other upgrade path (core, translation, install) is ignored.
+		 * Fail-open: purge failure degrades to the current manual-clear
+		 * behavior and is never fatal.
+		 *
+		 * @since NEXT
+		 * @param mixed $upgrader   Upgrader instance (unused).
+		 * @param mixed $hook_extra Update context (action/type/plugin/plugins/theme/themes).
+		 * @return void
+		 */
+		public static function on_extension_update( $upgrader = null, $hook_extra = null ): void {
+			unset( $upgrader );
+			try {
+				if ( ! is_array( $hook_extra ) ) {
+					return;
+				}
+				if ( 'update' !== ( $hook_extra['action'] ?? '' ) ) {
+					return;
+				}
+				if ( ! in_array( ( $hook_extra['type'] ?? '' ), array( 'plugin', 'theme' ), true ) ) {
+					return;
+				}
+				$has_target = ! empty( $hook_extra['plugin'] ) || ! empty( $hook_extra['plugins'] ) || ! empty( $hook_extra['theme'] ) || ! empty( $hook_extra['themes'] ) || ! empty( $hook_extra['bulk'] );
+				if ( ! $has_target ) {
+					return;
+				}
+				self::clear_all_cache();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 
 		/**

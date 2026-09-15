@@ -130,6 +130,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			'wppo_object_cache_circuit_dismissed',     // Object_Cache::CIRCUIT_DISMISSED_OPTION.
 			'wppo_used_css_last_full_regen',           // Used_CSS::LAST_FULL_REGEN_OPTION (issue #1107).
 			'wppo_settings_snapshot',                  // Single prior wppo_settings copy for one-click undo (issue #1144).
+			'wppo_preload_queue',                      // Resumable sitemap preload queue (issue #1162).
 		);
 
 		/**
@@ -290,6 +291,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'wooSafeMode'         => true,
 					'stampedeGuard'       => true,
 					'stampedeLockTtl'     => 5,
+					'cacheMaxSizeMB'      => 512,
+					'cacheSizeWarnRatio'  => 0.8,
+					'cacheSizeEnforce'    => true,
 				),
 				'file_optimisation'     => array(
 					'enableServerRules'            => false,
