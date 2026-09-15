@@ -556,7 +556,9 @@ describe( 'PluginSetting', () => {
 		const undoButton = await screen.findByRole( 'button', {
 			name: /Undo Last Change/i,
 		} );
-		expect( undoButton ).toBeEnabled();
+		// The button enables only after the snapshot check resolves; await
+		// the enabled state (React 19 flushes the effect later than 18).
+		await waitFor( () => expect( undoButton ).toBeEnabled() );
 		fireEvent.click( undoButton );
 
 		await waitFor( () =>
@@ -585,6 +587,9 @@ describe( 'PluginSetting', () => {
 		const undoButton = await screen.findByRole( 'button', {
 			name: /Undo Last Change/i,
 		} );
+		// Await the enabled state: clicking a still-disabled button is a
+		// no-op, which starves the restore call (flaky on React 19).
+		await waitFor( () => expect( undoButton ).toBeEnabled() );
 		fireEvent.click( undoButton );
 
 		await waitFor( () =>
@@ -611,6 +616,9 @@ describe( 'PluginSetting', () => {
 		const undoButton = await screen.findByRole( 'button', {
 			name: /Undo Last Change/i,
 		} );
+		// Await the enabled state: clicking a still-disabled button is a
+		// no-op, which starves the restore call (flaky on React 19).
+		await waitFor( () => expect( undoButton ).toBeEnabled() );
 		fireEvent.click( undoButton );
 
 		await waitFor( () =>
