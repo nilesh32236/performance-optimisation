@@ -363,6 +363,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['image_optimisation']['skipSmallThresholdBytes'] ) ) {
 				$this->options['image_optimisation']['skipSmallThresholdBytes'] = 5120;
 			}
+			if ( ! isset( $this->options['image_optimisation']['discardOversizedSibling'] ) ) {
+				$this->options['image_optimisation']['discardOversizedSibling'] = true;
+			}
 			if ( ! isset( $this->options['image_optimisation']['lcpHeroPreload'] ) ) {
 				$this->options['image_optimisation']['lcpHeroPreload'] = true;
 			}

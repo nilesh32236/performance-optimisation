@@ -390,6 +390,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'avifFirst'                  => true,
 					'smartQuality'               => true,
 					'skipSmallThresholdBytes'    => 5120,
+					'discardOversizedSibling'    => true,
 					'fieldLcpOverride'           => false,
 					'fieldLcpMinSamples'         => 20,
 					'cssHeroPreload'             => false,

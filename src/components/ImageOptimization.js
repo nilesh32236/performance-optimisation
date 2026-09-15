@@ -103,6 +103,7 @@ const ImageOptimization = ( { options = {} } ) => {
 		clientSideMimeTypeOverride: false,
 		clientSideMimeTypes: DEFAULT_CLIENT_SIDE_MIME_TYPES,
 		forceServerSideConversion: false,
+		discardOversizedSibling: true,
 		...options,
 		placeholderType:
 			options.placeholderType ??
@@ -177,6 +178,7 @@ const ImageOptimization = ( { options = {} } ) => {
 		options.clientSideMimeTypeOverride,
 		options.clientSideMimeTypes,
 		options.forceServerSideConversion,
+		options.discardOversizedSibling,
 		options.placeholderType,
 		options.replacePlaceholderWithSVG,
 	] );
@@ -241,6 +243,7 @@ const ImageOptimization = ( { options = {} } ) => {
 		options.clientSideMimeTypeOverride,
 		options.clientSideMimeTypes,
 		options.forceServerSideConversion,
+		options.discardOversizedSibling,
 		options.placeholderType,
 		options.replacePlaceholderWithSVG,
 	] );
@@ -786,6 +789,23 @@ const ImageOptimization = ( { options = {} } ) => {
 											'performance-optimisation'
 										) }
 									</p>
+								</div>
+								<div className="wppo-field wppo-field--spaced">
+									<SwitchField
+										label={ __(
+											'Discard Oversized Conversions',
+											'performance-optimisation'
+										) }
+										description={ __(
+											'Compare each converted file against its source and keep the source when the conversion is larger. Guarantees image conversion never increases byte size.',
+											'performance-optimisation'
+										) }
+										name="discardOversizedSibling"
+										checked={
+											settings.discardOversizedSibling
+										}
+										onChange={ handleChange( setSettings ) }
+									/>
 								</div>
 							</div>
 						) }

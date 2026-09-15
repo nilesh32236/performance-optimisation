@@ -1381,6 +1381,24 @@ Filters the byte threshold at or under which source images skip conversion (tiny
 
 ---
 
+### `wppo_smart_pipeline_enabled`
+Kill-switch filter for the size-compare smart-compress + local LQIP placeholder pipeline. Return falsy to disable both features: oversized converted siblings are kept (legacy behaviour) and native-lazy images receive no placeholder attributes. Server-side only — zero external HTTP either way. @since NEXT.
+
+**Parameters:**
+- `$enabled` *(bool)* — Default from the `image_optimisation.discardOversizedSibling` setting (`true`).
+
+---
+
+### `wppo_discard_oversized_sibling`
+Filters whether a converted sibling at or above its source byte size is discarded (source kept, status recorded as `skipped`). Return falsy to keep the sibling. Fail-open: missing/unreadable files are never discarded. @since NEXT.
+
+**Parameters:**
+- `$discard` *(bool)* — Whether to discard the sibling.
+- `$source_path` *(string)* — Filesystem path to the source image.
+- `$sibling_path` *(string)* — Filesystem path to the converted sibling.
+
+---
+
 ### `wppo_auto_alt_enabled`
 Filters whether missing-alt autofill is enabled. When truthy, `<img>` tags with no `alt` attribute get a deterministic derived alt (sanitized filename, falling back to the parent post title); existing `alt` attributes — including decorative `alt=""` — are never touched. Runs as a standalone buffer pass when lazy-loading is disabled, so the toggle works independently of `lazyLoadImages`. Data-URI images are included in both the Tag Processor and regex paths (derived from the parent title/filter when no filename exists). @since 2.0.0.
 

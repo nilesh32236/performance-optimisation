@@ -83,6 +83,70 @@ describe( 'ImageOptimization Component', () => {
 		expect( toggle ).not.toBeChecked();
 	} );
 
+	it( 'reveals the discard-oversized-conversions toggle when auto convert is enabled', () => {
+		render( <ImageOptimization /> );
+		expect(
+			screen.queryByLabelText( /Discard Oversized Conversions/i )
+		).not.toBeInTheDocument();
+
+		fireEvent.click( screen.getByLabelText( /Auto Convert Formats/i ) );
+
+		const toggle = screen.getByLabelText(
+			/Discard Oversized Conversions/i
+		);
+		expect( toggle ).toBeInTheDocument();
+		expect( toggle ).toBeChecked();
+
+		fireEvent.click( toggle );
+		expect( toggle ).not.toBeChecked();
+
+		fireEvent.click( toggle );
+		expect( toggle ).toBeChecked();
+	} );
+
+	it( 'persists the discard-oversized-conversions toggle via update_settings', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			message: 'Settings updated successfully.',
+		} );
+
+		render( <ImageOptimization /> );
+
+		fireEvent.click( screen.getByLabelText( /Auto Convert Formats/i ) );
+
+		const toggle = screen.getByLabelText(
+			/Discard Oversized Conversions/i
+		);
+		expect( toggle ).toBeChecked();
+
+		fireEvent.click( toggle );
+		expect( toggle ).not.toBeChecked();
+
+		const submitButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+
+		await act( async () => {
+			fireEvent.click( submitButton );
+		} );
+
+		expect( apiCall ).toHaveBeenCalledWith(
+			'update_settings',
+			expect.objectContaining( {
+				tab: 'image_optimisation',
+				settings: expect.objectContaining( {
+					discardOversizedSibling: false,
+				} ),
+			} )
+		);
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Settings updated successfully.' )
+			).toBeInTheDocument();
+		} );
+	} );
+
 	it( 'renders the client-side processing notice when WP 7.1+ media processing is active', () => {
 		global.wppoSettings.client_side_media_processing_enabled = true;
 
