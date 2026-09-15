@@ -221,6 +221,12 @@ const FileOptimization = ( {
 		delayJS: !! settings.delayJS,
 		deferJS: !! settings.deferJS,
 		combineCSS: !! settings.combineCSS,
+		// Staging must mirror what the preview renderer consumes:
+		// safe_minify_js reads delayJSExternalOnly and minifyInlineJS from
+		// the effective slice, so omitting them would silently drop the
+		// toggles from the admin preview.
+		delayJSExternalOnly: !! settings.delayJSExternalOnly,
+		minifyInlineJS: !! settings.minifyInlineJS,
 		excludeDelayJS:
 			typeof settings.excludeDelayJS === 'string'
 				? settings.excludeDelayJS
@@ -336,7 +342,23 @@ const FileOptimization = ( {
 		try {
 			const res = await apiCall( 'sandbox_promote', {} );
 			if ( res && res.success ) {
+				// Sync the production baseline so the form reflects the
+				// promoted values: prefer the production slice returned by
+				// the endpoint, falling back to the last staged values.
+				const promotedSlice =
+					res.data &&
+					typeof res.data === 'object' &&
+					res.data.file_optimisation &&
+					typeof res.data.file_optimisation === 'object'
+						? res.data.file_optimisation
+						: sandboxStaged;
+				if ( promotedSlice && typeof promotedSlice === 'object' ) {
+					const synced = { ...promotedSlice };
+					setSettings( ( prev ) => ( { ...prev, ...synced } ) );
+					setBaseline( ( prev ) => ( { ...prev, ...synced } ) );
+				}
 				setSandboxStaged( {} );
+				setSandboxPreviewUrl( '' );
 				notifySandbox( {
 					type: 'success',
 					message: __(
@@ -347,8 +369,14 @@ const FileOptimization = ( {
 			} else {
 				notifySandbox( {
 					type: 'error',
+					// The REST envelope is { data, success, message }: data
+					// is null on failure (or an object on validation-style
+					// failures), so prefer the string message to avoid
+					// rendering [object Object].
 					message:
-						( res && res.data ) ||
+						( res &&
+							typeof res.message === 'string' &&
+							res.message ) ||
 						__( 'Could not promote.', 'performance-optimisation' ),
 				} );
 			}
@@ -367,6 +395,9 @@ const FileOptimization = ( {
 			const res = await apiCall( 'sandbox_discard', {} );
 			if ( res && res.success ) {
 				setSandboxStaged( {} );
+				// Clear the stale preview link (its nonce and staged values
+				// no longer exist) so it cannot be reopened.
+				setSandboxPreviewUrl( '' );
 				notifySandbox( {
 					type: 'success',
 					message: __(
@@ -1802,7 +1833,7 @@ const FileOptimization = ( {
 									</p>
 									<p className="wppo-field-description">
 										{ __(
-											'Stage the current Delay, Defer and Combine settings, preview them as admin via a no-cache link (visitors keep production markup), then promote or discard. A perf test can run inside the preview.',
+											'Stage the current Delay, Defer and Combine settings, preview them as admin via a no-cache link (visitors keep production markup), then promote or discard. The perf test below always measures the production URL; staged settings are verified visually via the admin preview link.',
 											'performance-optimisation'
 										) }
 									</p>

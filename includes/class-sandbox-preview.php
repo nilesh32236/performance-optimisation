@@ -275,6 +275,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'sanitize_settings_recursively' ) ) {
 					$staged = (array) Util::sanitize_settings_recursively( $staged );
 				}
+				// Boolean normalization: a string 'false' (form-encoded or
+				// malformed import) would otherwise survive as a truthy
+				// non-empty string and later !empty() checks would enable a
+				// feature the caller meant to disable. Fail-safe to false.
+				foreach ( array( 'delayJS', 'deferJS', 'combineCSS' ) as $bool_key ) {
+					if ( array_key_exists( $bool_key, $staged ) && ! is_bool( $staged[ $bool_key ] ) ) {
+						$bool                = filter_var( $staged[ $bool_key ], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+						$staged[ $bool_key ] = null === $bool ? false : $bool;
+					}
+				}
 				$clean = array();
 				foreach ( self::ALLOWED_STAGED_KEYS as $key ) {
 					if ( array_key_exists( $key, $staged ) ) {
@@ -406,7 +416,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 					}
 				}
 				$stored['file_optimisation'][ self::STAGED_KEY ] = array();
-				update_option( 'wppo_settings', $stored );
+				$updated = update_option( 'wppo_settings', $stored );
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
 					try {
 						Util::set_settings_cache( $stored );
@@ -421,7 +431,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 						unset( $e );
 					}
 				}
-				return true;
+				if ( $updated ) {
+					return true;
+				}
+				// update_option() returns false both on failure and when the
+				// stored value is unchanged: read back and treat "staged slot
+				// already cleared" as success, like save_staged() does, so a
+				// failed DB write is never reported as a promotion.
+				try {
+					// allowlist(settings-read-guard): deliberate direct read — verify the write above.
+					$verify = get_option( 'wppo_settings' );
+					if ( is_array( $verify )
+					&& empty( $verify['file_optimisation'][ self::STAGED_KEY ] ) ) {
+						return true;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				return false;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;
@@ -452,13 +479,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 				// allowlist(settings-read-guard): deliberate direct read.
 				$stored = get_option( 'wppo_settings' );
 				if ( ! is_array( $stored ) ) {
-					return false;
+					// Nothing staged to discard (e.g. fresh install): treat
+					// the no-op as idempotent success, not a 500.
+					return true;
 				}
 				if ( ! isset( $stored['file_optimisation'] ) || ! is_array( $stored['file_optimisation'] ) ) {
 					$stored['file_optimisation'] = array();
 				}
 				$stored['file_optimisation'][ self::STAGED_KEY ] = array();
-				update_option( 'wppo_settings', $stored );
+				$updated = update_option( 'wppo_settings', $stored );
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
 					try {
 						Util::set_settings_cache( $stored );
@@ -466,7 +495,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 						unset( $e );
 					}
 				}
-				return true;
+				if ( $updated ) {
+					return true;
+				}
+				// update_option() returns false both on failure and when the
+				// stored value is unchanged: read back and treat "staged slot
+				// already empty" as success, like save_staged() does, so a
+				// failed DB write is never reported as a discard.
+				try {
+					// allowlist(settings-read-guard): deliberate direct read — verify the write above.
+					$verify = get_option( 'wppo_settings' );
+					if ( ! is_array( $verify )
+					|| empty( $verify['file_optimisation'][ self::STAGED_KEY ] ) ) {
+						return true;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				return false;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;

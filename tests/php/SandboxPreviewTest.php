@@ -84,6 +84,40 @@ class SandboxPreviewTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test preview gate rejects a wrong query value.
+	 */
+	public function test_preview_gate_rejects_wrong_query_value(): void {
+		$_GET[ Sandbox_Preview::QUERY_VAR ] = 'other';
+		$_GET[ Sandbox_Preview::NONCE_VAR ] = 'valid-nonce';
+		Functions\when( 'current_user_can' )->justReturn( true );
+		Functions\when( 'wp_verify_nonce' )->justReturn( 1 );
+		$this->assertFalse( Sandbox_Preview::is_preview_request() );
+	}
+
+	/**
+	 * Test preview gate rejects a missing nonce.
+	 */
+	public function test_preview_gate_rejects_missing_nonce(): void {
+		$_GET[ Sandbox_Preview::QUERY_VAR ] = 'assets';
+		unset( $_GET[ Sandbox_Preview::NONCE_VAR ] );
+		Functions\when( 'current_user_can' )->justReturn( true );
+		$this->assertFalse( Sandbox_Preview::is_preview_request() );
+	}
+
+	/**
+	 * Test save/promote/discard require manage_options and never write
+	 * without the capability.
+	 */
+	public function test_save_promote_discard_require_manage_options(): void {
+		Functions\when( 'current_user_can' )->justReturn( false );
+		Functions\expect( 'update_option' )->never();
+
+		$this->assertFalse( Sandbox_Preview::save_staged( array( 'delayJS' => true ) ) );
+		$this->assertFalse( Sandbox_Preview::promote_staged() );
+		$this->assertFalse( Sandbox_Preview::discard_staged() );
+	}
+
+	/**
 	 * Test effective overlay applies staged only in preview.
 	 */
 	public function test_effective_overlay_applies_staged_only_in_preview(): void {
@@ -132,9 +166,9 @@ class SandboxPreviewTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Test save promote discard round trip.
+	 * Test save_staged persists allowlisted keys only.
 	 */
-	public function test_save_promote_discard_round_trip(): void {
+	public function test_save_staged_persists_allowlisted_keys(): void {
 		$stored = array(
 			'file_optimisation' => array(
 				'delayJS'       => false,
@@ -145,7 +179,6 @@ class SandboxPreviewTest extends \PHPUnit\Framework\TestCase {
 		$saved = null;
 		Functions\when( 'update_option' )->alias(
 			static function ( $key, $value ) use ( &$saved ) {
-				// Snapshot writes use a different option key; only track wppo_settings.
 				if ( 'wppo_settings' === $key ) {
 					$saved = $value;
 				}
@@ -164,16 +197,109 @@ class SandboxPreviewTest extends \PHPUnit\Framework\TestCase {
 		);
 		$this->assertTrue( ! empty( $saved['file_optimisation']['sandboxStaged']['delayJS'] ) );
 		$this->assertArrayNotHasKey( 'evil', $saved['file_optimisation']['sandboxStaged'] );
+	}
 
-		// Promote copies staged into production and clears staged.
-		Functions\when( 'get_option' )->justReturn( $saved );
+	/**
+	 * Test promote_staged copies staged into production and clears staged.
+	 */
+	public function test_promote_staged_copies_to_production_and_clears(): void {
+		$saved = null;
+		Functions\when( 'get_option' )->justReturn(
+			array(
+				'file_optimisation' => array(
+					'delayJS'       => false,
+					'sandboxStaged' => array( 'delayJS' => true ),
+				),
+			)
+		);
+		Functions\when( 'update_option' )->alias(
+			static function ( $key, $value ) use ( &$saved ) {
+				// Snapshot writes use a different option key; only track wppo_settings.
+				if ( 'wppo_settings' === $key ) {
+					$saved = $value;
+				}
+				return true;
+			}
+		);
+		Functions\when( 'current_user_can' )->justReturn( true );
+
 		$this->assertTrue( Sandbox_Preview::promote_staged() );
 		$this->assertTrue( ! empty( $saved['file_optimisation']['delayJS'] ) );
+		$this->assertSame( array(), $saved['file_optimisation']['sandboxStaged'] );
+	}
 
-		// Discard clears staged.
-		Functions\when( 'get_option' )->justReturn( array( 'file_optimisation' => array( 'sandboxStaged' => array( 'delayJS' => true ) ) ) );
+	/**
+	 * Test discard_staged clears the staged slot.
+	 */
+	public function test_discard_staged_clears_staged_slot(): void {
+		$saved = null;
+		Functions\when( 'get_option' )->justReturn(
+			array(
+				'file_optimisation' => array(
+					'delayJS'       => true,
+					'sandboxStaged' => array( 'delayJS' => true ),
+				),
+			)
+		);
+		Functions\when( 'update_option' )->alias(
+			static function ( $key, $value ) use ( &$saved ) {
+				if ( 'wppo_settings' === $key ) {
+					$saved = $value;
+				}
+				return true;
+			}
+		);
+		Functions\when( 'current_user_can' )->justReturn( true );
+
 		$this->assertTrue( Sandbox_Preview::discard_staged() );
 		$this->assertSame( array(), $saved['file_optimisation']['sandboxStaged'] );
+		// Production values survive the discard.
+		$this->assertTrue( ! empty( $saved['file_optimisation']['delayJS'] ) );
+	}
+
+	/**
+	 * Test promote_staged reports a real write failure.
+	 */
+	public function test_promote_staged_reports_write_failure(): void {
+		$stored = array(
+			'file_optimisation' => array(
+				'delayJS'       => false,
+				'sandboxStaged' => array( 'delayJS' => true ),
+			),
+		);
+		Functions\when( 'get_option' )->justReturn( $stored );
+		Functions\when( 'update_option' )->justReturn( false );
+		Functions\when( 'current_user_can' )->justReturn( true );
+
+		$this->assertFalse( Sandbox_Preview::promote_staged() );
+	}
+
+	/**
+	 * Test discard_staged reports a real write failure.
+	 */
+	public function test_discard_staged_reports_write_failure(): void {
+		$stored = array(
+			'file_optimisation' => array(
+				'delayJS'       => true,
+				'sandboxStaged' => array( 'delayJS' => true ),
+			),
+		);
+		Functions\when( 'get_option' )->justReturn( $stored );
+		Functions\when( 'update_option' )->justReturn( false );
+		Functions\when( 'current_user_can' )->justReturn( true );
+
+		$this->assertFalse( Sandbox_Preview::discard_staged() );
+	}
+
+	/**
+	 * Test discard_staged with no stored row is an idempotent success.
+	 */
+	public function test_discard_staged_without_stored_row_is_idempotent_success(): void {
+		Functions\when( 'get_option' )->justReturn( false );
+		Functions\expect( 'update_option' )->never();
+		Functions\when( 'current_user_can' )->justReturn( true );
+
+		$this->assertTrue( Sandbox_Preview::discard_staged() );
 	}
 
 	/**
@@ -204,6 +330,22 @@ class SandboxPreviewTest extends \PHPUnit\Framework\TestCase {
 		$this->assertArrayHasKey( 'delayJS', $clean );
 		$this->assertArrayNotHasKey( 'minifyJS', $clean );
 		$this->assertArrayNotHasKey( 'minifyCSS', $clean );
+	}
+
+	/**
+	 * Test sanitize_staged normalizes string booleans fail-safe.
+	 */
+	public function test_sanitize_staged_normalizes_string_booleans(): void {
+		$clean = Sandbox_Preview::sanitize_staged(
+			array(
+				'delayJS'    => 'false',
+				'deferJS'    => 'true',
+				'combineCSS' => 'yes',
+			)
+		);
+		$this->assertFalse( $clean['delayJS'] );
+		$this->assertTrue( $clean['deferJS'] );
+		$this->assertTrue( $clean['combineCSS'] );
 	}
 
 	/**

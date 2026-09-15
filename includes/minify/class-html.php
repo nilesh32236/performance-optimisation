@@ -740,10 +740,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				// Sandbox preview staged excludes (issue #1163): staged
 				// excludeDelayJS lines also suppress delay in preview only.
 				// Util::process_urls() is array-safe (string or array payload),
-				// matching the constructor path for production excludes.
+				// matching the constructor path for production excludes. Parsed
+				// once per request (keyed by the raw staged value) instead of on
+				// every <script> tag, since safe_minify_js runs per tag.
 				if ( ! $skip_delay && ! $should_exclude && ! empty( $file_opt_for_preview['excludeDelayJS'] ) ) {
 					try {
-						$staged_lines = Util::process_urls( $file_opt_for_preview['excludeDelayJS'] );
+						static $staged_excludes_cache = null;
+						static $staged_excludes_key   = null;
+						$staged_raw = $file_opt_for_preview['excludeDelayJS'];
+						if ( is_string( $staged_raw ) ) {
+							$staged_key = $staged_raw;
+						} elseif ( is_array( $staged_raw ) ) {
+							$staged_key = function_exists( 'wp_json_encode' ) ? (string) wp_json_encode( $staged_raw ) : implode( "\0", array_map( 'strval', $staged_raw ) );
+						} else {
+							$staged_key = (string) $staged_raw;
+						}
+						if ( null === $staged_excludes_cache || $staged_key !== $staged_excludes_key ) {
+							$staged_excludes_cache = Util::process_urls( $staged_raw );
+							$staged_excludes_key   = $staged_key;
+						}
+						$staged_lines = $staged_excludes_cache;
 						foreach ( $staged_lines as $exclude ) {
 							$exclude = trim( (string) $exclude );
 							if ( '' === $exclude ) {

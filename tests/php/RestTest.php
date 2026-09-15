@@ -263,6 +263,163 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test save_sandbox_preview persists staged settings (issue #1163).
+	 */
+	public function test_save_sandbox_preview_persists_staged(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		Functions\when( 'current_user_can' )->justReturn( true );
+		Functions\when( 'get_option' )->justReturn( array( 'file_optimisation' => array( 'delayJS' => false ) ) );
+		Functions\when( 'update_option' )->justReturn( true );
+
+		$request = \Mockery::mock( \WP_REST_Request::class );
+		$request->shouldReceive( 'get_params' )->andReturn(
+			array(
+				'settings' => array(
+					'delayJS' => true,
+					'notAKey' => 'x',
+				),
+			)
+		);
+
+		$response = $this->rest->save_sandbox_preview( $request );
+		$data     = $response->get_data();
+		$this->assertTrue( $data['success'] );
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertTrue( ! empty( $data['data']['staged']['delayJS'] ) );
+		$this->assertArrayNotHasKey( 'notAKey', $data['data']['staged'] );
+	}
+
+	/**
+	 * Test save_sandbox_preview returns 500 on write failure (issue #1163).
+	 */
+	public function test_save_sandbox_preview_returns_500_on_write_failure(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		Functions\when( 'current_user_can' )->justReturn( true );
+		Functions\when( 'get_option' )->justReturn( array( 'file_optimisation' => array( 'delayJS' => false ) ) );
+		Functions\when( 'update_option' )->justReturn( false );
+
+		$request = \Mockery::mock( \WP_REST_Request::class );
+		$request->shouldReceive( 'get_params' )->andReturn(
+			array( 'settings' => array( 'delayJS' => true ) )
+		);
+
+		$response = $this->rest->save_sandbox_preview( $request );
+		$data     = $response->get_data();
+		$this->assertFalse( $data['success'] );
+		$this->assertSame( 500, $response->get_status() );
+	}
+
+	/**
+	 * Test promote_sandbox_preview promotes staged settings (issue #1163).
+	 */
+	public function test_promote_sandbox_preview_promotes_staged(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		Functions\when( 'current_user_can' )->justReturn( true );
+		Functions\when( 'get_option' )->justReturn(
+			array(
+				'file_optimisation' => array(
+					'delayJS'       => false,
+					'sandboxStaged' => array( 'delayJS' => true ),
+				),
+			)
+		);
+		Functions\when( 'update_option' )->justReturn( true );
+
+		$request  = \Mockery::mock( \WP_REST_Request::class );
+		$response = $this->rest->promote_sandbox_preview( $request );
+		$data     = $response->get_data();
+		$this->assertTrue( $data['success'] );
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertTrue( ! empty( $data['data']['file_optimisation']['delayJS'] ) );
+		$this->assertEmpty( $data['data']['file_optimisation']['sandboxStaged'] );
+	}
+
+	/**
+	 * Test promote_sandbox_preview returns 400 when nothing is staged (issue #1163).
+	 */
+	public function test_promote_sandbox_preview_returns_400_when_nothing_staged(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		Functions\when( 'current_user_can' )->justReturn( true );
+		Functions\when( 'get_option' )->justReturn( array( 'file_optimisation' => array( 'delayJS' => false ) ) );
+
+		$request  = \Mockery::mock( \WP_REST_Request::class );
+		$response = $this->rest->promote_sandbox_preview( $request );
+		$data     = $response->get_data();
+		$this->assertFalse( $data['success'] );
+		$this->assertSame( 400, $response->get_status() );
+	}
+
+	/**
+	 * Test promote_sandbox_preview returns 500 on write failure (issue #1163).
+	 */
+	public function test_promote_sandbox_preview_returns_500_on_write_failure(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		Functions\when( 'current_user_can' )->justReturn( true );
+		Functions\when( 'get_option' )->justReturn(
+			array(
+				'file_optimisation' => array(
+					'delayJS'       => false,
+					'sandboxStaged' => array( 'delayJS' => true ),
+				),
+			)
+		);
+		Functions\when( 'update_option' )->justReturn( false );
+
+		$request  = \Mockery::mock( \WP_REST_Request::class );
+		$response = $this->rest->promote_sandbox_preview( $request );
+		$data     = $response->get_data();
+		$this->assertFalse( $data['success'] );
+		$this->assertSame( 500, $response->get_status() );
+	}
+
+	/**
+	 * Test discard_sandbox_preview clears staged settings (issue #1163).
+	 */
+	public function test_discard_sandbox_preview_clears_staged(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		Functions\when( 'current_user_can' )->justReturn( true );
+		Functions\when( 'get_option' )->justReturn(
+			array(
+				'file_optimisation' => array(
+					'delayJS'       => true,
+					'sandboxStaged' => array( 'delayJS' => true ),
+				),
+			)
+		);
+		Functions\when( 'update_option' )->justReturn( true );
+
+		$request  = \Mockery::mock( \WP_REST_Request::class );
+		$response = $this->rest->discard_sandbox_preview( $request );
+		$data     = $response->get_data();
+		$this->assertTrue( $data['success'] );
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertSame( array(), $data['data']['staged'] );
+	}
+
+	/**
+	 * Test discard_sandbox_preview returns 500 on write failure (issue #1163).
+	 */
+	public function test_discard_sandbox_preview_returns_500_on_write_failure(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		Functions\when( 'current_user_can' )->justReturn( true );
+		Functions\when( 'get_option' )->justReturn(
+			array(
+				'file_optimisation' => array(
+					'delayJS'       => true,
+					'sandboxStaged' => array( 'delayJS' => true ),
+				),
+			)
+		);
+		Functions\when( 'update_option' )->justReturn( false );
+
+		$request  = \Mockery::mock( \WP_REST_Request::class );
+		$response = $this->rest->discard_sandbox_preview( $request );
+		$data     = $response->get_data();
+		$this->assertFalse( $data['success'] );
+		$this->assertSame( 500, $response->get_status() );
+	}
+
+	/**
 	 * Test that the Woo cache self-test endpoint returns the read-only
 	 * Util::woo_cache_self_test() result (issue #1020).
 	 */

@@ -719,6 +719,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// visitors (is_preview_request() false) keep production markup
 			// via the per-tag guards below.
 			$is_sandbox_preview = self::is_sandbox_preview_active();
+			// Staged defer for the per-page kill-switch registration below.
+			$staged_defer_js = false;
 			if ( $is_sandbox_preview && class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_staged_settings' ) ) {
 				try {
 					$staged = Sandbox_Preview::get_staged_settings();
@@ -726,7 +728,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						$has_delay_js = true;
 					}
 					if ( ! empty( $staged['deferJS'] ) ) {
-						$has_defer_js = true;
+						$has_defer_js    = true;
+						$staged_defer_js = true;
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
@@ -746,7 +749,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			// Delay JS: the script_loader_tag filter performs the wppo-src/type rewriting
 			// on every supported version, so it is always registered when delay JS is on.
-			if ( $has_delay_js || ! empty( $this->options['file_optimisation']['deferJS'] ) ) {
+			// Sandbox preview (issue #1163): the per-page kill-switch hook sets
+			// both delay_disabled_for_page and defer_disabled_for_page, so the
+			// second disjunct also honors staged defer — otherwise a
+			// staged-defer-only preview would defer even on kill-switched pages.
+			if ( $has_delay_js || ! empty( $this->options['file_optimisation']['deferJS'] ) || $staged_defer_js ) {
 				add_action( 'wp', array( $this, 'apply_per_page_delay_config' ) );
 			}
 			if ( $has_delay_js ) {
@@ -3530,6 +3537,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return $tag;
 			}
 			if ( $this->defer_disabled_for_page || self::is_defer_disabled_for_page() ) {
+				return $tag;
+			}
+			// Sandbox preview (issue #1163): the legacy path is registered on the
+			// production flag, so gate on the effective (production + staged)
+			// deferJS flag like the native path does — a staged deferJS=off must
+			// disable defer in preview instead of deferring every tag.
+			$file_opt_for_legacy = self::get_effective_file_optimisation( $this->options['file_optimisation'] ?? array() );
+			if ( empty( $file_opt_for_legacy['deferJS'] ) ) {
 				return $tag;
 			}
 

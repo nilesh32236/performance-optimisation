@@ -1204,6 +1204,138 @@ describe( 'FileOptimization Component', () => {
 		} );
 	} );
 
+	it( 'discards sandbox preview and clears the preview link', async () => {
+		apiCall
+			.mockResolvedValueOnce( {
+				success: true,
+				data: {
+					staged: { delayJS: true },
+					has_staged: true,
+					preview_url:
+						'http://example.com/?wppo_preview=assets&_wppo_preview_nonce=abc',
+				},
+			} )
+			.mockResolvedValueOnce( { success: true, data: { staged: {} } } );
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+		fireEvent.click( screen.getByRole( 'tab', { name: /Scripts/i } ) );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( /A staged preview exists/i )
+			).toBeInTheDocument();
+		} );
+		expect(
+			screen.getByRole( 'link', { name: /Open admin preview/i } )
+		).toBeInTheDocument();
+
+		await act( async () => {
+			fireEvent.click(
+				screen.getByRole( 'button', { name: /Discard/i } )
+			);
+		} );
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith( 'sandbox_discard', {} );
+		} );
+		// The stale preview link (nonce + staged values are gone) must be
+		// removed, along with the staged-exists note.
+		await waitFor( () => {
+			expect(
+				screen.queryByRole( 'link', { name: /Open admin preview/i } )
+			).not.toBeInTheDocument();
+		} );
+		expect(
+			screen.queryByText( /A staged preview exists/i )
+		).not.toBeInTheDocument();
+		await waitFor( () => {
+			expect(
+				screen.getByText( /Preview discarded/i )
+			).toBeInTheDocument();
+		} );
+	} );
+
+	it( 'stages preview-relevant toggles delayJSExternalOnly and minifyInlineJS', async () => {
+		apiCall
+			.mockResolvedValueOnce( {
+				success: true,
+				data: { staged: {}, has_staged: false, preview_url: '' },
+			} )
+			.mockResolvedValueOnce( {
+				success: true,
+				data: { staged: { delayJS: true } },
+			} )
+			.mockResolvedValueOnce( {
+				success: true,
+				data: { staged: {}, preview_url: '' },
+			} );
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+		fireEvent.click( screen.getByRole( 'tab', { name: /Scripts/i } ) );
+		await act( async () => {
+			fireEvent.click(
+				screen.getByRole( 'button', { name: /Stage preview/i } )
+			);
+		} );
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith(
+				'sandbox_save',
+				expect.objectContaining( {
+					settings: expect.objectContaining( {
+						delayJSExternalOnly: expect.any( Boolean ),
+						minifyInlineJS: expect.any( Boolean ),
+					} ),
+				} )
+			);
+		} );
+	} );
+
+	it( 'shows an error banner when staging fails', async () => {
+		apiCall
+			.mockResolvedValueOnce( {
+				success: true,
+				data: { staged: {}, has_staged: false, preview_url: '' },
+			} )
+			.mockRejectedValueOnce( new Error( 'nope' ) );
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+		fireEvent.click( screen.getByRole( 'tab', { name: /Scripts/i } ) );
+		await act( async () => {
+			fireEvent.click(
+				screen.getByRole( 'button', { name: /Stage preview/i } )
+			);
+		} );
+		await waitFor( () => {
+			expect(
+				screen.getByText( /Could not stage the preview/i )
+			).toBeInTheDocument();
+		} );
+	} );
+
+	it( 'shows a readable error when promote fails with a non-string payload', async () => {
+		apiCall
+			.mockResolvedValueOnce( {
+				success: true,
+				data: { staged: {}, has_staged: false, preview_url: '' },
+			} )
+			.mockResolvedValueOnce( {
+				success: false,
+				data: { errors: [ 'db failed' ] },
+				message: '',
+			} );
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+		fireEvent.click( screen.getByRole( 'tab', { name: /Scripts/i } ) );
+		await act( async () => {
+			fireEvent.click(
+				screen.getByRole( 'button', { name: /^Promote$/i } )
+			);
+		} );
+		await waitFor( () => {
+			expect(
+				screen.getByText( /Could not promote/i )
+			).toBeInTheDocument();
+		} );
+		// The object payload must never leak into the banner text.
+		expect( document.body.textContent ).not.toMatch( /\[object Object\]/ );
+	} );
+
 	it( 'hydrates sandbox status when the Scripts tab opens', async () => {
 		apiCall.mockResolvedValueOnce( {
 			success: true,
