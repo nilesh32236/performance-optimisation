@@ -798,11 +798,7 @@ const PluginSetting = ( { options } ) => {
 								type="button"
 								className="wppo-button wppo-button--secondary"
 								onClick={ () => loadActivityLog( 1 ) }
-								aria-describedby={
-									! logLoaded
-										? 'wppo-activity-log-desc'
-										: undefined
-								}
+									aria-describedby="wppo-activity-log-desc"
 								isLoading={ logLoading }
 								loadingLabel={ __(
 									'Loading log…',
