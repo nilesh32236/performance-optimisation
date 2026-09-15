@@ -7,7 +7,7 @@ import {
 	useCallback,
 } from '@wordpress/element';
 import { handleChange } from '../lib/util';
-import { apiCall } from '../lib/apiRequest';
+import { apiCall, isValidScanUrl, runPerformanceScan } from '../lib/apiRequest';
 import { modeLabel } from '../lib/litespeed';
 import useNotice from '../lib/useNotice';
 import useUnsavedChanges from '../lib/useUnsavedChanges';
@@ -281,14 +281,47 @@ const FileOptimization = ( {
 	// Server-side scans run unauthenticated, so they can never carry the
 	// admin preview session: strip the preview query args and scan the
 	// plain production URL instead of implying a staged measurement.
+	//
+	// Only absolute http(s) URLs are accepted: relative paths, protocol-
+	// relative values and non-http(s) schemes (javascript:, data:, …)
+	// return '' so callers can abort instead of forwarding a tampered
+	// server-provided preview_url to the resource-intensive scan endpoint.
+	// Server-side host allowlisting + rate limiting remains authoritative.
 	const stripPreviewParams = ( url ) => {
+		if ( ! url || typeof url !== 'string' ) {
+			return '';
+		}
 		try {
-			const parsed = new URL( url, window.location.origin );
+			const parsed = new URL( url );
+			if ( 'http:' !== parsed.protocol && 'https:' !== parsed.protocol ) {
+				return '';
+			}
 			parsed.searchParams.delete( 'wppo_preview' );
 			parsed.searchParams.delete( '_wppo_preview_nonce' );
 			return parsed.toString();
 		} catch {
-			return url;
+			return '';
+		}
+	};
+	/**
+	 * Whether a URL is safe to render as an external link href (http(s) only).
+	 *
+	 * Mirrors the isHttpUrl gate in LlmsPanel: a tampered server-provided
+	 * preview_url such as javascript:alert(1) must never reach <a href>.
+	 *
+	 * @since NEXT
+	 * @param {string} url Raw URL.
+	 * @return {boolean} True when the URL parses as http(s).
+	 */
+	const isSafePreviewUrl = ( url ) => {
+		if ( ! url || typeof url !== 'string' ) {
+			return false;
+		}
+		try {
+			const parsed = new URL( url );
+			return 'http:' === parsed.protocol || 'https:' === parsed.protocol;
+		} catch {
+			return false;
 		}
 	};
 	const handleSandboxSave = async () => {
@@ -429,11 +462,26 @@ const FileOptimization = ( {
 		if ( ! sandboxPreviewUrl ) {
 			return;
 		}
+		// Route through the shared validated wrapper: isValidScanUrl enforces
+		// an absolute same-origin http(s) URL before the resource-intensive
+		// performance_scan endpoint is hit. A tampered preview_url (or a
+		// javascript:/data: value) is rejected client-side instead of being
+		// forwarded; server-side allowlisting + rate limiting stays
+		// authoritative.
+		const scanUrl = stripPreviewParams( sandboxPreviewUrl );
+		if ( ! isValidScanUrl( scanUrl ) ) {
+			notifySandbox( {
+				type: 'error',
+				message: __(
+					'Perf test blocked: the preview URL is not a valid same-origin http(s) URL.',
+					'performance-optimisation'
+				),
+			} );
+			return;
+		}
 		setSandboxBusy( true );
 		try {
-			const res = await apiCall( 'performance_scan', {
-				url: stripPreviewParams( sandboxPreviewUrl ),
-			} );
+			const res = await runPerformanceScan( scanUrl );
 			if ( res && res.success ) {
 				notifySandbox( {
 					type: 'success',
@@ -1858,19 +1906,32 @@ const FileOptimization = ( {
 												'performance-optimisation'
 											) }
 										</button>
-										{ sandboxPreviewUrl && (
-											<a
-												className="button button-secondary"
-												href={ sandboxPreviewUrl }
-												target="_blank"
-												rel="noreferrer"
-											>
-												{ __(
-													'Open admin preview',
-													'performance-optimisation'
-												) }
-											</a>
-										) }
+										{ sandboxPreviewUrl &&
+											( isSafePreviewUrl(
+												sandboxPreviewUrl
+											) ? (
+												<a
+													className="button button-secondary"
+													href={ sandboxPreviewUrl }
+													target="_blank"
+													rel="noopener noreferrer"
+												>
+													{ __(
+														'Open admin preview',
+														'performance-optimisation'
+													) }
+												</a>
+											) : (
+												<span
+													className="button button-secondary"
+													aria-disabled="true"
+												>
+													{ __(
+														'Open admin preview',
+														'performance-optimisation'
+													) }
+												</span>
+											) ) }
 										<button
 											type="button"
 											className="button button-secondary"

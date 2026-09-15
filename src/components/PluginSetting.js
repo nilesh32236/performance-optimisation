@@ -83,6 +83,19 @@ const MAX_IMPORT_TOP_KEYS = ALLOWED_IMPORT_KEYS.length;
  */
 const MAX_IMPORT_NESTED_KEYS = 1000;
 
+/**
+ * Key names that must never be accepted in imported settings or copied
+ * during secret redaction. Assigning to `__proto__` on a plain object
+ * mutates its prototype (prototype pollution); `constructor`/`prototype`
+ * keys are the companion gadget path.
+ *
+ * @since NEXT
+ * @param {string} key Raw object key.
+ * @return {boolean} True when the key is a pollution vector.
+ */
+const isPollutionKey = ( key ) =>
+	key === '__proto__' || key === 'constructor' || key === 'prototype';
+
 const validateImportData = ( data ) => {
 	if ( ! data || typeof data !== 'object' || Array.isArray( data ) ) {
 		return false;
@@ -96,6 +109,7 @@ const validateImportData = ( data ) => {
 	}
 	return keys.every( ( key ) => {
 		if (
+			isPollutionKey( key ) ||
 			! ALLOWED_IMPORT_KEYS.includes( key ) ||
 			typeof data[ key ] !== 'object' ||
 			data[ key ] === null ||
@@ -135,6 +149,11 @@ const redactSecrets = ( value ) => {
 	if ( value && typeof value === 'object' ) {
 		const out = {};
 		Object.entries( value ).forEach( ( [ key, val ] ) => {
+			// Never copy pollution vectors: out['__proto__'] = … would
+			// mutate the clone's prototype instead of creating a key.
+			if ( isPollutionKey( key ) ) {
+				return;
+			}
 			if (
 				SECRET_KEY_PATTERN.test( key ) &&
 				typeof val === 'string' &&
@@ -195,8 +214,10 @@ const isValidImportValue = ( value, depth ) => {
 		if ( keys.length > MAX_IMPORT_NESTED_KEYS ) {
 			return false;
 		}
-		return keys.every( ( key ) =>
-			isValidImportValue( value[ key ], depth + 1 )
+		return keys.every(
+			( key ) =>
+				! isPollutionKey( key ) &&
+				isValidImportValue( value[ key ], depth + 1 )
 		);
 	}
 	return false;
@@ -1345,6 +1366,7 @@ export {
 	validateImportData,
 	redactSecrets,
 	isValidImportValue,
+	isPollutionKey,
 	MAX_IMPORT_BYTES,
 	MAX_IMPORT_DEPTH,
 	MAX_IMPORT_TOP_KEYS,
