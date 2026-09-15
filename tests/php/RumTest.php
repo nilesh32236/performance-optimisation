@@ -590,10 +590,10 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 		$today = gmdate( 'Y-m-d' );
 		$this->assertArrayHasKey( 'lcpSeg', $data[ $today ]['/seg'] );
 		$seg = $data[ $today ]['/seg']['lcpSeg'];
-		// Template is lowercased + allowlisted; device is allowlisted.
-		$this->assertArrayHasKey( 'mobile|single', $seg );
-		$this->assertSame( 1, $seg['mobile|single']['n'] );
-		$this->assertSame( array( 1800.0 ), $seg['mobile|single']['samples'] );
+		// Template is lowercased + allowlisted; device is allowlisted; connection defaults to unknown.
+		$this->assertArrayHasKey( 'mobile|single|unknown', $seg );
+		$this->assertSame( 1, $seg['mobile|single|unknown']['n'] );
+		$this->assertSame( array( 1800.0 ), $seg['mobile|single|unknown']['samples'] );
 	}
 
 	/**
@@ -621,7 +621,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 		$this->assertTrue( $result['ok'] );
 		$data  = RUM::get_data();
 		$today = gmdate( 'Y-m-d' );
-		$this->assertArrayHasKey( 'unknown|unknown', $data[ $today ]['/seg']['lcpSeg'] );
+		$this->assertArrayHasKey( 'unknown|unknown|unknown', $data[ $today ]['/seg']['lcpSeg'] );
 	}
 
 	/**
@@ -921,5 +921,102 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 			'https://example.com/wp-content/uploads/post-meta.jpg',
 			RUM::get_stored_pagespeed_lcp_url()
 		);
+	}
+
+	/**
+	 * Test that a beacon connection is aggregated into a 3-part segment key.
+	 *
+	 * @since NEXT
+	 */
+	public function test_collect_aggregates_connection_segment(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		Util::clear_settings_cache();
+		$_SERVER['REMOTE_ADDR'] = '203.0.113.5';
+
+		$result = RUM::collect(
+			array(
+				'token'      => $this->valid_token( '/seg' ),
+				'path'       => '/seg/',
+				'lcp'        => 1800,
+				'device'     => 'mobile',
+				'template'   => 'single',
+				'connection' => '4G',
+			)
+		);
+
+		$this->assertTrue( $result['ok'] );
+		$data  = RUM::get_data();
+		$today = gmdate( 'Y-m-d' );
+		$this->assertArrayHasKey( 'mobile|single|4g', $data[ $today ]['/seg']['lcpSeg'] );
+		$this->assertSame( '4g', $data[ $today ]['/seg']['lcpSeg']['mobile|single|4g']['connection'] );
+	}
+
+	/**
+	 * Test that an invalid connection buckets as unknown without rejecting the sample.
+	 *
+	 * @since NEXT
+	 */
+	public function test_collect_falls_back_to_unknown_connection(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		Util::clear_settings_cache();
+		$_SERVER['REMOTE_ADDR'] = '203.0.113.5';
+
+		$result = RUM::collect(
+			array(
+				'token'      => $this->valid_token( '/seg' ),
+				'path'       => '/seg/',
+				'lcp'        => 1800,
+				'connection' => '5g',
+			)
+		);
+
+		$this->assertTrue( $result['ok'] );
+		$data  = RUM::get_data();
+		$today = gmdate( 'Y-m-d' );
+		$this->assertArrayHasKey( 'unknown|unknown|unknown', $data[ $today ]['/seg']['lcpSeg'] );
+	}
+
+	/**
+	 * Test that the segmented p75 reader exposes the connection dimension.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_field_lcp_p75_by_segment_exposes_connection(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit'  => array( 'rum_enabled' => true ),
+			'image_optimisation' => array( 'fieldLcpMinSamples' => 20 ),
+		);
+		Util::clear_settings_cache();
+		$today                        = gmdate( 'Y-m-d' );
+		$this->options[ RUM::OPTION ] = array(
+			$today => array(
+				'/shop' => array(
+					'lcpSeg' => array(
+						'mobile|single|4g' => array(
+							'device'     => 'mobile',
+							'template'   => 'single',
+							'connection' => '4g',
+							'n'          => 20,
+							'sum'        => 60000.0,
+							'min'        => 3000.0,
+							'max'        => 3000.0,
+							'samples'    => array_fill( 0, 20, 3000.0 ),
+						),
+					),
+				),
+			),
+		);
+
+		$rows = RUM::get_field_lcp_p75_by_segment();
+		$this->assertCount( 1, $rows );
+		$this->assertSame( '4g', $rows[0]['connection'] );
+		$this->assertSame( 3000.0, $rows[0]['p75'] );
 	}
 }

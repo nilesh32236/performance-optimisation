@@ -1,5 +1,7 @@
 import {
 	classifyDeviceWidth,
+	classifyConnectionType,
+	RUM_ALLOWED_CONNECTIONS,
 	sanitizeRumValues,
 	RUM_MAX_METRIC_MS,
 } from '../rum';
@@ -44,6 +46,33 @@ describe( 'classifyDeviceWidth', () => {
 	it( 'returns null when both screen and viewport widths are invalid', () => {
 		expect( classifyDeviceWidth( NaN, NaN ) ).toBe( null );
 		expect( classifyDeviceWidth( -1, -1 ) ).toBe( null );
+	} );
+} );
+
+describe( 'classifyConnectionType', () => {
+	it( 'passes the allowlisted effective connection types through', () => {
+		expect( RUM_ALLOWED_CONNECTIONS ).toEqual( [
+			'slow-2g',
+			'2g',
+			'3g',
+			'4g',
+		] );
+		expect( classifyConnectionType( '4g' ) ).toBe( '4g' );
+		expect( classifyConnectionType( '3g' ) ).toBe( '3g' );
+		expect( classifyConnectionType( '2g' ) ).toBe( '2g' );
+		expect( classifyConnectionType( 'slow-2g' ) ).toBe( 'slow-2g' );
+	} );
+
+	it( 'normalizes case and surrounding whitespace', () => {
+		expect( classifyConnectionType( ' 4G ' ) ).toBe( '4g' );
+	} );
+
+	it( 'omits unknown, empty and non-string values (fail-open)', () => {
+		expect( classifyConnectionType( '5g' ) ).toBe( null );
+		expect( classifyConnectionType( '' ) ).toBe( null );
+		expect( classifyConnectionType( null ) ).toBe( null );
+		expect( classifyConnectionType( undefined ) ).toBe( null );
+		expect( classifyConnectionType( 4 ) ).toBe( null );
 	} );
 } );
 
