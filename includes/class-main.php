@@ -5868,6 +5868,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					$mode      = 'prefetch';
 					$eagerness = 'conservative';
 				}
+				$eagerness           = $this->maybe_cap_speculation_eagerness( $eagerness );
 				$config['mode']      = $mode;
 				$config['eagerness'] = $eagerness;
 				return $config;
@@ -6131,12 +6132,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// cron load: opportunistic reads with fail-open empty). The
 			// combined RUM-weighted fill never exceeds the limit so home +
 			// explicit high-value URLs keep their budget.
-			$top_limit  = $this->get_speculation_top_urls_limit();
-			$model_urls = $this->get_model_weighted_speculation_urls( $top_limit );
-			foreach ( $model_urls as $model_url ) {
-				$candidates[] = $model_url;
+			$top_limit = $this->get_speculation_top_urls_limit();
+			// Over-fetch the model so a hit duplicating home/high-value URLs
+			// does not waste a fill slot (final dedupe would otherwise drop
+			// it and under-fill). Only genuinely new URLs count toward the
+			// combined RUM-weighted budget.
+			$model_urls = $this->get_model_weighted_speculation_urls( $top_limit + count( $candidates ) );
+			$seen       = array();
+			foreach ( $candidates as $prior ) {
+				if ( ! is_string( $prior ) ) {
+					continue;
+				}
+				$clean_prior = function_exists( 'esc_url_raw' ) ? esc_url_raw( trim( $prior ) ) : trim( $prior );
+				if ( '' !== $clean_prior && ! in_array( $clean_prior, $seen, true ) ) {
+					$seen[] = $clean_prior;
+				}
 			}
-			$remaining = $top_limit - count( $model_urls );
+			$kept = 0;
+			foreach ( $model_urls as $model_url ) {
+				if ( in_array( $model_url, $seen, true ) ) {
+					continue;
+				}
+				$seen[]       = $model_url;
+				$candidates[] = $model_url;
+				++$kept;
+				if ( $kept >= $top_limit ) {
+					break;
+				}
+			}
+			$remaining = $top_limit - $kept;
 			if ( $remaining > 0 ) {
 				foreach ( $this->get_rum_top_urls( $remaining ) as $rum_url ) {
 					$candidates[] = $rum_url;
