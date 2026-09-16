@@ -59,6 +59,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 		const SCRIPT_HANDLE = 'wppo-bfcache';
 
 		/**
+		 * Inline invalidation script staged by enqueue_scripts().
+		 *
+		 * Held in a static property (instead of a closure use-clause) so
+		 * the footer printer below is a named, remove_action()-able,
+		 * inspectable, and unit-testable method.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		private static string $invalidation_script = '';
+
+		/**
 		 * Whether bfcache handling is enabled.
 		 *
 		 * Reads `wppo_settings[bfcache][enabled]` (false default) and applies
@@ -380,15 +392,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 				wp_json_encode( $token, $json_flags )
 			);
 
+			self::$invalidation_script = $js;
+
 			add_action(
 				'wp_footer',
-				static function () use ( $js ) {
-					wp_print_inline_script_tag( $js, array( 'id' => 'wppo-bfcache-invalidation' ) );
-				},
+				array( self::class, 'print_invalidation_script' ),
 				20
 			);
 			// Also print in wp_head for early invalidation on HTTP cache restore (alternative to footer).
 			// The footer hook above is sufficient for bfcache; HTTP cache immediate check also runs there before DOM ready.
+		}
+
+		/**
+		 * Print the staged bfcache invalidation script.
+		 *
+		 * Named wp_footer callback (instead of an anonymous closure) so it
+		 * can be removed via remove_action(), inspected via has_action(),
+		 * and unit-tested directly. No-op when no script was staged.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function print_invalidation_script(): void {
+			if ( '' === self::$invalidation_script ) {
+				return;
+			}
+			wp_print_inline_script_tag( self::$invalidation_script, array( 'id' => 'wppo-bfcache-invalidation' ) );
 		}
 
 		/**

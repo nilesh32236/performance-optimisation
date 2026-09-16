@@ -1365,6 +1365,15 @@ window.addEventListener( 'beforeunload', teardownLazyload );
  * The guard disconnects itself after firing (or on teardown) and never
  * re-arms — a re-added bundle copy runs its own module evaluation.
  *
+ * Cost control: the watched element is this bundle's own script
+ * (document.currentScript with an id/filename-pinned fallback, so an
+ * unrelated optimizer script can neither trigger nor defeat cleanup) and
+ * observation is scoped to the script's parent with childList only —
+ * detaching this element is a direct-child mutation of its parent, so no
+ * page-lifetime subtree observation is needed. A move to a new parent
+ * re-targets the observer; a replacement by a live copy skips teardown so
+ * the new copy's globals survive.
+ *
  * @since NEXT
  */
 const armScriptRemovalGuard = () => {
@@ -1377,7 +1386,15 @@ const armScriptRemovalGuard = () => {
 	}
 	let watched = null;
 	try {
-		watched = document.querySelector( 'script[src*="lazyload"]' );
+		const current = document.currentScript;
+		if ( current && 'SCRIPT' === current.tagName ) {
+			watched = current;
+		}
+		if ( ! watched ) {
+			watched =
+				document.querySelector( 'script#wppo-lazyload-js' ) ||
+				document.querySelector( 'script[src*="build/lazyload.js"]' );
+		}
 	} catch {
 		return;
 	}
@@ -1385,17 +1402,58 @@ const armScriptRemovalGuard = () => {
 		return;
 	}
 	const target = watched;
+	// Whether a *different* live copy of this bundle is still connected
+	// (the script was replaced rather than removed). Attribute-free id /
+	// filename matching avoids selector-injection from the src value.
+	const hasLiveReplacement = () => {
+		try {
+			const scripts = document.querySelectorAll(
+				'script#wppo-lazyload-js, script[src*="build/lazyload.js"]'
+			);
+			for ( const el of scripts ) {
+				if ( el !== target && el.isConnected ) {
+					return true;
+				}
+			}
+		} catch {
+			return false;
+		}
+		return false;
+	};
 	scriptRemovalObserver = new MutationObserver( () => {
-		// Still in the DOM (e.g. moved, or an unrelated mutation) — keep watching.
+		// Still in the DOM (e.g. moved to a new parent) — keep watching,
+		// re-targeting the new parent so a later removal is still observed.
 		if ( target.isConnected ) {
+			const parent = target.parentNode;
+			if ( parent && scriptRemovalObserver ) {
+				try {
+					scriptRemovalObserver.disconnect();
+					scriptRemovalObserver.observe( parent, {
+						childList: true,
+					} );
+				} catch {
+					// Keep the existing observation on failure.
+				}
+			}
+			return;
+		}
+		// Replaced with a live copy — the new copy runs its own module
+		// evaluation (arming its own guard), so leave its globals alone.
+		// One-way either way: disconnect after the decision.
+		if ( hasLiveReplacement() ) {
+			scriptRemovalObserver.disconnect();
+			scriptRemovalObserver = null;
 			return;
 		}
 		teardownLazyload();
 	} );
+	const parent = target.parentNode;
+	if ( ! parent ) {
+		return;
+	}
 	try {
-		scriptRemovalObserver.observe( document.documentElement, {
+		scriptRemovalObserver.observe( parent, {
 			childList: true,
-			subtree: true,
 		} );
 	} catch {
 		scriptRemovalObserver.disconnect();

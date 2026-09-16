@@ -287,10 +287,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			$asset_file = WPPO_PLUGIN_PATH . 'build/esi.asset.php';
 			$deps       = array( 'wp-i18n' );
 			$version    = WPPO_VERSION;
-			if ( file_exists( $asset_file ) ) {
-				$asset   = include $asset_file; // phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable
-				$deps    = isset( $asset['dependencies'] ) && is_array( $asset['dependencies'] ) ? $asset['dependencies'] : array( 'wp-i18n' );
-				$version = isset( $asset['version'] ) ? $asset['version'] : WPPO_VERSION;
+			// Memoize the asset lookup: this runs on every frontend request on
+			// LiteSpeed sites, so stat + include the artifact at most once per
+			// request instead of paying a second per-page stat.
+			static $asset_cache = null;
+			if ( null === $asset_cache ) {
+				$asset_cache = file_exists( $asset_file ) ? include $asset_file : false; // phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable
+			}
+			if ( false !== $asset_cache ) {
+				$asset = $asset_cache;
+				if ( is_array( $asset ) ) {
+					// Trust-but-verify the build artifact: entries must be
+					// non-empty strings (a tampered partial artifact must not
+					// widen the dependency trust surface), with a wp-i18n
+					// fallback since src/esi.js needs it for translated labels.
+					$raw_deps = isset( $asset['dependencies'] ) && is_array( $asset['dependencies'] ) ? $asset['dependencies'] : array();
+					$clean    = array();
+					foreach ( $raw_deps as $dep ) {
+						if ( ! is_scalar( $dep ) ) {
+							continue;
+						}
+						$dep = trim( (string) $dep );
+						if ( '' !== $dep ) {
+							$clean[] = $dep;
+						}
+					}
+					$clean = array_values( array_unique( $clean ) );
+					$deps  = ! empty( $clean ) ? $clean : array( 'wp-i18n' );
+					if ( isset( $asset['version'] ) ) {
+						if ( is_string( $asset['version'] ) && '' !== $asset['version'] ) {
+							$version = $asset['version'];
+						} elseif ( is_int( $asset['version'] ) || is_float( $asset['version'] ) ) {
+							$version = (string) $asset['version'];
+						}
+					}
+				}
 			} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 				// Visible failure signal for partial deploys: src/esi.js
 				// imports @wordpress/i18n for translated aria-labels, so a
