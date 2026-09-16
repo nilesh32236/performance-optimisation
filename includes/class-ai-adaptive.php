@@ -988,6 +988,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * @param array|null $trends Optional pre-loaded trends aggregate.
 		 * @return array
 		 * @since 2.0.0
+		 * @since NEXT Global-average eagerness upgrades are gated on total LCP
+		 *             samples reaching field_lcp_min_samples (suggest-only below).
 		 */
 		private static function heuristic_learn( ?array $rum = null, ?array $trends = null ): array {
 			if ( null === $rum ) {
@@ -1053,9 +1055,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			$exclude_css = self::get_disabled_assets( '_wppo_disabled_styles' );
 
 			// Eagerness heuristic: conservative by default, moderate if avg LCP > 2500 or high TTFB.
-			$eagerness   = 'conservative';
-			$avg_lcp_all = 0;
-			$cnt         = 0;
+			// Suggest-only gating (issue #1200, @since NEXT): the global-average
+			// ladder below only upgrades when total LCP samples reach the shared
+			// field-LCP minimum (ai_adaptive.field_lcp_min_samples, default 20).
+			// Undersampled RUM stays conservative so no eagerness override is
+			// emitted without qualified field data; the segmented upgrade below
+			// may still raise a qualified conservative baseline.
+			$eagerness     = 'conservative';
+			$avg_lcp_all   = 0;
+			$cnt           = 0;
+			$total_lcp_n   = 0;
+			$field_lcp_min = self::field_lcp_min_samples();
 			foreach ( $rum as $date => $paths ) {
 				if ( ! is_array( $paths ) ) {
 					continue;
@@ -1064,10 +1074,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					if ( isset( $metrics['lcp']['sum'], $metrics['lcp']['n'] ) && $metrics['lcp']['n'] > 0 ) {
 						$avg_lcp_all += (float) $metrics['lcp']['sum'] / (int) $metrics['lcp']['n'];
 						++$cnt;
+						$total_lcp_n += (int) $metrics['lcp']['n'];
 					}
 				}
 			}
-			if ( $cnt > 0 ) {
+			if ( $cnt > 0 && $total_lcp_n >= $field_lcp_min ) {
 				$avg_lcp_all /= $cnt;
 				if ( $avg_lcp_all > 3500 ) {
 					$eagerness = 'eager';
@@ -1076,19 +1087,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				}
 			}
 
-			// Field-data-driven tuning (issues #986, #1143): route segmented
+			// Field-data-driven tuning (issues #986, #1143, #1200): route segmented
 			// device × template × connection p75 into the eagerness decision.
-			// Below the minimum threshold the global-average path above is
-			// used unchanged with no eagerness upgrade; at/above threshold
-			// the slowest-p75 segment (slowest device/connection/template
-			// wins, so segment-skewed RUM cannot misfire as global advice)
-			// may upgrade eagerness via the same ladder (never downgrades
-			// the global result). Fail-open: RUM failures keep the global path.
+			// Below the minimum threshold no eagerness upgrade is emitted
+			// (the global-average path above is already gated on total samples);
+			// at/above threshold the slowest-p75 segment (slowest
+			// device/connection/template wins, so segment-skewed RUM cannot
+			// misfire as global advice) may upgrade eagerness via the same
+			// ladder (never downgrades the global result). Fail-open: RUM
+			// failures keep the global path.
 			$field_lcp_provisional = true;
 			$field_lcp_segment     = null;
 			$field_lcp_p75         = 0.0;
 			$field_lcp_samples     = 0;
-			$field_lcp_min         = self::field_lcp_min_samples();
 			// Upgrade-only: when the global-average path already sits at the top
 			// of the eagerness ladder (`eager`), the segmented lookup can never
 			// raise it, so skip the full RUM option scan entirely.

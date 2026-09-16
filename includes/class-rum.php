@@ -1534,6 +1534,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * otherwise so callers fall through to the PageSpeed heuristic.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Sample gate unified via get_field_lcp_min_samples() so
+		 *             `ai_adaptive.field_lcp_min_samples` is honoured.
 		 * @param string|null $path Page path (e.g. "/about/"). Defaults to the current request path.
 		 * @return array{url:string,n:int,lastSeen:int}|null Top LCP URL entry or null.
 		 */
@@ -1549,8 +1551,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				// Normalize identically to sanitize_sample()/print_config()
 				// so trailing-slash variants share one bucket (issue #935).
 				$normalized_path = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::normalize_rum_path( $path ) : $path;
-				$options         = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::get_settings() : array();
-				$min             = isset( $options['image_optimisation']['fieldLcpMinSamples'] ) ? (int) $options['image_optimisation']['fieldLcpMinSamples'] : self::FIELD_LCP_DEFAULT_MIN_SAMPLES;
+				// Sample gate unification (issue #1200, @since NEXT): resolve via
+				// the canonical get_field_lcp_min_samples() so the additive
+				// `ai_adaptive.field_lcp_min_samples` setting is honoured here
+				// (previously only the legacy `image_optimisation.fieldLcpMinSamples`
+				// was read, letting the preload path disagree with the AI path).
+				// Fail-open to FIELD_LCP_DEFAULT_MIN_SAMPLES via the resolver.
+				$min = self::get_field_lcp_min_samples();
 				if ( $min < 1 ) {
 					$min = self::FIELD_LCP_DEFAULT_MIN_SAMPLES;
 				}

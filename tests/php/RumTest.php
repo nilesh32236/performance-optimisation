@@ -563,6 +563,42 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test get_field_lcp_url honours ai_adaptive.field_lcp_min_samples (issue #1200).
+	 *
+	 * The canonical resolver prefers the additive ai_adaptive setting over
+	 * the legacy image_optimisation key so both read paths share one gate.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_field_lcp_url_prefers_ai_adaptive_min_samples(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit'  => array( 'rum_enabled' => true ),
+			'image_optimisation' => array( 'fieldLcpMinSamples' => 20 ),
+			'ai_adaptive'        => array( 'field_lcp_min_samples' => 5 ),
+		);
+		Util::clear_settings_cache();
+		$today                        = gmdate( 'Y-m-d' );
+		$this->options[ RUM::OPTION ] = array(
+			$today => array(
+				'/hero' => array(
+					'lcpUrls' => array(
+						'example.com/wp-content/uploads/hero.jpg' => array(
+							'url'      => 'https://example.com/wp-content/uploads/hero.jpg',
+							'n'        => 5,
+							'lastSeen' => time(),
+						),
+					),
+				),
+			),
+		);
+
+		$field = RUM::get_field_lcp_url( '/hero' );
+		$this->assertIsArray( $field );
+		$this->assertSame( 'https://example.com/wp-content/uploads/hero.jpg', $field['url'] );
+	}
+
+	/**
 	 * Test that a beacon device/template pair is aggregated into a bounded segment.
 	 *
 	 * @since 2.0.0

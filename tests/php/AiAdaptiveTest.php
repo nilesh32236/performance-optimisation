@@ -212,6 +212,10 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Seed RUM aggregates with average LCP above 3500 (forces `eager` eagerness).
 	 *
+	 * Uses a qualified sample count (>= default 20) so the suggest-only
+	 * sample gate (issue #1200) passes; undersampled RUM must stay
+	 * conservative (see test_learn_undersampled_global_stays_conservative).
+	 *
 	 * @return void
 	 */
 	private function seed_eager_rum(): void {
@@ -220,14 +224,14 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 			$today => array(
 				'/slow/' => array(
 					'lcp'  => array(
-						'n'   => 5,
-						'sum' => 20000,
+						'n'   => 25,
+						'sum' => 100000,
 						'min' => 3000,
 						'max' => 5000,
 					),
 					'ttfb' => array(
-						'n'   => 5,
-						'sum' => 4000,
+						'n'   => 25,
+						'sum' => 20000,
 						'min' => 700,
 						'max' => 900,
 					),
@@ -1272,6 +1276,47 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$this->assertStringContainsString( '12/20', $field['value'] );
 		$this->assertStringContainsString( 'provisional', $field['description'] );
 		// No eagerness upgrade: no eagerness suggestion at conservative.
+		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' ) );
+	}
+
+	/**
+	 * Test undersampled global-average RUM emits no eagerness override (issue #1200).
+	 *
+	 * Given a high average LCP (4000ms) with only 5 samples (below the
+	 * default 20-sample gate) When the heuristic runs Then eagerness stays
+	 * conservative with no override — suggest-only below threshold.
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_learn_undersampled_global_stays_conservative(): void {
+		$this->install_stubs();
+		$today                                   = gmdate( 'Y-m-d' );
+		$this->options['wppo_web_vitals_rum']    = array(
+			$today => array(
+				'/slow/' => array(
+					'lcp' => array(
+						'n'   => 5,
+						'sum' => 20000,
+						'min' => 3000,
+						'max' => 5000,
+					),
+				),
+			),
+		);
+		$this->options['wppo_web_vitals_trends'] = array();
+		$this->options['wppo_settings']          = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		Util::clear_settings_cache();
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$model = AI_Adaptive::learn();
+		$this->assertSame( 'conservative', $model['eagerness'] );
+		$this->assertTrue( $model['field_lcp_provisional'] );
+
+		$suggestions = AI_Adaptive::get_suggestions();
 		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' ) );
 	}
 
