@@ -407,6 +407,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'server_timing_enabled' => false,
 					'auto_rescan'           => '',
 					'rum_enabled'           => false,
+					'rum_sample_rate'       => 100,
 				),
 				'database_cleanup'      => array(
 					'autoloadThreshold' => 1024,
@@ -4941,6 +4942,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					}
 					$limit                  = is_numeric( $value ) ? (int) $value : 2;
 					$sanitized[ $safe_key ] = ( $limit >= 1 && $limit <= 5 ) ? $limit : 2;
+					continue;
+				}
+
+				// RUM beacon sample rate (issue #1214) — int clamped to
+				// 1-100 (percent of page views sending the beacon).
+				// Unrecognized values fail open to 100 (unsampled current
+				// behavior). Pinned before the generic is_numeric branch so
+				// 0/negative/huge values can never be stored.
+				if ( 'rum_sample_rate' === $safe_key ) {
+					if ( is_array( $value ) ) {
+						$sanitized[ $safe_key ] = 100;
+						continue;
+					}
+					$rate                   = is_numeric( $value ) ? (int) $value : 100;
+					$sanitized[ $safe_key ] = ( $rate >= 1 && $rate <= 100 ) ? $rate : 100;
 					continue;
 				}
 

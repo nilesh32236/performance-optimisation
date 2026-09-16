@@ -84,6 +84,56 @@ export const classifyConnectionType = ( raw ) => {
 };
 
 /**
+ * Default RUM beacon sample rate (percent of page views sampled).
+ *
+ * 100 keeps the pre-sampling behavior verbatim (every page view sends).
+ * Mirrors `RUM::RUM_SAMPLE_RATE_DEFAULT` in includes/class-rum.php.
+ *
+ * @since NEXT
+ * @type {number}
+ */
+export const RUM_DEFAULT_SAMPLE_RATE = 100;
+
+/**
+ * Sampling decision for one page view (lossy hint only, no PII).
+ *
+ * Keeps about `rate` percent of page views using a uniform
+ * `Math.random()` roll. A rate of 100 (or any missing/invalid value)
+ * always sends (fail-open to unsampled current behavior). An explicit
+ * `randomValue` makes the decision deterministic for tests; otherwise
+ * `Math.random()` is used. Never throws: any failure sends.
+ *
+ * @since NEXT
+ * @param {*} rate        Configured sample rate (1–100) from `window.wppoRum.sampleRate`.
+ * @param {*} randomValue Optional deterministic roll in [0, 1).
+ * @return {boolean} True when the beacon should be sent.
+ */
+export const shouldSendSample = ( rate, randomValue ) => {
+	try {
+		let parsed = Number( rate );
+		if ( ! Number.isFinite( parsed ) ) {
+			parsed = RUM_DEFAULT_SAMPLE_RATE;
+		}
+		const normalized = Math.floor( parsed );
+		const clamped =
+			normalized >= 1 && normalized <= 100
+				? normalized
+				: RUM_DEFAULT_SAMPLE_RATE;
+		if ( clamped >= 100 ) {
+			return true;
+		}
+		const roll =
+			typeof randomValue === 'number' ? randomValue : Math.random();
+		if ( ! Number.isFinite( roll ) ) {
+			return true;
+		}
+		return roll * 100 < clamped;
+	} catch {
+		return true;
+	}
+};
+
+/**
  * Upper bound (ms) accepted for time-based Web Vitals metrics before the
  * beacon is sent. Mirrors the server-side 0–60000 range enforced by
  * `RUM::sanitize_sample()` — extreme observer values (or forged beacons
@@ -191,6 +241,20 @@ export const sanitizeRumValues = ( raw ) => {
 
 	const send = () => {
 		if ( sent ) {
+			return;
+		}
+		// Sampling gate (issue #1214): send only about `sampleRate`
+		// percent of page views. Fail-open: a missing/invalid rate sends,
+		// and a dropped view degrades to unmeasured, never fatal. A drop
+		// still marks the beacon sent and disconnects observers so later
+		// triggers do not retry.
+		if ( ! shouldSendSample( config.sampleRate ) ) {
+			sent = true;
+			if ( scheduleTimerId ) {
+				clearTimeout( scheduleTimerId );
+				scheduleTimerId = null;
+			}
+			disconnectObservers();
 			return;
 		}
 		// Cap metric magnitudes client-side (mirrors the server-side
