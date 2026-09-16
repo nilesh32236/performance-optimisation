@@ -1665,8 +1665,8 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Test that an explicit 'auto' classic fetchpriority is treated as a gap
-	 * (consistent with the module path, issue #1019 review).
+	 * Test that an explicit 'auto' classic fetchpriority is preserved
+	 * (fill-gaps-only, issue #1218).
 	 *
 	 * @since 2.0.0
 	 */
@@ -1703,7 +1703,14 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 
 		$main->add_defer_strategy();
 
-		$this->assertSame( 'low', $fake_scripts->data['third-party-analytics']['fetchpriority'] ?? null, "'auto' must be treated as a gap and upgraded to low." );
+		$this->assertSame( 'auto', $fake_scripts->data['third-party-analytics']['fetchpriority'] ?? null, "An explicit 'auto' fetchpriority must never be overwritten (issue #1218)." );
+		$priority_writes = array_filter(
+			$recorded,
+			static function ( array $call ): bool {
+				return 'third-party-analytics' === $call[0] && 'fetchpriority' === $call[1];
+			}
+		);
+		$this->assertSame( array(), $priority_writes, 'Fill-gaps-only must not write fetchpriority where an explicit auto already exists.' );
 	}
 
 	/**
