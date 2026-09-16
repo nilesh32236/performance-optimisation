@@ -1426,14 +1426,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * fails closed. Mirrors Cache::is_path_contained().
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Added realpath symlink containment via Util::validate_cache_write_path().
 		 * @param string $path Absolute file or directory path.
 		 * @return bool True when contained.
 		 */
 		private function is_path_contained( string $path ): bool {
-			// Centralized dual-prefix containment lives in
-			// Util::is_cache_path_contained(); this wrapper only binds the
-			// per-instance root/domain so every call site shares one audit point.
-			return Util::is_cache_path_contained( $this->cache_root_dir, $this->domain, $path );
+			// Single validator (mirrors Cache::is_path_contained()):
+			// Util::validate_cache_write_path() owns the lexical + realpath
+			// AND so the used-CSS writer gets the same symlink containment
+			// as the static-HTML write path. Fail closed on any throwable.
+			try {
+				return Util::validate_cache_write_path( $this->cache_root_dir, $this->domain, $path );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
 		}
 
 		/**
@@ -1538,6 +1545,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			}
 
 			if ( ! Util::prepare_cache_dir( $dir_path ) ) {
+				return false;
+			}
+
+			// Post-mkdir re-verification (TOCTOU): a symlink swapped in
+			// during the iterative mkdir must not redirect the write, so
+			// containment is re-checked after the directory exists.
+			if ( ! $this->is_path_contained( $file_path ) || ! $this->is_path_contained( trailingslashit( $dir_path ) ) ) {
+				$this->log_traversal_probe( $url );
 				return false;
 			}
 

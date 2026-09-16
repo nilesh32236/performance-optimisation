@@ -758,6 +758,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			if ( '' === $htaccess_file || false !== strpos( $htaccess_file, "\0" ) || false !== strpos( $htaccess_file, '..' ) ) {
 				return false;
 			}
+			// Cache-tree isolation (parity with
+			// Util::is_htaccess_path_allowed()): the legacy fallback must
+			// refuse cache-tree targets too, never just the basename.
+			if ( false !== strpos( str_replace( '\\', '/', $htaccess_file ), '/cache/wppo/' ) ) {
+				return false;
+			}
 			try {
 				return '.htaccess' === basename( $htaccess_file );
 			} catch ( \Throwable $e ) {

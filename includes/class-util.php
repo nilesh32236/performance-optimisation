@@ -3007,21 +3007,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * Extends {@see is_cache_path_contained()} with `realpath()` symlink
 		 * resolution so a symlink planted inside the cache tree (e.g.
-		 * `{root}/{domain}/<segment>` pointing at `/etc`, or a symlinked
-		 * domain directory itself) cannot bypass the lexical prefix check at
-		 * write time (CVE-2026-18051 class). Both the target and the
-		 * `{root}/{domain}/` anchor are resolved via
-		 * {@see resolve_realpath()} (nearest existing ancestor plus the
-		 * lexical remainder, so brand-new pages and symlinked deploy roots
-		 * keep working) and the resolved target must sit under the resolved
-		 * anchor, which itself must sit under the resolved root
-		 * (trailing-slash aware so `wppo-evil` never prefix-matches `wppo`).
+		 * `{root}/{domain}/<segment>` pointing at `/etc`, a symlinked domain
+		 * directory itself, or a leaf symlink passed as a directory purge
+		 * target) cannot bypass the lexical prefix check at write time
+		 * (CVE-2026-18051 class). Both the full normalized target (leaf
+		 * included, so leaf symlinks resolve) and the `{root}/{domain}/`
+		 * anchor are resolved via {@see resolve_realpath()} (nearest existing
+		 * ancestor plus the lexical remainder, so brand-new pages and
+		 * symlinked deploy roots keep working) and the resolved target must
+		 * sit under the resolved anchor, which itself must sit under the
+		 * resolved root (trailing-slash aware so `wppo-evil` never
+		 * prefix-matches `wppo`).
 		 *
-		 * Fail-open uncached, never fatal: when `realpath()` is unavailable
-		 * or nothing on disk resolves yet, the lexical verdict stands. Empty
-		 * root/domain/path, null bytes, and `..` segments fail closed. Pure
-		 * static helper: no I/O beyond `realpath()`, no settings reads.
-		 * Multisite-safe: callers pass the per-site canonical domain.
+		 * Fail-open applies ONLY when nothing on disk resolves yet (brand-new
+		 * page tree): then there is no symlink to follow and the lexical
+		 * verdict stands. The same fail-open covers hosts where `realpath()`
+		 * itself is unavailable (symlinks cannot be ruled out there, but
+		 * refusing every write would break caching entirely, so the lexical
+		 * verdict stands and the probe is logged by callers). Empty
+		 * root/domain/path, null bytes, `..` segments, and hostile domain
+		 * segments (`/`, `\`, `..`, NUL) fail closed. Unexpected throwables
+		 * fail closed (skip the write, serve dynamic) while staying
+		 * non-fatal. Pure static helper: no I/O beyond `realpath()`, no
+		 * settings reads. Multisite-safe: callers pass the per-site
+		 * canonical domain.
+		 *
+		 * The resolved root/anchor pair is memoized per root+domain per
+		 * request (invariant across files) so purge loops pay the
+		 * ancestor-walk stat cost once, not once per file.
 		 *
 		 * @param string $cache_root_dir Absolute cache root directory.
 		 * @param string $domain Canonical domain directory segment.
@@ -3033,7 +3046,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			if ( '' === $cache_root_dir || '' === $domain || '' === $path ) {
 				return false;
 			}
-			if ( false !== strpos( $path, "\0" ) ) {
+			if ( false !== strpos( $path, "\0" ) || false !== strpos( $domain, "\0" ) ) {
 				return false;
 			}
 			// Lexical fail-closed first: unsanitized input must never pass
@@ -3046,7 +3059,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			}
 			try {
 				$domain_seg = trim( $domain, '/' );
-				if ( '' === $domain_seg ) {
+				// The domain shapes the anchor (root + domain segment), so a
+				// hostile segment must fail closed here rather than relying
+				// on callers passing a canonical host.
+				if ( '' === $domain_seg || false !== strpos( $domain_seg, '..' ) || false !== strpos( $domain_seg, '/' ) || false !== strpos( $domain_seg, '\\' ) ) {
 					return false;
 				}
 				if ( function_exists( 'wp_normalize_path' ) ) {
@@ -3056,35 +3072,59 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					$root_norm   = rtrim( str_replace( '\\', '/', $cache_root_dir ), '/' );
 					$target_norm = str_replace( '\\', '/', $path );
 				}
-				// Resolved anchor: the on-disk domain directory when it
-				// exists (catches a symlinked domain dir), else the
-				// resolved root plus the lexical domain segment (nothing
-				// exists to symlink yet).
-				$anchor = self::resolve_realpath( $root_norm . '/' . $domain_seg );
-				if ( null === $anchor ) {
-					$root_resolved = self::resolve_realpath( $root_norm );
-					if ( null === $root_resolved ) {
-						return true;
+				// Memoized anchor/root pair (per root+domain per request).
+				static $anchor_memo = array();
+				$memo_key           = $root_norm . "\0" . $domain_seg;
+				if ( ! isset( $anchor_memo[ $memo_key ] ) ) {
+					// Resolved anchor: the on-disk domain directory when it
+					// exists (catches a symlinked domain dir), else the
+					// resolved root plus the lexical domain segment (nothing
+					// exists to symlink yet).
+					$anchor = self::resolve_realpath( $root_norm . '/' . $domain_seg );
+					if ( null === $anchor ) {
+						$root_resolved = self::resolve_realpath( $root_norm );
+						if ( null === $root_resolved ) {
+							$anchor_memo[ $memo_key ] = null;
+						} else {
+							$anchor_memo[ $memo_key ] = array(
+								rtrim( $root_resolved, '/' ) . '/' . $domain_seg,
+								$root_resolved,
+							);
+						}
+					} else {
+						$anchor_memo[ $memo_key ] = array(
+							$anchor,
+							self::resolve_realpath( $root_norm ),
+						);
 					}
-					$anchor = rtrim( $root_resolved, '/' ) . '/' . $domain_seg;
 				}
-				// The anchor itself must live under the resolved root: a
-				// symlinked domain directory pointing outside fails closed.
-				$root_resolved = self::resolve_realpath( $root_norm );
+				$memo = $anchor_memo[ $memo_key ];
+				if ( null === $memo ) {
+					// Nothing on disk resolves yet: no symlink to follow,
+					// so the lexical verdict stands.
+					return true;
+				}
+				list( $anchor, $root_resolved ) = $memo;
 				if ( null === $root_resolved ) {
 					return true;
 				}
+				// The anchor itself must live under the resolved root: a
+				// symlinked domain directory pointing outside fails closed.
 				$anchor_dir = rtrim( $anchor, '/' ) . '/';
 				$root_dir   = rtrim( $root_resolved, '/' ) . '/';
 				if ( 0 !== strpos( $anchor_dir, $root_dir ) ) {
 					return false;
 				}
-				// Resolved target: nearest existing ancestor of the target
-				// directory plus the lexical remainder. The target file
-				// itself rarely exists before a write, so resolve its
-				// directory.
-				$target_dir      = dirname( $target_norm );
-				$target_resolved = self::resolve_realpath( $target_dir );
+				// Resolved target: the full normalized target first, so a
+				// leaf symlink (e.g. `{root}/{domain}/evil-dir -> /etc`
+				// passed as a directory purge target, or a trailing-slash
+				// directory target whose dirname() would otherwise drop to
+				// the parent) resolves and fails closed. Falls back to the
+				// target directory for not-yet-existing file leaves.
+				$target_resolved = self::resolve_realpath( rtrim( $target_norm, '/' ) );
+				if ( null === $target_resolved && function_exists( 'dirname' ) ) {
+					$target_resolved = self::resolve_realpath( dirname( $target_norm ) );
+				}
 				if ( null === $target_resolved ) {
 					return true;
 				}
@@ -3092,9 +3132,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				return 0 === strpos( $target_dir_slash, $anchor_dir );
 			} catch ( \Throwable $e ) {
 				unset( $e );
-				// Never fatal, never white-screen: the lexical check above
-				// already passed, so serve uncached-fail-open via true.
-				return true;
+				// Fail closed for security (skip the write, serve dynamic)
+				// while staying non-fatal for availability.
+				return false;
 			}
 		}
 
@@ -3191,9 +3231,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Isolation guard keeping htaccess writes out of reach of
 		 * cache-path resolution: the basename must be exactly `.htaccess`
 		 * and the target must never sit inside the static cache tree
-		 * (`{WP_CONTENT_DIR}/cache/wppo/`). Null bytes and `..` segments
-		 * fail closed. Fail-open uncached semantics belong to the caller:
-		 * false means "do not touch the filesystem".
+		 * (`{WP_CONTENT_DIR}/cache/wppo/`), lexically or via symlink
+		 * resolution (a symlinked `.htaccess` or a symlinked parent inside
+		 * the resolved write path resolving into the cache tree fails
+		 * closed — same CVE class as the cache write path). Null bytes and
+		 * `..` segments fail closed. Fail-open uncached semantics belong to
+		 * the caller: false means "do not touch the filesystem".
 		 *
 		 * @param string $htaccess_file Absolute .htaccess path candidate.
 		 * @return bool True when the target may be written.
@@ -3221,6 +3264,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				} else {
 					$norm = str_replace( '\\', '/', $htaccess_file );
 				}
+				$cache_root = null;
 				if ( defined( 'WP_CONTENT_DIR' ) ) {
 					if ( function_exists( 'wp_normalize_path' ) ) {
 						$cache_root = rtrim( wp_normalize_path( (string) WP_CONTENT_DIR ), '/' ) . '/cache/wppo/';
@@ -3232,6 +3276,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					}
 				} elseif ( false !== strpos( $norm, '/cache/wppo/' ) ) {
 					return false;
+				}
+				// Symlink-aware isolation: the resolved parent directory and
+				// the resolved leaf itself must not land inside the resolved
+				// cache root (lexical check above cannot see through
+				// symlinks). Unresolvable paths keep the lexical verdict.
+				if ( null !== $cache_root && function_exists( 'dirname' ) ) {
+					$cache_resolved = self::resolve_realpath( rtrim( $cache_root, '/' ) );
+					if ( null !== $cache_resolved ) {
+						$cache_dir       = rtrim( $cache_resolved, '/' ) . '/';
+						$candidates      = array();
+						$parent_resolved = self::resolve_realpath( dirname( $norm ) );
+						if ( null !== $parent_resolved ) {
+							$candidates[] = rtrim( $parent_resolved, '/' ) . '/';
+						}
+						$leaf_resolved = self::resolve_realpath( rtrim( $norm, '/' ) );
+						if ( null !== $leaf_resolved ) {
+							$candidates[] = rtrim( $leaf_resolved, '/' ) . '/';
+							$candidates[] = rtrim( dirname( $leaf_resolved ), '/' ) . '/';
+						}
+						foreach ( $candidates as $candidate ) {
+							if ( 0 === strpos( $candidate, $cache_dir ) ) {
+								return false;
+							}
+						}
+					}
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );

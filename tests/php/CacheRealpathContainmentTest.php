@@ -37,9 +37,9 @@ class WPPO_Realpath_Fake_Fs {
 	public $files = array();
 
 	/**
-	 * Every put_contents() path, in order.
+	 * Every put_contents() payload keyed by absolute path.
 	 *
-	 * @var string[]
+	 * @var array<string,string>
 	 */
 	public $put_log = array();
 
