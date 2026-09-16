@@ -132,8 +132,11 @@ and root `*.php`; the machine-checkable subset is pinned by
 
 - **Fixed by #1292:**
   - `Reflection::{Method,Property}::setAccessible()` — removed everywhere
-    (one production call in `Main::read_private_module_store()`, ~320 in
-    `tests/php/`). The calls were no-ops since PHP 8.1 and the plugin
+    (one production call in `Main::read_private_module_store()`, about 320
+    in `tests/php/` — about 322 total across 70+ files; source of truth is
+    `PhpDeprecationHygieneTest::test_plugin_sources_are_free_of_php84_85_banned_patterns()`
+    or `grep -rn --include='*.php' 'setAccessible' includes/ templates/ tests/php/`).
+    The calls were no-ops since PHP 8.1 and the plugin
     requires PHP 8.2+, so deletion is behavior-preserving; reflection
     reads/invokes work without them on every supported runtime.
   - Raw `imagedestroy()` in `ImageAvifPictureTest.php` fixture cleanup —

@@ -6185,6 +6185,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * `imagedestroy()` (see wiki.php.net/rfc/deprecations_php_8_5): on 8.5+
 		 * handles are released by dropping the reference instead of calling the
 		 * close function. Below 8.5 the legacy close path is kept unchanged.
+		 * Note: upstream deprecates `curl_close()` + `curl_share_close()`
+		 * only — not `curl_multi_close()` — but `close_curl_multi_handle()`
+		 * is over-gated the same way for symmetry (fail-open either way).
 		 *
 		 * The optional $php_version parameter exists so PHPUnit (Brain Monkey)
 		 * can exercise both sides of the gate without redefining PHP_VERSION.

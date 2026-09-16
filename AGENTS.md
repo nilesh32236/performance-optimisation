@@ -204,6 +204,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (4
 - `wp wppo` WP-CLI commands registered (7 subcommands — see `includes/class-wppo-cli-command.php`)
 - All REST endpoints require `manage_options` + `X-WP-Nonce`
 - Settings stored as serialized array in single `wppo_settings` option
+- **PHP 8.5 compat**: never call `Reflection::{Method,Property}::setAccessible()` (deprecated on PHP 8.5, no-op since PHP 8.1 — reflection works without it on the PHP 8.2+ floor); route resource teardown (`curl_close`, `curl_multi_close`, `curl_share_close`, `finfo_close`, `xml_parser_free`, `imagedestroy`) through the `Util` helpers (`close_curl_handle()`, `close_curl_multi_handle()`, `close_curl_share_handle()`, `close_finfo_handle()`, `free_xml_parser()`, `destroy_gd_image()`). Both rules are pinned by `tests/php/PhpDeprecationHygieneTest.php` (13-pattern scanner). See `docs/php-84-85-compat.md`.
 - **Filters**: `wppo_inline_combined_css` (return falsy to disable inlining of the combined/minified CSS via core `wp_maybe_inline_styles()` — e.g. when using a CDN for the combined file)
 - **Versioning / `@since` tags:** Never invent a version number. New functions, classes, and methods get a `@since` tag using the current unreleased `NEXT` version placeholder. The placeholder is replaced with the real version at release time. Do not guess future versions like `2.0.0` or `3.8.0`.
 
@@ -230,6 +231,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (4
 | Doc | Purpose |
 |-----|---------|
 | `docs/hooks.md` | All `wppo_*` filters/actions |
+| `docs/php-84-85-compat.md` | PHP 8.4/8.5 compat: setAccessible ban, Util teardown helpers, 13-pattern scanner, OPcache/JIT guidance |
 | `docs/litespeed-research.md` | LiteSpeed/OpenLiteSpeed deep research (server, LSCWP 7.9, conflict matrix, header protocol, feature comparison) |
 | `docs/litespeed-integration-plan.md` | LiteSpeed integration architecture, 5-phase plan, coexistence modes, data model, REST/SPA wiring, risks |
 | `docs/litespeed-roadmap.md` | Prioritized task board (LS-001…905) + PR split + Definition of Done |

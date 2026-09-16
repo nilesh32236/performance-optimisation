@@ -551,6 +551,11 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 			$this->assertNotEmpty( $scan( "<?php\n\\curl_close( \$ch );\n" ), 'Fully-qualified \\curl_close() must be flagged.' );
 			$this->assertNotEmpty( $scan( "<?php\n\$ref->{'setAccessible'}( true );\n" ), 'Dynamic setAccessible name must be flagged.' );
 			$this->assertNotEmpty( $scan( "<?php\ncall_user_func( array( \$ref, 'setAccessible' ) );\n" ), 'call_user_func setAccessible name must be flagged.' );
+			$this->assertNotEmpty( $scan( "<?php\n\$ref->/* c */setAccessible( true );\n" ), 'Comment-interrupted setAccessible() must be flagged.' );
+			$this->assertNotEmpty( $scan( "<?php\nimagedestroy( \$img );\n" ), 'Raw imagedestroy() outside Util must be flagged.' );
+			$this->assertNotEmpty( $scan( "<?php\nfinfo_close( \$finfo );\n" ), 'Raw finfo_close() outside Util must be flagged.' );
+			$this->assertSame( array(), $scan( "<?php\nUtil::destroy_gd_image( \$img );\n" ), 'Util::destroy_gd_image() helper calls must pass.' );
+			$this->assertSame( array(), $scan( "<?php\n\$doc = \"escaped \\\" quote \$http_response_header stays clean\";\n" ), 'Escaped-quote string content must not leak into code_only.' );
 			$this->assertSame( array(), $scan( "<?php\n\$doc = \"interpolated {\$http_response_header} stays clean\";\n" ), 'Double-quoted $http_response_header interpolation must pass.' );
 
 			$util_subdir = $dir . '/includes';
@@ -588,8 +593,10 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * Appends `file:line description` strings to `$violations` for every
 	 * hit: raw `curl_close(null)` / `E_STRICT` / `mysqli_ping` /
 	 * `mysqli_execute` / `socket_set_timeout` / `$http_response_header` /
-	 * `DATE_RFC7231` / `__sleep`+`__wakeup` / non-canonical casts /
-	 * `Reflection::setAccessible()` in code tokens, standalone backtick
+	 * `DATE_RFC7231` / `__sleep`+`__wakeup` / non-canonical casts in code
+	 * tokens, `Reflection::setAccessible()` via operator tokens (so
+	 * comment-interrupted calls are caught) plus dynamic `'setAccessible'`
+	 * string literals, standalone backtick
 	 * operators, implicitly-nullable `Type $param = null` declarations
 	 * (typed without `?`, `|null`, or `mixed`), and raw `curl_close()` /
 	 * `curl_multi_close()` / `curl_share_close()` / `finfo_close()` /
@@ -631,6 +638,18 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 				continue;
 			}
 			if ( ! is_array( $token ) && '"' === $token ) {
+				// An escaped quote (odd trailing backslashes) is string
+				// content, not a delimiter — toggling on it would desync
+				// in_double and leak string content into code_only.
+				$trailing = 0;
+				$len      = strlen( $code_only );
+				while ( $trailing < $len && '\\' === $code_only[ $len - 1 - $trailing ] ) {
+					++$trailing;
+				}
+				if ( 1 === $trailing % 2 ) {
+					$code_only .= '"';
+					continue;
+				}
 				$in_double  = ! $in_double;
 				$code_only .= ' ';
 				continue;
@@ -656,8 +675,12 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 			'/RFC7231\b/'                                  => 'DATE_RFC7231 usage (timezone is ignored, always GMT)',
 			'/\bfunction\s+__(sleep|wakeup)\b/i'           => '__sleep()/__wakeup() definition (use __serialize()/__unserialize())',
 			'/\(\s*(boolean|integer|double|binary)\s*\)/i' => 'non-canonical cast (use (bool)/(int)/(float)/(string))',
-			'/>\s*setAccessible\s*\(/i'                    => 'Reflection::setAccessible() call (deprecated on PHP 8.5; no-op since PHP 8.1)',
 		);
+		// Note: Reflection::setAccessible() is detected token-wise below
+		// (T_OBJECT_OPERATOR/T_NULLSAFE_OBJECT_OPERATOR/T_DOUBLE_COLON
+		// plus T_STRING, skipping comments) so comment-interrupted calls
+		// such as `-> /* c */ setAccessible()` cannot bypass the gate;
+		// dynamic `'setAccessible'` string literals are flagged separately.
 		foreach ( $raw_patterns as $pattern => $label ) {
 			if ( 1 === preg_match( $pattern, $code_only ) ) {
 				$violations[] = sprintf( '%s: raw %s', $rel, $label );
@@ -673,6 +696,10 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 		if ( defined( 'T_NAME_QUALIFIED' ) ) {
 			$name_ids[] = constant( 'T_NAME_QUALIFIED' );
 		}
+
+		// Build the function map once per file (not once per teardown call
+		// site) so large files stay cheap as patterns grow.
+		$function_map = $this->build_function_map( $tokens, $count );
 
 		for ( $i = 0; $i < $count; ++$i ) {
 			$token = $tokens[ $i ];
@@ -690,12 +717,39 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 
 			// Dynamic 'setAccessible' string literals cover $ref->{'setAccessible'}()
 			// and call_user_func()/call_user_func_array() invocations that the
-			// ->setAccessible( regex cannot see (deprecated on PHP 8.5).
+			// operator-based check below cannot see (deprecated on PHP 8.5).
+			// Deliberately over-flags benign mentions (e.g. log messages) as a
+			// test-only strictness tradeoff: quotes are stripped, then inner
+			// whitespace, before comparing.
 			if ( T_CONSTANT_ENCAPSED_STRING === $token[0] ) {
-				$literal = strtolower( trim( $token[1], "\"'" ) );
+				$literal = strtolower( trim( trim( $token[1], "\"'" ) ) );
 				if ( 'setaccessible' === $literal ) {
 					$violations[] = sprintf( '%s:%d dynamic Reflection::setAccessible() name (deprecated on PHP 8.5)', $rel, $token[2] );
 					continue;
+				}
+			}
+
+			// Operator-based setAccessible detection: `->`, `?->`, or `::`
+			// followed (across whitespace/comments) by `setAccessible` and
+			// `(`, so comment-interrupted calls cannot bypass the gate.
+			$op_ids = array( T_OBJECT_OPERATOR, T_DOUBLE_COLON );
+			if ( defined( 'T_NULLSAFE_OBJECT_OPERATOR' ) ) {
+				$op_ids[] = constant( 'T_NULLSAFE_OBJECT_OPERATOR' );
+			}
+			if ( in_array( $token[0], $op_ids, true ) ) {
+				$after = $i + 1;
+				while ( $after < $count && is_array( $tokens[ $after ] ) && in_array( $tokens[ $after ][0], array( T_WHITESPACE, T_COMMENT, T_DOC_COMMENT ), true ) ) {
+					++$after;
+				}
+				if ( $after < $count && is_array( $tokens[ $after ] ) && T_STRING === $tokens[ $after ][0] && 'setaccessible' === strtolower( $tokens[ $after ][1] ) ) {
+					$open = $after + 1;
+					while ( $open < $count && is_array( $tokens[ $open ] ) && in_array( $tokens[ $open ][0], array( T_WHITESPACE, T_COMMENT, T_DOC_COMMENT ), true ) ) {
+						++$open;
+					}
+					if ( $open < $count && '(' === $tokens[ $open ] ) {
+						$violations[] = sprintf( '%s:%d Reflection::setAccessible() call (deprecated on PHP 8.5; no-op since PHP 8.1)', $rel, $token[2] );
+						continue;
+					}
 				}
 			}
 
@@ -724,7 +778,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 						$method_guards[] = constant( 'T_NULLSAFE_OBJECT_OPERATOR' );
 					}
 					if ( ! in_array( $prev_id, $method_guards, true ) ) {
-						if ( ! $this->is_util_legacy_teardown_call( $tokens, $count, $i, $rel ) ) {
+						if ( ! $this->is_util_legacy_teardown_call( $tokens, $count, $i, $rel, $function_map ) ) {
 							$violations[] = sprintf( '%s:%d raw %s() outside the Util 8.5 helper', $rel, $token[2], $token[1] );
 						}
 					}
@@ -747,17 +801,20 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * added elsewhere in that file still fails the gate.
 	 *
 	 * @since NEXT
-	 * @param array  $tokens Full token stream of the file.
-	 * @param int    $count  Token count.
-	 * @param int    $index  Index of the teardown function-name token.
-	 * @param string $rel    Relative file path for reporting.
+	 * @param array      $tokens Full token stream of the file.
+	 * @param int        $count  Token count.
+	 * @param int        $index  Index of the teardown function-name token.
+	 * @param string     $rel    Relative file path for reporting.
+	 * @param array|null $function_map Optional precomputed map from
+	 *                       build_function_map() (built once per file by
+	 *                       the caller to avoid re-scanning per call site).
 	 * @return bool True when the call is an allowed legacy branch.
 	 */
-	private function is_util_legacy_teardown_call( $tokens, $count, $index, $rel ): bool {
+	private function is_util_legacy_teardown_call( $tokens, $count, $index, $rel, $function_map = null ): bool {
 		if ( false === strpos( $rel, 'includes/class-util.php' ) ) {
 			return false;
 		}
-		$allowed   = array(
+		$allowed = array(
 			'close_curl_handle',
 			'close_curl_multi_handle',
 			'destroy_gd_image',
@@ -765,27 +822,34 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 			'close_finfo_handle',
 			'free_xml_parser',
 		);
-		$enclosing = $this->get_enclosing_function_name( $tokens, $count, $index );
+		if ( null === $function_map ) {
+			$function_map = $this->build_function_map( $tokens, $count );
+		}
+		$enclosing = null;
+		$size      = null;
+		foreach ( $function_map as $entry ) {
+			if ( $index > $entry['start'] && $index < $entry['end'] && ( null === $size || $entry['size'] < $size ) ) {
+				$enclosing = $entry['name'];
+				$size      = $entry['size'];
+			}
+		}
 		return in_array( $enclosing, $allowed, true );
 	}
 
 	/**
-	 * Find the innermost named function containing a token index.
+	 * Map each named function declaration to its `{...}` body range.
 	 *
-	 * Forward-scans for `T_FUNCTION` declarations, maps each named
-	 * declaration to its `{...}` body range, and returns the innermost
-	 * name containing `$index` (null when top-level). Anonymous
-	 * functions/closures carry no name and never match the legacy list.
+	 * Forward-scans for `T_FUNCTION` declarations once per file; callers
+	 * reuse the map for every teardown call site instead of re-scanning.
+	 * Anonymous functions/closures carry no name and are skipped.
 	 *
 	 * @since NEXT
 	 * @param array $tokens Full token stream of the file.
 	 * @param int   $count  Token count.
-	 * @param int   $index  Token index to locate.
-	 * @return string|null Enclosing function name or null.
+	 * @return array[] List of `array( 'name' => string, 'start' => int, 'end' => int, 'size' => int )`.
 	 */
-	private function get_enclosing_function_name( $tokens, $count, $index ): ?string {
-		$match      = null;
-		$match_size = null;
+	private function build_function_map( $tokens, $count ): array {
+		$map = array();
 		for ( $k = 0; $k < $count; ++$k ) {
 			$token = $tokens[ $k ];
 			if ( ! is_array( $token ) || T_FUNCTION !== $token[0] ) {
@@ -841,12 +905,37 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 			if ( $brace_end < 0 ) {
 				continue;
 			}
-			if ( $index > $brace_start && $index < $brace_end ) {
-				$size = $brace_end - $brace_start;
-				if ( null === $match_size || $size < $match_size ) {
-					$match      = $name;
-					$match_size = $size;
-				}
+			$map[] = array(
+				'name'  => $name,
+				'start' => $brace_start,
+				'end'   => $brace_end,
+				'size'  => $brace_end - $brace_start,
+			);
+		}
+		return $map;
+	}
+
+	/**
+	 * Find the innermost named function containing a token index.
+	 *
+	 * Forward-scans for `T_FUNCTION` declarations, maps each named
+	 * declaration to its `{...}` body range, and returns the innermost
+	 * name containing `$index` (null when top-level). Anonymous
+	 * functions/closures carry no name and never match the legacy list.
+	 *
+	 * @since NEXT
+	 * @param array $tokens Full token stream of the file.
+	 * @param int   $count  Token count.
+	 * @param int   $index  Token index to locate.
+	 * @return string|null Enclosing function name or null.
+	 */
+	private function get_enclosing_function_name( $tokens, $count, $index ): ?string {
+		$match      = null;
+		$match_size = null;
+		foreach ( $this->build_function_map( $tokens, $count ) as $entry ) {
+			if ( $index > $entry['start'] && $index < $entry['end'] && ( null === $match_size || $entry['size'] < $match_size ) ) {
+				$match      = $entry['name'];
+				$match_size = $entry['size'];
 			}
 		}
 		return $match;
@@ -900,9 +989,13 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 		$params  = array();
 		$current = array();
 		$depth   = 0;
+		// T_ATTRIBUTE has existed since PHP 8.0, so the bare constant is
+		// safe on the plugin's PHP 8.2+ floor; the defined() guard mirrors
+		// the type-collection site below for backport safety.
+		$has_attr = defined( 'T_ATTRIBUTE' );
 		for ( $k = $j + 1; $k < $end; ++$k ) {
 			$token = $tokens[ $k ];
-			if ( '(' === $token || '[' === $token || '{' === $token || ( is_array( $token ) && T_ATTRIBUTE === $token[0] ) ) {
+			if ( '(' === $token || '[' === $token || '{' === $token || ( $has_attr && is_array( $token ) && T_ATTRIBUTE === $token[0] ) ) {
 				++$depth;
 			} elseif ( ')' === $token || ']' === $token || '}' === $token ) {
 				--$depth;
@@ -920,7 +1013,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 			$depth  = 0;
 			$equals = -1;
 			foreach ( $param as $idx => $token ) {
-				if ( '(' === $token || '[' === $token || '{' === $token || ( is_array( $token ) && T_ATTRIBUTE === $token[0] ) ) {
+				if ( '(' === $token || '[' === $token || '{' === $token || ( $has_attr && is_array( $token ) && T_ATTRIBUTE === $token[0] ) ) {
 					++$depth;
 				} elseif ( ')' === $token || ']' === $token || '}' === $token ) {
 					--$depth;
