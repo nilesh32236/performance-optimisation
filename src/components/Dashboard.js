@@ -5,6 +5,8 @@ import {
 	useRef,
 	useMemo,
 	memo,
+	lazy,
+	Suspense,
 } from '@wordpress/element';
 import {
 	apiCall,
@@ -12,6 +14,14 @@ import {
 	getErrorLogMessage,
 	getWppoSettings,
 } from '../lib/apiRequest';
+import {
+	CDN_PURGE_SERVICES,
+	normalizeCloudflareZoneId,
+	parseVarnishPurgeUrls,
+	normalizeImageInfo,
+	isEqualImageInfo,
+	toTtlOverride,
+} from '../lib/dashboardHelpers';
 import { getDbCounts } from '../lib/dbCounts';
 import useNotice from '../lib/useNotice';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
@@ -24,15 +34,10 @@ import NoticeBanner from './common/NoticeBanner';
 import PerformanceAudit from './PerformanceAudit';
 import PageSpeedPanel from './PageSpeedPanel';
 import WebVitalsTrends from './WebVitalsTrends';
-import WebVitalsRum from './WebVitalsRum';
-import SuggestionsPanel from './SuggestionsPanel';
 import SystemInfo from './SystemInfo';
-import AutoloadedOptions from './AutoloadedOptions';
-import LlmsPanel from './LlmsPanel';
-import AiPanel from './AiPanel';
-import EdgeCachePanel from './EdgeCachePanel';
 import ImageOptimizationCard from './ImageOptimizationCard';
 import RecentActivityCard from './RecentActivityCard';
+import SuggestionsPanel from './SuggestionsPanel';
 import WelcomePanel from './WelcomePanel';
 import { __ } from '@wordpress/i18n';
 import { modeLabel } from '../lib/litespeed';
@@ -48,6 +53,17 @@ import {
 	faGlobe,
 	faUserCheck,
 } from '@fortawesome/free-solid-svg-icons';
+
+/**
+ * Below-fold panels are code-split with React.lazy so they neither block
+ * initial paint (network, via LazySection) nor inflate the default
+ * tab-dashboard chunk (parse/compile). Above-fold panels stay eager.
+ */
+const WebVitalsRum = lazy( () => import( './WebVitalsRum' ) );
+const AutoloadedOptions = lazy( () => import( './AutoloadedOptions' ) );
+const LlmsPanel = lazy( () => import( './LlmsPanel' ) );
+const AiPanel = lazy( () => import( './AiPanel' ) );
+const EdgeCachePanel = lazy( () => import( './EdgeCachePanel' ) );
 
 /**
  * Polling interval for image_job_status ticks.
@@ -117,102 +133,49 @@ const LazySection = ( { children } ) => {
 		return () => observer.disconnect();
 	}, [ visible ] );
 	if ( ! visible ) {
-		return <div ref={ ref } />;
+		return (
+			<div ref={ ref } style={ { minHeight: 240 } } aria-hidden="true" />
+		);
 	}
 	return <>{ children }</>;
 };
 
 /**
- * Coerce a TTL override select value to a finite number, or undefined when
- * the override should be omitted. Guards against tampered non-numeric option
- * values: Number('abc') is NaN and JSON.stringify(NaN) becomes null, which
- * the server could misread as an explicit clear / never-expire.
+ * Shared TTL values (cache lifespan + 3 per-type overrides). A single source
+ * so value changes cannot drift across the four selects; labels stay inline
+ * __() literals via ttlLabel() so makepot can extract them.
  *
- * @param {*} value Raw select value ('' | number | string | null | undefined).
- * @return {number|undefined} Finite number, or undefined to omit.
+ * @since NEXT
+ * @type {number[]}
  */
-const toTtlOverride = ( value ) => {
-	if ( '' === value || null === value || undefined === value ) {
-		return undefined;
-	}
-	if ( typeof value === 'string' && '' === value.trim() ) {
-		return undefined;
-	}
-	const n = Number( value );
-	return Number.isFinite( n ) && n >= 0 ? n : undefined;
-};
+const TTL_VALUES = [ 0, 1, 6, 12, 24, 48, 168 ];
 
 /**
- * Allowed CDN purge services (client-side allowlist; server allowlists too).
- */
-const CDN_PURGE_SERVICES = [ 'none', 'cloudflare', 'varnish' ];
-
-/**
- * Cloudflare Zone IDs are 32-char hex. Client-side normalisation only;
- * the server treats the value as an opaque scalar (rawurlencode'd on use).
- */
-const CLOUDFLARE_ZONE_RE = /^[a-f0-9]{32}$/i;
-const normalizeCloudflareZoneId = ( raw ) => {
-	const zone = String( raw ?? '' )
-		.trim()
-		.toLowerCase();
-	return CLOUDFLARE_ZONE_RE.test( zone ) ? zone : '';
-};
-
-/**
- * Parse the Varnish purge-endpoint textarea into validated http(s) URLs.
- * Each URL later receives a server-side PURGE request, so shape-check here
- * as defense-in-depth (server allowlisting remains authoritative).
+ * Translated label for a TTL value.
  *
- * Note: private/loopback hosts are intentionally allowed — correct for
- * Varnish topology — behind the manage_options capability gate (admin-only
- * SSRF by design). Keep throttle parity with performance_scan if this is
- * ever exposed to lower roles.
- *
- * @param {string} raw Raw textarea value (URLs separated by newline, comma, semicolon or whitespace).
- * @return {string[]} Validated http(s) URLs.
+ * @since NEXT
+ * @param {number} value TTL hours (0 = never expire).
+ * @return {string} Translated label.
  */
-const parseVarnishPurgeUrls = ( raw ) => {
-	if ( typeof raw !== 'string' || '' === raw.trim() ) {
-		return [];
+const ttlLabel = ( value ) => {
+	switch ( value ) {
+		case 0:
+			return __( 'Never expire', 'performance-optimisation' );
+		case 1:
+			return __( '1 hour', 'performance-optimisation' );
+		case 6:
+			return __( '6 hours', 'performance-optimisation' );
+		case 12:
+			return __( '12 hours', 'performance-optimisation' );
+		case 24:
+			return __( '24 hours', 'performance-optimisation' );
+		case 48:
+			return __( '48 hours', 'performance-optimisation' );
+		case 168:
+			return __( '1 week', 'performance-optimisation' );
+		default:
+			return String( value );
 	}
-	return raw
-		.split( /[\n,;\s]+/ )
-		.map( ( url ) => url.trim() )
-		.filter( ( url ) => {
-			if ( ! url ) {
-				return false;
-			}
-			try {
-				const parsed = new URL( url );
-				return (
-					'http:' === parsed.protocol || 'https:' === parsed.protocol
-				);
-			} catch {
-				return false;
-			}
-		} );
-};
-
-/**
- * Normalize wppoSettings.image_info which stores arrays of file paths
- * into the {webp: count, avif: count} shape the component expects.
- * @param {Object} raw - Raw image info object.
- */
-const normalizeImageInfo = ( raw ) => {
-	const normalize = ( bucket ) => ( {
-		webp: Array.isArray( bucket?.webp )
-			? bucket.webp.length
-			: Number( bucket?.webp ) || 0,
-		avif: Array.isArray( bucket?.avif )
-			? bucket.avif.length
-			: Number( bucket?.avif ) || 0,
-	} );
-	return {
-		completed: normalize( raw?.completed ),
-		pending: normalize( raw?.pending ),
-		failed: normalize( raw?.failed ),
-	};
 };
 
 const Dashboard = ( {
@@ -509,9 +472,15 @@ const Dashboard = ( {
 			// Reuse the mount/sync-path normalizer so array-of-paths payloads
 			// (like wppoSettings.image_info) never store an Array where a
 			// count is expected (which would coerce totals to strings).
-			updateState( {
-				imageInfo: normalizeImageInfo( response.data ),
-			} );
+			// Equality-guarded: a fresh object every 5s tick would otherwise
+			// re-render the Dashboard root + MemoImageOptimizationCard even
+			// when counts are identical (matching bgJobsQueued/imgSavings).
+			const nextInfo = normalizeImageInfo( response.data );
+			setState( ( prev ) =>
+				isEqualImageInfo( prev.imageInfo, nextInfo )
+					? prev
+					: { ...prev, imageInfo: nextInfo }
+			);
 
 			if ( Number.isFinite( queuedJobs ) && queuedJobs === 0 ) {
 				setBgProcessing( false );
@@ -572,7 +541,7 @@ const Dashboard = ( {
 			const delay = hidden ? Math.max( backoff, 15000 ) : backoff;
 			pollingRef.current = setTimeout( pollJobStatus, delay );
 		}
-	}, [ updateState, notify ] );
+	}, [ notify ] );
 
 	useEffect( () => {
 		return () => {
@@ -688,6 +657,17 @@ const Dashboard = ( {
 								'Images optimized successfully.',
 								'performance-optimisation'
 							),
+							durationMs: 5000,
+						} );
+					} else {
+						notify( {
+							type: 'error',
+							message:
+								response.message ||
+								__(
+									'Image optimisation failed.',
+									'performance-optimisation'
+								),
 							durationMs: 5000,
 						} );
 					}
@@ -967,9 +947,15 @@ const Dashboard = ( {
 			) {
 				return;
 			}
-			setLoggedInCacheRoles( ( prev ) =>
-				checked ? [ ...prev, role ] : prev.filter( ( r ) => r !== role )
-			);
+			setLoggedInCacheRoles( ( prev ) => {
+				if ( ! checked ) {
+					return prev.filter( ( r ) => r !== role );
+				}
+				if ( prev.includes( role ) ) {
+					return prev;
+				}
+				return [ ...prev, role ];
+			} );
 		},
 		[ userRoles ]
 	);
@@ -1036,6 +1022,12 @@ const Dashboard = ( {
 		? __( 'Cache missing', 'performance-optimisation' )
 		: '';
 	const optimizedFilesCount = ( totalJs || 0 ) + ( totalCss || 0 );
+
+	// Concurrent savers (page-cache + CDN purge + logged-in) each snapshot
+	// the live global then spread their patch; disabling all save buttons
+	// while any save is in flight avoids lost-update interleavings.
+	const anyCacheSaving =
+		savingPageCache || savingCdnPurge || savingLoggedInCache;
 
 	let dbBadgeClass = 'wppo-status-badge--good';
 	let dbBadgeLabel = __( 'Healthy', 'performance-optimisation' );
@@ -1191,7 +1183,11 @@ const Dashboard = ( {
 			<WelcomePanel />
 
 			{ isCacheMissing && (
-				<div className="wppo-banner wppo-banner--warning" role="alert">
+				<div
+					className="wppo-banner wppo-banner--warning"
+					role="alert"
+					aria-live="assertive"
+				>
 					<span className="wppo-banner__icon" aria-hidden="true">
 						<FontAwesomeIcon icon={ faExclamationTriangle } />
 					</span>
@@ -1368,27 +1364,11 @@ const Dashboard = ( {
 						value={ cacheLife }
 						onChange={ handleCacheLifeChange }
 					>
-						<option value={ 0 }>
-							{ __( 'Never expire', 'performance-optimisation' ) }
-						</option>
-						<option value={ 1 }>
-							{ __( '1 hour', 'performance-optimisation' ) }
-						</option>
-						<option value={ 6 }>
-							{ __( '6 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 12 }>
-							{ __( '12 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 24 }>
-							{ __( '24 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 48 }>
-							{ __( '48 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 168 }>
-							{ __( '1 week', 'performance-optimisation' ) }
-						</option>
+						{ TTL_VALUES.map( ( value ) => (
+							<option key={ value } value={ value }>
+								{ ttlLabel( value ) }
+							</option>
+						) ) }
 					</select>
 					<p className="wppo-text-muted wppo-text-small">
 						{ __(
@@ -1418,27 +1398,11 @@ const Dashboard = ( {
 								'performance-optimisation'
 							) }
 						</option>
-						<option value={ 0 }>
-							{ __( 'Never expire', 'performance-optimisation' ) }
-						</option>
-						<option value={ 1 }>
-							{ __( '1 hour', 'performance-optimisation' ) }
-						</option>
-						<option value={ 6 }>
-							{ __( '6 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 12 }>
-							{ __( '12 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 24 }>
-							{ __( '24 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 48 }>
-							{ __( '48 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 168 }>
-							{ __( '1 week', 'performance-optimisation' ) }
-						</option>
+						{ TTL_VALUES.map( ( value ) => (
+							<option key={ value } value={ value }>
+								{ ttlLabel( value ) }
+							</option>
+						) ) }
 					</select>
 				</div>
 				<div className="wppo-field">
@@ -1462,27 +1426,11 @@ const Dashboard = ( {
 								'performance-optimisation'
 							) }
 						</option>
-						<option value={ 0 }>
-							{ __( 'Never expire', 'performance-optimisation' ) }
-						</option>
-						<option value={ 1 }>
-							{ __( '1 hour', 'performance-optimisation' ) }
-						</option>
-						<option value={ 6 }>
-							{ __( '6 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 12 }>
-							{ __( '12 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 24 }>
-							{ __( '24 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 48 }>
-							{ __( '48 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 168 }>
-							{ __( '1 week', 'performance-optimisation' ) }
-						</option>
+						{ TTL_VALUES.map( ( value ) => (
+							<option key={ value } value={ value }>
+								{ ttlLabel( value ) }
+							</option>
+						) ) }
 					</select>
 				</div>
 				<div className="wppo-field">
@@ -1509,27 +1457,11 @@ const Dashboard = ( {
 								'performance-optimisation'
 							) }
 						</option>
-						<option value={ 0 }>
-							{ __( 'Never expire', 'performance-optimisation' ) }
-						</option>
-						<option value={ 1 }>
-							{ __( '1 hour', 'performance-optimisation' ) }
-						</option>
-						<option value={ 6 }>
-							{ __( '6 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 12 }>
-							{ __( '12 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 24 }>
-							{ __( '24 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 48 }>
-							{ __( '48 hours', 'performance-optimisation' ) }
-						</option>
-						<option value={ 168 }>
-							{ __( '1 week', 'performance-optimisation' ) }
-						</option>
+						{ TTL_VALUES.map( ( value ) => (
+							<option key={ value } value={ value }>
+								{ ttlLabel( value ) }
+							</option>
+						) ) }
 					</select>
 					<p
 						id="wppoTtlOverrides-desc"
@@ -1778,6 +1710,7 @@ const Dashboard = ( {
 						className="wppo-button wppo-button--primary"
 						onClick={ savePageCacheSettings }
 						isLoading={ savingPageCache }
+						disabled={ anyCacheSaving }
 						label={ __(
 							'Save Page Cache Settings',
 							'performance-optimisation'
@@ -1904,6 +1837,7 @@ const Dashboard = ( {
 						className="wppo-button wppo-button--primary"
 						onClick={ saveCdnPurgeSettings }
 						isLoading={ savingCdnPurge }
+						disabled={ anyCacheSaving }
 						label={ __(
 							'Save CDN Purge',
 							'performance-optimisation'
@@ -1927,7 +1861,10 @@ const Dashboard = ( {
 				}
 			>
 				<SwitchField
-					label={ __( 'Enable', 'performance-optimisation' ) }
+					label={ __(
+						'Enable logged-in cache',
+						'performance-optimisation'
+					) }
 					description={ __(
 						'Serve cached pages to logged-in users based on their role(s). The admin bar and user-specific content are preserved per role group.',
 						'performance-optimisation'
@@ -1970,6 +1907,7 @@ const Dashboard = ( {
 						className="wppo-button wppo-button--primary"
 						onClick={ saveLoggedInCacheSettings }
 						isLoading={ savingLoggedInCache }
+						disabled={ anyCacheSaving }
 						label={ __(
 							'Save Settings',
 							'performance-optimisation'
@@ -2007,27 +1945,38 @@ const Dashboard = ( {
 				<MemoWebVitalsTrends url={ auditUrl } />
 
 				{ /* Below-fold panels mount on visibility so their REST
-				    fan-out doesn't block initial paint. */ }
+				    fan-out doesn't block initial paint; React.lazy keeps
+				    them out of the default tab-dashboard chunk. */ }
 				<LazySection>
-					{ /* Phase 3 — Real-user Web Vitals (v2.18.0) */ }
-					<MemoWebVitalsRum />
+					<Suspense fallback={ null }>
+						{ /* Phase 3 — Real-user Web Vitals (v2.18.0) */ }
+						<MemoWebVitalsRum />
+					</Suspense>
 				</LazySection>
 
 				<LazySection>
-					{ /* Phase 3 — Autoloaded options audit (v2.18.0) */ }
-					<MemoAutoloadedOptions />
+					<Suspense fallback={ null }>
+						{ /* Phase 3 — Autoloaded options audit (v2.18.0) */ }
+						<MemoAutoloadedOptions />
+					</Suspense>
 				</LazySection>
 
 				<LazySection>
-					<MemoLlmsPanel />
+					<Suspense fallback={ null }>
+						<MemoLlmsPanel />
+					</Suspense>
 				</LazySection>
 
 				<LazySection>
-					<MemoAiPanel />
+					<Suspense fallback={ null }>
+						<MemoAiPanel />
+					</Suspense>
 				</LazySection>
 
 				<LazySection>
-					<MemoEdgeCachePanel />
+					<Suspense fallback={ null }>
+						<MemoEdgeCachePanel />
+					</Suspense>
 				</LazySection>
 
 				<MemoSystemInfo />

@@ -1,3 +1,4 @@
+import { __ } from '@wordpress/i18n';
 import { isAuthErrorCode } from './authErrors';
 
 export {
@@ -114,7 +115,9 @@ const refreshNonce = async () => {
 			} );
 			if ( ! res.ok ) {
 				throw new Error(
-					'Nonce refresh failed with status ' + res.status
+					__( 'Nonce refresh failed.', 'performance-optimisation' ) +
+						' ' +
+						res.status
 				);
 			}
 			const data = await res.json();
@@ -127,7 +130,12 @@ const refreshNonce = async () => {
 					return data.data.nonce;
 				}
 			}
-			throw new Error( 'Nonce refresh returned invalid response' );
+			throw new Error(
+				__(
+					'Nonce refresh returned an invalid response.',
+					'performance-optimisation'
+				)
+			);
 		} catch ( e ) {
 			console.error( 'Nonce refresh failed:', getErrorLogMessage( e ) );
 			throw e;
@@ -250,6 +258,12 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 				! isRetrying &&
 				( response.status === 401 || response.status === 403 )
 			) {
+				if ( signal?.aborted ) {
+					throw new DOMException(
+						'The operation was aborted.',
+						'AbortError'
+					);
+				}
 				const freshNonce = await refreshNonce();
 				const retryResponse = await doFetch( freshNonce );
 				return handleResponse( retryResponse, true );
@@ -262,15 +276,26 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 		// Detect expired nonce (rest_forbidden, rest_cookie_invalid_nonce, etc.).
 		// The code list lives in ./authErrors.js; main.js/esi.js mirror it
 		// (see authSync.test.js). An HTTP 401/403 with a JSON body but no
-		// recognised code falls back to the same single retry.
+		// recognised code falls back to the same single retry. Optional
+		// chaining guards a null JSON body (response.json() may resolve to
+		// null) so the retry path is reached instead of throwing TypeError.
 		if (
-			( data.code && isAuthErrorCode( data.code ) ) ||
+			( data?.code && isAuthErrorCode( data.code ) ) ||
 			( ( response.status === 401 || response.status === 403 ) &&
-				! data.success )
+				! data?.success )
 		) {
 			if ( isRetrying ) {
 				throw new Error(
-					'Nonce retry failed — authentication error persists.'
+					__(
+						'Authentication failed. Please reload the page and try again.',
+						'performance-optimisation'
+					)
+				);
+			}
+			if ( signal?.aborted ) {
+				throw new DOMException(
+					'The operation was aborted.',
+					'AbortError'
 				);
 			}
 			const freshNonce = await refreshNonce();
@@ -336,10 +361,14 @@ export const fetchRecentActivities = ( page = 1, signal ) => {
  * authoritative.
  *
  * When homeUrl is absent (e.g. a test harness or a direct mount before
- * localisation), the origin check is skipped and any absolute http(s) URL is
- * accepted: failing closed here would brick legitimate scans, and the server
- * gate remains authoritative. Callers needing a strict gate should assert
- * homeUrl presence themselves.
+ * localisation), the origin check is skipped but loopback/private hosts are
+ * still rejected: failing closed here would brick legitimate scans, and the
+ * server gate remains authoritative. Callers needing a strict gate should
+ * assert homeUrl presence themselves.
+ *
+ * Credentialed URLs (username:password@host) are always rejected: the
+ * same-origin origin comparison strips userinfo, so without this guard
+ * credentials would be forwarded to the scanner and could leak to logs.
  *
  * @since 2.0.0
  * @param {string} url Raw scan URL.
@@ -360,6 +389,9 @@ export const isValidScanUrl = ( url ) => {
 	if ( 'http:' !== parsed.protocol && 'https:' !== parsed.protocol ) {
 		return false;
 	}
+	if ( parsed.username || parsed.password ) {
+		return false;
+	}
 	try {
 		if (
 			typeof wppoSettings !== 'undefined' &&
@@ -370,11 +402,58 @@ export const isValidScanUrl = ( url ) => {
 			if ( parsed.origin !== home.origin ) {
 				return false;
 			}
+		} else if ( isLocalOrPrivateHost( parsed.hostname ) ) {
+			return false;
 		}
 	} catch {
 		return false;
 	}
 	return true;
+};
+
+/**
+ * Check whether a hostname is loopback, link-local or RFC1918/ULA private.
+ *
+ * Client-side defense-in-depth for the homeUrl-absent fallback path of
+ * isValidScanUrl() only; the server allowlist remains authoritative.
+ *
+ * @since NEXT
+ * @param {string} hostname Lowercased hostname (no port).
+ * @return {boolean} True for localhost/loopback/private hosts.
+ */
+const isLocalOrPrivateHost = ( hostname ) => {
+	const host = String( hostname || '' ).toLowerCase();
+	if (
+		! host ||
+		host === 'localhost' ||
+		host === '[::1]' ||
+		host === '::1'
+	) {
+		return true;
+	}
+	// IPv4 loopback / link-local / private ranges.
+	if ( /^127\./.test( host ) || /^169\.254\./.test( host ) ) {
+		return true;
+	}
+	if ( /^10\./.test( host ) || /^192\.168\./.test( host ) ) {
+		return true;
+	}
+	const m172 = host.match( /^172\.(\d+)\./ );
+	if ( m172 ) {
+		const second = Number( m172[ 1 ] );
+		if ( second >= 16 && second <= 31 ) {
+			return true;
+		}
+	}
+	// Unique-local / link-local IPv6.
+	if (
+		host.startsWith( 'fc' ) ||
+		host.startsWith( 'fd' ) ||
+		host.startsWith( 'fe80' )
+	) {
+		return true;
+	}
+	return false;
 };
 
 /**
@@ -423,7 +502,10 @@ export const assertScanUrl = ( url, allowEmpty = false ) => {
 	}
 	if ( ! isValidScanUrl( url ) ) {
 		throw new Error(
-			'Invalid scan URL: must be a same-origin http(s) URL.'
+			__(
+				'Invalid scan URL: must be a same-origin http(s) URL.',
+				'performance-optimisation'
+			)
 		);
 	}
 };
@@ -440,8 +522,14 @@ export const assertScanStrategy = ( strategy, allowEmpty = false ) => {
 	if ( ! isValidScanStrategy( strategy, allowEmpty ) ) {
 		throw new Error(
 			allowEmpty
-				? "Invalid strategy: must be 'mobile', 'desktop' or ''."
-				: "Invalid strategy: must be 'mobile' or 'desktop'."
+				? __(
+						"Invalid strategy: must be 'mobile', 'desktop' or ''.",
+						'performance-optimisation'
+				  )
+				: __(
+						"Invalid strategy: must be 'mobile' or 'desktop'.",
+						'performance-optimisation'
+				  )
 		);
 	}
 };
@@ -466,9 +554,6 @@ export const isValidScanStrategy = ( strategy, allowEmpty = false ) => {
 	if ( typeof strategy !== 'string' ) {
 		return false;
 	}
-	if ( allowEmpty && '' === strategy ) {
-		return true;
-	}
 	return SCAN_STRATEGIES.includes( strategy );
 };
 
@@ -492,6 +577,69 @@ export const runPerformanceScan = ( url, force = false, signal ) => {
 };
 
 /**
+ * Shared TTL + inflight cache for idempotent GETs (system_info,
+ * server_rules, woo_cache_self_test) so Dashboard remounts reuse data
+ * instead of refetching expensive endpoints. Mirrors the dbCounts
+ * inflight+TTL pattern. Only successful responses are cached.
+ *
+ * @since NEXT
+ */
+const IDEMPOTENT_GET_TTL_MS = 60000;
+const idempotentGetCache = new Map();
+
+const getCachedIdempotentGet = ( key, signal, fetcher ) => {
+	const now = Date.now();
+	const entry = idempotentGetCache.get( key );
+	if ( entry?.data && now - entry.at < IDEMPOTENT_GET_TTL_MS ) {
+		if ( signal?.aborted ) {
+			throw new DOMException(
+				'The operation was aborted.',
+				'AbortError'
+			);
+		}
+		return Promise.resolve( entry.data );
+	}
+	if ( entry?.inflight && entry.signal === ( signal ?? null ) ) {
+		return entry.inflight;
+	}
+	const request = fetcher().then( ( response ) => {
+		if ( response && response.success ) {
+			idempotentGetCache.set( key, {
+				data: response,
+				at: Date.now(),
+				inflight: null,
+				signal: null,
+			} );
+		} else {
+			idempotentGetCache.delete( key );
+		}
+		return response;
+	} );
+	request.catch( () => {
+		if ( idempotentGetCache.get( key )?.inflight === request ) {
+			idempotentGetCache.delete( key );
+		}
+	} );
+	idempotentGetCache.set( key, {
+		data: entry?.data ?? null,
+		at: entry?.at ?? 0,
+		inflight: request,
+		signal: signal ?? null,
+	} );
+	return request;
+};
+
+/**
+ * Clear the idempotent GET cache (primarily for tests).
+ *
+ * @since NEXT
+ * @return {void}
+ */
+export const clearIdempotentGetCache = () => {
+	idempotentGetCache.clear();
+};
+
+/**
  * Fetch system information (PHP, DB, WordPress, server, cache).
  *
  * @since 1.5.0
@@ -500,7 +648,9 @@ export const runPerformanceScan = ( url, force = false, signal ) => {
  * @return {Promise<Object>} Resolved system info data.
  */
 export const fetchSystemInfo = ( signal ) => {
-	return apiCall( 'system_info', {}, 'GET', signal );
+	return getCachedIdempotentGet( 'system_info', signal, () =>
+		apiCall( 'system_info', {}, 'GET', signal )
+	);
 };
 
 /**
@@ -603,7 +753,9 @@ export const fetchSuggestions = ( url, signal ) => {
  * @return {Promise<Object>} Resolved server rules data.
  */
 export const fetchServerRules = ( signal ) => {
-	return apiCall( 'server_rules', {}, 'GET', signal );
+	return getCachedIdempotentGet( 'server_rules', signal, () =>
+		apiCall( 'server_rules', {}, 'GET', signal )
+	);
 };
 
 /**
@@ -621,5 +773,7 @@ export const fetchServerRules = ( signal ) => {
  * @return {Promise<Object>} Resolved self-test result data.
  */
 export const fetchWooCacheSelfTest = ( signal ) => {
-	return apiCall( 'woo_cache_self_test', {}, 'GET', signal );
+	return getCachedIdempotentGet( 'woo_cache_self_test', signal, () =>
+		apiCall( 'woo_cache_self_test', {}, 'GET', signal )
+	);
 };
