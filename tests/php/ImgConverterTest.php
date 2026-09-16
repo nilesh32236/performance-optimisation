@@ -1488,4 +1488,180 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		$this->assertFalse( $converter->convert_image( $this->uploads_dir . '/../wp-config.php', 'webp' ) );
 		$this->assertFalse( $converter->convert_image( 'https://evil.example.com/img.jpg', 'webp' ) );
 	}
+
+	/**
+	 * Memory-safe edge math: an over-budget source yields a shrunk longest
+	 * edge while a fitting source yields 0 (legacy path unchanged) (#1236).
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_memory_safe_edge_px_math_and_fit(): void {
+		// phpcs:ignore WordPress.PHP.IniSet.memory_limit_Disallowed -- Test pins a deterministic memory limit.
+		$previous = ini_set( 'memory_limit', '80M' );
+		try {
+			// Longest-edge cap disabled so the raw memory math is asserted.
+			$converter = $this->make_converter( array( 'maxLongestEdgePx' => 0 ) );
+
+			// 4000x3000x4 = 48M estimated vs 40M budget:
+			// scale = sqrt(41943040/48000000), safe = floor(4000*scale) = 3739.
+			$this->assertSame( 3739, $converter->get_memory_safe_edge_px( 4000, 3000, 4 ) );
+
+			// A small source fits the budget: legacy path unchanged.
+			$this->assertSame( 0, $converter->get_memory_safe_edge_px( 64, 48, 4 ) );
+
+			// Invalid dimensions never produce an edge.
+			$this->assertSame( 0, $converter->get_memory_safe_edge_px( 0, 100, 4 ) );
+		} finally {
+			if ( false !== $previous ) {
+				// phpcs:ignore WordPress.PHP.IniSet.memory_limit_Disallowed -- Test restores the original memory limit.
+				ini_set( 'memory_limit', (string) $previous );
+			}
+		}
+	}
+
+	/**
+	 * The memory-safe edge filter clamps to the 256px floor and honours
+	 * disable-via-zero, matching the computed-path clamp (#1236).
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_memory_safe_edge_px_filter_floor_and_disable(): void {
+		// phpcs:ignore WordPress.PHP.IniSet.memory_limit_Disallowed -- Test pins a deterministic memory limit.
+		$previous = ini_set( 'memory_limit', '80M' );
+		Functions\when( 'has_filter' )->justReturn( true );
+		try {
+			// Longest-edge cap disabled so the filter clamp is asserted raw.
+			$converter = $this->make_converter( array( 'maxLongestEdgePx' => 0 ) );
+			// A 1px filter override must clamp to the 256px floor, not
+			// record a 1px output as completed.
+			Functions\when( 'apply_filters' )->alias(
+				static function ( $hook_name, $value ) {
+					if ( 'wppo_memory_safe_edge_px' === $hook_name ) {
+						return 1;
+					}
+					return $value;
+				}
+			);
+			$this->assertSame( 256, $converter->get_memory_safe_edge_px( 4000, 3000, 4 ) );
+
+			// Zero disables the fallback: caller keeps the legacy path.
+			Functions\when( 'apply_filters' )->alias(
+				static function ( $hook_name, $value ) {
+					if ( 'wppo_memory_safe_edge_px' === $hook_name ) {
+						return 0;
+					}
+					return $value;
+				}
+			);
+			$this->assertSame( 0, $this->make_converter()->get_memory_safe_edge_px( 4000, 3000, 4 ) );
+		} finally {
+			if ( false !== $previous ) {
+				// phpcs:ignore WordPress.PHP.IniSet.memory_limit_Disallowed -- Test restores the original memory limit.
+				ini_set( 'memory_limit', (string) $previous );
+			}
+		}
+	}
+
+	/**
+	 * Explicit-edge downscale shrinks oversized resources, keeps fitting
+	 * ones, and fails open on invalid edges (#1236).
+	 *
+	 * @since NEXT
+	 */
+	public function test_maybe_downscale_gd_image_to_edge(): void {
+		if ( ! function_exists( 'imagecreatetruecolor' ) ) {
+			$this->markTestSkipped( 'GD support is required.' );
+		}
+
+		$converter = $this->make_converter();
+
+		$image  = imagecreatetruecolor( 64, 48 );
+		$result = $converter->maybe_downscale_gd_image_to_edge( $image, 64, 48, 32 );
+		$this->assertNotSame( $image, $result );
+		$this->assertSame( 32, imagesx( $result ) );
+		$this->assertSame( 24, imagesy( $result ) );
+		Util::destroy_gd_image( $image );
+		Util::destroy_gd_image( $result );
+
+		// Already within the edge: original resource retained (never enlarged).
+		$small = imagecreatetruecolor( 16, 12 );
+		$this->assertSame( $small, $converter->maybe_downscale_gd_image_to_edge( $small, 16, 12, 32 ) );
+		Util::destroy_gd_image( $small );
+
+		// Invalid edge fails open to the original resource.
+		$odd = imagecreatetruecolor( 8, 8 );
+		$this->assertSame( $odd, $converter->maybe_downscale_gd_image_to_edge( $odd, 8, 8, 0 ) );
+		Util::destroy_gd_image( $odd );
+	}
+
+	/**
+	 * Over-budget sources without an Imagick low-memory route keep the
+	 * legacy skip instead of attempting a full-size GD decode that would
+	 * risk an allowed-memory fatal (#1236).
+	 *
+	 * @since NEXT
+	 */
+	public function test_convert_image_overbudget_without_imagick_skips(): void {
+		if ( extension_loaded( 'imagick' ) ) {
+			$this->markTestSkipped( 'Requires a host without the Imagick extension.' );
+		}
+
+		// phpcs:ignore WordPress.PHP.IniSet.memory_limit_Disallowed -- Test forces the unlimited-memory fallback path deterministically.
+		$previous = ini_set( 'memory_limit', '-1' );
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook_name, $value ) {
+				if ( 'wppo_max_source_pixels' === $hook_name ) {
+					return 1000;
+				}
+				return $value;
+			}
+		);
+		// Force the core-handles probe false so conversion reaches the
+		// pixel-budget guard instead of the WP 6.7+ core skip (same
+		// Patchwork pattern as the downscale test above).
+		$function_exists_handle = \Patchwork\redefine(
+			'function_exists',
+			static function ( $function_name ) {
+				return 'wp_image_quality' !== $function_name;
+			}
+		);
+		$path                   = $this->uploads_dir . '/overbudget-noimagick.png';
+		$image                  = imagecreatetruecolor( 1200, 900 );
+		$color                  = imagecolorallocate( $image, 10, 120, 200 );
+		imagefill( $image, 0, 0, $color );
+		imagepng( $image, $path );
+		Util::destroy_gd_image( $image );
+		try {
+			$converter = $this->make_converter(
+				array(
+					'conversionFormat'        => 'webp',
+					'skipSmallThresholdBytes' => 0,
+				)
+			);
+
+			// Prove the fixture exercises the new path: a non-zero safe
+			// edge (256px floor) with no Imagick route available.
+			$this->assertSame( 256, $converter->get_memory_safe_edge_px( 1200, 900, 4 ) );
+			$this->assertFalse( $converter->convert_image( $path, 'webp' ) );
+			\Patchwork\restore( $function_exists_handle );
+
+			$this->assertFileExists( $path, 'Original must stay restorable' );
+			$this->assertFileDoesNotExist( Img_Converter::get_img_path( $path, 'webp' ) );
+
+			$full_rel = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $path ) );
+			$info     = Img_Converter::get_img_info();
+			$this->assertContains( $full_rel, $info['skipped']['webp'] ?? array() );
+		} finally {
+			\Patchwork\restore( $function_exists_handle );
+			if ( false !== $previous ) {
+				// phpcs:ignore WordPress.PHP.IniSet.memory_limit_Disallowed -- Test restores the original memory limit.
+				ini_set( 'memory_limit', (string) $previous );
+			}
+			if ( file_exists( $path ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+				unlink( $path );
+			}
+		}
+	}
 }
