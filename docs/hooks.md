@@ -1057,7 +1057,7 @@ Trusted-code-only: a non-array return falls back to the pre-filter rules and non
 ### `wppo_speculation_prerender_list_urls`
 Filters the high-value prerender list URLs before the dedicated prerender rule is registered/appended. @since NEXT.
 
-Emitted as a `{"source":"list"}` prerender rule with `moderate` eagerness via `Main::wppo_register_speculation_rules()` (WP 6.8+ object path and legacy array path) when `preload_settings.enableSpeculationRules` and the opt-in `preload_settings.speculationPrerenderList` are on, the static-cache + RUM-qualified gate passes, and the visitor is not logged-in/commerce. Post-filter output is re-validated (same-origin, no commerce/query), deduped, and re-sliced to `speculationTopUrlsLimit`.
+Emitted as a `{"source":"list"}` prerender rule with `moderate` eagerness via `Main::register_speculation_prerender_rule()` (`wppo_register_speculation_rules()` alias kept for BC; WP 6.8+ object path and legacy array path) when `preload_settings.enableSpeculationRules` and the opt-in `preload_settings.speculationPrerenderList` are on, the static-cache + RUM-qualified gate passes, and the visitor is not logged-in/commerce. Post-filter output is re-validated (same-origin, no commerce/query), deduped, and re-sliced to `speculationTopUrlsLimit`. On WP 6.8+ the object path owns the rule (single ownership): the legacy array append inside `filter_speculation_list_rules()` is skipped while the carve-out still applies, so no duplicate is emitted past the cap.
 
 **Parameters:**
 - `$urls` *(string[])* — Validated prerender URLs (home + capped RUM top URLs).
@@ -1075,7 +1075,7 @@ Post-filter validation enforces `source: list`, an allowlisted eagerness (invali
 ---
 
 ### `wppo_speculation_prerender_list_rules`
-Filters the speculation rules after the high-value prerender list rule is appended (legacy array path only; the WP 6.8+ object path registers via `add_rule()` instead). @since NEXT.
+Filters the speculation rules after the high-value prerender list rule is appended. Array-path-only by design (the WP 6.8+ object path registers via `add_rule()` on a `WP_Speculation_Rules` object, not an array, so this hook never fires there; object-path dedupe is intra-list only — the object exposes no list-URL getter, a known core-API limitation guarded by the singleton rule ID). @since NEXT.
 
 Trusted-code-only: a non-array return falls back to the pre-filter rules and non-array entries are dropped.
 

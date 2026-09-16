@@ -559,4 +559,46 @@ describe( 'PreloadSettings Component', () => {
 			).toBeInTheDocument();
 		} );
 	} );
+
+	it( 'renders the prerender toggle OFF for a legacy string false value', () => {
+		render(
+			<PreloadSettings
+				options={ {
+					enableSpeculationRules: true,
+					speculationPrerenderList: 'false',
+				} }
+			/>
+		);
+
+		const toggle = screen.getByLabelText( /Prerender High-Value URLs/i );
+		expect( toggle ).not.toBeChecked();
+	} );
+
+	it( 'renders the prerender toggle ON for a true value and posts a bool on save', async () => {
+		render(
+			<PreloadSettings
+				options={ {
+					enableSpeculationRules: true,
+					speculationPrerenderList: true,
+				} }
+			/>
+		);
+
+		expect(
+			screen.getByLabelText( /Prerender High-Value URLs/i )
+		).toBeChecked();
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Save Settings/i } )
+		);
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith( 'update_settings', {
+				tab: 'preload_settings',
+				settings: expect.objectContaining( {
+					speculationPrerenderList: expect.any( Boolean ),
+				} ),
+			} );
+		} );
+	} );
 } );

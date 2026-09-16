@@ -1204,63 +1204,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// Preserve the RUM-gated speculation toggle when the request
 			// omits it (issue #1061): PreloadSettings save posts only the
 			// toggles it renders, so a save must not wipe the gating flag.
-			if ( 'preload_settings' === $tab && ! array_key_exists( 'speculationRumGating', $settings ) && isset( $options['preload_settings']['speculationRumGating'] ) ) {
-				// Same filter_var() normalization as
-				// Util::sanitize_settings_recursively() so a stored string
-				// shape (e.g. 'false') does not diverge between the two paths.
-				$stored = $options['preload_settings']['speculationRumGating'];
-				if ( is_bool( $stored ) ) {
-					$sanitized_settings['speculationRumGating'] = $stored;
-				} else {
-					$bool                                       = filter_var( $stored, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
-					$sanitized_settings['speculationRumGating'] = null === $bool ? true : $bool;
-				}
-			}
+			if ( 'preload_settings' === $tab ) {
+				$this->preserve_bool_setting( 'preload_settings', 'speculationRumGating', $settings, $options, $sanitized_settings, true );
 
-			// Preserve the RUM-weighted top-URL cap when the request omits
-			// it (issue #1183): same partial-save hazard as the gating flag
-			// above — an older client/partial save must not wipe the cap.
-			if ( 'preload_settings' === $tab && ! array_key_exists( 'speculationTopUrlsLimit', $settings ) && isset( $options['preload_settings']['speculationTopUrlsLimit'] ) ) {
-				$stored = $options['preload_settings']['speculationTopUrlsLimit'];
-				$limit  = is_numeric( $stored ) ? (int) $stored : 2;
-				$sanitized_settings['speculationTopUrlsLimit'] = ( $limit >= 1 && $limit <= 5 ) ? $limit : 2;
-			}
+				// Preserve the RUM-weighted top-URL cap when the request omits
+				// it (issue #1183): same partial-save hazard as the gating flag
+				// above — an older client/partial save must not wipe the cap.
+				$this->preserve_int_clamped_setting( 'preload_settings', 'speculationTopUrlsLimit', $settings, $options, $sanitized_settings, 1, 5, 2 );
 
-			// Preserve the high-value prerender list toggle when the
-			// request omits it (issue #1237): same partial-save hazard —
-			// an older client/partial save must not wipe the off-by-default
-			// flag. Normalized like sanitize_settings_recursively().
-			if ( 'preload_settings' === $tab && ! array_key_exists( 'speculationPrerenderList', $settings ) && isset( $options['preload_settings']['speculationPrerenderList'] ) ) {
-				$stored = $options['preload_settings']['speculationPrerenderList'];
-				if ( is_bool( $stored ) ) {
-					$sanitized_settings['speculationPrerenderList'] = $stored;
-				} else {
-					$bool = filter_var( $stored, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
-					$sanitized_settings['speculationPrerenderList'] = null === $bool ? false : $bool;
-				}
-			}
+				// Preserve the high-value prerender list toggle when the
+				// request omits it (issue #1237): same partial-save hazard —
+				// an older client/partial save must not wipe the off-by-default
+				// flag. Normalized like sanitize_settings_recursively().
+				$this->preserve_bool_setting( 'preload_settings', 'speculationPrerenderList', $settings, $options, $sanitized_settings, false );
 
-			// Preserve the automatic LCP + font-discovery toggles when the
-			// request omits them (issue #1216): same partial-save hazard —
-			// an older client/partial save must not wipe the off-by-default
-			// flags. Normalized like sanitize_settings_recursively().
-			if ( 'preload_settings' === $tab && ! array_key_exists( 'autoLcpPreload', $settings ) && isset( $options['preload_settings']['autoLcpPreload'] ) ) {
-				$stored = $options['preload_settings']['autoLcpPreload'];
-				if ( is_bool( $stored ) ) {
-					$sanitized_settings['autoLcpPreload'] = $stored;
-				} else {
-					$bool                                 = filter_var( $stored, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
-					$sanitized_settings['autoLcpPreload'] = null === $bool ? false : $bool;
-				}
-			}
-			if ( 'preload_settings' === $tab && ! array_key_exists( 'autoDiscoverFonts', $settings ) && isset( $options['preload_settings']['autoDiscoverFonts'] ) ) {
-				$stored = $options['preload_settings']['autoDiscoverFonts'];
-				if ( is_bool( $stored ) ) {
-					$sanitized_settings['autoDiscoverFonts'] = $stored;
-				} else {
-					$bool                                    = filter_var( $stored, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
-					$sanitized_settings['autoDiscoverFonts'] = null === $bool ? false : $bool;
-				}
+				// Preserve the automatic LCP + font-discovery toggles when the
+				// request omits them (issue #1216): same partial-save hazard —
+				// an older client/partial save must not wipe the off-by-default
+				// flags. Normalized like sanitize_settings_recursively().
+				$this->preserve_bool_setting( 'preload_settings', 'autoLcpPreload', $settings, $options, $sanitized_settings, false );
+				$this->preserve_bool_setting( 'preload_settings', 'autoDiscoverFonts', $settings, $options, $sanitized_settings, false );
 			}
 
 			$merged_options = $options;
@@ -1309,6 +1272,60 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 */
 		private function sanitize_settings_recursively( $settings ) {
 			return Util::sanitize_settings_recursively( $settings );
+		}
+
+		/**
+		 * Preserve a boolean tab key across partial saves (issue #1237 follow-up).
+		 *
+		 * Older clients post only the toggles they render; when the request
+		 * omits `$key`, the stored value is carried into `$sanitized` with
+		 * the same filter_var() normalization as
+		 * Util::sanitize_settings_recursively() so a stored string shape
+		 * (e.g. 'false') does not diverge between the two paths.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $tab       Settings tab name.
+		 * @param string $key       Boolean key within the tab.
+		 * @param array  $settings  Raw request settings (key-existence check).
+		 * @param array  $options   Stored options.
+		 * @param array  $sanitized Sanitized settings (by reference).
+		 * @param bool   $default   Fallback when the stored value is unparseable.
+		 * @return void
+		 */
+		private function preserve_bool_setting( string $tab, string $key, array $settings, array $options, array &$sanitized, bool $default ): void {
+			if ( ! array_key_exists( $key, $settings ) && isset( $options[ $tab ][ $key ] ) ) {
+				$stored = $options[ $tab ][ $key ];
+				if ( is_bool( $stored ) ) {
+					$sanitized[ $key ] = $stored;
+					return;
+				}
+				$bool              = filter_var( $stored, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+				$sanitized[ $key ] = null === $bool ? $default : $bool;
+			}
+		}
+
+		/**
+		 * Preserve a clamped-int tab key across partial saves (issue #1237 follow-up).
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $tab       Settings tab name.
+		 * @param string $key       Integer key within the tab.
+		 * @param array  $settings  Raw request settings (key-existence check).
+		 * @param array  $options   Stored options.
+		 * @param array  $sanitized Sanitized settings (by reference).
+		 * @param int    $min       Minimum allowed value.
+		 * @param int    $max       Maximum allowed value.
+		 * @param int    $default   Fallback when the stored value is out of range.
+		 * @return void
+		 */
+		private function preserve_int_clamped_setting( string $tab, string $key, array $settings, array $options, array &$sanitized, int $min, int $max, int $default ): void {
+			if ( ! array_key_exists( $key, $settings ) && isset( $options[ $tab ][ $key ] ) ) {
+				$stored            = $options[ $tab ][ $key ];
+				$limit             = is_numeric( $stored ) ? (int) $stored : $default;
+				$sanitized[ $key ] = ( $limit >= $min && $limit <= $max ) ? $limit : $default;
+			}
 		}
 
 		/**

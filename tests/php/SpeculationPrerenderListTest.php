@@ -74,8 +74,8 @@ class SpeculationPrerenderListTest extends \PHPUnit\Framework\TestCase {
 		Main::reset_speculation_url_memo();
 		$this->had_wp_version      = array_key_exists( 'wp_version', $GLOBALS );
 		$this->previous_wp_version = $GLOBALS['wp_version'] ?? null;
-		$this->filter_overrides = array();
-		$overrides              = &$this->filter_overrides;
+		$this->filter_overrides    = array();
+		$overrides                 = &$this->filter_overrides;
 		Functions\when( 'apply_filters' )->alias(
 			static function ( $hook, $value ) use ( &$overrides ) {
 				$hook = (string) $hook;
@@ -178,9 +178,9 @@ class SpeculationPrerenderListTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function prerender_on(): array {
 		return array(
-			'enableSpeculationRules' => true,
+			'enableSpeculationRules'   => true,
 			'speculationPrerenderList' => true,
-			'speculationTopUrlsLimit' => 2,
+			'speculationTopUrlsLimit'  => 2,
 		);
 	}
 
@@ -194,7 +194,13 @@ class SpeculationPrerenderListTest extends \PHPUnit\Framework\TestCase {
 		$main = $this->make_main( array( 'enableSpeculationRules' => true ) );
 
 		$this->assertSame( array(), $main->wppo_register_speculation_rules( array() ) );
-		$rules = array( array( 'source' => 'list', 'urls' => array( 'http://example.com/a/' ), 'eagerness' => 'conservative' ) );
+		$rules = array(
+			array(
+				'source'    => 'list',
+				'urls'      => array( 'http://example.com/a/' ),
+				'eagerness' => 'conservative',
+			),
+		);
 		$this->assertSame( $rules, $main->wppo_register_speculation_rules( $rules ) );
 		$this->assertSame( 'nope', $main->wppo_register_speculation_rules( 'nope' ) );
 		$this->assertNull( $main->wppo_register_speculation_rules( null ) );
@@ -210,7 +216,13 @@ class SpeculationPrerenderListTest extends \PHPUnit\Framework\TestCase {
 		$main = $this->make_main( $this->prerender_on() );
 
 		Functions\when( 'is_user_logged_in' )->justReturn( true );
-		$rules = array( array( 'source' => 'list', 'urls' => array( 'http://example.com/a/' ), 'eagerness' => 'conservative' ) );
+		$rules = array(
+			array(
+				'source'    => 'list',
+				'urls'      => array( 'http://example.com/a/' ),
+				'eagerness' => 'conservative',
+			),
+		);
 		$this->assertSame( $rules, $main->wppo_register_speculation_rules( $rules, array( 'http://example.com/b/' ) ) );
 	}
 
@@ -440,5 +452,136 @@ class SpeculationPrerenderListTest extends \PHPUnit\Framework\TestCase {
 		);
 
 		$this->assertFalse( $sanitized['preload_settings']['speculationPrerenderList'] );
+	}
+
+	/**
+	 * Legacy stored string 'false' reads as disabled (no prerender output).
+	 *
+	 * @return void
+	 */
+	public function test_string_false_read_path_stays_disabled(): void {
+		$this->install_settings( array( 'enableSpeculationRules' => true ) );
+		$main = $this->make_main(
+			array(
+				'enableSpeculationRules'   => true,
+				'speculationPrerenderList' => 'false',
+				'speculationTopUrlsLimit'  => 2,
+			)
+		);
+
+		$this->assertSame( array(), $main->wppo_register_speculation_rules( array(), array( 'http://example.com/seed/' ) ) );
+		$this->assertSame( array(), $main->register_speculation_prerender_rule( array(), array( 'http://example.com/seed/' ) ) );
+	}
+
+	/**
+	 * Canonical method name works and the legacy alias delegates to it.
+	 *
+	 * @return void
+	 */
+	public function test_canonical_alias_delegates(): void {
+		$this->install_settings( $this->prerender_on() );
+		// Array path skips its append when the 6.8 object path is active
+		// (single ownership), so exercise the legacy path below 6.8 here.
+		$GLOBALS['wp_version'] = '6.7';
+		$first                 = $this->make_main( $this->prerender_on() );
+		$second                = $this->make_main( $this->prerender_on() );
+
+		$via_alias     = $first->wppo_register_speculation_rules( array(), array( 'http://example.com/seed/' ) );
+		$via_canonical = $second->register_speculation_prerender_rule( array(), array( 'http://example.com/seed/' ) );
+
+		$this->assertSame( $via_canonical, $via_alias );
+		$this->assertCount( 1, $via_canonical );
+		$GLOBALS['wp_version'] = '6.8';
+	}
+
+	/**
+	 * Repeated array-path calls never append a second prerender rule.
+	 *
+	 * @return void
+	 */
+	public function test_array_path_appends_prerender_once(): void {
+		$this->install_settings( $this->prerender_on() );
+		$GLOBALS['wp_version'] = '6.7';
+		$main                  = $this->make_main( $this->prerender_on() );
+
+		$once  = $main->register_speculation_prerender_rule( array(), array( 'http://example.com/seed/' ) );
+		$twice = $main->register_speculation_prerender_rule( $once, array( 'http://example.com/other/' ) );
+
+		$this->assertSame( $once, $twice );
+		$GLOBALS['wp_version'] = '6.8';
+	}
+
+	/**
+	 * Migration backfills the absent toggle to false and preserves explicit values.
+	 *
+	 * @return void
+	 */
+	public function test_migration_backfills_absent_and_preserves_explicit(): void {
+		Functions\when( 'current_user_can' )->justReturn( true );
+		Functions\when( 'update_option' )->justReturn( true );
+		Functions\when( '__' )->returnArg();
+		Functions\when( 'wp_kses_post' )->returnArg();
+		global $wpdb;
+		$original_wpdb = $wpdb; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
+		$wpdb          = new class() { // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
+			/**
+			 * Table prefix.
+			 *
+			 * @var string
+			 */
+			public $prefix = 'wp_';
+			/**
+			 * Record an insert into the activity log table.
+			 *
+			 * @param string $table  Table name.
+			 * @param array  $data   Data to insert.
+			 * @param array  $format Format array.
+			 * @return int
+			 */
+			public function insert( $table, $data, $format = array() ) {
+				return 1;
+			}
+		};
+
+		try {
+			// Absent key backfills.
+			Functions\when( 'get_option' )->alias(
+				static function ( $key, $default_value = false ) {
+					if ( 'wppo_settings' === $key ) {
+						return array( 'preload_settings' => array( 'enablePreloadCache' => true ) );
+					}
+					return $default_value;
+				}
+			);
+			$main = $this->make_main( array() );
+			$main->maybe_migrate_speculation_prerender_list();
+			$options_prop = new \ReflectionProperty( Main::class, 'options' );
+			$options_prop->setAccessible( true );
+			$options = $options_prop->getValue( $main );
+			$this->assertFalse( $options['preload_settings']['speculationPrerenderList'] );
+
+			// Explicit true is preserved (no write path exercised here —
+			// the method returns before update_option).
+			Functions\when( 'get_option' )->alias(
+				static function ( $key, $default_value = false ) {
+					if ( 'wppo_settings' === $key ) {
+						return array( 'preload_settings' => array( 'speculationPrerenderList' => true ) );
+					}
+					return $default_value;
+				}
+			);
+			$main2 = $this->make_main( array( 'speculationPrerenderList' => true ) );
+			$main2->maybe_migrate_speculation_prerender_list();
+			$options2 = $options_prop->getValue( $main2 );
+			$this->assertTrue( $options2['preload_settings']['speculationPrerenderList'] );
+
+			// Non-array stored row is skipped without fatal.
+			Functions\when( 'get_option' )->justReturn( false );
+			$main3 = $this->make_main( array() );
+			$main3->maybe_migrate_speculation_prerender_list();
+			$this->assertTrue( true );
+		} finally {
+			$wpdb = $original_wpdb; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
+		}
 	}
 }
