@@ -540,6 +540,108 @@ class WooSafeModeTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Self-test includes fragment probes that all bypass on defaults (issue #1197).
+	 *
+	 * `?wc-ajax=`, `?add-to-cart=` and the plain-permalink Store API form
+	 * (`?rest_route=/wc/store/...`) must be non-cacheable with safe mode on.
+	 */
+	public function test_woo_cache_self_test_fragment_probes_pass_on_defaults(): void {
+		$this->stub_front_end_guests();
+		$this->stub_self_test_urls();
+
+		$result = \PerformanceOptimise\Inc\Util::woo_cache_self_test();
+
+		$this->assertTrue( $result['runnable'] );
+		$this->assertTrue( $result['safe_mode'] );
+		$this->assertTrue( $result['all_pass'] );
+		$this->assertArrayHasKey( 'fragment_checks', $result );
+		$this->assertCount( 3, $result['fragment_checks'] );
+
+		$by_path = array();
+		foreach ( $result['fragment_checks'] as $check ) {
+			$by_path[ $check['path'] ] = $check;
+		}
+
+		$this->assertArrayHasKey( '/?wc-ajax=get_refreshed_fragments', $by_path );
+		$this->assertArrayHasKey( '/?add-to-cart=123', $by_path );
+		$this->assertArrayHasKey( '/?rest_route=/wc/store/v1/cart', $by_path );
+
+		foreach ( $result['fragment_checks'] as $check ) {
+			$this->assertTrue( $check['is_dynamic'] );
+			$this->assertFalse( $check['cacheable'] );
+			$this->assertTrue( $check['donotcachepage_honored'] );
+			$this->assertTrue( $check['pass'] );
+			$this->assertArrayNotHasKey( 'error', $check );
+		}
+	}
+
+	/**
+	 * Self-test fragment probes with safe mode off (issue #1197).
+	 *
+	 * The safe-mode-gated `?add-to-cart=` probe becomes cacheable
+	 * (pass=false) while `?wc-ajax=` (pre-boot drop-in guard) and the
+	 * plain-permalink Store API probe stay uncacheable unconditionally.
+	 */
+	public function test_woo_cache_self_test_fragments_safe_mode_off(): void {
+		$this->stub_front_end_guests();
+		$this->stub_self_test_urls();
+		Functions\when( 'get_option' )->justReturn( array( 'cache_settings' => array( 'wooSafeMode' => false ) ) );
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+
+		$result = \PerformanceOptimise\Inc\Util::woo_cache_self_test();
+
+		$this->assertTrue( $result['runnable'] );
+		$this->assertFalse( $result['safe_mode'] );
+		$this->assertFalse( $result['all_pass'] );
+
+		$by_path = array();
+		foreach ( $result['fragment_checks'] as $check ) {
+			$by_path[ $check['path'] ] = $check;
+		}
+
+		$this->assertTrue( $by_path['/?add-to-cart=123']['cacheable'] );
+		$this->assertFalse( $by_path['/?add-to-cart=123']['pass'] );
+		$this->assertFalse( $by_path['/?wc-ajax=get_refreshed_fragments']['cacheable'] );
+		$this->assertTrue( $by_path['/?wc-ajax=get_refreshed_fragments']['pass'] );
+		$this->assertFalse( $by_path['/?rest_route=/wc/store/v1/cart']['cacheable'] );
+		$this->assertTrue( $by_path['/?rest_route=/wc/store/v1/cart']['pass'] );
+	}
+
+	/**
+	 * A wc-ajax fragment query bypasses the cache at serve time (issue #1197).
+	 */
+	public function test_wc_ajax_query_string_is_not_cacheable(): void {
+		$this->stub_front_end_guests();
+		$_GET['wc-ajax']         = 'get_refreshed_fragments';
+		$_SERVER['QUERY_STRING'] = 'wc-ajax=get_refreshed_fragments';
+
+		$cache = $this->make_cache( array(), '/?wc-ajax=get_refreshed_fragments' );
+		$this->assertTrue( $this->invoke_private( $cache, 'is_woo_excluded' ) );
+		$this->assertTrue( $this->invoke_private( $cache, 'is_not_cacheable' ) );
+		$this->assertFalse( $this->invoke_private( $cache, 'maybe_store_cache' ) );
+	}
+
+	/**
+	 * A wc-ajax fragment query still bypasses with safe mode off (issue #1197).
+	 *
+	 * The Woo layer (`is_woo_excluded()`) honors `wooSafeMode=false` and
+	 * stops excluding, but the serve path still bypasses via the generic
+	 * query-poisoning guard (`has_uncacheable_query()`) and storage still
+	 * refuses via the unconditional `is_wc_ajax_request()` guard.
+	 */
+	public function test_wc_ajax_query_string_is_not_cacheable_safe_mode_off(): void {
+		$this->stub_front_end_guests();
+		$_GET['wc-ajax']         = 'get_refreshed_fragments';
+		$_SERVER['QUERY_STRING'] = 'wc-ajax=get_refreshed_fragments';
+
+		$options = array( 'cache_settings' => array( 'wooSafeMode' => false ) );
+		$cache   = $this->make_cache( $options, '/?wc-ajax=get_refreshed_fragments' );
+		$this->assertFalse( $this->invoke_private( $cache, 'is_woo_excluded' ) );
+		$this->assertTrue( $this->invoke_private( $cache, 'is_not_cacheable' ) );
+		$this->assertFalse( $this->invoke_private( $cache, 'maybe_store_cache' ) );
+	}
+
+	/**
 	 * Self-test includes resolved custom Woo slugs as probes (issue #1020).
 	 */
 	public function test_woo_cache_self_test_includes_custom_slug(): void {
