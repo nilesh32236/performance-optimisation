@@ -167,6 +167,67 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		}
 
 		/**
+		 * Get the stable LCP image URL from OD viewport groups.
+		 *
+		 * Stability-gated twin of {@see get_lcp_url()}: the most-common
+		 * normalized URL wins only when at least two real-visit observations
+		 * agree on it (mobile + desktop viewport groups), mirroring the
+		 * RUM sample-count gate. A single observation (one viewport group
+		 * measured so far) is accepted as stable — it is still real-visit
+		 * field data, and rejecting it would stall optimisation on
+		 * single-viewport pages. OD metrics describe the current URL, so
+		 * they are inherently fresh (no TTL needed). Returns an empty
+		 * string when disabled, when nothing is measured, or when two
+		 * viewport groups disagree (no stable winner). Fail-open: any
+		 * failure returns ''.
+		 *
+		 * @since NEXT
+		 * @return string Stable LCP image URL or empty string.
+		 */
+		public static function get_stable_lcp_url(): string {
+			if ( ! self::is_enabled() ) {
+				return '';
+			}
+
+			try {
+				$raw_urls = self::collect_raw_lcp_urls();
+				if ( empty( $raw_urls ) ) {
+					return '';
+				}
+
+				if ( 1 === count( $raw_urls ) ) {
+					return (string) $raw_urls[0];
+				}
+
+				$normalized = array();
+				foreach ( $raw_urls as $u ) {
+					$norm         = Util::normalize_url( $u );
+					$normalized[] = '' !== $norm ? $norm : trim( (string) $u );
+				}
+
+				$counts = array_count_values( $normalized );
+				if ( empty( $counts ) ) {
+					return '';
+				}
+
+				$max = max( $counts );
+				if ( $max < 2 ) {
+					return '';
+				}
+
+				foreach ( $normalized as $idx => $norm ) {
+					if ( ( $counts[ $norm ] ?? 0 ) === $max ) {
+						return (string) $raw_urls[ $idx ];
+					}
+				}
+			} catch ( \Throwable $e ) {
+				self::debug_log( 'WPPO OD bridge stable LCP error: ' . $e->getMessage() );
+			}
+
+			return '';
+		}
+
+		/**
 		 * Get the lazy-load threshold (excludeFirstImages) from OD data.
 		 *
 		 * When OD measured data is available, derives the count from the

@@ -171,6 +171,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private static array $preload_emitted = array();
 
 		/**
+		 * Per-request raw URLs emitted directly via `generate_img_preload()`.
+		 *
+		 * The direct path bypasses `get_all_preload_data()`, so its hero is
+		 * recorded here (bounded, unique) so `add_delay_load_img()` can
+		 * exempt it from lazy-load in the same response.
+		 * `preload_images()` URLs are intentionally NOT recorded here — they
+		 * already flow through `get_all_preload_data()` into the lazy
+		 * exclusion list. Reset with {@see clear_runtime_caches()}.
+		 * In-memory only, multisite-safe by construction.
+		 *
+		 * @var array<string,bool>
+		 * @since NEXT
+		 */
+		private static array $preload_emitted_urls = array();
+
+		/**
 		 * In-request LRU map for getimagesize results (see
 		 * {@see get_cached_image_size()}).
 		 *
@@ -333,6 +349,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			self::$file_exists_cache      = array();
 			self::$img_size_cache         = array();
 			self::$preload_emitted        = array();
+			self::$preload_emitted_urls   = array();
 			self::$placeholder_info_cache = null;
 			self::$placeholder_path_cache = array();
 			self::$heuristic_lcp_memo     = array();
@@ -380,6 +397,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		public static function mark_preload_emitted( string $url, string $media = '' ): void {
 			try {
 				self::$preload_emitted[ self::build_preload_dedup_key( $url, $media ) ] = true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Record a directly-emitted hero URL for same-response lazy exclusion.
+		 *
+		 * Only `generate_img_preload()` feeds this set: `preload_images()`
+		 * URLs already flow through `get_all_preload_data()` into the lazy
+		 * exclusion list, so recording them here too would only duplicate
+		 * state. Bounded (30 entries), reset with
+		 * {@see clear_runtime_caches()}. Never fatal.
+		 *
+		 * @since NEXT
+		 * @param string $url The raw preload URL.
+		 * @return void
+		 */
+		private static function record_direct_preload_url( string $url ): void {
+			try {
+				$raw = trim( $url );
+				if ( '' === $raw ) {
+					return;
+				}
+				self::$preload_emitted_urls[ substr( $raw, 0, 2048 ) ] = true;
+				if ( count( self::$preload_emitted_urls ) > 30 ) {
+					self::$preload_emitted_urls = array_slice( self::$preload_emitted_urls, -30, null, true );
+				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
@@ -610,11 +655,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( ! is_array( $data ) || empty( $data['url'] ) || ! is_string( $data['url'] ) ) {
 					continue;
 				}
-				$emitted_key = $this->get_preload_dedup_key( $data['url'], (string) ( $data['media'] ?? '' ) );
-				if ( isset( self::$preload_emitted[ $emitted_key ] ) ) {
+				$media = (string) ( $data['media'] ?? '' );
+				if ( self::has_emitted_preload( $data['url'], $media ) ) {
 					continue;
 				}
-				self::$preload_emitted[ $emitted_key ] = true;
+				self::mark_preload_emitted( $data['url'], $media );
 				Util::generate_preload_link(
 					$data['url'],
 					'preload',
@@ -2429,6 +2474,101 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Whether automatic (signal-driven) LCP preload is disabled for the current post.
+		 *
+		 * Reads the per-post `_wppo_disable_auto_lcp` meta (see Metabox).
+		 * The manual picker (`_wppo_lcp_preload_url`) is explicit opt-in and
+		 * is unaffected — only the RUM/OD signal tiers are suppressed. Off
+		 * (empty meta) by default so existing behaviour is unchanged.
+		 * Fail-open: any failure returns false (auto-LCP stays enabled).
+		 *
+		 * @since NEXT
+		 * @return bool True when auto-LCP must be skipped for this post.
+		 */
+		private function is_auto_lcp_disabled_for_post(): bool {
+			try {
+				if ( ! function_exists( 'is_singular' ) || ! function_exists( 'get_the_ID' ) || ! function_exists( 'get_post_meta' ) ) {
+					return false;
+				}
+				if ( ! is_singular() ) {
+					return false;
+				}
+				$post_id = get_the_ID();
+				if ( empty( $post_id ) ) {
+					return false;
+				}
+				return ! empty( get_post_meta( $post_id, '_wppo_disable_auto_lcp', true ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Resolve the stable signal-only LCP image URL for the current page.
+		 *
+		 * Signal-driven subset of `resolve_auto_lcp_url()` (issue #1273):
+		 * the RUM field candidate (stable by construction — sample-count
+		 * gate via `get_field_lcp_min_samples()`, 24 h freshness TTL, and
+		 * same-origin re-check inside `RUM::get_field_lcp_url()`) wins
+		 * first, then the stability-gated OD real-visit candidate
+		 * (`OD_Bridge::get_stable_lcp_url()` — at least two agreeing
+		 * viewport observations, or a single measured group). Manual picker,
+		 * stored PageSpeed, and DOM-heuristic tiers are deliberately
+		 * excluded here. Every candidate must pass `is_image_lcp_url()` +
+		 * `is_same_origin_preload_url()`. Returns '' when the per-post
+		 * disable meta is set, when no stable signal exists, or on any
+		 * failure (fail-open to no-preload, never broken markup).
+		 *
+		 * @since NEXT
+		 * @return string The stable signal LCP image URL, or empty string.
+		 */
+		private function get_stable_signal_lcp_url(): string {
+			try {
+				if ( $this->is_auto_lcp_disabled_for_post() ) {
+					return '';
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_field_lcp_url' ) ) {
+					$field = \PerformanceOptimise\Inc\RUM::get_field_lcp_url();
+					if ( is_array( $field ) && ! empty( $field['url'] ) && is_string( $field['url'] ) ) {
+						$candidate = trim( $field['url'] );
+						if ( '' !== $candidate && $this->is_image_lcp_url( $candidate ) && $this->is_same_origin_preload_url( $candidate ) ) {
+							return $candidate;
+						}
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
+			if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
+				try {
+					$od_available = class_exists( 'OD_URL_Metric' ) || function_exists( 'od_get_url_metrics' );
+					if ( $od_available ) {
+						$od_url = '';
+						if ( method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'get_stable_lcp_url' ) ) {
+							$od_url = \PerformanceOptimise\Inc\OD_Bridge::get_stable_lcp_url();
+						} elseif ( method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'get_lcp_url' ) ) {
+							$od_url = \PerformanceOptimise\Inc\OD_Bridge::get_lcp_url();
+						}
+						if ( is_string( $od_url ) && '' !== $od_url && $this->is_image_lcp_url( $od_url ) && $this->is_same_origin_preload_url( $od_url ) ) {
+							return $od_url;
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			return '';
+		}
+
+		/**
 		 * Resolve the OD-only LCP image URL (manual picker + OD real-visit data).
 		 *
 		 * Subset of `resolve_auto_lcp_url()` needing no RUM state (issue
@@ -2696,6 +2836,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return array List of preload items (zero or one item).
 		 */
 		private function get_auto_lcp_preload_data(): array {
+			try {
+				if ( $this->is_auto_lcp_disabled_for_post() ) {
+					return array();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 			$image_optimisation = $this->options['image_optimisation'] ?? array();
 			$preload_settings   = $this->options['preload_settings'] ?? array();
 			$legacy_on          = ! empty( $image_optimisation['autoPreloadLCP'] );
@@ -2946,6 +3093,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						$this->lazy_lcp_exclusion_url_key = $memo_key;
 					}
 					return $manual;
+				}
+				try {
+					if ( $this->is_auto_lcp_disabled_for_post() ) {
+						return '';
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
 				}
 				$auto_lcp_on = ! empty( ( $this->options['preload_settings'] ?? array() )['autoLcpPreload'] ) && $this->is_auto_lcp_rum_satisfied();
 				$gated       = ! empty( $image_optimisation['fieldLcpOverride'] ) || ! empty( $image_optimisation['autoPreloadLCP'] ) || ! empty( $image_optimisation['prioritizeLCPImages'] ) || $auto_lcp_on;
@@ -3315,13 +3469,71 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Generates a preload link for a given image URL.
 		 *
-		 * @since 1.0.0
+		 * Signal-driven single-preload entry point (issue #1273): with an
+		 * empty `$img_url` the stable RUM/OD candidate from
+		 * `get_stable_signal_lcp_url()` is used, so exactly one
+		 * `<link rel="preload" as="image" fetchpriority="high">` is emitted
+		 * per URL per request (shared `has/mark_preload_emitted()` dedup,
+		 * also consulted by `preload_images()` and the Critical-CSS
+		 * field-LCP path). The emitted URL is recorded in the per-request
+		 * emitted set so `add_delay_load_img()` exempts it from lazy-load
+		 * in the same response. Guards: per-post `_wppo_disable_auto_lcp`
+		 * meta suppresses the signal-resolved path; image-ness and
+		 * same-origin validators apply to every candidate; failures emit
+		 * nothing (fail-open, never broken markup). The `fetchpriority`
+		 * attribute is emitted directly (legacy-safe; no new core API
+		 * required — core gap-fill paths stay `function_exists()`-guarded
+		 * elsewhere).
 		 *
-		 * @param string $img_url The URL of the image to preload.
+		 * @since 1.0.0
+		 * @since NEXT Resolves the stable signal candidate when empty,
+		 * enforces per-URL dedup + per-post disable + lazy-exclusion
+		 * coupling with `fetchpriority="high"`.
+		 *
+		 * @param string $img_url The URL of the image to preload. Empty resolves the stable signal candidate.
 		 * @return void
 		 */
-		public function generate_img_preload( $img_url ) {
+		public function generate_img_preload( $img_url = '' ) {
+			try {
+				$img_url = is_string( $img_url ) ? trim( $img_url ) : '';
+				if ( '' === $img_url ) {
+					// Empty input resolves the stable signal candidate;
+					// get_stable_signal_lcp_url() already honours the
+					// per-post disable. An explicit URL is explicit
+					// opt-in and is unaffected by the disable.
+					$img_url = $this->get_stable_signal_lcp_url();
+				}
+				if ( '' === $img_url ) {
+					return;
+				}
+				if ( ! $this->is_image_lcp_url( $img_url ) || ! $this->is_same_origin_preload_url( $img_url ) ) {
+					return;
+				}
+				if ( self::has_emitted_preload( $img_url ) ) {
+					return;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return;
+			}
 			$data = $this->prepare_preload_item( $img_url );
+			if ( ! is_array( $data ) || empty( $data['url'] ) || ! is_string( $data['url'] ) ) {
+				return;
+			}
+			// Cross-emitter invariant: the prepared (resolved) URL claims
+			// the dedup slot too, so a relative-vs-absolute alias of the
+			// same hero cannot emit a second tag.
+			try {
+				if ( self::has_emitted_preload( $data['url'], (string) ( $data['media'] ?? '' ) ) ) {
+					return;
+				}
+				self::mark_preload_emitted( $img_url );
+				self::mark_preload_emitted( $data['url'], (string) ( $data['media'] ?? '' ) );
+				self::record_direct_preload_url( $img_url );
+				self::record_direct_preload_url( $data['url'] );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 			Util::generate_preload_link(
 				$data['url'],
 				'preload',
@@ -3329,7 +3541,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				false,
 				Util::get_image_mime_type( $data['url'] ),
 				$data['media'] ?? '',
-				$data['priority'] ?? 'high',
+				'high',
 				(string) ( $data['imagesrcset'] ?? '' ),
 				(string) ( $data['imagesizes'] ?? '' )
 			);
@@ -6474,6 +6686,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$preload_img_urls = $this->get_preload_images_urls();
 				$exclude_imgs     = array_unique( array_merge( $exclude_imgs, $preload_img_urls ) );
 
+				// Same-response coupling (issue #1273): URLs emitted via
+				// generate_img_preload() never flow through
+				// get_all_preload_data(), so they are merged here to keep
+				// the preloaded hero eager in this response.
+				try {
+					if ( array() !== self::$preload_emitted_urls ) {
+						$exclude_imgs = array_unique( array_merge( $exclude_imgs, array_keys( self::$preload_emitted_urls ) ) );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+
 				// OD bridge: ensure the LCP image (mobile/desktop) is never lazy-loaded.
 				// The `wppo_od_should_optimize` opt-out (issue #1216) is
 				// honoured inside `OD_Bridge::is_enabled()` (single filter
@@ -6890,7 +7114,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 */
 		private function get_preload_images_urls(): array {
 			$preload_data = $this->get_all_preload_data();
-			return array_unique( array_column( $preload_data, 'url' ) );
+			$urls         = array_unique( array_column( $preload_data, 'url' ) );
+			try {
+				if ( array() !== self::$preload_emitted_urls ) {
+					$urls = array_unique( array_merge( $urls, array_keys( self::$preload_emitted_urls ) ) );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $urls;
 		}
 
 		/**
