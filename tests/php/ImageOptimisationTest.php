@@ -701,6 +701,112 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that a thumbnail-size reuse of the LCP attachment stays lazy.
+	 *
+	 * A below-fold rendering (e.g. footer/sidebar thumbnail) of the same
+	 * attachment must not receive fetchpriority=high + loading=eager:
+	 * only an exact (size-suffix-preserving) file match stamps.
+	 */
+	public function test_wppo_add_fetchpriority_thumbnail_variant_stays_lazy(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'is_admin' )->justReturn( false );
+		$this->stub_lcp_resolution( 'https://example.com/wp-content/uploads/hero.jpg' );
+		Functions\when( 'wp_get_attachment_image_src' )->justReturn( array( 'https://example.com/wp-content/uploads/hero-150x150.jpg', 150, 150 ) );
+
+		$image_opt = $this->make_lcp_enabled_instance();
+
+		$attachment = (object) array( 'ID' => 42 );
+		$attr       = array(
+			'src'     => 'https://example.com/wp-content/uploads/hero-150x150.jpg',
+			'loading' => 'lazy',
+		);
+
+		$this->assertSame( $attr, $image_opt->wppo_add_fetchpriority( $attr, $attachment, 'thumbnail' ) );
+	}
+
+	/**
+	 * Test that a full-size request stamps via the suffix-insensitive fallback.
+	 *
+	 * When the requested size is 'full', the file core returns for the
+	 * attachment is the hero itself, so a size-suffixed variant still
+	 * stamps even without an exact file match.
+	 */
+	public function test_wppo_add_fetchpriority_full_size_request_stamps_variant(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'is_admin' )->justReturn( false );
+		$this->stub_lcp_resolution( 'https://example.com/wp-content/uploads/hero.jpg' );
+		Functions\when( 'wp_get_attachment_image_src' )->justReturn( array( 'https://example.com/wp-content/uploads/hero-1024x768.jpg', 1024, 768 ) );
+
+		$image_opt = $this->make_lcp_enabled_instance();
+
+		$attachment = (object) array( 'ID' => 42 );
+		$attr       = array(
+			'src'     => 'https://example.com/wp-content/uploads/hero-1024x768.jpg',
+			'loading' => 'lazy',
+		);
+		$result     = $image_opt->wppo_add_fetchpriority( $attr, $attachment, 'full' );
+
+		$this->assertSame( 'high', $result['fetchpriority'] );
+		$this->assertSame( 'eager', $result['loading'] );
+	}
+
+	/**
+	 * Test that the LCP candidate is memoized across images on the same page.
+	 *
+	 * The filter fires per attachment image; the manual-picker +
+	 * Optimization Detective chain must resolve once and serve the memo
+	 * on subsequent renders.
+	 */
+	public function test_wppo_add_fetchpriority_memoizes_lcp_candidate(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'is_admin' )->justReturn( false );
+		$this->stub_lcp_resolution( 'https://example.com/wp-content/uploads/hero.jpg' );
+		Functions\when( 'wp_get_attachment_image_src' )->justReturn( array( 'https://example.com/wp-content/uploads/hero.jpg', 800, 600 ) );
+
+		$image_opt = $this->make_lcp_enabled_instance();
+
+		$attachment = (object) array( 'ID' => 42 );
+		$attr       = array(
+			'src'     => 'https://example.com/wp-content/uploads/hero.jpg',
+			'loading' => 'lazy',
+		);
+
+		$first = $image_opt->wppo_add_fetchpriority( $attr, $attachment, 'large' );
+		$this->assertSame( 'high', $first['fetchpriority'] );
+
+		$memo = new \ReflectionProperty( Image_Optimisation::class, 'fetchpriority_lcp_url' );
+		$memo->setAccessible( true );
+		$this->assertSame( 'https://example.com/wp-content/uploads/hero.jpg', $memo->getValue( $image_opt ) );
+
+		$second = $image_opt->wppo_add_fetchpriority( $attr, $attachment, 'large' );
+		$this->assertSame( 'high', $second['fetchpriority'] );
+
+		$image_opt->clear_instance_lcp_memo();
+		$this->assertNull( $memo->getValue( $image_opt ) );
+	}
+
+	/**
+	 * Test that an exact srcset entry stamps when the attachment ID is unresolvable.
+	 */
+	public function test_wppo_add_fetchpriority_srcset_exact_match_stamps(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'is_admin' )->justReturn( false );
+		$this->stub_lcp_resolution( 'https://example.com/wp-content/uploads/hero.jpg' );
+		Functions\when( 'wp_get_attachment_image_src' )->justReturn( false );
+
+		$image_opt = $this->make_lcp_enabled_instance();
+
+		$attr   = array(
+			'src'    => 'https://example.com/wp-content/uploads/other.jpg',
+			'srcset' => 'https://example.com/wp-content/uploads/hero.jpg 800w, https://example.com/wp-content/uploads/hero-300x200.jpg 300w',
+		);
+		$result = $image_opt->wppo_add_fetchpriority( $attr, array(), 'large' );
+
+		$this->assertSame( 'high', $result['fetchpriority'] );
+		$this->assertSame( 'eager', $result['loading'] );
+	}
+
+	/**
 	 * Test that the client-side MIME override replaces core's default list,
 	 * intersecting away any format core does not support client-side.
 	 */

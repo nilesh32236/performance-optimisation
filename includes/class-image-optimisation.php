@@ -260,6 +260,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private ?string $lazy_lcp_exclusion_url_key = null;
 
 		/**
+		 * Memoized LCP candidate for the render-time fetchpriority filter.
+		 *
+		 * `wppo_add_fetchpriority()` fires per attachment image, so the
+		 * manual-picker + Optimization Detective chain
+		 * (`resolve_od_only_lcp_url()`) would otherwise re-run N times per
+		 * page. This memo resolves it at most once per page: keyed by
+		 * `get_lcp_memo_key()` (mirroring `$current_lcp_url`) so a
+		 * long-lived instance reused across pages re-resolves instead of
+		 * serving a stale hero. Null until first resolved, then the LCP
+		 * URL or ''.
+		 *
+		 * @var string|null
+		 * @since NEXT
+		 */
+		private ?string $fetchpriority_lcp_url = null;
+
+		/**
+		 * Current-URL key the `$fetchpriority_lcp_url` memo was resolved for.
+		 *
+		 * @var string|null
+		 * @since NEXT
+		 */
+		private ?string $fetchpriority_lcp_key = null;
+
+		/**
 		 * Per-request heuristic LCP memo keyed by buffer hash (issue #1216).
 		 *
 		 * The P2 DOM-first heuristic re-scans full HTML with
@@ -335,6 +360,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$this->current_lcp_url_key        = null;
 			$this->lazy_lcp_exclusion_url     = null;
 			$this->lazy_lcp_exclusion_url_key = null;
+			$this->fetchpriority_lcp_url      = null;
+			$this->fetchpriority_lcp_key      = null;
 			self::$heuristic_lcp_memo         = array();
 		}
 
@@ -4894,11 +4921,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * (`resolve_od_only_lcp_url()`), then the stored chain
 		 * (`get_current_lcp_url()` — RUM-field override + stored
 		 * PageSpeed). The DOM-heuristic tier is skipped (no buffer in
-		 * filter context). Core's stateful
+		 * filter context). The candidate is resolved at most once per
+		 * page via the `$fetchpriority_lcp_url` memo (keyed by
+		 * `get_lcp_memo_key()`), since this filter fires per image.
+		 * Core's stateful
 		 * `wp_get_loading_optimization_attributes()` is deliberately not
 		 * consulted here: a second direct call would double-count this
 		 * image in core's per-context counter and skew core's later
 		 * lazy/eager decisions.
+		 *
+		 * Size-aware matching: the rendered file must correspond to the
+		 * LCP candidate exactly (size suffix preserved) before stamping,
+		 * so a below-fold thumbnail reuse of the same attachment is left
+		 * lazy. The size-suffix-insensitive fallback applies only when
+		 * the requested `$size` is `'full'`, where whatever file core
+		 * returns for the attachment is the hero itself.
 		 *
 		 * Fail-open: any failure (unresolvable candidate, missing core
 		 * API, unexpected input) returns `$attr` unchanged, never fatal.
@@ -4907,10 +4944,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @param mixed $attr       Image attributes (expected array).
 		 * @param mixed $attachment Attachment post object, ID, or array with ID.
-		 * @param mixed $size       Requested image size. // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- Required by the 3-arg filter signature; threaded to wp_get_attachment_image_src().
+		 * @param mixed $size       Requested image size.
 		 * @return mixed The (possibly stamped) attributes, unchanged on miss.
 		 */
-		public function wppo_add_fetchpriority( $attr, $attachment = null, $size = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		public function wppo_add_fetchpriority( $attr, $attachment = null, $size = null ) {
 			try {
 				if ( ! is_array( $attr ) ) {
 					return $attr;
@@ -4931,18 +4968,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 				$lcp_url = '';
 				try {
-					$lcp_url = $this->resolve_od_only_lcp_url();
+					$lcp_url = $this->resolve_fetchpriority_lcp_url();
 				} catch ( \Throwable $e ) {
 					unset( $e );
 					$lcp_url = '';
-				}
-				if ( ! is_string( $lcp_url ) || '' === $lcp_url ) {
-					try {
-						$lcp_url = $this->get_current_lcp_url();
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						$lcp_url = '';
-					}
 				}
 				if ( ! is_string( $lcp_url ) || '' === $lcp_url ) {
 					return $attr;
@@ -4959,6 +4988,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( '' === $normalized_lcp ) {
 					return $attr;
 				}
+				$exact_lcp = $this->normalize_image_url( $lcp_url, false );
+				if ( '' === $exact_lcp ) {
+					return $attr;
+				}
+				$size_is_full  = ( 'full' === $size );
 				$is_lcp        = false;
 				$attachment_id = 0;
 				if ( is_object( $attachment ) && isset( $attachment->ID ) ) {
@@ -4978,7 +5012,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						} elseif ( is_string( $src_data ) ) {
 							$candidate = $src_data;
 						}
-						if ( '' !== $candidate && $this->normalize_image_url( $candidate ) === $normalized_lcp ) {
+						if ( '' !== $candidate && $this->fetchpriority_candidate_matches( $candidate, $normalized_lcp, $exact_lcp, $size_is_full ) ) {
 							$is_lcp = true;
 						}
 					} catch ( \Throwable $e ) {
@@ -4990,19 +5024,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					// array context): compare the built src/srcset against
 					// the candidate with normalized-URL equality only (no
 					// substring fallback, mirroring tag_matches_lcp_url()).
+					// The src/data-src entries use the same size-aware rule
+					// as the ID path; srcset entries require an exact match
+					// (a srcset inherently lists sized variants, so a
+					// suffix-insensitive fallback would stamp every image
+					// whose srcset merely contains a thumbnail of the hero).
 					foreach ( array( 'src', 'data-src' ) as $key ) {
-						if ( isset( $attr[ $key ] ) && is_string( $attr[ $key ] ) && '' !== $attr[ $key ] && $this->normalize_image_url( $attr[ $key ] ) === $normalized_lcp ) {
+						if ( isset( $attr[ $key ] ) && is_string( $attr[ $key ] ) && '' !== $attr[ $key ] && $this->fetchpriority_candidate_matches( $attr[ $key ], $normalized_lcp, $exact_lcp, $size_is_full ) ) {
 							$is_lcp = true;
 							break;
 						}
 					}
 					if ( ! $is_lcp && isset( $attr['srcset'] ) && is_string( $attr['srcset'] ) && '' !== $attr['srcset'] ) {
-						foreach ( preg_split( '/\s*,\s*/', trim( $attr['srcset'] ) ) as $candidate ) {
-							$parts         = preg_split( '/\s+/', trim( (string) $candidate ), 2 );
-							$candidate_url = is_array( $parts ) && isset( $parts[0] ) ? $parts[0] : '';
-							if ( '' !== $candidate_url && $this->normalize_image_url( $candidate_url ) === $normalized_lcp ) {
-								$is_lcp = true;
-								break;
+						$candidates = preg_split( '/\s*,\s*/', trim( $attr['srcset'] ) );
+						if ( is_array( $candidates ) ) {
+							foreach ( $candidates as $candidate ) {
+								$parts         = preg_split( '/\s+/', trim( (string) $candidate ), 2 );
+								$candidate_url = is_array( $parts ) && isset( $parts[0] ) ? $parts[0] : '';
+								if ( '' !== $candidate_url && $this->normalize_image_url( $candidate_url, false ) === $exact_lcp ) {
+									$is_lcp = true;
+									break;
+								}
 							}
 						}
 					}
@@ -5023,6 +5065,81 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				unset( $e );
 				return $attr;
 			}
+		}
+
+		/**
+		 * Resolve the LCP candidate for the render-time fetchpriority filter, memoized per page.
+		 *
+		 * Same chain as the filter needs on every image render (manual
+		 * picker + Optimization Detective via `resolve_od_only_lcp_url()`,
+		 * then the stored chain via `get_current_lcp_url()`), but resolved
+		 * at most once per page: the result is cached in
+		 * `$fetchpriority_lcp_url` keyed by `get_lcp_memo_key()` so a page
+		 * with N images pays the OD/manual chain once instead of N times.
+		 * The DOM-heuristic tier is skipped (no buffer in filter context).
+		 * Fail-open to ''.
+		 *
+		 * @since NEXT
+		 * @return string The validated LCP image URL, or empty string.
+		 */
+		private function resolve_fetchpriority_lcp_url(): string {
+			$memo_key = $this->get_lcp_memo_key();
+			if ( null !== $this->fetchpriority_lcp_url && $this->fetchpriority_lcp_key === $memo_key ) {
+				return $this->fetchpriority_lcp_url;
+			}
+			$this->fetchpriority_lcp_url = '';
+			$this->fetchpriority_lcp_key = $memo_key;
+			try {
+				$lcp_url = $this->resolve_od_only_lcp_url();
+				if ( ! is_string( $lcp_url ) || '' === $lcp_url ) {
+					$lcp_url = $this->get_current_lcp_url();
+				}
+				if ( ! is_string( $lcp_url ) || '' === $lcp_url ) {
+					return $this->fetchpriority_lcp_url;
+				}
+				if ( ! $this->is_image_lcp_url( $lcp_url ) || ! $this->is_same_origin_preload_url( $lcp_url ) ) {
+					return $this->fetchpriority_lcp_url;
+				}
+				$this->fetchpriority_lcp_url = $lcp_url;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$this->fetchpriority_lcp_url = '';
+			}
+			return $this->fetchpriority_lcp_url;
+		}
+
+		/**
+		 * Size-aware LCP candidate comparison for the fetchpriority filter.
+		 *
+		 * An exact (size-suffix-preserving) normalized match always stamps,
+		 * so the hero file itself is recognized at any requested size. A
+		 * size-suffix-insensitive match stamps only when the requested
+		 * `$size` is `'full'`, where the file core returns for the
+		 * attachment is the hero itself — a thumbnail/sidebar reuse of the
+		 * same attachment at a smaller size stays lazy. Fail-open to false.
+		 *
+		 * @since NEXT
+		 * @param string $candidate      The rendered file URL to test.
+		 * @param string $normalized_lcp Normalized LCP URL (size suffix stripped).
+		 * @param string $exact_lcp      Normalized LCP URL (size suffix preserved).
+		 * @param bool   $size_is_full   Whether the requested image size is 'full'.
+		 * @return bool True when the candidate corresponds to the LCP image.
+		 */
+		private function fetchpriority_candidate_matches( string $candidate, string $normalized_lcp, string $exact_lcp, bool $size_is_full ): bool {
+			try {
+				if ( '' === $candidate || '' === $normalized_lcp || '' === $exact_lcp ) {
+					return false;
+				}
+				if ( $this->normalize_image_url( $candidate, false ) === $exact_lcp ) {
+					return true;
+				}
+				if ( $size_is_full && $this->normalize_image_url( $candidate ) === $normalized_lcp ) {
+					return true;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return false;
 		}
 
 		/**
