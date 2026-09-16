@@ -1,6 +1,7 @@
 {
     "redefinable-internals": [
         "function_exists",
+        "method_exists",
         "getimagesize",
         "header",
         "headers_sent",

@@ -935,8 +935,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// Issue #1203 (modularity) proposed removing the shims now; deferred —
 			// the floor is still 6.2, so deletion would drop defer-JS on 6.2 with no
 			// native replacement. One canonical path per install is already enforced
-			// by the version gate below (never both regex passes per request).
-			$is_wp63_plus = version_compare( $wp_version, '6.3-alpha', '>=' );
+			// by the version+feature gate below (never both regex passes per request).
+			// Issue #1218: version_compare alone can mis-route on a backported or
+			// filtered version string, so the canonical predicate is
+			// supports_native_defer_strategy() (version + function_exists +
+			// a genuinely-6.3 WP_Scripts method probe when the class exists).
+			$use_native_defer = self::supports_native_defer_strategy();
+			// Native script fetchpriority capability (issue #1218): version +
+			// API probe via supports_native_script_fetchpriority() so a
+			// filtered version string cannot enable native fetchpriority
+			// writes where the API is absent. $is_wp69_plus below stays a
+			// bare version gate for the template-enhancement buffer paths,
+			// which carry their own function_exists probes.
+			$supports_fetchpriority = self::supports_native_script_fetchpriority();
 			// Pre-release-inclusive floor: '6.9-alpha' also matches alpha/beta/RC builds
 			// of 6.9 which already ship the template-enhancement buffer functions.
 			// TODO(#553, #829): remove the legacy buffer paths when minimum supported WP is raised to 6.9.
@@ -959,14 +970,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// Defer JS: use the native strategy on WP 6.3+, the script_loader_tag
 			// fallback on older core.
 			if ( $has_defer_js ) {
-				if ( $is_wp63_plus ) {
+				if ( $use_native_defer ) {
 					add_action( 'wp_enqueue_scripts', array( $this, 'add_defer_strategy' ), 1000 );
 				} else {
 					add_filter( 'script_loader_tag', array( $this, 'add_defer_attribute_legacy' ), 10, 2 );
 				}
 				// Native fetchpriority rendering arrived in WP 6.9 (Trac #61734); the
 				// regex-based script_loader_tag fallback only runs on older cores.
-				if ( ! $is_wp69_plus ) {
+				if ( ! $supports_fetchpriority ) {
 					add_filter( 'script_loader_tag', array( $this, 'add_fetchpriority_to_deferred' ), 11, 2 );
 				}
 			}
@@ -3400,14 +3411,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! $this->should_optimise_for_logged_in() ) {
 				return;
 			}
-			// WP 6.9+ native fetchpriority/in_footer (Trac #61734, #63486). Guard with
-			// version_compare + function_exists so <6.9 is a no-op; method_exists per
-			// set_in_footer/set_fetchpriority keeps compat if the API is partially present.
-			// Version gate uses same (string) ($GLOBALS['wp_version'] ?? get_bloginfo('version'))
-			// pattern as enqueue_scripts/add_defer_strategy/setup_hooks for consistency.
+			// WP 6.9+ native fetchpriority/in_footer (Trac #61734, #63486). Gate on
+			// the shared supports_native_script_fetchpriority() predicate (version
+			// + genuinely-6.9 API probe) instead of a bare version_compare so a
+			// filtered version string cannot enable native writes where the API
+			// is absent; method_exists per set_in_footer/set_fetchpriority keeps
+			// compat if the API is partially present.
 			// @since 2.0.0.
-			$wp_version = (string) ( $GLOBALS['wp_version'] ?? get_bloginfo( 'version' ) );
-			if ( version_compare( $wp_version, '6.9-alpha', '<' ) ) {
+			if ( ! self::supports_native_script_fetchpriority() ) {
 				return;
 			}
 			if ( ! function_exists( 'wp_script_modules' ) ) {
@@ -3476,16 +3487,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					$modules->set_in_footer( (string) $id, true );
 				}
 				if ( method_exists( $modules, 'set_fetchpriority' ) ) {
-					// Fill-gaps-only: skip modules that already carry an explicit
-					// fetchpriority. Core defaults gaps to 'auto' (see
-					// WP_Script_Modules::register), so only 'auto'/missing/empty
-					// counts as a gap; 'high' (LCP-critical) and explicit 'low'
-					// are left untouched. Reads via the public get_registered()
-					// getter when available (WP 7.0+) with a reflection fallback
-					// for the private 6.9 store. Fail-open: any unreadable shape
-					// falls through to 'low'. This matches the classic-script
-					// path in add_defer_strategy(), where 'auto' is likewise
-					// treated as a gap.
+					// Fill-gaps-only (issue #1218): 'high' and 'low' are preserved;
+					// 'auto'/missing/empty counts as a gap and is upgraded to 'low'.
+					// Core registers every module with fetchpriority default 'auto'
+					// (WP_Script_Modules::register, Trac #61734), so a defaulted
+					// module is indistinguishable from an explicitly-'auto' one
+					// post-registration — preserving every 'auto' value would make
+					// the low-fill a no-op for typical modules. Rendering-wise core
+					// only emits fetchpriority for non-'auto' anyway, so auto→low
+					// is exactly the deprioritization this pass intends. Reads via
+					// the public get_registered() getter when available (WP 7.0+)
+					// with a reflection fallback for the private 6.9 store.
+					// Fail-open: any unreadable shape falls through to 'low'.
+					// Note the deliberate asymmetry with the classic-script path in
+					// add_defer_strategy(), which DOES preserve explicit 'auto':
+					// classic scripts carry no core default (get_data() returns
+					// false when unset), so explicitness is observable there.
 					$existing = $this->get_module_fetchpriority( $modules, (string) $id );
 					if ( is_string( $existing ) && '' !== trim( $existing ) && 'auto' !== strtolower( trim( $existing ) ) ) {
 						continue;
@@ -3702,7 +3719,92 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Whether the native WP 6.3+ script loading strategy API can be used.
+		 *
+		 * Canonical predicate for the defer pipeline (issue #1218): the native
+		 * `wp_script_add_data( $handle, 'strategy', 'defer' )` path is only
+		 * honoured by core since WP 6.3, so both setup_hooks() routing and
+		 * add_defer_strategy() fail-open on this helper. Three guards:
+		 * version >= 6.3-alpha; `wp_script_add_data()` present (guards a
+		 * stripped/missing API — the function itself predates 6.3, so on its
+		 * own it cannot detect a backported/filtered version string); and,
+		 * when the WP_Scripts class is available, the genuinely-6.3
+		 * `WP_Scripts::get_eligible_loading_strategy()` method (changeset
+		 * 56033), which IS absent on pre-6.3 core and therefore catches the
+		 * inflated-version case. When the class is unavailable (e.g. very
+		 * early load), version + function probes decide. Fail-open: false on
+		 * any unreadable version or missing API, in which case callers fall
+		 * back to the pre-6.3 script_loader_tag regex.
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when the native defer strategy path is allowed.
+		 */
+		public static function supports_native_defer_strategy(): bool {
+			if ( isset( $GLOBALS['wp_version'] ) && is_string( $GLOBALS['wp_version'] ) && '' !== $GLOBALS['wp_version'] ) {
+				$wp_version = $GLOBALS['wp_version'];
+			} elseif ( function_exists( 'get_bloginfo' ) ) {
+				$wp_version = (string) get_bloginfo( 'version' );
+			} else {
+				return false;
+			}
+			if ( version_compare( $wp_version, '6.3-alpha', '<' ) ) {
+				return false;
+			}
+			if ( ! function_exists( 'wp_script_add_data' ) ) {
+				return false;
+			}
+			if ( class_exists( 'WP_Scripts' ) && ! method_exists( 'WP_Scripts', 'get_eligible_loading_strategy' ) ) {
+				return false;
+			}
+			return true;
+		}
+
+		/**
+		 * Whether the native WP 6.9+ script fetchpriority API can be used.
+		 *
+		 * Canonical predicate for the fetchpriority pipeline (issue #1218):
+		 * native fetchpriority rendering arrived in WP 6.9 (Trac #61734), so
+		 * setup_hooks() fallback routing, add_defer_strategy(), and
+		 * apply_module_loading_strategies() all fail-open on this helper
+		 * instead of a bare version_compare, which a backported/filtered
+		 * version string could defeat. Guards: version >= 6.9-alpha plus the
+		 * genuinely-6.9 `WP_Script_Modules::set_fetchpriority()` method when
+		 * the class is available; when it is not (e.g. unit-test doubles),
+		 * the 6.5+ module functions decide alongside the version gate.
+		 * Fail-open: false on any unreadable version or missing API, in which
+		 * case callers fall back to the pre-6.9 script_loader_tag regex.
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when the native fetchpriority path is allowed.
+		 */
+		public static function supports_native_script_fetchpriority(): bool {
+			if ( isset( $GLOBALS['wp_version'] ) && is_string( $GLOBALS['wp_version'] ) && '' !== $GLOBALS['wp_version'] ) {
+				$wp_version = $GLOBALS['wp_version'];
+			} elseif ( function_exists( 'get_bloginfo' ) ) {
+				$wp_version = (string) get_bloginfo( 'version' );
+			} else {
+				return false;
+			}
+			if ( version_compare( $wp_version, '6.9-alpha', '<' ) ) {
+				return false;
+			}
+			if ( class_exists( 'WP_Script_Modules' ) ) {
+				return method_exists( 'WP_Script_Modules', 'set_fetchpriority' );
+			}
+			return function_exists( 'wp_script_modules' ) && function_exists( 'wp_enqueue_script_module' );
+		}
+
+		/**
 		 * Applies defer strategy to non-logged-in users' scripts using wp_script_add_data.
+		 *
+		 * Canonical defer path on WP 6.3+ (issue #1218); the pre-6.3
+		 * script_loader_tag regex fallback (add_defer_attribute_legacy()) is
+		 * never registered on the same request via setup_hooks(). Iterates
+		 * `$wp_scripts->queue` in order with no sorting so dependency chain
+		 * order is preserved. Fill-gaps-only for the strategy itself: an
+		 * explicit `async` strategy is never rewritten to `defer`.
 		 *
 		 * On WP 6.9+ deferred handles also receive native fetchpriority/in_footer
 		 * args via the Script Loader API (Trac #61734 / #63486) so core renders
@@ -3746,12 +3848,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 
+			// Canonical-path guard (issue #1218): the native strategy API is
+			// silently ignored below WP 6.3 or when wp_script_add_data() is
+			// unavailable, so fail open to undeferred scripts (the pre-6.3
+			// regex fallback owns those installs via setup_hooks()).
+			if ( ! self::supports_native_defer_strategy() ) {
+				return;
+			}
+
 			global $wp_scripts;
 			if ( ! $wp_scripts instanceof \WP_Scripts || empty( $wp_scripts->queue ) ) {
 				return;
 			}
 
-			$is_wp69_plus = version_compare( (string) ( $GLOBALS['wp_version'] ?? get_bloginfo( 'version' ) ), '6.9-alpha', '>=' );
+			// Native fetchpriority/in_footer capability (issue #1218): the shared
+			// predicate pairs the 6.9-alpha floor with a genuinely-6.9 API probe
+			// so a filtered version string cannot enable native writes where
+			// the API is absent. Pre-release-inclusive floor matches
+			// setup_hooks() so alpha/beta/RC builds already carrying the API
+			// are covered.
+			$supports_fetchpriority = self::supports_native_script_fetchpriority();
 
 			foreach ( $wp_scripts->queue as $handle ) {
 				// Interactivity runtime guard (issue #1201): never deprioritize or
@@ -3781,18 +3897,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					$this->deferred_handles[ $handle ] = true;
 					// Native fetchpriority on WP 6.9+ (Trac #61734); pre-6.9 is handled
 					// by the script_loader_tag regex fallback (add_fetchpriority_to_deferred).
-					// Pre-release-inclusive '6.9-alpha' floor matches setup_hooks() so
-					// alpha/beta/RC builds already carrying the API are covered.
-					// Fill-gaps-only: never overwrite an explicit fetchpriority value
-					// (e.g. an LCP-critical handle filtered to 'high'). Core
-					// defaults module gaps to 'auto', and 'auto' is
-					// indistinguishable from "defer to browser" here, so
-					// 'auto'/missing/empty counts as a gap in both this path and
-					// apply_module_loading_strategies(); 'high' and explicit 'low'
-					// are left untouched.
-					if ( $is_wp69_plus && function_exists( 'wp_script_add_data' ) ) {
+					// Fill-gaps-only (issue #1218): never overwrite an explicit
+					// fetchpriority value — 'high', 'low', and explicit 'auto'
+					// are all preserved; only a missing/empty value counts as a
+					// gap. Explicit 'auto' IS distinguishable here (classic
+					// scripts carry no core default — get_data() returns false
+					// when unset), unlike the module path where core defaults
+					// every registration to 'auto'.
+					if ( $supports_fetchpriority && function_exists( 'wp_script_add_data' ) ) {
 						$existing_fetchpriority = method_exists( $wp_scripts, 'get_data' ) ? $wp_scripts->get_data( $handle, 'fetchpriority' ) : false;
-						$is_gap                 = empty( $existing_fetchpriority ) || ( is_string( $existing_fetchpriority ) && 'auto' === strtolower( trim( $existing_fetchpriority ) ) );
+						$is_gap                 = ! is_string( $existing_fetchpriority ) || '' === trim( $existing_fetchpriority );
 						if ( $is_gap ) {
 							/**
 							 * Filters fetchpriority for each deferred handle.
@@ -3819,7 +3933,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 							}
 						}
 					}
-					if ( $is_wp69_plus ) {
+					if ( $supports_fetchpriority ) {
 						// Native in_footer for deferred classic scripts on WP 6.9+
 						// (Trac #63486). Core reads the 'group' data key for footer
 						// placement — wp_enqueue_script()'s args handler
@@ -4082,6 +4196,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * core (WP 6.2) where the native strategy is silently ignored. Retained
 		 * while the plugin floor is 6.2 (issue #1203: removal deferred until the
 		 * minimum supported WP is raised to 6.3; see TODO(#553) in setup_hooks()).
+		 * Fill-gaps-only: a tag already carrying `defer`, `async` (core, theme,
+		 * or LiteSpeed delay), or `type="module"` is returned untouched so no
+		 * `async defer` double-attribute markup is emitted (issue #1218). The
+		 * pre-checks are case-insensitive with attribute boundaries and
+		 * quote-masking, so DEFER, valued async="async", single-quoted or
+		 * spaced type='module', and `async` inside quoted values (ignored)
+		 * are all handled.
 		 *
 		 * @since 1.9.0
 		 *
@@ -4124,7 +4245,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return $tag;
 			}
 
-			if ( false !== strpos( $tag, ' defer' ) || false !== strpos( $tag, 'type="module"' ) ) {
+			// Quote-mask attribute values first so `defer`/`async` inside a value
+			// (e.g. data-note="use async fallback") never counts as the real
+			// boolean attribute.
+			$tag_unquoted = preg_replace( '/"[^"]*"|\'[^\']*\'/', '""', (string) $tag );
+			if ( ! is_string( $tag_unquoted ) ) {
+				$tag_unquoted = (string) $tag;
+			}
+			// Fill-gaps-only: a tag already carrying `defer` or `async` (core,
+			// theme, or LiteSpeed delay, any case) is returned untouched so no
+			// `async defer` double-attribute markup is emitted (issue #1218).
+			// Case-insensitive with an attribute boundary so DEFER, valued
+			// async="async", and spaced variants are all observed.
+			if ( preg_match( '/\s(?:defer|async)(?=[\s=\/>])/i', $tag_unquoted ) ) {
+				return $tag;
+			}
+			// Module scripts are always deferred by the browser; match type=module
+			// on the raw tag (masking strips its quotes) tolerating case, quote
+			// style, and surrounding whitespace.
+			if ( preg_match( '/\stype\s*=\s*(["\']?)module\1(?=[\s>\/]|$)/i', (string) $tag ) ) {
 				return $tag;
 			}
 
