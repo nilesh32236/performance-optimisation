@@ -423,4 +423,308 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( '', $rest_route->invoke( $cron, 'http://example.com/', '' ) );
 		$this->assertSame( '/wc/store/v1/cart', $rest_route->invoke( $cron, 'http://example.com/?rest_route=/wc/store/v1/cart', 'rest_route=/wc/store/v1/cart' ) );
 	}
+
+	/**
+	 * Repeatable PHP 8.4/8.5 deprecation grep (issue #1260).
+	 *
+	 * Token-scans `includes/`, `templates/`, root `*.php`, and
+	 * `uninstall.php` for the banned patterns from the acceptance
+	 * criteria — `curl_close(null)`, `E_STRICT`, `mysqli_ping`, backtick
+	 * shell execution, implicitly-nullable `Type $x = null` signatures,
+	 * and raw 8.5 resource-teardown calls outside the version-gated
+	 * legacy branches of `Util` — so PHP 8.5 stays clean without
+	 * touching CI workflows. Token-based (not regex) so docblock
+	 * backticks, explicit-nullable `?Type $x = null` signatures, and
+	 * Redis `$manager->ping()` calls cannot false-positive. The WP
+	 * object-cache drop-in keeps core's untyped signatures by design
+	 * (untyped `$x = null` is legal and never flagged here).
+	 *
+	 * @since NEXT
+	 * @return void
+	 */
+	public function test_plugin_sources_are_free_of_php84_85_banned_patterns(): void {
+		$root  = dirname( __DIR__, 2 );
+		$files = array();
+
+		foreach ( array( 'includes', 'templates' ) as $dir ) {
+			$path = $root . '/' . $dir;
+			if ( ! is_dir( $path ) ) {
+				continue;
+			}
+			$iterator = new \RecursiveIteratorIterator(
+				new \RecursiveDirectoryIterator( $path, \FilesystemIterator::SKIP_DOTS )
+			);
+			foreach ( $iterator as $file ) {
+				if ( 'php' === strtolower( (string) pathinfo( (string) $file, PATHINFO_EXTENSION ) ) ) {
+					$files[] = (string) $file;
+				}
+			}
+		}
+
+		$root_files = glob( $root . '/*.php' );
+		if ( is_array( $root_files ) ) {
+			foreach ( $root_files as $file ) {
+				$files[] = (string) $file;
+			}
+		}
+
+		$this->assertNotEmpty( $files, 'Deprecation grep found no PHP files to scan (issue #1260).' );
+
+		$violations = array();
+		foreach ( array_unique( $files ) as $file ) {
+			if ( ! is_readable( $file ) ) {
+				continue;
+			}
+			$this->scan_file_for_deprecation_patterns( (string) $file, $root, $violations );
+		}
+
+		$this->assertSame(
+			array(),
+			$violations,
+			'PHP 8.4/8.5 deprecation sweep must stay clean (issue #1260):' . "\n" . implode( "\n", $violations )
+		);
+	}
+
+	/**
+	 * Scan one PHP file for the banned 8.4/8.5 patterns.
+	 *
+	 * Appends `file:line description` strings to `$violations` for every
+	 * hit: raw `curl_close(null)` / `E_STRICT` / `mysqli_ping` in code
+	 * tokens, standalone backtick operators, implicitly-nullable
+	 * `Type $param = null` declarations (typed without `?`, `|null`, or
+	 * `mixed`), and raw `curl_close()` / `curl_multi_close()` /
+	 * `curl_share_close()` / `finfo_close()` / `xml_parser_free()` /
+	 * `imagedestroy()` calls outside the version-gated legacy branches
+	 * of `includes/class-util.php`.
+	 *
+	 * @since NEXT
+	 * @param string   $file       Absolute file path.
+	 * @param string   $root       Plugin root for relative reporting.
+	 * @param string[] $violations Violation accumulator (by reference).
+	 * @return void
+	 */
+	private function scan_file_for_deprecation_patterns( $file, $root, &$violations ): void {
+		$source = file_get_contents( $file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- test-only source assertion.
+		if ( false === $source ) {
+			return;
+		}
+
+		$rel    = str_replace( $root . '/', '', $file );
+		$tokens = token_get_all( $source );
+		$count  = count( $tokens );
+
+		// Code-only text (no comments/strings) for the raw-pattern checks
+		// so docblock mentions can never false-positive.
+		$code_only = '';
+		foreach ( $tokens as $token ) {
+			if ( is_array( $token ) && in_array( $token[0], array( T_COMMENT, T_DOC_COMMENT, T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE ), true ) ) {
+				$code_only .= ' ';
+				continue;
+			}
+			$code_only .= is_array( $token ) ? $token[1] : $token;
+		}
+
+		$raw_patterns = array(
+			'/\bcurl_close\s*\(\s*null/i' => 'curl_close(null) call',
+			'/\bE_STRICT\b/'              => 'E_STRICT usage',
+			'/\bmysqli_ping\b/i'          => 'mysqli_ping() usage',
+		);
+		foreach ( $raw_patterns as $pattern => $label ) {
+			if ( 1 === preg_match( $pattern, $code_only ) ) {
+				$violations[] = sprintf( '%s: raw %s', $rel, $label );
+			}
+		}
+
+		$close_functions = array( 'curl_close', 'curl_multi_close', 'curl_share_close', 'finfo_close', 'xml_parser_free', 'imagedestroy' );
+
+		for ( $i = 0; $i < $count; ++$i ) {
+			$token = $tokens[ $i ];
+
+			// Standalone backtick tokens are shell execution; backticks
+			// inside comments/strings never surface as lone tokens.
+			if ( '`' === $token ) {
+				$violations[] = sprintf( '%s: backtick shell-execution operator', $rel );
+				continue;
+			}
+
+			if ( ! is_array( $token ) ) {
+				continue;
+			}
+
+			if ( T_STRING === $token[0] && in_array( strtolower( $token[1] ), $close_functions, true ) ) {
+				$next = $i + 1;
+				while ( $next < $count && is_array( $tokens[ $next ] ) && in_array( $tokens[ $next ][0], array( T_WHITESPACE, T_COMMENT, T_DOC_COMMENT ), true ) ) {
+					++$next;
+				}
+				if ( $next < $count && '(' === $tokens[ $next ] ) {
+					$prev = $i - 1;
+					while ( $prev >= 0 && is_array( $tokens[ $prev ] ) && in_array( $tokens[ $prev ][0], array( T_WHITESPACE, T_COMMENT, T_DOC_COMMENT ), true ) ) {
+						--$prev;
+					}
+					$prev_token = $prev >= 0 ? $tokens[ $prev ] : null;
+					$prev_id    = is_array( $prev_token ) ? $prev_token[0] : $prev_token;
+					if ( ! in_array( $prev_id, array( T_OBJECT_OPERATOR, T_DOUBLE_COLON, T_FUNCTION, T_NEW ), true ) ) {
+						if ( false === strpos( $rel, 'includes/class-util.php' ) ) {
+							$violations[] = sprintf( '%s:%d raw %s() outside the Util 8.5 helper', $rel, $token[2], $token[1] );
+						}
+					}
+				}
+			}
+
+			if ( T_FUNCTION === $token[0] || T_FN === $token[0] ) {
+				$this->scan_signature_for_implicit_nullable( $tokens, $count, $i, $rel, $violations );
+			}
+		}
+	}
+
+	/**
+	 * Scan the parameter list of one function token for implicitly-nullable params.
+	 *
+	 * Flags `Type $param = null` where the declared type is non-empty and
+	 * carries no explicit nullability (`?` prefix, `null` union member, or
+	 * `mixed`). Untyped `$param = null` and `mixed $param = null` are
+	 * legal and never flagged.
+	 *
+	 * @since NEXT
+	 * @param array    $tokens     Full token stream of the file.
+	 * @param int      $count      Token count.
+	 * @param int      $index      Index of the T_FUNCTION/T_FN token.
+	 * @param string   $rel        Relative file path for reporting.
+	 * @param string[] $violations Violation accumulator (by reference).
+	 * @return void
+	 */
+	private function scan_signature_for_implicit_nullable( $tokens, $count, $index, $rel, &$violations ): void {
+		$j = $index + 1;
+		while ( $j < $count && '(' !== $tokens[ $j ] ) {
+			if ( '{' === $tokens[ $j ] || ';' === $tokens[ $j ] || '}' === $tokens[ $j ] ) {
+				return;
+			}
+			++$j;
+		}
+		if ( $j >= $count || '(' !== $tokens[ $j ] ) {
+			return;
+		}
+
+		$depth = 0;
+		$end   = -1;
+		for ( $k = $j; $k < $count; ++$k ) {
+			if ( '(' === $tokens[ $k ] ) {
+				++$depth;
+			} elseif ( ')' === $tokens[ $k ] ) {
+				--$depth;
+				if ( 0 === $depth ) {
+					$end = $k;
+					break;
+				}
+			}
+		}
+		if ( $end < 0 ) {
+			return;
+		}
+
+		$params  = array();
+		$current = array();
+		$depth   = 0;
+		for ( $k = $j + 1; $k < $end; ++$k ) {
+			$token = $tokens[ $k ];
+			if ( '(' === $token || '[' === $token || '{' === $token ) {
+				++$depth;
+			} elseif ( ')' === $token || ']' === $token || '}' === $token ) {
+				--$depth;
+			}
+			if ( ',' === $token && 0 === $depth ) {
+				$params[] = $current;
+				$current  = array();
+				continue;
+			}
+			$current[] = $token;
+		}
+		$params[] = $current;
+
+		foreach ( $params as $param ) {
+			$depth  = 0;
+			$equals = -1;
+			foreach ( $param as $idx => $token ) {
+				if ( '(' === $token || '[' === $token || '{' === $token || '#[' === $token ) {
+					++$depth;
+				} elseif ( ')' === $token || ']' === $token || '}' === $token ) {
+					--$depth;
+				}
+				if ( '=' === $token && 0 === $depth ) {
+					$equals = $idx;
+					break;
+				}
+			}
+			if ( $equals < 0 ) {
+				continue;
+			}
+
+			$default = '';
+			foreach ( array_slice( $param, $equals + 1 ) as $token ) {
+				$default .= is_array( $token ) ? $token[1] : $token;
+			}
+			if ( 'null' !== strtolower( trim( $default ) ) ) {
+				continue;
+			}
+
+			$var_index = -1;
+			foreach ( $param as $idx => $token ) {
+				if ( $idx >= $equals ) {
+					break;
+				}
+				if ( is_array( $token ) && T_VARIABLE === $token[0] ) {
+					$var_index = $idx;
+					break;
+				}
+			}
+			if ( $var_index < 0 ) {
+				continue;
+			}
+
+			$type      = '';
+			$in_attr   = 0;
+			$modifiers = array( T_PUBLIC, T_PRIVATE, T_PROTECTED, T_READONLY, T_VAR, T_WHITESPACE, T_COMMENT, T_DOC_COMMENT );
+			$line      = 0;
+			foreach ( array_slice( $param, 0, $var_index ) as $token ) {
+				$text = is_array( $token ) ? $token[1] : $token;
+				$id   = is_array( $token ) ? $token[0] : $token;
+				if ( 0 === $line && is_array( $token ) ) {
+					$line = $token[2];
+				}
+				if ( '#[' === $token ) {
+					++$in_attr;
+					continue;
+				}
+				if ( $in_attr > 0 ) {
+					if ( ']' === $token ) {
+						--$in_attr;
+					} elseif ( '[' === $token ) {
+						++$in_attr;
+					}
+					continue;
+				}
+				if ( in_array( $id, $modifiers, true ) ) {
+					continue;
+				}
+				if ( '&' === $text || '...' === $text ) {
+					continue;
+				}
+				$type .= $text;
+			}
+
+			$normalized = strtolower( (string) preg_replace( '/\s+/', '', $type ) );
+			if ( '' === $normalized || 'mixed' === $normalized ) {
+				continue;
+			}
+			if ( 0 === strpos( $normalized, '?' ) ) {
+				continue;
+			}
+			$parts = preg_split( '/[|&()]+/', $normalized, -1, PREG_SPLIT_NO_EMPTY );
+			if ( is_array( $parts ) && ( in_array( 'null', $parts, true ) || in_array( 'mixed', $parts, true ) ) ) {
+				continue;
+			}
+
+			$violations[] = sprintf( '%s:%d implicitly-nullable `%s $.. = null`', $rel, $line, trim( $type ) );
+		}
+	}
 }

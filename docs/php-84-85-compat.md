@@ -80,3 +80,42 @@ matrix running `parallel-lint` plus `composer test`, failing on any
 - Debugging deprecations: enable `WP_DEBUG` + Query Monitor on staging,
   visit the settings and dashboard tabs, and confirm zero `Deprecated:`
   notices before promoting to production.
+
+## 5. Re-sweep results (issue #1260)
+
+- **Implicitly-nullable signatures (PHP 8.4):** re-swept `includes/`,
+  `templates/`, root `*.php`, and `uninstall.php` with a tokenizer-aware
+  check (typed `Type $x = null` without `?`/`|null`/`mixed`). True hits:
+  **0** — every `= null` default is an explicit `?Type = null`, an untyped
+  `$x = null`, or a legal `mixed $x = null` (e.g.
+  `CDN::rewrite_url()`/`rewrite_srcset()`, left untouched). The WP
+  object-cache drop-in keeps core's untyped signatures by design.
+- **Banned calls/usage:** `curl_close(null)`, `E_STRICT`, `mysqli_ping()`,
+  and backtick shell execution: **0** hits in plugin code. The backtick
+  characters that exist are `strpbrk()` XSS guards and docblock text, not
+  execution. Redis `$manager->ping()` calls are unrelated to
+  `mysqli_ping()`. Raw `curl_close()`/`curl_multi_close()`/
+  `curl_share_close()`/`finfo_close()`/`xml_parser_free()`/`imagedestroy()`
+  calls remain only inside the version-gated legacy branches of
+  `includes/class-util.php` (fail-open below PHP 8.5); all production call
+  sites use the `Util` helpers.
+- **Repeatable grep:** the sweep is now pinned by
+  `PhpDeprecationHygieneTest::test_plugin_sources_are_free_of_php84_85_banned_patterns()`,
+  a token-based source scan (no regex false-positives from comments or
+  strings) covering all six patterns above, so PHP 8.5 stays clean on every
+  `composer test` run without CI workflow changes.
+- **Vendor bumps:** Action Scheduler 4.1.0, `voku/html-min` 5.0.0, and
+  `matthiasmullie/minify` 1.3.75 are already at their latest releases — no
+  change. `symfony/css-selector` was bumped `v7.4.17` → `v7.4.18`
+  (patch-only, inside the existing `^7.4` constraint) with
+  `composer.lock` updated. Dev-only `outdated` hits (PHPCS 4.x major,
+  PHPStan, phpstan-wordpress) were deliberately left alone: they do not
+  ship and a major bump would risk the lint gate.
+- **Floors unchanged:** PHP 8.2 floor with 8.3 recommended;
+  `WPPO_REQUIRES_PHP`, `wppo_requirements_met()`, and
+  `wppo_version_guard()` messaging are untouched. No option or transient
+  scope changes (multisite-safe).
+- **Still open (needs workflow permissions, not applied here):** extend
+  `psalm-wpcs-check.yml` from the single PHP 8.2 job to an 8.2–8.5 matrix
+  running `parallel-lint` plus `composer test`, failing on any
+  `Deprecated:` line in the output.
