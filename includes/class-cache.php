@@ -3293,6 +3293,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$used_css_path = $this->get_file_path( $url_path, 'used-css' );
 				if ( '' !== $used_css_path ) {
 					$this->delete_cache_files( $used_css_path );
+					// Viewport variants (issue #1220): a single-page purge must
+					// also invalidate used-css.{mobile,desktop}.css (+
+					// compressed siblings) or the resolver may keep serving a
+					// stale variant. Derived from the choke-point path; each
+					// delete re-checks containment.
+					$used_css_dir = dirname( $used_css_path );
+					foreach ( array( 'used-css.mobile.css', 'used-css.desktop.css' ) as $variant_file ) {
+						$variant_path = trailingslashit( $used_css_dir ) . $variant_file;
+						$this->delete_cache_files( $variant_path );
+					}
 				}
 
 				self::bump_stats_cache();

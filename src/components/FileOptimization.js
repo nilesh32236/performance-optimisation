@@ -1,4 +1,4 @@
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 import {
 	useState,
 	useRef,
@@ -138,6 +138,7 @@ const FileOptimization = ( {
 				: true,
 		unusedCSSRegressionThreshold:
 			options.unusedCSSRegressionThreshold ?? 20,
+		usedCSSDeliveryMode: options.usedCSSDeliveryMode || 'file',
 		disableEmojis: false,
 		disableEmbeds: false,
 		disableDashicons: false,
@@ -197,6 +198,14 @@ const FileOptimization = ( {
 		typeof options.fontSubsetSubsets === 'string'
 			? options.fontSubsetSubsets
 			: 'latin';
+	defaultSettings.usedCSSDeliveryMode = [
+		'file',
+		'delay',
+		'async',
+		'remove',
+	].includes( defaultSettings.usedCSSDeliveryMode )
+		? defaultSettings.usedCSSDeliveryMode
+		: 'file';
 
 	const [ settings, setSettings ] = useState( defaultSettings );
 	const [ isLoading, setIsLoading ] = useState( false );
@@ -207,6 +216,29 @@ const FileOptimization = ( {
 		notify: notifyPurge,
 		dismiss: dismissPurge,
 	} = useNotice();
+	// Used-CSS staleness (issue #1220): last-regen time + stale flag from the
+	// read-only used_css_status endpoint, shown as a warning banner while
+	// removeUnusedCSS is on. Fail-open: a failed fetch simply hides the banner.
+	const [ usedCssStatus, setUsedCssStatus ] = useState( null );
+	useEffect( () => {
+		if ( ! options.removeUnusedCSS ) {
+			return;
+		}
+		let cancelled = false;
+		( async () => {
+			try {
+				const res = await apiCall( 'used_css_status', {}, 'GET' );
+				if ( ! cancelled && res && res.success && res.data ) {
+					setUsedCssStatus( res.data );
+				}
+			} catch {
+				// Fail-open: leave the banner hidden.
+			}
+		} )();
+		return () => {
+			cancelled = true;
+		};
+	}, [ options.removeUnusedCSS ] );
 	// Sandbox preview (issue #1163): visitor-safe admin preview of
 	// delay/defer/combine with one-click promote/discard + in-preview perf test.
 	const [ sandboxStaged, setSandboxStaged ] = useState( null );
@@ -532,6 +564,14 @@ const FileOptimization = ( {
 				typeof options.fontSubsetSubsets === 'string'
 					? options.fontSubsetSubsets
 					: 'latin',
+			usedCSSDeliveryMode: [
+				'file',
+				'delay',
+				'async',
+				'remove',
+			].includes( options.usedCSSDeliveryMode )
+				? options.usedCSSDeliveryMode
+				: 'file',
 		} );
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [
@@ -577,6 +617,7 @@ const FileOptimization = ( {
 		options.unusedCSSSafelistExtra,
 		options.unusedCSSRegressionGuard,
 		options.unusedCSSRegressionThreshold,
+		options.usedCSSDeliveryMode,
 		options.disableEmojis,
 		options.disableEmbeds,
 		options.disableDashicons,
@@ -631,6 +672,13 @@ const FileOptimization = ( {
 			if ( typeof next.fontSubsetSubsets !== 'string' ) {
 				next.fontSubsetSubsets = 'latin';
 			}
+			if (
+				! [ 'file', 'delay', 'async', 'remove' ].includes(
+					next.usedCSSDeliveryMode
+				)
+			) {
+				next.usedCSSDeliveryMode = 'file';
+			}
 			return next;
 		} );
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -677,6 +725,7 @@ const FileOptimization = ( {
 		options.unusedCSSSafelistExtra,
 		options.unusedCSSRegressionGuard,
 		options.unusedCSSRegressionThreshold,
+		options.usedCSSDeliveryMode,
 		options.disableEmojis,
 		options.disableEmbeds,
 		options.disableDashicons,
@@ -1435,6 +1484,84 @@ const FileOptimization = ( {
 												</p>
 											</>
 										) }
+										<label
+											className="wppo-field-label wppo-mt-16"
+											htmlFor="usedCSSDeliveryMode"
+										>
+											{ __(
+												'Used CSS Delivery Mode',
+												'performance-optimisation'
+											) }
+										</label>
+										<select
+											className="wppo-select"
+											id="usedCSSDeliveryMode"
+											name="usedCSSDeliveryMode"
+											value={
+												settings.usedCSSDeliveryMode ||
+												'file'
+											}
+											onChange={ handleChange(
+												setSettings
+											) }
+											aria-describedby="usedCSSDeliveryMode-desc"
+										>
+											<option value="file">
+												{ __(
+													'File (render-blocking used CSS)',
+													'performance-optimisation'
+												) }
+											</option>
+											<option value="delay">
+												{ __(
+													'Delay (full CSS on interaction)',
+													'performance-optimisation'
+												) }
+											</option>
+											<option value="async">
+												{ __(
+													'Async (preload + swap)',
+													'performance-optimisation'
+												) }
+											</option>
+											<option value="remove">
+												{ __(
+													'Remove (strip full CSS, auto-downgrades on builders)',
+													'performance-optimisation'
+												) }
+											</option>
+										</select>
+										<p
+											id="usedCSSDeliveryMode-desc"
+											className="wppo-text-muted wppo-text-small wppo-mt-8"
+										>
+											{ __(
+												'File and Delay never serve unstyled pages on a cache miss — the full stylesheet is served instead. Remove auto-downgrades to Delay on builder pages.',
+												'performance-optimisation'
+											) }
+										</p>
+										{ usedCssStatus &&
+											usedCssStatus.is_stale && (
+												<NoticeBanner
+													type="warning"
+													className="wppo-mt-12"
+													message={
+														usedCssStatus.last_regen_human
+															? sprintf(
+																	// translators: %s: last used-CSS regeneration time.
+																	__(
+																		'Used CSS looks stale — last regenerated at %s. Builder or theme updates may have outrun regeneration; use Regenerate Used CSS below.',
+																		'performance-optimisation'
+																	),
+																	usedCssStatus.last_regen_human
+															  )
+															: __(
+																	'Used CSS looks stale — it has never been regenerated. Use Regenerate Used CSS below.',
+																	'performance-optimisation'
+															  )
+													}
+												/>
+											) }
 										<NoticeBanner
 											type="info"
 											className="wppo-mt-12"
