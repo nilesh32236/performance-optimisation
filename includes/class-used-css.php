@@ -2269,9 +2269,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( empty( $options['file_optimisation']['removeUnusedCSS'] ) ) {
 					return 0;
 				}
-				if ( ! function_exists( 'as_enqueue_async_action' ) || ! function_exists( 'as_has_scheduled_action' ) ) {
+				if ( ! function_exists( 'as_enqueue_async_action' ) ) {
 					return 0;
 				}
+				// Note: de-duplication via as_has_scheduled_action() lives
+				// inside requeue_for_post(); no existence check is needed here.
 				$instance = new self( $options );
 				if ( $instance->is_targeted_regen_cooled_down() ) {
 					return 0;
@@ -3406,24 +3408,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		/**
 		 * Whether the response carries a strict CSP blocking inline handlers (issue #1220).
 		 *
-		 * The async delivery mode swaps via an inline `onload` attribute, which
-		 * a `Content-Security-Policy` without 'unsafe-inline' blocks — leaving
-		 * used-CSS never applied. Fail-open: any uncertainty returns false.
+		 * The async delivery mode swaps via an inline `onload` attribute and
+		 * the delay mode via an inline loader script, both of which a
+		 * `Content-Security-Policy` without 'unsafe-inline' blocks — leaving
+		 * stylesheets never applied. Checks both the `headers_list()` response
+		 * headers and a `<meta http-equiv="Content-Security-Policy">` tag in
+		 * the (already stripped) buffer. Fail-open: any uncertainty returns false.
 		 *
+		 * @param string $buffer Optional HTML buffer to scan for a meta CSP tag.
 		 * @return bool True when a strict CSP is detected.
 		 * @since NEXT
 		 */
-		private function has_strict_csp(): bool {
+		private function has_strict_csp( string $buffer = '' ): bool {
 			try {
-				if ( ! function_exists( 'headers_list' ) ) {
-					return false;
-				}
-				foreach ( headers_list() as $header ) {
-					if ( 0 !== stripos( (string) $header, 'content-security-policy' ) ) {
-						continue;
+				if ( function_exists( 'headers_list' ) ) {
+					foreach ( headers_list() as $header ) {
+						if ( 0 !== stripos( (string) $header, 'content-security-policy' ) ) {
+							continue;
+						}
+						if ( false === stripos( (string) $header, 'unsafe-inline' ) ) {
+							return true;
+						}
 					}
-					if ( false === stripos( (string) $header, 'unsafe-inline' ) ) {
-						return true;
+				}
+				if ( '' !== $buffer && false !== stripos( $buffer, 'http-equiv' ) && false !== stripos( $buffer, 'content-security-policy' ) ) {
+					if ( 1 === preg_match( '/<meta[^>]+http-equiv\s*=\s*["\']?\s*content-security-policy\s*["\']?[^>]*>/i', $buffer, $matches ) ) {
+						if ( false === stripos( $matches[0], 'unsafe-inline' ) ) {
+							return true;
+						}
 					}
 				}
 				return false;
@@ -3539,14 +3551,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			$file_opts_for_mode = $this->options['file_optimisation'] ?? array();
 			$delivery_mode      = self::get_used_css_delivery_mode( is_array( $file_opts_for_mode ) ? $file_opts_for_mode : array() );
 			$delivery_mode      = $this->resolve_effective_delivery_mode( $buffer_after_strip, $delivery_mode, $handles );
-			if ( 'async' === $delivery_mode && $this->has_strict_csp() ) {
+			if ( in_array( $delivery_mode, array( 'async', 'delay' ), true ) && $this->has_strict_csp( $buffer_after_strip ) ) {
 				// Strict Content-Security-Policy (no 'unsafe-inline') blocks
-				// the onload swap below, leaving used-CSS never applied —
-				// downgrade to the blocking file mode instead (fail-open,
-				// never unstyled). Logged via the safe fallback logger.
+				// the async onload swap and the delay inline loader below,
+				// leaving stylesheets never applied — downgrade to the
+				// blocking file mode instead (fail-open, never unstyled).
+				// Logged via the safe fallback logger.
 				try {
 					if ( $this->is_safe_fallback_enabled() ) {
-						$this->log_used_css_fallback( 'async_downgraded_to_file_csp', $handles );
+						$this->log_used_css_fallback( $delivery_mode . '_downgraded_to_file_csp', $handles );
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );

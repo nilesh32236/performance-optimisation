@@ -3294,13 +3294,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( '' !== $used_css_path ) {
 					$this->delete_cache_files( $used_css_path );
 					// Viewport variants (issue #1220): a single-page purge must
-					// also invalidate used-css.{mobile,desktop}.css (+
-					// compressed siblings) or the resolver may keep serving a
-					// stale variant. Derived from the choke-point path; each
-					// delete re-checks containment.
-					$used_css_dir = dirname( $used_css_path );
-					foreach ( array( 'used-css.mobile.css', 'used-css.desktop.css' ) as $variant_file ) {
-						$variant_path = trailingslashit( $used_css_dir ) . $variant_file;
+					// also invalidate used-css.{variant}.css (+ compressed
+					// siblings) or the resolver may keep serving a stale
+					// variant. Derived from the choke-point path; each delete
+					// re-checks containment. Variant slugs come from
+					// Used_CSS::VIEWPORT_VARIANTS with a hardcoded fallback
+					// when the class is unavailable.
+					$used_css_dir  = dirname( $used_css_path );
+					$variant_slugs = array( 'mobile', 'desktop' );
+					if ( class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
+						try {
+							$from_const = \PerformanceOptimise\Inc\Used_CSS::VIEWPORT_VARIANTS;
+							if ( is_array( $from_const ) && ! empty( $from_const ) ) {
+								$filtered = array_values( array_filter( array_map( 'strval', $from_const ) ) );
+								if ( ! empty( $filtered ) ) {
+									$variant_slugs = $filtered;
+								}
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+					}
+					foreach ( $variant_slugs as $variant_slug ) {
+						if ( '' === $variant_slug ) {
+							continue;
+						}
+						$variant_path = trailingslashit( $used_css_dir ) . 'used-css.' . $variant_slug . '.css';
 						$this->delete_cache_files( $variant_path );
 					}
 				}

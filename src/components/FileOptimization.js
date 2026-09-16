@@ -243,21 +243,10 @@ const FileOptimization = ( {
 			setUsedCssStatus( null );
 			return;
 		}
-		let cancelled = false;
-		( async () => {
-			try {
-				const res = await apiCall( 'used_css_status', {}, 'GET' );
-				if ( ! cancelled && res && res.success && res.data ) {
-					setUsedCssStatus( res.data );
-				}
-			} catch {
-				// Fail-open: leave the banner hidden.
-			}
-		} )();
-		return () => {
-			cancelled = true;
-		};
-	}, [ options.removeUnusedCSS ] );
+		// Reuse the shared fetcher so staleness logic lives in one place
+		// (issue #1220). Fail-open: a failed fetch leaves the banner hidden.
+		refreshUsedCssStatus();
+	}, [ options.removeUnusedCSS, refreshUsedCssStatus ] );
 	// Sandbox preview (issue #1163): visitor-safe admin preview of
 	// delay/defer/combine with one-click promote/discard + in-preview perf test.
 	const [ sandboxStaged, setSandboxStaged ] = useState( null );
