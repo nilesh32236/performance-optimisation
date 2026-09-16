@@ -165,6 +165,92 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 		}
 
 		/**
+		 * Normalize a raw host value the same way the generated drop-in does.
+		 *
+		 * Pure pre-boot helper: no `Util`, `sanitize_*`, `wp_*`, Woo, or filter
+		 * calls, so the drop-in serve path (which never boots WordPress) can
+		 * mirror it exactly with inline PHP. Bracketed IPv6 literals are
+		 * unwrapped (`[::1]:8080` → `::1`), a single `:port` suffix is
+		 * stripped, unbracketed multi-colon values are kept as IPv6 literals,
+		 * IDN is converted via `idn_to_ascii()` when available, and the
+		 * allowlist shape (`[a-z0-9.-:]`, no `..`, `/`, `\`) is enforced.
+		 * Returns `''` for missing/invalid input (fail-open signal).
+		 *
+		 * @param string $raw_host Raw host value (e.g. `$_SERVER['HTTP_HOST']`).
+		 * @return string Normalized lowercase host, or '' when invalid.
+		 * @since NEXT
+		 */
+		public static function normalize_dropin_host( string $raw_host ): string {
+			$domain = trim( $raw_host );
+			if ( '' === $domain ) {
+				return '';
+			}
+			if ( str_starts_with( $domain, '[' ) ) {
+				$bracket_end = strpos( $domain, ']' );
+				if ( false === $bracket_end ) {
+					return '';
+				}
+				$rest = substr( $domain, $bracket_end + 1 );
+				if ( '' !== $rest && ':' !== substr( $rest, 0, 1 ) ) {
+					return '';
+				}
+				$host = substr( $domain, 1, $bracket_end - 1 );
+			} elseif ( substr_count( $domain, ':' ) > 1 ) {
+				$host = $domain;
+			} else {
+				$host = explode( ':', $domain, 2 )[0];
+			}
+			if ( '' === $host ) {
+				return '';
+			}
+			if ( function_exists( 'idn_to_ascii' ) ) {
+				try {
+					$converted = idn_to_ascii( $host, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46 );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$converted = false;
+				}
+				if ( false !== $converted && is_string( $converted ) && '' !== $converted ) {
+					$host = $converted;
+				}
+			}
+			$host = strtolower( (string) preg_replace( '/[^a-z0-9.:-]+/i', '', $host ) );
+			if ( '' === $host || false !== strpos( $host, '..' ) || false !== strpos( $host, '/' ) || false !== strpos( $host, '\\' ) || ! preg_match( '/^[a-z0-9\.\-:]+$/i', $host ) ) {
+				return '';
+			}
+			return strtolower( $host );
+		}
+
+		/**
+		 * Whether a request host is allowed to read the static cache tree.
+		 *
+		 * Serve-time Host allowlist mirror for the generated drop-in: strict
+		 * equality between the normalized request host and the baked canonical
+		 * host. Pure PHP only — no `Util`, `sanitize_*`, `wp_*`, Woo, or filter
+		 * calls — so it stays callable in pre-boot contexts. Empty inputs fail
+		 * closed (not allowed → serve uncached). The generated drop-in in
+		 * {@see create()} inlines the same rule (`$request_host !==
+		 * $canonical_host → return`) because the drop-in file itself must stay
+		 * `Util`-free (see SettingsReadGuardTest).
+		 *
+		 * @param string $request_host   Raw request host (e.g. `$_SERVER['HTTP_HOST']`).
+		 * @param string $canonical_host Baked canonical host.
+		 * @return bool True when the request may read the canonical cache tree.
+		 * @since NEXT
+		 */
+		public static function is_host_allowed( string $request_host, string $canonical_host ): bool {
+			$canonical = self::normalize_dropin_host( $canonical_host );
+			if ( '' === $canonical ) {
+				return false;
+			}
+			$request = self::normalize_dropin_host( $request_host );
+			if ( '' === $request ) {
+				return false;
+			}
+			return $request === $canonical;
+		}
+
+		/**
 		 * Atomically write the drop-in via tmp-plus-rename with backup and verification.
 		 *
 		 * Writes the generated code to a uniquely named temp sibling, verifies the
@@ -358,6 +444,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			// cache/wppo/<canonical-host>/, so a forged Host header is served
 			// uncached (falls through to WordPress) and can never create or
 			// serve a poisoned file. Empty canonical fails open to uncached.
+			// The inlined rule mirrors is_host_allowed()/normalize_dropin_host()
+			// (@since NEXT) — the drop-in file itself must stay Util-free, so
+			// the rule is duplicated inline rather than called.
 			//
 			// Known tradeoff: a single canonical host is baked at create() time
 			// because the pre-boot drop-in has no blog context. On multisite or

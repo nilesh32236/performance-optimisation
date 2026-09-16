@@ -438,6 +438,47 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Canonical, query-normalized cache key for the current request.
+		 *
+		 * The key is pinned to the allowlisted canonical host resolved from
+		 * `home_url()` via `wp_parse_url()` (both guarded with
+		 * `function_exists()` inside {@see Util::get_canonical_host()}; see
+		 * {@see Util::resolve_canonical_host()}): a forged `Host` header can
+		 * never create its own key — `$this->domain` is the canonical host,
+		 * never the request host, and mismatched requests are served dynamic
+		 * uncached (see {@see is_not_cacheable()}) and never stored (see
+		 * {@see maybe_store_cache()}). The key itself stays canonical on
+		 * mismatch so callers can observe the pinning; servability is decided
+		 * by {@see is_host_mismatched()}, not by this key.
+		 *
+		 * Query-aware by construction: the key is path-only. Known tracking
+		 * params (`utm_*`, `gclid`, `fbclid`, … — the `has_filter()`-guarded
+		 * `wppo_cache_query_allowlist` filter in
+		 * {@see Util::get_cache_query_allowlist()}, classified by
+		 * {@see Util::has_uncacheable_query()}) are cache-neutral for the
+		 * read decision, while the write path refuses ANY query-bearing
+		 * response, so `/?utm_source=x` can never poison the clean-URL entry.
+		 *
+		 * No absolute URL in the key (or in cached output) is ever built from
+		 * `HTTP_HOST`; absolute URLs use `home_url()`/the canonical host with
+		 * legacy Host-derived fallback only when the canonical host is
+		 * unresolvable (early boot/CLI). Multisite-safe: `home_url()` is
+		 * blog-aware, so each site keys its own canonical tree.
+		 *
+		 * @return string `{canonical-host}/{path}` (homepage: `{host}/`), or '' when refused.
+		 * @since NEXT
+		 */
+		public function cache_key(): string {
+			if ( '' === $this->domain || $this->path_rejected ) {
+				return '';
+			}
+			if ( '' === $this->url_path ) {
+				return $this->domain . '/';
+			}
+			return $this->domain . '/' . $this->url_path;
+		}
+
+		/**
 		 * Check whether page caching is allowed for the current (possibly logged-in) user.
 		 *
 		 * - Not logged in: always allowed.
@@ -2625,7 +2666,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$this->log_traversal_probe( $this->url_path );
 				return false;
 			}
-			return Util::prepare_cache_dir( $target );
+			if ( ! Util::prepare_cache_dir( $target ) ) {
+				return false;
+			}
+			// Post-mkdir re-verification (TOCTOU): a symlink swapped in
+			// during the iterative mkdir must not redirect subsequent
+			// writes, so containment is re-checked after the directory
+			// exists before any put_contents happens.
+			if ( ! $this->is_path_contained( trailingslashit( $target ) ) ) {
+				$this->log_traversal_probe( $this->url_path );
+				return false;
+			}
+			return true;
 		}
 
 		/**
@@ -3474,17 +3526,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Dual-prefix containment: the normalized path must start with both
 		 * the cache root and the per-domain directory (trailing-slash aware
 		 * so `wppo-evil` never prefix-matches `wppo`). Empty root or domain
-		 * fails closed.
+		 * fails closed. Since NEXT the check is symlink-aware: the resolved
+		 * target must also pass {@see Util::is_realpath_contained()} so a
+		 * symlink planted inside the cache tree cannot redirect a write
+		 * outside the root (CVE-2026-18051 class). On containment failure
+		 * callers skip the write and serve dynamically uncached.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Added realpath symlink containment.
 		 * @param string $path Absolute file or directory path.
 		 * @return bool True when contained.
 		 */
 		private function is_path_contained( string $path ): bool {
-			// Centralized dual-prefix containment lives in
-			// Util::is_cache_path_contained(); this wrapper only binds the
-			// per-instance root/domain so every call site shares one audit point.
-			return Util::is_cache_path_contained( $this->cache_root_dir, $this->domain, $path );
+			// Single validator: Util::validate_cache_write_path() owns the
+			// lexical + realpath AND so this wrapper cannot drift from the
+			// enforced path. Fail closed on any throwable (skip the write,
+			// serve dynamic) while staying non-fatal.
+			try {
+				return Util::validate_cache_write_path( $this->cache_root_dir, $this->domain, $path );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
 		}
 
 		/**
@@ -4077,6 +4140,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Whether a minify-cache directory may be recursively deleted.
+		 *
+		 * The min dirs live outside the per-domain tree, so
+		 * {@see is_path_contained()} does not apply; instead the target must
+		 * sit lexically under the plugin-owned min base dir
+		 * (`{WP_CONTENT_DIR}/cache/wppo/min/`) and, when resolvable, its
+		 * realpath must stay under the resolved base (a symlinked min dir
+		 * pointing outside fails closed). Fail closed on any anomaly.
+		 *
+		 * @since NEXT
+		 * @param string $dir Absolute directory candidate.
+		 * @return bool True when the recursive delete may proceed.
+		 */
+		private function is_min_dir_allowed( string $dir ): bool {
+			if ( '' === $dir || false !== strpos( $dir, "\0" ) || false !== strpos( $dir, '..' ) ) {
+				return false;
+			}
+			try {
+				if ( function_exists( 'wp_normalize_path' ) ) {
+					$norm = wp_normalize_path( $dir );
+				} else {
+					$norm = str_replace( '\\', '/', $dir );
+				}
+				$base      = rtrim( Util::min_cache_base_dir(), '/' ) . '/';
+				$dir_slash = rtrim( $norm, '/' ) . '/';
+				if ( 0 !== strpos( $dir_slash, $base ) || $dir_slash === $base ) {
+					return false;
+				}
+				$base_resolved = Util::resolve_realpath( rtrim( $base, '/' ) );
+				$dir_resolved  = Util::resolve_realpath( rtrim( $norm, '/' ) );
+				if ( null !== $base_resolved && null !== $dir_resolved ) {
+					$base_dir = rtrim( $base_resolved, '/' ) . '/';
+					$dir_dir  = rtrim( $dir_resolved, '/' ) . '/';
+					if ( 0 !== strpos( $dir_dir, $base_dir ) ) {
+						return false;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+			return true;
+		}
+
+		/**
 		 * Delete all cache files.
 		 *
 		 * @return bool True if successful, false otherwise.
@@ -4091,7 +4199,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$fs = $this->get_filesystem();
 
 			if ( $fs && $fs->is_dir( $cache_dir ) ) {
-				$res1 = $fs->delete( $cache_dir, true );
+				// Containment gate (fail closed): a symlinked domain
+				// directory pointing outside the root must never be
+				// followed by the recursive delete. The trailing slash is
+				// appended explicitly (not via trailingslashit()) so the
+				// dual-prefix directory check holds even where
+				// trailingslashit() is filtered or stubbed.
+				if ( ! $this->is_path_contained( rtrim( $cache_dir, '/' ) . '/' ) ) {
+					$this->log_traversal_probe( $cache_dir );
+					$res1 = false;
+				} else {
+					$res1 = $fs->delete( $cache_dir, true );
+				}
 			}
 
 			// Minified JS/CSS files are blog-scoped so a network-wide clear cannot
@@ -4099,7 +4218,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$min_dir = Util::min_cache_dir();
 
 			if ( $fs && $fs->is_dir( $min_dir ) ) {
-				$res2 = $fs->delete( $min_dir, true );
+				if ( ! $this->is_min_dir_allowed( $min_dir ) ) {
+					$this->log_traversal_probe( $min_dir );
+					$res2 = false;
+				} else {
+					$res2 = $fs->delete( $min_dir, true );
+				}
 			}
 
 			// One-time idempotent cleanup of the pre-namespacing shared directories;
@@ -4111,6 +4235,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			foreach ( $legacy_min_dirs as $legacy_min_dir ) {
 				if ( $fs && $fs->is_dir( $legacy_min_dir ) ) {
+					if ( ! $this->is_min_dir_allowed( $legacy_min_dir ) ) {
+						$this->log_traversal_probe( $legacy_min_dir );
+						continue;
+					}
 					$fs->delete( $legacy_min_dir, true );
 				}
 			}

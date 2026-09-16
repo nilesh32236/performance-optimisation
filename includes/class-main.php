@@ -852,6 +852,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// honoured by core since WP 6.3, so the native defer path is gated to 6.3+
 			// and older core (WP 6.2) uses the legacy script_loader_tag fallback.
 			// TODO(#553): remove the legacy fallback when minimum supported WP is raised to 6.3.
+			// Issue #1203 (modularity) proposed removing the shims now; deferred —
+			// the floor is still 6.2, so deletion would drop defer-JS on 6.2 with no
+			// native replacement. One canonical path per install is already enforced
+			// by the version gate below (never both regex passes per request).
 			$is_wp63_plus = version_compare( $wp_version, '6.3-alpha', '>=' );
 			// Pre-release-inclusive floor: '6.9-alpha' also matches alpha/beta/RC builds
 			// of 6.9 which already ship the template-enhancement buffer functions.
@@ -2968,8 +2972,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 				if ( $needs_script ) {
 					// Shared runtime config for the lazyload bundle. Exported to the frontend
-					// via the script-module data filter on WP 6.5+, or as classic inline
-					// scripts on older versions (see the fallback below).
+					// via the script-module data filter on WP 6.9+, or as classic inline
+					// scripts on WP < 6.9 (see the fallback below). Both paths are
+					// retained while the floor is 6.2 (issue #1203: removal deferred
+					// until the minimum supported WP is raised to 6.9).
 					$lazy_config = array();
 
 					if ( $use_native_lazy ) {
@@ -3523,6 +3529,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$is_wp69_plus = version_compare( (string) ( $GLOBALS['wp_version'] ?? get_bloginfo( 'version' ) ), '6.9-alpha', '>=' );
 
 			foreach ( $wp_scripts->queue as $handle ) {
+				// Interactivity runtime guard (issue #1201): never deprioritize or
+				// move the block-interactivity runtime, even if a site filters the
+				// preset away. Mirrors apply_module_loading_strategies(). Fail-open.
+				//
+				// @since NEXT.
+				if ( in_array( (string) $handle, array( 'wp-interactivity', '@wordpress/interactivity', '@wordpress/interactivity-router' ), true ) ) {
+					continue;
+				}
 				if ( ! in_array( $handle, $this->exclude_defer_js, true ) ) {
 					// Fill-gaps-only for the strategy itself (issue #1184): never
 					// overwrite an explicit async/defer strategy stamped by core,
@@ -3782,11 +3796,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
-		 * Adds the defer attribute to script tags on WordPress &lt; 6.3.
+		 * Adds the defer attribute to script tags on WordPress < 6.3.
 		 *
 		 * WordPress 6.3+ natively honours the 'strategy' script data added via
 		 * wp_script_add_data(), so this legacy fallback is only registered on older
-		 * core (WP 6.2) where the native strategy is silently ignored.
+		 * core (WP 6.2) where the native strategy is silently ignored. Retained
+		 * while the plugin floor is 6.2 (issue #1203: removal deferred until the
+		 * minimum supported WP is raised to 6.3; see TODO(#553) in setup_hooks()).
 		 *
 		 * @since 1.9.0
 		 *
@@ -5084,6 +5100,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'cart-fragments',
 				'wc-blocks',
 				'wc-store',
+				// Interactivity runtime guard (issue #1201): never deprioritize
+				// or move the block-interactivity runtime. Covers the classic
+				// handle plus the 6.5+ module ids, mirroring
+				// apply_module_loading_strategies(). Fail-open append.
+				//
+				// @since NEXT.
+				'wp-interactivity',
+				'@wordpress/interactivity',
+				'@wordpress/interactivity-router',
 			);
 			/**
 			 * Filters defer-JS preset exclusions.

@@ -714,6 +714,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 					$data = $options;
 				}
 
+				// Never dump secrets to stdout (shell history / CI logs):
+				// mirror the export-path strip for both full and per-tab reads.
+				if ( is_array( $data ) ) {
+					if ( isset( $data['object_cache']['password'] ) ) {
+						unset( $data['object_cache']['password'] );
+					}
+					if ( isset( $data['performance_audit']['pagespeed_api_key'] ) ) {
+						unset( $data['performance_audit']['pagespeed_api_key'] );
+					}
+					if ( 'object_cache' === $tab && isset( $data['password'] ) ) {
+						unset( $data['password'] );
+					}
+					if ( 'performance_audit' === $tab && isset( $data['pagespeed_api_key'] ) ) {
+						unset( $data['pagespeed_api_key'] );
+					}
+				}
+
 				$format = $assoc_args['format'] ?? 'json';
 
 				if ( 'yaml' === $format ) {
