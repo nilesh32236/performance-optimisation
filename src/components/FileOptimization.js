@@ -299,6 +299,7 @@ const FileOptimization = ( {
 			'',
 	} );
 	const [ isPurgingDerived, setIsPurgingDerived ] = useState( false );
+	const purgingDerivedRef = useRef( false );
 	const {
 		notice: derivedPurgeNotice,
 		notify: notifyDerivedPurge,
@@ -322,9 +323,10 @@ const FileOptimization = ( {
 	// wppoSettings.upgradePurge (localized by PHP) so existing mocked-apiCall
 	// flows are unaffected; refresh runs after a manual derived purge.
 	const handlePurgeDerivedCaches = async () => {
-		if ( isPurgingDerived ) {
+		if ( isPurgingDerived || purgingDerivedRef.current ) {
 			return;
 		}
+		purgingDerivedRef.current = true;
 		setIsPurgingDerived( true );
 		dismissDerivedPurge();
 		try {
@@ -377,6 +379,7 @@ const FileOptimization = ( {
 				durationMs: 3000,
 			} );
 		} finally {
+			purgingDerivedRef.current = false;
 			setIsPurgingDerived( false );
 		}
 	};
@@ -468,14 +471,11 @@ const FileOptimization = ( {
 	// server-provided preview_url to the resource-intensive scan endpoint.
 	// Server-side host allowlisting + rate limiting remains authoritative.
 	const stripPreviewParams = ( url ) => {
-		if ( ! url || typeof url !== 'string' ) {
+		if ( ! isSafeHttpUrl( url ) ) {
 			return '';
 		}
 		try {
 			const parsed = new URL( url );
-			if ( 'http:' !== parsed.protocol && 'https:' !== parsed.protocol ) {
-				return '';
-			}
 			parsed.searchParams.delete( 'wppo_preview' );
 			parsed.searchParams.delete( '_wppo_preview_nonce' );
 			return parsed.toString();
@@ -483,17 +483,6 @@ const FileOptimization = ( {
 			return '';
 		}
 	};
-	/**
-	 * Whether a URL is safe to render as an external link href (http(s) only).
-	 *
-	 * Shared via src/lib/urls.js (also used by Dashboard): a tampered
-	 * server-provided preview_url such as javascript:alert(1) must never
-	 * reach <a href>.
-	 *
-	 * @param {string} url Raw URL.
-	 * @return {boolean} True when the URL parses as http(s).
-	 */
-	const isSafePreviewUrl = isSafeHttpUrl;
 	const handleSandboxSave = async () => {
 		setSandboxBusy( true );
 		try {
@@ -1308,6 +1297,7 @@ const FileOptimization = ( {
 						type={ notice.type }
 						message={ notice.message }
 						className="wppo-mb-20"
+						onDismiss={ dismiss }
 					/>
 				) }
 
@@ -2220,7 +2210,7 @@ const FileOptimization = ( {
 										/>
 										{ upgradePurge &&
 											upgradePurge.safe_preview_url &&
-											isSafePreviewUrl(
+											isSafeHttpUrl(
 												upgradePurge.safe_preview_url
 											) && (
 												<a
@@ -2272,7 +2262,7 @@ const FileOptimization = ( {
 											) }
 										</button>
 										{ sandboxPreviewUrl &&
-											( isSafePreviewUrl(
+											( isSafeHttpUrl(
 												sandboxPreviewUrl
 											) ? (
 												<a

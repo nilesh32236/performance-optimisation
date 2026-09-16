@@ -3011,15 +3011,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$response->header( 'Retry-After', '60' );
 				return $response;
 			}
-			$degraded = ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' );
+			$degraded = ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) || ! method_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher', 'purge_derived_caches' );
 			try {
 				if ( ! $degraded ) {
 					( new Builder_Purge_Watcher() )->purge_derived_caches( 'manual purge' );
 				} else {
 					if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 						Cache::clear_cache();
+						if ( method_exists( 'PerformanceOptimise\Inc\Cache', 'bump_stats_cache' ) ) {
+							Cache::bump_stats_cache();
+						}
 					}
-					Used_CSS::purge_coupled( null );
+					if ( class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
+						Used_CSS::purge_coupled( null );
+					}
+					if ( class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
+						Critical_CSS::clear_all();
+					}
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -3031,11 +3039,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					unset( $e );
 				}
 			}
-			$message = $degraded
+			$message    = $degraded
 				? __( 'Page cache and used CSS purged (degraded mode: version tracking unavailable).', 'performance-optimisation' )
 				: __( 'Page cache, used CSS and critical CSS purged.', 'performance-optimisation' );
+			$last_purge = array(
+				'reason' => '',
+				'time'   => 0,
+			);
+			if ( class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) && method_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher', 'get_last_purge' ) ) {
+				$last_purge = Builder_Purge_Watcher::get_last_purge();
+			}
 			return $this->send_response(
-				class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) && method_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher', 'get_last_purge' ) ? Builder_Purge_Watcher::get_last_purge() : array(),
+				$last_purge,
 				true,
 				200,
 				$message

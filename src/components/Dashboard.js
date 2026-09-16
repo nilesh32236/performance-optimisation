@@ -97,19 +97,7 @@ const parseVarnishPurgeUrls = ( raw ) => {
 	return raw
 		.split( /\n|,/ )
 		.map( ( url ) => url.trim() )
-		.filter( ( url ) => {
-			if ( ! url ) {
-				return false;
-			}
-			try {
-				const parsed = new URL( url );
-				return (
-					'http:' === parsed.protocol || 'https:' === parsed.protocol
-				);
-			} catch {
-				return false;
-			}
-		} );
+		.filter( ( url ) => url && isSafeHttpUrl( url ) );
 };
 
 /**
@@ -261,7 +249,6 @@ const Dashboard = ( {
 			// Fail-open: keep the seeded wppoSettings value.
 		}
 	}, [] );
-	const isSafeUpgradePreviewUrl = isSafeHttpUrl;
 	const [ loggedInCacheEnabled, setLoggedInCacheEnabled ] = useState(
 		!! cacheSettings.enableLoggedInCache
 	);
@@ -1109,9 +1096,7 @@ const Dashboard = ( {
 				( ( upgradePurge.last_purge &&
 					upgradePurge.last_purge.reason ) ||
 					( upgradePurge.safe_preview_url &&
-						isSafeUpgradePreviewUrl(
-							upgradePurge.safe_preview_url
-						) ) ) && (
+						isSafeHttpUrl( upgradePurge.safe_preview_url ) ) ) && (
 					<div
 						className="wppo-notice wppo-notice--info wppo-mb-16"
 						role="status"
@@ -1123,17 +1108,18 @@ const Dashboard = ( {
 								? sprintf(
 										// translators: %s: last purge reason.
 										__(
-											'Last purge: %s —',
+											'Last purge: %s',
 											'performance-optimisation'
 										),
 										upgradePurge.last_purge.reason
 								  )
 								: __(
-										'Updates auto-purge derived caches —',
+										'Updates auto-purge derived caches',
 										'performance-optimisation'
 								  ) }
+							{ ' — ' }
 							{ upgradePurge.safe_preview_url &&
-								isSafeUpgradePreviewUrl(
+								isSafeHttpUrl(
 									upgradePurge.safe_preview_url
 								) && (
 									<a

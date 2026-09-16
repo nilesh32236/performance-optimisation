@@ -177,6 +177,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		private static array $upgrade_purged_hashes = array();
 
 		/**
+		 * Per-request cache of the resolved builder map keyed by payload hash.
+		 *
+		 * Both upgrader handlers (builder at 10, generic at 20) observe the
+		 * same firing; resolving the map once per payload keeps routing
+		 * consistent even if the wppo_builder_purge_map filter is
+		 * non-deterministic between calls.
+		 *
+		 * @since NEXT
+		 * @var array<string,array>
+		 */
+		private static array $resolved_builder_map_cache = array();
+
+		/**
 		 * Re-entrancy guard for the drift fan-out (issue #1023).
 		 *
 		 * The regeneration fan-out fires elementor/core/files/clear_cache,
@@ -440,15 +453,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 			list( $updated_plugins, $updated_themes ) = $this->collect_updated_slugs( $hook_extra );
 
 			// Resolve the map once so routing and purging use the same map even
-			// if the wppo_builder_purge_map filter is non-deterministic.
-			$map     = self::get_builder_map();
-			$matched = $this->match_builders( $updated_plugins, $updated_themes, $map );
+			// if the wppo_builder_purge_map filter is non-deterministic. The
+			// hash is computed once (no double encode) and the resolved map is
+			// cached for the generic handler observing the same firing.
+			$hash                                      = $this->upgrade_payload_hash( $hook_extra );
+			$map                                       = self::get_builder_map();
+			self::$resolved_builder_map_cache[ $hash ] = $map;
+			$matched                                   = $this->match_builders( $updated_plugins, $updated_themes, $map );
 			if ( empty( $matched ) ) {
 				return;
 			}
 
 			$this->purge_for_builders( $matched, $map );
-			$this->mark_upgrade_purged( $hook_extra );
+			self::$upgrade_purged_hashes[ $hash ] = true;
 		}
 
 		/**
@@ -490,17 +507,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 			return array_values( array_unique( $matched ) );
 		}
 
-		/**
-		 * Run the purge chain for the matched builders.
-		 *
-		 * Protected (not private) so unit tests can subclass and observe the
-		 * routing without touching the filesystem.
-		 *
-		 * @since 2.0.0
-		 * @param string[] $matched Matched builder keys.
-		 * @param array    $map     Builder map (resolved once per update).
-		 * @return void
-		 */
 		/**
 		 * Collect updated plugin/theme slugs from an upgrader payload.
 		 *
@@ -555,10 +561,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 						return md5( $encoded );
 					}
 				}
+				return md5( serialize( $hook_extra ) ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize -- Dedupe-hash fallback only.
 			} catch ( \Throwable $e ) {
 				unset( $e );
+				// Ultimate non-throwing fallback: type + keys only, so an
+				// unserializable payload (object/Closure via filter) still
+				// dedupes fail-open instead of skipping the purge.
+				return md5( gettype( $hook_extra ) . '|' . implode( ',', array_keys( (array) $hook_extra ) ) );
 			}
-			return md5( serialize( $hook_extra ) ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize -- Dedupe-hash fallback only.
 		}
 
 		/**
@@ -649,7 +659,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 				if ( ! is_array( $hook_extra ) ) {
 					return;
 				}
-				if ( $this->is_upgrade_purged( $hook_extra ) ) {
+				// Single hash per firing: check/set the per-request map
+				// directly instead of hashing twice via
+				// is_upgrade_purged() + mark_upgrade_purged().
+				$hash = $this->upgrade_payload_hash( $hook_extra );
+				if ( isset( self::$upgrade_purged_hashes[ $hash ] ) ) {
 					return;
 				}
 				if ( 'update' !== ( $hook_extra['action'] ?? '' ) ) {
@@ -659,19 +673,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 					return;
 				}
 
-				list( $updated_plugins, $updated_themes ) = $this->collect_updated_slugs( $hook_extra );
+					list( $updated_plugins, $updated_themes ) = $this->collect_updated_slugs( $hook_extra );
 
 				// Builder updates already purged via on_builder_update().
-				$map     = self::get_builder_map();
+				// Reuse the map resolved by the priority-10 handler for the
+				// same firing so a non-deterministic filter cannot route
+				// the two handlers differently.
+				if ( isset( self::$resolved_builder_map_cache[ $hash ] ) ) {
+					$map = self::$resolved_builder_map_cache[ $hash ];
+				} else {
+					$map = self::get_builder_map();
+				}
 				$matched = $this->match_builders( $updated_plugins, $updated_themes, $map );
 				if ( ! empty( $matched ) ) {
-					return;
-				}
-
-				// Cross-request debounce: N separate auto-update/cron
-				// requests for N plugins must not each wipe + fan-out.
-				if ( function_exists( 'get_transient' ) && get_transient( Util::transient_key( self::UPGRADE_PURGE_LOCK ) ) ) {
-					$this->mark_upgrade_purged( $hook_extra );
 					return;
 				}
 
@@ -679,7 +693,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 				// payload with no slugs) — still purge, labelled generically.
 				$reason = $this->describe_upgrade( (string) ( $hook_extra['type'] ?? 'update' ), $updated_plugins, $updated_themes );
 
-				$this->mark_upgrade_purged( $hook_extra );
+				// Cross-request debounce: N separate auto-update/cron
+				// requests for N plugins must not each wipe + fan-out. Under
+				// cooldown still ensure a deferred wipe is pending before
+				// returning — otherwise a scheduler run between updates
+				// would leave the later update's files unpurged.
+				if ( function_exists( 'get_transient' ) && get_transient( Util::transient_key( self::UPGRADE_PURGE_LOCK ) ) ) {
+					$this->schedule_deferred_upgrade_purge();
+					self::$upgrade_purged_hashes[ $hash ] = true;
+					return;
+				}
+
+				self::$upgrade_purged_hashes[ $hash ] = true;
 				if ( function_exists( 'set_transient' ) && defined( 'MINUTE_IN_SECONDS' ) ) {
 					try {
 						set_transient( Util::transient_key( self::UPGRADE_PURGE_LOCK ), 1, 5 * MINUTE_IN_SECONDS );
@@ -688,13 +713,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 					}
 				}
 
-				if ( ! $this->schedule_deferred_upgrade_purge( $reason ) ) {
+				if ( ! $this->schedule_deferred_upgrade_purge() ) {
 					// No scheduler available — purge inline so the update
 					// never leaves stale derived caches.
 					$this->purge_wppo_derived_caches();
 					$this->bump_combined_asset_versions();
+					$this->record_last_purge( $reason );
+				} else {
+					// Deferred: record a scheduled marker now; the
+					// background callback re-records completion so the SPA
+					// never shows success for a job that never ran.
+					$this->record_last_purge( $reason . ' (scheduled)' );
 				}
-				$this->record_last_purge( $reason );
 				if ( class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 					try {
 						Log::add(
@@ -766,27 +796,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 *
 		 * Mirrors the drift path: Action Scheduler when available (deduped
 		 * via as_has_scheduled_action()), else wp_schedule_single_event()
-		 * (deduped via wp_next_scheduled()). Fail-open: any error or a
-		 * missing scheduler reports false and the caller purges inline.
+		 * (deduped via wp_next_scheduled()). Dedupe uses fixed empty args —
+		 * reason-keyed args would defeat dedupe (describe_upgrade() embeds
+		 * slugs, so N distinct plugins would enqueue N heavy purges); the
+		 * reason travels out-of-band via record_last_purge(). Fail-open: any
+		 * error or a missing scheduler reports false and the caller purges
+		 * inline.
 		 *
 		 * @since NEXT
-		 * @param string $reason Human-readable upgrade description.
+		 * @param string $reason Optional upgrade description (ignored, kept for backward compatibility).
 		 * @return bool True when an event was enqueued or already pending.
 		 */
-		protected function schedule_deferred_upgrade_purge( string $reason ): bool {
+		protected function schedule_deferred_upgrade_purge( string $reason = '' ): bool {
+			unset( $reason );
 			try {
 				if ( function_exists( 'as_enqueue_async_action' ) ) {
-					if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( self::UPGRADE_PURGE_HOOK, array( $reason ), 'performance_optimisation' ) ) {
+					if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( self::UPGRADE_PURGE_HOOK, array(), 'performance_optimisation' ) ) {
 						return true;
 					}
-					as_enqueue_async_action( self::UPGRADE_PURGE_HOOK, array( $reason ), 'performance_optimisation' );
+					as_enqueue_async_action( self::UPGRADE_PURGE_HOOK, array(), 'performance_optimisation' );
 					return true;
 				}
 				if ( function_exists( 'wp_schedule_single_event' ) ) {
-					if ( function_exists( 'wp_next_scheduled' ) && wp_next_scheduled( self::UPGRADE_PURGE_HOOK, array( $reason ) ) ) {
+					if ( function_exists( 'wp_next_scheduled' ) && wp_next_scheduled( self::UPGRADE_PURGE_HOOK, array() ) ) {
 						return true;
 					}
-					wp_schedule_single_event( time() + ( defined( 'MINUTE_IN_SECONDS' ) ? MINUTE_IN_SECONDS : 60 ), self::UPGRADE_PURGE_HOOK, array( $reason ) );
+					wp_schedule_single_event( time() + ( defined( 'MINUTE_IN_SECONDS' ) ? MINUTE_IN_SECONDS : 60 ), self::UPGRADE_PURGE_HOOK, array() );
 					return true;
 				}
 			} catch ( \Throwable $e ) {
@@ -799,18 +834,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * Background callback: run the heavy generic-upgrade purge.
 		 *
 		 * Registered on UPGRADE_PURGE_HOOK and executed by Action Scheduler
-		 * or WP-Cron, never inline in the upgrader request. Guarded and
-		 * fail-open like the other purge seams.
+		 * or WP-Cron, never inline in the upgrader request. Re-records the
+		 * last-purge marker on completion: the inline path stores a
+		 * "(scheduled)" marker, which is promoted here to the completed
+		 * reason (fresh timestamp) so the SPA never shows success for a job
+		 * that never ran. An explicit legacy reason arg (enqueued with args
+		 * by older versions) is recorded verbatim. Guarded and fail-open
+		 * like the other purge seams.
 		 *
 		 * @since NEXT
-		 * @param string $reason Human-readable upgrade description (unused, for traceability).
+		 * @param string $reason Optional legacy upgrade description.
 		 * @return void
 		 */
 		public function run_deferred_upgrade_purge( string $reason = '' ): void {
-			unset( $reason );
 			try {
 				$this->purge_wppo_derived_caches();
 				$this->bump_combined_asset_versions();
+				if ( '' !== $reason ) {
+					$this->record_last_purge( $reason );
+					return;
+				}
+				$last   = self::get_last_purge();
+				$suffix = ' (scheduled)';
+				if ( '' !== $last['reason'] && substr( $last['reason'], -strlen( $suffix ) ) === $suffix ) {
+					$this->record_last_purge( substr( $last['reason'], 0, -strlen( $suffix ) ) );
+				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
