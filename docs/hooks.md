@@ -1336,6 +1336,22 @@ Filters the delay-JS slider preset exclusions (revslider, swiper, slick, etc.). 
 
 ---
 
+### `wppo_delay_js_third_party_denylist`
+Filters the curated one-click third-party delay denylist (analytics, ads, social, chat, embeds). Payment gateways (Stripe, PayPal) and consent-management banners (Cookiebot, OneTrust, TrustArc, Quantcast) are intentionally excluded from the preset so one-click mode keeps them eager; add them via the extra-denylist textarea if desired. @since NEXT.
+
+**Parameters:**
+- `$preset` *(string[])* — Third-party denylist patterns.
+
+---
+
+### `wppo_delay_js_third_party_allowlist`
+Filters the user third-party allowlist that always wins over the denylist (scripts that must stay eager). @since NEXT.
+
+**Parameters:**
+- `$list` *(string[])* — Allowlist patterns, pre-populated from the `delayJSThirdPartyAllowlist` textarea setting. Callbacks should merge/append (e.g. `array_merge( $list, [...] )`) rather than replace, so user entries are preserved.
+
+---
+
 ### `wppo_htaccess_cache_vary_rules`
 Filters the `.htaccess` cache-vary rules block before writing. @since 2.0.0.
 

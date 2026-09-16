@@ -42,6 +42,18 @@ const cdnRowId = () => {
 	return `cdn-${ Date.now() }-${ cdnRowCounter }`;
 };
 
+// Newline-delimited third-party lists: normalise array payloads (from
+// sanitize/process_urls) to textarea strings without nested ternaries.
+const toDelayLines = ( value ) => {
+	if ( typeof value === 'string' ) {
+		return value;
+	}
+	if ( Array.isArray( value ) ) {
+		return value.join( '\n' );
+	}
+	return '';
+};
+
 // Normalize the used-CSS delivery mode the same way PHP sanitizes it
 // (lowercase + trim, allowlisted, fail-open to 'file') so the UI never
 // disagrees with the server on a single render (issue #1220).
@@ -103,6 +115,16 @@ const FileOptimization = ( {
 			options.delayJSExternalOnly !== undefined
 				? options.delayJSExternalOnly
 				: false,
+		delayJSThirdParty:
+			options.delayJSThirdParty !== undefined
+				? options.delayJSThirdParty
+				: false,
+		delayJSThirdPartyDenylist: toDelayLines(
+			options.delayJSThirdPartyDenylist
+		),
+		delayJSThirdPartyAllowlist: toDelayLines(
+			options.delayJSThirdPartyAllowlist
+		),
 		delayJSBuilderPreset:
 			options.delayJSBuilderPreset !== undefined
 				? options.delayJSBuilderPreset
@@ -199,6 +221,13 @@ const FileOptimization = ( {
 	// String-guard textarea-backed keys AFTER the spread so a non-string
 	// truthy payload (e.g. array from corrupted settings) cannot flow into
 	// a controlled textarea value via the ...options override above.
+	// toDelayLines joins array payloads instead of clearing them (#1217 review).
+	defaultSettings.delayJSThirdPartyDenylist = toDelayLines(
+		options.delayJSThirdPartyDenylist
+	);
+	defaultSettings.delayJSThirdPartyAllowlist = toDelayLines(
+		options.delayJSThirdPartyAllowlist
+	);
 	defaultSettings.delayJSExcludeUrls =
 		typeof options.delayJSExcludeUrls === 'string'
 			? options.delayJSExcludeUrls
@@ -283,6 +312,13 @@ const FileOptimization = ( {
 		// toggles from the admin preview.
 		delayJSExternalOnly: !! settings.delayJSExternalOnly,
 		minifyInlineJS: !! settings.minifyInlineJS,
+		delayJSThirdParty: !! settings.delayJSThirdParty,
+		delayJSThirdPartyDenylist: toDelayLines(
+			settings.delayJSThirdPartyDenylist
+		),
+		delayJSThirdPartyAllowlist: toDelayLines(
+			settings.delayJSThirdPartyAllowlist
+		),
 		excludeDelayJS: toExcludeLines( settings.excludeDelayJS ),
 		excludeDeferJS: toExcludeLines( settings.excludeDeferJS ),
 		excludeCombineCSS: toExcludeLines( settings.excludeCombineCSS ),
@@ -561,6 +597,12 @@ const FileOptimization = ( {
 		setBaseline( {
 			...defaultSettings,
 			...options,
+			delayJSThirdPartyDenylist: toDelayLines(
+				options.delayJSThirdPartyDenylist
+			),
+			delayJSThirdPartyAllowlist: toDelayLines(
+				options.delayJSThirdPartyAllowlist
+			),
 			delayJSExcludeUrls:
 				typeof options.delayJSExcludeUrls === 'string'
 					? options.delayJSExcludeUrls
@@ -600,6 +642,9 @@ const FileOptimization = ( {
 		options.delayJSBuilderPreset,
 		options.delayJSINPPreset,
 		options.delayJSExternalOnly,
+		options.delayJSThirdParty,
+		options.delayJSThirdPartyDenylist,
+		options.delayJSThirdPartyAllowlist,
 		options.delayJSExcludeUrls,
 		options.usedCSSExcludeUrls,
 		options.delayJSDefaultStrategy,
@@ -667,7 +712,19 @@ const FileOptimization = ( {
 		setSettings( ( prev ) => {
 			const next = { ...prev, ...options };
 			// String-guard textarea-backed keys so a corrupted non-string
-			// payload cannot reach a controlled textarea value.
+			// payload cannot reach a controlled textarea value. Third-party
+			// lists join array payloads (toDelayLines) so sync agrees with
+			// init instead of dropping backend arrays to '' (#1217 review).
+			if ( typeof next.delayJSThirdPartyDenylist !== 'string' ) {
+				next.delayJSThirdPartyDenylist = toDelayLines(
+					next.delayJSThirdPartyDenylist
+				);
+			}
+			if ( typeof next.delayJSThirdPartyAllowlist !== 'string' ) {
+				next.delayJSThirdPartyAllowlist = toDelayLines(
+					next.delayJSThirdPartyAllowlist
+				);
+			}
 			if ( typeof next.delayJSExcludeUrls !== 'string' ) {
 				next.delayJSExcludeUrls = '';
 			}
@@ -704,6 +761,9 @@ const FileOptimization = ( {
 		options.delayJSBuilderPreset,
 		options.delayJSINPPreset,
 		options.delayJSExternalOnly,
+		options.delayJSThirdParty,
+		options.delayJSThirdPartyDenylist,
+		options.delayJSThirdPartyAllowlist,
 		options.delayJSExcludeUrls,
 		options.usedCSSExcludeUrls,
 		options.delayJSDefaultStrategy,
@@ -2306,6 +2366,100 @@ const FileOptimization = ( {
 												) }
 												disabled={ optimizerDisabled }
 											/>
+											<SwitchField
+												label={ __(
+													'Delay third-party scripts only',
+													'performance-optimisation'
+												) }
+												description={ __(
+													'One-click delay of known third-party scripts (analytics, ads, social, chat, embeds) plus any cross-origin script. First-party scripts stay eager. Cart, checkout and account stay excluded.',
+													'performance-optimisation'
+												) }
+												name="delayJSThirdParty"
+												checked={
+													settings.delayJSThirdParty
+												}
+												onChange={ handleChange(
+													setSettings
+												) }
+												disabled={ optimizerDisabled }
+											/>
+											{ settings.delayJSThirdParty && (
+												<>
+													<div className="wppo-field wppo-mt-16">
+														<label
+															className="wppo-field-label"
+															htmlFor="delayJSThirdPartyDenylist"
+														>
+															{ __(
+																'Extra third-party patterns to delay',
+																'performance-optimisation'
+															) }
+														</label>
+														<textarea
+															className="wppo-textarea wppo-textarea--mono"
+															id="delayJSThirdPartyDenylist"
+															name="delayJSThirdPartyDenylist"
+															rows="3"
+															disabled={
+																optimizerDisabled
+															}
+															placeholder={ __(
+																'e.g. cdn.example.com/tracker',
+																'performance-optimisation'
+															) }
+															value={
+																settings.delayJSThirdPartyDenylist
+															}
+															onChange={ handleChange(
+																setSettings
+															) }
+														/>
+														<p className="wppo-text-muted wppo-text-small wppo-mt-8">
+															{ __(
+																'One per line — added to the curated built-in denylist. Empty uses the built-in list.',
+																'performance-optimisation'
+															) }
+														</p>
+													</div>
+													<div className="wppo-field wppo-mt-16">
+														<label
+															className="wppo-field-label"
+															htmlFor="delayJSThirdPartyAllowlist"
+														>
+															{ __(
+																'Third-party allowlist (never delay)',
+																'performance-optimisation'
+															) }
+														</label>
+														<textarea
+															className="wppo-textarea wppo-textarea--mono"
+															id="delayJSThirdPartyAllowlist"
+															name="delayJSThirdPartyAllowlist"
+															rows="3"
+															disabled={
+																optimizerDisabled
+															}
+															placeholder={ __(
+																'e.g. consent-manager.js',
+																'performance-optimisation'
+															) }
+															value={
+																settings.delayJSThirdPartyAllowlist
+															}
+															onChange={ handleChange(
+																setSettings
+															) }
+														/>
+														<p className="wppo-text-muted wppo-text-small wppo-mt-8">
+															{ __(
+																'One per line — always wins over the denylist. Use for scripts that must stay eager.',
+																'performance-optimisation'
+															) }
+														</p>
+													</div>
+												</>
+											) }
 											<SwitchField
 												label={ __(
 													'Builder safe preset',

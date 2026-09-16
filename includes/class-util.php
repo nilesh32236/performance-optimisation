@@ -320,6 +320,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'delayJSDefaultStrategy'       => 'interaction',
 					'delayJSINPPreset'             => false,
 					'delayJSExternalOnly'          => false,
+					'delayJSThirdParty'            => false,
+					'delayJSThirdPartyDenylist'    => '',
+					'delayJSThirdPartyAllowlist'   => '',
 					'delayJSBuilderPreset'         => true,
 					'delayJSCommercePreset'        => true,
 					'delayJSInteractionPreset'     => true,
@@ -4856,7 +4859,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				// Safe-default delay keys (issue #966) — external-only defaults
 				// off (fail-safe: delay everything unless asked), builder preset
 				// defaults on (fail-safe: never delay builder runtimes).
-				if ( in_array( $safe_key, array( 'delayJSExternalOnly' ), true ) && ! is_array( $value ) ) {
+				if ( in_array( $safe_key, array( 'delayJSExternalOnly', 'delayJSThirdParty' ), true ) && ! is_array( $value ) ) {
 					if ( is_bool( $value ) ) {
 						$sanitized[ $safe_key ] = $value;
 					} else {
@@ -4990,7 +4993,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				// the generic `url` branch (esc_url_raw would collapse the
 				// multiple lines). Pinned explicitly so a future reorder of the
 				// generic branches cannot corrupt these lists.
-				if ( in_array( $safe_key, array( 'delayJSExcludeUrls', 'usedCSSExcludeUrls' ), true ) && ! is_array( $value ) ) {
+				if ( in_array( $safe_key, array( 'delayJSExcludeUrls', 'usedCSSExcludeUrls', 'delayJSThirdPartyDenylist', 'delayJSThirdPartyAllowlist' ), true ) && ! is_array( $value ) ) {
 					$sanitized[ $safe_key ] = sanitize_textarea_field( (string) $value );
 					continue;
 				}

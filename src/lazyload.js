@@ -800,6 +800,16 @@ const loadScript = ( script ) => {
 
 			copyAllowedScriptAttrs( script, replacement );
 
+			// Stamp the surviving node (not the placeholder): loadScriptsByPriority
+			// marks the placeholder after replaceChild() swaps it out, so without
+			// this the live element never carries data-wppo-delay-loaded and
+			// dedup works only incidentally via selector mismatch (#1217 review).
+			try {
+				replacement.setAttribute( 'data-wppo-delay-loaded', '1' );
+			} catch {
+				// Marking is best-effort; loading still proceeds.
+			}
+
 			replacement.removeAttribute( 'wppo-src' );
 			replacement.setAttribute( 'src', src );
 
@@ -830,6 +840,13 @@ const loadScript = ( script ) => {
 
 			// Copy allowlisted attributes from the original node to the replacement.
 			copyAllowedScriptAttrs( script, replacement );
+
+			// Stamp the surviving node — see the external branch above (#1217 review).
+			try {
+				replacement.setAttribute( 'data-wppo-delay-loaded', '1' );
+			} catch {
+				// Marking is best-effort; loading still proceeds.
+			}
 
 			replacement.text = script.text;
 
@@ -866,6 +883,13 @@ const delayConfig = window.wppoDelayConfig ||
 /**
  * Load scripts grouped by priority (high → normal → low).
  *
+ * Sequential within each level so `defer` document order is preserved
+ * (parallel Promise.allSettled broke execution order, issue #1217).
+ * Scripts stamped `data-wppo-delay-exec="async"` execute in any order and
+ * may load concurrently; everything else loads sequentially. Already-loaded
+ * nodes (marked `data-wppo-delay-loaded`) are skipped so idle/viewport and
+ * interaction loaders never double-execute a script.
+ *
  * @since 3.8.0
  * @param {NodeList|HTMLScriptElement[]} scripts The scripts to load.
  * @return {Promise<void>} Resolves when all scripts have been loaded.
@@ -873,6 +897,12 @@ const delayConfig = window.wppoDelayConfig ||
 async function loadScriptsByPriority( scripts ) {
 	const groups = { high: [], normal: [], low: [] };
 	Array.from( scripts ).forEach( ( script ) => {
+		if (
+			script.hasAttribute( 'data-wppo-delay-loaded' ) ||
+			! script.isConnected
+		) {
+			return;
+		}
 		const priority =
 			script.getAttribute( 'data-wppo-delay-priority' ) || 'normal';
 		if ( groups[ priority ] ) {
@@ -882,20 +912,105 @@ async function loadScriptsByPriority( scripts ) {
 		}
 	} );
 
-	for ( const level of [ 'high', 'normal', 'low' ] ) {
-		const results = await Promise.allSettled(
-			groups[ level ].map( ( script ) => loadScript( script ) )
-		);
-		results
-			.filter( ( r ) => r.status === 'rejected' )
-			.forEach( ( r ) =>
-				console.error( 'Error loading script:', r.reason )
+	const markLoaded = ( script ) => {
+		try {
+			script.setAttribute( 'data-wppo-delay-loaded', '1' );
+		} catch {
+			// Marking is best-effort; loading still proceeds.
+		}
+	};
+
+	// Per-script timeout so one hanging third-party never stalls later
+	// deferred scripts indefinitely; defer order is preserved without
+	// indefinite stall (#1217 review). Overridable via
+	// wppoDelayConfig.scriptTimeout (used by Jest, where jsdom never fires
+	// script onload so the swap would otherwise pend forever).
+	// Timeout-as-liveness tradeoff: Promise.race unblocks the sequential
+	// chain but does not cancel the underlying loadScript — the replacement
+	// node is already in the DOM and may still execute later, out of order
+	// relative to subsequent deferred scripts. Timed-out nodes are still
+	// marked data-wppo-delay-loaded (see finally below) so a late execution
+	// is at least visible as an attempted load in debugging.
+	const scriptTimeout = ( delayConfig && delayConfig.scriptTimeout ) || 15000;
+	const loadWithTimeout = ( script, ms = scriptTimeout ) => {
+		let timer = null;
+		const timeout = new Promise( ( _, reject ) => {
+			timer = setTimeout(
+				() =>
+					reject(
+						new Error( 'WPPO: deferred script load timed out' )
+					),
+				ms
 			);
+		} );
+		return Promise.race( [ loadScript( script ), timeout ] ).finally(
+			() => {
+				if ( timer ) {
+					clearTimeout( timer );
+				}
+			}
+		);
+	};
+
+	for ( const level of [ 'high', 'normal', 'low' ] ) {
+		const deferred = [];
+		const concurrent = [];
+		groups[ level ].forEach( ( script ) => {
+			if ( 'async' === script.getAttribute( 'data-wppo-delay-exec' ) ) {
+				concurrent.push( script );
+			} else {
+				deferred.push( script );
+			}
+		} );
+		// Kick off async scripts without blocking deferred work: async is
+		// non-blocking by definition, so a slow tracker must not
+		// head-of-line-block defer replay (#1217 review). Deferred run
+		// sequentially first, then the concurrent batch settles.
+		const pendingAsync =
+			concurrent.length > 0
+				? Promise.allSettled(
+						concurrent.map( ( script ) =>
+							loadWithTimeout( script )
+						)
+				  )
+				: null;
+		for ( const script of deferred ) {
+			try {
+				await loadWithTimeout( script );
+			} catch ( err ) {
+				console.error( 'Error loading script:', err );
+			} finally {
+				// Dedup rides on the live-replacement stamp inside
+				// loadScript(); this placeholder mark only covers
+				// no-swap paths (blocked/empty). Mark even on failure so
+				// each node is processed once (#1217 review).
+				if ( script.isConnected ) {
+					markLoaded( script );
+				}
+			}
+		}
+		if ( pendingAsync ) {
+			const results = await pendingAsync;
+			results.forEach( ( r, i ) => {
+				if ( r.status === 'rejected' ) {
+					console.error( 'Error loading script:', r.reason );
+				}
+				if ( concurrent[ i ].isConnected ) {
+					markLoaded( concurrent[ i ] );
+				}
+			} );
+		}
 	}
 }
 
 /**
  * Load all deferred scripts queued in the DOM.
+ *
+ * Loads only interaction-strategy scripts (explicit, default, or unknown):
+ * idle and viewport scripts have dedicated schedulers (requestIdleCallback /
+ * IntersectionObserver) and must not be pulled in early here — bundling
+ * them into the first-interaction flush defeated idle/viewport semantics
+ * and double-loaded nodes (issue #1217).
  *
  * Once all scripts are loaded, dispatches DOMContentLoaded,
  * load, and pageshow events, and triggers lazy image loading.
@@ -913,7 +1028,22 @@ async function loadScripts() {
 			document.querySelectorAll(
 				'script[type="wppo/javascript"], script[wppo-src]'
 			)
-		);
+		).filter( ( script ) => {
+			if ( script.hasAttribute( 'data-wppo-delay-loaded' ) ) {
+				return false;
+			}
+			const strategy =
+				script.getAttribute( 'data-wppo-delay-strategy' ) ||
+				( delayConfig && delayConfig.defaultStrategy ) ||
+				'interaction';
+			// Unknown strategy values (typo/future value) fall back to
+			// interaction so a bad attribute cannot silently drop a script
+			// — idle/viewport schedulers only match exact values (#1217).
+			return (
+				strategy === 'interaction' ||
+				( strategy !== 'idle' && strategy !== 'viewport' )
+			);
+		} );
 
 		try {
 			await loadScriptsByPriority( inlineScripts );
@@ -1036,8 +1166,14 @@ const hasInteractionScripts = ( scripts ) => {
 	return Array.from( list ).some( ( script ) => {
 		const strategy =
 			script.getAttribute( 'data-wppo-delay-strategy' ) ||
-			delayConfig.defaultStrategy;
-		return strategy === 'interaction';
+			( delayConfig && delayConfig.defaultStrategy ) ||
+			'interaction';
+		// Mirror loadScripts(): unknown values count as interaction so the
+		// first flush picks them up instead of dropping them silently.
+		return (
+			strategy === 'interaction' ||
+			( strategy !== 'idle' && strategy !== 'viewport' )
+		);
 	} );
 };
 
@@ -1053,7 +1189,7 @@ const idleScripts = document.querySelectorAll(
 if ( idleScripts.length > 0 ) {
 	if ( 'requestIdleCallback' in window ) {
 		window.requestIdleCallback( loadIdleScripts, {
-			timeout: delayConfig.idleTimeout,
+			timeout: ( delayConfig && delayConfig.idleTimeout ) || 3000,
 		} );
 	} else {
 		// Fallback: load after a short delay.
@@ -1061,7 +1197,7 @@ if ( idleScripts.length > 0 ) {
 		// Use a shorter explicit delay to avoid excessive waiting when rIC is unavailable.
 		setTimeout(
 			loadIdleScripts,
-			Math.min( 2000, delayConfig.idleTimeout )
+			Math.min( 2000, ( delayConfig && delayConfig.idleTimeout ) || 3000 )
 		);
 	}
 }
