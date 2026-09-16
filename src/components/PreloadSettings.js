@@ -29,12 +29,16 @@ const PreloadSettings = ( { options = {} } ) => {
 		dnsPrefetchOrigins: '',
 		preloadFonts: false,
 		preloadFontsUrls: '',
+		autoDiscoverFonts: false,
+		autoLcpPreload: false,
 		preloadCSS: false,
 		preloadCSSUrls: '',
 		enableSpeculationRules: false,
 		speculationMode: 'prefetch',
 		speculationEagerness: 'conservative',
 		speculationExcludeUrls: '',
+		speculationRumGating: true,
+		speculationTopUrlsLimit: 2,
 		...options,
 	};
 
@@ -62,12 +66,16 @@ const PreloadSettings = ( { options = {} } ) => {
 		options.dnsPrefetchOrigins,
 		options.preloadFonts,
 		options.preloadFontsUrls,
+		options.autoDiscoverFonts,
+		options.autoLcpPreload,
 		options.preloadCSS,
 		options.preloadCSSUrls,
 		options.enableSpeculationRules,
 		options.speculationMode,
 		options.speculationEagerness,
 		options.speculationExcludeUrls,
+		options.speculationRumGating,
+		options.speculationTopUrlsLimit,
 	] );
 	useUnsavedChanges( settings, baseline );
 
@@ -143,12 +151,16 @@ const PreloadSettings = ( { options = {} } ) => {
 		options.dnsPrefetchOrigins,
 		options.preloadFonts,
 		options.preloadFontsUrls,
+		options.autoDiscoverFonts,
+		options.autoLcpPreload,
 		options.preloadCSS,
 		options.preloadCSSUrls,
 		options.enableSpeculationRules,
 		options.speculationMode,
 		options.speculationEagerness,
 		options.speculationExcludeUrls,
+		options.speculationRumGating,
+		options.speculationTopUrlsLimit,
 	] );
 
 	const speculationRules =
@@ -526,6 +538,34 @@ const PreloadSettings = ( { options = {} } ) => {
 									</p>
 								</div>
 							) }
+						</div>
+						<div className="wppo-field-group">
+							<SwitchField
+								label={ __(
+									'Automatically Discover Fonts',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'Scan enqueued stylesheets for @font-face files and preload up to 2 same-origin fonts with crossorigin. Manual font URLs always win on conflict.',
+									'performance-optimisation'
+								) }
+								name="autoDiscoverFonts"
+								checked={ settings.autoDiscoverFonts }
+								onChange={ handleChange( setSettings ) }
+							/>
+							<SwitchField
+								label={ __(
+									'Automatically Preload LCP Hero',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'Resolve the template hero from real-visit data, then stored PageSpeed data, then the in-viewport heuristic, and emit one fetchpriority-high eager preload. Requires Real-User Measurement; manual preload lists win and the hero is never lazy-loaded.',
+									'performance-optimisation'
+								) }
+								name="autoLcpPreload"
+								checked={ settings.autoLcpPreload }
+								onChange={ handleChange( setSettings ) }
+							/>
 						</div>
 						<div className="wppo-field-group">
 							<SwitchField

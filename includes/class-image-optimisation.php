@@ -51,6 +51,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private const IMG_SIZE_CACHE_LIMIT = 100;
 
 		/**
+		 * Maximum image preload hints emitted per page (manual wins on conflict).
+		 *
+		 * Manual lists are ordered first in `get_all_preload_data()` so the
+		 * slice keeps pinned heroes when auto + manual overlap. Competitor
+		 * parity (one hero preload) with a hard cap against preload waste.
+		 *
+		 * @since NEXT
+		 */
+		private const MAX_LCP_PRELOADS = 2;
+
+		/**
 		 * Configuration options for image optimization.
 		 *
 		 * @var array
@@ -191,10 +202,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * PageSpeed state once per page; this memo (see
 		 * {@see get_lazy_lcp_exclusion_url()}) keeps repeated lazy rewrites on
 		 * the same instance from re-scanning the RUM aggregate and transients.
-		 * Per-instance (not static): instances are constructed per request with
-		 * one site's options, so a memoized URL can never leak across sites or
-		 * option sets. Long-lived processes that reuse one instance across
-		 * pages should construct a fresh instance per page instead.
+		 * Keyed by the normalized current URL (see
+		 * `$lazy_lcp_exclusion_url_key`) so a long-lived instance reused
+		 * across pages re-resolves per page (issue #1216). Per-instance (not
+		 * static): instances are constructed per request with one site's
+		 * options, so a memoized URL can never leak across sites or option
+		 * sets. Long-lived processes that reuse one instance across pages
+		 * should construct a fresh instance per page instead.
 		 *
 		 * @var string|null Null until resolved, then the candidate URL or ''.
 		 * @since 2.0.0
@@ -207,16 +221,56 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * `get_current_lcp_url()` is called up to 7x per frontend render and
 		 * each call re-runs the OD lookup plus the RUM / PageSpeed chain
 		 * (post meta + options + transients). This memo keeps repeated calls
-		 * on the same instance from repeating those lookups. Per-instance
-		 * (not static): instances are constructed per request with one
-		 * site's options, so a memoized URL can never leak across sites or
-		 * option sets. Long-lived processes that reuse one instance across
-		 * pages should construct a fresh instance per page instead.
+		 * on the same instance from repeating those lookups. Keyed by the
+		 * normalized current URL (see `$current_lcp_url_key`) so a long-lived
+		 * instance reused across pages (CLI/cron batch renders) re-resolves
+		 * instead of serving the first page's hero everywhere; `switch_blog`
+		 * resets via `clear_instance_lcp_memo()` (wired in Main). Fresh
+		 * instances per page remain the recommended pattern for batch
+		 * renderers. Per-instance (not static): instances are constructed per
+		 * request with one site's options, so a memoized URL can never leak
+		 * across sites or option sets.
 		 *
 		 * @var string|null Null until resolved, then the LCP URL or ''.
 		 * @since 2.0.0
 		 */
 		private ?string $current_lcp_url = null;
+
+		/**
+		 * Current-URL key the `$current_lcp_url` memo was resolved for.
+		 *
+		 * Compared on every `get_current_lcp_url()` call: a mismatch drops
+		 * the memo and re-resolves (issue #1216). Null until first resolved.
+		 *
+		 * @var string|null
+		 * @since NEXT
+		 */
+		private ?string $current_lcp_url_key = null;
+
+		/**
+		 * Current-URL key the null-buffer `$lazy_lcp_exclusion_url` memo was resolved for.
+		 *
+		 * Buffered calls (`$buffer !== null`) bypass the memo and resolve
+		 * fresh so the P2 heuristic tier stays in parity with
+		 * `maybe_preload_hero_image()`. Null until first null-buffer resolved.
+		 *
+		 * @var string|null
+		 * @since NEXT
+		 */
+		private ?string $lazy_lcp_exclusion_url_key = null;
+
+		/**
+		 * Per-request heuristic LCP memo keyed by buffer hash (issue #1216).
+		 *
+		 * The P2 DOM-first heuristic re-scans full HTML with
+		 * `WP_HTML_Tag_Processor` on each caller (preload data, lazy
+		 * exclusion, hero inject); this static memo resolves each distinct
+		 * buffer once per request. Bounded: reset once past 30 entries.
+		 *
+		 * @var array<string, string>
+		 * @since NEXT
+		 */
+		private static $heuristic_lcp_memo = array();
 
 		/**
 		 * Cached placeholder info (dominant color + LQIP) from Img_Converter.
@@ -256,6 +310,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			self::$preload_emitted        = array();
 			self::$placeholder_info_cache = null;
 			self::$placeholder_path_cache = array();
+			self::$heuristic_lcp_memo     = array();
+		}
+
+		/**
+		 * Reset the per-instance LCP memos ($current_lcp_url, $lazy_lcp_exclusion_url).
+		 *
+		 * The static {@see clear_runtime_caches()} cannot reach instance state,
+		 * so long-lived processes (switch_to_blog, CLI/cron rendering N pages
+		 * with one shared instance) must call this between sites/pages (issue
+		 * #1216); otherwise the second site reuses the first site's memoized
+		 * LCP URL. Wired to `switch_blog` via Main alongside
+		 * {@see clear_runtime_caches()}. The URL keys are reset too so the
+		 * next call re-resolves instead of trusting a same-URL memo from
+		 * another site. (The memos are additionally keyed by current URL, so
+		 * cross-page reuse within one process self-corrects even without an
+		 * explicit reset; the reset remains the guaranteed path.)
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public function clear_instance_lcp_memo(): void {
+			$this->current_lcp_url            = null;
+			$this->current_lcp_url_key        = null;
+			$this->lazy_lcp_exclusion_url     = null;
+			$this->lazy_lcp_exclusion_url_key = null;
+			self::$heuristic_lcp_memo         = array();
 		}
 
 		/**
@@ -1916,22 +1996,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private function get_all_preload_data(): array {
 			$image_optimisation = $this->options['image_optimisation'] ?? array();
 
-			$merged = array_merge(
+			$manual = array_merge(
 				$this->get_manual_lcp_preload_data(),
-				$this->get_auto_lcp_preload_data(),
 				$this->get_front_page_preload_data( $image_optimisation ),
 				$this->get_meta_preload_data(),
 				$this->get_post_type_preload_data( $image_optimisation )
 			);
+			$auto   = $this->get_auto_lcp_preload_data();
 
 			// Deduplicate by normalized URL + query + media (issue #935): the
 			// field-measured LCP URL may equal a manually configured preload
 			// as an absolute URL vs a relative URL (or http vs https), but
 			// exactly one link tag must be emitted per resource (query-string
-			// versions still count as distinct resources).
+			// versions still count as distinct resources). Manual items are
+			// ordered first so they win the dedup. MAX_LCP_PRELOADS is
+			// intentionally an auto-tail-only cap (issue #1216): manual/meta
+			// preloads are explicit opt-in and are never dropped, while the
+			// auto srcset expansion is bounded so one hero cannot fan out to N
+			// high-priority hints and contend with the hero fetch.
 			$seen   = array();
 			$unique = array();
-			foreach ( $merged as $item ) {
+			foreach ( $manual as $item ) {
 				if ( ! is_array( $item ) || empty( $item['url'] ) ) {
 					continue;
 				}
@@ -1943,7 +2028,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$unique[]     = $item;
 			}
 
-			return $unique;
+			$auto_unique = array();
+			foreach ( $auto as $item ) {
+				if ( ! is_array( $item ) || empty( $item['url'] ) ) {
+					continue;
+				}
+				$key = $this->get_preload_dedup_key( (string) $item['url'], (string) ( $item['media'] ?? '' ) );
+				if ( isset( $seen[ $key ] ) ) {
+					continue;
+				}
+				$seen[ $key ]  = true;
+				$auto_unique[] = $item;
+			}
+
+			if ( count( $auto_unique ) > self::MAX_LCP_PRELOADS ) {
+				$auto_unique = array_slice( $auto_unique, 0, self::MAX_LCP_PRELOADS );
+			}
+
+			return array_merge( $unique, $auto_unique );
 		}
 
 		/**
@@ -2082,6 +2184,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					}
 					return true;
 				}
+				// RUM unavailable: fail closed (reject the absolute URL) so a
+				// possibly cross-origin candidate is never preloaded. The
+				// caller (`resolve_auto_lcp_url()`) falls through to the next
+				// tier, preserving fail-open page behaviour.
+				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'is_same_origin_url_strict' ) ) {
+					return \PerformanceOptimise\Inc\RUM::is_same_origin_url_strict( $url );
+				}
 				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'is_same_origin_url' ) ) {
 					return \PerformanceOptimise\Inc\RUM::is_same_origin_url( $url );
 				}
@@ -2200,39 +2309,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
-		 * Resolve the single auto-detected LCP image URL for the current page.
+		 * Resolve the OD-only LCP image URL (manual picker + OD real-visit data).
 		 *
-		 * Unified priority chain (fail-open, never fatal):
-		 * Manual per-post picker (`_wppo_lcp_preload_url`) wins first, then
-		 * P0 Optimization Detective real-visit data (guarded via
-		 * `class_exists('OD_URL_Metric')` / `function_exists('od_get_url_metrics')`
-		 * inside `OD_Bridge::is_enabled()` plus the `wppo_od_should_optimize`
-		 * filter), then stored PageSpeed LCP (via `get_current_lcp_url()`,
-		 * which covers RUM-field override + post-meta/front-page/transient
-		 * tiers), then the DOM-first heuristic (first non-trivial `<img src>`
-		 * in `$buffer` when provided — DOM order, not viewport-aware, and
-		 * only a fallback when no measured/stored data exists). Text-only LCP never resolves: every
-		 * candidate must pass `is_image_lcp_url()`. Cross-origin candidates never resolve either:
-		 * every tier must pass `is_same_origin_preload_url()` so at most one
-		 * same-origin `<link rel="preload" as="image" fetchpriority="high">`
-		 * is ever emitted. Multisite-safe: the
-		 * stored tier uses `Util::transient_key()` blog-aware keys.
+		 * Subset of `resolve_auto_lcp_url()` needing no RUM state (issue
+		 * #1216): the manual picker and the Optimization Detective tiers are
+		 * guarded (image + same-origin) and fire no RUM lookups, so they stay
+		 * available when the RUM gate is unsatisfied. The OD tier relies on
+		 * `OD_Bridge::get_lcp_url()`, which gates internally on
+		 * `OD_Bridge::is_enabled()` — the single firing of the
+		 * `wppo_od_should_optimize` filter (current-URL context) — so no
+		 * separate filter pre-check exists here. Fail-open: any failure
+		 * returns ''.
 		 *
 		 * @since NEXT
-		 * @param string|null $buffer Optional HTML buffer for the heuristic fallback.
-		 * @return string The LCP image URL, or empty string when none resolves.
+		 * @return string The OD-only LCP image URL, or empty string.
 		 */
-		private function resolve_auto_lcp_url( ?string $buffer = null ): string {
-			// Manual per-post LCP picker — pinned hero wins over auto-detect.
+		private function resolve_od_only_lcp_url(): string {
 			try {
 				$manual = $this->get_manual_lcp_url();
-				if ( '' !== $manual ) {
+				if ( '' !== $manual && $this->is_image_lcp_url( $manual ) && $this->is_same_origin_preload_url( $manual ) ) {
 					return $manual;
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
-			// P0: Optimization Detective — real-visit hero wins.
 			if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 				try {
 					$od_available = class_exists( 'OD_URL_Metric' ) || function_exists( 'od_get_url_metrics' );
@@ -2245,6 +2345,48 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
+			}
+			return '';
+		}
+
+		/**
+		 * Resolve the single auto-detected LCP image URL for the current page.
+		 *
+		 * Unified priority chain (fail-open, never fatal):
+		 * Manual per-post picker (`_wppo_lcp_preload_url`) wins first, then
+		 * P0 Optimization Detective real-visit data (shared
+		 * `resolve_od_only_lcp_url()` helper; the `wppo_od_should_optimize`
+		 * filter fires exactly once, inside `OD_Bridge::get_lcp_url()` via
+		 * `is_enabled()` with current-URL context), then stored PageSpeed LCP
+		 * (via `get_current_lcp_url()`, which covers RUM-field override +
+		 * post-meta/front-page/transient tiers), then the DOM-first heuristic
+		 * (first non-trivial `<img src>` in `$buffer` when provided — DOM
+		 * order, not viewport-aware, buffer-only, and only a fallback when no
+		 * measured/stored data exists). Text-only LCP never resolves: every
+		 * candidate must pass `is_image_lcp_url()`. Cross-origin candidates never resolve either:
+		 * every tier must pass `is_same_origin_preload_url()` so at most one
+		 * same-origin `<link rel="preload" as="image" fetchpriority="high">`
+		 * is ever emitted. Multisite-safe: the
+		 * stored tier uses `Util::transient_key()` blog-aware keys.
+		 *
+		 * @since NEXT
+		 * @param string|null $buffer Optional HTML buffer for the heuristic fallback.
+		 * @return string The LCP image URL, or empty string when none resolves.
+		 */
+		private function resolve_auto_lcp_url( ?string $buffer = null ): string {
+			// Manual picker + P0 Optimization Detective via the shared OD-only
+			// helper (issue #1216) so the emission, lazy-exclusion, and
+			// RUM-unsatisfied fallback paths cannot drift apart. The OD tier
+			// fires the `wppo_od_should_optimize` filter exactly once, inside
+			// `OD_Bridge::get_lcp_url()` via `is_enabled()` (current-URL
+			// context); no separate pre-check exists here.
+			try {
+				$od_only = $this->resolve_od_only_lcp_url();
+				if ( '' !== $od_only ) {
+					return $od_only;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 			}
 
 			// P1: Stored PageSpeed (+ RUM-field override) chain.
@@ -2260,7 +2402,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			// P2: DOM-first heuristic — first non-trivial image in the buffer.
 			if ( is_string( $buffer ) && '' !== $buffer && false !== strpos( $buffer, '<img' ) ) {
 				try {
-					$heuristic = $this->get_first_image_src_in_buffer( $buffer );
+					$heuristic = $this->get_heuristic_lcp_url( $buffer );
 					if ( '' !== $heuristic && $this->is_image_lcp_url( $heuristic ) && $this->is_same_origin_preload_url( $heuristic ) ) {
 						return $heuristic;
 					}
@@ -2404,24 +2546,50 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Retrieves the single auto-detected LCP image preload item.
 		 *
 		 * Resolves via the unified `resolve_auto_lcp_url()` chain
-		 * (P0 Optimization Detective real-visit data → P1 stored
-		 * PageSpeed/RUM-field → P2 DOM-first heuristic when a buffer is
+		 * (manual picker → P0 Optimization Detective real-visit data → P1
+		 * stored PageSpeed/RUM-field → P2 DOM-first heuristic when a buffer is
 		 * available). Emits at most one item via `prepare_preload_item()`
 		 * so "once per URL" holds; the item is ordered ahead of front-page
 		 * and generic meta preloads (after the manual picker item) and
-		 * participates in the normalized-URL dedup. The
-		 * toggle autoPreloadLCP must be enabled.
+		 * participates in the normalized-URL dedup. The legacy
+		 * `image_optimisation.autoPreloadLCP` toggle enables the legacy
+		 * path unchanged; the additive `preload_settings.autoLcpPreload`
+		 * toggle (issue #1216) enables the same chain but stays off until
+		 * RUM-gated (`RUM::is_enabled()`, guarded) with an off switch.
+		 *
+		 * RUM gates only the RUM-dependent tiers (issue #1216): with the new
+		 * toggle on but RUM unsatisfied, the OD-only subset (manual + OD,
+		 * needing no RUM state) still resolves instead of dropping OD
+		 * optimisation silently. The P2 heuristic is buffer-only by design —
+		 * this `wp_head` path passes no buffer, so heuristic heroes never
+		 * preload here; the buffer path (`maybe_preload_hero_image()`)
+		 * emits the companion preload link in the same pass it marks the
+		 * hero eager, keeping exclusion and emission consistent.
 		 *
 		 * @since 2.0.0
 		 * @since NEXT Resolves via the unified `resolve_auto_lcp_url()` chain
 		 * (OD → stored PageSpeed → heuristic) with a text-LCP guard; emits at
-		 * most one item.
+		 * most one item. Adds the RUM-gated `preload_settings.autoLcpPreload`
+		 * path (off by default, manual lists win, never lazy+high).
+		 * @since NEXT RUM gates only the RUM-dependent tiers: with RUM
+		 * unsatisfied the OD-only subset still resolves.
 		 * @return array List of preload items (zero or one item).
 		 */
 		private function get_auto_lcp_preload_data(): array {
 			$image_optimisation = $this->options['image_optimisation'] ?? array();
-			if ( empty( $image_optimisation['autoPreloadLCP'] ) ) {
+			$preload_settings   = $this->options['preload_settings'] ?? array();
+			$legacy_on          = ! empty( $image_optimisation['autoPreloadLCP'] );
+			$new_on             = ! empty( $preload_settings['autoLcpPreload'] );
+			if ( ! $legacy_on && ! $new_on ) {
 				return array();
+			}
+
+			if ( $new_on && ! $legacy_on && ! $this->is_auto_lcp_rum_satisfied() ) {
+				$lcp_url = $this->resolve_od_only_lcp_url();
+				if ( '' === $lcp_url ) {
+					return array();
+				}
+				return array( $this->prepare_preload_item( $lcp_url ) );
 			}
 
 			$lcp_url = $this->resolve_auto_lcp_url();
@@ -2430,6 +2598,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 
 			return array( $this->prepare_preload_item( $lcp_url ) );
+		}
+
+		/**
+		 * Whether the RUM gate for the additive auto-LCP toggle is satisfied.
+		 *
+		 * The `preload_settings.autoLcpPreload` path (issue #1216) stays off
+		 * until real-user measurement is enabled (`RUM::is_enabled()`,
+		 * guarded with class_exists/method_exists). Fail-closed when RUM is
+		 * unavailable or disabled so detection failure degrades to the
+		 * current manual behavior; fail-open only via the legacy
+		 * `autoPreloadLCP` path handled by the caller. Never fatal.
+		 *
+		 * @since NEXT
+		 * @return bool True when RUM gating passes.
+		 */
+		private function is_auto_lcp_rum_satisfied(): bool {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'is_enabled' ) ) {
+					return false;
+				}
+				return (bool) \PerformanceOptimise\Inc\RUM::is_enabled();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
 		}
 
 		/**
@@ -2455,15 +2648,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The LCP image URL, or empty string when none is stored.
 		 */
 		private function get_current_lcp_url(): string {
-			if ( null !== $this->current_lcp_url ) {
+			$memo_key = $this->get_lcp_memo_key();
+			if ( null !== $this->current_lcp_url && $this->current_lcp_url_key === $memo_key ) {
 				return $this->current_lcp_url;
 			}
-			$this->current_lcp_url = '';
+			$this->current_lcp_url     = '';
+			$this->current_lcp_url_key = $memo_key;
 			// Priority 0: Optimization Detective — LCP tag per viewport group (mobile/desktop).
+			// The `wppo_od_should_optimize` opt-out (issue #1216) is honoured
+			// inside `OD_Bridge::get_lcp_url()` via `is_enabled()` — the single
+			// firing of the filter (current-URL context) — so a false filter
+			// yields '' here exactly as in `resolve_auto_lcp_url()`; no
+			// separate pre-check exists (a second firing with a different
+			// context arg would give URL-inspecting filters inconsistent
+			// inputs). The stored OD URL is validated like every other
+			// emission tier (image + same-origin) so a cross-origin OD value
+			// never resolves.
 			if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 				try {
 					$od_url = \PerformanceOptimise\Inc\OD_Bridge::get_lcp_url();
-					if ( '' !== $od_url ) {
+					if ( is_string( $od_url ) && '' !== $od_url && $this->is_image_lcp_url( $od_url ) && $this->is_same_origin_preload_url( $od_url ) ) {
 						$this->current_lcp_url = $od_url;
 						return $this->current_lcp_url;
 					}
@@ -2473,7 +2677,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					}
 				}
 			}
-
 			// Priority 0b: Field-measured LCP (issue #935) - real-user LCP element
 			// URLs collected by the RUM beacon override the PageSpeed heuristic
 			// only after enough samples (default 20); a stale override (>24h)
@@ -2517,6 +2720,69 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Current-URL key for the per-instance LCP memos (issue #1216).
+		 *
+		 * Returns `Util::get_current_url()` (fail-open to '' when the URL is
+		 * unresolvable, e.g. early boot or bare unit contexts): both
+		 * `get_current_lcp_url()` and the null-buffer
+		 * `get_lazy_lcp_exclusion_url()` memo compare against this key so a
+		 * long-lived instance reused across pages re-resolves per page
+		 * instead of serving the first page's hero everywhere. Never fatal.
+		 *
+		 * @since NEXT
+		 * @return string Memo key (possibly empty).
+		 */
+		private function get_lcp_memo_key(): string {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_current_url' ) ) {
+					return Util::get_current_url();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return '';
+		}
+
+		/**
+		 * P2 DOM-first heuristic LCP URL, memoized per buffer hash (issue #1216).
+		 *
+		 * Wraps `get_first_image_src_in_buffer()` so the full-HTML
+		 * `WP_HTML_Tag_Processor` scan runs once per distinct buffer per
+		 * request no matter how many callers (preload data, lazy exclusion,
+		 * hero inject) resolve the same buffer. Buffer-only by design: the
+		 * `wp_head` (null-buffer) path never fires the heuristic, so a hero
+		 * that is only heuristically detectable is marked eager in the
+		 * buffer path and its companion preload link is emitted by
+		 * `maybe_preload_hero_image()` in the same pass — emission and
+		 * exclusion stay consistent because both resolve with the buffer.
+		 * Bounded (reset past 30 entries); fail-open to ''.
+		 *
+		 * @since NEXT
+		 * @param string $buffer HTML buffer to scan.
+		 * @return string Heuristic LCP URL, or empty string.
+		 */
+		private function get_heuristic_lcp_url( string $buffer ): string {
+			try {
+				if ( '' === $buffer ) {
+					return '';
+				}
+				$hash = md5( $buffer );
+				if ( isset( self::$heuristic_lcp_memo[ $hash ] ) ) {
+					return self::$heuristic_lcp_memo[ $hash ];
+				}
+				$resolved                          = $this->get_first_image_src_in_buffer( $buffer );
+				self::$heuristic_lcp_memo[ $hash ] = $resolved;
+				if ( count( self::$heuristic_lcp_memo ) > 30 ) {
+					self::$heuristic_lcp_memo = array();
+				}
+				return $resolved;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
 		 * Resolve the LCP-candidate URL excluded from lazy load (memoized per instance).
 		 *
 		 * Gated on the LCP toggles so default lazy behaviour is unchanged when
@@ -2541,7 +2807,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The candidate URL, or empty string when none applies.
 		 */
 		private function get_lazy_lcp_exclusion_url( array $image_optimisation, ?string $buffer = null ): string {
-			if ( null === $buffer && null !== $this->lazy_lcp_exclusion_url ) {
+			$memo_key = null === $buffer ? $this->get_lcp_memo_key() : null;
+			if ( null === $buffer && null !== $this->lazy_lcp_exclusion_url && $this->lazy_lcp_exclusion_url_key === $memo_key ) {
 				return $this->lazy_lcp_exclusion_url;
 			}
 			$resolved_url = '';
@@ -2555,11 +2822,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 				if ( '' !== $manual ) {
 					if ( null === $buffer ) {
-						$this->lazy_lcp_exclusion_url = $manual;
+						$this->lazy_lcp_exclusion_url     = $manual;
+						$this->lazy_lcp_exclusion_url_key = $memo_key;
 					}
 					return $manual;
 				}
-				$gated = ! empty( $image_optimisation['fieldLcpOverride'] ) || ! empty( $image_optimisation['autoPreloadLCP'] ) || ! empty( $image_optimisation['prioritizeLCPImages'] );
+				$auto_lcp_on = ! empty( ( $this->options['preload_settings'] ?? array() )['autoLcpPreload'] ) && $this->is_auto_lcp_rum_satisfied();
+				$gated       = ! empty( $image_optimisation['fieldLcpOverride'] ) || ! empty( $image_optimisation['autoPreloadLCP'] ) || ! empty( $image_optimisation['prioritizeLCPImages'] ) || $auto_lcp_on;
 				if ( ! $gated ) {
 					return '';
 				}
@@ -2567,14 +2836,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( '' !== $resolved ) {
 					$resolved_url = $resolved;
 					if ( null === $buffer ) {
-						$this->lazy_lcp_exclusion_url = $resolved;
+						$this->lazy_lcp_exclusion_url     = $resolved;
+						$this->lazy_lcp_exclusion_url_key = $memo_key;
 					}
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
 			if ( null === $buffer && '' === $resolved_url ) {
-				$this->lazy_lcp_exclusion_url = '';
+				$this->lazy_lcp_exclusion_url     = '';
+				$this->lazy_lcp_exclusion_url_key = $memo_key;
 			}
 			return $resolved_url;
 		}
@@ -2676,6 +2947,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return array List of preload items from meta.
 		 */
 		private function get_meta_preload_data(): array {
+			// Skip the post-meta lookup outside singular views (issue #1216):
+			// get_the_ID() is meaningless on archives and the meta query
+			// would run on every wp_head without this guard.
+			if ( function_exists( 'is_singular' ) && ! is_singular() ) {
+				return array();
+			}
 			$page_img_urls = get_post_meta( get_the_ID(), '_wppo_preload_image_url', true );
 
 			if ( empty( $page_img_urls ) ) {
@@ -2796,7 +3073,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Retrieves preload data items from an image's srcset.
 		 *
+		 * Capped at MAX_LCP_PRELOADS (issue #1216) so one post-type hero
+		 * can never expand to N media-variant links.
+		 *
 		 * @since 1.5.1
+		 * @since NEXT Keeps the largest MAX_LCP_PRELOADS widths (the likely
+		 * hero variants) instead of the smallest; media ranges are generated
+		 * after the slice so coverage stays gapless.
 		 * @param string $srcset             The srcset string from the image tag.
 		 * @param string $default_image      The fallback image URL.
 		 * @param array  $image_optimisation Image optimization configuration array.
@@ -2810,6 +3093,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$parsed_sources = $this->parse_srcset_data( $srcset, $image_optimisation );
 			if ( empty( $parsed_sources ) ) {
 				return array( $this->prepare_preload_item( $default_image ) );
+			}
+
+			// Slice parsed sources before generating media ranges so the
+			// surviving items keep gapless viewport coverage (issue #1216):
+			// slicing after media generation would leave the last kept
+			// item's max-width bound computed against a removed variant.
+			// `parse_srcset_data()` sorts ascending, so the negative offset
+			// keeps the largest widths — the likely hero — instead of
+			// thumbnails. The first survivor still opens at min-width 0, so
+			// no viewport gap is left below it.
+			if ( count( $parsed_sources ) > self::MAX_LCP_PRELOADS ) {
+				$parsed_sources = array_values( array_slice( $parsed_sources, -self::MAX_LCP_PRELOADS ) );
 			}
 
 			$max_width      = (int) ( $image_optimisation['maxWidthImgSize'] ?? self::MAX_PRELOAD_WIDTH );
@@ -2850,20 +3145,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$img_url = trim( $img_url );
 			$media   = '';
 
+			// Non-absolute hero URLs resolve via the request-aware base
+			// (issue #1216): root-relative (/uploads/hero.jpg) appends to the
+			// home URL while page-relative (images/hero.jpg, ../img.jpg)
+			// resolves against the current request path with dot-segment
+			// normalization — the same base the browser uses for the emitted
+			// <img src> — so the preload href never 404s from a wrong base.
+			$resolve_relative = function ( string $url ): string {
+				$url = trim( $url );
+				if ( '' === $url || 0 === strpos( $url, 'http' ) || 0 === strpos( $url, '//' ) || 0 === strpos( $url, 'data:' ) || 0 === strpos( $url, 'blob:' ) ) {
+					return $url;
+				}
+				try {
+					return $this->normalize_url( $url );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				if ( function_exists( 'home_url' ) ) {
+					$home = rtrim( (string) home_url(), '/' );
+					if ( 0 === strpos( $url, '/' ) ) {
+						return $home . $url;
+					}
+					return $home . '/' . ltrim( $url, '/' );
+				}
+				return Util::cached_content_url( $url );
+			};
+
 			if ( 0 === strpos( $img_url, 'mobile:' ) ) {
 				$img_url = trim( str_replace( 'mobile:', '', $img_url ) );
-				if ( 0 !== strpos( $img_url, 'http' ) ) {
-					$img_url = Util::cached_content_url( $img_url );
-				}
-				$media = '(max-width: 768px)';
+				$img_url = $resolve_relative( $img_url );
+				$media   = '(max-width: 768px)';
 			} elseif ( 0 === strpos( $img_url, 'desktop:' ) ) {
 				$img_url = trim( str_replace( 'desktop:', '', $img_url ) );
-				if ( 0 !== strpos( $img_url, 'http' ) ) {
-					$img_url = Util::cached_content_url( $img_url );
-				}
-				$media = '(min-width: 768px)';
-			} elseif ( 0 !== strpos( $img_url, 'http' ) ) {
-				$img_url = Util::cached_content_url( $img_url );
+				$img_url = $resolve_relative( $img_url );
+				$media   = '(min-width: 768px)';
+			} else {
+				$img_url = $resolve_relative( $img_url );
 			}
 
 			return array(
@@ -5797,6 +6114,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$exclude_imgs     = array_unique( array_merge( $exclude_imgs, $preload_img_urls ) );
 
 				// OD bridge: ensure the LCP image (mobile/desktop) is never lazy-loaded.
+				// The `wppo_od_should_optimize` opt-out (issue #1216) is
+				// honoured inside `OD_Bridge::is_enabled()` (single filter
+				// firing, current-URL context), so the lazy-exclusion path
+				// stays in parity with
+				// `resolve_auto_lcp_url()`/`get_current_lcp_url()`: opting out
+				// yields neither preload nor eager exclusion from OD data.
 				$od_lcp_normalized = '';
 				if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 					try {
