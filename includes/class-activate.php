@@ -266,22 +266,46 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				return 'wp_config_read';
 			}
 
+			$original_content = $wp_config_content;
+
 			// If WP_CACHE is defined as false, try to replace it with true.
+			// Anchored to start-of-line (multiline ^ + leading whitespace only) so
+			// commented defines (`// define(...)`, `# define(...)`, `/* define(...)`,
+			// `* define(...)`) are never matched or uncommented.
 			if ( defined( 'WP_CACHE' ) && ! WP_CACHE ) {
+				$replaced    = 0;
 				$new_content = preg_replace(
-					'/define\(\s*[\'"]WP_CACHE[\'"]\s*,\s*false\s*\);/i',
+					'/^[ \t]*define\(\s*[\'"]WP_CACHE[\'"]\s*,\s*false\s*\)\s*;/mi',
 					"define( 'WP_CACHE', true );",
-					$wp_config_content
+					$wp_config_content,
+					1,
+					$replaced
 				);
 
 				if ( null === $new_content || '' === $new_content ) {
 					Log::add( __( 'Failed to replace WP_CACHE in wp-config.php', 'performance-optimisation' ) );
 					return null;
 				}
-				$wp_config_content = $new_content;
+				if ( $replaced > 0 ) {
+					$wp_config_content = $new_content;
+				} else {
+					// Only a commented occurrence (or no literal match) existed — leave
+					// comments untouched and fall through to the guarded insert below.
+					$constant_code = "/** Enables WordPress Cache */\nif ( ! defined( 'WP_CACHE' ) ) {\n\tdefine( 'WP_CACHE', true );\n}\n";
+
+					$insert_position = strpos( $wp_config_content, "/* That's all, stop editing!" );
+
+					if ( false !== $insert_position ) {
+						$wp_config_content = substr_replace( $wp_config_content, $constant_code, $insert_position, 0 );
+					} else {
+						$wp_config_content .= $constant_code;
+					}
+				}
 			} elseif ( false !== strpos( $wp_config_content, 'WP_CACHE' ) ) {
 				// Already present but not necessarily true/false as literal (maybe a variable).
 				// If it's already there and we reached here, it means defined( 'WP_CACHE' ) is false or not matching our expectations.
+				// Deliberately fail-open here: a commented-only presence also takes this
+				// path so ambiguous files are never touched.
 				return null;
 			} else {
 				// Not present at all, add it.
@@ -306,7 +330,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 					$wp_config_path,
 					$wp_config_content,
 					static function ( $contents ): bool {
-						return is_string( $contents ) && false !== strpos( $contents, 'WP_CACHE' );
+						return is_string( $contents ) && (bool) preg_match( '/^[ \t]*define\(\s*[\'"]WP_CACHE[\'"]\s*,\s*true\s*\)/mi', $contents );
 					}
 				);
 				if ( true === $atomic ) {
@@ -317,9 +341,44 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				}
 			}
 
-			$ok = $wp_filesystem->put_contents( $wp_config_path, $wp_config_content, FS_CHMOD_FILE );
+			// Legacy direct-write fallback for transports without atomic support:
+			// re-read and verify byte-identical so a torn write never goes
+			// unnoticed. On mismatch restore the in-memory original best-effort
+			// and report failure (fail-open: cache stays unaccelerated).
+			$chmod = defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644;
+			$ok    = $wp_filesystem->put_contents( $wp_config_path, $wp_config_content, $chmod );
 
-			return $ok ? null : 'wp_config_write_failed';
+			if ( ! $ok ) {
+				return 'wp_config_write_failed';
+			}
+
+			$reread = $wp_filesystem->get_contents( $wp_config_path );
+			if ( ! is_string( $reread ) || $reread !== $wp_config_content ) {
+				try {
+					$wp_filesystem->put_contents( $wp_config_path, $original_content, $chmod );
+				} catch ( \Throwable $restore_failed ) {
+					unset( $restore_failed );
+				}
+				return 'wp_config_write_failed';
+			}
+			if ( ! (bool) preg_match( '/^[ \t]*define\(\s*[\'"]WP_CACHE[\'"]\s*,\s*true\s*\)/mi', $reread ) ) {
+				try {
+					$wp_filesystem->put_contents( $wp_config_path, $original_content, $chmod );
+				} catch ( \Throwable $restore_failed ) {
+					unset( $restore_failed );
+				}
+				return 'wp_config_write_failed';
+			}
+			if ( method_exists( 'PerformanceOptimise\Inc\Util', 'verify_php_syntax' ) && ! Util::verify_php_syntax( $reread ) ) {
+				try {
+					$wp_filesystem->put_contents( $wp_config_path, $original_content, $chmod );
+				} catch ( \Throwable $restore_failed ) {
+					unset( $restore_failed );
+				}
+				return 'wp_config_write_failed';
+			}
+
+			return null;
 		}
 
 		/**
