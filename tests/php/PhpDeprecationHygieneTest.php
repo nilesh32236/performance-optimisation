@@ -523,16 +523,21 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 			$this->assertNotEmpty( $scan( "<?php\nmysqli_ping( \$conn );\n" ), 'mysqli_ping() must be flagged.' );
 			$this->assertNotEmpty( $scan( "<?php\n\$out = `ls`;\n" ), 'Backtick execution must be flagged.' );
 			$this->assertNotEmpty( $scan( "<?php\ncurl_close( \$ch );\n" ), 'Raw curl_close() outside Util must be flagged.' );
+			$this->assertNotEmpty( $scan( "<?php\n\\curl_close( \$ch );\n" ), 'Fully-qualified \\curl_close() must be flagged.' );
+			$this->assertNotEmpty( $scan( "<?php\nfunction wppo_bad_attr( #[A] string \$x = null ) {}\n" ), 'Attributed implicitly-nullable params must be flagged.' );
 
 			$this->assertSame( array(), $scan( "<?php\nfunction wppo_good_nullable( ?array \$x = null, mixed \$y = null ) {}\n" ), 'Explicit ?array and mixed defaults must pass.' );
 			$this->assertSame( array(), $scan( "<?php\nfunction wppo_good_attr( #[MyAttr] ?string \$x = null ) {}\n" ), 'Attributed explicitly-nullable params must pass.' );
+			$this->assertSame( array(), $scan( "<?php\nfunction wppo_good_multi_attr( #[A(1, 2)] ?string \$x = null ) {}\n" ), 'Multi-arg attributed explicitly-nullable params must pass.' );
 			$this->assertSame( array(), $scan( "<?php\n\$manager->ping();\n\$manager?->ping();\n" ), 'Method and nullsafe ping() calls must pass.' );
 			$this->assertSame( array(), $scan( "<?php\n\$obj->curl_close( \$ch );\n" ), 'Method teardown calls must pass.' );
 			$this->assertSame( array(), $scan( "<?php\n\$obj?->curl_close( \$ch );\n" ), 'Nullsafe teardown calls must pass.' );
 			$this->assertSame( array(), $scan( "<?php\n// E_STRICT in a comment with `backticks`\n\$doc = 'curl_close(null) in a string';\n" ), 'Comment/string mentions must pass.' );
 
 			$util_subdir = $dir . '/includes';
-			mkdir( $util_subdir ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
+			if ( ! is_dir( $util_subdir ) ) {
+				mkdir( $util_subdir ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
+			}
 			$util_file = $util_subdir . '/class-util.php';
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
 			file_put_contents( $util_file, "<?php\nclass WPPO_Util_Fixture {\npublic static function close_curl_handle( &\$ch ) {\nif ( function_exists( 'curl_close' ) ) {\ncurl_close( \$ch );\n}\n}\n}\n" );
@@ -545,9 +550,12 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 			$method->invokeArgs( $this, array( $util_file, $dir, &$stray_violations ) );
 			$this->assertNotEmpty( $stray_violations, 'Raw teardown outside the Util legacy helpers must be flagged.' );
 		} finally {
-			foreach ( glob( $dir . '/*.php' ) as $file ) {
-				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
-				unlink( $file );
+			$fixture_files = glob( $dir . '/*.php' );
+			if ( is_array( $fixture_files ) ) {
+				foreach ( $fixture_files as $file ) {
+					// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+					unlink( $file );
+				}
 			}
 			if ( is_readable( $dir . '/includes/class-util.php' ) ) {
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
@@ -556,7 +564,9 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 			if ( is_dir( $dir . '/includes' ) ) {
 				rmdir( $dir . '/includes' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Test fixture cleanup.
 			}
-			rmdir( $dir ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Test fixture cleanup.
+			if ( is_dir( $dir ) ) {
+				rmdir( $dir ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Test fixture cleanup.
+			}
 		}
 	}
 
@@ -626,7 +636,27 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 				continue;
 			}
 
-			if ( T_STRING === $token[0] && in_array( strtolower( $token[1] ), $close_functions, true ) ) {
+			$teardown_ids = array( T_STRING );
+			if ( defined( 'T_NAME_FULLY_QUALIFIED' ) ) {
+				$teardown_ids[] = constant( 'T_NAME_FULLY_QUALIFIED' );
+			}
+			if ( defined( 'T_NAME_QUALIFIED' ) ) {
+				$teardown_ids[] = constant( 'T_NAME_QUALIFIED' );
+			}
+			if ( defined( 'T_NAME_RELATIVE' ) ) {
+				$teardown_ids[] = constant( 'T_NAME_RELATIVE' );
+			}
+
+			if ( in_array( $token[0], $teardown_ids, true ) ) {
+				$func_name = strtolower( ltrim( $token[1], '\\' ) );
+				// Namespaced calls (Foo\curl_close) are not the global
+				// teardown function; only bare or fully-qualified globals match.
+				if ( false !== strpos( $func_name, '\\' ) ) {
+					continue;
+				}
+				if ( ! in_array( $func_name, $close_functions, true ) ) {
+					continue;
+				}
 				$next = $i + 1;
 				while ( $next < $count && is_array( $tokens[ $next ] ) && in_array( $tokens[ $next ][0], array( T_WHITESPACE, T_COMMENT, T_DOC_COMMENT ), true ) ) {
 					++$next;
@@ -821,12 +851,13 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 		$depth   = 0;
 		for ( $k = $j + 1; $k < $end; ++$k ) {
 			$token = $tokens[ $k ];
-			if ( '(' === $token || '[' === $token || '{' === $token ) {
+			$text  = is_array( $token ) ? $token[1] : $token;
+			if ( '(' === $text || '[' === $text || '{' === $text || '#[' === $text ) {
 				++$depth;
-			} elseif ( ')' === $token || ']' === $token || '}' === $token ) {
+			} elseif ( ')' === $text || ']' === $text || '}' === $text ) {
 				--$depth;
 			}
-			if ( ',' === $token && 0 === $depth ) {
+			if ( ',' === $text && 0 === $depth ) {
 				$params[] = $current;
 				$current  = array();
 				continue;
@@ -839,9 +870,10 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 			$depth  = 0;
 			$equals = -1;
 			foreach ( $param as $idx => $token ) {
-				if ( '(' === $token || '[' === $token || '{' === $token || '#[' === $token ) {
+				$text = is_array( $token ) ? $token[1] : $token;
+				if ( '(' === $text || '[' === $text || '{' === $text || '#[' === $text ) {
 					++$depth;
-				} elseif ( ')' === $token || ']' === $token || '}' === $token ) {
+				} elseif ( ')' === $text || ']' === $text || '}' === $text ) {
 					--$depth;
 				}
 				if ( '=' === $token && 0 === $depth ) {
