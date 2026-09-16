@@ -1457,9 +1457,10 @@ const Dashboard = ( {
 						className="wppo-select"
 						id="wppoCacheLife"
 						name="cacheLife"
-						value={ cacheLife }
-						onChange={ handleCacheLifeChange }
-					>
+					value={ cacheLife }
+					onChange={ handleCacheLifeChange }
+					aria-describedby="wppoCacheLife-desc"
+				>
 						<option value={ 0 }>
 							{ __( 'Never expire', 'performance-optimisation' ) }
 						</option>
@@ -1482,7 +1483,10 @@ const Dashboard = ( {
 							{ __( '1 week', 'performance-optimisation' ) }
 						</option>
 					</select>
-					<p className="wppo-text-muted wppo-text-small">
+					<p
+						id="wppoCacheLife-desc"
+						className="wppo-text-muted wppo-text-small"
+					>
 						{ __(
 							'File cache uses this lifespan. LiteSpeed server layer may vary per post type below.',
 							'performance-optimisation'
