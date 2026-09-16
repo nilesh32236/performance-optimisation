@@ -6,7 +6,7 @@ import {
 	useContext,
 	useCallback,
 } from '@wordpress/element';
-import { handleChange } from '../lib/util';
+import { handleChange, toTextLines } from '../lib/util';
 import {
 	apiCall,
 	commitSettingsCache,
@@ -44,24 +44,23 @@ const cdnRowId = () => {
 	return `cdn-${ Date.now() }-${ cdnRowCounter }`;
 };
 
-// Newline-delimited third-party/exclude lists: normalise array payloads (from
-// sanitize/process_urls) to textarea strings without nested ternaries.
-const toTextLines = ( value ) => {
-	if ( typeof value === 'string' ) {
-		return value;
-	}
-	if ( Array.isArray( value ) ) {
-		return value.join( '\n' );
-	}
-	return '';
-};
-
 // Normalize the max-retries input the same way PHP sanitizes it
-// (integer, clamped 0..5, fail-open to 5) so strings/arrays from stored
-// settings never reach the controlled number input (issue #1274 review).
+// (whole-string integer, clamped 0..5, fail-open to 5) so strings/arrays
+// from stored settings never reach the controlled number input and the UI
+// never disagrees with the server on malformed values (issue #1274
+// review): PHP is_numeric() rejects '3abc', so parseInt() must not accept
+// it either.
 const normalizeRetries = ( value ) => {
-	const parsed = Number.parseInt( value, 10 );
-	return Number.isFinite( parsed ) ? Math.min( 5, Math.max( 0, parsed ) ) : 5;
+	if ( typeof value === 'number' ) {
+		return Number.isFinite( value )
+			? Math.min( 5, Math.max( 0, Math.trunc( value ) ) )
+			: 5;
+	}
+	const s = String( value ?? '' ).trim();
+	if ( ! /^-?\d+$/.test( s ) ) {
+		return 5;
+	}
+	return Math.min( 5, Math.max( 0, Number.parseInt( s, 10 ) ) );
 };
 
 // Normalize the used-CSS delivery mode the same way PHP sanitizes it
@@ -325,7 +324,6 @@ const FileOptimization = ( {
 				: true,
 		unusedCSSRegressionThreshold:
 			options.unusedCSSRegressionThreshold ?? 20,
-		usedCSSDeliveryMode: options.usedCSSDeliveryMode || 'file',
 		disableEmojis: false,
 		disableEmbeds: false,
 		disableDashicons: false,
@@ -388,17 +386,14 @@ const FileOptimization = ( {
 		typeof options.ccssSafelistExtra === 'string'
 			? options.ccssSafelistExtra
 			: '';
-	defaultSettings.ccssExcludedPostTypes =
-		typeof options.ccssExcludedPostTypes === 'string'
-			? options.ccssExcludedPostTypes
-			: 'fl-builder-template\nelementor_library';
 	defaultSettings.fontSubsetSubsets =
 		typeof options.fontSubsetSubsets === 'string'
 			? options.fontSubsetSubsets
 			: 'latin';
-	defaultSettings.usedCSSDeliveryMode = normalizeDeliveryMode(
-		defaultSettings.usedCSSDeliveryMode
-	);
+	defaultSettings.ccssExcludedPostTypes =
+		typeof defaultSettings.ccssExcludedPostTypes === 'string'
+			? defaultSettings.ccssExcludedPostTypes
+			: 'fl-builder-template\nelementor_library';
 	defaultSettings.ccssMaxRetries = normalizeRetries(
 		defaultSettings.ccssMaxRetries
 	);
@@ -1139,7 +1134,7 @@ const FileOptimization = ( {
 		dismiss();
 		try {
 			const res = await apiCall( 'regenerate_ccss', { template } );
-			if ( res?.success && 1 === res?.data?.queued ) {
+			if ( res?.success && 1 === Number( res?.data?.queued ) ) {
 				notify( {
 					type: 'success',
 					message:
@@ -1841,7 +1836,10 @@ const FileOptimization = ( {
 													id="wppoSinglePostId"
 													min="1"
 													step="1"
-													placeholder="123"
+													placeholder={ __(
+														'123',
+														'performance-optimisation'
+													) }
 													value={ singlePostId }
 													onChange={ ( e ) =>
 														setSinglePostId(
@@ -2021,7 +2019,10 @@ const FileOptimization = ( {
 												id="ccssExcludedPostTypes"
 												name="ccssExcludedPostTypes"
 												rows="2"
-												placeholder="fl-builder-template&#10;elementor_library"
+												placeholder={ __(
+													'fl-builder-template, elementor_library',
+													'performance-optimisation'
+												) }
 												value={
 													typeof settings.ccssExcludedPostTypes ===
 													'string'
@@ -2095,7 +2096,10 @@ const FileOptimization = ( {
 													className="wppo-input"
 													type="text"
 													id="wppoSingleTemplate"
-													placeholder="single"
+													placeholder={ __(
+														'single',
+														'performance-optimisation'
+													) }
 													value={ singleTemplate }
 													onChange={ ( e ) =>
 														setSingleTemplate(

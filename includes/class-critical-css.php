@@ -302,6 +302,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		private const DEFAULT_CCSS_MAX_RETRIES = 5;
 
 		/**
+		 * Hard upper bound (and clamp range 0..5) for the bounded-retry cap.
+		 *
+		 * Dedicated to the `ccssMaxRetries` setting / `wppo_ccss_max_retries`
+		 * filter (issue #1274 review) so changing timeout escalation
+		 * (MAX_CCSS_TIMEOUT_ATTEMPTS) can never silently change the generic
+		 * retry cap.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const MAX_CCSS_MAX_RETRIES = 5;
+
+		/**
 		 * Dedicated Action Scheduler group for CCSS jobs (issue #1235 review).
 		 *
 		 * Keeps 25-120s generation runs off the shared
@@ -347,6 +360,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @var string[]|null
 		 */
 		private static ?array $excluded_memo = null;
+
+		/**
+		 * Per-request memo of the theme template list so status polls and
+		 * single-template lookups in one request share one theme-directory
+		 * scan (issue #1274 review). Reset via reset_ccss_memo().
+		 *
+		 * @since NEXT
+		 * @var array<string, string>|null
+		 */
+		private static ?array $templates_memo = null;
 
 		/**
 		 * Viewport-split variant slugs (issue #1164).
@@ -513,7 +536,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * `get_ccss_queue_cap()` alias; both are kept as-is.
 		 *
 		 * @return int Per-run cap, or PHP_INT_MAX when uncapped.
-		 * @since NEXT
 		 * @since NEXT Filterable via `wppo_ccss_queue_cap`.
 		 * @see Critical_CSS::get_ccss_gen_timeout()
 		 * @see Critical_CSS::get_ccss_queue_cap()
@@ -602,6 +624,46 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
+		 * Normalize raw exclusion slugs (setting lines or filter output).
+		 *
+		 * Single shared parser (issue #1274 review) so Critical_CSS and the
+		 * Used_CSS fallback can never drift on delimiter, case, trim, or
+		 * charset rules. Accepts a newline/comma-delimited string or an
+		 * array of mixed values; non-string items are dropped.
+		 *
+		 * @param string|string[]|mixed $raw Raw slugs.
+		 * @return string[] Validated lowercase slugs.
+		 * @since NEXT
+		 */
+		public static function parse_excluded_slugs( $raw ): array {
+			$items = array();
+			try {
+				if ( is_string( $raw ) ) {
+					$split = preg_split( '/[\r\n,]+/', $raw );
+					$items = is_array( $split ) ? $split : array();
+				} elseif ( is_array( $raw ) ) {
+					$items = $raw;
+				} else {
+					return array();
+				}
+				$parsed = array();
+				foreach ( $items as $item ) {
+					if ( ! is_string( $item ) ) {
+						continue;
+					}
+					$slug = strtolower( trim( $item ) );
+					if ( '' !== $slug && preg_match( '/^[a-z0-9_\-]{1,64}$/', $slug ) ) {
+						$parsed[] = $slug;
+					}
+				}
+				return $parsed;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
 		 * Builder-template post types excluded from CSS generation (issue #1274).
 		 *
 		 * Single source of truth is `Util::get_default_settings()`
@@ -613,7 +675,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * slugs — keeps the defaults. Fail-open: any error returns the
 		 * built-in defaults so builder templates are still skipped.
 		 * Extensible via the `wppo_ccss_excluded_post_types` filter when a
-		 * listener is registered (also additive over the defaults).
+		 * listener is registered (also additive over the defaults; an
+		 * empty filter return is ignored, so there is no opt-out).
 		 *
 		 * Multisite-safe: per-site option reads only.
 		 *
@@ -628,18 +691,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				}
 				$options = Util::get_settings();
 				$raw     = $options['file_optimisation']['ccssExcludedPostTypes'] ?? null;
-				$parsed  = array();
-				if ( is_string( $raw ) && '' !== trim( $raw ) ) {
-					$lines = preg_split( '/[\r\n,]+/', $raw );
-					if ( is_array( $lines ) ) {
-						foreach ( $lines as $line ) {
-							$slug = strtolower( trim( (string) $line ) );
-							if ( '' !== $slug && preg_match( '/^[a-z0-9_\-]{1,64}$/', $slug ) ) {
-								$parsed[] = $slug;
-							}
-						}
-					}
-				}
+				$parsed  = self::parse_excluded_slugs( is_string( $raw ) ? $raw : array() );
 				// Additive merge: valid configured slugs join the built-in
 				// builder defaults; an empty/invalid setting keeps defaults
 				// so protection is never silently disabled.
@@ -649,19 +701,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				if ( function_exists( 'apply_filters' ) && function_exists( 'has_filter' ) && $has_filter ) {
 					$filtered = apply_filters( 'wppo_ccss_excluded_post_types', $excluded );
 					if ( is_array( $filtered ) ) {
-						$clean = array();
-						foreach ( $filtered as $item ) {
-							if ( ! is_string( $item ) ) {
-								continue;
-							}
-							$slug = strtolower( trim( $item ) );
-							if ( '' !== $slug && preg_match( '/^[a-z0-9_\-]{1,64}$/', $slug ) ) {
-								$clean[] = $slug;
-							}
-						}
-						// Additive as well: a filter that returns only its
-						// own types still keeps the builder defaults unless
-						// it returns an explicitly empty array (opt-out).
+						$clean = self::parse_excluded_slugs( $filtered );
+						// Always additive: an empty filter return is
+						// ignored (no opt-out) so builder-template
+						// protection cannot be silently disabled.
 						if ( ! empty( $clean ) ) {
 							$excluded = array_values( array_unique( array_merge( self::DEFAULT_EXCLUDED_POST_TYPES, $clean ) ) );
 						}
@@ -698,22 +741,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * from a legitimately skipped one (200, nothing queued) instead of
 		 * collapsing both into one ambiguous response.
 		 *
-		 * @param string $template Template slug or template hash.
+		 * @param string                    $template Template slug or template hash.
+		 * @param array<string,string>|null $templates Optional pre-enumerated template map (reuses the caller's scan).
 		 * @return bool True when the slug or hash resolves to a template.
 		 * @since NEXT
 		 */
-		public static function is_known_template( string $template ): bool {
+		public static function is_known_template( string $template, ?array $templates = null ): bool {
 			try {
 				$template = trim( $template );
 				if ( '' === $template ) {
 					return false;
 				}
-				$templates = self::get_templates();
+				if ( null === $templates ) {
+					$templates = self::get_templates();
+				}
 				if ( array_key_exists( $template, $templates ) ) {
 					return true;
 				}
-				foreach ( $templates as $candidate => $label ) {
-					unset( $label );
+				foreach ( array_keys( $templates ) as $candidate ) {
 					if ( self::get_template_hash( (string) $candidate ) === $template ) {
 						return true;
 					}
@@ -779,7 +824,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * 0 means fail fast with no retries. Filterable via
 		 * `wppo_ccss_max_retries` when a listener is registered.
 		 *
-		 * @return int Retry cap, 0..MAX_CCSS_TIMEOUT_ATTEMPTS.
+		 * @return int Retry cap, 0..MAX_CCSS_MAX_RETRIES.
 		 * @since NEXT
 		 */
 		public static function get_ccss_max_retries(): int {
@@ -787,11 +832,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				$options = Util::get_settings();
 				$raw     = $options['file_optimisation']['ccssMaxRetries'] ?? self::DEFAULT_CCSS_MAX_RETRIES;
 				$cap     = is_numeric( $raw ) ? (int) $raw : self::DEFAULT_CCSS_MAX_RETRIES;
-				$cap     = min( self::MAX_CCSS_TIMEOUT_ATTEMPTS, max( 0, $cap ) );
+				$cap     = min( self::MAX_CCSS_MAX_RETRIES, max( 0, $cap ) );
 				if ( function_exists( 'apply_filters' ) && function_exists( 'has_filter' ) && has_filter( 'wppo_ccss_max_retries' ) ) {
 					$filtered = apply_filters( 'wppo_ccss_max_retries', $cap );
 					if ( is_numeric( $filtered ) ) {
-						$cap = min( self::MAX_CCSS_TIMEOUT_ATTEMPTS, max( 0, (int) $filtered ) );
+						$cap = min( self::MAX_CCSS_MAX_RETRIES, max( 0, (int) $filtered ) );
 					}
 				}
 				return $cap;
@@ -1028,12 +1073,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
-			$total = 0;
-			try {
-				$total = $attempts + self::get_ccss_timeout_attempts( $template_hash );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				$total = $attempts;
+			// Lazy second-counter read: when the generic count alone
+			// already reaches the cap there is no need to spend a
+			// transient read on the timeout counter.
+			$total = $attempts;
+			if ( $cap > 0 && $total < max( 1, $cap ) ) {
+				try {
+					$total = $attempts + self::get_ccss_timeout_attempts( $template_hash );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$total = $attempts;
+				}
 			}
 			if ( $cap <= 0 || $total >= max( 1, $cap ) ) {
 				try {
@@ -1237,17 +1287,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// with no retry scheduled. Only the escalation is logged —
 			// retries below the cap stay silent so timeouts do not cost a
 			// Log::add() DB insert per attempt.
-			$retry_cap = self::MAX_CCSS_TIMEOUT_ATTEMPTS;
+			$retry_cap = self::MAX_CCSS_MAX_RETRIES;
 			try {
 				$retry_cap = self::get_ccss_max_retries(); // 0..5, 0 = immediate failed.
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
+			// Lazy second-counter read (see record_generation_failure).
 			$total = $attempts;
-			try {
-				$total = $attempts + self::get_ccss_generation_attempts( $template_hash );
-			} catch ( \Throwable $e ) {
-				unset( $e );
+			if ( $retry_cap > 0 && $total < max( 1, $retry_cap ) ) {
+				try {
+					$total = $attempts + self::get_ccss_generation_attempts( $template_hash );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 			}
 			if ( $retry_cap <= 0 || $total >= max( 1, $retry_cap ) ) {
 				try {
@@ -2664,6 +2717,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			self::$ccss_presets_memo   = null;
 			self::$lcp_preload_emitted = array();
 			self::$ccss_defer_blocked  = array();
+			self::$templates_memo      = null;
 		}
 
 		/**
@@ -2817,6 +2871,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since 2.0.0
 		 */
 		private static function get_templates(): array {
+			if ( null !== self::$templates_memo ) {
+				return self::$templates_memo;
+			}
 			$templates = array(
 				'index'   => __( 'Default', 'performance-optimisation' ),
 				'home'    => __( 'Home', 'performance-optimisation' ),
@@ -2832,6 +2889,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				}
 			}
 
+			self::$templates_memo = $templates;
 			return $templates;
 		}
 
@@ -4416,6 +4474,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
+				self::clear_ccss_retry_state( $template_hash );
 				return false;
 			}
 			if ( false === $critical_css ) {
@@ -4444,6 +4503,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
+				self::clear_ccss_retry_state( $template_hash );
 				return false;
 			}
 			if ( '' === trim( $critical_css ) ) {
@@ -5113,11 +5173,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * queued (skip-and-continue, no error loop). Fail-open: unknown
 		 * templates return 0 without queueing.
 		 *
-		 * @param string $template Template slug or template hash.
+		 * @param string                    $template Template slug or template hash.
+		 * @param array<string,string>|null $templates Optional pre-enumerated template map (reuses the caller's scan).
 		 * @return int 1 when queued, 0 otherwise.
 		 * @since NEXT
 		 */
-		public static function regenerate_single( string $template ): int {
+		public static function regenerate_single( string $template, ?array $templates = null ): int {
 			try {
 				if ( self::is_deferral_suspended_by_js() ) {
 					return 0;
@@ -5126,12 +5187,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				if ( '' === $template ) {
 					return 0;
 				}
-				$templates = self::get_templates();
-				$slug      = '';
+				if ( null === $templates ) {
+					$templates = self::get_templates();
+				}
+				$slug = '';
 				if ( array_key_exists( $template, $templates ) ) {
 					$slug = $template;
 				} else {
-					foreach ( $templates as $candidate => $label ) {
+					foreach ( array_keys( $templates ) as $candidate ) {
 						if ( self::get_template_hash( (string) $candidate ) === $template ) {
 							$slug = (string) $candidate;
 							break;

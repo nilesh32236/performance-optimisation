@@ -75,6 +75,27 @@ export const handleChange = ( setSettings ) => ( e ) => {
 };
 
 /**
+ * Normalize a newline-delimited textarea value.
+ *
+ * Sanitize/process_urls normalization can produce arrays, so arrays are
+ * joined instead of dropped (issue #1217). Single shared implementation
+ * replacing the per-component toDelayLines/toExcludeLines copies.
+ *
+ * @since NEXT
+ * @param {*} value Raw value.
+ * @return {string} Textarea-safe string.
+ */
+export const toTextLines = ( value ) => {
+	if ( typeof value === 'string' ) {
+		return value;
+	}
+	if ( Array.isArray( value ) ) {
+		return value.join( '\n' );
+	}
+	return '';
+};
+
+/**
  * Format a byte count as a localised human-readable size string.
  *
  * Single shared implementation (replaces the per-component copies in

@@ -2393,8 +2393,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( ! function_exists( 'as_enqueue_async_action' ) ) {
 					return 0;
 				}
-				// Note: de-duplication via as_has_scheduled_action() lives
-				// inside requeue_for_post(); no existence check is needed here.
+				// Hoisted scheduler snapshot (issue #1274 review): one
+				// as_get_scheduled_actions() query serves the whole
+				// targeted pass; requeue_for_post() consults the hint map
+				// instead of one as_has_scheduled_action() per post.
+				// Fail-open: an unavailable/failed lookup passes null so
+				// each post falls back to the per-post check.
+				$scheduled_hints = null;
+				if ( function_exists( 'as_get_scheduled_actions' ) ) {
+					try {
+						$batch_actions = as_get_scheduled_actions(
+							array(
+								'hook'     => 'wppo_used_css_generate',
+								'group'    => 'performance_optimisation',
+								'per_page' => 1000,
+								'status'   => 'pending',
+							),
+							'ARRAY_A'
+						);
+						if ( is_array( $batch_actions ) ) {
+							$scheduled_hints = array();
+							foreach ( $batch_actions as $action ) {
+								if ( ! is_array( $action ) ) {
+									continue;
+								}
+								$action_args = $action['args'] ?? null;
+								if ( is_string( $action_args ) ) {
+									$decoded     = json_decode( $action_args, true );
+									$action_args = is_array( $decoded ) ? $decoded : null;
+								}
+								if ( is_array( $action_args ) && isset( $action_args['post_id'] ) ) {
+									$scheduled_hints[ (int) $action_args['post_id'] ] = true;
+								}
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$scheduled_hints = null;
+					}
+				}
 				$instance = new self( $options );
 				if ( $instance->is_targeted_regen_cooled_down() ) {
 					return 0;
@@ -2434,7 +2471,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 						continue;
 					}
 					try {
-						if ( self::requeue_for_post( $post_id ) ) {
+						if ( self::requeue_for_post( $post_id, $scheduled_hints ) ) {
 							++$queued;
 						}
 					} catch ( \Throwable $e ) {
@@ -2540,11 +2577,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * enqueue. No-op when removeUnusedCSS is off or Action Scheduler
 		 * is unavailable.
 		 *
-		 * @param int $post_id Post ID to requeue.
+		 * @param int        $post_id Post ID to requeue.
+		 * @param array|null $scheduled_hints Optional hoisted pending-job map (post ID => true); null falls back to per-post lookup.
 		 * @return bool True when a job was queued or already scheduled; false when skipped as fresh or on failure.
 		 * @since 2.0.0
+		 * @since NEXT Optional $scheduled_hints for batched targeted regen.
 		 */
-		public static function requeue_for_post( int $post_id ): bool {
+		public static function requeue_for_post( int $post_id, ?array $scheduled_hints = null ): bool {
 			if ( $post_id <= 0 ) {
 				return false;
 			}
@@ -2553,11 +2592,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( empty( $options['file_optimisation']['removeUnusedCSS'] ) ) {
 					return false;
 				}
-				if ( ! function_exists( 'as_has_scheduled_action' ) || ! function_exists( 'as_enqueue_async_action' ) ) {
+				if ( ! function_exists( 'as_enqueue_async_action' ) ) {
 					return false;
 				}
 				$args = array( 'post_id' => $post_id );
-				if ( as_has_scheduled_action( 'wppo_used_css_generate', $args, 'performance_optimisation' ) ) {
+				// Hoisted snapshot hint (issue #1274 review): the targeted
+				// regen path passes one as_get_scheduled_actions() snapshot
+				// so N posts cost one query instead of N
+				// as_has_scheduled_action() reads.
+				if ( null !== $scheduled_hints && isset( $scheduled_hints[ $post_id ] ) ) {
+					return true;
+				}
+				if ( function_exists( 'as_has_scheduled_action' ) && ( null === $scheduled_hints ) && as_has_scheduled_action( 'wppo_used_css_generate', $args, 'performance_optimisation' ) ) {
 					return true;
 				}
 				try {
@@ -3151,19 +3197,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				$defaults = array( 'fl-builder-template', 'elementor_library' );
 				$options  = Util::get_settings();
 				$raw      = $options['file_optimisation']['ccssExcludedPostTypes'] ?? null;
-				if ( ! is_string( $raw ) || '' === trim( $raw ) ) {
-					return $defaults;
-				}
-				$lines  = preg_split( '/[\r\n,]+/', $raw );
-				$parsed = array();
-				if ( is_array( $lines ) ) {
-					foreach ( $lines as $line ) {
-						$slug = strtolower( trim( (string) $line ) );
-						if ( '' !== $slug && preg_match( '/^[a-z0-9_\-]{1,64}$/', $slug ) ) {
-							$parsed[] = $slug;
-						}
-					}
-				}
+				// Thin delegation to the shared parser so validation rules
+				// live in exactly one place (issue #1274 review).
+				$parsed = ( class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'parse_excluded_slugs' ) )
+					? Critical_CSS::parse_excluded_slugs( is_string( $raw ) ? $raw : array() )
+					: array();
 				// Additive merge with empty-fallback, mirroring
 				// Critical_CSS::get_excluded_post_types().
 				return array() !== $parsed ? array_values( array_unique( array_merge( $defaults, $parsed ) ) ) : $defaults;

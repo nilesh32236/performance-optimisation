@@ -83,8 +83,19 @@ describe( 'CriticalCssPanel', () => {
 		);
 	} );
 
-	it( 'does not throw when onRegenerate rejects', async () => {
+	it( 'rethrows bulk failures so the parent owns feedback', async () => {
 		const onRegenerate = jest.fn().mockRejectedValue( new Error( 'boom' ) );
+		// Harness mimics the parent (FileOptimization handleRegenerateCss
+		// via withNotification): it awaits the child and owns the banner,
+		// proving the child rethrew instead of notifying a second time.
+		let caught = null;
+		const catchingParent = async () => {
+			try {
+				await onRegenerate();
+			} catch ( err ) {
+				caught = err;
+			}
+		};
 		const errorSpy = jest
 			.spyOn( console, 'error' )
 			.mockImplementation( () => {} );
@@ -92,7 +103,7 @@ describe( 'CriticalCssPanel', () => {
 		render(
 			<CriticalCssPanel
 				status={ { abcdef1234567890: 'ready' } }
-				onRegenerate={ onRegenerate }
+				onRegenerate={ catchingParent }
 			/>
 		);
 
@@ -101,6 +112,11 @@ describe( 'CriticalCssPanel', () => {
 		await waitFor( () =>
 			expect( onRegenerate ).toHaveBeenCalledTimes( 1 )
 		);
+		await waitFor( () =>
+			expect( caught && caught.message ).toBe( 'boom' )
+		);
+		// Single-owner feedback: no error banner is rendered by the panel itself.
+		expect( screen.queryByRole( 'alert' ) ).not.toBeInTheDocument();
 
 		errorSpy.mockRestore();
 	} );

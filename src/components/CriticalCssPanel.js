@@ -123,21 +123,19 @@ const CriticalCssPanel = ( {
 } ) => {
 	const [ isRegenerating, setIsRegenerating ] = useState( false );
 	const [ singleBusy, setSingleBusy ] = useState( null );
-	const { notice, notify, dismiss } = useNotice();
+	const { notice, dismiss } = useNotice();
 
 	const handleRegenerate = async () => {
 		setIsRegenerating( true );
 		try {
 			await onRegenerate();
 		} catch ( err ) {
+			// Single-owner feedback (mirrors handleRegenerateSingle): the
+			// parent handleRegenerateCss via withNotification owns the
+			// banner, so log locally and rethrow instead of notifying a
+			// second time for the same click.
 			console.error( 'Failed to regenerate CCSS', err );
-			notify( {
-				type: 'error',
-				message: __(
-					'Failed to regenerate Critical CSS.',
-					'performance-optimisation'
-				),
-			} );
+			throw err;
 		} finally {
 			setIsRegenerating( false );
 		}

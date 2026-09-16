@@ -3160,26 +3160,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// allowlist lookup in regenerate_single().
 			try {
 				$params = $_request->get_params();
-				if ( isset( $params['template'] ) && is_string( $params['template'] ) && '' !== trim( $params['template'] ) ) {
-					$raw      = substr( trim( (string) $params['template'] ), 0, 256 );
-					$template = sanitize_text_field( $raw );
-					$queued   = Critical_CSS::regenerate_single( $template );
-					if ( 1 === $queued ) {
+				if ( array_key_exists( 'template', $params ) ) {
+					// An explicit but empty/non-string template key must
+					// not fall through to bulk regen (issue #1274 review):
+					// it signals a caller bug, so return 0 queued instead
+					// of queueing every template.
+					$raw_param = $params['template'];
+					if ( ! is_string( $raw_param ) || '' === trim( $raw_param ) ) {
 						return $this->send_response(
 							array(
 								'mode'     => 'single',
-								'template' => $template,
-								'queued'   => 1,
+								'template' => is_string( $raw_param ) ? sanitize_text_field( substr( trim( $raw_param ), 0, 256 ) ) : '',
+								'queued'   => 0,
 							),
-							true,
-							202,
-							__( 'Critical CSS regeneration queued for template.', 'performance-optimisation' )
+							false,
+							400,
+							__( 'Invalid template: nothing queued.', 'performance-optimisation' )
 						);
 					}
-					// Distinguish an unknown template (typo/misconfiguration,
-					// 404) from a legitimately skipped or suspended one
-					// (200 with a distinct message) so a typo never looks
-					// like success (issue #1274 review).
+					$raw      = substr( trim( $raw_param ), 0, 256 );
+					$template = sanitize_text_field( $raw );
+					// Known-first ordering (issue #1274 review): an unknown
+					// slug returns 404 even while suspended, so typos are
+					// never hidden behind the suspended message. The
+					// single enumeration below is reused by both the known
+					// check and the queue call (no double theme scan).
+					if ( method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'is_known_template' ) ) {
+						$known = true;
+						try {
+							$known = Critical_CSS::is_known_template( $template );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+						if ( ! $known ) {
+							return $this->send_response(
+								array(
+									'mode'     => 'single',
+									'template' => $template,
+									'queued'   => 0,
+								),
+								false,
+								404,
+								__( 'Unknown template: nothing queued.', 'performance-optimisation' )
+							);
+						}
+					}
 					if ( method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'is_deferral_suspended_by_js' ) && Critical_CSS::is_deferral_suspended_by_js() ) {
 						return $this->send_response(
 							array(
@@ -3192,22 +3217,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 							__( 'Critical CSS generation is suspended while deferred or delayed JavaScript is enabled.', 'performance-optimisation' )
 						);
 					}
-					$known = true;
-					try {
-						$known = ! method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'is_known_template' ) || Critical_CSS::is_known_template( $template );
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-					if ( ! $known ) {
+					$queued = Critical_CSS::regenerate_single( $template );
+					if ( 1 === $queued ) {
 						return $this->send_response(
 							array(
 								'mode'     => 'single',
 								'template' => $template,
-								'queued'   => 0,
+								'queued'   => 1,
 							),
-							false,
-							404,
-							__( 'Unknown template: nothing queued.', 'performance-optimisation' )
+							true,
+							202,
+							__( 'Critical CSS regeneration queued for template.', 'performance-optimisation' )
 						);
 					}
 					return $this->send_response(

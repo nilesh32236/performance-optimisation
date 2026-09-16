@@ -139,4 +139,87 @@ class CcssExclusionsRetry1274Test extends \PHPUnit\Framework\TestCase {
 		$this->assertFalse( Used_CSS::is_excluded_post( 8 ) );
 		$this->assertFalse( Used_CSS::is_excluded_post( 0 ) );
 	}
+
+	/**
+	 * Shared slug parser validates, lowercases, and drops junk.
+	 *
+	 * @return void
+	 */
+	public function test_parse_excluded_slugs_shared(): void {
+		$this->assertSame(
+			array( 'my_type', 'elementor_library' ),
+			Critical_CSS::parse_excluded_slugs( "My_Type\nELEMENTOR_LIBRARY\n!!!\n" )
+		);
+		$this->assertSame( array(), Critical_CSS::parse_excluded_slugs( '!!!' ) );
+		$this->assertSame( array(), Critical_CSS::parse_excluded_slugs( array( 123, null ) ) );
+	}
+
+	/**
+	 * Filter output merges additively; an empty return is ignored (no opt-out).
+	 *
+	 * @return void
+	 */
+	public function test_filter_additive_and_empty_ignored(): void {
+		$this->use_file_optimisation_settings( array() );
+		Functions\when( 'has_filter' )->alias(
+			static function ( $hook ) {
+				return 'wppo_ccss_excluded_post_types' === $hook;
+			}
+		);
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook, $value ) {
+				if ( 'wppo_ccss_excluded_post_types' === $hook && is_array( $value ) ) {
+					$value[] = 'my_library';
+					return $value;
+				}
+				return $value;
+			}
+		);
+		$excluded = Critical_CSS::get_excluded_post_types();
+		$this->assertContains( 'fl-builder-template', $excluded );
+		$this->assertContains( 'elementor_library', $excluded );
+		$this->assertContains( 'my_library', $excluded );
+
+		Critical_CSS::reset_excluded_post_types_memo();
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook, $value ) {
+				if ( 'wppo_ccss_excluded_post_types' === $hook ) {
+					return array();
+				}
+				return $value;
+			}
+		);
+		$this->assertSame(
+			array( 'fl-builder-template', 'elementor_library' ),
+			Critical_CSS::get_excluded_post_types()
+		);
+	}
+
+	/**
+	 * Critical_CSS::is_excluded_post() mirrors the Used_CSS delegation.
+	 *
+	 * @return void
+	 */
+	public function test_critical_css_is_excluded_post(): void {
+		$this->use_file_optimisation_settings( array() );
+		Functions\when( 'get_post_type' )->alias(
+			static function ( $post_id ) {
+				return 9 === $post_id ? 'fl-builder-template' : 'page';
+			}
+		);
+		$this->assertTrue( Critical_CSS::is_excluded_post( 9 ) );
+		$this->assertFalse( Critical_CSS::is_excluded_post( 10 ) );
+	}
+
+	/**
+	 * Unknown slugs/hashes are not known templates; empty is never known.
+	 *
+	 * @return void
+	 */
+	public function test_is_known_template_false_for_unknown(): void {
+		Functions\when( 'get_page_templates' )->justReturn( array() );
+		$this->assertFalse( Critical_CSS::is_known_template( '' ) );
+		$this->assertFalse( Critical_CSS::is_known_template( 'no-such-template-xyz' ) );
+		$this->assertTrue( Critical_CSS::is_known_template( 'single' ) );
+	}
 }

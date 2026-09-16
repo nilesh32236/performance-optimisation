@@ -226,9 +226,7 @@ trait WPPO_Test_Bootstrap {
 		}
 		if ( class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			\PerformanceOptimise\Inc\Critical_CSS::reset_ccss_memo();
-			if ( method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'reset_excluded_post_types_memo' ) ) {
-				\PerformanceOptimise\Inc\Critical_CSS::reset_excluded_post_types_memo();
-			}
+			\PerformanceOptimise\Inc\Critical_CSS::reset_excluded_post_types_memo();
 		}
 		if ( class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 			\PerformanceOptimise\Inc\CDN::reset_cache();
