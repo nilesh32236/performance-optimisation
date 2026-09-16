@@ -1100,9 +1100,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			// Preserve the field-LCP minimum-sample threshold when the request
 			// omits it (issue #1036): AiPanel save posts only the toggles, so
-			// a toggle save must not wipe a custom threshold.
+			// a toggle save must not wipe a custom threshold. Clamped to
+			// 1-1000 like the sanitizer (issue #1200) so a legacy extreme
+			// stored value self-heals instead of pinning auto-tune.
 			if ( 'ai_adaptive' === $tab && ! isset( $params['settings']['field_lcp_min_samples'] ) && isset( $options['ai_adaptive']['field_lcp_min_samples'] ) ) {
-				$sanitized_settings['field_lcp_min_samples'] = absint( $options['ai_adaptive']['field_lcp_min_samples'] );
+				$sanitized_settings['field_lcp_min_samples'] = min( 1000, max( 1, absint( $options['ai_adaptive']['field_lcp_min_samples'] ) ) );
 			}
 
 			// Preserve the RUM-priority ordering flags when the request omits

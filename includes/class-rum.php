@@ -193,6 +193,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		public const FIELD_LCP_DEFAULT_MIN_SAMPLES = 20;
 
 		/**
+		 * Upper bound for the field-LCP minimum-sample threshold.
+		 *
+		 * The resolver and the settings sanitizer clamp the configured
+		 * `ai_adaptive.field_lcp_min_samples` / legacy
+		 * `image_optimisation.fieldLcpMinSamples` value to 1–MAX so an
+		 * extreme admin value cannot perpetually pin auto-tune to
+		 * provisional (feature DoS) while keeping the fail-open default.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const FIELD_LCP_MIN_SAMPLES_MAX = 1000;
+
+		/**
 		 * Freshness window (seconds) for the field-measured LCP override.
 		 *
 		 * An override whose top URL was last seen longer ago than this
@@ -1899,6 +1913,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * Pure read path: no option or transient writes.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Return value is clamped to 1–FIELD_LCP_MIN_SAMPLES_MAX.
 		 * @return int Minimum samples (>=1).
 		 */
 		public static function get_field_lcp_min_samples(): int {
@@ -1907,13 +1922,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				if ( isset( $options['ai_adaptive']['field_lcp_min_samples'] ) ) {
 					$min = (int) $options['ai_adaptive']['field_lcp_min_samples'];
 					if ( $min >= 1 ) {
-						return $min;
+						return min( self::FIELD_LCP_MIN_SAMPLES_MAX, $min );
 					}
 				}
 				if ( isset( $options['image_optimisation']['fieldLcpMinSamples'] ) ) {
 					$min = (int) $options['image_optimisation']['fieldLcpMinSamples'];
 					if ( $min >= 1 ) {
-						return $min;
+						return min( self::FIELD_LCP_MIN_SAMPLES_MAX, $min );
 					}
 				}
 			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch

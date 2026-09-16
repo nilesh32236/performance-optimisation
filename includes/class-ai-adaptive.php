@@ -691,6 +691,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		}
 
 		/**
+		 * Pick the slowest-p75 segment row from qualified rows (slowest-first).
+		 *
+		 * Centralizes the slowest-segment selection so callers never depend
+		 * on the callee sort order of RUM::get_field_lcp_p75_by_segment():
+		 * heuristic_learn(), get_suggestions(), and
+		 * get_rum_gated_delay_state() all route through here with the same
+		 * comparator. Fail-open: non-array entries are ignored, empty input
+		 * returns null.
+		 *
+		 * @since NEXT
+		 * @param array[] $rows Qualified segment rows.
+		 * @return array|null Slowest row or null when empty.
+		 */
+		private static function slowest_segment_row( array $rows ): ?array {
+			$rows = array_values( array_filter( $rows, 'is_array' ) );
+			if ( empty( $rows ) ) {
+				return null;
+			}
+			usort(
+				$rows,
+				static function ( $a, $b ) {
+					$pa = isset( $a['p75'] ) ? (float) $a['p75'] : 0.0;
+					$pb = isset( $b['p75'] ) ? (float) $b['p75'] : 0.0;
+					if ( $pa === $pb ) {
+						return 0;
+					}
+					return $pa > $pb ? -1 : 1;
+				}
+			);
+			return $rows[0];
+		}
+
+		/**
 		 * Dismissed AI suggestion metrics (persisted, per-site).
 		 *
 		 * Stored additively in `wppo_settings[ai_adaptive][dismissed_suggestions]`
@@ -802,8 +835,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					return $fallback;
 				}
 
-				$top_inp = ! empty( $qualified_inp ) ? $qualified_inp[0] : null;
-				$top_lcp = ! empty( $qualified_lcp ) ? $qualified_lcp[0] : null;
+				$top_inp = self::slowest_segment_row( $qualified_inp );
+				$top_lcp = self::slowest_segment_row( $qualified_lcp );
 				$inp_p75 = ( is_array( $top_inp ) && isset( $top_inp['p75'] ) ) ? (float) $top_inp['p75'] : 0.0;
 				$lcp_p75 = ( is_array( $top_lcp ) && isset( $top_lcp['p75'] ) ) ? (float) $top_lcp['p75'] : 0.0;
 
@@ -1058,12 +1091,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			// Suggest-only gating (issue #1200, @since NEXT): the global-average
 			// ladder below only upgrades when total LCP samples reach the shared
 			// field-LCP minimum (ai_adaptive.field_lcp_min_samples, default 20).
-			// Undersampled RUM stays conservative so no eagerness override is
-			// emitted without qualified field data; the segmented upgrade below
-			// may still raise a qualified conservative baseline.
+			// Undersampled RUM stays conservative on the global path so no
+			// eagerness override is emitted without qualified field data. The
+			// segmented ladder below has its own per-segment n >= min gate and
+			// may still upgrade a conservative global baseline when a qualified
+			// slow segment exists.
 			$eagerness     = 'conservative';
 			$avg_lcp_all   = 0;
-			$cnt           = 0;
+			$path_count    = 0;
+			$total_lcp_sum = 0.0;
 			$total_lcp_n   = 0;
 			$field_lcp_min = self::field_lcp_min_samples();
 			foreach ( $rum as $date => $paths ) {
@@ -1072,14 +1108,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				}
 				foreach ( $paths as $path => $metrics ) {
 					if ( isset( $metrics['lcp']['sum'], $metrics['lcp']['n'] ) && $metrics['lcp']['n'] > 0 ) {
-						$avg_lcp_all += (float) $metrics['lcp']['sum'] / (int) $metrics['lcp']['n'];
-						++$cnt;
-						$total_lcp_n += (int) $metrics['lcp']['n'];
+						// Sample-weighted accumulation so the estimator matches
+						// the total-sample gate: a low-n outlier bucket cannot
+						// outweigh high-n buckets the way a mean-of-means would.
+						$total_lcp_sum += (float) $metrics['lcp']['sum'];
+						$total_lcp_n   += (int) $metrics['lcp']['n'];
+						++$path_count;
 					}
 				}
 			}
-			if ( $cnt > 0 && $total_lcp_n >= $field_lcp_min ) {
-				$avg_lcp_all /= $cnt;
+			if ( 0 < $path_count && $total_lcp_n >= $field_lcp_min ) {
+				$avg_lcp_all = $total_lcp_sum / $total_lcp_n;
 				if ( $avg_lcp_all > 3500 ) {
 					$eagerness = 'eager';
 				} elseif ( $avg_lcp_all > 2500 ) {
@@ -1102,7 +1141,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			$field_lcp_samples     = 0;
 			// Upgrade-only: when the global-average path already sits at the top
 			// of the eagerness ladder (`eager`), the segmented lookup can never
-			// raise it, so skip the full RUM option scan entirely.
+			// raise it, so skip the full RUM option scan entirely. Reporting
+			// fields still carry the qualified global sample count so REST/UI
+			// copy never pairs an eager suggestion with provisional (0/N)
+			// copy (provisional stays true: no qualified segment was observed).
 			if ( 'eager' !== $eagerness ) {
 				try {
 					$observed = self::segmented_field_lcp( 1 );
@@ -1119,19 +1161,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 							$qualified[] = $row;
 						}
 					}
-					if ( ! empty( $qualified ) ) {
-						usort(
-							$qualified,
-							static function ( $a, $b ) {
-								$pa = isset( $a['p75'] ) ? (float) $a['p75'] : 0.0;
-								$pb = isset( $b['p75'] ) ? (float) $b['p75'] : 0.0;
-								if ( $pa === $pb ) {
-									return 0;
-								}
-								return $pa > $pb ? -1 : 1;
-							}
-						);
-						$slowest           = $qualified[0];
+					$slowest = self::slowest_segment_row( $qualified );
+					if ( is_array( $slowest ) ) {
 						$segment_p75       = isset( $slowest['p75'] ) ? (float) $slowest['p75'] : 0.0;
 						$segment_eagerness = 'conservative';
 						if ( $segment_p75 > 3500 ) {
@@ -1157,6 +1188,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
+			} else {
+				// Global-eager skip path (no segment scan): report the
+				// qualified global sample count so the persisted model never
+				// pairs `eager` with a zero-sample provisional copy.
+				$field_lcp_samples = $total_lcp_n;
 			}
 
 			// RUM-gated INP-aware delay state (issue #1036): read-only, opt-in
@@ -1950,8 +1986,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 							$qualified[] = $row;
 						}
 					}
-					if ( ! empty( $qualified ) && is_array( $qualified[0] ) ) {
-						$top               = $qualified[0];
+					$top = self::slowest_segment_row( $qualified );
+					if ( is_array( $top ) ) {
 						$field_segment     = self::segment_descriptor( $top );
 						$field_p75         = isset( $top['p75'] ) ? (float) $top['p75'] : 0.0;
 						$field_samples     = isset( $top['n'] ) ? (int) $top['n'] : 0;

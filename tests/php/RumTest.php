@@ -454,7 +454,6 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	/**
 	 * Test that a beacon lcpUrl is aggregated per path.
 	 *
 	 * @since 2.0.0
@@ -596,6 +595,29 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 		$field = RUM::get_field_lcp_url( '/hero' );
 		$this->assertIsArray( $field );
 		$this->assertSame( 'https://example.com/wp-content/uploads/hero.jpg', $field['url'] );
+	}
+
+	/**
+	 * Test get_field_lcp_min_samples clamps extreme values to 1-1000.
+	 *
+	 * A huge admin value (1000000) must not perpetually pin auto-tune to
+	 * provisional; zero/negative values fail open to the 20 default.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_field_lcp_min_samples_clamps_extreme_values(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'ai_adaptive' => array( 'field_lcp_min_samples' => 1000000 ),
+		);
+		Util::clear_settings_cache();
+		$this->assertSame( 1000, RUM::get_field_lcp_min_samples() );
+
+		$this->options['wppo_settings'] = array(
+			'ai_adaptive' => array( 'field_lcp_min_samples' => 0 ),
+		);
+		Util::clear_settings_cache();
+		$this->assertSame( 20, RUM::get_field_lcp_min_samples() );
 	}
 
 	/**

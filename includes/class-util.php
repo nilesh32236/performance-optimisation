@@ -4529,6 +4529,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					continue;
 				}
 
+				// Field-LCP minimum-sample threshold (issue #1200) — int
+				// clamped to 1-1000. Covers both the additive
+				// `ai_adaptive.field_lcp_min_samples` key and the legacy
+				// `image_optimisation.fieldLcpMinSamples` key so an extreme
+				// admin value cannot permanently pin auto-tune to provisional.
+				// Unrecognized values fail open to the 20 default.
+				if ( in_array( $safe_key, array( 'field_lcp_min_samples', 'fieldLcpMinSamples' ), true ) ) {
+					if ( is_array( $value ) ) {
+						$sanitized[ $safe_key ] = 20;
+						continue;
+					}
+					$min                    = is_numeric( $value ) ? (int) $value : 20;
+					$sanitized[ $safe_key ] = min( 1000, max( 1, $min ) );
+					continue;
+				}
+
 				// Newline/regex URL lists must use the textarea sanitizer, not
 				// the generic `url` branch (esc_url_raw would collapse the
 				// multiple lines). Pinned explicitly so a future reorder of the
