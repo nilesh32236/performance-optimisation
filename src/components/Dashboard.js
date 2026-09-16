@@ -897,6 +897,37 @@ const Dashboard = ( {
 	const handleWooSafeModeToggle = useCallback( ( e ) => {
 		setWooSafeMode( e.target.checked );
 	}, [] );
+	/**
+	 * Re-enable WooCommerce safe mode from a FAIL self-test result.
+	 *
+	 * Stages the toggle on (the existing Save Page Cache Settings flow
+	 * remains the commit path) and moves focus to the safe-mode switch
+	 * so keyboard and screen-reader users land on the fix.
+	 *
+	 * @since NEXT
+	 */
+	const handleReenableWooSafeMode = useCallback( () => {
+		setWooSafeMode( true );
+		if ( typeof document !== 'undefined' ) {
+			const anchor = document.getElementById( 'wppoWooSafeMode' );
+			if ( anchor ) {
+				if (
+					anchor.scrollIntoView &&
+					typeof anchor.scrollIntoView === 'function'
+				) {
+					try {
+						anchor.scrollIntoView( { block: 'nearest' } );
+					} catch {
+						// scrollIntoView options unsupported — ignore.
+					}
+				}
+				const input = anchor.querySelector( 'input, button' );
+				if ( input && typeof input.focus === 'function' ) {
+					input.focus( { preventScroll: true } );
+				}
+			}
+		}
+	}, [] );
 	const handleCdnPurgeServiceChange = useCallback( ( e ) => {
 		setCdnPurgeService(
 			CDN_PURGE_SERVICES.includes( e.target.value )
@@ -1090,7 +1121,7 @@ const Dashboard = ( {
 				}
 			/>
 
-			<WelcomePanel />
+			<WelcomePanel onNavigate={ onNavigate } />
 
 			{ upgradePurge &&
 				( ( upgradePurge.last_purge &&
@@ -1488,19 +1519,21 @@ const Dashboard = ( {
 						) }
 					</p>
 				</div>
-				<SwitchField
-					label={ __(
-						'WooCommerce safe mode',
-						'performance-optimisation'
-					) }
-					description={ __(
-						'Always bypass the static cache for cart, checkout, account pages and Store API routes. Custom Woo slugs stay excluded even without WooCommerce conditional tags.',
-						'performance-optimisation'
-					) }
-					name="wooSafeMode"
-					checked={ wooSafeMode }
-					onChange={ handleWooSafeModeToggle }
-				/>
+				<div id="wppoWooSafeMode">
+					<SwitchField
+						label={ __(
+							'WooCommerce safe mode',
+							'performance-optimisation'
+						) }
+						description={ __(
+							'Always bypass the static cache for cart, checkout, account pages and Store API routes. Custom Woo slugs stay excluded even without WooCommerce conditional tags.',
+							'performance-optimisation'
+						) }
+						name="wooSafeMode"
+						checked={ wooSafeMode }
+						onChange={ handleWooSafeModeToggle }
+					/>
+				</div>
 				<div className="wppo-field">
 					<button
 						type="button"
@@ -1549,7 +1582,17 @@ const Dashboard = ( {
 								{ __(
 									'Self-test failed: force-excluding dynamic routes plus cookie bypass (fail-closed for commerce). Re-enable WooCommerce safe mode and serve dynamic — never a stale cart.',
 									'performance-optimisation'
-								) }
+								) }{ ' ' }
+								<button
+									type="button"
+									className="wppo-button wppo-button--secondary wppo-button--sm"
+									onClick={ handleReenableWooSafeMode }
+								>
+									{ __(
+										'Re-enable safe mode',
+										'performance-optimisation'
+									) }
+								</button>
 							</p>
 						) }
 						<p className="wppo-text-muted wppo-text-small">

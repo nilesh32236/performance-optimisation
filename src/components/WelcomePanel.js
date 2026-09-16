@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
-import { apiCall, getWppoSettings } from '../lib/apiRequest';
+import {
+	apiCall,
+	fetchWooCacheSelfTest,
+	getWppoSettings,
+} from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
@@ -16,6 +20,47 @@ import NoticeBanner from './common/NoticeBanner';
  * @return {Promise<Object>} Resolved dismiss response.
  */
 export const dismissWelcome = () => apiCall( 'dismiss_welcome' );
+
+/**
+ * Accessible label for a welcome step action button.
+ *
+ * Split out so the render path avoids nested ternaries (no-nested-ternary)
+ * while keeping each sprintf() call on a literal format string.
+ *
+ * @since NEXT
+ * @param {Object}  step     Step entry from STEPS.
+ * @param {boolean} isActive Whether the step action is in flight.
+ * @param {boolean} isWoo    Whether this is the Woo self-test step.
+ * @return {string} Accessible button label.
+ */
+export const getStepAriaLabel = ( step, isActive, isWoo ) => {
+	if ( isActive ) {
+		if ( isWoo ) {
+			return sprintf(
+				/* translators: %s: feature name */
+				__( 'Running %s…', 'performance-optimisation' ),
+				step.label
+			);
+		}
+		return sprintf(
+			/* translators: %s: feature name */
+			__( 'Enabling %s…', 'performance-optimisation' ),
+			step.label
+		);
+	}
+	if ( isWoo ) {
+		return sprintf(
+			/* translators: %s: feature name */
+			__( 'Run %s', 'performance-optimisation' ),
+			step.label
+		);
+	}
+	return sprintf(
+		/* translators: %s: feature name */
+		__( 'Enable %s', 'performance-optimisation' ),
+		step.label
+	);
+};
 
 const STEPS = [
 	{
@@ -67,14 +112,29 @@ const STEPS = [
 			getWppoSettings()?.settings?.image_optimisation?.lazyLoadImages ??
 			false,
 	},
+	{
+		number: 4,
+		key: 'woo-verify',
+		label: __(
+			'Verify WooCommerce Cart Bypass',
+			'performance-optimisation'
+		),
+		description: __(
+			'Prove in one click that cart, checkout and account pages bypass the page cache so the guest cart survives.',
+			'performance-optimisation'
+		),
+		action: 'woo-self-test',
+		isEnabled: () => false,
+	},
 ];
 
-const WelcomePanel = () => {
+const WelcomePanel = ( { onNavigate } = {} ) => {
 	const [ visible, setVisible ] = useState(
 		getWppoSettings()?.show_welcome ?? false
 	);
 	const [ activatingStep, setActivatingStep ] = useState( null );
 	const [ dismissing, setDismissing ] = useState( false );
+	const [ wooSelfTest, setWooSelfTest ] = useState( null );
 	const { notice, notify, dismiss } = useNotice();
 	const dismissedRef = useRef( false );
 
@@ -92,7 +152,105 @@ const WelcomePanel = () => {
 		return null;
 	}
 
+	/**
+	 * Run the read-only WooCommerce cache self-test.
+	 *
+	 * Never dismisses the panel: the test proves cart/checkout bypass
+	 * without writing settings, so auto-dismiss would hide onboarding
+	 * before the user enables anything.
+	 *
+	 * @since NEXT
+	 */
+	const handleWooSelfTest = async () => {
+		setActivatingStep( 'woo-verify' );
+		dismiss();
+		const controller =
+			typeof AbortController !== 'undefined'
+				? new AbortController()
+				: null;
+		const timeoutId = controller
+			? setTimeout( () => controller.abort(), 5000 )
+			: null;
+		try {
+			const runner =
+				typeof fetchWooCacheSelfTest === 'function'
+					? () => fetchWooCacheSelfTest( controller?.signal )
+					: () =>
+							apiCall(
+								'woo_cache_self_test',
+								{},
+								'GET',
+								controller?.signal
+							);
+			const res = await runner();
+			if ( res?.success && res?.data ) {
+				setWooSelfTest( res.data );
+				if ( ! res.data.runnable || ! res.data.woo_active ) {
+					notify( {
+						type: 'info',
+						message: res.data.woo_active
+							? __(
+									'The self-test could not run. Default exclusion paths are shown read-only; dynamic pages fail open to uncached.',
+									'performance-optimisation'
+							  )
+							: __(
+									'WooCommerce is not active — showing default exclusion paths read-only. Dynamic pages fail open to uncached.',
+									'performance-optimisation'
+							  ),
+						durationMs: 5000,
+					} );
+				} else if ( res.data.all_pass ) {
+					notify( {
+						type: 'success',
+						message: __(
+							'WooCommerce self-test passed: cart, checkout and account pages bypass the cache; the guest cart survives.',
+							'performance-optimisation'
+						),
+						durationMs: 5000,
+					} );
+				} else {
+					notify( {
+						type: 'warning',
+						message: __(
+							'WooCommerce self-test found a cacheable dynamic route. Re-enable safe mode in Dashboard → Page Cache.',
+							'performance-optimisation'
+						),
+						durationMs: 5000,
+					} );
+				}
+			} else {
+				notify( {
+					type: 'error',
+					message: __(
+						'Failed to run the WooCommerce self-test.',
+						'performance-optimisation'
+					),
+					durationMs: 5000,
+				} );
+			}
+		} catch ( error ) {
+			console.error( 'Woo self-test failed:', error );
+			notify( {
+				type: 'error',
+				message: __(
+					'Failed to run the WooCommerce self-test.',
+					'performance-optimisation'
+				),
+				durationMs: 5000,
+			} );
+		} finally {
+			if ( timeoutId ) {
+				clearTimeout( timeoutId );
+			}
+			setActivatingStep( null );
+		}
+	};
+
 	const handleStepAction = async ( step ) => {
+		if ( step?.action === 'woo-self-test' ) {
+			await handleWooSelfTest();
+			return;
+		}
 		setActivatingStep( step.key );
 		dismiss();
 		try {
@@ -228,13 +386,15 @@ const WelcomePanel = () => {
 			) }
 			<p className="wppo-welcome-panel__intro">
 				{ __(
-					'Get started in 3 quick steps. Each toggle below activates a key performance feature — no page reload needed.',
+					'Get started in 4 quick steps. Each toggle below activates a key performance feature — no page reload needed.',
 					'performance-optimisation'
 				) }
 			</p>
 			<div className="wppo-welcome-steps">
 				{ STEPS.map( ( step ) => {
-					const enabled = step.isEnabled();
+					const isWooStep = step.action === 'woo-self-test';
+					const wooVerified = isWooStep && !! wooSelfTest?.all_pass;
+					const enabled = isWooStep ? wooVerified : step.isEnabled();
 					return (
 						<div
 							key={ step.key }
@@ -270,6 +430,85 @@ const WelcomePanel = () => {
 								<p className="wppo-welcome-step__desc">
 									{ step.description }
 								</p>
+								{ isWooStep &&
+									wooSelfTest &&
+									! wooSelfTest.runnable && (
+										<p className="wppo-text-muted wppo-text-small">
+											{ __(
+												'The self-test could not run. Default exclusion paths are shown read-only; dynamic pages fail open to uncached.',
+												'performance-optimisation'
+											) }
+										</p>
+									) }
+								{ isWooStep &&
+									wooSelfTest?.runnable &&
+									! wooSelfTest?.woo_active && (
+										<p className="wppo-text-muted wppo-text-small">
+											{ __(
+												'WooCommerce is not active — showing default exclusion paths read-only. Dynamic pages fail open to uncached.',
+												'performance-optimisation'
+											) }
+										</p>
+									) }
+								{ isWooStep && wooSelfTest && (
+									<p className="wppo-text-muted wppo-text-small">
+										{ __(
+											'Excluded paths:',
+											'performance-optimisation'
+										) }{ ' ' }
+										{ Array.isArray(
+											wooSelfTest.excluded_paths
+										)
+											? wooSelfTest.excluded_paths.join(
+													', '
+											  )
+											: '' }
+										{ ' • ' }
+										{ wooSelfTest.all_pass
+											? __(
+													'Cart, checkout and fragments bypass the cache (PASS).',
+													'performance-optimisation'
+											  )
+											: __(
+													'A dynamic route looks cacheable (FAIL).',
+													'performance-optimisation'
+											  ) }
+									</p>
+								) }
+								{ isWooStep &&
+									wooSelfTest?.runnable &&
+									! wooSelfTest?.all_pass && (
+										<p className="wppo-text-muted wppo-text-small">
+											{ __(
+												'Force-excluding dynamic routes plus cookie bypass.',
+												'performance-optimisation'
+											) }{ ' ' }
+											{ typeof onNavigate ===
+											'function' ? (
+												<button
+													type="button"
+													className="wppo-button wppo-button--secondary wppo-button--sm"
+													onClick={ () =>
+														onNavigate(
+															'dashboard'
+														)
+													}
+												>
+													{ __(
+														'Enable safe mode in Dashboard → Page Cache',
+														'performance-optimisation'
+													) }
+												</button>
+											) : (
+												<a href="#wppoWooSafeMode">
+													{ __(
+														'Enable safe mode in Dashboard → Page Cache',
+														'performance-optimisation'
+													) }
+												</a>
+											) }
+										</p>
+									) }
 							</div>
 							<div className="wppo-welcome-step__action">
 								{ enabled ? (
@@ -286,36 +525,36 @@ const WelcomePanel = () => {
 										isLoading={
 											activatingStep === step.key
 										}
-										aria-label={
-											activatingStep === step.key
-												? sprintf(
-														/* translators: %s: feature name */
-														__(
-															'Enabling %s…',
-															'performance-optimisation'
-														),
-														step.label
-												  )
-												: sprintf(
-														/* translators: %s: feature name */
-														__(
-															'Enable %s',
-															'performance-optimisation'
-														),
-														step.label
-												  )
-										}
+										aria-label={ getStepAriaLabel(
+											step,
+											activatingStep === step.key,
+											isWooStep
+										) }
 										onClick={ () =>
 											handleStepAction( step )
 										}
-										label={ __(
-											'Enable',
-											'performance-optimisation'
-										) }
-										loadingLabel={ __(
-											'Enabling…',
-											'performance-optimisation'
-										) }
+										label={
+											isWooStep
+												? __(
+														'Run test',
+														'performance-optimisation'
+												  )
+												: __(
+														'Enable',
+														'performance-optimisation'
+												  )
+										}
+										loadingLabel={
+											isWooStep
+												? __(
+														'Running…',
+														'performance-optimisation'
+												  )
+												: __(
+														'Enabling…',
+														'performance-optimisation'
+												  )
+										}
 									/>
 								) }
 							</div>
