@@ -1329,6 +1329,8 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 				'do_action',
 				'WP_Filesystem',
 				'delete_transient',
+				'get_transient',
+				'set_transient',
 				'update_option',
 				'current_time',
 				'is_multisite',
@@ -1339,6 +1341,8 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 		);
 		Functions\when( 'wp_parse_url' )->justReturn( '/' );
 		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'get_transient' )->justReturn( false );
+		Functions\when( 'set_transient' )->justReturn( true );
 		Functions\when( 'do_action' )->justReturn( null );
 		Functions\when( 'WP_Filesystem' )->justReturn( true );
 		Functions\when( 'delete_transient' )->justReturn( null );

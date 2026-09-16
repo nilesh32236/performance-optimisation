@@ -233,6 +233,12 @@ trait WPPO_Test_Bootstrap {
 		if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			\PerformanceOptimise\Inc\LiteSpeed_Crawler::reset_cache();
 		}
+		if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'reset_cache' ) ) {
+			// is_lscache_active() memoizes per process: a true memo left by
+			// an earlier file disables the optimizer (add_defer_attribute()
+			// early-return) for every later test.
+			\PerformanceOptimise\Inc\LiteSpeed_Integration::reset_cache();
+		}
 		if ( class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) && method_exists( 'PerformanceOptimise\Inc\AI_Adaptive', 'reset_disabled_assets_cache' ) ) {
 			\PerformanceOptimise\Inc\AI_Adaptive::reset_disabled_assets_cache();
 		}

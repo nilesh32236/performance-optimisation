@@ -31,6 +31,12 @@ class PreloadAutoMigrationTest extends \PHPUnit\Framework\TestCase {
 	 */
 	protected function setUp(): void { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid
 		parent::setUp();
+		// Re-register the shared stubs: this setUp() shadows the trait
+		// method, and Brain Monkey eval-declared functions persist per
+		// process, so without this Log::add()'s salted-cache gate throws
+		// MissingFunctionExpectations when an earlier file declared
+		// wp_using_ext_object_cache().
+		$this->register_common_function_stubs();
 		global $wpdb;
 		$this->original_wpdb = $wpdb; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
 		$wpdb                = new class() { // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
@@ -120,9 +126,16 @@ class PreloadAutoMigrationTest extends \PHPUnit\Framework\TestCase {
 			)
 		);
 
-		$this->assertCount( 1, $writes );
-		$this->assertSame( 'wppo_settings', $writes[0][0] );
-		$persisted = $writes[0][1]['preload_settings'];
+		$settings_writes = array_values(
+			array_filter(
+				$writes,
+				static function ( $write ) {
+					return 'wppo_settings' === $write[0];
+				}
+			)
+		);
+		$this->assertCount( 1, $settings_writes, 'Migration must persist exactly one wppo_settings write (Log::add() may bump its own cache-version option).' );
+		$persisted = $settings_writes[0][1]['preload_settings'];
 		$this->assertFalse( $persisted['autoLcpPreload'] );
 		$this->assertFalse( $persisted['autoDiscoverFonts'] );
 		$this->assertTrue( $persisted['enablePreloadCache'], 'Sibling keys must survive the backfill' );
@@ -162,8 +175,16 @@ class PreloadAutoMigrationTest extends \PHPUnit\Framework\TestCase {
 			)
 		);
 
-		$this->assertCount( 1, $writes );
-		$persisted = $writes[0][1]['preload_settings'];
+		$settings_writes = array_values(
+			array_filter(
+				$writes,
+				static function ( $write ) {
+					return 'wppo_settings' === $write[0];
+				}
+			)
+		);
+		$this->assertCount( 1, $settings_writes, 'Migration must persist exactly one wppo_settings write (Log::add() may bump its own cache-version option).' );
+		$persisted = $settings_writes[0][1]['preload_settings'];
 		$this->assertTrue( $persisted['autoLcpPreload'], 'Explicit true must be preserved verbatim' );
 		$this->assertFalse( $persisted['autoDiscoverFonts'] );
 	}

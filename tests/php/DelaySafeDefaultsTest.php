@@ -21,7 +21,23 @@ use Brain\Monkey\Functions;
  * @package PerformanceOptimise\Tests
  */
 class DelaySafeDefaultsTest extends \PHPUnit\Framework\TestCase {
-	use WPPO_Test_Bootstrap;
+	use WPPO_Test_Bootstrap {
+		setUp as protected wppoSetUp;
+	}
+
+	/**
+	 * Default to no post/Woo-endpoint context: get_the_ID() may already be
+	 * eval-declared by an earlier file, and an unmocked call inside
+	 * is_delay_js_safe_context()'s fail-safe try throws and forces
+	 * skip-delay for every later test.
+	 *
+	 * @return void
+	 */
+	protected function setUp(): void {
+		$this->wppoSetUp();
+		\Brain\Monkey\Functions\when( 'get_the_ID' )->justReturn( 0 );
+		\Brain\Monkey\Functions\when( 'is_wc_endpoint_url' )->justReturn( false );
+	}
 
 	/**
 	 * Build a Used_CSS instance without constructor, with given options/safelist.

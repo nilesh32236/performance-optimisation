@@ -63,6 +63,11 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		);
 
 		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		// Default to a non-singular context so the manual LCP-picker path
+		// (get_manual_lcp_url()) is skipped: is_singular() may already be
+		// eval-declared by an earlier test file, in which case calling it
+		// without an expectation throws. LCP tests override this to true.
+		Functions\when( 'is_singular' )->justReturn( false );
 		Functions\when( 'has_filter' )->alias(
 			static function ( $hook_name ) {
 				if ( 'home_url' === $hook_name ) {
