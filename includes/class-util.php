@@ -375,6 +375,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'speculationExcludeUrls'   => '',
 					'speculationDocumentRules' => true,
 					'preloadSitemap'           => false,
+					'autoLcpPreload'           => false,
+					'autoDiscoverFonts'        => false,
 				),
 				'image_optimisation'    => array(
 					'lazyLoadImages'             => false,

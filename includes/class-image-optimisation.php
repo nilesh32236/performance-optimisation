@@ -51,6 +51,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private const IMG_SIZE_CACHE_LIMIT = 100;
 
 		/**
+		 * Maximum image preload hints emitted per page (manual wins on conflict).
+		 *
+		 * Manual lists are ordered first in `get_all_preload_data()` so the
+		 * slice keeps pinned heroes when auto + manual overlap. Competitor
+		 * parity (one hero preload) with a hard cap against preload waste.
+		 *
+		 * @since NEXT
+		 */
+		private const MAX_LCP_PRELOADS = 2;
+
+		/**
 		 * Configuration options for image optimization.
 		 *
 		 * @var array
@@ -1928,7 +1939,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			// field-measured LCP URL may equal a manually configured preload
 			// as an absolute URL vs a relative URL (or http vs https), but
 			// exactly one link tag must be emitted per resource (query-string
-			// versions still count as distinct resources).
+			// versions still count as distinct resources). Manual items are
+			// ordered first so they win the dedup, and the whole list is
+			// capped at MAX_LCP_PRELOADS (issue #1216) so srcset expansion
+			// can never emit N media-variant links.
 			$seen   = array();
 			$unique = array();
 			foreach ( $merged as $item ) {
@@ -1941,6 +1955,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 				$seen[ $key ] = true;
 				$unique[]     = $item;
+			}
+
+			if ( count( $unique ) > self::MAX_LCP_PRELOADS ) {
+				$unique = array_slice( $unique, 0, self::MAX_LCP_PRELOADS );
 			}
 
 			return $unique;
@@ -2232,14 +2250,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
-			// P0: Optimization Detective — real-visit hero wins.
+			// P0: Optimization Detective — real-visit hero wins. Guarded via
+			// class_exists/function_exists plus has_filter on the OD opt-out
+			// hook (issue #1216): an explicit wppo_od_should_optimize=false
+			// filter skips the OD tier and falls through to stored/heuristic.
 			if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 				try {
 					$od_available = class_exists( 'OD_URL_Metric' ) || function_exists( 'od_get_url_metrics' );
 					if ( $od_available ) {
-						$od_url = \PerformanceOptimise\Inc\OD_Bridge::get_lcp_url();
-						if ( is_string( $od_url ) && '' !== $od_url && $this->is_image_lcp_url( $od_url ) && $this->is_same_origin_preload_url( $od_url ) ) {
-							return $od_url;
+						$od_opt_in = true;
+						if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) ) {
+							// Consult the hook (no-op when unhooked) then
+							// respect an explicit opt-out.
+							has_filter( 'wppo_od_should_optimize' );
+							$od_opt_in = (bool) apply_filters( 'wppo_od_should_optimize', true, function_exists( 'home_url' ) ? home_url() : '' );
+						}
+						if ( $od_opt_in ) {
+							$od_url = \PerformanceOptimise\Inc\OD_Bridge::get_lcp_url();
+							if ( is_string( $od_url ) && '' !== $od_url && $this->is_image_lcp_url( $od_url ) && $this->is_same_origin_preload_url( $od_url ) ) {
+								return $od_url;
+							}
 						}
 					}
 				} catch ( \Throwable $e ) {
@@ -2409,18 +2439,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * available). Emits at most one item via `prepare_preload_item()`
 		 * so "once per URL" holds; the item is ordered ahead of front-page
 		 * and generic meta preloads (after the manual picker item) and
-		 * participates in the normalized-URL dedup. The
-		 * toggle autoPreloadLCP must be enabled.
+		 * participates in the normalized-URL dedup. The legacy
+		 * `image_optimisation.autoPreloadLCP` toggle enables the legacy
+		 * path unchanged; the additive `preload_settings.autoLcpPreload`
+		 * toggle (issue #1216) enables the same chain but stays off until
+		 * RUM-gated (`RUM::is_enabled()`, guarded) with an off switch.
 		 *
 		 * @since 2.0.0
 		 * @since NEXT Resolves via the unified `resolve_auto_lcp_url()` chain
 		 * (OD → stored PageSpeed → heuristic) with a text-LCP guard; emits at
-		 * most one item.
+		 * most one item. Adds the RUM-gated `preload_settings.autoLcpPreload`
+		 * path (off by default, manual lists win, never lazy+high).
 		 * @return array List of preload items (zero or one item).
 		 */
 		private function get_auto_lcp_preload_data(): array {
 			$image_optimisation = $this->options['image_optimisation'] ?? array();
-			if ( empty( $image_optimisation['autoPreloadLCP'] ) ) {
+			$preload_settings   = $this->options['preload_settings'] ?? array();
+			$legacy_on          = ! empty( $image_optimisation['autoPreloadLCP'] );
+			$new_on             = ! empty( $preload_settings['autoLcpPreload'] );
+			if ( ! $legacy_on && ! $new_on ) {
+				return array();
+			}
+
+			if ( $new_on && ! $legacy_on && ! $this->is_auto_lcp_rum_satisfied() ) {
 				return array();
 			}
 
@@ -2430,6 +2471,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 
 			return array( $this->prepare_preload_item( $lcp_url ) );
+		}
+
+		/**
+		 * Whether the RUM gate for the additive auto-LCP toggle is satisfied.
+		 *
+		 * The `preload_settings.autoLcpPreload` path (issue #1216) stays off
+		 * until real-user measurement is enabled (`RUM::is_enabled()`,
+		 * guarded with class_exists/method_exists). Fail-closed when RUM is
+		 * unavailable or disabled so detection failure degrades to the
+		 * current manual behavior; fail-open only via the legacy
+		 * `autoPreloadLCP` path handled by the caller. Never fatal.
+		 *
+		 * @since NEXT
+		 * @return bool True when RUM gating passes.
+		 */
+		private function is_auto_lcp_rum_satisfied(): bool {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'is_enabled' ) ) {
+					return false;
+				}
+				return (bool) \PerformanceOptimise\Inc\RUM::is_enabled();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
 		}
 
 		/**
@@ -2559,7 +2625,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					}
 					return $manual;
 				}
-				$gated = ! empty( $image_optimisation['fieldLcpOverride'] ) || ! empty( $image_optimisation['autoPreloadLCP'] ) || ! empty( $image_optimisation['prioritizeLCPImages'] );
+				$gated = ! empty( $image_optimisation['fieldLcpOverride'] ) || ! empty( $image_optimisation['autoPreloadLCP'] ) || ! empty( $image_optimisation['prioritizeLCPImages'] ) || ! empty( ( $this->options['preload_settings'] ?? array() )['autoLcpPreload'] );
 				if ( ! $gated ) {
 					return '';
 				}
@@ -2796,6 +2862,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Retrieves preload data items from an image's srcset.
 		 *
+		 * Capped at MAX_LCP_PRELOADS (issue #1216) so one post-type hero
+		 * can never expand to N media-variant links.
+		 *
 		 * @since 1.5.1
 		 * @param string $srcset             The srcset string from the image tag.
 		 * @param string $default_image      The fallback image URL.
@@ -2831,6 +2900,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					'priority' => 'high',
 				);
 				$previous_width = $current_width + 1;
+			}
+
+			if ( count( $items ) > self::MAX_LCP_PRELOADS ) {
+				$items = array_slice( $items, 0, self::MAX_LCP_PRELOADS );
 			}
 
 			return $items;

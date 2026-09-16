@@ -149,6 +149,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private static array $defer_disabled_page_cache = array();
 
 		/**
+		 * Per-request record of emitted font preload links (normalized URL).
+		 *
+		 * `add_preload_prefetch_preconnect()` may run more than once per
+		 * request; this guard keeps auto-discovered font hints (issue #1216)
+		 * to at most one tag per URL. Reset via
+		 * {@see reset_font_preload_emitted()} (tests, switch_blog).
+		 *
+		 * @var array<string,bool>
+		 * @since NEXT
+		 */
+		private static array $font_preload_emitted = array();
+
+		/**
+		 * Maximum auto-discovered font preloads per page (manual wins).
+		 *
+		 * @since NEXT
+		 */
+		private const MAX_AUTO_FONT_PRELOADS = 2;
+
+		/**
 		 * Associative array of deferred script handles (keyed by handle for O(1) lookups).
 		 *
 		 * @var   array<string, bool>
@@ -431,6 +451,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// requests). Multisite-safe: per-site wppo_settings only.
 			if ( ! isset( $this->options['preload_settings']['speculationTopUrlsLimit'] ) ) {
 				$this->options['preload_settings']['speculationTopUrlsLimit'] = 2;
+			}
+			// Automatic LCP hero preload + automatic font discovery
+			// (issue #1216): additive keys, off by default so existing
+			// installs keep manual-only behaviour. In-memory only here
+			// (no front-end DB write); persisted via update_settings/REST
+			// and backfilled once by maybe_migrate_preload_auto_defaults().
+			if ( ! isset( $this->options['preload_settings']['autoLcpPreload'] ) ) {
+				$this->options['preload_settings']['autoLcpPreload'] = false;
+			}
+			if ( ! isset( $this->options['preload_settings']['autoDiscoverFonts'] ) ) {
+				$this->options['preload_settings']['autoDiscoverFonts'] = false;
 			}
 
 			if ( ! isset( $this->options['llms_txt'] ) || ! is_array( $this->options['llms_txt'] ) ) {
@@ -795,6 +826,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'admin_init', array( $this, 'maybe_migrate_safe_mode' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_sandbox_preview' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_image_alt_edge_defaults' ) );
+			add_action( 'admin_init', array( $this, 'maybe_migrate_preload_auto_defaults' ) );
 			// One-time activity-log notice on admin_init.
 			if ( isset( $this->options['file_optimisation']['removeQueryStrings'] ) ) {
 				add_action( 'admin_init', array( $this, 'maybe_notify_remove_query_strings_removal' ) );
@@ -1755,6 +1787,58 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$this->options['file_optimisation'] = array();
 			}
 			$this->options['file_optimisation']['sandboxStaged'] = array();
+		}
+
+		/**
+		 * One-time backfill for automatic LCP hero preload + font discovery (issue #1216).
+		 *
+		 * Runs on `admin_init` (not the constructor) so a cacheable front-end
+		 * request never triggers a settings write. Only installs whose stored
+		 * settings predate the `autoLcpPreload` / `autoDiscoverFonts` keys
+		 * (key absent) are backfilled with the off defaults (`false`, manual
+		 * lists keep winning); any stored explicit value is preserved
+		 * verbatim, and fresh installs with no stored option are skipped
+		 * because the constructor defaults already match. Idempotent (key
+		 * presence is the marker). Uses per-site `get_option()` so multisite
+		 * sites migrate independently with no cross-site leakage.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public function maybe_migrate_preload_auto_defaults(): void {
+			// allowlist(settings-read-guard): deliberate direct read — must distinguish
+			// "no stored row" (false) from "stored array", which Util::get_settings()
+			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
+			$stored = get_option( 'wppo_settings' );
+			if ( ! is_array( $stored ) ) {
+				return;
+			}
+
+			$preload = isset( $stored['preload_settings'] ) && is_array( $stored['preload_settings'] ) ? $stored['preload_settings'] : array();
+
+			$changed = false;
+			if ( ! array_key_exists( 'autoLcpPreload', $preload ) ) {
+				$preload['autoLcpPreload'] = false;
+				$changed                   = true;
+			}
+			if ( ! array_key_exists( 'autoDiscoverFonts', $preload ) ) {
+				$preload['autoDiscoverFonts'] = false;
+				$changed                      = true;
+			}
+
+			if ( ! $changed ) {
+				return;
+			}
+
+			$stored['preload_settings'] = $preload;
+			update_option( 'wppo_settings', $stored );
+
+			if ( ! isset( $this->options['preload_settings'] ) || ! is_array( $this->options['preload_settings'] ) ) {
+				$this->options['preload_settings'] = array();
+			}
+			$this->options['preload_settings'] = array_merge( $this->options['preload_settings'], $preload );
+
+			Log::add( __( 'Added default automatic LCP preload and font discovery settings (both off; manual lists keep winning).', 'performance-optimisation' ) );
 		}
 
 		/**
@@ -5520,6 +5604,374 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Reset the per-request font preload dedup guard (tests, switch_blog).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_font_preload_emitted(): void {
+			self::$font_preload_emitted = array();
+		}
+
+		/**
+		 * Extract font file URLs from a CSS string.
+		 *
+		 * Pure helper (issue #1216): matches `url(...)` values whose path
+		 * carries a woff2/woff/ttf extension, drops data:/blob:/javascript:
+		 * schemes, trims to 2048 chars, dedups preserving order with
+		 * woff2 preferred. Never fatals: any failure returns an empty list.
+		 *
+		 * @since NEXT
+		 * @param string $css CSS text to scan.
+		 * @return string[] Ordered unique font URLs.
+		 */
+		public static function extract_font_urls_from_css( string $css ): array {
+			try {
+				if ( '' === trim( $css ) ) {
+					return array();
+				}
+				$css = substr( $css, 0, 524288 );
+				if ( ! preg_match_all( '/url\(\s*[\'"]?([^\'")]+)[\'"]?\s*\)/i', $css, $matches ) ) {
+					return array();
+				}
+				$found = array();
+				foreach ( $matches[1] as $raw ) {
+					$url = trim( (string) $raw );
+					if ( '' === $url || strlen( $url ) > 2048 ) {
+						continue;
+					}
+					$lower = strtolower( ltrim( $url ) );
+					if ( str_starts_with( $lower, 'data:' ) || str_starts_with( $lower, 'blob:' ) || str_starts_with( $lower, 'javascript:' ) || str_starts_with( $lower, 'vbscript:' ) ) {
+						continue;
+					}
+					$path = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url, PHP_URL_PATH ) : parse_url( $url, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url() is unavailable.
+					if ( ! is_string( $path ) || '' === $path || 1 !== preg_match( '/\.(woff2|woff|ttf)(\?.*)?$/i', $path ) ) {
+						continue;
+					}
+					$found[] = $url;
+				}
+				$found = array_values( array_unique( $found ) );
+				usort(
+					$found,
+					static function ( $a, $b ) {
+						$rank = static function ( $u ) {
+							$p = strtolower( (string) ( function_exists( 'wp_parse_url' ) ? wp_parse_url( $u, PHP_URL_PATH ) : parse_url( $u, PHP_URL_PATH ) ) ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url() is unavailable.
+							if ( str_ends_with( $p, '.woff2' ) ) {
+								return 0;
+							}
+							if ( str_ends_with( $p, '.woff' ) ) {
+								return 1;
+							}
+							return 2;
+						};
+						return $rank( $a ) <=> $rank( $b );
+					}
+				);
+				return $found;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
+		 * Map a font URL to its preload `type` attribute.
+		 *
+		 * @since NEXT
+		 * @param string $font_url Font URL.
+		 * @return string MIME type (possibly empty).
+		 */
+		private function font_type_for_url( string $font_url ): string {
+			try {
+				$path = function_exists( 'wp_parse_url' ) ? wp_parse_url( $font_url, PHP_URL_PATH ) : parse_url( $font_url, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url() is unavailable.
+				$ext  = is_string( $path ) ? strtolower( pathinfo( $path, PATHINFO_EXTENSION ) ) : '';
+				switch ( $ext ) {
+					case 'woff2':
+						return 'font/woff2';
+					case 'woff':
+						return 'font/woff';
+					case 'ttf':
+						return 'font/ttf';
+					default:
+						return '';
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Whether a font candidate URL is same-origin with this site.
+		 *
+		 * Fail-closed (issue #1216): absolute URLs validate via
+		 * `RUM::is_same_origin_url()` when available, else a guarded
+		 * home-host comparison; root-relative and bare relative paths are
+		 * same-origin by construction. Any failure returns false.
+		 *
+		 * @since NEXT
+		 * @param string $url Candidate URL.
+		 * @return bool True when the URL may be preloaded.
+		 */
+		private function is_same_origin_font_url( string $url ): bool {
+			try {
+				$url = trim( $url );
+				if ( '' === $url ) {
+					return false;
+				}
+				$lower = strtolower( ltrim( $url ) );
+				if ( str_starts_with( $lower, 'data:' ) || str_starts_with( $lower, 'blob:' ) || str_starts_with( $lower, 'javascript:' ) || str_starts_with( $lower, 'vbscript:' ) ) {
+					return false;
+				}
+				if ( 0 === strpos( $url, '/' ) && 0 !== strpos( $url, '//' ) ) {
+					return true;
+				}
+				if ( false === strpos( $url, '://' ) && 0 !== strpos( $url, '//' ) ) {
+					$before_slash = strtok( $url, '/\\?#' );
+					if ( is_string( $before_slash ) && false !== strpos( $before_slash, ':' ) ) {
+						return false;
+					}
+					return true;
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'is_same_origin_url' ) ) {
+					return \PerformanceOptimise\Inc\RUM::is_same_origin_url( $url );
+				}
+				if ( function_exists( 'wp_parse_url' ) && function_exists( 'home_url' ) ) {
+					$host      = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
+					$home_host = strtolower( (string) wp_parse_url( home_url(), PHP_URL_HOST ) );
+					return '' !== $host && $host === $home_host;
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Normalize a font URL for manual-wins dedup.
+		 *
+		 * @since NEXT
+		 * @param string $url Font URL.
+		 * @return string Dedup key.
+		 */
+		private function normalize_font_url( string $url ): string {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'normalize_url' ) ) {
+					$norm = Util::normalize_url( $url );
+					if ( '' !== $norm ) {
+						return $norm;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return strtolower( trim( $url ) );
+		}
+
+		/**
+		 * Read the manual font preload URL list (resolved to absolute URLs).
+		 *
+		 * @since NEXT
+		 * @param array $preload_settings Preload settings tab.
+		 * @return string[] Absolute manual font URLs.
+		 */
+		public function get_manual_font_urls( array $preload_settings ): array {
+			try {
+				if ( empty( $preload_settings['preloadFonts'] ) || empty( $preload_settings['preloadFontsUrls'] ) ) {
+					return array();
+				}
+				$raw  = Util::process_urls( $preload_settings['preloadFontsUrls'] );
+				$urls = array();
+				foreach ( $raw as $font_url ) {
+					$font_url = trim( (string) $font_url );
+					if ( '' === $font_url ) {
+						continue;
+					}
+					$font_url = preg_match( '/^https?:\/\//i', $font_url ) ? $font_url : Util::cached_content_url( $font_url );
+					$urls[]   = substr( $font_url, 0, 2048 );
+				}
+				return array_values( array_unique( $urls ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
+		 * Collect CSS text chunks from enqueued stylesheets (bounded).
+		 *
+		 * Scans inline `before`/`after` CSS plus same-origin stylesheet file
+		 * contents (512 KB per file, 10 handles max). Fail-open: any failure
+		 * returns the chunks collected so far.
+		 *
+		 * @since NEXT
+		 * @return string[] CSS text chunks.
+		 */
+		private function collect_enqueued_font_css_chunks(): array {
+			$chunks = array();
+			try {
+				if ( ! isset( $GLOBALS['wp_styles'] ) || ! is_object( $GLOBALS['wp_styles'] ) ) {
+					return $chunks;
+				}
+				$registered = $GLOBALS['wp_styles']->registered ?? null;
+				if ( ! is_array( $registered ) ) {
+					if ( is_object( $registered ) && method_exists( $registered, 'getArrayCopy' ) ) {
+						$registered = $registered->getArrayCopy();
+					} else {
+						return $chunks;
+					}
+				}
+				$scanned = 0;
+				foreach ( $registered as $style ) {
+					if ( $scanned >= 10 ) {
+						break;
+					}
+					if ( ! is_object( $style ) ) {
+						continue;
+					}
+					++$scanned;
+					$extra = $style->extra ?? array();
+					if ( is_array( $extra ) ) {
+						foreach ( array( 'after', 'before' ) as $key ) {
+							if ( empty( $extra[ $key ] ) ) {
+								continue;
+							}
+							$inline = is_array( $extra[ $key ] ) ? implode( "\n", $extra[ $key ] ) : (string) $extra[ $key ];
+							if ( '' !== trim( $inline ) && false !== stripos( $inline, 'font-face' ) ) {
+								$chunks[] = substr( $inline, 0, 524288 );
+							}
+						}
+					}
+					$src = is_string( $style->src ?? null ) ? (string) $style->src : '';
+					if ( '' !== $src ) {
+						$src_path = strtok( $src, '?' );
+						if ( ! is_string( $src_path ) || 1 !== preg_match( '/\.css$/i', $src_path ) ) {
+							continue;
+						}
+					}
+					if ( '' === $src ) {
+						continue;
+					}
+					$abs_src = preg_match( '/^https?:\/\//i', $src ) ? $src : Util::cached_content_url( $src );
+					if ( ! $this->is_same_origin_font_url( $abs_src ) ) {
+						continue;
+					}
+					$path = function_exists( 'wp_parse_url' ) ? wp_parse_url( $abs_src, PHP_URL_PATH ) : parse_url( $abs_src, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url() is unavailable.
+					if ( ! is_string( $path ) || '' === $path ) {
+						continue;
+					}
+					$local = ( defined( 'ABSPATH' ) ? (string) ABSPATH : '' ) . ltrim( $path, '/' );
+					$size  = 0;
+					if ( function_exists( 'wp_normalize_path' ) ) {
+						$local = wp_normalize_path( $local );
+					}
+					if ( file_exists( $local ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_exists -- Local read-only size probe; WP_Filesystem init per asset is disproportionate.
+						$size = filesize( $local ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize -- Same local probe as above.
+					}
+					if ( ! is_int( $size ) && ! is_float( $size ) ) {
+						continue;
+					}
+					if ( (int) $size <= 0 || (int) $size > 524288 ) {
+						continue;
+					}
+					$content = false;
+					if ( is_object( $this->filesystem ) && method_exists( $this->filesystem, 'get_contents' ) ) {
+						$content = $this->filesystem->get_contents( $local );
+					}
+					if ( ! is_string( $content ) ) {
+						$content = file_get_contents( $local ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local stylesheet read with size guard; WP_Filesystem tried first.
+					}
+					if ( is_string( $content ) && '' !== trim( $content ) && false !== stripos( $content, 'font-face' ) ) {
+						$chunks[] = substr( $content, 0, 524288 );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $chunks;
+		}
+
+		/**
+		 * Resolve auto-discovered font preload URLs (capped at 2, manual wins).
+		 *
+		 * Gated on `preload_settings.autoDiscoverFonts` (off by default).
+		 * Candidates come from enqueued stylesheet `@font-face` URLs,
+		 * filtered same-origin, minus manual-list overlaps (normalized), then
+		 * capped at MAX_AUTO_FONT_PRELOADS. Results are cached in a
+		 * blog-aware transient (`Util::transient_key()`, multisite-safe, 12h)
+		 * keyed by stylesheet state. Fail-open: any failure returns [].
+		 *
+		 * @since NEXT
+		 * @param string[] $manual_urls Manual font URLs (win on conflict).
+		 * @return string[] Auto font URLs (zero to two items).
+		 */
+		public function get_auto_discovered_font_urls( array $manual_urls = array() ): array {
+			try {
+				$preload_settings = $this->options['preload_settings'] ?? array();
+				if ( empty( $preload_settings['autoDiscoverFonts'] ) ) {
+					return array();
+				}
+				$manual_keys = array();
+				foreach ( $manual_urls as $m ) {
+					if ( is_string( $m ) && '' !== $m ) {
+						$manual_keys[ $this->normalize_font_url( $m ) ] = true;
+					}
+				}
+				$cache_key = '';
+				try {
+					$handles = array();
+					if ( isset( $GLOBALS['wp_styles'] ) && is_object( $GLOBALS['wp_styles'] ) && isset( $GLOBALS['wp_styles']->queue ) && is_array( $GLOBALS['wp_styles']->queue ) ) {
+						$handles = array_slice( $GLOBALS['wp_styles']->queue, 0, 10 );
+					}
+					$cache_key = Util::transient_key( 'wppo_auto_fonts_' . md5( wp_json_encode( $handles ) . '|' . implode( '|', array_keys( $manual_keys ) ) ) );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$cache_key = '';
+				}
+				if ( '' !== $cache_key && function_exists( 'get_transient' ) ) {
+					try {
+						$cached = get_transient( $cache_key );
+						if ( is_array( $cached ) ) {
+							return array_slice( array_values( array_filter( array_map( 'strval', $cached ) ) ), 0, self::MAX_AUTO_FONT_PRELOADS );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				$candidates = array();
+				foreach ( $this->collect_enqueued_font_css_chunks() as $css ) {
+					foreach ( self::extract_font_urls_from_css( $css ) as $font_url ) {
+						$abs = preg_match( '/^https?:\/\//i', $font_url ) ? $font_url : Util::cached_content_url( $font_url );
+						if ( ! $this->is_same_origin_font_url( $abs ) ) {
+							continue;
+						}
+						$key = $this->normalize_font_url( $abs );
+						if ( isset( $manual_keys[ $key ] ) || isset( $candidates[ $key ] ) ) {
+							continue;
+						}
+						$candidates[ $key ] = substr( $abs, 0, 2048 );
+						if ( count( $candidates ) >= self::MAX_AUTO_FONT_PRELOADS ) {
+							break 2;
+						}
+					}
+				}
+				$result = array_values( $candidates );
+				if ( '' !== $cache_key && function_exists( 'set_transient' ) ) {
+					try {
+						set_transient( $cache_key, $result, 12 * HOUR_IN_SECONDS );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				return $result;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
 		 * Adds preload, prefetch, and preconnect links to optimize resource loading.
 		 *
 		 * Image preloads delegate to `Image_Optimisation::preload_images()`,
@@ -5544,28 +5996,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			$preload_settings = $this->options['preload_settings'] ?? array();
 
-			// Preload fonts.
-			if ( ! empty( $preload_settings['preloadFonts'] ) && ! empty( $preload_settings['preloadFontsUrls'] ) ) {
-				$preload_fonts_urls = Util::process_urls( $preload_settings['preloadFontsUrls'] );
+			// Preload fonts (manual lists win; auto-discovery fills the gap).
+			$manual_font_urls = $this->get_manual_font_urls( is_array( $preload_settings ) ? $preload_settings : array() );
+			foreach ( $manual_font_urls as $font_url ) {
+				$dedup_key = $this->normalize_font_url( (string) $font_url );
+				if ( '' !== $dedup_key && isset( self::$font_preload_emitted[ $dedup_key ] ) ) {
+					continue;
+				}
+				if ( '' !== $dedup_key ) {
+					self::$font_preload_emitted[ $dedup_key ] = true;
+				}
+				Util::generate_preload_link( $font_url, 'preload', 'font', true, $this->font_type_for_url( (string) $font_url ) );
+			}
 
-				foreach ( $preload_fonts_urls as $font_url ) {
-					$font_url       = preg_match( '/^https?:\/\//i', $font_url ) ? $font_url : Util::cached_content_url( $font_url );
-					$font_extension = pathinfo( wp_parse_url( $font_url, PHP_URL_PATH ), PATHINFO_EXTENSION );
-					$font_type      = '';
-
-					switch ( strtolower( $font_extension ) ) {
-						case 'woff2':
-							$font_type = 'font/woff2';
-							break;
-						case 'woff':
-							$font_type = 'font/woff';
-							break;
-						case 'ttf':
-							$font_type = 'font/ttf';
-							break;
+			// Auto-discovered fonts: capped at 2 with crossorigin, manual wins.
+			if ( ! empty( $preload_settings['autoDiscoverFonts'] ) ) {
+				try {
+					$auto_fonts = $this->get_auto_discovered_font_urls( $manual_font_urls );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$auto_fonts = array();
+				}
+				$count = 0;
+				foreach ( $auto_fonts as $font_url ) {
+					if ( $count >= self::MAX_AUTO_FONT_PRELOADS ) {
+						break;
 					}
-
-					Util::generate_preload_link( $font_url, 'preload', 'font', true, $font_type );
+					if ( ! is_string( $font_url ) || '' === trim( $font_url ) ) {
+						continue;
+					}
+					$dedup_key = $this->normalize_font_url( $font_url );
+					if ( '' === $dedup_key || isset( self::$font_preload_emitted[ $dedup_key ] ) ) {
+						continue;
+					}
+					self::$font_preload_emitted[ $dedup_key ] = true;
+					Util::generate_preload_link( $font_url, 'preload', 'font', true, $this->font_type_for_url( $font_url ) );
+					++$count;
 				}
 			}
 

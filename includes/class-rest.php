@@ -1160,6 +1160,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$sanitized_settings['speculationTopUrlsLimit'] = ( $limit >= 1 && $limit <= 5 ) ? $limit : 2;
 			}
 
+			// Preserve the automatic LCP + font-discovery toggles when the
+			// request omits them (issue #1216): same partial-save hazard —
+			// an older client/partial save must not wipe the off-by-default
+			// flags. Normalized like sanitize_settings_recursively().
+			if ( 'preload_settings' === $tab && ! array_key_exists( 'autoLcpPreload', $settings ) && isset( $options['preload_settings']['autoLcpPreload'] ) ) {
+				$stored = $options['preload_settings']['autoLcpPreload'];
+				if ( is_bool( $stored ) ) {
+					$sanitized_settings['autoLcpPreload'] = $stored;
+				} else {
+					$bool                                 = filter_var( $stored, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+					$sanitized_settings['autoLcpPreload'] = null === $bool ? false : $bool;
+				}
+			}
+			if ( 'preload_settings' === $tab && ! array_key_exists( 'autoDiscoverFonts', $settings ) && isset( $options['preload_settings']['autoDiscoverFonts'] ) ) {
+				$stored = $options['preload_settings']['autoDiscoverFonts'];
+				if ( is_bool( $stored ) ) {
+					$sanitized_settings['autoDiscoverFonts'] = $stored;
+				} else {
+					$bool                                    = filter_var( $stored, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+					$sanitized_settings['autoDiscoverFonts'] = null === $bool ? false : $bool;
+				}
+			}
+
 			$merged_options         = $options;
 			$merged_options[ $tab ] = $sanitized_settings;
 
