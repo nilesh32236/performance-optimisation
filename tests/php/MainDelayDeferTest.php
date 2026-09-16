@@ -1976,6 +1976,29 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Inflated version without the genuinely-6.9 method stays on the regex
+	 * fallback: version floor alone must not route to native when
+	 * WP_Script_Modules::set_fetchpriority() is absent (backport/polyfill
+	 * with a spoofed version string).
+	 *
+	 * @since NEXT
+	 */
+	public function test_supports_native_script_fetchpriority_false_when_method_absent(): void {
+		$GLOBALS['wp_version'] = '6.9';
+		Functions\when( 'get_bloginfo' )->justReturn( '6.9' );
+		Functions\when( 'method_exists' )->alias(
+			static function ( $object_or_class, $method_name ) {
+				if ( 'WP_Script_Modules' === $object_or_class && 'set_fetchpriority' === $method_name ) {
+					return false;
+				}
+				return \method_exists( $object_or_class, $method_name );
+			}
+		);
+
+		$this->assertFalse( Main::supports_native_script_fetchpriority() );
+	}
+
+	/**
 	 * Native fetchpriority predicate cases.
 	 *
 	 * The WP_Script_Modules stand-in at the end of this file carries the
