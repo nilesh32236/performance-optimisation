@@ -690,7 +690,7 @@ const Dashboard = ( {
 						type: response.data.all_pass ? 'success' : 'warning',
 						message: response.data.all_pass
 							? __(
-									'WooCommerce self-test passed: cart, checkout and account pages bypass the cache.',
+									'WooCommerce self-test passed: cart, checkout and account pages bypass the cache; faceted URLs are skipped by preload and the guest cart survives.',
 									'performance-optimisation'
 							  )
 							: __(
@@ -1415,7 +1415,7 @@ const Dashboard = ( {
 					</button>
 					<p className="wppo-text-muted wppo-text-small">
 						{ __(
-							'Proves in one click that cart, checkout and account paths plus cart/checkout fragments (?wc-ajax=, ?add-to-cart=, plain-permalink Store API) bypass the static cache under path/query/safe-mode semantics (DONOTCACHEPAGE enforcement is assumed via Cache::is_not_cacheable(); the wppo_woo_cacheable override is out of scope).',
+							'Proves in one click that cart, checkout and account paths plus cart/checkout fragments (?wc-ajax=, ?add-to-cart=, plain-permalink Store API) bypass the static cache under path/query/safe-mode semantics, that faceted filter URLs are skipped by preload, and that a guest cart survives with page and object cache on (DONOTCACHEPAGE enforcement is assumed via Cache::is_not_cacheable(); the wppo_woo_cacheable override is out of scope). On failure, force-exclude dynamic routes plus cookie bypass (re-enable safe mode) and serve dynamic.',
 							'performance-optimisation'
 						) }
 					</p>
@@ -1438,6 +1438,14 @@ const Dashboard = ( {
 							<p className="wppo-text-muted wppo-text-small">
 								{ __(
 									'WooCommerce is not active — showing default exclusion paths read-only. Dynamic pages fail open to uncached.',
+									'performance-optimisation'
+								) }
+							</p>
+						) }
+						{ wooSelfTest.force_exclude && (
+							<p className="wppo-text-muted wppo-text-small">
+								{ __(
+									'Self-test failed: force-excluding dynamic routes plus cookie bypass (fail-closed for commerce). Re-enable WooCommerce safe mode and serve dynamic — never a stale cart.',
 									'performance-optimisation'
 								) }
 							</p>
@@ -1506,6 +1514,90 @@ const Dashboard = ( {
 													}-${ index }` }
 												>
 													<span>{ check?.path }</span>
+													{ ' — ' }
+													<span>
+														{ check?.pass
+															? __(
+																	'Bypassed (pass)',
+																	'performance-optimisation'
+															  )
+															: __(
+																	'Cacheable (fail)',
+																	'performance-optimisation'
+															  ) }
+													</span>
+												</li>
+											)
+										) }
+									</ul>
+								</>
+							) }
+						{ Array.isArray( wooSelfTest.preload_checks ) &&
+							wooSelfTest.preload_checks.length > 0 && (
+								<>
+									<p className="wppo-text-muted wppo-text-small">
+										{ __(
+											'Preload probes (faceted URLs skipped):',
+											'performance-optimisation'
+										) }
+									</p>
+									<ul
+										className="wppo-woo-self-test"
+										aria-label={ __(
+											'Preload probes (faceted URLs skipped)',
+											'performance-optimisation'
+										) }
+									>
+										{ wooSelfTest.preload_checks.map(
+											( check, index ) => (
+												<li
+													key={ `${
+														check?.path ?? 'preload'
+													}-${ index }` }
+												>
+													<span>{ check?.path }</span>
+													{ ' — ' }
+													<span>
+														{ check?.pass
+															? __(
+																	'Skipped (pass)',
+																	'performance-optimisation'
+															  )
+															: __(
+																	'Queued (fail)',
+																	'performance-optimisation'
+															  ) }
+													</span>
+												</li>
+											)
+										) }
+									</ul>
+								</>
+							) }
+						{ Array.isArray( wooSelfTest.cart_checks ) &&
+							wooSelfTest.cart_checks.length > 0 && (
+								<>
+									<p className="wppo-text-muted wppo-text-small">
+										{ __(
+											'Guest-cart survival (page + object cache on):',
+											'performance-optimisation'
+										) }
+									</p>
+									<ul
+										className="wppo-woo-self-test"
+										aria-label={ __(
+											'Guest-cart survival (page + object cache on)',
+											'performance-optimisation'
+										) }
+									>
+										{ wooSelfTest.cart_checks.map(
+											( check, index ) => (
+												<li
+													key={ `${
+														check?.key ?? 'cart'
+													}-${ index }` }
+												>
+													<span>{ check?.key }</span>
 													{ ' — ' }
 													<span>
 														{ check?.pass

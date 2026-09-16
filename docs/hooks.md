@@ -97,7 +97,7 @@ add_filter( 'wppo_should_cache_request', function( $should, $request_uri, $is_mo
 
 **WooCommerce cookie behavior note (issue #907):** only cart-content cookies (`woocommerce_items_in_cart`, `woocommerce_cart_hash`) bypass the cache; currency-switcher cookies (`WOOCS` / `wmc-current-currency`, Aelia, …) intentionally do **not** vary or bypass — there is no per-currency segmentation today. Currency vary is a future M-sized item. WooCommerce AJAX endpoints (`?wc-ajax=…`, `/wc-ajax/…`) are always excluded from serving (the `advanced-cache.php` drop-in returns early pre-boot), buffering, and storage.
 
-**WooCommerce safe mode (issue #922, extended by #962):** when `cache_settings.wooSafeMode` is `true` (default), `cart`/`checkout`/`my-account` endpoints (plus any configured custom WooCommerce page slugs resolved via `Util::get_woo_excluded_paths()`, including nested paths like `shop/basket`), Woo endpoint URLs (`is_wc_endpoint_url()`: order-pay, view-order, downloads, …), `wc-ajax` and `?add-to-cart` requests, and Woo session cookies (`wp_woocommerce_session_*` + cart fragments) are never served as cache HIT. Store API routes (`wc/store`, `wcstore`, `wp-json/wc/store*`, `wp-json/wcstore*`, including the plain-permalink `?rest_route=/wc/store/...` form) are never cached unconditionally (safe-mode independent), at serve time, write time, and in the pre-boot drop-in. The same dynamic set is auto-excluded from script delay, remove-unused-CSS, and preload scheduling. Product/order/coupon updates purge only affected URLs via `Cache::invalidate_woo_object()` (product → own permalink + category/tag archives + shop page; order/coupon → own permalink only) — never a full-cache wipe. The per-URL override below (`wppo_woo_cacheable`) applies only after WordPress boots (Cache layer); the pre-boot `advanced-cache.php` drop-in cannot run the filter and instead bakes the toggle and the configured Woo paths in at generation time — disabling safe mode (`wooSafeMode => false` via `wppo_settings`, e.g. `wp wppo settings` or import) regenerates the drop-in with only the pre-#922 guards plus the unconditional Store API guard, restoring master behaviour.
+**WooCommerce safe mode (issue #922, extended by #962, proof by #1256):** when `cache_settings.wooSafeMode` is `true` (default), `cart`/`checkout`/`my-account` endpoints (plus any configured custom WooCommerce page slugs resolved via `Util::get_woo_excluded_paths()`, including nested paths like `shop/basket`), Woo endpoint URLs (`is_wc_endpoint_url()`: order-pay, view-order, downloads, …), `wc-ajax` and `?add-to-cart` requests, faceted layered-nav queries (`filter_*`, `query_type_*`, `min_price`/`max_price`, `rating_filter`, `orderby`, `product_cat` query form, `pa_*`, `attribute_*`, `gpf_*` via `Util::is_woo_faceted_query()`), and Woo session cookies (`wp_woocommerce_session_*` + cart fragments) are never served as cache HIT. Store API routes (`wc/store`, `wcstore`, `wp-json/wc/store*`, `wp-json/wcstore*`, including the plain-permalink `?rest_route=/wc/store/...` form) are never cached unconditionally (safe-mode independent), at serve time, write time, and in the pre-boot drop-in. The same dynamic set is auto-excluded from script delay, remove-unused-CSS, and preload scheduling (faceted/functional queries are skipped by preload unconditionally, even with safe mode off). The one-click `woo_cache_self_test` REST endpoint proves exclusions on the live store: path probes, fragment probes, preload-skip probes (faceted URLs), guest-cart survival probes (cart/session cookies, wc-ajax, add-to-cart, Store API with page + object cache on), and a fail-closed `force_exclude` recommendation (true when the verdict fails: force-exclude dynamic routes plus cookie bypass and serve dynamic — never a stale cart). Product/order/coupon updates purge only affected URLs via `Cache::invalidate_woo_object()` (product → own permalink + category/tag archives + shop page; order/coupon → own permalink only) — never a full-cache wipe. The per-URL override below (`wppo_woo_cacheable`) applies only after WordPress boots (Cache layer); the pre-boot `advanced-cache.php` drop-in cannot run the filter and instead bakes the toggle and the configured Woo paths in at generation time — disabling safe mode (`wooSafeMode => false` via `wppo_settings`, e.g. `wp wppo settings` or import) regenerates the drop-in with only the pre-#922 guards plus the unconditional Store API guard, restoring master behaviour.
 
 **Query-param poisoning guard (issue #1141):** the query gate (`Util::has_uncacheable_query()`) runs **before** this filter as a security property, so this filter can no longer re-allow a functional/unknown query param (e.g. `?ref=`, `?currency=`) as cacheable — such requests always go dynamic. To treat a custom marketing param as cache-neutral, extend `wppo_cache_query_allowlist` instead (e.g. `$allowlist[] = 'ref';`). The legacy `s`/`ver`/`v` params always force dynamic even if allowlisted.
 
@@ -198,6 +198,22 @@ add_filter( 'wppo_woo_cacheable', function( $cacheable, $request_uri ) {
     }
     return $cacheable;
 }, 10, 2 );
+```
+
+---
+
+### `wppo_woo_faceted_query_params`
+Filters additional faceted layered-nav query param names treated as WooCommerce dynamic by `Util::is_woo_faceted_query()` (issue #1256). The built-in set (`filter_*`, `query_type_*`, `min_price`, `max_price`, `rating_filter`, `orderby`, `product_cat`, `pa_*`, `attribute_*`, `gpf_*`) always applies; names added here are matched case-insensitively as exact param names. Guarded by `has_filter()` — the filter only runs when a listener is present. @since NEXT.
+
+**Parameters:**
+- `$params` *(string[])* — Additional lowercase param names (e.g. `array( 'filter_brand' )` is redundant — `filter_*` already covers it; use for custom params like `'my_layer'`).
+
+**Example:**
+```php
+add_filter( 'wppo_woo_faceted_query_params', function( $params ) {
+    $params[] = 'my_layer';
+    return $params;
+} );
 ```
 
 ---

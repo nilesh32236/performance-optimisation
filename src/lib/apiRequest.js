@@ -564,9 +564,12 @@ export const fetchServerRules = ( signal ) => {
  *
  * Read-only GET proving cart/checkout/account bypass the static HTML cache
  * with DONOTCACHEPAGE honored. Returns the detected Woo paths, safe-mode
- * toggle state, and per-URL pass/fail entries.
+ * toggle state, per-URL pass/fail entries, preload-skip probes (faceted
+ * filter URLs), guest-cart survival probes, and the fail-closed
+ * force_exclude recommendation.
  *
  * @since 2.0.0
+ * @since NEXT Added preload_checks, cart_checks and force_exclude to the result (issue #1256).
  * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
  * @return {Promise<Object>} Resolved self-test result data.
  */

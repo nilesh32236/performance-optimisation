@@ -2690,6 +2690,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 							return;
 						}
 					}
+					// Faceted / Store API / functional-query URLs (issue #1256) are
+					// never warmed — unconditional on safe mode. Permalinks rarely
+					// carry a query, but filtered variants must not enter the queue.
+					try {
+						$warm_qs = (string) wp_parse_url( $url, PHP_URL_QUERY );
+						if ( '' !== $warm_qs ) {
+							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_request' ) && Util::is_woo_store_api_request( (string) wp_parse_url( $url, PHP_URL_PATH ), $warm_qs, '' ) ) {
+								return;
+							}
+							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_faceted_query' ) && Util::is_woo_faceted_query( $warm_qs ) ) {
+								return;
+							}
+							if ( method_exists( 'PerformanceOptimise\Inc\Util', 'has_uncacheable_query' ) && Util::has_uncacheable_query( $warm_qs ) ) {
+								return;
+							}
+						} elseif ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_request' ) && Util::is_woo_store_api_request( (string) wp_parse_url( $url, PHP_URL_PATH ), '', '' ) ) {
+							return;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return;
+					}
 					$url = esc_url_raw( $url );
 					if ( '' !== $url && ! as_has_scheduled_action( 'wppo_crawler_warm', array( $url ), 'performance_optimisation' ) ) {
 						as_enqueue_async_action( 'wppo_crawler_warm', array( $url ), 'performance_optimisation' );

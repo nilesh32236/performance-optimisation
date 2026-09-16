@@ -560,6 +560,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 				: PHP_EOL // Keeps the blank-line separator consistent below.
 			) .
 
+			'// WooCommerce layered-nav / faceted filter queries are dynamic and must never be served from the static cache (issue #1256).' . PHP_EOL .
+			'// Safe-mode gated like add-to-cart (parity with Cache::is_woo_excluded()); the empty-QUERY_STRING' . PHP_EOL .
+			'// gate before wppo_serve_cache_file() below remains as an unconditional backstop.' . PHP_EOL .
+			( $woo_safe_mode
+				? 'if ( ! empty( $_SERVER[\'QUERY_STRING\'] ) && preg_match( \'/(?:^|[&;])(?:filter_[^=&]*|query_type_[^=&]*|min_price|max_price|rating_filter|orderby|product_cat|pa_[^=&]*|attribute_[^=&]*|gpf_[^=&]*)(?:=|&|;|$)/i\', $_SERVER[\'QUERY_STRING\'] ) ) {' . PHP_EOL .
+				'	return;' . PHP_EOL .
+				'}' . PHP_EOL . PHP_EOL
+				: PHP_EOL // Keeps the blank-line separator consistent below.
+			) .
+
 			'// WooCommerce Store API routes are dynamic JSON and must never be served from the static cache (issue #962).' . PHP_EOL .
 			'// Unconditional on safe mode, mirroring wc-ajax: wc/store, wcstore, wp-json/wc/store, wp-json/wcstore,' . PHP_EOL .
 			'// plus the plain-permalink ?rest_route=/wc/store/... form (path is "/" there, so the' . PHP_EOL .

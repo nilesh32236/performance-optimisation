@@ -776,6 +776,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 						continue;
 					}
 
+					// WooCommerce dynamic routes (issue #962, extended #1256): never
+					// preload cart / checkout / account, custom Woo slugs, Store API
+					// routes, or faceted filter URLs. Mirrors the sitemap path below.
+					if ( $this->is_woo_excluded_url( $page_url ) ) {
+						continue;
+					}
+
+					// Editor/admin previews (issue #1097): never preload wp-admin or
+					// builder/core preview URLs. Mirrors the sitemap path below.
+					if ( $this->is_editor_preview_url( $page_url ) ) {
+						continue;
+					}
+
 					if ( $this->is_hook_arg_scheduled( 'wppo_generate_static_page', array( $page_id ), $scheduled_pages ) ) {
 						continue;
 					}
@@ -896,6 +909,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				} elseif ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_store_api_path' ) && ( Util::is_woo_store_api_path( $path ) || Util::is_woo_store_api_path( $this->get_rest_route_param( $url, $query ) ) ) ) {
 					return true;
 				} elseif ( (bool) preg_match( '#(^|/)(?:wc/store|wcstore|wp-json/wc/store|wp-json/wcstore)(/|$)#i', '/' . ltrim( $path, '/' ) ) || (bool) preg_match( '#rest_route=[^&]*(?:wc/store|wcstore)#i', rawurldecode( $query ) ) ) {
+					return true;
+				}
+				// Faceted layered-nav queries (issue #1256) are never preloaded —
+				// unconditional on safe mode: a filtered URL is dynamic by nature
+				// and warming it wastes cron slots plus risks caching filtered
+				// output. Mirrors Util::is_woo_faceted_query() with a pre-boot
+				// regex fallback for mixed-version deploys.
+				try {
+					if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_faceted_query' ) ) {
+						if ( '' !== $query && Util::is_woo_faceted_query( $query ) ) {
+							return true;
+						}
+					} elseif ( '' !== $query && (bool) preg_match( '/(?:^|[&;])(?:filter_[^=&]*|query_type_[^=&]*|min_price|max_price|rating_filter|orderby|product_cat|pa_[^=&]*|attribute_[^=&]*|gpf_[^=&]*)(?:=|&|;|$)/i', $query ) ) {
+						return true;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return true;
+				}
+				// Any other functional/unknown query (issue #1141) is never
+				// preloaded — unconditional on safe mode. Tracking-only queries
+				// (utm_*, gclid, …) still pass through to the clean URL; warming a
+				// dynamic query URL can only waste cron slots, never help.
+				try {
+					if ( method_exists( 'PerformanceOptimise\Inc\Util', 'has_uncacheable_query' ) ) {
+						if ( '' !== $query && Util::has_uncacheable_query( $query ) ) {
+							return true;
+						}
+					} elseif ( '' !== $query ) {
+						// Mixed-version fallback: without the helper, any
+						// query-bearing URL is treated as dynamic (fail-safe).
+						return true;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
 					return true;
 				}
 				if ( ! method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_safe_mode_enabled' ) || ! method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_dynamic_path' ) ) {

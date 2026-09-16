@@ -647,7 +647,7 @@ describe( 'Dashboard', () => {
 		expect( screen.getAllByText( 'Bypassed (pass)' ) ).toHaveLength( 2 );
 		expect(
 			screen.getByText(
-				'WooCommerce self-test passed: cart, checkout and account pages bypass the cache.'
+				'WooCommerce self-test passed: cart, checkout and account pages bypass the cache; faceted URLs are skipped by preload and the guest cart survives.'
 			)
 		).toBeInTheDocument();
 	} );
@@ -714,6 +714,73 @@ describe( 'Dashboard', () => {
 			screen.getByText( '/?wc-ajax=get_refreshed_fragments' )
 		).toBeInTheDocument();
 		expect( screen.getByText( '/?add-to-cart=123' ) ).toBeInTheDocument();
+	} );
+
+	it( 'renders preload-skip and guest-cart survival probes plus the fail-closed warning', async () => {
+		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+		await flushDashboardMount();
+
+		fetchWooCacheSelfTest.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				woo_active: true,
+				safe_mode: false,
+				runnable: true,
+				excluded_paths: [ 'cart', 'checkout', 'my-account' ],
+				donotcachepage_honored: true,
+				all_pass: false,
+				force_exclude: true,
+				checks: [
+					{
+						url: 'http://example.com/cart/',
+						path: '/cart/',
+						is_dynamic: true,
+						cacheable: true,
+						donotcachepage_honored: true,
+						pass: false,
+					},
+				],
+				preload_checks: [
+					{
+						url: 'http://example.com/shop/?filter_color=blue',
+						path: '/shop/?filter_color=blue',
+						skipped: true,
+						pass: true,
+					},
+				],
+				cart_checks: [
+					{
+						key: 'cart_cookie',
+						url: 'http://example.com/',
+						bypass: false,
+						cacheable: true,
+						donotcachepage_honored: true,
+						pass: false,
+					},
+				],
+			},
+		} );
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Run Woo Cache Self-Test/i } )
+		);
+
+		await waitFor( () =>
+			expect( fetchWooCacheSelfTest ).toHaveBeenCalled()
+		);
+		expect(
+			screen.getByText( 'Preload probes (faceted URLs skipped):' )
+		).toBeInTheDocument();
+		expect(
+			screen.getByText( 'Guest-cart survival (page + object cache on):' )
+		).toBeInTheDocument();
+		expect( screen.getByText( 'cart_cookie' ) ).toBeInTheDocument();
+		expect(
+			screen.getByText(
+				'Self-test failed: force-excluding dynamic routes plus cookie bypass (fail-closed for commerce). Re-enable WooCommerce safe mode and serve dynamic — never a stale cart.'
+			)
+		).toBeInTheDocument();
 	} );
 
 	it( 'shows a read-only notice when WooCommerce is inactive', async () => {
