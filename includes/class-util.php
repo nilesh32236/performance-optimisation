@@ -2122,7 +2122,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 
 			$link_tag = '<link ' . implode( ' ', array_map( fn ( $k, $v ) => $k . '="' . $v . '"', array_keys( $attributes ), $attributes ) ) . '>';
 
-			$allowed_html = array(
+			// Static-cached (issue #1216): every preload link rebuilt this
+			// allowlist per call (~10x HTML tokenizer runs per render when
+			// manual + auto + fonts + CSS combine stack up). The shape is
+			// constant so one shared copy is safe.
+			static $allowed_html = array(
 				'link' => array(
 					'rel'           => array(),
 					'href'          => array(),
@@ -4825,6 +4829,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					} else {
 						$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
 						$sanitized[ $safe_key ] = null === $bool ? true : $bool;
+					}
+					continue;
+				}
+
+				// Automatic LCP hero preload + font discovery toggles (issue
+				// #1216) — normalize malformed import shapes to bool so a
+				// string 'false' (textarea/text branches preserve strings, and
+				// !empty('false') is truthy at every read site) cannot silently
+				// enable the features. Unrecognized values fail safe to false
+				// (both features default off).
+				if ( in_array( $safe_key, array( 'autoLcpPreload', 'autoDiscoverFonts' ), true ) && ! is_array( $value ) ) {
+					if ( is_bool( $value ) ) {
+						$sanitized[ $safe_key ] = $value;
+					} else {
+						$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+						$sanitized[ $safe_key ] = null === $bool ? false : $bool;
 					}
 					continue;
 				}

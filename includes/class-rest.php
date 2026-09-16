@@ -558,7 +558,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 						// empty string, and non-image URLs must not surface as
 						// preload candidates (parity with the frontend
 						// pipeline's is_image_lcp_url() guard).
-						if ( '' !== $sanitized && $this->is_image_candidate_url( $sanitized ) ) {
+						if ( '' !== $sanitized && $this->is_image_candidate_url( $sanitized ) && $this->is_same_origin_candidate_url( $sanitized ) ) {
 							$candidate = array(
 								'url'      => $sanitized,
 								'n'        => 0,
@@ -575,8 +575,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// RUM field data wins over lab guesses when it passes the sample gate.
 			// Field-only here: the stored-PageSpeed fallback lives in its own
 			// tier below so the Optimization Detective tier stays reachable
-			// (manual > RUM field > OD > stored PageSpeed).
-			if ( null === $candidate && class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_field_lcp_url' ) ) {
+			// (manual > RUM field > OD > stored PageSpeed). Gated on the same
+			// fieldLcpOverride toggle the frontend chain uses (issue #1216) so
+			// the settings UI resolves the same hero as the frontend: with the
+			// toggle off both paths skip the RUM-field tier.
+			$field_override = false;
+			try {
+				$stored_opts    = class_exists( 'PerformanceOptimise\Inc\Util' ) ? Util::get_settings() : array();
+				$field_override = is_array( $stored_opts ) && ! empty( $stored_opts['image_optimisation']['fieldLcpOverride'] );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			if ( $field_override && null === $candidate && class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_field_lcp_url' ) ) {
 				try {
 					$field = RUM::get_field_lcp_url( $path );
 					if ( is_array( $field ) && ! empty( $field['url'] ) && is_string( $field['url'] ) ) {
@@ -596,7 +606,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					$od_available = class_exists( 'OD_URL_Metric' ) || function_exists( 'od_get_url_metrics' );
 					if ( $od_available && method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'is_enabled' ) && \PerformanceOptimise\Inc\OD_Bridge::is_enabled() ) {
 						$od_url = \PerformanceOptimise\Inc\OD_Bridge::get_lcp_url();
-						if ( is_string( $od_url ) && '' !== $od_url ) {
+						if ( is_string( $od_url ) && '' !== $od_url && $this->is_image_candidate_url( $od_url ) && $this->is_same_origin_candidate_url( $od_url ) ) {
 							$candidate = array(
 								'url'      => $od_url,
 								'n'        => 0,
@@ -720,6 +730,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					if ( 1 === preg_match( '/(^|&)(w|h|width|height|format|fit|crop|resize|quality)(=|&|$)/i', $query ) ) {
 						return true;
 					}
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Whether a REST LCP candidate URL is same-origin with this site.
+		 *
+		 * Emission-path parity with the frontend pipeline (issue #1216):
+		 * delegates to `RUM::is_same_origin_url_strict()` when available so
+		 * an unverifiable verdict maps to false. Fail-closed: any failure
+		 * returns false.
+		 *
+		 * @since NEXT
+		 * @param string $url The candidate URL.
+		 * @return bool True when the URL may surface as a candidate.
+		 */
+		private function is_same_origin_candidate_url( string $url ): bool {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'is_same_origin_url_strict' ) ) {
+					return RUM::is_same_origin_url_strict( $url );
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'is_same_origin_url' ) ) {
+					return RUM::is_same_origin_url( $url );
 				}
 				return false;
 			} catch ( \Throwable $e ) {
@@ -1183,8 +1220,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				}
 			}
 
-			$merged_options         = $options;
-			$merged_options[ $tab ] = $sanitized_settings;
+			$merged_options = $options;
+			// Merge into the existing tab (issue #1216): a partial POST (e.g.
+			// only autoLcpPreload from an older client) must not delete sibling
+			// keys like enablePreloadCache or preloadFontsUrls. The tab value is
+			// replaced only when no prior tab array exists.
+			$prior_tab              = ( isset( $options[ $tab ] ) && is_array( $options[ $tab ] ) ) ? $options[ $tab ] : array();
+			$merged_options[ $tab ] = array_merge( $prior_tab, is_array( $sanitized_settings ) ? $sanitized_settings : array() );
 
 			// One-click undo (issue #1144): snapshot the prior settings before
 			// overwriting, but skip no-op saves so an identical write does not

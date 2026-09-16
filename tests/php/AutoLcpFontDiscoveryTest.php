@@ -51,6 +51,18 @@ class AutoLcpFontDiscoveryTest extends \PHPUnit\Framework\TestCase {
 				return \json_encode( $data ); // phpcs:ignore WordPress.WP.AlternativeFunctions.json_encode_json_encode -- Test stub backing wp_json_encode().
 			}
 		);
+		// Order-independent: the strict same-origin guard parses URLs, so
+		// pin wp_parse_url explicitly (a leaked stub from an earlier test
+		// in the same process could otherwise return null).
+		// phpcs:disable WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Test-only wp_parse_url stub.
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		// phpcs:enable WordPress.WP.AlternativeFunctions.parse_url_parse_url
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'untrailingslashit' )->alias(
+			static function ( $url ) {
+				return is_string( $url ) ? rtrim( $url, '/' ) : $url;
+			}
+		);
 		Functions\stubs(
 			array(
 				'get_transient',
@@ -211,8 +223,91 @@ class AutoLcpFontDiscoveryTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Slicing parsed sources before media generation keeps gapless coverage.
+	 * Cross-origin @font-face URLs are dropped by discovery (issue #1216).
 	 */
+	public function test_auto_discovery_drops_cross_origin_fonts(): void {
+		$this->install_stubs();
+		$queued                = new \stdClass();
+		$queued->src           = '';
+		$queued->ver           = '1';
+		$queued->extra         = array(
+			'before' => array(
+				"@font-face{src:url('http://cdn.evil/fonts/evil.woff2');}"
+				. "@font-face{src:url('http://example.com/fonts/ok.woff2');}",
+			),
+		);
+		$wp_styles             = new \stdClass();
+		$wp_styles->queue      = array( 'queued' );
+		$wp_styles->registered = array( 'queued' => $queued );
+		$GLOBALS['wp_styles']  = $wp_styles;
+		try {
+			$main   = $this->make_main( array( 'autoDiscoverFonts' => true ) );
+			$result = $main->get_auto_discovered_font_urls( array() );
+			$this->assertSame( array( 'http://example.com/fonts/ok.woff2' ), $result );
+		} finally {
+			unset( $GLOBALS['wp_styles'] );
+		}
+	}
+
+	/**
+	 * Versioned font URLs (?v=1 vs ?v=2) are distinct dedup keys (issue #1216).
+	 */
+	public function test_normalize_font_url_keeps_query_distinct(): void {
+		$this->install_stubs();
+		$main   = $this->make_main( array( 'autoDiscoverFonts' => true ) );
+		$method = new \ReflectionMethod( Main::class, 'normalize_font_url' );
+		$method->setAccessible( true );
+
+		$first  = $method->invoke( $main, 'http://example.com/fonts/a.woff2?v=1' );
+		$second = $method->invoke( $main, 'http://example.com/fonts/a.woff2?v=2' );
+
+		$this->assertNotSame( $first, $second );
+		$this->assertSame( $first, $method->invoke( $main, 'http://example.com/fonts/a.woff2?v=1' ) );
+	}
+
+	/**
+	 * The strict same-origin helper proves origin; unverifiable verdicts are false.
+	 */
+	public function test_strict_same_origin_url_proves_origin(): void {
+		$this->install_stubs();
+		$this->assertTrue( \PerformanceOptimise\Inc\RUM::is_same_origin_url_strict( 'http://example.com/fonts/a.woff2' ) );
+		$this->assertTrue( \PerformanceOptimise\Inc\RUM::is_same_origin_url_strict( '/fonts/a.woff2' ) );
+		$this->assertFalse( \PerformanceOptimise\Inc\RUM::is_same_origin_url_strict( 'http://cdn.evil/fonts/a.woff2' ) );
+		$this->assertFalse( \PerformanceOptimise\Inc\RUM::is_same_origin_url_strict( 'javascript:alert(1)' ) );
+	}
+
+	/**
+	 * String 'false' for the new toggles sanitizes to bool false (issue #1216).
+	 */
+	public function test_sanitize_normalizes_auto_toggles_to_bool(): void {
+		$sanitized = Util::sanitize_settings_recursively(
+			array(
+				'preload_settings' => array(
+					'autoLcpPreload'    => 'false',
+					'autoDiscoverFonts' => 'true',
+				),
+			)
+		);
+
+		$this->assertFalse( $sanitized['preload_settings']['autoLcpPreload'] );
+		$this->assertTrue( $sanitized['preload_settings']['autoDiscoverFonts'] );
+	}
+
+	/**
+	 * The per-instance LCP memo reset clears memoized URLs (issue #1216).
+	 */
+	public function test_clear_instance_lcp_memo_resets_memos(): void {
+		Functions\when( 'is_multisite' )->justReturn( false );
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		$image_opt = new Image_Optimisation( array( 'image_optimisation' => array() ) );
+
+		$this->assertTrue( method_exists( $image_opt, 'clear_instance_lcp_memo' ) );
+		$image_opt->clear_instance_lcp_memo();
+
+		$prop = new \ReflectionProperty( Image_Optimisation::class, 'current_lcp_url' );
+		$prop->setAccessible( true );
+		$this->assertNull( $prop->getValue( $image_opt ) );
+	}
 	public function test_srcset_slice_keeps_gapless_media(): void {
 		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
 		$image_opt = new Image_Optimisation(

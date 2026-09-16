@@ -278,6 +278,20 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 		// phpcs:disable WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Test-only wp_parse_url stub.
 		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
 		// phpcs:enable WordPress.WP.AlternativeFunctions.parse_url_parse_url
+		// The manual tier also enforces the same-origin guard (issue #1216),
+		// so pin the home host the strict check compares against.
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'untrailingslashit' )->alias(
+			static function ( $url ) {
+				return is_string( $url ) ? rtrim( $url, '/' ) : $url;
+			}
+		);
+		Functions\when( 'home_url' )->alias(
+			static function ( $path = '' ) {
+				return 'https://example.com' . (string) $path;
+			}
+		);
 
 		$request  = new WP_REST_Request( array( 'post_id' => 123 ) );
 		$response = $this->rest->get_lcp_preload_candidate( $request );
@@ -385,9 +399,20 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that sample-gated RUM field data surfaces as the candidate with
 	 * source 'rum' when no manual pin exists.
+	 *
+	 * The RUM-field tier is gated on the image_optimisation fieldLcpOverride
+	 * toggle (issue #1216, parity with the frontend chain), so the settings
+	 * cache enables the toggle for this test.
 	 */
 	public function test_get_lcp_preload_candidate_returns_rum_field_candidate(): void {
 		$this->install_lcp_tier_stubs();
+		\PerformanceOptimise\Inc\Util::set_settings_cache(
+			array(
+				'image_optimisation' => array(
+					'fieldLcpOverride' => true,
+				),
+			)
+		);
 		Functions\when( 'get_transient' )->alias(
 			static function ( $key ) {
 				if ( is_string( $key ) && false !== strpos( $key, 'wppo_rum_top_' ) ) {
@@ -428,6 +453,92 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 		}
 	}
 
+	/**
+	 * Test that the RUM-field tier is skipped when fieldLcpOverride is off
+	 * (issue #1216): the settings UI resolves the same hero as the frontend
+	 * chain, which gates the RUM-field tier on the same toggle.
+	 */
+	public function test_get_lcp_preload_candidate_skips_rum_field_when_override_off(): void {
+		$this->install_lcp_tier_stubs();
+		\PerformanceOptimise\Inc\Util::set_settings_cache(
+			array(
+				'image_optimisation' => array(
+					'fieldLcpOverride' => false,
+				),
+			)
+		);
+		Functions\when( 'get_transient' )->alias(
+			static function ( $key ) {
+				if ( is_string( $key ) && false !== strpos( $key, 'wppo_rum_top_' ) ) {
+					return array(
+						'url'      => 'https://example.com/wp-content/uploads/rum-hero.jpg',
+						'n'        => 25,
+						'lastSeen' => time(),
+					);
+				}
+				return false;
+			}
+		);
+		$previous_metrics           = $GLOBALS['od_metrics_stub'] ?? null;
+		$GLOBALS['od_metrics_stub'] = array();
+		$previous_collection        = $GLOBALS['od_url_metrics'] ?? null;
+		$GLOBALS['od_url_metrics']  = array();
+
+		try {
+			$request  = new WP_REST_Request( array( 'path' => '/rum-tier-page/' ) );
+			$response = $this->rest->get_lcp_preload_candidate( $request );
+
+			$data = $response->get_data()['data'];
+			$this->assertNull( $data['candidate'] );
+			$this->assertSame( 'none', $data['source'] );
+		} finally {
+			if ( null === $previous_metrics ) {
+				unset( $GLOBALS['od_metrics_stub'] );
+			} else {
+				$GLOBALS['od_metrics_stub'] = $previous_metrics;
+			}
+			if ( null === $previous_collection ) {
+				unset( $GLOBALS['od_url_metrics'] );
+			} else {
+				$GLOBALS['od_url_metrics'] = $previous_collection;
+			}
+		}
+	}
+
+	/**
+	 * Test that a cross-origin manual picker value is rejected by the
+	 * same-origin guard (issue #1216) and fails open to a null candidate.
+	 */
+	public function test_get_lcp_preload_candidate_rejects_cross_origin_manual_url(): void {
+		$this->install_lcp_tier_stubs();
+		Functions\when( 'get_post_meta' )->justReturn( 'https://cdn.evil/hero.jpg' );
+		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'get_transient' )->justReturn( false );
+		$previous_metrics           = $GLOBALS['od_metrics_stub'] ?? null;
+		$GLOBALS['od_metrics_stub'] = array();
+		$previous_collection        = $GLOBALS['od_url_metrics'] ?? null;
+		$GLOBALS['od_url_metrics']  = array();
+
+		try {
+			$request  = new WP_REST_Request( array( 'post_id' => 123 ) );
+			$response = $this->rest->get_lcp_preload_candidate( $request );
+
+			$data = $response->get_data()['data'];
+			$this->assertNull( $data['candidate'] );
+			$this->assertSame( 'none', $data['source'] );
+		} finally {
+			if ( null === $previous_metrics ) {
+				unset( $GLOBALS['od_metrics_stub'] );
+			} else {
+				$GLOBALS['od_metrics_stub'] = $previous_metrics;
+			}
+			if ( null === $previous_collection ) {
+				unset( $GLOBALS['od_url_metrics'] );
+			} else {
+				$GLOBALS['od_url_metrics'] = $previous_collection;
+			}
+		}
+	}
 	/**
 	 * Test that the stored PageSpeed transient surfaces as the candidate
 	 * with source 'pagespeed' when RUM field data and OD both miss.

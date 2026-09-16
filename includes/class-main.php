@@ -1035,6 +1035,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// site or pre-clear state are re-verified (audit #888 finding 7).
 			add_action( 'switch_blog', array( 'PerformanceOptimise\Inc\Image_Optimisation', 'clear_runtime_caches' ) );
 			add_action( 'switch_blog', array( 'PerformanceOptimise\Inc\Main', 'reset_font_preload_emitted' ) );
+			add_action( 'switch_blog', array( 'PerformanceOptimise\Inc\Main', 'reset_image_lcp_memos' ), 10, 2 );
 			add_action( 'wppo_after_cache_clear', array( 'PerformanceOptimise\Inc\Image_Optimisation', 'clear_runtime_caches' ) );
 			$combine_for_registration = ! empty( $this->options['file_optimisation']['combineCSS'] );
 			if ( ! $combine_for_registration && ! empty( $staged_for_registration['combineCSS'] ) ) {
@@ -5620,6 +5621,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Reset the per-instance LCP memos on the shared image-optimisation instance.
+		 *
+		 * Wired to `switch_blog` in {@see init()} (issue #1216): the
+		 * Image_Optimisation instance is long-lived via Main, so its
+		 * memoized LCP URLs would otherwise leak across sites in
+		 * `switch_to_blog()` requests. Accepts the switch_blog args so the
+		 * hook passes ($new_blog_id, $prev_blog_id) without warnings.
+		 * Also called directly in tests.
+		 *
+		 * @since NEXT
+		 * @param int $new_blog_id New blog ID (unused).
+		 * @param int $prev_blog_id Previous blog ID (unused).
+		 * @return void
+		 */
+		public static function reset_image_lcp_memos( $new_blog_id = 0, $prev_blog_id = 0 ): void {
+			unset( $new_blog_id, $prev_blog_id );
+			try {
+				$main = self::get_instance();
+				if ( $main instanceof self && isset( $main->image_optimisation ) && $main->image_optimisation instanceof \PerformanceOptimise\Inc\Image_Optimisation ) {
+					$main->image_optimisation->clear_instance_lcp_memo();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
 		 * Extract font file URLs from a CSS string.
 		 *
 		 * Pure helper (issue #1216): matches `url(...)` values whose path
@@ -5757,6 +5785,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					}
 					return true;
 				}
+				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'is_same_origin_url_strict' ) ) {
+					return \PerformanceOptimise\Inc\RUM::is_same_origin_url_strict( $url );
+				}
 				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'is_same_origin_url' ) ) {
 					return \PerformanceOptimise\Inc\RUM::is_same_origin_url( $url );
 				}
@@ -5775,16 +5806,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Normalize a font URL for manual-wins dedup.
 		 *
+		 * Builds on `Util::normalize_url()` (host + path, size-suffix aware)
+		 * but re-attaches the truncated query string (issue #1216): font
+		 * files versioned via `?v=1` vs `?v=2` are distinct resources and must
+		 * not collapse to one tag. Long-lived processes (CLI/cron rendering N
+		 * pages with one instance) must call {@see reset_font_preload_emitted()}
+		 * between pages or the per-request emitted guard skips page-2 repeats.
+		 *
 		 * @since NEXT
 		 * @param string $url Font URL.
 		 * @return string Dedup key.
 		 */
 		private function normalize_font_url( string $url ): string {
 			try {
+				$query = '';
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$q = wp_parse_url( $url, PHP_URL_QUERY );
+					if ( is_string( $q ) && '' !== $q ) {
+						$query = '?' . substr( $q, 0, 256 );
+					}
+				} else {
+					$qpos = strpos( $url, '?' );
+					if ( false !== $qpos ) {
+						$query = '?' . substr( substr( $url, $qpos + 1 ), 0, 256 );
+					}
+				}
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'normalize_url' ) ) {
 					$norm = Util::normalize_url( $url );
 					if ( '' !== $norm ) {
-						return $norm;
+						return $norm . $query;
 					}
 				}
 			} catch ( \Throwable $e ) {
@@ -5853,7 +5903,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( empty( $queue ) ) {
 					return $chunks;
 				}
-				$scanned = 0;
+				// Total-bytes budget (issue #1216): a cold miss may probe up to
+				// 10 handles x 512KB; stop reading files past ~1MB total so a
+				// font-less theme cannot block TTFB on useless disk I/O.
+				$total_bytes = 0;
+				$scanned     = 0;
 				foreach ( array_slice( $queue, 0, 10 ) as $handle ) {
 					if ( $scanned >= 10 ) {
 						break;
@@ -5933,11 +5987,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						$content = file_get_contents( $local ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local stylesheet read with size guard; WP_Filesystem tried first.
 					}
 					if ( is_string( $content ) && '' !== trim( $content ) && false !== stripos( $content, 'font-face' ) ) {
-						$chunks[] = array(
+						$total_bytes += strlen( $content );
+						$chunks[]     = array(
 							'css'  => substr( $content, 0, 524288 ),
 							'base' => $abs_src,
 						);
 						++$scanned;
+						if ( $total_bytes > 1048576 ) {
+							break;
+						}
 					}
 				}
 			} catch ( \Throwable $e ) {
@@ -5974,109 +6032,162 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( preg_match( '/^https?:\/\//i', $font_url ) || 0 === strpos( $font_url, '//' ) ) {
 					return substr( $font_url, 0, 2048 );
 				}
-			$is_root_relative = 0 === strpos( $font_url, '/' );
-			if ( $is_root_relative && function_exists( 'home_url' ) ) {
-				$home = (string) home_url();
-				return substr( $this->normalize_font_href( rtrim( $home, '/' ) . $font_url ), 0, 2048 );
-			}
-			if ( '' !== $base_src ) {
-				$base_path = strtok( $base_src, '?#' );
-				if ( ! is_string( $base_path ) || '' === $base_path ) {
-					$base_path = $base_src;
+				$is_root_relative = 0 === strpos( $font_url, '/' );
+				if ( $is_root_relative && function_exists( 'home_url' ) ) {
+					$home = (string) home_url();
+					return substr( $this->normalize_font_href( rtrim( $home, '/' ) . $font_url ), 0, 2048 );
 				}
-				$dir = rtrim( dirname( $base_path ), '/' ) . '/';
-				return substr( $this->normalize_font_href( $dir . ltrim( $font_url, '/' ) ), 0, 2048 );
-			}
-			if ( function_exists( 'home_url' ) ) {
-				$home = (string) home_url();
-				return substr( $this->normalize_font_href( rtrim( $home, '/' ) . '/' . ltrim( $font_url, '/' ) ), 0, 2048 );
-			}
-			return substr( $this->normalize_font_href( $font_url ), 0, 2048 );
-		} catch ( \Throwable $e ) {
-			unset( $e );
-			return substr( trim( $font_url ), 0, 2048 );
-		}
-	}
-
-	/**
-	 * Canonicalize a font href by resolving dot-segments.
-	 *
-	 * Resolves `/./` and `/../` against the directory path so
-	 * stylesheet-relative refs (`../fonts/x.woff2`) emit canonical
-	 * preload hrefs for dedup, caching, and audit tooling (issue
-	 * #1216). Query strings and fragments are preserved. Browsers
-	 * resolve uncanonical hrefs identically, so this is purely a
-	 * canonicalization step. Never fatals: any failure returns the
-	 * input unchanged.
-	 *
-	 * @since NEXT
-	 * @param string $href Absolute or protocol-relative href.
-	 * @return string Canonicalized href.
-	 */
-	private function normalize_font_href( string $href ): string {
-		try {
-			$fragment = '';
-			$hash_pos = strpos( $href, '#' );
-			if ( false !== $hash_pos ) {
-				$fragment = substr( $href, $hash_pos );
-				$href     = substr( $href, 0, $hash_pos );
-			}
-			$query = '';
-			$q_pos = strpos( $href, '?' );
-			if ( false !== $q_pos ) {
-				$query = substr( $href, $q_pos );
-				$href  = substr( $href, 0, $q_pos );
-			}
-			if ( preg_match( '#^(https?://[^/]+)(/.*)$#i', $href, $m ) ) {
-				return $m[1] . $this->normalize_font_path( $m[2] ) . $query . $fragment;
-			}
-			if ( 0 === strpos( $href, '//' ) && preg_match( '#^(//[^/]+)(/.*)$#', $href, $m ) ) {
-				return $m[1] . $this->normalize_font_path( $m[2] ) . $query . $fragment;
-			}
-			if ( 0 === strpos( $href, '/' ) ) {
-				return $this->normalize_font_path( $href ) . $query . $fragment;
-			}
-			return $href . $query . $fragment;
-		} catch ( \Throwable $e ) {
-			unset( $e );
-			return $href;
-		}
-	}
-
-	/**
-	 * Resolve dot-segments in a URL path.
-	 *
-	 * @since NEXT
-	 * @param string $path URL path starting with `/`.
-	 * @return string Normalized path.
-	 */
-	private function normalize_font_path( string $path ): string {
-		$is_absolute = 0 === strpos( $path, '/' );
-		$parts       = explode( '/', $path );
-		$stack       = array();
-		foreach ( $parts as $part ) {
-			if ( '' === $part || '.' === $part ) {
-				continue;
-			}
-			if ( '..' === $part ) {
-				if ( ! empty( $stack ) ) {
-					array_pop( $stack );
+				if ( '' !== $base_src ) {
+					$base_path = strtok( $base_src, '?#' );
+					if ( ! is_string( $base_path ) || '' === $base_path ) {
+						$base_path = $base_src;
+					}
+					$dir = rtrim( dirname( $base_path ), '/' ) . '/';
+					return substr( $this->normalize_font_href( $dir . ltrim( $font_url, '/' ) ), 0, 2048 );
 				}
-				continue;
+				if ( function_exists( 'home_url' ) ) {
+					$home = (string) home_url();
+					return substr( $this->normalize_font_href( rtrim( $home, '/' ) . '/' . ltrim( $font_url, '/' ) ), 0, 2048 );
+				}
+				return substr( $this->normalize_font_href( $font_url ), 0, 2048 );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return substr( trim( $font_url ), 0, 2048 );
 			}
-			$stack[] = $part;
 		}
-		$normalized = implode( '/', $stack );
-		if ( $is_absolute ) {
-			$normalized = '/' . $normalized;
+
+		/**
+		 * Canonicalize a font href by resolving dot-segments.
+		 *
+		 * Resolves `/./` and `/../` against the directory path so
+		 * stylesheet-relative refs (`../fonts/x.woff2`) emit canonical
+		 * preload hrefs for dedup, caching, and audit tooling (issue
+		 * #1216). Query strings and fragments are preserved. Browsers
+		 * resolve uncanonical hrefs identically, so this is purely a
+		 * canonicalization step. Never fatals: any failure returns the
+		 * input unchanged.
+		 *
+		 * @since NEXT
+		 * @param string $href Absolute or protocol-relative href.
+		 * @return string Canonicalized href.
+		 */
+		private function normalize_font_href( string $href ): string {
+			try {
+				$fragment = '';
+				$hash_pos = strpos( $href, '#' );
+				if ( false !== $hash_pos ) {
+					$fragment = substr( $href, $hash_pos );
+					$href     = substr( $href, 0, $hash_pos );
+				}
+				$query = '';
+				$q_pos = strpos( $href, '?' );
+				if ( false !== $q_pos ) {
+					$query = substr( $href, $q_pos );
+					$href  = substr( $href, 0, $q_pos );
+				}
+				if ( preg_match( '#^(https?://[^/]+)(/.*)$#i', $href, $m ) ) {
+					return $m[1] . $this->normalize_font_path( $m[2] ) . $query . $fragment;
+				}
+				if ( 0 === strpos( $href, '//' ) && preg_match( '#^(//[^/]+)(/.*)$#', $href, $m ) ) {
+					return $m[1] . $this->normalize_font_path( $m[2] ) . $query . $fragment;
+				}
+				if ( 0 === strpos( $href, '/' ) ) {
+					return $this->normalize_font_path( $href ) . $query . $fragment;
+				}
+				return $href . $query . $fragment;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $href;
+			}
 		}
-		if ( '' !== $normalized && '/' !== $normalized && str_ends_with( $path, '/' ) && ! str_ends_with( $normalized, '/' ) ) {
-			$normalized .= '/';
+
+		/**
+		 * Resolve dot-segments in a URL path.
+		 *
+		 * @since NEXT
+		 * @param string $path URL path starting with `/`.
+		 * @return string Normalized path.
+		 */
+		private function normalize_font_path( string $path ): string {
+			$is_absolute = 0 === strpos( $path, '/' );
+			$parts       = explode( '/', $path );
+			$stack       = array();
+			foreach ( $parts as $part ) {
+				if ( '' === $part || '.' === $part ) {
+					continue;
+				}
+				if ( '..' === $part ) {
+					if ( ! empty( $stack ) ) {
+						array_pop( $stack );
+					}
+					continue;
+				}
+				$stack[] = $part;
+			}
+			$normalized = implode( '/', $stack );
+			if ( $is_absolute ) {
+				$normalized = '/' . $normalized;
+			}
+			if ( '' !== $normalized && '/' !== $normalized && str_ends_with( $path, '/' ) && ! str_ends_with( $normalized, '/' ) ) {
+				$normalized .= '/';
+			}
+			if ( '' === $normalized && $is_absolute ) {
+				$normalized = '/';
+			}
+			return $normalized;
 		}
-		if ( '' === $normalized && $is_absolute ) {
-			$normalized = '/';
-		}
-		return $normalized;
+
+		/**
+		 * Best-effort file stamp (mtime:size) for a stylesheet src.
+		 *
+		 * Used only for the auto-font transient key so same-ver CSS edits bust
+		 * the 12h cache (issue #1216). Mirrors the ABSPATH containment in
+		 * {@see collect_enqueued_font_css_chunks()}; unresolvable or
+		 * non-local files yield '' (key falls back to src|ver). Never fatals.
+		 *
+		 * @since NEXT
+		 * @param string $src Stylesheet src as registered.
+		 * @return string Stamp shaped as "mtime:size" or ''.
+		 */
+		private function font_stylesheet_stamp( string $src ): string {
+			try {
+				$src = trim( $src );
+				if ( '' === $src ) {
+					return '';
+				}
+				$abs_src = preg_match( '/^(?:https?:)?\/\//i', $src ) ? $src : ( class_exists( 'PerformanceOptimise\Inc\Util' ) ? Util::cached_content_url( $src ) : $src );
+				if ( ! $this->is_same_origin_font_url( $abs_src ) ) {
+					return '';
+				}
+				$path = function_exists( 'wp_parse_url' ) ? wp_parse_url( $abs_src, PHP_URL_PATH ) : parse_url( $abs_src, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url() is unavailable.
+				if ( ! is_string( $path ) || '' === $path ) {
+					return '';
+				}
+				$local = ( defined( 'ABSPATH' ) ? (string) ABSPATH : '' ) . ltrim( $path, '/' );
+				if ( function_exists( 'wp_normalize_path' ) ) {
+					$local = wp_normalize_path( $local );
+				}
+				$real = realpath( $local );
+				if ( ! is_string( $real ) ) {
+					return '';
+				}
+				if ( function_exists( 'wp_normalize_path' ) ) {
+					$real = wp_normalize_path( $real );
+				}
+				$base = ( function_exists( 'wp_normalize_path' ) && defined( 'ABSPATH' ) ) ? wp_normalize_path( (string) ABSPATH ) : (string) ( defined( 'ABSPATH' ) ? ABSPATH : '' );
+				if ( '' === $base || 0 !== strpos( $real, rtrim( $base, '/' ) . '/' ) ) {
+					return '';
+				}
+				$mtime = filemtime( $real ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filemtime -- Local read-only key stamp; WP_Filesystem init per asset is disproportionate.
+				$size  = filesize( $real ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize -- Same local stamp as above.
+				if ( false === $mtime && false === $size ) {
+					return '';
+				}
+				return ( false === $mtime ? '0' : (string) (int) $mtime ) . ':' . ( false === $size ? '0' : (string) (int) $size );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
 		}
 
 		/**
@@ -6105,54 +6216,66 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						$manual_keys[ $this->normalize_font_url( $m ) ] = true;
 					}
 				}
-			$cache_key = '';
-			try {
-				$handles = array();
-				$srcs    = array();
-				if ( isset( $GLOBALS['wp_styles'] ) && is_object( $GLOBALS['wp_styles'] ) && isset( $GLOBALS['wp_styles']->queue ) && is_array( $GLOBALS['wp_styles']->queue ) ) {
-					$handles    = array_slice( $GLOBALS['wp_styles']->queue, 0, 10 );
-					$registered = $GLOBALS['wp_styles']->registered ?? array();
-					if ( ! is_array( $registered ) ) {
-						$registered = array();
-					}
-					foreach ( $handles as $h ) {
-						$s      = $registered[ $h ] ?? null;
-						$srcs[] = is_object( $s ) ? (string) ( (string) ( $s->src ?? '' ) . '|' . (string) ( $s->ver ?? '' ) ) : (string) $h;
-					}
-				}
-				// Inline before/after CSS is also scanned by
-				// collect_enqueued_font_css_chunks(), so hash it into the
-				// key (issue #1216): editing Customizer additional CSS or
-				// inline @font-face rules must bust the 12h cache. Reads
-				// are in-memory only (no file I/O) so the transient still
-				// avoids stylesheet disk reads on cache hits.
-				$inline_hashes = array();
-				if ( ! empty( $handles ) && isset( $GLOBALS['wp_styles'] ) && is_object( $GLOBALS['wp_styles'] ) ) {
-					$registered = $GLOBALS['wp_styles']->registered ?? array();
-					if ( ! is_array( $registered ) ) {
-						$registered = array();
-					}
-					foreach ( $handles as $h ) {
-						$s = $registered[ $h ] ?? null;
-						if ( ! is_object( $s ) ) {
-							continue;
+				$cache_key = '';
+				try {
+					$handles = array();
+					$srcs    = array();
+					// Home host + scheme bind the key (issue #1216): a
+					// poisoned/stale transient (object-cache write, domain
+					// migration) must not serve another origin's font list.
+					$home_id = function_exists( 'home_url' ) ? strtolower( (string) home_url() ) : '';
+					if ( isset( $GLOBALS['wp_styles'] ) && is_object( $GLOBALS['wp_styles'] ) && isset( $GLOBALS['wp_styles']->queue ) && is_array( $GLOBALS['wp_styles']->queue ) ) {
+						$handles    = array_slice( $GLOBALS['wp_styles']->queue, 0, 10 );
+						$registered = $GLOBALS['wp_styles']->registered ?? array();
+						if ( ! is_array( $registered ) ) {
+							$registered = array();
 						}
-						$extra = $s->extra ?? array();
-						if ( ! is_array( $extra ) ) {
-							continue;
+						foreach ( $handles as $h ) {
+							$s   = $registered[ $h ] ?? null;
+							$src = is_object( $s ) ? (string) ( $s->src ?? '' ) : '';
+							$ver = is_object( $s ) ? (string) ( $s->ver ?? '' ) : '';
+							// Same-ver CSS edits (direct edit, minify/combine
+							// rewrite, child-theme override) must bust the 12h
+							// cache (issue #1216): fold filemtime + filesize
+							// into the key best-effort. Unresolvable files
+							// contribute src|ver only (never fatal).
+							$stamp  = $this->font_stylesheet_stamp( $src );
+							$srcs[] = (string) $h . '|' . $src . '|' . $ver . '|' . $stamp;
 						}
-						foreach ( array( 'after', 'before' ) as $key ) {
-							if ( empty( $extra[ $key ] ) ) {
+					}
+					// Inline before/after CSS is also scanned by
+					// collect_enqueued_font_css_chunks(), so hash it into the
+					// key (issue #1216): editing Customizer additional CSS or
+					// inline @font-face rules must bust the 12h cache. Reads
+					// are in-memory only (no file I/O) so the transient still
+					// avoids stylesheet disk reads on cache hits.
+					$inline_hashes = array();
+					if ( ! empty( $handles ) && isset( $GLOBALS['wp_styles'] ) && is_object( $GLOBALS['wp_styles'] ) ) {
+						$registered = $GLOBALS['wp_styles']->registered ?? array();
+						if ( ! is_array( $registered ) ) {
+							$registered = array();
+						}
+						foreach ( $handles as $h ) {
+							$s = $registered[ $h ] ?? null;
+							if ( ! is_object( $s ) ) {
 								continue;
 							}
-							$inline = is_array( $extra[ $key ] ) ? implode( "\n", $extra[ $key ] ) : (string) $extra[ $key ];
-							if ( '' !== trim( $inline ) && false !== stripos( $inline, 'font-face' ) ) {
-								$inline_hashes[] = md5( substr( $inline, 0, 524288 ) );
+							$extra = $s->extra ?? array();
+							if ( ! is_array( $extra ) ) {
+								continue;
+							}
+							foreach ( array( 'after', 'before' ) as $key ) {
+								if ( empty( $extra[ $key ] ) ) {
+									continue;
+								}
+								$inline = is_array( $extra[ $key ] ) ? implode( "\n", $extra[ $key ] ) : (string) $extra[ $key ];
+								if ( '' !== trim( $inline ) && false !== stripos( $inline, 'font-face' ) ) {
+									$inline_hashes[] = md5( substr( $inline, 0, 524288 ) );
+								}
 							}
 						}
 					}
-				}
-				$cache_key = Util::transient_key( 'wppo_auto_fonts_' . md5( wp_json_encode( $srcs ) . '|' . wp_json_encode( $inline_hashes ) . '|' . implode( '|', array_keys( $manual_keys ) ) ) );
+					$cache_key = Util::transient_key( 'wppo_auto_fonts_' . md5( $home_id . '|' . wp_json_encode( $srcs ) . '|' . wp_json_encode( $inline_hashes ) . '|' . implode( '|', array_keys( $manual_keys ) ) ) );
 				} catch ( \Throwable $e ) {
 					unset( $e );
 					$cache_key = '';
@@ -6161,7 +6284,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					try {
 						$cached = get_transient( $cache_key );
 						if ( is_array( $cached ) ) {
-							return array_slice( array_values( array_filter( array_map( 'strval', $cached ) ) ), 0, self::MAX_AUTO_FONT_PRELOADS );
+							// Re-validate cached values on read (issue #1216):
+							// a poisoned/stale transient must not emit
+							// cross-origin fonts or shadow the manual list.
+							$clean = array();
+							foreach ( $cached as $cu ) {
+								$cu = is_string( $cu ) ? substr( trim( $cu ), 0, 2048 ) : '';
+								if ( '' === $cu || ! $this->is_same_origin_font_url( $cu ) ) {
+									continue;
+								}
+								$ck = $this->normalize_font_url( $cu );
+								if ( '' === $ck || isset( $manual_keys[ $ck ] ) || isset( $clean[ $ck ] ) ) {
+									continue;
+								}
+								$clean[ $ck ] = $cu;
+								if ( count( $clean ) >= self::MAX_AUTO_FONT_PRELOADS ) {
+									break;
+								}
+							}
+							return array_values( $clean );
 						}
 					} catch ( \Throwable $e ) {
 						unset( $e );
@@ -6223,6 +6364,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 1.0.0
 		 */
 		public function add_preload_prefetch_preconnect() {
+			// Non-frontend contexts never need preload hints (issue #1216):
+			// skip the font/settings lookups entirely. Util::generate_preload_link()
+			// already suppresses echo in admin/ajax/cron, but the queries
+			// (get_manual_font_urls, post meta, front-page options) would
+			// still run without this early bail.
+			try {
+				if ( function_exists( 'is_admin' ) && is_admin() ) {
+					return;
+				}
+				if ( function_exists( 'is_feed' ) && is_feed() ) {
+					return;
+				}
+				if ( function_exists( 'is_embed' ) && is_embed() ) {
+					return;
+				}
+				if ( function_exists( 'is_preview' ) && is_preview() ) {
+					return;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 
 			$preload_settings = $this->options['preload_settings'] ?? array();
 

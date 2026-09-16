@@ -37,6 +37,8 @@ const PreloadSettings = ( { options = {} } ) => {
 		speculationMode: 'prefetch',
 		speculationEagerness: 'conservative',
 		speculationExcludeUrls: '',
+		speculationRumGating: true,
+		speculationTopUrlsLimit: 2,
 		...options,
 	};
 
@@ -72,6 +74,8 @@ const PreloadSettings = ( { options = {} } ) => {
 		options.speculationMode,
 		options.speculationEagerness,
 		options.speculationExcludeUrls,
+		options.speculationRumGating,
+		options.speculationTopUrlsLimit,
 	] );
 	useUnsavedChanges( settings, baseline );
 
@@ -155,6 +159,8 @@ const PreloadSettings = ( { options = {} } ) => {
 		options.speculationMode,
 		options.speculationEagerness,
 		options.speculationExcludeUrls,
+		options.speculationRumGating,
+		options.speculationTopUrlsLimit,
 	] );
 
 	const speculationRules =

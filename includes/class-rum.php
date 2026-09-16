@@ -1129,6 +1129,67 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		}
 
 		/**
+		 * Whether a URL is same-origin, strict variant for emission paths.
+		 *
+		 * Wraps {@see is_same_origin_url()} but maps the unverifiable cases to
+		 * false (issue #1216): when the home host is undeterminable, when
+		 * `wp_parse_url` is unavailable, or on Throwable, the legacy helper
+		 * fails open to true for non-emission callers — but a preload `<link>`
+		 * must never be emitted on an unverifiable verdict. Emission-path
+		 * guards (font/LCP preload) must call this method.
+		 *
+		 * @since NEXT
+		 * @param string $url Candidate URL.
+		 * @return bool True only when same-origin is positively proven.
+		 */
+		public static function is_same_origin_url_strict( string $url ): bool {
+			try {
+				$url = trim( $url );
+				if ( '' === $url ) {
+					return false;
+				}
+				$lower = strtolower( ltrim( $url ) );
+				if ( str_starts_with( $lower, 'data:' ) || str_starts_with( $lower, 'blob:' ) || str_starts_with( $lower, 'javascript:' ) || str_starts_with( $lower, 'vbscript:' ) || str_starts_with( $lower, 'mailto:' ) ) {
+					return false;
+				}
+				// Root-relative and bare relative paths are same-origin by
+				// construction (unless scheme-like).
+				if ( 0 === strpos( $url, '/' ) && 0 !== strpos( $url, '//' ) ) {
+					return true;
+				}
+				if ( 0 === strpos( ltrim( $url ), '//' ) ) {
+					// Protocol-relative: host must be proven below.
+				} elseif ( false === strpos( $url, '://' ) ) {
+					$before_slash = strtok( $url, '/\\?#' );
+					if ( is_string( $before_slash ) && false !== strpos( $before_slash, ':' ) ) {
+						return false;
+					}
+					return true;
+				}
+				if ( ! function_exists( 'wp_parse_url' ) ) {
+					return false;
+				}
+				$host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
+				if ( '' === $host ) {
+					return false;
+				}
+				$home = '';
+				try {
+					$home_url = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::cached_home_url() : ( function_exists( 'home_url' ) ? home_url() : '' );
+					$home     = strtolower( (string) wp_parse_url( $home_url, PHP_URL_HOST ) );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				if ( '' === $home ) {
+					return false;
+				}
+				return $host === $home;
+			} catch ( \Throwable $e ) {
+				return false;
+			}
+		}
+
+		/**
 		 * Buffer a sample to a transient queue and flush periodically.
 		 *
 		 * Replaces the previous per-beacon get_option+update_option with a

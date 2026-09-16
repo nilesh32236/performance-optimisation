@@ -270,6 +270,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Reset the per-instance LCP memos ($current_lcp_url, $lazy_lcp_exclusion_url).
+		 *
+		 * The static {@see clear_runtime_caches()} cannot reach instance state,
+		 * so long-lived processes (switch_to_blog, CLI/cron rendering N pages
+		 * with one shared instance) must call this between sites/pages (issue
+		 * #1216); otherwise the second site reuses the first site's memoized
+		 * LCP URL. Wired to `switch_blog` via Main alongside
+		 * {@see clear_runtime_caches()}.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public function clear_instance_lcp_memo(): void {
+			$this->current_lcp_url        = null;
+			$this->lazy_lcp_exclusion_url = null;
+		}
+
+		/**
 		 * Constructor.
 		 *
 		 * @since 1.0.0
@@ -1940,10 +1958,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			// as an absolute URL vs a relative URL (or http vs https), but
 			// exactly one link tag must be emitted per resource (query-string
 			// versions still count as distinct resources). Manual items are
-			// ordered first so they win the dedup and are never dropped:
-			// the MAX_LCP_PRELOADS cap applies only to the auto-expanded
-			// tail (issue #1216), so srcset expansion can never emit N
-			// media-variant links while manual/meta preloads are preserved.
+			// ordered first so they win the dedup. MAX_LCP_PRELOADS is
+			// intentionally an auto-tail-only cap (issue #1216): manual/meta
+			// preloads are explicit opt-in and are never dropped, while the
+			// auto srcset expansion is bounded so one hero cannot fan out to N
+			// high-priority hints and contend with the hero fetch.
 			$seen   = array();
 			$unique = array();
 			foreach ( $manual as $item ) {
@@ -2114,6 +2133,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					}
 					return true;
 				}
+				// RUM unavailable: fail closed (reject the absolute URL) so a
+				// possibly cross-origin candidate is never preloaded. The
+				// caller (`resolve_auto_lcp_url()`) falls through to the next
+				// tier, preserving fail-open page behaviour.
+				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'is_same_origin_url_strict' ) ) {
+					return \PerformanceOptimise\Inc\RUM::is_same_origin_url_strict( $url );
+				}
 				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'is_same_origin_url' ) ) {
 					return \PerformanceOptimise\Inc\RUM::is_same_origin_url( $url );
 				}
@@ -2281,24 +2307,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 */
 		private function resolve_auto_lcp_url( ?string $buffer = null ): string {
 			// Manual per-post LCP picker — pinned hero wins over auto-detect.
+			// Guarded like every other tier (issue #1216): the stored picker
+			// value must pass both the image and same-origin checks so a
+			// cross-origin manual value can never emit a cross-origin preload.
 			try {
 				$manual = $this->get_manual_lcp_url();
-				if ( '' !== $manual ) {
+				if ( '' !== $manual && $this->is_image_lcp_url( $manual ) && $this->is_same_origin_preload_url( $manual ) ) {
 					return $manual;
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
-		// P0: Optimization Detective — real-visit hero wins. Guarded via
-		// class_exists/function_exists plus has_filter on the OD opt-out
-		// hook (issue #1216): an explicit wppo_od_should_optimize=false
-		// filter skips the OD tier and falls through to stored/heuristic.
-		if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
-			try {
-				$od_available = class_exists( 'OD_URL_Metric' ) || function_exists( 'od_get_url_metrics' );
-				if ( $od_available ) {
-					$od_opt_in = $this->is_od_opted_in();
-					if ( $od_opt_in ) {
+			// P0: Optimization Detective — real-visit hero wins. Guarded via
+			// OD_Bridge::is_enabled() plus the wppo_od_should_optimize opt-out
+			// in is_od_opted_in() (issue #1216): an explicit
+			// wppo_od_should_optimize=false filter skips the OD tier and falls
+			// through to stored/heuristic.
+			if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
+				try {
+					$od_available = class_exists( 'OD_URL_Metric' ) || function_exists( 'od_get_url_metrics' );
+					if ( $od_available ) {
+						$od_opt_in = $this->is_od_opted_in();
+						if ( $od_opt_in ) {
 							$od_url = \PerformanceOptimise\Inc\OD_Bridge::get_lcp_url();
 							if ( is_string( $od_url ) && '' !== $od_url && $this->is_image_lcp_url( $od_url ) && $this->is_same_origin_preload_url( $od_url ) ) {
 								return $od_url;
@@ -2557,17 +2587,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			if ( null !== $this->current_lcp_url ) {
 				return $this->current_lcp_url;
 			}
-		$this->current_lcp_url = '';
-		// Priority 0: Optimization Detective — LCP tag per viewport group (mobile/desktop).
-		// Honours the wppo_od_should_optimize opt-out (issue #1216) via
-		// is_od_opted_in() so a false filter disables OD-driven LCP here
-		// exactly as it does in resolve_auto_lcp_url(). OD_Bridge::get_lcp_url()
-		// additionally gates on OD_Bridge::is_enabled(); this explicit check
-		// keeps both paths in parity even if the bridge logic drifts.
-		if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) && $this->is_od_opted_in() ) {
+			$this->current_lcp_url = '';
+			// Priority 0: Optimization Detective — LCP tag per viewport group (mobile/desktop).
+			// Honours the wppo_od_should_optimize opt-out (issue #1216) via
+			// is_od_opted_in() so a false filter disables OD-driven LCP here
+			// exactly as it does in resolve_auto_lcp_url(). OD_Bridge::get_lcp_url()
+			// additionally gates on OD_Bridge::is_enabled(); this explicit check
+			// keeps both paths in parity even if the bridge logic drifts.
+			// The stored OD URL is validated like every other emission tier
+			// (image + same-origin) so a cross-origin OD value never resolves.
+			if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) && $this->is_od_opted_in() ) {
 				try {
 					$od_url = \PerformanceOptimise\Inc\OD_Bridge::get_lcp_url();
-					if ( '' !== $od_url ) {
+					if ( is_string( $od_url ) && '' !== $od_url && $this->is_image_lcp_url( $od_url ) && $this->is_same_origin_preload_url( $od_url ) ) {
 						$this->current_lcp_url = $od_url;
 						return $this->current_lcp_url;
 					}
@@ -2781,6 +2813,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return array List of preload items from meta.
 		 */
 		private function get_meta_preload_data(): array {
+			// Skip the post-meta lookup outside singular views (issue #1216):
+			// get_the_ID() is meaningless on archives and the meta query
+			// would run on every wp_head without this guard.
+			if ( function_exists( 'is_singular' ) && ! is_singular() ) {
+				return array();
+			}
 			$page_img_urls = get_post_meta( get_the_ID(), '_wppo_preload_image_url', true );
 
 			if ( empty( $page_img_urls ) ) {
@@ -2966,20 +3004,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$img_url = trim( $img_url );
 			$media   = '';
 
+			// Non-absolute hero URLs resolve against home_url() (issue #1216):
+			// root-relative (/uploads/hero.jpg) appends to the home URL and
+			// page-relative (images/hero.jpg) resolves against the home path,
+			// never against WP_CONTENT_URL, so the preload href matches the
+			// emitted <img src>.
+			$resolve_relative = function ( string $url ): string {
+				$url = trim( $url );
+				if ( '' === $url || 0 === strpos( $url, 'http' ) || 0 === strpos( $url, '//' ) || 0 === strpos( $url, 'data:' ) || 0 === strpos( $url, 'blob:' ) ) {
+					return $url;
+				}
+				if ( function_exists( 'home_url' ) ) {
+					$home = rtrim( (string) home_url(), '/' );
+					if ( 0 === strpos( $url, '/' ) ) {
+						return $home . $url;
+					}
+					return $home . '/' . ltrim( $url, '/' );
+				}
+				return Util::cached_content_url( $url );
+			};
+
 			if ( 0 === strpos( $img_url, 'mobile:' ) ) {
 				$img_url = trim( str_replace( 'mobile:', '', $img_url ) );
-				if ( 0 !== strpos( $img_url, 'http' ) ) {
-					$img_url = Util::cached_content_url( $img_url );
-				}
-				$media = '(max-width: 768px)';
+				$img_url = $resolve_relative( $img_url );
+				$media   = '(max-width: 768px)';
 			} elseif ( 0 === strpos( $img_url, 'desktop:' ) ) {
 				$img_url = trim( str_replace( 'desktop:', '', $img_url ) );
-				if ( 0 !== strpos( $img_url, 'http' ) ) {
-					$img_url = Util::cached_content_url( $img_url );
-				}
-				$media = '(min-width: 768px)';
-			} elseif ( 0 !== strpos( $img_url, 'http' ) ) {
-				$img_url = Util::cached_content_url( $img_url );
+				$img_url = $resolve_relative( $img_url );
+				$media   = '(min-width: 768px)';
+			} else {
+				$img_url = $resolve_relative( $img_url );
 			}
 
 			return array(
@@ -5913,10 +5967,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$exclude_imgs     = array_unique( array_merge( $exclude_imgs, $preload_img_urls ) );
 
 				// OD bridge: ensure the LCP image (mobile/desktop) is never lazy-loaded.
+				// Honours the wppo_od_should_optimize opt-out (issue #1216) via
+				// is_od_opted_in() so the lazy-exclusion path stays in parity
+				// with resolve_auto_lcp_url()/get_current_lcp_url(): opting out
+				// yields neither preload nor eager exclusion from OD data.
 				$od_lcp_normalized = '';
 				if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 					try {
-						if ( \PerformanceOptimise\Inc\OD_Bridge::is_enabled() ) {
+						if ( \PerformanceOptimise\Inc\OD_Bridge::is_enabled() && $this->is_od_opted_in() ) {
 							$od_lcp = \PerformanceOptimise\Inc\OD_Bridge::get_lcp_url();
 							if ( '' !== $od_lcp ) {
 								$exclude_imgs[]    = $od_lcp;
