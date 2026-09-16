@@ -227,16 +227,60 @@ class SpeculationPrerenderListTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Commerce contexts never receive the prerender rule (fail-closed).
+	 * Site-wide commerce signal alone never suppresses the prerender list (issue #1243).
+	 *
+	 * WooCommerce presence (the site-wide `wppo_ai_adaptive_commerce_context`
+	 * signal) must not kill the list on safe pages: per-URL safety comes from
+	 * `is_speculation_list_url_valid()`, and request safety from the
+	 * request-scoped guard. Only the current request being commerce/auth
+	 * suppresses.
 	 *
 	 * @return void
 	 */
-	public function test_commerce_context_gets_no_prerender_rule(): void {
+	public function test_site_wide_commerce_signal_does_not_suppress_prerender_list(): void {
 		$this->install_settings( $this->prerender_on() );
 		$main = $this->make_main( $this->prerender_on() );
 
 		$this->filter_overrides['wppo_ai_adaptive_commerce_context'] = true;
-		$this->assertSame( array(), $main->wppo_register_speculation_rules( array(), array( 'http://example.com/b/' ) ) );
+		$result = $main->wppo_register_speculation_rules( array(), array( 'http://example.com/b/' ) );
+
+		$this->assertCount( 1, $result );
+		$this->assertSame( 'list', $result[0]['source'] );
+		$this->assertSame( array( 'http://example.com/b/' ), $result[0]['urls'] );
+	}
+
+	/**
+	 * A commerce current request (cart conditional) suppresses the prerender list.
+	 *
+	 * @return void
+	 */
+	public function test_cart_request_suppresses_prerender_list(): void {
+		$this->install_settings( $this->prerender_on() );
+		$main = $this->make_main( $this->prerender_on() );
+
+		Functions\when( 'is_cart' )->justReturn( true );
+		try {
+			$this->assertSame( array(), $main->wppo_register_speculation_rules( array(), array( 'http://example.com/b/' ) ) );
+		} finally {
+			Functions\when( 'is_cart' )->justReturn( false );
+		}
+	}
+
+	/**
+	 * An active cart session (Woo cookies) on an otherwise safe page suppresses the list.
+	 *
+	 * @return void
+	 */
+	public function test_cart_cookies_suppress_prerender_list(): void {
+		$this->install_settings( $this->prerender_on() );
+		$main = $this->make_main( $this->prerender_on() );
+
+		$_COOKIE['woocommerce_items_in_cart'] = '1';
+		try {
+			$this->assertSame( array(), $main->wppo_register_speculation_rules( array(), array( 'http://example.com/b/' ) ) );
+		} finally {
+			unset( $_COOKIE['woocommerce_items_in_cart'] );
+		}
 	}
 
 	/**
