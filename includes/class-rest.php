@@ -1226,6 +1226,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$sanitized_settings['speculationTopUrlsLimit'] = ( $limit >= 1 && $limit <= 5 ) ? $limit : 2;
 			}
 
+			// Preserve the high-value prerender list toggle when the
+			// request omits it (issue #1237): same partial-save hazard —
+			// an older client/partial save must not wipe the off-by-default
+			// flag. Normalized like sanitize_settings_recursively().
+			if ( 'preload_settings' === $tab && ! array_key_exists( 'speculationPrerenderList', $settings ) && isset( $options['preload_settings']['speculationPrerenderList'] ) ) {
+				$stored = $options['preload_settings']['speculationPrerenderList'];
+				if ( is_bool( $stored ) ) {
+					$sanitized_settings['speculationPrerenderList'] = $stored;
+				} else {
+					$bool = filter_var( $stored, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+					$sanitized_settings['speculationPrerenderList'] = null === $bool ? false : $bool;
+				}
+			}
+
 			// Preserve the automatic LCP + font-discovery toggles when the
 			// request omits them (issue #1216): same partial-save hazard —
 			// an older client/partial save must not wipe the off-by-default

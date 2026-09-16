@@ -61,14 +61,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		}
 
 		/**
-		 * Get the stored model.
+		 * Get the stored model (per-request memoized).
+		 *
+		 * A single page view may deserialize the AI model plus the RUM
+		 * aggregate; the memo collapses that to one get_option() per
+		 * request. Invalidated by update_model() and reset_model_memo()
+		 * (tests). Mirrors Util::get_settings()/RUM::get_memoized_aggregate().
 		 *
 		 * @return array
 		 * @since 2.0.0
+		 * @since NEXT Memoize per request.
 		 */
 		public static function get_model(): array {
+			if ( null !== self::$model_memo ) {
+				return self::$model_memo;
+			}
 			$model = get_option( self::OPTION, array() );
-			return is_array( $model ) ? $model : array();
+			if ( ! is_array( $model ) ) {
+				$model = array();
+			}
+			self::$model_memo = $model;
+			return $model;
+		}
+
+		/**
+		 * Per-request memo of the stored AI model (null = not loaded yet).
+		 *
+		 * @since NEXT
+		 * @var array|null
+		 */
+		private static ?array $model_memo = null;
+
+		/**
+		 * Reset the per-request model memo (for testing).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_model_memo(): void {
+			self::$model_memo = null;
 		}
 
 		/**
@@ -80,6 +111,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 */
 		public static function update_model( array $model ): void {
 			update_option( self::OPTION, $model, false );
+			self::$model_memo = $model;
 		}
 
 		/**
