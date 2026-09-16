@@ -53,7 +53,7 @@ class BuilderPurgeWatcherTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * The watcher registers on upgrader_process_complete with two args.
+	 * The watcher registers all four hooks with their expected specs.
 	 */
 	public function test_register_hooks_upgrader_action(): void {
 		$calls = array();
@@ -65,13 +65,72 @@ class BuilderPurgeWatcherTest extends \PHPUnit\Framework\TestCase {
 
 		( new Builder_Purge_Watcher() )->register();
 
-		$found = false;
-		foreach ( $calls as $call ) {
-			if ( 'upgrader_process_complete' === $call[0] && 10 === $call[2] && 2 === $call[3] ) {
-				$found = true;
+		$expected = array(
+			array( 'upgrader_process_complete', 10, 2 ),
+			array( 'elementor/core/files/clear_cache', 10, 0 ),
+			array( 'elementor/editor/after_save', 10, 2 ),
+			array( Builder_Purge_Watcher::DRIFT_PURGE_HOOK, 10, 0 ),
+		);
+		// Only count watcher hooks: Util::get_settings() lazily registers its
+		// own cache hooks via add_action() in the same process.
+		$watcher_calls = array_values(
+			array_filter(
+				$calls,
+				static function ( $call ) use ( $expected ) {
+					return in_array( $call[0], array_column( $expected, 0 ), true );
+				}
+			)
+		);
+		foreach ( $expected as $spec ) {
+			$found = false;
+			foreach ( $watcher_calls as $call ) {
+				if ( $spec[0] === $call[0] && $spec[1] === $call[2] && $spec[2] === $call[3] ) {
+					$found = true;
+					break;
+				}
 			}
+			$this->assertTrue( $found, sprintf( 'Expected registration for hook %s.', $spec[0] ) );
 		}
-		$this->assertTrue( $found, 'Expected upgrader_process_complete registration with 2 args.' );
+		$this->assertCount( 4, $watcher_calls, 'register() must register exactly the four watcher hooks.' );
+	}
+
+	/**
+	 * A disabled watcher registers nothing (issue #1288).
+	 */
+	public function test_register_disabled_is_noop(): void {
+		Util::set_settings_cache(
+			array(
+				'file_optimisation' => array(
+					'builderPurgeWatcher' => false,
+				),
+			)
+		);
+		$calls = array();
+		Functions\when( 'add_action' )->alias(
+			static function ( $hook, $callback, $priority = 10, $args = 1 ) use ( &$calls ) {
+				$calls[] = array( $hook, $callback, $priority, $args );
+			}
+		);
+
+		( new Builder_Purge_Watcher() )->register();
+
+		// Only watcher hooks count: Util::set_settings_cache() lazily
+		// registers its own cache hooks via add_action() in the same process.
+		$watcher_hooks = array(
+			'upgrader_process_complete',
+			'elementor/core/files/clear_cache',
+			'elementor/editor/after_save',
+			Builder_Purge_Watcher::DRIFT_PURGE_HOOK,
+		);
+		$watcher_calls = array_values(
+			array_filter(
+				$calls,
+				static function ( $call ) use ( $watcher_hooks ) {
+					return in_array( $call[0], $watcher_hooks, true );
+				}
+			)
+		);
+		$this->assertSame( array(), $watcher_calls, 'Disabled watcher must not register any hook.' );
 	}
 
 	/**
@@ -735,6 +794,444 @@ class BuilderPurgeWatcherTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * A failed schedule must not latch the per-request dedupe flag (issue #1288).
+	 *
+	 * Previously the flag was set before the schedule result was known, so a
+	 * transient failure (lock hit) suppressed the heal for the rest of the
+	 * request with no retry.
+	 */
+	public function test_on_builder_drift_failed_schedule_remains_retryable(): void {
+		$this->reset_drift_static_flags();
+		Functions\when( 'doing_action' )->justReturn( false );
+		Functions\when( 'do_action' )->justReturn( null );
+
+		$locked   = true;
+		$enqueued = 0;
+		Functions\when( 'get_transient' )->alias(
+			static function ( $key ) use ( &$locked ) {
+				unset( $key );
+				return $locked ? 1 : false;
+			}
+		);
+		Functions\when( 'as_enqueue_async_action' )->alias(
+			static function () use ( &$enqueued ) {
+				++$enqueued;
+				return 1;
+			}
+		);
+
+		$watcher = new WPPO_Test_Builder_Watcher_Flow();
+		$watcher->on_builder_drift();
+		$this->assertSame( 0, $enqueued, 'Locked schedule must not enqueue.' );
+
+		// The lock clears later in the same request: the heal must retry.
+		$locked = false;
+		$watcher->on_builder_drift();
+		$this->assertSame( 1, $enqueued, 'Failed schedule must leave the dedupe flag unlatched so a retry can heal.' );
+	}
+
+	/**
+	 * Subdir plain permalinks must not purge the subdir homepage (issue #1288).
+	 */
+	public function test_resolve_post_url_path_rejects_subdir_plain_permalinks(): void {
+		Functions\when( 'get_permalink' )->alias(
+			static function ( $post_id ) {
+				if ( 11 === (int) $post_id ) {
+					return 'http://example.com/subdir/?p=11';
+				}
+				if ( 12 === (int) $post_id ) {
+					return 'http://example.com/subdir/my-page/';
+				}
+				return '';
+			}
+		);
+
+		$watcher = new Builder_Purge_Watcher();
+		$method  = new \ReflectionMethod( $watcher, 'resolve_post_url_path' );
+		$method->setAccessible( true );
+
+		Util::clear_permalink_cache();
+		$this->assertSame( '', $method->invoke( $watcher, 11 ), 'Subdir plain permalink must be rejected, not mapped to the subdir homepage.' );
+		Util::clear_permalink_cache();
+		$this->assertSame( '/subdir/my-page/', $method->invoke( $watcher, 12 ) );
+		Util::clear_permalink_cache();
+	}
+
+	/**
+	 * Swap in an insert-recording $wpdb fake so Log::add() can run.
+	 *
+	 * @return object The fake (recorded inserts in $fake->inserts, previous $wpdb in $fake->prev).
+	 */
+	private function swap_in_wpdb_recorder() {
+		global $wpdb;
+		$recorder       = new class() {
+			/**
+			 * Table prefix.
+			 *
+			 * @var string
+			 */
+			public $prefix = 'wp_';
+
+			/**
+			 * Recorded insert() calls.
+			 *
+			 * @var array
+			 */
+			public $inserts = array();
+
+			/**
+			 * Previous global $wpdb (restored after the test).
+			 *
+			 * @var mixed
+			 */
+			public $prev = null;
+
+			/**
+			 * Record an insert.
+			 *
+			 * @param string $table  Table name.
+			 * @param array  $data   Data.
+			 * @param array  $format Format.
+			 * @return int
+			 */
+			public function insert( $table, $data, $format = array() ) {
+				$this->inserts[] = array( $table, $data, $format );
+				return 1;
+			}
+		};
+		$previous       = $wpdb ?? null; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
+		$wpdb           = $recorder; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
+		$recorder->prev = $previous;
+		return $recorder;
+	}
+
+	/**
+	 * Restore the global $wpdb saved by swap_in_wpdb_recorder().
+	 *
+	 * @param object $recorder The fake holding the previous instance.
+	 * @return void
+	 */
+	private function restore_wpdb( $recorder ): void {
+		global $wpdb;
+		$wpdb = $recorder->prev; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
+	}
+
+	/**
+	 * Drift-purge audit entries respect the drift-log setting (issue #1288).
+	 */
+	public function test_write_drift_purge_log_gated_by_setting(): void {
+		Functions\when( 'wp_kses_post' )->returnArg();
+		$recorder = $this->swap_in_wpdb_recorder();
+
+		Util::set_settings_cache(
+			array(
+				'file_optimisation' => array(
+					'builderPurgeDriftLog' => false,
+				),
+			)
+		);
+		$watcher = new Builder_Purge_Watcher();
+		$method  = new \ReflectionMethod( $watcher, 'write_drift_purge_log' );
+		$method->setAccessible( true );
+		$method->invoke( $watcher, true );
+		$this->assertCount( 0, $recorder->inserts, 'Drift-log=false must skip Log::add().' );
+
+		Util::set_settings_cache(
+			array(
+				'file_optimisation' => array(
+					'builderPurgeDriftLog' => true,
+				),
+			)
+		);
+		$method->invoke( $watcher, true );
+		$this->assertCount( 1, $recorder->inserts, 'Drift-log=true must write the purge audit entry.' );
+
+		$this->restore_wpdb( $recorder );
+	}
+
+	/**
+	 * Save-log covers purged+queued, purged-only, and queued-only branches.
+	 */
+	public function test_write_drift_save_log_branches(): void {
+		Functions\when( 'wp_kses_post' )->returnArg();
+		$recorder = $this->swap_in_wpdb_recorder();
+
+		Util::set_settings_cache(
+			array(
+				'file_optimisation' => array(
+					'builderPurgeDriftLog' => true,
+				),
+			)
+		);
+		$watcher = new Builder_Purge_Watcher();
+		$method  = new \ReflectionMethod( $watcher, 'write_drift_save_log' );
+		$method->setAccessible( true );
+
+		$method->invoke( $watcher, 7, true, true );
+		$method->invoke( $watcher, 8, true, false );
+		$method->invoke( $watcher, 9, false, true );
+		$method->invoke( $watcher, 10, false, false );
+
+		$this->assertCount( 3, $recorder->inserts, 'purged=false+queued=false must write nothing.' );
+		$messages = array_column( array_column( $recorder->inserts, 1 ), 'activity' );
+		$this->assertStringContainsString( 'regeneration requeued', $messages[0] );
+		$this->assertStringContainsString( 'purged for the affected URL', $messages[0] );
+		$this->assertStringContainsString( 'purged for the affected URL', $messages[1] );
+		$this->assertStringNotContainsString( 'requeued', $messages[1] );
+		$this->assertStringContainsString( 'regeneration requeued', $messages[2] );
+		$this->assertStringNotContainsString( 'purged', $messages[2] );
+
+		$this->restore_wpdb( $recorder );
+	}
+
+	/**
+	 * Purge+requeue success writes the log, stages the notice, and fires the action.
+	 *
+	 * Runs in a separate process because the `as_has_scheduled_action()`
+	 * stub would otherwise be eval-declared in the main process and break
+	 * later test classes that rely on it being undefined (function_exists
+	 * guard), e.g. CronWebVitalsRescanTest.
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_on_builder_drift_save_success_path(): void {
+		Functions\when( 'wp_kses_post' )->returnArg();
+		$recorder = $this->swap_in_wpdb_recorder();
+
+		Util::set_settings_cache(
+			array(
+				'file_optimisation' => array(
+					'builderPurgeWatcher'  => true,
+					'builderPurgeDriftLog' => true,
+					'removeUnusedCSS'      => true,
+				),
+			)
+		);
+		Functions\when( 'as_has_scheduled_action' )->justReturn( true );
+		// Declared so Used_CSS::requeue_for_post()'s function_exists guard passes.
+		Functions\when( 'as_enqueue_async_action' )->justReturn( 1 );
+
+		$transients = array();
+		Functions\when( 'set_transient' )->alias(
+			static function ( $key, $value ) use ( &$transients ) {
+				$transients[ $key ] = $value;
+				return true;
+			}
+		);
+		$fired = array();
+		Functions\when( 'do_action' )->alias(
+			static function ( $tag, ...$args ) use ( &$fired ) {
+				$fired[] = array( $tag, $args );
+			}
+		);
+
+		$watcher         = new WPPO_Test_Builder_Watcher_Save();
+		$watcher->purged = true;
+		$watcher->on_builder_drift_save( 7, array() );
+
+		$this->assertCount( 1, $recorder->inserts, 'Successful drift save must write the audit entry.' );
+
+		$notice_found = false;
+		foreach ( $transients as $key => $value ) {
+			if ( false !== strpos( (string) $key, Builder_Purge_Watcher::NOTICE_TRANSIENT ) ) {
+				$notice_found = true;
+				break;
+			}
+		}
+		$this->assertTrue( $notice_found, 'Purged drift save must stage the one-time admin notice.' );
+
+		$action_found = false;
+		foreach ( $fired as $entry ) {
+			if ( 'wppo_builder_drift_requeue' === $entry[0] && array( 7 ) === $entry[1] ) {
+				$action_found = true;
+				break;
+			}
+		}
+		$this->assertTrue( $action_found, 'Queued drift save must fire wppo_builder_drift_requeue with the post ID.' );
+
+		$this->restore_wpdb( $recorder );
+	}
+
+	/**
+	 * Purged-but-not-queued saves log + notice without the requeue action.
+	 */
+	public function test_on_builder_drift_save_purged_only_skips_action(): void {
+		Functions\when( 'wp_kses_post' )->returnArg();
+		$recorder = $this->swap_in_wpdb_recorder();
+
+		// removeUnusedCSS off: requeue_for_post() returns false (not queued).
+		Util::set_settings_cache(
+			array(
+				'file_optimisation' => array(
+					'builderPurgeWatcher'  => true,
+					'builderPurgeDriftLog' => true,
+				),
+			)
+		);
+
+		$fired = array();
+		Functions\when( 'do_action' )->alias(
+			static function ( $tag, ...$args ) use ( &$fired ) {
+				$fired[] = array( $tag, $args );
+			}
+		);
+
+		$watcher         = new WPPO_Test_Builder_Watcher_Save();
+		$watcher->purged = true;
+		$watcher->on_builder_drift_save( 7, array() );
+
+		$this->assertCount( 1, $recorder->inserts, 'Purged-only drift save must still write the audit entry.' );
+		foreach ( $fired as $entry ) {
+			$this->assertNotSame( 'wppo_builder_drift_requeue', $entry[0], 'Unqueued drift save must not fire the requeue action.' );
+		}
+
+		$this->restore_wpdb( $recorder );
+	}
+
+	/**
+	 * Deferred purge writes a distinct entry when the page cache was not cleared.
+	 */
+	public function test_deferred_drift_purge_logs_failed_attempt(): void {
+		Functions\when( 'wp_kses_post' )->returnArg();
+		$recorder = $this->swap_in_wpdb_recorder();
+
+		Util::set_settings_cache(
+			array(
+				'file_optimisation' => array(
+					'builderPurgeDriftLog' => true,
+				),
+			)
+		);
+
+		$watcher = new WPPO_Test_Builder_Watcher_Failed_Purge();
+		$watcher->run_deferred_drift_purge();
+
+		$this->assertCount( 1, $recorder->inserts, 'Failed deferred purge must still write an audit entry.' );
+		$activity = $recorder->inserts[0][1]['activity'] ?? '';
+		$this->assertStringContainsString( 'not cleared', (string) $activity );
+
+		$this->restore_wpdb( $recorder );
+	}
+
+	/**
+	 * Invoke Main::maybe_migrate_builder_watcher() on an instance with seeded options.
+	 *
+	 * @param array $stored  Persisted wppo_settings row (false = no stored row).
+	 * @param array $options In-memory options seed.
+	 * @param bool  $updated update_option() return value.
+	 * @return array{main: object, writes: array} Instance plus captured writes.
+	 */
+	private function run_builder_watcher_migration( $stored, array $options = array(), bool $updated = true ): array {
+		$writes = array();
+		Functions\when( 'get_option' )->alias(
+			static function ( $key, $default_value = false ) use ( $stored ) {
+				if ( 'wppo_settings' === $key ) {
+					return $stored;
+				}
+				return $default_value;
+			}
+		);
+		Functions\when( 'update_option' )->alias(
+			static function ( $key, $value ) use ( &$writes, $updated ) {
+				$writes[] = array( $key, $value );
+				return $updated;
+			}
+		);
+
+		$main         = ( new \ReflectionClass( \PerformanceOptimise\Inc\Main::class ) )->newInstanceWithoutConstructor();
+		$options_prop = new \ReflectionProperty( \PerformanceOptimise\Inc\Main::class, 'options' );
+		$options_prop->setAccessible( true );
+		$options_prop->setValue( $main, $options );
+		$main->maybe_migrate_builder_watcher();
+
+		return array( $main, $writes );
+	}
+
+	/**
+	 * Migration is idempotent when both keys already exist.
+	 */
+	public function test_builder_watcher_migration_idempotent(): void {
+		$stored           = array(
+			'file_optimisation' => array(
+				'builderPurgeWatcher'  => false,
+				'builderPurgeDriftLog' => false,
+			),
+		);
+		list( , $writes ) = $this->run_builder_watcher_migration( $stored );
+
+		$settings_writes = array_values(
+			array_filter(
+				$writes,
+				static function ( $entry ) {
+					return 'wppo_settings' === $entry[0];
+				}
+			)
+		);
+		$this->assertSame( array(), $settings_writes, 'Idempotent migration must not rewrite wppo_settings.' );
+	}
+
+	/**
+	 * Migration heals a single-key row and preserves the explicit value.
+	 */
+	public function test_builder_watcher_migration_heals_single_key(): void {
+		$stored                = array(
+			'file_optimisation' => array(
+				'builderPurgeWatcher' => false,
+			),
+		);
+		list( $main, $writes ) = $this->run_builder_watcher_migration( $stored );
+
+		$settings_write = null;
+		foreach ( $writes as $entry ) {
+			if ( 'wppo_settings' === $entry[0] ) {
+				$settings_write = $entry[1];
+			}
+		}
+		$this->assertNotNull( $settings_write, 'Single-key row must be healed with a wppo_settings write.' );
+		$this->assertFalse( $settings_write['file_optimisation']['builderPurgeWatcher'], 'Explicit false must be preserved.' );
+		$this->assertTrue( $settings_write['file_optimisation']['builderPurgeDriftLog'], 'Missing key must backfill to true.' );
+
+		$options_prop = new \ReflectionProperty( \PerformanceOptimise\Inc\Main::class, 'options' );
+		$options_prop->setAccessible( true );
+		$options = $options_prop->getValue( $main );
+		$this->assertTrue( $options['file_optimisation']['builderPurgeDriftLog'] );
+	}
+
+	/**
+	 * Migration skips fresh installs with no stored row.
+	 */
+	public function test_builder_watcher_migration_skips_without_stored_row(): void {
+		list( , $writes ) = $this->run_builder_watcher_migration( false );
+
+		$settings_writes = array_values(
+			array_filter(
+				$writes,
+				static function ( $entry ) {
+					return 'wppo_settings' === $entry[0];
+				}
+			)
+		);
+		$this->assertSame( array(), $settings_writes, 'Fresh installs must not get a partial wppo_settings write.' );
+	}
+
+	/**
+	 * A failed DB write must not poison the in-request memo.
+	 */
+	public function test_builder_watcher_migration_failed_write_skips_memo(): void {
+		$stored                = array(
+			'file_optimisation' => array(),
+		);
+		list( $main, $writes ) = $this->run_builder_watcher_migration( $stored, array(), false );
+
+		$this->assertNotEmpty( $writes, 'Migration must attempt the write.' );
+		$options_prop = new \ReflectionProperty( \PerformanceOptimise\Inc\Main::class, 'options' );
+		$options_prop->setAccessible( true );
+		$options = $options_prop->getValue( $main );
+		$file    = isset( $options['file_optimisation'] ) && is_array( $options['file_optimisation'] ) ? $options['file_optimisation'] : array();
+		$this->assertArrayNotHasKey( 'builderPurgeWatcher', $file, 'Failed write must not merge into the in-request memo.' );
+	}
+
+	/**
 	 * Reset the watcher's static re-entrancy flags between assertions.
 	 *
 	 * @return void
@@ -815,6 +1312,46 @@ class WPPO_Test_Builder_Watcher_Flow extends Builder_Purge_Watcher {
 	 */
 	protected function write_purge_log( array $labels ): void {
 		$this->logged = $labels;
+	}
+}
+
+/**
+ * Watcher double with a scripted URL-scoped purge result for drift-save tests.
+ *
+ * @package PerformanceOptimise\Tests
+ */
+class WPPO_Test_Builder_Watcher_Save extends Builder_Purge_Watcher {
+	/**
+	 * Scripted purge_post_url_caches() result.
+	 *
+	 * @var bool
+	 */
+	public $purged = false;
+
+	/**
+	 * Return the scripted purge result.
+	 *
+	 * @param int $post_id Post ID (unused).
+	 * @return bool
+	 */
+	protected function purge_post_url_caches( int $post_id ): bool { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+		return $this->purged;
+	}
+}
+
+/**
+ * Watcher double whose derived-cache purge always fails.
+ *
+ * @package PerformanceOptimise\Tests
+ */
+class WPPO_Test_Builder_Watcher_Failed_Purge extends Builder_Purge_Watcher {
+	/**
+	 * Report a failed purge.
+	 *
+	 * @return bool
+	 */
+	protected function purge_wppo_derived_caches(): bool {
+		return false;
 	}
 }
 

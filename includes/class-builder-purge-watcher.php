@@ -374,28 +374,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 			return;
 		}
 			if ( ! self::is_watcher_enabled() ) {
-					return;
+				return;
 			}
-		try {
-			add_action( 'upgrader_process_complete', array( $this, 'on_builder_update' ), 10, 2 );
-		} catch ( \Throwable $e ) {
-			unset( $e );
-		}
-		try {
-			add_action( 'upgrader_process_complete', array( $this, 'on_any_upgrade' ), 20, 2 );
-		} catch ( \Throwable $e ) {
-			unset( $e );
-		}
-		try {
-			add_action( 'elementor/core/files/clear_cache', array( $this, 'on_builder_drift' ), 10, 0 );
-		} catch ( \Throwable $e ) {
-			unset( $e );
-		}
-		try {
-			add_action( 'elementor/editor/after_save', array( $this, 'on_builder_drift_save' ), 10, 2 );
-		} catch ( \Throwable $e ) {
-			unset( $e );
-		}
 			// Elementor-safe mode (issue #1259): per-post CSS-regen signal.
 			// Fired by Elementor after a post CSS file is (re)generated; the
 			// callback purges that post's static HTML cache so stale HTML
@@ -404,21 +384,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 			// is fully guarded so non-Elementor sites pay nothing. Two
 			// accepted args so the resolvable post ID is not dropped when
 			// Elementor passes ($css_file, $post_id).
-		try {
-			add_action( 'elementor/css-file/post/parse_after', array( $this, 'on_elementor_css_regen' ), 10, 2 );
-		} catch ( \Throwable $e ) {
-			unset( $e );
-		}
-		try {
-			add_action( self::DRIFT_PURGE_HOOK, array( $this, 'run_deferred_drift_purge' ), 10, 0 );
-		} catch ( \Throwable $e ) {
-			unset( $e );
-		}
-		try {
-			add_action( self::UPGRADE_PURGE_HOOK, array( $this, 'run_deferred_upgrade_purge' ), 10, 1 );
-		} catch ( \Throwable $e ) {
-			unset( $e );
-		}
+			$hooks = array(
+				array( 'upgrader_process_complete', array( $this, 'on_builder_update' ), 10, 2 ),
+				array( 'upgrader_process_complete', array( $this, 'on_any_upgrade' ), 20, 2 ),
+				array( 'elementor/core/files/clear_cache', array( $this, 'on_builder_drift' ), 10, 0 ),
+				array( 'elementor/editor/after_save', array( $this, 'on_builder_drift_save' ), 10, 2 ),
+				array( 'elementor/css-file/post/parse_after', array( $this, 'on_elementor_css_regen' ), 10, 2 ),
+				array( self::DRIFT_PURGE_HOOK, array( $this, 'run_deferred_drift_purge' ), 10, 0 ),
+				array( self::UPGRADE_PURGE_HOOK, array( $this, 'run_deferred_upgrade_purge' ), 10, 1 ),
+			);
+			foreach ( $hooks as $spec ) {
+				try {
+					add_action( $spec[0], $spec[1], $spec[2], $spec[3] );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
 		}
 
 		/**
@@ -457,11 +438,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 			if ( function_exists( 'doing_action' ) && doing_action( 'upgrader_process_complete' ) ) {
 				return;
 			}
-			self::$drift_handled_this_request = true;
 			try {
 				if ( ! $this->schedule_deferred_drift_purge() ) {
 					return;
 				}
+				self::$drift_handled_this_request = true;
 				if ( function_exists( 'do_action' ) ) {
 					/**
 					 * Fires after builder-drift requeue (issue #1023).
@@ -925,10 +906,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 				if ( ! is_array( $parts ) ) {
 					return '';
 				}
-				if ( ! empty( $parts['query'] ) && ( empty( $parts['path'] ) || '/' === $parts['path'] ) ) {
+				// Reject query-based plain permalinks (?p=, ?page_id=,
+				// ?attachment_id=) regardless of path so a subdir install
+				// (/subdir/?p=8) never purges the subdir homepage instead.
+				if ( ! empty( $parts['query'] ) && is_string( $parts['query'] ) && 1 === preg_match( '/(^|&)(p|page_id|attachment_id)=\d+/i', $parts['query'] ) ) {
 					return '';
 				}
-				if ( empty( $parts['path'] ) || ! is_string( $parts['path'] ) ) {
+				if ( empty( $parts['path'] ) || ! is_string( $parts['path'] ) || '/' === $parts['path'] ) {
 					return '';
 				}
 				return $parts['path'];
@@ -1023,16 +1007,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 					);
 				} elseif ( $purged ) {
 					$message = sprintf(
-						/* translators: %d: post ID saved in the builder */
+					/* translators: %d: post ID saved in the builder */
 						__( 'Builder drift detected (post %d): page cache and used-CSS purged for the affected URL.', 'performance-optimisation' ),
 						$post_id
 					);
-				} else {
+				} elseif ( $queued ) {
 					$message = sprintf(
-						/* translators: %d: post ID saved in the builder */
+					/* translators: %d: post ID saved in the builder */
 						__( 'Builder drift detected (post %d): regeneration requeued for the affected URL.', 'performance-optimisation' ),
 						$post_id
 					);
+				} else {
+					return;
 				}
 				Log::add( $message );
 			} catch ( \Throwable $e ) {
