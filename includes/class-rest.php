@@ -1185,6 +1185,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			if ( 'file_optimisation' === $tab && ! isset( $params['settings']['ccssQueueCap'] ) && isset( $options['file_optimisation']['ccssQueueCap'] ) ) {
 				$sanitized_settings['ccssQueueCap'] = absint( $options['file_optimisation']['ccssQueueCap'] );
 			}
+			// Preserve the CCSS generation timeout when the request omits it
+			// (issue #1235): same partial-save hazard as the queue caps above
+			// — an older client/partial save must not wipe a custom budget.
+			// Read-time clamping in Critical_CSS::get_ccss_gen_timeout()
+			// keeps the stored value bounded.
+			if ( 'file_optimisation' === $tab && ! isset( $params['settings']['ccssGenTimeout'] ) && isset( $options['file_optimisation']['ccssGenTimeout'] ) ) {
+				$sanitized_settings['ccssGenTimeout'] = absint( $options['file_optimisation']['ccssGenTimeout'] );
+			}
 			if ( 'file_optimisation' === $tab && ! isset( $params['settings']['usedCssQueueCap'] ) && isset( $options['file_optimisation']['usedCssQueueCap'] ) ) {
 				$sanitized_settings['usedCssQueueCap'] = absint( $options['file_optimisation']['usedCssQueueCap'] );
 			}

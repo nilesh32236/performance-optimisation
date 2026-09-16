@@ -599,6 +599,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['file_optimisation']['ccssQueueCap'] ) ) {
 				$this->options['file_optimisation']['ccssQueueCap'] = 5;
 			}
+			// Existing installs whose stored settings predate the CCSS
+			// generation timeout key (issue #1235) inherit the 25s default
+			// in-memory here (no database write on front-end requests); the
+			// persisted value is backfilled once by
+			// maybe_migrate_css_queue_defaults() on admin_init.
+			if ( ! isset( $this->options['file_optimisation']['ccssGenTimeout'] ) ) {
+				$this->options['file_optimisation']['ccssGenTimeout'] = 25;
+			}
 			if ( ! isset( $this->options['file_optimisation']['usedCssQueueCap'] ) ) {
 				$this->options['file_optimisation']['usedCssQueueCap'] = 50;
 			}
@@ -1629,14 +1637,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Runs on `admin_init` (not the constructor) so a cacheable front-end
 		 * request never triggers a settings write. Only installs whose stored
 		 * settings predate any of the `ccssQueueCap` / `usedCssQueueCap` /
-		 * `ccssViewportVariants` / `usedCSSDeliveryMode` keys (key absent) are backfilled with the
-		 * fail-open defaults; any stored explicit value is preserved verbatim,
-		 * and fresh installs with no stored option are skipped because the
-		 * constructor defaults already match. The check is idempotent (key
-		 * presence is the marker), so no extra option row is needed.
-		 * In-memory options are synced too so the current request observes the
-		 * backfilled values. Uses per-site `get_option()` so multisite sites
-		 * migrate independently with no cross-site leakage.
+		 * `ccssViewportVariants` / `usedCSSDeliveryMode` / `ccssGenTimeout` keys
+		 * (key absent) are backfilled with the fail-open defaults; any stored
+		 * explicit value is preserved verbatim, and fresh installs with no
+		 * stored option are skipped because the constructor defaults already
+		 * match. The check is idempotent (key presence is the marker), so no
+		 * extra option row is needed. In-memory options are synced too so the
+		 * current request observes the backfilled values. Uses per-site
+		 * `get_option()` so multisite sites migrate independently with no
+		 * cross-site leakage.
 		 *
 		 * @return void
 		 * @since NEXT
@@ -1657,6 +1666,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'usedCssQueueCap'      => 50,
 				'ccssViewportVariants' => false,
 				'usedCSSDeliveryMode'  => 'file',
+				'ccssGenTimeout'       => 25,
 			);
 			$changed  = false;
 			foreach ( $defaults as $key => $default ) {

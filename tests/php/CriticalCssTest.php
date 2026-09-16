@@ -818,4 +818,230 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertFalse( Critical_CSS::maybe_check_stale_and_requeue( 'some-template-hash' ) );
 	}
+
+	/**
+	 * The generation budget defaults to 25s and honours the stored setting.
+	 *
+	 * @return void
+	 */
+	public function test_get_ccss_gen_timeout_default_and_override(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		$this->assertSame( 25, Critical_CSS::get_ccss_gen_timeout() );
+
+		$this->option_map['wppo_settings'] = array(
+			'file_optimisation' => array( 'ccssGenTimeout' => 10 ),
+		);
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		$this->assertSame( 10, Critical_CSS::get_ccss_gen_timeout() );
+
+		// Non-positive / non-numeric values fall back to the default so
+		// generation is always bounded (never uncapped).
+		$this->option_map['wppo_settings'] = array(
+			'file_optimisation' => array( 'ccssGenTimeout' => 0 ),
+		);
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		$this->assertSame( 25, Critical_CSS::get_ccss_gen_timeout() );
+
+		$this->option_map['wppo_settings'] = array(
+			'file_optimisation' => array( 'ccssGenTimeout' => 'not-a-number' ),
+		);
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		$this->assertSame( 25, Critical_CSS::get_ccss_gen_timeout() );
+
+		// Oversized values clamp to the hard upper bound.
+		$this->option_map['wppo_settings'] = array(
+			'file_optimisation' => array( 'ccssGenTimeout' => 500 ),
+		);
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		$this->assertSame( 120, Critical_CSS::get_ccss_gen_timeout() );
+	}
+
+	/**
+	 * The wppo_ccss_generation_timeout filter overrides the stored budget.
+	 *
+	 * @return void
+	 */
+	public function test_get_ccss_gen_timeout_applies_filter_when_listener_exists(): void {
+		Functions\when( 'has_filter' )->justReturn( true );
+		$this->filter_overrides['wppo_ccss_generation_timeout'] = 7;
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+
+		$this->assertSame( 7, Critical_CSS::get_ccss_gen_timeout() );
+	}
+
+	/**
+	 * An already-expired budget aborts generation before any HTTP request.
+	 *
+	 * @return void
+	 */
+	public function test_generate_aborts_on_expired_deadline_without_http(): void {
+		$source_css    = null;
+		$resolved_urls = null;
+		$expired       = microtime( true ) - 5;
+
+		$result = Critical_CSS::generate( 'http://example.com/', $source_css, $resolved_urls, $expired );
+
+		$this->assertFalse( $result );
+		$this->assertSame( 0, $this->http_calls['regular'] );
+		$this->assertSame( 0, $this->http_calls['safe'] );
+	}
+
+	/**
+	 * An expired budget refuses stylesheet fetches without any HTTP request.
+	 *
+	 * @return void
+	 */
+	public function test_fetch_aborts_on_expired_deadline_without_http(): void {
+		$expired = microtime( true ) - 5;
+
+		$result = $this->invoke_private( 'fetch_stylesheet_with_imports', 'http://example.com/style.css', 0, $expired );
+
+		$this->assertSame( '', $result );
+		$this->assertSame( 0, $this->http_calls['regular'] );
+		$this->assertSame( 0, $this->http_calls['safe'] );
+	}
+
+	/**
+	 * An expired budget skips the CPU-bound parse phase entirely.
+	 *
+	 * @return void
+	 */
+	public function test_extract_aborts_on_expired_deadline(): void {
+		$expired = microtime( true ) - 5;
+
+		$this->assertSame( '', $this->invoke_private( 'extract_above_fold_css', 'body{color:red}', $expired ) );
+	}
+
+	/**
+	 * Per-request timeouts clamp to the remaining budget (issue #1235).
+	 *
+	 * @return void
+	 */
+	public function test_fetch_clamps_request_timeout_to_remaining_budget(): void {
+		$seen_timeout = null;
+		Functions\when( 'wp_remote_get' )->alias(
+			function ( $url, $args = array() ) use ( &$seen_timeout ) {
+				++$this->http_calls['regular'];
+				$seen_timeout = $args['timeout'] ?? null;
+				return $this->fake_response();
+			}
+		);
+
+		$this->invoke_private( 'fetch_stylesheet_with_imports', 'http://example.com/style.css', 0, microtime( true ) + 3 );
+
+		$this->assertSame( 3, $seen_timeout );
+	}
+
+	/**
+	 * A timed-out run stores nothing and leaves a previous file untouched.
+	 *
+	 * @return void
+	 */
+	public function test_generate_and_store_timeout_stores_nothing_and_keeps_previous_file(): void {
+		Functions\when( 'untrailingslashit' )->alias(
+			static function ( $value ) {
+				return rtrim( (string) $value, '/' );
+			}
+		);
+
+		$hash = 'ccsstimeouttest1234567890abcd';
+		$dir  = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/ccss' );
+		if ( ! is_dir( $dir ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
+			mkdir( $dir, 0775, true );
+		}
+		$file     = $dir . '/' . $hash . '.css';
+		$previous = 'body{color:blue}';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+		file_put_contents( $file, $previous );
+
+		try {
+			$expired = microtime( true ) - 5;
+			$result  = $this->invoke_private( 'generate_and_store', $hash, 'home', $expired );
+
+			$this->assertFalse( $result );
+			$this->assertSame( 0, $this->http_calls['regular'] );
+			$this->assertSame( 0, $this->http_calls['safe'] );
+
+			// Fail-open: the previous file is byte-identical, no partial output.
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Test fixture assertion.
+			$this->assertSame( $previous, file_get_contents( $file ) );
+		} finally {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+			unlink( $file );
+		}
+	}
+
+	/**
+	 * A timed-out run without a previous file creates none (fail-open).
+	 *
+	 * @return void
+	 */
+	public function test_generate_and_store_timeout_creates_no_file(): void {
+		Functions\when( 'untrailingslashit' )->alias(
+			static function ( $value ) {
+				return rtrim( (string) $value, '/' );
+			}
+		);
+
+		$hash = 'ccsstimeoutnofile1234567890ab';
+		$dir  = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/ccss' );
+		$file = $dir . '/' . $hash . '.css';
+		if ( file_exists( $file ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Stale fixture cleanup.
+			unlink( $file );
+		}
+		Critical_CSS::reset_ccss_memo();
+
+		$expired = microtime( true ) - 5;
+		$result  = $this->invoke_private( 'generate_and_store', $hash, 'home', $expired );
+
+		$this->assertFalse( $result );
+		$this->assertFileDoesNotExist( $file );
+	}
+
+	/**
+	 * Normal sources generate unchanged output under a live budget.
+	 *
+	 * @return void
+	 */
+	public function test_generate_happy_path_unchanged_under_live_budget(): void {
+		Functions\when( 'wp_remote_get' )->alias(
+			function ( $url ) {
+				++$this->http_calls['regular'];
+				$body = false !== strpos( (string) $url, 's.css' )
+					? 'body{color:red}h1{color:blue}'
+					// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- Fixture markup for the generator fetch stub.
+					: '<html><head><style>body{color:red}</style><link rel="stylesheet" href="http://example.com/s.css"></head><body><p>hi</p></body></html>';
+				return array(
+					'response' => array( 'code' => 200 ),
+					'body'     => $body,
+				);
+			}
+		);
+
+		$source_css    = null;
+		$resolved_urls = null;
+
+		$result = Critical_CSS::generate( 'http://example.com/', $source_css, $resolved_urls, microtime( true ) + 30 );
+
+		$this->assertIsString( $result );
+		$this->assertStringContainsString( 'body', (string) $result );
+		$this->assertGreaterThan( 0, $this->http_calls['regular'] );
+	}
+
+	/**
+	 * The guarded wrapper never fatals when the environment cannot serve a
+	 * sample URL: it fails open with timed_out unset.
+	 *
+	 * @return void
+	 */
+	public function test_generate_guarded_fails_open_without_sample_url(): void {
+		$timed_out = null;
+
+		$result = Critical_CSS::generate_guarded( 'ccssguardednofixture1', 'single', $timed_out );
+
+		$this->assertFalse( $result );
+		$this->assertFalse( $timed_out );
+	}
 }

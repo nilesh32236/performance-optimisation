@@ -311,6 +311,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'ccssRumPriority'              => true,
 					'usedCssRumPriority'           => true,
 					'ccssQueueCap'                 => 5,
+					'ccssGenTimeout'               => 25,
 					'usedCssQueueCap'              => 50,
 					'ccssViewportVariants'         => false,
 					'usedCSSDeliveryMode'          => 'file',
