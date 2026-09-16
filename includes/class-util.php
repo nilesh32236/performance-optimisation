@@ -4968,6 +4968,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					continue;
 				}
 
+				// CCSS generation timeout (issue #1235) — int clamped to
+				// 1-120 (seconds). Unrecognized values fail open to 25 so
+				// generation is always bounded. Pinned before the generic
+				// is_numeric branch so 0/negative/huge values can never be
+				// stored; get_ccss_gen_timeout() still clamps at read time
+				// as defense-in-depth.
+				if ( 'ccssGenTimeout' === $safe_key ) {
+					if ( is_array( $value ) ) {
+						$sanitized[ $safe_key ] = 25;
+						continue;
+					}
+					$timeout                = is_numeric( $value ) ? (int) $value : 25;
+					$sanitized[ $safe_key ] = ( $timeout >= 1 && $timeout <= 120 ) ? $timeout : 25;
+					continue;
+				}
+
 				// RUM-weighted top-URL prefetch cap (issue #1183) — int clamped
 				// to 1-5 (footprint guard, ~0.15 KB per URL). Unrecognized
 				// values fail open to 2.

@@ -862,7 +862,11 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 	 * @return void
 	 */
 	public function test_get_ccss_gen_timeout_applies_filter_when_listener_exists(): void {
-		Functions\when( 'has_filter' )->justReturn( true );
+		Functions\when( 'has_filter' )->alias(
+			static function ( $tag ) {
+				return 'wppo_ccss_generation_timeout' === $tag;
+			}
+		);
 		$this->filter_overrides['wppo_ccss_generation_timeout'] = 7;
 		\PerformanceOptimise\Inc\Util::clear_settings_cache();
 
@@ -929,7 +933,88 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 
 		$this->invoke_private( 'fetch_stylesheet_with_imports', 'http://example.com/style.css', 0, microtime( true ) + 3 );
 
-		$this->assertSame( 3, $seen_timeout );
+		// Floor semantics: the socket timeout never exceeds the budget.
+		$this->assertGreaterThanOrEqual( 1, $seen_timeout );
+		$this->assertLessThanOrEqual( 3, $seen_timeout );
+	}
+
+	/**
+	 * An exhausted budget returns a zero request timeout so callers skip the fetch.
+	 *
+	 * @return void
+	 */
+	public function test_request_timeout_returns_zero_when_budget_exhausted(): void {
+		$expired = microtime( true ) - 5;
+
+		$this->assertSame( 0, $this->invoke_private( 'request_timeout_for_deadline', $expired, 15 ) );
+		$this->assertSame( 15, $this->invoke_private( 'request_timeout_for_deadline', null, 15 ) );
+	}
+
+	/**
+	 * Oversized / non-numeric filter values clamp to the hard upper bound.
+	 *
+	 * @return void
+	 */
+	public function test_get_ccss_gen_timeout_clamps_oversized_filter_value(): void {
+		Functions\when( 'has_filter' )->alias(
+			static function ( $tag ) {
+				return 'wppo_ccss_generation_timeout' === $tag;
+			}
+		);
+		$this->filter_overrides['wppo_ccss_generation_timeout'] = 500;
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+
+		$this->assertSame( 120, Critical_CSS::get_ccss_gen_timeout() );
+
+		$this->filter_overrides['wppo_ccss_generation_timeout'] = 'not-a-number';
+
+		$this->assertSame( 25, Critical_CSS::get_ccss_gen_timeout() );
+	}
+
+	/**
+	 * Malformed scheduler hashes are rejected without touching the worker.
+	 *
+	 * @return void
+	 */
+	public function test_background_generate_rejects_malformed_hash(): void {
+		Critical_CSS::background_generate( array( 'template_hash' => array( 'not', 'a', 'string' ) ) );
+		Critical_CSS::background_generate( array( 'template_hash' => '../../etc' ) );
+
+		$this->assertSame( 0, $this->http_calls['regular'] );
+		$this->assertSame( 0, $this->http_calls['safe'] );
+	}
+
+	/**
+	 * The guarded wrapper fails open without a sample URL and creates no file.
+	 *
+	 * @return void
+	 */
+	public function test_generate_guarded_no_sample_url_creates_no_file(): void {
+		Functions\when( 'untrailingslashit' )->alias(
+			static function ( $value ) {
+				return rtrim( (string) $value, '/' );
+			}
+		);
+
+		$hash = 'ccssguardednosample1234567890a';
+		$dir  = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/ccss' );
+		$file = $dir . '/' . $hash . '.css';
+		if ( file_exists( $file ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Stale fixture cleanup.
+			unlink( $file );
+		}
+		Critical_CSS::reset_ccss_memo();
+
+		// 'single' has no posts in this fixture, so no sample URL exists
+		// and generation fails open without any HTTP request.
+		$timed_out = null;
+		$result    = Critical_CSS::generate_guarded( $hash, 'single', $timed_out );
+
+		$this->assertFalse( $result );
+		$this->assertFalse( $timed_out );
+		$this->assertSame( 0, $this->http_calls['regular'] );
+		$this->assertSame( 0, $this->http_calls['safe'] );
+		$this->assertFileDoesNotExist( $file );
 	}
 
 	/**

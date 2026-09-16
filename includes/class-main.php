@@ -1649,6 +1649,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * @return void
 		 * @since NEXT
+		 * @since NEXT Also backfills the 25s `ccssGenTimeout` generation budget.
 		 */
 		public function maybe_migrate_css_queue_defaults(): void {
 			// allowlist(settings-read-guard): deliberate direct read — must distinguish
@@ -1691,7 +1692,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 			}
 
-			Log::add( __( 'Added default RUM-weighted CSS queue settings (capped per-run queue, single-variant behaviour kept).', 'performance-optimisation' ) );
+			Log::add( __( 'Added default RUM-weighted CSS queue settings and CCSS generation timeout (25s, single-variant behaviour kept).', 'performance-optimisation' ) );
 		}
 
 		/**
