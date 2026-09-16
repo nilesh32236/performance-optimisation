@@ -37,6 +37,18 @@ const cdnRowId = () => {
 	return `cdn-${ Date.now() }-${ cdnRowCounter }`;
 };
 
+// Normalize the used-CSS delivery mode the same way PHP sanitizes it
+// (lowercase + trim, allowlisted, fail-open to 'file') so the UI never
+// disagrees with the server on a single render (issue #1220).
+const normalizeDeliveryMode = ( value ) => {
+	const mode = String( value || 'file' )
+		.toLowerCase()
+		.trim();
+	return [ 'file', 'delay', 'async', 'remove' ].includes( mode )
+		? mode
+		: 'file';
+};
+
 const FileOptimization = ( {
 	options = {},
 	serverRules = null,
@@ -198,14 +210,9 @@ const FileOptimization = ( {
 		typeof options.fontSubsetSubsets === 'string'
 			? options.fontSubsetSubsets
 			: 'latin';
-	defaultSettings.usedCSSDeliveryMode = [
-		'file',
-		'delay',
-		'async',
-		'remove',
-	].includes( defaultSettings.usedCSSDeliveryMode )
-		? defaultSettings.usedCSSDeliveryMode
-		: 'file';
+	defaultSettings.usedCSSDeliveryMode = normalizeDeliveryMode(
+		defaultSettings.usedCSSDeliveryMode
+	);
 
 	const [ settings, setSettings ] = useState( defaultSettings );
 	const [ isLoading, setIsLoading ] = useState( false );
@@ -220,8 +227,20 @@ const FileOptimization = ( {
 	// read-only used_css_status endpoint, shown as a warning banner while
 	// removeUnusedCSS is on. Fail-open: a failed fetch simply hides the banner.
 	const [ usedCssStatus, setUsedCssStatus ] = useState( null );
+	const refreshUsedCssStatus = useCallback( async () => {
+		try {
+			const res = await apiCall( 'used_css_status', {}, 'GET' );
+			if ( res && res.success && res.data ) {
+				setUsedCssStatus( res.data );
+			}
+		} catch {
+			// Fail-open: leave the banner hidden.
+		}
+	}, [] );
 	useEffect( () => {
 		if ( ! options.removeUnusedCSS ) {
+			// Clear a stale banner when the feature is toggled off.
+			setUsedCssStatus( null );
 			return;
 		}
 		let cancelled = false;
@@ -564,14 +583,9 @@ const FileOptimization = ( {
 				typeof options.fontSubsetSubsets === 'string'
 					? options.fontSubsetSubsets
 					: 'latin',
-			usedCSSDeliveryMode: [
-				'file',
-				'delay',
-				'async',
-				'remove',
-			].includes( options.usedCSSDeliveryMode )
-				? options.usedCSSDeliveryMode
-				: 'file',
+			usedCSSDeliveryMode: normalizeDeliveryMode(
+				options.usedCSSDeliveryMode
+			),
 		} );
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [
@@ -672,13 +686,9 @@ const FileOptimization = ( {
 			if ( typeof next.fontSubsetSubsets !== 'string' ) {
 				next.fontSubsetSubsets = 'latin';
 			}
-			if (
-				! [ 'file', 'delay', 'async', 'remove' ].includes(
-					next.usedCSSDeliveryMode
-				)
-			) {
-				next.usedCSSDeliveryMode = 'file';
-			}
+			next.usedCSSDeliveryMode = normalizeDeliveryMode(
+				next.usedCSSDeliveryMode
+			);
 			return next;
 		} );
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -951,6 +961,9 @@ const FileOptimization = ( {
 						),
 					durationMs: 3000,
 				} );
+				// Refresh the staleness banner so it does not linger after a
+				// successful regen until remount (issue #1220).
+				refreshUsedCssStatus();
 			} else {
 				notify( {
 					type: 'error',
@@ -994,6 +1007,9 @@ const FileOptimization = ( {
 						),
 					durationMs: 3000,
 				} );
+				// A purge invalidates used-CSS, so the staleness banner must
+				// reflect the new state immediately (issue #1220).
+				refreshUsedCssStatus();
 			} else {
 				notifyPurge( {
 					type: 'error',

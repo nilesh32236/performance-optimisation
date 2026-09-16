@@ -722,7 +722,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 
 			try {
 				if ( class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
-					Used_CSS::delete_all_used_css();
 					$full = false;
 					if ( function_exists( 'apply_filters' ) ) {
 						try {
@@ -739,6 +738,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 						}
 					}
 					if ( $full ) {
+						Used_CSS::delete_all_used_css();
 						if ( function_exists( 'as_enqueue_async_action' ) ) {
 							// Note: regenerate_all() writes its own 'N jobs queued'
 							// audit entry; write_purge_log() below adds the
@@ -750,7 +750,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 							( new Used_CSS( Util::get_settings() ) )->regenerate_all( true );
 						}
 					} elseif ( method_exists( 'PerformanceOptimise\Inc\Used_CSS', 'request_targeted_regen' ) ) {
-						// Cooldown-gated bounded requeue of stale variants.
+						// Targeted path (issue #1220): do NOT wipe all variants
+						// here. A wipe followed by a bounded (20-post) requeue
+						// would leave most of the site without used-CSS until
+						// lazy rebuild; instead let requeue_for_post() freshness
+						// filtering drive per-post regeneration while untouched
+						// pages keep serving their existing used-CSS (fail-open).
 						Used_CSS::request_targeted_regen( 'builder-update' );
 					}
 				}

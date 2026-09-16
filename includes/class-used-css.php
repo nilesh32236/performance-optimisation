@@ -93,7 +93,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * - delay:  used-CSS blocking, full stylesheets load on interaction.
 		 * - async:  used-CSS via preload + media swap, full in noscript.
 		 * - remove: strip full stylesheets; auto-downgrades to delay when the
-		 *           Elementor smoke check fails (never unstyled, never fatal).
+		 *           builder smoke check fails (never unstyled, never fatal).
 		 *
 		 * @since NEXT
 		 * @var string[]
@@ -1921,11 +1921,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					$full_path = trailingslashit( $current ) . $name;
 					if ( ! empty( $entry['type'] ) && 'd' === $entry['type'] ) {
 						$dir_queue[] = $full_path;
-					} elseif ( self::USED_CSS_FILENAME === $name || self::USED_CSS_FILENAME . '.sha256' === $name
-						|| 'used-css.mobile.css' === $name || 'used-css.mobile.css.sha256' === $name
-						|| 'used-css.desktop.css' === $name || 'used-css.desktop.css.sha256' === $name ) {
-						if ( ! $fs->delete( $full_path ) ) {
-							$success = false;
+					} else {
+						$purge_names = array( self::USED_CSS_FILENAME, self::USED_CSS_FILENAME . '.sha256' );
+						foreach ( self::VIEWPORT_VARIANTS as $variant ) {
+							$purge_names[] = 'used-css.' . $variant . '.css';
+							$purge_names[] = 'used-css.' . $variant . '.css.sha256';
+						}
+						if ( in_array( $name, $purge_names, true ) ) {
+							if ( ! $fs->delete( $full_path ) ) {
+								$success = false;
+							}
 						}
 					}
 				}
@@ -2069,7 +2074,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					$settings  = class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ? Util::get_settings() : array();
 					$file_opts = isset( $settings['file_optimisation'] ) && is_array( $settings['file_optimisation'] ) ? $settings['file_optimisation'] : array();
 				}
-				$mode = isset( $file_opts['usedCSSDeliveryMode'] ) ? (string) $file_opts['usedCSSDeliveryMode'] : 'file';
+				$mode = isset( $file_opts['usedCSSDeliveryMode'] ) ? strtolower( trim( (string) $file_opts['usedCSSDeliveryMode'] ) ) : 'file';
 				if ( in_array( $mode, self::DELIVERY_MODES, true ) ) {
 					return $mode;
 				}
@@ -2142,7 +2147,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( function_exists( 'get_option' ) ) {
 					$targeted = (int) get_option( self::TARGETED_REGEN_OPTION, 0 );
 					if ( $targeted > 0 ) {
-						$remaining                  = self::TARGETED_REGEN_COOLDOWN_SECONDS - ( time() - $targeted );
+						$cooldown                   = self::get_effective_targeted_cooldown();
+						$remaining                  = $cooldown - ( time() - $targeted );
 						$info['cooldown_remaining'] = $remaining > 0 ? $remaining : 0;
 					}
 				}
@@ -2161,6 +2167,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @since NEXT
 		 */
 		private function get_targeted_regen_cooldown(): int {
+			return self::get_effective_targeted_cooldown();
+		}
+
+		/**
+		 * Static variant of the targeted-regen cooldown (issue #1220).
+		 *
+		 * Shares the filterable default with the instance gate so static
+		 * callers (e.g. get_staleness_info()) display the same remaining
+		 * time the gate enforces. Fail-open: any failure returns the default.
+		 *
+		 * @return int Cooldown seconds (>= 0).
+		 * @since NEXT
+		 */
+		private static function get_effective_targeted_cooldown(): int {
 			$default = self::TARGETED_REGEN_COOLDOWN_SECONDS;
 			try {
 				if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_used_css_targeted_cooldown' ) ) {
@@ -2283,7 +2303,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					return 0;
 				}
 				$queued = 0;
-				foreach ( array_slice( $post_ids, 0, $cap ) as $post_id ) {
+				foreach ( $post_ids as $post_id ) {
+					if ( $queued >= $cap ) {
+						break;
+					}
 					if ( $post_id <= 0 ) {
 						continue;
 					}
@@ -3246,33 +3269,58 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 
 		/**
 		 * Smoke-gate the remove delivery mode (issue #1220).
-			 *
-			 * Remove mode strips the full stylesheets entirely, so builder pages
-			 * (Elementor markers in the stripped buffer) auto-downgrade to delay
-			 * mode instead — the full stylesheets then load on interaction rather
-			 * than vanishing. Non-builder pages keep remove. Fail-open: any error
-			 * keeps the requested mode. The downgrade is logged via the safe
-			 * fallback logger when enabled.
-			 *
-			 * @param string   $buffer_after_strip Buffer with original links stripped.
-			 * @param string   $mode               Requested delivery mode.
-			 * @param string[] $handles            Stripped stylesheet handles.
-			 * @return string Effective delivery mode.
-			 * @since NEXT
-			 */
+		 *
+		 * Remove mode strips the full stylesheets entirely, so builder pages
+		 * (Elementor, Divi, Beaver Builder, Bricks, Oxygen, WPBakery, and
+		 * Gutenberg block markers in the stripped buffer) auto-downgrade to
+		 * delay mode instead — the full stylesheets then load on interaction
+		 * rather than vanishing. Non-builder pages keep remove. Fail-open:
+		 * any error keeps the requested mode. The downgrade is logged via the
+		 * safe fallback logger when enabled.
+		 *
+		 * @param string   $buffer_after_strip Buffer with original links stripped.
+		 * @param string   $mode               Requested delivery mode.
+		 * @param string[] $handles            Stripped stylesheet handles.
+		 * @return string Effective delivery mode.
+		 * @since NEXT
+		 */
 		private function resolve_effective_delivery_mode( string $buffer_after_strip, string $mode, array $handles ): string {
 			try {
 				if ( 'remove' !== $mode ) {
 					return $mode;
 				}
-				$has_builder = false !== strpos( $buffer_after_strip, 'data-elementor-type' )
-					|| false !== strpos( $buffer_after_strip, 'elementor-widget' )
-					|| false !== strpos( $buffer_after_strip, 'elementor-popup' );
+				$builder_markers = array(
+					'data-elementor-type',
+					'elementor-widget',
+					'elementor-popup',
+					'et_pb_',
+					'et-pb-',
+					'fl-builder',
+					'fl-row',
+					'bricks-',
+					'brxe-',
+					'oxy-',
+					'oxygen-',
+					'wpb_',
+					'vc_row',
+					'wp-block-',
+				);
+				$has_builder     = false;
+				foreach ( $builder_markers as $marker ) {
+					if ( false !== strpos( $buffer_after_strip, $marker ) ) {
+						$has_builder = true;
+						break;
+					}
+				}
 				if ( ! $has_builder ) {
 					return 'remove';
 				}
-				if ( $this->is_safe_fallback_enabled() ) {
-					$this->log_used_css_fallback( 'remove_downgraded_to_delay', $handles );
+				try {
+					if ( $this->is_safe_fallback_enabled() ) {
+						$this->log_used_css_fallback( 'remove_downgraded_to_delay', $handles );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
 				}
 				return 'delay';
 			} catch ( \Throwable $e ) {
@@ -3292,7 +3340,97 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @since NEXT
 		 */
 		private function build_delayed_css_loader(): string {
-			return '<script data-wppo-delayed-css-loader="1">(function(){var d=false;function l(){if(d){return;}d=true;var a=document.querySelectorAll(\'link[data-wppo-delayed-css]\');for(var i=0;i<a.length;i++){try{a[i].rel=\'stylesheet\';a[i].media=\'all\';a[i].removeAttribute(\'data-wppo-delayed-css\');}catch(e){}}};function b(){l();window.removeEventListener(\'pointerdown\',b);window.removeEventListener(\'keydown\',b);window.removeEventListener(\'touchstart\',b);window.removeEventListener(\'scroll\',b);}window.addEventListener(\'pointerdown\',b,{passive:true});window.addEventListener(\'keydown\',b);window.addEventListener(\'touchstart\',b,{passive:true});window.addEventListener(\'scroll\',b,{passive:true});setTimeout(l,5000);})();</script>';
+			return '<script data-wppo-delayed-css-loader="1">(function(){var d=false;function l(){if(d){return;}d=true;var a=document.querySelectorAll(\'link[data-wppo-delayed-css]\');for(var i=0;i<a.length;i++){try{a[i].rel=\'stylesheet\';a[i].media=a[i].getAttribute(\'data-wppo-delayed-media\')||\'all\';a[i].removeAttribute(\'data-wppo-delayed-css\');}catch(e){}}};function b(){l();window.removeEventListener(\'pointerdown\',b);window.removeEventListener(\'keydown\',b);window.removeEventListener(\'touchstart\',b);window.removeEventListener(\'scroll\',b);}window.addEventListener(\'pointerdown\',b,{passive:true});window.addEventListener(\'keydown\',b);window.addEventListener(\'touchstart\',b,{passive:true});window.addEventListener(\'scroll\',b,{passive:true});setTimeout(l,5000);})();</script>';
+		}
+
+		/**
+		 * Registered stylesheet URL with its version query (issue #1220).
+		 *
+		 * Delay-mode preloads and the noscript fallback must preserve the
+		 * `ver` query so versioned handles keep cache-busting parity with
+		 * the original <link> tags. Fail-open: missing registration or
+		 * source returns ''.
+		 *
+		 * @param string $handle Style handle.
+		 * @return string Full URL with ver query, or '' when unresolvable.
+		 * @since NEXT
+		 */
+		private function get_handle_url_with_ver( string $handle ): string {
+			try {
+				global $wp_styles;
+				if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
+					return '';
+				}
+				$src = (string) ( $wp_styles->registered[ $handle ]->src ?? '' );
+				if ( '' === $src ) {
+					return '';
+				}
+				$ver = isset( $wp_styles->registered[ $handle ]->ver ) ? (string) $wp_styles->registered[ $handle ]->ver : '';
+				if ( '' === $ver ) {
+					return $src;
+				}
+				return $src . ( false === strpos( $src, '?' ) ? '?' : '&' ) . 'ver=' . $ver;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Registered stylesheet media (issue #1220).
+		 *
+		 * Preserves per-handle media (e.g. print-only handles) in delay
+		 * mode instead of forcing `all`. Fail-open to 'all'.
+		 *
+		 * @param string $handle Style handle.
+		 * @return string Media attribute value.
+		 * @since NEXT
+		 */
+		private function get_handle_media( string $handle ): string {
+			try {
+				global $wp_styles;
+				if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
+					return 'all';
+				}
+				$media = $wp_styles->registered[ $handle ]->args ?? 'all';
+				if ( is_string( $media ) && '' !== $media ) {
+					return $media;
+				}
+				return 'all';
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 'all';
+			}
+		}
+
+		/**
+		 * Whether the response carries a strict CSP blocking inline handlers (issue #1220).
+		 *
+		 * The async delivery mode swaps via an inline `onload` attribute, which
+		 * a `Content-Security-Policy` without 'unsafe-inline' blocks — leaving
+		 * used-CSS never applied. Fail-open: any uncertainty returns false.
+		 *
+		 * @return bool True when a strict CSP is detected.
+		 * @since NEXT
+		 */
+		private function has_strict_csp(): bool {
+			try {
+				if ( ! function_exists( 'headers_list' ) ) {
+					return false;
+				}
+				foreach ( headers_list() as $header ) {
+					if ( 0 !== stripos( (string) $header, 'content-security-policy' ) ) {
+						continue;
+					}
+					if ( false === stripos( (string) $header, 'unsafe-inline' ) ) {
+						return true;
+					}
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
 		}
 
 		/**
@@ -3401,9 +3539,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			$file_opts_for_mode = $this->options['file_optimisation'] ?? array();
 			$delivery_mode      = self::get_used_css_delivery_mode( is_array( $file_opts_for_mode ) ? $file_opts_for_mode : array() );
 			$delivery_mode      = $this->resolve_effective_delivery_mode( $buffer_after_strip, $delivery_mode, $handles );
+			if ( 'async' === $delivery_mode && $this->has_strict_csp() ) {
+				// Strict Content-Security-Policy (no 'unsafe-inline') blocks
+				// the onload swap below, leaving used-CSS never applied —
+				// downgrade to the blocking file mode instead (fail-open,
+				// never unstyled). Logged via the safe fallback logger.
+				try {
+					if ( $this->is_safe_fallback_enabled() ) {
+						$this->log_used_css_fallback( 'async_downgraded_to_file_csp', $handles );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				$delivery_mode = 'file';
+			}
 
 			// Build used-CSS link + noscript fallback.
-		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet
+			// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet
 			$used_css_tag = '<link id="wppo-used-css" rel="stylesheet" href="' . esc_url( $used_css_url ) . '" media="all">';
 			if ( 'async' === $delivery_mode ) {
 				// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet
@@ -3413,10 +3565,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			$noscript_fallback = '';
 			foreach ( $handles as $handle ) {
 				if ( isset( $wp_styles->registered[ $handle ] ) ) {
-					$original_url   = $wp_styles->registered[ $handle ]->src;
-					$original_media = $wp_styles->registered[ $handle ]->args;
+					$original_url = $this->get_handle_url_with_ver( (string) $handle );
+					$media_attr   = $this->get_handle_media( (string) $handle );
 					if ( ! empty( $original_url ) ) {
-						$media_attr = ! empty( $original_media ) ? $original_media : 'all';
 						// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet
 						$noscript_fallback .= '<link rel="stylesheet" href="' . esc_url( $original_url ) . '" media="' . esc_attr( $media_attr ) . '">' . "\n";
 					}
@@ -3440,10 +3591,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				$delayed = '';
 				foreach ( $handles as $handle ) {
 					if ( isset( $wp_styles->registered[ $handle ] ) ) {
-						$original_url = $wp_styles->registered[ $handle ]->src;
+						$original_url = $this->get_handle_url_with_ver( (string) $handle );
+						$media_attr   = $this->get_handle_media( (string) $handle );
 						if ( ! empty( $original_url ) ) {
 							// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet
-							$delayed .= '<link rel="preload" as="style" href="' . esc_url( $original_url ) . '" data-wppo-delayed-css="1">' . "\n";
+							$delayed .= '<link rel="preload" as="style" href="' . esc_url( $original_url ) . '" media="' . esc_attr( $media_attr ) . '" data-wppo-delayed-css="1" data-wppo-delayed-media="' . esc_attr( $media_attr ) . '">' . "\n";
 						}
 					}
 				}

@@ -25,13 +25,17 @@ class UsedCssDeliveryModes1220Test extends \PHPUnit\Framework\TestCase {
 	 * Reset the Util settings memo between tests.
 	 *
 	 * Note: this tearDown shadows the trait's tearDown, so it replicates the
-	 * Brain Monkey teardown (see UsedCssHostTest).
+	 * Brain Monkey teardown (see UsedCssHostTest) plus the Main singleton
+	 * reset to avoid cross-test pollution.
 	 *
 	 * @return void
 	 */
 	protected function tearDown(): void {
 		Util::clear_settings_cache();
 		\Brain\Monkey\tearDown();
+		if ( class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
+			\PerformanceOptimise\Inc\Main::reset_instance();
+		}
 		parent::tearDown();
 	}
 
@@ -70,11 +74,11 @@ class UsedCssDeliveryModes1220Test extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_staleness_info_reports_stale_when_never_regenerated(): void {
 		Functions\when( 'get_option' )->alias(
-			static function ( $key, $default = false ) {
+			static function ( $key, $fallback = false ) {
 				if ( Used_CSS::LAST_FULL_REGEN_OPTION === $key || Used_CSS::TARGETED_REGEN_OPTION === $key ) {
 					return 0;
 				}
-				return $default;
+				return $fallback;
 			}
 		);
 		Functions\when( 'has_filter' )->justReturn( false );
@@ -100,14 +104,14 @@ class UsedCssDeliveryModes1220Test extends \PHPUnit\Framework\TestCase {
 	public function test_staleness_info_fresh_after_regen(): void {
 		$now = time();
 		Functions\when( 'get_option' )->alias(
-			static function ( $key, $default = false ) use ( $now ) {
+			static function ( $key, $fallback = false ) use ( $now ) {
 				if ( Used_CSS::LAST_FULL_REGEN_OPTION === $key ) {
 					return $now;
 				}
 				if ( Used_CSS::TARGETED_REGEN_OPTION === $key ) {
 					return 0;
 				}
-				return $default;
+				return $fallback;
 			}
 		);
 		Functions\when( 'has_filter' )->justReturn( false );
@@ -145,11 +149,11 @@ class UsedCssDeliveryModes1220Test extends \PHPUnit\Framework\TestCase {
 	public function test_targeted_regen_respects_cooldown(): void {
 		$now = time();
 		Functions\when( 'get_option' )->alias(
-			static function ( $key, $default = false ) use ( $now ) {
+			static function ( $key, $fallback = false ) use ( $now ) {
 				if ( Used_CSS::TARGETED_REGEN_OPTION === $key ) {
 					return $now;
 				}
-				return $default;
+				return $fallback;
 			}
 		);
 		Functions\when( 'has_filter' )->justReturn( false );
