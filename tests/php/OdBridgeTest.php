@@ -524,6 +524,195 @@ class OdBridgeTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test get_stable_lcp_url accepts a single observation as stable.
+	 */
+	public function test_get_stable_lcp_url_single_observation(): void {
+		$this->install_common_stubs();
+		$this->ensure_od_class();
+		$this->options = array(
+			'od_integration' => array( 'enabled' => true ),
+		);
+
+		$hero                       = 'https://example.com/wp-content/uploads/hero.jpg';
+		$this->od_metrics           = array(
+			new \OD_URL_Metric(
+				array(
+					'viewportWidth' => 400,
+					'lcp'           => array(
+						'src'   => $hero,
+						'isLCP' => true,
+					),
+				)
+			),
+		);
+		$GLOBALS['od_metrics_stub'] = $this->od_metrics;
+
+		$this->assertSame( $hero, OD_Bridge::get_stable_lcp_url() );
+	}
+
+	/**
+	 * Test get_stable_lcp_url wins when two viewport groups agree.
+	 */
+	public function test_get_stable_lcp_url_agreeing_groups_win(): void {
+		$this->install_common_stubs();
+		$this->ensure_od_class();
+		$this->options = array(
+			'od_integration' => array( 'enabled' => true ),
+		);
+
+		$hero                       = 'https://example.com/wp-content/uploads/hero.jpg';
+		$this->od_metrics           = array(
+			new \OD_URL_Metric(
+				array(
+					'viewportWidth' => 360,
+					'lcp'           => array(
+						'src'   => $hero,
+						'isLCP' => true,
+					),
+				)
+			),
+			new \OD_URL_Metric(
+				array(
+					'viewportWidth' => 1200,
+					'lcp'           => array(
+						'src'   => $hero,
+						'isLCP' => true,
+					),
+				)
+			),
+		);
+		$GLOBALS['od_metrics_stub'] = $this->od_metrics;
+
+		$this->assertSame( $hero, OD_Bridge::get_stable_lcp_url() );
+	}
+
+	/**
+	 * Test get_stable_lcp_url returns empty when viewport groups disagree.
+	 */
+	public function test_get_stable_lcp_url_disagreeing_groups_return_empty(): void {
+		$this->install_common_stubs();
+		$this->ensure_od_class();
+		$this->options = array(
+			'od_integration' => array( 'enabled' => true ),
+		);
+
+		$this->od_metrics           = array(
+			new \OD_URL_Metric(
+				array(
+					'viewportWidth' => 360,
+					'lcp'           => array(
+						'src'   => 'https://example.com/wp-content/uploads/hero-mobile.jpg',
+						'isLCP' => true,
+					),
+				)
+			),
+			new \OD_URL_Metric(
+				array(
+					'viewportWidth' => 1200,
+					'lcp'           => array(
+						'src'   => 'https://example.com/wp-content/uploads/hero-desktop.jpg',
+						'isLCP' => true,
+					),
+				)
+			),
+		);
+		$GLOBALS['od_metrics_stub'] = $this->od_metrics;
+
+		$this->assertSame( '', OD_Bridge::get_stable_lcp_url() );
+	}
+
+	/**
+	 * Test get_stable_lcp_url returns empty on a tied vote.
+	 */
+	public function test_get_stable_lcp_url_tied_vote_returns_empty(): void {
+		$this->install_common_stubs();
+		$this->ensure_od_class();
+		$this->options = array(
+			'od_integration' => array( 'enabled' => true ),
+		);
+
+		$hero_a                     = 'https://example.com/wp-content/uploads/hero-a.jpg';
+		$hero_b                     = 'https://example.com/wp-content/uploads/hero-b.jpg';
+		$this->od_metrics           = array(
+			new \OD_URL_Metric(
+				array(
+					'viewportWidth' => 360,
+					'lcp'           => array(
+						'src'   => $hero_a,
+						'isLCP' => true,
+					),
+				)
+			),
+			new \OD_URL_Metric(
+				array(
+					'viewportWidth' => 390,
+					'lcp'           => array(
+						'src'   => $hero_a,
+						'isLCP' => true,
+					),
+				)
+			),
+			new \OD_URL_Metric(
+				array(
+					'viewportWidth' => 1200,
+					'lcp'           => array(
+						'src'   => $hero_b,
+						'isLCP' => true,
+					),
+				)
+			),
+			new \OD_URL_Metric(
+				array(
+					'viewportWidth' => 1366,
+					'lcp'           => array(
+						'src'   => $hero_b,
+						'isLCP' => true,
+					),
+				)
+			),
+		);
+		$GLOBALS['od_metrics_stub'] = $this->od_metrics;
+
+		$this->assertSame( '', OD_Bridge::get_stable_lcp_url() );
+	}
+
+	/**
+	 * Test get_stable_lcp_url returns empty when the bridge is disabled.
+	 */
+	public function test_get_stable_lcp_url_empty_when_disabled(): void {
+		$this->install_common_stubs();
+		$this->ensure_od_class();
+		$this->options = array(
+			'od_integration' => array( 'enabled' => true ),
+		);
+
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook, $value ) {
+				if ( 'wppo_od_should_optimize' === $hook ) {
+					return false;
+				}
+				return $value;
+			}
+		);
+
+		$hero                       = 'https://example.com/wp-content/uploads/hero.jpg';
+		$this->od_metrics           = array(
+			new \OD_URL_Metric(
+				array(
+					'viewportWidth' => 400,
+					'lcp'           => array(
+						'src'   => $hero,
+						'isLCP' => true,
+					),
+				)
+			),
+		);
+		$GLOBALS['od_metrics_stub'] = $this->od_metrics;
+
+		$this->assertSame( '', OD_Bridge::get_stable_lcp_url() );
+	}
+
+	/**
 	 * Data provider for OD present/absent threshold.
 	 *
 	 * @return array

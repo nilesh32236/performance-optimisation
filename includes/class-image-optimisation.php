@@ -2534,7 +2534,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 			try {
 				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_field_lcp_url' ) ) {
-					$field = \PerformanceOptimise\Inc\RUM::get_field_lcp_url();
+					// Same explicit path derivation as get_current_lcp_url()
+					// so both tiers bucket identically behind
+					// proxies/subdirectories.
+					$parsed_path = function_exists( 'wp_parse_url' ) ? wp_parse_url( Util::get_current_url(), PHP_URL_PATH ) : '/';
+					$raw_path    = is_string( $parsed_path ) && '' !== $parsed_path ? $parsed_path : '/';
+					$field_path  = Util::normalize_rum_path( $raw_path );
+					$field       = \PerformanceOptimise\Inc\RUM::get_field_lcp_url( $field_path );
 					if ( is_array( $field ) && ! empty( $field['url'] ) && is_string( $field['url'] ) ) {
 						$candidate = trim( $field['url'] );
 						if ( '' !== $candidate && $this->is_image_lcp_url( $candidate ) && $this->is_same_origin_preload_url( $candidate ) ) {
@@ -2619,7 +2625,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * filter fires exactly once, inside `OD_Bridge::get_lcp_url()` via
 		 * `is_enabled()` with current-URL context), then stored PageSpeed LCP
 		 * (via `get_current_lcp_url()`, which covers RUM-field override +
-		 * post-meta/front-page/transient tiers), then the DOM-first heuristic
+		 * post-meta/front-page/transient tiers), then the stability-gated
+		 * signal-only tier (`get_stable_signal_lcp_url()` — RUM field +
+		 * agreement-gated OD, issue #1273), then the DOM-first heuristic
 		 * (first non-trivial `<img src>` in `$buffer` when provided — DOM
 		 * order, not viewport-aware, buffer-only, and only a fallback when no
 		 * measured/stored data exists). Text-only LCP never resolves: every
@@ -2654,6 +2662,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$stored = $this->get_current_lcp_url();
 				if ( is_string( $stored ) && '' !== $stored && $this->is_image_lcp_url( $stored ) && $this->is_same_origin_preload_url( $stored ) ) {
 					return $stored;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
+			// P1b: Stable signal-only tier (issue #1273) — RUM field +
+			// stability-gated OD, without the manual/stored/heuristic tiers.
+			// This is the internal caller that makes the signal path
+			// automatic: `get_auto_lcp_preload_data()`, the buffer hero
+			// path, and the lazy-exclusion path all resolve through here.
+			// Already validated + per-post-disable gated inside.
+			try {
+				$signal = $this->get_stable_signal_lcp_url();
+				if ( is_string( $signal ) && '' !== $signal ) {
+					return $signal;
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -3096,6 +3119,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 				try {
 					if ( $this->is_auto_lcp_disabled_for_post() ) {
+						if ( null === $buffer ) {
+							$this->lazy_lcp_exclusion_url     = '';
+							$this->lazy_lcp_exclusion_url_key = $memo_key;
+						}
 						return '';
 					}
 				} catch ( \Throwable $e ) {
@@ -3541,7 +3568,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				false,
 				Util::get_image_mime_type( $data['url'] ),
 				$data['media'] ?? '',
-				'high',
+				is_string( $data['priority'] ?? null ) && '' !== ( $data['priority'] ?? '' ) ? (string) $data['priority'] : 'high',
 				(string) ( $data['imagesrcset'] ?? '' ),
 				(string) ( $data['imagesizes'] ?? '' )
 			);
@@ -6686,17 +6713,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$preload_img_urls = $this->get_preload_images_urls();
 				$exclude_imgs     = array_unique( array_merge( $exclude_imgs, $preload_img_urls ) );
 
-				// Same-response coupling (issue #1273): URLs emitted via
-				// generate_img_preload() never flow through
-				// get_all_preload_data(), so they are merged here to keep
-				// the preloaded hero eager in this response.
-				try {
-					if ( array() !== self::$preload_emitted_urls ) {
-						$exclude_imgs = array_unique( array_merge( $exclude_imgs, array_keys( self::$preload_emitted_urls ) ) );
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
+				// Note: same-response coupling (issue #1273) lives in
+				// get_preload_images_urls(), which already merges the
+				// generate_img_preload() emitted set — no second merge here.
 
 				// OD bridge: ensure the LCP image (mobile/desktop) is never lazy-loaded.
 				// The `wppo_od_should_optimize` opt-out (issue #1216) is

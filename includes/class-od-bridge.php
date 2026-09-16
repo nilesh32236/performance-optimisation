@@ -215,8 +215,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 					return '';
 				}
 
+				// Unique-winner gate: a tied vote (e.g. mobile vs desktop
+				// heroes at 2-2) has no stable winner, so fail open to ''.
+				$winners = array_keys(
+					array_filter(
+						$counts,
+						static function ( $c ) use ( $max ) {
+							return $c === $max;
+						}
+					)
+				);
+				if ( 1 !== count( $winners ) ) {
+					return '';
+				}
+				$winner = (string) $winners[0];
 				foreach ( $normalized as $idx => $norm ) {
-					if ( ( $counts[ $norm ] ?? 0 ) === $max ) {
+					if ( $norm === $winner ) {
 						return (string) $raw_urls[ $idx ];
 					}
 				}
