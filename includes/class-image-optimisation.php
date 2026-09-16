@@ -2232,6 +2232,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Whether OD-driven LCP optimization is opted in via filter.
+		 *
+		 * Single source of truth for the `wppo_od_should_optimize` opt-out
+		 * (issue #1216): consulted by both `resolve_auto_lcp_url()` (P0)
+		 * and `get_current_lcp_url()` (Priority-0 OD tier) so setting the
+		 * filter to false disables OD-driven LCP on every path. Fail-open:
+		 * any failure returns true (OD tier proceeds to its own guards).
+		 *
+		 * @since NEXT
+		 * @return bool False when an explicit filter opts out.
+		 */
+		private function is_od_opted_in(): bool {
+			try {
+				if ( ! function_exists( 'apply_filters' ) ) {
+					return true;
+				}
+				$context = function_exists( 'home_url' ) ? home_url() : '';
+				return (bool) apply_filters( 'wppo_od_should_optimize', true, $context );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
 		 * Resolve the single auto-detected LCP image URL for the current page.
 		 *
 		 * Unified priority chain (fail-open, never fatal):
@@ -2264,21 +2289,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
-			// P0: Optimization Detective — real-visit hero wins. Guarded via
-			// class_exists/function_exists plus has_filter on the OD opt-out
-			// hook (issue #1216): an explicit wppo_od_should_optimize=false
-			// filter skips the OD tier and falls through to stored/heuristic.
-			if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
-				try {
-					$od_available = class_exists( 'OD_URL_Metric' ) || function_exists( 'od_get_url_metrics' );
-					if ( $od_available ) {
-						$od_opt_in = true;
-						if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) ) {
-							// Consult the hook (no-op when unhooked) then
-							// respect an explicit opt-out.
-							$od_opt_in = (bool) apply_filters( 'wppo_od_should_optimize', true, function_exists( 'home_url' ) ? home_url() : '' );
-						}
-						if ( $od_opt_in ) {
+		// P0: Optimization Detective — real-visit hero wins. Guarded via
+		// class_exists/function_exists plus has_filter on the OD opt-out
+		// hook (issue #1216): an explicit wppo_od_should_optimize=false
+		// filter skips the OD tier and falls through to stored/heuristic.
+		if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
+			try {
+				$od_available = class_exists( 'OD_URL_Metric' ) || function_exists( 'od_get_url_metrics' );
+				if ( $od_available ) {
+					$od_opt_in = $this->is_od_opted_in();
+					if ( $od_opt_in ) {
 							$od_url = \PerformanceOptimise\Inc\OD_Bridge::get_lcp_url();
 							if ( is_string( $od_url ) && '' !== $od_url && $this->is_image_lcp_url( $od_url ) && $this->is_same_origin_preload_url( $od_url ) ) {
 								return $od_url;
@@ -2537,9 +2557,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			if ( null !== $this->current_lcp_url ) {
 				return $this->current_lcp_url;
 			}
-			$this->current_lcp_url = '';
-			// Priority 0: Optimization Detective — LCP tag per viewport group (mobile/desktop).
-			if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
+		$this->current_lcp_url = '';
+		// Priority 0: Optimization Detective — LCP tag per viewport group (mobile/desktop).
+		// Honours the wppo_od_should_optimize opt-out (issue #1216) via
+		// is_od_opted_in() so a false filter disables OD-driven LCP here
+		// exactly as it does in resolve_auto_lcp_url(). OD_Bridge::get_lcp_url()
+		// additionally gates on OD_Bridge::is_enabled(); this explicit check
+		// keeps both paths in parity even if the bridge logic drifts.
+		if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) && $this->is_od_opted_in() ) {
 				try {
 					$od_url = \PerformanceOptimise\Inc\OD_Bridge::get_lcp_url();
 					if ( '' !== $od_url ) {

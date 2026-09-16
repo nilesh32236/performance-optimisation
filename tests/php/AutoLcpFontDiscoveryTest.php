@@ -127,7 +127,7 @@ class AutoLcpFontDiscoveryTest extends \PHPUnit\Framework\TestCase {
 			$method->invoke( $main, '/fonts/root.woff2', '' )
 		);
 		$this->assertSame(
-			'http://example.com/wp-content/themes/t/css/../fonts/rel.woff2',
+			'http://example.com/wp-content/themes/t/fonts/rel.woff2',
 			$method->invoke( $main, '../fonts/rel.woff2', 'http://example.com/wp-content/themes/t/css/style.css' )
 		);
 		$this->assertSame(

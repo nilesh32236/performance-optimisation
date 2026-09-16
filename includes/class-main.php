@@ -5891,7 +5891,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					if ( '' === $src ) {
 						continue;
 					}
-					$abs_src = preg_match( '/^https?:\/\//i', $src ) ? $src : Util::cached_content_url( $src );
+					$abs_src = preg_match( '/^(?:https?:)?\/\//i', $src ) ? $src : Util::cached_content_url( $src );
 					if ( ! $this->is_same_origin_font_url( $abs_src ) ) {
 						continue;
 					}
@@ -5974,28 +5974,109 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( preg_match( '/^https?:\/\//i', $font_url ) || 0 === strpos( $font_url, '//' ) ) {
 					return substr( $font_url, 0, 2048 );
 				}
-				$is_root_relative = 0 === strpos( $font_url, '/' );
-				if ( $is_root_relative && function_exists( 'home_url' ) ) {
-					$home = (string) home_url();
-					return substr( rtrim( $home, '/' ) . $font_url, 0, 2048 );
-				}
-				if ( '' !== $base_src ) {
-					$base_path = strtok( $base_src, '?#' );
-					if ( ! is_string( $base_path ) || '' === $base_path ) {
-						$base_path = $base_src;
-					}
-					$dir = rtrim( dirname( $base_path ), '/' ) . '/';
-					return substr( $dir . ltrim( $font_url, '/' ), 0, 2048 );
-				}
-				if ( function_exists( 'home_url' ) ) {
-					$home = (string) home_url();
-					return substr( rtrim( $home, '/' ) . '/' . ltrim( $font_url, '/' ), 0, 2048 );
-				}
-				return substr( $font_url, 0, 2048 );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return substr( trim( $font_url ), 0, 2048 );
+			$is_root_relative = 0 === strpos( $font_url, '/' );
+			if ( $is_root_relative && function_exists( 'home_url' ) ) {
+				$home = (string) home_url();
+				return substr( $this->normalize_font_href( rtrim( $home, '/' ) . $font_url ), 0, 2048 );
 			}
+			if ( '' !== $base_src ) {
+				$base_path = strtok( $base_src, '?#' );
+				if ( ! is_string( $base_path ) || '' === $base_path ) {
+					$base_path = $base_src;
+				}
+				$dir = rtrim( dirname( $base_path ), '/' ) . '/';
+				return substr( $this->normalize_font_href( $dir . ltrim( $font_url, '/' ) ), 0, 2048 );
+			}
+			if ( function_exists( 'home_url' ) ) {
+				$home = (string) home_url();
+				return substr( $this->normalize_font_href( rtrim( $home, '/' ) . '/' . ltrim( $font_url, '/' ) ), 0, 2048 );
+			}
+			return substr( $this->normalize_font_href( $font_url ), 0, 2048 );
+		} catch ( \Throwable $e ) {
+			unset( $e );
+			return substr( trim( $font_url ), 0, 2048 );
+		}
+	}
+
+	/**
+	 * Canonicalize a font href by resolving dot-segments.
+	 *
+	 * Resolves `/./` and `/../` against the directory path so
+	 * stylesheet-relative refs (`../fonts/x.woff2`) emit canonical
+	 * preload hrefs for dedup, caching, and audit tooling (issue
+	 * #1216). Query strings and fragments are preserved. Browsers
+	 * resolve uncanonical hrefs identically, so this is purely a
+	 * canonicalization step. Never fatals: any failure returns the
+	 * input unchanged.
+	 *
+	 * @since NEXT
+	 * @param string $href Absolute or protocol-relative href.
+	 * @return string Canonicalized href.
+	 */
+	private function normalize_font_href( string $href ): string {
+		try {
+			$fragment = '';
+			$hash_pos = strpos( $href, '#' );
+			if ( false !== $hash_pos ) {
+				$fragment = substr( $href, $hash_pos );
+				$href     = substr( $href, 0, $hash_pos );
+			}
+			$query = '';
+			$q_pos = strpos( $href, '?' );
+			if ( false !== $q_pos ) {
+				$query = substr( $href, $q_pos );
+				$href  = substr( $href, 0, $q_pos );
+			}
+			if ( preg_match( '#^(https?://[^/]+)(/.*)$#i', $href, $m ) ) {
+				return $m[1] . $this->normalize_font_path( $m[2] ) . $query . $fragment;
+			}
+			if ( 0 === strpos( $href, '//' ) && preg_match( '#^(//[^/]+)(/.*)$#', $href, $m ) ) {
+				return $m[1] . $this->normalize_font_path( $m[2] ) . $query . $fragment;
+			}
+			if ( 0 === strpos( $href, '/' ) ) {
+				return $this->normalize_font_path( $href ) . $query . $fragment;
+			}
+			return $href . $query . $fragment;
+		} catch ( \Throwable $e ) {
+			unset( $e );
+			return $href;
+		}
+	}
+
+	/**
+	 * Resolve dot-segments in a URL path.
+	 *
+	 * @since NEXT
+	 * @param string $path URL path starting with `/`.
+	 * @return string Normalized path.
+	 */
+	private function normalize_font_path( string $path ): string {
+		$is_absolute = 0 === strpos( $path, '/' );
+		$parts       = explode( '/', $path );
+		$stack       = array();
+		foreach ( $parts as $part ) {
+			if ( '' === $part || '.' === $part ) {
+				continue;
+			}
+			if ( '..' === $part ) {
+				if ( ! empty( $stack ) ) {
+					array_pop( $stack );
+				}
+				continue;
+			}
+			$stack[] = $part;
+		}
+		$normalized = implode( '/', $stack );
+		if ( $is_absolute ) {
+			$normalized = '/' . $normalized;
+		}
+		if ( '' !== $normalized && '/' !== $normalized && str_ends_with( $path, '/' ) && ! str_ends_with( $normalized, '/' ) ) {
+			$normalized .= '/';
+		}
+		if ( '' === $normalized && $is_absolute ) {
+			$normalized = '/';
+		}
+		return $normalized;
 		}
 
 		/**
@@ -6024,22 +6105,54 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						$manual_keys[ $this->normalize_font_url( $m ) ] = true;
 					}
 				}
-				$cache_key = '';
-				try {
-					$handles = array();
-					$srcs    = array();
-					if ( isset( $GLOBALS['wp_styles'] ) && is_object( $GLOBALS['wp_styles'] ) && isset( $GLOBALS['wp_styles']->queue ) && is_array( $GLOBALS['wp_styles']->queue ) ) {
-						$handles    = array_slice( $GLOBALS['wp_styles']->queue, 0, 10 );
-						$registered = $GLOBALS['wp_styles']->registered ?? array();
-						if ( ! is_array( $registered ) ) {
-							$registered = array();
+			$cache_key = '';
+			try {
+				$handles = array();
+				$srcs    = array();
+				if ( isset( $GLOBALS['wp_styles'] ) && is_object( $GLOBALS['wp_styles'] ) && isset( $GLOBALS['wp_styles']->queue ) && is_array( $GLOBALS['wp_styles']->queue ) ) {
+					$handles    = array_slice( $GLOBALS['wp_styles']->queue, 0, 10 );
+					$registered = $GLOBALS['wp_styles']->registered ?? array();
+					if ( ! is_array( $registered ) ) {
+						$registered = array();
+					}
+					foreach ( $handles as $h ) {
+						$s      = $registered[ $h ] ?? null;
+						$srcs[] = is_object( $s ) ? (string) ( (string) ( $s->src ?? '' ) . '|' . (string) ( $s->ver ?? '' ) ) : (string) $h;
+					}
+				}
+				// Inline before/after CSS is also scanned by
+				// collect_enqueued_font_css_chunks(), so hash it into the
+				// key (issue #1216): editing Customizer additional CSS or
+				// inline @font-face rules must bust the 12h cache. Reads
+				// are in-memory only (no file I/O) so the transient still
+				// avoids stylesheet disk reads on cache hits.
+				$inline_hashes = array();
+				if ( ! empty( $handles ) && isset( $GLOBALS['wp_styles'] ) && is_object( $GLOBALS['wp_styles'] ) ) {
+					$registered = $GLOBALS['wp_styles']->registered ?? array();
+					if ( ! is_array( $registered ) ) {
+						$registered = array();
+					}
+					foreach ( $handles as $h ) {
+						$s = $registered[ $h ] ?? null;
+						if ( ! is_object( $s ) ) {
+							continue;
 						}
-						foreach ( $handles as $h ) {
-							$s      = $registered[ $h ] ?? null;
-							$srcs[] = is_object( $s ) ? (string) ( (string) ( $s->src ?? '' ) . '|' . (string) ( $s->ver ?? '' ) ) : (string) $h;
+						$extra = $s->extra ?? array();
+						if ( ! is_array( $extra ) ) {
+							continue;
+						}
+						foreach ( array( 'after', 'before' ) as $key ) {
+							if ( empty( $extra[ $key ] ) ) {
+								continue;
+							}
+							$inline = is_array( $extra[ $key ] ) ? implode( "\n", $extra[ $key ] ) : (string) $extra[ $key ];
+							if ( '' !== trim( $inline ) && false !== stripos( $inline, 'font-face' ) ) {
+								$inline_hashes[] = md5( substr( $inline, 0, 524288 ) );
+							}
 						}
 					}
-					$cache_key = Util::transient_key( 'wppo_auto_fonts_' . md5( wp_json_encode( $srcs ) . '|' . implode( '|', array_keys( $manual_keys ) ) ) );
+				}
+				$cache_key = Util::transient_key( 'wppo_auto_fonts_' . md5( wp_json_encode( $srcs ) . '|' . wp_json_encode( $inline_hashes ) . '|' . implode( '|', array_keys( $manual_keys ) ) ) );
 				} catch ( \Throwable $e ) {
 					unset( $e );
 					$cache_key = '';
