@@ -53,7 +53,8 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 	 * the three audit #899 findings (img-scan cursors, blog-prefixed purge
 	 * queue) plus the issue #934 autoload-remediation priors option plus the
 	 * option-leak hardening additions plus the issue #1107 regen timestamp
-	 * plus the issue #1144 settings snapshot.
+	 * plus the issue #1144 settings snapshot plus the issue #1220 targeted
+	 * regen timestamp.
 	 *
 	 * @var string[]
 	 */
@@ -99,6 +100,8 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 		'wppo_object_cache_circuit_dismissed',
 		// Issue #1107 used-CSS full-regen cooldown timestamp.
 		'wppo_used_css_last_full_regen',
+		// Issue #1220 used-CSS targeted-regen cooldown timestamp.
+		'wppo_used_css_last_targeted_regen',
 		// Issue #1144 one-click-undo snapshot (Util::SETTINGS_SNAPSHOT_OPTION).
 		'wppo_settings_snapshot',
 		// Issue #1162 resumable sitemap preload queue.

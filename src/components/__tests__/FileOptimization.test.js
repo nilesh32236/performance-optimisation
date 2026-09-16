@@ -342,6 +342,11 @@ describe( 'FileOptimization Component', () => {
 			success: true,
 			message: 'Used CSS regeneration queued.',
 		} );
+		// Staleness-banner refresh after a successful regen (issue #1220).
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { is_stale: false },
+		} );
 
 		render( <FileOptimization options={ {} } serverRules={ {} } /> );
 
@@ -352,7 +357,7 @@ describe( 'FileOptimization Component', () => {
 		fireEvent.click( regenerateButton );
 
 		await waitFor( () => {
-			expect( apiCall ).toHaveBeenCalledTimes( 2 );
+			expect( apiCall ).toHaveBeenCalledTimes( 3 );
 		} );
 
 		expect( apiCall.mock.calls[ 0 ][ 0 ] ).toBe( 'update_settings' );
@@ -362,6 +367,8 @@ describe( 'FileOptimization Component', () => {
 		);
 
 		expect( apiCall.mock.calls[ 1 ][ 0 ] ).toBe( 'used_css_regenerate' );
+
+		expect( apiCall.mock.calls[ 2 ][ 0 ] ).toBe( 'used_css_status' );
 
 		await waitFor( () => {
 			expect(

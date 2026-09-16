@@ -1,6 +1,6 @@
 import { useState, useEffect } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
-import { apiCall } from '../lib/apiRequest';
+import { apiCall, patchSettingsCache } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
 import SwitchField from './common/SwitchField';
@@ -73,15 +73,7 @@ const LlmsPanel = () => {
 			} );
 			if ( response.success ) {
 				// Mutate global for next mount.
-				if (
-					typeof wppoSettings !== 'undefined' &&
-					wppoSettings.settings
-				) {
-					wppoSettings.settings = Object.freeze( {
-						...wppoSettings.settings,
-						llms_txt: Object.freeze( { enabled, source } ),
-					} );
-				}
+				patchSettingsCache( 'llms_txt', { enabled, source } );
 				notify( {
 					type: 'success',
 					message: __(

@@ -4,6 +4,8 @@ import {
 	RUM_ALLOWED_CONNECTIONS,
 	sanitizeRumValues,
 	RUM_MAX_METRIC_MS,
+	shouldSendSample,
+	RUM_DEFAULT_SAMPLE_RATE,
 } from '../rum';
 
 describe( 'classifyDeviceWidth', () => {
@@ -171,5 +173,58 @@ describe( 'sanitizeRumValues', () => {
 		} );
 		expect( clean ).toEqual( { ttfb: 50 } );
 		expect( clean.evilKey ).toBeUndefined();
+	} );
+} );
+
+describe( 'shouldSendSample', () => {
+	it( 'defaults to 100 (unsampled current behavior)', () => {
+		expect( RUM_DEFAULT_SAMPLE_RATE ).toBe( 100 );
+	} );
+
+	it( 'sends about rate percent over 1k views', () => {
+		let hits = 0;
+		const views = 1000;
+		for ( let i = 0; i < views; i++ ) {
+			if ( shouldSendSample( 10, i / views ) ) {
+				hits++;
+			}
+		}
+		// Inclusive boundary (roll * 100 <= rate, matching PHP roll <= rate):
+		// rolls 0..0.10 inclusive keep, so i=0..100 hit = 101 views.
+		expect( hits ).toBe( 101 );
+	} );
+
+	it( 'clamps invalid rates to 100 (fail-open to unsampled)', () => {
+		for ( const bad of [
+			undefined,
+			null,
+			0,
+			-5,
+			101,
+			1000,
+			NaN,
+			'nope',
+			{},
+			[],
+		] ) {
+			expect( shouldSendSample( bad, 0.999 ) ).toBe( true );
+		}
+	} );
+
+	it( 'keeps only the first percentile at rate 1', () => {
+		expect( shouldSendSample( 1, 0.0 ) ).toBe( true );
+		expect( shouldSendSample( 1, 0.009 ) ).toBe( true );
+		// Inclusive boundary, matching PHP should_keep_sample( 1, 1 ).
+		expect( shouldSendSample( 1, 0.01 ) ).toBe( true );
+		expect( shouldSendSample( 1, 0.0101 ) ).toBe( false );
+	} );
+
+	it( 'keeps a roll exactly on the boundary (matches PHP roll <= rate)', () => {
+		expect( shouldSendSample( 10, 0.1 ) ).toBe( true );
+		expect( shouldSendSample( 10, 0.1001 ) ).toBe( false );
+	} );
+
+	it( 'fails open on a non-finite roll', () => {
+		expect( shouldSendSample( 10, NaN ) ).toBe( true );
 	} );
 } );

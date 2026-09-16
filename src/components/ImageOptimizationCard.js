@@ -9,7 +9,49 @@ import { faImages, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import { formatBytes } from '../lib/util';
+import { savingsPercent } from '../lib/format';
 import { __, sprintf } from '@wordpress/i18n';
+
+/**
+ * Shared conversion progress section (WebP/AVIF were ~30-line duplicates).
+ *
+ * @since NEXT
+ * @param {Object} props       Props.
+ * @param {string} props.id    Progress label id.
+ * @param {string} props.title Section title.
+ * @param {number} props.done  Completed count.
+ * @param {number} props.total Total count.
+ * @return {Element} Progress section.
+ */
+export const ConversionProgressSection = ( { id, title, done, total } ) => {
+	const safeTotal = Number( total ) || 0;
+	const safeDone = Number( done ) || 0;
+	const percent = safeTotal > 0 ? ( safeDone / safeTotal ) * 100 : 0;
+	return (
+		<div className="wppo-progress-section">
+			<div className="wppo-progress-header" id={ id }>
+				<span>{ title }</span>
+				<span>
+					{ safeDone } / { safeTotal }
+				</span>
+			</div>
+			<div
+				className="wppo-progress-bar"
+				role="progressbar"
+				aria-labelledby={ id }
+				aria-valuemin="0"
+				aria-valuemax="100"
+				aria-valuenow={ Math.round( percent ) }
+			>
+				{ /* dynamic progress via CSS var for consistency (intentional inline var) */ }
+				<div
+					className="wppo-progress-bar__fill"
+					style={ { '--wppo-progress': `${ percent }%` } }
+				></div>
+			</div>
+		</div>
+	);
+};
 
 const ImageOptimizationCard = ( {
 	completed = {},
@@ -27,10 +69,6 @@ const ImageOptimizationCard = ( {
 		( completed.webp || 0 ) + ( pending.webp || 0 ) + ( failed.webp || 0 );
 	const totalAvif =
 		( completed.avif || 0 ) + ( pending.avif || 0 ) + ( failed.avif || 0 );
-	const webpPercent =
-		totalWebP > 0 ? ( ( completed.webp || 0 ) / totalWebP ) * 100 : 0;
-	const avifPercent =
-		totalAvif > 0 ? ( ( completed.avif || 0 ) / totalAvif ) * 100 : 0;
 	const failedWebP = failed.webp || 0;
 	const failedAvif = failed.avif || 0;
 
@@ -72,67 +110,25 @@ const ImageOptimizationCard = ( {
 			}
 		>
 			<div className="wppo-progress-grid">
-				<div className="wppo-progress-section">
-					<div
-						className="wppo-progress-header"
-						id="wppo-webp-progress-label"
-					>
-						<span>
-							{ __(
-								'WebP Conversion Progress',
-								'performance-optimisation'
-							) }
-						</span>
-						<span>
-							{ completed.webp || 0 } / { totalWebP }
-						</span>
-					</div>
-					<div
-						className="wppo-progress-bar"
-						role="progressbar"
-						aria-labelledby="wppo-webp-progress-label"
-						aria-valuemin="0"
-						aria-valuemax="100"
-						aria-valuenow={ Math.round( webpPercent ) }
-					>
-						{ /* dynamic progress via CSS var for consistency (intentional inline var) */ }
-						<div
-							className="wppo-progress-bar__fill"
-							style={ { '--wppo-progress': `${ webpPercent }%` } }
-						></div>
-					</div>
-				</div>
+				<ConversionProgressSection
+					id="wppo-webp-progress-label"
+					title={ __(
+						'WebP Conversion Progress',
+						'performance-optimisation'
+					) }
+					done={ completed.webp || 0 }
+					total={ totalWebP }
+				/>
 
-				<div className="wppo-progress-section">
-					<div
-						className="wppo-progress-header"
-						id="wppo-avif-progress-label"
-					>
-						<span>
-							{ __(
-								'AVIF Conversion Progress',
-								'performance-optimisation'
-							) }
-						</span>
-						<span>
-							{ completed.avif || 0 } / { totalAvif }
-						</span>
-					</div>
-					<div
-						className="wppo-progress-bar"
-						role="progressbar"
-						aria-labelledby="wppo-avif-progress-label"
-						aria-valuemin="0"
-						aria-valuemax="100"
-						aria-valuenow={ Math.round( avifPercent ) }
-					>
-						{ /* dynamic progress via CSS var for consistency (intentional inline var) */ }
-						<div
-							className="wppo-progress-bar__fill"
-							style={ { '--wppo-progress': `${ avifPercent }%` } }
-						></div>
-					</div>
-				</div>
+				<ConversionProgressSection
+					id="wppo-avif-progress-label"
+					title={ __(
+						'AVIF Conversion Progress',
+						'performance-optimisation'
+					) }
+					done={ completed.avif || 0 }
+					total={ totalAvif }
+				/>
 			</div>
 
 			{ ( failedWebP > 0 || failedAvif > 0 ) && (
@@ -170,11 +166,10 @@ const ImageOptimizationCard = ( {
 								formatBytes( savings.converted_bytes ),
 								Math.max(
 									0,
-									Math.round(
-										( savings.saved_bytes /
-											savings.original_bytes ) *
-											100
-									)
+									savingsPercent(
+										savings.original_bytes,
+										savings.converted_bytes
+									) ?? 0
 								),
 								savings.images_counted
 							) }

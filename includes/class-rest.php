@@ -211,6 +211,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+				'used_css_status'           => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'get_used_css_status' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
 				'regenerate_ccss'           => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'regenerate_ccss' ),
@@ -1077,6 +1083,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$stored_rescan                     = $options['performance_audit']['auto_rescan'];
 				$stored_rescan                     = is_string( $stored_rescan ) ? sanitize_text_field( $stored_rescan ) : '';
 				$sanitized_settings['auto_rescan'] = in_array( $stored_rescan, array( '', 'daily', 'weekly' ), true ) ? $stored_rescan : '';
+			}
+
+			// Preserve the RUM beacon sample rate when the request omits it
+			// (issue #1214): a partial save must not wipe the rate. Clamped to
+			// 1-100 like the sanitizer so a legacy extreme stored value
+			// self-heals to unsampled instead of disabling beacons.
+			if ( 'performance_audit' === $tab && ! isset( $params['settings']['rum_sample_rate'] ) && isset( $options['performance_audit']['rum_sample_rate'] ) ) {
+				$rum_default                           = class_exists( 'PerformanceOptimise\Inc\RUM' ) ? \PerformanceOptimise\Inc\RUM::RUM_SAMPLE_RATE_DEFAULT : 100;
+				$stored_rate                           = $options['performance_audit']['rum_sample_rate'];
+				$stored_rate                           = is_numeric( $stored_rate ) ? (int) $stored_rate : $rum_default;
+				$sanitized_settings['rum_sample_rate'] = ( $stored_rate >= 1 && $stored_rate <= 100 ) ? $stored_rate : $rum_default;
 			}
 
 			// Preserve dismissed AI suggestions when the request omits them
@@ -2912,6 +2929,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 */
 		public function get_ccss_status( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			$status = Critical_CSS::get_status_all();
+
+			return $this->send_response( $status );
+		}
+
+		/**
+		 * Get used-CSS staleness status (issue #1220).
+		 *
+		 * Read-only: last-regen time, stale flag, targeted-regen cooldown
+		 * remaining, and the active delivery mode for the admin staleness
+		 * warning. Fail-open to safe defaults on any failure.
+		 *
+		 * @param \WP_REST_Request $_request The request object (unused).
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		public function get_used_css_status( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			$status = class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Used_CSS', 'get_staleness_info' )
+				? Used_CSS::get_staleness_info()
+				: array(
+					'last_regen'         => 0,
+					'last_regen_human'   => '',
+					'is_stale'           => false,
+					'cooldown_remaining' => 0,
+					'delivery_mode'      => 'file',
+				);
 
 			return $this->send_response( $status );
 		}

@@ -5,9 +5,13 @@ import React from 'react';
 import AiPanel from '../AiPanel';
 
 // Mock the API request
-jest.mock( '../../lib/apiRequest', () => ( {
-	apiCall: jest.fn(),
-} ) );
+jest.mock( '../../lib/apiRequest', () => {
+	const actual = jest.requireActual( '../../lib/apiRequest' );
+	return {
+		...actual,
+		apiCall: jest.fn(),
+	};
+} );
 
 import { apiCall } from '../../lib/apiRequest';
 

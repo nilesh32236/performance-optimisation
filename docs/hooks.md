@@ -1157,6 +1157,37 @@ add_filter( 'wppo_server_timing_enabled', function( $enabled ) {
 
 ---
 
+### `wppo_rum_throttle_threshold`
+Filters the per-minute collection volume that engages the RUM high-traffic auto-throttle (issue #1214). When the site-wide beacon count for the current minute (the windowed `wppo_rum_global` bucket, so no new transient writes) reaches this threshold, the effective sample rate halves (floored at 1) for the rest of the minute. A non-positive value disables the throttle. Non-numeric filter returns fall back to the default (fail-open). @since NEXT.
+
+**Parameters:**
+- `$threshold` *(int)* — Beacons per minute that engage the throttle. Default `60` (`RUM::RUM_THROTTLE_THRESHOLD_DEFAULT`).
+
+**Example:**
+```php
+add_filter( 'wppo_rum_throttle_threshold', function() {
+    return 120; // Throttle later on high-capacity infrastructure.
+} );
+```
+
+---
+
+### `wppo_rum_effective_sample_rate`
+Filters the final RUM effective sample rate after the high-traffic auto-throttle (issue #1214). Out-of-range values (outside 1–100) fall back to the unfiltered effective rate. Sampling is a lossy hint only: the client (`src/rum.js`) and the server (`RUM::store_sample()`) each roll independently at this rate, so stored volume is approximately rate²/100. @since NEXT.
+
+**Parameters:**
+- `$effective` *(int)* — Effective rate in 1–100 (configured rate, halved under throttle).
+- `$base` *(int)* — Configured `performance_audit.rum_sample_rate` before throttling.
+
+**Example:**
+```php
+add_filter( 'wppo_rum_effective_sample_rate', function( $effective, $base ) {
+    return min( $effective, 25 ); // Never sample more than 25% on this site.
+}, 10, 2 );
+```
+
+---
+
 ## 🔌 WordPress Core Late-Header Hooks Used by Plugin
 
 ### `wp_finalized_template_enhancement_output_buffer` (alias `wp_send_late_headers`)
@@ -1852,6 +1883,7 @@ jobs / WP-CLI and edited via `wp wppo settings` (or `import_settings`).
 |-----|----------------|-------------|
 | `image_optimisation.excludeWebPImages` | string (newline-separated URLs/handles), default `''` | `Img_Converter::__construct()` (`includes/class-img-converter.php`) — images matching these URLs/handles are skipped during WebP/AVIF conversion. |
 | `image_optimisation.batch` | int, default `50` | `Cron` image-conversion worker (`includes/class-cron.php`) and `wp wppo image convert` (`includes/class-wppo-cli-command.php`) — number of images processed per batch. |
+| `performance_audit.rum_sample_rate` | int 1–100, default `100` | `RUM::get_sample_rate()` / `RUM::get_effective_sample_rate()` (`includes/class-rum.php`) — percent of page views sending a RUM beacon. No SPA toggle (headless by design); edit via `wp wppo settings` or `import_settings`. The client (`src/rum.js`) and server each roll independently at the effective rate, so stored volume is ~rate²/100; the high-traffic auto-throttle halves each gate (see `wppo_rum_throttle_threshold` / `wppo_rum_effective_sample_rate`). |
 
 ---
 

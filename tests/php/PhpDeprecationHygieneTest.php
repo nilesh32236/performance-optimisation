@@ -101,6 +101,9 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * @return void
 	 */
 	public function test_close_curl_multi_handle_keeps_legacy_path_below_85(): void {
+		if ( Util::is_php85_or_greater() ) {
+			$this->markTestSkipped( 'Legacy curl_multi_close() path cannot run notice-free on PHP >= 8.5.' );
+		}
 		if ( ! function_exists( 'curl_multi_init' ) ) {
 			$this->markTestSkipped( 'cURL extension is required.' );
 		}
@@ -191,5 +194,233 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 		$attrs = $param->getAttributes( \SensitiveParameter::class );
 
 		$this->assertNotEmpty( $attrs, 'get_user_token( $session_token ) must carry #[SensitiveParameter] (issue #1056).' );
+	}
+
+	/**
+	 * The 8.5 branch must release a cURL share handle by dropping the
+	 * reference (no curl_share_close() call, so no deprecation).
+	 *
+	 * @since NEXT
+	 * @return void
+	 */
+	public function test_close_curl_share_handle_unsets_on_85(): void {
+		if ( ! function_exists( 'curl_share_init' ) ) {
+			$this->markTestSkipped( 'cURL extension is required.' );
+		}
+
+		$sh = curl_share_init(); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_share_init -- test requires a real share handle for the teardown helper.
+
+		Util::close_curl_share_handle( $sh, '8.5.0' );
+
+		$this->assertNull( $sh );
+	}
+
+	/**
+	 * Below 8.5 the legacy curl_share_close() path must run without error.
+	 *
+	 * @since NEXT
+	 * @return void
+	 */
+	public function test_close_curl_share_handle_keeps_legacy_path_below_85(): void {
+		if ( Util::is_php85_or_greater() ) {
+			$this->markTestSkipped( 'Legacy curl_share_close() path cannot run notice-free on PHP >= 8.5.' );
+		}
+		if ( ! function_exists( 'curl_share_init' ) ) {
+			$this->markTestSkipped( 'cURL extension is required.' );
+		}
+
+		$sh = curl_share_init(); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_share_init -- test requires a real share handle for the teardown helper.
+
+		Util::close_curl_share_handle( $sh, '8.4.0' );
+
+		// Legacy curl_share_close() closed the handle; null the local so no
+		// second close is attempted during cleanup.
+		$sh = null;
+		$this->assertNull( $sh );
+	}
+
+	/**
+	 * The 8.5 branch must release a finfo handle by dropping the reference
+	 * (no finfo_close() call, so no deprecation).
+	 *
+	 * @since NEXT
+	 * @return void
+	 */
+	public function test_close_finfo_handle_unsets_on_85(): void {
+		if ( ! function_exists( 'finfo_open' ) ) {
+			$this->markTestSkipped( 'fileinfo extension is required.' );
+		}
+
+		$finfo = finfo_open( FILEINFO_MIME_TYPE );
+
+		Util::close_finfo_handle( $finfo, '8.5.0' );
+
+		$this->assertNull( $finfo );
+	}
+
+	/**
+	 * Below 8.5 the legacy finfo_close() path must run without error.
+	 *
+	 * @since NEXT
+	 * @return void
+	 */
+	public function test_close_finfo_handle_keeps_legacy_path_below_85(): void {
+		if ( Util::is_php85_or_greater() ) {
+			$this->markTestSkipped( 'Legacy finfo_close() path cannot run notice-free on PHP >= 8.5.' );
+		}
+		if ( ! function_exists( 'finfo_open' ) ) {
+			$this->markTestSkipped( 'fileinfo extension is required.' );
+		}
+
+		$finfo = finfo_open( FILEINFO_MIME_TYPE );
+
+		Util::close_finfo_handle( $finfo, '8.4.0' );
+
+		// Legacy finfo_close() closed the handle; null the local so no
+		// second close is attempted during cleanup.
+		$finfo = null;
+		$this->assertNull( $finfo );
+	}
+
+	/**
+	 * The 8.5 branch must release an XML parser by dropping the reference
+	 * (no xml_parser_free() call, so no deprecation).
+	 *
+	 * @since NEXT
+	 * @return void
+	 */
+	public function test_free_xml_parser_unsets_on_85(): void {
+		if ( ! function_exists( 'xml_parser_create' ) ) {
+			$this->markTestSkipped( 'xml extension is required.' );
+		}
+
+		$parser = xml_parser_create(); // phpcs:ignore WordPress.WP.AlternativeFunctions.xml_xml_parser_create -- test requires a real parser for the teardown helper.
+
+		Util::free_xml_parser( $parser, '8.5.0' );
+
+		$this->assertNull( $parser );
+	}
+
+	/**
+	 * Below 8.5 the legacy xml_parser_free() path must run without error.
+	 *
+	 * @since NEXT
+	 * @return void
+	 */
+	public function test_free_xml_parser_keeps_legacy_path_below_85(): void {
+		if ( Util::is_php85_or_greater() ) {
+			$this->markTestSkipped( 'Legacy xml_parser_free() path cannot run notice-free on PHP >= 8.5.' );
+		}
+		if ( ! function_exists( 'xml_parser_create' ) ) {
+			$this->markTestSkipped( 'xml extension is required.' );
+		}
+
+		$parser = xml_parser_create(); // phpcs:ignore WordPress.WP.AlternativeFunctions.xml_xml_parser_create -- test requires a real parser for the teardown helper.
+
+		Util::free_xml_parser( $parser, '8.4.0' );
+
+		// Legacy xml_parser_free() freed the parser; null the local so no
+		// second free is attempted during cleanup.
+		$parser = null;
+		$this->assertNull( $parser );
+	}
+
+	/**
+	 * The bundled Action Scheduler save_action surface must stay
+	 * explicit-nullable (no PHP 8.4 implicitly-nullable deprecation).
+	 *
+	 * Guards the acceptance criterion "no nullable notice on save" without
+	 * touching vendor/: the pinned Action Scheduler files are read as text
+	 * (the classes are not Composer-autoloadable in the unit suite) and
+	 * every save_action() signature must use `?DateTime ... = null`.
+	 *
+	 * @since NEXT
+	 * @return void
+	 */
+	public function test_action_scheduler_save_action_is_explicit_nullable(): void {
+		$root  = dirname( __DIR__, 2 );
+		$files = array(
+			'vendor/woocommerce/action-scheduler/classes/abstracts/ActionScheduler_Store.php',
+			'vendor/woocommerce/action-scheduler/classes/data-stores/ActionScheduler_DBStore.php',
+			'vendor/woocommerce/action-scheduler/classes/data-stores/ActionScheduler_HybridStore.php',
+			'vendor/woocommerce/action-scheduler/classes/data-stores/ActionScheduler_wpPostStore.php',
+		);
+
+		// Collect unreadable files instead of skipping inside the loop so one
+		// missing file cannot mask the assertions on the remaining files.
+		$missing = array();
+		$checked = 0;
+		foreach ( $files as $relative ) {
+			$path = $root . '/' . $relative;
+			if ( ! is_readable( $path ) ) {
+				$missing[] = $relative;
+				continue;
+			}
+
+			$source = file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- test-only vendor source assertion.
+			$this->assertNotFalse( $source, sprintf( '%s must be readable.', $relative ) );
+
+			$this->assertMatchesRegularExpression(
+				'/function\s+save_action\s*\([^)]*\?DateTime[^)]*=\s*null/s',
+				$source,
+				sprintf( '%s::save_action() must be explicit-nullable `?DateTime ... = null` (issue #1219).', $relative )
+			);
+			$this->assertDoesNotMatchRegularExpression(
+				'/function\s+save_action\s*\([^)]*(?<!\?)(?:^|[\s(,])DateTime\s+\$\w+\s*=\s*null/',
+				$source,
+				sprintf( '%s::save_action() must not use implicitly-nullable `DateTime $x = null` (issue #1219).', $relative )
+			);
+			++$checked;
+		}
+
+		if ( 0 === $checked ) {
+			$this->markTestSkipped(
+				sprintf( 'Action Scheduler sources unavailable: %s.', implode( ', ', $missing ) )
+			);
+		}
+		if ( ! empty( $missing ) ) {
+			$this->markTestSkipped(
+				sprintf( 'Partial Action Scheduler sources unavailable (checked %d of %d): %s.', $checked, count( $files ), implode( ', ', $missing ) )
+			);
+		}
+	}
+
+	/**
+	 * The cron scheduler hotspot must run null-safely (no trim(null) or
+	 * implicitly-nullable deprecation on the Woo-exclusion path).
+	 *
+	 * Exercises Cron::is_woo_excluded_url() and get_rest_route_param()
+	 * through reflection with empty/edge inputs under the zero-notice gate.
+	 *
+	 * @since NEXT
+	 * @return void
+	 */
+	public function test_cron_woo_exclusion_paths_are_null_safe(): void {
+		\Brain\Monkey\Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		\Brain\Monkey\Functions\when( 'get_option' )->justReturn( array() );
+		Util::clear_settings_cache();
+
+		$cron = ( new \ReflectionClass( 'PerformanceOptimise\Inc\Cron' ) )->newInstanceWithoutConstructor();
+
+		$is_excluded = new \ReflectionMethod( 'PerformanceOptimise\Inc\Cron', 'is_woo_excluded_url' );
+		$is_excluded->setAccessible( true );
+
+		// Empty URL and plain home URL must not raise; failures fail-open
+		// (excluded) or fail-closed deterministically, never a notice.
+		$home_excluded  = $is_excluded->invoke( $cron, 'http://example.com/' );
+		$store_excluded = $is_excluded->invoke( $cron, 'http://example.com/?rest_route=/wc/store/v1/cart' );
+
+		// Plain home page is cacheable (not excluded); the plain-permalink
+		// Store API URL is unconditionally excluded.
+		$this->assertIsBool( $home_excluded );
+		$this->assertIsBool( $store_excluded );
+		$this->assertFalse( $home_excluded );
+		$this->assertTrue( $store_excluded );
+
+		$rest_route = new \ReflectionMethod( 'PerformanceOptimise\Inc\Cron', 'get_rest_route_param' );
+		$rest_route->setAccessible( true );
+
+		$this->assertSame( '', $rest_route->invoke( $cron, 'http://example.com/', '' ) );
+		$this->assertSame( '/wc/store/v1/cart', $rest_route->invoke( $cron, 'http://example.com/?rest_route=/wc/store/v1/cart', 'rest_route=/wc/store/v1/cart' ) );
 	}
 }

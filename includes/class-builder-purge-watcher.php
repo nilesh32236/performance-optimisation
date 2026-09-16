@@ -698,12 +698,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		/**
 		 * Purge WPPO's derived caches (page cache, used-CSS, critical-CSS).
 		 *
-		 * Critical-CSS and used-CSS regeneration is queued via Action
-		 * Scheduler (async) instead of running synchronously so the upgrader
-		 * request is never blocked; without Action Scheduler the caches are
-		 * simply cleared and rebuilt lazily on the next visits.
+		 * Critical-CSS regeneration is queued via Action Scheduler (async)
+		 * instead of running synchronously so the upgrader request is never
+		 * blocked; without Action Scheduler the caches are simply cleared and
+		 * rebuilt lazily on the next visits. Used-CSS uses a cooldown-gated
+		 * targeted requeue (issue #1220) — only stale variants, bounded —
+		 * instead of a full-site requeue, so a burst of builder updates cannot
+		 * flood the scheduler; remaining pages rebuild lazily and serve the
+		 * full stylesheet meanwhile (fail-open, never unstyled).
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Used-CSS path switched from forced full regen to targeted regen.
 		 * @return void
 		 */
 		protected function purge_wppo_derived_caches(): void {
@@ -717,16 +722,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 
 			try {
 				if ( class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
-					Used_CSS::delete_all_used_css();
-					if ( function_exists( 'as_enqueue_async_action' ) ) {
-						// Note: regenerate_all() writes its own 'N jobs queued'
-						// audit entry; write_purge_log() below adds the
-						// builder-purge summary. Two entries per update is
-						// intentional — distinct facts on a rare event.
-						// Forced: the wipe above deleted every variant, so
-						// per-post freshness would find nothing fresh and
-						// the cooldown must not suppress the requeue (issue #1107).
-						( new Used_CSS( Util::get_settings() ) )->regenerate_all( true );
+					$full = false;
+					if ( function_exists( 'apply_filters' ) ) {
+						try {
+							/**
+							 * Restore the legacy forced full used-CSS requeue after a builder purge.
+							 *
+							 * @since NEXT
+							 *
+							 * @param bool $full Whether to force a full requeue. Default false (targeted).
+							 */
+							$full = (bool) apply_filters( 'wppo_builder_used_css_full_regen', false );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+					}
+					if ( $full ) {
+						Used_CSS::delete_all_used_css();
+						if ( function_exists( 'as_enqueue_async_action' ) ) {
+							// Note: regenerate_all() writes its own 'N jobs queued'
+							// audit entry; write_purge_log() below adds the
+							// builder-purge summary. Two entries per update is
+							// intentional — distinct facts on a rare event.
+							// Forced: the wipe above deleted every variant, so
+							// per-post freshness would find nothing fresh and
+							// the cooldown must not suppress the requeue (issue #1107).
+							( new Used_CSS( Util::get_settings() ) )->regenerate_all( true );
+						}
+					} elseif ( method_exists( 'PerformanceOptimise\Inc\Used_CSS', 'request_targeted_regen' ) ) {
+						// Targeted path (issue #1220): do NOT wipe all variants
+						// here. A wipe followed by a bounded (20-post) requeue
+						// would leave most of the site without used-CSS until
+						// lazy rebuild; instead let requeue_for_post() freshness
+						// filtering drive per-post regeneration while untouched
+						// pages keep serving their existing used-CSS (fail-open).
+						Used_CSS::request_targeted_regen( 'builder-update' );
 					}
 				}
 			} catch ( \Throwable $e ) {

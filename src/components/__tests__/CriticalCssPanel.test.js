@@ -16,7 +16,7 @@ jest.mock( '@fortawesome/free-solid-svg-icons', () => ( {
 	faTimesCircle: { iconName: 'times-circle' },
 } ) );
 
-import CriticalCssPanel from '../CriticalCssPanel';
+import CriticalCssPanel, { normalizeCcssEntry } from '../CriticalCssPanel';
 
 describe( 'CriticalCssPanel', () => {
 	it( 'renders the empty state when no templates exist', () => {
@@ -103,5 +103,57 @@ describe( 'CriticalCssPanel', () => {
 		);
 
 		errorSpy.mockRestore();
+	} );
+
+	it( 'renders prototype-polluting status keys with the warning badge', () => {
+		render(
+			<CriticalCssPanel
+				status={ { abcdef1234567890: '__proto__' } }
+				onRegenerate={ jest.fn() }
+			/>
+		);
+
+		expect( screen.getByText( 'Not Generated' ) ).toBeInTheDocument();
+	} );
+} );
+
+describe( 'normalizeCcssEntry', () => {
+	it( 'falls back to none with a hash label for null', () => {
+		const normalized = normalizeCcssEntry( 'abcdef1234567890', null );
+		expect( normalized.statusKey ).toBe( 'none' );
+		expect( normalized.label ).toBe( 'abcdef12…' );
+		expect( normalized.size ).toBeNull();
+	} );
+
+	it( 'falls back to none for non-object entries', () => {
+		expect( normalizeCcssEntry( 'abcdef1234567890', 42 ).statusKey ).toBe(
+			'none'
+		);
+		expect(
+			normalizeCcssEntry( 'abcdef1234567890', undefined ).statusKey
+		).toBe( 'none' );
+	} );
+
+	it( 'falls back to none when status is missing', () => {
+		const normalized = normalizeCcssEntry( 'abcdef1234567890', {
+			label: 'Custom',
+		} );
+		expect( normalized.statusKey ).toBe( 'none' );
+		expect( normalized.label ).toBe( 'Custom' );
+	} );
+
+	it( 'preserves valid entries', () => {
+		const normalized = normalizeCcssEntry( 'abcdef1234567890', {
+			status: 'ready',
+			label: 'Single',
+			size: 1234,
+			truncated: true,
+		} );
+		expect( normalized ).toEqual( {
+			statusKey: 'ready',
+			label: 'Single',
+			size: 1234,
+			truncated: true,
+		} );
 	} );
 } );

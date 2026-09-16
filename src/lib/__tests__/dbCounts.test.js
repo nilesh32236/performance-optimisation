@@ -1,4 +1,9 @@
-import { getDbCounts, clearDbCountsCache } from '../dbCounts';
+import {
+	getDbCounts,
+	clearDbCountsCache,
+	setDbCountsTtl,
+	createDbCountsCache,
+} from '../dbCounts';
 import { apiCall } from '../apiRequest';
 
 jest.mock( '../apiRequest', () => ( {
@@ -158,5 +163,129 @@ describe( 'dbCounts memoization (lib/dbCounts.js)', () => {
 		resolveFirst( { success: true, data: { posts: 1 } } );
 		await p1;
 		expect( await p2 ).toEqual( { posts: 42 } );
+	} );
+
+	describe( 'setDbCountsTtl', () => {
+		afterEach( () => {
+			setDbCountsTtl( 60000 );
+			clearDbCountsCache();
+		} );
+
+		it( 'expires immediately when TTL is zero', async () => {
+			apiCall.mockResolvedValue( {
+				success: true,
+				data: { posts: 1 },
+			} );
+			setDbCountsTtl( 0 );
+
+			await getDbCounts();
+			await getDbCounts();
+
+			expect( apiCall ).toHaveBeenCalledTimes( 2 );
+		} );
+
+		it( 'ignores invalid TTL values', async () => {
+			apiCall.mockResolvedValue( {
+				success: true,
+				data: { posts: 1 },
+			} );
+
+			await getDbCounts();
+			setDbCountsTtl( NaN );
+			setDbCountsTtl( -5 );
+			await getDbCounts();
+
+			// Default TTL still applies: a single request serves both reads.
+			expect( apiCall ).toHaveBeenCalledTimes( 1 );
+		} );
+	} );
+
+	describe( 'createDbCountsCache factory', () => {
+		it( 'hits within TTL and misses after clear', async () => {
+			const fetchImpl = jest.fn().mockResolvedValue( {
+				success: true,
+				data: { posts: 3 },
+			} );
+			const cache = createDbCountsCache( { fetch: fetchImpl } );
+
+			const first = await cache.get();
+			const second = await cache.get();
+			expect( fetchImpl ).toHaveBeenCalledTimes( 1 );
+			expect( second ).toEqual( first );
+
+			cache.clear();
+			fetchImpl.mockResolvedValueOnce( {
+				success: true,
+				data: { posts: 9 },
+			} );
+			expect( ( await cache.get() ).posts ).toBe( 9 );
+			expect( fetchImpl ).toHaveBeenCalledTimes( 2 );
+		} );
+
+		it( 'does not coalesce different abort signals', async () => {
+			let resolveFirst;
+			const fetchImpl = jest
+				.fn()
+				.mockImplementationOnce(
+					() =>
+						new Promise( ( resolve ) => {
+							resolveFirst = resolve;
+						} )
+				)
+				.mockResolvedValueOnce( {
+					success: true,
+					data: { posts: 42 },
+				} );
+			const cache = createDbCountsCache( { fetch: fetchImpl } );
+
+			const p1 = cache.get( new AbortController().signal );
+			const p2 = cache.get( new AbortController().signal );
+
+			expect( fetchImpl ).toHaveBeenCalledTimes( 2 );
+			resolveFirst( { success: true, data: { posts: 1 } } );
+			expect( ( await p1 ).posts ).toBe( 1 );
+			expect( ( await p2 ).posts ).toBe( 42 );
+		} );
+
+		it( 'drops stale in-flight results after clear', async () => {
+			let resolveFirst;
+			const fetchImpl = jest
+				.fn()
+				.mockImplementationOnce(
+					() =>
+						new Promise( ( resolve ) => {
+							resolveFirst = resolve;
+						} )
+				)
+				.mockResolvedValueOnce( {
+					success: true,
+					data: { posts: 7 },
+				} );
+			const cache = createDbCountsCache( { fetch: fetchImpl } );
+
+			const pending = cache.get();
+			cache.clear();
+			resolveFirst( { success: true, data: { posts: 1 } } );
+			await pending;
+
+			expect( ( await cache.get() ).posts ).toBe( 7 );
+			expect( fetchImpl ).toHaveBeenCalledTimes( 2 );
+		} );
+
+		it( 'falls back to the default TTL for invalid ttlMs', async () => {
+			const fetchImpl = jest.fn().mockResolvedValue( {
+				success: true,
+				data: { posts: 2 },
+			} );
+			const cache = createDbCountsCache( {
+				ttlMs: NaN,
+				fetch: fetchImpl,
+			} );
+
+			await cache.get();
+			await cache.get();
+
+			expect( fetchImpl ).toHaveBeenCalledTimes( 1 );
+		} );
 	} );
 } );
