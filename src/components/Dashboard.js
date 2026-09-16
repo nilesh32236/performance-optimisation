@@ -5,7 +5,12 @@ import {
 	useRef,
 	useMemo,
 } from '@wordpress/element';
-import { apiCall, fetchWooCacheSelfTest } from '../lib/apiRequest';
+import {
+	apiCall,
+	fetchWooCacheSelfTest,
+	getErrorLogMessage,
+	getWppoSettings,
+} from '../lib/apiRequest';
 import { getDbCounts } from '../lib/dbCounts';
 import useNotice from '../lib/useNotice';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
@@ -38,6 +43,9 @@ import {
 	faImages,
 	faExclamationTriangle,
 	faBroom,
+	faBolt,
+	faGlobe,
+	faUserCheck,
 } from '@fortawesome/free-solid-svg-icons';
 
 /**
@@ -50,6 +58,58 @@ const POLL_INTERVAL_MS = 5000;
  * (~5 minutes at 5s), matching PageSpeedPanel's cap.
  */
 const MAX_POLL_ATTEMPTS = 60;
+
+/**
+ * Coerce a TTL override select value to a finite number, or undefined when
+ * the override should be omitted. Guards against tampered non-numeric option
+ * values: Number('abc') is NaN and JSON.stringify(NaN) becomes null, which
+ * the server could misread as an explicit clear / never-expire.
+ *
+ * @param {*} value Raw select value ('' | number | string | null | undefined).
+ * @return {number|undefined} Finite number, or undefined to omit.
+ */
+const toTtlOverride = ( value ) => {
+	if ( '' === value || null === value || undefined === value ) {
+		return undefined;
+	}
+	const n = Number( value );
+	return Number.isFinite( n ) ? n : undefined;
+};
+
+/**
+ * Allowed CDN purge services (client-side allowlist; server allowlists too).
+ */
+const CDN_PURGE_SERVICES = [ 'none', 'cloudflare', 'varnish' ];
+
+/**
+ * Parse the Varnish purge-endpoint textarea into validated http(s) URLs.
+ * Each URL later receives a server-side PURGE request, so shape-check here
+ * as defense-in-depth (server allowlisting remains authoritative).
+ *
+ * @param {string} raw Raw textarea value (one URL per line).
+ * @return {string[]} Validated http(s) URLs.
+ */
+const parseVarnishPurgeUrls = ( raw ) => {
+	if ( typeof raw !== 'string' || '' === raw.trim() ) {
+		return [];
+	}
+	return raw
+		.split( /\n|,/ )
+		.map( ( url ) => url.trim() )
+		.filter( ( url ) => {
+			if ( ! url ) {
+				return false;
+			}
+			try {
+				const parsed = new URL( url );
+				return (
+					'http:' === parsed.protocol || 'https:' === parsed.protocol
+				);
+			} catch {
+				return false;
+			}
+		} );
+};
 
 /**
  * Normalize wppoSettings.image_info which stores arrays of file paths
@@ -83,11 +143,12 @@ const Dashboard = ( {
 	const [ telemetrySuggestions, setTelemetrySuggestions ] = useState( [] );
 	const [ pagespeedSuggestions, setPagespeedSuggestions ] = useState( [] );
 	const [ auditUrl, setAuditUrl ] = useState(
-		typeof wppoSettings !== 'undefined'
-			? wppoSettings?.performance_audit?.homeUrl ?? ''
-			: ''
+		getWppoSettings( 'performance_audit.homeUrl', '' )
 	);
 	// Merge telemetry and PageSpeed suggestions, deduplicating by metric key.
+	// Malformed entries (null, non-objects, missing metric) pass through
+	// without participating in dedup so one bad row can never throw or
+	// collapse distinct rows onto a shared `undefined` key.
 	const allSuggestions = useMemo( () => {
 		const seen = new Set();
 		const merged = [];
@@ -95,6 +156,10 @@ const Dashboard = ( {
 			...pagespeedSuggestions,
 			...telemetrySuggestions,
 		] ) {
+			if ( ! s || typeof s !== 'object' || s.metric === undefined ) {
+				merged.push( s );
+				continue;
+			}
 			if ( ! seen.has( s.metric ) ) {
 				seen.add( s.metric );
 				merged.push( s );
@@ -103,29 +168,22 @@ const Dashboard = ( {
 		return merged;
 	}, [ telemetrySuggestions, pagespeedSuggestions ] );
 
-	// Reset suggestions when auditUrl changes to prevent stale results from merging.
-	useEffect( () => {
+	// Clear stale suggestions when the audited URL changes, synchronously with
+	// the URL update (not as an effect on auditUrl): PerformanceAudit calls
+	// onUrlChange mid-scan and onSuggestionsReady after the suggestions fetch
+	// resolves, so an effect would wipe just-received results for the new URL.
+	const handleAuditUrlChange = useCallback( ( url ) => {
 		setTelemetrySuggestions( [] );
 		setPagespeedSuggestions( [] );
-	}, [ auditUrl ] );
+		setAuditUrl( url );
+	}, [] );
 
 	// Initialize state
 	const [ state, setState ] = useState( {
-		totalCacheSize:
-			typeof wppoSettings !== 'undefined'
-				? wppoSettings?.cache_size ?? '0 B'
-				: '0 B',
-		totalJs:
-			typeof wppoSettings !== 'undefined'
-				? wppoSettings?.total_js_css?.js ?? 0
-				: 0,
-		totalCss:
-			typeof wppoSettings !== 'undefined'
-				? wppoSettings?.total_js_css?.css ?? 0
-				: 0,
-		imageInfo: normalizeImageInfo(
-			typeof wppoSettings !== 'undefined' ? wppoSettings?.image_info : {}
-		),
+		totalCacheSize: getWppoSettings( 'cache_size', '0 B' ),
+		totalJs: getWppoSettings( 'total_js_css.js', 0 ),
+		totalCss: getWppoSettings( 'total_js_css.css', 0 ),
+		imageInfo: normalizeImageInfo( getWppoSettings( 'image_info', {} ) ),
 		dbCounts: {},
 		loading: {
 			clear_cache: false,
@@ -136,27 +194,27 @@ const Dashboard = ( {
 	} );
 
 	// Logged-in user cache settings — prefer props from App.js, fallback to global for direct mounts/tests.
+	// The live global is read via getWppoSettings() so every mount sees the
+	// same snapshot apiCall() froze on the last save; globalCacheSettings is a
+	// memo dep so saves from sibling panels re-sync instead of going stale.
+	const globalCacheSettings = getWppoSettings(
+		'settings.cache_settings',
+		{}
+	);
 	// Memoized so the save*Settings useCallbacks below keep stable deps.
 	const cacheSettings = useMemo(
-		() =>
-			propCacheSettings ??
-			( typeof wppoSettings !== 'undefined'
-				? wppoSettings?.settings?.cache_settings || {}
-				: {} ),
-		[ propCacheSettings ]
+		() => propCacheSettings ?? globalCacheSettings ?? {},
+		[ propCacheSettings, globalCacheSettings ]
 	);
-	const userRoles =
-		propUserRoles ??
-		( typeof wppoSettings !== 'undefined'
-			? wppoSettings?.userRoles || {}
-			: {} );
+	const userRoles = propUserRoles ?? getWppoSettings( 'userRoles', {} );
 	const [ pageCacheEnabled, setPageCacheEnabled ] = useState(
 		!! cacheSettings.enableCache
 	);
 	const [ savingPageCache, setSavingPageCache ] = useState( false );
-	const [ cacheLife, setCacheLife ] = useState(
-		Number( cacheSettings.cacheLife ?? 0 )
-	);
+	const [ cacheLife, setCacheLife ] = useState( () => {
+		const n = Number( cacheSettings.cacheLife ?? 0 );
+		return Number.isFinite( n ) ? n : 0;
+	} );
 	const [ ttlPost, setTtlPost ] = useState(
 		cacheSettings.ttlOverrides?.post ?? ''
 	);
@@ -199,7 +257,8 @@ const Dashboard = ( {
 	// re-fetches settings or apiCall mutates global wppoSettings).
 	useEffect( () => {
 		setPageCacheEnabled( !! cacheSettings.enableCache );
-		setCacheLife( Number( cacheSettings.cacheLife ?? 0 ) );
+		const life = Number( cacheSettings.cacheLife ?? 0 );
+		setCacheLife( Number.isFinite( life ) ? life : 0 );
 		const ov =
 			cacheSettings.ttlOverrides &&
 			typeof cacheSettings.ttlOverrides === 'object'
@@ -273,7 +332,10 @@ const Dashboard = ( {
 				if ( error?.name === 'AbortError' || signal?.aborted ) {
 					return;
 				}
-				console.error( 'Error fetching db counts:', error );
+				console.error(
+					'Error fetching db counts:',
+					getErrorLogMessage( error )
+				);
 				notify( {
 					type: 'error',
 					message: __(
@@ -343,48 +405,47 @@ const Dashboard = ( {
 				return;
 			}
 			pollRetryRef.current = 0;
-			if ( response.success && response.data ) {
-				const { queued_jobs: queuedJobs } = response.data;
-				setBgJobsQueued( queuedJobs );
-				setImgSavings( response.data.savings || null );
+			if ( ! response.success || ! response.data ) {
+				// Malformed payload: treat as a retryable failure with backoff
+				// instead of silently rescheduling until the 5-minute timeout.
+				throw new Error( response.message || 'Status check failed' );
+			}
+			// Coerce: the endpoint may omit queued_jobs or encode it as a
+			// string ("0"). Strict === 0 would then never detect completion
+			// and poll until MAX_POLL_ATTEMPTS; NaN stays retryable below.
+			const queuedJobs = Number( response.data.queued_jobs ?? NaN );
+			setBgJobsQueued( Number.isFinite( queuedJobs ) ? queuedJobs : 0 );
+			setImgSavings( response.data.savings ?? null );
 
-				updateState( {
-					imageInfo: {
-						completed: {
-							webp: response.data.completed?.webp || 0,
-							avif: response.data.completed?.avif || 0,
-						},
-						pending: {
-							webp: response.data.pending?.webp || 0,
-							avif: response.data.pending?.avif || 0,
-						},
-						failed: {
-							webp: response.data.failed?.webp || 0,
-							avif: response.data.failed?.avif || 0,
-						},
-					},
+			// Reuse the mount/sync-path normalizer so array-of-paths payloads
+			// (like wppoSettings.image_info) never store an Array where a
+			// count is expected (which would coerce totals to strings).
+			updateState( {
+				imageInfo: normalizeImageInfo( response.data ),
+			} );
+
+			if ( Number.isFinite( queuedJobs ) && queuedJobs === 0 ) {
+				setBgProcessing( false );
+				notify( {
+					type: 'success',
+					message: __(
+						'Image optimisation completed.',
+						'performance-optimisation'
+					),
+					durationMs: 5000,
 				} );
-
-				if ( queuedJobs === 0 ) {
-					setBgProcessing( false );
-					notify( {
-						type: 'success',
-						message: __(
-							'Image optimisation completed.',
-							'performance-optimisation'
-						),
-						durationMs: 5000,
-					} );
-					pollingRef.current = null;
-					pollAttemptsRef.current = 0;
-					return;
-				}
+				pollingRef.current = null;
+				pollAttemptsRef.current = 0;
+				return;
 			}
 		} catch ( error ) {
 			if ( signal.aborted || error?.name === 'AbortError' ) {
 				return;
 			}
-			console.error( 'Error polling job status:', error );
+			console.error(
+				'Error polling job status:',
+				getErrorLogMessage( error )
+			);
 			pollRetryRef.current++;
 			if ( pollRetryRef.current >= 5 ) {
 				setBgProcessing( false );
@@ -488,7 +549,10 @@ const Dashboard = ( {
 				if ( response.data?.background ) {
 					// Background (Action Scheduler) path.
 					setBgProcessing( true );
-					setBgJobsQueued( response.data.jobs_queued || 0 );
+					const jobsQueued = Number( response.data.jobs_queued ?? 0 );
+					setBgJobsQueued(
+						Number.isFinite( jobsQueued ) ? jobsQueued : 0
+					);
 					notify( {
 						type: 'success',
 						message: __(
@@ -601,74 +665,84 @@ const Dashboard = ( {
 			.finally( () => handleLoading( 'remove_images', false ) );
 	}, [ handleLoading, notify ] );
 
+	/**
+	 * Single save helper for the cache_settings tab: re-reads the live global
+	 * at call-time (avoiding stale closures after a prior save froze it),
+	 * merges the patch, and notifies success/failure. One place to fix means
+	 * the error branch can no longer be missed in one saver but not others.
+	 */
+	const saveCacheTab = useCallback(
+		( patch, setSaving, successMessage, failureMessage ) => {
+			setSaving( true );
+			// Re-read global wppoSettings at call-time to avoid stale closure
+			// after prior save mutated it via apiCall's freeze.
+			const currentSettings =
+				getWppoSettings( 'settings.cache_settings', null ) ??
+				cacheSettings ??
+				{};
+			return apiCall( 'update_settings', {
+				tab: 'cache_settings',
+				settings: {
+					...currentSettings,
+					...patch,
+				},
+			} )
+				.then( ( response ) => {
+					if ( response.success && response.data ) {
+						notify( {
+							type: 'success',
+							message: successMessage,
+							durationMs: 5000,
+						} );
+					} else {
+						notify( {
+							type: 'error',
+							message: response.message || failureMessage,
+							durationMs: 5000,
+						} );
+					}
+				} )
+				.catch( () =>
+					notify( {
+						type: 'error',
+						message: failureMessage,
+						durationMs: 5000,
+					} )
+				)
+				.finally( () => setSaving( false ) );
+		},
+		[ cacheSettings, notify ]
+	);
+
 	const savePageCacheSettings = useCallback( () => {
-		setSavingPageCache( true );
-		// Re-read global wppoSettings at call-time to avoid stale closure
-		// after prior save mutated it via apiCall's freeze.
-		const currentSettings =
-			( typeof wppoSettings !== 'undefined'
-				? wppoSettings.settings?.cache_settings
-				: null ) ??
-			cacheSettings ??
-			{};
 		const overrides = {};
-		if ( '' !== ttlPost && null !== ttlPost && undefined !== ttlPost ) {
-			overrides.post = Number( ttlPost );
+		const post = toTtlOverride( ttlPost );
+		const page = toTtlOverride( ttlPage );
+		const product = toTtlOverride( ttlProduct );
+		if ( post !== undefined ) {
+			overrides.post = post;
 		}
-		if ( '' !== ttlPage && null !== ttlPage && undefined !== ttlPage ) {
-			overrides.page = Number( ttlPage );
+		if ( page !== undefined ) {
+			overrides.page = page;
 		}
-		if (
-			'' !== ttlProduct &&
-			null !== ttlProduct &&
-			undefined !== ttlProduct
-		) {
-			overrides.product = Number( ttlProduct );
+		if ( product !== undefined ) {
+			overrides.product = product;
 		}
-		apiCall( 'update_settings', {
-			tab: 'cache_settings',
-			settings: {
-				...currentSettings,
+		const life = Number( cacheLife );
+		return saveCacheTab(
+			{
 				enableCache: pageCacheEnabled,
-				cacheLife,
+				cacheLife: Number.isFinite( life ) ? life : 0,
 				ttlOverrides: overrides,
 				wooSafeMode,
 			},
-		} )
-			.then( ( response ) => {
-				if ( response.success && response.data ) {
-					notify( {
-						type: 'success',
-						message: __(
-							'Page cache settings saved.',
-							'performance-optimisation'
-						),
-						durationMs: 5000,
-					} );
-				} else {
-					notify( {
-						type: 'error',
-						message:
-							response.message ||
-							__(
-								'Failed to save page cache settings.',
-								'performance-optimisation'
-							),
-						durationMs: 5000,
-					} );
-				}
-			} )
-			.catch( () =>
-				notify( {
-					type: 'error',
-					message: __(
-						'Failed to save page cache settings.',
-						'performance-optimisation'
-					),
-					durationMs: 5000,
-				} )
+			setSavingPageCache,
+			__( 'Page cache settings saved.', 'performance-optimisation' ),
+			__(
+				'Failed to save page cache settings.',
+				'performance-optimisation'
 			)
-			.finally( () => setSavingPageCache( false ) );
+		);
 	}, [
 		pageCacheEnabled,
 		cacheLife,
@@ -676,8 +750,7 @@ const Dashboard = ( {
 		ttlPage,
 		ttlProduct,
 		wooSafeMode,
-		cacheSettings,
-		notify,
+		saveCacheTab,
 	] );
 
 	const runWooCacheSelfTest = useCallback( () => {
@@ -690,7 +763,7 @@ const Dashboard = ( {
 						type: response.data.all_pass ? 'success' : 'warning',
 						message: response.data.all_pass
 							? __(
-									'WooCommerce self-test passed: cart, checkout and account pages bypass the cache.',
+									'WooCommerce self-test passed: cart, checkout and account pages bypass the cache; faceted URLs are skipped by preload and the guest cart survives.',
 									'performance-optimisation'
 							  )
 							: __(
@@ -724,121 +797,107 @@ const Dashboard = ( {
 	}, [ notify ] );
 
 	const saveLoggedInCacheSettings = useCallback( () => {
-		setSavingLoggedInCache( true );
-		// Re-read global wppoSettings at call-time to avoid stale closure.
-		const currentSettings =
-			( typeof wppoSettings !== 'undefined'
-				? wppoSettings.settings?.cache_settings
-				: null ) ??
-			cacheSettings ??
-			{};
-		apiCall( 'update_settings', {
-			tab: 'cache_settings',
-			settings: {
-				...currentSettings,
+		return saveCacheTab(
+			{
 				enableLoggedInCache: loggedInCacheEnabled,
 				loggedInCacheRoles,
 			},
-		} )
-			.then( ( response ) => {
-				if ( response.success && response.data ) {
-					notify( {
-						type: 'success',
-						message: __(
-							'Logged-in cache settings saved.',
-							'performance-optimisation'
-						),
-						durationMs: 5000,
-					} );
-				} else {
-					notify( {
-						type: 'error',
-						message:
-							response.message ||
-							__(
-								'Failed to save logged-in cache settings.',
-								'performance-optimisation'
-							),
-						durationMs: 5000,
-					} );
-				}
-			} )
-			.catch( () =>
-				notify( {
-					type: 'error',
-					message: __(
-						'Failed to save logged-in cache settings.',
-						'performance-optimisation'
-					),
-					durationMs: 5000,
-				} )
+			setSavingLoggedInCache,
+			__( 'Logged-in cache settings saved.', 'performance-optimisation' ),
+			__(
+				'Failed to save logged-in cache settings.',
+				'performance-optimisation'
 			)
-			.finally( () => setSavingLoggedInCache( false ) );
-	}, [ loggedInCacheEnabled, loggedInCacheRoles, cacheSettings, notify ] );
+		);
+	}, [ loggedInCacheEnabled, loggedInCacheRoles, saveCacheTab ] );
 
 	const saveCdnPurgeSettings = useCallback( () => {
-		setSavingCdnPurge( true );
-		// Re-read global wppoSettings at call-time to avoid stale closure.
-		const currentSettings =
-			( typeof wppoSettings !== 'undefined'
-				? wppoSettings.settings?.cache_settings
-				: null ) ??
-			cacheSettings ??
-			{};
-		const urls = varnishPurgeUrls
-			.split( '\n' )
-			.map( ( url ) => url.trim() )
-			.filter( Boolean );
-		apiCall( 'update_settings', {
-			tab: 'cache_settings',
-			settings: {
-				...currentSettings,
-				cdnPurgeService,
+		const service = CDN_PURGE_SERVICES.includes( cdnPurgeService )
+			? cdnPurgeService
+			: 'none';
+		return saveCacheTab(
+			{
+				cdnPurgeService: service,
 				cloudflareZoneId,
-				varnishPurgeUrls: urls,
+				varnishPurgeUrls: parseVarnishPurgeUrls( varnishPurgeUrls ),
 			},
-		} )
-			.then( ( response ) => {
-				if ( response.success && response.data ) {
-					notify( {
-						type: 'success',
-						message: __(
-							'CDN purge settings saved.',
-							'performance-optimisation'
-						),
-						durationMs: 5000,
-					} );
-				}
-			} )
-			.catch( () =>
-				notify( {
-					type: 'error',
-					message: __(
-						'Failed to save CDN purge settings.',
-						'performance-optimisation'
-					),
-					durationMs: 5000,
-				} )
+			setSavingCdnPurge,
+			__( 'CDN purge settings saved.', 'performance-optimisation' ),
+			__(
+				'Failed to save CDN purge settings.',
+				'performance-optimisation'
 			)
-			.finally( () => setSavingCdnPurge( false ) );
-	}, [
-		cdnPurgeService,
-		cloudflareZoneId,
-		varnishPurgeUrls,
-		cacheSettings,
-		notify,
-	] );
+		);
+	}, [ cdnPurgeService, cloudflareZoneId, varnishPurgeUrls, saveCacheTab ] );
 
 	const handleLoggedInCacheToggle = useCallback( ( e ) => {
 		setLoggedInCacheEnabled( e.target.checked );
 	}, [] );
 
-	const handleRoleCheckbox = useCallback( ( e ) => {
-		const role = e.target.name;
-		const checked = e.target.checked;
-		setLoggedInCacheRoles( ( prev ) =>
-			checked ? [ ...prev, role ] : prev.filter( ( r ) => r !== role )
+	const handleRoleCheckbox = useCallback(
+		( e ) => {
+			const role = e.target.name;
+			const checked = e.target.checked;
+			// Defense-in-depth: intersect DOM-supplied role slugs against the
+			// known roles map (server allowlists too); tampered names never
+			// reach the payload.
+			if (
+				! userRoles ||
+				typeof userRoles !== 'object' ||
+				! Object.hasOwnProperty.call( userRoles, role )
+			) {
+				return;
+			}
+			setLoggedInCacheRoles( ( prev ) =>
+				checked ? [ ...prev, role ] : prev.filter( ( r ) => r !== role )
+			);
+		},
+		[ userRoles ]
+	);
+
+	// Stable form handlers so the 5s image_job_status poll re-render does not
+	// hand fresh inline closures to every SwitchField/select/input child.
+	const handlePageCacheToggle = useCallback( ( e ) => {
+		setPageCacheEnabled( e.target.checked );
+	}, [] );
+	const handleCacheLifeChange = useCallback( ( e ) => {
+		const n = Number( e.target.value );
+		setCacheLife( Number.isFinite( n ) ? n : 0 );
+	}, [] );
+	const handleTtlPostChange = useCallback( ( e ) => {
+		setTtlPost( '' === e.target.value ? '' : Number( e.target.value ) );
+	}, [] );
+	const handleTtlPageChange = useCallback( ( e ) => {
+		setTtlPage( '' === e.target.value ? '' : Number( e.target.value ) );
+	}, [] );
+	const handleTtlProductChange = useCallback( ( e ) => {
+		setTtlProduct( '' === e.target.value ? '' : Number( e.target.value ) );
+	}, [] );
+	const handleWooSafeModeToggle = useCallback( ( e ) => {
+		setWooSafeMode( e.target.checked );
+	}, [] );
+	const handleCdnPurgeServiceChange = useCallback( ( e ) => {
+		setCdnPurgeService(
+			CDN_PURGE_SERVICES.includes( e.target.value )
+				? e.target.value
+				: 'none'
 		);
+	}, [] );
+	const handleCloudflareZoneIdChange = useCallback( ( e ) => {
+		setCloudflareZoneId( e.target.value );
+	}, [] );
+	const handleVarnishPurgeUrlsChange = useCallback( ( e ) => {
+		setVarnishPurgeUrls( e.target.value );
+	}, [] );
+	const handleRemoveRequest = useCallback( () => {
+		setConfirmRemove( true );
+	}, [] );
+	const handleRemoveConfirm = useCallback( () => {
+		setConfirmRemove( false );
+		removeImages();
+	}, [ removeImages ] );
+	const handleRemoveCancel = useCallback( () => {
+		setConfirmRemove( false );
 	}, [] );
 
 	const totalWebP = ( completed.webp || 0 ) + ( pending.webp || 0 );
@@ -891,8 +950,7 @@ const Dashboard = ( {
 	};
 
 	// LiteSpeed banner data from global wppoSettings (injected by PHP).
-	const litespeedInfo =
-		typeof wppoSettings !== 'undefined' ? wppoSettings?.litespeed : null;
+	const litespeedInfo = getWppoSettings( 'litespeed', null );
 	const isLiteSpeed = !! litespeedInfo?.detected;
 	const effectiveMode = litespeedInfo?.effective_mode || 'standalone';
 	const lscacheActive = !! litespeedInfo?.lscache_active;
@@ -1165,7 +1223,7 @@ const Dashboard = ( {
 			{ /* Page cache master toggle */ }
 			<FeatureCard
 				title={ __( 'Page Cache', 'performance-optimisation' ) }
-				icon={ <i className="fas fa-bolt"></i> }
+				icon={ <FontAwesomeIcon icon={ faBolt } aria-hidden="true" /> }
 			>
 				<SwitchField
 					label={ __(
@@ -1178,9 +1236,7 @@ const Dashboard = ( {
 					) }
 					name="enableCache"
 					checked={ pageCacheEnabled }
-					onChange={ ( e ) =>
-						setPageCacheEnabled( e.target.checked )
-					}
+					onChange={ handlePageCacheToggle }
 				/>
 				<div className="wppo-field">
 					<label className="wppo-field-label" htmlFor="wppoCacheLife">
@@ -1191,9 +1247,7 @@ const Dashboard = ( {
 						id="wppoCacheLife"
 						name="cacheLife"
 						value={ cacheLife }
-						onChange={ ( e ) =>
-							setCacheLife( Number( e.target.value ) )
-						}
+						onChange={ handleCacheLifeChange }
 					>
 						<option value={ 0 }>
 							{ __( 'Never expire', 'performance-optimisation' ) }
@@ -1236,13 +1290,7 @@ const Dashboard = ( {
 						id="wppoTtlPost"
 						name="ttlPost"
 						value={ '' === ttlPost ? '' : String( ttlPost ) }
-						onChange={ ( e ) =>
-							setTtlPost(
-								'' === e.target.value
-									? ''
-									: Number( e.target.value )
-							)
-						}
+						onChange={ handleTtlPostChange }
 						aria-describedby="wppoTtlOverrides-desc"
 					>
 						<option value="">
@@ -1286,13 +1334,7 @@ const Dashboard = ( {
 						id="wppoTtlPage"
 						name="ttlPage"
 						value={ '' === ttlPage ? '' : String( ttlPage ) }
-						onChange={ ( e ) =>
-							setTtlPage(
-								'' === e.target.value
-									? ''
-									: Number( e.target.value )
-							)
-						}
+						onChange={ handleTtlPageChange }
 						aria-describedby="wppoTtlOverrides-desc"
 					>
 						<option value="">
@@ -1339,13 +1381,7 @@ const Dashboard = ( {
 						id="wppoTtlProduct"
 						name="ttlProduct"
 						value={ '' === ttlProduct ? '' : String( ttlProduct ) }
-						onChange={ ( e ) =>
-							setTtlProduct(
-								'' === e.target.value
-									? ''
-									: Number( e.target.value )
-							)
-						}
+						onChange={ handleTtlProductChange }
 						aria-describedby="wppoTtlOverrides-desc"
 					>
 						<option value="">
@@ -1397,7 +1433,7 @@ const Dashboard = ( {
 					) }
 					name="wooSafeMode"
 					checked={ wooSafeMode }
-					onChange={ ( e ) => setWooSafeMode( e.target.checked ) }
+					onChange={ handleWooSafeModeToggle }
 				/>
 				<div className="wppo-field">
 					<button
@@ -1415,7 +1451,7 @@ const Dashboard = ( {
 					</button>
 					<p className="wppo-text-muted wppo-text-small">
 						{ __(
-							'Proves in one click that cart, checkout and account paths plus cart/checkout fragments (?wc-ajax=, ?add-to-cart=, plain-permalink Store API) bypass the static cache under path/query/safe-mode semantics (DONOTCACHEPAGE enforcement is assumed via Cache::is_not_cacheable(); the wppo_woo_cacheable override is out of scope).',
+							'Proves in one click that cart, checkout and account paths plus cart/checkout fragments (?wc-ajax=, ?add-to-cart=, plain-permalink Store API) bypass the static cache under path/query/safe-mode semantics, that faceted filter URLs are skipped by preload, and that a guest cart survives with page and object cache on (DONOTCACHEPAGE enforcement is assumed via Cache::is_not_cacheable(); the wppo_woo_cacheable override is out of scope). On failure, force-exclude dynamic routes plus cookie bypass (re-enable safe mode) and serve dynamic.',
 							'performance-optimisation'
 						) }
 					</p>
@@ -1438,6 +1474,14 @@ const Dashboard = ( {
 							<p className="wppo-text-muted wppo-text-small">
 								{ __(
 									'WooCommerce is not active — showing default exclusion paths read-only. Dynamic pages fail open to uncached.',
+									'performance-optimisation'
+								) }
+							</p>
+						) }
+						{ wooSelfTest.force_exclude && (
+							<p className="wppo-text-muted wppo-text-small">
+								{ __(
+									'Self-test failed: force-excluding dynamic routes plus cookie bypass (fail-closed for commerce). Re-enable WooCommerce safe mode and serve dynamic — never a stale cart.',
 									'performance-optimisation'
 								) }
 							</p>
@@ -1524,6 +1568,90 @@ const Dashboard = ( {
 									</ul>
 								</>
 							) }
+						{ Array.isArray( wooSelfTest.preload_checks ) &&
+							wooSelfTest.preload_checks.length > 0 && (
+								<>
+									<p className="wppo-text-muted wppo-text-small">
+										{ __(
+											'Preload probes (faceted URLs skipped):',
+											'performance-optimisation'
+										) }
+									</p>
+									<ul
+										className="wppo-woo-self-test"
+										aria-label={ __(
+											'Preload probes (faceted URLs skipped)',
+											'performance-optimisation'
+										) }
+									>
+										{ wooSelfTest.preload_checks.map(
+											( check, index ) => (
+												<li
+													key={ `${
+														check?.path ?? 'preload'
+													}-${ index }` }
+												>
+													<span>{ check?.path }</span>
+													{ ' — ' }
+													<span>
+														{ check?.pass
+															? __(
+																	'Skipped (pass)',
+																	'performance-optimisation'
+															  )
+															: __(
+																	'Queued (fail)',
+																	'performance-optimisation'
+															  ) }
+													</span>
+												</li>
+											)
+										) }
+									</ul>
+								</>
+							) }
+						{ Array.isArray( wooSelfTest.cart_checks ) &&
+							wooSelfTest.cart_checks.length > 0 && (
+								<>
+									<p className="wppo-text-muted wppo-text-small">
+										{ __(
+											'Guest-cart survival (page + object cache on):',
+											'performance-optimisation'
+										) }
+									</p>
+									<ul
+										className="wppo-woo-self-test"
+										aria-label={ __(
+											'Guest-cart survival (page + object cache on)',
+											'performance-optimisation'
+										) }
+									>
+										{ wooSelfTest.cart_checks.map(
+											( check, index ) => (
+												<li
+													key={ `${
+														check?.key ?? 'cart'
+													}-${ index }` }
+												>
+													<span>{ check?.key }</span>
+													{ ' — ' }
+													<span>
+														{ check?.pass
+															? __(
+																	'Bypassed (pass)',
+																	'performance-optimisation'
+															  )
+															: __(
+																	'Cacheable (fail)',
+																	'performance-optimisation'
+															  ) }
+													</span>
+												</li>
+											)
+										) }
+									</ul>
+								</>
+							) }
 					</div>
 				) }
 				<div className="wppo-feature-card__footer">
@@ -1546,7 +1674,7 @@ const Dashboard = ( {
 			{ /* CDN cache purge (Cloudflare / Varnish) */ }
 			<FeatureCard
 				title={ __( 'CDN Cache Purge', 'performance-optimisation' ) }
-				icon={ <i className="fas fa-globe"></i> }
+				icon={ <FontAwesomeIcon icon={ faGlobe } aria-hidden="true" /> }
 			>
 				<div className="wppo-field">
 					<label
@@ -1563,9 +1691,7 @@ const Dashboard = ( {
 						id="cdnPurgeService"
 						name="cdnPurgeService"
 						value={ cdnPurgeService }
-						onChange={ ( e ) =>
-							setCdnPurgeService( e.target.value )
-						}
+						onChange={ handleCdnPurgeServiceChange }
 						aria-describedby="wppo-cdnPurgeService-desc"
 					>
 						<option value="none">
@@ -1606,9 +1732,7 @@ const Dashboard = ( {
 							name="cloudflareZoneId"
 							type="text"
 							value={ cloudflareZoneId }
-							onChange={ ( e ) =>
-								setCloudflareZoneId( e.target.value )
-							}
+							onChange={ handleCloudflareZoneIdChange }
 							aria-describedby="wppo-cloudflareZoneId-desc"
 						/>
 						<p
@@ -1640,9 +1764,7 @@ const Dashboard = ( {
 							name="varnishPurgeUrls"
 							rows={ 3 }
 							value={ varnishPurgeUrls }
-							onChange={ ( e ) =>
-								setVarnishPurgeUrls( e.target.value )
-							}
+							onChange={ handleVarnishPurgeUrlsChange }
 							aria-describedby="wppo-varnishPurgeUrls-desc"
 							placeholder={ __(
 								'http://127.0.0.1:8081/purge',
@@ -1684,7 +1806,9 @@ const Dashboard = ( {
 					'Cache for Logged-in Users',
 					'performance-optimisation'
 				) }
-				icon={ <i className="fas fa-user-check"></i> }
+				icon={
+					<FontAwesomeIcon icon={ faUserCheck } aria-hidden="true" />
+				}
 			>
 				<SwitchField
 					label={ __( 'Enable', 'performance-optimisation' ) }
@@ -1746,7 +1870,7 @@ const Dashboard = ( {
 			<div className="wppo-stacked-cards">
 				<PerformanceAudit
 					onSuggestionsReady={ setTelemetrySuggestions }
-					onUrlChange={ setAuditUrl }
+					onUrlChange={ handleAuditUrlChange }
 				/>
 
 				{ /* Phase 2 — SuggestionsPanel sits directly below PerformanceAudit (v1.6.0) */ }
@@ -1795,7 +1919,7 @@ const Dashboard = ( {
 						( pending.webp || 0 ) + ( pending.avif || 0 )
 					}
 					onOptimize={ optimizeImages }
-					onRemove={ () => setConfirmRemove( true ) }
+					onRemove={ handleRemoveRequest }
 				/>
 
 				<RecentActivityCard
@@ -1807,11 +1931,8 @@ const Dashboard = ( {
 
 			<ConfirmDialog
 				isOpen={ confirmRemove }
-				onConfirm={ () => {
-					setConfirmRemove( false );
-					removeImages();
-				} }
-				onCancel={ () => setConfirmRemove( false ) }
+				onConfirm={ handleRemoveConfirm }
+				onCancel={ handleRemoveCancel }
 				title={ __(
 					'Remove Optimized Images',
 					'performance-optimisation'

@@ -2804,10 +2804,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * Returns Util::woo_cache_self_test(): detected Woo paths against the
 		 * exclusion list, safe-mode toggle state, and per-URL pass/fail
 		 * proving cart/checkout/account bypass the static HTML cache with
-		 * DONOTCACHEPAGE honored. Never writes options, transients, or files.
+		 * DONOTCACHEPAGE honored, plus additive preload-skip probes (faceted
+		 * filter URLs never enter the preload queue), guest-cart survival
+		 * probes (cart/session cookies, wc-ajax, add-to-cart, Store API bypass
+		 * with page and object cache on) and a fail-closed `force_exclude`
+		 * recommendation (true when the verdict fails: force-exclude dynamic
+		 * routes plus cookie bypass and serve dynamic). Never writes options,
+		 * transients, or files.
 		 *
 		 * @param \WP_REST_Request $_request The request object (unused).
 		 * @since 2.0.0
+		 * @since NEXT Added preload_checks, cart_checks and force_exclude to the result (issue #1256).
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function get_woo_cache_self_test( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found

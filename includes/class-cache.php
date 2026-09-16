@@ -2525,6 +2525,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				}
 
 				if ( ! $excluded ) {
+					// Faceted layered-nav queries (issue #1256): filter_*, query_type_*,
+					// min/max_price, rating_filter, orderby, pa_*/attribute_*/gpf_*.
+					// Safe-mode gated like add-to-cart (safe_mode=false keeps the
+					// operator opt-out); serve-time safety without safe mode still
+					// holds via the unconditional has_uncacheable_query() gate in
+					// is_not_cacheable() plus the any-query store refusal below.
+					try {
+						if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_faceted_query' ) ) {
+							$faceted_qs = (string) wp_parse_url( $this->request_uri, PHP_URL_QUERY );
+							if ( '' === $faceted_qs && ! empty( $_SERVER['QUERY_STRING'] ) ) {
+								$faceted_qs = sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) );
+							}
+							if ( '' !== $faceted_qs && Util::is_woo_faceted_query( $faceted_qs ) ) {
+								$excluded = true;
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$excluded = true;
+					}
+				}
+
+				if ( ! $excluded ) {
 					return false;
 				}
 
@@ -3163,6 +3186,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// is_not_cacheable() is bypassed via filter. Unconditional on
 			// wooSafeMode, mirroring wc-ajax.
 			if ( $this->is_woo_store_api_request() ) {
+				return false;
+			}
+
+			// Faceted filter defense-in-depth (issue #1256): storage refuses
+			// layered-nav query responses even if is_not_cacheable() is bypassed
+			// via filter. Unconditional on safe mode — a filtered URL must never
+			// be persisted over the path-only clean file.
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_faceted_query' ) ) {
+					$faceted_store_qs = (string) wp_parse_url( $this->request_uri, PHP_URL_QUERY );
+					if ( '' === $faceted_store_qs && ! empty( $_SERVER['QUERY_STRING'] ) && function_exists( 'wp_unslash' ) && function_exists( 'sanitize_text_field' ) ) {
+						$faceted_store_qs = sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) );
+					}
+					if ( '' !== $faceted_store_qs && Util::is_woo_faceted_query( $faceted_store_qs ) ) {
+						return false;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 				return false;
 			}
 

@@ -9,11 +9,15 @@ import '@testing-library/jest-dom';
 // eslint-disable-next-line import/no-extraneous-dependencies -- React is required for JSX rendering in tests
 import React from 'react';
 
-jest.mock( '../../lib/apiRequest', () => ( {
-	apiCall: jest.fn(),
-	fetchWebVitalsTrends: jest.fn(),
-	fetchWooCacheSelfTest: jest.fn(),
-} ) );
+jest.mock( '../../lib/apiRequest', () => {
+	const actual = jest.requireActual( '../../lib/apiRequest' );
+	return {
+		...actual,
+		apiCall: jest.fn(),
+		fetchWebVitalsTrends: jest.fn(),
+		fetchWooCacheSelfTest: jest.fn(),
+	};
+} );
 
 jest.mock( '../WelcomePanel', () => () => <div data-testid="welcome-panel" /> );
 jest.mock( '../PerformanceAudit', () => () => (
@@ -29,9 +33,6 @@ jest.mock( '../SuggestionsPanel', () => () => (
 	<div data-testid="suggestions-panel" />
 ) );
 jest.mock( '../SystemInfo', () => () => <div data-testid="system-info" /> );
-jest.mock( '../WebVitalsTrends', () => () => (
-	<div data-testid="web-vitals-trends" />
-) );
 jest.mock( '../WebVitalsRum', () => () => <div data-testid="rum-panel" /> );
 jest.mock( '../AutoloadedOptions', () => () => (
 	<div data-testid="autoloaded-options" />
@@ -113,8 +114,11 @@ import { clearDbCountsCache } from '../../lib/dbCounts';
 
 /**
  * Wait for the mount-time database_cleanup_counts call to start AND for the
- * resolved promise to be handled inside act(), so subsequent assertions never
- * race the async state update (which otherwise emits act() warnings).
+ * resolved promise to propagate through the getDbCounts .then ->
+ * updateState/handleLoading chain, so subsequent assertions never race the
+ * async state update (which otherwise emits act() warnings). Quiescence is
+ * awaited via the rendered stat (proof the mount settled), not just the
+ * bare microtask queue.
  */
 const flushDashboardMount = async () => {
 	await waitFor( () => {
@@ -124,6 +128,9 @@ const flushDashboardMount = async () => {
 			'GET',
 			expect.any( AbortSignal )
 		);
+	} );
+	await waitFor( () => {
+		expect( screen.getByText( 'Cache Size' ) ).toBeInTheDocument();
 	} );
 	await act( async () => {} );
 };
@@ -356,11 +363,6 @@ describe( 'Dashboard', () => {
 			} );
 			await act( async () => {} );
 
-			expect( apiCall ).not.toHaveBeenCalledWith(
-				'image_job_status',
-				{},
-				'GET'
-			);
 			expect( apiCall ).not.toHaveBeenCalledWith(
 				'image_job_status',
 				{},
@@ -647,7 +649,7 @@ describe( 'Dashboard', () => {
 		expect( screen.getAllByText( 'Bypassed (pass)' ) ).toHaveLength( 2 );
 		expect(
 			screen.getByText(
-				'WooCommerce self-test passed: cart, checkout and account pages bypass the cache.'
+				'WooCommerce self-test passed: cart, checkout and account pages bypass the cache; faceted URLs are skipped by preload and the guest cart survives.'
 			)
 		).toBeInTheDocument();
 	} );
@@ -714,6 +716,73 @@ describe( 'Dashboard', () => {
 			screen.getByText( '/?wc-ajax=get_refreshed_fragments' )
 		).toBeInTheDocument();
 		expect( screen.getByText( '/?add-to-cart=123' ) ).toBeInTheDocument();
+	} );
+
+	it( 'renders preload-skip and guest-cart survival probes plus the fail-closed warning', async () => {
+		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+		await flushDashboardMount();
+
+		fetchWooCacheSelfTest.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				woo_active: true,
+				safe_mode: false,
+				runnable: true,
+				excluded_paths: [ 'cart', 'checkout', 'my-account' ],
+				donotcachepage_honored: true,
+				all_pass: false,
+				force_exclude: true,
+				checks: [
+					{
+						url: 'http://example.com/cart/',
+						path: '/cart/',
+						is_dynamic: true,
+						cacheable: true,
+						donotcachepage_honored: true,
+						pass: false,
+					},
+				],
+				preload_checks: [
+					{
+						url: 'http://example.com/shop/?filter_color=blue',
+						path: '/shop/?filter_color=blue',
+						skipped: true,
+						pass: true,
+					},
+				],
+				cart_checks: [
+					{
+						key: 'cart_cookie',
+						url: 'http://example.com/',
+						bypass: false,
+						cacheable: true,
+						donotcachepage_honored: true,
+						pass: false,
+					},
+				],
+			},
+		} );
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Run Woo Cache Self-Test/i } )
+		);
+
+		await waitFor( () =>
+			expect( fetchWooCacheSelfTest ).toHaveBeenCalled()
+		);
+		expect(
+			screen.getByText( 'Preload probes (faceted URLs skipped):' )
+		).toBeInTheDocument();
+		expect(
+			screen.getByText( 'Guest-cart survival (page + object cache on):' )
+		).toBeInTheDocument();
+		expect( screen.getByText( 'cart_cookie' ) ).toBeInTheDocument();
+		expect(
+			screen.getByText(
+				'Self-test failed: force-excluding dynamic routes plus cookie bypass (fail-closed for commerce). Re-enable WooCommerce safe mode and serve dynamic — never a stale cart.'
+			)
+		).toBeInTheDocument();
 	} );
 
 	it( 'shows a read-only notice when WooCommerce is inactive', async () => {

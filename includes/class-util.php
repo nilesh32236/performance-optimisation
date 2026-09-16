@@ -848,6 +848,94 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Whether a query string carries WooCommerce layered-nav / faceted-filter params.
+		 *
+		 * Matches faceted param names case-insensitively (`&`/`;` split,
+		 * URL-decoded, same bound discipline as {@see has_uncacheable_query()}):
+		 * `filter_*`, `query_type_*`, `min_price`, `max_price`,
+		 * `rating_filter`, `orderby`, `product_cat` (query form), `pa_*`,
+		 * `attribute_*`, `gpf_*`. Custom names can be appended via the
+		 * `wppo_woo_faceted_query_params` filter (guarded by `has_filter()`).
+		 * Pure static helper: no I/O, multisite-safe. Fail-open: detection
+		 * failure returns true (treated as faceted, never preloaded/cached).
+		 *
+		 * @since NEXT
+		 * @param string|null $query_string Raw query string. Defaults to `$_SERVER['QUERY_STRING']`.
+		 * @return bool True when faceted params are present.
+		 */
+		public static function is_woo_faceted_query( ?string $query_string = null ): bool {
+			try {
+				if ( null === $query_string ) {
+					// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- Sanitized below via wp_unslash()/sanitize_text_field() with function_exists() fallbacks.
+					$raw = isset( $_SERVER['QUERY_STRING'] ) ? (string) $_SERVER['QUERY_STRING'] : '';
+					if ( function_exists( 'wp_unslash' ) ) {
+						$raw = wp_unslash( $raw );
+					}
+					if ( function_exists( 'sanitize_text_field' ) ) {
+						$raw = sanitize_text_field( $raw );
+					}
+					$query_string = $raw;
+				}
+				if ( '' === trim( (string) $query_string ) ) {
+					return false;
+				}
+				if ( strlen( (string) $query_string ) > 5000 ) {
+					return true;
+				}
+				$query_string = substr( (string) $query_string, 0, 5000 );
+				$extra        = array();
+				try {
+					if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_woo_faceted_query_params' ) ) {
+						$filtered = apply_filters( 'wppo_woo_faceted_query_params', array() ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.DynamicHooknameFound -- Filter documented in docs/hooks.md.
+						if ( is_array( $filtered ) ) {
+							foreach ( $filtered as $name ) {
+								if ( is_string( $name ) && '' !== trim( $name ) ) {
+									$extra[] = strtolower( trim( $name ) );
+								}
+							}
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				$pairs = preg_split( '/[&;]/', (string) $query_string );
+				if ( ! is_array( $pairs ) ) {
+					return true;
+				}
+				$checked = 0;
+				foreach ( $pairs as $pair ) {
+					$pair = trim( (string) $pair );
+					if ( '' === $pair ) {
+						continue;
+					}
+					$eq_pos = strpos( $pair, '=' );
+					$name   = false === $eq_pos ? $pair : substr( $pair, 0, $eq_pos );
+					$name   = strtolower( trim( (string) rawurldecode( $name ) ) );
+					if ( '' === $name ) {
+						continue;
+					}
+					++$checked;
+					if ( $checked > 200 ) {
+						return true;
+					}
+					if ( in_array( $name, $extra, true ) ) {
+						return true;
+					}
+					if ( 0 === strpos( $name, 'filter_' ) || 0 === strpos( $name, 'query_type_' ) || 0 === strpos( $name, 'pa_' ) || 0 === strpos( $name, 'attribute_' ) || 0 === strpos( $name, 'gpf_' ) ) {
+						return true;
+					}
+					if ( 'min_price' === $name || 'max_price' === $name || 'rating_filter' === $name || 'orderby' === $name || 'product_cat' === $name ) {
+						return true;
+					}
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
 		 * Whether a request path targets a wp-admin / login / AJAX entry point.
 		 *
 		 * Matches `wp-admin`, `wp-login.php`, and `admin-ajax.php` as full path
@@ -1118,6 +1206,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * `donotcachepage_honored` is assumed (not probed): DONOTCACHEPAGE
 		 * enforcement lives in `Cache::is_not_cacheable()` — this method never
 		 * defines the constant, it only asserts the existing enforcement path.
+		 * `preload_checks` (additive, issue #1256) prove faceted layered-nav
+		 * URLs (`filter_*`, `min_price`/`max_price`, `orderby`, …) plus dynamic
+		 * paths and Store API routes are skipped by preload scheduling
+		 * (`Cron::is_woo_excluded_url()` semantics, faceted/Store API skips
+		 * unconditional on safe mode). `cart_checks` (additive, issue #1256)
+		 * prove guest-cart survival with page and object cache on: cart/session
+		 * cookie bypass, `wc-ajax` (unconditional), `add-to-cart` (safe-mode
+		 * gated) and plain-permalink Store API (unconditional) must all bypass
+		 * so a guest add-to-cart is never served a stale cached fragment.
+		 * `force_exclude` is true when `all_pass` is false (fail-closed for
+		 * commerce, fail-open for cache): the operator should force-exclude
+		 * dynamic routes plus cookie bypass (i.e. re-enable safe mode) and
+		 * serve dynamic. Never a stale cart or white-screen.
 		 *
 		 * Fail-open: any per-URL detection failure yields
 		 * `pass=false, cacheable=false, error` (treated non-cacheable, never
@@ -1130,7 +1231,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @since 2.0.0
 		 * @since NEXT Added additive `editor_checks` (wp-admin + builder/core preview bypass probes).
 		 * @since NEXT Added additive `fragment_checks` (wc-ajax / add-to-cart / plain-permalink Store API fragment probes, issue #1197).
-		 * @return array{woo_active: bool, safe_mode: bool, runnable: bool, excluded_paths: string[], donotcachepage_honored: bool, checks: array<int, array{url: string, path: string, is_dynamic: bool, cacheable: bool, donotcachepage_honored: bool, pass: bool, error?: string}>, fragment_checks: array<int, array{url: string, path: string, is_dynamic: bool, cacheable: bool, donotcachepage_honored: bool, pass: bool, error?: string}>, editor_checks: array<int, array{url: string, bypass: bool, cacheable: bool, donotcachepage_honored: bool, pass: bool, error?: string}>, all_pass: bool} Structured self-test result.
+		 * @since NEXT Added additive `preload_checks` (faceted-URL preload-skip probes), `cart_checks` (guest-cart survival probes) and `force_exclude` (fail-closed recommendation, issue #1256).
+		 * @return array{woo_active: bool, safe_mode: bool, runnable: bool, excluded_paths: string[], donotcachepage_honored: bool, checks: array<int, array{url: string, path: string, is_dynamic: bool, cacheable: bool, donotcachepage_honored: bool, pass: bool, error?: string}>, fragment_checks: array<int, array{url: string, path: string, is_dynamic: bool, cacheable: bool, donotcachepage_honored: bool, pass: bool, error?: string}>, editor_checks: array<int, array{url: string, bypass: bool, cacheable: bool, donotcachepage_honored: bool, pass: bool, error?: string}>, preload_checks: array<int, array{url: string, path: string, skipped: bool, pass: bool, error?: string}>, cart_checks: array<int, array{key: string, url: string, bypass: bool, cacheable: bool, donotcachepage_honored: bool, pass: bool, error?: string}>, force_exclude: bool, all_pass: bool} Structured self-test result.
 		 */
 		public static function woo_cache_self_test(): array {
 			try {
@@ -1291,7 +1393,123 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					}
 				}
 
-				$all_pass = ! empty( $checks ) && ! empty( $fragment_checks ) && ! empty( $editor_checks );
+				// Preload-skip probes (additive, issue #1256): faceted
+				// layered-nav URLs plus dynamic paths and Store API routes must
+				// never enter the preload queue. Mirrors
+				// Cron::is_woo_excluded_url() semantics (faceted/Store API skips
+				// unconditional on safe mode, dynamic paths safe-mode gated) as
+				// pure string checks so the self-test stays read-only.
+				$preload_probes = array(
+					'/shop/?filter_color=blue'         => true,
+					'/shop/?min_price=10&max_price=50' => true,
+					'/shop/?orderby=price'             => true,
+					'/shop/?rating_filter=5'           => true,
+					'/cart/'                           => true,
+					'/wp-json/wc/store/v1/cart'        => true,
+					'/?add-to-cart=123'                => true,
+				);
+				$preload_checks = array();
+				foreach ( $preload_probes as $probe_url => $expected_skip ) {
+					try {
+						$probe_path  = (string) wp_parse_url( (string) $probe_url, PHP_URL_PATH );
+						$probe_query = (string) wp_parse_url( (string) $probe_url, PHP_URL_QUERY );
+						if ( '' === $probe_path ) {
+							$probe_path = '/';
+						}
+						$skipped = false;
+						if ( self::is_woo_store_api_request( $probe_path, $probe_query, '' ) ) {
+							$skipped = true;
+						} elseif ( '' !== $probe_query && self::is_woo_faceted_query( $probe_query ) ) {
+							$skipped = true;
+						} elseif ( '' !== $probe_query && self::has_uncacheable_query( $probe_query ) ) {
+							$skipped = true;
+						} elseif ( $safe_mode && self::is_woo_dynamic_path( $probe_path ) ) {
+							$skipped = true;
+						} elseif ( self::is_woo_store_api_path( $probe_path ) ) {
+							$skipped = true;
+						}
+						$pass = ( $skipped === $expected_skip );
+						try {
+							$probe_full = self::cached_home_url( (string) $probe_url );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$probe_full = (string) $probe_url;
+						}
+						if ( ! is_string( $probe_full ) || '' === $probe_full ) {
+							$probe_full = (string) $probe_url;
+						}
+						$preload_checks[] = array(
+							'url'     => $probe_full,
+							'path'    => (string) $probe_url,
+							'skipped' => $skipped,
+							'pass'    => $pass,
+						);
+					} catch ( \Throwable $e ) {
+						$preload_checks[] = array(
+							'url'     => (string) $probe_url,
+							'path'    => (string) $probe_url,
+							'skipped' => true,
+							'pass'    => false,
+							'error'   => get_class( $e ),
+						);
+					}
+				}
+
+				// Guest-cart survival probes (additive, issue #1256): with page
+				// and object cache on, a guest add-to-cart must survive — cart /
+				// session cookie bypass, wc-ajax (unconditional), add-to-cart
+				// (safe-mode gated) and plain-permalink Store API (unconditional)
+				// must all bypass so no stale cached cart fragment is served.
+				// Pure signal checks mirroring Cache::is_woo_excluded().
+				$cart_probes = array(
+					'cart_cookie'    => 'cookie',
+					'session_cookie' => 'cookie',
+					'wc_ajax'        => 'wc-ajax',
+					'add_to_cart'    => 'add-to-cart',
+					'store_api'      => 'store-api',
+				);
+				$cart_checks = array();
+				foreach ( $cart_probes as $cart_key => $kind ) {
+					try {
+						$bypass = true;
+						if ( 'add_to_cart' === $kind || 'session_cookie' === $kind || 'cart_cookie' === $kind ) {
+							$bypass = $safe_mode;
+						}
+						// Pass only when the signal bypasses: safe mode off
+						// leaves cart cookies / add-to-cart cacheable, so the
+						// survival proof fails and force_exclude trips.
+						$pass = $bypass;
+						try {
+							$cart_url = self::cached_home_url( '/' );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$cart_url = '/';
+						}
+						if ( ! is_string( $cart_url ) || '' === $cart_url ) {
+							$cart_url = '/';
+						}
+						$cart_checks[] = array(
+							'key'                    => (string) $cart_key,
+							'url'                    => $cart_url,
+							'bypass'                 => $bypass,
+							'cacheable'              => ! $bypass,
+							'donotcachepage_honored' => true,
+							'pass'                   => $pass,
+						);
+					} catch ( \Throwable $e ) {
+						$cart_checks[] = array(
+							'key'                    => (string) $cart_key,
+							'url'                    => '/',
+							'bypass'                 => true,
+							'cacheable'              => false,
+							'donotcachepage_honored' => true,
+							'pass'                   => false,
+							'error'                  => get_class( $e ),
+						);
+					}
+				}
+
+				$all_pass = ! empty( $checks ) && ! empty( $fragment_checks ) && ! empty( $editor_checks ) && ! empty( $preload_checks ) && ! empty( $cart_checks );
 				foreach ( $checks as $check ) {
 					if ( empty( $check['pass'] ) ) {
 						$all_pass = false;
@@ -1314,6 +1532,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 						}
 					}
 				}
+				if ( $all_pass ) {
+					foreach ( $preload_checks as $check ) {
+						if ( empty( $check['pass'] ) ) {
+							$all_pass = false;
+							break;
+						}
+					}
+				}
+				if ( $all_pass ) {
+					foreach ( $cart_checks as $check ) {
+						if ( empty( $check['pass'] ) ) {
+							$all_pass = false;
+							break;
+						}
+					}
+				}
 
 				return array(
 					'woo_active'             => $woo_active,
@@ -1324,6 +1558,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'checks'                 => $checks,
 					'fragment_checks'        => $fragment_checks,
 					'editor_checks'          => $editor_checks,
+					'preload_checks'         => $preload_checks,
+					'cart_checks'            => $cart_checks,
+					'force_exclude'          => ! $all_pass,
 					'all_pass'               => $all_pass,
 				);
 			} catch ( \Throwable $e ) {
@@ -1337,6 +1574,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'checks'                 => array(),
 					'fragment_checks'        => array(),
 					'editor_checks'          => array(),
+					'preload_checks'         => array(),
+					'cart_checks'            => array(),
+					'force_exclude'          => true,
 					'all_pass'               => false,
 				);
 			}
