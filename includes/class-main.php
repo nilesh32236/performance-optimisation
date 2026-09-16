@@ -10210,6 +10210,46 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Whether core 6.9+ wants an empty block's asset kept via its canonical filter.
+		 *
+		 * Probes core's `enqueue_empty_block_content_assets` filter
+		 * (`wp-includes/class-wp-block.php`, `@since 6.9.0`; semantics:
+		 * `$enqueue=false` = drop empty-block assets, return `true` = keep
+		 * them). See the WP 6.9 frontend-performance field guide. Fail-open:
+		 * any doubt returns true (keep the asset — degrade to unoptimized,
+		 * never unstyled). On core below 6.9 returns false (no keep-signal)
+		 * so the caller falls through to legacy behavior byte-for-byte.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $block_name Block name e.g. 'core/cover'.
+		 * @return bool True when core wants the asset kept.
+		 */
+		private function should_keep_empty_block_asset_via_core_filter( $block_name ): bool {
+			try {
+				if ( isset( $GLOBALS['wp_version'] ) && version_compare( (string) $GLOBALS['wp_version'], '6.9-alpha', '<' ) ) {
+					return false;
+				}
+				if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) ) {
+					return true;
+				}
+				if ( ! has_filter( 'enqueue_empty_block_content_assets' ) ) {
+					return false;
+				}
+				try {
+					$enqueue = apply_filters( 'enqueue_empty_block_content_assets', false, (string) $block_name );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return true;
+				}
+				return (bool) $enqueue;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
 		 * Whether a queued core block asset should be omitted as hidden.
 		 *
 		 * A block asset counts as hidden when its block type is absent from the
@@ -10218,10 +10258,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * the stylesheet is unused by definition). Hidden assets are omitted by
 		 * default; a per-block re-enable is available via the
 		 * `wppo_allow_hidden_block_asset` filter (return truthy to keep the
-		 * asset for that block). The filter is only applied when a listener is
-		 * registered (`has_filter()` guard). Fail-open: missing content, missing
-		 * APIs, an unregistered block type, or any throwable returns false (keep
-		 * the asset — degrade to unoptimized, never fatal, never unstyled).
+		 * asset for that block). On WP 6.9+ core's canonical
+		 * `enqueue_empty_block_content_assets` filter is honored first
+		 * (return `true` to keep the asset even though empty); either filter
+		 * keeping the asset wins. The filters are only applied when a
+		 * listener is registered (`has_filter()` guard). Fail-open: missing
+		 * content, missing APIs, an unregistered block type, or any throwable
+		 * returns false (keep the asset — degrade to unoptimized, never
+		 * fatal, never unstyled).
 		 * Callers may pass a shared `$presence` map so the content parse in
 		 * {@see Util::content_has_block()} runs at most once per block type per
 		 * pass instead of once per queued handle.
@@ -10250,6 +10294,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					$presence[ $key ] = Util::content_has_block( (string) $content, (string) $block_name );
 				}
 				if ( ! empty( $presence[ $key ] ) ) {
+					return false;
+				}
+				// Core parity first: on WP 6.9+ defer to core's canonical
+				// empty-block filter (wp-includes/class-wp-block.php); a
+				// filtered-in handle is kept even though the block is hidden.
+				if ( $this->should_keep_empty_block_asset_via_core_filter( (string) $block_name ) ) {
 					return false;
 				}
 				$allowed = false;
@@ -10388,7 +10438,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// caches Util::content_has_block() results by block name
 				// (shared across handles); $decisions stays keyed by handle
 				// because the wppo_allow_hidden_block_asset filter takes
-				// ($block_name, $handle) and must run per queued handle.
+				// ($block_name, $handle) and must run per queued handle (the
+				// core enqueue_empty_block_content_assets filter takes only
+				// $block_name but shares the same per-handle memoization).
 				$decisions = array();
 				$presence  = array();
 				foreach ( $wp_styles->queue as $handle ) {
