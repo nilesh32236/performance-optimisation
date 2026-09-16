@@ -229,6 +229,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 			add_action( 'upgrader_process_complete', array( $this, 'on_any_upgrade' ), 20, 2 );
 			add_action( 'elementor/core/files/clear_cache', array( $this, 'on_builder_drift' ), 10, 0 );
 			add_action( 'elementor/editor/after_save', array( $this, 'on_builder_drift_save' ), 10, 2 );
+			// Elementor-safe mode (issue #1259): per-post CSS-regen signal.
+			// Fired by Elementor after a post CSS file is (re)generated; the
+			// callback purges that post's static HTML cache so stale HTML
+			// never points at renamed/deleted post-*.css. Registered
+			// unconditionally — WP tolerates unknown hooks, and the callback
+			// is fully guarded so non-Elementor sites pay nothing.
+			add_action( 'elementor/css-file/post/parse_after', array( $this, 'on_elementor_css_regen' ), 10, 1 );
 			add_action( self::DRIFT_PURGE_HOOK, array( $this, 'run_deferred_drift_purge' ), 10, 0 );
 			add_action( self::UPGRADE_PURGE_HOOK, array( $this, 'run_deferred_upgrade_purge' ), 10, 1 );
 		}
@@ -371,6 +378,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 				if ( $post_id <= 0 ) {
 					return;
 				}
+				// Elementor-safe mode (issue #1259): an editor save renames or
+				// deletes uploads/elementor/css/post-*.css, so purge this
+				// post's static HTML cache alongside the Used-CSS requeue.
+				// Purge failures degrade to uncached dynamic, never stale-broken.
+				$this->purge_post_static_cache( $post_id );
 				$queued = false;
 				if ( class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					$queued = Used_CSS::requeue_for_post( $post_id );
@@ -387,6 +399,111 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 					 * @param int $post_id Post ID saved in the builder.
 					 */
 					do_action( 'wppo_builder_drift_requeue', $post_id );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Handle Elementor per-post CSS regeneration (issue #1259).
+		 *
+		 * Fired by Elementor's `elementor/css-file/post/parse_after` action
+		 * after a post CSS file is (re)generated. Purges that post's static
+		 * HTML cache so stale HTML never references renamed or deleted
+		 * `uploads/elementor/css/post-*.css` files (no post-css 404s), and
+		 * requeues Used-CSS for the post best-effort. The post ID is resolved
+		 * from the CSS-file object (`get_post_id()` when available) or from
+		 * a plain integer first argument; unresolvable payloads are ignored.
+		 * Fully guarded and fail-open: any failure degrades to uncached
+		 * dynamic output, never stale-broken pages or fatal errors.
+		 *
+		 * @since NEXT
+		 *
+		 * @param mixed $css_file Elementor post CSS-file object or post ID.
+		 * @return void
+		 */
+		public function on_elementor_css_regen( $css_file ): void {
+			try {
+				$post_id = $this->resolve_elementor_post_id( $css_file );
+				if ( $post_id <= 0 ) {
+					return;
+				}
+				$this->purge_post_static_cache( $post_id );
+				try {
+					if ( class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
+						Used_CSS::requeue_for_post( $post_id );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Resolve an Elementor CSS-regen payload to a post ID (issue #1259).
+		 *
+		 * @since NEXT
+		 *
+		 * @param mixed $css_file CSS-file object or post ID.
+		 * @return int Post ID, or 0 when unresolvable.
+		 */
+		protected function resolve_elementor_post_id( $css_file ): int {
+			try {
+				if ( is_object( $css_file ) && method_exists( $css_file, 'get_post_id' ) ) {
+					try {
+						$id = (int) $css_file->get_post_id();
+						return $id > 0 ? $id : 0;
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return 0;
+					}
+				}
+				if ( is_numeric( $css_file ) ) {
+					$id = (int) $css_file;
+					return $id > 0 ? $id : 0;
+				}
+				return 0;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
+			}
+		}
+
+		/**
+		 * Purge a single post's static HTML + derived CSS caches (issue #1259).
+		 *
+		 * Uses the domain-based single-URL purge path
+		 * (`Cache::invalidate_single_static_html()`), which is inherently
+		 * multisite-safe. Fail-open: missing Cache class or any error simply
+		 * leaves the cache as-is (full CSS keeps serving).
+		 *
+		 * @since NEXT
+		 *
+		 * @param int $post_id Post ID whose cache must be purged.
+		 * @return void
+		 */
+		protected function purge_post_static_cache( int $post_id ): void {
+			try {
+				if ( $post_id <= 0 ) {
+					return;
+				}
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
+					return;
+				}
+				$settings = array();
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					try {
+						$settings = (array) Util::get_settings();
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				$cache = new Cache( $settings );
+				if ( method_exists( $cache, 'invalidate_single_static_html' ) ) {
+					$cache->invalidate_single_static_html( $post_id );
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );

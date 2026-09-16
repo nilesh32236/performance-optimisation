@@ -520,6 +520,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['file_optimisation']['safeMode'] ) ) {
 				$this->options['file_optimisation']['safeMode'] = false;
 			}
+			// Elementor-safe mode (issue #1259): additive key, defaults to on
+			// (builder-proof by default) so combine/inline step aside on
+			// Elementor-built pages. In-memory only here (no front-end DB
+			// write); persisted via update_settings/REST. Multisite-safe:
+			// per-site wppo_settings only.
+			if ( ! isset( $this->options['file_optimisation']['elementorSafeMode'] ) ) {
+				$this->options['file_optimisation']['elementorSafeMode'] = true;
+			}
 			// Sandbox preview staged values (issue #1163): additive key,
 			// defaults to empty so existing installs keep current behaviour.
 			// In-memory only here (no front-end DB write).
@@ -984,6 +992,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'admin_init', array( $this, 'maybe_migrate_speculation_prerender_list' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_rum_sample_rate' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_safe_mode' ) );
+			add_action( 'admin_init', array( $this, 'maybe_migrate_elementor_safe_mode' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_sandbox_preview' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_image_alt_edge_defaults' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_preload_auto_defaults' ) );
@@ -2056,6 +2065,194 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$this->options['file_optimisation'] = array();
 			}
 			$this->options['file_optimisation']['safeMode'] = false;
+		}
+
+		/**
+		 * Backfill the additive elementorSafeMode key (issue #1259).
+		 *
+		 * Runs on admin_init; in-memory default is applied in __construct so
+		 * front-end requests never pay for a DB write. Defaults to on
+		 * (builder-proof by default). Multisite-safe: per-site
+		 * get_option() so sites migrate independently.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public function maybe_migrate_elementor_safe_mode(): void {
+			// allowlist(settings-read-guard): deliberate direct read — must distinguish
+			// "no stored row" (false) from "stored array".
+			$stored = get_option( 'wppo_settings' );
+			if ( ! is_array( $stored ) ) {
+				return;
+			}
+			$file = isset( $stored['file_optimisation'] ) && is_array( $stored['file_optimisation'] ) ? $stored['file_optimisation'] : array();
+			if ( array_key_exists( 'elementorSafeMode', $file ) ) {
+				return;
+			}
+			$stored['file_optimisation'] = $file + array( 'elementorSafeMode' => true );
+			update_option( 'wppo_settings', $stored );
+			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
+				$this->options['file_optimisation'] = array();
+			}
+			$this->options['file_optimisation']['elementorSafeMode'] = true;
+		}
+
+		/**
+		 * Whether Elementor-safe mode is active (issue #1259).
+		 *
+		 * When on (default), combine/inline step aside on Elementor-built
+		 * pages. Fail-open to enabled when settings are unreadable so
+		 * unknown builder markup degrades to uncombined (never broken).
+		 * Every builder call is guarded; non-Elementor sites carry zero
+		 * weight beyond two cheap array lookups.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $file_optimisation Optional `file_optimisation` settings slice.
+		 * @return bool True when Elementor-safe mode is on.
+		 */
+		public static function is_elementor_safe_mode_active( array $file_optimisation = array() ): bool {
+			try {
+				if ( empty( $file_optimisation ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					try {
+						$settings          = (array) Util::get_settings();
+						$file_optimisation = isset( $settings['file_optimisation'] ) && is_array( $settings['file_optimisation'] ) ? $settings['file_optimisation'] : array();
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				// Absent key (pre-migration) means default-on.
+				$enabled = ! array_key_exists( 'elementorSafeMode', $file_optimisation ) || ! empty( $file_optimisation['elementorSafeMode'] );
+				if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_elementor_safe_mode_enabled' ) ) {
+					try {
+						$enabled = (bool) apply_filters( 'wppo_elementor_safe_mode_enabled', $enabled );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				return $enabled;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
+		 * Whether the current page was built with Elementor (issue #1259).
+		 *
+		 * Lazy boot: class_exists() / function_exists() guards first so
+		 * non-Elementor sites pay nothing. Checks the Elementor plugin class,
+		 * version markers, per-post `_elementor_data` / `_elementor_edit_mode`
+		 * meta for the queried post, and `data-elementor-type` is left to
+		 * markup-level callers. Any failure fails open to false (no bypass)
+		 * except when the caller explicitly opts into fail-open elsewhere.
+		 *
+		 * @since NEXT
+		 *
+		 * @param int|null $post_id Optional post ID (defaults to queried object).
+		 * @return bool True when this looks like an Elementor-built page.
+		 */
+		public static function is_elementor_built_page( ?int $post_id = null ): bool {
+			try {
+				if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_is_elementor_page' ) ) {
+					try {
+						$filtered = apply_filters( 'wppo_is_elementor_page', null, $post_id );
+						if ( null !== $filtered ) {
+							return (bool) $filtered;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				// Reuse the Critical_CSS detection precedent when available.
+				if ( class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'is_elementor_context' ) ) {
+					try {
+						$resolved = $post_id;
+						if ( null === $resolved && function_exists( 'get_queried_object_id' ) ) {
+							try {
+								$qid = (int) get_queried_object_id();
+								if ( $qid > 0 ) {
+									$resolved = $qid;
+								}
+							} catch ( \Throwable $e ) {
+								unset( $e );
+							}
+						}
+						if ( Critical_CSS::is_elementor_context( $resolved ) ) {
+							// is_elementor_context() returns true when the
+							// Elementor plugin is active site-wide; that alone
+							// must NOT bypass combine on non-builder pages.
+							// Require per-post builder meta (or an explicit
+							// preview query) before treating the page as built.
+							if ( null !== $resolved && $resolved > 0 && function_exists( 'get_post_meta' ) ) {
+								try {
+									$data = get_post_meta( $resolved, '_elementor_data', true );
+									if ( ! empty( $data ) ) {
+										return true;
+									}
+									$edit_mode = get_post_meta( $resolved, '_elementor_edit_mode', true );
+									if ( ! empty( $edit_mode ) && 'builder' === (string) $edit_mode ) {
+										return true;
+									}
+								} catch ( \Throwable $e ) {
+									unset( $e );
+								}
+							}
+							if ( isset( $_GET['elementor-preview'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
+								return true;
+							}
+							// Plugin active but this post carries no builder
+							// meta: not a builder-built page.
+							return false;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( null !== $post_id && $post_id > 0 && function_exists( 'get_post_meta' ) ) {
+					try {
+						$data = get_post_meta( $post_id, '_elementor_data', true );
+						if ( ! empty( $data ) ) {
+							return true;
+						}
+						$edit_mode = get_post_meta( $post_id, '_elementor_edit_mode', true );
+						if ( ! empty( $edit_mode ) ) {
+							return true;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Whether combine/inline must be skipped for this request (issue #1259).
+		 *
+		 * True only when Elementor-safe mode is on AND the current page is
+		 * Elementor-built. Fail-open: any error returns false (optimisations
+		 * run) — the safe-mode default-on path only bypasses positively
+		 * identified builder pages, never on detection failure.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $file_optimisation Optional `file_optimisation` settings slice.
+		 * @return bool True when combine/inline must be skipped.
+		 */
+		public static function should_skip_combine_for_elementor( array $file_optimisation = array() ): bool {
+			try {
+				if ( ! self::is_elementor_safe_mode_active( $file_optimisation ) ) {
+					return false;
+				}
+				return self::is_elementor_built_page();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
 		}
 
 		/**

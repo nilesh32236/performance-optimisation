@@ -100,6 +100,10 @@ const FileOptimization = ( {
 
 	const defaultSettings = {
 		safeMode: options.safeMode !== undefined ? options.safeMode : false,
+		elementorSafeMode:
+			options.elementorSafeMode !== undefined
+				? options.elementorSafeMode
+				: true,
 		minifyJS: false,
 		excludeJS: '',
 		minifyCSS: false,
@@ -408,6 +412,7 @@ const FileOptimization = ( {
 		delayJS: !! settings.delayJS,
 		deferJS: !! settings.deferJS,
 		combineCSS: !! settings.combineCSS,
+		elementorSafeMode: !! settings.elementorSafeMode,
 		// Staging must mirror what the preview renderer consumes:
 		// safe_minify_js reads delayJSExternalOnly and minifyInlineJS from
 		// the effective slice, so omitting them would silently drop the
@@ -2229,10 +2234,33 @@ const FileOptimization = ( {
 											) }
 									</div>
 								</div>
+								<SwitchField
+									label={ __(
+										'Elementor-safe mode — builder-proof by default',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Keep Combine CSS off on Elementor-built pages and auto-purge the page cache when Elementor regenerates its CSS. Stage risky changes via Sandbox preview before promoting.',
+										'performance-optimisation'
+									) }
+									name="elementorSafeMode"
+									checked={ settings.elementorSafeMode }
+									onChange={ handleChange( setSettings ) }
+									disabled={ optimizerDisabled }
+								/>
+								{ settings.elementorSafeMode && (
+									<NoticeBanner
+										type="info"
+										message={ __(
+											'Elementor-safe mode is on — Combine CSS steps aside on builder pages and Elementor CSS regens auto-purge the affected page.',
+											'performance-optimisation'
+										) }
+									/>
+								) }
 								<div className="wppo-field wppo-sandbox-preview">
 									<p className="wppo-field-label">
 										{ __(
-											'Sandbox preview — test Delay / Defer / Combine safely',
+											'Sandbox preview — test Delay / Defer / Combine / Elementor-safe safely',
 											'performance-optimisation'
 										) }
 									</p>

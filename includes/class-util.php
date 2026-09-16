@@ -340,6 +340,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'delayJS'                      => false,
 					'delayJSSafeMode'              => true,
 					'safeMode'                     => false,
+					'elementorSafeMode'            => true,
 					'sandboxStaged'                => array(),
 					'combineCSS'                   => false,
 					'excludeJS'                    => '',
