@@ -8860,6 +8860,56 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Whether the current request must not receive the high-value prerender list (issue #1243).
+		 *
+		 * Request-scoped counterpart to {@see is_speculation_commerce_or_auth()}: the
+		 * site-wide helper returns true on the mere presence of WooCommerce
+		 * (correct for global mode/eagerness guardrails), which would keep the
+		 * opt-in prerender list dead on every Woo store. The prerender list is
+		 * a per-URL feature whose URL safety already comes from the per-URL
+		 * {@see is_speculation_list_url_valid()} commerce-path backstop, so
+		 * this probe only inspects the *current request*: cart/checkout/
+		 * account conditionals, a frontend logged-in visitor, and an active
+		 * cart session via `woocommerce_items_in_cart` / `woocommerce_cart_hash`
+		 * cookies. Fail-closed: any throwable means "suppressed".
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when the prerender list must not be emitted for this request.
+		 */
+		private function is_prerender_list_suppressed_for_request(): bool {
+			try {
+				foreach ( array( 'is_cart', 'is_checkout', 'is_account_page' ) as $conditional ) {
+					if ( function_exists( $conditional ) ) {
+						try {
+							if ( call_user_func( $conditional ) ) {
+								return true;
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+					}
+				}
+				if ( function_exists( 'is_user_logged_in' ) ) {
+					try {
+						if ( $this->is_speculation_frontend_context() && is_user_logged_in() ) {
+							return true;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( ! empty( $_COOKIE['woocommerce_items_in_cart'] ) || ! empty( $_COOKIE['woocommerce_cart_hash'] ) ) {
+					return true;
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
 		 * High-value prerender list URLs (issue #1237).
 		 *
 		 * Builds the high-value URL set (home plus capped RUM top URLs via
@@ -8871,8 +8921,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * alongside `enableSpeculationRules`.
 		 *
 		 * Guards: same-origin enforcement via
-		 * {@see is_speculation_list_url_valid()}, commerce and auth exclusion
-		 * via {@see is_speculation_commerce_or_auth()}, logged-in
+		 * {@see is_speculation_list_url_valid()}, request-scoped commerce and
+		 * auth exclusion via {@see is_prerender_list_suppressed_for_request()}
+		 * (cart/checkout/account conditionals, logged-in visitor, cart
+		 * cookies — deliberately not the site-wide
+		 * {@see is_speculation_commerce_or_auth()} Woo-presence guard, so the
+		 * list still fires on safe pages of Woo stores), logged-in
 		 * exclusion via {@see is_speculation_suppressed_for_visitor()}, and
 		 * the static-cache + RUM-qualified gate via
 		 * {@see is_prerender_allowed()} (matching the document-mode
@@ -8907,7 +8961,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( $this->is_speculation_suppressed_for_visitor() ) {
 					return array();
 				}
-				if ( $this->is_speculation_commerce_or_auth() ) {
+				// Request-scoped commerce/auth guard (issue #1243): suppress
+				// only when the *current request* is commerce/auth (cart,
+				// checkout, account, logged-in visitor, active cart cookies).
+				// The site-wide is_speculation_commerce_or_auth() Woo-presence
+				// guard must not apply here — it would keep the list dead on
+				// every Woo store even on safe pages, while per-URL safety
+				// already comes from is_speculation_list_url_valid().
+				if ( $this->is_prerender_list_suppressed_for_request() ) {
 					return array();
 				}
 				if ( null === $candidates ) {
