@@ -1800,8 +1800,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 *
 		 * Thin wrapper over {@see Util::get_purge_fallback_path_for()} so the
 		 * used-CSS purge/miss path can be unit-tested via this surface.
-		 * `used-css.css` maps to `fallback.css` in the same directory; paths
-		 * that already point at a fallback file map to `''` (loop guard).
+		 * `used-css.css` maps to `fallback.css` in the same directory (and
+		 * `used-css.{mobile,desktop}.css` to their own variant fallbacks);
+		 * paths that already point at a fallback file map to `''` (loop guard).
 		 *
 		 * @param string $file_path Absolute used-CSS file path.
 		 * @return string Sibling fallback path, or '' when not applicable.
@@ -1823,11 +1824,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		/**
 		 * Retain a last-good fallback copy before a used-CSS file is purged.
 		 *
-		 * When {@see Util::is_purge_fallback_enabled()} is on and the file
-		 * exists with non-empty content, it is copied to the sibling
-		 * `fallback.css` so a post-purge miss stays styled (302) instead of
-		 * flashing unstyled. No-op when disabled, on containment failure, or
-		 * when the file is missing/empty. Never throws.
+		 * Thin wrapper over {@see Util::retain_purge_fallback_file()} (the
+		 * single shared implementation — see also
+		 * `Cache::retain_purge_fallback()`). Viewport variants
+		 * (`used-css.mobile.css` / `used-css.desktop.css`) map to their own
+		 * `fallback.mobile.css` / `fallback.desktop.css` so variant misses
+		 * never cross-serve. No-op when disabled, on containment failure,
+		 * or when the file is missing/empty. Never throws.
+		 *
+		 * Serving is owned by `Cache::get_purge_fallback_response()` /
+		 * `Cache::maybe_serve_purge_fallback()` (used-CSS files live under
+		 * the same cache tree, so the Cache resolver covers them); this
+		 * class only retains.
 		 *
 		 * @param string $file_path The used-CSS file about to be deleted.
 		 * @return void
@@ -1836,175 +1844,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 */
 		private function retain_purge_fallback( string $file_path ): void {
 			try {
-				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! Util::is_purge_fallback_enabled() ) {
-					return;
-				}
-				if ( '' === (string) $file_path || ! $this->is_path_contained( $file_path ) ) {
-					return;
-				}
-				$fallback = self::get_purge_fallback_path( (string) $file_path );
-				if ( '' === $fallback || ! $this->is_path_contained( $fallback ) ) {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					return;
 				}
 				$fs = Util::init_filesystem();
-				if ( ! $fs || ! $fs->exists( $file_path ) ) {
+				if ( ! $fs ) {
 					return;
 				}
-				// Refresh the fallback to the newest good copy on every purge
-				// (overwrite), so the post-purge 302 serves the latest
-				// known-good payload rather than the first copy ever kept.
-				// Cheap size() guard first (single stat); fall back to a
-				// content read only when size is unavailable/unknown.
-				if ( method_exists( $fs, 'size' ) ) {
-					try {
-						if ( (int) $fs->size( $file_path ) <= 0 ) {
-							return;
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						if ( method_exists( $fs, 'get_contents' ) ) {
-							try {
-								$probe = $fs->get_contents( $file_path );
-							} catch ( \Throwable $ignored ) {
-								unset( $ignored );
-								$probe = null;
-							}
-							if ( ! is_string( $probe ) || '' === $probe ) {
-								return;
-							}
-						}
-					}
-				}
-				if ( method_exists( $fs, 'copy' ) ) {
-					try {
-						$fs->copy( $file_path, $fallback, true );
-						return;
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-				}
-				if ( ! method_exists( $fs, 'get_contents' ) || ! method_exists( $fs, 'put_contents' ) ) {
-					return;
-				}
-				$contents = $fs->get_contents( $file_path );
-				if ( ! is_string( $contents ) || '' === $contents ) {
-					return;
-				}
-				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'atomic_file_put_contents' ) ) {
-					Util::atomic_file_put_contents( $fs, $fallback, $contents );
-					return;
-				}
-				$fs->put_contents( $fallback, $contents, defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644 );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-		}
-
-		/**
-		 * Resolve a post-purge used-CSS miss to its fallback.
-		 *
-		 * Returns `served=true` with status 302 and the fallback path only
-		 * when the gate is on, the requested path is contained, it is not
-		 * itself a fallback file (no loops), the base file is missing, and a
-		 * non-empty fallback sibling exists. A single throttled log entry is
-		 * written per fallback directory per day. All other cases return
-		 * `served=false` with status 404 (legacy hard-404 preserved,
-		 * including when the gate is off). Never throws.
-		 *
-		 * @param string $requested_path Absolute requested used-CSS path.
-		 * @return array{served: bool, status: int, fallback_path: string} Resolution.
-		 *
-		 * @since NEXT
-		 */
-		public function get_purge_fallback_response( string $requested_path ): array {
-			$miss = array(
-				'served'        => false,
-				'status'        => 404,
-				'fallback_path' => '',
-			);
-			try {
-				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! Util::is_purge_fallback_enabled() ) {
-					return $miss;
-				}
-				if ( '' === (string) $requested_path || ! $this->is_path_contained( (string) $requested_path ) ) {
-					return $miss;
-				}
-				$fallback = self::get_purge_fallback_path( (string) $requested_path );
-				if ( '' === $fallback || ! $this->is_path_contained( $fallback ) ) {
-					return $miss;
-				}
-				$fs = Util::init_filesystem();
-				if ( ! $fs || $fs->exists( $requested_path ) || ! $fs->exists( $fallback ) ) {
-					return $miss;
-				}
-				$valid = false;
-				if ( method_exists( $fs, 'size' ) ) {
-					try {
-						$valid = (int) $fs->size( $fallback ) > 0;
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						$valid = false;
-					}
-				}
-				if ( ! $valid && method_exists( $fs, 'get_contents' ) ) {
-					try {
-						$contents = $fs->get_contents( $fallback );
-						$valid    = is_string( $contents ) && '' !== $contents;
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						$valid = false;
-					}
-				}
-				if ( ! $valid ) {
-					return $miss;
-				}
-				$this->log_purge_fallback( $fallback );
-				return array(
-					'served'        => true,
-					'status'        => 302,
-					'fallback_path' => $fallback,
+				Util::retain_purge_fallback_file(
+					$fs,
+					function ( string $path ): bool {
+						return $this->is_path_contained( $path );
+					},
+					$file_path
 				);
 			} catch ( \Throwable $e ) {
 				unset( $e );
-				return $miss;
 			}
 		}
 
-		/**
-		 * Log a used-CSS purge-fallback serve once per directory per day.
-		 *
-		 * Throttled via a blog-prefixed transient so a sustained post-purge
-		 * miss storm writes a single activity-log row instead of one per hit.
-		 * Fail-open: logging failures never affect serving.
-		 *
-		 * @param string $fallback_path The fallback file being served.
-		 * @return void
-		 *
-		 * @since NEXT
-		 */
-		private function log_purge_fallback( string $fallback_path ): void {
-			try {
-				if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
-					return;
-				}
-				$dir = (string) preg_replace( '#/[^/]*$#', '', (string) $fallback_path );
-				if ( function_exists( 'wp_normalize_path' ) ) {
-					$dir = wp_normalize_path( $dir );
-				}
-				$key = Util::transient_key( 'wppo_usedcss_purge_fallback_' . md5( $dir ) );
-				if ( function_exists( 'get_transient' ) && get_transient( $key ) ) {
-					return;
-				}
-				if ( function_exists( 'set_transient' ) ) {
-					$ttl = defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400;
-					set_transient( $key, 1, $ttl );
-				}
-				$message = function_exists( '__' ) ? __( 'Used-CSS purge fallback: served last-good fallback after purge (302).', 'performance-optimisation' ) : 'Used-CSS purge fallback: served last-good fallback after purge (302).';
-				Log::add( $message );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-		}
+		// NOTE (issue #1275): miss serving is owned by
+		// Cache::get_purge_fallback_response() /
+		// Cache::maybe_serve_purge_fallback() — used-CSS files live under
+		// the same cache tree, so no second resolver exists here by design
+		// (a divergent copy was removed; this class only retains).
 
 		/**
 		 * Delete used-CSS file(s) for a URL or all URLs.

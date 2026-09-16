@@ -1626,6 +1626,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		private static array $settings_cache_loaded = array();
 
 		/**
+		 * Per-request memo for the purge-fallback gate (issue #1275).
+		 *
+		 * The gate result is request-stable (settings + constant + filter);
+		 * memoizing avoids re-running get_settings + apply_filters on every
+		 * retain/serve call (3x+ per single-page clear). Cleared alongside
+		 * the settings cache so tests and option updates stay coherent.
+		 *
+		 * @var bool|null
+		 * @since NEXT
+		 */
+		private static ?bool $purge_fallback_memo = null;
+
+		/**
 		 * Resets the home_url static cache for testing isolation.
 		 *
 		 * Also clears the canonical-host and normalized-host memos, which
@@ -1772,6 +1785,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @return void
 		 */
 		public static function clear_settings_cache( $blog_id = null ): void {
+			self::$purge_fallback_memo = null;
 			if ( null !== $blog_id && is_int( $blog_id ) ) {
 				$bid = (int) $blog_id;
 				unset( self::$settings_cache[ $bid ], self::$settings_cache_loaded[ $bid ] );
@@ -5485,10 +5499,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @return bool True when purge-fallback retention/serving is active.
 		 */
 		public static function is_purge_fallback_enabled(): bool {
+			if ( null !== self::$purge_fallback_memo ) {
+				return self::$purge_fallback_memo;
+			}
 			try {
 				if ( defined( 'WPPO_PURGE_FALLBACK' ) ) {
 					$flag = filter_var( WPPO_PURGE_FALLBACK, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
 					if ( true === $flag ) {
+						self::$purge_fallback_memo = true;
 						return true;
 					}
 				}
@@ -5498,9 +5516,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				$enabled  = true === $enabled;
 			} catch ( \Throwable $e ) {
 				unset( $e );
+				self::$purge_fallback_memo = false;
 				return false;
 			}
 			if ( ! function_exists( 'apply_filters' ) ) {
+				self::$purge_fallback_memo = $enabled;
 				return $enabled;
 			}
 			try {
@@ -5513,18 +5533,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				$filtered = apply_filters( 'wppo_purge_fallback_enabled', $enabled );
 			} catch ( \Throwable $e ) {
 				unset( $e );
+				self::$purge_fallback_memo = false;
 				return false;
 			}
-			$normalized = filter_var( $filtered, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
-			return true === $normalized;
+			$normalized                = filter_var( $filtered, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+			self::$purge_fallback_memo = true === $normalized;
+			return self::$purge_fallback_memo;
 		}
 
 		/**
 		 * Map a derived asset path to its sibling last-good fallback path.
 		 *
 		 * `.css` bases map to `fallback.css` and `.js` bases to `fallback.js`
-		 * in the same directory; anything else (HTML, images, unknown) maps
-		 * to `''`. A trailing `.gz`/`.br` sibling suffix is stripped before
+		 * in the same directory; viewport variants (`*.mobile.css`,
+		 * `*.desktop.css` from used-CSS) map to their own
+		 * `fallback.mobile.css` / `fallback.desktop.css` so a base-URL miss
+		 * can never 302-serve variant-specific CSS (and vice versa — issue
+		 * #1275 follow-up). Anything else (HTML, images, unknown) maps to
+		 * `''`. A trailing `.gz`/`.br` sibling suffix is stripped before
 		 * the extension check. Paths that already point at a fallback file
 		 * map to `''` so retention/serving can never loop onto itself.
 		 * Pure path math only — no filesystem or containment checks; callers
@@ -5565,8 +5591,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					return '';
 				}
 				$basename = strtolower( (string) preg_replace( '#^.*/#', '', $base ) );
-				if ( 'fallback.css' === $basename || 'fallback.js' === $basename ) {
+				if (
+					'fallback.css' === $basename || 'fallback.js' === $basename
+					|| 'fallback.mobile.css' === $basename || 'fallback.desktop.css' === $basename
+					|| 'fallback.mobile.js' === $basename || 'fallback.desktop.js' === $basename
+				) {
 					return '';
+				}
+				$variant = '';
+				if ( preg_match( '/\.(mobile|desktop)\.css$/', $basename, $m ) ) {
+					$variant = '.' . strtolower( $m[1] );
+				} elseif ( preg_match( '/\.(mobile|desktop)\.js$/', $basename, $m ) ) {
+					$variant = '.' . strtolower( $m[1] );
 				}
 				$ext = strtolower( (string) pathinfo( $base, PATHINFO_EXTENSION ) );
 				if ( 'css' !== $ext && 'js' !== $ext ) {
@@ -5576,10 +5612,177 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				if ( '' === $dir ) {
 					return '';
 				}
-				return $dir . '/fallback.' . $ext;
+				return $dir . '/fallback' . $variant . '.' . $ext;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return '';
+			}
+		}
+
+		/**
+		 * Retain a last-good fallback copy before a derived file is purged.
+		 *
+		 * Single shared implementation behind `Cache::retain_purge_fallback()`
+		 * and `Used_CSS::retain_purge_fallback()` (issue #1275 follow-up:
+		 * the two copies had already diverged, so all retain fixes land
+		 * here once). Order is deliberate: cheap pure-path reject first
+		 * (non CSS/JS inputs skip containment stats entirely), then
+		 * containment of base + fallback, then a cheap `size()` guard with
+		 * a content-probe fallback only when the size is unknown — the
+		 * `copy()` fast path never pays a full read. Compressed (`.gz`/`.br`)
+		 * inputs are refused so gzip bytes can never poison `fallback.css`.
+		 * Writes prefer atomic + `FS_CHMOD_FILE`. Never throws.
+		 *
+		 * @since NEXT
+		 * @param object   $fs         Filesystem exposing exists()/size()/copy()/get_contents()/put_contents().
+		 * @param callable $is_allowed Containment validator: fn( string $path ): bool.
+		 * @param string   $file_path  The derived file about to be deleted.
+		 * @return void
+		 */
+		public static function retain_purge_fallback_file( $fs, callable $is_allowed, string $file_path ): void {
+			try {
+				if ( ! self::is_purge_fallback_enabled() ) {
+					return;
+				}
+				if ( '' === $file_path ) {
+					return;
+				}
+				// Refuse compressed siblings outright: the mapper strips the
+				// suffix, so retaining `index.css.gz` would copy gzip bytes
+				// onto `fallback.css`.
+				if ( preg_match( '/\.(?:gz|br)$/i', $file_path ) ) {
+					return;
+				}
+				// Cheap pure-path reject before any containment stat.
+				$fallback = self::get_purge_fallback_path_for( $file_path );
+				if ( '' === $fallback ) {
+					return;
+				}
+				try {
+					if ( ! $is_allowed( $file_path ) || ! $is_allowed( $fallback ) ) {
+						return;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return;
+				}
+				if ( ! is_object( $fs ) || ! method_exists( $fs, 'exists' ) || ! $fs->exists( $file_path ) ) {
+					return;
+				}
+				if ( method_exists( $fs, 'size' ) ) {
+					try {
+						if ( (int) $fs->size( $file_path ) <= 0 ) {
+							return;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						// Size unknown: probe non-emptiness so an empty base
+						// can never overwrite a good fallback (downgrade).
+						if ( method_exists( $fs, 'get_contents' ) ) {
+							try {
+								$probe = $fs->get_contents( $file_path );
+							} catch ( \Throwable $ignored ) {
+								unset( $ignored );
+								$probe = null;
+							}
+							if ( ! is_string( $probe ) || '' === $probe ) {
+								return;
+							}
+						}
+					}
+				}
+				if ( method_exists( $fs, 'copy' ) ) {
+					try {
+						$fs->copy( $file_path, $fallback, true );
+						return;
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( ! method_exists( $fs, 'get_contents' ) || ! method_exists( $fs, 'put_contents' ) ) {
+					return;
+				}
+				$contents = $fs->get_contents( $file_path );
+				if ( ! is_string( $contents ) || '' === $contents ) {
+					return;
+				}
+				if ( method_exists( self::class, 'atomic_file_put_contents' ) ) {
+					self::atomic_file_put_contents( $fs, $fallback, $contents );
+					return;
+				}
+				$fs->put_contents( $fallback, $contents, defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644 );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Whether a retained fallback file holds a servable payload.
+		 *
+		 * Shared validator behind the purge-fallback resolvers: prefers the
+		 * cheap `size() > 0` stat and reads the body only when `size()` is
+		 * unavailable, so a fallback hit never pays a full-file read it can
+		 * avoid. Never throws.
+		 *
+		 * @since NEXT
+		 * @param object $fs       Filesystem exposing size()/get_contents().
+		 * @param string $fallback Absolute fallback path.
+		 * @return bool True when the fallback exists with non-empty content.
+		 */
+		public static function is_purge_fallback_payload_valid( $fs, string $fallback ): bool {
+			try {
+				if ( ! is_object( $fs ) || '' === $fallback ) {
+					return false;
+				}
+				if ( method_exists( $fs, 'size' ) ) {
+					try {
+						return (int) $fs->size( $fallback ) > 0;
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return false;
+					}
+				}
+				if ( method_exists( $fs, 'get_contents' ) ) {
+					try {
+						$contents = $fs->get_contents( $fallback );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return false;
+					}
+					return is_string( $contents ) && '' !== $contents;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return false;
+		}
+
+		/**
+		 * Global per-day throttle for purge-fallback serve logging.
+		 *
+		 * A single blog-prefixed transient (`wppo_purge_fallback_served`)
+		 * gates all fallback-serve log rows (both Cache and used-CSS share
+		 * it) so a post-purge miss storm writes one row per day instead of
+		 * one per directory. Returns true when the caller should log.
+		 * Fail-open: logging failures never affect serving. Never throws.
+		 *
+		 * @since NEXT
+		 * @return bool True when the caller should write its log row.
+		 */
+		public static function purge_fallback_should_log(): bool {
+			try {
+				$key = self::transient_key( 'wppo_purge_fallback_served' );
+				if ( function_exists( 'get_transient' ) && get_transient( $key ) ) {
+					return false;
+				}
+				if ( function_exists( 'set_transient' ) ) {
+					$ttl = defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400;
+					set_transient( $key, 1, $ttl );
+				}
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
 			}
 		}
 

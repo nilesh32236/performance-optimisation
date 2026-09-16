@@ -42,18 +42,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Post-purge fallback snapshot bounds (issue #1275).
 		 *
-		 * A full-cache wipe snapshots retained `fallback.css`/`fallback.js`
-		 * siblings so the first post-purge hit can 302 instead of flashing
-		 * unstyled. The guarantee is intentionally bounded (memory + I/O):
-		 * larger sites keep the first N fallbacks only. Override via the
-		 * `wppo_purge_fallback_limits` filter.
+		 * A full-cache wipe snapshots retained fallback siblings so the
+		 * first post-purge hit can 302 instead of flashing unstyled. The
+		 * guarantee is intentionally bounded (memory + I/O): larger sites
+		 * keep the first N fallbacks only (see {@see purge_fallback_limits()}
+		 * and the `wppo_purge_fallback_limits` filter). Staging spills the
+		 * snapshot to a temp dir outside the wipe tree so a fatal between
+		 * delete and restore cannot destroy both copies.
 		 *
 		 * @since NEXT
 		 */
 		private const PURGE_FALLBACK_MAX_FILES = 25;
 		private const PURGE_FALLBACK_MAX_DEPTH = 6;
-		private const PURGE_FALLBACK_MAX_BYTES = 524288;
+		private const PURGE_FALLBACK_MAX_BYTES = 512 * 1024; // 512 KiB per file.
 		private const PURGE_FALLBACK_MAX_DIRS  = 200;
+		/** Cap on total snapshot bytes held in memory (OOM guard for shared hosts). */
+		private const PURGE_FALLBACK_MAX_TOTAL_BYTES = 2 * 1024 * 1024; // 2 MiB total.
+		/** Redirect status for fallback serves (filterable, @see serve_purge_fallback_response()). */
+		private const PURGE_FALLBACK_REDIRECT_STATUS = 302;
 
 		/**
 		 * Invalidate the cached cache-size/page-count stats transients.
@@ -4102,12 +4108,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Retain a last-good fallback copy before a derived file is purged.
 		 *
-		 * When {@see Util::is_purge_fallback_enabled()} is on and the base
-		 * file exists with non-empty content, it is copied to the sibling
-		 * `fallback.css` / `fallback.js` so a post-purge miss can stay styled
-		 * (302) instead of flashing unstyled. No-op when disabled, when the
-		 * path is not a CSS/JS asset, when containment fails, or when the
-		 * base file is missing/empty. Never throws.
+		 * Thin wrapper over {@see Util::retain_purge_fallback_file()} (the
+		 * single shared implementation — see also
+		 * `Used_CSS::retain_purge_fallback()`). No-op when disabled, for
+		 * non CSS/JS paths, on containment failure, or when the base file
+		 * is missing/empty. Never throws.
 		 *
 		 * @param string $file_path The derived file about to be deleted.
 		 * @return void
@@ -4116,72 +4121,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		private function retain_purge_fallback( string $file_path ): void {
 			try {
-				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! Util::is_purge_fallback_enabled() ) {
-					return;
-				}
-				if ( '' === (string) $file_path || ! $this->is_path_contained( (string) $file_path ) ) {
-					return;
-				}
-				$fallback = self::get_purge_fallback_path( (string) $file_path );
-				if ( '' === $fallback || ! $this->is_path_contained( $fallback ) ) {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					return;
 				}
 				$fs = $this->get_filesystem();
-				if ( ! $fs || ! $fs->exists( $file_path ) ) {
+				if ( ! $fs ) {
 					return;
 				}
-				if ( method_exists( $fs, 'size' ) ) {
-					$size_ok    = false;
-					$size_known = false;
-					try {
-						$size       = (int) $fs->size( $file_path );
-						$size_known = true;
-						$size_ok    = $size > 0;
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-					if ( $size_known && ! $size_ok ) {
-						return;
-					}
-					if ( ! $size_known ) {
-						// size() outcome unknown (missing method already
-						// excluded; a throw means unknown): verify non-empty
-						// content before copy so an empty base can never
-						// overwrite a good fallback (downgrade guard).
-						try {
-							$probe = method_exists( $fs, 'get_contents' ) ? $fs->get_contents( $file_path ) : null;
-						} catch ( \Throwable $e ) {
-							unset( $e );
-							$probe = null;
-						}
-						if ( ! is_string( $probe ) || '' === $probe ) {
-							return;
-						}
-					}
-				}
-				// Refresh the fallback to the newest good copy on every purge:
-				// a previously retained fallback is overwritten so the
-				// post-purge 302 serves the latest known-good payload.
-				if ( method_exists( $fs, 'copy' ) ) {
-					try {
-						$fs->copy( $file_path, $fallback, true );
-						return;
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-				}
-				if ( ! method_exists( $fs, 'get_contents' ) || ! method_exists( $fs, 'put_contents' ) ) {
-					return;
-				}
-				$contents = $fs->get_contents( $file_path );
-				if ( ! is_string( $contents ) || '' === $contents ) {
-					return;
-				}
-				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'atomic_file_put_contents' ) ) {
-					Util::atomic_file_put_contents( $fs, $fallback, $contents );
-					return;
-				}
-				$fs->put_contents( $fallback, $contents, defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644 );
+				Util::retain_purge_fallback_file(
+					$fs,
+					function ( string $path ): bool {
+						return $this->is_path_contained( $path );
+					},
+					$file_path
+				);
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
@@ -4190,8 +4143,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Resolve a post-purge miss under the cache path to its fallback.
 		 *
-		 * Returns `served=true` with status 302 and the fallback path/URL
-		 * only when every guard holds: the gate is on, the requested path is
+		 * Returns `served=true` with a redirect status (default 302 via
+		 * {@see purge_fallback_redirect_status()}) and the fallback
+		 * path/URL only when every guard holds: the gate is on, the requested path is
 		 * contained, it is not itself a fallback file (no loops), the base
 		 * file is missing, and a non-empty fallback sibling exists. A single
 		 * throttled log entry is written per fallback directory per day so a
@@ -4229,30 +4183,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( $fs->exists( $requested_path ) ) {
 					return $miss;
 				}
+				// Compressed-variant miss with a live base: Nginx forwards
+				// `.css.gz`/`.br` misses, so a missing `.gz` beside a live
+				// base must NOT 302 to a stale fallback — the live base (or
+				// the normal 404 path) wins.
+				if ( preg_match( '/\.(?:gz|br)$/i', (string) $requested_path ) ) {
+					$stripped = (string) preg_replace( '/\.(?:gz|br)$/i', '', (string) $requested_path );
+					if ( '' !== $stripped && $fs->exists( $stripped ) ) {
+						return $miss;
+					}
+				}
 				if ( ! $fs->exists( $fallback ) ) {
 					return $miss;
 				}
-				$valid = false;
-				if ( method_exists( $fs, 'size' ) ) {
-					try {
-						$valid = (int) $fs->size( $fallback ) > 0;
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						$valid = false;
-					}
-				} elseif ( method_exists( $fs, 'get_contents' ) ) {
-					try {
-						$contents = $fs->get_contents( $fallback );
-						$valid    = is_string( $contents ) && '' !== $contents;
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						$valid = false;
-					}
-				}
-				if ( ! $valid ) {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! Util::is_purge_fallback_payload_valid( $fs, $fallback ) ) {
 					return $miss;
 				}
-				$this->log_purge_fallback( $fallback );
+				$this->log_purge_fallback();
 				$location = '';
 				try {
 					if ( '' !== $this->cache_root_dir && '' !== $this->domain && 0 === strpos( $fallback, $this->cache_root_dir ) ) {
@@ -4270,7 +4217,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				}
 				return array(
 					'served'        => true,
-					'status'        => 302,
+					'status'        => self::purge_fallback_redirect_status(),
 					'fallback_path' => $fallback,
 					'location'      => $location,
 				);
@@ -4281,35 +4228,115 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
-		 * Serve a resolved purge fallback with a 302 redirect.
+		 * Resolve the redirect status for a fallback serve.
+		 *
+		 * Filterable via `wppo_purge_fallback_redirect_status` (default
+		 * {@see PURGE_FALLBACK_REDIRECT_STATUS}); invalid values fall back
+		 * to the constant. Never throws.
+		 *
+		 * @since NEXT
+		 * @return int Redirect status code.
+		 */
+		public static function purge_fallback_redirect_status(): int {
+			$status = self::PURGE_FALLBACK_REDIRECT_STATUS;
+			try {
+				if ( function_exists( 'apply_filters' ) ) {
+					/**
+					 * Filters the redirect status used when serving a purge fallback.
+					 *
+					 * @since NEXT
+					 * @param int $status Redirect status code.
+					 */
+					$filtered = apply_filters( 'wppo_purge_fallback_redirect_status', $status );
+					$filtered = (int) $filtered;
+					if ( $filtered >= 300 && $filtered <= 399 ) {
+						$status = $filtered;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $status;
+		}
+
+		/**
+		 * Build the headers for a fallback redirect (pure, testable).
+		 *
+		 * The `Cache-Control: no-store` line is deliberate: without it
+		 * browsers/proxies may heuristically cache the 302 and keep
+		 * redirecting to `fallback.css` after the base regenerates — a
+		 * stale-serve window regeneration cannot clear client-side.
+		 *
+		 * @since NEXT
+		 * @param string $location Absolute fallback URL.
+		 * @param int    $status   Redirect status code.
+		 * @return array{location: string, status: int, headers: string[]} Headers to send.
+		 */
+		public static function build_purge_fallback_headers( string $location, int $status ): array {
+			if ( $status < 300 || $status > 399 ) {
+				$status = self::PURGE_FALLBACK_REDIRECT_STATUS;
+			}
+			return array(
+				'location' => $location,
+				'status'   => $status,
+				'headers'  => array( 'Cache-Control: no-store, no-cache, must-revalidate, max-age=0' ),
+			);
+		}
+
+		/**
+		 * Serve a resolved purge fallback with a redirect.
 		 *
 		 * Thin sender for {@see get_purge_fallback_response()}: no-op unless
 		 * the resolution carries `served=true` with a non-empty location.
-		 * Uses `wp_safe_redirect()` when available, `header()` otherwise.
-		 * Never throws; terminates the request on success via `exit`.
+		 * Uses `wp_safe_redirect()` when available, `header()` otherwise,
+		 * and sends `Cache-Control: no-store` so the redirect itself is
+		 * never cached past regeneration. The location is stripped of
+		 * literal and encoded CR/LF before sending (defense-in-depth: it is
+		 * internally built, but this method is public). Never throws;
+		 * terminates the request on success via `exit` (skipped when the
+		 * `WPPO_PURGE_FALLBACK_NO_EXIT` test seam is set, returning true).
 		 *
 		 * @param array{served: bool, status: int, fallback_path: string, location: string} $response Resolver output.
-		 * @return void
+		 * @return bool True when the fallback was served (or would be, under the test seam).
 		 *
 		 * @since NEXT
 		 */
-		public function serve_purge_fallback_response( array $response ): void {
+		public function serve_purge_fallback_response( array $response ): bool {
 			try {
 				if ( empty( $response['served'] ) || empty( $response['location'] ) || ! is_string( $response['location'] ) ) {
-					return;
+					return false;
 				}
-				$location = $response['location'];
-				$location = str_replace( array( "\r", "\n" ), '', $location );
+				$location = str_replace( array( "\r", "\n", '%0d', '%0D', '%0a', '%0A' ), '', $response['location'] );
+				if ( '' === $location ) {
+					return false;
+				}
+				$status = isset( $response['status'] ) ? (int) $response['status'] : self::PURGE_FALLBACK_REDIRECT_STATUS;
+				if ( $status < 300 || $status > 399 ) {
+					$status = self::PURGE_FALLBACK_REDIRECT_STATUS;
+				}
+				$built = self::build_purge_fallback_headers( $location, $status );
+				if ( defined( 'WPPO_PURGE_FALLBACK_NO_EXIT' ) && WPPO_PURGE_FALLBACK_NO_EXIT ) {
+					return true;
+				}
 				if ( function_exists( 'wp_safe_redirect' ) ) {
-					wp_safe_redirect( $location, 302 );
+					foreach ( $built['headers'] as $header ) {
+						if ( ! headers_sent() ) {
+							header( $header, false ); // phpcs:ignore WordPress.PHP.HeaderURLColon.NoSpaceAfterColon,WordPress.WP.AlternativeFunctions.header_header -- Intentional no-store header format.
+						}
+					}
+					wp_safe_redirect( $built['location'], $built['status'] );
 					exit;
 				}
 				if ( ! headers_sent() ) {
-					header( 'Location: ' . $location, true, 302 ); // phpcs:ignore WordPress.PHP.HeaderURLColon.NoSpaceAfterColon -- Intentional canonical header format.
+					foreach ( $built['headers'] as $header ) {
+						header( $header, false ); // phpcs:ignore WordPress.PHP.HeaderURLColon.NoSpaceAfterColon,WordPress.WP.AlternativeFunctions.header_header -- Intentional no-store header format.
+					}
+					header( 'Location: ' . $built['location'], true, $built['status'] ); // phpcs:ignore WordPress.PHP.HeaderURLColon.NoSpaceAfterColon -- Intentional canonical header format.
 				}
 				exit;
 			} catch ( \Throwable $e ) {
 				unset( $e );
+				return false;
 			}
 		}
 
@@ -4346,7 +4373,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( '' === $this->cache_root_dir ) {
 					return;
 				}
-				$marker = '/cache/wppo/';
+				$marker = self::CACHE_DIR . '/';
 				$pos    = strpos( $path, $marker );
 				if ( false === $pos ) {
 					return;
@@ -4372,33 +4399,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
-		 * Log a purge-fallback serve once per fallback directory per day.
+		 * Log a purge-fallback serve (global once-per-day throttle).
 		 *
-		 * Throttled via a blog-prefixed transient so a sustained post-purge
-		 * miss storm writes a single activity-log row instead of one per hit.
-		 * Fail-open: logging failures never affect serving.
+		 * Shares the single `wppo_purge_fallback_served` transient via
+		 * {@see Util::purge_fallback_should_log()} so a sustained post-purge
+		 * miss storm writes one activity-log row per day total (not one per
+		 * directory). Fail-open: logging failures never affect serving.
 		 *
-		 * @param string $fallback_path The fallback file being served.
 		 * @return void
 		 *
 		 * @since NEXT
 		 */
-		private function log_purge_fallback( string $fallback_path ): void {
+		private function log_purge_fallback(): void {
 			try {
-				if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) || ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					return;
 				}
-				$dir = (string) preg_replace( '#/[^/]*$#', '', (string) $fallback_path );
-				if ( function_exists( 'wp_normalize_path' ) ) {
-					$dir = wp_normalize_path( $dir );
-				}
-				$key = Util::transient_key( 'wppo_purge_fallback_' . md5( $dir ) );
-				if ( function_exists( 'get_transient' ) && get_transient( $key ) ) {
+				if ( ! Util::purge_fallback_should_log() ) {
 					return;
-				}
-				if ( function_exists( 'set_transient' ) ) {
-					$ttl = defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400;
-					set_transient( $key, 1, $ttl );
 				}
 				$message = function_exists( '__' ) ? __( 'Purge fallback: served last-good fallback after purge (302).', 'performance-optimisation' ) : 'Purge fallback: served last-good fallback after purge (302).';
 				Log::add( $message );
@@ -4810,38 +4828,73 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Resolve bounded purge-fallback snapshot limits.
 		 *
-		 * Defaults come from the PURGE_FALLBACK_* constants; the
+		 * Defaults come from the `PURGE_FALLBACK_*` constants; the
 		 * `wppo_purge_fallback_limits` filter may override any key
-		 * (`max_files`, `max_depth`, `max_bytes`, `max_dirs`). Fail-closed:
-		 * invalid values fall back to the constant defaults. Never throws.
+		 * (`max_files`, `max_depth`, `max_bytes`, `max_dirs`,
+		 * `max_total_bytes`). Fail-closed: missing/invalid values fall back
+		 * to the constant defaults, and filter values are clamped to sane
+		 * ceilings so a buggy filter cannot force an OOM
+		 * (`max_files × max_bytes` is otherwise buffered in memory). Result
+		 * is memoized per request. Never throws.
 		 *
 		 * @since NEXT
-		 * @return array{max_files: int, max_depth: int, max_bytes: int, max_dirs: int} Limits.
+		 * @return array{max_files: int, max_depth: int, max_bytes: int, max_dirs: int, max_total_bytes: int} Limits.
 		 */
 		private static function purge_fallback_limits(): array {
+			static $memo = null;
+			if ( null !== $memo ) {
+				return $memo;
+			}
 			$defaults = array(
-				'max_files' => self::PURGE_FALLBACK_MAX_FILES,
-				'max_depth' => self::PURGE_FALLBACK_MAX_DEPTH,
-				'max_bytes' => self::PURGE_FALLBACK_MAX_BYTES,
-				'max_dirs'  => self::PURGE_FALLBACK_MAX_DIRS,
+				'max_files'       => self::PURGE_FALLBACK_MAX_FILES,
+				'max_depth'       => self::PURGE_FALLBACK_MAX_DEPTH,
+				'max_bytes'       => self::PURGE_FALLBACK_MAX_BYTES,
+				'max_dirs'        => self::PURGE_FALLBACK_MAX_DIRS,
+				'max_total_bytes' => self::PURGE_FALLBACK_MAX_TOTAL_BYTES,
+			);
+			$ceilings = array(
+				'max_files'       => 200,
+				'max_depth'       => 20,
+				'max_bytes'       => 2 * 1024 * 1024,
+				'max_dirs'        => 2000,
+				'max_total_bytes' => 8 * 1024 * 1024,
 			);
 			try {
 				if ( ! function_exists( 'apply_filters' ) ) {
-					return $defaults;
+					$memo = $defaults;
+					return $memo;
 				}
-				/** This filter is documented above. */
+				/**
+				 * Filters purge-fallback snapshot bounds.
+				 *
+				 * Controls how many fallback files (max_files), how deep the
+				 * walk goes (max_depth), the per-file size cap (max_bytes),
+				 * how many directories are visited (max_dirs), and the total
+				 * in-memory snapshot budget (max_total_bytes) kept on a
+				 * full-cache wipe. Values are clamped to sane ceilings.
+				 *
+				 * @since NEXT
+				 * @param array{max_files: int, max_depth: int, max_bytes: int, max_dirs: int, max_total_bytes: int} $defaults Snapshot bounds.
+				 */
 				$filtered = apply_filters( 'wppo_purge_fallback_limits', $defaults );
 				if ( ! is_array( $filtered ) ) {
-					return $defaults;
+					$memo = $defaults;
+					return $memo;
 				}
 				foreach ( $defaults as $key => $fallback ) {
-					$value            = isset( $filtered[ $key ] ) ? (int) $filtered[ $key ] : $fallback;
-					$defaults[ $key ] = $value > 0 ? $value : $fallback;
+					$value = isset( $filtered[ $key ] ) ? (int) $filtered[ $key ] : $fallback;
+					if ( $value <= 0 ) {
+						$value = $fallback;
+					} else {
+						$value = min( $value, $ceilings[ $key ] );
+					}
+					$defaults[ $key ] = $value;
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
-			return $defaults;
+			$memo = $defaults;
+			return $memo;
 		}
 
 		/**
@@ -4878,17 +4931,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Snapshot last-good fallback files under a directory slated for wipe.
 		 *
-		 * Walks the tree (bounded: 6 levels, 25 files, 512 KiB each) and
-		 * captures `fallback.css` / `fallback.js` contents so a full-cache
-		 * wipe can restore them afterwards — a full purge must not leave the
-		 * first hit unstyled either. Returns path => contents. Never throws.
+		 * Walks the tree (bounded by {@see purge_fallback_limits()}: file
+		 * count, depth, per-file bytes, visited directories, and total
+		 * bytes) and captures fallback siblings so a full-cache wipe can
+		 * restore them afterwards — a full purge must not leave the first
+		 * hit unstyled either. Oversize fallbacks are skipped via a
+		 * `size()` check before any full read. Returns path => contents.
+		 * Never throws.
 		 *
-		 * @param string $dir Absolute directory about to be deleted.
+		 * @param string $dir      Absolute directory about to be deleted.
+		 * @param bool   $min_tree Whether $dir lives under the min tree (min-dir containment) instead of the domain tree.
 		 * @return array<string, string> Fallback path => file contents.
 		 *
 		 * @since NEXT
 		 */
-		private function snapshot_purge_fallbacks( string $dir ): array {
+		private function snapshot_purge_fallbacks( string $dir, bool $min_tree = false ): array {
 			$snapshot = array();
 			try {
 				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! Util::is_purge_fallback_enabled() ) {
@@ -4898,24 +4955,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( ! $fs || ! method_exists( $fs, 'dirlist' ) || ! method_exists( $fs, 'get_contents' ) ) {
 					return $snapshot;
 				}
-				$limits    = self::purge_fallback_limits();
-				$max_files = $limits['max_files'];
-				$max_depth = $limits['max_depth'];
-				$max_bytes = $limits['max_bytes'];
-				$max_dirs  = $limits['max_dirs'];
-				$queue     = array( array( $dir, 0 ) );
-				$head      = 0;
-				$visited   = 0;
-				$collected = 0;
-				$capped    = false;
-				$queue_len = count( $queue );
-				while ( $head < $queue_len && $collected < $max_files && $visited < $max_dirs ) {
+				$limits      = self::purge_fallback_limits();
+				$max_files   = $limits['max_files'];
+				$max_depth   = $limits['max_depth'];
+				$max_bytes   = $limits['max_bytes'];
+				$max_dirs    = $limits['max_dirs'];
+				$max_total   = $limits['max_total_bytes'];
+				$queue       = array( array( $dir, 0 ) );
+				$head        = 0;
+				$visited     = 0;
+				$collected   = 0;
+				$total_bytes = 0;
+				$capped      = false;
+				$queue_total = count( $queue );
+				while ( $head < $queue_total && $collected < $max_files && $visited < $max_dirs && $total_bytes < $max_total ) {
 					$current = $queue[ $head ];
 					++$head;
 					++$visited;
 					$path  = (string) $current[0];
 					$depth = (int) $current[1];
 					if ( $depth > $max_depth ) {
+						$capped = true;
 						continue;
 					}
 					$entries = $fs->dirlist( $path );
@@ -4923,18 +4983,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 						continue;
 					}
 					foreach ( $entries as $name => $entry ) {
-						if ( $collected >= $max_files ) {
+						if ( $collected >= $max_files || $total_bytes >= $max_total ) {
 							$capped = true;
 							break;
 						}
 						$full = rtrim( $path, '/' ) . '/' . $name;
 						if ( ! empty( $entry['type'] ) && 'd' === $entry['type'] ) {
-							$queue[] = array( $full, $depth + 1 );
-							++$queue_len;
+							$queue[]     = array( $full, $depth + 1 );
+							$queue_total = count( $queue );
 							continue;
 						}
 						$lower = strtolower( (string) $name );
-						if ( 'fallback.css' !== $lower && 'fallback.js' !== $lower ) {
+						if ( ! in_array( $lower, self::PURGE_FALLBACK_NAMES, true ) ) {
+							continue;
+						}
+						// Never follow a symlinked entry out of the tree:
+						// validate the exact fallback basename and
+						// containment before any stat/read (min-tree or
+						// domain-tree validator, matching the wiped root).
+						$allowed = $min_tree
+							? $this->is_min_dir_allowed( (string) preg_replace( '#/[^/]*$#', '', $full ) . '/' )
+							: $this->is_path_contained( $full );
+						if ( false !== strpos( $full, "\0" ) || false !== strpos( $full, '..' ) || ! $allowed ) {
 							continue;
 						}
 						// Size-check before the full read so oversize
@@ -4942,10 +5012,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 						if ( method_exists( $fs, 'size' ) ) {
 							try {
 								$size = (int) $fs->size( $full );
-								if ( $size <= 0 || $size > $max_bytes ) {
-									if ( $size > $max_bytes ) {
-										$capped = true;
-									}
+								if ( $size <= 0 || $size > $max_bytes || $total_bytes + $size > $max_total ) {
+									$capped = true;
 									continue;
 								}
 							} catch ( \Throwable $e ) {
@@ -4958,17 +5026,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 							unset( $e );
 							continue;
 						}
-						if ( ! is_string( $contents ) || '' === $contents || strlen( $contents ) > $max_bytes ) {
-							if ( is_string( $contents ) && strlen( $contents ) > $max_bytes ) {
-								$capped = true;
-							}
+						if ( ! is_string( $contents ) || '' === $contents || strlen( $contents ) > $max_bytes || $total_bytes + strlen( $contents ) > $max_total ) {
+							$capped = true;
 							continue;
 						}
 						$snapshot[ $full ] = $contents;
+						$total_bytes      += strlen( $contents );
 						++$collected;
 					}
 				}
-				if ( $capped || $collected >= $max_files || $visited >= $max_dirs ) {
+				if ( $capped || $collected >= $max_files || $visited >= $max_dirs || $total_bytes >= $max_total ) {
 					// Throttled signal: the bounded guarantee means larger
 					// sites keep only the first N fallbacks on full wipe.
 					$this->log_snapshot_cap();
@@ -4979,21 +5046,58 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			return $snapshot;
 		}
 
+		/** Fallback basenames recognized by the snapshot/restore path. */
+		private const PURGE_FALLBACK_NAMES = array( 'fallback.css', 'fallback.js', 'fallback.mobile.css', 'fallback.desktop.css', 'fallback.mobile.js', 'fallback.desktop.js' );
+
 		/**
-		 * Restore snapshotted fallback files after a full-cache wipe.
-		 *
-		 * Recreates parent directories via {@see Util::prepare_cache_dir()}
-		 * and rewrites each captured fallback. Skips entries that fail
-		 * containment (domain tree) so a snapshot can never plant files
-		 * outside the cache root. Never throws.
+		 * Restore domain-tree fallbacks after a full-cache wipe.
 		 *
 		 * @param array<string, string> $snapshot Path => contents from {@see snapshot_purge_fallbacks()}.
-		 * @param bool                  $min_tree Whether entries live under the min tree (min-dir containment) instead of the domain tree.
 		 * @return void
 		 *
 		 * @since NEXT
 		 */
-		private function restore_purge_fallbacks( array $snapshot, bool $min_tree = false ): void {
+		private function restore_purge_fallbacks( array $snapshot ): void {
+			$this->restore_snapshot(
+				$snapshot,
+				function ( string $path ): bool {
+					return $this->is_path_contained( $path );
+				}
+			);
+		}
+
+		/**
+		 * Restore min-tree fallbacks after a full-cache wipe.
+		 *
+		 * @param array<string, string> $snapshot Path => contents from {@see snapshot_purge_fallbacks()}.
+		 * @return void
+		 *
+		 * @since NEXT
+		 */
+		private function restore_min_fallbacks( array $snapshot ): void {
+			$this->restore_snapshot(
+				$snapshot,
+				function ( string $path ): bool {
+					return $this->is_min_dir_allowed( (string) preg_replace( '#/[^/]*$#', '', $path ) . '/' );
+				}
+			);
+		}
+
+		/**
+		 * Shared restore worker behind the domain/min entry points.
+		 *
+		 * Recreates parent directories via {@see Util::prepare_cache_dir()}
+		 * and rewrites each captured fallback. Skips entries that fail the
+		 * basename allowlist or the caller-supplied containment check so a
+		 * snapshot can never plant files outside its tree. Never throws.
+		 *
+		 * @param array<string, string> $snapshot   Path => contents.
+		 * @param callable              $is_allowed Containment validator: fn( string $path ): bool.
+		 * @return void
+		 *
+		 * @since NEXT
+		 */
+		private function restore_snapshot( array $snapshot, callable $is_allowed ): void {
 			if ( empty( $snapshot ) ) {
 				return;
 			}
@@ -5011,14 +5115,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 							continue;
 						}
 						$base = strtolower( basename( (string) $path ) );
-						if ( 'fallback.css' !== $base && 'fallback.js' !== $base ) {
+						if ( ! in_array( $base, self::PURGE_FALLBACK_NAMES, true ) ) {
 							continue;
 						}
-						if ( $min_tree ) {
-							if ( ! $this->is_min_dir_allowed( (string) preg_replace( '#/[^/]*$#', '', (string) $path ) . '/' ) ) {
+						try {
+							if ( ! $is_allowed( (string) $path ) ) {
 								continue;
 							}
-						} elseif ( ! $this->is_path_contained( (string) $path ) ) {
+						} catch ( \Throwable $e ) {
+							unset( $e );
 							continue;
 						}
 						$parent = (string) preg_replace( '#/[^/]*$#', '', (string) $path );
@@ -5036,6 +5141,127 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					} catch ( \Throwable $e ) {
 						unset( $e );
 					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Stage a snapshot to a temp dir outside the wipe tree.
+		 *
+		 * The in-memory snapshot alone is lost on a fatal/OOM/timeout
+		 * between `delete()` and restore — exactly the outage the fallback
+		 * exists to prevent. Spilling each entry to a temp file before the
+		 * delete means the bytes survive the wipe even if this request
+		 * dies (a later wipe restores from its own fresh snapshot; stale
+		 * temp files are always cleaned up after a successful restore).
+		 * Returns original-path => temp-path. Never throws.
+		 *
+		 * @param array<string, string> $snapshot Path => contents.
+		 * @return array<string, string> Original path => staged temp path.
+		 *
+		 * @since NEXT
+		 */
+		private function stage_snapshot_to_temp( array $snapshot ): array {
+			$staged = array();
+			if ( empty( $snapshot ) ) {
+				return $staged;
+			}
+			try {
+				if ( function_exists( 'get_temp_dir' ) ) {
+					$base = (string) get_temp_dir();
+				} else {
+					$base = (string) sys_get_temp_dir();
+				}
+				if ( '' === $base ) {
+					return $staged;
+				}
+				$suffix = function_exists( 'wp_generate_password' ) ? wp_generate_password( 8, false ) : uniqid( '', false );
+				$suffix = (string) preg_replace( '/[^A-Za-z0-9]/', '', (string) $suffix );
+				if ( '' === $suffix ) {
+					$suffix = (string) getmypid();
+				}
+				$staging = rtrim( str_replace( '\\', '/', $base ), '/' ) . '/wppo-fb-' . $suffix;
+				if ( function_exists( 'wp_mkdir_p' ) ) {
+					wp_mkdir_p( $staging );
+				} elseif ( ! is_dir( $staging ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_dir -- Temp staging outside the wipe tree.
+					// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Temp staging outside the wipe tree.
+					mkdir( $staging, 0700, true );
+				}
+				if ( ! is_dir( $staging ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_dir -- Temp staging outside the wipe tree.
+					return $staged;
+				}
+				$i = 0;
+				foreach ( $snapshot as $path => $contents ) {
+					if ( ! is_string( $contents ) || '' === $contents ) {
+						continue;
+					}
+					$tmp = $staging . '/fb-' . $i . '.bin';
+					++$i;
+					$written = file_put_contents( $tmp, $contents, LOCK_EX ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+					if ( false === $written || 0 === $written ) {
+						continue;
+					}
+					$staged[ (string) $path ] = $tmp;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $staged;
+		}
+
+		/**
+		 * Restore staged temp files back to their original paths.
+		 *
+		 * Reads each temp file (bounded by the snapshot limits) and
+		 * delegates to {@see restore_snapshot()} with the caller-supplied
+		 * validator, then removes the staging dir. Callers fall back to
+		 * the in-memory snapshot when staging produced nothing. Never
+		 * throws.
+		 *
+		 * @param array<string, string> $staged     Original path => staged temp path.
+		 * @param callable              $is_allowed Containment validator: fn( string $path ): bool.
+		 * @return void
+		 *
+		 * @since NEXT
+		 */
+		private function restore_staged_snapshot( array $staged, callable $is_allowed ): void {
+			if ( empty( $staged ) ) {
+				return;
+			}
+			try {
+				$limits    = self::purge_fallback_limits();
+				$max_bytes = $limits['max_bytes'];
+				$snapshot  = array();
+				$staging   = '';
+				foreach ( $staged as $path => $tmp ) {
+					if ( '' === (string) $tmp || ! is_file( (string) $tmp ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_file
+						continue;
+					}
+					if ( '' === $staging ) {
+						$staging = (string) preg_replace( '#/[^/]*$#', '', (string) $tmp );
+					}
+					$size = filesize( (string) $tmp ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize
+					if ( false === $size || $size <= 0 || $size > $max_bytes ) {
+						continue;
+					}
+					$contents = file_get_contents( (string) $tmp ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local temp staging file, not a remote URL.
+					if ( ! is_string( $contents ) || '' === $contents ) {
+						continue;
+					}
+					$snapshot[ (string) $path ] = $contents;
+				}
+				$this->restore_snapshot( $snapshot, $is_allowed );
+				if ( '' !== $staging && false !== strpos( $staging, 'wppo-fb-' ) ) {
+					foreach ( array_values( $staged ) as $tmp ) {
+						if ( is_file( (string) $tmp ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_file
+							// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Local temp staging cleanup.
+							unlink( (string) $tmp );
+						}
+					}
+					// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir
+					rmdir( $staging );
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -5068,11 +5294,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					$res1 = false;
 				} else {
 					// Post-purge fallback (issue #1275): snapshot last-good
-					// fallbacks so the wipe below can restore them for the
-					// first post-purge hit. No-op when the gate is off.
-					$domain_snapshot = $this->snapshot_purge_fallbacks( $cache_dir );
+					// fallbacks, stage them to a temp dir outside the wipe
+					// tree (so a fatal between delete and restore cannot
+					// destroy both copies), then restore for the first
+					// post-purge hit. No-op when the gate is off.
+					$domain_snapshot = $this->snapshot_purge_fallbacks( $cache_dir, false );
+					$domain_staged   = $this->stage_snapshot_to_temp( $domain_snapshot );
 					$res1            = $fs->delete( $cache_dir, true );
-					$this->restore_purge_fallbacks( $domain_snapshot, false );
+					if ( ! empty( $domain_staged ) ) {
+						$this->restore_staged_snapshot(
+							$domain_staged,
+							function ( string $path ): bool {
+								return $this->is_path_contained( $path );
+							}
+						);
+					} else {
+						$this->restore_purge_fallbacks( $domain_snapshot );
+					}
 				}
 			}
 
@@ -5085,9 +5323,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					$this->log_traversal_probe( $min_dir );
 					$res2 = false;
 				} else {
-					$min_snapshot = $this->snapshot_purge_fallbacks( $min_dir );
+					$min_snapshot = $this->snapshot_purge_fallbacks( $min_dir, true );
+					$min_staged   = $this->stage_snapshot_to_temp( $min_snapshot );
 					$res2         = $fs->delete( $min_dir, true );
-					$this->restore_purge_fallbacks( $min_snapshot, true );
+					if ( ! empty( $min_staged ) ) {
+						$this->restore_staged_snapshot(
+							$min_staged,
+							function ( string $path ): bool {
+								return $this->is_min_dir_allowed( (string) preg_replace( '#/[^/]*$#', '', $path ) . '/' );
+							}
+						);
+					} else {
+						$this->restore_min_fallbacks( $min_snapshot );
+					}
 				}
 			}
 

@@ -243,12 +243,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) ) {
 			}
 
 			// Post-purge last-good fallback (issue #1275): on a miss under the
-			// cache path, fall through to WordPress so
-			// Cache::maybe_serve_purge_fallback() can 302 to the retained
-			// sibling fallback.css/fallback.js instead of hard-404ing into a
-			// FOUC. Gated (default off). Nginx-only: Apache output is
+			// cache path, redirect to the retained sibling fallback at the
+			// Nginx layer (no PHP boot, no second client RTT beyond the
+			// redirect itself). Variant-specific misses resolve to their own
+			// variant fallback; Cache::maybe_serve_purge_fallback()
+			// (template_redirect, self-gated) stays registered as the
+			// fallback path for stacks where the named location is not used.
+			// Gated (default off). Nginx-only serving scope: Apache output is
 			// unchanged, so on Apache the retained fallback files have no
-			// serving path (retention still harmless).
+			// serving path — retention there is bounded, harmless dead weight
+			// (a few small sibling copies) kept so enabling Nginx later, or
+			// switching stacks, needs no re-purge.
 			$purge_fallback = false;
 			try {
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_purge_fallback_enabled' ) ) {
@@ -263,11 +268,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) ) {
 				if ( ! empty( $rules ) ) {
 					$rules[] = '';
 				}
-				$rules[] = '# WPPO purge fallback (stability) — serve last-good fallback.css/fallback.js with 302 on miss under the cache path';
-				$rules[] = '# Paired with Cache::maybe_serve_purge_fallback() (template_redirect, self-gated). Nginx-only serving scope.';
+				$rules[] = '# WPPO purge fallback (stability) — serve last-good fallback with redirect on miss under the cache path';
+				$rules[] = '# PHP handler Cache::maybe_serve_purge_fallback() (template_redirect, self-gated) remains as fallback. Nginx-only serving scope.';
 				$rules[] = '# --- server context (place inside your existing server { } block) ---';
 				$rules[] = 'location ~* ^/wp-content/cache/wppo/.*\.(css|js)(\.(gz|br))?$ {';
-				$rules[] = '    try_files $uri $uri/ /index.php?wppo_purge_fallback=$uri&$args;';
+				$rules[] = '    try_files $uri $uri/ @wppo_fallback;';
+				$rules[] = '}';
+				$rules[] = 'location @wppo_fallback {';
+				$rules[] = '    # Variant-specific fallbacks first (used-CSS mobile/desktop), then generic.';
+				$rules[] = '    rewrite ^(.*/)[^/]+\.mobile\.css(\.(gz|br))?$ $1fallback.mobile.css redirect;';
+				$rules[] = '    rewrite ^(.*/)[^/]+\.desktop\.css(\.(gz|br))?$ $1fallback.desktop.css redirect;';
+				$rules[] = '    rewrite ^(.*/)[^/]+\.(css|js)(\.(gz|br))?$ $1fallback.$2 redirect;';
 				$rules[] = '}';
 				/**
 				 * Filter nginx purge-fallback rules.
