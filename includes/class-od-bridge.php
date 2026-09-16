@@ -46,6 +46,75 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		const FILTER_SHOULD_OPTIMIZE = 'wppo_od_should_optimize';
 
 		/**
+		 * Per-request memo for OD lookups keyed by current URL.
+		 *
+		 * One page can resolve OD metrics up to 4-6x (preload, lazy
+		 * exclusion, hero stamp, fetchpriority filter); each scan fires
+		 * the `wppo_od_should_optimize` filter + `od_get_url_metrics()` +
+		 * normalize. This memo keeps repeated lookups on the same URL to
+		 * a single scan per request. Keys are `raw:`, `lcp:`, and
+		 * `stable:` prefixed current URLs. Bounded (reset past 30
+		 * entries); reset with {@see clear_request_memo()} (also wired
+		 * into `Image_Optimisation::clear_runtime_caches()` so the shared
+		 * PHPUnit bootstrap reset covers it). In-memory only,
+		 * multisite-safe by construction.
+		 *
+		 * @since NEXT
+		 * @var array<string, mixed>
+		 */
+		private static array $request_memo = array();
+
+		/**
+		 * Reset the per-request OD memo.
+		 *
+		 * Called between pages in long-lived processes and in tests (via
+		 * `Image_Optimisation::clear_runtime_caches()`).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function clear_request_memo(): void {
+			self::$request_memo = array();
+		}
+
+		/**
+		 * Memo key for the current URL with the given prefix.
+		 *
+		 * Fail-open to the bare prefix when the URL is unresolvable.
+		 *
+		 * @since NEXT
+		 * @param string $prefix Memo namespace prefix.
+		 * @return string Memo key.
+		 */
+		private static function request_memo_key( string $prefix ): string {
+			$url = '';
+			try {
+				if ( method_exists( Util::class, 'get_current_url' ) ) {
+					$url = Util::get_current_url();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$url = '';
+			}
+			return $prefix . (string) $url;
+		}
+
+		/**
+		 * Store a memo value, bounding the map.
+		 *
+		 * @since NEXT
+		 * @param string $key   Memo key.
+		 * @param mixed  $value Memo value.
+		 * @return void
+		 */
+		private static function request_memo_set( string $key, $value ): void {
+			self::$request_memo[ $key ] = $value;
+			if ( count( self::$request_memo ) > 30 ) {
+				self::$request_memo = array();
+			}
+		}
+
+		/**
 		 * Log a Throwable diagnostic to the server error log when WP_DEBUG is on.
 		 *
 		 * Centralizes the bridge's debug diagnostics so the WP_DEBUG gate and the
@@ -108,6 +177,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 
 			$current_url = method_exists( Util::class, 'get_current_url' ) ? Util::get_current_url() : Util::cached_home_url();
 
+			// Per-request memo so the filter fires once per URL per
+			// settings state instead of 4-6x per page. Keyed by URL +
+			// settings fingerprint so mid-request settings changes still
+			// re-evaluate.
+			$settings_fingerprint = '';
+			try {
+				$od_slice = array( $settings[ self::SETTINGS_KEY ] ?? null, $settings['wppo_od_enabled'] ?? null );
+				if ( function_exists( 'wp_json_encode' ) ) {
+					$encoded = wp_json_encode( $od_slice );
+				} else {
+					// phpcs:ignore WordPress.WP.AlternativeFunctions.json_encode_json_encode -- Fallback when wp_json_encode() is unavailable (unit contexts).
+					$encoded = json_encode( $od_slice );
+				}
+				if ( is_string( $encoded ) ) {
+					$settings_fingerprint = md5( $encoded );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			$enabled_key = 'enabled:' . (string) $current_url . ':' . $settings_fingerprint;
+			if ( array_key_exists( $enabled_key, self::$request_memo ) && is_bool( self::$request_memo[ $enabled_key ] ) ) {
+				return self::$request_memo[ $enabled_key ];
+			}
+
 			/**
 			 * Filters whether OD-based optimization should be applied.
 			 *
@@ -117,7 +210,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 			 */
 			$should = (bool) apply_filters( self::FILTER_SHOULD_OPTIMIZE, $enabled, $current_url );
 
-			return $should && $enabled;
+			$result = $should && $enabled;
+			self::request_memo_set( $enabled_key, $result );
+			return $result;
 		}
 
 		/**
@@ -136,8 +231,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 				return '';
 			}
 
+			$memo_key = self::request_memo_key( 'lcp:' );
+			if ( array_key_exists( $memo_key, self::$request_memo ) && is_string( self::$request_memo[ $memo_key ] ) ) {
+				return self::$request_memo[ $memo_key ];
+			}
+
 			$raw_urls = self::collect_raw_lcp_urls();
 			if ( empty( $raw_urls ) ) {
+				self::request_memo_set( $memo_key, '' );
 				return '';
 			}
 
@@ -157,13 +258,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 
 			$max = max( $counts );
 			// Tie-break: earliest in original order among those with max count.
+			$winner_url = (string) $raw_urls[0];
 			foreach ( $normalized as $idx => $norm ) {
 				if ( ( $counts[ $norm ] ?? 0 ) === $max ) {
-					return (string) $raw_urls[ $idx ];
+					$winner_url = (string) $raw_urls[ $idx ];
+					break;
 				}
 			}
+			self::request_memo_set( $memo_key, $winner_url );
 
-			return (string) $raw_urls[0];
+			return $winner_url;
 		}
 
 		/**
@@ -189,14 +293,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 				return '';
 			}
 
+			$memo_key = self::request_memo_key( 'stable:' );
+			if ( array_key_exists( $memo_key, self::$request_memo ) && is_string( self::$request_memo[ $memo_key ] ) ) {
+				return self::$request_memo[ $memo_key ];
+			}
+
 			try {
 				$raw_urls = self::collect_raw_lcp_urls();
 				if ( empty( $raw_urls ) ) {
+					self::request_memo_set( $memo_key, '' );
 					return '';
 				}
 
 				if ( 1 === count( $raw_urls ) ) {
-					return (string) $raw_urls[0];
+					$single = (string) $raw_urls[0];
+					self::request_memo_set( $memo_key, $single );
+					return $single;
 				}
 
 				$normalized = array();
@@ -207,11 +319,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 
 				$counts = array_count_values( $normalized );
 				if ( empty( $counts ) ) {
+					self::request_memo_set( $memo_key, '' );
 					return '';
 				}
 
 				$max = max( $counts );
 				if ( $max < 2 ) {
+					self::request_memo_set( $memo_key, '' );
 					return '';
 				}
 
@@ -226,18 +340,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 					)
 				);
 				if ( 1 !== count( $winners ) ) {
+					self::request_memo_set( $memo_key, '' );
 					return '';
 				}
 				$winner = (string) $winners[0];
 				foreach ( $normalized as $idx => $norm ) {
 					if ( $norm === $winner ) {
-						return (string) $raw_urls[ $idx ];
+						$winner_url = (string) $raw_urls[ $idx ];
+						self::request_memo_set( $memo_key, $winner_url );
+						return $winner_url;
 					}
 				}
 			} catch ( \Throwable $e ) {
 				self::debug_log( 'WPPO OD bridge stable LCP error: ' . $e->getMessage() );
 			}
 
+			self::request_memo_set( $memo_key, '' );
 			return '';
 		}
 
@@ -330,6 +448,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * @return string[] Raw LCP image URLs (may contain duplicates).
 		 */
 		private static function collect_raw_lcp_urls(): array {
+			// Share one scan per URL per request: resolve_auto_lcp_url()
+			// tiers (P0 OD-only, P1 stored, P1b stable signal) each collect
+			// the same snapshot on a cold page, so memoize the raw list.
+			$memo_key = self::request_memo_key( 'raw:' );
+			if ( array_key_exists( $memo_key, self::$request_memo ) && is_array( self::$request_memo[ $memo_key ] ) ) {
+				return self::$request_memo[ $memo_key ];
+			}
 			$metrics = self::get_url_metrics();
 			if ( empty( $metrics ) ) {
 				return array();
@@ -431,7 +556,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 				$filtered[] = $url;
 			}
 
-			return array_values( array_filter( $filtered ) );
+			$result = array_values( array_filter( $filtered ) );
+			self::request_memo_set( $memo_key, $result );
+			return $result;
 		}
 
 		/**

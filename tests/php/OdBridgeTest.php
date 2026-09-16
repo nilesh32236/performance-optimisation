@@ -622,6 +622,86 @@ class OdBridgeTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test get_stable_lcp_url collapses size-suffix/scheme variants to one winner.
+	 */
+	public function test_get_stable_lcp_url_normalized_variants_agree(): void {
+		$this->install_common_stubs();
+		$this->ensure_od_class();
+		$this->options = array(
+			'od_integration' => array( 'enabled' => true ),
+		);
+
+		$sized                      = 'https://example.com/wp-content/uploads/hero-300x200.jpg';
+		$this->od_metrics           = array(
+			new \OD_URL_Metric(
+				array(
+					'viewportWidth' => 360,
+					'lcp'           => array(
+						'src'   => $sized,
+						'isLCP' => true,
+					),
+				)
+			),
+			new \OD_URL_Metric(
+				array(
+					'viewportWidth' => 1200,
+					'lcp'           => array(
+						'src'   => 'http://example.com/wp-content/uploads/hero.jpg',
+						'isLCP' => true,
+					),
+				)
+			),
+		);
+		$GLOBALS['od_metrics_stub'] = $this->od_metrics;
+
+		$this->assertSame( $sized, OD_Bridge::get_stable_lcp_url() );
+	}
+
+	/**
+	 * Test get_stable_lcp_url returns empty when max < 2 across 3 distinct URLs.
+	 */
+	public function test_get_stable_lcp_url_three_distinct_singles_return_empty(): void {
+		$this->install_common_stubs();
+		$this->ensure_od_class();
+		$this->options = array(
+			'od_integration' => array( 'enabled' => true ),
+		);
+
+		$this->od_metrics           = array(
+			new \OD_URL_Metric(
+				array(
+					'viewportWidth' => 360,
+					'lcp'           => array(
+						'src'   => 'https://example.com/wp-content/uploads/hero-a.jpg',
+						'isLCP' => true,
+					),
+				)
+			),
+			new \OD_URL_Metric(
+				array(
+					'viewportWidth' => 390,
+					'lcp'           => array(
+						'src'   => 'https://example.com/wp-content/uploads/hero-b.jpg',
+						'isLCP' => true,
+					),
+				)
+			),
+			new \OD_URL_Metric(
+				array(
+					'viewportWidth' => 1200,
+					'lcp'           => array(
+						'src'   => 'https://example.com/wp-content/uploads/hero-c.jpg',
+						'isLCP' => true,
+					),
+				)
+			),
+		);
+		$GLOBALS['od_metrics_stub'] = $this->od_metrics;
+
+		$this->assertSame( '', OD_Bridge::get_stable_lcp_url() );
+	}
+
+	/**
 	 * Test get_stable_lcp_url returns empty on a tied vote.
 	 */
 	public function test_get_stable_lcp_url_tied_vote_returns_empty(): void {
