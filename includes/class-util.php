@@ -1065,9 +1065,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Fail-open: detection failure returns true (treated as dynamic).
 		 *
 		 * @since NEXT
-		 * @param string      $url        Absolute URL.
-		 * @param string      $query      Optional pre-parsed query string (parsed from $url when '').
-		 * @param string      $rest_route Optional pre-parsed rest_route value.
+		 * @param string $url        Absolute URL.
+		 * @param string $query      Optional pre-parsed query string (parsed from $url when '').
+		 * @param string $rest_route Optional pre-parsed rest_route value.
 		 * @return bool True when the URL must not be cached/preloaded.
 		 */
 		public static function is_woo_excluded_url( string $url, string $query = '', string $rest_route = '' ): bool {

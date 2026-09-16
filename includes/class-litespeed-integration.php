@@ -2148,55 +2148,54 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 
 			// Singular: Po, PT, T, A, D.
 			if ( $facts['is_singular'] ) {
-					$post_id = function_exists( 'get_queried_object_id' ) ? (int) get_queried_object_id() : 0;
+				$post_id = function_exists( 'get_queried_object_id' ) ? (int) get_queried_object_id() : 0;
+				if ( $post_id > 0 ) {
+					$post_id = (int) apply_filters( 'wppo_litespeed_tag_post_id', $post_id );
 					if ( $post_id > 0 ) {
-						$post_id = (int) apply_filters( 'wppo_litespeed_tag_post_id', $post_id );
-						if ( $post_id > 0 ) {
 							$facts['post_id'] = $post_id;
 							// PT.
 							$pt = function_exists( 'get_post_type' ) ? get_post_type( $post_id ) : null;
-							if ( $pt ) {
-								$facts['post_type'] = sanitize_text_field( (string) $pt );
-							}
+						if ( $pt ) {
+							$facts['post_type'] = sanitize_text_field( (string) $pt );
+						}
 							// T.* taxonomy terms.
-							if ( function_exists( 'get_object_taxonomies' ) && function_exists( 'wp_get_object_terms' ) && $pt ) {
-								try {
-									$taxes = get_object_taxonomies( $pt, 'names' );
-									if ( ! empty( $taxes ) ) {
-										$terms = wp_get_object_terms( $post_id, $taxes );
-										if ( ! is_wp_error( $terms ) && ! empty( $terms ) ) {
-											foreach ( $terms as $term ) {
-												if ( isset( $term->term_id ) ) {
-													$facts['term_ids'][] = (int) $term->term_id;
-												}
+						if ( function_exists( 'get_object_taxonomies' ) && function_exists( 'wp_get_object_terms' ) && $pt ) {
+							try {
+								$taxes = get_object_taxonomies( $pt, 'names' );
+								if ( ! empty( $taxes ) ) {
+									$terms = wp_get_object_terms( $post_id, $taxes );
+									if ( ! is_wp_error( $terms ) && ! empty( $terms ) ) {
+										foreach ( $terms as $term ) {
+											if ( isset( $term->term_id ) ) {
+												$facts['term_ids'][] = (int) $term->term_id;
 											}
 										}
 									}
-								} catch ( \Throwable $e ) {
-									unset( $e );
 								}
+							} catch ( \Throwable $e ) {
+								unset( $e );
 							}
+						}
 							// A.
-							if ( function_exists( 'get_post_field' ) ) {
-								try {
-									$author = get_post_field( 'post_author', $post_id );
-									if ( $author ) {
-										$facts['author'] = (int) $author;
-									}
-								} catch ( \Throwable $e ) {
-									unset( $e );
+						if ( function_exists( 'get_post_field' ) ) {
+							try {
+								$author = get_post_field( 'post_author', $post_id );
+								if ( $author ) {
+									$facts['author'] = (int) $author;
 								}
+							} catch ( \Throwable $e ) {
+								unset( $e );
 							}
+						}
 							// D. date Ymd.
-							if ( function_exists( 'get_the_date' ) ) {
-								try {
-									$date = get_the_date( 'Ymd', $post_id );
-									if ( $date ) {
-										$facts['date_ymd'] = sanitize_text_field( (string) $date );
-									}
-								} catch ( \Throwable $e ) {
-									unset( $e );
+						if ( function_exists( 'get_the_date' ) ) {
+							try {
+								$date = get_the_date( 'Ymd', $post_id );
+								if ( $date ) {
+									$facts['date_ymd'] = sanitize_text_field( (string) $date );
 								}
+							} catch ( \Throwable $e ) {
+								unset( $e );
 							}
 						}
 					}
@@ -2209,7 +2208,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 					if ( is_multisite() && function_exists( 'get_current_blog_id' ) ) {
 						$bid = (int) get_current_blog_id();
 						if ( $bid > 0 ) {
-							$tags[] = 'B.' . $bid;
+							$facts['blog_id'] = $bid;
 						}
 					}
 				} catch ( \Throwable $e ) {
@@ -2221,45 +2220,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			if ( function_exists( 'is_feed' ) ) {
 				try {
 					if ( is_feed() ) {
-						$tags[] = 'FD';
+						$facts['is_feed'] = true;
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
 			}
 			if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
-				$tags[] = 'REST';
+				$facts['is_rest'] = true;
 			} elseif ( isset( $_SERVER['REQUEST_URI'] ) && false !== strpos( sanitize_text_field( (string) wp_unslash( $_SERVER['REQUEST_URI'] ) ), '/wp-json/' ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotValidated
-				$tags[] = 'REST';
+				$facts['is_rest'] = true;
 			}
 			if ( function_exists( 'is_404' ) ) {
 				try {
 					if ( is_404() ) {
-						$tags[] = 'HTTP.404';
+						$facts['is_404'] = true;
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
 			}
 
-			// MIN: combined/minified assets.
-			$tags[] = 'MIN';
-			// W. widget tags (W.{hash}) are only emitted by the ESI bridge — a
-			// bare 'W.' tag has an empty value and would be a no-op/malformed
-			// entry in X-LiteSpeed-Tag, so it is intentionally not added here.
-
-			$tags = array_values( array_unique( $tags ) );
-
-			/**
-			 * Filter the LiteSpeed tags for current request (fan-out).
-			 *
-			 * @since 2.0.0
-			 * @param string[] $tags Tag list.
-			 * @param string   $scope Cache scope ('public'|'private'|'stale').
-			 */
-			$tags = (array) apply_filters( 'wppo_litespeed_purge_tags', $tags, 'public' );
-
-			return $tags;
+			return self::build_litespeed_tags( $facts );
 		}
 
 		/**

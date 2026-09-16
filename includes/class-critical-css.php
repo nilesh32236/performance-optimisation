@@ -1854,18 +1854,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			$presets = class_exists( 'PerformanceOptimise\Inc\Css_Safelist' )
 				? Css_Safelist::get_elementor_presets()
 				: array(
-				'.elementor-',
-				'.elementor-popup-',
-				'.e-con*',
-				'.e-popup-',
-				'.dialog-',
-				'.popup-',
-				'.modal-',
-				'.mfp-',
-				'.swal2-',
-				'[data-elementor-type]',
-				'[data-elementor-type="popup"]',
-			);
+					'.elementor-',
+					'.elementor-popup-',
+					'.e-con*',
+					'.e-popup-',
+					'.dialog-',
+					'.popup-',
+					'.modal-',
+					'.mfp-',
+					'.swal2-',
+					'[data-elementor-type]',
+					'[data-elementor-type="popup"]',
+				);
 
 			/**
 			 * Filters the built-in Critical CSS safelist presets.

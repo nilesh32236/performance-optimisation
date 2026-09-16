@@ -1337,7 +1337,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				if ( '' === $host ) {
 					return false;
 				}
-				$home     = self::get_home_host();
+				$home = self::get_home_host();
 				return '' !== $home && $host === $home;
 			} catch ( \Throwable $e ) {
 				return false;
@@ -1672,7 +1672,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				$samples = array_slice( $samples, -$max_samples );
 			}
 			$bucket[ $map_key ][ $seg_key ]['samples'] = array_values( $samples );
-			$seg_count = count( $bucket[ $map_key ] );
+			$seg_count                                 = count( $bucket[ $map_key ] );
 			while ( $seg_count > $max_segments ) {
 				$evict_key = null;
 				$evict_n   = null;
@@ -1763,7 +1763,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					unset( $all[ $oldest_day_key ] );
 					continue;
 				}
-				$encoded = wp_json_encode( $all );
+				$encoded           = wp_json_encode( $all );
 				$under_byte_budget = false !== $encoded && strlen( (string) $encoded ) <= self::MAX_OPTION_BYTES;
 				if ( $under_byte_budget ) {
 					break;
@@ -2546,7 +2546,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				}
 				$rows = array();
 				foreach ( $merged as $entry ) {
-					$n = (int) $entry['n'];
+					$n            = (int) $entry['n'];
 					$sample_count = count( $entry['samples'] );
 					if ( $sample_count < $n ) {
 						$n = $sample_count;

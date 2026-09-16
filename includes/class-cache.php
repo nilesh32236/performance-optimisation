@@ -1248,8 +1248,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
 					continue;
 				}
-				$style_data = $wp_styles->registered[ $handle ];
-				$src        = $wp_styles->registered[ $handle ]->src;
+				$style_data  = $wp_styles->registered[ $handle ];
+				$src         = $wp_styles->registered[ $handle ]->src;
 				$css_content = $this->fetch_remote_css( $src );
 				if ( false === $css_content ) {
 					continue;
@@ -1266,7 +1266,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$successful_handles[] = $handle;
 			}
 			if ( empty( $successful_handles ) || '' === trim( $combined_css ) ) {
-				return array( 'css' => '', 'handles' => $successful_handles, 'error' => 'empty_payload' );
+				return array(
+					'css'     => '',
+					'handles' => $successful_handles,
+					'error'   => 'empty_payload',
+				);
 			}
 			$font_display = 'swap';
 			if ( class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) && method_exists( 'PerformanceOptimise\Inc\Google_Fonts', 'get_font_display' ) ) {
@@ -1280,16 +1284,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( '' !== $font_display ) {
 				$combined_css = preg_replace( '/font-display\s*:\s*block\s*;?/i', 'font-display: ' . $font_display . ';', $combined_css );
 				if ( null === $combined_css ) {
-					return array( 'css' => '', 'handles' => $successful_handles, 'error' => 'preg_error' );
+					return array(
+						'css'     => '',
+						'handles' => $successful_handles,
+						'error'   => 'preg_error',
+					);
 				}
 				$combined_css = Minify\CSS::inject_font_display_swap( $combined_css, $font_display );
 			}
 			$css_minifier = new CSSMinifier( $combined_css );
 			$combined_css = $css_minifier->minify();
 			if ( '' === trim( (string) $combined_css ) ) {
-				return array( 'css' => '', 'handles' => $successful_handles, 'error' => 'empty_after_minify' );
+				return array(
+					'css'     => '',
+					'handles' => $successful_handles,
+					'error'   => 'empty_after_minify',
+				);
 			}
-			return array( 'css' => (string) $combined_css, 'handles' => $successful_handles, 'error' => '' );
+			return array(
+				'css'     => (string) $combined_css,
+				'handles' => $successful_handles,
+				'error'   => '',
+			);
 		}
 
 		/**
@@ -1306,13 +1322,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private function write_combined_file( string $combined_css, string $css_variant ): array {
 			$css_file_path = $this->get_cache_file_path( 'css', '', $css_variant );
 			if ( ! $this->prepare_cache_dir() ) {
-				return array( 'path' => '', 'error' => 'prepare_dir_failed' );
+				return array(
+					'path'  => '',
+					'error' => 'prepare_dir_failed',
+				);
 			}
 			$this->save_cache_files( $combined_css, $css_file_path, 'css' );
 			if ( $this->is_safe_css_combine_fallback_enabled() && ! $this->is_combined_css_valid( $css_file_path ) ) {
-				return array( 'path' => '', 'error' => 'write_failure' );
+				return array(
+					'path'  => '',
+					'error' => 'write_failure',
+				);
 			}
-			return array( 'path' => $css_file_path, 'error' => '' );
+			return array(
+				'path'  => $css_file_path,
+				'error' => '',
+			);
 		}
 
 		/**
