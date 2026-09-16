@@ -566,6 +566,10 @@ jobs:
           git_user_email: nilesh32236@gmail.com
           model: ${{ vars.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free' }}
           max_fix_iterations: 3
+          # The action default (20 min) kills the step right after the fix
+          # push, before verification/labels complete (issue #1250). The job
+          # ceiling is 60 min; allow 50 for fix + verify + label.
+          timeout_minutes: 50
           enable_mcp: false
           enable_fix: true
           # Single command only — see inputs.ts validateRunChecksCommand.
