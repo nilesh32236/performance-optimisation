@@ -2196,9 +2196,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
 					return;
 				}
-				if ( isset( $this->options['image_optimisation'] ) && is_array( $this->options['image_optimisation'] ) && array_key_exists( 'hardenCommentImages', $this->options['image_optimisation'] ) ) {
-					return;
-				}
+				// NOTE: no in-memory `$this->options` early-return here —
+				// the constructor default (`hardenCommentImages => true`)
+				// would make such a guard always hit and the DB backfill
+				// dead code. The stored option is the only marker.
 				// allowlist(settings-read-guard): deliberate direct read — must distinguish
 				// "no stored row" (false) from "stored array", which Util::get_settings()
 				// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
@@ -2215,6 +2216,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 				$stored['image_optimisation'] = $image + array( 'hardenCommentImages' => true );
 				update_option( 'wppo_settings', $stored );
+
+				// First migration only: purge the static HTML cache so
+				// pages poisoned before hardening (served verbatim by
+				// advanced-cache.php) are regenerated sanitized.
+				try {
+					if ( class_exists( 'PerformanceOptimise\\Inc\\Cache' ) ) {
+						\PerformanceOptimise\Inc\Cache::clear_cache();
+					}
+				} catch ( \Throwable $purge_error ) {
+					unset( $purge_error );
+				}
 
 				if ( ! isset( $this->options['image_optimisation'] ) || ! is_array( $this->options['image_optimisation'] ) ) {
 					$this->options['image_optimisation'] = array();

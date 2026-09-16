@@ -166,6 +166,93 @@ class CommentImageHardeningTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Style vectors, mixed srcset, data: payloads, entity obfuscation,
+	 * srcdoc, and slash-separated handlers are all neutralized.
+	 */
+	public function test_extended_vectors_neutralized(): void {
+		Functions\when( 'sanitize_text_field' )->returnArg();
+		Functions\when( 'wp_unslash' )->returnArg();
+		Functions\when( 'add_action' )->justReturn( true );
+		Functions\when( 'add_filter' )->returnArg( 2 );
+		$_SERVER['HTTP_ACCEPT'] = 'image/webp';
+
+		$image_opt = $this->make_image_optimisation();
+		$cases     = array(
+			'<img src="http://example.com/a.jpg" style="width:expression(alert(1))" alt="x">',
+			'<img src="http://example.com/a.jpg" style="background:url(javascript:alert(1))" alt="x">',
+			'<img src="http://example.com/a.jpg" style="behavior:url(x.htc)" alt="x">',
+			'<img src="data:text/html,<svg onload=alert(1)>" alt="x">',
+			'<img src="data:image/svg+xml,<svg onload=alert(1)>" alt="x">',
+			'<img src="&#106;avascript:alert(1)" alt="x">',
+			'<img src="javascript&colon;alert(1)" alt="x">',
+			'<img src="java&#9;script:alert(1)" alt="x">',
+			'<img/onerror="alert(1)" src="http://example.com/a.jpg" alt="x">',
+			'<img src="http://example.com/a.jpg" srcset="javascript:alert(1) 1x, http://example.com/a.jpg 2x" alt="x">',
+			'<img src="http://example.com/a.jpg" srcset=javascript:alert(1) alt="x">',
+			'<img src="http://example.com/a.jpg" style=expression(alert(1)) alt="x">',
+			'<svg onload="alert(1)"><circle cx="5" cy="5" r="4"/></svg>',
+			'<audio src="http://example.com/a.mp3" onplay="alert(1)"></audio>',
+			'<iframe src="javascript:alert(1)"></iframe>',
+			'<iframe srcdoc="<svg onload=alert(1)>"></iframe>',
+			'<img src="http://example.com/a.jpg" alt="a>b" onerror="alert(1)">',
+		);
+		foreach ( $cases as $html ) {
+			$out = $image_opt->maybe_serve_next_gen_images( '<div>' . $html . '</div>' );
+			$this->assertStringNotContainsStringIgnoringCase( 'onerror', $out, "Failed for: $html" );
+			$this->assertStringNotContainsStringIgnoringCase( 'onload', $out, "Failed for: $html" );
+			$this->assertStringNotContainsStringIgnoringCase( 'onplay', $out, "Failed for: $html" );
+			$this->assertStringNotContainsString( 'javascript:alert', $out, "Failed for: $html" );
+			$this->assertStringNotContainsString( 'expression(', $out, "Failed for: $html" );
+			$this->assertStringNotContainsString( 'behavior:', $out, "Failed for: $html" );
+			$this->assertStringNotContainsString( 'behaviour:', $out, "Failed for: $html" );
+			$this->assertStringNotContainsString( 'srcdoc', $out, "Failed for: $html" );
+			$this->assertStringNotContainsString( 'data:text/html', $out, "Failed for: $html" );
+			$this->assertStringNotContainsString( 'data:image/svg', $out, "Failed for: $html" );
+		}
+
+		unset( $_SERVER['HTTP_ACCEPT'] );
+	}
+
+	/**
+	 * Mixed hostile/safe srcset keeps the safe candidate, drops the hostile one.
+	 */
+	public function test_mixed_srcset_keeps_safe_candidate(): void {
+		Functions\when( 'sanitize_text_field' )->returnArg();
+		Functions\when( 'wp_unslash' )->returnArg();
+		Functions\when( 'add_action' )->justReturn( true );
+		Functions\when( 'add_filter' )->returnArg( 2 );
+		$_SERVER['HTTP_ACCEPT'] = 'image/webp';
+
+		$image_opt = $this->make_image_optimisation();
+		$html      = '<img src="http://example.com/a.jpg" srcset="javascript:alert(1) 1x, http://example.com/a.jpg 2x" alt="x">';
+		$out       = $image_opt->maybe_serve_next_gen_images( '<div>' . $html . '</div>' );
+
+		$this->assertStringNotContainsString( 'javascript:', $out );
+		$this->assertStringContainsString( 'http://example.com/a.jpg 2x', $out );
+
+		unset( $_SERVER['HTTP_ACCEPT'] );
+	}
+
+	/**
+	 * Data-URI srcset commas survive the split (no corruption).
+	 */
+	public function test_data_uri_srcset_not_corrupted(): void {
+		Functions\when( 'sanitize_text_field' )->returnArg();
+		Functions\when( 'wp_unslash' )->returnArg();
+		Functions\when( 'add_action' )->justReturn( true );
+		Functions\when( 'add_filter' )->returnArg( 2 );
+		$_SERVER['HTTP_ACCEPT'] = 'image/webp';
+
+		$image_opt = $this->make_image_optimisation();
+		$html      = '<img src="http://example.com/a.jpg" srcset="data:image/png;base64,iVBORw0KGgo= 1x, http://example.com/a.jpg 2x" alt="x">';
+		$out       = $image_opt->maybe_serve_next_gen_images( '<div>' . $html . '</div>' );
+
+		$this->assertStringContainsString( 'data:image/png;base64,iVBORw0KGgo=', $out );
+
+		unset( $_SERVER['HTTP_ACCEPT'] );
+	}
+
+	/**
 	 * Explicit opt-out restores the legacy byte-identical path.
 	 */
 	public function test_hardening_opt_out_preserves_handlers(): void {
