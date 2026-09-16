@@ -888,6 +888,12 @@ async function loadScriptsByPriority( scripts ) {
 	// indefinite stall (#1217 review). Overridable via
 	// wppoDelayConfig.scriptTimeout (used by Jest, where jsdom never fires
 	// script onload so the swap would otherwise pend forever).
+	// Timeout-as-liveness tradeoff: Promise.race unblocks the sequential
+	// chain but does not cancel the underlying loadScript — the replacement
+	// node is already in the DOM and may still execute later, out of order
+	// relative to subsequent deferred scripts. Timed-out nodes are still
+	// marked data-wppo-delay-loaded (see finally below) so a late execution
+	// is at least visible as an attempted load in debugging.
 	const scriptTimeout = ( delayConfig && delayConfig.scriptTimeout ) || 15000;
 	const loadWithTimeout = ( script, ms = scriptTimeout ) => {
 		let timer = null;
@@ -963,8 +969,8 @@ async function loadScriptsByPriority( scripts ) {
 /**
  * Load all deferred scripts queued in the DOM.
  *
- * Loads only interaction-strategy scripts (explicit or default): idle and
- * viewport scripts have dedicated schedulers (requestIdleCallback /
+ * Loads only interaction-strategy scripts (explicit, default, or unknown):
+ * idle and viewport scripts have dedicated schedulers (requestIdleCallback /
  * IntersectionObserver) and must not be pulled in early here — bundling
  * them into the first-interaction flush defeated idle/viewport semantics
  * and double-loaded nodes (issue #1217).
@@ -993,7 +999,13 @@ async function loadScripts() {
 				script.getAttribute( 'data-wppo-delay-strategy' ) ||
 				( delayConfig && delayConfig.defaultStrategy ) ||
 				'interaction';
-			return strategy === 'interaction';
+			// Unknown strategy values (typo/future value) fall back to
+			// interaction so a bad attribute cannot silently drop a script
+			// — idle/viewport schedulers only match exact values (#1217).
+			return (
+				strategy === 'interaction' ||
+				( strategy !== 'idle' && strategy !== 'viewport' )
+			);
 		} );
 
 		try {
@@ -1119,7 +1131,12 @@ const hasInteractionScripts = ( scripts ) => {
 			script.getAttribute( 'data-wppo-delay-strategy' ) ||
 			( delayConfig && delayConfig.defaultStrategy ) ||
 			'interaction';
-		return strategy === 'interaction';
+		// Mirror loadScripts(): unknown values count as interaction so the
+		// first flush picks them up instead of dropping them silently.
+		return (
+			strategy === 'interaction' ||
+			( strategy !== 'idle' && strategy !== 'viewport' )
+		);
 	} );
 };
 

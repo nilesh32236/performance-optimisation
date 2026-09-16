@@ -5376,19 +5376,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Curated third-party Delay-JS denylist (one-click delay, issue #1217).
 		 *
 		 * Host/keyword fragments that are safe to delay with one click:
-		 * analytics, ads, social, chat, video embeds and consent. The user
-		 * allowlist always wins over this list. Filterable via
-		 * `wppo_delay_js_third_party_denylist`. Fail-open: filter failures
-		 * fall back to the curated preset.
+		 * analytics, ads, social, chat and video embeds. Payment gateways
+		 * (Stripe, PayPal) and consent-management banners (Cookiebot,
+		 * OneTrust, TrustArc, Quantcast) are intentionally NOT in this
+		 * preset: payment SDKs also run on product pages (express checkout)
+		 * and site-wide (fraud detection), and consent banners must stay
+		 * eager for GDPR/ePrivacy ordering (consent before trackers). Users
+		 * who want them delayed can add them via the extra-denylist
+		 * textarea. The user allowlist always wins over this list.
+		 * Filterable via `wppo_delay_js_third_party_denylist`. Fail-open:
+		 * filter failures fall back to the curated preset.
+		 *
+		 * Note: no per-request memoization is used on purpose — the filter
+		 * call is cheap and caching would go stale on mid-request
+		 * add/remove_filter, switch_to_blog, or sequential unit tests.
 		 *
 		 * @since NEXT
 		 * @return string[]
 		 */
 		public static function get_delay_js_third_party_denylist(): array {
-			static $cached = null;
-			if ( null !== $cached ) {
-				return $cached;
-			}
 			$preset = array(
 				'googletagmanager.com',
 				'google-analytics.com',
@@ -5441,27 +5447,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'nr-data.net',
 				'sentry.io',
 				'bugsnag',
-				'stripe.com/v3',
-				'paypal.com/sdk',
-				'cookiebot',
-				'onetrust',
-				'trustarc',
-				'quantcast',
 			);
 			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_third_party_denylist' ) ) {
-				$cached = $preset;
-				return $cached;
+				return $preset;
 			}
 			try {
 				$raw = apply_filters( 'wppo_delay_js_third_party_denylist', $preset );
 			} catch ( \Throwable $e ) {
 				unset( $e );
-				$cached = $preset;
-				return $cached;
+				return $preset;
 			}
 			if ( ! is_array( $raw ) ) {
-				$cached = $preset;
-				return $cached;
+				return $preset;
 			}
 			$filtered = array_values(
 				array_unique(
@@ -5478,8 +5475,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					)
 				)
 			);
-			$cached   = $filtered;
-			return $cached;
+			return $filtered;
 		}
 
 		/**
@@ -5501,8 +5497,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$raw      = $file_opt['delayJSThirdPartyAllowlist'] ?? '';
 				$list     = array();
 				if ( is_string( $raw ) && '' !== trim( $raw ) ) {
+					// process_urls() splits on newlines only; normalize commas
+					// first so comma-pasted entries also split (#1217 review).
+					$normalized = str_replace( ',', "\n", $raw );
 					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'process_urls' ) ) {
-						$list = (array) Util::process_urls( $raw );
+						$list = (array) Util::process_urls( $normalized );
 					} else {
 						$split = preg_split( '/[\r\n,]+/', $raw );
 						$list  = array_filter( array_map( 'trim', is_array( $split ) ? $split : array() ) );
@@ -5602,8 +5601,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$file_opt = self::get_effective_file_optimisation( $this->options['file_optimisation'] ?? array() );
 				$extra    = $file_opt['delayJSThirdPartyDenylist'] ?? '';
 				if ( is_string( $extra ) && '' !== trim( $extra ) ) {
+					// Normalize commas: process_urls() splits on newlines only.
+					$extra_normalized = str_replace( ',', "\n", $extra );
 					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'process_urls' ) ) {
-						$denylist = array_merge( $denylist, (array) Util::process_urls( $extra ) );
+						$denylist = array_merge( $denylist, (array) Util::process_urls( $extra_normalized ) );
 					} else {
 						$split    = preg_split( '/[\r\n,]+/', $extra );
 						$denylist = array_merge( $denylist, array_filter( array_map( 'trim', is_array( $split ) ? $split : array() ) ) );

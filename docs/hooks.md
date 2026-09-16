@@ -1306,7 +1306,7 @@ Filters the delay-JS slider preset exclusions (revslider, swiper, slick, etc.). 
 ---
 
 ### `wppo_delay_js_third_party_denylist`
-Filters the curated one-click third-party delay denylist (analytics, ads, social, chat, embeds, consent). @since NEXT.
+Filters the curated one-click third-party delay denylist (analytics, ads, social, chat, embeds). Payment gateways (Stripe, PayPal) and consent-management banners (Cookiebot, OneTrust, TrustArc, Quantcast) are intentionally excluded from the preset so one-click mode keeps them eager; add them via the extra-denylist textarea if desired. @since NEXT.
 
 **Parameters:**
 - `$preset` *(string[])* — Third-party denylist patterns.

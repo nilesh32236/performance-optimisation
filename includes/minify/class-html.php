@@ -1009,9 +1009,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				$settings_allowlist = array();
 				$allow_raw          = $file_opt['delayJSThirdPartyAllowlist'] ?? '';
 				if ( is_string( $allow_raw ) && '' !== trim( $allow_raw ) ) {
-					$settings_allowlist = (array) Util::process_urls( $allow_raw );
+					// Normalize commas: process_urls() splits on newlines only.
+					$allow_normalized   = str_replace( ',', "\n", $allow_raw );
+					$settings_allowlist = (array) Util::process_urls( $allow_normalized );
 				} elseif ( is_array( $allow_raw ) ) {
-					$settings_allowlist = array_values( array_filter( array_map( 'strval', $allow_raw ) ) );
+					// Same coerce/dedupe guard as Main: non-string/non-numeric
+					// entries map to '' then empties are filtered, so a
+					// nested-array filter return never becomes "Array".
+					$settings_allowlist = array_values(
+						array_filter(
+							array_map(
+								static function ( $v ): string {
+									return is_string( $v ) || is_numeric( $v ) ? (string) $v : '';
+								},
+								$allow_raw
+							),
+							static function ( $v ): bool {
+								return '' !== trim( (string) $v );
+							}
+						)
+					);
 				}
 				foreach ( $settings_allowlist as $allowed ) {
 					$allowed = trim( (string) $allowed );
@@ -1023,7 +1040,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 					try {
 						$filtered = apply_filters( 'wppo_delay_js_third_party_allowlist', $settings_allowlist );
 						if ( is_array( $filtered ) ) {
-							foreach ( $filtered as $allowed ) {
+							// Coerce/dedupe mirroring Main: drop non-string
+							// entries instead of casting nested arrays to "Array".
+							$coerced = array_values(
+								array_filter(
+									array_map(
+										static function ( $v ): string {
+											return is_string( $v ) || is_numeric( $v ) ? (string) $v : '';
+										},
+										$filtered
+									),
+									static function ( $v ): bool {
+										return '' !== trim( (string) $v );
+									}
+								)
+							);
+							foreach ( $coerced as $allowed ) {
 								$allowed = trim( (string) $allowed );
 								if ( '' !== $allowed && false !== stripos( $haystack, $allowed ) ) {
 									return false;
@@ -1046,9 +1078,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				}
 				$extra = $file_opt['delayJSThirdPartyDenylist'] ?? '';
 				if ( is_string( $extra ) && '' !== trim( $extra ) ) {
-					$denylist = array_merge( $denylist, (array) Util::process_urls( $extra ) );
+					// Normalize commas: process_urls() splits on newlines only.
+					$denylist = array_merge( $denylist, (array) Util::process_urls( str_replace( ',', "\n", $extra ) ) );
 				} elseif ( is_array( $extra ) ) {
-					$denylist = array_merge( $denylist, array_values( array_filter( array_map( 'strval', $extra ) ) ) );
+					// Same coerce guard as above (no bare strval).
+					$denylist = array_merge(
+						$denylist,
+						array_values(
+							array_filter(
+								array_map(
+									static function ( $v ): string {
+										return is_string( $v ) || is_numeric( $v ) ? (string) $v : '';
+									},
+									$extra
+								),
+								static function ( $v ): bool {
+									return '' !== trim( (string) $v );
+								}
+							)
+						)
+					);
 				}
 				foreach ( $denylist as $entry ) {
 					$entry = trim( (string) $entry );
