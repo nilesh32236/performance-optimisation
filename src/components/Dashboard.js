@@ -1483,31 +1483,46 @@ const Dashboard = ( {
 						) }
 						{ Array.isArray( wooSelfTest.fragment_checks ) &&
 							wooSelfTest.fragment_checks.length > 0 && (
-								<ul className="wppo-woo-self-test">
-									{ wooSelfTest.fragment_checks.map(
-										( check, index ) => (
-											<li
-												key={ `${
-													check?.path ?? 'fragment'
-												}-${ index }` }
-											>
-												<span>{ check?.path }</span>
-												{ ' — ' }
-												<span>
-													{ check?.pass
-														? __(
-																'Bypassed (pass)',
-																'performance-optimisation'
-														  )
-														: __(
-																'Cacheable (fail)',
-																'performance-optimisation'
-														  ) }
-												</span>
-											</li>
-										)
-									) }
-								</ul>
+								<>
+									<p className="wppo-text-muted wppo-text-small">
+										{ __(
+											'Fragment probes (query-string):',
+											'performance-optimisation'
+										) }
+									</p>
+									<ul
+										className="wppo-woo-self-test"
+										aria-label={ __(
+											'Fragment probes (query-string)',
+											'performance-optimisation'
+										) }
+									>
+										{ wooSelfTest.fragment_checks.map(
+											( check, index ) => (
+												<li
+													key={ `${
+														check?.path ??
+														'fragment'
+													}-${ index }` }
+												>
+													<span>{ check?.path }</span>
+													{ ' — ' }
+													<span>
+														{ check?.pass
+															? __(
+																	'Bypassed (pass)',
+																	'performance-optimisation'
+															  )
+															: __(
+																	'Cacheable (fail)',
+																	'performance-optimisation'
+															  ) }
+													</span>
+												</li>
+											)
+										) }
+									</ul>
+								</>
 							) }
 					</div>
 				) }

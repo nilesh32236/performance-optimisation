@@ -652,6 +652,70 @@ describe( 'Dashboard', () => {
 		).toBeInTheDocument();
 	} );
 
+	it( 'renders fragment probes under a distinct label', async () => {
+		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+		await flushDashboardMount();
+
+		fetchWooCacheSelfTest.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				woo_active: true,
+				safe_mode: true,
+				runnable: true,
+				excluded_paths: [ 'cart', 'checkout', 'my-account' ],
+				donotcachepage_honored: true,
+				all_pass: true,
+				checks: [
+					{
+						url: 'http://example.com/cart/',
+						path: '/cart/',
+						is_dynamic: true,
+						cacheable: false,
+						donotcachepage_honored: true,
+						pass: true,
+					},
+				],
+				fragment_checks: [
+					{
+						url: 'http://example.com/?wc-ajax=get_refreshed_fragments',
+						path: '/?wc-ajax=get_refreshed_fragments',
+						is_dynamic: true,
+						cacheable: false,
+						donotcachepage_honored: true,
+						pass: true,
+					},
+					{
+						url: 'http://example.com/?add-to-cart=123',
+						path: '/?add-to-cart=123',
+						is_dynamic: true,
+						cacheable: false,
+						donotcachepage_honored: true,
+						pass: true,
+					},
+				],
+			},
+		} );
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Run Woo Cache Self-Test/i } )
+		);
+
+		await waitFor( () =>
+			expect( fetchWooCacheSelfTest ).toHaveBeenCalled()
+		);
+		expect(
+			screen.getByText( 'Fragment probes (query-string):' )
+		).toBeInTheDocument();
+		expect(
+			screen.getByLabelText( 'Fragment probes (query-string)' )
+		).toBeInTheDocument();
+		expect(
+			screen.getByText( '/?wc-ajax=get_refreshed_fragments' )
+		).toBeInTheDocument();
+		expect( screen.getByText( '/?add-to-cart=123' ) ).toBeInTheDocument();
+	} );
+
 	it( 'shows a read-only notice when WooCommerce is inactive', async () => {
 		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
 

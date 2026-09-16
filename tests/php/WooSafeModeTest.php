@@ -622,6 +622,26 @@ class WooSafeModeTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * A wc-ajax fragment query still bypasses with safe mode off (issue #1197).
+	 *
+	 * The Woo layer (`is_woo_excluded()`) honors `wooSafeMode=false` and
+	 * stops excluding, but the serve path still bypasses via the generic
+	 * query-poisoning guard (`has_uncacheable_query()`) and storage still
+	 * refuses via the unconditional `is_wc_ajax_request()` guard.
+	 */
+	public function test_wc_ajax_query_string_is_not_cacheable_safe_mode_off(): void {
+		$this->stub_front_end_guests();
+		$_GET['wc-ajax']         = 'get_refreshed_fragments';
+		$_SERVER['QUERY_STRING'] = 'wc-ajax=get_refreshed_fragments';
+
+		$options = array( 'cache_settings' => array( 'wooSafeMode' => false ) );
+		$cache   = $this->make_cache( $options, '/?wc-ajax=get_refreshed_fragments' );
+		$this->assertFalse( $this->invoke_private( $cache, 'is_woo_excluded' ) );
+		$this->assertTrue( $this->invoke_private( $cache, 'is_not_cacheable' ) );
+		$this->assertFalse( $this->invoke_private( $cache, 'maybe_store_cache' ) );
+	}
+
+	/**
 	 * Self-test includes resolved custom Woo slugs as probes (issue #1020).
 	 */
 	public function test_woo_cache_self_test_includes_custom_slug(): void {

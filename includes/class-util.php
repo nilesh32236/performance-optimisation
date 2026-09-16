@@ -1095,6 +1095,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Scope note: this covers path/query/safe-mode semantics only and does not
 		 * evaluate the `wppo_woo_cacheable` / `wppo_should_cache_request`
 		 * overrides, which can re-allow caching of an excluded URL at runtime.
+		 * Fragment probes model Woo-layer intent only: generic
+		 * query-poisoning (`has_uncacheable_query()`) and storage guards may
+		 * still bypass independently of the reported Woo signal.
 		 * `donotcachepage_honored` is assumed (not probed): DONOTCACHEPAGE
 		 * enforcement lives in `Cache::is_not_cacheable()` — this method never
 		 * defines the constant, it only asserts the existing enforcement path.
