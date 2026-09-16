@@ -9893,22 +9893,79 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * On WP 6.9+ with separate core block assets active, the combined
 		 * stylesheet (`wp-block-library`) and every per-block stylesheet
 		 * (`wp-block-cover`, `wp-block-group`, ...) are loaded on demand for the
-		 * blocks actually present on the page. Rewriting their `src` (minify) or
+		 * blocks actually present on the page. On pre-6.9 cores the 6.8 classic
+		 * on-demand world (`should_load_block_assets_on_demand` /
+		 * `wp_should_load_block_assets_on_demand()`, see
+		 * {@see is_classic_block_assets_on_demand_active()}) owns the same
+		 * `wp-block-*` family when the operator opted in. Rewriting their `src` (minify) or
 		 * folding them into the combined file would re-monolithize what core
-		 * ships conditionally, so the minify path skips them in that mode —
+		 * ships conditionally, so the minify path skips them in either mode —
 		 * mirroring `Cache::is_core_block_asset()`.
 		 *
 		 * @since 2.0.0
 		 *
 		 * @param string $handle The registered style handle.
-		 * @return bool True when core owns the handle under separate-assets mode.
+		 * @return bool True when core owns the handle under on-demand mode.
 		 */
 		private function is_core_block_asset_skipped( $handle ): bool {
-			if ( ! $this->is_core_separate_block_assets_active() ) {
-				return false;
+			if ( $this->is_core_separate_block_assets_active() ) {
+				try {
+					return str_starts_with( (string) $handle, 'wp-block-' );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return false;
+				}
 			}
+			if ( $this->is_classic_block_assets_on_demand_active() ) {
+				try {
+					return str_starts_with( (string) $handle, 'wp-block-' );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return false;
+				}
+			}
+			return false;
+		}
+
+		/**
+		 * Whether WP 6.8 classic on-demand block-asset loading is active.
+		 *
+		 * Covers the pre-6.9 world (`should_load_block_assets_on_demand` filter /
+		 * `wp_should_load_block_assets_on_demand()`) that
+		 * {@see is_core_separate_block_assets_active()} does not model. Positive
+		 * runtime evidence only: the core function wins when present, otherwise
+		 * a `has_filter`-guarded `should_load_block_assets_on_demand` read
+		 * (which reflects the opt-in registered by
+		 * {@see register_block_assets_filters()}). The combined monolith escape
+		 * hatch (`loadAllCoreBlockAssets` on / `blockAssetsOnDemand` off, see
+		 * {@see is_hidden_block_asset_omission_enabled()}) forces false so
+		 * operators who opted out keep the legacy monolith. Fail-open: any
+		 * throwable, missing API, or absent evidence returns false (legacy path).
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when classic on-demand block assets are active.
+		 */
+		private function is_classic_block_assets_on_demand_active(): bool {
 			try {
-				return str_starts_with( (string) $handle, 'wp-block-' );
+				// Classic on-demand is a pre-6.9 world: on 6.9+ (or when the
+				// version is unknown, which assumes newest per codebase
+				// convention) the separate-assets path owns `wp-block-*`.
+				// Gating on version first also keeps this probe-free on 6.9+
+				// so exact-count `function_exists` unit expectations stay stable.
+				if ( ! isset( $GLOBALS['wp_version'] ) || version_compare( (string) $GLOBALS['wp_version'], '6.9-alpha', '>=' ) ) {
+					return false;
+				}
+				if ( ! $this->is_hidden_block_asset_omission_enabled() ) {
+					return false;
+				}
+				if ( function_exists( 'wp_should_load_block_assets_on_demand' ) ) {
+					return (bool) wp_should_load_block_assets_on_demand();
+				}
+				if ( function_exists( 'has_filter' ) && has_filter( 'should_load_block_assets_on_demand' ) ) {
+					return (bool) apply_filters( 'should_load_block_assets_on_demand', false );
+				}
+				return false;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;

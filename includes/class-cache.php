@@ -648,12 +648,204 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Whether WP 6.8 classic on-demand block-asset loading is active.
+		 *
+		 * Pre-6.9 cores (6.8 `should_load_block_assets_on_demand` filter /
+		 * `wp_should_load_block_assets_on_demand()`) load core block styles on
+		 * demand when core reports it at runtime. The 6.9+ separate-assets world
+		 * is owned by {@see block_assets_are_separate()}; this covers the
+		 * classic world so those handles are never folded into the combined
+		 * file either. Positive runtime evidence only: the core function wins
+		 * when present, then a `has_filter`-guarded
+		 * `should_load_block_assets_on_demand` read (which reflects the opt-in
+		 * registered by `Main::register_block_assets_filters()` on real
+		 * requests). The per-site `blockAssetsOnDemand` option alone is never
+		 * sufficient here — in unit-test isolation (or when Main never ran) it
+		 * would flip legacy combines without core actually loading on demand.
+		 * The combined-monolith escape hatch forces false. Fail-open: any
+		 * throwable, missing API, or absent evidence returns false (legacy
+		 * combine behavior unchanged).
+		 *
+		 * @return bool True when classic on-demand block assets are active.
+		 * @since NEXT
+		 */
+		private function classic_block_assets_on_demand_active(): bool {
+			try {
+				// Classic on-demand is a pre-6.9 world: on 6.9+ (or when the
+				// version is unknown, which assumes newest per codebase
+				// convention) the separate-assets path owns `wp-block-*`.
+				// Gating on version first also keeps this probe-free on 6.9+
+				// so exact-count `function_exists` unit expectations stay stable.
+				if ( ! isset( $GLOBALS['wp_version'] ) || version_compare( (string) $GLOBALS['wp_version'], '6.9-alpha', '>=' ) ) {
+					return false;
+				}
+				if ( $this->is_combined_core_block_monolith_forced() ) {
+					return false;
+				}
+				if ( function_exists( 'wp_should_load_block_assets_on_demand' ) ) {
+					return (bool) wp_should_load_block_assets_on_demand();
+				}
+				if ( function_exists( 'has_filter' ) && has_filter( 'should_load_block_assets_on_demand' ) ) {
+					return (bool) apply_filters( 'should_load_block_assets_on_demand', false );
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Whether a handle is a classic (pre-6.9) on-demand block asset.
+		 *
+		 * @param string $handle The registered style handle.
+		 * @return bool True when the handle must stay out of the combined file.
+		 * @since NEXT
+		 */
+		private function is_classic_on_demand_block_asset( $handle ): bool {
+			try {
+				if ( ! $this->classic_block_assets_on_demand_active() ) {
+					return false;
+				}
+				return str_starts_with( (string) $handle, 'wp-block-' );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Whether a queued style handle is a verifiable core per-block asset.
+		 *
+		 * Defensive `src` check mirroring `Main::is_core_per_block_style_handle()`:
+		 * the `wp-block-*` prefix alone is not proof of core ownership. Only
+		 * handles whose registered `src` points at core block styles
+		 * (`wp-includes` + `block-library` or `/blocks/`) count. Fail-open:
+		 * unregistered handles or unverifiable `src` return false (keep the
+		 * asset — degrade to unoptimized, never unstyled).
+		 *
+		 * @param string $handle Queued style handle e.g. 'wp-block-cover'.
+		 * @return bool True when the handle is verifiably a core per-block asset.
+		 * @since NEXT
+		 */
+		private function is_core_per_block_style_handle( $handle ): bool {
+			try {
+				global $wp_styles;
+				if ( ! is_object( $wp_styles ) || ! isset( $wp_styles->registered[ $handle ] ) ) {
+					return false;
+				}
+				$src = (string) ( $wp_styles->registered[ $handle ]->src ?? '' );
+				if ( '' === $src ) {
+					return false;
+				}
+				if ( false !== strpos( $src, 'block-library' ) ) {
+					return false !== strpos( $src, 'wp-includes' );
+				}
+				return false !== strpos( $src, 'wp-includes' ) && false !== strpos( $src, '/blocks/' );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Whether a handle is a hidden block asset that must stay out of the combine.
+		 *
+		 * Defensive backstop for `Main::omit_hidden_block_assets()`: that pass
+		 * dequeues per-block stylesheets for blocks absent from the singular
+		 * post content, but it bails on archives, block themes, unresolvable
+		 * block sources, or when core 6.9 hoisting owns the output. Any path
+		 * where the omit pass bails (or ordering shifts) must still never embed
+		 * a hidden handle in the combined file, so the combine pipeline
+		 * re-checks type-absence here. Singular classic views only; block
+		 * themes, archives, empty/unresolvable content, unverifiable `src`,
+		 * and the `wppo_allow_hidden_block_asset` opt-in all fail open (return
+		 * false — keep the handle combinable, never unstyled).
+		 *
+		 * @param string $handle The registered style handle.
+		 * @return bool True when the handle is hidden and must not be combined.
+		 * @since NEXT
+		 */
+		private function is_hidden_block_asset_for_combine( $handle ): bool {
+			try {
+				$handle = (string) $handle;
+				if ( 0 !== strpos( $handle, 'wp-block-' ) ) {
+					return false;
+				}
+				$slug = substr( $handle, strlen( 'wp-block-' ) );
+				if ( '' === $slug || 0 === strpos( $slug, 'library' ) ) {
+					return false;
+				}
+				if ( ! $this->is_core_per_block_style_handle( $handle ) ) {
+					return false;
+				}
+				if ( ! function_exists( 'is_singular' ) || ! is_singular() ) {
+					return false;
+				}
+				if ( function_exists( 'wp_is_block_theme' ) ) {
+					try {
+						if ( wp_is_block_theme() ) {
+							return false;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return false;
+					}
+				}
+				if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
+					return false;
+				}
+				$file_opt = $this->options['file_optimisation'];
+				if ( empty( $file_opt['blockAssetsOnDemand'] ) || ! empty( $file_opt['loadAllCoreBlockAssets'] ) ) {
+					return false;
+				}
+				$content = '';
+				if ( function_exists( 'get_the_ID' ) && function_exists( 'get_post_field' ) ) {
+					try {
+						$post_id = get_the_ID();
+						if ( ! empty( $post_id ) ) {
+							$content = (string) get_post_field( 'post_content', $post_id );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return false;
+					}
+				}
+				if ( '' === $content ) {
+					return false;
+				}
+				$block_name = 'core/' . $slug;
+				if ( Util::content_has_block( $content, $block_name ) ) {
+					return false;
+				}
+				if ( function_exists( 'has_filter' ) && has_filter( 'wppo_allow_hidden_block_asset' ) ) {
+					try {
+						$allowed = apply_filters( 'wppo_allow_hidden_block_asset', false, $block_name, $handle );
+						if ( ! empty( $allowed ) ) {
+							return false;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return false;
+					}
+				}
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
 		 * Whether a handle is already owned by core output and must never be combined.
 		 *
 		 * Single dedupe assertion for the combine pipeline: true when core will
 		 * inline the handle under its `styles_inline_size_limit` budget
-		 * ({@see core_will_inline()}) or when core 6.9+ hoisting owns the block
-		 * handle ({@see is_core_block_asset()}). Every combine/preload loop
+		 * ({@see core_will_inline()}), when core 6.9+ hoisting owns the block
+		 * handle ({@see is_core_block_asset()}), when classic 6.8 on-demand
+		 * loading owns it ({@see is_classic_on_demand_block_asset()}), or when
+		 * it is a hidden block asset absent from the current singular content
+		 * ({@see is_hidden_block_asset_for_combine()}). Every combine/preload loop
 		 * funnels through this so no scattered skip site can emit duplicate
 		 * style output for the same handle.
 		 *
@@ -664,6 +856,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		private function is_duplicate_of_core_output( $handle, bool $separate_block_assets ): bool {
 			if ( $this->is_core_block_asset( $handle, $separate_block_assets ) ) {
+				return true;
+			}
+			if ( $this->is_classic_on_demand_block_asset( $handle ) ) {
+				return true;
+			}
+			if ( $this->is_hidden_block_asset_for_combine( $handle ) ) {
 				return true;
 			}
 			return $this->core_will_inline( $handle );
