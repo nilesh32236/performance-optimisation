@@ -5321,6 +5321,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * `curl_share_close()` is unavailable the reference is dropped on
 		 * every runtime. Multisite-safe: no option/cache changes.
 		 *
+		 * Note: completes the teardown-helper set promised above; no
+		 * production call sites use curl_share handles yet, so this is
+		 * forward-compat API for future callers.
+		 *
 		 * @since NEXT
 		 * @param mixed       $sh          cURL share handle to release (nulled in the caller scope).
 		 * @param string|null $php_version Optional version override for testing; defaults to PHP_VERSION.
@@ -5350,6 +5354,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * is unavailable the reference is dropped on every runtime.
 		 * Multisite-safe: no option/cache changes.
 		 *
+		 * Note: completes the teardown-helper set promised above; no
+		 * production call sites use finfo handles yet, so this is
+		 * forward-compat API for future callers.
+		 *
 		 * @since NEXT
 		 * @param mixed       $finfo       Finfo handle to release (nulled in the caller scope).
 		 * @param string|null $php_version Optional version override for testing; defaults to PHP_VERSION.
@@ -5378,6 +5386,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * `xml_parser_free()` path runs unchanged. Fail-open: when
 		 * `xml_parser_free()` is unavailable the reference is dropped on
 		 * every runtime. Multisite-safe: no option/cache changes.
+		 *
+		 * Note: completes the teardown-helper set promised above; no
+		 * production call sites use XML parsers yet, so this is
+		 * forward-compat API for future callers.
 		 *
 		 * @since NEXT
 		 * @param mixed       $parser      XML parser to release (nulled in the caller scope).

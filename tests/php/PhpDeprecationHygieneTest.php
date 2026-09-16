@@ -101,6 +101,9 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * @return void
 	 */
 	public function test_close_curl_multi_handle_keeps_legacy_path_below_85(): void {
+		if ( Util::is_php85_or_greater() ) {
+			$this->markTestSkipped( 'Legacy curl_multi_close() path cannot run notice-free on PHP >= 8.5.' );
+		}
 		if ( ! function_exists( 'curl_multi_init' ) ) {
 			$this->markTestSkipped( 'cURL extension is required.' );
 		}
@@ -219,6 +222,9 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * @return void
 	 */
 	public function test_close_curl_share_handle_keeps_legacy_path_below_85(): void {
+		if ( Util::is_php85_or_greater() ) {
+			$this->markTestSkipped( 'Legacy curl_share_close() path cannot run notice-free on PHP >= 8.5.' );
+		}
 		if ( ! function_exists( 'curl_share_init' ) ) {
 			$this->markTestSkipped( 'cURL extension is required.' );
 		}
@@ -259,6 +265,9 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * @return void
 	 */
 	public function test_close_finfo_handle_keeps_legacy_path_below_85(): void {
+		if ( Util::is_php85_or_greater() ) {
+			$this->markTestSkipped( 'Legacy finfo_close() path cannot run notice-free on PHP >= 8.5.' );
+		}
 		if ( ! function_exists( 'finfo_open' ) ) {
 			$this->markTestSkipped( 'fileinfo extension is required.' );
 		}
@@ -299,6 +308,9 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * @return void
 	 */
 	public function test_free_xml_parser_keeps_legacy_path_below_85(): void {
+		if ( Util::is_php85_or_greater() ) {
+			$this->markTestSkipped( 'Legacy xml_parser_free() path cannot run notice-free on PHP >= 8.5.' );
+		}
 		if ( ! function_exists( 'xml_parser_create' ) ) {
 			$this->markTestSkipped( 'xml extension is required.' );
 		}
@@ -334,10 +346,15 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 			'vendor/woocommerce/action-scheduler/classes/data-stores/ActionScheduler_wpPostStore.php',
 		);
 
+		// Collect unreadable files instead of skipping inside the loop so one
+		// missing file cannot mask the assertions on the remaining files.
+		$missing = array();
+		$checked = 0;
 		foreach ( $files as $relative ) {
 			$path = $root . '/' . $relative;
 			if ( ! is_readable( $path ) ) {
-				$this->markTestSkipped( sprintf( '%s is unavailable.', $relative ) );
+				$missing[] = $relative;
+				continue;
 			}
 
 			$source = file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- test-only vendor source assertion.
@@ -352,6 +369,18 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 				'/function\s+save_action\s*\([^)]*(?<!\?)(?:^|[\s(,])DateTime\s+\$\w+\s*=\s*null/',
 				$source,
 				sprintf( '%s::save_action() must not use implicitly-nullable `DateTime $x = null` (issue #1219).', $relative )
+			);
+			++$checked;
+		}
+
+		if ( 0 === $checked ) {
+			$this->markTestSkipped(
+				sprintf( 'Action Scheduler sources unavailable: %s.', implode( ', ', $missing ) )
+			);
+		}
+		if ( ! empty( $missing ) ) {
+			$this->markTestSkipped(
+				sprintf( 'Partial Action Scheduler sources unavailable (checked %d of %d): %s.', $checked, count( $files ), implode( ', ', $missing ) )
 			);
 		}
 	}
@@ -369,6 +398,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	public function test_cron_woo_exclusion_paths_are_null_safe(): void {
 		\Brain\Monkey\Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
 		\Brain\Monkey\Functions\when( 'get_option' )->justReturn( array() );
+		Util::clear_settings_cache();
 
 		$cron = ( new \ReflectionClass( 'PerformanceOptimise\Inc\Cron' ) )->newInstanceWithoutConstructor();
 
@@ -377,17 +407,20 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 
 		// Empty URL and plain home URL must not raise; failures fail-open
 		// (excluded) or fail-closed deterministically, never a notice.
-		$is_excluded->invoke( $cron, 'http://example.com/' );
-		$is_excluded->invoke( $cron, 'http://example.com/?rest_route=/wc/store/v1/cart' );
+		$home_excluded  = $is_excluded->invoke( $cron, 'http://example.com/' );
+		$store_excluded = $is_excluded->invoke( $cron, 'http://example.com/?rest_route=/wc/store/v1/cart' );
+
+		// Plain home page is cacheable (not excluded); the plain-permalink
+		// Store API URL is unconditionally excluded.
+		$this->assertIsBool( $home_excluded );
+		$this->assertIsBool( $store_excluded );
+		$this->assertFalse( $home_excluded );
+		$this->assertTrue( $store_excluded );
 
 		$rest_route = new \ReflectionMethod( 'PerformanceOptimise\Inc\Cron', 'get_rest_route_param' );
 		$rest_route->setAccessible( true );
 
 		$this->assertSame( '', $rest_route->invoke( $cron, 'http://example.com/', '' ) );
 		$this->assertSame( '/wc/store/v1/cart', $rest_route->invoke( $cron, 'http://example.com/?rest_route=/wc/store/v1/cart', 'rest_route=/wc/store/v1/cart' ) );
-
-		// Reaching this line means the per-test tearDown() zero-notice gate
-		// saw no E_DEPRECATED from the cron paths.
-		$this->assertTrue( true );
 	}
 }
