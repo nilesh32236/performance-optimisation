@@ -84,6 +84,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		private static array $lcp_preload_emitted = array();
 
 		/**
+		 * Per-request stylesheet-deferral block list keyed by template hash.
+		 *
+		 * Set by inline_ccss() when over-cap output has no file URL to serve
+		 * (issue #1255 review): defer_stylesheets() must then load the full
+		 * stylesheets normally instead of deferring them with zero critical
+		 * CSS on the page. Reset via reset_ccss_memo().
+		 *
+		 * @since NEXT
+		 * @var array<string, bool>
+		 */
+		private static array $ccss_defer_blocked = array();
+
+		/**
 		 * Above-fold selectors to match during extraction.
 		 *
 		 * Uses precise token-based matching to avoid false positives.
@@ -2249,6 +2262,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			self::$stale_probe_memo    = array();
 			self::$ccss_presets_memo   = null;
 			self::$lcp_preload_emitted = array();
+			self::$ccss_defer_blocked  = array();
 		}
 
 		/**
@@ -2495,7 +2509,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * sites. No API keys required; missing RUM data falls back to the
 		 * heuristic candidate, never fatal.
 		 *
-		 * @param string|null $url Page URL. Null resolves the current request path.
+		 * Only the path component of an explicit $url is used (RUM buckets
+		 * are per-site): an explicit URL carrying another host resolves to
+		 * '' instead of this site's bucket for that path, so future callers
+		 * cannot mix two sites' measurements. The returned candidate must
+		 * also look like an image (see is_image_preload_url(), mirroring the
+		 * image pipeline's text-LCP guard): a same-origin non-image URL is
+		 * never preloaded as an image.
+		 *
+		 * @param string|null $url Page URL. Null resolves the current request path. Only the path is used.
 		 * @return string Same-origin LCP image URL, or '' when none resolves.
 		 * @since NEXT
 		 * @see RUM::get_lcp_preload_candidate()
@@ -2521,6 +2543,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					if ( ! is_array( $parts ) ) {
 						return '';
 					}
+					// Per-site buckets: an explicit URL on another host must
+					// not resolve this site's bucket for that path.
+					if ( isset( $parts['host'] ) && is_string( $parts['host'] ) && '' !== trim( $parts['host'] ) ) {
+						$explicit_host = strtolower( trim( $parts['host'] ) );
+						$home_host     = '';
+						try {
+							if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'cached_home_url' ) && function_exists( 'wp_parse_url' ) ) {
+								$home_host = strtolower( (string) wp_parse_url( \PerformanceOptimise\Inc\Util::cached_home_url(), PHP_URL_HOST ) );
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+						if ( '' === $home_host || $explicit_host !== $home_host ) {
+							return '';
+						}
+					}
 					$raw_path = isset( $parts['path'] ) && is_string( $parts['path'] ) && '' !== $parts['path'] ? $parts['path'] : '/';
 					$path     = class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'normalize_rum_path' )
 						? \PerformanceOptimise\Inc\Util::normalize_rum_path( substr( $raw_path, 0, 512 ) )
@@ -2543,11 +2581,133 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 						return '';
 					}
 				}
+				// Text-LCP guard (issue #1255 review): the stored PageSpeed
+				// tiers validate same-origin but never image-ness, so a
+				// same-origin non-image candidate must not be preloaded as
+				// an image (wasted high-priority fetch).
+				if ( ! self::is_image_preload_url( $lcp ) ) {
+					return '';
+				}
 				return $lcp;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return '';
 			}
+		}
+
+		/**
+		 * Whether a candidate URL is a plausible LCP image (text-LCP guard).
+		 *
+		 * Mirrors Image_Optimisation::is_image_lcp_url() (kept local so this
+		 * static context never depends on that instance pipeline): data/,
+		 * blob: and script-scheme URLs are refused, and the URL must either
+		 * map to a known image MIME type, carry an image file extension, or
+		 * (for extensionless image-CDN URLs) carry image-ish query params.
+		 * Fail-open for the page (returns false so callers emit nothing),
+		 * never fatal.
+		 *
+		 * @param string $url The candidate URL.
+		 * @return bool True when the URL may be preloaded as an image.
+		 * @since NEXT
+		 */
+		private static function is_image_preload_url( string $url ): bool {
+			try {
+				$url = trim( $url );
+				if ( '' === $url ) {
+					return false;
+				}
+				$lower = strtolower( ltrim( $url ) );
+				if ( str_starts_with( $lower, 'data:' ) || str_starts_with( $lower, 'blob:' ) || str_starts_with( $lower, 'javascript:' ) || str_starts_with( $lower, 'vbscript:' ) ) {
+					return false;
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_image_mime_type' ) ) {
+					if ( '' !== \PerformanceOptimise\Inc\Util::get_image_mime_type( $url ) ) {
+						return true;
+					}
+				}
+				$path = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url, PHP_URL_PATH ) : ''; // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback only when wp_parse_url() is unavailable (unit contexts).
+				if ( is_string( $path ) && '' !== $path && 1 === preg_match( '/\.(jpe?g|png|gif|webp|avif|svg|heic|heif|jxl)$/i', $path ) ) {
+					return true;
+				}
+				$query = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url, PHP_URL_QUERY ) : ''; // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback only when wp_parse_url() is unavailable (unit contexts).
+				if ( is_string( $query ) && '' !== $query ) {
+					if ( 1 === preg_match( '/\.(jpe?g|png|gif|webp|avif|svg|heic|heif|jxl)/i', $query ) ) {
+						return true;
+					}
+					if ( 1 === preg_match( '/(^|&)(w|h|width|height|format|fit|crop|resize|quality)(=|&|$)/i', $query ) ) {
+						return true;
+					}
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Whether the image pipeline owns LCP preloading on this request.
+		 *
+		 * The pipeline's wp_head:1 preload (Image_Optimisation::preload_images())
+		 * emits the same RUM-field → PageSpeed candidate with responsive
+		 * imagesrcset/imagesizes; its auto-LCP path runs only when
+		 * `image_optimisation.autoPreloadLCP` or
+		 * `preload_settings.autoLcpPreload` is enabled. When either is on,
+		 * the CCSS-path hint (wp_head:0, no responsive hints) yields so
+		 * exactly one preload prints. Fail-open: any failure returns false
+		 * (CCSS path emits normally).
+		 *
+		 * @return bool True when the image pipeline will preload the LCP hero.
+		 * @since NEXT
+		 */
+		private static function is_image_pipeline_lcp_preload_active(): bool {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					return false;
+				}
+				$settings = \PerformanceOptimise\Inc\Util::get_settings();
+				if ( ! is_array( $settings ) ) {
+					return false;
+				}
+				$image_optimisation = $settings['image_optimisation'] ?? array();
+				$preload_settings   = $settings['preload_settings'] ?? array();
+				if ( ! is_array( $image_optimisation ) ) {
+					$image_optimisation = array();
+				}
+				if ( ! is_array( $preload_settings ) ) {
+					$preload_settings = array();
+				}
+				return ! empty( $image_optimisation['autoPreloadLCP'] ) || ! empty( $preload_settings['autoLcpPreload'] );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Whether the CCSS-path field-LCP preload may fire on this request.
+		 *
+		 * Operator opt-out for the worst-first hero hint (issue #1255
+		 * review): this preload belongs to the critical-CSS feature and
+		 * fires independently of the image-pipeline LCP toggles, so owners
+		 * who disabled every automatic preload need a kill switch that does
+		 * not require disabling critical CSS itself. Filterable via
+		 * `wppo_ccss_field_lcp_preload` when a listener is registered
+		 * (default true); any filter failure keeps the default.
+		 *
+		 * @return bool True when the CCSS-path preload may emit.
+		 * @since NEXT
+		 * @see Critical_CSS::maybe_emit_field_lcp_preload()
+		 */
+		private static function is_ccss_field_lcp_preload_allowed(): bool {
+			try {
+				if ( function_exists( 'apply_filters' ) && function_exists( 'has_filter' ) && has_filter( 'wppo_ccss_field_lcp_preload' ) ) {
+					return (bool) apply_filters( 'wppo_ccss_field_lcp_preload', true );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return true;
 		}
 
 		/**
@@ -2562,14 +2722,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * a no-op when no candidate resolves. Fail-open: any failure emits
 		 * nothing, never fatal.
 		 *
+		 * Single-emitter coordination (issue #1255 review): the image
+		 * pipeline preloads the same candidate at wp_head:1 with responsive
+		 * imagesrcset/imagesizes, so when its auto-LCP path is enabled this
+		 * earlier (wp_head:0) path yields and the pipeline owns the hint;
+		 * otherwise this path emits and claims the URL in the pipeline's
+		 * shared dedup set (Image_Optimisation::has/mark_preload_emitted())
+		 * so the later pipeline run skips the duplicate. This hint belongs
+		 * to the critical-CSS feature and is independent of the
+		 * image-pipeline LCP toggles — disable it via the
+		 * `wppo_ccss_field_lcp_preload` filter (see
+		 * is_ccss_field_lcp_preload_allowed()).
+		 *
 		 * @return void
 		 * @since NEXT
 		 * @see Critical_CSS::get_field_lcp_preload_url()
+		 * @see Critical_CSS::is_ccss_field_lcp_preload_allowed()
 		 */
 		private static function maybe_emit_field_lcp_preload(): void {
 			try {
+				if ( ! self::is_ccss_field_lcp_preload_allowed() ) {
+					return;
+				}
+				if ( self::is_image_pipeline_lcp_preload_active() ) {
+					return;
+				}
 				$lcp = self::get_field_lcp_preload_url();
 				if ( '' === $lcp ) {
+					return;
+				}
+				// Shared dedup: the pipeline may already have emitted this
+				// URL (manual/meta/front-page preloads run off-toggle), in
+				// which case there is nothing left to hint.
+				$shared_available = class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' )
+					&& method_exists( 'PerformanceOptimise\Inc\Image_Optimisation', 'has_emitted_preload' )
+					&& method_exists( 'PerformanceOptimise\Inc\Image_Optimisation', 'mark_preload_emitted' );
+				if ( $shared_available && \PerformanceOptimise\Inc\Image_Optimisation::has_emitted_preload( $lcp ) ) {
 					return;
 				}
 				$key = class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'normalize_url' )
@@ -2590,6 +2778,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 						'',
 						'high'
 					);
+					if ( $shared_available ) {
+						\PerformanceOptimise\Inc\Image_Optimisation::mark_preload_emitted( $lcp );
+					}
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -3941,7 +4132,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @return void
 		 * @since 2.0.0
-		 * @since NEXT Over-cap output without a file URL defers to the full stylesheet.
+		 * @since NEXT Over-cap output without a file URL defers to the full stylesheet (and blocks deferral for the request).
 		 * @since NEXT Field-measured LCP image is preloaded alongside served CCSS.
 		 */
 		public static function inline_ccss(): void {
@@ -4002,7 +4193,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					// File URL unavailable — defer to the full stylesheet
 					// (issue #1255): inlining a truncated block would ship a
 					// partial above-fold payload, so output nothing and let
-					// the normally-enqueued stylesheets style the page.
+					// the normally-enqueued stylesheets style the page. Record
+					// the template so defer_stylesheets() loads those
+					// stylesheets normally instead of deferring them with zero
+					// critical CSS on the page (review FOUC guard).
+					self::$ccss_defer_blocked[ $template_hash ] = true;
 					return;
 				}
 				echo '<style id="wppo-critical-css">' . "\n";
@@ -4162,6 +4357,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// Missing-variant fail-open: without a CCSS file for the current
 			// template, deferring the full stylesheets would leave the page
 			// unstyled until JS runs — load normally instead (never fatal).
+			// Same when inline_ccss() served over-cap output with no file URL
+			// this request (issue #1255 review): the page carries zero
+			// critical CSS, so deferral would open a FOUC window the
+			// render-blocking stylesheets avoid.
+			if ( isset( self::$ccss_defer_blocked[ self::get_template_hash() ] ) ) {
+				return $tag;
+			}
 			if ( ! self::ccss_exists( self::get_template_hash() ) ) {
 				return $tag;
 			}

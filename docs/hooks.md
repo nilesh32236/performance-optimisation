@@ -1646,6 +1646,22 @@ add_filter( 'wppo_ccss_queue_cap', static function() { return 10; } );
 
 ---
 
+### `wppo_ccss_field_lcp_preload`
+Filters whether the Critical-CSS path emits the field-measured LCP image preload (`<link rel="preload" as="image" fetchpriority="high">` at `wp_head:0`). The candidate is the RUM field-LCP winner for the page (above the sample gate and freshness TTL) falling back to the stored PageSpeed heuristic; same-origin and image-type guards always apply. @since NEXT.
+
+**Independence note:** this hint belongs to the critical-CSS feature and fires independently of the image-pipeline LCP toggles (`fieldLcpOverride`, `autoPreloadLCP`, `prioritizeLCPImages`, `autoLcpPreload`). When the image pipeline's auto-LCP path is enabled it owns the hint (with responsive `imagesrcset`/`imagesizes`) and the Critical-CSS path yields, so at most one preload prints per hero either way. Return `false` to disable the Critical-CSS-path hint without disabling critical CSS itself. Default `true`.
+
+**Parameters:**
+- `$allowed` *(bool)* — Whether the Critical-CSS-path LCP preload may emit. Default `true`.
+
+**Example:**
+
+```php
+add_filter( 'wppo_ccss_field_lcp_preload', '__return_false' );
+```
+
+---
+
 ### `wppo_crawler_use_nproc`
 Filters whether `nproc` may be probed (via `shell_exec`) as a fallback for CPU-count detection. Default `false`. @since 2.0.0.
 
