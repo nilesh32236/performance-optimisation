@@ -1,3 +1,11 @@
+import { isAuthErrorCode } from './authErrors';
+
+export {
+	AUTH_ERROR_CODES,
+	AUTH_ERROR_CODE_SET,
+	isAuthErrorCode,
+} from './authErrors';
+
 /**
  * Safe accessor for the global wppoSettings object injected by PHP via
  * wp_localize_script. Optional chaining alone does not protect against an
@@ -12,13 +20,35 @@
  * mutation contract.
  *
  * @since 2.0.0
- * @return {Object} The global settings object, or an empty object when absent.
+ * @since NEXT Accepts an optional dot-path with fallback (getWppoSettings('settings.cache.enabled', false)).
+ * @param {string} [path]     Optional dot-separated path (e.g. 'settings.cache').
+ * @param {*}      [fallback] Optional fallback returned when the global or path is absent.
+ * @return {*} The global settings object (or path value), or fallback/{} when absent.
  */
-export const getWppoSettings = () => {
+export const getWppoSettings = ( path, fallback = {} ) => {
+	const fallbackValue = fallback;
 	if ( typeof wppoSettings === 'undefined' || ! wppoSettings ) {
-		return {};
+		return fallbackValue;
 	}
-	return wppoSettings;
+	if ( typeof path !== 'string' || ! path ) {
+		return wppoSettings;
+	}
+	const hasOwn = ( obj, key ) =>
+		Object.hasOwn
+			? Object.hasOwn( obj, key )
+			: Object.prototype.hasOwnProperty.call( obj, key );
+	let current = wppoSettings;
+	for ( const key of path.split( '.' ) ) {
+		if (
+			! current ||
+			typeof current !== 'object' ||
+			! hasOwn( current, key )
+		) {
+			return fallbackValue;
+		}
+		current = current[ key ];
+	}
+	return current === undefined ? fallbackValue : current;
 };
 
 /**
@@ -108,6 +138,58 @@ const refreshNonce = async () => {
 };
 
 /**
+ * Commit a settings payload to the shared `wppoSettings.settings` cache.
+ *
+ * Single choke point for the frozen-global mutation previously inlined in
+ * apiCall() and copied across AiPanel/EdgeCachePanel/LlmsPanel. Freezing
+ * keeps every component reading the live global on the same snapshot.
+ *
+ * @since NEXT
+ * @param {*} payload Resolved settings payload (typically `data.data`).
+ * @return {void}
+ */
+export const commitSettingsCache = ( payload ) => {
+	if ( typeof wppoSettings === 'undefined' || ! wppoSettings ) {
+		return;
+	}
+	if ( payload && typeof payload === 'object' ) {
+		wppoSettings.settings = Object.freeze( payload );
+	}
+};
+
+/**
+ * Patch a single settings tab into the shared `wppoSettings.settings` cache.
+ *
+ * Components that save one tab optimistically merge the saved slice into the
+ * live global so sibling panels see the new value without a reload. The
+ * merged tab and the top-level object are both frozen like commitSettingsCache().
+ *
+ * @since NEXT
+ * @param {string} tab   Settings tab key (e.g. 'ai_adaptive').
+ * @param {Object} patch Tab settings to merge.
+ * @return {void}
+ */
+export const patchSettingsCache = ( tab, patch ) => {
+	if ( typeof wppoSettings === 'undefined' || ! wppoSettings ) {
+		return;
+	}
+	if ( typeof tab !== 'string' || ! tab ) {
+		return;
+	}
+	if ( ! patch || typeof patch !== 'object' ) {
+		return;
+	}
+	const current =
+		wppoSettings.settings && typeof wppoSettings.settings === 'object'
+			? wppoSettings.settings
+			: {};
+	wppoSettings.settings = Object.freeze( {
+		...current,
+		[ tab ]: Object.freeze( { ...( current[ tab ] || {} ), ...patch } ),
+	} );
+};
+
+/**
  * Make a REST API call to the Performance Optimisation plugin.
  *
  * Mutates wppoSettings.settings globally on successful `update_settings` or
@@ -148,12 +230,9 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 		}
 
 		// Detect expired nonce (rest_forbidden, rest_cookie_invalid_nonce, etc.).
-		if (
-			data.code &&
-			( data.code === 'rest_forbidden' ||
-				data.code === 'rest_cookie_invalid_nonce' ||
-				data.code === 'rest_cookie_nonce_invalid' )
-		) {
+		// The code list lives in ./authErrors.js; main.js/esi.js mirror it
+		// (see authSync.test.js).
+		if ( data.code && isAuthErrorCode( data.code ) ) {
 			if ( isRetrying ) {
 				throw new Error(
 					'Nonce retry failed — authentication error persists.'
@@ -173,7 +252,7 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 			data.success &&
 			data.data
 		) {
-			wppoSettings.settings = Object.freeze( data.data );
+			commitSettingsCache( data.data );
 		}
 		return data;
 	};
@@ -207,7 +286,7 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 export const fetchRecentActivities = ( page = 1, signal ) => {
 	const safePage = Math.max( 1, Number.parseInt( page, 10 ) || 1 );
 	return apiCall(
-		`recent_activities?page=${ encodeURIComponent( safePage ) }`,
+		buildAction( 'recent_activities', { page: safePage } ),
 		{},
 		'GET',
 		signal
@@ -258,6 +337,75 @@ export const isValidScanUrl = ( url ) => {
 };
 
 /**
+ * Allowed PageSpeed scan strategies (server-side allowlisting remains
+ * authoritative).
+ *
+ * @since NEXT
+ * @type {string[]}
+ */
+export const SCAN_STRATEGIES = [ 'mobile', 'desktop' ];
+
+/**
+ * Build an action path with URL-encoded query params via URLSearchParams.
+ *
+ * Single choke point so callers cannot forget encodeURIComponent and inject
+ * `&`/`#` through user-controlled values.
+ *
+ * @since NEXT
+ * @param {string} action REST action (e.g. 'pagespeed_results').
+ * @param {Object} params Query params.
+ * @return {string} Action path with query string.
+ */
+export const buildAction = ( action, params = {} ) => {
+	const search = new URLSearchParams();
+	for ( const [ key, value ] of Object.entries( params ?? {} ) ) {
+		if ( value === undefined || value === null || value === '' ) {
+			continue;
+		}
+		search.set( key, String( value ) );
+	}
+	const qs = search.toString();
+	return qs ? `${ action }?${ qs }` : action;
+};
+
+/**
+ * Throw when a scan URL fails client-side validation.
+ *
+ * @since NEXT
+ * @param {string}  url        Raw scan URL.
+ * @param {boolean} allowEmpty Whether '' is accepted (list endpoints).
+ * @return {void}
+ */
+export const assertScanUrl = ( url, allowEmpty = false ) => {
+	if ( allowEmpty && ( url === '' || url === undefined || url === null ) ) {
+		return;
+	}
+	if ( ! isValidScanUrl( url ) ) {
+		throw new Error(
+			'Invalid scan URL: must be a same-origin http(s) URL.'
+		);
+	}
+};
+
+/**
+ * Throw when a scan strategy fails client-side validation.
+ *
+ * @since NEXT
+ * @param {string}  strategy   Raw strategy value.
+ * @param {boolean} allowEmpty Whether '' is accepted (list endpoints).
+ * @return {void}
+ */
+export const assertScanStrategy = ( strategy, allowEmpty = false ) => {
+	if ( ! isValidScanStrategy( strategy, allowEmpty ) ) {
+		throw new Error(
+			allowEmpty
+				? "Invalid strategy: must be 'mobile', 'desktop' or ''."
+				: "Invalid strategy: must be 'mobile' or 'desktop'."
+		);
+	}
+};
+
+/**
  * Validate a PageSpeed scan strategy client-side before it reaches the
  * resource-intensive pagespeed_scan / pagespeed_results / web_vitals_trends
  * endpoints. Server-side allowlisting remains authoritative.
@@ -274,7 +422,7 @@ export const isValidScanStrategy = ( strategy, allowEmpty = false ) => {
 	if ( allowEmpty && '' === strategy ) {
 		return true;
 	}
-	return 'mobile' === strategy || 'desktop' === strategy;
+	return SCAN_STRATEGIES.includes( strategy );
 };
 
 /**
@@ -288,10 +436,10 @@ export const isValidScanStrategy = ( strategy, allowEmpty = false ) => {
  * @return {Promise<Object>} Resolved scan result data.
  */
 export const runPerformanceScan = ( url, force = false, signal ) => {
-	if ( ! isValidScanUrl( url ) ) {
-		return Promise.reject(
-			new Error( 'Invalid scan URL: must be a same-origin http(s) URL.' )
-		);
+	try {
+		assertScanUrl( url );
+	} catch ( error ) {
+		return Promise.reject( error );
 	}
 	return apiCall( 'performance_scan', { url, force }, 'POST', signal );
 };
@@ -320,15 +468,11 @@ export const fetchSystemInfo = ( signal ) => {
  * @return {Promise<Object>} Resolved response with job_id.
  */
 export const queuePagespeedScan = ( url, strategy = 'mobile', signal ) => {
-	if ( ! isValidScanUrl( url ) ) {
-		return Promise.reject(
-			new Error( 'Invalid scan URL: must be a same-origin http(s) URL.' )
-		);
-	}
-	if ( ! isValidScanStrategy( strategy ) ) {
-		return Promise.reject(
-			new Error( "Invalid strategy: must be 'mobile' or 'desktop'." )
-		);
+	try {
+		assertScanUrl( url );
+		assertScanStrategy( strategy );
+	} catch ( error ) {
+		return Promise.reject( error );
 	}
 	return apiCall( 'pagespeed_scan', { url, strategy }, 'POST', signal );
 };
@@ -348,20 +492,14 @@ export const queuePagespeedScan = ( url, strategy = 'mobile', signal ) => {
  * @return {Promise<Object>} Resolved result data or not_ready status.
  */
 export const getPagespeedResults = ( url, strategy = 'mobile', signal ) => {
-	if ( ! isValidScanUrl( url ) ) {
-		return Promise.reject(
-			new Error( 'Invalid scan URL: must be a same-origin http(s) URL.' )
-		);
-	}
-	if ( ! isValidScanStrategy( strategy ) ) {
-		return Promise.reject(
-			new Error( "Invalid strategy: must be 'mobile' or 'desktop'." )
-		);
+	try {
+		assertScanUrl( url );
+		assertScanStrategy( strategy );
+	} catch ( error ) {
+		return Promise.reject( error );
 	}
 	return apiCall(
-		`pagespeed_results?url=${ encodeURIComponent(
-			url
-		) }&strategy=${ encodeURIComponent( strategy ) }`,
+		buildAction( 'pagespeed_results', { url, strategy } ),
 		{},
 		'GET',
 		signal
@@ -382,30 +520,14 @@ export const getPagespeedResults = ( url, strategy = 'mobile', signal ) => {
  * @return {Promise<Object>} Resolved trends data.
  */
 export const fetchWebVitalsTrends = ( url = '', strategy = '', signal ) => {
-	if ( url && ! isValidScanUrl( url ) ) {
-		return Promise.reject(
-			new Error( 'Invalid scan URL: must be a same-origin http(s) URL.' )
-		);
+	try {
+		assertScanUrl( url, true );
+		assertScanStrategy( strategy, true );
+	} catch ( error ) {
+		return Promise.reject( error );
 	}
-	if ( ! isValidScanStrategy( strategy, true ) ) {
-		return Promise.reject(
-			new Error( "Invalid strategy: must be 'mobile', 'desktop' or ''." )
-		);
-	}
-	const params = new URLSearchParams();
-	if ( url ) {
-		params.set( 'url', url );
-	}
-	if ( strategy ) {
-		params.set( 'strategy', strategy );
-	}
-	const qs = params.toString();
-	return apiCall(
-		`web_vitals_trends${ qs ? `?${ qs }` : '' }`,
-		{},
-		'GET',
-		signal
-	);
+	const qs = buildAction( 'web_vitals_trends', { url, strategy } );
+	return apiCall( qs, {}, 'GET', signal );
 };
 
 /**
@@ -418,17 +540,12 @@ export const fetchWebVitalsTrends = ( url = '', strategy = '', signal ) => {
  * @return {Promise<Object>} Resolved suggestions array.
  */
 export const fetchSuggestions = ( url, signal ) => {
-	if ( ! isValidScanUrl( url ) ) {
-		return Promise.reject(
-			new Error( 'Invalid scan URL: must be a same-origin http(s) URL.' )
-		);
+	try {
+		assertScanUrl( url );
+	} catch ( error ) {
+		return Promise.reject( error );
 	}
-	return apiCall(
-		`suggestions?url=${ encodeURIComponent( url ) }`,
-		{},
-		'GET',
-		signal
-	);
+	return apiCall( buildAction( 'suggestions', { url } ), {}, 'GET', signal );
 };
 
 /**

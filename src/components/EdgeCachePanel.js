@@ -6,7 +6,7 @@ import {
 	useMemo,
 } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
-import { apiCall } from '../lib/apiRequest';
+import { apiCall, patchSettingsCache } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
 import SwitchField from './common/SwitchField';
@@ -102,22 +102,14 @@ const EdgeCachePanel = () => {
 				},
 			} );
 			if ( response.success ) {
-				if (
-					typeof wppoSettings !== 'undefined' &&
-					wppoSettings.settings
-				) {
-					wppoSettings.settings = Object.freeze( {
-						...wppoSettings.settings,
-						edge_cache: Object.freeze( {
-							enabled,
-							provider,
-							ttl: clampedTtl,
-							staleWhileRevalidate: clampedSwr,
-							cloudflareZoneId: cfZone,
-							bunnyPullZoneId: bunnyZone,
-						} ),
-					} );
-				}
+				patchSettingsCache( 'edge_cache', {
+					enabled,
+					provider,
+					ttl: clampedTtl,
+					staleWhileRevalidate: clampedSwr,
+					cloudflareZoneId: cfZone,
+					bunnyPullZoneId: bunnyZone,
+				} );
 				notify( {
 					type: 'success',
 					message: __(

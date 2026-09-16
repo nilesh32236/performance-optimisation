@@ -24,6 +24,7 @@ import {
 	faDesktop,
 } from '@fortawesome/free-solid-svg-icons';
 import { queuePagespeedScan, getPagespeedResults } from '../lib/apiRequest';
+import { scoreToStatus } from '../lib/status';
 import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
 import StatusBadge from './common/StatusBadge';
@@ -47,17 +48,15 @@ const MAX_POLL_ATTEMPTS = 60;
 /**
  * Score colour based on Lighthouse thresholds.
  *
+ * Single-sourced via scoreToStatus() in lib/status.js ('warning' maps to the
+ * legacy 'needs_improvement' CSS class suffix used by the gauge styles).
+ *
  * @param {number} score 0–100
  * @return {string} CSS class suffix.
  */
 const scoreStatus = ( score ) => {
-	if ( score >= 90 ) {
-		return 'good';
-	}
-	if ( score >= 50 ) {
-		return 'needs_improvement';
-	}
-	return 'poor';
+	const status = scoreToStatus( score );
+	return 'warning' === status ? 'needs_improvement' : status;
 };
 
 /**
@@ -89,13 +88,12 @@ const ScoreGauge = ( { label, score } ) => {
  */
 const VitalRow = ( { label, displayValue, score } ) => {
 	let status = null;
-	if ( score !== null ) {
-		if ( score >= 0.9 ) {
-			status = 'good';
-		} else if ( score >= 0.5 ) {
+	if ( score !== null && score !== undefined ) {
+		const mapped = scoreToStatus( Number( score ) * 100 );
+		if ( 'warning' === mapped ) {
 			status = 'needs_improvement';
-		} else {
-			status = 'poor';
+		} else if ( 'unknown' !== mapped ) {
+			status = mapped;
 		}
 	}
 
