@@ -6,16 +6,14 @@ import { getErrorLogMessage } from '../apiRequest';
 const readSrc = ( rel ) =>
 	fs.readFileSync( path.join( __dirname, '..', '..', rel ), 'utf8' );
 
-describe( 'auth contract sync (apiRequest ↔ main.js ↔ esi.js)', () => {
-	it( 'shares the same auth-error code set in all three bundles', () => {
+describe( 'auth contract sync (apiRequest ↔ main.js)', () => {
+	it( 'shares the same auth-error code set in both bundles', () => {
 		const mainSrc = readSrc( 'main.js' );
-		const esiSrc = readSrc( 'esi.js' );
 		const apiSrc = readSrc( 'lib/apiRequest.js' );
 		const authSrc = readSrc( 'lib/authErrors.js' );
 
 		for ( const code of AUTH_ERROR_CODES ) {
 			expect( mainSrc ).toContain( code );
-			expect( esiSrc ).toContain( code );
 			// SPA reads the codes via ./authErrors.js (single source).
 			expect( authSrc ).toContain( code );
 		}
@@ -27,7 +25,6 @@ describe( 'auth contract sync (apiRequest ↔ main.js ↔ esi.js)', () => {
 				new Set( ( src.match( /rest_[a-z_]+/g ) || [] ).sort() )
 			);
 		const expected = [ ...AUTH_ERROR_CODES ].sort();
-		expect( restCodes( esiSrc ) ).toEqual( expected );
 		expect( restCodes( mainSrc ) ).toEqual( expected );
 	} );
 

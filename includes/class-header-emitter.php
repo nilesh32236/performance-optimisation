@@ -2,7 +2,7 @@
 /**
  * Header emitter — single consolidation point for dynamic header() emission.
  *
- * Centralises all LiteSpeed / ESI dynamic header emission behind CRLF-safe
+ * Centralises all LiteSpeed dynamic header emission behind CRLF-safe
  * helpers so header-injection hardening lives in one place. Thin delegation
  * keeps every existing call site working with zero behaviour change.
  *
@@ -21,7 +21,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Header_Emitter' ) ) {
 	 * Class Header_Emitter
 	 *
 	 * Consolidates dynamic header() emission (LiteSpeed purge/tag/TTL/vary
-	 * plus ESI private/no-cache pairs) with CR/LF/NUL stripping.
+	 * plus private/no-cache pairs) with CR/LF/NUL stripping.
 	 *
 	 * @since 2.0.0
 	 */
@@ -63,15 +63,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Header_Emitter' ) ) {
 		}
 
 		/**
-		 * Emit the ESI private pair (Cache-Control + X-LiteSpeed-Cache-Control).
+		 * Emit the private pair (Cache-Control + X-LiteSpeed-Cache-Control).
 		 *
-		 * Repeated 5x across the ESI bridge (AJAX fragments + send_headers
-		 * cart/checkout/account/punch-hole paths); one helper pins the exact
-		 * pair so the strings cannot drift. Uses the default replace=true to
-		 * preserve the pre-extraction header() semantics (issue #905 review).
-		 * Single headers_sent() check mirrors the pre-extraction
-		 * `if ( ! headers_sent() ) { header(); header(); }` shape so a
-		 * mid-pair race cannot emit a partial pair.
+		 * Previously shared by the removed ESI bridge (AJAX fragments +
+		 * send_headers cart/checkout/account paths); retained as a generic
+		 * helper so the exact pair cannot drift. Uses the default
+		 * replace=true to preserve the pre-extraction header() semantics
+		 * (issue #905 review). Single headers_sent() check mirrors the
+		 * pre-extraction `if ( ! headers_sent() ) { header(); header(); }`
+		 * shape so a mid-pair race cannot emit a partial pair.
 		 *
 		 * @since 2.0.0
 		 * @return void
@@ -85,9 +85,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Header_Emitter' ) ) {
 		}
 
 		/**
-		 * Emit the ESI no-cache pair (Cache-Control + X-LiteSpeed-Cache-Control).
+		 * Emit the no-cache pair (Cache-Control + X-LiteSpeed-Cache-Control).
 		 *
-		 * Used for the admin / no-cache ESI path. Uses the default
+		 * Used for the admin / no-cache path. Uses the default
 		 * replace=true to preserve the pre-extraction header() semantics
 		 * (issue #905 review). Single headers_sent() check mirrors the
 		 * pre-extraction shape (see emit_private_pair()).
@@ -126,10 +126,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Header_Emitter' ) ) {
 		}
 
 		/**
-		 * Emit an ESI tag header (X-LiteSpeed-Tag: ESI.{action}).
+		 * Emit a LiteSpeed ESI tag header (X-LiteSpeed-Tag: ESI.{action}).
+		 *
+		 * Retained for tag-format parity although the ESI bridge was removed.
 		 *
 		 * @since 2.0.0
-		 * @param string $action ESI action name (unsanitized).
+		 * @param string $action Tag action name (unsanitized).
 		 * @return bool True when emitted, false when headers were already sent.
 		 */
 		public static function emit_esi_tag( string $action ): bool {
@@ -161,9 +163,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Header_Emitter' ) ) {
 		 * Tags travel in response headers, so ASCII control characters
 		 * (including CR/LF) are stripped while printable characters —
 		 * including the `: ` separators and spaces used by tag lists —
-		 * are preserved. Result is capped at 1024 chars. Public so ESI
-		 * fallback paths can reuse the canonical sanitizer instead of
-		 * hand-mirroring it (see LiteSpeed_ESI::sanitize_esi_tag_value()).
+		 * are preserved. Result is capped at 1024 chars.
 		 *
 		 * @since NEXT
 		 * @param string $tag Raw tag value.

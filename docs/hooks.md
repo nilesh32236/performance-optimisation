@@ -349,22 +349,6 @@ add_filter( 'wppo_delay_js_allowed_hosts', function( array $hosts ): array {
 
 ---
 
-### `wppo_esi_allowed_html`
-Filters the wp_kses allowlist applied to ESI fragment HTML returned by the `wppo_esi_fragment` admin-ajax endpoint (`LiteSpeed_ESI::handle_ajax_fragment()`). The fragment is inserted into the page DOM by `src/esi.js`, so this allowlist is the server-side sanitization contract: every tag/attribute a custom ESI widget needs must be present here. Script-capable tags must never be added. @since 2.0.0.
-
-**Parameters:**
-- `$tags` *(array)* — Allowed tags => attributes map in `wp_kses()` shape.
-
-**Example:**
-```php
-add_filter( 'wppo_esi_allowed_html', function( array $tags ): array {
-    $tags['mark'] = array( 'class' => true, 'id' => true, 'data-*' => true );
-    return $tags;
-} );
-```
-
----
-
 ### `wppo_exclude_defer_js`
 Filters the list of script handles or URL substrings excluded from JavaScript deferral.
 
@@ -784,26 +768,6 @@ Filters crawler BLACKLIST_THRESHOLD (default 3 mirroring `crawler.cls.php:26`). 
 
 ### `wppo_crawler_variants`
 Filters variant matrix per URL (Accept webp/avif × mobile/desktop × guest/role). @since 2.0.0.
-
----
-
-### `wppo_esi_available`
-Filters whether ESI is available (Enterprise only, OLS has no ESI). @since 2.0.0.
-
----
-
-### `wppo_esi_enabled`
-Filters whether ESI bridge is enabled (settings `esi.enabled` + availability). @since 2.0.0.
-
----
-
-### `wppo_esi_nonces`
-Filters ESI nonce list for widget/cart hole-punching. @since 2.0.0.
-
----
-
-### `wppo_esi_fallback`
-Filters whether ESI AJAX fallback should run on OLS (`DONOTCACHEPAGE`). @since 2.0.0.
 
 ---
 
@@ -1822,86 +1786,19 @@ Filters the LiteSpeed `Cache-Control` header value for the resolved TTL. @since 
 
 ---
 
-### `wppo_litespeed_esi_available`
-Filters whether LiteSpeed ESI is considered available (gates the whole ESI bridge). Default `false`. @since 2.0.0.
-
-**Parameters:**
-- `$available` *(bool)* — Default `false`.
-
----
-
-### `wppo_esi_should_punch_hole`
-Filters whether an ESI block should punch a hole. Return `null` to defer to default detection. @since 2.0.0.
-
-**Parameters:**
-- `$punch` *(bool|null)* — Default `null` (auto).
-- `$context` *(string)* — Block context.
-
----
-
-### `wppo_esi_block`
-Filters the ESI block name before the `<esi:include>` is assembled. @since 2.0.0.
-
-**Parameters:**
-- `$block` *(string)* — Block name.
-- `$attrs` *(array)* — Block attributes.
-
----
-
-### `wppo_esi_block_label`
-Filters the accessible loading label announced on the OLS ESI placeholder (`role="status"` region) while the fragment is being fetched. The `nonce` block is hidden from assistive tech instead (audit #888 finding 7). @since 2.0.0.
-
-**Parameters:**
-- `$label` *(string)* — Loading label (default: localized per block name).
-- `$block` *(string)* — Block name.
-
----
-
-### `wppo_esi_placeholder`
-Filters the ESI placeholder HTML rendered when ESI is unavailable. @since 2.0.0.
-
-**Parameters:**
-- `$html` *(string)* — Placeholder markup.
-- `$block` *(string)* — Block name.
-- `$attrs` *(array)* — Block attributes.
-
----
-
-### `wppo_esi_fragment_html`
-Filters the rendered ESI fragment HTML before output. @since 2.0.0.
-
-Runs before the `wp_kses` sanitization contract (`wppo_esi_allowed_html`), so any markup added here must be permitted by that allowlist. The plugin's own `LiteSpeed_ESI::inject_nonce_replacement()` is attached to this filter: it rewrites `data-wppo-nonce` placeholders (including `__WPPO_ESI_NONCE__` / `__WPPO_NONCE__`) to a freshly minted nonce. A fragment supplied here carrying `data-wppo-nonce=""` therefore receives a real nonce automatically, and `data-*` attributes survive sanitization.
-
-**Parameters:**
-- `$fragment` *(string)* — Fragment markup.
-- `$block` *(string)* — Block name.
-
----
-
-### `wppo_esi_nonce_content`
-Filters the content rendered inside a nonce ESI fragment. @since 2.0.0.
-
-Applied by `LiteSpeed_ESI::inject_nonce_replacement()` after placeholder substitution. This is the content-level extension point; the never-applied `wppo_esi_nonce` / `wppo_litespeed_esi_nonce` names were removed in favour of the fragment filter above.
-
-**Parameters:**
-- `$content` *(string)* — Fragment content.
-- `$nonce` *(string)* — Nonce value.
-
----
-
-### `wppo_esi_private_headers_sent` (action)
-Fires when private/no-cache headers were sent in the ESI path (used by the DB queue fallback to know headers are gone). @since 2.0.0.
-
-**Parameters:**
-- `$scope` *(string)* — `'private'` or `'no-cache'`.
-
----
-
-### `wppo_litespeed_esi_nonces`
-Filters the nonce allowlist map used by the LiteSpeed ESI bridge. @since 2.0.0.
-
-**Parameters:**
-- `$nonces` *(array)* — Nonce names → values.
+> **Note — ESI bridge removed:** the Enterprise-only LiteSpeed ESI bridge
+> (PHP bridge class, OLS hydrator script, the `wppo_esi_fragment`
+> admin-ajax endpoint and the `wppo-esi` script) was removed in NEXT. ESI-gated
+> blocks now render inline as normal HTML (fail-open); purge, TTL and header
+> behaviour is unchanged. The ESI filters (`wppo_esi_allowed_html`,
+> `wppo_esi_available`, `wppo_esi_enabled`, `wppo_esi_nonces`,
+> `wppo_esi_fallback`, `wppo_litespeed_esi_available`,
+> `wppo_esi_should_punch_hole`, `wppo_esi_block`, `wppo_esi_block_label`,
+> `wppo_esi_placeholder`, `wppo_esi_fragment_html`, `wppo_esi_nonce_content`,
+> `wppo_litespeed_esi_nonces` and the `wppo_esi_private_headers_sent` action)
+> are no longer applied. The stored `litespeed_integration.esi.enabled`
+> setting key is retained with its default so existing settings payloads keep
+> validating.
 
 ---
 

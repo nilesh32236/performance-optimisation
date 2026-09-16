@@ -255,7 +255,7 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 		}
 
 		// Detect expired nonce (rest_forbidden, rest_cookie_invalid_nonce, etc.).
-		// The code list lives in ./authErrors.js; main.js/esi.js mirror it
+		// The code list lives in ./authErrors.js; main.js mirrors it
 		// (see authSync.test.js). An HTTP 401/403 with a JSON body but no
 		// recognised code falls back to the same single retry.
 		if (

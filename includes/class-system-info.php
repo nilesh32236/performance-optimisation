@@ -342,10 +342,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 						'blacklistThreshold' => LiteSpeed_Crawler::get_blacklist_threshold(),
 					);
 				}
-				// P5 ESI.
-				if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
-					$info['esi_available'] = LiteSpeed_ESI::is_esi_available();
-				}
 				// Map effective_mode to wppo_owns logic already in get_info.
 				if ( isset( $ls_info['detected'] ) ) {
 					$info['detected'] = (bool) $ls_info['detected'];

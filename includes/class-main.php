@@ -833,7 +833,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-server-rules.php' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-server-rules.php';
 			}
-			// Header emitter first: LiteSpeed_Integration + ESI delegate to it.
+			// Header emitter first: LiteSpeed_Integration delegates to it.
 			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-header-emitter.php' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-header-emitter.php';
 			}
@@ -842,9 +842,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-litespeed-crawler.php' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-litespeed-crawler.php';
-			}
-			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-litespeed-esi.php' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-litespeed-esi.php';
 			}
 			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-llms.php' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-llms.php';
@@ -880,7 +877,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// the hot path — a file is required only on an actual missing-class
 			// failure. Classes already required unconditionally above
 			// (Server_Rules, Header_Emitter, LiteSpeed_Integration,
-			// LiteSpeed_Crawler, LiteSpeed_ESI, Llms, OD_Bridge, Bfcache,
+			// LiteSpeed_Crawler, Llms, OD_Bridge, Bfcache,
 			// AI_Adaptive, Edge_Cache, Edge_Purger, CDN, Builder_Purge_Watcher,
 			// Perf_Translations) are intentionally omitted here to avoid
 			// duplicate probes.
@@ -1527,10 +1524,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// LS-202: LiteSpeed → WPPO purge sync (litespeed_purged_all/post/purge_finalize).
 			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'init' ) ) {
 				LiteSpeed_Integration::init();
-			}
-			// P5 ESI bridge (Enterprise only — OLS has no ESI).
-			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI', 'init' ) ) {
-				LiteSpeed_ESI::init();
 			}
 		}
 

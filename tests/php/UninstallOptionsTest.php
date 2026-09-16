@@ -106,6 +106,8 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 		'wppo_settings_snapshot',
 		// Issue #1162 resumable sitemap preload queue.
 		'wppo_preload_queue',
+		// Issue #1291 orphaned secret from the removed ESI bridge.
+		'wppo_esi_fallback_secret',
 	);
 
 	/**

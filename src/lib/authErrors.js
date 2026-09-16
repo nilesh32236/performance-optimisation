@@ -1,13 +1,13 @@
 /**
  * Shared auth-error contract for the standalone frontend bundles.
  *
- * `src/lib/apiRequest.js` (SPA), `src/main.js` (admin bar) and `src/esi.js`
- * (ESI hydrator) are intentionally standalone runtime bundles — they must not
- * import each other — but they must agree on which server payload codes mean
+ * `src/lib/apiRequest.js` (SPA) and `src/main.js` (admin bar) are
+ * intentionally standalone runtime bundles — they must not import each
+ * other — but they must agree on which server payload codes mean
  * "nonce expired, refresh once and retry". This module is the single source
- * of truth for the SPA import graph; `main.js`/`esi.js` keep local copies for
+ * of truth for the SPA import graph; `main.js` keeps a local copy for
  * bundle independence and `src/lib/__tests__/authSync.test.js` asserts the
- * three sets stay in sync.
+ * sets stay in sync.
  *
  * @since NEXT
  */

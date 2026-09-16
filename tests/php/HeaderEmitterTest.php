@@ -4,14 +4,12 @@
  *
  * Pins zero-behaviour-change delegation: strip_crlf parity with the former
  * LiteSpeed_Integration::strip_crlf, CRLF-safe emit with headers_sent guard,
- * private/no-cache pair exact strings, purge/tag emission, and ESI routing
- * through the emitter.
+ * private/no-cache pair exact strings, purge/tag emission.
  *
  * @package PerformanceOptimise\Tests
  */
 
 use PerformanceOptimise\Inc\Header_Emitter;
-use PerformanceOptimise\Inc\LiteSpeed_ESI;
 use PerformanceOptimise\Inc\LiteSpeed_Integration;
 use Brain\Monkey\Functions;
 
@@ -125,7 +123,7 @@ class HeaderEmitterTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Verify emit_private_pair emits the exact ESI pair with replace=true (pre-extraction semantics).
+	 * Verify emit_private_pair emits the exact private pair with replace=true (pre-extraction semantics).
 	 */
 	public function test_emit_private_pair_exact_strings(): void {
 		Functions\when( 'headers_sent' )->justReturn( false );
@@ -184,56 +182,6 @@ class HeaderEmitterTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'headers_sent' )->justReturn( false );
 		Header_Emitter::emit_esi_tag( "cart\r\nX: 1" );
 		$this->assertSame( array( 'X-LiteSpeed-Tag: ESI.cartX: 1' ), $this->captured_headers );
-	}
-
-	/**
-	 * ESI cart send_headers still emits the private pair via the emitter.
-	 */
-	public function test_esi_cart_headers_route_through_emitter(): void {
-		$_SERVER['SERVER_SOFTWARE'] = 'LiteSpeed';
-		LiteSpeed_Integration::reset_cache();
-		Functions\when( 'headers_sent' )->justReturn( false );
-		Functions\when( 'is_cart' )->justReturn( true );
-		Functions\when( 'is_checkout' )->justReturn( false );
-		Functions\when( 'is_account_page' )->justReturn( false );
-		Functions\when( 'is_admin' )->justReturn( false );
-		Functions\when( 'apply_filters' )->alias(
-			static function ( $tag, $value ) {
-				return $value;
-			}
-		);
-		Functions\when( 'do_action' )->justReturn( null );
-
-		LiteSpeed_ESI::handle_send_headers();
-
-		$this->assertContains( 'Cache-Control: private,no-cache', $this->captured_headers );
-		$this->assertContains( 'X-LiteSpeed-Cache-Control: private,no-vary', $this->captured_headers );
-		foreach ( $this->captured_headers as $header ) {
-			$this->assertStringNotContainsString( 'X-LiteSpeed-Cache-Control: public', $header );
-		}
-	}
-
-	/**
-	 * ESI send_headers emits nothing once headers were sent (hardening).
-	 */
-	public function test_esi_send_headers_suppressed_when_sent(): void {
-		$_SERVER['SERVER_SOFTWARE'] = 'LiteSpeed';
-		LiteSpeed_Integration::reset_cache();
-		Functions\when( 'headers_sent' )->justReturn( true );
-		Functions\when( 'is_cart' )->justReturn( true );
-		Functions\when( 'is_checkout' )->justReturn( false );
-		Functions\when( 'is_account_page' )->justReturn( false );
-		Functions\when( 'is_admin' )->justReturn( false );
-		Functions\when( 'apply_filters' )->alias(
-			static function ( $tag, $value ) {
-				return $value;
-			}
-		);
-		Functions\when( 'do_action' )->justReturn( null );
-
-		LiteSpeed_ESI::handle_send_headers();
-
-		$this->assertSame( array(), $this->captured_headers );
 	}
 
 	/**

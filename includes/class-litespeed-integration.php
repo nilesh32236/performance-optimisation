@@ -653,7 +653,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Queue LiteSpeed purge tags (P3).
 		 *
-		 * Mirrors LSCWP Tag taxonomy (F,H,PGS,Po.{id},PT.{type},T.{id},A.{id},D.,B.{id},W.{id},ESI.,REST,HTTP.{code} + public/private/stale scope).
+		 * Mirrors LSCWP Tag taxonomy (F,H,PGS,Po.{id},PT.{type},T.{id},A.{id},D.,B.{id},W.{id},REST,HTTP.{code} + public/private/stale scope).
 		 * Stored to blog-prefixed transient with 60s lock fan-out on multisite.
 		 *
 		 * @since 2.0.0
@@ -1951,7 +1951,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * Mirrors LSCWP Tag taxonomy: WPPO, F (front), H (home/blog), PGS (paged),
 		 * Po.{id}, PT.{postType}, T.{termId}, A.{authorId}, D.{Ymd}, B.{blogId},
 		 * FD (feed), REST, HTTP.404, MIN (combined css) + stale/private scope.
-		 * W.{hash} widget tags are emitted only by the ESI bridge.
 		 * Filterable via wppo_litespeed_tag (single) and wppo_litespeed_purge_tags (array).
 		 *
 		 * @since 2.0.0
@@ -2148,9 +2147,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 
 			// MIN: combined/minified assets.
 			$tags[] = 'MIN';
-			// W. widget tags (W.{hash}) are only emitted by the ESI bridge — a
-			// bare 'W.' tag has an empty value and would be a no-op/malformed
-			// entry in X-LiteSpeed-Tag, so it is intentionally not added here.
 
 			$tags = array_values( array_unique( $tags ) );
 
@@ -2590,9 +2586,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 					'concurrency'        => LiteSpeed_Crawler::get_concurrency(),
 					'blacklistThreshold' => LiteSpeed_Crawler::get_blacklist_threshold(),
 				);
-			}
-			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
-				$info['esi_available'] = LiteSpeed_ESI::is_esi_available();
 			}
 			return $info;
 		}

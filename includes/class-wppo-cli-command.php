@@ -1505,8 +1505,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 * @param string $effective Resolved effective mode.
 		 * @param bool   $server_ls Whether the server is LiteSpeed.
 		 * @param bool   $lscache Whether the LSCache plugin is active.
-		 * @param bool   $esi_enabled Whether the ESI bridge setting is on.
-		 * @param bool   $esi_available Whether native ESI is available (Enterprise).
+		 * @param bool   $esi_enabled Legacy ESI bridge flag (removed in NEXT; ignored, kept for backward compatibility).
+		 * @param bool   $esi_available Legacy native-ESI flag (removed in NEXT; ignored, kept for backward compatibility).
 		 * @return array{check:string,status:string,detail:string} Verify row.
 		 */
 		public static function evaluate_litespeed_state( string $raw_mode, string $effective, bool $server_ls, bool $lscache, bool $esi_enabled, bool $esi_available ): array {
@@ -1542,9 +1542,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 			if ( 'standalone' === $raw_mode && $server_ls ) {
 				$warnings[] = 'standalone on LS server (intentional but flagged)';
 			}
-			if ( $esi_enabled && ! $esi_available ) {
-				$warnings[] = 'ESI enabled without Enterprise/native ESI';
-			}
+			unset( $esi_enabled, $esi_available );
 
 			if ( ! empty( $warnings ) ) {
 				return array(
@@ -2082,18 +2080,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 
 			$esi_enabled   = false;
 			$esi_available = false;
-			try {
-				if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
-					if ( method_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI', 'is_setting_enabled' ) ) {
-						$esi_enabled = (bool) LiteSpeed_ESI::is_setting_enabled();
-					}
-					if ( method_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI', 'is_esi_available' ) ) {
-						$esi_available = (bool) LiteSpeed_ESI::is_esi_available();
-					}
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
 
 			return self::evaluate_litespeed_state( $raw_mode, $effective, $server_ls, $lscache, $esi_enabled, $esi_available );
 		}

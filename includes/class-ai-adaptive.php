@@ -120,8 +120,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Conservative gate for AI speculation guardrails (issue #908): when true,
 		 * AI-learned speculation eagerness is capped at `moderate` and commerce
 		 * paths are suggested as speculation excludes. Mirrors the WooCommerce /
-		 * auth detection precedents in Cache cart/checkout/account guards
-		 * (class-cache.php) and LiteSpeed_ESI::should_punch_hole().
+		 * auth detection precedents in the Cache cart/checkout/account guards
+		 * (class-cache.php).
 		 *
 		 * Manual user settings are never touched — the AI only tightens, never
 		 * loosens past moderate.

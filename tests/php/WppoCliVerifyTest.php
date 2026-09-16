@@ -203,12 +203,12 @@ class WppoCliVerifyTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * ESI enabled without native ESI must warn.
+	 * Legacy ESI flags are ignored since the ESI bridge was removed (issue #1291).
 	 */
-	public function test_litespeed_esi_without_enterprise_warns(): void {
+	public function test_litespeed_legacy_esi_flags_ignored(): void {
 		$row = WPPO_CLI_Command::evaluate_litespeed_state( 'auto', 'standalone', false, false, true, false );
-		$this->assertSame( 'warn', $row['status'] );
-		$this->assertStringContainsString( 'ESI', $row['detail'] );
+		$this->assertSame( 'pass', $row['status'] );
+		$this->assertStringNotContainsString( 'ESI', $row['detail'] );
 	}
 
 	/**
