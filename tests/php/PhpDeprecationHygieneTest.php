@@ -548,6 +548,10 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 			$this->assertSame( array(), $scan( "<?php\n\$obj->curl_close( \$ch );\n" ), 'Method teardown calls must pass.' );
 			$this->assertSame( array(), $scan( "<?php\n\$obj?->curl_close( \$ch );\n" ), 'Nullsafe teardown calls must pass.' );
 			$this->assertSame( array(), $scan( "<?php\n// E_STRICT in a comment with `backticks`\n\$doc = 'curl_close(null) in a string';\n" ), 'Comment/string mentions must pass.' );
+			$this->assertNotEmpty( $scan( "<?php\n\\curl_close( \$ch );\n" ), 'Fully-qualified \\curl_close() must be flagged.' );
+			$this->assertNotEmpty( $scan( "<?php\n\$ref->{'setAccessible'}( true );\n" ), 'Dynamic setAccessible name must be flagged.' );
+			$this->assertNotEmpty( $scan( "<?php\ncall_user_func( array( \$ref, 'setAccessible' ) );\n" ), 'call_user_func setAccessible name must be flagged.' );
+			$this->assertSame( array(), $scan( "<?php\n\$doc = \"interpolated {\$http_response_header} stays clean\";\n" ), 'Double-quoted $http_response_header interpolation must pass.' );
 
 			$util_subdir = $dir . '/includes';
 			$this->assertTrue( mkdir( $util_subdir ) || is_dir( $util_subdir ), 'Scanner Util fixture dir must be creatable.' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
@@ -609,9 +613,32 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 		$count  = count( $tokens );
 
 		// Code-only text (no comments/strings) for the raw-pattern checks
-		// so docblock mentions can never false-positive.
-		$code_only = '';
+		// so docblock mentions can never false-positive. Double-quoted and
+		// heredoc interpolations are skipped as well so "$var" inside a
+		// string cannot false-positive (e.g. $http_response_header).
+		$code_only  = '';
+		$in_double  = false;
+		$in_heredoc = false;
 		foreach ( $tokens as $token ) {
+			if ( is_array( $token ) && defined( 'T_START_HEREDOC' ) && T_START_HEREDOC === $token[0] ) {
+				$in_heredoc = true;
+				$code_only .= ' ';
+				continue;
+			}
+			if ( is_array( $token ) && defined( 'T_END_HEREDOC' ) && T_END_HEREDOC === $token[0] ) {
+				$in_heredoc = false;
+				$code_only .= ' ';
+				continue;
+			}
+			if ( ! is_array( $token ) && '"' === $token ) {
+				$in_double  = ! $in_double;
+				$code_only .= ' ';
+				continue;
+			}
+			if ( $in_double || $in_heredoc ) {
+				$code_only .= ' ';
+				continue;
+			}
 			if ( is_array( $token ) && in_array( $token[0], array( T_COMMENT, T_DOC_COMMENT, T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE ), true ) ) {
 				$code_only .= ' ';
 				continue;
@@ -639,6 +666,14 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 
 		$close_functions = array( 'curl_close', 'curl_multi_close', 'curl_share_close', 'finfo_close', 'xml_parser_free', 'imagedestroy' );
 
+		$name_ids = array( T_STRING );
+		if ( defined( 'T_NAME_FULLY_QUALIFIED' ) ) {
+			$name_ids[] = constant( 'T_NAME_FULLY_QUALIFIED' );
+		}
+		if ( defined( 'T_NAME_QUALIFIED' ) ) {
+			$name_ids[] = constant( 'T_NAME_QUALIFIED' );
+		}
+
 		for ( $i = 0; $i < $count; ++$i ) {
 			$token = $tokens[ $i ];
 
@@ -653,7 +688,26 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 				continue;
 			}
 
-			if ( T_STRING === $token[0] && in_array( strtolower( $token[1] ), $close_functions, true ) ) {
+			// Dynamic 'setAccessible' string literals cover $ref->{'setAccessible'}()
+			// and call_user_func()/call_user_func_array() invocations that the
+			// ->setAccessible( regex cannot see (deprecated on PHP 8.5).
+			if ( T_CONSTANT_ENCAPSED_STRING === $token[0] ) {
+				$literal = strtolower( trim( $token[1], "\"'" ) );
+				if ( 'setaccessible' === $literal ) {
+					$violations[] = sprintf( '%s:%d dynamic Reflection::setAccessible() name (deprecated on PHP 8.5)', $rel, $token[2] );
+					continue;
+				}
+			}
+
+			if ( in_array( $token[0], $name_ids, true ) ) {
+				$basename = strtolower( $token[1] );
+				if ( false !== strpos( $basename, '\\' ) ) {
+					$parts    = explode( '\\', $basename );
+					$basename = end( $parts );
+				}
+				if ( ! in_array( $basename, $close_functions, true ) ) {
+					continue;
+				}
 				$next = $i + 1;
 				while ( $next < $count && is_array( $tokens[ $next ] ) && in_array( $tokens[ $next ][0], array( T_WHITESPACE, T_COMMENT, T_DOC_COMMENT ), true ) ) {
 					++$next;
@@ -915,7 +969,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 				if ( 0 === $line && is_array( $token ) ) {
 					$line = $token[2];
 				}
-				if ( '#[' === $text ) {
+				if ( is_array( $token ) && defined( 'T_ATTRIBUTE' ) && T_ATTRIBUTE === $id ) {
 					++$in_attr;
 					continue;
 				}

@@ -6194,8 +6194,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @return bool True on PHP 8.5+, false below.
 		 */
 		public static function is_php85_or_greater( ?string $php_version = null ): bool {
+			static $cached = null;
+			if ( null === $php_version && null !== $cached ) {
+				return $cached;
+			}
 			$version = $php_version ?? PHP_VERSION;
-			return version_compare( $version, '8.5', '>=' );
+			$result  = version_compare( $version, '8.5', '>=' );
+			if ( null === $php_version ) {
+				$cached = $result;
+			}
+			return $result;
 		}
 
 		/**

@@ -4416,8 +4416,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( method_exists( $modules, 'get_print_queue' ) ) {
 				$ids = (array) $modules->get_print_queue();
 			}
+			// Hoisted reflection read (issue #1292 follow-up): reused by
+			// get_module_fetchpriority() so the fallback path pays one
+			// ReflectionObject instead of one per module. A null store is
+			// still "already read" (signalled via func_num_args()) and reused.
+			$registered_store   = null;
+			$store_already_read = false;
 			if ( empty( $ids ) ) {
-				$ids = $this->get_registered_module_ids( $modules );
+				$ids                = $this->get_registered_module_ids( $modules, $registered_store );
+				$store_already_read = true;
 			}
 
 			// Hoist the reflection fallback read once (issue #1292
@@ -4425,8 +4432,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// new ReflectionObject per module when get_registered() is
 			// unavailable. The third arg signals "already read" via
 			// func_num_args() so even a null (unreadable) store is reused.
-			$fallback_ready   = ! method_exists( $modules, 'get_registered' );
-			$registered_store = $fallback_ready ? $this->read_private_module_store( $modules, 'registered' ) : null;
+			$fallback_ready = ! method_exists( $modules, 'get_registered' );
+			if ( $fallback_ready && ! $store_already_read ) {
+				$registered_store = $this->read_private_module_store( $modules, 'registered' );
+			}
 			foreach ( $ids as $id ) {
 				if ( in_array( (string) $id, $excluded, true ) ) {
 					continue;
@@ -4530,14 +4539,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 2.0.0
 		 *
 		 * @param object $modules Script modules instance from wp_script_modules().
+		 * @param mixed  $registered_store Optional out-param receiving the already-read
+		 *                                 `registered` store (even when null/unreadable)
+		 *                                 so callers can hoist it without re-reflecting.
 		 * @return string[] Module ids.
 		 */
-		private function get_registered_module_ids( $modules ): array {
-			foreach ( array( 'registered', 'all' ) as $property ) {
-				$store = $this->read_private_module_store( $modules, $property );
-				if ( is_array( $store ) && ! empty( $store ) ) {
-					return array_map( 'strval', array_keys( $store ) );
-				}
+		private function get_registered_module_ids( $modules, &$registered_store = null ): array {
+			$registered_store = $this->read_private_module_store( $modules, 'registered' );
+			if ( is_array( $registered_store ) && ! empty( $registered_store ) ) {
+				return array_map( 'strval', array_keys( $registered_store ) );
+			}
+			$all_store = $this->read_private_module_store( $modules, 'all' );
+			if ( is_array( $all_store ) && ! empty( $all_store ) ) {
+				return array_map( 'strval', array_keys( $all_store ) );
 			}
 			return array();
 		}
@@ -4564,8 +4578,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 				$prop = $reflection->getProperty( $property );
 				return $prop->getValue( $modules );
-			} catch ( \Throwable $unused_exception ) {
-				unset( $unused_exception );
+			} catch ( \Throwable ) {
 				return null;
 			}
 		}

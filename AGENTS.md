@@ -183,7 +183,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (4
   - `jest.mock('../../lib/apiRequest', () => ({ apiCall: jest.fn() }))` (preferred for components)
   - `global.fetch = jest.fn()` (used in apiRequest.test.js)
   - `jest.spyOn(console, 'error').mockImplementation(() => {})` + `.mockRestore()` for sad paths
-- **PHP unit tests** (`tests/php/`, run via `composer test`): PHPUnit + Brain Monkey. Bootstrap defines WP constants and a `WPPO_Test_Bootstrap` trait. Test files must be named `*Test.php` (matching their class name) or PHPUnit will not discover them. Use `Brain\Monkey\Functions\when()` for WP function stubs, `Brain\Monkey\Filters\has()` / `expectAdded()` for filter assertions, and `ReflectionMethod`/`ReflectionProperty` (with `setAccessible`) to test private methods. Requires dev deps (`composer dev-setup`).
+- **PHP unit tests** (`tests/php/`, run via `composer test`): PHPUnit + Brain Monkey. Bootstrap defines WP constants and a `WPPO_Test_Bootstrap` trait. Test files must be named `*Test.php` (matching their class name) or PHPUnit will not discover them. Use `Brain\Monkey\Functions\when()` for WP function stubs, `Brain\Monkey\Filters\has()` / `expectAdded()` for filter assertions, and `ReflectionMethod`/`ReflectionProperty` to test private methods. Requires dev deps (`composer dev-setup`).
 - **No pre-commit hooks** — all quality checks run in CI only
 
 ## JS conventions
