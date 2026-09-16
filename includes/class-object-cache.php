@@ -957,11 +957,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Publish Redis config source atomically via tmp-write + verify + rename.
 		 *
-		 * Stages `$content` at the `CONFIG_TMP_SUFFIX` sibling, re-reads it
-		 * byte-identically, syntax-checks it, then renames it over the live
-		 * config path (atomic on the same filesystem for the Direct
-		 * transport; FTP/SSH transports degrade gracefully but still never
-		 * clobber the live file before the staged copy verifies).
+		 * Stages `$content` at a unique tmp sibling (falling back to the
+		 * `CONFIG_TMP_SUFFIX` sibling), re-reads it byte-identically,
+		 * syntax-checks it, then renames it over the live config path
+		 * (atomic on the same filesystem for the Direct transport; FTP/SSH
+		 * transports re-read and re-verify the live file after the move and
+		 * restore the previous bytes on mismatch, so they still never leave
+		 * a torn live file behind).
 		 *
 		 * On any atomic-step failure the old live config is left untouched and
 		 * a `WP_Error` is returned (fail-closed file, fail-open site: the
@@ -1013,8 +1015,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					return new \WP_Error( 'write_error', __( 'Cannot write Redis configuration file.', 'performance-optimisation' ) );
 				}
 
-				$tmp   = $this->config_path . self::CONFIG_TMP_SUFFIX;
+				// Unique staging sibling so concurrent enable() calls never share
+				// a tmp path and spuriously fail each other's verification.
+				$tmp = $this->config_path . self::CONFIG_TMP_SUFFIX;
+				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'atomic_tmp_path' ) ) {
+					try {
+						$uniq = Util::atomic_tmp_path( $this->config_path );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$uniq = '';
+					}
+					if ( is_string( $uniq ) && '' !== $uniq ) {
+						$tmp = $uniq;
+					}
+				}
 				$chmod = defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644;
+
+				// In-memory original for post-rename restore on non-atomic
+				// (FTP/SSH copy+delete) transports.
+				$original     = '';
+				$had_original = false;
+				try {
+					if ( method_exists( $wp_filesystem, 'exists' ) ) {
+						if ( $wp_filesystem->exists( $this->config_path ) ) {
+							$read = $wp_filesystem->get_contents( $this->config_path );
+							if ( is_string( $read ) && '' !== $read ) {
+								$original     = $read;
+								$had_original = true;
+							}
+						}
+					} else {
+						$read = $wp_filesystem->get_contents( $this->config_path );
+						if ( is_string( $read ) && '' !== $read ) {
+							$original     = $read;
+							$had_original = true;
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 
 				if ( ! $wp_filesystem->put_contents( $tmp, $content, $chmod ) ) {
 					$this->delete_config_tmp_quietly( $wp_filesystem, $tmp );
@@ -1032,6 +1071,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					return new \WP_Error( 'write_error', __( 'Cannot write Redis configuration file.', 'performance-optimisation' ) );
 				}
 
+				// Best-effort single backup of the previous live config before
+				// publish, so a torn live file detected below has a restore
+				// source even when the in-memory read was unavailable. Swept on
+				// success; never blocks publish.
+				try {
+					if ( $had_original && method_exists( $wp_filesystem, 'copy' ) ) {
+						$wp_filesystem->copy( $this->config_path, $this->config_path . '.wppo-bak', true );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+
 				$moved = false;
 				if ( method_exists( $wp_filesystem, 'move' ) ) {
 					$moved = $wp_filesystem->move( $tmp, $this->config_path, true );
@@ -1041,6 +1092,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				}
 
 				if ( ! $moved ) {
+					$this->delete_config_tmp_quietly( $wp_filesystem, $tmp );
+					return new \WP_Error( 'write_error', __( 'Cannot write Redis configuration file.', 'performance-optimisation' ) );
+				}
+
+				// Post-rename re-read + re-verify: on FTP/SSH transports
+				// move() is copy+delete (non-atomic), so a kill mid-copy can
+				// still leave a torn live file. On mismatch restore the
+				// in-memory original (or the best-effort backup) and fail
+				// closed instead of leaving a fatal config behind.
+				try {
+					$written = $wp_filesystem->get_contents( $this->config_path );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$written = false;
+				}
+				$live_ok = is_string( $written ) && $written === $content && self::is_valid_config_content( $written );
+				if ( $live_ok && method_exists( 'PerformanceOptimise\Inc\Util', 'verify_php_syntax' ) ) {
+					try {
+						$live_ok = Util::verify_php_syntax( $written );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$live_ok = false;
+					}
+				}
+				if ( ! $live_ok ) {
+					try {
+						if ( $had_original && method_exists( $wp_filesystem, 'put_contents' ) ) {
+							$wp_filesystem->put_contents( $this->config_path, $original, $chmod );
+						} elseif ( method_exists( $wp_filesystem, 'exists' ) && method_exists( $wp_filesystem, 'copy' ) && $wp_filesystem->exists( $this->config_path . '.wppo-bak' ) ) {
+							$wp_filesystem->copy( $this->config_path . '.wppo-bak', $this->config_path, true );
+						} elseif ( ! $had_original && method_exists( $wp_filesystem, 'delete' ) ) {
+							$wp_filesystem->delete( $this->config_path );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
 					$this->delete_config_tmp_quietly( $wp_filesystem, $tmp );
 					return new \WP_Error( 'write_error', __( 'Cannot write Redis configuration file.', 'performance-optimisation' ) );
 				}
@@ -1081,7 +1168,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * Sweep orphan config staging files left by an interrupted write.
 		 *
 		 * Removes the fixed `CONFIG_TMP_SUFFIX` sibling plus unique
-		 * `*.tmp.*` siblings from killed verified-writes. Best-effort only
+		 * `*.tmp.*` siblings from killed verified-writes, as well as a
+		 * stale `.wppo-bak` backup left behind when a run is killed between
+		 * backup creation and post-success cleanup. Best-effort only
 		 * and never throws; a sweep racing a concurrent writer merely fails
 		 * that writer's verification (fail-closed), never corrupts the live
 		 * config.
@@ -1107,6 +1196,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					}
 				} else {
 					$this->delete_config_tmp_quietly( $wp_filesystem, $tmp );
+				}
+
+				// Stale backup from a run killed between backup creation
+				// and post-success cleanup: the shared writer removes it on
+				// success, so anything left here is orphaned.
+				$backup = $this->config_path . '.wppo-bak';
+				if ( method_exists( $wp_filesystem, 'exists' ) ) {
+					try {
+						if ( $wp_filesystem->exists( $backup ) ) {
+							$this->delete_config_tmp_quietly( $wp_filesystem, $backup );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				} else {
+					$this->delete_config_tmp_quietly( $wp_filesystem, $backup );
 				}
 
 				if ( ! method_exists( $wp_filesystem, 'dirlist' ) || ! function_exists( 'dirname' ) || ! function_exists( 'basename' ) ) {
