@@ -2,7 +2,7 @@
  * Tests for lib/util helpers.
  */
 
-import { handleChange, formatBytes } from '../util';
+import { handleChange, formatBytes, toTextLines } from '../util';
 
 describe( 'handleChange', () => {
 	it( 'updates a text field value by name', () => {
@@ -133,5 +133,23 @@ describe( 'formatBytes', () => {
 	it( 'formats GB values and coerces numeric strings', () => {
 		expect( formatBytes( 1024 ** 3 ) ).toBe( '1.0 GB' );
 		expect( formatBytes( '2048' ) ).toBe( '2.0 KB' );
+	} );
+} );
+
+describe( 'toTextLines', () => {
+	it( 'passes strings through unchanged', () => {
+		expect( toTextLines( 'a\nb' ) ).toBe( 'a\nb' );
+		expect( toTextLines( '' ) ).toBe( '' );
+	} );
+
+	it( 'joins arrays with newlines', () => {
+		expect( toTextLines( [ 'a', 'b' ] ) ).toBe( 'a\nb' );
+		expect( toTextLines( [] ) ).toBe( '' );
+	} );
+
+	it( 'returns empty string for numbers, null and undefined', () => {
+		expect( toTextLines( 42 ) ).toBe( '' );
+		expect( toTextLines( null ) ).toBe( '' );
+		expect( toTextLines( undefined ) ).toBe( '' );
 	} );
 } );

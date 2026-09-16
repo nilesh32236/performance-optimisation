@@ -2471,7 +2471,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 						continue;
 					}
 					try {
-						if ( self::requeue_for_post( $post_id, $scheduled_hints ) ) {
+						if ( self::requeue_for_post( $post_id, $scheduled_hints, $instance ) ) {
 							++$queued;
 						}
 					} catch ( \Throwable $e ) {
@@ -2579,11 +2579,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 *
 		 * @param int        $post_id Post ID to requeue.
 		 * @param array|null $scheduled_hints Optional hoisted pending-job map (post ID => true); null falls back to per-post lookup.
+		 * @param self|null  $instance Optional hoisted instance (shares parsed safelist/memo across loop calls).
 		 * @return bool True when a job was queued or already scheduled; false when skipped as fresh or on failure.
 		 * @since 2.0.0
 		 * @since NEXT Optional $scheduled_hints for batched targeted regen.
+		 * @since NEXT Optional $instance to avoid per-post re-construction.
 		 */
-		public static function requeue_for_post( int $post_id, ?array $scheduled_hints = null ): bool {
+		public static function requeue_for_post( int $post_id, ?array $scheduled_hints = null, ?self $instance = null ): bool {
 			if ( $post_id <= 0 ) {
 				return false;
 			}
@@ -2614,7 +2616,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 							$modified_gmt = $post->post_modified_gmt;
 						}
 					}
-					if ( '' !== $modified_gmt && ( new self( $options ) )->is_variant_fresh_for_post( $post_id, $modified_gmt ) ) {
+					if ( '' !== $modified_gmt && ( $instance ?? new self( $options ) )->is_variant_fresh_for_post( $post_id, $modified_gmt ) ) {
 						return false;
 					}
 				} catch ( \Throwable $e ) {
@@ -2642,9 +2644,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @since 2.0.0
 		 * @param int[]              $post_ids Post IDs in FIFO order.
 		 * @param array<int, string> $permalinks Optional pre-resolved post ID => permalink map (scan path builds it once per batch so ordering + freshness share one get_permalink() per post).
+		 * @param array|null         $priority Optional hoisted RUM path-LCP priority map (regenerate_all fetches once per run; null fetches per call).
+		 * @param array|null         $trends Optional hoisted PageSpeed trends (null fetches per call).
 		 * @return int[] Ordered post IDs (same entries).
 		 */
-		public static function order_post_ids_by_rum_priority( array $post_ids, array $permalinks = array() ): array {
+		public static function order_post_ids_by_rum_priority( array $post_ids, array $permalinks = array(), ?array $priority = null, ?array $trends = null ): array {
 			try {
 				if ( count( $post_ids ) < 2 ) {
 					return array_values( array_map( 'intval', $post_ids ) );
@@ -2666,16 +2670,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( ! function_exists( 'get_permalink' ) ) {
 					return $post_ids;
 				}
-				$priority = \PerformanceOptimise\Inc\RUM::get_path_lcp_priority();
+				// Hoisted signals (issue #1274 review): regenerate_all()
+				// passes one priority/trends snapshot per run; direct
+				// callers passing null still fetch once per call.
+				if ( null === $priority ) {
+					$priority = \PerformanceOptimise\Inc\RUM::get_path_lcp_priority();
+				}
 				// Fetch trends once for the whole ordering pass instead of once
 				// per post inside score_url_lcp() (issue #1059 review). A
 				// trend-only site (no RUM samples yet) must still prioritize,
 				// so only fall back to FIFO when both signals are empty.
-				$trends = null;
-				if ( class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) && method_exists( 'PerformanceOptimise\Inc\Pagespeed', 'get_trends' ) ) {
-					$trends = \PerformanceOptimise\Inc\Pagespeed::get_trends();
-					if ( ! is_array( $trends ) ) {
-						$trends = array();
+				if ( null === $trends ) {
+					$trends = null;
+					if ( class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) && method_exists( 'PerformanceOptimise\Inc\Pagespeed', 'get_trends' ) ) {
+						$trends = \PerformanceOptimise\Inc\Pagespeed::get_trends();
+						if ( ! is_array( $trends ) ) {
+							$trends = array();
+						}
 					}
 				}
 				if ( empty( $priority ) && empty( $trends ) ) {
@@ -3057,6 +3068,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- Intentional direct query, $placeholders is count-derived only.
 			$scan_ok = true;
 			$capped  = false;
+			// Hoisted RUM/trends snapshot (issue #1274 review): one read
+			// per run instead of one per 200-row batch inside the ordering
+			// helper. Fail-open: lookup failure passes nulls so the helper
+			// falls back to its own per-call fetch/FIFO behaviour.
+			$run_priority = null;
+			$run_trends   = null;
+			$signals_ok   = false;
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_path_lcp_priority' ) ) {
+					$run_priority = \PerformanceOptimise\Inc\RUM::get_path_lcp_priority();
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) && method_exists( 'PerformanceOptimise\Inc\Pagespeed', 'get_trends' ) ) {
+					$run_trends = \PerformanceOptimise\Inc\Pagespeed::get_trends();
+					if ( ! is_array( $run_trends ) ) {
+						$run_trends = array();
+					}
+				}
+				$signals_ok = true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$signals_ok = false;
+			}
 			do {
 				// Cursor pagination via ID > last_id avoids O(offset) MySQL scans.
 				$prepare_args   = array_values( $post_types );
@@ -3108,7 +3141,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 						$permalink_map[ (int) $pid ] = is_string( $resolved ) ? $resolved : '';
 					}
 				}
-				$batch_ids = self::order_post_ids_by_rum_priority( array_values( array_map( 'intval', $post_ids ) ), $permalink_map );
+				$batch_ids = $signals_ok
+					? self::order_post_ids_by_rum_priority( array_values( array_map( 'intval', $post_ids ) ), $permalink_map, is_array( $run_priority ) ? $run_priority : array(), is_array( $run_trends ) ? $run_trends : array() )
+					: self::order_post_ids_by_rum_priority( array_values( array_map( 'intval', $post_ids ) ), $permalink_map );
 
 				foreach ( $batch_ids as $post_id ) {
 					// Per-run cap: stop enqueueing once the cap is reached

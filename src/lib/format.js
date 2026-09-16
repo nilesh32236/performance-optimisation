@@ -43,6 +43,10 @@ export const formatPercent = ( value ) => {
 /**
  * Format bytes.
  *
+ * Non-i18n background/metric counterpart to the localised `formatBytes`
+ * in lib/util.js (which UI code must use). Extended caps (TB/PB) and
+ * '—' fallback for dashboards where translation is handled elsewhere.
+ *
  * @since NEXT
  * @param {*} value Numeric value.
  * @return {string} Formatted value or '—' fallback.

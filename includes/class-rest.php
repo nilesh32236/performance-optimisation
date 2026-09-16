@@ -2846,7 +2846,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$response->header( 'Retry-After', '60' );
 				return $response;
 			}
-			$params  = $request->get_params();
+			$params = $request->get_params();
+			// Validate the raw post_id before absint(): absint('foo') is 0,
+			// which would fall through to bulk regenerate_all and mass-queue
+			// on a typo (issue #1274 review).
+			$raw_id = $params['post_id'] ?? null;
+			if ( null !== $raw_id && '' !== $raw_id && ! is_numeric( $raw_id ) ) {
+				return $this->send_response( null, false, 400, __( 'Invalid post ID.', 'performance-optimisation' ) );
+			}
 			$post_id = isset( $params['post_id'] ) ? absint( $params['post_id'] ) : 0;
 
 			if ( ! function_exists( 'as_enqueue_async_action' ) ) {
@@ -2855,8 +2862,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			if ( $post_id ) {
 				// Reject unknown post IDs before enqueueing so junk jobs
-				// never reach the queue (issue #1274 review).
-				if ( function_exists( 'get_post' ) && null === get_post( $post_id ) ) {
+				// never reach the queue (issue #1274 review). get_post()
+				// returns false (not just null) for missing posts.
+				if ( function_exists( 'get_post' ) && ! get_post( $post_id ) ) {
 					return $this->send_response( null, false, 404, __( 'Invalid post ID.', 'performance-optimisation' ) );
 				}
 				// Builder-template skip-and-continue (issue #1274): excluded
@@ -3185,10 +3193,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					// never hidden behind the suspended message. The
 					// single enumeration below is reused by both the known
 					// check and the queue call (no double theme scan).
+					$templates_map = null;
+					if ( method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'get_templates' ) ) {
+						try {
+							$templates_map = Critical_CSS::get_templates();
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$templates_map = null;
+						}
+					}
 					if ( method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'is_known_template' ) ) {
 						$known = true;
 						try {
-							$known = Critical_CSS::is_known_template( $template );
+							$known = Critical_CSS::is_known_template( $template, $templates_map );
 						} catch ( \Throwable $e ) {
 							unset( $e );
 						}
@@ -3217,7 +3234,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 							__( 'Critical CSS generation is suspended while deferred or delayed JavaScript is enabled.', 'performance-optimisation' )
 						);
 					}
-					$queued = Critical_CSS::regenerate_single( $template );
+					$queued = Critical_CSS::regenerate_single( $template, $templates_map );
 					if ( 1 === $queued ) {
 						return $this->send_response(
 							array(

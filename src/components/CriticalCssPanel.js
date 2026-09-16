@@ -8,21 +8,19 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
-import useNotice from '../lib/useNotice';
-import NoticeBanner from './common/NoticeBanner';
 import { formatBytes } from '../lib/util';
 
+const READY_CONFIG = {
+	icon: faCheckCircle,
+	className: 'wppo-badge--success',
+	label: __( 'Generated', 'performance-optimisation' ),
+};
+
 const STATUS_CONFIG = {
-	ready: {
-		icon: faCheckCircle,
-		className: 'wppo-badge--success',
-		label: __( 'Generated', 'performance-optimisation' ),
-	},
-	done: {
-		icon: faCheckCircle,
-		className: 'wppo-badge--success',
-		label: __( 'Generated', 'performance-optimisation' ),
-	},
+	ready: READY_CONFIG,
+	// Alias (issue #1274 review): done === ready, single source so a
+	// future label change needs one edit.
+	done: READY_CONFIG,
 	queued: {
 		icon: faClock,
 		className: 'wppo-badge--info',
@@ -109,7 +107,7 @@ export const normalizeCcssEntry = ( hash, entry ) => {
  * @param {*} statusKey Raw status key.
  * @return {{icon: *, className: string, label: string}} Badge config.
  */
-const statusConfigFor = ( statusKey ) => {
+export const statusConfigFor = ( statusKey ) => {
 	const hasOwn = Object.hasOwn
 		? Object.hasOwn( STATUS_CONFIG, statusKey )
 		: Object.prototype.hasOwnProperty.call( STATUS_CONFIG, statusKey );
@@ -123,7 +121,9 @@ const CriticalCssPanel = ( {
 } ) => {
 	const [ isRegenerating, setIsRegenerating ] = useState( false );
 	const [ singleBusy, setSingleBusy ] = useState( null );
-	const { notice, dismiss } = useNotice();
+	// No local useNotice/NoticeBanner here (issue #1274 review): the
+	// parent (FileOptimization via withNotification) is the single
+	// feedback owner; this panel logs locally and rethrows.
 
 	const handleRegenerate = async () => {
 		setIsRegenerating( true );
@@ -160,17 +160,10 @@ const CriticalCssPanel = ( {
 		}
 	};
 
-	const entries = Object.entries( status );
+	const entries = Object.entries( status ?? {} );
 
 	return (
 		<div className="wppo-ccss-panel wppo-mt-20">
-			{ notice && (
-				<NoticeBanner
-					type={ notice.type }
-					message={ notice.message }
-					onDismiss={ dismiss }
-				/>
-			) }
 			<div className="wppo-field-label">
 				{ __( 'Critical CSS Status', 'performance-optimisation' ) }
 			</div>

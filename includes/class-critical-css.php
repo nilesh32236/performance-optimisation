@@ -700,7 +700,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					: self::DEFAULT_EXCLUDED_POST_TYPES;
 				if ( function_exists( 'apply_filters' ) && function_exists( 'has_filter' ) && $has_filter ) {
 					$filtered = apply_filters( 'wppo_ccss_excluded_post_types', $excluded );
-					if ( is_array( $filtered ) ) {
+					// Accept array or newline/comma-delimited string filter
+					// output via the shared parser (issue #1274 review).
+					if ( is_array( $filtered ) || is_string( $filtered ) ) {
 						$clean = self::parse_excluded_slugs( $filtered );
 						// Always additive: an empty filter return is
 						// ignored (no opt-out) so builder-template
@@ -1088,6 +1090,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			if ( $cap <= 0 || $total >= max( 1, $cap ) ) {
 				try {
 					self::set_status_cache( $template_hash, 'failed', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				// Log generic escalation like the timeout path so
+				// generic-error loops stay visible (issue #1274 review).
+				try {
+					if ( class_exists( Log::class ) ) {
+						Log::add( sprintf( 'Critical CSS escalated to failed for %s after %d failures.', $template_hash, (int) $total ) );
+					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
@@ -4474,7 +4485,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
-				self::clear_ccss_retry_state( $template_hash );
+				// Deterministic poison keeps prior generic/timeout counts
+				// so alternating poison/ordinary failures still terminate
+				// on the combined cap (issue #1274 review).
 				return false;
 			}
 			if ( false === $critical_css ) {
@@ -4503,7 +4516,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
-				self::clear_ccss_retry_state( $template_hash );
+				// Keep retry counters (see poison branch above).
 				return false;
 			}
 			if ( '' === trim( $critical_css ) ) {
@@ -5121,6 +5134,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
+				$scheduled_now = false;
+				$has_pending   = false;
 				if ( function_exists( 'as_enqueue_async_action' ) ) {
 					$hook = 'wppo_generate_ccss';
 					// Wrapped payload: AS unpacks args positionally, so the
@@ -5146,10 +5161,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 								self::CCSS_AS_GROUP
 							);
 						}
+						$scheduled_now = true;
 						++$queued;
 					}
 				}
-				self::set_status_cache( $hash, 'queued', defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
+				// Only mark queued when a job is actually pending/scheduled
+				// (issue #1274 review): without Action Scheduler the status
+				// must not claim queued with zero jobs queued.
+				if ( $has_pending || $scheduled_now ) {
+					self::set_status_cache( $hash, 'queued', defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
+				}
 			}
 
 			Log::add(
@@ -5228,6 +5249,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 							as_enqueue_async_action( $hook, $hook_args, self::CCSS_AS_GROUP );
 						}
 					}
+				} else {
+					return 0;
 				}
 				self::set_status_cache( $hash, 'queued', defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
 				return 1;

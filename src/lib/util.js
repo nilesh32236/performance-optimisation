@@ -98,10 +98,11 @@ export const toTextLines = ( value ) => {
 /**
  * Format a byte count as a localised human-readable size string.
  *
- * Single shared implementation (replaces the per-component copies in
- * AutoloadedOptions, PerformanceAudit and ImageOptimizationCard). Units are
- * passed through __() and composed via sprintf() so translators can reorder
- * words and localise the unit.
+ * Localised canonical UI formatter (units via __(), composed with
+ * sprintf() so translators can reorder words). The non-i18n
+ * `formatBytesShared` in lib/format.js is the background/metric
+ * counterpart (TB/PB caps, '—' fallback); UI code must use this
+ * function — see also formatBytesShared.
  *
  * @since 2.0.0
  * @param {number} bytes Byte count.

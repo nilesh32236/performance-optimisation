@@ -38,35 +38,50 @@ import NoticeBanner from './common/NoticeBanner';
 
 import CriticalCssPanel from './CriticalCssPanel';
 
-let cdnRowCounter = 0;
-const cdnRowId = () => {
-	cdnRowCounter += 1;
-	return `cdn-${ Date.now() }-${ cdnRowCounter }`;
+// Per-instance row ids (issue #1274 review): a module counter + Date.now()
+// leaks across mounts/tests and is non-deterministic, so each component
+// instance owns a useRef counter seeded once.
+const useCdnRowId = () => {
+	const ref = useRef( 0 );
+	return () => {
+		ref.current += 1;
+		return `cdn-${ ref.current }`;
+	};
 };
 
 // Normalize the max-retries input the same way PHP sanitizes it
-// (whole-string integer, clamped 0..5, fail-open to 5) so strings/arrays
-// from stored settings never reach the controlled number input and the UI
-// never disagrees with the server on malformed values (issue #1274
-// review): PHP is_numeric() rejects '3abc', so parseInt() must not accept
-// it either.
-const normalizeRetries = ( value ) => {
+// (is_numeric whole-value check, (int) truncation, clamped 0..5,
+// fail-open to 5) so the UI never disagrees with the server on values
+// like '3.7', '+3' or '1e2' (issue #1274 review): Number() mirrors
+// PHP is_numeric(), Math.trunc() mirrors the (int) cast.
+// Exported for direct Jest coverage.
+// @since NEXT
+export const normalizeRetries = ( value ) => {
 	if ( typeof value === 'number' ) {
 		return Number.isFinite( value )
 			? Math.min( 5, Math.max( 0, Math.trunc( value ) ) )
 			: 5;
 	}
-	const s = String( value ?? '' ).trim();
-	if ( ! /^-?\d+$/.test( s ) ) {
+	if ( Array.isArray( value ) ) {
 		return 5;
 	}
-	return Math.min( 5, Math.max( 0, Number.parseInt( s, 10 ) ) );
+	const s = String( value ?? '' ).trim();
+	if ( '' === s ) {
+		return 5;
+	}
+	const n = Number( s );
+	if ( ! Number.isFinite( n ) ) {
+		return 5;
+	}
+	return Math.min( 5, Math.max( 0, Math.trunc( n ) ) );
 };
 
 // Normalize the used-CSS delivery mode the same way PHP sanitizes it
 // (lowercase + trim, allowlisted, fail-open to 'file') so the UI never
 // disagrees with the server on a single render (issue #1220).
-const normalizeDeliveryMode = ( value ) => {
+// Exported for direct Jest coverage.
+// @since NEXT
+export const normalizeDeliveryMode = ( value ) => {
 	const mode = String( value || 'file' )
 		.toLowerCase()
 		.trim();
@@ -184,8 +199,9 @@ const FILE_OPT_SYNC_KEYS = [
 
 // Normalize one file-optimisation options object: textarea-backed keys via
 // toTextLines() (after spread, so backend arrays win correctly), delivery
-// mode via the PHP-mirroring allowlist, CCSS retries clamped 0..5,
-// font subsets with the 'latin' fallback. Idempotent — safe to run on init,
+// mode via the PHP-mirroring allowlist, CCSS retries clamped 0..5, blank
+// CCSS exclusions reset to the builder defaults (mirroring PHP), font
+// subsets with the 'latin' fallback. Idempotent — safe to run on init,
 // baseline, and sync payloads.
 const normalizeFileOpt = ( source = {} ) => {
 	const next = { ...source };
@@ -198,6 +214,16 @@ const normalizeFileOpt = ( source = {} ) => {
 		next.usedCSSDeliveryMode
 	);
 	next.ccssMaxRetries = normalizeRetries( next.ccssMaxRetries );
+	// An empty or whitespace-only exclusions string normalizes to the
+	// builder defaults (mirroring PHP, where empty keeps defaults) so the
+	// UI never shows "no exclusions" while the server enforces the builder
+	// defaults (issue #1274 review).
+	if (
+		'string' !== typeof next.ccssExcludedPostTypes ||
+		'' === next.ccssExcludedPostTypes.trim()
+	) {
+		next.ccssExcludedPostTypes = 'fl-builder-template\nelementor_library';
+	}
 	if ( typeof next.fontSubsetSubsets !== 'string' ) {
 		next.fontSubsetSubsets = 'latin';
 	}
@@ -234,6 +260,7 @@ const FileOptimization = ( {
 		return tabRefCallbacks.current[ id ];
 	}, [] );
 
+	const cdnRowId = useCdnRowId();
 	const defaultSettings = normalizeFileOpt( {
 		safeMode: options.safeMode !== undefined ? options.safeMode : false,
 		elementorSafeMode:
