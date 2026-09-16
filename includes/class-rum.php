@@ -193,6 +193,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		public const FIELD_LCP_DEFAULT_MIN_SAMPLES = 20;
 
 		/**
+		 * Upper bound for the field-LCP minimum-sample threshold.
+		 *
+		 * The resolver and the settings sanitizer clamp the configured
+		 * `ai_adaptive.field_lcp_min_samples` / legacy
+		 * `image_optimisation.fieldLcpMinSamples` value to 1–MAX so an
+		 * extreme admin value cannot perpetually pin auto-tune to
+		 * provisional (feature DoS) while keeping the fail-open default.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const FIELD_LCP_MIN_SAMPLES_MAX = 1000;
+
+		/**
 		 * Freshness window (seconds) for the field-measured LCP override.
 		 *
 		 * An override whose top URL was last seen longer ago than this
@@ -1534,6 +1548,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * otherwise so callers fall through to the PageSpeed heuristic.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Sample gate unified via get_field_lcp_min_samples() so
+		 *             `ai_adaptive.field_lcp_min_samples` is honoured.
 		 * @param string|null $path Page path (e.g. "/about/"). Defaults to the current request path.
 		 * @return array{url:string,n:int,lastSeen:int}|null Top LCP URL entry or null.
 		 */
@@ -1549,8 +1565,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				// Normalize identically to sanitize_sample()/print_config()
 				// so trailing-slash variants share one bucket (issue #935).
 				$normalized_path = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::normalize_rum_path( $path ) : $path;
-				$options         = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::get_settings() : array();
-				$min             = isset( $options['image_optimisation']['fieldLcpMinSamples'] ) ? (int) $options['image_optimisation']['fieldLcpMinSamples'] : self::FIELD_LCP_DEFAULT_MIN_SAMPLES;
+				// Sample gate unification (issue #1200, @since NEXT): resolve via
+				// the canonical get_field_lcp_min_samples() so the additive
+				// `ai_adaptive.field_lcp_min_samples` setting is honoured here
+				// (previously only the legacy `image_optimisation.fieldLcpMinSamples`
+				// was read, letting the preload path disagree with the AI path).
+				// Fail-open to FIELD_LCP_DEFAULT_MIN_SAMPLES via the resolver.
+				$min = self::get_field_lcp_min_samples();
 				if ( $min < 1 ) {
 					$min = self::FIELD_LCP_DEFAULT_MIN_SAMPLES;
 				}
@@ -1892,6 +1913,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * Pure read path: no option or transient writes.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Return value is clamped to 1–FIELD_LCP_MIN_SAMPLES_MAX.
 		 * @return int Minimum samples (>=1).
 		 */
 		public static function get_field_lcp_min_samples(): int {
@@ -1900,13 +1922,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				if ( isset( $options['ai_adaptive']['field_lcp_min_samples'] ) ) {
 					$min = (int) $options['ai_adaptive']['field_lcp_min_samples'];
 					if ( $min >= 1 ) {
-						return $min;
+						return min( self::FIELD_LCP_MIN_SAMPLES_MAX, $min );
 					}
 				}
 				if ( isset( $options['image_optimisation']['fieldLcpMinSamples'] ) ) {
 					$min = (int) $options['image_optimisation']['fieldLcpMinSamples'];
 					if ( $min >= 1 ) {
-						return $min;
+						return min( self::FIELD_LCP_MIN_SAMPLES_MAX, $min );
 					}
 				}
 			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch

@@ -212,6 +212,10 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Seed RUM aggregates with average LCP above 3500 (forces `eager` eagerness).
 	 *
+	 * Uses a qualified sample count (>= default 20) so the suggest-only
+	 * sample gate (issue #1200) passes; undersampled RUM must stay
+	 * conservative (see test_learn_undersampled_global_stays_conservative).
+	 *
 	 * @return void
 	 */
 	private function seed_eager_rum(): void {
@@ -220,14 +224,14 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 			$today => array(
 				'/slow/' => array(
 					'lcp'  => array(
-						'n'   => 5,
-						'sum' => 20000,
+						'n'   => 25,
+						'sum' => 100000,
 						'min' => 3000,
 						'max' => 5000,
 					),
 					'ttfb' => array(
-						'n'   => 5,
-						'sum' => 4000,
+						'n'   => 25,
+						'sum' => 20000,
 						'min' => 700,
 						'max' => 900,
 					),
@@ -1196,12 +1200,15 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Seed RUM aggregates with a device × template LCP segment.
+	 * Seed RUM aggregates with a device × template × connection LCP segment.
 	 *
 	 * The global-average path stays conservative (per-path averages of 1000ms)
 	 * so any eagerness upgrade is attributable to the segmented p75 routing.
+	 * The segment carries the `connection` dimension (issue #1143) so the
+	 * heuristic path exercises connection-aware copy.
 	 *
 	 * @since 2.0.0
+	 * @since NEXT Segment fixture carries the `connection` dimension.
 	 *
 	 * @param int $segment_n Segment sample count.
 	 * @return void
@@ -1226,14 +1233,15 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 						'max' => 1000,
 					),
 					'lcpSeg' => array(
-						'mobile|single' => array(
-							'device'   => 'mobile',
-							'template' => 'single',
-							'n'        => $segment_n,
-							'sum'      => (float) $segment_n * 4000.0,
-							'min'      => 4000.0,
-							'max'      => 4000.0,
-							'samples'  => array_fill( 0, $segment_n, 4000.0 ),
+						'mobile|single|4g' => array(
+							'device'     => 'mobile',
+							'template'   => 'single',
+							'connection' => '4g',
+							'n'          => $segment_n,
+							'sum'        => (float) $segment_n * 4000.0,
+							'min'        => 4000.0,
+							'max'        => 4000.0,
+							'samples'    => array_fill( 0, $segment_n, 4000.0 ),
 						),
 					),
 				),
@@ -1273,6 +1281,189 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$this->assertStringContainsString( 'provisional', $field['description'] );
 		// No eagerness upgrade: no eagerness suggestion at conservative.
 		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' ) );
+	}
+
+	/**
+	 * Test undersampled global-average RUM emits no eagerness override (issue #1200).
+	 *
+	 * Given a high average LCP (4000ms) with only 5 samples (below the
+	 * default 20-sample gate) When the heuristic runs Then eagerness stays
+	 * conservative with no override — suggest-only below threshold.
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_learn_undersampled_global_stays_conservative(): void {
+		$this->install_stubs();
+		$today                                   = gmdate( 'Y-m-d' );
+		$this->options['wppo_web_vitals_rum']    = array(
+			$today => array(
+				'/slow/' => array(
+					'lcp' => array(
+						'n'   => 5,
+						'sum' => 20000,
+						'min' => 3000,
+						'max' => 5000,
+					),
+				),
+			),
+		);
+		$this->options['wppo_web_vitals_trends'] = array();
+		$this->options['wppo_settings']          = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		Util::clear_settings_cache();
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$model = AI_Adaptive::learn();
+		$this->assertSame( 'conservative', $model['eagerness'] );
+		$this->assertTrue( $model['field_lcp_provisional'] );
+
+		$suggestions = AI_Adaptive::get_suggestions();
+		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' ) );
+	}
+
+	/**
+	 * Test the global-eager skip path reports the qualified global sample count.
+	 *
+	 * Given qualified global RUM (n=25, avg 4000ms) with no segments the
+	 * heuristic reaches `eager` via the global ladder and skips the segment
+	 * scan; the persisted model must still report samples=25 (never 0) so
+	 * REST/UI copy never pairs an eager suggestion with provisional (0/20)
+	 * copy. Provisional stays true: no qualified segment was observed.
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_learn_global_eager_reports_global_sample_count(): void {
+		$this->install_stubs();
+		$this->seed_eager_rum();
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$model = AI_Adaptive::learn();
+		$this->assertSame( 'eager', $model['eagerness'] );
+		$this->assertSame( 25, $model['field_lcp_samples'] );
+		$this->assertSame( 20, $model['field_lcp_min_samples'] );
+		$this->assertTrue( $model['field_lcp_provisional'] );
+		$this->assertNull( $model['field_lcp_segment'] );
+		$this->assertSame( 0.0, $model['field_lcp_p75'] );
+	}
+
+	/**
+	 * Test a custom ai_adaptive.field_lcp_min_samples gates the global ladder.
+	 *
+	 * Given global RUM (n=25, avg 4000ms) with a custom minimum of 30 the
+	 * heuristic stays conservative; after lowering the minimum to 10 the
+	 * same data learns `eager`. Pins the additive setting on the heuristic
+	 * path (the preload path is pinned in RumTest).
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_learn_custom_min_samples_gates_global_ladder(): void {
+		$this->install_stubs();
+		$this->seed_eager_rum();
+		$this->options['wppo_settings'] = array(
+			'ai_adaptive' => array(
+				'enabled'               => true,
+				'field_lcp_min_samples' => 30,
+			),
+		);
+		Util::clear_settings_cache();
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$model = AI_Adaptive::learn();
+		$this->assertSame( 'conservative', $model['eagerness'] );
+		$this->assertTrue( $model['field_lcp_provisional'] );
+		$this->assertSame( 30, $model['field_lcp_min_samples'] );
+
+		$this->options['wppo_settings']['ai_adaptive']['field_lcp_min_samples'] = 10;
+		Util::clear_settings_cache();
+		RUM::clear_field_lcp_cache();
+		// learn() throttles to once per minute via a transient lock; drop
+		// the lock so the second learn recomputes from the updated settings.
+		$this->transients = array();
+
+		$model = AI_Adaptive::learn();
+		$this->assertSame( 'eager', $model['eagerness'] );
+		$this->assertSame( 10, $model['field_lcp_min_samples'] );
+	}
+
+	/**
+	 * Test the slowest-p75 segment wins across device/template/connection.
+	 *
+	 * Given two qualified segments (mobile/single/4g at p75 3000ms and
+	 * desktop/archive/slow-2g at p75 4500ms) with a conservative global
+	 * baseline, the slowest segment drives `eager` and the suggestion copy
+	 * carries its device, template, and connection.
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_learn_slowest_segment_wins_with_connection(): void {
+		$this->install_stubs();
+		$today                                   = gmdate( 'Y-m-d' );
+		$this->options['wppo_web_vitals_rum']    = array(
+			$today => array(
+				'/shop/' => array(
+					'lcp'    => array(
+						'n'   => 100,
+						'sum' => 100000,
+						'min' => 1000,
+						'max' => 1000,
+					),
+					'lcpSeg' => array(
+						array(
+							'device'     => 'mobile',
+							'template'   => 'single',
+							'connection' => '4g',
+							'n'          => 20,
+							'sum'        => 60000.0,
+							'min'        => 3000.0,
+							'max'        => 3000.0,
+							'samples'    => array_fill( 0, 20, 3000.0 ),
+						),
+						array(
+							'device'     => 'desktop',
+							'template'   => 'archive',
+							'connection' => 'slow-2g',
+							'n'          => 20,
+							'sum'        => 90000.0,
+							'min'        => 4500.0,
+							'max'        => 4500.0,
+							'samples'    => array_fill( 0, 20, 4500.0 ),
+						),
+					),
+				),
+			),
+		);
+		$this->options['wppo_web_vitals_trends'] = array();
+		$this->options['wppo_settings']          = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		Util::clear_settings_cache();
+		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+
+		$model = AI_Adaptive::learn();
+		$this->assertSame( 'eager', $model['eagerness'] );
+		$this->assertFalse( $model['field_lcp_provisional'] );
+		$this->assertSame( 'desktop', $model['field_lcp_segment']['device'] );
+		$this->assertSame( 'archive', $model['field_lcp_segment']['template'] );
+		$this->assertSame( 'slow-2g', $model['field_lcp_segment']['connection'] );
+		$this->assertSame( 4500.0, $model['field_lcp_p75'] );
+
+		$suggestions = AI_Adaptive::get_suggestions();
+		$eagerness   = $this->find_suggestion( $suggestions, 'ai_speculation_eagerness' );
+		$this->assertNotNull( $eagerness );
+		$this->assertStringContainsString( 'slow-2g', $eagerness['value'] );
 	}
 
 	/**

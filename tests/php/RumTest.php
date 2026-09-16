@@ -454,7 +454,6 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	/**
 	 * Test that a beacon lcpUrl is aggregated per path.
 	 *
 	 * @since 2.0.0
@@ -560,6 +559,65 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 		);
 
 		$this->assertNull( RUM::get_field_lcp_url( '/hero' ) );
+	}
+
+	/**
+	 * Test get_field_lcp_url honours ai_adaptive.field_lcp_min_samples (issue #1200).
+	 *
+	 * The canonical resolver prefers the additive ai_adaptive setting over
+	 * the legacy image_optimisation key so both read paths share one gate.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_field_lcp_url_prefers_ai_adaptive_min_samples(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit'  => array( 'rum_enabled' => true ),
+			'image_optimisation' => array( 'fieldLcpMinSamples' => 20 ),
+			'ai_adaptive'        => array( 'field_lcp_min_samples' => 5 ),
+		);
+		Util::clear_settings_cache();
+		$today                        = gmdate( 'Y-m-d' );
+		$this->options[ RUM::OPTION ] = array(
+			$today => array(
+				'/hero' => array(
+					'lcpUrls' => array(
+						'example.com/wp-content/uploads/hero.jpg' => array(
+							'url'      => 'https://example.com/wp-content/uploads/hero.jpg',
+							'n'        => 5,
+							'lastSeen' => time(),
+						),
+					),
+				),
+			),
+		);
+
+		$field = RUM::get_field_lcp_url( '/hero' );
+		$this->assertIsArray( $field );
+		$this->assertSame( 'https://example.com/wp-content/uploads/hero.jpg', $field['url'] );
+	}
+
+	/**
+	 * Test get_field_lcp_min_samples clamps extreme values to 1-1000.
+	 *
+	 * A huge admin value (1000000) must not perpetually pin auto-tune to
+	 * provisional; zero/negative values fail open to the 20 default.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_field_lcp_min_samples_clamps_extreme_values(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'ai_adaptive' => array( 'field_lcp_min_samples' => 1000000 ),
+		);
+		Util::clear_settings_cache();
+		$this->assertSame( 1000, RUM::get_field_lcp_min_samples() );
+
+		$this->options['wppo_settings'] = array(
+			'ai_adaptive' => array( 'field_lcp_min_samples' => 0 ),
+		);
+		Util::clear_settings_cache();
+		$this->assertSame( 20, RUM::get_field_lcp_min_samples() );
 	}
 
 	/**
