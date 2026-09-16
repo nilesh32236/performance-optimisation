@@ -186,78 +186,50 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		/**
 		 * Purge specific Cloudflare files (URL-scoped single-page purge).
 		 *
+		 * Thin delegating wrapper around the canonical
+		 * Cloudflare_Purger::purge_files() transport (file-purge semantics
+		 * differ from purge_everything, so the wrapper is retained). No HTTP
+		 * code lives here.
+		 *
 		 * @since 2.0.0
+		 * @since NEXT Delegates to Cloudflare_Purger::purge_files().
 		 * @param string $zone Zone ID.
 		 * @param string $token API token.
 		 * @param string $url Absolute URL to purge.
 		 * @return bool
 		 */
 		private static function purge_cloudflare_files( string $zone, string $token, string $url ): bool {
-			$body = wp_json_encode( array( 'files' => array( $url ) ) );
-			if ( false === $body ) {
-				self::log_failure( 'cloudflare-edge', $zone . ': JSON encoding failed' );
+			if ( '' === $zone || '' === $token || '' === $url ) {
 				return false;
 			}
-			$response = wp_remote_request(
-				'https://api.cloudflare.com/client/v4/zones/' . rawurlencode( $zone ) . '/purge_cache',
-				array(
-					'method'  => 'POST',
-					'headers' => array(
-						'Authorization' => 'Bearer ' . $token,
-						'Content-Type'  => 'application/json',
-					),
-					'body'    => $body,
-					'timeout' => 10,
-				)
-			);
-			if ( is_wp_error( $response ) ) {
-				self::log_failure( 'cloudflare-edge', $zone . ': ' . $response->get_error_message() );
+			if ( ! class_exists( 'PerformanceOptimise\Inc\Cloudflare_Purger' ) ) {
 				return false;
 			}
-			$code = (int) wp_remote_retrieve_response_code( $response );
-			if ( $code < 200 || $code >= 300 ) {
-				self::log_failure( 'cloudflare-edge', $zone . ' (HTTP ' . $code . ')' );
-				return false;
-			}
-			return true;
+			// Single implementation lives in Cloudflare_Purger::purge_files().
+			return Cloudflare_Purger::purge_files( $zone, $token, array( $url ), 'cloudflare-edge' );
 		}
 
 		/**
 		 * Purge Cloudflare zone cache (purge_everything).
 		 *
+		 * Thin delegating wrapper around the canonical
+		 * Cloudflare_Purger::purge() transport. No HTTP code lives here.
+		 *
 		 * @since 2.0.0
+		 * @since NEXT Delegates to Cloudflare_Purger::purge().
 		 * @param string $zone Zone ID.
 		 * @param string $token API token.
 		 * @return bool
 		 */
 		private static function purge_cloudflare( string $zone, string $token ): bool {
-			$body = wp_json_encode( array( 'purge_everything' => true ) );
-			if ( false === $body ) {
-				self::log_failure( 'cloudflare-edge', $zone . ': JSON encoding failed' );
+			if ( '' === $zone || '' === $token ) {
 				return false;
 			}
-			$response = wp_remote_request(
-				'https://api.cloudflare.com/client/v4/zones/' . rawurlencode( $zone ) . '/purge_cache',
-				array(
-					'method'  => 'POST',
-					'headers' => array(
-						'Authorization' => 'Bearer ' . $token,
-						'Content-Type'  => 'application/json',
-					),
-					'body'    => $body,
-					'timeout' => 10,
-				)
-			);
-			if ( is_wp_error( $response ) ) {
-				self::log_failure( 'cloudflare-edge', $zone . ': ' . $response->get_error_message() );
+			if ( ! class_exists( 'PerformanceOptimise\Inc\Cloudflare_Purger' ) ) {
 				return false;
 			}
-			$code = (int) wp_remote_retrieve_response_code( $response );
-			if ( $code < 200 || $code >= 300 ) {
-				self::log_failure( 'cloudflare-edge', $zone . ' (HTTP ' . $code . ')' );
-				return false;
-			}
-			return true;
+			// Single implementation lives in Cloudflare_Purger::purge().
+			return Cloudflare_Purger::purge( $zone, $token, 'cloudflare-edge' );
 		}
 
 		/**

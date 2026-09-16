@@ -86,6 +86,63 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cloudflare_Purger' ) ) {
 		}
 
 		/**
+		 * Purge specific files on Cloudflare for the given zone.
+		 *
+		 * Behaviourally equivalent to the inlined Edge_Purger::purge_cloudflare_files()
+		 * method it replaces. Keeps the same URL shape, Bearer header, JSON body
+		 * shape ({files: [...]}), timeout, is_wp_error branch and 2xx status check.
+		 *
+		 * @since NEXT
+		 * @param string $zone    Cloudflare zone ID (already sanitized).
+		 * @param string $token   Cloudflare API token (Bearer).
+		 * @param array  $urls    Absolute URLs to purge.
+		 * @param string $log_tag Provider tag for wppo_debug_log ('cloudflare' or 'cloudflare-edge').
+		 * @return bool True on 2xx, false on WP_Error or non-2xx or empty args.
+		 */
+		public static function purge_files( string $zone, string $token, array $urls, string $log_tag = 'cloudflare' ): bool {
+			if ( '' === $zone || '' === $token || empty( $urls ) ) {
+				return false;
+			}
+
+			$files = array_values(
+				array_filter(
+					$urls,
+					static function ( $url ): bool {
+						return is_string( $url ) && '' !== $url;
+					}
+				)
+			);
+			if ( empty( $files ) ) {
+				return false;
+			}
+
+			$response = wp_remote_request(
+				'https://api.cloudflare.com/client/v4/zones/' . rawurlencode( $zone ) . '/purge_cache',
+				array(
+					'method'  => 'POST',
+					'headers' => array(
+						'Authorization' => 'Bearer ' . $token,
+						'Content-Type'  => 'application/json',
+					),
+					'body'    => (string) wp_json_encode( array( 'files' => $files ) ),
+					'timeout' => self::TIMEOUT,
+				)
+			);
+
+			if ( is_wp_error( $response ) ) {
+				self::log_failure( $log_tag, $zone . ': ' . $response->get_error_message() ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Debug log, not HTML output.
+				return false;
+			}
+
+			$code = (int) wp_remote_retrieve_response_code( $response );
+			if ( $code < 200 || $code >= 300 ) {
+				self::log_failure( $log_tag, $zone . ' (HTTP ' . $code . ')' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Debug log, not HTML output.
+				return false;
+			}
+			return true;
+		}
+
+		/**
 		 * Surface a failed purge via wppo_debug_log.
 		 *
 		 * Keeps the historic 'CDN purge failed [...]' prefix so existing
