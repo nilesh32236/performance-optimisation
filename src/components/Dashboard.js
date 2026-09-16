@@ -32,7 +32,7 @@ import AiPanel from './AiPanel';
 import EdgeCachePanel from './EdgeCachePanel';
 import ImageOptimizationCard from './ImageOptimizationCard';
 import RecentActivityCard from './RecentActivityCard';
-import WelcomePanel from './WelcomePanel';
+import WelcomePanel, { scrollToWooSafeMode } from './WelcomePanel';
 import { __, sprintf } from '@wordpress/i18n';
 import { modeLabel } from '../lib/litespeed';
 import { isSafeHttpUrl } from '../lib/urls';
@@ -321,6 +321,8 @@ const Dashboard = ( {
 	const pollRetryRef = useRef( 0 );
 	const pollAttemptsRef = useRef( 0 );
 	const submittingRef = useRef( false );
+	const wooAbortRef = useRef( null );
+	const wooTimedOutRef = useRef( false );
 	const [ confirmRemove, setConfirmRemove ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
 
@@ -378,6 +380,16 @@ const Dashboard = ( {
 		fetchDbCounts( controller.signal );
 		return () => controller.abort();
 	}, [ fetchDbCounts ] );
+
+	// Abort any in-flight Woo self-test on unmount so a slow request can
+	// never call setWooSelfTest/notify after the component is gone.
+	useEffect( () => {
+		return () => {
+			if ( wooAbortRef.current ) {
+				wooAbortRef.current.abort();
+			}
+		};
+	}, [] );
 
 	const dbOverheadCount = useMemo( () => {
 		return Object.entries( dbCounts ).reduce( ( sum, [ , val ] ) => {
@@ -776,23 +788,72 @@ const Dashboard = ( {
 
 	const runWooCacheSelfTest = useCallback( () => {
 		setWooSelfTestLoading( true );
-		fetchWooCacheSelfTest()
+		// Abort any previous in-flight test so a rapid re-run can never let
+		// stale first-run results win over the latest run.
+		if ( wooAbortRef.current ) {
+			wooAbortRef.current.abort();
+		}
+		const controller =
+			typeof AbortController !== 'undefined'
+				? new AbortController()
+				: null;
+		wooAbortRef.current = controller;
+		wooTimedOutRef.current = false;
+		const timeoutId = controller
+			? setTimeout( () => {
+					wooTimedOutRef.current = true;
+					controller.abort();
+			  }, 5000 )
+			: null;
+		fetchWooCacheSelfTest( controller?.signal )
 			.then( ( response ) => {
+				// Bail when this run is no longer current (a newer re-run
+				// replaced it) or its signal was aborted — stale results
+				// must never overwrite the latest run.
+				if (
+					wooAbortRef.current !== controller ||
+					wooAbortRef.current?.signal?.aborted
+				) {
+					return;
+				}
 				if ( response.success && response.data ) {
 					setWooSelfTest( response.data );
-					notify( {
-						type: response.data.all_pass ? 'success' : 'warning',
-						message: response.data.all_pass
-							? __(
-									'WooCommerce self-test passed: cart, checkout and account pages bypass the cache; faceted URLs are skipped by preload and the guest cart survives.',
-									'performance-optimisation'
-							  )
-							: __(
-									'WooCommerce self-test found a cacheable dynamic route. Check safe mode and the results below.',
-									'performance-optimisation'
-							  ),
-						durationMs: 5000,
-					} );
+					if (
+						! response.data.runnable ||
+						! response.data.woo_active
+					) {
+						notify( {
+							type: 'info',
+							message: response.data.woo_active
+								? __(
+										'The self-test could not run. Default exclusion paths are shown read-only; dynamic pages fail open to uncached.',
+										'performance-optimisation'
+								  )
+								: __(
+										'WooCommerce is not active — showing default exclusion paths read-only. Dynamic pages fail open to uncached.',
+										'performance-optimisation'
+								  ),
+							durationMs: 5000,
+						} );
+					} else if ( response.data.all_pass ) {
+						notify( {
+							type: 'success',
+							message: __(
+								'WooCommerce self-test passed: cart, checkout and account pages bypass the cache; faceted URLs are skipped by preload and the guest cart survives.',
+								'performance-optimisation'
+							),
+							durationMs: 5000,
+						} );
+					} else {
+						notify( {
+							type: 'warning',
+							message: __(
+								'WooCommerce self-test found a cacheable dynamic route. Check safe mode and the results below.',
+								'performance-optimisation'
+							),
+							durationMs: 5000,
+						} );
+					}
 				} else {
 					notify( {
 						type: 'error',
@@ -804,7 +865,36 @@ const Dashboard = ( {
 					} );
 				}
 			} )
-			.catch( () =>
+			.catch( ( error ) => {
+				// An abort from unmount cleanup (not the 5s timeout) must
+				// stay silent: notifying after unmount is spurious. The
+				// timeout sets wooTimedOutRef before aborting, so an aborted
+				// signal without the flag means unmount (or a superseded run).
+				if ( controller?.signal?.aborted && ! wooTimedOutRef.current ) {
+					return;
+				}
+				if (
+					error?.name === 'AbortError' ||
+					controller?.signal?.aborted
+				) {
+					console.error(
+						'Woo self-test timed out:',
+						getErrorLogMessage( error )
+					);
+					notify( {
+						type: 'error',
+						message: __(
+							'The WooCommerce self-test timed out after 5 seconds. Please retry.',
+							'performance-optimisation'
+						),
+						durationMs: 5000,
+					} );
+					return;
+				}
+				console.error(
+					'Woo self-test failed:',
+					getErrorLogMessage( error )
+				);
 				notify( {
 					type: 'error',
 					message: __(
@@ -812,9 +902,17 @@ const Dashboard = ( {
 						'performance-optimisation'
 					),
 					durationMs: 5000,
-				} )
-			)
-			.finally( () => setWooSelfTestLoading( false ) );
+				} );
+			} )
+			.finally( () => {
+				if ( timeoutId ) {
+					clearTimeout( timeoutId );
+				}
+				if ( wooAbortRef.current === controller ) {
+					wooAbortRef.current = null;
+					setWooSelfTestLoading( false );
+				}
+			} );
 	}, [ notify ] );
 
 	const saveLoggedInCacheSettings = useCallback( () => {
@@ -822,6 +920,10 @@ const Dashboard = ( {
 			{
 				enableLoggedInCache: loggedInCacheEnabled,
 				loggedInCacheRoles,
+				// Carry the live safe-mode switch so saving this card can
+				// never silently reset a staged fix back to the last
+				// committed value via the global-settings sync effect.
+				wooSafeMode,
 			},
 			setSavingLoggedInCache,
 			__( 'Logged-in cache settings saved.', 'performance-optimisation' ),
@@ -830,7 +932,12 @@ const Dashboard = ( {
 				'performance-optimisation'
 			)
 		);
-	}, [ loggedInCacheEnabled, loggedInCacheRoles, saveCacheTab ] );
+	}, [
+		loggedInCacheEnabled,
+		loggedInCacheRoles,
+		wooSafeMode,
+		saveCacheTab,
+	] );
 
 	const saveCdnPurgeSettings = useCallback( () => {
 		const service = CDN_PURGE_SERVICES.includes( cdnPurgeService )
@@ -841,6 +948,10 @@ const Dashboard = ( {
 				cdnPurgeService: service,
 				cloudflareZoneId,
 				varnishPurgeUrls: parseVarnishPurgeUrls( varnishPurgeUrls ),
+				// Carry the live safe-mode switch so saving this card can
+				// never silently reset a staged fix back to the last
+				// committed value via the global-settings sync effect.
+				wooSafeMode,
 			},
 			setSavingCdnPurge,
 			__( 'CDN purge settings saved.', 'performance-optimisation' ),
@@ -849,7 +960,13 @@ const Dashboard = ( {
 				'performance-optimisation'
 			)
 		);
-	}, [ cdnPurgeService, cloudflareZoneId, varnishPurgeUrls, saveCacheTab ] );
+	}, [
+		cdnPurgeService,
+		cloudflareZoneId,
+		varnishPurgeUrls,
+		wooSafeMode,
+		saveCacheTab,
+	] );
 
 	const handleLoggedInCacheToggle = useCallback( ( e ) => {
 		setLoggedInCacheEnabled( e.target.checked );
@@ -897,16 +1014,15 @@ const Dashboard = ( {
 	const handleWooSafeModeToggle = useCallback( ( e ) => {
 		setWooSafeMode( e.target.checked );
 	}, [] );
-	/**
-	 * Stage WooCommerce safe mode on from a FAIL self-test result.
-	 *
-	 * Staging only: the existing Save Page Cache Settings flow remains the
-	 * commit path, so the button label and helper copy say so explicitly
-	 * and a notice reminds the user to save. Focus moves to the safe-mode
-	 * switch so keyboard and screen-reader users land on the staged fix.
-	 *
-	 * @since NEXT
-	 */
+	// Stage WooCommerce safe mode on from a FAIL self-test result.
+	//
+	// Staging only: the existing Save Page Cache Settings flow remains the
+	// commit path, so the button label and helper copy say so explicitly
+	// and a notice reminds the user to save. Focus moves to the safe-mode
+	// switch (shared scrollToWooSafeMode helper) so keyboard and
+	// screen-reader users land on the staged fix. Sibling save cards carry
+	// the live wooSafeMode value so a staged fix survives saving another
+	// card; switching tabs still discards unstaged changes.
 	const handleReenableWooSafeMode = useCallback( () => {
 		setWooSafeMode( true );
 		notify( {
@@ -917,25 +1033,7 @@ const Dashboard = ( {
 			),
 			durationMs: 5000,
 		} );
-		if ( typeof document !== 'undefined' ) {
-			const anchor = document.getElementById( 'wppoWooSafeMode' );
-			if ( anchor ) {
-				if (
-					anchor.scrollIntoView &&
-					typeof anchor.scrollIntoView === 'function'
-				) {
-					try {
-						anchor.scrollIntoView( { block: 'nearest' } );
-					} catch {
-						// scrollIntoView options unsupported — ignore.
-					}
-				}
-				const input = anchor.querySelector( 'input, button' );
-				if ( input && typeof input.focus === 'function' ) {
-					input.focus( { preventScroll: true } );
-				}
-			}
-		}
+		scrollToWooSafeMode();
 	}, [ notify ] );
 	const handleCdnPurgeServiceChange = useCallback( ( e ) => {
 		setCdnPurgeService(
@@ -1528,7 +1626,7 @@ const Dashboard = ( {
 						) }
 					</p>
 				</div>
-				<div id="wppoWooSafeMode">
+				<div id="wppoWooSafeMode" tabIndex="-1">
 					<SwitchField
 						label={ __(
 							'WooCommerce safe mode',

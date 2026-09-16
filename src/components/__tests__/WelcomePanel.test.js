@@ -51,7 +51,7 @@ describe( 'WelcomePanel', () => {
 			screen.getByText( 'Welcome to Performance Optimisation' )
 		).toBeInTheDocument();
 		expect(
-			screen.getByRole( 'button', { name: 'Enable Enable Page Caching' } )
+			screen.getByRole( 'button', { name: 'Enable Page Caching' } )
 		).toBeInTheDocument();
 	} );
 
@@ -66,7 +66,7 @@ describe( 'WelcomePanel', () => {
 
 		render( <WelcomePanel /> );
 		const cacheButton = screen.getByRole( 'button', {
-			name: 'Enable Enable Page Caching',
+			name: 'Enable Page Caching',
 		} );
 
 		expect( cacheButton ).not.toHaveAttribute( 'aria-busy', 'true' );
@@ -82,7 +82,7 @@ describe( 'WelcomePanel', () => {
 		// Screen reader label should update
 		expect( cacheButton ).toHaveAttribute(
 			'aria-label',
-			'Enabling Enable Page Caching…'
+			'Enable Page Caching…'
 		);
 		// Visual text should update
 		expect( cacheButton ).toHaveTextContent( 'Enabling…' );
@@ -106,7 +106,7 @@ describe( 'WelcomePanel', () => {
 
 		render( <WelcomePanel /> );
 		const cacheButton = screen.getByRole( 'button', {
-			name: 'Enable Enable Page Caching',
+			name: 'Enable Page Caching',
 		} );
 
 		await act( async () => {
@@ -136,7 +136,7 @@ describe( 'WelcomePanel', () => {
 
 		render( <WelcomePanel /> );
 		const cacheButton = screen.getByRole( 'button', {
-			name: 'Enable Enable Page Caching',
+			name: 'Enable Page Caching',
 		} );
 
 		await act( async () => {
@@ -165,7 +165,7 @@ describe( 'WelcomePanel', () => {
 
 		render( <WelcomePanel /> );
 		const cacheButton = screen.getByRole( 'button', {
-			name: 'Enable Enable Page Caching',
+			name: 'Enable Page Caching',
 		} );
 
 		await act( async () => {
@@ -190,7 +190,7 @@ describe( 'WelcomePanel', () => {
 
 		render( <WelcomePanel /> );
 		const cacheButton = screen.getByRole( 'button', {
-			name: 'Enable Enable Page Caching',
+			name: 'Enable Page Caching',
 		} );
 
 		await act( async () => {
@@ -225,7 +225,7 @@ describe( 'WelcomePanel', () => {
 
 		render( <WelcomePanel /> );
 		const cacheButton = screen.getByRole( 'button', {
-			name: 'Enable Enable Page Caching',
+			name: 'Enable Page Caching',
 		} );
 
 		await act( async () => {
@@ -247,7 +247,7 @@ describe( 'WelcomePanel', () => {
 
 		render( <WelcomePanel /> );
 		const cacheButton = screen.getByRole( 'button', {
-			name: 'Enable Enable Page Caching',
+			name: 'Enable Page Caching',
 		} );
 
 		await act( async () => {
@@ -340,17 +340,18 @@ describe( 'WelcomePanel', () => {
 		).toBeInTheDocument();
 		expect(
 			screen.getByRole( 'button', {
-				name: 'Run Verify WooCommerce Cart Bypass',
+				name: 'Verify WooCommerce Cart Bypass',
 			} )
 		).toBeInTheDocument();
 	} );
 
 	it( 'getStepAriaLabel guards malformed steps', () => {
-		expect( getStepAriaLabel( null, false, false ) ).toBe( 'Enable ' );
+		expect( getStepAriaLabel( null, false, false ) ).toBe( '' );
 		expect( getStepAriaLabel( undefined, true, true ) ).toBe( 'Running …' );
-		expect( getStepAriaLabel( { label: 'X' }, true, false ) ).toBe(
-			'Enabling X…'
-		);
+		expect( getStepAriaLabel( { label: 'X' }, true, false ) ).toBe( 'X…' );
+		expect(
+			getStepAriaLabel( { label: 'Enable Page Caching' }, false, false )
+		).toBe( 'Enable Page Caching' );
 	} );
 
 	it( 'scrollToWooSafeMode focuses the switch input', () => {
@@ -381,7 +382,7 @@ describe( 'WelcomePanel', () => {
 		render( <WelcomePanel /> );
 		fireEvent.click(
 			screen.getByRole( 'button', {
-				name: 'Run Verify WooCommerce Cart Bypass',
+				name: 'Verify WooCommerce Cart Bypass',
 			} )
 		);
 
@@ -412,7 +413,7 @@ describe( 'WelcomePanel', () => {
 		render( <WelcomePanel /> );
 		fireEvent.click(
 			screen.getByRole( 'button', {
-				name: 'Run Verify WooCommerce Cart Bypass',
+				name: 'Verify WooCommerce Cart Bypass',
 			} )
 		);
 
@@ -448,7 +449,7 @@ describe( 'WelcomePanel', () => {
 			render( <WelcomePanel onNavigate={ onNavigate } /> );
 			fireEvent.click(
 				screen.getByRole( 'button', {
-					name: 'Run Verify WooCommerce Cart Bypass',
+					name: 'Verify WooCommerce Cart Bypass',
 				} )
 			);
 
@@ -485,7 +486,7 @@ describe( 'WelcomePanel', () => {
 		render( <WelcomePanel /> );
 		fireEvent.click(
 			screen.getByRole( 'button', {
-				name: 'Run Verify WooCommerce Cart Bypass',
+				name: 'Verify WooCommerce Cart Bypass',
 			} )
 		);
 
@@ -508,7 +509,7 @@ describe( 'WelcomePanel', () => {
 		render( <WelcomePanel /> );
 		fireEvent.click(
 			screen.getByRole( 'button', {
-				name: 'Run Verify WooCommerce Cart Bypass',
+				name: 'Verify WooCommerce Cart Bypass',
 			} )
 		);
 
@@ -545,7 +546,7 @@ describe( 'WelcomePanel', () => {
 		const { unmount } = render( <WelcomePanel /> );
 		fireEvent.click(
 			screen.getByRole( 'button', {
-				name: 'Run Verify WooCommerce Cart Bypass',
+				name: 'Verify WooCommerce Cart Bypass',
 			} )
 		);
 		await waitFor( () =>

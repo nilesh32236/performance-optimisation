@@ -28,6 +28,10 @@ export const dismissWelcome = () => apiCall( 'dismiss_welcome' );
  * Split out so the render path avoids nested ternaries (no-nested-ternary)
  * while keeping each sprintf() call on a literal format string.
  *
+ * Returns the step label alone when idle (STEPS labels already contain the
+ * verb, so prefixing another verb would read as "Enable Enable Page
+ * Caching" to screen readers) and appends an ellipsis while in flight.
+ *
  * @since NEXT
  * @param {Object}  step     Step entry from STEPS.
  * @param {boolean} isActive Whether the step action is in flight.
@@ -46,22 +50,11 @@ export const getStepAriaLabel = ( step, isActive, isWoo ) => {
 		}
 		return sprintf(
 			/* translators: %s: feature name */
-			__( 'Enabling %s…', 'performance-optimisation' ),
+			__( '%s…', 'performance-optimisation' ),
 			label
 		);
 	}
-	if ( isWoo ) {
-		return sprintf(
-			/* translators: %s: feature name */
-			__( 'Run %s', 'performance-optimisation' ),
-			label
-		);
-	}
-	return sprintf(
-		/* translators: %s: feature name */
-		__( 'Enable %s', 'performance-optimisation' ),
-		label
-	);
+	return label;
 };
 
 /**
@@ -73,15 +66,15 @@ export const getStepAriaLabel = ( step, isActive, isWoo ) => {
  * screen-reader users on the fix.
  *
  * @since NEXT
- * @return {void}
+ * @return {boolean} True when the switch was found and scrolled to.
  */
 export const scrollToWooSafeMode = () => {
 	if ( typeof document === 'undefined' ) {
-		return;
+		return false;
 	}
 	const anchor = document.getElementById( 'wppoWooSafeMode' );
 	if ( ! anchor ) {
-		return;
+		return false;
 	}
 	if (
 		anchor.scrollIntoView &&
@@ -97,6 +90,7 @@ export const scrollToWooSafeMode = () => {
 	if ( input && typeof input.focus === 'function' ) {
 		input.focus( { preventScroll: true } );
 	}
+	return true;
 };
 
 const STEPS = [
@@ -175,6 +169,7 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 	const { notice, notify, dismiss } = useNotice();
 	const dismissedRef = useRef( false );
 	const wooAbortRef = useRef( null );
+	const wooTimedOutRef = useRef( false );
 
 	// Resync when the global settings arrive late (e.g. localised data
 	// injected after first paint) or change after a save elsewhere.
@@ -207,18 +202,37 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 	 * 'dashboard' )` alone is a no-op tab re-set with no scroll — and the
 	 * `#wppoWooSafeMode` anchor fallback below is unreachable in that mount
 	 * path. Call onNavigate first (harmless when already on dashboard, still
-	 * correct if ever mounted elsewhere) and then scroll/focus the switch.
+	 * correct if ever mounted elsewhere) and then scroll/focus the switch,
+	 * retrying briefly so a late tab-switch commit still lands. When the
+	 * anchor never appears, surface a notice instead of failing silently.
 	 *
-	 * @since NEXT
 	 * @return {void}
 	 */
 	const handleWooFailNavigate = () => {
 		if ( typeof onNavigate === 'function' ) {
 			onNavigate( 'dashboard' );
 		}
-		// Dashboard is already mounted in this path, so the anchor exists
-		// synchronously; defer one tick so a tab switch (if any) commits.
-		setTimeout( scrollToWooSafeMode, 0 );
+		// Dashboard is already mounted in this path, so the anchor usually
+		// exists synchronously; retry for ~500ms so a tab switch (if any)
+		// that commits later still lands on the switch.
+		const attempts = [ 0, 100, 250, 500 ];
+		attempts.forEach( ( delay ) => {
+			setTimeout( () => {
+				if ( scrollToWooSafeMode() ) {
+					return;
+				}
+				if ( delay === 500 ) {
+					notify( {
+						type: 'info',
+						message: __(
+							'Open Dashboard → Page Cache and turn WooCommerce safe mode back on.',
+							'performance-optimisation'
+						),
+						durationMs: 5000,
+					} );
+				}
+			}, delay );
+		} );
 	};
 
 	/**
@@ -227,23 +241,36 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 	 * Never dismisses the panel: the test proves cart/checkout bypass
 	 * without writing settings, so auto-dismiss would hide onboarding
 	 * before the user enables anything.
-	 *
-	 * @since NEXT
 	 */
 	const handleWooSelfTest = async () => {
 		setActivatingStep( 'woo-verify' );
 		dismiss();
+		// Abort any previous in-flight test so a rapid re-run can never let
+		// stale first-run results win over the latest run.
+		if ( wooAbortRef.current ) {
+			wooAbortRef.current.abort();
+		}
 		const controller =
 			typeof AbortController !== 'undefined'
 				? new AbortController()
 				: null;
 		wooAbortRef.current = controller;
+		wooTimedOutRef.current = false;
 		const timeoutId = controller
-			? setTimeout( () => controller.abort(), 5000 )
+			? setTimeout( () => {
+					wooTimedOutRef.current = true;
+					controller.abort();
+			  }, 5000 )
 			: null;
 		try {
 			const res = await fetchWooCacheSelfTest( controller?.signal );
-			if ( wooAbortRef.current?.signal?.aborted ) {
+			// Bail when this run is no longer current (a newer re-run
+			// replaced it) or its signal was aborted — stale results must
+			// never overwrite the latest run.
+			if (
+				wooAbortRef.current !== controller ||
+				wooAbortRef.current?.signal?.aborted
+			) {
 				return;
 			}
 			if ( res?.success && res?.data ) {
@@ -292,6 +319,13 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 				} );
 			}
 		} catch ( error ) {
+			// An abort from unmount cleanup (not the 5s timeout) must stay
+			// silent: notifying or logging after unmount is spurious. The
+			// timeout sets wooTimedOutRef before aborting, so an aborted
+			// signal without the flag means unmount (or a superseded run).
+			if ( controller?.signal?.aborted && ! wooTimedOutRef.current ) {
+				return;
+			}
 			if ( error?.name === 'AbortError' || controller?.signal?.aborted ) {
 				console.error(
 					'Woo self-test timed out:',
@@ -367,7 +401,10 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 					// The feature is enabled; a thrown dismiss request must
 					// not masquerade as an enable failure. Surface the
 					// dismiss-specific error and keep the panel visible.
-					console.error( 'Welcome dismiss failed:', dismissError );
+					console.error(
+						'Welcome dismiss failed:',
+						getErrorLogMessage( dismissError )
+					);
 					return { success: false };
 				}
 			);
@@ -391,7 +428,10 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 				} );
 			}
 		} catch ( error ) {
-			console.error( 'Welcome panel action failed:', error );
+			console.error(
+				'Welcome panel action failed:',
+				getErrorLogMessage( error )
+			);
 			notify( {
 				type: 'error',
 				message: __(
@@ -426,7 +466,10 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 				} );
 			}
 		} catch ( error ) {
-			console.error( 'Welcome dismiss failed:', error );
+			console.error(
+				'Welcome dismiss failed:',
+				getErrorLogMessage( error )
+			);
 			notify( {
 				type: 'error',
 				message: __(
@@ -477,8 +520,31 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 			<div className="wppo-welcome-steps">
 				{ STEPS.map( ( step ) => {
 					const isWooStep = step.action === 'woo-self-test';
-					const wooVerified = isWooStep && !! wooSelfTest?.all_pass;
+					const wooVerified =
+						isWooStep && wooSelfTest?.all_pass === true;
 					const enabled = isWooStep ? wooVerified : step.isEnabled();
+					// Explicit tri-state result copy: a malformed payload
+					// with all_pass missing must never render FAIL copy or
+					// the fix CTA with no evidence of failure.
+					let wooResultCopy = '';
+					if ( isWooStep && wooSelfTest ) {
+						if ( wooSelfTest.all_pass === true ) {
+							wooResultCopy = __(
+								'Cart, checkout and fragments bypass the cache (PASS).',
+								'performance-optimisation'
+							);
+						} else if ( wooSelfTest.all_pass === false ) {
+							wooResultCopy = __(
+								'A dynamic route looks cacheable (FAIL).',
+								'performance-optimisation'
+							);
+						} else {
+							wooResultCopy = __(
+								'Result inconclusive — please re-run the test.',
+								'performance-optimisation'
+							);
+						}
+					}
 					return (
 						<div
 							key={ step.key }
@@ -536,32 +602,35 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 									) }
 								{ isWooStep && wooSelfTest && (
 									<p className="wppo-text-muted wppo-text-small">
-										{ __(
-											'Excluded paths:',
-											'performance-optimisation'
-										) }{ ' ' }
-										{ Array.isArray(
-											wooSelfTest.excluded_paths
-										)
-											? wooSelfTest.excluded_paths.join(
-													', '
-											  )
-											: '' }
-										{ ' • ' }
-										{ wooSelfTest.all_pass
-											? __(
-													'Cart, checkout and fragments bypass the cache (PASS).',
-													'performance-optimisation'
-											  )
-											: __(
-													'A dynamic route looks cacheable (FAIL).',
-													'performance-optimisation'
-											  ) }
+										{ sprintf(
+											/* translators: 1: safe mode state (On/Off), 2: comma-separated excluded paths, 3: self-test result */
+											__(
+												'Safe mode: %1$s • Excluded paths: %2$s • %3$s',
+												'performance-optimisation'
+											),
+											wooSelfTest.safe_mode
+												? __(
+														'On',
+														'performance-optimisation'
+												  )
+												: __(
+														'Off',
+														'performance-optimisation'
+												  ),
+											Array.isArray(
+												wooSelfTest.excluded_paths
+											)
+												? wooSelfTest.excluded_paths.join(
+														', '
+												  )
+												: '',
+											wooResultCopy
+										) }
 									</p>
 								) }
 								{ isWooStep &&
 									wooSelfTest?.runnable &&
-									! wooSelfTest?.all_pass && (
+									wooSelfTest?.all_pass === false && (
 										<p className="wppo-text-muted wppo-text-small">
 											{ __(
 												'Force-excluding dynamic routes plus cookie bypass.',

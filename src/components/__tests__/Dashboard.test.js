@@ -19,7 +19,11 @@ jest.mock( '../../lib/apiRequest', () => {
 	};
 } );
 
-jest.mock( '../WelcomePanel', () => () => <div data-testid="welcome-panel" /> );
+jest.mock( '../WelcomePanel', () => ( {
+	__esModule: true,
+	default: () => <div data-testid="welcome-panel" />,
+	scrollToWooSafeMode: jest.fn( () => true ),
+} ) );
 jest.mock( '../PerformanceAudit', () => () => (
 	<div data-testid="performance-audit" />
 ) );
@@ -809,10 +813,10 @@ describe( 'Dashboard', () => {
 
 		await waitFor( () =>
 			expect(
-				screen.getByText(
+				screen.getAllByText(
 					'WooCommerce is not active — showing default exclusion paths read-only. Dynamic pages fail open to uncached.'
-				)
-			).toBeInTheDocument()
+				).length
+			).toBeGreaterThanOrEqual( 1 )
 		);
 	} );
 
