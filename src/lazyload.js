@@ -1267,6 +1267,22 @@ const observedElements = new WeakSet();
 let backgroundObserver = null;
 
 /**
+ * MutationObserver instance tracking dynamically added native placeholders.
+ *
+ * Declared up-front (rather than at its first use ~700 lines below) so
+ * teardownLazyload() above never reads a later let binding — safe today
+ * (teardown only runs post-evaluation) but TDZ-fragile if teardown is ever
+ * called during module init.
+ *
+ * Installed separately from the data-src observer so natively-deferred
+ * images are covered even in full native-lazy mode (where loadImages()
+ * returns early and the main observer never installs).
+ *
+ * @type {MutationObserver|null}
+ */
+let nativePlaceholderObserver = null;
+
+/**
  * Module-local handle for the safety-scan interval.
  *
  * The id is mirrored to window.wppoSafetyScanId for backward compatibility
@@ -1365,18 +1381,27 @@ window.addEventListener( 'beforeunload', teardownLazyload );
  * The guard disconnects itself after firing (or on teardown) and never
  * re-arms — a re-added bundle copy runs its own module evaluation.
  *
- * Cost control: the watched element is this bundle's own script
- * (document.currentScript with an id/filename-pinned fallback, so an
- * unrelated optimizer script can neither trigger nor defeat cleanup) and
- * observation is scoped to the script's parent with childList only —
- * detaching this element is a direct-child mutation of its parent, so no
- * page-lifetime subtree observation is needed. A move to a new parent
- * re-targets the observer; a replacement by a live copy skips teardown so
- * the new copy's globals survive.
+ * Scope: observation is on document.documentElement with subtree:true so
+ * ancestor removal (head/body innerHTML rewrites, parent.remove(),
+ * optimizer rewrites) is also caught — watching only the script's direct
+ * parent misses those paths and leaks the fail-safe it was added for. The
+ * per-mutation cost is a single isConnected check; the replacement scan
+ * only runs once the watched element actually leaves the DOM.
+ *
+ * Copy pinning: the watched element is this bundle's own script
+ * (document.currentScript when available). When currentScript is null
+ * (deferred/async evaluation) the fallback pins by id/filename and, with
+ * several copies present, watches the last match (the most recently parsed
+ * element, i.e. this evaluation) so an unrelated optimizer script can
+ * neither trigger nor defeat cleanup. A replacement by a live copy skips
+ * teardown so the new copy's globals survive. When no script element
+ * exists yet at arm time (async/deferred evaluation before insertion),
+ * arming is retried once on DOMContentLoaded.
  *
  * @since NEXT
+ * @param {boolean} [retried=false] Whether this is the DOMContentLoaded retry.
  */
-const armScriptRemovalGuard = () => {
+const armScriptRemovalGuard = ( retried = false ) => {
 	if (
 		typeof MutationObserver === 'undefined' ||
 		typeof document === 'undefined' ||
@@ -1391,20 +1416,42 @@ const armScriptRemovalGuard = () => {
 			watched = current;
 		}
 		if ( ! watched ) {
-			watched =
-				document.querySelector( 'script#wppo-lazyload-js' ) ||
-				document.querySelector( 'script[src*="build/lazyload.js"]' );
+			// Attribute-free id/filename matching avoids selector-injection
+			// from the src value.
+			const candidates = document.querySelectorAll(
+				'script#wppo-lazyload-js, script[src*="build/lazyload.js"]'
+			);
+			if ( 1 === candidates.length ) {
+				watched = candidates[ 0 ];
+			} else if ( candidates.length > 1 ) {
+				// Most recently parsed element == this evaluation.
+				watched = candidates[ candidates.length - 1 ];
+			}
 		}
 	} catch {
 		return;
 	}
 	if ( ! watched ) {
+		// Detached-at-arm-time (null parent / not yet inserted): retry once
+		// on DOMContentLoaded instead of staying dormant forever.
+		if ( ! retried && typeof window !== 'undefined' ) {
+			try {
+				window.addEventListener(
+					'DOMContentLoaded',
+					() => {
+						armScriptRemovalGuard( true );
+					},
+					{ once: true }
+				);
+			} catch {
+				// Leave dormant when listeners are unavailable.
+			}
+		}
 		return;
 	}
 	const target = watched;
 	// Whether a *different* live copy of this bundle is still connected
-	// (the script was replaced rather than removed). Attribute-free id /
-	// filename matching avoids selector-injection from the src value.
+	// (the script was replaced rather than removed).
 	const hasLiveReplacement = () => {
 		try {
 			const scripts = document.querySelectorAll(
@@ -1420,40 +1467,30 @@ const armScriptRemovalGuard = () => {
 		}
 		return false;
 	};
+	// Disconnect any previous (e.g. DOMContentLoaded retry double-arm).
+	if ( scriptRemovalObserver ) {
+		scriptRemovalObserver.disconnect();
+		scriptRemovalObserver = null;
+	}
 	scriptRemovalObserver = new MutationObserver( () => {
-		// Still in the DOM (e.g. moved to a new parent) — keep watching,
-		// re-targeting the new parent so a later removal is still observed.
+		// Still in the DOM (e.g. moved) — keep watching.
 		if ( target.isConnected ) {
-			const parent = target.parentNode;
-			if ( parent && scriptRemovalObserver ) {
-				try {
-					scriptRemovalObserver.disconnect();
-					scriptRemovalObserver.observe( parent, {
-						childList: true,
-					} );
-				} catch {
-					// Keep the existing observation on failure.
-				}
-			}
 			return;
 		}
 		// Replaced with a live copy — the new copy runs its own module
 		// evaluation (arming its own guard), so leave its globals alone.
 		// One-way either way: disconnect after the decision.
+		scriptRemovalObserver.disconnect();
+		scriptRemovalObserver = null;
 		if ( hasLiveReplacement() ) {
-			scriptRemovalObserver.disconnect();
-			scriptRemovalObserver = null;
 			return;
 		}
 		teardownLazyload();
 	} );
-	const parent = target.parentNode;
-	if ( ! parent ) {
-		return;
-	}
 	try {
-		scriptRemovalObserver.observe( parent, {
+		scriptRemovalObserver.observe( document.documentElement, {
 			childList: true,
+			subtree: true,
 		} );
 	} catch {
 		scriptRemovalObserver.disconnect();
@@ -2036,17 +2073,6 @@ const observeElement = ( el ) => {
 		pendingLazyCount++;
 	}
 };
-
-/**
- * MutationObserver instance tracking dynamically added native placeholders.
- *
- * Installed separately from the data-src observer so natively-deferred
- * images are covered even in full native-lazy mode (where loadImages()
- * returns early and the main observer never installs).
- *
- * @type {MutationObserver|null}
- */
-let nativePlaceholderObserver = null;
 
 /**
  * Selector for natively-deferred images carrying local placeholder attributes.

@@ -17,7 +17,7 @@
  * filter. No new Composer deps; all WP APIs behind function_exists guards.
  *
  * @package PerformanceOptimise\Inc
- * @since   NEXT
+ * @since   2.0.0
  */
 
 namespace PerformanceOptimise\Inc;
@@ -69,6 +69,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 		 * @var string
 		 */
 		private static string $invalidation_script = '';
+
+		/**
+		 * Whether the invalidation script was already staged for this request.
+		 *
+		 * Class property (instead of a function-static) so long-lived PHP
+		 * workers and unit tests can reset it via reset_state_for_tests().
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static bool $script_staged = false;
 
 		/**
 		 * Whether bfcache handling is enabled.
@@ -346,11 +357,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 				return;
 			}
 			// Avoid duplicate output.
-			static $done = false;
-			if ( $done ) {
+			if ( self::$script_staged ) {
 				return;
 			}
-			$done = true;
+			self::$script_staged = true;
 
 			$cookie_name = self::get_cookie_name();
 			// Inline script: privacy-safe invalidation.
@@ -408,7 +418,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 		 *
 		 * Named wp_footer callback (instead of an anonymous closure) so it
 		 * can be removed via remove_action(), inspected via has_action(),
-		 * and unit-tested directly. No-op when no script was staged.
+		 * and unit-tested directly. No-op when no script was staged. The
+		 * staged script is cleared after printing so a double wp_footer
+		 * cannot emit duplicate scripts (double pageshow listeners).
 		 *
 		 * @since NEXT
 		 * @return void
@@ -418,6 +430,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 				return;
 			}
 			wp_print_inline_script_tag( self::$invalidation_script, array( 'id' => 'wppo-bfcache-invalidation' ) );
+			self::$invalidation_script = '';
+		}
+
+		/**
+		 * Reset staged bfcache state (tests / long-lived workers).
+		 *
+		 * Clears both the staged script and the already-staged flag so an
+		 * in-process second page starts clean.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_state_for_tests(): void {
+			self::$invalidation_script = '';
+			self::$script_staged       = false;
 		}
 
 		/**
@@ -431,9 +458,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 			add_action( 'set_logged_in_cookie', array( self::class, 'on_set_logged_in_cookie' ), 10, 6 );
 			add_action( 'clear_auth_cookie', array( self::class, 'on_clear_auth_cookie' ) );
 			add_filter( 'nocache_headers', array( self::class, 'filter_nocache_headers' ), 1000 );
+			// Frontend only: enqueue_scripts() early-returns on is_admin(), so
+			// an admin_enqueue_scripts registration could never print — admin
+			// pages are intentionally excluded (no bfcache invalidation needed
+			// there).
 			add_action( 'wp_enqueue_scripts', array( self::class, 'enqueue_scripts' ) );
-			// Also for admin and customize (like upstream) so admin pages get bfcache too.
-			add_action( 'admin_enqueue_scripts', array( self::class, 'enqueue_scripts' ) );
 		}
 	}
 }

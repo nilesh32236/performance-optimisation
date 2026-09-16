@@ -26,6 +26,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 	final class LiteSpeed_ESI {
 
 		/**
+		 * Memoized build/esi.asset.php lookup (false when missing).
+		 *
+		 * Class property (instead of a function-static) so unit tests and
+		 * long-lived PHP workers can reset it via reset_asset_cache_for_tests()
+		 * — a first missing-artifact false must not stick forever in-process.
+		 *
+		 * @since NEXT
+		 * @var mixed
+		 */
+		private static $asset_cache = null;
+
+		/**
+		 * Whether $asset_cache was already populated.
+		 *
+		 * Null is a legitimate "not yet loaded" state distinct from a loaded
+		 * false, hence the separate flag.
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static bool $asset_cache_set = false;
+
+		/**
+		 * Reset the memoized asset lookup (tests / long-lived workers).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_asset_cache_for_tests(): void {
+			self::$asset_cache     = null;
+			self::$asset_cache_set = false;
+		}
+
+		/**
 		 * Whether ESI is available (Enterprise only).
 		 *
 		 * Checks LITESPEED_SERVER_TYPE, LITESPEED_ESI_ON, or litespeed_esi_status filter.
@@ -211,22 +245,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		/**
 		 * Whether core supports the native `strategy` script args (WP 6.3+).
 		 *
-		 * Mirrors RUM::maybe_enqueue_scripts(): the ESI hydration client is
-		 * functionally equivalent to the RUM beacon, so it gets the same
-		 * render-non-blocking treatment on modern core.
+		 * Delegates to Util::supports_script_strategy() — the single shared
+		 * home for this gate (also used by RUM::supports_script_strategy())
+		 * so floor bumps cannot drift between copies.
 		 *
 		 * @since NEXT
 		 * @return bool
 		 */
 		private static function supports_script_strategy(): bool {
-			if ( isset( $GLOBALS['wp_version'] ) && is_string( $GLOBALS['wp_version'] ) && '' !== $GLOBALS['wp_version'] ) {
-				$wp_version = $GLOBALS['wp_version'];
-			} elseif ( function_exists( 'get_bloginfo' ) ) {
-				$wp_version = (string) get_bloginfo( 'version' );
-			} else {
-				$wp_version = '';
-			}
-			return version_compare( $wp_version, '6.3-alpha', '>=' );
+			return Util::supports_script_strategy();
 		}
 
 		/**
@@ -289,13 +316,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			$version    = WPPO_VERSION;
 			// Memoize the asset lookup: this runs on every frontend request on
 			// LiteSpeed sites, so stat + include the artifact at most once per
-			// request instead of paying a second per-page stat.
-			static $asset_cache = null;
-			if ( null === $asset_cache ) {
-				$asset_cache = file_exists( $asset_file ) ? include $asset_file : false; // phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable
+			// request instead of paying a second per-page stat. Resettable via
+			// reset_asset_cache_for_tests() for tests/long-lived workers.
+			if ( ! self::$asset_cache_set ) {
+				self::$asset_cache     = file_exists( $asset_file ) ? include $asset_file : false; // phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable
+				self::$asset_cache_set = true;
 			}
-			if ( false !== $asset_cache ) {
-				$asset = $asset_cache;
+			if ( false !== self::$asset_cache ) {
+				$asset = self::$asset_cache;
 				if ( is_array( $asset ) ) {
 					// Trust-but-verify the build artifact: entries must be
 					// non-empty strings (a tampered partial artifact must not
@@ -313,7 +341,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 						}
 					}
 					$clean = array_values( array_unique( $clean ) );
-					$deps  = ! empty( $clean ) ? $clean : array( 'wp-i18n' );
+					// Always union wp-i18n: src/esi.js needs it for translated
+					// labels, so a future build emitting non-empty deps without
+					// wp-i18n must not load without its i18n runtime.
+					if ( ! in_array( 'wp-i18n', $clean, true ) ) {
+						$clean[] = 'wp-i18n';
+					}
+					$deps = $clean;
 					if ( isset( $asset['version'] ) ) {
 						if ( is_string( $asset['version'] ) && '' !== $asset['version'] ) {
 							$version = $asset['version'];

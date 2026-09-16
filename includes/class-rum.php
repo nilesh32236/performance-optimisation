@@ -585,9 +585,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			$deps       = array();
 			$version    = WPPO_VERSION;
 			if ( file_exists( $asset_file ) ) {
-				$asset   = include $asset_file; // phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable
-				$deps    = isset( $asset['dependencies'] ) && is_array( $asset['dependencies'] ) ? $asset['dependencies'] : array();
-				$version = isset( $asset['version'] ) ? $asset['version'] : WPPO_VERSION;
+				$asset = include $asset_file; // phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable
+				if ( is_array( $asset ) ) {
+					// Trust-but-verify the build artifact (mirrors
+					// LiteSpeed_ESI::enqueue_hydration_client()): entries must
+					// be non-empty strings and the version a scalar so a
+					// tampered partial artifact cannot widen the dependency
+					// trust surface.
+					$raw_deps = isset( $asset['dependencies'] ) && is_array( $asset['dependencies'] ) ? $asset['dependencies'] : array();
+					$clean    = array();
+					foreach ( $raw_deps as $dep ) {
+						if ( ! is_scalar( $dep ) ) {
+							continue;
+						}
+						$dep = trim( (string) $dep );
+						if ( '' !== $dep ) {
+							$clean[] = $dep;
+						}
+					}
+					$deps = array_values( array_unique( $clean ) );
+					if ( isset( $asset['version'] ) ) {
+						if ( is_string( $asset['version'] ) && '' !== $asset['version'] ) {
+							$version = $asset['version'];
+						} elseif ( is_int( $asset['version'] ) || is_float( $asset['version'] ) ) {
+							$version = (string) $asset['version'];
+						}
+					}
+				}
 			}
 
 			if ( self::supports_script_strategy() ) {
@@ -610,18 +634,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		/**
 		 * Whether core supports the native `strategy` script args (WP 6.3+).
 		 *
+		 * Delegates to Util::supports_script_strategy() — the single shared
+		 * home for this gate (also used by LiteSpeed_ESI::supports_script_strategy())
+		 * so floor bumps cannot drift between copies.
+		 *
 		 * @since 2.0.0
 		 * @return bool
 		 */
 		private static function supports_script_strategy(): bool {
-			if ( isset( $GLOBALS['wp_version'] ) && is_string( $GLOBALS['wp_version'] ) && '' !== $GLOBALS['wp_version'] ) {
-				$wp_version = $GLOBALS['wp_version'];
-			} elseif ( function_exists( 'get_bloginfo' ) ) {
-				$wp_version = (string) get_bloginfo( 'version' );
-			} else {
-				$wp_version = '';
-			}
-			return version_compare( $wp_version, '6.3-alpha', '>=' );
+			return Util::supports_script_strategy();
 		}
 
 		/**

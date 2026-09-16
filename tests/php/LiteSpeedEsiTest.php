@@ -25,6 +25,9 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 		if ( class_exists( LiteSpeed_Integration::class ) && method_exists( LiteSpeed_Integration::class, 'reset_cache' ) ) {
 			LiteSpeed_Integration::reset_cache();
 		}
+		if ( class_exists( LiteSpeed_ESI::class ) && method_exists( LiteSpeed_ESI::class, 'reset_asset_cache_for_tests' ) ) {
+			LiteSpeed_ESI::reset_asset_cache_for_tests();
+		}
 		unset( $_SERVER['SERVER_SOFTWARE'] );
 		unset( $_COOKIE['woocommerce_items_in_cart'], $_COOKIE['woocommerce_cart_hash'] );
 		parent::tearDown();
