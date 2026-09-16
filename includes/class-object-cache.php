@@ -252,8 +252,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * - `foreign_dropin`: `true` if an existing `object-cache.php` without the plugin marker was found.
 		 * - `telemetry` (optional): array of Redis information (redis_version, uptime_in_seconds, uptime_in_days, connected_clients, used_memory_human, used_memory_peak_human, total_connections_received, keyspace_hits, keyspace_misses, keys).
 		 * - `telemetry_error` (optional): error message when telemetry collection failed.
+		 * - `bypassed`: `true` when the in-request outage bypass is armed or the persistent outage flag is set.
+		 * - `circuit_open`, `circuit_tripped_at`, `circuit_reason`, `circuit_error_code`, `failure_count`: circuit-breaker state.
+		 * - `serializers`: serializer capability map from get_serializer_support().
+		 * - `last_failure`: latest recorded failure payload ({ code, message, time }) or null.
 		 *
 		 * @since 1.4.0
+		 * @since NEXT Added `bypassed`, circuit, `serializers` and `last_failure` keys; fail-open outage short-circuit (at most one reconnect attempt per request per site).
 		 * @return array The status array described above.
 		 */
 		public function get_status() {
@@ -272,15 +277,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 
 			// Circuit state is file/option-backed (no Redis needed), so it is
 			// reported even when the extension is missing or Redis is down.
+			// Raw extension messages can embed host:port/topology, so reason
+			// and failure text are scrubbed before reaching admins/REST.
 			$circuit                      = $this->get_circuit_state();
 			$status['circuit_open']       = $circuit['open'];
 			$status['circuit_tripped_at'] = $circuit['tripped_at'];
-			$status['circuit_reason']     = $circuit['reason'];
+			$status['circuit_reason']     = self::scrub_redis_message( $circuit['reason'] );
 			$status['circuit_error_code'] = $circuit['error_code'];
 			$status['failure_count']      = $circuit['failures'];
 			$status['serializers']        = $this->get_serializer_support();
 			$status['last_failure']       = $this->get_last_failure_payload();
-			$status['bypassed']           = true === self::$outage_bypassed || $this->is_outage_flagged();
+			$status['bypassed']           = self::is_outage_bypassed() || $this->is_outage_flagged();
 
 			if ( file_exists( $this->dropin_path ) ) {
 				$wp_filesystem = Util::init_filesystem();
@@ -360,14 +367,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 							);
 						}
 					}
-				} catch ( \Exception $te ) {
+				} catch ( \Throwable $te ) {
+					unset( $te );
 					$status['telemetry_error'] = defined( 'WP_DEBUG' ) && WP_DEBUG ? $te->getMessage() : __( 'Redis telemetry error.', 'performance-optimisation' );
 				} finally {
 					if ( method_exists( $redis, 'close' ) ) {
-						$redis->close();
+						try {
+							$redis->close();
+						} catch ( \Throwable $close_error ) {
+							unset( $close_error );
+						}
 					}
 				}
-			} catch ( \Exception $e ) {
+			} catch ( \Throwable $e ) {
+				unset( $e );
 				$status['redis_reachable'] = false;
 				$status['telemetry_error'] = defined( 'WP_DEBUG' ) && WP_DEBUG ? $e->getMessage() : __( 'Redis connection error.', 'performance-optimisation' );
 			}
@@ -627,6 +640,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			delete_transient( Util::transient_key( self::CIRCUIT_NOTICE_TRANSIENT ) );
 			delete_transient( Util::transient_key( self::LAST_FAILURE_TRANSIENT ) );
 			self::$outage_bypassed = false;
+			self::$outage_blog_id  = 0;
 			self::$outage_error    = null;
 			$this->clear_outage_flag();
 
@@ -780,10 +794,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * another ~0.5s connection timeout (retry storm). Reset on successful
 		 * ping/enable or via reset_outage_bypass() (tests).
 		 *
+		 * Blog-scoped via $outage_blog_id: after switch_to_blog() the bypass
+		 * for site A must never short-circuit site B's different Redis
+		 * config — the scope check resets the flag when the blog changes.
+		 *
 		 * @since NEXT
 		 * @var bool
 		 */
 		private static $outage_bypassed = false;
+
+		/**
+		 * Blog ID the in-request bypass was armed for (see $outage_bypassed).
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private static $outage_blog_id = 0;
 
 		/**
 		 * Last outage error surfaced while the in-request bypass is armed.
@@ -798,19 +824,149 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		private static $outage_error = null;
 
 		/**
+		 * Resolve the current blog ID for outage-bypass scoping (never fatals).
+		 *
+		 * @since NEXT
+		 * @return int Current blog ID, or 0 when unavailable.
+		 */
+		private static function current_outage_blog_id(): int {
+			if ( ! function_exists( 'get_current_blog_id' ) ) {
+				return 0;
+			}
+			try {
+				return (int) get_current_blog_id();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
+			}
+		}
+
+		/**
+		 * Reset the in-request bypass when the blog changed since arming.
+		 *
+		 * The persistent flag is per-site (per-site wppo_settings option)
+		 * while the static is process-global; without this a site-A outage
+		 * would short-circuit site B's healthy Redis after switch_to_blog().
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private static function sync_outage_scope(): void {
+			try {
+				if ( true !== self::$outage_bypassed ) {
+					return;
+				}
+				if ( self::current_outage_blog_id() !== self::$outage_blog_id ) {
+					self::$outage_bypassed = false;
+					self::$outage_error    = null;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Arm the in-request bypass for the current blog.
+		 *
+		 * @since NEXT
+		 * @param \WP_Error $error Original failure to replay to repeat callers.
+		 * @return void
+		 */
+		private static function arm_in_request_bypass( $error ): void {
+			self::$outage_bypassed = true;
+			self::$outage_blog_id  = self::current_outage_blog_id();
+			self::$outage_error    = $error;
+		}
+
+		/**
+		 * Whether a Redis failure code is a transient outage (vs permanent misconfiguration).
+		 *
+		 * Only transient network/timeout failures persist `outage_bypassed`:
+		 * auth failures (wrong password), missing classes/extensions, and
+		 * invalid config can never heal on their own, so persisting a
+		 * "bypassed until recovery" flag for them would masquerade a
+		 * permanent misconfiguration as a transient outage. The in-request
+		 * bypass still short-circuits those (single attempt per request).
+		 *
+		 * @since NEXT
+		 * @param string $code Failure code.
+		 * @param string $message Failure message (scanned for auth signals).
+		 * @return bool True when the failure may heal without config changes.
+		 */
+		private static function is_transient_outage_error( string $code, string $message = '' ): bool {
+			$code          = strtolower( trim( $code ) );
+			$non_transient = array(
+				'auth_fail',
+				'missing_extension',
+				'missing_redis',
+				'missing_helper',
+				'missing_cluster',
+				'missing_sentinel',
+				'low_nodes',
+				'redis_version',
+				'select_fail',
+				'forbidden',
+				'foreign_dropin',
+			);
+			if ( in_array( $code, $non_transient, true ) ) {
+				return false;
+			}
+			$haystack = strtolower( $code . ' ' . $message );
+			if ( false !== strpos( $haystack, 'auth' ) || false !== strpos( $haystack, 'wrongpass' ) || false !== strpos( $haystack, 'noperm' ) || false !== strpos( $haystack, 'password' ) ) {
+				return false;
+			}
+			return true;
+		}
+
+		/**
+		 * Scrub a Redis failure/circuit message before admin/REST surfacing.
+		 *
+		 * Raw phpredis messages can embed host:port/topology and absolute
+		 * paths; strip those plus tags and truncate, mirroring
+		 * redis_error_payload() hygiene.
+		 *
+		 * @since NEXT
+		 * @param string $message Raw message.
+		 * @return string Scrubbed message (max 200 chars).
+		 */
+		private static function scrub_redis_message( string $message ): string {
+			$message = trim( (string) preg_replace( '/<[^>]*>/', '', $message ) );
+			try {
+				if ( defined( 'ABSPATH' ) && is_string( ABSPATH ) && '' !== ABSPATH ) {
+					$message = str_replace( (string) ABSPATH, '', $message );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			try {
+				if ( defined( 'WP_CONTENT_DIR' ) && is_string( WP_CONTENT_DIR ) && '' !== WP_CONTENT_DIR ) {
+					$message = str_replace( (string) WP_CONTENT_DIR, '', $message );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			if ( '' === $message ) {
+				return '';
+			}
+			return substr( $message, 0, 200 );
+		}
+
+		/**
 		 * Internal helper to connect to Redis based on config.
 		 *
 		 * Fail-open: when the in-request outage bypass is armed (see
 		 * wppo_redis_outage_fallback()) this short-circuits to the stored
 		 * outage error without touching the network — at most one reconnect
-		 * attempt per request. Explicit recovery probes (ping()) clear the
+		 * attempt per request per site. Explicit recovery probes (ping()) clear the
 		 * bypass before connecting so recovery is always detectable.
 		 *
 		 * @since 1.4.0
+		 * @since NEXT Blog-scoped bypass short-circuit (no cross-site leakage after switch_to_blog()).
 		 * @param array $config Configuration array.
 		 * @return \Redis|\RedisCluster|\WP_Error
 		 */
 		private function connect_internal( $config ) {
+			self::sync_outage_scope();
 			if ( true === self::$outage_bypassed && self::$outage_error instanceof \WP_Error ) {
 				return self::$outage_error;
 			}
@@ -830,18 +986,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * success the persistent flag is cleared and normal caching resumes.
 		 * Subsequent calls in the same request short-circuit via
 		 * connect_internal() without another network round-trip (single
-		 * reconnect attempt max per request). Never fatals — failures are
+		 * reconnect attempt max per request per site). Never fatals — failures are
 		 * returned as WP_Error for uncached serving.
 		 *
 		 * Multisite-safe: the persistent flag lives in the per-site
 		 * `wppo_settings` option (get_option/update_option are inherently
-		 * site-specific); no cross-site leakage.
+		 * site-specific); the in-request bypass is blog-scoped and resets on
+		 * switch_to_blog(); no cross-site leakage.
+		 *
+		 * Expects a pre-filtered `$config` (callers: get_redis_config() or
+		 * ping() already apply `wppo_object_cache_config`); this helper never
+		 * re-applies the filter, so non-idempotent filters run exactly once.
 		 *
 		 * @since NEXT
-		 * @param array $config Connection configuration.
+		 * @param array $config Connection configuration (pre-filtered).
 		 * @return \Redis|\RedisCluster|\WP_Error Connected client, or WP_Error (including `redis_bypassed` while bypassed).
 		 */
 		public function wppo_redis_outage_fallback( $config = array() ) {
+			self::sync_outage_scope();
 			if ( true === self::$outage_bypassed ) {
 				if ( self::$outage_error instanceof \WP_Error ) {
 					return self::$outage_error;
@@ -849,31 +1011,52 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				return new \WP_Error( 'redis_bypassed', __( 'Redis is bypassed for this request after an outage.', 'performance-optimisation' ) );
 			}
 
+			// Missing extension is a permanent environment state, not a
+			// transient outage: report it without arming any bypass (a
+			// class_exists check is cheap, and arming here while never
+			// calling arm_outage_flag() would diverge the in-request and
+			// persistent signals).
 			if ( ! class_exists( 'Redis' ) ) {
-				$error                 = new \WP_Error( 'missing_extension', __( 'The PhpRedis extension is not installed.', 'performance-optimisation' ) );
-				self::$outage_bypassed = true;
-				self::$outage_error    = $error;
-				return $error;
+				return new \WP_Error( 'missing_extension', __( 'The PhpRedis extension is not installed.', 'performance-optimisation' ) );
 			}
 
-			if ( function_exists( 'apply_filters' ) ) {
-				$config = (array) apply_filters( 'wppo_object_cache_config', $config );
-			} else {
-				$config = (array) $config;
+			// Caller pre-filters via get_redis_config()/ping(); only cast
+			// and lightly re-validate shape here (host/port) since filtered
+			// values reach wppo_redis_connect() directly.
+			$config = (array) $config;
+			if ( isset( $config['port'] ) && ! is_array( $config['port'] ) ) {
+				$port = (int) $config['port'];
+				if ( $port > 0 && $port <= 65535 ) {
+					$config['port'] = $port;
+				} else {
+					unset( $config['port'] );
+				}
+			}
+			if ( isset( $config['host'] ) && ! is_string( $config['host'] ) ) {
+				unset( $config['host'] );
 			}
 
 			$connection = $this->connect_internal( $config );
 
 			if ( function_exists( 'is_wp_error' ) ? is_wp_error( $connection ) : $connection instanceof \WP_Error ) {
-				self::$outage_bypassed = true;
-				self::$outage_error    = $connection instanceof \WP_Error ? $connection : new \WP_Error( 'redis_error', __( 'Redis connection failed.', 'performance-optimisation' ) );
-				$this->arm_outage_flag();
-				try {
-					$this->log_redis_failure( self::$outage_error->get_error_code(), self::$outage_error->get_error_message() );
-				} catch ( \Throwable $e ) {
-					unset( $e );
+				$outage_error = $connection instanceof \WP_Error ? $connection : new \WP_Error( 'redis_error', __( 'Redis connection failed.', 'performance-optimisation' ) );
+				self::arm_in_request_bypass( $outage_error );
+				// Permanent misconfiguration (e.g. auth failure) arms only
+				// the cheap in-request bypass, never the persistent flag.
+				if ( self::is_transient_outage_error( $outage_error->get_error_code(), $outage_error->get_error_message() ) ) {
+					$armed = $this->arm_outage_flag();
+					// Log only on the unarmed → armed transition so a
+					// prolonged outage costs one DB write, not one per
+					// request (the fail-open path must stay cheap).
+					if ( $armed ) {
+						try {
+							$this->log_redis_failure( $outage_error->get_error_code(), $outage_error->get_error_message() );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+					}
 				}
-				return self::$outage_error;
+				return $outage_error;
 			}
 
 			$this->clear_outage_flag();
@@ -882,12 +1065,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		}
 
 		/**
-		 * Whether the in-request outage bypass is armed.
+		 * Whether the in-request outage bypass is armed (current site).
 		 *
 		 * @since NEXT
 		 * @return bool True when subsequent cache calls short-circuit to uncached in this request.
 		 */
 		public static function is_outage_bypassed(): bool {
+			self::sync_outage_scope();
 			return true === self::$outage_bypassed;
 		}
 
@@ -902,6 +1086,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 */
 		public static function reset_outage_bypass(): void {
 			self::$outage_bypassed = false;
+			self::$outage_blog_id  = 0;
 			self::$outage_error    = null;
 		}
 
@@ -921,6 +1106,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
 					$settings = Util::get_settings();
 				} elseif ( function_exists( 'get_option' ) ) {
+					// allowlist(settings-read-guard): legacy fallback when Util is unavailable (never hit at runtime).
 					$settings = get_option( 'wppo_settings', array() );
 				} else {
 					return false;
@@ -933,29 +1119,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				return false;
 			}
 			$oc = isset( $settings['object_cache'] ) && is_array( $settings['object_cache'] ) ? $settings['object_cache'] : array();
-			return ! empty( $oc['outage_bypassed'] );
+			if ( ! array_key_exists( 'outage_bypassed', $oc ) ) {
+				return false;
+			}
+			// Pinned boolean normalization: a stored "false" string (legacy
+			// JSON import) must read as false, not truthy via !empty().
+			$normalized = filter_var( $oc['outage_bypassed'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+			return true === $normalized;
 		}
 
 		/**
 		 * Arm the persistent outage status flag (additive settings key).
 		 *
-		 * No-op when already armed (no extra DB write). Guarded for WP 6.2+
-		 * and PHP 8.2+ with function_exists/class_exists checks and a legacy
-		 * get_option fallback.
+		 * Reads a fresh (unmemoized) get_option() immediately before the
+		 * write so a stale Util::get_settings() memo can never clobber an
+		 * unrelated tab saved concurrently (whole-option read-modify-write
+		 * lost-update hazard). No-op when already armed (no extra DB write).
+		 * Guarded for WP 6.2+ and PHP 8.2+ with function_exists/class_exists
+		 * checks and a legacy get_option fallback. Schedules the
+		 * wppo_object_cache_probe recovery cron (guarded by
+		 * wp_next_scheduled) so an armed flag cannot stay stale when no
+		 * further fallback/ping callers run.
 		 *
 		 * @since NEXT
-		 * @return void
+		 * @return bool True on the unarmed → armed transition (callers log only then); false when already armed or unavailable.
 		 */
-		private function arm_outage_flag(): void {
+		private function arm_outage_flag(): bool {
 			try {
 				if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
-					return;
+					return false;
 				}
-				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
-					$settings = Util::get_settings();
-				} else {
-					$settings = get_option( 'wppo_settings', array() );
-				}
+				// allowlist(settings-read-guard): deliberate fresh read — must bypass
+				// the Util::get_settings() memo so a stale memo can never clobber
+				// an unrelated tab saved concurrently (whole-option RMW). See tests/php/SettingsReadGuardTest.php.
+				// Fresh read bypassing the memo by construction.
+				$settings = get_option( 'wppo_settings', array() );
 				if ( ! is_array( $settings ) ) {
 					$settings = array();
 				}
@@ -965,24 +1163,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				if ( ! isset( $settings['object_cache'] ) ) {
 					$settings['object_cache'] = array();
 				}
-				if ( ! empty( $settings['object_cache']['outage_bypassed'] ) ) {
-					return;
+				if ( true === filter_var( $settings['object_cache']['outage_bypassed'] ?? false, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE ) ) {
+					return false;
 				}
 				$settings['object_cache']['outage_bypassed'] = true;
-				update_option( 'wppo_settings', $settings );
-				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
+				// Refresh the memo only on a real write: update_option()
+				// returns false both on failure and on identical values, and
+				// the value differs here, so false means the write failed and
+				// the memo must keep describing the stored state.
+				if ( update_option( 'wppo_settings', $settings ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
 					Util::set_settings_cache( $settings );
 				}
+				// Recovery probe so an armed flag heals without waiting for
+				// the next admin/REST status call (mirrors the circuit
+				// probe scheduling in auto_disable_circuit()).
+				if ( function_exists( 'wp_next_scheduled' ) && function_exists( 'wp_schedule_event' ) && ! wp_next_scheduled( 'wppo_object_cache_probe' ) ) {
+					wp_schedule_event( time(), 'wppo_object_cache_probe', 'wppo_object_cache_probe' );
+				}
+				return true;
 			} catch ( \Throwable $e ) {
 				unset( $e );
+				return false;
 			}
 		}
 
 		/**
 		 * Clear the persistent outage status flag on recovery.
 		 *
-		 * No-op when already clear (no extra DB write), so the hot
-		 * success path stays query-free.
+		 * Fresh (unmemoized) get_option() read before the write, matching
+		 * arm_outage_flag(). No-op when already clear (no extra DB write),
+		 * so the hot success path stays query-free.
 		 *
 		 * @since NEXT
 		 * @return void
@@ -992,23 +1202,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
 					return;
 				}
-				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
-					$settings = Util::get_settings();
-				} else {
-					$settings = get_option( 'wppo_settings', array() );
-				}
+				// allowlist(settings-read-guard): deliberate fresh read — matches
+				// arm_outage_flag() so clear never resurrects a concurrently
+				// saved tab. See tests/php/SettingsReadGuardTest.php.
+				// Fresh read bypassing the memo by construction.
+				$settings = get_option( 'wppo_settings', array() );
 				if ( ! is_array( $settings ) ) {
 					return;
 				}
 				if ( empty( $settings['object_cache'] ) || ! is_array( $settings['object_cache'] ) ) {
 					return;
 				}
-				if ( empty( $settings['object_cache']['outage_bypassed'] ) ) {
+				if ( true !== filter_var( $settings['object_cache']['outage_bypassed'] ?? false, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE ) ) {
 					return;
 				}
 				$settings['object_cache']['outage_bypassed'] = false;
-				update_option( 'wppo_settings', $settings );
-				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
+				if ( update_option( 'wppo_settings', $settings ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
 					Util::set_settings_cache( $settings );
 				}
 			} catch ( \Throwable $e ) {
@@ -1135,57 +1344,70 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			// Recovery probe: lift the in-request bypass for exactly one real
 			// attempt so a healed Redis is detected even mid-request.
 			self::$outage_bypassed = false;
+			self::$outage_blog_id  = self::current_outage_blog_id();
 			self::$outage_error    = null;
 			$connection            = $this->connect_internal( $config );
 
 			if ( is_wp_error( $connection ) ) {
-				self::$outage_bypassed = true;
-				self::$outage_error    = $connection;
-				$this->arm_outage_flag();
-				$this->log_redis_failure( $connection->get_error_code(), $connection->get_error_message() );
+				self::arm_in_request_bypass( $connection );
+				if ( self::is_transient_outage_error( $connection->get_error_code(), $connection->get_error_message() ) && $this->arm_outage_flag() ) {
+					$this->log_redis_failure( $connection->get_error_code(), $connection->get_error_message() );
+				}
 				return $connection;
 			}
 
 			if ( method_exists( $connection, 'ping' ) ) {
 				try {
 					$result = $connection->ping();
-					$connection->close();
+					try {
+						$connection->close();
+					} catch ( \Throwable $close_error ) {
+						unset( $close_error );
+					}
 
 					if ( true === $result || '+PONG' === $result || ( is_string( $result ) && stripos( $result, 'PONG' ) !== false ) ) {
 						self::$outage_bypassed = false;
+						self::$outage_blog_id  = 0;
 						self::$outage_error    = null;
 						$this->clear_outage_flag();
 						return true;
 					}
-					$error                 = new \WP_Error( 'ping_fail', __( 'Ping returned false', 'performance-optimisation' ) );
-					self::$outage_bypassed = true;
-					self::$outage_error    = $error;
-					$this->arm_outage_flag();
-					$this->log_redis_failure( $error->get_error_code(), $error->get_error_message() );
+					$error = new \WP_Error( 'ping_fail', __( 'Ping returned false', 'performance-optimisation' ) );
+					self::arm_in_request_bypass( $error );
+					if ( $this->arm_outage_flag() ) {
+						$this->log_redis_failure( $error->get_error_code(), $error->get_error_message() );
+					}
 					return $error;
-				} catch ( \Exception $e ) {
+				} catch ( \Throwable $e ) {
 					if ( method_exists( $connection, 'close' ) ) {
-						$connection->close();
+						try {
+							$connection->close();
+						} catch ( \Throwable $close_error ) {
+							unset( $close_error );
+						}
 					}
-					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'ABSPATH' ) ) {
 						// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-						error_log( 'Redis ping exception: ' . str_replace( ABSPATH, '', $e->getMessage() ) );
+						error_log( 'Redis ping exception: ' . str_replace( (string) ABSPATH, '', $e->getMessage() ) );
 					}
-					$error                 = new \WP_Error( 'ping_exception', __( 'Redis connection failed.', 'performance-optimisation' ) );
-					self::$outage_bypassed = true;
-					self::$outage_error    = $error;
-					$this->arm_outage_flag();
-					$this->log_redis_failure( $error->get_error_code(), $error->get_error_message() );
+					$error = new \WP_Error( 'ping_exception', __( 'Redis connection failed.', 'performance-optimisation' ) );
+					self::arm_in_request_bypass( $error );
+					if ( $this->arm_outage_flag() ) {
+						$this->log_redis_failure( $error->get_error_code(), $error->get_error_message() );
+					}
 					return $error;
 				}
 			}
 
-			$connection->close();
-			$error                 = new \WP_Error( 'no_ping_method', __( 'Connection does not support ping', 'performance-optimisation' ) );
-			self::$outage_bypassed = true;
-			self::$outage_error    = $error;
-			$this->arm_outage_flag();
-			$this->log_redis_failure( $error->get_error_code(), $error->get_error_message() );
+			try {
+				$connection->close();
+			} catch ( \Throwable $close_error ) {
+				unset( $close_error );
+			}
+			$error = new \WP_Error( 'no_ping_method', __( 'Connection does not support ping', 'performance-optimisation' ) );
+			self::arm_in_request_bypass( $error );
+			// no_ping_method is a client-shape issue, not a network outage:
+			// short-circuit in-request only, never persist or log as outage.
 			return $error;
 		}
 
@@ -1525,7 +1747,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		public function enable( $config ) {
 			// Defense-in-depth: authorization lives in REST/CLI callers, but a
 			// direct PHP call must not get privileged file writes.
-			if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) && ! wp_doing_cron() && ! ( defined( 'WP_CLI' ) && WP_CLI ) ) {
+			if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) && ! ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() ) && ! ( defined( 'WP_CLI' ) && WP_CLI ) ) {
 				return new \WP_Error( 'forbidden', __( 'You are not allowed to manage the object cache.', 'performance-optimisation' ) );
 			}
 			if ( ! class_exists( 'Redis' ) ) {
@@ -1535,12 +1757,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			/** This filter is documented in get_redis_config(). */
 			$config = (array) apply_filters( 'wppo_object_cache_config', $config );
 
-			$status = $this->get_status();
-			if ( $status['foreign_dropin'] ) {
+			// Foreign check via the local marker read (no Redis round-trip:
+			// get_status() would attempt a connection AND ping() below would
+			// attempt a second one, doubling timeouts + log writes on a dead
+			// server and violating the single-attempt-per-request budget).
+			if ( file_exists( $this->dropin_path ) && ! $this->is_own_dropin() ) {
 				return new \WP_Error( 'foreign_dropin', __( 'Another Object Cache drop-in is already present. Please disable it before enabling this one.', 'performance-optimisation' ) );
 			}
 
-			// Test connection before writing config.
+			// Test connection before writing config (single attempt; ping()
+			// is the recovery probe and manages the outage flags itself).
 			$ping_result = $this->ping( $config );
 			if ( is_wp_error( $ping_result ) ) {
 				return new \WP_Error( 'redis_unreachable', __( 'Cannot connect to Redis with provided settings.', 'performance-optimisation' ) );
@@ -1634,11 +1860,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * @return bool|\WP_Error True on success, WP_Error on failure.
 		 */
 		public function disable() {
-			if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) && ! wp_doing_cron() && ! ( defined( 'WP_CLI' ) && WP_CLI ) ) {
+			if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) && ! ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() ) && ! ( defined( 'WP_CLI' ) && WP_CLI ) ) {
 				return new \WP_Error( 'forbidden', __( 'You are not allowed to manage the object cache.', 'performance-optimisation' ) );
 			}
-			$status = $this->get_status();
-			if ( $status['foreign_dropin'] ) {
+			// Local marker read only: get_status() would pay a connection
+			// timeout (and arm outage state) on a dead server just to
+			// disable the drop-in.
+			if ( file_exists( $this->dropin_path ) && ! $this->is_own_dropin() ) {
 				return new \WP_Error( 'foreign_dropin', __( 'A foreign drop-in exists. We will not delete it for safety.', 'performance-optimisation' ) );
 			}
 
@@ -1908,7 +2136,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			}
 			return array(
 				'code'    => (string) $payload['code'],
-				'message' => isset( $payload['message'] ) ? (string) $payload['message'] : '',
+				'message' => isset( $payload['message'] ) ? self::scrub_redis_message( (string) $payload['message'] ) : '',
 				'time'    => isset( $payload['time'] ) ? (int) $payload['time'] : 0,
 			);
 		}

@@ -1971,27 +1971,43 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since NEXT
 		 */
 		public function maybe_migrate_object_cache_outage_flag(): void {
-			// allowlist(settings-read-guard): deliberate direct read — must distinguish
-			// "no stored row" (false) from "stored array", which Util::get_settings()
-			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
-			$stored = get_option( 'wppo_settings' );
-			if ( ! is_array( $stored ) ) {
-				return;
+			try {
+				if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
+					return;
+				}
+				// Cheap early-return through the already-loaded memo: after
+				// migration completes this avoids one extra option read per
+				// admin page.
+				if ( isset( $this->options['object_cache'] ) && is_array( $this->options['object_cache'] ) && array_key_exists( 'outage_bypassed', $this->options['object_cache'] ) ) {
+					return;
+				}
+				// allowlist(settings-read-guard): deliberate direct read — must distinguish
+				// "no stored row" (false) from "stored array", which Util::get_settings()
+				// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
+				$stored = get_option( 'wppo_settings' );
+				if ( ! is_array( $stored ) ) {
+					return;
+				}
+
+				$oc = isset( $stored['object_cache'] ) && is_array( $stored['object_cache'] ) ? $stored['object_cache'] : array();
+
+				if ( array_key_exists( 'outage_bypassed', $oc ) ) {
+					return;
+				}
+
+				$stored['object_cache'] = $oc + array( 'outage_bypassed' => false );
+				update_option( 'wppo_settings', $stored );
+
+				if ( ! isset( $this->options['object_cache'] ) || ! is_array( $this->options['object_cache'] ) ) {
+					$this->options['object_cache'] = array();
+				}
+				$this->options['object_cache']['outage_bypassed'] = false;
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
+					Util::set_settings_cache( $stored );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 			}
-
-			$oc = isset( $stored['object_cache'] ) && is_array( $stored['object_cache'] ) ? $stored['object_cache'] : array();
-
-			if ( array_key_exists( 'outage_bypassed', $oc ) ) {
-				return;
-			}
-
-			$stored['object_cache'] = $oc + array( 'outage_bypassed' => false );
-			update_option( 'wppo_settings', $stored );
-
-			if ( ! isset( $this->options['object_cache'] ) || ! is_array( $this->options['object_cache'] ) ) {
-				$this->options['object_cache'] = array();
-			}
-			$this->options['object_cache']['outage_bypassed'] = false;
 		}
 
 		/**

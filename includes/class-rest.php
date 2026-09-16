@@ -1099,6 +1099,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				}
 			}
 
+			// Server-only outage status flag (issue #1233): clients must not
+			// pin spoofed degraded/healthy state via update_settings. Drop
+			// any client value so the array_merge below preserves the stored
+			// server-written value, mirroring password handling.
+			if ( 'object_cache' === $tab && isset( $sanitized_settings['outage_bypassed'] ) ) {
+				unset( $sanitized_settings['outage_bypassed'] );
+			}
+
 			// Removed (#925): the legacy file_optimisation.removeQueryStrings key
 			// is dropped on save so it decays naturally. A legacy client that
 			// still posts the key is accepted silently (fail-open, never fatal);
@@ -1708,6 +1716,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				if ( $password_provided ) {
 					$data['settings']['object_cache']['password_set'] = true;
 				}
+			}
+
+			// Server-only outage status flag (issue #1233): strip before
+			// sanitize/merge so imports cannot pin spoofed bypassed state,
+			// mirroring password handling. The stored server-written value
+			// survives via array_replace_recursive of the remaining keys.
+			if ( isset( $data['settings']['object_cache'] ) && is_array( $data['settings']['object_cache'] ) && array_key_exists( 'outage_bypassed', $data['settings']['object_cache'] ) ) {
+				unset( $data['settings']['object_cache']['outage_bypassed'] );
 			}
 
 			// Sanitize settings before saving.

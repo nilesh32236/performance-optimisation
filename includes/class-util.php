@@ -561,7 +561,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				// the REST layer but may survive in imported/legacy payloads.
 				// `outage_bypassed` is the additive persistent outage status
 				// flag (issue #1233): never a connection credential, only the
-				// degraded-state signal cleared on ping/enable recovery.
+				// degraded-state signal cleared on ping/enable recovery. It is
+				// server-only (REST update/import strip client values), kept
+				// in the schema so legacy payloads validate, and normalized
+				// to bool on sanitize (see sanitize_settings_recursively).
 				'object_cache'       => array(
 					'mode'            => 'scalar',
 					'host'            => 'scalar',
@@ -4827,6 +4830,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					 */
 					$mapping                = (array) apply_filters( 'wppo_cdn_mapping', $mapping );
 					$sanitized[ $safe_key ] = $mapping;
+					continue;
+				}
+
+				// Persistent Redis outage flag (issue #1233) — pinned boolean
+				// normalization before the generic branches: a JSON string
+				// "false" must sanitize to false (it would otherwise stay a
+				// truthy non-empty string and paradoxically read as armed).
+				// Server-only in practice (REST update/import strip client
+				// values); unrecognized values fail safe to false.
+				if ( 'outage_bypassed' === $safe_key && ! is_array( $value ) ) {
+					if ( is_bool( $value ) ) {
+						$sanitized[ $safe_key ] = $value;
+					} else {
+						$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+						$sanitized[ $safe_key ] = true === $bool;
+					}
 					continue;
 				}
 
