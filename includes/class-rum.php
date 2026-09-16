@@ -1343,9 +1343,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				if ( 0 === strpos( $url, '/' ) && 0 !== strpos( $url, '//' ) ) {
 					return true;
 				}
-				if ( 0 === strpos( ltrim( $url ), '//' ) ) {
-					// Protocol-relative: host must be proven below.
-				} elseif ( false === strpos( $url, '://' ) ) {
+				// Protocol-relative URLs skip this block: host must be proven below.
+				if ( 0 !== strpos( ltrim( $url ), '//' ) && false === strpos( $url, '://' ) ) {
 					$before_slash = strtok( $url, '/\\?#' );
 					if ( is_string( $before_slash ) && false !== strpos( $before_slash, ':' ) ) {
 						return false;

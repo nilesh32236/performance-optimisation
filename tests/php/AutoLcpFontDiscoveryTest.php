@@ -308,6 +308,10 @@ class AutoLcpFontDiscoveryTest extends \PHPUnit\Framework\TestCase {
 		$prop->setAccessible( true );
 		$this->assertNull( $prop->getValue( $image_opt ) );
 	}
+
+	/**
+	 * Largest srcset widths win and generated media stays gapless from 0.
+	 */
 	public function test_srcset_slice_keeps_gapless_media(): void {
 		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
 		$image_opt = new Image_Optimisation(
@@ -443,7 +447,7 @@ class AutoLcpFontDiscoveryTest extends \PHPUnit\Framework\TestCase {
 	public function test_auto_lcp_manual_wins_dedup_absolute_vs_relative(): void {
 		$this->install_auto_lcp_stubs(
 			array(
-				'_wppo_lcp_preload_url'        => '/wp-content/uploads/hero.jpg',
+				'_wppo_lcp_preload_url'      => '/wp-content/uploads/hero.jpg',
 				'_wppo_lcp_image_url_mobile' => 'https://example.com/wp-content/uploads/hero.jpg',
 			)
 		);
