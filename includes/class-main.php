@@ -479,6 +479,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['preload_settings']['speculationTopUrlsLimit'] ) ) {
 				$this->options['preload_settings']['speculationTopUrlsLimit'] = 2;
 			}
+			// Existing installs whose stored settings predate the
+			// speculation-rules eagerness upgrade (issue #1215) inherit the
+			// conservative defaults in-memory here (prefetch + conservative,
+			// prerender stays opt-in; no database write on front-end
+			// requests). Multisite-safe: per-site wppo_settings only.
+			if ( ! isset( $this->options['preload_settings']['enableSpeculationRules'] ) ) {
+				$this->options['preload_settings']['enableSpeculationRules'] = false;
+			}
+			if ( ! isset( $this->options['preload_settings']['speculationMode'] ) ) {
+				$this->options['preload_settings']['speculationMode'] = 'prefetch';
+			}
+			if ( ! isset( $this->options['preload_settings']['speculationEagerness'] ) ) {
+				$this->options['preload_settings']['speculationEagerness'] = 'conservative';
+			}
+			if ( ! isset( $this->options['preload_settings']['speculationExcludeUrls'] ) ) {
+				$this->options['preload_settings']['speculationExcludeUrls'] = '';
+			}
+			if ( ! isset( $this->options['preload_settings']['speculationDocumentRules'] ) ) {
+				$this->options['preload_settings']['speculationDocumentRules'] = true;
+			}
 			// Automatic LCP hero preload + automatic font discovery
 			// (issue #1216): additive keys, off by default so existing
 			// installs keep manual-only behaviour. In-memory only here
@@ -7128,7 +7148,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * an allowlist fallback. Excludes are merged via `wp_speculation_rules_href_exclude_paths`
 		 * (user `speculationExcludeUrls` + WooCommerce cart/checkout/account).
 		 *
-		 * Backward compatible: on WP <6.8 `wp_get_speculation_rules()` does not exist,
+		 * Backward compatible: on WP <6.8 neither `wp_get_speculation_rules()`
+		 * nor `wp_get_speculation_rules_configuration()` exists,
 		 * so this method is a no-op and no filter is registered (legacy path).
 		 * Fail-open: pre-6.8 output degrades to unoptimised (no speculation
 		 * block is printed by this plugin on 6.2-6.7); invalid URLs are
@@ -7139,12 +7160,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return void
 		 */
 		public function add_speculation_rules() {
-			// WP 6.8+ provides the Speculation Rules API. Gate on wp_get_speculation_rules()
-			// per WP 7.1 spec (IO-001); wp_get_speculation_rules_configuration() is the
-			// same 6.8 introduction, but wp_get_speculation_rules is the canonical
-			// presence check for the <script type="speculationrules"> emitter.
+			// WP 6.8+ provides the Speculation Rules API. Gate on the 6.8
+			// emitter (`wp_get_speculation_rules`, canonical presence check
+			// for the <script type="speculationrules"> block) or the 6.8
+			// configuration helper (`wp_get_speculation_rules_configuration`,
+			// same introduction) so a backport or partial polyfill exposing
+			// only one entry point still defers to core's single block.
 			// Keep backward compat for WP <6.8 (no-op, fail-open to unoptimised).
-			if ( ! function_exists( 'wp_get_speculation_rules' ) ) {
+			if ( ! function_exists( 'wp_get_speculation_rules' ) && ! function_exists( 'wp_get_speculation_rules_configuration' ) ) {
 				return;
 			}
 
