@@ -6,9 +6,14 @@ let scriptLoadPromise = null;
 
 /**
  * Read the runtime config exported by PHP through the WordPress
- * `script_module_data_wppo-lazyload` filter (WP 6.5+). The data is printed as a
+ * `script_module_data_wppo-lazyload` filter (WP 6.9+). The data is printed as a
  * `<script type="application/json" id="wp-script-module-data-wppo-lazyload">`
  * tag before the module itself, so it is always available on load.
+ *
+ * The classic-script globals (`window.wppoNativeLazy` / `window.wppoDelayConfig`)
+ * remain the WP < 6.9 path (see Main::enqueue_scripts()); both sources are read
+ * so one bundle serves the full supported matrix (floor 6.2). Removal deferred
+ * per #1203 until the minimum supported WP is raised to 6.9.
  *
  * @return {Object} Parsed module data, or an empty object when absent/invalid.
  */
@@ -29,8 +34,8 @@ const moduleData = readModuleData();
 
 /**
  * Whether native lazy loading is active (loading="lazy" on img/iframe instead of IntersectionObserver).
- * Provided by PHP via the script-module data filter (WP 6.5+) or via
- * wp_add_inline_script on the classic-script fallback path (WP < 6.5).
+ * Provided by PHP via the script-module data filter (WP 6.9+) or via
+ * wp_add_inline_script on the classic-script fallback path (WP < 6.9).
  * @type {boolean}
  */
 const useNativeLazy =
@@ -811,8 +816,8 @@ const loadScript = ( script ) => {
 
 /**
  * Delay JS configuration from PHP.
- * Read from the script-module data filter (WP 6.5+) or the classic
- * `window.wppoDelayConfig` global (WP < 6.5), with sensible defaults.
+ * Read from the script-module data filter (WP 6.9+) or the classic
+ * `window.wppoDelayConfig` global (WP < 6.9), with sensible defaults.
  * @type {{ idleTimeout: number, defaultStrategy: string }}
  */
 const delayConfig = window.wppoDelayConfig ||
