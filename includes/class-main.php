@@ -3523,6 +3523,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$is_wp69_plus = version_compare( (string) ( $GLOBALS['wp_version'] ?? get_bloginfo( 'version' ) ), '6.9-alpha', '>=' );
 
 			foreach ( $wp_scripts->queue as $handle ) {
+				// Interactivity runtime guard (issue #1201): never deprioritize or
+				// move the block-interactivity runtime, even if a site filters the
+				// preset away. Mirrors apply_module_loading_strategies(). Fail-open.
+				//
+				// @since NEXT.
+				if ( in_array( (string) $handle, array( 'wp-interactivity', '@wordpress/interactivity', '@wordpress/interactivity-router' ), true ) ) {
+					continue;
+				}
 				if ( ! in_array( $handle, $this->exclude_defer_js, true ) ) {
 					// Fill-gaps-only for the strategy itself (issue #1184): never
 					// overwrite an explicit async/defer strategy stamped by core,
@@ -5084,6 +5092,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'cart-fragments',
 				'wc-blocks',
 				'wc-store',
+				// Interactivity runtime guard (issue #1201): never deprioritize
+				// or move the block-interactivity runtime. Covers the classic
+				// handle plus the 6.5+ module ids, mirroring
+				// apply_module_loading_strategies(). Fail-open append.
+				//
+				// @since NEXT.
+				'wp-interactivity',
+				'@wordpress/interactivity',
+				'@wordpress/interactivity-router',
 			);
 			/**
 			 * Filters defer-JS preset exclusions.
