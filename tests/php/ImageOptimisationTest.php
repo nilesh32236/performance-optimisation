@@ -602,6 +602,105 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that the render-time filter is registered on wp_get_attachment_image_attributes.
+	 */
+	public function test_wppo_add_fetchpriority_filter_registered(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+
+		new Image_Optimisation( $this->default_options );
+
+		$this->assertTrue( Filters\has( 'wp_get_attachment_image_attributes' ) );
+	}
+
+	/**
+	 * Test that the render-time filter stamps fetchpriority=high + eager on the LCP attachment.
+	 */
+	public function test_wppo_add_fetchpriority_stamps_lcp_attachment(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'is_admin' )->justReturn( false );
+		$this->stub_lcp_resolution( 'https://example.com/wp-content/uploads/hero.jpg' );
+		Functions\when( 'wp_get_attachment_image_src' )->justReturn( array( 'https://example.com/wp-content/uploads/hero.jpg', 800, 600 ) );
+
+		$image_opt = $this->make_lcp_enabled_instance();
+
+		$attachment = (object) array( 'ID' => 42 );
+		$attr       = array(
+			'src'     => 'https://example.com/wp-content/uploads/hero.jpg',
+			'loading' => 'lazy',
+		);
+		$result     = $image_opt->wppo_add_fetchpriority( $attr, $attachment, 'large' );
+
+		$this->assertSame( 'high', $result['fetchpriority'] );
+		$this->assertSame( 'eager', $result['loading'] );
+		$this->assertSame( 'async', $result['decoding'] );
+		$this->assertFalse( isset( $result['loading'], $result['fetchpriority'] ) && 'lazy' === $result['loading'] && 'high' === $result['fetchpriority'] );
+	}
+
+	/**
+	 * Test that the render-time filter leaves a non-LCP attachment byte-identical.
+	 */
+	public function test_wppo_add_fetchpriority_leaves_non_lcp_unchanged(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'is_admin' )->justReturn( false );
+		$this->stub_lcp_resolution( 'https://example.com/wp-content/uploads/hero.jpg' );
+		Functions\when( 'wp_get_attachment_image_src' )->justReturn( array( 'https://example.com/wp-content/uploads/other.jpg', 800, 600 ) );
+
+		$image_opt = $this->make_lcp_enabled_instance();
+
+		$attachment = (object) array( 'ID' => 7 );
+		$attr       = array(
+			'src'      => 'https://example.com/wp-content/uploads/other.jpg',
+			'loading'  => 'lazy',
+			'decoding' => 'async',
+		);
+		$result     = $image_opt->wppo_add_fetchpriority( $attr, $attachment, 'large' );
+
+		$this->assertSame( $attr, $result );
+	}
+
+	/**
+	 * Test that the render-time filter passes attributes through unchanged when
+	 * the core attachment API is absent (legacy core fail-open).
+	 */
+	public function test_wppo_add_fetchpriority_passthrough_when_api_missing(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'is_admin' )->justReturn( false );
+		$this->stub_lcp_resolution( 'https://example.com/wp-content/uploads/hero.jpg' );
+		// No wp_get_attachment_image_src stub: function_exists() is false.
+
+		$image_opt = $this->make_lcp_enabled_instance();
+
+		$attr   = array(
+			'src'     => 'https://example.com/wp-content/uploads/other.jpg',
+			'loading' => 'lazy',
+		);
+		$result = $image_opt->wppo_add_fetchpriority( $attr, 7, 'large' );
+
+		$this->assertSame( $attr, $result );
+		$this->assertSame( 'not-an-array', $image_opt->wppo_add_fetchpriority( 'not-an-array', 42, 'large' ) );
+	}
+
+	/**
+	 * Test that the render-time filter is a no-op when LCP prioritization is off.
+	 */
+	public function test_wppo_add_fetchpriority_noop_when_toggle_off(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'is_admin' )->justReturn( false );
+		$this->stub_lcp_resolution( 'https://example.com/wp-content/uploads/hero.jpg' );
+		Functions\when( 'wp_get_attachment_image_src' )->justReturn( array( 'https://example.com/wp-content/uploads/hero.jpg', 800, 600 ) );
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+
+		$attachment = (object) array( 'ID' => 42 );
+		$attr       = array(
+			'src'     => 'https://example.com/wp-content/uploads/hero.jpg',
+			'loading' => 'lazy',
+		);
+
+		$this->assertSame( $attr, $image_opt->wppo_add_fetchpriority( $attr, $attachment, 'large' ) );
+	}
+
+	/**
 	 * Test that the client-side MIME override replaces core's default list,
 	 * intersecting away any format core does not support client-side.
 	 */
