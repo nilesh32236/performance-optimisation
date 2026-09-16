@@ -26,9 +26,8 @@ export {
  * @return {*} The global settings object (or path value), or fallback/{} when absent.
  */
 export const getWppoSettings = ( path, fallback = {} ) => {
-	const fallbackValue = fallback;
 	if ( typeof wppoSettings === 'undefined' || ! wppoSettings ) {
-		return fallbackValue;
+		return fallback;
 	}
 	if ( typeof path !== 'string' || ! path ) {
 		return wppoSettings;
@@ -44,11 +43,11 @@ export const getWppoSettings = ( path, fallback = {} ) => {
 			typeof current !== 'object' ||
 			! hasOwn( current, key )
 		) {
-			return fallbackValue;
+			return fallback;
 		}
 		current = current[ key ];
 	}
-	return current === undefined ? fallbackValue : current;
+	return current === undefined ? fallback : current;
 };
 
 /**
@@ -120,8 +119,13 @@ const refreshNonce = async () => {
 			}
 			const data = await res.json();
 			if ( data.success && data.data?.nonce ) {
-				wppoSettings.nonce = data.data.nonce;
-				return data.data.nonce;
+				if (
+					typeof data.data.nonce === 'string' &&
+					data.data.nonce.length > 0
+				) {
+					wppoSettings.nonce = data.data.nonce;
+					return data.data.nonce;
+				}
 			}
 			throw new Error( 'Nonce refresh returned invalid response' );
 		} catch ( e ) {
@@ -143,6 +147,12 @@ const refreshNonce = async () => {
  * Single choke point for the frozen-global mutation previously inlined in
  * apiCall() and copied across AiPanel/EdgeCachePanel/LlmsPanel. Freezing
  * keeps every component reading the live global on the same snapshot.
+ *
+ * Contract verified in includes/class-rest.php: both `update_settings` and
+ * `restore_settings` respond with the full merged `wppo_settings` option
+ * (via `send_response( $response_settings )` / `send_response( $merged_settings )`),
+ * so a full replace here is correct. If an endpoint ever echoes only the
+ * saved tab slice, callers must use patchSettingsCache() instead.
  *
  * @since NEXT
  * @param {*} payload Resolved settings payload (typically `data.data`).
@@ -183,9 +193,13 @@ export const patchSettingsCache = ( tab, patch ) => {
 		wppoSettings.settings && typeof wppoSettings.settings === 'object'
 			? wppoSettings.settings
 			: {};
+	const base =
+		current[ tab ] && typeof current[ tab ] === 'object'
+			? current[ tab ]
+			: {};
 	wppoSettings.settings = Object.freeze( {
 		...current,
-		[ tab ]: Object.freeze( { ...( current[ tab ] || {} ), ...patch } ),
+		[ tab ]: Object.freeze( { ...base, ...patch } ),
 	} );
 };
 
@@ -224,6 +238,17 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 		try {
 			data = await response.json();
 		} catch ( parseError ) {
+			// An expired nonce can surface as a non-JSON (HTML/login) 401/403
+			// body, which never reaches the data.code check below. Retry once
+			// with a fresh nonce on those statuses before giving up.
+			if (
+				! isRetrying &&
+				( response.status === 401 || response.status === 403 )
+			) {
+				const freshNonce = await refreshNonce();
+				const retryResponse = await doFetch( freshNonce );
+				return handleResponse( retryResponse, true );
+			}
 			throw new Error(
 				`Invalid JSON response from ${ action }: ${ parseError.message }`
 			);
@@ -231,8 +256,13 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 
 		// Detect expired nonce (rest_forbidden, rest_cookie_invalid_nonce, etc.).
 		// The code list lives in ./authErrors.js; main.js/esi.js mirror it
-		// (see authSync.test.js).
-		if ( data.code && isAuthErrorCode( data.code ) ) {
+		// (see authSync.test.js). An HTTP 401/403 with a JSON body but no
+		// recognised code falls back to the same single retry.
+		if (
+			( data.code && isAuthErrorCode( data.code ) ) ||
+			( ( response.status === 401 || response.status === 403 ) &&
+				! data.success )
+		) {
 			if ( isRetrying ) {
 				throw new Error(
 					'Nonce retry failed — authentication error persists.'
@@ -299,6 +329,12 @@ export const fetchRecentActivities = ( page = 1, signal ) => {
  * URL and, when wppoSettings.homeUrl is available, same-origin with the site.
  * Server-side host allowlisting + per-user/IP rate limiting remains
  * authoritative.
+ *
+ * When homeUrl is absent (e.g. a test harness or a direct mount before
+ * localisation), the origin check is skipped and any absolute http(s) URL is
+ * accepted: failing closed here would brick legitimate scans, and the server
+ * gate remains authoritative. Callers needing a strict gate should assert
+ * homeUrl presence themselves.
  *
  * @since 2.0.0
  * @param {string} url Raw scan URL.
@@ -416,6 +452,12 @@ export const assertScanStrategy = ( strategy, allowEmpty = false ) => {
  * @return {boolean} True when the strategy is safe to forward to the server.
  */
 export const isValidScanStrategy = ( strategy, allowEmpty = false ) => {
+	if (
+		allowEmpty &&
+		( strategy === '' || strategy === undefined || strategy === null )
+	) {
+		return true;
+	}
 	if ( typeof strategy !== 'string' ) {
 		return false;
 	}

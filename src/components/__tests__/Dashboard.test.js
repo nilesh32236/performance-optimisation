@@ -9,11 +9,15 @@ import '@testing-library/jest-dom';
 // eslint-disable-next-line import/no-extraneous-dependencies -- React is required for JSX rendering in tests
 import React from 'react';
 
-jest.mock( '../../lib/apiRequest', () => ( {
-	apiCall: jest.fn(),
-	fetchWebVitalsTrends: jest.fn(),
-	fetchWooCacheSelfTest: jest.fn(),
-} ) );
+jest.mock( '../../lib/apiRequest', () => {
+	const actual = jest.requireActual( '../../lib/apiRequest' );
+	return {
+		...actual,
+		apiCall: jest.fn(),
+		fetchWebVitalsTrends: jest.fn(),
+		fetchWooCacheSelfTest: jest.fn(),
+	};
+} );
 
 jest.mock( '../WelcomePanel', () => () => <div data-testid="welcome-panel" /> );
 jest.mock( '../PerformanceAudit', () => () => (
@@ -29,9 +33,6 @@ jest.mock( '../SuggestionsPanel', () => () => (
 	<div data-testid="suggestions-panel" />
 ) );
 jest.mock( '../SystemInfo', () => () => <div data-testid="system-info" /> );
-jest.mock( '../WebVitalsTrends', () => () => (
-	<div data-testid="web-vitals-trends" />
-) );
 jest.mock( '../WebVitalsRum', () => () => <div data-testid="rum-panel" /> );
 jest.mock( '../AutoloadedOptions', () => () => (
 	<div data-testid="autoloaded-options" />
@@ -113,8 +114,11 @@ import { clearDbCountsCache } from '../../lib/dbCounts';
 
 /**
  * Wait for the mount-time database_cleanup_counts call to start AND for the
- * resolved promise to be handled inside act(), so subsequent assertions never
- * race the async state update (which otherwise emits act() warnings).
+ * resolved promise to propagate through the getDbCounts .then ->
+ * updateState/handleLoading chain, so subsequent assertions never race the
+ * async state update (which otherwise emits act() warnings). Quiescence is
+ * awaited via the rendered stat (proof the mount settled), not just the
+ * bare microtask queue.
  */
 const flushDashboardMount = async () => {
 	await waitFor( () => {
@@ -124,6 +128,9 @@ const flushDashboardMount = async () => {
 			'GET',
 			expect.any( AbortSignal )
 		);
+	} );
+	await waitFor( () => {
+		expect( screen.getByText( 'Cache Size' ) ).toBeInTheDocument();
 	} );
 	await act( async () => {} );
 };
@@ -356,11 +363,6 @@ describe( 'Dashboard', () => {
 			} );
 			await act( async () => {} );
 
-			expect( apiCall ).not.toHaveBeenCalledWith(
-				'image_job_status',
-				{},
-				'GET'
-			);
 			expect( apiCall ).not.toHaveBeenCalledWith(
 				'image_job_status',
 				{},
