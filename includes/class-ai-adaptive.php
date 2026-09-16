@@ -2820,6 +2820,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			$model      = self::get_model();
 			$model_urls = self::get_prefetch_urls_from_model( $model );
 			// RUM-ranked top URLs fill the remaining budget (fail-open empty).
+			// Cost note: Main already ranks the same RUM aggregate at prio 10
+			// when both lists are enabled; the aggregate read itself is shared
+			// via the per-request RUM memo and this fill is bounded to 5 URLs,
+			// so the extra cost is one small in-memory ranking, not I/O.
 			$rum_urls = self::get_rum_top_speculation_urls( 5 );
 			$urls     = array();
 			foreach ( array_merge( $model_urls, $rum_urls ) as $candidate ) {
@@ -2924,13 +2928,48 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		/**
 		 * Remove URLs already covered by an existing list-source rule.
 		 *
+		 * Normalization-aware (mirrors `Main::diff_speculation_urls()`):
+		 * lowercases scheme+host and drops trailing-slash variants so
+		 * `https://example.com/post` and `https://EXAMPLE.com/post/`
+		 * count as the same URL across Main (prio 10) and AI (prio 20)
+		 * prefetch/prerender rules. Scheme-insensitive like Main.
+		 *
 		 * @param string[] $urls  Candidate AI URLs.
 		 * @param array    $rules Existing speculation rules.
 		 * @return string[]
 		 * @since 2.0.0
 		 */
 		private static function dedupe_against_existing_lists( array $urls, array $rules ): array {
-			$existing = array();
+			$normalize = static function ( $url ): string {
+				if ( ! is_string( $url ) || '' === $url ) {
+					return '';
+				}
+				$parts = wp_parse_url( $url );
+				if ( ! is_array( $parts ) || empty( $parts['host'] ) ) {
+					return strtolower( $url );
+				}
+				$host   = strtolower( (string) $parts['host'] );
+				$port   = isset( $parts['port'] ) ? (int) $parts['port'] : null;
+				$scheme = strtolower( (string) ( $parts['scheme'] ?? '' ) );
+				if ( ( 'http' === $scheme && 80 === $port ) || ( 'https' === $scheme && 443 === $port ) ) {
+					$port = null;
+				}
+				$path = (string) ( $parts['path'] ?? '' );
+				if ( function_exists( 'untrailingslashit' ) ) {
+					$path = untrailingslashit( $path );
+				} else {
+					$path = rtrim( $path, '/' );
+				}
+				$normalized = '//' . $host . ( null !== $port && $port > 0 ? ':' . $port : '' ) . $path;
+				if ( isset( $parts['query'] ) && '' !== (string) $parts['query'] ) {
+					$normalized .= '?' . (string) $parts['query'];
+				}
+				if ( isset( $parts['fragment'] ) && '' !== (string) $parts['fragment'] ) {
+					$normalized .= '#' . (string) $parts['fragment'];
+				}
+				return $normalized;
+			};
+			$existing  = array();
 			foreach ( $rules as $rule ) {
 				if ( ! is_array( $rule ) || ( $rule['source'] ?? '' ) !== 'list' ) {
 					continue;
@@ -2941,14 +2980,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				}
 				foreach ( $rule_urls as $existing_url ) {
 					if ( is_string( $existing_url ) && '' !== $existing_url ) {
-						$existing[] = $existing_url;
+						$existing[ $normalize( $existing_url ) ] = true;
 					}
 				}
 			}
 			if ( empty( $existing ) ) {
 				return array_values( $urls );
 			}
-			return array_values( array_diff( $urls, $existing ) );
+			$remaining = array();
+			foreach ( $urls as $url ) {
+				if ( ! is_string( $url ) || '' === $url ) {
+					continue;
+				}
+				$key = $normalize( $url );
+				if ( isset( $existing[ $key ] ) ) {
+					continue;
+				}
+				$existing[ $key ] = true;
+				$remaining[]      = $url;
+			}
+			return array_values( $remaining );
 		}
 
 		/**

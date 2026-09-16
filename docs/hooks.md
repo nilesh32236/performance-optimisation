@@ -1057,7 +1057,7 @@ Trusted-code-only: a non-array return falls back to the pre-filter rules and non
 ### `wppo_speculation_prerender_list_urls`
 Filters the high-value prerender list URLs before the dedicated prerender rule is registered/appended. @since NEXT.
 
-Emitted as a `{"source":"list"}` prerender rule with `moderate` eagerness via `Main::wppo_register_speculation_rules()` (WP 6.8+ object path and legacy array path) when `preload_settings.enableSpeculationRules` and the opt-in `preload_settings.speculationPrerenderList` are on, the static-cache + RUM-qualified gate passes, and the visitor is not logged-in/commerce. Post-filter output is re-validated (same-origin, no commerce/query), deduped, and re-sliced to `speculationTopUrlsLimit`.
+Emitted as a `{"source":"list"}` prerender rule with `moderate` eagerness via `Main::wppo_register_speculation_rules()` (WP 6.8+ object path and legacy array path) when `preload_settings.enableSpeculationRules` and the opt-in `preload_settings.speculationPrerenderList` are on, the static-cache + RUM-qualified gate passes, and the visitor is not logged-in and not on a cart/checkout/account page. Mere WooCommerce presence never suppresses; requires static cache + qualifying field data (when RUM gating is enabled). Post-filter output is re-validated (same-origin, no commerce/query), deduped, and re-sliced to `speculationTopUrlsLimit`. Accepted risk: anonymous shoppers with an active cart on an otherwise cacheable page may still receive the safe-page list (per-URL commerce validation still applies).
 
 **Parameters:**
 - `$urls` *(string[])* — Validated prerender URLs (home + capped RUM top URLs).

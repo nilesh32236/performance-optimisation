@@ -291,6 +291,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private static array $speculation_rum_top_memo = array();
 
 		/**
+		 * Per-request memo of the prerender-allowed gate verdict.
+		 *
+		 * Shares one RUM segmented-scan verdict across
+		 * filter_speculation_rules_configuration(), get_prerender_list_urls(),
+		 * and the register paths on a single request (up to 3 traversals
+		 * saved per frontend cache-miss when the prerender list is on).
+		 * Reset via reset_speculation_url_memo() (tests).
+		 *
+		 * @since NEXT
+		 * @var bool|null
+		 */
+		private static ?bool $prerender_allowed_memo = null;
+
+		/**
 		 * Whether the object-path prerender rule was already added.
 		 *
 		 * Idempotency backstop for repeated `wp_load_speculation_rules`
@@ -7662,6 +7676,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					$filtered = apply_filters( 'wppo_speculation_exclusions', $excludes, $preload_settings );
 					if ( is_array( $filtered ) ) {
 						$excludes = array_values( array_unique( array_filter( $filtered, 'is_string' ) ) );
+						// Mandatory floor: a buggy/compromised filter returning
+						// array() must not strip core auth/admin/REST and
+						// commerce excludes — re-merge the safety defaults.
+						$mandatory = array( '/wp-login*', '/wp-admin/*', '/wp-json/*', '/logout/*', '/cart/*', '/checkout/*', '/my-account/*', '/account/*' );
+						$excludes  = array_values( array_unique( array_merge( $mandatory, $excludes ) ) );
 					}
 				}
 
@@ -7691,22 +7710,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		private function is_prerender_allowed(): bool {
 			try {
+				if ( null !== self::$prerender_allowed_memo ) {
+					return self::$prerender_allowed_memo;
+				}
 				if ( empty( $this->options['cache_settings']['enableCache'] ) ) {
+					self::$prerender_allowed_memo = false;
 					return false;
 				}
 				if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
+					self::$prerender_allowed_memo = false;
 					return false;
 				}
 				if ( ! method_exists( 'PerformanceOptimise\Inc\AI_Adaptive', 'is_speculation_rum_gating_enabled' )
 					|| ! method_exists( 'PerformanceOptimise\Inc\AI_Adaptive', 'get_rum_gated_speculation_state' ) ) {
+					self::$prerender_allowed_memo = false;
 					return false;
 				}
 				$gating_enabled = AI_Adaptive::is_speculation_rum_gating_enabled();
 				if ( ! $gating_enabled ) {
+					self::$prerender_allowed_memo = true;
 					return true;
 				}
-				$state = AI_Adaptive::get_rum_gated_speculation_state( $gating_enabled );
-				return ! empty( $state['qualified'] );
+				$state                        = AI_Adaptive::get_rum_gated_speculation_state( $gating_enabled );
+				self::$prerender_allowed_memo = ! empty( $state['qualified'] );
+				return self::$prerender_allowed_memo;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;
@@ -7809,6 +7836,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// page JavaScript even at moderate eagerness, so a commerce
 				// context degrades prerender to prefetch (prefetch only,
 				// never eager) rather than emitting prerender/moderate.
+				// Note: the opt-in high-value prerender list
+				// (get_prerender_list_urls, issue #1243) is intentionally
+				// exempt — per-URL validation + suppressed_for_visitor
+				// cover it, so mere WooCommerce presence never suppresses it.
 				if ( 'prerender' === $mode && $this->is_speculation_commerce_or_auth() ) {
 					$mode = 'prefetch';
 				}
@@ -7865,6 +7896,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Whether the current request is a commerce/auth context for speculation guardrails.
 		 *
+		 * Canonical owner of the Main-side check is this method; the
+		 * near-identical `AI_Adaptive::is_commerce_or_auth_context()` is the
+		 * AI-side counterpart kept in sync deliberately (shared Util
+		 * extraction deferred to avoid a cross-class behavior change).
 		 * Reuses `AI_Adaptive::is_commerce_or_auth_context()` when available
 		 * (guarded by class_exists/method_exists for backward compat), with a
 		 * conservative local fallback (WooCommerce presence, cart/checkout/
@@ -8364,6 +8399,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Cache-aware: pages served with `DONOTCACHEPAGE` / `no-store`
 		 * (cart/checkout/account, previews) never speculate — speculating a
 		 * non-cacheable URL wastes origin load and risks broken carts.
+		 * Accepted risk (documented): cart-session cookies / Store API state
+		 * are not checked here, so an anonymous shopper with an active cart
+		 * on an otherwise cacheable page may still receive the safe-page
+		 * prerender list (per-URL commerce validation still applies).
 		 * Fail-closed: any throwable means "suppressed" so uncertainty
 		 * disables output (privacy guard must never fail open for
 		 * logged-in/DONOTCACHEPAGE visitors).
@@ -8594,6 +8633,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			self::$speculation_commerce_paths_sig  = '';
 			self::$speculation_normalize_memo      = array();
 			self::$speculation_rum_top_memo        = array();
+			self::$prerender_allowed_memo          = null;
 		}
 
 		/**
@@ -8608,7 +8648,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return string '1'/'0' flags for wc_get_checkout_url, wc_get_cart_url, wc_get_page_permalink.
 		 */
 		private static function speculation_woo_fingerprint(): string {
-			return ( function_exists( 'wc_get_checkout_url' ) ? '1' : '0' )
+			$blog_id = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
+			return $blog_id . ':' . ( function_exists( 'wc_get_checkout_url' ) ? '1' : '0' )
 				. ( function_exists( 'wc_get_cart_url' ) ? '1' : '0' )
 				. ( function_exists( 'wc_get_page_permalink' ) ? '1' : '0' );
 		}
@@ -8618,7 +8659,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * Base cart/checkout/account prefixes plus WooCommerce dynamic
 		 * paths (checkout/cart/myaccount permalinks). Resolved once per
-		 * request instead of once per candidate URL.
+		 * request instead of once per candidate URL. Memo key includes the
+		 * blog id (multisite switch_to_blog safety) and Woo-function
+		 * availability; mid-request URL-filter changes reuse the
+		 * first-resolved paths (per-request bounded, never persisted).
 		 *
 		 * @since NEXT
 		 *
@@ -8681,8 +8725,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * variants, so `https://example.com/post` and
 		 * `https://EXAMPLE.com/post/` compare equal (RUM winners restore the
 		 * trailing slash while raw high_value_urls input may not carry one).
-		 * Query/fragment are preserved as-is: validated URLs never carry
-		 * them, and distinct raw inputs must not collapse silently.
+		 * Scheme-insensitive: `http` vs `https` variants of the same page
+		 * share one dedupe key (validators treat them same-site and home_url
+		 * is normally consistent, so mixed-scheme inputs must not
+		 * double-emit). Query/fragment are preserved as-is: validated URLs
+		 * never carry them, and distinct raw inputs must not collapse
+		 * silently.
 		 *
 		 * @since NEXT
 		 *
@@ -8709,7 +8757,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					} else {
 						$path = rtrim( $path, '/' );
 					}
-					$normalized = ( '' !== $scheme ? $scheme . '://' : '//' ) . $host
+					$normalized = '//' . $host
 						. ( null !== $port && $port > 0 ? ':' . $port : '' ) . $path;
 					if ( isset( $parts['query'] ) && '' !== (string) $parts['query'] ) {
 						$normalized .= '?' . (string) $parts['query'];
@@ -8752,22 +8800,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private function validate_speculation_list_url_uncached( string $url, array $parts, string $home ): bool {
 			// Query strings and fragments are never speculated: core excludes
 			// `?`-URLs by default and dynamic/action URLs must stay excluded.
-			// Each invalid URL is skipped individually (fail-open).
-			try {
-				$query = wp_parse_url( $url, PHP_URL_QUERY );
-				if ( is_string( $query ) && '' !== $query ) {
-					return false;
-				}
-				$fragment = wp_parse_url( $url, PHP_URL_FRAGMENT );
-				if ( is_string( $fragment ) && '' !== $fragment ) {
-					return false;
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				// Fall back to string checks when wp_parse_url with component fails.
-				if ( false !== strpos( $url, '?' ) || false !== strpos( $url, '#' ) ) {
-					return false;
-				}
+			// Each invalid URL is skipped individually (fail-open). Parts are
+			// reused from the caller (parsed once) instead of re-parsing.
+			$query = $parts['query'] ?? null;
+			if ( is_string( $query ) && '' !== $query ) {
+				return false;
+			}
+			$fragment = $parts['fragment'] ?? null;
+			if ( is_string( $fragment ) && '' !== $fragment ) {
+				return false;
+			}
+			if ( ( ! array_key_exists( 'query', $parts ) && false !== strpos( $url, '?' ) ) || ( ! array_key_exists( 'fragment', $parts ) && false !== strpos( $url, '#' ) ) ) {
+				return false;
 			}
 
 			$scheme = strtolower( (string) ( $parts['scheme'] ?? '' ) );
@@ -8775,7 +8819,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return false;
 			}
 
-			$home_host = wp_parse_url( $home, PHP_URL_HOST );
+			$home_parts = wp_parse_url( $home );
+			$home_host  = is_array( $home_parts ) ? ( $home_parts['host'] ?? null ) : null;
 			if ( ! is_string( $home_host ) || '' === $home_host ) {
 				return false;
 			}
@@ -8803,13 +8848,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 				return $port;
 			};
-			try {
-				$home_port = wp_parse_url( $home, PHP_URL_PORT );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				$home_port = null;
-			}
-			$home_scheme = strtolower( (string) ( wp_parse_url( $home, PHP_URL_SCHEME ) ?? '' ) );
+			$home_port      = is_array( $home_parts ) ? ( $home_parts['port'] ?? null ) : null;
+			$home_scheme    = strtolower( (string) ( is_array( $home_parts ) ? ( $home_parts['scheme'] ?? '' ) : '' ) );
 			if ( $normalize_port( $parts['port'] ?? null, $scheme ) !== $normalize_port( $home_port ?? null, $home_scheme ) ) {
 				return false;
 			}
@@ -8821,24 +8861,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			// Nonce-bearing, logout, add-to-cart, and admin-ajax URLs must
-			// never be speculated. Scoped to path+query (never scheme+host)
-			// so hosts containing these substrings — or legitimate slugs
-			// like /add-to-cart-guide/ handled below — are not over-blocked.
-			// Query-param forms (preview, customize_changeset) need no check
-			// here: any URL carrying a query string already returned false
-			// above, mirroring core's `?`-URL exclusion.
-			$query_string = '';
-			try {
-				$parsed_query = wp_parse_url( $url, PHP_URL_QUERY );
-				if ( is_string( $parsed_query ) ) {
-					$query_string = strtolower( $parsed_query );
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
+			// never be speculated. Scoped to the path only (never
+			// scheme+host) so hosts containing these substrings stay
+			// eligible. `nonce`/`logout` use substring matching to preserve
+			// the tested exclusion matrix (/nonce-cleanup/, /my-logout-page/
+			// stay excluded); `add-to-cart` uses exact-segment matching so
+			// legitimate slugs like /add-to-cart-guide/ stay eligible while
+			// /add-to-cart/ and ?add-to-cart= (query, rejected above) stay
+			// excluded. admin-ajax.php is matched by filename.
+			// Query-param forms need no check here: any URL carrying a query
+			// string already returned false above, mirroring core's `?`-URL
+			// exclusion.
+			if ( false !== strpos( $path, 'admin-ajax.php' ) ) {
+				return false;
 			}
-			$haystack = $path . '?' . $query_string;
-			foreach ( array( 'nonce', 'logout', 'add-to-cart', 'admin-ajax' ) as $unsafe ) {
-				if ( false !== strpos( $haystack, $unsafe ) ) {
+			if ( false !== strpos( $path, 'nonce' ) || false !== strpos( $path, 'logout' ) ) {
+				return false;
+			}
+			$segments = array_values(
+				array_filter(
+					explode( '/', $path ),
+					static function ( $segment ): bool {
+						return '' !== $segment;
+					}
+				)
+			);
+			foreach ( $segments as $segment ) {
+				if ( 'add-to-cart' === $segment ) {
 					return false;
 				}
 			}
@@ -8852,6 +8901,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					continue;
 				}
 				if ( $path_trimmed === $prefix || 0 === strpos( $path_trimmed . '/', $prefix . '/' ) ) {
+					return false;
+				}
+				// Anywhere-segment fallback (mirrors the static-cache layer):
+				// locale-prefixed (/de/cart/) or subsite-nested
+				// (/subsite/cart/) commerce paths must also stay excluded
+				// when Woo helpers are absent.
+				if ( 1 === preg_match( '#/(?:' . preg_quote( ltrim( $prefix, '/' ), '#' ) . ')(?:/|$)#', $path_trimmed ) ) {
 					return false;
 				}
 			}
@@ -8899,7 +8955,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( empty( $this->options['preload_settings']['enableSpeculationRules'] ) ) {
 					return array();
 				}
-				if ( empty( $this->options['preload_settings']['speculationPrerenderList'] ) ) {
+				// Strict boolean read with legacy string normalization: the
+				// sanitizer normalizes 'false' to false, but pre-fix stored
+				// strings would stay enabled under empty() (empty('false')
+				// is false). Normalize here so stored strings behave like
+				// the sanitized value until the next save.
+				$toggle = $this->options['preload_settings']['speculationPrerenderList'] ?? false;
+				if ( is_string( $toggle ) ) {
+					$toggle = filter_var( $toggle, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE ) ?? false;
+				}
+				if ( ! $toggle ) {
 					return array();
 				}
 				// Prerender executes page JavaScript speculatively: only run
@@ -9020,7 +9085,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! in_array( $eagerness, array( 'conservative', 'moderate', 'eager' ), true ) ) {
 				$eagerness = 'moderate';
 			}
-			$raw_urls = $rule['urls'] ?? array();
+			// Commerce cap (#1183 guardrail): a filter must not escalate to
+			// eager speculative JS execution on a commerce site now that
+			// prerender fires on Woo stores (issue #1243 fix).
+			$eagerness = $this->maybe_cap_speculation_eagerness( $eagerness );
+			$raw_urls  = $rule['urls'] ?? array();
 			if ( ! is_array( $raw_urls ) ) {
 				return null;
 			}
@@ -9055,11 +9124,82 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 			$clean = array();
 			foreach ( $filtered as $entry ) {
-				if ( is_array( $entry ) ) {
-					$clean[] = $entry;
+				if ( ! is_array( $entry ) ) {
+					continue;
 				}
+				// Re-validate list-rule URLs: final-rules filters bypass the
+				// builder guards and must not inject javascript:,
+				// cross-origin, or ?add-to-cart= URLs. Entries whose list
+				// URLs all fail validation are dropped; document rules pass
+				// through (shape-owned by their builders).
+				if ( 'list' === ( $entry['source'] ?? '' ) && isset( $entry['urls'] ) && is_array( $entry['urls'] ) ) {
+					$entry['urls'] = array_values(
+						array_filter(
+							array_values( array_filter( $entry['urls'], 'is_string' ) ),
+							array( $this, 'is_speculation_list_url_valid' )
+						)
+					);
+					if ( empty( $entry['urls'] ) ) {
+						continue;
+					}
+				}
+				$clean[] = $entry;
 			}
 			return $clean;
+		}
+
+		/**
+		 * Apply the shared prerender URL + rule filters (issue #1237 follow-up).
+		 *
+		 * Single contract for both merge paths in
+		 * {@see wppo_register_speculation_rules()}: applies
+		 * `wppo_speculation_prerender_list_urls`, normalizes
+		 * ({@see normalize_prerender_urls()}), then applies
+		 * `wppo_speculation_prerender_list_rule` with
+		 * {@see validate_prerender_rule()} post-filter validation. Future
+		 * filter-contract changes live here, not twice.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string[] $urls           Validated prerender URLs.
+		 * @param array    $existing_rules Existing rules for dedupe.
+		 * @return array<string,mixed>|null Validated rule, or null to drop it.
+		 */
+		private function apply_prerender_filters( array $urls, array $existing_rules ): ?array {
+			if ( function_exists( 'apply_filters' ) ) {
+				/**
+				 * Filters the high-value prerender list URLs before the rule is registered/appended.
+				 *
+				 * @since NEXT
+				 * @param string[] $urls Validated prerender URLs (home + capped RUM top URLs).
+				 */
+				$filtered = apply_filters( 'wppo_speculation_prerender_list_urls', $urls );
+				if ( is_array( $filtered ) ) {
+					$urls = $filtered;
+				}
+			}
+			$urls = $this->normalize_prerender_urls( $urls, $existing_rules );
+			if ( empty( $urls ) ) {
+				return null;
+			}
+			$rule_args = array(
+				'source'    => 'list',
+				'urls'      => array_values( $urls ),
+				'eagerness' => 'moderate',
+			);
+			if ( function_exists( 'apply_filters' ) ) {
+				/**
+				 * Filters the high-value prerender list rule before it is registered/appended.
+				 *
+				 * @since NEXT
+				 * @param array $rule_args The prerender list rule arguments.
+				 */
+				$filtered_rule = apply_filters( 'wppo_speculation_prerender_list_rule', $rule_args );
+				if ( is_array( $filtered_rule ) ) {
+					$rule_args = $filtered_rule;
+				}
+			}
+			return $this->validate_prerender_rule( $rule_args, $existing_rules );
 		}
 
 		/**
@@ -9109,6 +9249,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		public function wppo_register_speculation_rules( $rules, ?array $candidate_urls = null ) {
 			try {
+				// Shared idempotency: core may fire both wp_speculation_rules
+				// and wp_load_speculation_rules on one request — the ranking
+				// and normalize loops must run once, not twice.
+				if ( $this->speculation_prerender_object_added ) {
+					return $rules;
+				}
 				if ( is_object( $rules ) && method_exists( $rules, 'add_rule' ) ) {
 					if ( ! function_exists( 'wp_get_speculation_rules_configuration' ) && ! function_exists( 'wp_get_speculation_rules' ) ) {
 						return $rules;
@@ -9133,9 +9279,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// duplicate the rule on repeated firings. Instance state
 					// (not a method static) so test instances stay isolated
 					// while the single production instance stays guarded.
-					if ( $this->speculation_prerender_object_added ) {
-						return $rules;
-					}
+					// Shared with the legacy array path below so firing both
+					// core hooks on one request emits once.
 					if ( method_exists( $rules, 'has_rule' ) && $rules->has_rule( 'prerender', 'wppo-high-value-prerender' ) ) {
 						return $rules;
 					}
@@ -9143,45 +9288,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					if ( empty( $urls ) ) {
 						return $rules;
 					}
-					if ( function_exists( 'apply_filters' ) ) {
-						/**
-						 * Filters the high-value prerender list URLs before the rule is registered.
-						 *
-						 * @since NEXT
-						 * @param string[] $urls Validated prerender URLs (home + capped RUM top URLs).
-						 */
-						$filtered = apply_filters( 'wppo_speculation_prerender_list_urls', $urls );
-						if ( is_array( $filtered ) ) {
-							$urls = $filtered;
-						}
-					}
 					// Object-path dedupe: the WP_Speculation_Rules object
 					// does not expose its list URLs for comparison, so
 					// dedupe here is intra-list only; cross-contributor
 					// duplicates on this path are prevented by the
-					// has_rule()/static idempotency guards above.
-					$urls = $this->normalize_prerender_urls( $urls, array() );
-					if ( empty( $urls ) ) {
-						return $rules;
-					}
-					$rule_args = array(
-						'source'    => 'list',
-						'urls'      => array_values( $urls ),
-						'eagerness' => 'moderate',
-					);
-					if ( function_exists( 'apply_filters' ) ) {
-						/**
-						 * Filters the high-value prerender list rule before it is registered.
-						 *
-						 * @since NEXT
-						 * @param array $rule_args The prerender list rule arguments.
-						 */
-						$filtered_rule = apply_filters( 'wppo_speculation_prerender_list_rule', $rule_args );
-						if ( is_array( $filtered_rule ) ) {
-							$rule_args = $filtered_rule;
-						}
-					}
-					$validated = $this->validate_prerender_rule( $rule_args, array() );
+					// has_rule()/instance idempotency guards above. Dedupe
+					// across same-eagerness rules from other contributors is
+					// intentionally out of scope (no object read API).
+					$validated = $this->apply_prerender_filters( $urls, array() );
 					if ( null === $validated ) {
 						return $rules;
 					}
@@ -9203,45 +9317,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					return $rules;
 				}
 
-				if ( function_exists( 'apply_filters' ) ) {
-					/**
-					 * Filters the high-value prerender list URLs before the rule is appended.
-					 *
-					 * @since NEXT
-					 * @param string[] $urls Validated prerender URLs (home + capped RUM top URLs).
-					 */
-					$filtered = apply_filters( 'wppo_speculation_prerender_list_urls', $urls );
-					if ( is_array( $filtered ) ) {
-						$urls = $filtered;
-					}
-				}
-				$urls = $this->normalize_prerender_urls( $urls, $rules );
-				if ( empty( $urls ) ) {
-					return $rules;
-				}
-
-				$rule = array(
-					'source'    => 'list',
-					'urls'      => array_values( $urls ),
-					'eagerness' => 'moderate',
-				);
-				if ( function_exists( 'apply_filters' ) ) {
-					/**
-					 * Filters the high-value prerender list rule before it is appended.
-					 *
-					 * @since NEXT
-					 * @param array $rule The prerender list rule.
-					 */
-					$filtered_rule = apply_filters( 'wppo_speculation_prerender_list_rule', $rule );
-					if ( is_array( $filtered_rule ) ) {
-						$rule = $filtered_rule;
-					}
-				}
-				$validated = $this->validate_prerender_rule( $rule, $rules );
+				$validated = $this->apply_prerender_filters( $urls, $rules );
 				if ( null === $validated ) {
 					return $rules;
 				}
 				$rules[] = $validated;
+				// Mark emitted so a later object-path firing on the same
+				// request (core firing both hooks) early-returns above.
+				$this->speculation_prerender_object_added = true;
 
 				if ( function_exists( 'apply_filters' ) ) {
 					/**

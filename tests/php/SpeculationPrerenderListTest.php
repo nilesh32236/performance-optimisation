@@ -122,6 +122,10 @@ class SpeculationPrerenderListTest extends \PHPUnit\Framework\TestCase {
 		} else {
 			unset( $GLOBALS['wp_version'] );
 		}
+		\Brain\Monkey\tearDown();
+		if ( class_exists( Main::class ) ) {
+			Main::reset_instance();
+		}
 		parent::tearDown();
 	}
 

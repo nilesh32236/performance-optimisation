@@ -719,7 +719,7 @@ const PreloadSettings = ( { options = {} } ) => {
 										className="wppo-text-muted wppo-mt-10 wppo-text-small"
 									>
 										{ __(
-											'Prerender executes JavaScript on hover and may inflate analytics and origin load on uncached routes — use only with caching verified.',
+											'Prerender executes JavaScript on hover and may inflate analytics and origin load on uncached routes — use only with caching verified. On WooCommerce stores, document-mode prerender degrades to prefetch; only the High-Value prerender list below prerenders safe pages.',
 											'performance-optimisation'
 										) }
 									</p>
@@ -778,7 +778,7 @@ const PreloadSettings = ( { options = {} } ) => {
 											'performance-optimisation'
 										) }
 										description={ __(
-											'Prerender the home page plus top visited URLs for near-instant navigation. Only safe same-origin pages are prerendered; cart, checkout, account, and logged-in views stay on prefetch or nothing.',
+											'Prerender the home page plus top visited URLs for near-instant navigation. Only safe same-origin pages are prerendered; cart, checkout, account, and logged-in views stay on prefetch or nothing. Requires the static cache plus qualifying field data — with caching off or no RUM signal the list stays prefetch-only.',
 											'performance-optimisation'
 										) }
 										name="speculationPrerenderList"
