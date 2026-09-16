@@ -12,6 +12,7 @@ import { __, sprintf } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUsers, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import { apiCall } from '../lib/apiRequest';
+import { formatMs } from '../lib/format';
 import FeatureCard from './common/FeatureCard';
 
 /**
@@ -97,9 +98,7 @@ const WebVitalsRum = () => {
 	}, [ load ] );
 
 	const fmtMs = ( value ) =>
-		value === null || value === undefined
-			? '—'
-			: `${ Math.round( value ) } ms`;
+		value === null || value === undefined ? '—' : formatMs( value );
 	const fmtCls = ( value ) =>
 		value === null || value === undefined ? '—' : value.toFixed( 3 );
 

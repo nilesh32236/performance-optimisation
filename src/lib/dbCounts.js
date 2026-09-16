@@ -48,13 +48,18 @@ export const createDbCountsCache = ( {
 			? apiCall( 'database_cleanup_counts', {}, 'GET', signal )
 			: apiCall( 'database_cleanup_counts', {}, 'GET' ),
 } = {} ) => {
+	const safeTtl =
+		Number.isFinite( ttlMs ) && ttlMs >= 0 ? ttlMs : DEFAULT_TTL_MS;
 	let localAt = 0;
 	let localData = null;
 	let localInflight = null;
+	let localInflightSignal = null;
+	let localGeneration = 0;
 	return {
 		get: async ( signal ) => {
+			const ownerSignal = signal ?? null;
 			const now = Date.now();
-			if ( localData && now - localAt < ttlMs ) {
+			if ( localData && now - localAt < safeTtl ) {
 				if ( signal && signal.aborted ) {
 					throw new DOMException(
 						'The operation was aborted.',
@@ -63,13 +68,16 @@ export const createDbCountsCache = ( {
 				}
 				return { ...localData };
 			}
-			if ( localInflight ) {
+			if ( localInflight && localInflightSignal === ownerSignal ) {
 				return localInflight.then( ( data ) => ( { ...data } ) );
 			}
+			const requestGeneration = localGeneration;
 			const request = fetchImpl( signal ).then( ( response ) => {
 				if ( response && response.success && response.data ) {
-					localData = { ...response.data };
-					localAt = Date.now();
+					if ( requestGeneration === localGeneration ) {
+						localData = { ...response.data };
+						localAt = Date.now();
+					}
 					return { ...response.data };
 				}
 				throw new Error(
@@ -77,14 +85,23 @@ export const createDbCountsCache = ( {
 				);
 			} );
 			localInflight = request.finally( () => {
-				localInflight = null;
+				if (
+					localGeneration === requestGeneration &&
+					localInflightSignal === ownerSignal
+				) {
+					localInflight = null;
+					localInflightSignal = null;
+				}
 			} );
+			localInflightSignal = ownerSignal;
 			return localInflight;
 		},
 		clear: () => {
 			localData = null;
 			localAt = 0;
+			localGeneration++;
 			localInflight = null;
+			localInflightSignal = null;
 		},
 	};
 };

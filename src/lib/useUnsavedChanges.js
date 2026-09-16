@@ -4,43 +4,70 @@ import UnsavedChangesContext from './UnsavedChangesContext';
 /**
  * Stable stringify with sorted keys for deterministic dirty comparison.
  *
- * Circular references serialize as "[Circular]"; undefined/functions fall
- * back to JSON semantics so a circular settings value cannot crash every tab.
+ * Circular references serialize as "[Circular]". Object keys holding
+ * undefined/function values serialize as null (JSON.stringify would drop
+ * those keys; here keys are always emitted so key sets stay comparable).
+ * toJSON is honored like JSON.stringify. Values that cannot stringify
+ * (BigInt, throwing toJSON) fall back to a stable sentinel so a bad settings
+ * value can never throw out of useMemo and crash every tab.
  *
  * @since 2.0.0
- * @param {*}     value  Value to stringify.
- * @param {Array} [seen] Internal circular guard.
+ * @since NEXT Circular guard, toJSON support and never-throw hardening; exported for shared use.
+ * @param {*} value Value to stringify.
  * @return {string} Stable JSON string.
  */
-export const stableStringify = ( value, seen = [] ) => {
-	if ( value === null || typeof value !== 'object' ) {
-		const result = JSON.stringify( value );
-		return result === undefined ? 'null' : result;
-	}
-	if ( seen.includes( value ) ) {
-		return '"[Circular]"';
-	}
-	const nextSeen = [ ...seen, value ];
-	if ( Array.isArray( value ) ) {
-		return (
-			'[' +
-			value.map( ( v ) => stableStringify( v, nextSeen ) ).join( ',' ) +
-			']'
-		);
-	}
-	const keys = Object.keys( value ).sort();
-	return (
-		'{' +
-		keys
-			.map(
-				( k ) =>
-					JSON.stringify( k ) +
-					':' +
-					stableStringify( value[ k ], nextSeen )
-			)
-			.join( ',' ) +
-		'}'
-	);
+export const stableStringify = ( value ) => {
+	const stringifyInner = ( val, seen ) => {
+		if ( val !== null && typeof val === 'object' ) {
+			if ( seen.includes( val ) ) {
+				return '"[Circular]"';
+			}
+			const nextSeen = [ ...seen, val ];
+			if ( typeof val.toJSON === 'function' ) {
+				let json;
+				try {
+					json = val.toJSON();
+				} catch {
+					return '"[Unserializable]"';
+				}
+				return stringifyInner( json, nextSeen );
+			}
+			if ( Array.isArray( val ) ) {
+				const parts = [];
+				for ( let i = 0; i < val.length; i++ ) {
+					parts.push( stringifyInner( val[ i ], nextSeen ) );
+				}
+				return '[' + parts.join( ',' ) + ']';
+			}
+			const keys = Object.keys( val ).sort();
+			return (
+				'{' +
+				keys
+					.map(
+						( k ) =>
+							JSON.stringify( k ) +
+							':' +
+							stringifyInner( val[ k ], nextSeen )
+					)
+					.join( ',' ) +
+				'}'
+			);
+		}
+		if ( typeof val === 'bigint' ) {
+			return JSON.stringify( String( val ) );
+		}
+		try {
+			const result = JSON.stringify( val );
+			return result === undefined ? 'null' : result;
+		} catch {
+			try {
+				return JSON.stringify( String( val ) );
+			} catch {
+				return '"[Unserializable]"';
+			}
+		}
+	};
+	return stringifyInner( value, [] );
 };
 
 /**

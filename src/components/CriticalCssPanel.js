@@ -79,6 +79,23 @@ export const normalizeCcssEntry = ( hash, entry ) => {
 	};
 };
 
+/**
+ * Resolve the badge config for a status key with an own-property check.
+ *
+ * Plain property access would resolve inherited keys like '__proto__' to
+ * Object.prototype (truthy) instead of the intended `none` fallback.
+ *
+ * @since NEXT
+ * @param {*} statusKey Raw status key.
+ * @return {{icon: *, className: string, label: string}} Badge config.
+ */
+const statusConfigFor = ( statusKey ) => {
+	const hasOwn = Object.hasOwn
+		? Object.hasOwn( STATUS_CONFIG, statusKey )
+		: Object.prototype.hasOwnProperty.call( STATUS_CONFIG, statusKey );
+	return hasOwn ? STATUS_CONFIG[ statusKey ] : STATUS_CONFIG.none;
+};
+
 const CriticalCssPanel = ( { status = {}, onRegenerate } ) => {
 	const [ isRegenerating, setIsRegenerating ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
@@ -127,8 +144,7 @@ const CriticalCssPanel = ( { status = {}, onRegenerate } ) => {
 						const normalized = normalizeCcssEntry( hash, entry );
 						const { statusKey, label, size, truncated } =
 							normalized;
-						const config =
-							STATUS_CONFIG[ statusKey ] || STATUS_CONFIG.none;
+						const config = statusConfigFor( statusKey );
 						return (
 							<div key={ hash } className="wppo-ccss-status-item">
 								<span className="wppo-ccss-status-hash">

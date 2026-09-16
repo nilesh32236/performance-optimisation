@@ -18,11 +18,11 @@
  * @since NEXT
  * @type {string[]}
  */
-export const AUTH_ERROR_CODES = [
+export const AUTH_ERROR_CODES = Object.freeze( [
 	'rest_forbidden',
 	'rest_cookie_invalid_nonce',
 	'rest_cookie_nonce_invalid',
-];
+] );
 
 /**
  * Set view of AUTH_ERROR_CODES for O(1) lookup.

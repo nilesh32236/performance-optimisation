@@ -9,6 +9,7 @@ import { faImages, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import { formatBytes } from '../lib/util';
+import { savingsPercent } from '../lib/format';
 import { __, sprintf } from '@wordpress/i18n';
 
 const ImageOptimizationCard = ( {
@@ -170,11 +171,10 @@ const ImageOptimizationCard = ( {
 								formatBytes( savings.converted_bytes ),
 								Math.max(
 									0,
-									Math.round(
-										( savings.saved_bytes /
-											savings.original_bytes ) *
-											100
-									)
+									savingsPercent(
+										savings.original_bytes,
+										savings.converted_bytes
+									) ?? 0
 								),
 								savings.images_counted
 							) }

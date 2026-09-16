@@ -22,8 +22,13 @@ export const formatMs = ( value ) => {
 /**
  * Format a 0-1 ratio or 0-100 number as percent.
  *
+ * Heuristic: finite values in [0, 1] are treated as ratios (0.5 → "50%").
+ * Callers holding a genuine percent in that range (e.g. 0.5%) must scale to
+ * basis points or pass a consistent 0-100 scale — there is no opt-out flag
+ * by design so call sites stay comparable.
+ *
  * @since NEXT
- * @param {*} value Numeric value.
+ * @param {*} value Numeric value (ratio 0-1 or percent 0-100).
  * @return {string} Formatted value or '—' fallback.
  */
 export const formatPercent = ( value ) => {
@@ -50,7 +55,7 @@ export const formatBytesShared = ( value ) => {
 	if ( num < 1024 ) {
 		return `${ Math.round( num ) } B`;
 	}
-	const units = [ 'KB', 'MB', 'GB' ];
+	const units = [ 'KB', 'MB', 'GB', 'TB', 'PB' ];
 	let size = num / 1024;
 	let unit = 0;
 	while ( size >= 1024 && unit < units.length - 1 ) {
@@ -76,7 +81,7 @@ export const savingsPercent = ( original, optimized ) => {
 		! Number.isFinite( after ) ||
 		before <= 0 ||
 		after < 0 ||
-		after >= before
+		after > before
 	) {
 		return null;
 	}

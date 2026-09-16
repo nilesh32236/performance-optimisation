@@ -10,7 +10,12 @@
  * @since NEXT
  * @type {string[]}
  */
-export const STATUS_LEVELS = [ 'good', 'warning', 'poor', 'unknown' ];
+export const STATUS_LEVELS = Object.freeze( [
+	'good',
+	'warning',
+	'poor',
+	'unknown',
+] );
 
 /**
  * Map a 0-100 score to a status level.

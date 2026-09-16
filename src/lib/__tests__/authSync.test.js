@@ -28,9 +28,7 @@ describe( 'auth contract sync (apiRequest ↔ main.js ↔ esi.js)', () => {
 			);
 		const expected = [ ...AUTH_ERROR_CODES ].sort();
 		expect( restCodes( esiSrc ) ).toEqual( expected );
-		expect(
-			restCodes( mainSrc ).filter( ( c ) => expected.includes( c ) )
-		).toEqual( expected );
+		expect( restCodes( mainSrc ) ).toEqual( expected );
 	} );
 
 	it( 'main.js getErrorLogMessage matches the shared implementation', () => {

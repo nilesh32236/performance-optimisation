@@ -1,4 +1,4 @@
-import { AUTH_ERROR_CODE_SET } from './authErrors';
+import { isAuthErrorCode } from './authErrors';
 
 export {
 	AUTH_ERROR_CODES,
@@ -21,26 +21,28 @@ export {
  *
  * @since 2.0.0
  * @since NEXT Accepts an optional dot-path with fallback (getWppoSettings('settings.cache.enabled', false)).
- * @param {string} [path] Optional dot-separated path (e.g. 'settings.cache').
- * @param {...any} args   Optional fallback as second argument.
+ * @param {string} [path]     Optional dot-separated path (e.g. 'settings.cache').
+ * @param {*}      [fallback] Optional fallback returned when the global or path is absent.
  * @return {*} The global settings object (or path value), or fallback/{} when absent.
  */
-export const getWppoSettings = ( path, ...args ) => {
-	const hasFallback = args.length > 0;
-	const fallback = args[ 0 ];
-	const fallbackValue = hasFallback ? fallback : {};
+export const getWppoSettings = ( path, fallback = {} ) => {
+	const fallbackValue = fallback;
 	if ( typeof wppoSettings === 'undefined' || ! wppoSettings ) {
 		return fallbackValue;
 	}
 	if ( typeof path !== 'string' || ! path ) {
 		return wppoSettings;
 	}
+	const hasOwn = ( obj, key ) =>
+		Object.hasOwn
+			? Object.hasOwn( obj, key )
+			: Object.prototype.hasOwnProperty.call( obj, key );
 	let current = wppoSettings;
 	for ( const key of path.split( '.' ) ) {
 		if (
 			! current ||
 			typeof current !== 'object' ||
-			! ( key in current )
+			! hasOwn( current, key )
 		) {
 			return fallbackValue;
 		}
@@ -178,7 +180,7 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 		// Detect expired nonce (rest_forbidden, rest_cookie_invalid_nonce, etc.).
 		// The code list lives in ./authErrors.js; main.js/esi.js mirror it
 		// (see authSync.test.js).
-		if ( data.code && AUTH_ERROR_CODE_SET.has( data.code ) ) {
+		if ( data.code && isAuthErrorCode( data.code ) ) {
 			if ( isRetrying ) {
 				throw new Error(
 					'Nonce retry failed — authentication error persists.'
@@ -304,7 +306,7 @@ export const SCAN_STRATEGIES = [ 'mobile', 'desktop' ];
  */
 export const buildAction = ( action, params = {} ) => {
 	const search = new URLSearchParams();
-	for ( const [ key, value ] of Object.entries( params ) ) {
+	for ( const [ key, value ] of Object.entries( params ?? {} ) ) {
 		if ( value === undefined || value === null || value === '' ) {
 			continue;
 		}
@@ -323,7 +325,7 @@ export const buildAction = ( action, params = {} ) => {
  * @return {void}
  */
 export const assertScanUrl = ( url, allowEmpty = false ) => {
-	if ( allowEmpty && ( url === '' || url === undefined ) ) {
+	if ( allowEmpty && ( url === '' || url === undefined || url === null ) ) {
 		return;
 	}
 	if ( ! isValidScanUrl( url ) ) {
