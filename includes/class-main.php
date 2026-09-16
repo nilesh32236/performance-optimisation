@@ -2723,16 +2723,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
 					return;
 				}
-				if ( isset( $this->options['file_optimisation'] ) && is_array( $this->options['file_optimisation'] ) && array_key_exists( 'builderPurgeWatcher', $this->options['file_optimisation'] ) && array_key_exists( 'builderPurgeDriftLog', $this->options['file_optimisation'] ) ) {
-					return;
-				}
 				// allowlist(settings-read-guard): deliberate direct read — must distinguish
 				// "no stored row" (false) from "stored array", which Util::get_settings()
 				// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
+				// Gate on the persisted row (not the in-memory backfill) so the
+				// migration branch stays reachable and single-key rows heal.
 				$stored = get_option( 'wppo_settings' );
 				if ( ! is_array( $stored ) ) {
 					return;
 				}
+				$file_opts = $stored['file_optimisation'] ?? null;
+				if ( is_array( $file_opts ) && array_key_exists( 'builderPurgeWatcher', $file_opts ) && array_key_exists( 'builderPurgeDriftLog', $file_opts ) ) {
+					return;
+				}
+
 				$file = isset( $stored['file_optimisation'] ) && is_array( $stored['file_optimisation'] ) ? $stored['file_optimisation'] : array();
 
 				$changed = false;
@@ -2750,7 +2754,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 
 				$stored['file_optimisation'] = $file;
-				update_option( 'wppo_settings', $stored );
+				$updated                     = update_option( 'wppo_settings', $stored );
+				if ( ! $updated ) {
+					return;
+				}
 
 				if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
 					$this->options['file_optimisation'] = array();

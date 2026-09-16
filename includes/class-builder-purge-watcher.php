@@ -304,19 +304,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * @return bool True when the watcher may run.
 		 */
 		public static function is_watcher_enabled(): bool {
-			try {
-				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
-					return true;
-				}
-				$settings = Util::get_settings();
-				if ( ! isset( $settings['file_optimisation']['builderPurgeWatcher'] ) ) {
-					return true;
-				}
-				return (bool) $settings['file_optimisation']['builderPurgeWatcher'];
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return true;
-			}
+			return self::is_file_flag_enabled( 'builderPurgeWatcher' );
 		}
 
 		/**
@@ -330,20 +318,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * @return bool True when drift purges should write a log entry.
 		 */
 		public static function is_drift_log_enabled(): bool {
+			return self::is_file_flag_enabled( 'builderPurgeDriftLog' );
+		}
+
+		/**
+		 * Read an additive file_optimisation flag, fail-open to true (issue #1288).
+		 *
+		 * Single helper behind is_watcher_enabled() / is_drift_log_enabled()
+		 * so the fail-open shape (class/method guards, is_array guard, key
+		 * presence check, bool cast) cannot drift between the two callers.
+		 *
+		 * @since NEXT
+		 * @param string $key Flag key inside file_optimisation.
+		 * @return bool True when the flag is enabled or unreadable.
+		 */
+		private static function is_file_flag_enabled( string $key ): bool {
 			try {
 				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
 					return true;
 				}
 				$settings = Util::get_settings();
-				if ( ! isset( $settings['file_optimisation']['builderPurgeDriftLog'] ) ) {
+				if ( ! is_array( $settings ) ) {
 					return true;
 				}
-			return (bool) $settings['file_optimisation']['builderPurgeDriftLog'];
-		} catch ( \Throwable $e ) {
-			unset( $e );
-			return true;
+				$file = $settings['file_optimisation'] ?? null;
+				if ( ! is_array( $file ) || ! array_key_exists( $key, $file ) ) {
+					return true;
+				}
+				return (bool) $file[ $key ];
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
 		}
-	}
 
 		/**
 		 * Register the upgrader hook plus builder-drift hooks.
@@ -485,21 +492,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 					return false;
 				}
 
+				$ttl       = defined( 'MINUTE_IN_SECONDS' ) ? 5 * MINUTE_IN_SECONDS : 300;
 				$scheduled = false;
 				if ( function_exists( 'as_enqueue_async_action' ) ) {
-					if ( ! function_exists( 'as_has_scheduled_action' ) || ! as_has_scheduled_action( self::DRIFT_PURGE_HOOK, array(), 'performance_optimisation' ) ) {
-						as_enqueue_async_action( self::DRIFT_PURGE_HOOK, array(), 'performance_optimisation' );
+					if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( self::DRIFT_PURGE_HOOK, array(), 'performance_optimisation' ) ) {
+						return false;
 					}
+					as_enqueue_async_action( self::DRIFT_PURGE_HOOK, array(), 'performance_optimisation' );
 					$scheduled = true;
 				} elseif ( function_exists( 'wp_schedule_single_event' ) ) {
-					if ( ! function_exists( 'wp_next_scheduled' ) || ! wp_next_scheduled( self::DRIFT_PURGE_HOOK ) ) {
-						wp_schedule_single_event( time() + ( defined( 'MINUTE_IN_SECONDS' ) ? MINUTE_IN_SECONDS : 60 ), self::DRIFT_PURGE_HOOK );
+					if ( function_exists( 'wp_next_scheduled' ) && wp_next_scheduled( self::DRIFT_PURGE_HOOK ) ) {
+						return false;
 					}
+					wp_schedule_single_event( time() + ( defined( 'MINUTE_IN_SECONDS' ) ? MINUTE_IN_SECONDS : 60 ), self::DRIFT_PURGE_HOOK );
 					$scheduled = true;
 				}
 
-				if ( $scheduled && function_exists( 'set_transient' ) && defined( 'MINUTE_IN_SECONDS' ) ) {
-					set_transient( Util::transient_key( self::DRIFT_PURGE_LOCK ), 1, 5 * MINUTE_IN_SECONDS );
+				if ( $scheduled && function_exists( 'set_transient' ) ) {
+					set_transient( Util::transient_key( self::DRIFT_PURGE_LOCK ), 1, $ttl );
 				}
 
 				return $scheduled;
@@ -521,12 +531,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 */
 		public function run_deferred_drift_purge(): void {
 			try {
-				if ( ! self::is_watcher_enabled() ) {
-					return;
+				// No watcher gate here by design (issue #1288): disable stops
+				// future scheduling, it must not abandon an already-queued heal.
+				$purged = $this->purge_wppo_derived_caches();
+				if ( $purged ) {
+					$this->write_drift_purge_log( true );
+					$this->store_admin_notice( array( 'Elementor' ) );
+				} else {
+					$this->write_drift_purge_log( false );
 				}
-				$this->purge_wppo_derived_caches();
-				$this->write_drift_purge_log();
-				$this->store_admin_notice( array( 'Elementor' ) );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
@@ -605,9 +618,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 				if ( ! $purged && ! $queued ) {
 					return;
 				}
-				$this->write_drift_save_log( $post_id );
-				$this->store_admin_notice( array( 'Elementor' ) );
-				if ( function_exists( 'do_action' ) ) {
+				$this->write_drift_save_log( $post_id, $purged, $queued );
+				if ( $purged ) {
+					$this->store_admin_notice( array( 'Elementor' ) );
+				}
+				if ( $queued && function_exists( 'do_action' ) ) {
 					/**
 					 * Fires after builder-drift requeue for a saved post (issue #1023).
 					 *
@@ -866,12 +881,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 					return false;
 				}
 				if ( class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Used_CSS', 'purge_coupled' ) ) {
-					Used_CSS::purge_coupled( $path );
-					return true;
+					$result = Used_CSS::purge_coupled( $path );
+					return (bool) ( ( $result['page_cache'] ?? false ) || ( $result['used_css'] ?? false ) );
 				}
 				if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) && method_exists( 'PerformanceOptimise\Inc\Cache', 'clear_cache' ) ) {
-					Cache::clear_cache( $path );
-					return true;
+					return (bool) Cache::clear_cache( $path );
 				}
 				return false;
 			} catch ( \Throwable $e ) {
@@ -895,7 +909,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 				if ( ! function_exists( 'get_permalink' ) ) {
 					return '';
 				}
-				$url = get_permalink( $post_id );
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'memoized_permalink' ) ) {
+					$url = Util::memoized_permalink( $post_id );
+				} else {
+					$url = get_permalink( $post_id );
+				}
 				if ( ! is_string( $url ) || '' === $url ) {
 					return '';
 				}
@@ -904,7 +922,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 				} else {
 					$parts = parse_url( $url ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url
 				}
-				if ( ! is_array( $parts ) || empty( $parts['path'] ) || ! is_string( $parts['path'] ) ) {
+				if ( ! is_array( $parts ) ) {
+					return '';
+				}
+				if ( ! empty( $parts['query'] ) && ( empty( $parts['path'] ) || '/' === $parts['path'] ) ) {
+					return '';
+				}
+				if ( empty( $parts['path'] ) || ! is_string( $parts['path'] ) ) {
 					return '';
 				}
 				return $parts['path'];
@@ -926,6 +950,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * Fail-open: scheduling failures are swallowed.
 		 *
 		 * @since NEXT
+		 * @param bool $succeeded Whether the page-cache clear succeeded.
 		 * @return void
 		 */
 		protected function maybe_coalesce_bulk_regen(): void {
@@ -949,7 +974,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		}
 	}
 
-		protected function write_drift_purge_log(): void {
+		protected function write_drift_purge_log( bool $succeeded = true ): void {
 			if ( ! self::is_drift_log_enabled() ) {
 				return;
 			}
@@ -957,9 +982,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 				return;
 			}
 			try {
-				Log::add(
-					__( 'Builder CSS regeneration detected (Elementor): builder CSS, page cache, used-CSS and critical-CSS purged.', 'performance-optimisation' )
-				);
+				if ( $succeeded ) {
+					Log::add(
+						__( 'Builder CSS regeneration detected (Elementor): builder CSS, page cache, used-CSS and critical-CSS purged.', 'performance-optimisation' )
+					);
+				} else {
+					Log::add(
+						__( 'Builder CSS regeneration detected (Elementor): derived-cache purge attempted but page cache was not cleared; full CSS keeps serving.', 'performance-optimisation' )
+					);
+				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
@@ -971,10 +1002,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * Gated by the additive `builderPurgeDriftLog` setting (default on).
 		 *
 		 * @since NEXT
-		 * @param int $post_id Post ID saved in the builder.
+		 * @param int  $post_id Post ID saved in the builder.
+		 * @param bool $purged Whether the URL-scoped purge succeeded.
+		 * @param bool $queued Whether regeneration was requeued.
 		 * @return void
 		 */
-		protected function write_drift_save_log( int $post_id ): void {
+		protected function write_drift_save_log( int $post_id, bool $purged = true, bool $queued = true ): void {
 			if ( ! self::is_drift_log_enabled() ) {
 				return;
 			}
@@ -982,13 +1015,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 				return;
 			}
 			try {
-				Log::add(
-					sprintf(
+				if ( $purged && $queued ) {
+					$message = sprintf(
 						/* translators: %d: post ID saved in the builder */
 						__( 'Builder drift detected (post %d): page cache and used-CSS purged for the affected URL, regeneration requeued.', 'performance-optimisation' ),
 						$post_id
-					)
-				);
+					);
+				} elseif ( $purged ) {
+					$message = sprintf(
+						/* translators: %d: post ID saved in the builder */
+						__( 'Builder drift detected (post %d): page cache and used-CSS purged for the affected URL.', 'performance-optimisation' ),
+						$post_id
+					);
+				} else {
+					$message = sprintf(
+						/* translators: %d: post ID saved in the builder */
+						__( 'Builder drift detected (post %d): regeneration requeued for the affected URL.', 'performance-optimisation' ),
+						$post_id
+					);
+				}
+				Log::add( $message );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
@@ -1826,12 +1872,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 *
 		 * @since 2.0.0
 		 * @since NEXT Used-CSS path switched from forced full regen to targeted regen.
-		 * @return void
+		 * @since NEXT Returns whether the page-cache clear succeeded.
+		 * @return bool True when the page-cache clear succeeded.
 		 */
-		protected function purge_wppo_derived_caches(): void {
+		protected function purge_wppo_derived_caches(): bool {
+			$page_cache_ok = false;
 			try {
 				if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
-					Cache::clear_cache();
+					$page_cache_ok = (bool) Cache::clear_cache();
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -1893,6 +1941,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
+
+			return $page_cache_ok;
 		}
 
 		/**

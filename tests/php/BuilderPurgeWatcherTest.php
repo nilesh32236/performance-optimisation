@@ -659,6 +659,82 @@ class BuilderPurgeWatcherTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Watcher flags fail open when settings carry no keys (issue #1288).
+	 */
+	public function test_watcher_flags_fail_open_without_keys(): void {
+		Util::set_settings_cache( array() );
+		$this->assertTrue( Builder_Purge_Watcher::is_watcher_enabled() );
+		$this->assertTrue( Builder_Purge_Watcher::is_drift_log_enabled() );
+	}
+
+	/**
+	 * Watcher flags respect explicit stored values, including corrupted shapes.
+	 */
+	public function test_watcher_flags_respect_stored_values(): void {
+		Util::set_settings_cache(
+			array(
+				'file_optimisation' => array(
+					'builderPurgeWatcher'  => false,
+					'builderPurgeDriftLog' => false,
+				),
+			)
+		);
+		$this->assertFalse( Builder_Purge_Watcher::is_watcher_enabled() );
+		$this->assertFalse( Builder_Purge_Watcher::is_drift_log_enabled() );
+
+		Util::set_settings_cache( array( 'file_optimisation' => 'corrupted' ) );
+		$this->assertTrue( Builder_Purge_Watcher::is_watcher_enabled() );
+		$this->assertTrue( Builder_Purge_Watcher::is_drift_log_enabled() );
+	}
+
+	/**
+	 * Resolve_post_url_path() returns the path and rejects plain permalinks.
+	 */
+	public function test_resolve_post_url_path_edge_cases(): void {
+		Functions\when( 'get_permalink' )->alias(
+			static function ( $post_id ) {
+				if ( 7 === (int) $post_id ) {
+					return 'http://example.com/my-page/';
+				}
+				if ( 8 === (int) $post_id ) {
+					return 'http://example.com/?p=8';
+				}
+				return '';
+			}
+		);
+
+		$watcher = new Builder_Purge_Watcher();
+		$method  = new \ReflectionMethod( $watcher, 'resolve_post_url_path' );
+		$method->setAccessible( true );
+
+		Util::clear_permalink_cache();
+		$this->assertSame( '/my-page/', $method->invoke( $watcher, 7 ) );
+		Util::clear_permalink_cache();
+		$this->assertSame( '', $method->invoke( $watcher, 8 ), 'Plain permalinks must not heal the homepage.' );
+		Util::clear_permalink_cache();
+		$this->assertSame( '', $method->invoke( $watcher, 9 ) );
+		Util::clear_permalink_cache();
+	}
+
+	/**
+	 * Purge_post_url_caches() reports false when both coupled stores fail.
+	 */
+	public function test_purge_post_url_caches_reports_coupled_failure(): void {
+		Functions\when( 'get_permalink' )->justReturn( 'http://example.com/my-page/' );
+		Util::clear_permalink_cache();
+
+		$watcher = new Builder_Purge_Watcher();
+		$method  = new \ReflectionMethod( $watcher, 'purge_post_url_caches' );
+		$method->setAccessible( true );
+
+		// Cache::clear_cache() returns false with no filesystem; the coupled
+		// seam must propagate that instead of reporting success.
+		Functions\when( 'WP_Filesystem' )->justReturn( false );
+		$this->assertFalse( $method->invoke( $watcher, 7 ) );
+		Util::clear_permalink_cache();
+	}
+
+	/**
 	 * Reset the watcher's static re-entrancy flags between assertions.
 	 *
 	 * @return void
@@ -724,10 +800,11 @@ class WPPO_Test_Builder_Watcher_Flow extends Builder_Purge_Watcher {
 	/**
 	 * Record the derived-cache purge.
 	 *
-	 * @return void
+	 * @return bool
 	 */
-	protected function purge_wppo_derived_caches(): void {
+	protected function purge_wppo_derived_caches(): bool {
 		$this->wppo_purged = true;
+		return true;
 	}
 
 	/**
