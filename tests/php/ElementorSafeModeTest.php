@@ -176,6 +176,81 @@ class ElementorSafeModeTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Object get_post_id() values route through the same float rejection.
+	 */
+	public function test_resolve_rejects_float_object_post_id(): void {
+		$watcher = new Builder_Purge_Watcher();
+		$method  = new \ReflectionMethod( Builder_Purge_Watcher::class, 'resolve_elementor_post_id' );
+		$method->setAccessible( true );
+
+		$float_css = new class() {
+			/**
+			 * Float post ID fixture mirroring a malformed Elementor payload.
+			 *
+			 * @return float Post ID that must never truncate to a real post.
+			 */
+			public function get_post_id(): float {
+				return 12.9;
+			}
+		};
+		$this->assertSame( 0, $method->invoke( $watcher, $float_css ), 'Float object post IDs must not truncate to a wrong post.' );
+
+		$string_float_css = new class() {
+			/**
+			 * Float-like string post ID fixture.
+			 *
+			 * @return string Post ID that must never truncate to a real post.
+			 */
+			public function get_post_id(): string {
+				return '12.9';
+			}
+		};
+		$this->assertSame( 0, $method->invoke( $watcher, $string_float_css ), 'Float-like string object post IDs must not truncate.' );
+	}
+
+	/**
+	 * Bulk regen coalesces past the distinct-post threshold.
+	 */
+	public function test_bulk_regen_coalesces_after_threshold(): void {
+		$watcher = new WPPO_Test_Elementor_Counting_Watcher();
+
+		for ( $post_id = 101; $post_id <= 106; $post_id++ ) {
+			$watcher->on_elementor_css_regen( $post_id );
+		}
+		$this->assertSame( array( 101, 102, 103, 104, 105, 106 ), $watcher->purged_posts );
+
+		$flag = new \ReflectionProperty( Builder_Purge_Watcher::class, 'bulk_regen_coalesced' );
+		$flag->setAccessible( true );
+		$this->assertTrue( $flag->getValue(), 'Six distinct posts must trip bulk-regen coalescing (archive fan-out + targeted regen).' );
+	}
+
+	/**
+	 * Loop fallback applies on singular views only, never on archives/home.
+	 */
+	public function test_loop_fallback_is_singular_only(): void {
+		$this->stub_builder_meta( '', 'builder' );
+		Functions\when( 'get_the_ID' )->justReturn( 99 );
+		Functions\when( 'is_singular' )->justReturn( false );
+
+		$this->assertFalse( Main::is_elementor_built_page( null ), 'Archives/home must not inherit a loop member builder verdict.' );
+
+		Main::reset_elementor_memo();
+		Functions\when( 'is_singular' )->justReturn( true );
+		$this->assertTrue( Main::is_elementor_built_page( null ), 'Singular loop fallback must still bypass for builder posts.' );
+	}
+
+	/**
+	 * Staged elementorSafeMode fail-safes to true like production.
+	 */
+	public function test_sandbox_staged_safe_mode_fails_safe_true(): void {
+		$garbage = \PerformanceOptimise\Inc\Sandbox_Preview::sanitize_staged( array( 'elementorSafeMode' => 'maybe' ) );
+		$this->assertTrue( $garbage['elementorSafeMode'], 'Garbage staged values must preview with protection ON.' );
+
+		$off = \PerformanceOptimise\Inc\Sandbox_Preview::sanitize_staged( array( 'elementorSafeMode' => 'false' ) );
+		$this->assertFalse( $off['elementorSafeMode'] );
+	}
+
+	/**
 	 * Regen + editor-save share one per-request dedupe set.
 	 */
 	public function test_elementor_purge_dedupe_shared_across_handlers(): void {

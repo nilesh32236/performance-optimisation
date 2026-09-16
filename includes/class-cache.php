@@ -909,6 +909,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Whether CSS combine/inline must be skipped for Elementor-safe mode (issue #1259).
+		 *
+		 * Single choke point for both combine_css() and
+		 * will_combine_css_inline() so the pre-gate, sandbox-effective
+		 * slice, and skip predicate cannot drift between call sites.
+		 * Fail-open to production behaviour (false) on any detection
+		 * failure; Main::should_skip_combine_for_elementor() itself
+		 * fail-safes to skip while safe mode is on.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $file_opt Sandbox-effective `file_optimisation` slice.
+		 * @return bool True when combine/inline must be skipped.
+		 */
+		private function should_bypass_combine_for_elementor( array $file_opt ): bool {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) || ! method_exists( 'PerformanceOptimise\Inc\Main', 'looks_like_elementor_request' ) || ! method_exists( 'PerformanceOptimise\Inc\Main', 'should_skip_combine_for_elementor' ) ) {
+					return false;
+				}
+				// Centralized native pre-gate (class/constant/query var
+				// only — zero WP calls) so non-Elementor sites, and unit
+				// tests with strict function_exists() expectations, pay
+				// nothing; the full guarded detection (memoized per request
+				// in Main::is_elementor_built_page()) runs only when
+				// Elementor looks present.
+				if ( ! Main::looks_like_elementor_request() ) {
+					return false;
+				}
+				return Main::should_skip_combine_for_elementor( $file_opt );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
 		 * Combines all enqueued CSS files into a single file.
 		 *
 		 * @return void
@@ -976,21 +1012,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 			// Elementor-safe mode (issue #1259): default-off combine/inline for
 			// builder-built pages. Uses the sandbox-effective slice so a staged
-			// elementorSafeMode=off can be previewed before promote. Fail-open:
-			// detection failure returns false (combine runs). Centralized
-			// native pre-gate (Main::looks_like_elementor_request(): class/
-			// constant/query var only — zero WP calls) so non-Elementor sites
-			// carry zero weight; full detection (memoized per request in
-			// Main::is_elementor_built_page()) runs only when Elementor looks
-			// present.
-			if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'looks_like_elementor_request' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'should_skip_combine_for_elementor' ) && Main::looks_like_elementor_request() ) {
-				try {
-					if ( Main::should_skip_combine_for_elementor( is_array( $file_opt_for_combine ) ? $file_opt_for_combine : array() ) ) {
-						return;
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
+			// elementorSafeMode=off can be previewed before promote. Single
+			// choke point (should_bypass_combine_for_elementor()) shared with
+			// will_combine_css_inline() so the two call sites cannot drift.
+			if ( $this->should_bypass_combine_for_elementor( is_array( $file_opt_for_combine ) ? $file_opt_for_combine : array() ) ) {
+				return;
 			}
 
 			// On WP 6.9+ with separate (on-demand) core block assets active, never
@@ -1718,30 +1744,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			// Elementor-safe mode (issue #1259): never inline the combined
-			// file on builder-built pages. Fail-open to production behaviour
-			// on any detection failure. Centralized native pre-gate
-			// (Main::looks_like_elementor_request(): class/constant/query var
-			// only — zero WP calls) so non-Elementor sites, and unit tests
-			// with strict function_exists() expectations, pay nothing; the
-			// full guarded detection (memoized per request in
-			// Main::is_elementor_built_page()) runs only when Elementor looks
-			// present.
-			if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'looks_like_elementor_request' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'should_skip_combine_for_elementor' ) && Main::looks_like_elementor_request() ) {
-				try {
-					$file_opt = isset( $this->options['file_optimisation'] ) && is_array( $this->options['file_optimisation'] ) ? $this->options['file_optimisation'] : array();
-					if ( class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_effective_file_optimisation' ) ) {
-						try {
-							$file_opt = Sandbox_Preview::get_effective_file_optimisation( $file_opt );
-						} catch ( \Throwable $e ) {
-							unset( $e );
-						}
+			// file on builder-built pages. Single choke point shared with
+			// combine_css() (see should_bypass_combine_for_elementor()).
+			try {
+				$file_opt = isset( $this->options['file_optimisation'] ) && is_array( $this->options['file_optimisation'] ) ? $this->options['file_optimisation'] : array();
+				if ( class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_effective_file_optimisation' ) ) {
+					try {
+						$file_opt = Sandbox_Preview::get_effective_file_optimisation( $file_opt );
+					} catch ( \Throwable $e ) {
+						unset( $e );
 					}
-					if ( Main::should_skip_combine_for_elementor( $file_opt ) ) {
-						return false;
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
 				}
+				if ( $this->should_bypass_combine_for_elementor( $file_opt ) ) {
+					return false;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 			}
 
 			// When the budget prediction drifted this request the combined file is

@@ -2246,11 +2246,11 @@ const FileOptimization = ( {
 										'performance-optimisation'
 									) }
 									name="elementorSafeMode"
-									checked={ settings.elementorSafeMode }
+									checked={ !! settings.elementorSafeMode }
 									onChange={ handleChange( setSettings ) }
 									disabled={ optimizerDisabled }
 								/>
-								{ settings.elementorSafeMode && (
+								{ !! settings.elementorSafeMode && (
 									<NoticeBanner
 										type="info"
 										message={ __(

@@ -1273,7 +1273,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 */
 		public static function is_elementor_context( ?int $post_id = null ): bool {
 			try {
-				if ( class_exists( 'Elementor\Plugin' ) ) {
+				// Note: autoload disabled to match Main::looks_like_elementor_request()
+				// and Main::detect_elementor_built_page() — an autoloadable but
+				// not-yet-loaded Elementor class must not change the verdict
+				// between call sites, and the combine hot path must not pay an
+				// autoloader scan.
+				if ( class_exists( 'Elementor\Plugin', false ) ) {
 					return true;
 				}
 				if ( function_exists( 'elementor_pro_load_plugin' ) || defined( 'ELEMENTOR_VERSION' ) ) {

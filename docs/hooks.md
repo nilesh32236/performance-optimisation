@@ -327,6 +327,58 @@ add_action( 'wppo_builder_drift_requeue', function( $post_id = 0 ) {
 
 ---
 
+### `wppo_elementor_safe_mode_enabled`
+Filters whether Elementor-safe mode is active (issue #1259). When on (default), Combine CSS and combined-CSS inlining step aside on Elementor-built pages. @since NEXT.
+
+**Parameters:**
+- `$enabled` *(bool)* — Whether safe mode is on. Default follows the `file_optimisation.elementorSafeMode` setting (absent key = enabled).
+
+**Example:**
+```php
+add_filter( 'wppo_elementor_safe_mode_enabled', function( $enabled ) {
+    // Keep protection on everywhere except a staging host.
+    if ( 'staging.example.com' === $_SERVER['HTTP_HOST'] ) {
+        return false;
+    }
+    return $enabled;
+} );
+```
+
+---
+
+### `wppo_is_elementor_page`
+Filters the Elementor-built verdict for the current request (issue #1259). Return a non-null bool to force the verdict — the escape hatch for Elementor Theme Builder (header/footer/archive/popup), translated copies, and loop contexts that single-post meta detection does not cover. @since NEXT.
+
+**Parameters:**
+- `$verdict` *(bool|null)* — Forced verdict. Default `null` (run built-in detection).
+- `$post_id` *(int|null)* — Resolved post ID, or `null` when unknown.
+
+**Example:**
+```php
+add_filter( 'wppo_is_elementor_page', function( $verdict, $post_id ) {
+    // Treat every page using a Theme Builder header as builder-built.
+    if ( null === $verdict && function_exists( 'elementor_theme_do_location' ) ) {
+        return true;
+    }
+    return $verdict;
+}, 10, 2 );
+```
+
+---
+
+### `wppo_builder_used_css_full_regen`
+Restores the legacy forced full used-CSS requeue after a builder purge (issue #1259). By default the watcher runs a cooldown-gated targeted regen (`Used_CSS::request_targeted_regen()`) so a burst of builder updates cannot flood the scheduler; return `true` to wipe all variants and requeue site-wide instead. @since NEXT.
+
+**Parameters:**
+- `$full` *(bool)* — Whether to force a full requeue. Default `false` (targeted).
+
+**Example:**
+```php
+add_filter( 'wppo_builder_used_css_full_regen', '__return_true' );
+```
+
+---
+
 ### `wppo_exclude_delay_js`
 Filters the list of script handles or URL substrings excluded from JavaScript delay loading.
 
