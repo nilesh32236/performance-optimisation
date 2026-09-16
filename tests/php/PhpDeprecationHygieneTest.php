@@ -486,6 +486,81 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * The banned-pattern scanner must catch each violation class (issue #1260).
+	 *
+	 * Pins the green-path gate above with synthetic fixtures run through
+	 * the private scan helper via reflection: every one of the six
+	 * violation classes must report, while explicit-nullable `?array`,
+	 * `mixed`, attributed `#[MyAttr] ?string`, method-call, and
+	 * comment/string mentions must stay clean.
+	 *
+	 * @since NEXT
+	 * @return void
+	 */
+	public function test_deprecation_scanner_catches_known_violations(): void {
+		$method = new \ReflectionMethod( self::class, 'scan_file_for_deprecation_patterns' );
+		$method->setAccessible( true );
+
+		$dir = sys_get_temp_dir() . '/wppo-scanner-' . uniqid();
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
+		$this->assertTrue( mkdir( $dir ) || is_dir( $dir ), 'Scanner fixture dir must be creatable.' );
+
+		$scan = function ( $code ) use ( $method, $dir ) {
+			static $counter = 0;
+			++$counter;
+			$file = $dir . '/fixture-' . $counter . '.php';
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+			file_put_contents( $file, $code );
+			$violations = array();
+			$method->invokeArgs( $this, array( $file, $dir, &$violations ) );
+			return $violations;
+		};
+
+		try {
+			$this->assertNotEmpty( $scan( "<?php\nfunction wppo_bad_nullable( string \$x = null ) {}\n" ), 'Implicitly-nullable Type $x = null must be flagged.' );
+			$this->assertNotEmpty( $scan( "<?php\ncurl_close( null );\n" ), 'curl_close(null) must be flagged.' );
+			$this->assertNotEmpty( $scan( "<?php\n\$level = E_STRICT;\n" ), 'E_STRICT must be flagged.' );
+			$this->assertNotEmpty( $scan( "<?php\nmysqli_ping( \$conn );\n" ), 'mysqli_ping() must be flagged.' );
+			$this->assertNotEmpty( $scan( "<?php\n\$out = `ls`;\n" ), 'Backtick execution must be flagged.' );
+			$this->assertNotEmpty( $scan( "<?php\ncurl_close( \$ch );\n" ), 'Raw curl_close() outside Util must be flagged.' );
+
+			$this->assertSame( array(), $scan( "<?php\nfunction wppo_good_nullable( ?array \$x = null, mixed \$y = null ) {}\n" ), 'Explicit ?array and mixed defaults must pass.' );
+			$this->assertSame( array(), $scan( "<?php\nfunction wppo_good_attr( #[MyAttr] ?string \$x = null ) {}\n" ), 'Attributed explicitly-nullable params must pass.' );
+			$this->assertSame( array(), $scan( "<?php\n\$manager->ping();\n\$manager?->ping();\n" ), 'Method and nullsafe ping() calls must pass.' );
+			$this->assertSame( array(), $scan( "<?php\n\$obj->curl_close( \$ch );\n" ), 'Method teardown calls must pass.' );
+			$this->assertSame( array(), $scan( "<?php\n\$obj?->curl_close( \$ch );\n" ), 'Nullsafe teardown calls must pass.' );
+			$this->assertSame( array(), $scan( "<?php\n// E_STRICT in a comment with `backticks`\n\$doc = 'curl_close(null) in a string';\n" ), 'Comment/string mentions must pass.' );
+
+			$util_subdir = $dir . '/includes';
+			mkdir( $util_subdir ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
+			$util_file = $util_subdir . '/class-util.php';
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+			file_put_contents( $util_file, "<?php\nclass WPPO_Util_Fixture {\npublic static function close_curl_handle( &\$ch ) {\nif ( function_exists( 'curl_close' ) ) {\ncurl_close( \$ch );\n}\n}\n}\n" );
+			$allowed_violations = array();
+			$method->invokeArgs( $this, array( $util_file, $dir, &$allowed_violations ) );
+			$this->assertSame( array(), $allowed_violations, 'Raw teardown inside the Util legacy helper must pass.' );
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+			file_put_contents( $util_file, "<?php\nclass WPPO_Util_Fixture {\npublic static function some_other_method() {\ncurl_close( \$ch );\n}\n}\n" );
+			$stray_violations = array();
+			$method->invokeArgs( $this, array( $util_file, $dir, &$stray_violations ) );
+			$this->assertNotEmpty( $stray_violations, 'Raw teardown outside the Util legacy helpers must be flagged.' );
+		} finally {
+			foreach ( glob( $dir . '/*.php' ) as $file ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+				unlink( $file );
+			}
+			if ( is_readable( $dir . '/includes/class-util.php' ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+				unlink( $dir . '/includes/class-util.php' );
+			}
+			if ( is_dir( $dir . '/includes' ) ) {
+				rmdir( $dir . '/includes' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Test fixture cleanup.
+			}
+			rmdir( $dir ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Test fixture cleanup.
+		}
+	}
+
+	/**
 	 * Scan one PHP file for the banned 8.4/8.5 patterns.
 	 *
 	 * Appends `file:line description` strings to `$violations` for every
@@ -561,10 +636,14 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 					while ( $prev >= 0 && is_array( $tokens[ $prev ] ) && in_array( $tokens[ $prev ][0], array( T_WHITESPACE, T_COMMENT, T_DOC_COMMENT ), true ) ) {
 						--$prev;
 					}
-					$prev_token = $prev >= 0 ? $tokens[ $prev ] : null;
-					$prev_id    = is_array( $prev_token ) ? $prev_token[0] : $prev_token;
-					if ( ! in_array( $prev_id, array( T_OBJECT_OPERATOR, T_DOUBLE_COLON, T_FUNCTION, T_NEW ), true ) ) {
-						if ( false === strpos( $rel, 'includes/class-util.php' ) ) {
+					$prev_token    = $prev >= 0 ? $tokens[ $prev ] : null;
+					$prev_id       = is_array( $prev_token ) ? $prev_token[0] : $prev_token;
+					$method_guards = array( T_OBJECT_OPERATOR, T_DOUBLE_COLON, T_FUNCTION, T_NEW );
+					if ( defined( 'T_NULLSAFE_OBJECT_OPERATOR' ) ) {
+						$method_guards[] = constant( 'T_NULLSAFE_OBJECT_OPERATOR' );
+					}
+					if ( ! in_array( $prev_id, $method_guards, true ) ) {
+						if ( ! $this->is_util_legacy_teardown_call( $tokens, $count, $i, $rel ) ) {
 							$violations[] = sprintf( '%s:%d raw %s() outside the Util 8.5 helper', $rel, $token[2], $token[1] );
 						}
 					}
@@ -575,6 +654,121 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 				$this->scan_signature_for_implicit_nullable( $tokens, $count, $i, $rel, $violations );
 			}
 		}
+	}
+
+	/**
+	 * Whether a teardown call sits inside a version-gated Util legacy helper.
+	 *
+	 * Narrows the `includes/class-util.php` exemption to the six legacy
+	 * branches (`close_curl_handle`, `close_curl_multi_handle`,
+	 * `destroy_gd_image`, `close_curl_share_handle`, `close_finfo_handle`,
+	 * `free_xml_parser`) so a future raw `curl_close()` / `imagedestroy()`
+	 * added elsewhere in that file still fails the gate.
+	 *
+	 * @since NEXT
+	 * @param array  $tokens Full token stream of the file.
+	 * @param int    $count  Token count.
+	 * @param int    $index  Index of the teardown function-name token.
+	 * @param string $rel    Relative file path for reporting.
+	 * @return bool True when the call is an allowed legacy branch.
+	 */
+	private function is_util_legacy_teardown_call( $tokens, $count, $index, $rel ): bool {
+		if ( false === strpos( $rel, 'includes/class-util.php' ) ) {
+			return false;
+		}
+		$allowed   = array(
+			'close_curl_handle',
+			'close_curl_multi_handle',
+			'destroy_gd_image',
+			'close_curl_share_handle',
+			'close_finfo_handle',
+			'free_xml_parser',
+		);
+		$enclosing = $this->get_enclosing_function_name( $tokens, $count, $index );
+		return in_array( $enclosing, $allowed, true );
+	}
+
+	/**
+	 * Find the innermost named function containing a token index.
+	 *
+	 * Forward-scans for `T_FUNCTION` declarations, maps each named
+	 * declaration to its `{...}` body range, and returns the innermost
+	 * name containing `$index` (null when top-level). Anonymous
+	 * functions/closures carry no name and never match the legacy list.
+	 *
+	 * @since NEXT
+	 * @param array $tokens Full token stream of the file.
+	 * @param int   $count  Token count.
+	 * @param int   $index  Token index to locate.
+	 * @return string|null Enclosing function name or null.
+	 */
+	private function get_enclosing_function_name( $tokens, $count, $index ): ?string {
+		$match      = null;
+		$match_size = null;
+		for ( $k = 0; $k < $count; ++$k ) {
+			$token = $tokens[ $k ];
+			if ( ! is_array( $token ) || T_FUNCTION !== $token[0] ) {
+				continue;
+			}
+			$name       = null;
+			$name_index = -1;
+			for ( $m = $k + 1; $m < $count; ++$m ) {
+				$candidate = $tokens[ $m ];
+				if ( is_array( $candidate ) && in_array( $candidate[0], array( T_WHITESPACE, T_COMMENT, T_DOC_COMMENT ), true ) ) {
+					continue;
+				}
+				if ( '&' === $candidate ) {
+					continue;
+				}
+				if ( is_array( $candidate ) && T_STRING === $candidate[0] ) {
+					$name       = $candidate[1];
+					$name_index = $m;
+				}
+				break;
+			}
+			if ( null === $name ) {
+				continue;
+			}
+			$brace_start = -1;
+			for ( $m = $name_index + 1; $m < $count; ++$m ) {
+				$candidate = $tokens[ $m ];
+				if ( ';' === $candidate ) {
+					break;
+				}
+				if ( '{' === $candidate ) {
+					$brace_start = $m;
+					break;
+				}
+			}
+			if ( $brace_start < 0 ) {
+				continue;
+			}
+			$depth     = 0;
+			$brace_end = -1;
+			for ( $m = $brace_start; $m < $count; ++$m ) {
+				$candidate = $tokens[ $m ];
+				if ( '{' === $candidate ) {
+					++$depth;
+				} elseif ( '}' === $candidate ) {
+					--$depth;
+					if ( 0 === $depth ) {
+						$brace_end = $m;
+						break;
+					}
+				}
+			}
+			if ( $brace_end < 0 ) {
+				continue;
+			}
+			if ( $index > $brace_start && $index < $brace_end ) {
+				$size = $brace_end - $brace_start;
+				if ( null === $match_size || $size < $match_size ) {
+					$match      = $name;
+					$match_size = $size;
+				}
+			}
+		}
+		return $match;
 	}
 
 	/**
@@ -691,7 +885,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 				if ( 0 === $line && is_array( $token ) ) {
 					$line = $token[2];
 				}
-				if ( '#[' === $token ) {
+				if ( '#[' === $text ) {
 					++$in_attr;
 					continue;
 				}
