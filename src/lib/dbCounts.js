@@ -10,13 +10,86 @@ import { apiCall } from './apiRequest';
  * @since 2.0.0
  */
 
-const TTL_MS = 60000;
+const DEFAULT_TTL_MS = 60000;
 
 let cachedAt = 0;
 let cachedData = null;
 let inflight = null;
 let inflightSignal = null;
 let generation = 0;
+let activeTtlMs = DEFAULT_TTL_MS;
+
+/**
+ * Override the TTL (primarily for tests).
+ *
+ * @since NEXT
+ * @param {number} ttlMs TTL in milliseconds.
+ * @return {void}
+ */
+export const setDbCountsTtl = ( ttlMs ) => {
+	if ( Number.isFinite( ttlMs ) && ttlMs >= 0 ) {
+		activeTtlMs = ttlMs;
+	}
+};
+
+/**
+ * Create an isolated counts cache (for tests; production uses the module singleton).
+ *
+ * @since NEXT
+ * @param {Object}   options       Options.
+ * @param {number}   options.ttlMs TTL in milliseconds.
+ * @param {Function} options.fetch Fetch implementation receiving a signal.
+ * @return {{get: Function, clear: Function}} Isolated cache.
+ */
+export const createDbCountsCache = ( {
+	ttlMs = DEFAULT_TTL_MS,
+	fetch: fetchImpl = ( signal ) =>
+		hasSignalArg( signal )
+			? apiCall( 'database_cleanup_counts', {}, 'GET', signal )
+			: apiCall( 'database_cleanup_counts', {}, 'GET' ),
+} = {} ) => {
+	let localAt = 0;
+	let localData = null;
+	let localInflight = null;
+	return {
+		get: async ( signal ) => {
+			const now = Date.now();
+			if ( localData && now - localAt < ttlMs ) {
+				if ( signal && signal.aborted ) {
+					throw new DOMException(
+						'The operation was aborted.',
+						'AbortError'
+					);
+				}
+				return { ...localData };
+			}
+			if ( localInflight ) {
+				return localInflight.then( ( data ) => ( { ...data } ) );
+			}
+			const request = fetchImpl( signal ).then( ( response ) => {
+				if ( response && response.success && response.data ) {
+					localData = { ...response.data };
+					localAt = Date.now();
+					return { ...response.data };
+				}
+				throw new Error(
+					response?.message || 'Failed to load counts.'
+				);
+			} );
+			localInflight = request.finally( () => {
+				localInflight = null;
+			} );
+			return localInflight;
+		},
+		clear: () => {
+			localData = null;
+			localAt = 0;
+			localInflight = null;
+		},
+	};
+};
+
+const hasSignalArg = ( signal ) => signal !== undefined && signal !== null;
 
 /**
  * Fetch database cleanup counts with memoization.
@@ -26,10 +99,10 @@ let generation = 0;
  * @return {Promise<Object>} Counts keyed by cleanup type.
  */
 export const getDbCounts = async ( signal ) => {
-	const hasSignal = signal !== undefined && signal !== null;
+	const hasSignal = hasSignalArg( signal );
 	const ownerSignal = signal ?? null;
 	const now = Date.now();
-	if ( cachedData && now - cachedAt < TTL_MS ) {
+	if ( cachedData && now - cachedAt < activeTtlMs ) {
 		// A cache hit must still honour an already-aborted caller signal —
 		// callers expect AbortError rather than a value after cancellation.
 		if ( hasSignal && signal.aborted ) {

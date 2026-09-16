@@ -8,13 +8,14 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	) {
 		return;
 	}
-	// Keep in sync with src/lib/apiRequest.js: refreshNonce() + apiCall() retry logic.
+	// Keep in sync with src/lib/authErrors.js (AUTH_ERROR_CODES) + src/lib/apiRequest.js refreshNonce()/apiCall() retry logic.
 	// This entry is intentionally standalone (admin-bar, enqueued on every admin page via
 	// wppoObject) and does not import the SPA's apiRequest module to avoid bundle coupling.
 	// Sync note: apiCall() retries when the JSON payload carries rest_forbidden /
 	// rest_cookie_invalid_nonce / rest_cookie_nonce_invalid (even on HTTP 200);
 	// postJsonRequest() below mirrors that payload-code check in addition to the
 	// HTTP-403 check. When changing retry behaviour, update both copies.
+	// Sync is enforced by src/lib/__tests__/authSync.test.js.
 
 	let pendingRefresh = null;
 	const fallbackTimers = new Set();

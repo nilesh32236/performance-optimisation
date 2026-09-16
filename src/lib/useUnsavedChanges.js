@@ -4,16 +4,29 @@ import UnsavedChangesContext from './UnsavedChangesContext';
 /**
  * Stable stringify with sorted keys for deterministic dirty comparison.
  *
+ * Circular references serialize as "[Circular]"; undefined/functions fall
+ * back to JSON semantics so a circular settings value cannot crash every tab.
+ *
  * @since 2.0.0
- * @param {*} value Value to stringify.
+ * @param {*}     value  Value to stringify.
+ * @param {Array} [seen] Internal circular guard.
  * @return {string} Stable JSON string.
  */
-const stableStringify = ( value ) => {
+export const stableStringify = ( value, seen = [] ) => {
 	if ( value === null || typeof value !== 'object' ) {
-		return JSON.stringify( value );
+		const result = JSON.stringify( value );
+		return result === undefined ? 'null' : result;
 	}
+	if ( seen.includes( value ) ) {
+		return '"[Circular]"';
+	}
+	const nextSeen = [ ...seen, value ];
 	if ( Array.isArray( value ) ) {
-		return '[' + value.map( stableStringify ).join( ',' ) + ']';
+		return (
+			'[' +
+			value.map( ( v ) => stableStringify( v, nextSeen ) ).join( ',' ) +
+			']'
+		);
 	}
 	const keys = Object.keys( value ).sort();
 	return (
@@ -21,7 +34,9 @@ const stableStringify = ( value ) => {
 		keys
 			.map(
 				( k ) =>
-					JSON.stringify( k ) + ':' + stableStringify( value[ k ] )
+					JSON.stringify( k ) +
+					':' +
+					stableStringify( value[ k ], nextSeen )
 			)
 			.join( ',' ) +
 		'}'

@@ -487,6 +487,82 @@ const getScriptSrcHosts = () => {
 };
 
 /**
+ * Strip ASCII whitespace/C0 controls browsers ignore when parsing schemes.
+ *
+ * Browsers skip these characters when matching a URL scheme, so
+ * "java\tscript:" or "  javascript:" would otherwise bypass a naive
+ * protocol check. Every URL validator below normalises through this helper
+ * first so a bypass fixed in one validator stays fixed in all of them.
+ *
+ * @since NEXT
+ * @param {*} raw Raw attribute value.
+ * @return {string} Normalised string (empty when input is not a string).
+ */
+const stripUrlControls = ( raw ) => {
+	if ( ! raw || typeof raw !== 'string' ) {
+		return '';
+	}
+	return String( raw ).replace( /[\u0000-\u0020\u007f]/g, '' );
+};
+
+/**
+ * Parse a lazy-load URL candidate against the page origin.
+ *
+ * Single choke point for all URL validators in this bundle: normalises
+ * controls, parses with `window.location.origin` as base, and returns null
+ * instead of throwing so validators stay branch-light.
+ *
+ * @since NEXT
+ * @param {*} raw Raw attribute value.
+ * @return {URL|null} Parsed URL, or null when it does not parse.
+ */
+const parseLazyUrl = ( raw ) => {
+	const normalised = stripUrlControls( raw );
+	if ( ! normalised ) {
+		return null;
+	}
+	try {
+		return new URL( normalised, window.location.origin );
+	} catch {
+		return null;
+	}
+};
+
+/**
+ * Whether a parsed URL uses an http(s) scheme.
+ *
+ * The URL parser lower-cases the scheme, so no caller-side lowercasing is
+ * needed; this single check rejects javascript:/vbscript:/data:/blob:.
+ *
+ * @since NEXT
+ * @param {URL} url Parsed URL.
+ * @return {boolean} True for http:/https: only.
+ */
+const isHttpProtocol = ( url ) =>
+	!! url && ( 'http:' === url.protocol || 'https:' === url.protocol );
+
+/**
+ * Whether a parsed http(s) URL satisfies the generic cross-origin policy:
+ * same-origin (any http(s), covering http dev origins) or cross-origin https.
+ *
+ * Host-allowlisted validators (scripts, video embeds) apply their allowlist
+ * on top of this; generic subresources stop here.
+ *
+ * @since NEXT
+ * @param {URL} url Parsed URL.
+ * @return {boolean} True when the URL is safe under the generic policy.
+ */
+const checkGenericUrlPolicy = ( url ) => {
+	if ( ! isHttpProtocol( url ) ) {
+		return false;
+	}
+	if ( url.origin === window.location.origin ) {
+		return true;
+	}
+	return 'https:' === url.protocol;
+};
+
+/**
  * Validate a deferred script's src before it is assigned to a live script
  * element: the URL must parse, use http(s), and point at the same origin or
  * an allowlisted host. Rejects javascript:/data:/blob: and arbitrary origins
@@ -497,13 +573,8 @@ const getScriptSrcHosts = () => {
  * @return {boolean} True when the src is safe to load.
  */
 const isSafeScriptSrc = ( src ) => {
-	if ( ! src || typeof src !== 'string' ) {
-		return false;
-	}
-	let url;
-	try {
-		url = new URL( src, window.location.origin );
-	} catch {
+	const url = parseLazyUrl( src );
+	if ( ! url || ! isHttpProtocol( url ) ) {
 		return false;
 	}
 	// Cross-origin scripts must be https (no mixed active content); http is
@@ -532,13 +603,8 @@ const isSafeScriptSrc = ( src ) => {
  * @return {boolean} True when the embed URL is safe to load in an iframe.
  */
 const isSafeVideoEmbedUrl = ( src ) => {
-	if ( ! src || typeof src !== 'string' ) {
-		return false;
-	}
-	let url;
-	try {
-		url = new URL( src, window.location.origin );
-	} catch {
+	const url = parseLazyUrl( src );
+	if ( ! url || ! isHttpProtocol( url ) ) {
 		return false;
 	}
 	if ( url.origin === window.location.origin ) {
@@ -569,30 +635,11 @@ const isSafeVideoEmbedUrl = ( src ) => {
  * @return {boolean} True when the URL is safe to assign to src/poster.
  */
 const isSafeSubresourceUrl = ( src ) => {
-	if ( ! src || typeof src !== 'string' ) {
+	const url = parseLazyUrl( src );
+	if ( ! url ) {
 		return false;
 	}
-	// Normalise whitespace/C0 controls first (browsers ignore them when
-	// parsing schemes: "java\tscript:", "  javascript:").
-	const normalised = String( src ).replace( /[\u0000-\u0020]/g, '' );
-	if ( ! normalised ) {
-		return false;
-	}
-	let url;
-	try {
-		url = new URL( normalised, window.location.origin );
-	} catch {
-		return false;
-	}
-	if ( 'http:' !== url.protocol && 'https:' !== url.protocol ) {
-		return false;
-	}
-	if ( url.origin === window.location.origin ) {
-		return true;
-	}
-	// Cross-origin subresources must be https (no mixed active content);
-	// http is tolerated only for same-origin dev/staging origins.
-	return 'https:' === url.protocol;
+	return checkGenericUrlPolicy( url );
 };
 
 /**
@@ -642,9 +689,10 @@ const isSafeBackgroundValue = ( value ) => {
 	if ( ! value || typeof value !== 'string' ) {
 		return false;
 	}
-	const normalised = String( value )
-		.toLowerCase()
-		.replace( /[\u0000-\u001f\u007f]/g, '' );
+	const normalised = stripUrlControls( value ).toLowerCase();
+	if ( ! normalised ) {
+		return false;
+	}
 	if (
 		normalised.includes( 'javascript:' ) ||
 		normalised.includes( 'vbscript:' ) ||
@@ -672,19 +720,8 @@ const isSafeBackgroundValue = ( value ) => {
 		if ( target.startsWith( 'data:image/' ) ) {
 			continue;
 		}
-		let url;
-		try {
-			url = new URL( target, window.location.origin );
-		} catch {
-			return false;
-		}
-		if ( 'http:' !== url.protocol && 'https:' !== url.protocol ) {
-			return false;
-		}
-		if (
-			url.origin !== window.location.origin &&
-			'https:' !== url.protocol
-		) {
+		const url = parseLazyUrl( target );
+		if ( ! url || ! checkGenericUrlPolicy( url ) ) {
 			return false;
 		}
 	}
