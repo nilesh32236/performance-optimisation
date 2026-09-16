@@ -2909,6 +2909,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 
 			$post_types = get_post_types( array( 'public' => true ), 'names' );
 			$post_types = array_diff( $post_types, array( 'attachment' ) );
+			// Builder-template exclusion (issue #1274): library templates
+			// are never rendered standalone — skip them so regen never
+			// wastes queries + CPU fetching them. Additive setting with
+			// filter extensibility; fail-open to previous behaviour.
+			try {
+				$excluded   = self::get_excluded_post_types();
+				$post_types = array_diff( $post_types, $excluded );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 
 			$queued  = 0;
 			$batch   = 200;
@@ -3092,7 +3102,67 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @return void
 		 * @since 1.9.0
 		 */
+		/**
+		 * Builder-template post types excluded from used-CSS generation (issue #1274).
+		 *
+		 * Shares the additive `file_optimisation.ccssExcludedPostTypes`
+		 * setting (and the `wppo_ccss_excluded_post_types` filter) with
+		 * Critical_CSS so both pipelines skip the same non-renderable
+		 * builder templates. Fail-open: any error returns the built-in
+		 * defaults.
+		 *
+		 * @return string[] Excluded post type slugs.
+		 * @since NEXT
+		 */
+		public static function get_excluded_post_types(): array {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'get_excluded_post_types' ) ) {
+					return Critical_CSS::get_excluded_post_types();
+				}
+				$options = Util::get_settings();
+				$raw     = $options['file_optimisation']['ccssExcludedPostTypes'] ?? null;
+				if ( ! is_string( $raw ) || '' === trim( $raw ) ) {
+					return array( 'fl-builder-template', 'elementor_library' );
+				}
+				$lines  = preg_split( '/[\r\n,]+/', $raw );
+				$parsed = array();
+				if ( is_array( $lines ) ) {
+					foreach ( $lines as $line ) {
+						$slug = strtolower( trim( (string) $line ) );
+						if ( '' !== $slug && preg_match( '/^[a-z0-9_\-]{1,64}$/', $slug ) ) {
+							$parsed[] = $slug;
+						}
+					}
+				}
+				return array_values( array_unique( $parsed ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array( 'fl-builder-template', 'elementor_library' );
+			}
+		}
+
+		/**
+		 * Process a single page for used-CSS generation (Action Scheduler callback).
+		 *
+		 * Builder-template post types are skipped without fetching (issue #1274).
+		 *
+		 * @param int $post_id The post ID.
+		 * @return void
+		 * @since 1.9.0
+		 */
 		public static function process_background( int $post_id ): void {
+			// Builder-template skip-and-continue (issue #1274): never fetch
+			// non-renderable library templates for used CSS.
+			try {
+				if ( function_exists( 'get_post_type' ) ) {
+					$post_type = get_post_type( $post_id );
+					if ( is_string( $post_type ) && '' !== $post_type && in_array( strtolower( trim( $post_type ) ), self::get_excluded_post_types(), true ) ) {
+						return;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 			$permalink = get_permalink( $post_id );
 			if ( ! $permalink ) {
 				return;

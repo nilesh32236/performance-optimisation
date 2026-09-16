@@ -2854,6 +2854,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			if ( $post_id ) {
+				// Builder-template skip-and-continue (issue #1274): excluded
+				// post types report skipped instead of queueing (no error loop).
+				if ( class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Used_CSS', 'get_excluded_post_types' ) && function_exists( 'get_post_type' ) ) {
+					try {
+						$post_type = get_post_type( $post_id );
+						if ( is_string( $post_type ) && '' !== $post_type && in_array( strtolower( trim( $post_type ) ), Used_CSS::get_excluded_post_types(), true ) ) {
+							return $this->send_response(
+								array(
+									'mode'    => 'single',
+									'post_id' => $post_id,
+									'skipped' => true,
+								),
+								true,
+								200,
+								__( 'Skipped: post type is excluded from used-CSS generation.', 'performance-optimisation' )
+							);
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
 				$job_args = array( 'post_id' => $post_id );
 				if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_used_css_generate', $job_args, 'performance_optimisation' ) ) {
 					return $this->send_response(
@@ -3128,6 +3149,38 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
 				$response->header( 'Retry-After', '60' );
 				return $response;
+			}
+			// Per-template/per-URL regenerate (issue #1274): an optional
+			// `template` slug (or hash) queues one job; otherwise all.
+			try {
+				$params = $_request->get_params();
+				if ( isset( $params['template'] ) && is_string( $params['template'] ) && '' !== trim( $params['template'] ) ) {
+					$queued = Critical_CSS::regenerate_single( sanitize_text_field( trim( $params['template'] ) ) );
+					if ( 1 === $queued ) {
+						return $this->send_response(
+							array(
+								'mode'     => 'single',
+								'template' => sanitize_text_field( trim( $params['template'] ) ),
+								'queued'   => 1,
+							),
+							true,
+							202,
+							__( 'Critical CSS regeneration queued for template.', 'performance-optimisation' )
+						);
+					}
+					return $this->send_response(
+						array(
+							'mode'     => 'single',
+							'template' => sanitize_text_field( trim( $params['template'] ) ),
+							'queued'   => 0,
+						),
+						true,
+						200,
+						__( 'Template skipped or unknown: nothing queued.', 'performance-optimisation' )
+					);
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 			}
 			$queued = Critical_CSS::regenerate_all();
 

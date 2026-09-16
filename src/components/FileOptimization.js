@@ -289,6 +289,11 @@ const FileOptimization = ( {
 			typeof options.ccssSafelistExtra === 'string'
 				? options.ccssSafelistExtra
 				: '',
+		ccssExcludedPostTypes:
+			typeof options.ccssExcludedPostTypes === 'string'
+				? options.ccssExcludedPostTypes
+				: 'fl-builder-template\nelementor_library',
+		ccssMaxRetries: options.ccssMaxRetries ?? 5,
 		hostGoogleFontsLocally: false,
 		fontMetricFallback: false,
 		fontSubset: false,
@@ -370,6 +375,10 @@ const FileOptimization = ( {
 		typeof options.ccssSafelistExtra === 'string'
 			? options.ccssSafelistExtra
 			: '';
+	defaultSettings.ccssExcludedPostTypes =
+		typeof options.ccssExcludedPostTypes === 'string'
+			? options.ccssExcludedPostTypes
+			: 'fl-builder-template\nelementor_library';
 	defaultSettings.fontSubsetSubsets =
 		typeof options.fontSubsetSubsets === 'string'
 			? options.fontSubsetSubsets
@@ -1098,6 +1107,87 @@ const FileOptimization = ( {
 		}
 	};
 
+	const [ singlePostId, setSinglePostId ] = useState( '' );
+	const [ singleTemplate, setSingleTemplate ] = useState( '' );
+
+	const handleRegenerateSingleCcss = async ( hash ) => {
+		const template = hash || singleTemplate.trim();
+		if ( ! template ) {
+			return;
+		}
+		await withNotification(
+			( async () => {
+				const res = await apiCall( 'regenerate_ccss', {
+					template,
+				} );
+				if ( res?.success && onCcssRefresh ) {
+					onCcssRefresh();
+				}
+				return res;
+			} )(),
+			__(
+				'Critical CSS regeneration queued for template.',
+				'performance-optimisation'
+			),
+			__(
+				'Failed to regenerate critical CSS for template.',
+				'performance-optimisation'
+			)
+		);
+	};
+
+	const handleRegenerateSingleUsedCss = async () => {
+		const postId = parseInt( singlePostId, 10 );
+		if ( ! Number.isFinite( postId ) || postId <= 0 ) {
+			notify( {
+				type: 'error',
+				message: __(
+					'Enter a valid post ID to regenerate.',
+					'performance-optimisation'
+				),
+				durationMs: 3000,
+			} );
+			return;
+		}
+		setIsLoading( true );
+		dismiss();
+		try {
+			const res = await apiCall( 'used_css_regenerate', {
+				post_id: postId,
+			} );
+			notify( {
+				type: res.success ? 'success' : 'error',
+				message:
+					res.message ||
+					( res.success
+						? __(
+								'Used CSS regeneration queued.',
+								'performance-optimisation'
+						  )
+						: __(
+								'Failed to regenerate used CSS.',
+								'performance-optimisation'
+						  ) ),
+				durationMs: 3000,
+			} );
+			if ( res.success ) {
+				refreshUsedCssStatus();
+			}
+		} catch ( err ) {
+			console.error( 'Failed to regenerate used CSS for post.', err );
+			notify( {
+				type: 'error',
+				message: __(
+					'An unexpected error occurred.',
+					'performance-optimisation'
+				),
+				durationMs: 3000,
+			} );
+		} finally {
+			setIsLoading( false );
+		}
+	};
+
 	const handleSubmit = async ( e ) => {
 		if ( e ) {
 			e.preventDefault();
@@ -1677,6 +1767,53 @@ const FileOptimization = ( {
 												'performance-optimisation'
 											) }
 										</button>
+										<div className="wppo-field wppo-mt-16">
+											<label
+												className="wppo-field-label"
+												htmlFor="wppoSinglePostId"
+											>
+												{ __(
+													'Regenerate Used CSS for Post ID',
+													'performance-optimisation'
+												) }
+											</label>
+											<div className="wppo-inline-row">
+												<input
+													className="wppo-input"
+													type="number"
+													inputMode="numeric"
+													id="wppoSinglePostId"
+													min="1"
+													step="1"
+													placeholder="123"
+													value={ singlePostId }
+													onChange={ ( e ) =>
+														setSinglePostId(
+															e.target.value
+														)
+													}
+												/>
+												<button
+													className="wppo-button wppo-button--secondary"
+													type="button"
+													disabled={ isLoading }
+													onClick={
+														handleRegenerateSingleUsedCss
+													}
+												>
+													{ __(
+														'Regenerate Post',
+														'performance-optimisation'
+													) }
+												</button>
+											</div>
+											<p className="wppo-text-muted wppo-mt-8 wppo-text-small">
+												{ __(
+													'Builder-template post types are skipped automatically.',
+													'performance-optimisation'
+												) }
+											</p>
+										</div>
 									</div>
 								) }
 								{ settings.minifyCSS && (
@@ -1813,6 +1950,117 @@ const FileOptimization = ( {
 												) }
 											</p>
 										</div>
+										<div className="wppo-field wppo-mt-16">
+											<label
+												className="wppo-field-label"
+												htmlFor="ccssExcludedPostTypes"
+											>
+												{ __(
+													'Excluded Post Types (Critical / Used CSS)',
+													'performance-optimisation'
+												) }
+											</label>
+											<textarea
+												className="wppo-textarea wppo-textarea--mono"
+												id="ccssExcludedPostTypes"
+												name="ccssExcludedPostTypes"
+												rows="2"
+												placeholder="fl-builder-template&#10;elementor_library"
+												value={
+													typeof settings.ccssExcludedPostTypes ===
+													'string'
+														? settings.ccssExcludedPostTypes
+														: ''
+												}
+												onChange={ handleChange(
+													setSettings
+												) }
+												aria-describedby="ccssExcludedPostTypes-desc"
+											/>
+											<p
+												id="ccssExcludedPostTypes-desc"
+												className="wppo-text-muted wppo-mt-8 wppo-text-small"
+											>
+												{ __(
+													'One post type per line — builder templates are skipped, never error-looped. Empty keeps the builder defaults.',
+													'performance-optimisation'
+												) }
+											</p>
+										</div>
+										<div className="wppo-field wppo-mt-16">
+											<label
+												className="wppo-field-label"
+												htmlFor="ccssMaxRetries"
+											>
+												{ __(
+													'Critical CSS Max Retries',
+													'performance-optimisation'
+												) }
+											</label>
+											<input
+												className="wppo-input"
+												type="number"
+												inputMode="numeric"
+												id="ccssMaxRetries"
+												name="ccssMaxRetries"
+												min="0"
+												max="5"
+												step="1"
+												value={
+													settings.ccssMaxRetries
+												}
+												onChange={ handleChange(
+													setSettings
+												) }
+												aria-describedby="ccssMaxRetries-desc"
+											/>
+											<p
+												id="ccssMaxRetries-desc"
+												className="wppo-text-muted wppo-mt-8 wppo-text-small"
+											>
+												{ __(
+													'Consecutive failures before a template is marked failed (0–5, default 5).',
+													'performance-optimisation'
+												) }
+											</p>
+										</div>
+										<div className="wppo-field wppo-mt-16">
+											<label
+												className="wppo-field-label"
+												htmlFor="wppoSingleTemplate"
+											>
+												{ __(
+													'Regenerate Critical CSS for Template',
+													'performance-optimisation'
+												) }
+											</label>
+											<div className="wppo-inline-row">
+												<input
+													className="wppo-input"
+													type="text"
+													id="wppoSingleTemplate"
+													placeholder="single"
+													value={ singleTemplate }
+													onChange={ ( e ) =>
+														setSingleTemplate(
+															e.target.value
+														)
+													}
+												/>
+												<button
+													className="wppo-button wppo-button--secondary"
+													type="button"
+													onClick={ () =>
+														handleRegenerateSingleCcss()
+													}
+												>
+													{ __(
+														'Regenerate Template',
+														'performance-optimisation'
+													) }
+												</button>
+											</div>
+										</div>
 										{ ccssError && (
 											<div className="wppo-notice wppo-notice--error">
 												<span>
@@ -1837,6 +2085,9 @@ const FileOptimization = ( {
 										<CriticalCssPanel
 											status={ ccssStatus }
 											onRegenerate={ handleRegenerateCss }
+											onRegenerateSingle={
+												handleRegenerateSingleCcss
+											}
 										/>
 									</>
 								) }

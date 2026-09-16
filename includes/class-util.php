@@ -312,6 +312,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'usedCssRumPriority'           => true,
 					'ccssQueueCap'                 => 5,
 					'ccssGenTimeout'               => 25,
+					'ccssExcludedPostTypes'        => "fl-builder-template\nelementor_library",
+					'ccssMaxRetries'               => 5,
 					'usedCssQueueCap'              => 50,
 					'ccssViewportVariants'         => false,
 					'usedCSSDeliveryMode'          => 'file',
@@ -5345,21 +5347,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				// the generic `url` branch (esc_url_raw would collapse the
 				// multiple lines). Pinned explicitly so a future reorder of the
 				// generic branches cannot corrupt these lists.
-				if ( in_array( $safe_key, array( 'delayJSExcludeUrls', 'usedCSSExcludeUrls', 'delayJSThirdPartyDenylist', 'delayJSThirdPartyAllowlist' ), true ) && ! is_array( $value ) ) {
+				if ( in_array( $safe_key, array( 'delayJSExcludeUrls', 'usedCSSExcludeUrls', 'delayJSThirdPartyDenylist', 'delayJSThirdPartyAllowlist', 'ccssExcludedPostTypes' ), true ) && ! is_array( $value ) ) {
 					$sanitized[ $safe_key ] = sanitize_textarea_field( (string) $value );
 					continue;
 				}
 
-				// Elementor-safe mode (issue #1259) — normalize malformed import
-				// shapes (0/1, '0'/'1', 'false'/'true') to bool so the toggle
-				// check in Main::is_elementor_safe_mode_active() is reliable.
-				// A form-encoded 'false' string would otherwise survive
-				// sanitize_text_field as a truthy non-empty string and read
-				// as ON via !empty(). Unrecognized values fail safe to true
-				// (absent key = enabled), mirroring Sandbox_Preview.
 				if ( 'elementorSafeMode' === $safe_key && ! is_array( $value ) ) {
 					$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
 					$sanitized[ $safe_key ] = null === $bool ? true : $bool;
+					continue;
+				}
+				// CCSS bounded-retry cap (issue #1274) — int clamped to
+				// 0..5 (0 = fail fast, no retries). Unrecognized values
+				// fail open to 5 so generation keeps its retry budget.
+				if ( 'ccssMaxRetries' === $safe_key ) {
+					if ( is_array( $value ) ) {
+						$sanitized[ $safe_key ] = 5;
+						continue;
+					}
+					$retries                = is_numeric( $value ) ? (int) $value : 5;
+					$sanitized[ $safe_key ] = min( 5, max( 0, $retries ) );
 					continue;
 				}
 

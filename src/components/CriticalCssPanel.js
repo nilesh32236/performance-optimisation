@@ -18,10 +18,30 @@ const STATUS_CONFIG = {
 		className: 'wppo-badge--success',
 		label: __( 'Generated', 'performance-optimisation' ),
 	},
+	done: {
+		icon: faCheckCircle,
+		className: 'wppo-badge--success',
+		label: __( 'Generated', 'performance-optimisation' ),
+	},
+	queued: {
+		icon: faClock,
+		className: 'wppo-badge--info',
+		label: __( 'Queued', 'performance-optimisation' ),
+	},
 	pending: {
 		icon: faClock,
 		className: 'wppo-badge--info',
 		label: __( 'Pending', 'performance-optimisation' ),
+	},
+	processing: {
+		icon: faClock,
+		className: 'wppo-badge--info',
+		label: __( 'Processing', 'performance-optimisation' ),
+	},
+	skipped: {
+		icon: faExclamationTriangle,
+		className: 'wppo-badge--warning',
+		label: __( 'Skipped', 'performance-optimisation' ),
 	},
 	failed: {
 		icon: faTimesCircle,
@@ -96,8 +116,13 @@ const statusConfigFor = ( statusKey ) => {
 	return hasOwn ? STATUS_CONFIG[ statusKey ] : STATUS_CONFIG.none;
 };
 
-const CriticalCssPanel = ( { status = {}, onRegenerate } ) => {
+const CriticalCssPanel = ( {
+	status = {},
+	onRegenerate,
+	onRegenerateSingle,
+} ) => {
 	const [ isRegenerating, setIsRegenerating ] = useState( false );
+	const [ singleBusy, setSingleBusy ] = useState( null );
 	const { notice, notify, dismiss } = useNotice();
 
 	const handleRegenerate = async () => {
@@ -115,6 +140,27 @@ const CriticalCssPanel = ( { status = {}, onRegenerate } ) => {
 			} );
 		} finally {
 			setIsRegenerating( false );
+		}
+	};
+
+	const handleRegenerateSingle = async ( hash ) => {
+		if ( ! onRegenerateSingle ) {
+			return;
+		}
+		setSingleBusy( hash );
+		try {
+			await onRegenerateSingle( hash );
+		} catch ( err ) {
+			console.error( 'Failed to regenerate CCSS for template', err );
+			notify( {
+				type: 'error',
+				message: __(
+					'Failed to regenerate Critical CSS for template.',
+					'performance-optimisation'
+				),
+			} );
+		} finally {
+			setSingleBusy( null );
 		}
 	};
 
@@ -181,6 +227,21 @@ const CriticalCssPanel = ( { status = {}, onRegenerate } ) => {
 									<FontAwesomeIcon icon={ config.icon } />
 									{ config.label }
 								</span>
+								{ onRegenerateSingle && (
+									<button
+										className="wppo-button wppo-button--secondary wppo-button--small"
+										type="button"
+										disabled={ singleBusy === hash }
+										onClick={ () =>
+											handleRegenerateSingle( hash )
+										}
+									>
+										{ __(
+											'Regenerate',
+											'performance-optimisation'
+										) }
+									</button>
+								) }
 							</div>
 						);
 					} ) }
