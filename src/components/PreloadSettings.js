@@ -783,7 +783,9 @@ const PreloadSettings = ( { options = {} } ) => {
 										) }
 										name="speculationPrerenderList"
 										checked={
-											settings.speculationPrerenderList
+											Boolean(
+												settings.speculationPrerenderList
+											)
 										}
 										onChange={ handleChange( setSettings ) }
 									/>

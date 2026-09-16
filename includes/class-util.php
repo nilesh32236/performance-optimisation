@@ -4864,12 +4864,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				}
 
 				// Automatic LCP hero preload + font discovery toggles (issue
-				// #1216) — normalize malformed import shapes to bool so a
+				// #1216) plus the high-value prerender list toggle (issue
+				// #1237) — normalize malformed import shapes to bool so a
 				// string 'false' (textarea/text branches preserve strings, and
 				// !empty('false') is truthy at every read site) cannot silently
 				// enable the features. Unrecognized values fail safe to false
-				// (both features default off).
-				if ( in_array( $safe_key, array( 'autoLcpPreload', 'autoDiscoverFonts' ), true ) && ! is_array( $value ) ) {
+				// (all three features default off). Pinned before the generic
+				// stripos 'list' branch so speculationPrerenderList never
+				// falls through to sanitize_textarea_field.
+				if ( in_array( $safe_key, array( 'autoLcpPreload', 'autoDiscoverFonts', 'speculationPrerenderList' ), true ) && ! is_array( $value ) ) {
 					if ( is_bool( $value ) ) {
 						$sanitized[ $safe_key ] = $value;
 					} else {

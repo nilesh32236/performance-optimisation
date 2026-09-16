@@ -75,6 +75,14 @@ class MainSpeculationRulesTest extends \PHPUnit\Framework\TestCase {
 		parent::setUp();
 		\Brain\Monkey\setUp();
 		$this->register_common_function_stubs();
+		\PerformanceOptimise\Inc\Util::reset_runtime_caches();
+		\PerformanceOptimise\Inc\RUM::clear_field_lcp_cache();
+		\PerformanceOptimise\Inc\AI_Adaptive::reset_model_memo();
+		\PerformanceOptimise\Inc\Main::reset_speculation_url_memo();
+		// Explicit visitor context: is_speculation_suppressed_for_visitor()
+		// fails closed on throwable, so an unstubbed (or stale cross-file)
+		// is_user_logged_in would suppress every configuration under test.
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
 		Functions\when( 'apply_filters' )->alias(
 			static function ( $hook, $value ) {
 				if ( 'wppo_ai_adaptive_commerce_context' === $hook ) {
