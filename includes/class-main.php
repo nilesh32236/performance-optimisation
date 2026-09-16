@@ -875,6 +875,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'admin_init', array( $this, 'maybe_migrate_sandbox_preview' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_image_alt_edge_defaults' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_preload_auto_defaults' ) );
+			add_action( 'admin_init', array( $this, 'maybe_migrate_object_cache_outage_flag' ) );
 			// One-time activity-log notice on admin_init.
 			if ( isset( $this->options['file_optimisation']['removeQueryStrings'] ) ) {
 				add_action( 'admin_init', array( $this, 'maybe_notify_remove_query_strings_removal' ) );
@@ -1953,6 +1954,44 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$this->options['preload_settings'] = array_merge( $this->options['preload_settings'], $preload );
 
 			Log::add( __( 'Added default automatic LCP preload and font discovery settings (both off; manual lists keep winning).', 'performance-optimisation' ) );
+		}
+
+		/**
+		 * Backfill the additive Redis outage status flag (issue #1233).
+		 *
+		 * Adds `object_cache.outage_bypassed = false` to stored settings that
+		 * predate the key. Runs on `admin_init` (not the constructor) so a
+		 * cacheable front-end request never triggers a settings write. Fresh
+		 * installs with no stored option are skipped (absent key reads as
+		 * "not bypassed"). Idempotent (key presence is the marker). Uses
+		 * per-site `get_option()` so multisite sites migrate independently
+		 * with no cross-site leakage.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public function maybe_migrate_object_cache_outage_flag(): void {
+			// allowlist(settings-read-guard): deliberate direct read — must distinguish
+			// "no stored row" (false) from "stored array", which Util::get_settings()
+			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
+			$stored = get_option( 'wppo_settings' );
+			if ( ! is_array( $stored ) ) {
+				return;
+			}
+
+			$oc = isset( $stored['object_cache'] ) && is_array( $stored['object_cache'] ) ? $stored['object_cache'] : array();
+
+			if ( array_key_exists( 'outage_bypassed', $oc ) ) {
+				return;
+			}
+
+			$stored['object_cache'] = $oc + array( 'outage_bypassed' => false );
+			update_option( 'wppo_settings', $stored );
+
+			if ( ! isset( $this->options['object_cache'] ) || ! is_array( $this->options['object_cache'] ) ) {
+				$this->options['object_cache'] = array();
+			}
+			$this->options['object_cache']['outage_bypassed'] = false;
 		}
 
 		/**

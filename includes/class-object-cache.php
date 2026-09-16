@@ -267,6 +267,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				'circuit_reason'     => '',
 				'circuit_error_code' => '',
 				'failure_count'      => 0,
+				'bypassed'           => false,
 			);
 
 			// Circuit state is file/option-backed (no Redis needed), so it is
@@ -279,6 +280,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			$status['failure_count']      = $circuit['failures'];
 			$status['serializers']        = $this->get_serializer_support();
 			$status['last_failure']       = $this->get_last_failure_payload();
+			$status['bypassed']           = true === self::$outage_bypassed || $this->is_outage_flagged();
 
 			if ( file_exists( $this->dropin_path ) ) {
 				$wp_filesystem = Util::init_filesystem();
@@ -307,12 +309,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			try {
 				$config = $this->get_redis_config();
 
-				$connection = $this->connect_internal( $config );
+				$connection = $this->wppo_redis_outage_fallback( $config );
 
 				if ( is_wp_error( $connection ) ) {
+					$status['bypassed']        = true;
 					$status['telemetry_error'] = defined( 'WP_DEBUG' ) && WP_DEBUG ? $connection->get_error_message() : __( 'Redis connection error.', 'performance-optimisation' );
 					return $status;
 				}
+				$status['bypassed'] = $this->is_outage_flagged();
 
 				$status['redis_reachable'] = true;
 				$redis                     = $connection;
@@ -622,6 +626,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			delete_transient( Util::transient_key( self::FAIL_TRANSIENT ) );
 			delete_transient( Util::transient_key( self::CIRCUIT_NOTICE_TRANSIENT ) );
 			delete_transient( Util::transient_key( self::LAST_FAILURE_TRANSIENT ) );
+			self::$outage_bypassed = false;
+			self::$outage_error    = null;
+			$this->clear_outage_flag();
 
 			$wp_filesystem = Util::init_filesystem();
 			foreach ( array( $this->get_parked_path(), $this->get_disabled_state_path(), $this->get_failures_path() ) as $path ) {
@@ -766,17 +773,247 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		}
 
 		/**
+		 * In-request outage bypass flag (never persisted).
+		 *
+		 * Armed on the first connection failure in the request so subsequent
+		 * cache calls short-circuit to uncached immediately instead of paying
+		 * another ~0.5s connection timeout (retry storm). Reset on successful
+		 * ping/enable or via reset_outage_bypass() (tests).
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static $outage_bypassed = false;
+
+		/**
+		 * Last outage error surfaced while the in-request bypass is armed.
+		 *
+		 * Lets repeat callers return the original failure code instead of a
+		 * generic one, keeping admin/REST diagnostics stable across the
+		 * bypassed request.
+		 *
+		 * @since NEXT
+		 * @var \WP_Error|null
+		 */
+		private static $outage_error = null;
+
+		/**
 		 * Internal helper to connect to Redis based on config.
+		 *
+		 * Fail-open: when the in-request outage bypass is armed (see
+		 * wppo_redis_outage_fallback()) this short-circuits to the stored
+		 * outage error without touching the network — at most one reconnect
+		 * attempt per request. Explicit recovery probes (ping()) clear the
+		 * bypass before connecting so recovery is always detectable.
 		 *
 		 * @since 1.4.0
 		 * @param array $config Configuration array.
 		 * @return \Redis|\RedisCluster|\WP_Error
 		 */
 		private function connect_internal( $config ) {
+			if ( true === self::$outage_bypassed && self::$outage_error instanceof \WP_Error ) {
+				return self::$outage_error;
+			}
 			if ( ! self::ensure_redis_helper( 'wppo_redis_connect' ) ) {
 				return new \WP_Error( 'missing_helper', __( 'The Redis connection helper is unavailable.', 'performance-optimisation' ) );
 			}
 			return wppo_redis_connect( $config );
+		}
+
+		/**
+		 * Single-call Redis outage fallback helper (class-layer fail-open).
+		 *
+		 * Wraps one connection attempt: on failure the in-request bypass flag
+		 * is armed and a lightweight persistent status flag
+		 * (`wppo_settings[object_cache][outage_bypassed]`) is recorded so the
+		 * admin UI/REST can report Redis as bypassed until recovery; on
+		 * success the persistent flag is cleared and normal caching resumes.
+		 * Subsequent calls in the same request short-circuit via
+		 * connect_internal() without another network round-trip (single
+		 * reconnect attempt max per request). Never fatals — failures are
+		 * returned as WP_Error for uncached serving.
+		 *
+		 * Multisite-safe: the persistent flag lives in the per-site
+		 * `wppo_settings` option (get_option/update_option are inherently
+		 * site-specific); no cross-site leakage.
+		 *
+		 * @since NEXT
+		 * @param array $config Connection configuration.
+		 * @return \Redis|\RedisCluster|\WP_Error Connected client, or WP_Error (including `redis_bypassed` while bypassed).
+		 */
+		public function wppo_redis_outage_fallback( $config = array() ) {
+			if ( true === self::$outage_bypassed ) {
+				if ( self::$outage_error instanceof \WP_Error ) {
+					return self::$outage_error;
+				}
+				return new \WP_Error( 'redis_bypassed', __( 'Redis is bypassed for this request after an outage.', 'performance-optimisation' ) );
+			}
+
+			if ( ! class_exists( 'Redis' ) ) {
+				$error                 = new \WP_Error( 'missing_extension', __( 'The PhpRedis extension is not installed.', 'performance-optimisation' ) );
+				self::$outage_bypassed = true;
+				self::$outage_error    = $error;
+				return $error;
+			}
+
+			if ( function_exists( 'apply_filters' ) ) {
+				$config = (array) apply_filters( 'wppo_object_cache_config', $config );
+			} else {
+				$config = (array) $config;
+			}
+
+			$connection = $this->connect_internal( $config );
+
+			if ( function_exists( 'is_wp_error' ) ? is_wp_error( $connection ) : $connection instanceof \WP_Error ) {
+				self::$outage_bypassed = true;
+				self::$outage_error    = $connection instanceof \WP_Error ? $connection : new \WP_Error( 'redis_error', __( 'Redis connection failed.', 'performance-optimisation' ) );
+				$this->arm_outage_flag();
+				try {
+					$this->log_redis_failure( self::$outage_error->get_error_code(), self::$outage_error->get_error_message() );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				return self::$outage_error;
+			}
+
+			$this->clear_outage_flag();
+
+			return $connection;
+		}
+
+		/**
+		 * Whether the in-request outage bypass is armed.
+		 *
+		 * @since NEXT
+		 * @return bool True when subsequent cache calls short-circuit to uncached in this request.
+		 */
+		public static function is_outage_bypassed(): bool {
+			return true === self::$outage_bypassed;
+		}
+
+		/**
+		 * Reset the in-request outage bypass (tests and explicit recovery).
+		 *
+		 * Never touches the persistent status flag — use clear_outage_flag()
+		 * (via ping/enable) for that.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_outage_bypass(): void {
+			self::$outage_bypassed = false;
+			self::$outage_error    = null;
+		}
+
+		/**
+		 * Whether the persistent outage status flag is set.
+		 *
+		 * Reads the additive `wppo_settings[object_cache][outage_bypassed]`
+		 * key via the memoized Util::get_settings() (zero extra queries on
+		 * the bypass path). Fail-open: returns false when settings are
+		 * unavailable or malformed.
+		 *
+		 * @since NEXT
+		 * @return bool True when Redis was recorded as bypassed until recovery.
+		 */
+		public function is_outage_flagged(): bool {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					$settings = Util::get_settings();
+				} elseif ( function_exists( 'get_option' ) ) {
+					$settings = get_option( 'wppo_settings', array() );
+				} else {
+					return false;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+			if ( ! is_array( $settings ) ) {
+				return false;
+			}
+			$oc = isset( $settings['object_cache'] ) && is_array( $settings['object_cache'] ) ? $settings['object_cache'] : array();
+			return ! empty( $oc['outage_bypassed'] );
+		}
+
+		/**
+		 * Arm the persistent outage status flag (additive settings key).
+		 *
+		 * No-op when already armed (no extra DB write). Guarded for WP 6.2+
+		 * and PHP 8.2+ with function_exists/class_exists checks and a legacy
+		 * get_option fallback.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private function arm_outage_flag(): void {
+			try {
+				if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
+					return;
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					$settings = Util::get_settings();
+				} else {
+					$settings = get_option( 'wppo_settings', array() );
+				}
+				if ( ! is_array( $settings ) ) {
+					$settings = array();
+				}
+				if ( isset( $settings['object_cache'] ) && ! is_array( $settings['object_cache'] ) ) {
+					$settings['object_cache'] = array();
+				}
+				if ( ! isset( $settings['object_cache'] ) ) {
+					$settings['object_cache'] = array();
+				}
+				if ( ! empty( $settings['object_cache']['outage_bypassed'] ) ) {
+					return;
+				}
+				$settings['object_cache']['outage_bypassed'] = true;
+				update_option( 'wppo_settings', $settings );
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
+					Util::set_settings_cache( $settings );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Clear the persistent outage status flag on recovery.
+		 *
+		 * No-op when already clear (no extra DB write), so the hot
+		 * success path stays query-free.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private function clear_outage_flag(): void {
+			try {
+				if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
+					return;
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					$settings = Util::get_settings();
+				} else {
+					$settings = get_option( 'wppo_settings', array() );
+				}
+				if ( ! is_array( $settings ) ) {
+					return;
+				}
+				if ( empty( $settings['object_cache'] ) || ! is_array( $settings['object_cache'] ) ) {
+					return;
+				}
+				if ( empty( $settings['object_cache']['outage_bypassed'] ) ) {
+					return;
+				}
+				$settings['object_cache']['outage_bypassed'] = false;
+				update_option( 'wppo_settings', $settings );
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
+					Util::set_settings_cache( $settings );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 
 		/**
@@ -866,6 +1103,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Ping the Redis server to test connection.
 		 *
+		 * Explicit recovery probe: always forces one real connection attempt
+		 * even while the in-request outage bypass is armed, so recovery is
+		 * detectable. On success both the in-request bypass and the
+		 * persistent outage flag clear and normal caching resumes; on failure
+		 * both are (re-)armed for fail-open serving.
+		 *
 		 * @since 1.4.0
 		 * @param array $config Connection configuration.
 		 * @return bool|\WP_Error True if connected, WP_Error on failure.
@@ -889,9 +1132,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			 */
 			$config = (array) apply_filters( 'wppo_object_cache_config', $config );
 
-			$connection = $this->connect_internal( $config );
+			// Recovery probe: lift the in-request bypass for exactly one real
+			// attempt so a healed Redis is detected even mid-request.
+			self::$outage_bypassed = false;
+			self::$outage_error    = null;
+			$connection            = $this->connect_internal( $config );
 
 			if ( is_wp_error( $connection ) ) {
+				self::$outage_bypassed = true;
+				self::$outage_error    = $connection;
+				$this->arm_outage_flag();
 				$this->log_redis_failure( $connection->get_error_code(), $connection->get_error_message() );
 				return $connection;
 			}
@@ -902,9 +1152,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					$connection->close();
 
 					if ( true === $result || '+PONG' === $result || ( is_string( $result ) && stripos( $result, 'PONG' ) !== false ) ) {
+						self::$outage_bypassed = false;
+						self::$outage_error    = null;
+						$this->clear_outage_flag();
 						return true;
 					}
-					$error = new \WP_Error( 'ping_fail', __( 'Ping returned false', 'performance-optimisation' ) );
+					$error                 = new \WP_Error( 'ping_fail', __( 'Ping returned false', 'performance-optimisation' ) );
+					self::$outage_bypassed = true;
+					self::$outage_error    = $error;
+					$this->arm_outage_flag();
 					$this->log_redis_failure( $error->get_error_code(), $error->get_error_message() );
 					return $error;
 				} catch ( \Exception $e ) {
@@ -915,14 +1171,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 						// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 						error_log( 'Redis ping exception: ' . str_replace( ABSPATH, '', $e->getMessage() ) );
 					}
-					$error = new \WP_Error( 'ping_exception', __( 'Redis connection failed.', 'performance-optimisation' ) );
+					$error                 = new \WP_Error( 'ping_exception', __( 'Redis connection failed.', 'performance-optimisation' ) );
+					self::$outage_bypassed = true;
+					self::$outage_error    = $error;
+					$this->arm_outage_flag();
 					$this->log_redis_failure( $error->get_error_code(), $error->get_error_message() );
 					return $error;
 				}
 			}
 
 			$connection->close();
-			$error = new \WP_Error( 'no_ping_method', __( 'Connection does not support ping', 'performance-optimisation' ) );
+			$error                 = new \WP_Error( 'no_ping_method', __( 'Connection does not support ping', 'performance-optimisation' ) );
+			self::$outage_bypassed = true;
+			self::$outage_error    = $error;
+			$this->arm_outage_flag();
 			$this->log_redis_failure( $error->get_error_code(), $error->get_error_message() );
 			return $error;
 		}
@@ -1849,7 +2111,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		private function read_redis_memory_bytes() {
 			try {
 				$config     = $this->get_redis_config();
-				$connection = $this->connect_internal( $config );
+				$connection = $this->wppo_redis_outage_fallback( $config );
 				if ( is_wp_error( $connection ) ) {
 					return null;
 				}

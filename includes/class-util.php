@@ -559,19 +559,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				),
 				// Mirrors Object_Cache::ALLOWED_KEYS. `password` is stripped by
 				// the REST layer but may survive in imported/legacy payloads.
+				// `outage_bypassed` is the additive persistent outage status
+				// flag (issue #1233): never a connection credential, only the
+				// degraded-state signal cleared on ping/enable recovery.
 				'object_cache'       => array(
-					'mode'        => 'scalar',
-					'host'        => 'scalar',
-					'port'        => 'scalar',
-					'password'    => 'scalar',
-					'database'    => 'scalar',
-					'timeout'     => 'scalar',
-					'prefix'      => 'scalar',
-					'nodes'       => 'scalar',
-					'master_name' => 'scalar',
-					'use_tls'     => 'scalar',
-					'persistent'  => 'scalar',
-					'compression' => 'scalar',
+					'mode'            => 'scalar',
+					'host'            => 'scalar',
+					'port'            => 'scalar',
+					'password'        => 'scalar',
+					'database'        => 'scalar',
+					'timeout'         => 'scalar',
+					'prefix'          => 'scalar',
+					'nodes'           => 'scalar',
+					'master_name'     => 'scalar',
+					'use_tls'         => 'scalar',
+					'persistent'      => 'scalar',
+					'compression'     => 'scalar',
+					'outage_bypassed' => 'scalar',
 				),
 			);
 
