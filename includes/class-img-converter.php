@@ -341,7 +341,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * @return bool True when Imagick reports an AVIF delegate.
 		 */
 		public static function is_imagick_avif_available(): bool {
+			static $memo = null;
+			if ( null !== $memo ) {
+				return $memo;
+			}
+
 			if ( ! extension_loaded( 'imagick' ) || ! class_exists( 'Imagick' ) ) {
+				$memo = false;
 				return false;
 			}
 
@@ -350,7 +356,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				try {
 					if ( method_exists( $imagick, 'queryFormats' ) ) {
 						$formats = $imagick->queryFormats( 'AVIF*' );
-						return ! empty( $formats );
+						$memo    = ! empty( $formats );
+						return $memo;
 					}
 				} finally {
 					if ( method_exists( $imagick, 'clear' ) ) {
@@ -364,6 +371,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Probe only; absence means no Imagick AVIF support.
 			}
 
+			$memo = false;
 			return false;
 		}
 
@@ -1259,17 +1267,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			}
 
 			if ( $smart && 'image/avif' === $mime ) {
-				// Guarded encoder check (issue #1158): when no AVIF encoder is
-				// available on this host, fall through to the WebP quality
-				// instead of the AVIF-mapped value so callers that fall back
-				// to WebP encoding use the right quality. Fail-open: the
-				// probe itself never fatals (see is_avif_encoder_available()).
-				if ( ! self::is_avif_encoder_available() ) {
-					return $this->resolve_encode_quality( 'image/webp', 82, $size );
+				// Explicit encoder chain (issue #1258): GD `imageavif()`
+				// (PHP >= 8.2), then Imagick AVIF delegate, then WebP.
+				// No AVIF encoder on this host falls through to the WebP
+				// quality so callers that fall back to WebP encoding use the
+				// right quality. Fail-open: the probes never fatal (see
+				// is_avif_encoder_available() / is_imagick_avif_available()).
+				$gd_avif_available = function_exists( 'imageavif' ) && version_compare( PHP_VERSION, '8.2', '>=' );
+				if ( $gd_avif_available || self::is_imagick_avif_available() ) {
+					$webp_quality = $this->resolve_encode_quality( 'image/webp', 82, $size );
+					$quality      = max( 1, $webp_quality - 20 );
+					return min( 100, max( 1, $quality ) );
 				}
-				$webp_quality = $this->resolve_encode_quality( 'image/webp', 82, $size );
-				$quality      = max( 1, $webp_quality - 20 );
-				return min( 100, max( 1, $quality ) );
+				return $this->resolve_encode_quality( 'image/webp', 82, $size );
 			}
 
 			return $this->resolve_encode_quality( $mime, 82, $size );
@@ -1735,98 +1745,110 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					case IMAGETYPE_WEBP:
 						if ( in_array( $format, array( 'avif', 'both' ), true ) ) {
 							if ( ! self::is_avif_encoder_available() ) {
-								$this->update_conversion_status( $source_image, 'failed', $format );
-								return false;
-							}
+								// Fail-open (issue #1258): a WebP source
+								// requested as `both` without an AVIF encoder
+								// records `skipped` for AVIF and falls through
+								// to the generic WebP path below (then the
+								// original) instead of failing closed. Pure
+								// `avif` has nothing else to produce, so it
+								// keeps the legacy `failed` behaviour.
+								if ( 'both' === $format ) {
+									$this->update_conversion_status( $source_image, 'skipped', 'avif' );
+								} else {
+									$this->update_conversion_status( $source_image, 'failed', $format );
+									return false;
+								}
+							} else {
 
-							if ( $this->is_animated_webp( $source_image ) ) {
-								$this->update_conversion_status( $source_image, 'failed', $format );
-								return false;
-							}
+								if ( $this->is_animated_webp( $source_image ) ) {
+									$this->update_conversion_status( $source_image, 'failed', $format );
+									return false;
+								}
 
-							if ( ! function_exists( 'imagecreatefromwebp' ) ) {
-								$this->update_conversion_status( $source_image, 'failed', $format );
-								return false;
-							}
+								if ( ! function_exists( 'imagecreatefromwebp' ) ) {
+									$this->update_conversion_status( $source_image, 'failed', $format );
+									return false;
+								}
 
-							try {
-								// OOM-safe route (#1236): over-budget WebP
-								// sources decode via an Imagick thumbnail so
-								// GD never allocates the full-size bitmap.
-								// Low-memory failure keeps the legacy skip,
-								// never a full-size GD decode.
-								if ( $memory_safe_edge > 0 ) {
-									$lowmem_webp = $this->decode_overbudget_image_via_imagick( $source_image, $memory_safe_edge );
-									if ( null !== $lowmem_webp && ( is_resource( $lowmem_webp ) || $lowmem_webp instanceof \GdImage ) ) {
-										$image = $lowmem_webp;
+								try {
+									// OOM-safe route (#1236): over-budget WebP
+									// sources decode via an Imagick thumbnail so
+									// GD never allocates the full-size bitmap.
+									// Low-memory failure keeps the legacy skip,
+									// never a full-size GD decode.
+									if ( $memory_safe_edge > 0 ) {
+										$lowmem_webp = $this->decode_overbudget_image_via_imagick( $source_image, $memory_safe_edge );
+										if ( null !== $lowmem_webp && ( is_resource( $lowmem_webp ) || $lowmem_webp instanceof \GdImage ) ) {
+											$image = $lowmem_webp;
+										} else {
+											$this->update_conversion_status( $source_image, 'skipped', $format );
+											return false;
+										}
 									} else {
-										$this->update_conversion_status( $source_image, 'skipped', $format );
+										$image = imagecreatefromwebp( $source_image );
+									}
+									if ( ! $image ) {
+										$this->update_conversion_status( $source_image, 'failed', $format );
 										return false;
 									}
-								} else {
-									$image = imagecreatefromwebp( $source_image );
-								}
-								if ( ! $image ) {
-									$this->update_conversion_status( $source_image, 'failed', $format );
-									return false;
-								}
 
-								// Longest-edge cap also applies to the WebP-source
-								// AVIF path (issue #985 follow-up): shrink the
-								// in-memory GD resource so the AVIF output
-								// respects the cap; the memory-safe edge wins
-								// when stricter (#1236); fail-open keeps original.
-								if ( $memory_safe_edge > 0 ) {
-									$downscaled = $this->maybe_downscale_gd_image_to_edge( $image, (int) $image_info[0], (int) $image_info[1], $memory_safe_edge );
-								} else {
-									$downscaled = $this->maybe_downscale_gd_image( $image, (int) $image_info[0], (int) $image_info[1] );
-								}
-								if ( $downscaled !== $image ) {
-									Util::destroy_gd_image( $image );
-									$image = $downscaled;
-								}
+									// Longest-edge cap also applies to the WebP-source
+									// AVIF path (issue #985 follow-up): shrink the
+									// in-memory GD resource so the AVIF output
+									// respects the cap; the memory-safe edge wins
+									// when stricter (#1236); fail-open keeps original.
+									if ( $memory_safe_edge > 0 ) {
+										$downscaled = $this->maybe_downscale_gd_image_to_edge( $image, (int) $image_info[0], (int) $image_info[1], $memory_safe_edge );
+									} else {
+										$downscaled = $this->maybe_downscale_gd_image( $image, (int) $image_info[0], (int) $image_info[1] );
+									}
+									if ( $downscaled !== $image ) {
+										Util::destroy_gd_image( $image );
+										$image = $downscaled;
+									}
 
-								$avif_path = $this->get_img_path( $source_image, 'avif' );
-								if ( ! self::is_safe_write_path( $avif_path ) ) {
+									$avif_path = $this->get_img_path( $source_image, 'avif' );
+									if ( ! self::is_safe_write_path( $avif_path ) ) {
+										if ( null !== $image && ( is_resource( $image ) || $image instanceof \GdImage ) ) {
+											Util::destroy_gd_image( $image );
+										}
+										$this->update_conversion_status( $source_image, 'failed', $format );
+										return false;
+									}
+									if ( ! Util::prepare_cache_dir( dirname( $avif_path ) ) ) {
+										if ( null !== $image && ( is_resource( $image ) || $image instanceof \GdImage ) ) {
+											Util::destroy_gd_image( $image );
+										}
+										$this->update_conversion_status( $source_image, 'failed', $format );
+										return false;
+									}
+
+									if ( function_exists( 'imageavif' ) && imageavif( $image, $avif_path, $avif_quality ?? $quality ) ) {
+										$webp_source_success = true;
+										$this->record_encoded_sibling( $source_image, $avif_path, 'avif', $webp_source_success );
+									} elseif ( ! function_exists( 'imageavif' ) && $this->encode_avif_via_imagick( $source_image, $avif_path, (int) ( $avif_quality ?? $quality ), (int) $memory_safe_edge ) ) {
+										// Imagick-only AVIF host: GD decoded the WebP
+										// source but cannot encode AVIF, so encode
+										// from the source file via Imagick instead.
+										// Size-compared like every other path (issue
+										// #1158): an oversized AVIF is discarded and
+										// marked skipped instead of completed.
+										$webp_source_success = true;
+										$this->record_encoded_sibling( $source_image, $avif_path, 'avif', $webp_source_success );
+									} else {
+										if ( null !== $image && ( is_resource( $image ) || $image instanceof \GdImage ) ) {
+											Util::destroy_gd_image( $image );
+										}
+										$this->update_conversion_status( $source_image, 'failed', $format );
+										return false;
+									}
+								} catch ( \Exception $e ) {
 									if ( null !== $image && ( is_resource( $image ) || $image instanceof \GdImage ) ) {
 										Util::destroy_gd_image( $image );
 									}
 									$this->update_conversion_status( $source_image, 'failed', $format );
 									return false;
 								}
-								if ( ! Util::prepare_cache_dir( dirname( $avif_path ) ) ) {
-									if ( null !== $image && ( is_resource( $image ) || $image instanceof \GdImage ) ) {
-										Util::destroy_gd_image( $image );
-									}
-									$this->update_conversion_status( $source_image, 'failed', $format );
-									return false;
-								}
-
-								if ( function_exists( 'imageavif' ) && imageavif( $image, $avif_path, $avif_quality ?? $quality ) ) {
-									$webp_source_success = true;
-									$this->record_encoded_sibling( $source_image, $avif_path, 'avif', $webp_source_success );
-								} elseif ( ! function_exists( 'imageavif' ) && $this->encode_avif_via_imagick( $source_image, $avif_path, (int) ( $avif_quality ?? $quality ), (int) $memory_safe_edge ) ) {
-									// Imagick-only AVIF host: GD decoded the WebP
-									// source but cannot encode AVIF, so encode
-									// from the source file via Imagick instead.
-									// Size-compared like every other path (issue
-									// #1158): an oversized AVIF is discarded and
-									// marked skipped instead of completed.
-									$webp_source_success = true;
-									$this->record_encoded_sibling( $source_image, $avif_path, 'avif', $webp_source_success );
-								} else {
-									if ( null !== $image && ( is_resource( $image ) || $image instanceof \GdImage ) ) {
-										Util::destroy_gd_image( $image );
-									}
-									$this->update_conversion_status( $source_image, 'failed', $format );
-									return false;
-								}
-							} catch ( \Exception $e ) {
-								if ( null !== $image && ( is_resource( $image ) || $image instanceof \GdImage ) ) {
-									Util::destroy_gd_image( $image );
-								}
-								$this->update_conversion_status( $source_image, 'failed', $format );
-								return false;
 							}
 						}
 
