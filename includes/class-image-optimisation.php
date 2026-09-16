@@ -2535,6 +2535,64 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Resolve responsive srcset/sizes for an LCP URL via the media library.
+		 *
+		 * Attachment-based lookup for the `wp_head` emission paths (which run
+		 * before any HTML buffer exists, so the buffer scanners cannot help):
+		 * maps the LCP URL to an attachment via `attachment_url_to_postid()`
+		 * and fetches `wp_get_attachment_image_srcset()` /
+		 * `wp_get_attachment_image_sizes()` (`full` size). Returns an empty
+		 * pair when the URL is not an attachment image, when the WP helpers
+		 * are unavailable, or on any failure (fail-open: callers fall back to
+		 * a plain `href` preload). Callers must never emit srcset without
+		 * sizes: when either value is empty both are treated as empty.
+		 *
+		 * @since NEXT
+		 * @param string $lcp_url The resolved LCP image URL.
+		 * @return array{srcset: string, sizes: string} Responsive data (empty strings when unavailable).
+		 */
+		public static function get_lcp_responsive_data_for_url( string $lcp_url ): array {
+			$empty = array(
+				'srcset' => '',
+				'sizes'  => '',
+			);
+			try {
+				$lcp_url = trim( $lcp_url );
+				if ( '' === $lcp_url ) {
+					return $empty;
+				}
+				$lower = strtolower( ltrim( $lcp_url ) );
+				if ( 0 === strpos( $lower, 'data:' ) || 0 === strpos( $lower, 'blob:' ) || 0 === strpos( $lower, 'javascript:' ) || 0 === strpos( $lower, 'vbscript:' ) ) {
+					return $empty;
+				}
+				if ( ! function_exists( 'attachment_url_to_postid' ) || ! function_exists( 'wp_get_attachment_image_srcset' ) || ! function_exists( 'wp_get_attachment_image_sizes' ) ) {
+					return $empty;
+				}
+				$attachment_id = (int) attachment_url_to_postid( $lcp_url );
+				if ( $attachment_id <= 0 ) {
+					return $empty;
+				}
+				$srcset = wp_get_attachment_image_srcset( $attachment_id, 'full' );
+				$sizes  = wp_get_attachment_image_sizes( $attachment_id, 'full' );
+				if ( ! is_string( $srcset ) || ! is_string( $sizes ) ) {
+					return $empty;
+				}
+				$srcset = trim( substr( $srcset, 0, 4096 ) );
+				$sizes  = trim( substr( $sizes, 0, 1024 ) );
+				if ( '' === $srcset || '' === $sizes ) {
+					return $empty;
+				}
+				return array(
+					'srcset' => $srcset,
+					'sizes'  => $sizes,
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $empty;
+			}
+		}
+
+		/**
 		 * Find the responsive srcset for an LCP URL inside an HTML buffer.
 		 *
 		 * Scans `<img>` tags for the first node whose `src`/`data-src`
@@ -2655,7 +2713,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( '' === $manual ) {
 					return array();
 				}
-				return array( $this->prepare_preload_item( $manual ) );
+				$responsive = self::get_lcp_responsive_data_for_url( $manual );
+				return array( $this->prepare_preload_item( $manual, $responsive['srcset'], $responsive['sizes'] ) );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return array();
@@ -2709,7 +2768,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( '' === $lcp_url ) {
 					return array();
 				}
-				return array( $this->prepare_preload_item( $lcp_url ) );
+				$responsive = self::get_lcp_responsive_data_for_url( $lcp_url );
+				return array( $this->prepare_preload_item( $lcp_url, $responsive['srcset'], $responsive['sizes'] ) );
 			}
 
 			$lcp_url = $this->resolve_auto_lcp_url();
@@ -2717,7 +2777,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return array();
 			}
 
-			return array( $this->prepare_preload_item( $lcp_url ) );
+			$responsive = self::get_lcp_responsive_data_for_url( $lcp_url );
+			return array( $this->prepare_preload_item( $lcp_url, $responsive['srcset'], $responsive['sizes'] ) );
 		}
 
 		/**
@@ -3301,6 +3362,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$media   = '(min-width: 768px)';
 			} else {
 				$img_url = $resolve_relative( $img_url );
+			}
+
+			// Never emit srcset without sizes (preload spec): a half pair
+			// degrades to a plain href preload (fail-open).
+			if ( '' === trim( $imagesrcset ) || '' === trim( $imagesizes ) ) {
+				$imagesrcset = '';
+				$imagesizes  = '';
 			}
 
 			return array(
