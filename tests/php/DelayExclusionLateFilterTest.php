@@ -45,6 +45,11 @@ class DelayExclusionLateFilterTest extends \PHPUnit\Framework\TestCase {
 		$this->wppoSetUp();
 		$this->registered = array();
 		Main::reset_delay_context_memo();
+		// get_the_ID() may already be eval-declared by an earlier file; an
+		// unmocked call inside is_delay_js_safe_context()'s fail-safe try
+		// throws and forces skip-delay. Default to no post context.
+		\Brain\Monkey\Functions\when( 'get_the_ID' )->justReturn( 0 );
+		\Brain\Monkey\Functions\when( 'is_wc_endpoint_url' )->justReturn( false );
 	}
 
 	/**
