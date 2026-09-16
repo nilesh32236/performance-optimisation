@@ -12,6 +12,7 @@
 use PerformanceOptimise\Inc\Main;
 use PerformanceOptimise\Inc\LiteSpeed_Integration;
 use Brain\Monkey\Functions;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
  * Tests the setup_hooks() defer/delay exclusion merge.
@@ -1668,9 +1669,15 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	 * Test that an explicit 'auto' classic fetchpriority is preserved
 	 * (fill-gaps-only, issue #1218).
 	 *
+	 * Classic scripts carry no core default — get_data() returns false when
+	 * unset — so an explicit 'auto' is distinguishable from a gap and must
+	 * never be overwritten. (The module path deliberately differs: core
+	 * defaults every module registration to 'auto', so 'auto' counts as a
+	 * gap there; see test_apply_module_loading_strategies_upgrades_auto_to_low.)
+	 *
 	 * @since 2.0.0
 	 */
-	public function test_add_defer_strategy_treats_auto_as_gap(): void {
+	public function test_add_defer_strategy_preserves_explicit_auto_fetchpriority(): void {
 		$this->stub_main_construction(
 			array(
 				'deferJS'        => true,
@@ -1711,6 +1718,279 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 			}
 		);
 		$this->assertSame( array(), $priority_writes, 'Fill-gaps-only must not write fetchpriority where an explicit auto already exists.' );
+	}
+
+	/**
+	 * Test that a core-defaulted 'auto' module fetchpriority is upgraded to
+	 * 'low' while explicit 'high'/'low' are preserved (issue #1218).
+	 *
+	 * Core registers every module with fetchpriority default 'auto'
+	 * (WP_Script_Modules::register, Trac #61734), so a defaulted module is
+	 * indistinguishable from an explicitly-'auto' one post-registration —
+	 * preserving every 'auto' value would make the low-fill a no-op for
+	 * typical modules. Deliberate asymmetry with the classic path (which
+	 * preserves explicit 'auto', see
+	 * test_add_defer_strategy_preserves_explicit_auto_fetchpriority).
+	 *
+	 * @since NEXT
+	 */
+	public function test_apply_module_loading_strategies_upgrades_auto_to_low(): void {
+		$main = $this->make_main(
+			array(
+				'file_optimisation' => array(
+					'deferJS'        => true,
+					'excludeDeferJS' => '',
+				),
+			)
+		);
+		$fake = $this->make_fake_modules();
+		// Core-shaped default: registered without an explicit choice, core
+		// stores 'auto'. Explicit 'low' must survive untouched.
+		$fake->set_registered_entry( 'my-mod', array( 'fetchpriority' => 'auto' ) );
+		$fake->set_registered_entry( 'interactive', array( 'fetchpriority' => 'low' ) );
+		$this->stub_script_modules( $fake );
+
+		$main->apply_module_loading_strategies();
+
+		$this->assertContains( 'priority:my-mod:low', $fake->calls, "A defaulted 'auto' module fetchpriority must be upgraded to low." );
+		$this->assertNotContains( 'priority:interactive:low', $fake->calls, 'An explicit low must never be rewritten.' );
+	}
+
+	/**
+	 * Build a Main instance that passes the legacy defer guards.
+	 *
+	 * Bypasses the constructor (no WP options stack needed) with deferJS on
+	 * and an empty exclusion list, then pins the request guards: logged-out
+	 * visitor, no safe-mode key, no nocache bypass, and the LiteSpeed
+	 * disable-decision filter pinned false with a reset static cache.
+	 *
+	 * @return Main
+	 */
+	private function make_legacy_main(): Main {
+		$this->stub_main_construction(
+			array(
+				'deferJS'        => true,
+				'delayJS'        => false,
+				'excludeDeferJS' => '',
+			)
+		);
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook, $value ) {
+				if ( 'wppo_litespeed_should_disable_optimizer' === $hook ) {
+					return false;
+				}
+				return $value;
+			}
+		);
+		Functions\when( 'has_filter' )->justReturn( false );
+		if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'reset_cache' ) ) {
+			\PerformanceOptimise\Inc\LiteSpeed_Integration::reset_cache();
+		}
+		unset( $_GET['nocache'], $_GET['wppo_nocache'], $_SERVER['QUERY_STRING'] );
+
+		$main = $this->make_main(
+			array(
+				'file_optimisation' => array(
+					'deferJS'        => true,
+					'excludeDeferJS' => '',
+				),
+			)
+		);
+
+		$exclude_prop = new \ReflectionProperty( Main::class, 'exclude_defer_js' );
+		$exclude_prop->setAccessible( true );
+		$exclude_prop->setValue( $main, array() );
+
+		return $main;
+	}
+
+	/**
+	 * Test that the legacy defer fallback never double-stamps tags already
+	 * carrying async (issue #1218).
+	 *
+	 * Covers the bare, valued, and uppercase spellings of the async boolean
+	 * attribute.
+	 *
+	 * @param string $tag Fixture tag markup already carrying async.
+	 */
+	#[DataProvider( 'provide_legacy_async_tags' )]
+	public function test_add_defer_attribute_legacy_skips_async_tags( string $tag ): void {
+		$main = $this->make_legacy_main();
+
+		$this->assertSame( $tag, $main->add_defer_attribute_legacy( $tag, 'async-first' ), 'A tag already carrying async must be returned untouched.' );
+	}
+
+	/**
+	 * Tags already carrying async in various spellings.
+	 *
+	 * @return array<string, array{0: string}>
+	 */
+	public static function provide_legacy_async_tags(): array {
+		return array(
+			// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for add_defer_attribute_legacy() tests.
+			'bare async'      => array( '<script async src="https://example.com/a.js"></script>' ),
+			// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for add_defer_attribute_legacy() tests.
+			'valued async'    => array( '<script async="async" src="https://example.com/b.js"></script>' ),
+			// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for add_defer_attribute_legacy() tests.
+			'uppercase async' => array( '<script ASYNC src="https://example.com/c.js"></script>' ),
+		);
+	}
+
+	/**
+	 * Test that the legacy defer pre-checks are case- and quote-insensitive
+	 * (issue #1218 review).
+	 *
+	 * DEFER, single-quoted or spaced type='module', and valued defer must all
+	 * be observed so no second attribute is stamped.
+	 *
+	 * @param string $tag Fixture tag markup already deferred or modular.
+	 */
+	#[DataProvider( 'provide_legacy_prefixed_tags' )]
+	public function test_add_defer_attribute_legacy_skips_prefixed_tags( string $tag ): void {
+		$main = $this->make_legacy_main();
+
+		$this->assertSame( $tag, $main->add_defer_attribute_legacy( $tag, 'already-deferred' ), 'An already-deferred or module tag must be returned untouched.' );
+	}
+
+	/**
+	 * Already-deferred or module tags in various spellings.
+	 *
+	 * @return array<string, array{0: string}>
+	 */
+	public static function provide_legacy_prefixed_tags(): array {
+		return array(
+			// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for add_defer_attribute_legacy() tests.
+			'lowercase defer'         => array( '<script defer src="https://example.com/a.js"></script>' ),
+			// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for add_defer_attribute_legacy() tests.
+			'uppercase DEFER'         => array( '<script DEFER src="https://example.com/b.js"></script>' ),
+			// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for add_defer_attribute_legacy() tests.
+			'valued defer'            => array( '<script defer="defer" src="https://example.com/c.js"></script>' ),
+			// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for add_defer_attribute_legacy() tests.
+			'double-quoted module'    => array( '<script type="module" src="https://example.com/d.js"></script>' ),
+			// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for add_defer_attribute_legacy() tests.
+			'single-quoted module'    => array( "<script type='module' src='https://example.com/e.js'></script>" ),
+			// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for add_defer_attribute_legacy() tests.
+			'spaced uppercase module' => array( '<script TYPE = "MODULE" src="https://example.com/f.js"></script>' ),
+		);
+	}
+
+	/**
+	 * Test that `async` inside a quoted attribute value does not suppress the
+	 * legacy defer stamp (issue #1218).
+	 *
+	 * Quote-masking must keep values like data-note="use async fallback"
+	 * from counting as the real boolean attribute.
+	 */
+	public function test_add_defer_attribute_legacy_ignores_async_inside_quoted_value(): void {
+		$main = $this->make_legacy_main();
+
+		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for add_defer_attribute_legacy() tests.
+		$tag    = '<script data-note="use async fallback" src="https://example.com/a.js"></script>';
+		$result = $main->add_defer_attribute_legacy( $tag, 'quoted-async' );
+
+		$this->assertStringContainsString( ' defer ', $result, 'Quoted-value async must not suppress the defer stamp.' );
+		$this->assertSame( 1, substr_count( strtolower( $result ), ' defer' ), 'Exactly one defer attribute must be emitted.' );
+	}
+
+	/**
+	 * Test that a plain tag still receives defer through the legacy fallback.
+	 */
+	public function test_add_defer_attribute_legacy_adds_defer_to_plain_tag(): void {
+		$main = $this->make_legacy_main();
+
+		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for add_defer_attribute_legacy() tests.
+		$tag    = '<script src="https://example.com/plain.js"></script>';
+		$result = $main->add_defer_attribute_legacy( $tag, 'plain' );
+
+		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for add_defer_attribute_legacy() tests.
+		$this->assertSame( '<script defer src="https://example.com/plain.js"></script>', $result );
+	}
+
+	/**
+	 * Test the native defer-strategy capability predicate matrix (issue #1218).
+	 *
+	 * @param string|null $wp_version      Simulated $GLOBALS['wp_version'] (null = unset, falls back to get_bloginfo).
+	 * @param string      $bloginfo        Simulated get_bloginfo('version') return.
+	 * @param bool        $api_available   Whether wp_script_add_data() exists.
+	 * @param bool        $expected        Expected predicate result.
+	 */
+	#[DataProvider( 'provide_native_defer_strategy_cases' )]
+	public function test_supports_native_defer_strategy_matrix( ?string $wp_version, string $bloginfo, bool $api_available, bool $expected ): void {
+		if ( null === $wp_version ) {
+			unset( $GLOBALS['wp_version'] );
+		} else {
+			$GLOBALS['wp_version'] = $wp_version;
+		}
+		Functions\when( 'get_bloginfo' )->justReturn( $bloginfo );
+		Functions\when( 'function_exists' )->alias(
+			static function ( $function_name ) use ( $api_available ) {
+				if ( 'wp_script_add_data' === $function_name ) {
+					return $api_available;
+				}
+				return \function_exists( $function_name );
+			}
+		);
+
+		$this->assertSame( $expected, Main::supports_native_defer_strategy() );
+	}
+
+	/**
+	 * Native defer-strategy predicate cases.
+	 *
+	 * The WP_Scripts stand-in at the end of this file carries the genuinely-6.3
+	 * get_eligible_loading_strategy() method, so the method probe passes and
+	 * each case isolates the version/API dimension under test.
+	 *
+	 * @return array<string, array{0: string|null, 1: string, 2: bool, 3: bool}>
+	 */
+	public static function provide_native_defer_strategy_cases(): array {
+		return array(
+			'wp 6.2 with api routes to regex fallback'   => array( '6.2', '6.2', true, false ),
+			'wp 6.3-alpha with api routes to native'     => array( '6.3-alpha', '6.3-alpha', true, true ),
+			'wp 6.9 with api routes to native'           => array( '6.9', '6.9', true, true ),
+			'wp 6.9 without api fails open to fallback'  => array( '6.9', '6.9', false, false ),
+			'wp 6.2 without api fails open to fallback'  => array( '6.2', '6.2', false, false ),
+			'empty version fails open to fallback'       => array( '', '', true, false ),
+			'bloginfo fallback version routes to native' => array( null, '6.3', true, true ),
+			'bloginfo fallback below floor stays on legacy' => array( null, '6.2.5', true, false ),
+		);
+	}
+
+	/**
+	 * Test the native fetchpriority capability predicate (issue #1218).
+	 *
+	 * @param string|null $wp_version Simulated $GLOBALS['wp_version'] (null = unset, falls back to get_bloginfo).
+	 * @param string      $bloginfo   Simulated get_bloginfo('version') return.
+	 * @param bool        $expected   Expected predicate result.
+	 */
+	#[DataProvider( 'provide_native_fetchpriority_cases' )]
+	public function test_supports_native_script_fetchpriority_matrix( ?string $wp_version, string $bloginfo, bool $expected ): void {
+		if ( null === $wp_version ) {
+			unset( $GLOBALS['wp_version'] );
+		} else {
+			$GLOBALS['wp_version'] = $wp_version;
+		}
+		Functions\when( 'get_bloginfo' )->justReturn( $bloginfo );
+
+		$this->assertSame( $expected, Main::supports_native_script_fetchpriority() );
+	}
+
+	/**
+	 * Native fetchpriority predicate cases.
+	 *
+	 * The WP_Script_Modules stand-in at the end of this file carries the
+	 * genuinely-6.9 set_fetchpriority() method, so the API probe passes and
+	 * each case isolates the version dimension under test.
+	 *
+	 * @return array<string, array{0: string|null, 1: string, 2: bool}>
+	 */
+	public static function provide_native_fetchpriority_cases(): array {
+		return array(
+			'wp 6.8 stays on regex fallback'             => array( '6.8', '6.8', false ),
+			'wp 6.9-alpha with api routes to native'     => array( '6.9-alpha', '6.9-alpha', true ),
+			'wp 6.9 with api routes to native'           => array( '6.9', '6.9', true ),
+			'bloginfo fallback version routes to native' => array( null, '6.9', true ),
+		);
 	}
 
 	/**
@@ -1840,6 +2120,23 @@ if ( ! class_exists( 'WP_Script_Modules' ) ) {
 		public function get_registered( $id ) {
 			return $this->registered[ $id ] ?? null;
 		}
+
+		/**
+		 * Simulate the genuinely-6.9 fetchpriority setter for the capability probe.
+		 *
+		 * Core added WP_Script_Modules::set_fetchpriority() in 6.9 (Trac
+		 * #61734); Main::supports_native_script_fetchpriority() probes it via
+		 * method_exists(). Never called by the plugin on this stand-in —
+		 * presence is the signal.
+		 *
+		 * @param string $id       Module id (unused).
+		 * @param string $priority Priority (unused).
+		 * @return bool
+		 */
+		public function set_fetchpriority( $id, $priority ) {
+			unset( $id, $priority );
+			return true;
+		}
 	}
 }
 
@@ -1863,6 +2160,22 @@ if ( ! class_exists( 'WP_Scripts' ) ) {
 		 * @var array
 		 */
 		public $registered = array();
+
+		/**
+		 * Simulate the genuinely-6.3 strategy method for the capability probe.
+		 *
+		 * Core added WP_Scripts::get_eligible_loading_strategy() in 6.3
+		 * (changeset 56033); Main::supports_native_defer_strategy() probes
+		 * it via method_exists() to catch backported/filtered version
+		 * strings. Never called by the plugin — presence is the signal.
+		 *
+		 * @param string $handle Script handle (unused).
+		 * @return string
+		 */
+		private function get_eligible_loading_strategy( $handle ) { // phpcs:ignore Universal.NamingConventions.NoReservedKeywordParameterNames.stringFound -- Mirrors core WP_Scripts::get_eligible_loading_strategy() signature.
+			unset( $handle );
+			return '';
+		}
 	}
 }
 // phpcs:enable Generic.Files.OneObjectStructurePerFile
