@@ -763,6 +763,16 @@ const loadScript = ( script ) => {
 
 			copyAllowedScriptAttrs( script, replacement );
 
+			// Stamp the surviving node (not the placeholder): loadScriptsByPriority
+			// marks the placeholder after replaceChild() swaps it out, so without
+			// this the live element never carries data-wppo-delay-loaded and
+			// dedup works only incidentally via selector mismatch (#1217 review).
+			try {
+				replacement.setAttribute( 'data-wppo-delay-loaded', '1' );
+			} catch {
+				// Marking is best-effort; loading still proceeds.
+			}
+
 			replacement.removeAttribute( 'wppo-src' );
 			replacement.setAttribute( 'src', src );
 
@@ -793,6 +803,13 @@ const loadScript = ( script ) => {
 
 			// Copy allowlisted attributes from the original node to the replacement.
 			copyAllowedScriptAttrs( script, replacement );
+
+			// Stamp the surviving node — see the external branch above (#1217 review).
+			try {
+				replacement.setAttribute( 'data-wppo-delay-loaded', '1' );
+			} catch {
+				// Marking is best-effort; loading still proceeds.
+			}
 
 			replacement.text = script.text;
 

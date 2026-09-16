@@ -815,11 +815,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 					// Add strategy and priority data attributes for inline scripts.
 					// Execution-order preservation (#1217): carry original
 					// async/defer semantics so lazyload.js replays defer in
-					// document order. Fill-gaps-only.
+					// document order. Fill-gaps-only. The attr test runs
+					// against the attributes with quoted values stripped so
+					// `async`/`defer` inside attribute VALUES never counts as
+					// the real boolean attribute (#1217 review).
 					if ( false === strpos( $attributes, 'data-wppo-delay-exec' ) ) {
-						if ( preg_match( '/\sasync(?:\s|=|>|\/)/i', $attributes ) ) {
+						$attrs_unquoted = preg_replace( '/"[^"]*"|\'[^\']*\'/', '""', $attributes );
+						if ( ! is_string( $attrs_unquoted ) ) {
+							$attrs_unquoted = $attributes;
+						}
+						if ( preg_match( '/\sasync(?=[\s=\/>])/i', $attrs_unquoted ) ) {
 							$attributes .= ' data-wppo-delay-exec="async"';
-						} elseif ( preg_match( '/\sdefer(?:\s|=|>|\/)/i', $attributes ) ) {
+						} elseif ( preg_match( '/\sdefer(?=[\s=\/>])/i', $attrs_unquoted ) ) {
 							$attributes .= ' data-wppo-delay-exec="defer"';
 						}
 					}
@@ -970,6 +977,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 * user denylist additions, user allowlist (wins), and cross-origin
 		 * host detection decide. Fail-open to false on any error.
 		 *
+		 * Handle-vs-markup limitation: the buffered path sees only the tag
+		 * attributes and inline content — the WP script handle is unavailable
+		 * here — so denylist/allowlist entries that match a handle keyword
+		 * (e.g. a handle containing 'gtag' with an opaque src) delay via the
+		 * `script_loader_tag` filter path but stay eager here. When relying on
+		 * handle keywords, also add a matching src/attribute fragment to the
+		 * denylist (or filter) so both paths agree.
+		 *
 		 * @since NEXT
 		 * @param string $attributes Script attributes string.
 		 * @param string $content    Inline script content.
@@ -986,19 +1001,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 					return false;
 				}
 				$haystack = $attributes . ' ' . $content;
-				// User allowlist wins.
-				$allow_raw = $file_opt['delayJSThirdPartyAllowlist'] ?? '';
+				// User allowlist wins. The settings-derived list is built
+				// first and passed into the filter (mirroring
+				// Main::get_delay_js_third_party_allowlist()) so filters
+				// written as array_merge($list, [...]) keep the user's
+				// textarea entries on this path too (#1217 review).
+				$settings_allowlist = array();
+				$allow_raw          = $file_opt['delayJSThirdPartyAllowlist'] ?? '';
 				if ( is_string( $allow_raw ) && '' !== trim( $allow_raw ) ) {
-					foreach ( (array) Util::process_urls( $allow_raw ) as $allowed ) {
-						$allowed = trim( (string) $allowed );
-						if ( '' !== $allowed && false !== stripos( $haystack, $allowed ) ) {
-							return false;
-						}
+					$settings_allowlist = (array) Util::process_urls( $allow_raw );
+				} elseif ( is_array( $allow_raw ) ) {
+					$settings_allowlist = array_values( array_filter( array_map( 'strval', $allow_raw ) ) );
+				}
+				foreach ( $settings_allowlist as $allowed ) {
+					$allowed = trim( (string) $allowed );
+					if ( '' !== $allowed && false !== stripos( $haystack, $allowed ) ) {
+						return false;
 					}
 				}
 				if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_delay_js_third_party_allowlist' ) ) {
 					try {
-						$filtered = apply_filters( 'wppo_delay_js_third_party_allowlist', array() );
+						$filtered = apply_filters( 'wppo_delay_js_third_party_allowlist', $settings_allowlist );
 						if ( is_array( $filtered ) ) {
 							foreach ( $filtered as $allowed ) {
 								$allowed = trim( (string) $allowed );
@@ -1031,7 +1054,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 						return true;
 					}
 				}
-				// Cross-origin host auto-detection.
+				// Cross-origin host auto-detection. Same-site hosts (apex, www,
+				// first-party subdomains/CDN) stay eager — only genuinely
+				// foreign hosts auto-qualify (#1217 review). Delegates to
+				// Main::is_same_site_script_host() with an inline fallback.
 				$site_host = '';
 				$src_host  = '';
 				if ( function_exists( 'home_url' ) && function_exists( 'wp_parse_url' ) ) {
@@ -1052,7 +1078,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 						unset( $e );
 					}
 				}
-				return '' !== $src_host && '' !== $site_host && $src_host !== $site_host;
+				if ( '' === $src_host || '' === $site_host ) {
+					return false;
+				}
+				try {
+					if ( class_exists( Main::class ) && method_exists( Main::class, 'is_same_site_script_host' ) ) {
+						return ! Main::is_same_site_script_host( $src_host, $site_host );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return false;
+				}
+				$norm_site = strtolower( (string) preg_replace( '/^www\./', '', rtrim( $site_host, '.' ) ) );
+				$norm_src  = strtolower( (string) preg_replace( '/^www\./', '', rtrim( $src_host, '.' ) ) );
+				if ( '' === $norm_site || '' === $norm_src ) {
+					return false;
+				}
+				if ( $norm_src === $norm_site ) {
+					return false;
+				}
+				return substr( $norm_src, -strlen( '.' . $norm_site ) ) !== '.' . $norm_site && substr( $norm_site, -strlen( '.' . $norm_src ) ) !== '.' . $norm_src;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;

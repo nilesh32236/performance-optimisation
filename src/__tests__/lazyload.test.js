@@ -1210,6 +1210,92 @@ describe( 'Lazy Load (lazyload.js)', () => {
 		} );
 	} );
 
+	describe( 'delay-JS maturity semantics (#1217)', () => {
+		beforeEach( () => {
+			delete global.IntersectionObserver;
+		} );
+
+		afterEach( () => {
+			delete global.wppoAllowedScriptHosts;
+			delete global.IntersectionObserver;
+		} );
+
+		it( 'loads only interaction-strategy scripts on first flush (idle stays pending)', async () => {
+			document.body.innerHTML =
+				'<script type="wppo/javascript" wppo-src="/interaction-app.js"></script>' +
+				'<script type="wppo/javascript" wppo-src="/idle-app.js" data-wppo-delay-strategy="idle"></script>';
+			await bootLazyload();
+			// Flush the async flush one microtask turn (the swap itself is
+			// synchronous; the idle fallback is a 2000ms timer that never
+			// fires here).
+			await Promise.resolve();
+
+			expect(
+				document.querySelector( 'script[src="/interaction-app.js"]' )
+			).toBeInTheDocument();
+			// The idle placeholder must not be pulled in early.
+			expect(
+				document.querySelector( 'script[wppo-src="/idle-app.js"]' )
+			).toBeInTheDocument();
+			expect(
+				document.querySelector( 'script[src="/idle-app.js"]' )
+			).toBeNull();
+		} );
+
+		it( 'stamps the live replacement with data-wppo-delay-loaded', async () => {
+			document.body.innerHTML =
+				'<script type="wppo/javascript" wppo-src="/interaction-app.js"></script>';
+			await bootLazyload();
+			await Promise.resolve();
+
+			const replacement = document.querySelector(
+				'script[src="/interaction-app.js"]'
+			);
+			expect( replacement ).toBeInTheDocument();
+			expect( replacement.getAttribute( 'data-wppo-delay-loaded' ) ).toBe(
+				'1'
+			);
+		} );
+
+		it( 'skips already-loaded placeholders so loaders never double-execute', async () => {
+			document.body.innerHTML =
+				'<script type="wppo/javascript" wppo-src="/interaction-app.js"></script>' +
+				'<script type="wppo/javascript" wppo-src="/skipped-app.js" data-wppo-delay-loaded="1"></script>';
+			await bootLazyload();
+			await Promise.resolve();
+
+			expect(
+				document.querySelector( 'script[src="/interaction-app.js"]' )
+			).toBeInTheDocument();
+			// Pre-marked placeholder is left untouched (no live duplicate).
+			expect(
+				document.querySelector( 'script[src="/skipped-app.js"]' )
+			).toBeNull();
+			expect(
+				document.querySelector( 'script[wppo-src="/skipped-app.js"]' )
+			).toBeInTheDocument();
+		} );
+
+		it( 'hydrates an async-stamped interaction script', async () => {
+			document.body.innerHTML =
+				'<script type="wppo/javascript" wppo-src="/async-app.js" data-wppo-delay-exec="async"></script>';
+			await bootLazyload();
+			await Promise.resolve();
+			// Async scripts resolve via Promise.allSettled; allow the
+			// microtask queue to flush (jsdom never fires onload, but the
+			// synchronous swap is what this asserts).
+			await new Promise( ( r ) => setTimeout( r, 0 ) );
+
+			const replacement = document.querySelector(
+				'script[src="/async-app.js"]'
+			);
+			expect( replacement ).toBeInTheDocument();
+			expect( replacement.getAttribute( 'data-wppo-delay-loaded' ) ).toBe(
+				'1'
+			);
+		} );
+	} );
+
 	describe( 'teardown releases injected config globals', () => {
 		it( 'deletes wppoNativeLazy and wppoDelayConfig', () => {
 			mockIntersectionObserver();

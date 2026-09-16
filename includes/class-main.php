@@ -3751,20 +3751,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// (e.g. data-wp-fetchpriority=, which core emits alongside the
 					// real attribute) never count as a real fetchpriority.
 					if ( ! preg_match( '/\sfetchpriority\s*=/i', (string) $tag ) ) {
-						$tag = str_replace( '<script ', '<script fetchpriority="low" ', $tag );
+						$tag = self::inject_delay_script_attr( $tag, 'fetchpriority="low" ' );
 					}
 					// Execution-order preservation (#1217): record the original
 					// async/defer semantics so lazyload.js can replay them —
 					// defer in document order (sequential), async in any order.
 					// Fill-gaps-only: never duplicate when already stamped.
+					// The attr test runs against the tag with quoted values
+					// stripped so `async`/`defer` inside attribute VALUES
+					// (e.g. data-x="async loader") never counts as the real
+					// boolean attribute (#1217 review).
 					if ( false === strpos( $tag, 'data-wppo-delay-exec' ) ) {
-						if ( preg_match( '/\sasync(?:\s|=|>|\/)/i', $tag ) ) {
-							$tag = str_replace( '<script ', '<script data-wppo-delay-exec="async" ', $tag );
-						} elseif ( preg_match( '/\sdefer(?:\s|=|>|\/)/i', $tag ) ) {
-							$tag = str_replace( '<script ', '<script data-wppo-delay-exec="defer" ', $tag );
+						$tag_unquoted = preg_replace( '/"[^"]*"|\'[^\']*\'/', '""', $tag );
+						if ( ! is_string( $tag_unquoted ) ) {
+							$tag_unquoted = $tag;
+						}
+						if ( preg_match( '/\sasync(?=[\s=\/>])/i', $tag_unquoted ) ) {
+							$tag = self::inject_delay_script_attr( $tag, 'data-wppo-delay-exec="async" ' );
+						} elseif ( preg_match( '/\sdefer(?=[\s=\/>])/i', $tag_unquoted ) ) {
+							$tag = self::inject_delay_script_attr( $tag, 'data-wppo-delay-exec="defer" ' );
 						}
 					}
-					$tag = str_replace( ' src', ' wppo-src', $tag );
+					// Whitespace-anchored and case-insensitive so `<SCRIPT
+					// SRC=…>`, `<script\tsrc=…>` and `<script\nsrc=…>` variants
+					// rewrite identically to lowercase markup; anchored so
+					// `data-src`/`wppo-src` (dash-prefixed) never match, and
+					// fill-gaps-safe on re-processing (#1217 review).
+					$rewritten = preg_replace( '/\ssrc(?=[\s=])/i', ' wppo-src', $tag );
+					$tag       = is_string( $rewritten ) ? $rewritten : $tag;
 					// Normalise an executable JS type into the delay marker,
 					// carrying the ORIGINAL type through wppo-type so
 					// lazyload.js can restore it (type="module" becomes
@@ -3792,26 +3806,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					if ( false !== strpos( $tag, 'wppo-src' )
 						&& false === strpos( $tag, 'wppo/javascript' )
 					) {
-						$tag = str_replace( '<script ', '<script type="wppo/javascript" wppo-type="text/javascript" ', $tag );
+						$tag = self::inject_delay_script_attr( $tag, 'type="wppo/javascript" wppo-type="text/javascript" ' );
 					}
 
 						// Determine delay strategy for this handle.
 						$strategy = $this->get_delay_strategy_for_handle( $handle );
 					if ( 'interaction' !== $strategy ) {
-						$tag = str_replace(
-							'<script ',
-							'<script data-wppo-delay-strategy="' . esc_attr( $strategy ) . '" ',
-							$tag
+						$tag = self::inject_delay_script_attr(
+							$tag,
+							'data-wppo-delay-strategy="' . esc_attr( $strategy ) . '" '
 						);
 					}
 
 						// Determine priority for this handle.
 						$priority = $this->get_delay_priority_for_handle( $handle );
 					if ( 'normal' !== $priority ) {
-						$tag = str_replace(
-							'<script ',
-							'<script data-wppo-delay-priority="' . esc_attr( $priority ) . '" ',
-							$tag
+						$tag = self::inject_delay_script_attr(
+							$tag,
+							'data-wppo-delay-priority="' . esc_attr( $priority ) . '" '
 						);
 					}
 				}
@@ -5548,6 +5560,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					}
 				}
 				// Host-based auto-detection: external host != site host.
+				// Same-site hosts (apex, www, first-party subdomains/CDN) stay
+				// eager — only genuinely foreign hosts auto-qualify (#1217
+				// review). Fail-open: empty/unparseable hosts are not candidates.
 				$site_host = '';
 				if ( function_exists( 'wp_parse_url' ) ) {
 					$home = function_exists( 'home_url' ) ? home_url() : '';
@@ -5563,7 +5578,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					}
 					$src_host = strtolower( (string) wp_parse_url( $candidate, PHP_URL_HOST ) );
 				}
-				if ( '' !== $src_host && '' !== $site_host && $src_host !== $site_host ) {
+				if ( '' !== $src_host && '' !== $site_host && ! self::is_same_site_script_host( $src_host, $site_host ) ) {
 					return true;
 				}
 				// Relative src or same host with no denylist hit: not a candidate.
@@ -5571,6 +5586,72 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;
+			}
+		}
+
+		/**
+		 * Whether two script hosts belong to the same site (issue #1217 review).
+		 *
+		 * Hosts are lowercased, trailing dots trimmed, and a leading `www.`
+		 * stripped, then compared equal-or-subdomain in either direction, so a
+		 * first-party CDN (`cdn.example.com`), `www` vs apex mismatches, and
+		 * apex-vs-subdomain pairs stay eager instead of being misclassified as
+		 * third-party. Only genuinely foreign hosts auto-qualify. Fail-open to
+		 * false (not same-site) on any error.
+		 *
+		 * Note: sibling subdomains sharing only a parent (e.g.
+		 * `shop.example.com` vs `cdn.example.com`) are conservatively treated
+		 * as third-party; add the CDN host to the allowlist in that setup.
+		 *
+		 * @since NEXT
+		 * @param string $a First host.
+		 * @param string $b Second host.
+		 * @return bool True when both hosts belong to the same site.
+		 */
+		public static function is_same_site_script_host( string $a, string $b ): bool {
+			try {
+				$normalize = static function ( string $host ): string {
+					$host = strtolower( trim( $host ) );
+					$host = rtrim( $host, '.' );
+					$host = (string) preg_replace( '/^www\./', '', $host );
+					return $host;
+				};
+				$a         = $normalize( $a );
+				$b         = $normalize( $b );
+				if ( '' === $a || '' === $b ) {
+					return false;
+				}
+				if ( $a === $b ) {
+					return true;
+				}
+				return substr( $a, -strlen( '.' . $b ) ) === '.' . $b || substr( $b, -strlen( '.' . $a ) ) === '.' . $a;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Inject an attribute string into a script open tag (issue #1217 review).
+		 *
+		 * Case-insensitive single-occurrence insert that handles `<script>`,
+		 * `<script `, `<script\n` (and uppercase `<SCRIPT …>`) variants, so
+		 * every delayed tag is stamped even when core emits non-lowercase
+		 * markup. Falls back to the original tag when no script open tag is
+		 * found or the rewrite fails.
+		 *
+		 * @since NEXT
+		 * @param string $tag    Script tag markup.
+		 * @param string $insert Attribute string including trailing space, e.g. 'fetchpriority="low" '.
+		 * @return string Tag with the attributes injected.
+		 */
+		private static function inject_delay_script_attr( string $tag, string $insert ): string {
+			try {
+				$result = preg_replace( '/<script(?=[\s>])/i', '<script ' . $insert, $tag, 1 );
+				return is_string( $result ) ? $result : $tag;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $tag;
 			}
 		}
 
