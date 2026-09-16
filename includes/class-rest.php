@@ -1194,9 +1194,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// write time so 'not-a-number'/0/500 self-heal instead of
 			// persisting verbatim.
 			if ( 'file_optimisation' === $tab && ! isset( $params['settings']['ccssGenTimeout'] ) && isset( $options['file_optimisation']['ccssGenTimeout'] ) ) {
-				$stored                               = $options['file_optimisation']['ccssGenTimeout'];
-				$stored                               = is_numeric( $stored ) ? (int) $stored : 25;
-				$sanitized_settings['ccssGenTimeout'] = ( $stored >= 1 && $stored <= 120 ) ? $stored : 25;
+					$sanitized_settings['ccssGenTimeout'] = Util::sanitize_ccss_gen_timeout( $options['file_optimisation']['ccssGenTimeout'] );
 			}
 			if ( 'file_optimisation' === $tab && ! isset( $params['settings']['usedCssQueueCap'] ) && isset( $options['file_optimisation']['usedCssQueueCap'] ) ) {
 				$sanitized_settings['usedCssQueueCap'] = absint( $options['file_optimisation']['usedCssQueueCap'] );

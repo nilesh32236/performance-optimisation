@@ -4678,6 +4678,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Sanitize the CCSS generation timeout to 1..120 seconds (issue #1235).
+		 *
+		 * Single source of truth for the budget clamp so the write-time
+		 * sanitizer, the REST partial-save preserve, and the read-time getter
+		 * can never drift: one legacy row yields one budget on every path.
+		 * Non-numeric, zero, negative, and oversized values fail open to the
+		 * 25s default (an uncapped generation is the failure mode the budget
+		 * exists to prevent).
+		 *
+		 * @param mixed $value Raw candidate value.
+		 * @return int Budget in seconds, 1..120 (default 25).
+		 * @since NEXT
+		 */
+		public static function sanitize_ccss_gen_timeout( $value ): int {
+			if ( is_array( $value ) ) {
+				return 25;
+			}
+			$timeout = is_numeric( $value ) ? (int) $value : 25;
+			return ( $timeout >= 1 && $timeout <= 120 ) ? $timeout : 25;
+		}
+
+		/**
 		 * Sanitizes the settings array recursively.
 		 *
 		 * Shared by every settings entry point (REST API, WP-CLI import/update)
@@ -4969,18 +4991,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				}
 
 				// CCSS generation timeout (issue #1235) — int clamped to
-				// 1-120 (seconds). Unrecognized values fail open to 25 so
-				// generation is always bounded. Pinned before the generic
-				// is_numeric branch so 0/negative/huge values can never be
-				// stored; get_ccss_gen_timeout() still clamps at read time
-				// as defense-in-depth.
+				// 1-120 (seconds) via the shared helper so write-time healing
+				// matches the read-time getter and REST preserve exactly.
+				// Pinned before the generic is_numeric branch so 0/negative/
+				// huge values can never be stored.
 				if ( 'ccssGenTimeout' === $safe_key ) {
-					if ( is_array( $value ) ) {
-						$sanitized[ $safe_key ] = 25;
-						continue;
-					}
-					$timeout                = is_numeric( $value ) ? (int) $value : 25;
-					$sanitized[ $safe_key ] = ( $timeout >= 1 && $timeout <= 120 ) ? $timeout : 25;
+					$sanitized[ $safe_key ] = self::sanitize_ccss_gen_timeout( $value );
 					continue;
 				}
 

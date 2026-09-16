@@ -848,12 +848,14 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 		\PerformanceOptimise\Inc\Util::clear_settings_cache();
 		$this->assertSame( 25, Critical_CSS::get_ccss_gen_timeout() );
 
-		// Oversized values clamp to the hard upper bound.
+		// Oversized values heal to the default via the shared helper
+		// (issue #1235 review): write-time, REST preserve, and read-time
+		// paths all yield one budget for one stored row.
 		$this->option_map['wppo_settings'] = array(
 			'file_optimisation' => array( 'ccssGenTimeout' => 500 ),
 		);
 		\PerformanceOptimise\Inc\Util::clear_settings_cache();
-		$this->assertSame( 120, Critical_CSS::get_ccss_gen_timeout() );
+		$this->assertSame( 25, Critical_CSS::get_ccss_gen_timeout() );
 	}
 
 	/**
