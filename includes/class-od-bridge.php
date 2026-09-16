@@ -342,7 +342,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 				}
 			}
 
-			return array_values( array_filter( $urls ) );
+			$filtered = array();
+			foreach ( $urls as $url ) {
+				if ( ! is_string( $url ) || '' === $url ) {
+					continue;
+				}
+				// Reject absolute URLs with non-http(s) schemes; relative
+				// URLs (no scheme) stay eligible for same-site resolution.
+				$scheme = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url, PHP_URL_SCHEME ) : parse_url( $url, PHP_URL_SCHEME ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url() is unavailable.
+				if ( is_string( $scheme ) && '' !== $scheme && ! in_array( strtolower( $scheme ), array( 'http', 'https' ), true ) ) {
+					continue;
+				}
+				$filtered[] = $url;
+			}
+
+			return array_values( array_filter( $filtered ) );
 		}
 
 		/**
@@ -585,8 +599,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 			}
 
 			if ( is_string( $element ) ) {
-				// Direct URL string.
-				return $element;
+				// Direct URL string: sanitize and refuse non-http(s) schemes
+				// (javascript:/data:) at the source; relative URLs pass.
+				$clean = function_exists( 'esc_url_raw' ) ? esc_url_raw( $element ) : $element;
+				if ( ! is_string( $clean ) || '' === $clean ) {
+					return '';
+				}
+				$scheme = function_exists( 'wp_parse_url' ) ? wp_parse_url( $clean, PHP_URL_SCHEME ) : parse_url( $clean, PHP_URL_SCHEME ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url() is unavailable.
+				if ( is_string( $scheme ) && '' !== $scheme && ! in_array( strtolower( $scheme ), array( 'http', 'https' ), true ) ) {
+					return '';
+				}
+				return $clean;
 			}
 
 			if ( is_object( $element ) ) {

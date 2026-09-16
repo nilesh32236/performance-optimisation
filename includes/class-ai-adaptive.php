@@ -1041,12 +1041,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			arsort( $url_scores );
 			$top_paths = array_slice( array_keys( $url_scores ), 0, 2 );
 
-			// Resolve paths to absolute URLs for speculation.
+			// Resolve paths to absolute URLs for speculation, applying the
+			// same guards as the RUM-gated list rule: reject query/fragment
+			// keys (public-beacon-influenced), then same-site + commerce
+			// filtering before persisting.
 			$prefetch_urls = array();
 			foreach ( $top_paths as $path ) {
+				if ( ! is_string( $path ) || '' === $path ) {
+					continue;
+				}
+				if ( false !== strpos( $path, '?' ) || false !== strpos( $path, '#' ) ) {
+					continue;
+				}
 				$url             = Util::cached_home_url( $path );
 				$prefetch_urls[] = esc_url_raw( $url );
 			}
+			$prefetch_urls = self::filter_same_site_urls( $prefetch_urls );
+			$excludes      = self::get_commerce_exclude_paths();
+			$prefetch_urls = array_values(
+				array_filter(
+					$prefetch_urls,
+					static function ( $candidate ) use ( $excludes ) {
+						return ! self::is_speculation_commerce_url( $candidate, $excludes );
+					}
+				)
+			);
 
 			// Most-frequently disabled handles = least-used (candidates to exclude).
 			$exclude_js  = self::get_disabled_assets( '_wppo_disabled_scripts' );

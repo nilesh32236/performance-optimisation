@@ -220,13 +220,12 @@ if ( ! function_exists( 'wppo_redis_connect_sentinel' ) ) {
 					}
 				}
 			} catch ( \Throwable $e ) {
+				unset( $e );
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-					// Same constraint as above: the drop-in context has no WP functions,
-					// so this must stay on error_log, strictly WP_DEBUG-gated. The raw
-					// extension exception text is used because $errors[] below carries
-					// the translated, detail-free message.
+					// Static message only: raw extension text commonly embeds
+					// host:port and must never reach the error log.
 					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-					error_log( 'WPPO Sentinel node connection failed: ' . $e->getMessage() );
+					error_log( 'WPPO Sentinel node connection failed.' );
 				}
 				$errors[] = __( 'Sentinel node connection failed.', 'performance-optimisation' );
 				continue;
@@ -516,14 +515,72 @@ if ( ! function_exists( 'wppo_apply_redis_options' ) ) {
 		if ( ! empty( $config['use_tls'] ) && defined( '\Redis::OPT_SSL_VERIFY_PEER' ) ) {
 			try {
 				$verify = $config['tls_verify'] ?? true;
+				if ( ! $verify && defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					// Peer verification disabled (e.g. via filtered config):
+					// opportunistic encryption without MITM protection.
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					error_log( 'WPPO Redis TLS peer verification is disabled; connection is vulnerable to MITM.' );
+				}
 				$redis->setOption( \Redis::OPT_SSL_VERIFY_PEER, (bool) $verify ? 1 : 0 );
 				if ( ! empty( $config['tls_ca'] ) && is_string( $config['tls_ca'] ) && defined( '\Redis::OPT_SSL_CAFILE' ) ) {
-					$redis->setOption( \Redis::OPT_SSL_CAFILE, $config['tls_ca'] );
+					$ca_file = function_exists( 'wppo_validate_tls_ca_file' ) ? wppo_validate_tls_ca_file( $config['tls_ca'] ) : '';
+					if ( '' !== $ca_file ) {
+						$redis->setOption( \Redis::OPT_SSL_CAFILE, $ca_file );
+					} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+						// Fail closed to system CAs: an invalid CA path is
+						// ignored rather than passed to the extension.
+						// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+						error_log( 'WPPO Redis TLS CA file rejected; falling back to system CAs.' );
+					}
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
 		}
+	}
+}
+
+if ( ! function_exists( 'wppo_validate_tls_ca_file' ) ) {
+	/**
+	 * Validate a TLS CA bundle path for Redis SSL options.
+	 *
+	 * Rejects NUL bytes, traversal segments, and URL-style values, then
+	 * resolves via realpath() and requires an existing readable regular
+	 * file contained under WP_CONTENT_DIR or a system CA directory
+	 * (/etc/ssl, /usr/share/ca-certificates, /etc/pki/tls). Returns the
+	 * resolved path, or '' when invalid so callers fail closed to the
+	 * system CA store.
+	 *
+	 * @param string $path Raw CA file path from config.
+	 * @since NEXT
+	 * @return string Resolved path or '' when invalid.
+	 */
+	function wppo_validate_tls_ca_file( $path ) {
+		if ( ! is_string( $path ) || '' === $path ) {
+			return '';
+		}
+		if ( false !== strpos( $path, "\0" ) || false !== strpos( $path, '..' ) ) {
+			return '';
+		}
+		if ( (bool) preg_match( '#^[a-zA-Z][a-zA-Z0-9+.-]*://#', ltrim( $path ) ) ) {
+			return '';
+		}
+		$real = realpath( $path );
+		if ( ! is_string( $real ) || '' === $real || ! is_file( $real ) || ! is_readable( $real ) ) {
+			return '';
+		}
+		$normalized = str_replace( '\\', '/', $real );
+		$prefixes   = array( '/etc/ssl', '/usr/share/ca-certificates', '/etc/pki/tls' );
+		if ( defined( 'WP_CONTENT_DIR' ) && is_string( WP_CONTENT_DIR ) && '' !== WP_CONTENT_DIR ) {
+			$prefixes[] = str_replace( '\\', '/', (string) WP_CONTENT_DIR );
+		}
+		foreach ( $prefixes as $prefix ) {
+			$prefix = rtrim( $prefix, '/' );
+			if ( '' !== $prefix && ( $normalized === $prefix || 0 === strpos( $normalized, $prefix . '/' ) ) ) {
+				return $real;
+			}
+		}
+		return '';
 	}
 }
 

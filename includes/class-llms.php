@@ -114,7 +114,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 			$is_llms      = false;
 			$is_full      = false;
 			$which        = 'llms';
-			$request_uri  = isset( $_SERVER['REQUEST_URI'] ) && is_string( $_SERVER['REQUEST_URI'] ) ? (string) wp_unslash( $_SERVER['REQUEST_URI'] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			$request_uri  = isset( $_SERVER['REQUEST_URI'] ) && is_string( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotValidated -- Unslashed before sanitizing; read-only routing check.
 			$request_path = wp_parse_url( $request_uri, PHP_URL_PATH );
 
 			// Prefer query var when rewrite flushed; fallback to URI check.

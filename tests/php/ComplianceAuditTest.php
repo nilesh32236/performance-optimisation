@@ -119,7 +119,7 @@ class ComplianceAuditTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public static function debug_log_provider(): array {
 		return array(
-			'redis-connect-helper' => array( 'includes/redis-connect-helper.php', 3 ),
+			'redis-connect-helper' => array( 'includes/redis-connect-helper.php', 5 ),
 			'od-bridge'            => array( 'includes/class-od-bridge.php', 1 ),
 			'img-converter'        => array( 'includes/class-img-converter.php', 8 ),
 		);

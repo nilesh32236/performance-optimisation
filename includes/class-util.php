@@ -1063,7 +1063,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				if ( '' === $query && isset( $_SERVER['QUERY_STRING'] ) ) {
 					$query = (string) wp_unslash( $_SERVER['QUERY_STRING'] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Unslashed here; read-only routing check, no output.
 				}
-				$rest_route = isset( $_GET['rest_route'] ) ? (string) wp_unslash( $_GET['rest_route'] ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Read-only routing check, no state change or output.
+				$rest_route = isset( $_GET['rest_route'] ) ? sanitize_text_field( wp_unslash( $_GET['rest_route'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change or output.
 				if ( '' !== $path && self::is_admin_path( $path ) ) {
 					return true;
 				}
@@ -3762,21 +3762,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				}
 				if ( ! $fs->move( $tmp, $path, true ) ) {
 					$fs->delete( $tmp );
+					self::delete_php_backup( $fs, $path );
 					return false;
 				}
 				$written = $fs->get_contents( $path );
 				if ( ! is_string( $written ) || $written !== $contents ) {
 					self::restore_php_backup( $fs, $path, $original, $chmod );
+					self::delete_php_backup( $fs, $path );
 					$fs->delete( $tmp );
 					return false;
 				}
 				if ( null !== $expect && ! call_user_func( $expect, $written ) ) {
 					self::restore_php_backup( $fs, $path, $original, $chmod );
+					self::delete_php_backup( $fs, $path );
 					$fs->delete( $tmp );
 					return false;
 				}
 				if ( ! self::verify_php_syntax( $written ) ) {
 					self::restore_php_backup( $fs, $path, $original, $chmod );
+					self::delete_php_backup( $fs, $path );
 					$fs->delete( $tmp );
 					return false;
 				}
@@ -3803,6 +3807,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					}
 				} catch ( \Throwable $ignored ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Best-effort tmp cleanup must never throw.
 				}
+				self::delete_php_backup( $fs, $path );
 				return false;
 			}
 		}
@@ -3825,11 +3830,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			try {
 				if ( '' !== $original ) {
 					if ( $fs->put_contents( $path, $original, $chmod ) ) {
+						// In-memory restore won: the on-disk backup is stale
+						// secrets beside the live file — remove it best-effort.
+						self::delete_php_backup( $fs, $path );
 						return true;
 					}
 				}
 				if ( $fs->exists( $path . '.wppo-bak' ) ) {
 					if ( $fs->copy( $path . '.wppo-bak', $path, true ) ) {
+						// Fallback restore won: the backup copy is now
+						// redundant — remove it so secrets never linger.
+						self::delete_php_backup( $fs, $path );
 						return true;
 					}
 				}
@@ -3837,6 +3848,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				unset( $e );
 			}
 			return false;
+		}
+
+		/**
+		 * Best-effort deletion of the `.wppo-bak` backup beside a PHP file.
+		 *
+		 * The backup can hold full wp-config.php secrets (DB credentials +
+		 * salts) in a web-readable location, so every failure/restore path in
+		 * atomic_write_php_verified() must call this. Never throws.
+		 *
+		 * @param mixed  $fs Filesystem object.
+		 * @param string $path Final file path (backup is `$path.wppo-bak`).
+		 * @return void
+		 * @since NEXT
+		 */
+		private static function delete_php_backup( $fs, string $path ): void {
+			try {
+				$fs->delete( $path . '.wppo-bak' );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 
 		/**

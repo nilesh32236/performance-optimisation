@@ -2136,6 +2136,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * @since 1.0.0
 		 */
 		public static function get_img_path( string $source_image, string $format = 'webp' ): string {
+			// Allowlist the output extension: $format is interpolated as a
+			// file extension inside the wppo/ tree, so an arbitrary value
+			// (e.g. 'php') must never become a written path.
+			$format = strtolower( $format );
+			if ( ! in_array( $format, array( 'webp', 'avif' ), true ) ) {
+				return $source_image;
+			}
 			$normalized_source = wp_normalize_path( $source_image );
 			$is_already_local  = path_is_absolute( $normalized_source ) && (
 			0 === strpos( $normalized_source, wp_normalize_path( ABSPATH ) ) ||
@@ -2232,6 +2239,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * @since 1.0.0
 		 */
 		public static function get_img_url( string $source_image, string $format = 'webp' ): string {
+
+			$format = strtolower( $format );
+			if ( ! in_array( $format, array( 'webp', 'avif' ), true ) ) {
+				return $source_image;
+			}
 
 			$home_url = untrailingslashit( Util::cached_home_url() );
 
