@@ -39,6 +39,7 @@ const PreloadSettings = ( { options = {} } ) => {
 		speculationExcludeUrls: '',
 		speculationRumGating: true,
 		speculationTopUrlsLimit: 2,
+		speculationPrerenderList: false,
 		...options,
 	};
 
@@ -76,6 +77,7 @@ const PreloadSettings = ( { options = {} } ) => {
 		options.speculationExcludeUrls,
 		options.speculationRumGating,
 		options.speculationTopUrlsLimit,
+		options.speculationPrerenderList,
 	] );
 	useUnsavedChanges( settings, baseline );
 
@@ -161,6 +163,7 @@ const PreloadSettings = ( { options = {} } ) => {
 		options.speculationExcludeUrls,
 		options.speculationRumGating,
 		options.speculationTopUrlsLimit,
+		options.speculationPrerenderList,
 	] );
 
 	const speculationRules =
@@ -767,6 +770,23 @@ const PreloadSettings = ( { options = {} } ) => {
 											'performance-optimisation'
 										) }
 									</p>
+								</div>
+								<div className="wppo-field-group">
+									<SwitchField
+										label={ __(
+											'Prerender High-Value URLs',
+											'performance-optimisation'
+										) }
+										description={ __(
+											'Prerender the home page plus top visited URLs for near-instant navigation. Only safe same-origin pages are prerendered; cart, checkout, account, and logged-in views stay on prefetch or nothing.',
+											'performance-optimisation'
+										) }
+										name="speculationPrerenderList"
+										checked={ Boolean(
+											settings.speculationPrerenderList
+										) }
+										onChange={ handleChange( setSettings ) }
+									/>
 								</div>
 								<div className="wppo-field">
 									<label

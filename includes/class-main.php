@@ -238,6 +238,72 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private static string $delay_excluded_context_memo_sig = '';
 
 		/**
+		 * Per-request memo of speculation list URL validity.
+		 *
+		 * Keyed by URL + home URL + Woo-function fingerprint; avoids
+		 * re-running Woo URL lookups and wp_parse_url triplets when the
+		 * same candidates are validated by get_speculation_list_urls(),
+		 * get_prerender_list_urls(), and the register/filter paths on a
+		 * single request. Bounded (200 entries) for long-running
+		 * processes. Reset via reset_speculation_url_memo() (tests).
+		 *
+		 * @since NEXT
+		 * @var array<string, bool>
+		 */
+		private static array $speculation_url_validity_memo = array();
+
+		/**
+		 * Per-request memo of resolved speculation commerce paths.
+		 *
+		 * Null = not computed yet. Fingerprinted on Woo-function
+		 * availability so test fixtures defining wc_get_* after a first
+		 * resolution still see the new paths.
+		 *
+		 * @since NEXT
+		 * @var string[]|null
+		 */
+		private static ?array $speculation_commerce_paths_memo = null;
+
+		/**
+		 * Woo-function fingerprint the commerce-path memo was computed for.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		private static string $speculation_commerce_paths_sig = '';
+
+		/**
+		 * Per-request memo of normalized speculation URLs.
+		 *
+		 * @since NEXT
+		 * @var array<string, string>
+		 */
+		private static array $speculation_normalize_memo = array();
+
+		/**
+		 * Per-request memo of RUM top URLs keyed by fill limit.
+		 *
+		 * Reset via reset_speculation_url_memo() (tests).
+		 *
+		 * @since NEXT
+		 * @var array<int, string[]>
+		 */
+		private static array $speculation_rum_top_memo = array();
+
+		/**
+		 * Whether the object-path prerender rule was already added.
+		 *
+		 * Idempotency backstop for repeated `wp_load_speculation_rules`
+		 * firings on objects without `has_rule()`. Instance state so the
+		 * single production instance stays guarded while test instances
+		 * stay isolated.
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private bool $speculation_prerender_object_added = false;
+
+		/**
 		 * Cache instance for static HTML cache operations.
 		 *
 		 * @var   Cache|null
@@ -478,6 +544,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// requests). Multisite-safe: per-site wppo_settings only.
 			if ( ! isset( $this->options['preload_settings']['speculationTopUrlsLimit'] ) ) {
 				$this->options['preload_settings']['speculationTopUrlsLimit'] = 2;
+			}
+			// Existing installs whose stored settings predate the
+			// high-value prerender list toggle (issue #1237) inherit the
+			// off default in-memory here (no database write on front-end
+			// requests). Multisite-safe: per-site wppo_settings only.
+			if ( ! isset( $this->options['preload_settings']['speculationPrerenderList'] ) ) {
+				$this->options['preload_settings']['speculationPrerenderList'] = false;
 			}
 			// Existing installs whose stored settings predate the
 			// speculation-rules eagerness upgrade (issue #1215) inherit the
@@ -870,6 +943,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'admin_init', array( $this, 'maybe_migrate_ccss_safelist' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_css_queue_defaults' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_speculation_top_urls' ) );
+			add_action( 'admin_init', array( $this, 'maybe_migrate_speculation_prerender_list' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_rum_sample_rate' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_safe_mode' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_sandbox_preview' ) );
@@ -1729,6 +1803,55 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			Log::add( __( 'Added default RUM-weighted top-URL prefetch limit (2 URLs, prerender stays guarded).', 'performance-optimisation' ) );
+		}
+
+		/**
+		 * One-time backfill for the high-value prerender list toggle (issue #1237).
+		 *
+		 * Runs on `admin_init` (not the constructor) so a cacheable front-end
+		 * request never triggers a settings write. Only installs whose stored
+		 * settings predate the `speculationPrerenderList` key (key absent) are
+		 * backfilled with the off default; any stored explicit value is
+		 * preserved verbatim, and fresh installs with no stored option are
+		 * skipped because the constructor defaults already match. The check is
+		 * idempotent (key presence is the marker), so no extra option row is
+		 * needed. In-memory options are synced too so the current request
+		 * observes the backfilled value. Uses per-site `get_option()` so
+		 * multisite sites migrate independently with no cross-site leakage.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public function maybe_migrate_speculation_prerender_list(): void {
+			if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) ) {
+				return;
+			}
+			// allowlist(settings-read-guard): deliberate direct read — must distinguish
+			// "no stored row" (false) from "stored array", which Util::get_settings()
+			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
+			$stored = get_option( 'wppo_settings' );
+			if ( ! is_array( $stored ) ) {
+				return;
+			}
+
+			$preload = isset( $stored['preload_settings'] ) && is_array( $stored['preload_settings'] ) ? $stored['preload_settings'] : array();
+
+			if ( array_key_exists( 'speculationPrerenderList', $preload ) ) {
+				return;
+			}
+
+			$preload['speculationPrerenderList'] = false;
+			$stored['preload_settings']          = $preload;
+			update_option( 'wppo_settings', $stored );
+
+			if ( ! isset( $this->options['preload_settings'] ) || ! is_array( $this->options['preload_settings'] ) ) {
+				$this->options['preload_settings'] = array();
+			}
+			if ( ! array_key_exists( 'speculationPrerenderList', $this->options['preload_settings'] ) ) {
+				$this->options['preload_settings']['speculationPrerenderList'] = false;
+			}
+
+			Log::add( __( 'Added default high-value prerender list toggle (off, current prefetch behavior kept).', 'performance-optimisation' ) );
 		}
 
 		/**
@@ -7411,6 +7534,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			);
 
 			add_filter( 'wp_speculation_rules', array( $this, 'filter_speculation_list_rules' ), 10 );
+
+			// Guarded high-value prerender list (issue #1237): merges into
+			// the single core `speculationrules` block on WP 6.8+ via the
+			// `wp_load_speculation_rules` action (WP_Speculation_Rules
+			// object path in wppo_register_speculation_rules()). Guards and
+			// fail-open behavior live in the helper; registering here keeps
+			// the single 6.8-guarded registration point above.
+			add_action( 'wp_load_speculation_rules', array( $this, 'wppo_register_speculation_rules' ) );
 		}
 
 		/**
@@ -7737,8 +7868,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Reuses `AI_Adaptive::is_commerce_or_auth_context()` when available
 		 * (guarded by class_exists/method_exists for backward compat), with a
 		 * conservative local fallback (WooCommerce presence, cart/checkout/
-		 * account conditionals, logged-in visitor, cart cookies). Fail-open:
-		 * any throwable means "not commerce".
+		 * account conditionals, logged-in visitor, cart cookies). Fail-closed:
+		 * any throwable means "commerce" so uncertainty suppresses the
+		 * highest-risk prerender mode; the outer list builder stays fail-open
+		 * (returns empty) for prefetch paths.
 		 *
 		 * @since NEXT
 		 *
@@ -7786,7 +7919,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return false;
 			} catch ( \Throwable $e ) {
 				unset( $e );
-				return false;
+				return true;
 			}
 		}
 
@@ -7993,6 +8126,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$high_value = preg_split( '/[\r\n,]+/', $high_value );
 			}
 			if ( is_array( $high_value ) ) {
+				// Bound raw user input before validation: a long pasted list
+				// must not mean unbounded per-request Woo lookups/parses.
+				// 20 raw entries amply cover the 10-URL output budget.
+				$high_value = array_slice( array_values( $high_value ), 0, 20 );
 				foreach ( $high_value as $high_url ) {
 					if ( is_string( $high_url ) && '' !== trim( $high_url ) ) {
 						$candidates[] = $high_url;
@@ -8018,16 +8155,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					continue;
 				}
 				$clean_prior = function_exists( 'esc_url_raw' ) ? esc_url_raw( trim( $prior ) ) : trim( $prior );
-				if ( '' !== $clean_prior && ! in_array( $clean_prior, $seen, true ) ) {
-					$seen[] = $clean_prior;
+				if ( '' !== $clean_prior ) {
+					$seen[ $this->normalize_speculation_url( $clean_prior ) ] = true;
 				}
 			}
 			$kept = 0;
 			foreach ( $model_urls as $model_url ) {
-				if ( in_array( $model_url, $seen, true ) ) {
+				if ( isset( $seen[ $this->normalize_speculation_url( $model_url ) ] ) ) {
 					continue;
 				}
-				$seen[]       = $model_url;
+				$seen[ $this->normalize_speculation_url( $model_url ) ] = true;
 				$candidates[] = $model_url;
 				++$kept;
 				if ( $kept >= $top_limit ) {
@@ -8041,7 +8178,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 			}
 
-			$urls = array();
+			$urls    = array();
+			$emitted = array();
+			$checked = 0;
 			foreach ( $candidates as $candidate ) {
 				if ( ! is_string( $candidate ) ) {
 					continue;
@@ -8050,13 +8189,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( '' === $clean ) {
 					continue;
 				}
-				if ( in_array( $clean, $urls, true ) ) {
+				$norm_key = $this->normalize_speculation_url( $clean );
+				if ( isset( $emitted[ $norm_key ] ) ) {
 					continue;
+				}
+				// Bound validation attempts: invalid URLs do not count
+				// toward the output budget, so cap total checks (3x budget)
+				// to keep a hostile/pasted list off the hot path.
+				if ( ++$checked > 30 ) {
+					break;
 				}
 				if ( ! $this->is_speculation_list_url_valid( $clean ) ) {
 					continue;
 				}
-				$urls[] = $clean;
+				$emitted[ $norm_key ] = true;
+				$urls[]               = $clean;
 				if ( count( $urls ) >= 10 ) {
 					break;
 				}
@@ -8069,19 +8216,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Top RUM (real-visit) URLs by visit volume.
 		 *
 		 * Reads the `wppo_web_vitals_rum` per-day/per-path aggregates via
-		 * `RUM::get_data()` (one opportunistic option read, no extra cron
-		 * load), sums sample counts (`max(lcp.n, ttfb.n, ...)`) per
+		 * `RUM::get_aggregate_readonly()` (per-request memoized, no queue
+		 * flush, no transient churn — safe for the frontend hot path),
+		 * sums sample counts (`max(lcp.n, ttfb.n, ...)`) per
 		 * normalized path across days, and resolves the winners to absolute
 		 * same-site URLs. Candidates are validated with
 		 * {@see is_speculation_list_url_valid()} (cart/checkout/account,
 		 * query strings, cross-site excluded) and capped so home +
 		 * high-value + RUM total stays within the 10-URL budget.
+		 * Per-request memoized keyed by limit.
 		 *
 		 * Fail-open: any throwable, missing class, or empty RUM returns an
 		 * empty array — never fatal, never white-screen.
 		 *
 		 * @since 2.0.0
 		 * @since NEXT Accept a fill-budget limit for the RUM-weighted portion.
+		 * @since NEXT Read via get_aggregate_readonly() with per-request memo.
 		 *
 		 * @param int $limit Maximum URLs to return.
 		 * @return string[] Validated absolute RUM winner URLs (possibly empty).
@@ -8093,11 +8243,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( $limit > 10 ) {
 				$limit = 10;
 			}
+			if ( isset( self::$speculation_rum_top_memo[ $limit ] ) ) {
+				return self::$speculation_rum_top_memo[ $limit ];
+			}
+			$result = $this->compute_rum_top_urls( $limit );
+			if ( count( self::$speculation_rum_top_memo ) > 10 ) {
+				self::$speculation_rum_top_memo = array();
+			}
+			self::$speculation_rum_top_memo[ $limit ] = $result;
+			return $result;
+		}
+
+		/**
+		 * Uncached RUM top-URL computation for {@see get_rum_top_urls()}.
+		 *
+		 * @since NEXT
+		 *
+		 * @param int $limit Maximum URLs to return.
+		 * @return string[] Validated absolute RUM winner URLs (possibly empty).
+		 */
+		private function compute_rum_top_urls( int $limit ): array {
 			try {
-				if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'get_data' ) ) {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'get_aggregate_readonly' ) ) {
 					return array();
 				}
-				$rum = RUM::get_data();
+				$rum = RUM::get_aggregate_readonly();
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return array();
@@ -8194,7 +8364,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Cache-aware: pages served with `DONOTCACHEPAGE` / `no-store`
 		 * (cart/checkout/account, previews) never speculate — speculating a
 		 * non-cacheable URL wastes origin load and risks broken carts.
-		 * Fail-open: any throwable means "not suppressed".
+		 * Fail-closed: any throwable means "suppressed" so uncertainty
+		 * disables output (privacy guard must never fail open for
+		 * logged-in/DONOTCACHEPAGE visitors).
 		 *
 		 * @since 2.0.0
 		 *
@@ -8227,7 +8399,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return false;
 			} catch ( \Throwable $e ) {
 				unset( $e );
-				return false;
+				return true;
 			}
 		}
 
@@ -8376,9 +8548,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * cross-site leakage), http(s) only, and rejects admin, login,
 		 * REST, commerce (cart/checkout/account) paths, and any URL
 		 * carrying a query string or fragment (mirroring core's
-		 * `?`-URL exclusion).
+		 * `?`-URL exclusion). Same-host different-port URLs and URLs
+		 * with userinfo are rejected as cross-origin/unsafe.
+		 *
+		 * Per-request memoized (URL + home + Woo availability); the same
+		 * candidates validated by the list, prerender, and register paths
+		 * cost one Woo lookup set per distinct URL.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Memoize per-request results.
 		 *
 		 * @param string $url Candidate absolute URL.
 		 * @return bool True when the URL may be prefetched.
@@ -8389,69 +8567,68 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return false;
 			}
 
-			// Query strings and fragments are never speculated: core excludes
-			// `?`-URLs by default and dynamic/action URLs must stay excluded.
-			// Each invalid URL is skipped individually (fail-open).
-			try {
-				$query = wp_parse_url( $url, PHP_URL_QUERY );
-				if ( is_string( $query ) && '' !== $query ) {
-					return false;
-				}
-				$fragment = wp_parse_url( $url, PHP_URL_FRAGMENT );
-				if ( is_string( $fragment ) && '' !== $fragment ) {
-					return false;
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				// Fall back to string checks when wp_parse_url with component fails.
-				if ( false !== strpos( $url, '?' ) || false !== strpos( $url, '#' ) ) {
-					return false;
-				}
+			$home = Util::cached_home_url();
+			$key  = $url . "\0" . $home . "\0" . self::speculation_woo_fingerprint();
+			if ( array_key_exists( $key, self::$speculation_url_validity_memo ) ) {
+				return self::$speculation_url_validity_memo[ $key ];
 			}
+			// Bound the memo for long-running processes (Action Scheduler,
+			// WP-CLI) where unbounded growth would leak memory.
+			if ( count( self::$speculation_url_validity_memo ) > 200 ) {
+				self::$speculation_url_validity_memo = array();
+			}
+			$result                                      = $this->validate_speculation_list_url_uncached( $url, $parts, $home );
+			self::$speculation_url_validity_memo[ $key ] = $result;
+			return $result;
+		}
 
-			$scheme = strtolower( (string) ( $parts['scheme'] ?? '' ) );
-			if ( '' !== $scheme && ! in_array( $scheme, array( 'http', 'https' ), true ) ) {
-				return false;
-			}
+		/**
+		 * Reset the speculation URL validity + commerce-path memos (for tests).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_speculation_url_memo(): void {
+			self::$speculation_url_validity_memo   = array();
+			self::$speculation_commerce_paths_memo = null;
+			self::$speculation_commerce_paths_sig  = '';
+			self::$speculation_normalize_memo      = array();
+			self::$speculation_rum_top_memo        = array();
+		}
 
-			$home      = Util::cached_home_url();
-			$home_host = wp_parse_url( $home, PHP_URL_HOST );
-			if ( ! is_string( $home_host ) || '' === $home_host ) {
-				return false;
-			}
-			if ( strtolower( $parts['host'] ) !== strtolower( $home_host ) ) {
-				return false;
-			}
+		/**
+		 * Fingerprint WooCommerce-function availability for the speculation memos.
+		 *
+		 * Test fixtures may define wc_get_* after a first resolution; the
+		 * fingerprint keeps the cached verdicts keyed on that boundary so a
+		 * stale "no Woo" verdict is never reused once Woo helpers appear.
+		 *
+		 * @since NEXT
+		 *
+		 * @return string '1'/'0' flags for wc_get_checkout_url, wc_get_cart_url, wc_get_page_permalink.
+		 */
+		private static function speculation_woo_fingerprint(): string {
+			return ( function_exists( 'wc_get_checkout_url' ) ? '1' : '0' )
+				. ( function_exists( 'wc_get_cart_url' ) ? '1' : '0' )
+				. ( function_exists( 'wc_get_page_permalink' ) ? '1' : '0' );
+		}
 
-			$path = strtolower( (string) ( $parts['path'] ?? '/' ) );
-
-			if ( false !== strpos( $path, '/wp-admin' ) || false !== strpos( $path, 'wp-login.php' ) || false !== strpos( $path, '/wp-json' ) ) {
-				return false;
+		/**
+		 * Resolved speculation commerce paths (per-request memoized).
+		 *
+		 * Base cart/checkout/account prefixes plus WooCommerce dynamic
+		 * paths (checkout/cart/myaccount permalinks). Resolved once per
+		 * request instead of once per candidate URL.
+		 *
+		 * @since NEXT
+		 *
+		 * @return string[] Lowercase path prefixes.
+		 */
+		private function get_speculation_commerce_paths(): array {
+			$sig = self::speculation_woo_fingerprint();
+			if ( null !== self::$speculation_commerce_paths_memo && $sig === self::$speculation_commerce_paths_sig ) {
+				return self::$speculation_commerce_paths_memo;
 			}
-
-			// Nonce-bearing, logout, add-to-cart, and admin-ajax URLs must
-			// never be speculated. Scoped to path+query (never scheme+host)
-			// so hosts containing these substrings — or legitimate slugs
-			// like /add-to-cart-guide/ handled below — are not over-blocked.
-			// Query-param forms (preview, customize_changeset) need no check
-			// here: any URL carrying a query string already returned false
-			// above, mirroring core's `?`-URL exclusion.
-			$query_string = '';
-			try {
-				$parsed_query = wp_parse_url( $url, PHP_URL_QUERY );
-				if ( is_string( $parsed_query ) ) {
-					$query_string = strtolower( $parsed_query );
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			$haystack = $path . '?' . $query_string;
-			foreach ( array( 'nonce', 'logout', 'add-to-cart', 'admin-ajax' ) as $unsafe ) {
-				if ( false !== strpos( $haystack, $unsafe ) ) {
-					return false;
-				}
-			}
-
 			$commerce_paths = array( '/cart', '/checkout', '/my-account', '/account' );
 			if ( function_exists( 'wc_get_checkout_url' ) ) {
 				try {
@@ -8492,6 +8669,181 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					unset( $e );
 				}
 			}
+			self::$speculation_commerce_paths_memo = array_values( array_unique( array_map( 'strtolower', $commerce_paths ) ) );
+			self::$speculation_commerce_paths_sig  = $sig;
+			return self::$speculation_commerce_paths_memo;
+		}
+
+		/**
+		 * Normalize a speculation URL for dedupe/carve-out comparison.
+		 *
+		 * Lowercases scheme+host, strips default ports, drops trailing-slash
+		 * variants, so `https://example.com/post` and
+		 * `https://EXAMPLE.com/post/` compare equal (RUM winners restore the
+		 * trailing slash while raw high_value_urls input may not carry one).
+		 * Query/fragment are preserved as-is: validated URLs never carry
+		 * them, and distinct raw inputs must not collapse silently.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $url Candidate URL.
+		 * @return string Normalized URL (input unchanged when unparseable).
+		 */
+		private function normalize_speculation_url( string $url ): string {
+			if ( isset( self::$speculation_normalize_memo[ $url ] ) ) {
+				return self::$speculation_normalize_memo[ $url ];
+			}
+			$normalized = $url;
+			try {
+				$parts = wp_parse_url( $url );
+				if ( is_array( $parts ) && ! empty( $parts['host'] ) ) {
+					$scheme = strtolower( (string) ( $parts['scheme'] ?? '' ) );
+					$host   = strtolower( (string) $parts['host'] );
+					$port   = isset( $parts['port'] ) ? (int) $parts['port'] : null;
+					if ( ( 'http' === $scheme && 80 === $port ) || ( 'https' === $scheme && 443 === $port ) ) {
+						$port = null;
+					}
+					$path = (string) ( $parts['path'] ?? '' );
+					if ( function_exists( 'untrailingslashit' ) ) {
+						$path = untrailingslashit( $path );
+					} else {
+						$path = rtrim( $path, '/' );
+					}
+					$normalized = ( '' !== $scheme ? $scheme . '://' : '//' ) . $host
+						. ( null !== $port && $port > 0 ? ':' . $port : '' ) . $path;
+					if ( isset( $parts['query'] ) && '' !== (string) $parts['query'] ) {
+						$normalized .= '?' . (string) $parts['query'];
+					}
+					if ( isset( $parts['fragment'] ) && '' !== (string) $parts['fragment'] ) {
+						$normalized .= '#' . (string) $parts['fragment'];
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$normalized = $url;
+			}
+			if ( count( self::$speculation_normalize_memo ) > 200 ) {
+				self::$speculation_normalize_memo = array();
+			}
+			self::$speculation_normalize_memo[ $url ] = $normalized;
+			return $normalized;
+		}
+
+		/**
+		 * Uncached speculation list URL validation.
+		 *
+		 * Same-site (host must match home host, preventing multisite
+		 * cross-site leakage), http(s) only, and rejects admin, login,
+		 * REST, commerce (cart/checkout/account) paths, and any URL
+		 * carrying a query string or fragment (mirroring core's
+		 * `?`-URL exclusion). Same-host different-port URLs and URLs
+		 * with userinfo are rejected as cross-origin/unsafe.
+		 *
+		 * Called once per distinct URL via the
+		 * {@see is_speculation_list_url_valid()} memo.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string               $url   Candidate absolute URL.
+		 * @param array<string, mixed> $parts Parsed URL parts.
+		 * @param string               $home  Home URL.
+		 * @return bool True when the URL may be prefetched.
+		 */
+		private function validate_speculation_list_url_uncached( string $url, array $parts, string $home ): bool {
+			// Query strings and fragments are never speculated: core excludes
+			// `?`-URLs by default and dynamic/action URLs must stay excluded.
+			// Each invalid URL is skipped individually (fail-open).
+			try {
+				$query = wp_parse_url( $url, PHP_URL_QUERY );
+				if ( is_string( $query ) && '' !== $query ) {
+					return false;
+				}
+				$fragment = wp_parse_url( $url, PHP_URL_FRAGMENT );
+				if ( is_string( $fragment ) && '' !== $fragment ) {
+					return false;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				// Fall back to string checks when wp_parse_url with component fails.
+				if ( false !== strpos( $url, '?' ) || false !== strpos( $url, '#' ) ) {
+					return false;
+				}
+			}
+
+			$scheme = strtolower( (string) ( $parts['scheme'] ?? '' ) );
+			if ( '' !== $scheme && ! in_array( $scheme, array( 'http', 'https' ), true ) ) {
+				return false;
+			}
+
+			$home_host = wp_parse_url( $home, PHP_URL_HOST );
+			if ( ! is_string( $home_host ) || '' === $home_host ) {
+				return false;
+			}
+			if ( strtolower( $parts['host'] ) !== strtolower( $home_host ) ) {
+				return false;
+			}
+
+			// Same-origin means host + port with no userinfo: a same-host
+			// different-port URL is cross-origin for speculation, and a
+			// user:pass@host URL must never be speculated (credential leak).
+			// Default ports (80/443) are treated as equal to an absent port.
+			if ( isset( $parts['user'] ) || isset( $parts['pass'] ) ) {
+				return false;
+			}
+			$normalize_port = static function ( $port, $scheme ): ?int {
+				if ( null === $port || '' === $port ) {
+					return null;
+				}
+				$port = (int) $port;
+				if ( $port <= 0 ) {
+					return null;
+				}
+				if ( ( 'http' === $scheme && 80 === $port ) || ( 'https' === $scheme && 443 === $port ) ) {
+					return null;
+				}
+				return $port;
+			};
+			try {
+				$home_port = wp_parse_url( $home, PHP_URL_PORT );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$home_port = null;
+			}
+			$home_scheme = strtolower( (string) ( wp_parse_url( $home, PHP_URL_SCHEME ) ?? '' ) );
+			if ( $normalize_port( $parts['port'] ?? null, $scheme ) !== $normalize_port( $home_port ?? null, $home_scheme ) ) {
+				return false;
+			}
+
+			$path = strtolower( (string) ( $parts['path'] ?? '/' ) );
+
+			if ( false !== strpos( $path, '/wp-admin' ) || false !== strpos( $path, 'wp-login.php' ) || false !== strpos( $path, '/wp-json' ) ) {
+				return false;
+			}
+
+			// Nonce-bearing, logout, add-to-cart, and admin-ajax URLs must
+			// never be speculated. Scoped to path+query (never scheme+host)
+			// so hosts containing these substrings — or legitimate slugs
+			// like /add-to-cart-guide/ handled below — are not over-blocked.
+			// Query-param forms (preview, customize_changeset) need no check
+			// here: any URL carrying a query string already returned false
+			// above, mirroring core's `?`-URL exclusion.
+			$query_string = '';
+			try {
+				$parsed_query = wp_parse_url( $url, PHP_URL_QUERY );
+				if ( is_string( $parsed_query ) ) {
+					$query_string = strtolower( $parsed_query );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			$haystack = $path . '?' . $query_string;
+			foreach ( array( 'nonce', 'logout', 'add-to-cart', 'admin-ajax' ) as $unsafe ) {
+				if ( false !== strpos( $haystack, $unsafe ) ) {
+					return false;
+				}
+			}
+
+			$commerce_paths = $this->get_speculation_commerce_paths();
 
 			$path_trimmed = rtrim( $path, '/' );
 			foreach ( $commerce_paths as $commerce_path ) {
@@ -8508,6 +8860,412 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * High-value prerender list URLs (issue #1237).
+		 *
+		 * Builds the high-value URL set (home plus capped RUM top URLs via
+		 * {@see get_speculation_list_urls()}, same-site validated with cart,
+		 * checkout, account, and query-string URLs excluded) and trims it to
+		 * the `speculationTopUrlsLimit` fill cap so the rules JSON stays near
+		 * ~0.5 KB. Returns an empty array unless the opt-in
+		 * `preload_settings.speculationPrerenderList` toggle is enabled
+		 * alongside `enableSpeculationRules`.
+		 *
+		 * Guards: same-origin enforcement via
+		 * {@see is_speculation_list_url_valid()} (cart, checkout, and
+		 * account URLs excluded per URL via the real WooCommerce
+		 * permalinks), request-level exclusion via
+		 * {@see is_speculation_suppressed_for_visitor()} (logged-in
+		 * visitor, cart/checkout/account page, non-cacheable response),
+		 * and the static-cache + RUM-qualified gate via
+		 * {@see is_prerender_allowed()} (matching the document-mode
+		 * guardrail: prerender executes page JavaScript, so unqualified
+		 * origins get no prerender list). Deliberately no site-wide
+		 * {@see is_speculation_commerce_or_auth()} check here: WooCommerce
+		 * being installed must not suppress the rule on safe pages (issue
+		 * #1243) — URL safety is enforced per URL instead.
+		 * Fail-open: any empty model, missing toggle, excluded context, or
+		 * failure returns an empty array (conservative document-rule-only
+		 * behavior), never fatal. Multisite-safe: per-site settings and
+		 * model, no cross-site leakage.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string[]|null $candidates     Optional pre-validated candidates (defaults to get_speculation_list_urls()).
+		 * @param array         $existing_rules Existing speculation rules used for list-URL dedupe.
+		 * @return string[] Validated prerender URLs (possibly empty).
+		 */
+		private function get_prerender_list_urls( ?array $candidates = null, array $existing_rules = array() ): array {
+			try {
+				if ( empty( $this->options['preload_settings']['enableSpeculationRules'] ) ) {
+					return array();
+				}
+				if ( empty( $this->options['preload_settings']['speculationPrerenderList'] ) ) {
+					return array();
+				}
+				// Prerender executes page JavaScript speculatively: only run
+				// on origins where prerender is provably safe (static cache
+				// active + RUM-qualified), matching the document-mode
+				// guardrail. Unqualified origins get no prerender list.
+				if ( ! $this->is_prerender_allowed() ) {
+					return array();
+				}
+				if ( $this->is_speculation_suppressed_for_visitor() ) {
+					return array();
+				}
+				// No is_speculation_commerce_or_auth() guard here (issue
+				// #1243): that helper returns true on mere WooCommerce
+				// presence, which would silently disable the toggle on every
+				// Woo store. Request-level commerce pages are already covered
+				// by is_speculation_suppressed_for_visitor() above, and URL
+				// safety by is_speculation_list_url_valid() below.
+				if ( null === $candidates ) {
+					$candidates = $this->get_speculation_list_urls();
+				}
+				if ( empty( $candidates ) ) {
+					return array();
+				}
+				$limit = $this->get_speculation_top_urls_limit();
+				$urls  = array();
+				$seen  = array();
+				foreach ( $candidates as $candidate ) {
+					if ( ! is_string( $candidate ) || '' === trim( $candidate ) ) {
+						continue;
+					}
+					$clean = function_exists( 'esc_url_raw' ) ? esc_url_raw( trim( $candidate ) ) : trim( $candidate );
+					if ( '' === $clean ) {
+						continue;
+					}
+					// Normalization-aware intra-dedupe: RUM winners restore
+					// the trailing slash while raw high_value_urls input may
+					// not carry one — strict comparison would double-emit.
+					$norm_key = $this->normalize_speculation_url( $clean );
+					if ( isset( $seen[ $norm_key ] ) ) {
+						continue;
+					}
+					if ( ! $this->is_speculation_list_url_valid( $clean ) ) {
+						continue;
+					}
+					$seen[ $norm_key ] = true;
+					$urls[]            = $clean;
+					if ( count( $urls ) >= $limit ) {
+						break;
+					}
+				}
+				if ( empty( $urls ) ) {
+					return array();
+				}
+				return array_values( $this->dedupe_speculation_urls_against_rules( $urls, $existing_rules ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
+		 * Normalize post-filter prerender URLs (issue #1237 follow-up).
+		 *
+		 * Shared by both merge paths in
+		 * {@see wppo_register_speculation_rules()}: keeps strings only,
+		 * re-validates every URL with
+		 * {@see is_speculation_list_url_valid()} (a filter must not inject
+		 * commerce/cross-origin/query URLs), dedupes against existing rules
+		 * (normalization-aware), and re-slices to
+		 * {@see get_speculation_top_urls_limit()} so a filter returning 20
+		 * URLs cannot defeat the ~0.5 KB footprint guard.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $urls           Post-filter candidate URLs.
+		 * @param array $existing_rules Existing speculation rules for dedupe.
+		 * @return string[] Normalized prerender URLs (possibly empty).
+		 */
+		private function normalize_prerender_urls( array $urls, array $existing_rules ): array {
+			$urls  = array_values( array_filter( $urls, 'is_string' ) );
+			$urls  = array_values(
+				array_filter(
+					$urls,
+					array( $this, 'is_speculation_list_url_valid' )
+				)
+			);
+			$urls  = $this->dedupe_speculation_urls_against_rules( $urls, $existing_rules );
+			$limit = $this->get_speculation_top_urls_limit();
+			return array_values( array_slice( $urls, 0, $limit ) );
+		}
+
+		/**
+		 * Validate a post-filter prerender list rule (issue #1237 follow-up).
+		 *
+		 * Enforces the list-rule schema after the
+		 * `wppo_speculation_prerender_list_rule` filter: `source` must stay
+		 * `list` (a filter must not morph the rule into a document rule),
+		 * `eagerness` must be a known value (invalid values fall back to
+		 * `moderate`), and `urls` are re-validated, deduped, and re-sliced
+		 * to the top-URL limit. Returns null when the rule must be dropped
+		 * (wrong source or no valid URLs left).
+		 *
+		 * @since NEXT
+		 *
+		 * @param mixed $rule          Post-filter rule candidate.
+		 * @param array $existing_rules Existing speculation rules for dedupe.
+		 * @return array<string,mixed>|null Validated rule, or null to drop it.
+		 */
+		private function validate_prerender_rule( $rule, array $existing_rules ): ?array {
+			if ( ! is_array( $rule ) ) {
+				return null;
+			}
+			if ( 'list' !== ( $rule['source'] ?? '' ) ) {
+				return null;
+			}
+			$eagerness = $rule['eagerness'] ?? 'moderate';
+			if ( ! in_array( $eagerness, array( 'conservative', 'moderate', 'eager' ), true ) ) {
+				$eagerness = 'moderate';
+			}
+			$raw_urls = $rule['urls'] ?? array();
+			if ( ! is_array( $raw_urls ) ) {
+				return null;
+			}
+			$urls = $this->normalize_prerender_urls( $raw_urls, $existing_rules );
+			if ( empty( $urls ) ) {
+				return null;
+			}
+			$rule['source']    = 'list';
+			$rule['eagerness'] = $eagerness;
+			$rule['urls']      = array_values( $urls );
+			return $rule;
+		}
+
+		/**
+		 * Validate post-filter speculation rules output (trusted-code-only).
+		 *
+		 * The `wppo_speculation_*_rules` filters run trusted code, but a
+		 * misbehaving callback must not corrupt the emitted
+		 * `speculationrules` block: a non-array return falls back to the
+		 * pre-filter rules, and non-array entries are dropped. Shape
+		 * validation beyond that stays with the rule builders above.
+		 *
+		 * @since NEXT
+		 *
+		 * @param mixed $filtered  Post-filter rules candidate.
+		 * @param array $fallback  Pre-filter rules.
+		 * @return array Validated rules.
+		 */
+		private function validate_speculation_rules_output( $filtered, array $fallback ): array {
+			if ( ! is_array( $filtered ) ) {
+				return $fallback;
+			}
+			$clean = array();
+			foreach ( $filtered as $entry ) {
+				if ( is_array( $entry ) ) {
+					$clean[] = $entry;
+				}
+			}
+			return $clean;
+		}
+
+		/**
+		 * Register the guarded high-value prerender list rule (issue #1237).
+		 *
+		 * Wires the high-value URL selection ({@see get_prerender_list_urls()},
+		 * home plus capped RUM top URLs) to a dedicated prerender list rule
+		 * that only fires for safe same-origin candidates: cart, checkout,
+		 * and account URLs are excluded per URL, and logged-in or
+		 * cart/checkout/account-page visitors get nothing (request-level
+		 * guard). Mere WooCommerce presence never suppresses the rule
+		 * (issue #1243).
+		 *
+		 * Dual-path merge into the single core `speculationrules` block on
+		 * WP 6.8+: when `$rules` is a `WP_Speculation_Rules` object (the
+		 * `wp_load_speculation_rules` action path) the rule is added via
+		 * `add_rule( 'prerender', 'wppo-high-value-prerender', ... )` with a
+		 * `has_rule()` guard so no duplicate is emitted; otherwise (legacy
+		 * array path, WP <6.8 or unit-test fixtures) the rule is appended to
+		 * the array with dedupe against pre-existing list rules. The WP 6.8+
+		 * object path is additionally guarded by `function_exists` on
+		 * `wp_get_speculation_rules_configuration` plus `version_compare`,
+		 * so pre-6.8 installs fall back to the legacy plugin-owned output.
+		 * Both paths apply the same `wppo_speculation_prerender_list_urls`
+		 * and `wppo_speculation_prerender_list_rule` filters with identical
+		 * post-filter validation ({@see normalize_prerender_urls()},
+		 * {@see validate_prerender_rule()}).
+		 *
+		 * Eagerness is pinned to `moderate` by design (not derived from
+		 * `speculationEagerness`): `eager` prerender fires on page load and
+		 * would speculatively execute JS for every visitor, while
+		 * `conservative` waits for hover and defeats prerender's
+		 * near-instant-navigation purpose for high-value URLs; `moderate`
+		 * matches core's cached-site default.
+		 *
+		 * Backward compatible with WP 6.2+ and PHP 8.2+. Fail-open: toggle
+		 * off, empty model, suppressed visitor, or any
+		 * failure returns the input unchanged (current conservative
+		 * document-rule-only behavior), never fatal. Multisite-safe:
+		 * per-site settings and model, no cross-site leakage.
+		 *
+		 * @since NEXT
+		 *
+		 * @param mixed         $rules          Speculation rules (WP_Speculation_Rules object or legacy rules array).
+		 * @param string[]|null $candidate_urls Optional candidate URLs (defaults to the high-value list selection).
+		 * @return mixed Updated rules, or the input unchanged.
+		 */
+		public function wppo_register_speculation_rules( $rules, ?array $candidate_urls = null ) {
+			try {
+				if ( is_object( $rules ) && method_exists( $rules, 'add_rule' ) ) {
+					if ( ! function_exists( 'wp_get_speculation_rules_configuration' ) && ! function_exists( 'wp_get_speculation_rules' ) ) {
+						return $rules;
+					}
+					try {
+						if ( isset( $GLOBALS['wp_version'] ) ) {
+							$wp_version = (string) $GLOBALS['wp_version'];
+						} elseif ( function_exists( 'get_bloginfo' ) ) {
+							$wp_version = (string) get_bloginfo( 'version' );
+						} else {
+							$wp_version = '6.8';
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$wp_version = '6.8';
+					}
+					if ( version_compare( $wp_version, '6.8', '<' ) ) {
+						return $rules;
+					}
+					// Per-request backstop: core 6.8+ exposes has_rule(), but
+					// a WP_Speculation_Rules-shaped object without it would
+					// duplicate the rule on repeated firings. Instance state
+					// (not a method static) so test instances stay isolated
+					// while the single production instance stays guarded.
+					if ( $this->speculation_prerender_object_added ) {
+						return $rules;
+					}
+					if ( method_exists( $rules, 'has_rule' ) && $rules->has_rule( 'prerender', 'wppo-high-value-prerender' ) ) {
+						return $rules;
+					}
+					$urls = $this->get_prerender_list_urls( $candidate_urls, array() );
+					if ( empty( $urls ) ) {
+						return $rules;
+					}
+					if ( function_exists( 'apply_filters' ) ) {
+						/**
+						 * Filters the high-value prerender list URLs before the rule is registered.
+						 *
+						 * @since NEXT
+						 * @param string[] $urls Validated prerender URLs (home + capped RUM top URLs).
+						 */
+						$filtered = apply_filters( 'wppo_speculation_prerender_list_urls', $urls );
+						if ( is_array( $filtered ) ) {
+							$urls = $filtered;
+						}
+					}
+					// Object-path dedupe: the WP_Speculation_Rules object
+					// does not expose its list URLs for comparison, so
+					// dedupe here is intra-list only; cross-contributor
+					// duplicates on this path are prevented by the
+					// has_rule()/static idempotency guards above.
+					$urls = $this->normalize_prerender_urls( $urls, array() );
+					if ( empty( $urls ) ) {
+						return $rules;
+					}
+					$rule_args = array(
+						'source'    => 'list',
+						'urls'      => array_values( $urls ),
+						'eagerness' => 'moderate',
+					);
+					if ( function_exists( 'apply_filters' ) ) {
+						/**
+						 * Filters the high-value prerender list rule before it is registered.
+						 *
+						 * @since NEXT
+						 * @param array $rule_args The prerender list rule arguments.
+						 */
+						$filtered_rule = apply_filters( 'wppo_speculation_prerender_list_rule', $rule_args );
+						if ( is_array( $filtered_rule ) ) {
+							$rule_args = $filtered_rule;
+						}
+					}
+					$validated = $this->validate_prerender_rule( $rule_args, array() );
+					if ( null === $validated ) {
+						return $rules;
+					}
+					$rules->add_rule(
+						'prerender',
+						'wppo-high-value-prerender',
+						$validated
+					);
+					$this->speculation_prerender_object_added = true;
+					return $rules;
+				}
+
+				if ( ! is_array( $rules ) ) {
+					return $rules;
+				}
+
+				$urls = $this->get_prerender_list_urls( $candidate_urls, $rules );
+				if ( empty( $urls ) ) {
+					return $rules;
+				}
+
+				if ( function_exists( 'apply_filters' ) ) {
+					/**
+					 * Filters the high-value prerender list URLs before the rule is appended.
+					 *
+					 * @since NEXT
+					 * @param string[] $urls Validated prerender URLs (home + capped RUM top URLs).
+					 */
+					$filtered = apply_filters( 'wppo_speculation_prerender_list_urls', $urls );
+					if ( is_array( $filtered ) ) {
+						$urls = $filtered;
+					}
+				}
+				$urls = $this->normalize_prerender_urls( $urls, $rules );
+				if ( empty( $urls ) ) {
+					return $rules;
+				}
+
+				$rule = array(
+					'source'    => 'list',
+					'urls'      => array_values( $urls ),
+					'eagerness' => 'moderate',
+				);
+				if ( function_exists( 'apply_filters' ) ) {
+					/**
+					 * Filters the high-value prerender list rule before it is appended.
+					 *
+					 * @since NEXT
+					 * @param array $rule The prerender list rule.
+					 */
+					$filtered_rule = apply_filters( 'wppo_speculation_prerender_list_rule', $rule );
+					if ( is_array( $filtered_rule ) ) {
+						$rule = $filtered_rule;
+					}
+				}
+				$validated = $this->validate_prerender_rule( $rule, $rules );
+				if ( null === $validated ) {
+					return $rules;
+				}
+				$rules[] = $validated;
+
+				if ( function_exists( 'apply_filters' ) ) {
+					/**
+					 * Filters the speculation rules after the high-value prerender list rule is appended.
+					 *
+					 * Trusted-code-only: non-array returns fall back to the
+					 * pre-filter rules and non-array entries are dropped
+					 * ({@see validate_speculation_rules_output()}).
+					 *
+					 * @since NEXT
+					 * @param array    $rules Updated rules.
+					 * @param string[] $urls  Prerender list URLs that were appended.
+					 */
+					$filtered_rules = apply_filters( 'wppo_speculation_prerender_list_rules', $rules, $urls );
+					return $this->validate_speculation_rules_output( $filtered_rules, $rules );
+				}
+				return $rules;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $rules;
+			}
+		}
+
+		/**
 		 * Append the high-value list rule to the `wp_speculation_rules` array.
 		 *
 		 * Runs on WP 6.8+ only (registered inside the `wp_get_speculation_rules`
@@ -8520,11 +9278,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * prerender list rule for the home link on singular views
 		 * ({@see get_singular_home_link_rule()}) and a first-post selector
 		 * document rule on archive views
-		 * ({@see get_archive_first_post_rule()}). URLs are deduped across
+		 * ({@see get_archive_first_post_rule()}). When the opt-in
+		 * `speculationPrerenderList` toggle is enabled, the safest
+		 * high-value URLs are carved out of the generic prefetch list and
+		 * emitted as a dedicated guarded prerender list rule via
+		 * {@see wppo_register_speculation_rules()}. URLs are deduped across
 		 * all emitted entries (and against pre-existing list rules) so no
 		 * URL is speculated twice.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Carve out the opt-in guarded prerender list via wppo_register_speculation_rules().
 		 *
 		 * @param mixed $rules Speculation rules array from core.
 		 * @return mixed Updated rules, or the input unchanged.
@@ -8551,8 +9314,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			// The singular eager rule must not duplicate a URL already
 			// covered by a pre-existing list rule; drop it when empty.
+			// Normalization-aware so trailing-slash variants compare equal.
 			if ( is_array( $singular_rule ) && ! empty( $singular_rule['urls'] ) && is_array( $singular_rule['urls'] ) ) {
-				$singular_rule['urls'] = array_values( array_diff( $singular_rule['urls'], $pre_existing ) );
+				$singular_rule['urls'] = $this->diff_speculation_urls( $singular_rule['urls'], $pre_existing );
 				if ( empty( $singular_rule['urls'] ) ) {
 					$singular_rule = null;
 				}
@@ -8582,8 +9346,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return $rules;
 			}
 			$urls = array_values( array_filter( $urls, 'is_string' ) );
+			// Re-validate filter output: a filter may inject cart/checkout/
+			// account, cross-host, or query-bearing URLs that must never
+			// reach the emitted speculationrules block.
+			$urls = array_values(
+				array_filter(
+					$urls,
+					array( $this, 'is_speculation_list_url_valid' )
+				)
+			);
 			if ( ! empty( $covered ) ) {
-				$urls = array_values( array_diff( $urls, $covered ) );
+				$urls = $this->diff_speculation_urls( $urls, $covered );
 			}
 			// Exclude generic-list URLs already targeted by the archive
 			// document rule's href_matches pattern, so a user-configured
@@ -8618,6 +9391,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// Dedupe against list-source URLs already present (e.g. an
 			// earlier contributor) so this method never re-adds them.
 			$urls = $this->dedupe_speculation_urls_against_rules( $urls, $rules );
+
+			// Prerender where provably safe (issue #1237): when the opt-in
+			// prerender list is enabled, carve its URLs out of the generic
+			// prefetch list so the single block carries no duplicates; the
+			// dedicated prerender rule is appended below via
+			// wppo_register_speculation_rules(). Guards (toggle off,
+			// logged-in, commerce/auth) yield an empty set, leaving the
+			// generic list untouched (current behavior).
+			$prerender_urls = $this->get_prerender_list_urls( $urls, $rules );
+			if ( ! empty( $prerender_urls ) ) {
+				$urls = $this->diff_speculation_urls( $urls, $prerender_urls );
+			}
 
 			$preload_settings = $this->options['preload_settings'] ?? array();
 			$eagerness        = $preload_settings['speculationEagerness'] ?? 'conservative';
@@ -8672,11 +9457,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			/**
 			 * Filters the speculation rules after the high-value list rule is appended.
 			 *
+			 * Trusted-code-only: a non-array return falls back to the
+			 * pre-filter rules and non-array entries are dropped
+			 * ({@see validate_speculation_rules_output()}).
+			 *
 			 * @since 2.0.0
 			 * @param array    $rules Updated rules.
 			 * @param string[] $urls  List URLs that were appended.
 			 */
-			return apply_filters( 'wppo_speculation_list_rules', $rules, $urls );
+			$filtered_list_rules = apply_filters( 'wppo_speculation_list_rules', $rules, $urls );
+			$rules               = $this->validate_speculation_rules_output( $filtered_list_rules, $rules );
+
+			// Append the guarded prerender list rule (issue #1237, opt-in).
+			// The helper re-validates, dedupes against the merged rules
+			// (generic list included), and returns the input unchanged when
+			// guards fail, so the single block stays duplicate-free.
+			if ( ! empty( $prerender_urls ) ) {
+				$rules = $this->wppo_register_speculation_rules( $rules, $prerender_urls );
+			}
+
+			return $rules;
 		}
 
 		/**
@@ -8732,9 +9532,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * Mirrors `AI_Adaptive::dedupe_against_existing_lists()` so this
 		 * method's contribution and the priority-20 AI rule can never
-		 * re-add the same URL (single block, no duplicates).
+		 * re-add the same URL (single block, no duplicates). Comparison is
+		 * normalization-aware ({@see normalize_speculation_url()}): a RUM
+		 * winner with a restored trailing slash and a raw high-value input
+		 * without one count as the same URL.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Normalize before comparing.
 		 *
 		 * @param string[] $urls  Candidate list URLs.
 		 * @param array    $rules Existing speculation rules.
@@ -8742,10 +9546,52 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		private function dedupe_speculation_urls_against_rules( array $urls, array $rules ): array {
 			$existing = $this->collect_speculation_list_urls( $rules );
-			if ( empty( $existing ) ) {
-				return array_values( $urls );
+			return $this->diff_speculation_urls( $urls, $existing );
+		}
+
+		/**
+		 * Remove URLs present in an exclusion set (normalization-aware).
+		 *
+		 * Shared by the singular-rule, covered-URL, and prerender carve-outs
+		 * in {@see filter_speculation_list_rules()} so trailing-slash
+		 * variants compare equal everywhere. Output preserves the original
+		 * (non-normalized) URL strings and order.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $urls     Candidate URLs (non-strings dropped).
+		 * @param array $excluded URLs to remove.
+		 * @return string[] Remaining URLs.
+		 */
+		private function diff_speculation_urls( array $urls, array $excluded ): array {
+			$blocked = array();
+			foreach ( $excluded as $excluded_url ) {
+				if ( is_string( $excluded_url ) && '' !== $excluded_url ) {
+					$blocked[ $this->normalize_speculation_url( $excluded_url ) ] = true;
+				}
 			}
-			return array_values( array_diff( $urls, $existing ) );
+			if ( empty( $blocked ) ) {
+				$clean = array();
+				foreach ( $urls as $url ) {
+					if ( is_string( $url ) && '' !== $url ) {
+						$clean[] = $url;
+					}
+				}
+				return array_values( $clean );
+			}
+			$remaining = array();
+			foreach ( $urls as $url ) {
+				if ( ! is_string( $url ) || '' === $url ) {
+					continue;
+				}
+				$key = $this->normalize_speculation_url( $url );
+				if ( isset( $blocked[ $key ] ) ) {
+					continue;
+				}
+				$remaining[]     = $url;
+				$blocked[ $key ] = true;
+			}
+			return array_values( $remaining );
 		}
 
 		/**

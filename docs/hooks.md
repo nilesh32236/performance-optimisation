@@ -1046,9 +1046,42 @@ Emitted as a `{"source":"document"}` rule (first-post `href_matches` + first-pos
 ### `wppo_speculation_list_rules`
 Filters the speculation rules after the high-value list rule is appended. @since 2.0.0.
 
+Trusted-code-only: a non-array return falls back to the pre-filter rules and non-array entries are dropped.
+
 **Parameters:**
 - `$rules` *(array)* — Speculation rules array.
 - `$urls` *(string[])* — List URLs that were appended.
+
+---
+
+### `wppo_speculation_prerender_list_urls`
+Filters the high-value prerender list URLs before the dedicated prerender rule is registered/appended. @since NEXT.
+
+Emitted as a `{"source":"list"}` prerender rule with `moderate` eagerness via `Main::wppo_register_speculation_rules()` (WP 6.8+ object path and legacy array path) when `preload_settings.enableSpeculationRules` and the opt-in `preload_settings.speculationPrerenderList` are on, the static-cache + RUM-qualified gate passes, and the visitor is not logged-in/commerce. Post-filter output is re-validated (same-origin, no commerce/query), deduped, and re-sliced to `speculationTopUrlsLimit`.
+
+**Parameters:**
+- `$urls` *(string[])* — Validated prerender URLs (home + capped RUM top URLs).
+
+---
+
+### `wppo_speculation_prerender_list_rule`
+Filters the high-value prerender list rule before it is registered/appended. @since NEXT.
+
+Post-filter validation enforces `source: list`, an allowlisted eagerness (invalid values fall back to `moderate`), and re-validated/re-sliced `urls`; a rule with the wrong source or no valid URLs is dropped (input returned unchanged).
+
+**Parameters:**
+- `$rule` *(array)* — The prerender list rule (`source`, `urls`, `eagerness`).
+
+---
+
+### `wppo_speculation_prerender_list_rules`
+Filters the speculation rules after the high-value prerender list rule is appended (legacy array path only; the WP 6.8+ object path registers via `add_rule()` instead). @since NEXT.
+
+Trusted-code-only: a non-array return falls back to the pre-filter rules and non-array entries are dropped.
+
+**Parameters:**
+- `$rules` *(array)* — Updated rules.
+- `$urls` *(string[])* — Prerender list URLs that were appended.
 
 ---
 

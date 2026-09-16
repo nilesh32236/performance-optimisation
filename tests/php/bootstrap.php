@@ -242,6 +242,21 @@ trait WPPO_Test_Bootstrap {
 		if ( class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) && method_exists( 'PerformanceOptimise\Inc\AI_Adaptive', 'reset_disabled_assets_cache' ) ) {
 			\PerformanceOptimise\Inc\AI_Adaptive::reset_disabled_assets_cache();
 		}
+		if ( class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) && method_exists( 'PerformanceOptimise\Inc\AI_Adaptive', 'reset_model_memo' ) ) {
+			// get_model() memoizes per process: a model read by an earlier
+			// test would otherwise shadow later fixtures.
+			\PerformanceOptimise\Inc\AI_Adaptive::reset_model_memo();
+		}
+		if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'clear_field_lcp_cache' ) ) {
+			// get_aggregate_readonly() memoizes per process: reset so each
+			// test reads its own wppo_web_vitals_rum fixture.
+			\PerformanceOptimise\Inc\RUM::clear_field_lcp_cache();
+		}
+		if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'reset_speculation_url_memo' ) ) {
+			// Speculation URL validity/RUM-top memos are per process: reset
+			// so speculation tests never reuse another test's verdicts.
+			\PerformanceOptimise\Inc\Main::reset_speculation_url_memo();
+		}
 
 		// Pre-register frequently used WP functions to avoid "Cannot redeclare"
 		// PHP fatal errors when multiple test classes share one process.

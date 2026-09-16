@@ -46,6 +46,10 @@ class MainSpeculationListRulesTest extends \PHPUnit\Framework\TestCase {
 			}
 		);
 		Functions\when( 'is_admin' )->justReturn( false );
+		// Explicit visitor context: is_speculation_suppressed_for_visitor()
+		// fails closed on throwable, so an unstubbed (or stale cross-file)
+		// is_user_logged_in would suppress every rule under test.
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
 		Functions\when( 'get_option' )->alias(
 			function ( $name, $fallback = false ) {
 				return array_key_exists( $name, $this->options ) ? $this->options[ $name ] : $fallback;

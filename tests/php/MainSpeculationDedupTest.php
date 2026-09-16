@@ -62,6 +62,10 @@ class MainSpeculationDedupTest extends \PHPUnit\Framework\TestCase {
 		parent::setUp();
 		\Brain\Monkey\setUp();
 		$this->register_common_function_stubs();
+		\PerformanceOptimise\Inc\Util::reset_runtime_caches();
+		\PerformanceOptimise\Inc\RUM::clear_field_lcp_cache();
+		\PerformanceOptimise\Inc\AI_Adaptive::reset_model_memo();
+		Main::reset_speculation_url_memo();
 
 		$this->had_wp_version      = array_key_exists( 'wp_version', $GLOBALS );
 		$this->previous_wp_version = $GLOBALS['wp_version'] ?? null;
