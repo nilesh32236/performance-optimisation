@@ -1853,12 +1853,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				// Refresh the fallback to the newest good copy on every purge
 				// (overwrite), so the post-purge 302 serves the latest
 				// known-good payload rather than the first copy ever kept.
-				if ( method_exists( $fs, 'copy' ) ) {
+				// Cheap size() guard first (single stat); fall back to a
+				// content read only when size is unavailable/unknown.
+				if ( method_exists( $fs, 'size' ) ) {
 					try {
-						$contents = method_exists( $fs, 'get_contents' ) ? $fs->get_contents( $file_path ) : null;
-						if ( ! is_string( $contents ) || '' === $contents ) {
+						if ( (int) $fs->size( $file_path ) <= 0 ) {
 							return;
 						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						if ( method_exists( $fs, 'get_contents' ) ) {
+							try {
+								$probe = $fs->get_contents( $file_path );
+							} catch ( \Throwable $ignored ) {
+								unset( $ignored );
+								$probe = null;
+							}
+							if ( ! is_string( $probe ) || '' === $probe ) {
+								return;
+							}
+						}
+					}
+				}
+				if ( method_exists( $fs, 'copy' ) ) {
+					try {
 						$fs->copy( $file_path, $fallback, true );
 						return;
 					} catch ( \Throwable $e ) {
@@ -1872,7 +1890,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( ! is_string( $contents ) || '' === $contents ) {
 					return;
 				}
-				$fs->put_contents( $fallback, $contents );
+				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'atomic_file_put_contents' ) ) {
+					Util::atomic_file_put_contents( $fs, $fallback, $contents );
+					return;
+				}
+				$fs->put_contents( $fallback, $contents, defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644 );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
@@ -1916,7 +1938,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					return $miss;
 				}
 				$valid = false;
-				if ( method_exists( $fs, 'get_contents' ) ) {
+				if ( method_exists( $fs, 'size' ) ) {
+					try {
+						$valid = (int) $fs->size( $fallback ) > 0;
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$valid = false;
+					}
+				}
+				if ( ! $valid && method_exists( $fs, 'get_contents' ) ) {
 					try {
 						$contents = $fs->get_contents( $fallback );
 						$valid    = is_string( $contents ) && '' !== $contents;
@@ -2060,6 +2090,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					if ( '' === $variant_path || ! $this->is_path_contained( $variant_path ) ) {
 						continue;
 					}
+					// Post-purge fallback (issue #1275): retain each
+					// viewport variant before deleting so variant-URL
+					// misses have a retained copy like the single file.
+					$this->retain_purge_fallback( $variant_path );
 					try {
 						$checksum_path = $this->get_checksum_path( $variant_path );
 					} catch ( \Throwable $e ) {

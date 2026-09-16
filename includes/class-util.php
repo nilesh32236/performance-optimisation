@@ -5486,25 +5486,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 */
 		public static function is_purge_fallback_enabled(): bool {
 			try {
-				if ( defined( 'WPPO_PURGE_FALLBACK' ) && WPPO_PURGE_FALLBACK ) {
-					return true;
+				if ( defined( 'WPPO_PURGE_FALLBACK' ) ) {
+					$flag = filter_var( WPPO_PURGE_FALLBACK, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+					if ( true === $flag ) {
+						return true;
+					}
 				}
 				$settings = self::get_settings();
-				$enabled  = $settings['file_optimisation']['purgeFallbackEnabled'] ?? false;
+				$raw      = $settings['file_optimisation']['purgeFallbackEnabled'] ?? false;
+				$enabled  = filter_var( $raw, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+				$enabled  = true === $enabled;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;
 			}
 			if ( ! function_exists( 'apply_filters' ) ) {
-				return (bool) $enabled;
+				return $enabled;
 			}
-			/**
-			 * Filters whether the post-purge last-good fallback is enabled.
-			 *
-			 * @since NEXT
-			 * @param bool $enabled Whether the purge fallback is enabled.
-			 */
-			return (bool) apply_filters( 'wppo_purge_fallback_enabled', (bool) $enabled );
+			try {
+				/**
+				 * Filters whether the post-purge last-good fallback is enabled.
+				 *
+				 * @since NEXT
+				 * @param bool $enabled Whether the purge fallback is enabled.
+				 */
+				$filtered = apply_filters( 'wppo_purge_fallback_enabled', $enabled );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+			$normalized = filter_var( $filtered, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+			return true === $normalized;
 		}
 
 		/**
@@ -5527,12 +5539,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				if ( '' === $file_path || false !== strpos( $file_path, "\0" ) || false !== strpos( $file_path, '..' ) ) {
 					return '';
 				}
+				// Single-decode probe: reject encoded traversal/NUL that the
+				// raw check above cannot see. Downstream containment remains
+				// the authoritative guard; this only fails fast.
+				$probe = rawurldecode( $file_path );
+				if ( false !== strpos( $probe, "\0" ) || false !== strpos( $probe, '..' ) ) {
+					return '';
+				}
 				if ( function_exists( 'wp_normalize_path' ) ) {
 					$normalized = wp_normalize_path( $file_path );
 				} else {
 					$normalized = str_replace( '\\', '/', $file_path );
 				}
 				if ( '' === $normalized ) {
+					return '';
+				}
+				// Reject drive-letter and UNC shapes (mirror
+				// sanitize_cache_url_path()): absolute cache paths must be
+				// POSIX-style; downstream containment is authoritative.
+				if ( preg_match( '#^[a-zA-Z]:[\\\\/]#', $normalized ) || 0 === strpos( $normalized, '//' ) || 0 === strpos( $normalized, '\\\\' ) ) {
 					return '';
 				}
 				$base = (string) preg_replace( '/\.(?:gz|br)$/i', '', $normalized );

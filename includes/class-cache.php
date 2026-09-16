@@ -40,6 +40,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private const CACHE_DIR = '/cache/wppo';
 
 		/**
+		 * Post-purge fallback snapshot bounds (issue #1275).
+		 *
+		 * A full-cache wipe snapshots retained `fallback.css`/`fallback.js`
+		 * siblings so the first post-purge hit can 302 instead of flashing
+		 * unstyled. The guarantee is intentionally bounded (memory + I/O):
+		 * larger sites keep the first N fallbacks only. Override via the
+		 * `wppo_purge_fallback_limits` filter.
+		 *
+		 * @since NEXT
+		 */
+		private const PURGE_FALLBACK_MAX_FILES = 25;
+		private const PURGE_FALLBACK_MAX_DEPTH = 6;
+		private const PURGE_FALLBACK_MAX_BYTES = 524288;
+		private const PURGE_FALLBACK_MAX_DIRS  = 200;
+
+		/**
 		 * Invalidate the cached cache-size/page-count stats transients.
 		 *
 		 * The dashboard stats (wppo_cache_stats + legacy
@@ -4115,12 +4131,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					return;
 				}
 				if ( method_exists( $fs, 'size' ) ) {
+					$size_ok    = false;
+					$size_known = false;
 					try {
-						if ( (int) $fs->size( $file_path ) <= 0 ) {
-							return;
-						}
+						$size       = (int) $fs->size( $file_path );
+						$size_known = true;
+						$size_ok    = $size > 0;
 					} catch ( \Throwable $e ) {
 						unset( $e );
+					}
+					if ( $size_known && ! $size_ok ) {
+						return;
+					}
+					if ( ! $size_known ) {
+						// size() outcome unknown (missing method already
+						// excluded; a throw means unknown): verify non-empty
+						// content before copy so an empty base can never
+						// overwrite a good fallback (downgrade guard).
+						try {
+							$probe = method_exists( $fs, 'get_contents' ) ? $fs->get_contents( $file_path ) : null;
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$probe = null;
+						}
+						if ( ! is_string( $probe ) || '' === $probe ) {
+							return;
+						}
 					}
 				}
 				// Refresh the fallback to the newest good copy on every purge:
@@ -4141,7 +4177,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( ! is_string( $contents ) || '' === $contents ) {
 					return;
 				}
-				$fs->put_contents( $fallback, $contents );
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'atomic_file_put_contents' ) ) {
+					Util::atomic_file_put_contents( $fs, $fallback, $contents );
+					return;
+				}
+				$fs->put_contents( $fallback, $contents, defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644 );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
@@ -4225,6 +4265,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					unset( $e );
 					$location = '';
 				}
+				if ( '' === $location ) {
+					return $miss;
+				}
 				return array(
 					'served'        => true,
 					'status'        => 302,
@@ -4256,6 +4299,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					return;
 				}
 				$location = $response['location'];
+				$location = str_replace( array( "\r", "\n" ), '', $location );
 				if ( function_exists( 'wp_safe_redirect' ) ) {
 					wp_safe_redirect( $location, 302 );
 					exit;
@@ -4285,10 +4329,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		public function maybe_serve_purge_fallback(): void {
 			try {
-				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! Util::is_purge_fallback_enabled() ) {
+				if ( ! isset( $_GET['wppo_purge_fallback'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only miss handler, no state change.
 					return;
 				}
-				if ( ! isset( $_GET['wppo_purge_fallback'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only miss handler, no state change.
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! Util::is_purge_fallback_enabled() ) {
 					return;
 				}
 				$raw = isset( $_GET['wppo_purge_fallback'] ) && is_string( $_GET['wppo_purge_fallback'] ) ? wp_unslash( $_GET['wppo_purge_fallback'] ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Read-only miss routing; path-extracted and containment-checked below, never output.
@@ -4308,7 +4352,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					return;
 				}
 				$relative = ltrim( substr( $path, $pos + strlen( $marker ) ), '/' );
-				if ( '' === $relative || false !== strpos( $relative, "\0" ) || false !== strpos( $relative, '..' ) ) {
+				if ( '' === $relative || false !== strpos( $relative, "\0" ) || false !== strpos( $relative, '..' ) || false !== strpbrk( $relative, "\r\n" ) || false !== stripos( $relative, '%0d' ) || false !== stripos( $relative, '%0a' ) ) {
+					return;
+				}
+				// Single-decode re-check: PHP has already urldecoded $_GET,
+				// so catch %252e-style double-encoding before path math.
+				$decoded = rawurldecode( $relative );
+				if ( false !== strpos( $decoded, "\0" ) || false !== strpos( $decoded, '..' ) || false !== strpbrk( $decoded, "\r\n" ) ) {
 					return;
 				}
 				$requested = rtrim( $this->cache_root_dir, '/' ) . '/' . $relative;
@@ -4758,6 +4808,74 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Resolve bounded purge-fallback snapshot limits.
+		 *
+		 * Defaults come from the PURGE_FALLBACK_* constants; the
+		 * `wppo_purge_fallback_limits` filter may override any key
+		 * (`max_files`, `max_depth`, `max_bytes`, `max_dirs`). Fail-closed:
+		 * invalid values fall back to the constant defaults. Never throws.
+		 *
+		 * @since NEXT
+		 * @return array{max_files: int, max_depth: int, max_bytes: int, max_dirs: int} Limits.
+		 */
+		private static function purge_fallback_limits(): array {
+			$defaults = array(
+				'max_files' => self::PURGE_FALLBACK_MAX_FILES,
+				'max_depth' => self::PURGE_FALLBACK_MAX_DEPTH,
+				'max_bytes' => self::PURGE_FALLBACK_MAX_BYTES,
+				'max_dirs'  => self::PURGE_FALLBACK_MAX_DIRS,
+			);
+			try {
+				if ( ! function_exists( 'apply_filters' ) ) {
+					return $defaults;
+				}
+				/** This filter is documented above. */
+				$filtered = apply_filters( 'wppo_purge_fallback_limits', $defaults );
+				if ( ! is_array( $filtered ) ) {
+					return $defaults;
+				}
+				foreach ( $defaults as $key => $fallback ) {
+					$value            = isset( $filtered[ $key ] ) ? (int) $filtered[ $key ] : $fallback;
+					$defaults[ $key ] = $value > 0 ? $value : $fallback;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $defaults;
+		}
+
+		/**
+		 * Throttled log when the snapshot bounds are hit.
+		 *
+		 * A full wipe restores only the bounded snapshot (see
+		 * {@see purge_fallback_limits()}); without a signal larger sites
+		 * would silently lose fallbacks. Reuses the per-day transient
+		 * throttle so a wipe storm writes a single row. Never throws.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private function log_snapshot_cap(): void {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) || ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
+					return;
+				}
+				$key = Util::transient_key( 'wppo_purge_fallback_snapshot_cap' );
+				if ( function_exists( 'get_transient' ) && get_transient( $key ) ) {
+					return;
+				}
+				if ( function_exists( 'set_transient' ) ) {
+					$ttl = defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400;
+					set_transient( $key, 1, $ttl );
+				}
+				$message = function_exists( '__' ) ? __( 'Purge fallback: snapshot cap reached; some fallbacks not restored after full wipe.', 'performance-optimisation' ) : 'Purge fallback: snapshot cap reached; some fallbacks not restored after full wipe.';
+				Log::add( $message );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
 		 * Snapshot last-good fallback files under a directory slated for wipe.
 		 *
 		 * Walks the tree (bounded: 6 levels, 25 files, 512 KiB each) and
@@ -4780,13 +4898,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( ! $fs || ! method_exists( $fs, 'dirlist' ) || ! method_exists( $fs, 'get_contents' ) ) {
 					return $snapshot;
 				}
+				$limits    = self::purge_fallback_limits();
+				$max_files = $limits['max_files'];
+				$max_depth = $limits['max_depth'];
+				$max_bytes = $limits['max_bytes'];
+				$max_dirs  = $limits['max_dirs'];
 				$queue     = array( array( $dir, 0 ) );
+				$head      = 0;
+				$visited   = 0;
 				$collected = 0;
-				while ( ! empty( $queue ) && $collected < 25 ) {
-					$current = array_shift( $queue );
-					$path    = (string) $current[0];
-					$depth   = (int) $current[1];
-					if ( $depth > 6 ) {
+				$capped    = false;
+				$queue_len = count( $queue );
+				while ( $head < $queue_len && $collected < $max_files && $visited < $max_dirs ) {
+					$current = $queue[ $head ];
+					++$head;
+					++$visited;
+					$path  = (string) $current[0];
+					$depth = (int) $current[1];
+					if ( $depth > $max_depth ) {
 						continue;
 					}
 					$entries = $fs->dirlist( $path );
@@ -4794,17 +4923,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 						continue;
 					}
 					foreach ( $entries as $name => $entry ) {
-						if ( $collected >= 25 ) {
+						if ( $collected >= $max_files ) {
+							$capped = true;
 							break;
 						}
 						$full = rtrim( $path, '/' ) . '/' . $name;
 						if ( ! empty( $entry['type'] ) && 'd' === $entry['type'] ) {
 							$queue[] = array( $full, $depth + 1 );
+							++$queue_len;
 							continue;
 						}
 						$lower = strtolower( (string) $name );
 						if ( 'fallback.css' !== $lower && 'fallback.js' !== $lower ) {
 							continue;
+						}
+						// Size-check before the full read so oversize
+						// fallbacks are skipped without loading them.
+						if ( method_exists( $fs, 'size' ) ) {
+							try {
+								$size = (int) $fs->size( $full );
+								if ( $size <= 0 || $size > $max_bytes ) {
+									if ( $size > $max_bytes ) {
+										$capped = true;
+									}
+									continue;
+								}
+							} catch ( \Throwable $e ) {
+								unset( $e );
+							}
 						}
 						try {
 							$contents = $fs->get_contents( $full );
@@ -4812,12 +4958,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 							unset( $e );
 							continue;
 						}
-						if ( ! is_string( $contents ) || '' === $contents || strlen( $contents ) > 524288 ) {
+						if ( ! is_string( $contents ) || '' === $contents || strlen( $contents ) > $max_bytes ) {
+							if ( is_string( $contents ) && strlen( $contents ) > $max_bytes ) {
+								$capped = true;
+							}
 							continue;
 						}
 						$snapshot[ $full ] = $contents;
 						++$collected;
 					}
+				}
+				if ( $capped || $collected >= $max_files || $visited >= $max_dirs ) {
+					// Throttled signal: the bounded guarantee means larger
+					// sites keep only the first N fallbacks on full wipe.
+					$this->log_snapshot_cap();
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -4853,6 +5007,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 						if ( '' === (string) $path || ! is_string( $contents ) || '' === $contents ) {
 							continue;
 						}
+						if ( false !== strpos( (string) $path, "\0" ) || false !== strpos( (string) $path, '..' ) ) {
+							continue;
+						}
+						$base = strtolower( basename( (string) $path ) );
+						if ( 'fallback.css' !== $base && 'fallback.js' !== $base ) {
+							continue;
+						}
 						if ( $min_tree ) {
 							if ( ! $this->is_min_dir_allowed( (string) preg_replace( '#/[^/]*$#', '', (string) $path ) . '/' ) ) {
 								continue;
@@ -4867,7 +5028,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 						if ( $fs->exists( $path ) ) {
 							continue;
 						}
-						$fs->put_contents( $path, $contents );
+						if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'atomic_file_put_contents' ) ) {
+							Util::atomic_file_put_contents( $fs, (string) $path, $contents );
+							continue;
+						}
+						$fs->put_contents( $path, $contents, defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644 );
 					} catch ( \Throwable $e ) {
 						unset( $e );
 					}
