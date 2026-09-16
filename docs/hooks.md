@@ -1704,7 +1704,7 @@ Filters how long a Critical CSS source checksum is kept. @since 2.0.0.
 ---
 
 ### `wppo_ccss_generation_timeout`
-Filters the wall-clock budget in seconds for one Critical CSS generation run (fetch plus parse). On expiry the run aborts fail-open: the previously stored CSS is left untouched, no partial output is stored or inlined, the miss is logged, and a retry is scheduled with exponential backoff (5min, 10min, 20min, 40min steps, escalating to `failed` after 5 consecutive timeouts). Timeout status is `pending` (1h TTL) while ordinary failures are `failed` (1-day TTL). Stored values heal to the default `25` when missing, non-numeric, zero, or negative; in-range stored values and valid filter output clamp to 1–120. Non-numeric filter output is ignored and the stored budget is kept. Default `25` (stored `file_optimisation.ccssGenTimeout`). @since NEXT.
+Filters the wall-clock budget in seconds for one Critical CSS generation run (fetch plus parse). On expiry the run aborts fail-open: the previously stored CSS is left untouched, no partial output is stored or inlined, and a retry is scheduled with exponential backoff (5min, 10min, 20min, 40min steps, escalating to `failed` once generic + timeout failures combined reach the `ccssMaxRetries` cap; only the escalation is logged). Below the cap the status is `queued` (1h TTL) while terminal outcomes are `failed` (1-day TTL). Stored values heal to the default `25` when missing, non-numeric, zero, or negative; in-range stored values and valid filter output clamp to 1–120. Non-numeric filter output is ignored and the stored budget is kept. Default `25` (stored `file_optimisation.ccssGenTimeout`). @since NEXT.
 
 **Parameters:**
 - `$timeout` *(int)* — Budget in seconds. Default `25`.
@@ -1727,6 +1727,37 @@ Filters how many RUM-worst-first Critical CSS templates are queued per regenerat
 
 ```php
 add_filter( 'wppo_ccss_queue_cap', static function() { return 10; } );
+```
+
+---
+
+### `wppo_ccss_excluded_post_types`
+Filters post types skipped by Critical CSS and Used CSS generation. The filter is ADDITIVE over the built-in builder defaults (`fl-builder-template`, `elementor_library`): returned slugs are merged with the defaults, and an explicitly empty array opts out of all exclusions. Backed by the additive `file_optimisation.ccssExcludedPostTypes` setting (one post type per line; empty or all-invalid keeps the defaults). Shared contract: the CCSS-named key/filter intentionally serves both pipelines for backward compatibility. Used-CSS retries are intentionally out of scope — excluded posts are never queued, so no retry counter exists there. Fail-open: non-array output is ignored and the setting-derived list is kept. @since NEXT.
+
+**Parameters:**
+- `$excluded` *(string[])* — Excluded post type slugs. Default from `file_optimisation.ccssExcludedPostTypes`.
+
+**Example:**
+
+```php
+add_filter( 'wppo_ccss_excluded_post_types', static function( $excluded ) {
+	$excluded[] = 'my_builder_library';
+	return $excluded;
+} );
+```
+
+---
+
+### `wppo_ccss_max_retries`
+Filters how many consecutive generation failures (generic + timeout combined) a Critical CSS template tolerates before escalating to the terminal `failed` state. Below the cap the template stays `queued` with a retry scheduled (exponential backoff); `0` means fail fast with no retries. Only the escalation is logged — retries below the cap stay silent. Stored values heal to the default `5` when missing or non-numeric; stored and filter values clamp to 0–5; non-numeric filter output is ignored and the stored cap is kept. Default `5` (stored `file_optimisation.ccssMaxRetries`). @since NEXT.
+
+**Parameters:**
+- `$cap` *(int)* — Retry cap. Default `5`.
+
+**Example:**
+
+```php
+add_filter( 'wppo_ccss_max_retries', static function() { return 3; } );
 ```
 
 ---

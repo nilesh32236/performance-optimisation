@@ -115,6 +115,108 @@ describe( 'CriticalCssPanel', () => {
 
 		expect( screen.getByText( 'Not Generated' ) ).toBeInTheDocument();
 	} );
+
+	it( 'renders skipped and failed badges', () => {
+		render(
+			<CriticalCssPanel
+				status={ {
+					aaaa1111bbbb2222: {
+						status: 'skipped',
+						label: 'Builder',
+					},
+					cccc3333dddd4444: { status: 'failed', label: 'Home' },
+				} }
+				onRegenerate={ jest.fn() }
+			/>
+		);
+
+		expect( screen.getByText( 'Skipped' ) ).toBeInTheDocument();
+		expect( screen.getByText( 'Failed' ) ).toBeInTheDocument();
+	} );
+
+	it( 'renders processing and done badges', () => {
+		render(
+			<CriticalCssPanel
+				status={ {
+					aaaa1111bbbb2222: {
+						status: 'processing',
+						label: 'Builder',
+					},
+					cccc3333dddd4444: { status: 'done', label: 'Home' },
+				} }
+				onRegenerate={ jest.fn() }
+			/>
+		);
+
+		expect( screen.getByText( 'Processing' ) ).toBeInTheDocument();
+		expect( screen.getAllByText( 'Generated' ).length ).toBeGreaterThan(
+			0
+		);
+	} );
+
+	it( 'rethrows single-regen failures so the parent owns feedback', async () => {
+		const onRegenerateSingle = jest.fn( async () => {
+			throw new Error( 'nope' );
+		} );
+		// Harness mimics the parent (FileOptimization): it awaits the child
+		// and owns the banner, proving the child rethrew instead of
+		// notifying a second time for the same click.
+		let caught = null;
+		const catchingParent = async ( hash ) => {
+			try {
+				await onRegenerateSingle( hash );
+			} catch ( err ) {
+				caught = err;
+			}
+		};
+		const errorSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
+
+		render(
+			<CriticalCssPanel
+				status={ {
+					abcdef1234567890: { status: 'failed', label: 'Home' },
+				} }
+				onRegenerate={ jest.fn() }
+				onRegenerateSingle={ catchingParent }
+			/>
+		);
+
+		fireEvent.click( screen.getByText( 'Regenerate' ) );
+
+		await waitFor( () =>
+			expect( onRegenerateSingle ).toHaveBeenCalledWith(
+				'abcdef1234567890'
+			)
+		);
+		expect( caught && caught.message ).toBe( 'nope' );
+		// Single-owner feedback: no error banner is rendered by the panel itself.
+		expect( screen.queryByRole( 'alert' ) ).not.toBeInTheDocument();
+
+		errorSpy.mockRestore();
+	} );
+
+	it( 'resolves onRegenerateSingle success without notifying', async () => {
+		const onRegenerateSingle = jest.fn().mockResolvedValue( undefined );
+
+		render(
+			<CriticalCssPanel
+				status={ {
+					abcdef1234567890: { status: 'failed', label: 'Home' },
+				} }
+				onRegenerate={ jest.fn() }
+				onRegenerateSingle={ onRegenerateSingle }
+			/>
+		);
+
+		fireEvent.click( screen.getByText( 'Regenerate' ) );
+
+		await waitFor( () =>
+			expect( onRegenerateSingle ).toHaveBeenCalledTimes( 1 )
+		);
+		expect( screen.queryByRole( 'alert' ) ).not.toBeInTheDocument();
+	} );
 } );
 
 describe( 'normalizeCcssEntry', () => {
@@ -155,5 +257,23 @@ describe( 'normalizeCcssEntry', () => {
 			size: 1234,
 			truncated: true,
 		} );
+	} );
+
+	it( 'nulls non-finite sizes and coerces truncated', () => {
+		expect(
+			normalizeCcssEntry( 'abcdef1234567890', {
+				status: 'done',
+				label: 'Single',
+				size: Number.NaN,
+			} ).size
+		).toBeNull();
+		expect(
+			normalizeCcssEntry( 'abcdef1234567890', {
+				status: 'done',
+				label: 'Single',
+				size: 2048,
+				truncated: 1,
+			} ).truncated
+		).toBe( true );
 	} );
 } );

@@ -56,6 +56,14 @@ const toTextLines = ( value ) => {
 	return '';
 };
 
+// Normalize the max-retries input the same way PHP sanitizes it
+// (integer, clamped 0..5, fail-open to 5) so strings/arrays from stored
+// settings never reach the controlled number input (issue #1274 review).
+const normalizeRetries = ( value ) => {
+	const parsed = Number.parseInt( value, 10 );
+	return Number.isFinite( parsed ) ? Math.min( 5, Math.max( 0, parsed ) ) : 5;
+};
+
 // Normalize the used-CSS delivery mode the same way PHP sanitizes it
 // (lowercase + trim, allowlisted, fail-open to 'file') so the UI never
 // disagrees with the server on a single render (issue #1220).
@@ -91,6 +99,7 @@ const FILE_OPT_TEXTAREA_KEYS = [
 	'excludeUnusedCSS',
 	'unusedCSSSafelistExtra',
 	'ccssSafelistExtra',
+	'ccssExcludedPostTypes',
 ];
 
 // Every file-optimisation key synced from incoming props in the baseline +
@@ -132,6 +141,8 @@ const FILE_OPT_SYNC_KEYS = [
 	'criticalCSS',
 	'ccssMaxSize',
 	'ccssSafelistExtra',
+	'ccssExcludedPostTypes',
+	'ccssMaxRetries',
 	'hostGoogleFontsLocally',
 	'fontMetricFallback',
 	'fontSubset',
@@ -174,8 +185,9 @@ const FILE_OPT_SYNC_KEYS = [
 
 // Normalize one file-optimisation options object: textarea-backed keys via
 // toTextLines() (after spread, so backend arrays win correctly), delivery
-// mode via the PHP-mirroring allowlist, font subsets with the 'latin'
-// fallback. Idempotent — safe to run on init, baseline, and sync payloads.
+// mode via the PHP-mirroring allowlist, CCSS retries clamped 0..5,
+// font subsets with the 'latin' fallback. Idempotent — safe to run on init,
+// baseline, and sync payloads.
 const normalizeFileOpt = ( source = {} ) => {
 	const next = { ...source };
 	for ( const key of FILE_OPT_TEXTAREA_KEYS ) {
@@ -186,6 +198,7 @@ const normalizeFileOpt = ( source = {} ) => {
 	next.usedCSSDeliveryMode = normalizeDeliveryMode(
 		next.usedCSSDeliveryMode
 	);
+	next.ccssMaxRetries = normalizeRetries( next.ccssMaxRetries );
 	if ( typeof next.fontSubsetSubsets !== 'string' ) {
 		next.fontSubsetSubsets = 'latin';
 	}
@@ -293,7 +306,7 @@ const FileOptimization = ( {
 			typeof options.ccssExcludedPostTypes === 'string'
 				? options.ccssExcludedPostTypes
 				: 'fl-builder-template\nelementor_library',
-		ccssMaxRetries: options.ccssMaxRetries ?? 5,
+		ccssMaxRetries: normalizeRetries( options.ccssMaxRetries ),
 		hostGoogleFontsLocally: false,
 		fontMetricFallback: false,
 		fontSubset: false,
@@ -385,6 +398,9 @@ const FileOptimization = ( {
 			: 'latin';
 	defaultSettings.usedCSSDeliveryMode = normalizeDeliveryMode(
 		defaultSettings.usedCSSDeliveryMode
+	);
+	defaultSettings.ccssMaxRetries = normalizeRetries(
+		defaultSettings.ccssMaxRetries
 	);
 
 	const [ settings, setSettings ] = useState( defaultSettings );
@@ -1115,25 +1131,65 @@ const FileOptimization = ( {
 		if ( ! template ) {
 			return;
 		}
-		await withNotification(
-			( async () => {
-				const res = await apiCall( 'regenerate_ccss', {
-					template,
+		// Gate feedback on the queued count (issue #1274 review): a
+		// skipped/unknown template returns success with queued:0, which
+		// must surface the server's distinct message (info) instead of
+		// the generic "queued" success toast.
+		setIsLoading( true );
+		dismiss();
+		try {
+			const res = await apiCall( 'regenerate_ccss', { template } );
+			if ( res?.success && 1 === res?.data?.queued ) {
+				notify( {
+					type: 'success',
+					message:
+						res.message ||
+						__(
+							'Critical CSS regeneration queued for template.',
+							'performance-optimisation'
+						),
+					durationMs: 3000,
 				} );
-				if ( res?.success && onCcssRefresh ) {
-					onCcssRefresh();
-				}
-				return res;
-			} )(),
-			__(
-				'Critical CSS regeneration queued for template.',
-				'performance-optimisation'
-			),
-			__(
-				'Failed to regenerate critical CSS for template.',
-				'performance-optimisation'
-			)
-		);
+			} else if ( res?.success ) {
+				notify( {
+					type: 'info',
+					message:
+						res.message ||
+						__(
+							'Template skipped: nothing queued.',
+							'performance-optimisation'
+						),
+					durationMs: 3000,
+				} );
+			} else {
+				notify( {
+					type: 'error',
+					message:
+						res?.message ||
+						__(
+							'Failed to regenerate critical CSS for template.',
+							'performance-optimisation'
+						),
+					durationMs: 3000,
+				} );
+				return;
+			}
+			if ( onCcssRefresh ) {
+				onCcssRefresh();
+			}
+		} catch ( err ) {
+			console.error( 'Failed to regenerate CCSS for template', err );
+			notify( {
+				type: 'error',
+				message: __(
+					'An unexpected error occurred.',
+					'performance-optimisation'
+				),
+				durationMs: 3000,
+			} );
+		} finally {
+			setIsLoading( false );
+		}
 	};
 
 	const handleRegenerateSingleUsedCss = async () => {
@@ -2006,9 +2062,9 @@ const FileOptimization = ( {
 												min="0"
 												max="5"
 												step="1"
-												value={
+												value={ normalizeRetries(
 													settings.ccssMaxRetries
-												}
+												) }
 												onChange={ handleChange(
 													setSettings
 												) }

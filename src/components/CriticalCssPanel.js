@@ -151,14 +151,12 @@ const CriticalCssPanel = ( {
 		try {
 			await onRegenerateSingle( hash );
 		} catch ( err ) {
+			// Single-owner feedback: the parent (FileOptimization
+			// handleRegenerateSingleCcss via withNotification) owns the
+			// banner, so log locally and rethrow instead of notifying a
+			// second time for the same click.
 			console.error( 'Failed to regenerate CCSS for template', err );
-			notify( {
-				type: 'error',
-				message: __(
-					'Failed to regenerate Critical CSS for template.',
-					'performance-optimisation'
-				),
-			} );
+			throw err;
 		} finally {
 			setSingleBusy( null );
 		}

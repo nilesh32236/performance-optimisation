@@ -2854,12 +2854,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			if ( $post_id ) {
+				// Reject unknown post IDs before enqueueing so junk jobs
+				// never reach the queue (issue #1274 review).
+				if ( function_exists( 'get_post' ) && null === get_post( $post_id ) ) {
+					return $this->send_response( null, false, 404, __( 'Invalid post ID.', 'performance-optimisation' ) );
+				}
 				// Builder-template skip-and-continue (issue #1274): excluded
 				// post types report skipped instead of queueing (no error loop).
-				if ( class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Used_CSS', 'get_excluded_post_types' ) && function_exists( 'get_post_type' ) ) {
+				if ( class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Used_CSS', 'is_excluded_post' ) ) {
 					try {
-						$post_type = get_post_type( $post_id );
-						if ( is_string( $post_type ) && '' !== $post_type && in_array( strtolower( trim( $post_type ) ), Used_CSS::get_excluded_post_types(), true ) ) {
+						if ( Used_CSS::is_excluded_post( $post_id ) ) {
 							return $this->send_response(
 								array(
 									'mode'    => 'single',
@@ -3152,15 +3156,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 			// Per-template/per-URL regenerate (issue #1274): an optional
 			// `template` slug (or hash) queues one job; otherwise all.
+			// The raw input is length-capped (defense-in-depth) before the
+			// allowlist lookup in regenerate_single().
 			try {
 				$params = $_request->get_params();
 				if ( isset( $params['template'] ) && is_string( $params['template'] ) && '' !== trim( $params['template'] ) ) {
-					$queued = Critical_CSS::regenerate_single( sanitize_text_field( trim( $params['template'] ) ) );
+					$raw      = substr( trim( (string) $params['template'] ), 0, 256 );
+					$template = sanitize_text_field( $raw );
+					$queued   = Critical_CSS::regenerate_single( $template );
 					if ( 1 === $queued ) {
 						return $this->send_response(
 							array(
 								'mode'     => 'single',
-								'template' => sanitize_text_field( trim( $params['template'] ) ),
+								'template' => $template,
 								'queued'   => 1,
 							),
 							true,
@@ -3168,15 +3176,49 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 							__( 'Critical CSS regeneration queued for template.', 'performance-optimisation' )
 						);
 					}
+					// Distinguish an unknown template (typo/misconfiguration,
+					// 404) from a legitimately skipped or suspended one
+					// (200 with a distinct message) so a typo never looks
+					// like success (issue #1274 review).
+					if ( method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'is_deferral_suspended_by_js' ) && Critical_CSS::is_deferral_suspended_by_js() ) {
+						return $this->send_response(
+							array(
+								'mode'     => 'single',
+								'template' => $template,
+								'queued'   => 0,
+							),
+							true,
+							200,
+							__( 'Critical CSS generation is suspended while deferred or delayed JavaScript is enabled.', 'performance-optimisation' )
+						);
+					}
+					$known = true;
+					try {
+						$known = ! method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'is_known_template' ) || Critical_CSS::is_known_template( $template );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+					if ( ! $known ) {
+						return $this->send_response(
+							array(
+								'mode'     => 'single',
+								'template' => $template,
+								'queued'   => 0,
+							),
+							false,
+							404,
+							__( 'Unknown template: nothing queued.', 'performance-optimisation' )
+						);
+					}
 					return $this->send_response(
 						array(
 							'mode'     => 'single',
-							'template' => sanitize_text_field( trim( $params['template'] ) ),
+							'template' => $template,
 							'queued'   => 0,
 						),
 						true,
 						200,
-						__( 'Template skipped or unknown: nothing queued.', 'performance-optimisation' )
+						__( 'Template skipped: nothing queued.', 'performance-optimisation' )
 					);
 				}
 			} catch ( \Throwable $e ) {
