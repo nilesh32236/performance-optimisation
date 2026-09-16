@@ -3720,6 +3720,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						return $tag;
 					}
 				}
+				// One-click third-party delay (#1217): when on, only delay
+				// third-party candidates (known denylist host/keyword or
+				// cross-origin src); first-party scripts stay eager. User
+				// allowlist wins. Fail-open: detection errors leave un-delayed.
+				if ( ! empty( $file_opt_for_gate['delayJSThirdParty'] ) ) {
+					try {
+						if ( ! $this->is_delay_third_party_candidate( (string) $tag, (string) $handle ) ) {
+							return $tag;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return $tag;
+					}
+				}
 				if ( ! $this->is_delay_excluded_handle( $handle ) ) {
 					// Non-executable <script> types are data blocks
 					// (application/json, application/ld+json, text/template,
@@ -3738,6 +3752,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// real attribute) never count as a real fetchpriority.
 					if ( ! preg_match( '/\sfetchpriority\s*=/i', (string) $tag ) ) {
 						$tag = str_replace( '<script ', '<script fetchpriority="low" ', $tag );
+					}
+					// Execution-order preservation (#1217): record the original
+					// async/defer semantics so lazyload.js can replay them —
+					// defer in document order (sequential), async in any order.
+					// Fill-gaps-only: never duplicate when already stamped.
+					if ( false === strpos( $tag, 'data-wppo-delay-exec' ) ) {
+						if ( preg_match( '/\sasync(?:\s|=|>|\/)/i', $tag ) ) {
+							$tag = str_replace( '<script ', '<script data-wppo-delay-exec="async" ', $tag );
+						} elseif ( preg_match( '/\sdefer(?:\s|=|>|\/)/i', $tag ) ) {
+							$tag = str_replace( '<script ', '<script data-wppo-delay-exec="defer" ', $tag );
+						}
 					}
 					$tag = str_replace( ' src', ' wppo-src', $tag );
 					// Normalise an executable JS type into the delay marker,
@@ -5316,6 +5341,237 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		public function on_delay_kill_switch_meta_changed( $meta_id, $post_id, $meta_key ): void {
 			$this->on_aggressive_kill_switch_meta_changed( $meta_id, $post_id, $meta_key );
+		}
+
+		/**
+		 * Curated third-party Delay-JS denylist (one-click delay, issue #1217).
+		 *
+		 * Host/keyword fragments that are safe to delay with one click:
+		 * analytics, ads, social, chat, video embeds and consent. The user
+		 * allowlist always wins over this list. Filterable via
+		 * `wppo_delay_js_third_party_denylist`. Fail-open: filter failures
+		 * fall back to the curated preset.
+		 *
+		 * @since NEXT
+		 * @return string[]
+		 */
+		public static function get_delay_js_third_party_denylist(): array {
+			$preset = array(
+				'googletagmanager.com',
+				'google-analytics.com',
+				'analytics.google.com',
+				'gtag',
+				'googletag',
+				'googleads',
+				'doubleclick.net',
+				'facebook.net',
+				'fbevents',
+				'connect.facebook.net',
+				'platform.twitter.com',
+				'platform.linkedin.com',
+				'linkedin.com/insight',
+				'hotjar.com',
+				'static.hotjar.com',
+				'intercom',
+				'hubspot',
+				'hs-scripts',
+				'clarity.ms',
+				'snapchat.com',
+				'tiktok.com',
+				'pinterest.com',
+				'ads-twitter',
+				'cdn.mxpnl.com',
+				'mixpanel',
+				'segment.com',
+				'amplitude',
+				'fullstory.com',
+				'crazyegg.com',
+				'optimizely.com',
+				'vwo.com',
+				'mouseflow.com',
+				'luckyorange',
+				'zendesk',
+				'drift.com',
+				'crisp.chat',
+				'tawk.to',
+				'livechatinc.com',
+				'youtube.com/iframe_api',
+				'player.vimeo.com',
+				'wistia',
+				'jwplayer',
+				'disqus.com',
+				'addthis.com',
+				'sharethis.com',
+				'quantserve.com',
+				'scorecardresearch.com',
+				'newrelic.com',
+				'nr-data.net',
+				'sentry.io',
+				'bugsnag',
+				'stripe.com/v3',
+				'paypal.com/sdk',
+				'cookiebot',
+				'onetrust',
+				'trustarc',
+				'quantcast',
+			);
+			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_third_party_denylist' ) ) {
+				return $preset;
+			}
+			try {
+				$raw = apply_filters( 'wppo_delay_js_third_party_denylist', $preset );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $preset;
+			}
+			if ( ! is_array( $raw ) ) {
+				return $preset;
+			}
+			$filtered = array_values(
+				array_unique(
+					array_filter(
+						array_map(
+							static function ( $val ): string {
+								return is_string( $val ) || is_numeric( $val ) ? (string) $val : '';
+							},
+							$raw
+						),
+						static function ( $val ): bool {
+							return '' !== $val;
+						}
+					)
+				)
+			);
+			return $filtered;
+		}
+
+		/**
+		 * Parse the user-configured third-party allowlist (wins over denylist).
+		 *
+		 * Reads `file_optimisation.delayJSThirdPartyAllowlist` (one entry per
+		 * line) plus the `wppo_delay_js_third_party_allowlist` filter. Fail-open:
+		 * any failure returns an empty list (denylist applies unmodified).
+		 *
+		 * @since NEXT
+		 * @return string[]
+		 */
+		public function get_delay_js_third_party_allowlist(): array {
+			try {
+				$file_opt = $this->options['file_optimisation'] ?? array();
+				$raw      = $file_opt['delayJSThirdPartyAllowlist'] ?? '';
+				$list     = array();
+				if ( is_string( $raw ) && '' !== trim( $raw ) ) {
+					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'process_urls' ) ) {
+						$list = (array) Util::process_urls( $raw );
+					} else {
+						$split = preg_split( '/[\r\n,]+/', $raw );
+						$list  = array_filter( array_map( 'trim', is_array( $split ) ? $split : array() ) );
+					}
+				} elseif ( is_array( $raw ) ) {
+					$list = array_values( array_filter( array_map( 'strval', $raw ) ) );
+				}
+				if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_delay_js_third_party_allowlist' ) ) {
+					$filtered = apply_filters( 'wppo_delay_js_third_party_allowlist', $list );
+					if ( is_array( $filtered ) ) {
+						$list = $filtered;
+					}
+				}
+				return array_values(
+					array_unique(
+						array_filter(
+							array_map( 'strval', (array) $list ),
+							static function ( $val ): bool {
+								return '' !== trim( (string) $val );
+							}
+						)
+					)
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
+		 * Whether a script tag/handle is a third-party delay candidate.
+		 *
+		 * When one-click third-party delay (`delayJSThirdParty`) is on, only
+		 * external scripts whose src host differs from the site host — or
+		 * whose handle/src matches the curated denylist plus user additions —
+		 * are delayed. Inline scripts (no src) are never delayed in this mode.
+		 * The user allowlist always wins (returns false). Any detection
+		 * failure fails open to false (leave un-delayed).
+		 *
+		 * @since NEXT
+		 * @param string $tag    Script tag markup.
+		 * @param string $handle Script handle.
+		 * @return bool True when the script should be delayed in third-party mode.
+		 */
+		public function is_delay_third_party_candidate( string $tag, string $handle ): bool {
+			try {
+				if ( ! preg_match( '/\ssrc\s*=\s*(["\'])(.*?)\1/i', $tag, $matches ) ) {
+					return false;
+				}
+				$src = trim( $matches[2] );
+				if ( '' === $src || 0 === strpos( $src, 'data:' ) || 0 === strpos( $src, 'blob:' ) ) {
+					return false;
+				}
+				// User allowlist wins over everything.
+				foreach ( $this->get_delay_js_third_party_allowlist() as $allowed ) {
+					$allowed = trim( (string) $allowed );
+					if ( '' === $allowed ) {
+						continue;
+					}
+					if ( false !== stripos( $handle, $allowed ) || false !== stripos( $src, $allowed ) ) {
+						return false;
+					}
+				}
+				// Curated denylist + user additions match handle or src.
+				$denylist = self::get_delay_js_third_party_denylist();
+				$file_opt = $this->options['file_optimisation'] ?? array();
+				$extra    = $file_opt['delayJSThirdPartyDenylist'] ?? '';
+				if ( is_string( $extra ) && '' !== trim( $extra ) ) {
+					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'process_urls' ) ) {
+						$denylist = array_merge( $denylist, (array) Util::process_urls( $extra ) );
+					} else {
+						$split    = preg_split( '/[\r\n,]+/', $extra );
+						$denylist = array_merge( $denylist, array_filter( array_map( 'trim', is_array( $split ) ? $split : array() ) ) );
+					}
+				}
+				foreach ( $denylist as $entry ) {
+					$entry = trim( (string) $entry );
+					if ( '' === $entry ) {
+						continue;
+					}
+					if ( false !== stripos( $handle, $entry ) || false !== stripos( $src, $entry ) ) {
+						return true;
+					}
+				}
+				// Host-based auto-detection: external host != site host.
+				$site_host = '';
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$home = function_exists( 'home_url' ) ? home_url() : '';
+					if ( '' !== (string) $home ) {
+						$site_host = strtolower( (string) wp_parse_url( (string) $home, PHP_URL_HOST ) );
+					}
+				}
+				$src_host = '';
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$candidate = $src;
+					if ( 0 === strpos( $candidate, '//' ) ) {
+						$candidate = 'https:' . $candidate;
+					}
+					$src_host = strtolower( (string) wp_parse_url( $candidate, PHP_URL_HOST ) );
+				}
+				if ( '' !== $src_host && '' !== $site_host && $src_host !== $site_host ) {
+					return true;
+				}
+				// Relative src or same host with no denylist hit: not a candidate.
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
 		}
 
 		/**

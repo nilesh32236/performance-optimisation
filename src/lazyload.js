@@ -829,6 +829,13 @@ const delayConfig = window.wppoDelayConfig ||
 /**
  * Load scripts grouped by priority (high → normal → low).
  *
+ * Sequential within each level so `defer` document order is preserved
+ * (parallel Promise.allSettled broke execution order, issue #1217).
+ * Scripts stamped `data-wppo-delay-exec="async"` execute in any order and
+ * may load concurrently; everything else loads sequentially. Already-loaded
+ * nodes (marked `data-wppo-delay-loaded`) are skipped so idle/viewport and
+ * interaction loaders never double-execute a script.
+ *
  * @since 3.8.0
  * @param {NodeList|HTMLScriptElement[]} scripts The scripts to load.
  * @return {Promise<void>} Resolves when all scripts have been loaded.
@@ -836,6 +843,12 @@ const delayConfig = window.wppoDelayConfig ||
 async function loadScriptsByPriority( scripts ) {
 	const groups = { high: [], normal: [], low: [] };
 	Array.from( scripts ).forEach( ( script ) => {
+		if (
+			script.hasAttribute( 'data-wppo-delay-loaded' ) ||
+			! script.isConnected
+		) {
+			return;
+		}
 		const priority =
 			script.getAttribute( 'data-wppo-delay-priority' ) || 'normal';
 		if ( groups[ priority ] ) {
@@ -845,20 +858,55 @@ async function loadScriptsByPriority( scripts ) {
 		}
 	} );
 
+	const markLoaded = ( script ) => {
+		try {
+			script.setAttribute( 'data-wppo-delay-loaded', '1' );
+		} catch {
+			// Marking is best-effort; loading still proceeds.
+		}
+	};
+
 	for ( const level of [ 'high', 'normal', 'low' ] ) {
-		const results = await Promise.allSettled(
-			groups[ level ].map( ( script ) => loadScript( script ) )
-		);
-		results
-			.filter( ( r ) => r.status === 'rejected' )
-			.forEach( ( r ) =>
-				console.error( 'Error loading script:', r.reason )
+		const deferred = [];
+		const concurrent = [];
+		groups[ level ].forEach( ( script ) => {
+			if ( 'async' === script.getAttribute( 'data-wppo-delay-exec' ) ) {
+				concurrent.push( script );
+			} else {
+				deferred.push( script );
+			}
+		} );
+		if ( concurrent.length > 0 ) {
+			const results = await Promise.allSettled(
+				concurrent.map( ( script ) => loadScript( script ) )
 			);
+			results.forEach( ( r, i ) => {
+				if ( r.status === 'rejected' ) {
+					console.error( 'Error loading script:', r.reason );
+				} else {
+					markLoaded( concurrent[ i ] );
+				}
+			} );
+		}
+		for ( const script of deferred ) {
+			try {
+				await loadScript( script );
+				markLoaded( script );
+			} catch ( err ) {
+				console.error( 'Error loading script:', err );
+			}
+		}
 	}
 }
 
 /**
  * Load all deferred scripts queued in the DOM.
+ *
+ * Loads only interaction-strategy scripts (explicit or default): idle and
+ * viewport scripts have dedicated schedulers (requestIdleCallback /
+ * IntersectionObserver) and must not be pulled in early here — bundling
+ * them into the first-interaction flush defeated idle/viewport semantics
+ * and double-loaded nodes (issue #1217).
  *
  * Once all scripts are loaded, dispatches DOMContentLoaded,
  * load, and pageshow events, and triggers lazy image loading.
@@ -876,7 +924,15 @@ async function loadScripts() {
 			document.querySelectorAll(
 				'script[type="wppo/javascript"], script[wppo-src]'
 			)
-		);
+		).filter( ( script ) => {
+			if ( script.hasAttribute( 'data-wppo-delay-loaded' ) ) {
+				return false;
+			}
+			const strategy =
+				script.getAttribute( 'data-wppo-delay-strategy' ) ||
+				delayConfig.defaultStrategy;
+			return strategy === 'interaction';
+		} );
 
 		try {
 			await loadScriptsByPriority( inlineScripts );

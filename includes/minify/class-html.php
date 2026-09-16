@@ -726,6 +726,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 					}
 				}
 
+				// One-click third-party delay (#1217): mirror Main — inline
+				// scripts (no src) stay eager; external scripts must match the
+				// curated denylist/host check and survive the user allowlist.
+				// Fail-open: detection errors leave the tag untouched.
+				if ( ! $skip_delay && ! empty( $file_opt_for_preview['delayJSThirdParty'] ) ) {
+					try {
+						$skip_delay = ! self::is_third_party_delay_candidate( (string) $attributes, (string) $content, $file_opt_for_preview );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$skip_delay = true;
+					}
+				}
+
 				$should_exclude = $skip_delay;
 				// Localised/config inline scripts (#1055): `wp_localize_script()`
 				// (`id="*-js-extra"`) and `wp_add_inline_script(..., 'before'|'after')`
@@ -800,6 +813,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 					}
 
 					// Add strategy and priority data attributes for inline scripts.
+					// Execution-order preservation (#1217): carry original
+					// async/defer semantics so lazyload.js replays defer in
+					// document order. Fill-gaps-only.
+					if ( false === strpos( $attributes, 'data-wppo-delay-exec' ) ) {
+						if ( preg_match( '/\sasync(?:\s|=|>|\/)/i', $attributes ) ) {
+							$attributes .= ' data-wppo-delay-exec="async"';
+						} elseif ( preg_match( '/\sdefer(?:\s|=|>|\/)/i', $attributes ) ) {
+							$attributes .= ' data-wppo-delay-exec="defer"';
+						}
+					}
 					$strategy = $this->get_delay_strategy_for_inline( $attributes, $content );
 					if ( 'interaction' !== $strategy ) {
 						$attributes .= ' data-wppo-delay-strategy="' . esc_attr( $strategy ) . '"';
@@ -936,6 +959,104 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				return Main::is_delay_excluded_context();
 			}
 			return false;
+		}
+
+		/**
+		 * Whether an inline-path script is a third-party delay candidate (#1217).
+		 *
+		 * Mirrors Main::is_delay_third_party_candidate() for buffered HTML:
+		 * scripts without src stay eager; otherwise the curated denylist
+		 * (Main::get_delay_js_third_party_denylist() when available),
+		 * user denylist additions, user allowlist (wins), and cross-origin
+		 * host detection decide. Fail-open to false on any error.
+		 *
+		 * @since NEXT
+		 * @param string $attributes Script attributes string.
+		 * @param string $content    Inline script content.
+		 * @param array  $file_opt   Effective file_optimisation slice.
+		 * @return bool True when the script should be delayed.
+		 */
+		private static function is_third_party_delay_candidate( string $attributes, string $content, array $file_opt ): bool {
+			try {
+				if ( ! preg_match( '/\ssrc\s*=\s*(["\'])(.*?)\1/i', $attributes, $matches ) ) {
+					return false;
+				}
+				$src = trim( $matches[2] );
+				if ( '' === $src || 0 === strpos( $src, 'data:' ) || 0 === strpos( $src, 'blob:' ) ) {
+					return false;
+				}
+				$haystack = $attributes . ' ' . $content;
+				// User allowlist wins.
+				$allow_raw = $file_opt['delayJSThirdPartyAllowlist'] ?? '';
+				if ( is_string( $allow_raw ) && '' !== trim( $allow_raw ) ) {
+					foreach ( (array) Util::process_urls( $allow_raw ) as $allowed ) {
+						$allowed = trim( (string) $allowed );
+						if ( '' !== $allowed && false !== stripos( $haystack, $allowed ) ) {
+							return false;
+						}
+					}
+				}
+				if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_delay_js_third_party_allowlist' ) ) {
+					try {
+						$filtered = apply_filters( 'wppo_delay_js_third_party_allowlist', array() );
+						if ( is_array( $filtered ) ) {
+							foreach ( $filtered as $allowed ) {
+								$allowed = trim( (string) $allowed );
+								if ( '' !== $allowed && false !== stripos( $haystack, $allowed ) ) {
+									return false;
+								}
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				// Curated denylist + user additions.
+				$denylist = array();
+				if ( class_exists( Main::class ) && method_exists( Main::class, 'get_delay_js_third_party_denylist' ) ) {
+					try {
+						$denylist = Main::get_delay_js_third_party_denylist();
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$denylist = array();
+					}
+				}
+				$extra = $file_opt['delayJSThirdPartyDenylist'] ?? '';
+				if ( is_string( $extra ) && '' !== trim( $extra ) ) {
+					$denylist = array_merge( $denylist, (array) Util::process_urls( $extra ) );
+				}
+				foreach ( $denylist as $entry ) {
+					$entry = trim( (string) $entry );
+					if ( '' !== $entry && false !== stripos( $haystack, $entry ) ) {
+						return true;
+					}
+				}
+				// Cross-origin host auto-detection.
+				$site_host = '';
+				$src_host  = '';
+				if ( function_exists( 'home_url' ) && function_exists( 'wp_parse_url' ) ) {
+					try {
+						$site_host = strtolower( (string) wp_parse_url( (string) home_url(), PHP_URL_HOST ) );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$candidate = $src;
+					if ( 0 === strpos( $candidate, '//' ) ) {
+						$candidate = 'https:' . $candidate;
+					}
+					try {
+						$src_host = strtolower( (string) wp_parse_url( $candidate, PHP_URL_HOST ) );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				return '' !== $src_host && '' !== $site_host && $src_host !== $site_host;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
 		}
 
 		/**
