@@ -2217,15 +2217,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$stored['image_optimisation'] = $image + array( 'hardenCommentImages' => true );
 				update_option( 'wppo_settings', $stored );
 
+				// Keep the in-request settings memo in parity (sibling
+				// migration paths call set_settings_cache(); without it a
+				// get_settings() memo loaded earlier in this admin_init
+				// request would stay pre-migration).
+				try {
+					if ( class_exists( 'PerformanceOptimise\\Inc\\Util' ) ) {
+						\PerformanceOptimise\Inc\Util::set_settings_cache( $stored );
+					}
+				} catch ( \Throwable $cache_error ) {
+					unset( $cache_error );
+				}
+
 				// First migration only: purge the static HTML cache so
 				// pages poisoned before hardening (served verbatim by
-				// advanced-cache.php) are regenerated sanitized.
+				// advanced-cache.php) are regenerated sanitized. Fan out
+				// to edge caches (Cloudflare/Bunny/Varnish) so poisoned
+				// edge copies do not survive the local purge.
 				try {
 					if ( class_exists( 'PerformanceOptimise\\Inc\\Cache' ) ) {
 						\PerformanceOptimise\Inc\Cache::clear_cache();
 					}
 				} catch ( \Throwable $purge_error ) {
 					unset( $purge_error );
+				}
+				try {
+					if ( class_exists( 'PerformanceOptimise\\Inc\\Edge_Purger' ) ) {
+						\PerformanceOptimise\Inc\Edge_Purger::purge_all();
+					}
+				} catch ( \Throwable $edge_error ) {
+					unset( $edge_error );
 				}
 
 				if ( ! isset( $this->options['image_optimisation'] ) || ! is_array( $this->options['image_optimisation'] ) ) {
