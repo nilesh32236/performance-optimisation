@@ -74,6 +74,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		private static array $sample_url_cache = array();
 
 		/**
+		 * Per-request field-LCP preload dedup set keyed by normalized URL so
+		 * repeated inline_ccss() invocations emit the hint once. Reset via
+		 * reset_ccss_memo().
+		 *
+		 * @since NEXT
+		 * @var array<string, bool>
+		 */
+		private static array $lcp_preload_emitted = array();
+
+		/**
 		 * Above-fold selectors to match during extraction.
 		 *
 		 * Uses precise token-based matching to avoid false positives.
@@ -447,12 +457,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * key falls back to the default; a non-positive / non-numeric value
 		 * means uncapped (current behaviour) so a rogue setting can never
 		 * starve the queue. Oversized values are clamped to MAX_CCSS_QUEUE_CAP.
+		 * Filterable via `wppo_ccss_queue_cap` when a listener is registered
+		 * (issue #1255): invalid filter output is ignored and oversized values
+		 * clamp, so a rogue filter can never starve or flood the queue.
 		 *
 		 * Note: the historic singular-`css` name predates the double-`s`
 		 * `get_ccss_queue_cap()` alias; both are kept as-is.
 		 *
 		 * @return int Per-run cap, or PHP_INT_MAX when uncapped.
 		 * @since NEXT
+		 * @since NEXT Filterable via `wppo_ccss_queue_cap`.
 		 * @see Critical_CSS::get_ccss_gen_timeout()
 		 * @see Critical_CSS::get_ccss_queue_cap()
 		 */
@@ -460,17 +474,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			try {
 				$options = Util::get_settings();
 				if ( ! isset( $options['file_optimisation']['ccssQueueCap'] ) ) {
-					return self::DEFAULT_CCSS_QUEUE_CAP;
+					$cap = self::DEFAULT_CCSS_QUEUE_CAP;
+				} else {
+					$raw = $options['file_optimisation']['ccssQueueCap'];
+					if ( ! is_numeric( $raw ) || (int) $raw <= 0 ) {
+						$cap = PHP_INT_MAX;
+					} else {
+						$cap = min( (int) $raw, self::MAX_CCSS_QUEUE_CAP );
+					}
 				}
-				$raw = $options['file_optimisation']['ccssQueueCap'];
-				if ( ! is_numeric( $raw ) ) {
-					return PHP_INT_MAX;
+				if ( function_exists( 'apply_filters' ) && function_exists( 'has_filter' ) && has_filter( 'wppo_ccss_queue_cap' ) ) {
+					$filtered = apply_filters( 'wppo_ccss_queue_cap', $cap );
+					if ( is_numeric( $filtered ) && (int) $filtered >= 1 ) {
+						$cap = min( (int) $filtered, self::MAX_CCSS_QUEUE_CAP );
+					}
 				}
-				$cap = (int) $raw;
-				if ( $cap <= 0 ) {
-					return PHP_INT_MAX;
-				}
-				return min( $cap, self::MAX_CCSS_QUEUE_CAP );
+				return $cap;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return PHP_INT_MAX;
@@ -2224,11 +2243,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @return void
 		 */
 		public static function reset_ccss_memo(): void {
-			self::$ccss_exists_cache  = array();
-			self::$ccss_content_cache = array();
-			self::$sample_url_cache   = array();
-			self::$stale_probe_memo   = array();
-			self::$ccss_presets_memo  = null;
+			self::$ccss_exists_cache   = array();
+			self::$ccss_content_cache  = array();
+			self::$sample_url_cache    = array();
+			self::$stale_probe_memo    = array();
+			self::$ccss_presets_memo   = null;
+			self::$lcp_preload_emitted = array();
 		}
 
 		/**
@@ -2457,6 +2477,123 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					break;
 			}
 			return self::$sample_url_cache[ $cache_key ];
+		}
+
+		/**
+		 * Field-measured LCP image preload target for a page URL (issue #1255).
+		 *
+		 * Resolves the RUM field-LCP candidate for the page's path via
+		 * RUM::get_lcp_preload_candidate(): the top real-user LCP URL wins only
+		 * above the minimum sample count and while fresh (both gates are
+		 * enforced inside RUM::get_field_lcp_url()); otherwise the stored
+		 * PageSpeed heuristic wins. A null $url resolves the current request
+		 * path the same way the image pipeline does. Fail-open: any missing
+		 * class/method, unparseable URL, unverifiable origin, or internal
+		 * failure returns '' so callers emit nothing. Multisite-safe: RUM
+		 * aggregates are per-site options and per-path transient keys go
+		 * through Util::transient_key() (blog-aware), so no data leaks across
+		 * sites. No API keys required; missing RUM data falls back to the
+		 * heuristic candidate, never fatal.
+		 *
+		 * @param string|null $url Page URL. Null resolves the current request path.
+		 * @return string Same-origin LCP image URL, or '' when none resolves.
+		 * @since NEXT
+		 * @see RUM::get_lcp_preload_candidate()
+		 * @see RUM::get_field_lcp_url()
+		 */
+		public static function get_field_lcp_preload_url( ?string $url = null ): string {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'get_lcp_preload_candidate' ) ) {
+					return '';
+				}
+				$path = null;
+				if ( null !== $url ) {
+					if ( '' === trim( $url ) ) {
+						return '';
+					}
+					if ( function_exists( 'wp_parse_url' ) ) {
+						$parts = wp_parse_url( $url );
+					} elseif ( function_exists( 'parse_url' ) ) {
+						$parts = parse_url( $url ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when core's wrapper is unavailable.
+					} else {
+						return '';
+					}
+					if ( ! is_array( $parts ) ) {
+						return '';
+					}
+					$raw_path = isset( $parts['path'] ) && is_string( $parts['path'] ) && '' !== $parts['path'] ? $parts['path'] : '/';
+					$path     = class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'normalize_rum_path' )
+						? \PerformanceOptimise\Inc\Util::normalize_rum_path( substr( $raw_path, 0, 512 ) )
+						: $raw_path;
+				}
+				$candidate = \PerformanceOptimise\Inc\RUM::get_lcp_preload_candidate( $path );
+				if ( ! is_array( $candidate ) || empty( $candidate['url'] ) || ! is_string( $candidate['url'] ) ) {
+					return '';
+				}
+				$lcp = trim( $candidate['url'] );
+				if ( '' === $lcp ) {
+					return '';
+				}
+				// Emission-path origin proof (strict: unverifiable means reject
+				// so a preload <link> is never emitted for a cross-origin or
+				// scheme-like URL). The candidate tiers already check the
+				// legacy verdict; this re-check covers pre-guard rows.
+				if ( method_exists( 'PerformanceOptimise\Inc\RUM', 'is_same_origin_url_strict' ) ) {
+					if ( ! \PerformanceOptimise\Inc\RUM::is_same_origin_url_strict( $lcp ) ) {
+						return '';
+					}
+				}
+				return $lcp;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Emit the field-measured LCP image preload for the current page.
+		 *
+		 * Resolves the preload target via get_field_lcp_preload_url() (field
+		 * candidate wins over the PageSpeed heuristic only above the minimum
+		 * sample count and freshness TTL) and emits one `<link rel="preload"
+		 * as="image" fetchpriority="high">` through the shared
+		 * Util::generate_preload_link() helper so markup matches the image
+		 * pipeline. Emitted at most once per normalized URL per request;
+		 * a no-op when no candidate resolves. Fail-open: any failure emits
+		 * nothing, never fatal.
+		 *
+		 * @return void
+		 * @since NEXT
+		 * @see Critical_CSS::get_field_lcp_preload_url()
+		 */
+		private static function maybe_emit_field_lcp_preload(): void {
+			try {
+				$lcp = self::get_field_lcp_preload_url();
+				if ( '' === $lcp ) {
+					return;
+				}
+				$key = class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'normalize_url' )
+					? \PerformanceOptimise\Inc\Util::normalize_url( $lcp )
+					: $lcp;
+				$key = is_string( $key ) && '' !== $key ? $key : $lcp;
+				if ( isset( self::$lcp_preload_emitted[ $key ] ) ) {
+					return;
+				}
+				self::$lcp_preload_emitted[ $key ] = true;
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'generate_preload_link' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_image_mime_type' ) ) {
+					\PerformanceOptimise\Inc\Util::generate_preload_link(
+						$lcp,
+						'preload',
+						'image',
+						false,
+						\PerformanceOptimise\Inc\Util::get_image_mime_type( $lcp ),
+						'',
+						'high'
+					);
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 
 		/**
@@ -3792,9 +3929,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * 5. Over-cap content — file-first delivery: a render-blocking
 		 *    `<link>` to the per-template variant with mtime cache busting
 		 *    (no FOUC), while the full theme stylesheets are still deferred.
+		 *    When the file URL is unavailable (missing/unreadable variant),
+		 *    output nothing and defer to the full stylesheet instead of
+		 *    inlining a truncated block (issue #1255).
+		 *
+		 * Whenever CCSS output is served for the current request, the
+		 * field-measured LCP image (issue #1255) is preloaded first via
+		 * get_field_lcp_preload_url(): the RUM field candidate wins over the
+		 * stored PageSpeed heuristic only above the minimum sample count and
+		 * freshness TTL, so worst pages preload the hero real users see.
 		 *
 		 * @return void
 		 * @since 2.0.0
+		 * @since NEXT Over-cap output without a file URL defers to the full stylesheet.
+		 * @since NEXT Field-measured LCP image is preloaded alongside served CCSS.
 		 */
 		public static function inline_ccss(): void {
 			if ( is_admin() ) {
@@ -3820,6 +3968,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			$template_slug = self::get_current_template_slug();
 			$template_hash = self::get_template_hash( $template_slug );
 
+			// Worst-first LCP preload (issue #1255): the field-measured hero
+			// for the current page is hinted before any CCSS output so the
+			// browser discovers it as early as possible. Emitted once per
+			// request; a no-op when no candidate resolves (helper fails open
+			// to ''). Runs before the content branches so queued (not yet
+			// generated) templates still preload their hero.
+			self::maybe_emit_field_lcp_preload();
+
 			$content = self::get_ccss_content( $template_hash );
 			if ( null !== $content ) {
 				// Fallback when CCSS is too short (<500B) — treat as failed and inject async loadCSS guard.
@@ -3843,16 +3999,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 						echo '<link rel="stylesheet" id="wppo-critical-css" href="' . esc_url( $file_url ) . '" media="all" />' . "\n";
 						return;
 					}
-					// File URL unavailable — fall back to truncated inline
-					// output so the response still carries above-fold CSS.
-					$truncated = self::truncate_to_cap( $content, min( $cap, $limit ) );
-					if ( '' === $truncated ) {
-						return;
-					}
-					echo '<style id="wppo-critical-css" data-truncated="1">' . "\n";
-					// Sanitized against HTML breakout tokens; see sanitize_inline_css().
-					echo self::sanitize_inline_css( $truncated ) . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- CSS content sanitized for the <style> context by sanitize_inline_css().
-					echo '</style>' . "\n";
+					// File URL unavailable — defer to the full stylesheet
+					// (issue #1255): inlining a truncated block would ship a
+					// partial above-fold payload, so output nothing and let
+					// the normally-enqueued stylesheets style the page.
 					return;
 				}
 				echo '<style id="wppo-critical-css">' . "\n";

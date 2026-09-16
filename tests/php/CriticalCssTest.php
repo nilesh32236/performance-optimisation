@@ -10,6 +10,7 @@
  */
 
 use PerformanceOptimise\Inc\Critical_CSS;
+use PerformanceOptimise\Inc\RUM;
 use Brain\Monkey\Functions;
 
 /**
@@ -1115,5 +1116,239 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 		$this->assertIsString( $result );
 		$this->assertStringContainsString( 'body', (string) $result );
 		$this->assertGreaterThan( 0, $this->http_calls['regular'] );
+	}
+
+	/**
+	 * The per-run queue cap defaults to 5 and honours the stored setting.
+	 *
+	 * @return void
+	 */
+	public function test_get_css_queue_cap_default_and_override(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		$this->assertSame( 5, Critical_CSS::get_css_queue_cap() );
+		$this->assertSame( 5, Critical_CSS::get_ccss_queue_cap() );
+
+		$this->option_map['wppo_settings'] = array(
+			'file_optimisation' => array( 'ccssQueueCap' => 3 ),
+		);
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		$this->assertSame( 3, Critical_CSS::get_css_queue_cap() );
+
+		// Non-numeric / non-positive stored values fail open to uncapped.
+		$this->option_map['wppo_settings'] = array(
+			'file_optimisation' => array( 'ccssQueueCap' => 0 ),
+		);
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		$this->assertSame( PHP_INT_MAX, Critical_CSS::get_css_queue_cap() );
+
+		$this->option_map['wppo_settings'] = array(
+			'file_optimisation' => array( 'ccssQueueCap' => 'not-a-number' ),
+		);
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		$this->assertSame( PHP_INT_MAX, Critical_CSS::get_css_queue_cap() );
+
+		// Oversized values clamp to the hard upper bound.
+		$this->option_map['wppo_settings'] = array(
+			'file_optimisation' => array( 'ccssQueueCap' => 500 ),
+		);
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		$this->assertSame( 100, Critical_CSS::get_css_queue_cap() );
+	}
+
+	/**
+	 * The wppo_ccss_queue_cap filter overrides the stored cap (issue #1255).
+	 *
+	 * @return void
+	 */
+	public function test_get_css_queue_cap_applies_filter_when_listener_exists(): void {
+		Functions\when( 'has_filter' )->alias(
+			static function ( $tag ) {
+				return 'wppo_ccss_queue_cap' === $tag;
+			}
+		);
+		$this->filter_overrides['wppo_ccss_queue_cap'] = 10;
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+
+		$this->assertSame( 10, Critical_CSS::get_css_queue_cap() );
+		$this->assertSame( 10, Critical_CSS::get_ccss_queue_cap() );
+	}
+
+	/**
+	 * Oversized / non-numeric filter values clamp to the bound or keep stored.
+	 *
+	 * @return void
+	 */
+	public function test_get_css_queue_cap_clamps_oversized_filter_value(): void {
+		Functions\when( 'has_filter' )->alias(
+			static function ( $tag ) {
+				return 'wppo_ccss_queue_cap' === $tag;
+			}
+		);
+		$this->filter_overrides['wppo_ccss_queue_cap'] = 500;
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+
+		$this->assertSame( 100, Critical_CSS::get_css_queue_cap() );
+
+		$this->filter_overrides['wppo_ccss_queue_cap'] = 'not-a-number';
+
+		$this->assertSame( 5, Critical_CSS::get_css_queue_cap() );
+	}
+
+	/**
+	 * Seed a field-LCP aggregate fixture for one page path.
+	 *
+	 * @param string $path      Page path bucket (e.g. '/slow-page').
+	 * @param string $url       LCP image URL.
+	 * @param int    $n         Sample count.
+	 * @param int    $last_seen Last-seen timestamp.
+	 * @return void
+	 */
+	private function seed_field_lcp_fixture( string $path, string $url, int $n, int $last_seen ): void {
+		$today                           = gmdate( 'Y-m-d' );
+		$this->option_map[ RUM::OPTION ] = array(
+			$today => array(
+				$path => array(
+					'lcpUrls' => array(
+						'fixture-hero' => array(
+							'url'      => $url,
+							'n'        => $n,
+							'lastSeen' => $last_seen,
+						),
+					),
+				),
+			),
+		);
+		RUM::clear_field_lcp_cache();
+	}
+
+	/**
+	 * Fresh field data above the sample gate wins the CCSS preload target.
+	 *
+	 * @return void
+	 */
+	public function test_get_field_lcp_preload_url_returns_field_candidate(): void {
+		$this->seed_field_lcp_fixture(
+			'/slow-page',
+			'https://example.com/wp-content/uploads/hero.jpg',
+			20,
+			time()
+		);
+
+		$this->assertSame(
+			'https://example.com/wp-content/uploads/hero.jpg',
+			Critical_CSS::get_field_lcp_preload_url( 'http://example.com/slow-page/' )
+		);
+	}
+
+	/**
+	 * Under-sampled or stale field data falls back (no field URL wins).
+	 *
+	 * @return void
+	 */
+	public function test_get_field_lcp_preload_url_falls_back_when_under_sampled_or_stale(): void {
+		// Under the 20-sample gate: heuristic fallback (empty in this fixture).
+		$this->seed_field_lcp_fixture(
+			'/slow-page',
+			'https://example.com/wp-content/uploads/hero.jpg',
+			3,
+			time()
+		);
+
+		$this->assertSame( '', Critical_CSS::get_field_lcp_preload_url( 'http://example.com/slow-page/' ) );
+
+		// Stale (>24h): self-corrects back to the heuristic.
+		$this->seed_field_lcp_fixture(
+			'/slow-page',
+			'https://example.com/wp-content/uploads/hero.jpg',
+			25,
+			time() - ( 2 * DAY_IN_SECONDS )
+		);
+
+		$this->assertSame( '', Critical_CSS::get_field_lcp_preload_url( 'http://example.com/slow-page/' ) );
+	}
+
+	/**
+	 * Cross-origin candidates and empty/unknown URLs resolve to nothing.
+	 *
+	 * @return void
+	 */
+	public function test_get_field_lcp_preload_url_rejects_cross_origin_and_empty(): void {
+		$this->seed_field_lcp_fixture(
+			'/slow-page',
+			'https://evil.example/wp-content/uploads/hero.jpg',
+			25,
+			time()
+		);
+
+		$this->assertSame( '', Critical_CSS::get_field_lcp_preload_url( 'http://example.com/slow-page/' ) );
+		$this->assertSame( '', Critical_CSS::get_field_lcp_preload_url( '' ) );
+		$this->assertSame( '', Critical_CSS::get_field_lcp_preload_url( 'http://example.com/unmeasured-path-xyz/' ) );
+		RUM::clear_field_lcp_cache();
+	}
+
+	/**
+	 * Write a CCSS fixture file for the current (home) template hash.
+	 *
+	 * @param string $content File content.
+	 * @return string Template hash.
+	 */
+	private function write_home_ccss_fixture( string $content ): string {
+		$hash = Critical_CSS::get_template_hash( 'home' );
+		$dir  = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/ccss' );
+		if ( ! is_dir( $dir ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
+			mkdir( $dir, 0775, true );
+		}
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+		file_put_contents( $dir . '/' . $hash . '.css', $content );
+		Critical_CSS::reset_ccss_memo();
+
+		return $hash;
+	}
+
+	/**
+	 * Over-cap CCSS serves the file variant, never a truncated inline block.
+	 *
+	 * @return void
+	 */
+	public function test_inline_ccss_over_cap_serves_file_link_without_truncated_inline(): void {
+		$hash = $this->write_home_ccss_fixture( str_repeat( 'body.a{color:red}', 2000 ) );
+
+		try {
+			ob_start();
+			Critical_CSS::inline_ccss();
+			$output = ob_get_clean();
+
+			$this->assertStringContainsString( 'id="wppo-critical-css"', $output );
+			$this->assertStringContainsString( $hash . '.css?ver=', $output );
+			$this->assertStringNotContainsString( 'data-truncated', $output );
+			$this->assertStringNotContainsString( '<style', $output );
+		} finally {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+			unlink( wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/ccss' ) . '/' . $hash . '.css' );
+			Critical_CSS::reset_ccss_memo();
+		}
+	}
+
+	/**
+	 * Under-cap CCSS still inlines normally (emission wiring is a no-op here).
+	 *
+	 * @return void
+	 */
+	public function test_inline_ccss_under_cap_inlines_style(): void {
+		$hash = $this->write_home_ccss_fixture( str_repeat( 'body.a{color:red}', 40 ) );
+
+		try {
+			ob_start();
+			Critical_CSS::inline_ccss();
+			$output = ob_get_clean();
+
+			$this->assertStringContainsString( '<style id="wppo-critical-css">', $output );
+			$this->assertStringNotContainsString( 'data-truncated', $output );
+		} finally {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+			unlink( wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/ccss' ) . '/' . $hash . '.css' );
+			Critical_CSS::reset_ccss_memo();
+		}
 	}
 }
