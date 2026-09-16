@@ -369,6 +369,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'fontMetricFallback'           => false,
 					'fontSubset'                   => false,
 					'fontSubsetSubsets'            => 'latin',
+					'purgeFallbackEnabled'         => false,
 				),
 				'preload_settings'      => array(
 					'enablePreloadCache'       => false,
@@ -5467,6 +5468,94 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			 * @param bool $enabled Whether the safe fallback is enabled.
 			 */
 			return (bool) apply_filters( 'wppo_safe_css_combine_fallback', true );
+		}
+
+		/**
+		 * Whether the post-purge last-good fallback is enabled.
+		 *
+		 * Shared gate for the purge-fallback path (retain `fallback.css` /
+		 * `fallback.js` beside derived assets on purge; serve the fallback
+		 * with a 302 on a miss under the cache path). Default off: when
+		 * disabled the legacy hard-404-on-miss behavior is kept unchanged.
+		 * The `WPPO_PURGE_FALLBACK` constant (when defined true) forces the
+		 * fallback on even when the setting is off (fail-open kill-switch).
+		 * Multisite-safe: reads the per-site `wppo_settings` option.
+		 *
+		 * @since NEXT
+		 * @return bool True when purge-fallback retention/serving is active.
+		 */
+		public static function is_purge_fallback_enabled(): bool {
+			try {
+				if ( defined( 'WPPO_PURGE_FALLBACK' ) && WPPO_PURGE_FALLBACK ) {
+					return true;
+				}
+				$settings = self::get_settings();
+				$enabled  = $settings['file_optimisation']['purgeFallbackEnabled'] ?? false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+			if ( ! function_exists( 'apply_filters' ) ) {
+				return (bool) $enabled;
+			}
+			/**
+			 * Filters whether the post-purge last-good fallback is enabled.
+			 *
+			 * @since NEXT
+			 * @param bool $enabled Whether the purge fallback is enabled.
+			 */
+			return (bool) apply_filters( 'wppo_purge_fallback_enabled', (bool) $enabled );
+		}
+
+		/**
+		 * Map a derived asset path to its sibling last-good fallback path.
+		 *
+		 * `.css` bases map to `fallback.css` and `.js` bases to `fallback.js`
+		 * in the same directory; anything else (HTML, images, unknown) maps
+		 * to `''`. A trailing `.gz`/`.br` sibling suffix is stripped before
+		 * the extension check. Paths that already point at a fallback file
+		 * map to `''` so retention/serving can never loop onto itself.
+		 * Pure path math only — no filesystem or containment checks; callers
+		 * re-check containment via their own validators.
+		 *
+		 * @since NEXT
+		 * @param string $file_path Absolute derived-asset path.
+		 * @return string Sibling fallback path, or '' when not applicable.
+		 */
+		public static function get_purge_fallback_path_for( string $file_path ): string {
+			try {
+				if ( '' === $file_path || false !== strpos( $file_path, "\0" ) || false !== strpos( $file_path, '..' ) ) {
+					return '';
+				}
+				if ( function_exists( 'wp_normalize_path' ) ) {
+					$normalized = wp_normalize_path( $file_path );
+				} else {
+					$normalized = str_replace( '\\', '/', $file_path );
+				}
+				if ( '' === $normalized ) {
+					return '';
+				}
+				$base = (string) preg_replace( '/\.(?:gz|br)$/i', '', $normalized );
+				if ( '' === $base ) {
+					return '';
+				}
+				$basename = strtolower( (string) preg_replace( '#^.*/#', '', $base ) );
+				if ( 'fallback.css' === $basename || 'fallback.js' === $basename ) {
+					return '';
+				}
+				$ext = strtolower( (string) pathinfo( $base, PATHINFO_EXTENSION ) );
+				if ( 'css' !== $ext && 'js' !== $ext ) {
+					return '';
+				}
+				$dir = (string) preg_replace( '#/[^/]*$#', '', $base );
+				if ( '' === $dir ) {
+					return '';
+				}
+				return $dir . '/fallback.' . $ext;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
 		}
 
 		/**

@@ -1796,7 +1796,188 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		}
 
 		/**
-		 * Delete used-CSS files. If URL is provided, delete per-page; otherwise delete all.
+		 * Map a used-CSS path to its sibling last-good fallback path.
+		 *
+		 * Thin wrapper over {@see Util::get_purge_fallback_path_for()} so the
+		 * used-CSS purge/miss path can be unit-tested via this surface.
+		 * `used-css.css` maps to `fallback.css` in the same directory; paths
+		 * that already point at a fallback file map to `''` (loop guard).
+		 *
+		 * @param string $file_path Absolute used-CSS file path.
+		 * @return string Sibling fallback path, or '' when not applicable.
+		 *
+		 * @since NEXT
+		 */
+		public static function get_purge_fallback_path( string $file_path ): string {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
+					return '';
+				}
+				return Util::get_purge_fallback_path_for( $file_path );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Retain a last-good fallback copy before a used-CSS file is purged.
+		 *
+		 * When {@see Util::is_purge_fallback_enabled()} is on and the file
+		 * exists with non-empty content, it is copied to the sibling
+		 * `fallback.css` so a post-purge miss stays styled (302) instead of
+		 * flashing unstyled. No-op when disabled, on containment failure, or
+		 * when the file is missing/empty. Never throws.
+		 *
+		 * @param string $file_path The used-CSS file about to be deleted.
+		 * @return void
+		 *
+		 * @since NEXT
+		 */
+		private function retain_purge_fallback( string $file_path ): void {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! Util::is_purge_fallback_enabled() ) {
+					return;
+				}
+				if ( '' === (string) $file_path || ! $this->is_path_contained( $file_path ) ) {
+					return;
+				}
+				$fallback = self::get_purge_fallback_path( (string) $file_path );
+				if ( '' === $fallback || ! $this->is_path_contained( $fallback ) ) {
+					return;
+				}
+				$fs = Util::init_filesystem();
+				if ( ! $fs || ! $fs->exists( $file_path ) ) {
+					return;
+				}
+				// Refresh the fallback to the newest good copy on every purge
+				// (overwrite), so the post-purge 302 serves the latest
+				// known-good payload rather than the first copy ever kept.
+				if ( method_exists( $fs, 'copy' ) ) {
+					try {
+						$contents = method_exists( $fs, 'get_contents' ) ? $fs->get_contents( $file_path ) : null;
+						if ( ! is_string( $contents ) || '' === $contents ) {
+							return;
+						}
+						$fs->copy( $file_path, $fallback, true );
+						return;
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( ! method_exists( $fs, 'get_contents' ) || ! method_exists( $fs, 'put_contents' ) ) {
+					return;
+				}
+				$contents = $fs->get_contents( $file_path );
+				if ( ! is_string( $contents ) || '' === $contents ) {
+					return;
+				}
+				$fs->put_contents( $fallback, $contents );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Resolve a post-purge used-CSS miss to its fallback.
+		 *
+		 * Returns `served=true` with status 302 and the fallback path only
+		 * when the gate is on, the requested path is contained, it is not
+		 * itself a fallback file (no loops), the base file is missing, and a
+		 * non-empty fallback sibling exists. A single throttled log entry is
+		 * written per fallback directory per day. All other cases return
+		 * `served=false` with status 404 (legacy hard-404 preserved,
+		 * including when the gate is off). Never throws.
+		 *
+		 * @param string $requested_path Absolute requested used-CSS path.
+		 * @return array{served: bool, status: int, fallback_path: string} Resolution.
+		 *
+		 * @since NEXT
+		 */
+		public function get_purge_fallback_response( string $requested_path ): array {
+			$miss = array(
+				'served'        => false,
+				'status'        => 404,
+				'fallback_path' => '',
+			);
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! Util::is_purge_fallback_enabled() ) {
+					return $miss;
+				}
+				if ( '' === (string) $requested_path || ! $this->is_path_contained( (string) $requested_path ) ) {
+					return $miss;
+				}
+				$fallback = self::get_purge_fallback_path( (string) $requested_path );
+				if ( '' === $fallback || ! $this->is_path_contained( $fallback ) ) {
+					return $miss;
+				}
+				$fs = Util::init_filesystem();
+				if ( ! $fs || $fs->exists( $requested_path ) || ! $fs->exists( $fallback ) ) {
+					return $miss;
+				}
+				$valid = false;
+				if ( method_exists( $fs, 'get_contents' ) ) {
+					try {
+						$contents = $fs->get_contents( $fallback );
+						$valid    = is_string( $contents ) && '' !== $contents;
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$valid = false;
+					}
+				}
+				if ( ! $valid ) {
+					return $miss;
+				}
+				$this->log_purge_fallback( $fallback );
+				return array(
+					'served'        => true,
+					'status'        => 302,
+					'fallback_path' => $fallback,
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $miss;
+			}
+		}
+
+		/**
+		 * Log a used-CSS purge-fallback serve once per directory per day.
+		 *
+		 * Throttled via a blog-prefixed transient so a sustained post-purge
+		 * miss storm writes a single activity-log row instead of one per hit.
+		 * Fail-open: logging failures never affect serving.
+		 *
+		 * @param string $fallback_path The fallback file being served.
+		 * @return void
+		 *
+		 * @since NEXT
+		 */
+		private function log_purge_fallback( string $fallback_path ): void {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
+					return;
+				}
+				$dir = (string) preg_replace( '#/[^/]*$#', '', (string) $fallback_path );
+				if ( function_exists( 'wp_normalize_path' ) ) {
+					$dir = wp_normalize_path( $dir );
+				}
+				$key = Util::transient_key( 'wppo_usedcss_purge_fallback_' . md5( $dir ) );
+				if ( function_exists( 'get_transient' ) && get_transient( $key ) ) {
+					return;
+				}
+				if ( function_exists( 'set_transient' ) ) {
+					$ttl = defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400;
+					set_transient( $key, 1, $ttl );
+				}
+				$message = function_exists( '__' ) ? __( 'Used-CSS purge fallback: served last-good fallback after purge (302).', 'performance-optimisation' ) : 'Used-CSS purge fallback: served last-good fallback after purge (302).';
+				Log::add( $message );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Delete used-CSS file(s) for a URL or all URLs.
 		 *
 		 * @param string|null $url Optional URL to delete specific page used-CSS.
 		 * @return bool True on success.
@@ -1825,6 +2006,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( ! $fs ) {
 					return false;
 				}
+				// Post-purge fallback (issue #1275): retain the last-good
+				// copy before deleting so a first hit pre-regen stays styled
+				// (302). No-op when the gate is off. Bulk deletes
+				// (delete_all_used_css) only remove used-css* names, so
+				// retained fallback.css siblings survive them untouched.
+				$this->retain_purge_fallback( $file_path );
 				// Drop the checksum sidecar alongside the variant so a
 				// re-generation re-baselines instead of comparing against a
 				// checksum for deleted output (issue #1038).

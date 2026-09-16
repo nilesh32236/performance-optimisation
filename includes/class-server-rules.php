@@ -242,6 +242,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) ) {
 				}
 			}
 
+			// Post-purge last-good fallback (issue #1275): on a miss under the
+			// cache path, fall through to WordPress so
+			// Cache::maybe_serve_purge_fallback() can 302 to the retained
+			// sibling fallback.css/fallback.js instead of hard-404ing into a
+			// FOUC. Gated (default off); Apache behavior unchanged.
+			$purge_fallback = false;
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_purge_fallback_enabled' ) ) {
+					$purge_fallback = Util::is_purge_fallback_enabled();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$purge_fallback = false;
+			}
+
+			if ( $purge_fallback ) {
+				if ( ! empty( $rules ) ) {
+					$rules[] = '';
+				}
+				$rules[] = '# WPPO purge fallback (stability) — serve last-good fallback.css/fallback.js with 302 on miss under the cache path';
+				$rules[] = '# Paired with Cache::maybe_serve_purge_fallback() (template_redirect, self-gated).';
+				$rules[] = '# --- server context (place inside your existing server { } block) ---';
+				$rules[] = 'location ~* ^/wp-content/cache/wppo/.*\.(css|js)$ {';
+				$rules[] = '    try_files $uri $uri/ /index.php?wppo_purge_fallback=$uri&$args;';
+				$rules[] = '}';
+				/**
+				 * Filter nginx purge-fallback rules.
+				 *
+				 * @since NEXT
+				 * @param string[] $rules Nginx configuration lines.
+				 */
+				$rules = (array) apply_filters( 'wppo_nginx_purge_fallback_rules', $rules );
+			}
+
 			$rules_str = implode( "\n", $rules );
 
 			/**
