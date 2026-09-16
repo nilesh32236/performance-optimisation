@@ -61,6 +61,33 @@ class WpConfigAtomicTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Invoke the private pure content builder via reflection.
+	 *
+	 * The builder takes the runtime WP_CACHE state as a parameter so the
+	 * decision logic is testable without defining the process-global
+	 * WP_CACHE constant (which cannot be undefined once set).
+	 *
+	 * @param string $contents Live file contents.
+	 * @param bool   $runtime_false Whether WP_CACHE is already defined false at runtime.
+	 * @return string|null New file contents, or null when no write should happen.
+	 */
+	private function build_wp_cache_contents( string $contents, bool $runtime_false ): ?string {
+		$method = new \ReflectionMethod( Activate::class, 'build_wp_cache_contents' );
+		$method->setAccessible( true );
+		return $method->invoke( null, $contents, $runtime_false );
+	}
+
+	/**
+	 * Read a private Activate WP_CACHE pattern constant via reflection.
+	 *
+	 * @param string $name Constant name.
+	 * @return string Pattern.
+	 */
+	private function wp_cache_pattern( string $name ): string {
+		return (string) ( new \ReflectionClass( Activate::class ) )->getConstant( $name );
+	}
+
+	/**
 	 * Verified write succeeds and live file parses.
 	 */
 	public function test_atomic_write_verified_success(): void {
@@ -169,6 +196,144 @@ class WpConfigAtomicTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertSame( 'wp_config_write_failed', $notice );
 		$this->assertSame( $this->valid_config(), $fs->contents );
+	}
+
+	/**
+	 * Anchored false pattern matches uncommented defines but never comments.
+	 */
+	public function test_anchored_false_pattern_ignores_commented_defines(): void {
+		$pattern = $this->wp_cache_pattern( 'WP_CACHE_FALSE_PATTERN' );
+
+		$matching = array(
+			"define( 'WP_CACHE', false );",
+			"  define( 'WP_CACHE', false );",
+			"\tdefine( 'WP_CACHE', false );",
+			'define( "WP_CACHE", FALSE );',
+			"define('WP_CACHE',false);",
+		);
+		foreach ( $matching as $line ) {
+			$this->assertSame( 1, preg_match( $pattern, "<?php\n" . $line . "\n" ), "Expected match: {$line}" );
+		}
+
+		$non_matching = array(
+			"// define( 'WP_CACHE', false );",
+			"  // define( 'WP_CACHE', false );",
+			"//define('WP_CACHE', false);",
+			"# define( 'WP_CACHE', false );",
+			'/* define( \'WP_CACHE\', false ); */',
+			" * define( 'WP_CACHE', false );",
+			"define( 'WP_CACHE', 0 );",
+			'define( \'WP_CACHE\', $enabled );',
+			'$copy = WP_CACHE;',
+		);
+		foreach ( $non_matching as $line ) {
+			$this->assertSame( 0, preg_match( $pattern, "<?php\n" . $line . "\n" ), "Expected no match: {$line}" );
+		}
+	}
+
+	/**
+	 * Commented-only WP_CACHE false is never uncommented when runtime is false.
+	 */
+	public function test_commented_only_false_is_never_uncommented(): void {
+		$commented = "<?php\ndefine( 'DB_NAME', 'test' );\n// define( 'WP_CACHE', false );\n/* That's all, stop editing! Happy publishing. */\n";
+
+		$result = $this->build_wp_cache_contents( $commented, true );
+
+		$this->assertNull( $result, 'Commented-only WP_CACHE must leave the file untouched when runtime is already false.' );
+	}
+
+	/**
+	 * Non-literal or already-guarded state leaves the file untouched (no duplicate dead blocks).
+	 */
+	public function test_nonliteral_false_leaves_file_untouched(): void {
+		$zero_define = "<?php\ndefine( 'DB_NAME', 'test' );\ndefine( 'WP_CACHE', 0 );\n/* That's all, stop editing! Happy publishing. */\n";
+		$this->assertNull( $this->build_wp_cache_contents( $zero_define, true ) );
+
+		// Repeat activation with the plugin's own guarded block already present
+		// must not append a duplicate dead block.
+		$with_block = "<?php\ndefine( 'DB_NAME', 'test' );\n/** Enables WordPress Cache */\nif ( ! defined( 'WP_CACHE' ) ) {\n\tdefine( 'WP_CACHE', true );\n}\n/* That's all, stop editing! Happy publishing. */\n";
+		$this->assertNull( $this->build_wp_cache_contents( $with_block, true ) );
+	}
+
+	/**
+	 * A literal uncommented false define is still flipped to true.
+	 */
+	public function test_literal_false_is_flipped_to_true(): void {
+		$with_false = "<?php\ndefine( 'DB_NAME', 'test' );\ndefine( 'WP_CACHE', false );\n/* That's all, stop editing! Happy publishing. */\n";
+
+		$result = $this->build_wp_cache_contents( $with_false, true );
+
+		$this->assertIsString( $result );
+		$this->assertStringContainsString( "define( 'WP_CACHE', true );", $result );
+		$this->assertStringNotContainsString( 'false', $result );
+		$this->assertSame( 1, preg_match( $this->wp_cache_pattern( 'WP_CACHE_TRUE_PATTERN' ), (string) $result ) );
+		$this->assertTrue( Util::verify_php_syntax( (string) $result ) );
+	}
+
+	/**
+	 * Guarded-block insert satisfies the anchored true-define expectation.
+	 */
+	public function test_guarded_insert_satisfies_anchored_expect(): void {
+		$result = $this->build_wp_cache_contents( $this->valid_config(), false );
+
+		$this->assertIsString( $result );
+		$this->assertSame( 1, preg_match( $this->wp_cache_pattern( 'WP_CACHE_TRUE_PATTERN' ), (string) $result ) );
+		$this->assertTrue( Util::verify_php_syntax( (string) $result ) );
+		// Inserted before the stop-editing marker, not appended after it.
+		$this->assertLessThan(
+			strpos( (string) $result, "/* That's all, stop editing!" ),
+			strpos( (string) $result, "define( 'WP_CACHE', true );" )
+		);
+	}
+
+	/**
+	 * Ambiguous (non-literal) content is left untouched when runtime is not false.
+	 */
+	public function test_ambiguous_content_is_left_untouched(): void {
+		$variable = "<?php\ndefine( 'DB_NAME', 'test' );\ndefine( 'WP_CACHE', \$flag );\n";
+		$this->assertNull( $this->build_wp_cache_contents( $variable, false ) );
+	}
+
+	/**
+	 * Legacy transport (no atomic methods) still writes the guarded block.
+	 */
+	public function test_activate_legacy_fallback_writes_guarded_block(): void {
+		$this->stub_path_helpers();
+		$fs                       = new WPPO_WpConfig_Legacy_Mock();
+		$fs->contents             = $this->valid_config();
+		$GLOBALS['wp_filesystem'] = $fs;
+
+		try {
+			$notice = Activate::add_wp_cache_constant();
+		} finally {
+			unset( $GLOBALS['wp_filesystem'] );
+		}
+
+		$this->assertNull( $notice );
+		$this->assertSame( 1, preg_match( $this->wp_cache_pattern( 'WP_CACHE_TRUE_PATTERN' ), $fs->contents ) );
+		$this->assertTrue( Util::verify_php_syntax( $fs->contents ) );
+	}
+
+	/**
+	 * Legacy fallback restores the original on a torn re-read.
+	 */
+	public function test_activate_legacy_fallback_restores_original_on_torn_reread(): void {
+		$this->stub_path_helpers();
+		$original                 = $this->valid_config();
+		$fs                       = new WPPO_WpConfig_Legacy_Mock();
+		$fs->contents             = $original;
+		$fs->corrupt_reread       = true;
+		$GLOBALS['wp_filesystem'] = $fs;
+
+		try {
+			$notice = Activate::add_wp_cache_constant();
+		} finally {
+			unset( $GLOBALS['wp_filesystem'] );
+		}
+
+		$this->assertSame( 'wp_config_write_failed', $notice );
+		$this->assertSame( $original, $fs->contents );
+		$this->assertSame( $original, end( $fs->put_log ) );
 	}
 
 	/**
@@ -571,6 +736,106 @@ class WPPO_WpConfig_Unreadable_Mock {
 	 * @return bool
 	 */
 	public function delete( $path ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+		return true;
+	}
+}
+
+/**
+ * Legacy-transport filesystem mock for wp-config fallback tests.
+ *
+ * Exposes exists()/get_contents()/put_contents()/is_writable() only, so
+ * Util::atomic_write_php_verified() reports unsupported transport (null)
+ * and Activate exercises the legacy direct-write fallback instead of the
+ * atomic path.
+ */
+class WPPO_WpConfig_Legacy_Mock {
+	/**
+	 * Live file contents.
+	 *
+	 * @var string
+	 */
+	public $contents = '';
+	/**
+	 * Whether the live file exists.
+	 *
+	 * @var bool
+	 */
+	public $file_exists = true;
+	/**
+	 * Whether the file is writable.
+	 *
+	 * @var bool
+	 */
+	public $writable = true;
+	/**
+	 * Whether put_contents succeeds (false simulates disk-full).
+	 *
+	 * @var bool
+	 */
+	public $put_result = true;
+	/**
+	 * When true, the re-read after a write returns torn PHP to simulate a
+	 * torn direct write, exercising the fallback restore branch.
+	 *
+	 * @var bool
+	 */
+	public $corrupt_reread = false;
+	/**
+	 * Every written payload in order, so tests can prove the original was
+	 * restored last.
+	 *
+	 * @var array
+	 */
+	public $put_log = array();
+
+	/**
+	 * Check existence.
+	 *
+	 * @param string $path Path.
+	 * @return bool
+	 */
+	public function exists( $path ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+		return $this->file_exists;
+	}
+
+	/**
+	 * Check whether a path is writable in the mock.
+	 *
+	 * @param string $path Path.
+	 * @return bool
+	 */
+	public function is_writable( $path ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+		return $this->writable;
+	}
+
+	/**
+	 * Read mock file contents.
+	 *
+	 * @param string $path Path.
+	 * @return string|false
+	 */
+	public function get_contents( $path ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+		if ( $this->corrupt_reread && array() !== $this->put_log ) {
+			return "<?php\nbroken trunc if ( ! defined(";
+		}
+		return $this->file_exists ? $this->contents : false;
+	}
+
+	/**
+	 * Write mock file contents.
+	 *
+	 * @param string $path Path.
+	 * @param string $contents Contents.
+	 * @param int    $chmod Mode.
+	 * @return bool
+	 */
+	public function put_contents( $path, $contents, $chmod = 0 ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		if ( ! $this->put_result ) {
+			return false;
+		}
+		$this->put_log[]   = $contents;
+		$this->contents    = $contents;
+		$this->file_exists = true;
 		return true;
 	}
 }
