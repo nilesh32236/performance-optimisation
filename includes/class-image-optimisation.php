@@ -1927,25 +1927,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private function get_all_preload_data(): array {
 			$image_optimisation = $this->options['image_optimisation'] ?? array();
 
-			$merged = array_merge(
+			$manual = array_merge(
 				$this->get_manual_lcp_preload_data(),
-				$this->get_auto_lcp_preload_data(),
 				$this->get_front_page_preload_data( $image_optimisation ),
 				$this->get_meta_preload_data(),
 				$this->get_post_type_preload_data( $image_optimisation )
 			);
+			$auto   = $this->get_auto_lcp_preload_data();
 
 			// Deduplicate by normalized URL + query + media (issue #935): the
 			// field-measured LCP URL may equal a manually configured preload
 			// as an absolute URL vs a relative URL (or http vs https), but
 			// exactly one link tag must be emitted per resource (query-string
 			// versions still count as distinct resources). Manual items are
-			// ordered first so they win the dedup, and the whole list is
-			// capped at MAX_LCP_PRELOADS (issue #1216) so srcset expansion
-			// can never emit N media-variant links.
+			// ordered first so they win the dedup and are never dropped:
+			// the MAX_LCP_PRELOADS cap applies only to the auto-expanded
+			// tail (issue #1216), so srcset expansion can never emit N
+			// media-variant links while manual/meta preloads are preserved.
 			$seen   = array();
 			$unique = array();
-			foreach ( $merged as $item ) {
+			foreach ( $manual as $item ) {
 				if ( ! is_array( $item ) || empty( $item['url'] ) ) {
 					continue;
 				}
@@ -1957,11 +1958,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$unique[]     = $item;
 			}
 
-			if ( count( $unique ) > self::MAX_LCP_PRELOADS ) {
-				$unique = array_slice( $unique, 0, self::MAX_LCP_PRELOADS );
+			$auto_unique = array();
+			foreach ( $auto as $item ) {
+				if ( ! is_array( $item ) || empty( $item['url'] ) ) {
+					continue;
+				}
+				$key = $this->get_preload_dedup_key( (string) $item['url'], (string) ( $item['media'] ?? '' ) );
+				if ( isset( $seen[ $key ] ) ) {
+					continue;
+				}
+				$seen[ $key ]  = true;
+				$auto_unique[] = $item;
 			}
 
-			return $unique;
+			if ( count( $auto_unique ) > self::MAX_LCP_PRELOADS ) {
+				$auto_unique = array_slice( $auto_unique, 0, self::MAX_LCP_PRELOADS );
+			}
+
+			return array_merge( $unique, $auto_unique );
 		}
 
 		/**
@@ -2262,7 +2276,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) ) {
 							// Consult the hook (no-op when unhooked) then
 							// respect an explicit opt-out.
-							has_filter( 'wppo_od_should_optimize' );
 							$od_opt_in = (bool) apply_filters( 'wppo_od_should_optimize', true, function_exists( 'home_url' ) ? home_url() : '' );
 						}
 						if ( $od_opt_in ) {
@@ -2625,7 +2638,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					}
 					return $manual;
 				}
-				$gated = ! empty( $image_optimisation['fieldLcpOverride'] ) || ! empty( $image_optimisation['autoPreloadLCP'] ) || ! empty( $image_optimisation['prioritizeLCPImages'] ) || ! empty( ( $this->options['preload_settings'] ?? array() )['autoLcpPreload'] );
+				$auto_lcp_on = ! empty( ( $this->options['preload_settings'] ?? array() )['autoLcpPreload'] ) && $this->is_auto_lcp_rum_satisfied();
+				$gated       = ! empty( $image_optimisation['fieldLcpOverride'] ) || ! empty( $image_optimisation['autoPreloadLCP'] ) || ! empty( $image_optimisation['prioritizeLCPImages'] ) || $auto_lcp_on;
 				if ( ! $gated ) {
 					return '';
 				}
@@ -2881,6 +2895,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return array( $this->prepare_preload_item( $default_image ) );
 			}
 
+			// Slice parsed sources before generating media ranges so the
+			// surviving items keep gapless viewport coverage (issue #1216):
+			// slicing after media generation would leave the last kept
+			// item's max-width bound computed against a removed variant.
+			if ( count( $parsed_sources ) > self::MAX_LCP_PRELOADS ) {
+				$parsed_sources = array_slice( array_values( $parsed_sources ), 0, self::MAX_LCP_PRELOADS );
+			}
+
 			$max_width      = (int) ( $image_optimisation['maxWidthImgSize'] ?? self::MAX_PRELOAD_WIDTH );
 			$items          = array();
 			$previous_width = 0;
@@ -2900,10 +2922,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					'priority' => 'high',
 				);
 				$previous_width = $current_width + 1;
-			}
-
-			if ( count( $items ) > self::MAX_LCP_PRELOADS ) {
-				$items = array_slice( $items, 0, self::MAX_LCP_PRELOADS );
 			}
 
 			return $items;

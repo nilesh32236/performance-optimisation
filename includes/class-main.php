@@ -1034,6 +1034,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// sizes) on blog switches and after cache clears so paths from another
 			// site or pre-clear state are re-verified (audit #888 finding 7).
 			add_action( 'switch_blog', array( 'PerformanceOptimise\Inc\Image_Optimisation', 'clear_runtime_caches' ) );
+			add_action( 'switch_blog', array( 'PerformanceOptimise\Inc\Main', 'reset_font_preload_emitted' ) );
 			add_action( 'wppo_after_cache_clear', array( 'PerformanceOptimise\Inc\Image_Optimisation', 'clear_runtime_caches' ) );
 			$combine_for_registration = ! empty( $this->options['file_optimisation']['combineCSS'] );
 			if ( ! $combine_for_registration && ! empty( $staged_for_registration['combineCSS'] ) ) {
@@ -5604,7 +5605,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
-		 * Reset the per-request font preload dedup guard (tests, switch_blog).
+		 * Reset the per-request font preload dedup guard.
+		 *
+		 * Wired to `switch_blog` in {@see init()} alongside
+		 * `Image_Optimisation::clear_runtime_caches()` so the dedup map
+		 * cannot leak across sites in `switch_to_blog()` requests; also
+		 * called directly in tests.
 		 *
 		 * @since NEXT
 		 * @return void
@@ -5618,8 +5624,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * Pure helper (issue #1216): matches `url(...)` values whose path
 		 * carries a woff2/woff/ttf extension, drops data:/blob:/javascript:
-		 * schemes, trims to 2048 chars, dedups preserving order with
-		 * woff2 preferred. Never fatals: any failure returns an empty list.
+		 * schemes, trims to 2048 chars, dedups preserving document order
+		 * with woff2 preferred within each `@font-face` block (never
+		 * reordered across families so a secondary family's woff2 cannot
+		 * outrank the primary family's woff under the cap-2 slice).
+		 * Never fatals: any failure returns an empty list.
 		 *
 		 * @since NEXT
 		 * @param string $css CSS text to scan.
@@ -5630,43 +5639,58 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( '' === trim( $css ) ) {
 					return array();
 				}
-				$css = substr( $css, 0, 524288 );
-				if ( ! preg_match_all( '/url\(\s*[\'"]?([^\'")]+)[\'"]?\s*\)/i', $css, $matches ) ) {
-					return array();
+				$css    = substr( $css, 0, 524288 );
+				$blocks = array();
+				if ( preg_match_all( '/@font-face\s*\{[^}]*\}/is', $css, $block_matches ) && ! empty( $block_matches[0] ) ) {
+					$blocks = $block_matches[0];
+				} else {
+					$blocks = array( $css );
 				}
 				$found = array();
-				foreach ( $matches[1] as $raw ) {
-					$url = trim( (string) $raw );
-					if ( '' === $url || strlen( $url ) > 2048 ) {
+				foreach ( $blocks as $block ) {
+					$block = substr( $block, 0, 524288 );
+					if ( ! preg_match_all( '/url\(\s*[\'"]?([^\'")]+)[\'"]?\s*\)/i', $block, $matches ) ) {
 						continue;
 					}
-					$lower = strtolower( ltrim( $url ) );
-					if ( str_starts_with( $lower, 'data:' ) || str_starts_with( $lower, 'blob:' ) || str_starts_with( $lower, 'javascript:' ) || str_starts_with( $lower, 'vbscript:' ) ) {
-						continue;
+					$block_urls = array();
+					foreach ( $matches[1] as $raw ) {
+						$url = trim( (string) $raw );
+						if ( '' === $url || strlen( $url ) > 2048 ) {
+							continue;
+						}
+						$lower = strtolower( ltrim( $url ) );
+						if ( str_starts_with( $lower, 'data:' ) || str_starts_with( $lower, 'blob:' ) || str_starts_with( $lower, 'javascript:' ) || str_starts_with( $lower, 'vbscript:' ) ) {
+							continue;
+						}
+						$path = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url, PHP_URL_PATH ) : parse_url( $url, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url() is unavailable.
+						if ( ! is_string( $path ) || '' === $path || 1 !== preg_match( '/\.(woff2|woff|ttf)(\?.*)?$/i', $path ) ) {
+							continue;
+						}
+						$block_urls[] = $url;
 					}
-					$path = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url, PHP_URL_PATH ) : parse_url( $url, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url() is unavailable.
-					if ( ! is_string( $path ) || '' === $path || 1 !== preg_match( '/\.(woff2|woff|ttf)(\?.*)?$/i', $path ) ) {
-						continue;
+					$block_urls = array_values( array_unique( $block_urls ) );
+					usort(
+						$block_urls,
+						static function ( $a, $b ) {
+							$rank = static function ( $u ) {
+								$p = strtolower( (string) ( function_exists( 'wp_parse_url' ) ? wp_parse_url( $u, PHP_URL_PATH ) : parse_url( $u, PHP_URL_PATH ) ) ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url() is unavailable.
+								if ( str_ends_with( $p, '.woff2' ) ) {
+									return 0;
+								}
+								if ( str_ends_with( $p, '.woff' ) ) {
+									return 1;
+								}
+								return 2;
+							};
+							return $rank( $a ) <=> $rank( $b );
+						}
+					);
+					foreach ( $block_urls as $u ) {
+						if ( ! in_array( $u, $found, true ) ) {
+							$found[] = $u;
+						}
 					}
-					$found[] = $url;
 				}
-				$found = array_values( array_unique( $found ) );
-				usort(
-					$found,
-					static function ( $a, $b ) {
-						$rank = static function ( $u ) {
-							$p = strtolower( (string) ( function_exists( 'wp_parse_url' ) ? wp_parse_url( $u, PHP_URL_PATH ) : parse_url( $u, PHP_URL_PATH ) ) ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url() is unavailable.
-							if ( str_ends_with( $p, '.woff2' ) ) {
-								return 0;
-							}
-							if ( str_ends_with( $p, '.woff' ) ) {
-								return 1;
-							}
-							return 2;
-						};
-						return $rank( $a ) <=> $rank( $b );
-					}
-				);
 				return $found;
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -5802,11 +5826,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Collect CSS text chunks from enqueued stylesheets (bounded).
 		 *
 		 * Scans inline `before`/`after` CSS plus same-origin stylesheet file
-		 * contents (512 KB per file, 10 handles max). Fail-open: any failure
-		 * returns the chunks collected so far.
+		 * contents (512 KB per file, 10 handles max). Only queued (actually
+		 * printed) handles are scanned so discovery matches the page output.
+		 * Each chunk carries its stylesheet base URL so CSS-relative font
+		 * refs resolve against the enclosing stylesheet. Fail-open: any
+		 * failure returns the chunks collected so far.
 		 *
 		 * @since NEXT
-		 * @return string[] CSS text chunks.
+		 * @return array[] Chunks shaped as array{css: string, base: string}.
 		 */
 		private function collect_enqueued_font_css_chunks(): array {
 			$chunks = array();
@@ -5822,15 +5849,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						return $chunks;
 					}
 				}
+				$queue = ( isset( $GLOBALS['wp_styles']->queue ) && is_array( $GLOBALS['wp_styles']->queue ) ) ? $GLOBALS['wp_styles']->queue : array();
+				if ( empty( $queue ) ) {
+					return $chunks;
+				}
 				$scanned = 0;
-				foreach ( $registered as $style ) {
+				foreach ( array_slice( $queue, 0, 10 ) as $handle ) {
 					if ( $scanned >= 10 ) {
 						break;
 					}
+					$style = $registered[ $handle ] ?? null;
 					if ( ! is_object( $style ) ) {
 						continue;
 					}
-					++$scanned;
 					$extra = $style->extra ?? array();
 					if ( is_array( $extra ) ) {
 						foreach ( array( 'after', 'before' ) as $key ) {
@@ -5839,7 +5870,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 							}
 							$inline = is_array( $extra[ $key ] ) ? implode( "\n", $extra[ $key ] ) : (string) $extra[ $key ];
 							if ( '' !== trim( $inline ) && false !== stripos( $inline, 'font-face' ) ) {
-								$chunks[] = substr( $inline, 0, 524288 );
+								$chunks[] = array(
+									'css'  => substr( $inline, 0, 524288 ),
+									'base' => '',
+								);
+								++$scanned;
+								if ( $scanned >= 10 ) {
+									break 2;
+								}
 							}
 						}
 					}
@@ -5862,10 +5900,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						continue;
 					}
 					$local = ( defined( 'ABSPATH' ) ? (string) ABSPATH : '' ) . ltrim( $path, '/' );
-					$size  = 0;
 					if ( function_exists( 'wp_normalize_path' ) ) {
 						$local = wp_normalize_path( $local );
 					}
+					$real = realpath( $local );
+					$base = ( function_exists( 'wp_normalize_path' ) && defined( 'ABSPATH' ) ) ? wp_normalize_path( (string) ABSPATH ) : (string) ( defined( 'ABSPATH' ) ? ABSPATH : '' );
+					if ( ! is_string( $real ) ) {
+						continue;
+					}
+					if ( function_exists( 'wp_normalize_path' ) ) {
+						$real = wp_normalize_path( $real );
+					}
+					if ( '' === $base || 0 !== strpos( $real, rtrim( $base, '/' ) . '/' ) ) {
+						continue;
+					}
+					$local = $real;
+					$size  = 0;
 					if ( file_exists( $local ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_exists -- Local read-only size probe; WP_Filesystem init per asset is disproportionate.
 						$size = filesize( $local ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize -- Same local probe as above.
 					}
@@ -5883,13 +5933,69 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						$content = file_get_contents( $local ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local stylesheet read with size guard; WP_Filesystem tried first.
 					}
 					if ( is_string( $content ) && '' !== trim( $content ) && false !== stripos( $content, 'font-face' ) ) {
-						$chunks[] = substr( $content, 0, 524288 );
+						$chunks[] = array(
+							'css'  => substr( $content, 0, 524288 ),
+							'base' => $abs_src,
+						);
+						++$scanned;
 					}
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
 			return $chunks;
+		}
+
+		/**
+		 * Resolve a font URL found in CSS against its stylesheet base.
+		 *
+		 * Absolute URLs pass through unchanged. Root-relative refs
+		 * (`/fonts/x.woff2`) resolve against `home_url()` and
+		 * stylesheet-relative refs (`../fonts/x.woff2`, `fonts/x.woff2`)
+		 * resolve against the enclosing stylesheet directory (issue #1216);
+		 * inline `<style>` chunks (empty base) resolve root-relative refs
+		 * against `home_url()` and bare relatives against the home URL so
+		 * no `wp-content`-based guess can emit a 404 preload. Protocol-
+		 * relative URLs (`//host/...`) pass through for the same-origin
+		 * guard to judge. Never fatals: any failure returns the trimmed
+		 * input unchanged.
+		 *
+		 * @since NEXT
+		 * @param string $font_url Font URL as written in CSS.
+		 * @param string $base_src Absolute stylesheet URL (or empty for inline CSS).
+		 * @return string Resolved absolute-or-relative URL.
+		 */
+		private function resolve_font_url( string $font_url, string $base_src = '' ): string {
+			try {
+				$font_url = trim( $font_url );
+				if ( '' === $font_url ) {
+					return '';
+				}
+				if ( preg_match( '/^https?:\/\//i', $font_url ) || 0 === strpos( $font_url, '//' ) ) {
+					return substr( $font_url, 0, 2048 );
+				}
+				$is_root_relative = 0 === strpos( $font_url, '/' );
+				if ( $is_root_relative && function_exists( 'home_url' ) ) {
+					$home = (string) home_url();
+					return substr( rtrim( $home, '/' ) . $font_url, 0, 2048 );
+				}
+				if ( '' !== $base_src ) {
+					$base_path = strtok( $base_src, '?#' );
+					if ( ! is_string( $base_path ) || '' === $base_path ) {
+						$base_path = $base_src;
+					}
+					$dir = rtrim( dirname( $base_path ), '/' ) . '/';
+					return substr( $dir . ltrim( $font_url, '/' ), 0, 2048 );
+				}
+				if ( function_exists( 'home_url' ) ) {
+					$home = (string) home_url();
+					return substr( rtrim( $home, '/' ) . '/' . ltrim( $font_url, '/' ), 0, 2048 );
+				}
+				return substr( $font_url, 0, 2048 );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return substr( trim( $font_url ), 0, 2048 );
+			}
 		}
 
 		/**
@@ -5921,10 +6027,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$cache_key = '';
 				try {
 					$handles = array();
+					$srcs    = array();
 					if ( isset( $GLOBALS['wp_styles'] ) && is_object( $GLOBALS['wp_styles'] ) && isset( $GLOBALS['wp_styles']->queue ) && is_array( $GLOBALS['wp_styles']->queue ) ) {
-						$handles = array_slice( $GLOBALS['wp_styles']->queue, 0, 10 );
+						$handles    = array_slice( $GLOBALS['wp_styles']->queue, 0, 10 );
+						$registered = $GLOBALS['wp_styles']->registered ?? array();
+						if ( ! is_array( $registered ) ) {
+							$registered = array();
+						}
+						foreach ( $handles as $h ) {
+							$s      = $registered[ $h ] ?? null;
+							$srcs[] = is_object( $s ) ? (string) ( (string) ( $s->src ?? '' ) . '|' . (string) ( $s->ver ?? '' ) ) : (string) $h;
+						}
 					}
-					$cache_key = Util::transient_key( 'wppo_auto_fonts_' . md5( wp_json_encode( $handles ) . '|' . implode( '|', array_keys( $manual_keys ) ) ) );
+					$cache_key = Util::transient_key( 'wppo_auto_fonts_' . md5( wp_json_encode( $srcs ) . '|' . implode( '|', array_keys( $manual_keys ) ) ) );
 				} catch ( \Throwable $e ) {
 					unset( $e );
 					$cache_key = '';
@@ -5940,9 +6055,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					}
 				}
 				$candidates = array();
-				foreach ( $this->collect_enqueued_font_css_chunks() as $css ) {
+				foreach ( $this->collect_enqueued_font_css_chunks() as $chunk ) {
+					$css  = is_array( $chunk ) ? (string) ( $chunk['css'] ?? '' ) : (string) $chunk;
+					$base = is_array( $chunk ) ? (string) ( $chunk['base'] ?? '' ) : '';
 					foreach ( self::extract_font_urls_from_css( $css ) as $font_url ) {
-						$abs = preg_match( '/^https?:\/\//i', $font_url ) ? $font_url : Util::cached_content_url( $font_url );
+						$abs = $this->resolve_font_url( $font_url, $base );
 						if ( ! $this->is_same_origin_font_url( $abs ) ) {
 							continue;
 						}
@@ -5959,7 +6076,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$result = array_values( $candidates );
 				if ( '' !== $cache_key && function_exists( 'set_transient' ) ) {
 					try {
-						set_transient( $cache_key, $result, 12 * HOUR_IN_SECONDS );
+						set_transient( $cache_key, $result, defined( 'HOUR_IN_SECONDS' ) ? 12 * HOUR_IN_SECONDS : 43200 );
 					} catch ( \Throwable $e ) {
 						unset( $e );
 					}
