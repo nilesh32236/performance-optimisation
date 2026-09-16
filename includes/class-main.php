@@ -500,6 +500,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['image_optimisation']['lazyRenderExcludeBuilders'] ) ) {
 				$this->options['image_optimisation']['lazyRenderExcludeBuilders'] = true;
 			}
+			// Comment-image hardening (issue #1271): additive key, defaults to
+			// on so hostile comment markup (img onerror, picture source,
+			// inline on* handlers, scriptable URLs) is stripped before
+			// next-gen/lazy rewriting. In-memory only here (no front-end DB
+			// write); persisted via maybe_migrate_comment_image_hardening().
+			if ( ! isset( $this->options['image_optimisation']['hardenCommentImages'] ) ) {
+				$this->options['image_optimisation']['hardenCommentImages'] = true;
+			}
 			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
 				$this->options['file_optimisation'] = array();
 			}
@@ -980,6 +988,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'admin_init', array( $this, 'maybe_migrate_image_alt_edge_defaults' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_preload_auto_defaults' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_object_cache_outage_flag' ) );
+			add_action( 'admin_init', array( $this, 'maybe_migrate_comment_image_hardening' ) );
 			// One-time activity-log notice on admin_init.
 			if ( isset( $this->options['file_optimisation']['removeQueryStrings'] ) ) {
 				add_action( 'admin_init', array( $this, 'maybe_notify_remove_query_strings_removal' ) );
@@ -2160,6 +2169,57 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
 					Util::set_settings_cache( $stored );
 				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * One-time backfill for comment-image hardening (issue #1271).
+		 *
+		 * Adds `image_optimisation.hardenCommentImages = true` to stored
+		 * settings that predate the key so hostile comment markup (img
+		 * onerror, picture source, inline on* handlers, scriptable URLs)
+		 * is stripped before next-gen/lazy rewriting. Runs on `admin_init`
+		 * (not the constructor) so a cacheable front-end request never
+		 * triggers a settings write. Fresh installs with no stored option
+		 * are skipped (absent key reads as enabled via the in-memory
+		 * default). Idempotent (key presence is the marker). Uses per-site
+		 * `get_option()` so multisite sites migrate independently with no
+		 * cross-site leakage.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public function maybe_migrate_comment_image_hardening(): void {
+			try {
+				if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
+					return;
+				}
+				if ( isset( $this->options['image_optimisation'] ) && is_array( $this->options['image_optimisation'] ) && array_key_exists( 'hardenCommentImages', $this->options['image_optimisation'] ) ) {
+					return;
+				}
+				// allowlist(settings-read-guard): deliberate direct read — must distinguish
+				// "no stored row" (false) from "stored array", which Util::get_settings()
+				// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
+				$stored = get_option( 'wppo_settings' );
+				if ( ! is_array( $stored ) ) {
+					return;
+				}
+
+				$image = isset( $stored['image_optimisation'] ) && is_array( $stored['image_optimisation'] ) ? $stored['image_optimisation'] : array();
+
+				if ( array_key_exists( 'hardenCommentImages', $image ) ) {
+					return;
+				}
+
+				$stored['image_optimisation'] = $image + array( 'hardenCommentImages' => true );
+				update_option( 'wppo_settings', $stored );
+
+				if ( ! isset( $this->options['image_optimisation'] ) || ! is_array( $this->options['image_optimisation'] ) ) {
+					$this->options['image_optimisation'] = array();
+				}
+				$this->options['image_optimisation']['hardenCommentImages'] = true;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
