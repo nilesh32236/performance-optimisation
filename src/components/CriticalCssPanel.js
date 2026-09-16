@@ -35,6 +35,67 @@ const STATUS_CONFIG = {
 	},
 };
 
+/**
+ * Normalize a status entry into a null-safe shape.
+ *
+ * Malformed payloads (null, numbers, missing status) fall back to 'none'
+ * with a hash-derived label instead of throwing.
+ *
+ * @since NEXT
+ * @param {*} hash  Status key.
+ * @param {*} entry Raw entry value.
+ * @return {{statusKey: string, label: string, size: number|null, truncated: boolean}} Normalized entry.
+ */
+export const normalizeCcssEntry = ( hash, entry ) => {
+	const safeHash = typeof hash === 'string' ? hash : String( hash ?? '' );
+	const fallbackLabel = ( safeHash ? safeHash.substring( 0, 8 ) : '?' ) + '…';
+	if ( typeof entry === 'string' ) {
+		return {
+			statusKey: entry || 'none',
+			label: fallbackLabel,
+			size: null,
+			truncated: false,
+		};
+	}
+	if ( ! entry || typeof entry !== 'object' ) {
+		return {
+			statusKey: 'none',
+			label: fallbackLabel,
+			size: null,
+			truncated: false,
+		};
+	}
+	return {
+		statusKey:
+			typeof entry.status === 'string' && entry.status
+				? entry.status
+				: 'none',
+		label:
+			typeof entry.label === 'string' && entry.label
+				? entry.label
+				: fallbackLabel,
+		size: Number.isFinite( entry.size ) ? entry.size : null,
+		truncated: !! entry.truncated,
+	};
+};
+
+/**
+ * Resolve the badge config for a status key with an own-property check.
+ *
+ * Plain property access would resolve inherited keys like '__proto__' to
+ * Object.prototype (truthy) instead of the intended `none` fallback.
+ *
+ * @since NEXT
+ * @param {*} statusKey Raw status key.
+ * @return {{icon: *, className: string, label: string}} Badge config.
+ */
+const statusConfigFor = ( statusKey ) => {
+	const hasOwn = Object.hasOwn
+		? Object.hasOwn( STATUS_CONFIG, statusKey )
+		: Object.prototype.hasOwnProperty.call( STATUS_CONFIG, statusKey );
+	return hasOwn ? STATUS_CONFIG[ statusKey ] : STATUS_CONFIG.none;
+};
+
 const CriticalCssPanel = ( { status = {}, onRegenerate } ) => {
 	const [ isRegenerating, setIsRegenerating ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
@@ -80,21 +141,10 @@ const CriticalCssPanel = ( { status = {}, onRegenerate } ) => {
 			{ entries.length > 0 ? (
 				<div className="wppo-ccss-status-list wppo-mb-16">
 					{ entries.map( ( [ hash, entry ] ) => {
-						const statusKey =
-							typeof entry === 'string' ? entry : entry.status;
-						const label =
-							typeof entry === 'object' && entry.label
-								? entry.label
-								: hash.substring( 0, 8 ) + '…';
-						const size =
-							typeof entry === 'object' &&
-							Number.isFinite( entry.size )
-								? entry.size
-								: null;
-						const truncated =
-							typeof entry === 'object' && !! entry.truncated;
-						const config =
-							STATUS_CONFIG[ statusKey ] || STATUS_CONFIG.none;
+						const normalized = normalizeCcssEntry( hash, entry );
+						const { statusKey, label, size, truncated } =
+							normalized;
+						const config = statusConfigFor( statusKey );
 						return (
 							<div key={ hash } className="wppo-ccss-status-item">
 								<span className="wppo-ccss-status-hash">

@@ -84,9 +84,11 @@ const ESI_REQUEST_HEADERS = {
 
 /**
  * JSON payload error codes indicating an expired/invalid nonce even when the
- * HTTP status is 200. Mirrors the retry list in src/lib/apiRequest.js and
- * src/main.js (rest_forbidden / rest_cookie_invalid_nonce /
- * rest_cookie_nonce_invalid).
+ * HTTP status is 200. Mirrors AUTH_ERROR_CODES in src/lib/authErrors.js (used
+ * by src/lib/apiRequest.js) and src/main.js (rest_forbidden /
+ * rest_cookie_invalid_nonce / rest_cookie_nonce_invalid). Kept local so this
+ * bundle stays standalone; sync is enforced by
+ * src/lib/__tests__/authSync.test.js.
  *
  * @since 2.0.0
  * @type {Set<string>}

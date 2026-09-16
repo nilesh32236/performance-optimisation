@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faBrain } from '@fortawesome/free-solid-svg-icons';
-import { apiCall } from '../lib/apiRequest';
+import { apiCall, patchSettingsCache } from '../lib/apiRequest';
 import { suggestionKey } from './SuggestionsPanel';
 import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
@@ -117,19 +117,11 @@ const AiPanel = () => {
 				},
 			} );
 			if ( response.success ) {
-				if (
-					typeof wppoSettings !== 'undefined' &&
-					wppoSettings.settings
-				) {
-					wppoSettings.settings = Object.freeze( {
-						...wppoSettings.settings,
-						ai_adaptive: Object.freeze( {
-							enabled,
-							use_wp_ai_client: useWpAiClient,
-							dismissed_suggestions: dismissed,
-						} ),
-					} );
-				}
+				patchSettingsCache( 'ai_adaptive', {
+					enabled,
+					use_wp_ai_client: useWpAiClient,
+					dismissed_suggestions: dismissed,
+				} );
 				notify( {
 					type: 'success',
 					message: __(
@@ -213,15 +205,7 @@ const AiPanel = () => {
 				settings: merged,
 			} );
 			if ( res.success ) {
-				if (
-					typeof wppoSettings !== 'undefined' &&
-					wppoSettings.settings
-				) {
-					wppoSettings.settings = Object.freeze( {
-						...wppoSettings.settings,
-						[ payload.tab ]: Object.freeze( merged ),
-					} );
-				}
+				patchSettingsCache( payload.tab, merged );
 				notify( {
 					type: 'success',
 					message: __(
@@ -281,24 +265,11 @@ const AiPanel = () => {
 				},
 			} );
 			if ( res.success ) {
-				if (
-					typeof wppoSettings !== 'undefined' &&
-					wppoSettings.settings
-				) {
-					const prevAdaptive =
-						wppoSettings.settings.ai_adaptive || {};
-					wppoSettings.settings = Object.freeze( {
-						...wppoSettings.settings,
-						ai_adaptive: Object.freeze( {
-							...prevAdaptive,
-							enabled,
-							use_wp_ai_client: useWpAiClient,
-							dismissed_suggestions: Object.freeze( [
-								...current,
-							] ),
-						} ),
-					} );
-				}
+				patchSettingsCache( 'ai_adaptive', {
+					enabled,
+					use_wp_ai_client: useWpAiClient,
+					dismissed_suggestions: [ ...current ],
+				} );
 				notify( {
 					type: 'success',
 					message: __(

@@ -1,4 +1,4 @@
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 import {
 	useState,
 	useRef,
@@ -7,7 +7,12 @@ import {
 	useCallback,
 } from '@wordpress/element';
 import { handleChange } from '../lib/util';
-import { apiCall, isValidScanUrl, runPerformanceScan } from '../lib/apiRequest';
+import {
+	apiCall,
+	commitSettingsCache,
+	isValidScanUrl,
+	runPerformanceScan,
+} from '../lib/apiRequest';
 import { modeLabel } from '../lib/litespeed';
 import useNotice from '../lib/useNotice';
 import useUnsavedChanges from '../lib/useUnsavedChanges';
@@ -35,6 +40,30 @@ let cdnRowCounter = 0;
 const cdnRowId = () => {
 	cdnRowCounter += 1;
 	return `cdn-${ Date.now() }-${ cdnRowCounter }`;
+};
+
+// Newline-delimited third-party lists: normalise array payloads (from
+// sanitize/process_urls) to textarea strings without nested ternaries.
+const toDelayLines = ( value ) => {
+	if ( typeof value === 'string' ) {
+		return value;
+	}
+	if ( Array.isArray( value ) ) {
+		return value.join( '\n' );
+	}
+	return '';
+};
+
+// Normalize the used-CSS delivery mode the same way PHP sanitizes it
+// (lowercase + trim, allowlisted, fail-open to 'file') so the UI never
+// disagrees with the server on a single render (issue #1220).
+const normalizeDeliveryMode = ( value ) => {
+	const mode = String( value || 'file' )
+		.toLowerCase()
+		.trim();
+	return [ 'file', 'delay', 'async', 'remove' ].includes( mode )
+		? mode
+		: 'file';
 };
 
 const FileOptimization = ( {
@@ -86,6 +115,16 @@ const FileOptimization = ( {
 			options.delayJSExternalOnly !== undefined
 				? options.delayJSExternalOnly
 				: false,
+		delayJSThirdParty:
+			options.delayJSThirdParty !== undefined
+				? options.delayJSThirdParty
+				: false,
+		delayJSThirdPartyDenylist: toDelayLines(
+			options.delayJSThirdPartyDenylist
+		),
+		delayJSThirdPartyAllowlist: toDelayLines(
+			options.delayJSThirdPartyAllowlist
+		),
 		delayJSBuilderPreset:
 			options.delayJSBuilderPreset !== undefined
 				? options.delayJSBuilderPreset
@@ -138,6 +177,7 @@ const FileOptimization = ( {
 				: true,
 		unusedCSSRegressionThreshold:
 			options.unusedCSSRegressionThreshold ?? 20,
+		usedCSSDeliveryMode: options.usedCSSDeliveryMode || 'file',
 		disableEmojis: false,
 		disableEmbeds: false,
 		disableDashicons: false,
@@ -181,6 +221,13 @@ const FileOptimization = ( {
 	// String-guard textarea-backed keys AFTER the spread so a non-string
 	// truthy payload (e.g. array from corrupted settings) cannot flow into
 	// a controlled textarea value via the ...options override above.
+	// toDelayLines joins array payloads instead of clearing them (#1217 review).
+	defaultSettings.delayJSThirdPartyDenylist = toDelayLines(
+		options.delayJSThirdPartyDenylist
+	);
+	defaultSettings.delayJSThirdPartyAllowlist = toDelayLines(
+		options.delayJSThirdPartyAllowlist
+	);
 	defaultSettings.delayJSExcludeUrls =
 		typeof options.delayJSExcludeUrls === 'string'
 			? options.delayJSExcludeUrls
@@ -197,6 +244,9 @@ const FileOptimization = ( {
 		typeof options.fontSubsetSubsets === 'string'
 			? options.fontSubsetSubsets
 			: 'latin';
+	defaultSettings.usedCSSDeliveryMode = normalizeDeliveryMode(
+		defaultSettings.usedCSSDeliveryMode
+	);
 
 	const [ settings, setSettings ] = useState( defaultSettings );
 	const [ isLoading, setIsLoading ] = useState( false );
@@ -207,6 +257,30 @@ const FileOptimization = ( {
 		notify: notifyPurge,
 		dismiss: dismissPurge,
 	} = useNotice();
+	// Used-CSS staleness (issue #1220): last-regen time + stale flag from the
+	// read-only used_css_status endpoint, shown as a warning banner while
+	// removeUnusedCSS is on. Fail-open: a failed fetch simply hides the banner.
+	const [ usedCssStatus, setUsedCssStatus ] = useState( null );
+	const refreshUsedCssStatus = useCallback( async () => {
+		try {
+			const res = await apiCall( 'used_css_status', {}, 'GET' );
+			if ( res && res.success && res.data ) {
+				setUsedCssStatus( res.data );
+			}
+		} catch {
+			// Fail-open: leave the banner hidden.
+		}
+	}, [] );
+	useEffect( () => {
+		if ( ! options.removeUnusedCSS ) {
+			// Clear a stale banner when the feature is toggled off.
+			setUsedCssStatus( null );
+			return;
+		}
+		// Reuse the shared fetcher so staleness logic lives in one place
+		// (issue #1220). Fail-open: a failed fetch leaves the banner hidden.
+		refreshUsedCssStatus();
+	}, [ options.removeUnusedCSS, refreshUsedCssStatus ] );
 	// Sandbox preview (issue #1163): visitor-safe admin preview of
 	// delay/defer/combine with one-click promote/discard + in-preview perf test.
 	const [ sandboxStaged, setSandboxStaged ] = useState( null );
@@ -238,6 +312,13 @@ const FileOptimization = ( {
 		// toggles from the admin preview.
 		delayJSExternalOnly: !! settings.delayJSExternalOnly,
 		minifyInlineJS: !! settings.minifyInlineJS,
+		delayJSThirdParty: !! settings.delayJSThirdParty,
+		delayJSThirdPartyDenylist: toDelayLines(
+			settings.delayJSThirdPartyDenylist
+		),
+		delayJSThirdPartyAllowlist: toDelayLines(
+			settings.delayJSThirdPartyAllowlist
+		),
 		excludeDelayJS: toExcludeLines( settings.excludeDelayJS ),
 		excludeDeferJS: toExcludeLines( settings.excludeDeferJS ),
 		excludeCombineCSS: toExcludeLines( settings.excludeCombineCSS ),
@@ -516,6 +597,12 @@ const FileOptimization = ( {
 		setBaseline( {
 			...defaultSettings,
 			...options,
+			delayJSThirdPartyDenylist: toDelayLines(
+				options.delayJSThirdPartyDenylist
+			),
+			delayJSThirdPartyAllowlist: toDelayLines(
+				options.delayJSThirdPartyAllowlist
+			),
 			delayJSExcludeUrls:
 				typeof options.delayJSExcludeUrls === 'string'
 					? options.delayJSExcludeUrls
@@ -532,6 +619,9 @@ const FileOptimization = ( {
 				typeof options.fontSubsetSubsets === 'string'
 					? options.fontSubsetSubsets
 					: 'latin',
+			usedCSSDeliveryMode: normalizeDeliveryMode(
+				options.usedCSSDeliveryMode
+			),
 		} );
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [
@@ -552,6 +642,9 @@ const FileOptimization = ( {
 		options.delayJSBuilderPreset,
 		options.delayJSINPPreset,
 		options.delayJSExternalOnly,
+		options.delayJSThirdParty,
+		options.delayJSThirdPartyDenylist,
+		options.delayJSThirdPartyAllowlist,
 		options.delayJSExcludeUrls,
 		options.usedCSSExcludeUrls,
 		options.delayJSDefaultStrategy,
@@ -577,6 +670,7 @@ const FileOptimization = ( {
 		options.unusedCSSSafelistExtra,
 		options.unusedCSSRegressionGuard,
 		options.unusedCSSRegressionThreshold,
+		options.usedCSSDeliveryMode,
 		options.disableEmojis,
 		options.disableEmbeds,
 		options.disableDashicons,
@@ -618,7 +712,19 @@ const FileOptimization = ( {
 		setSettings( ( prev ) => {
 			const next = { ...prev, ...options };
 			// String-guard textarea-backed keys so a corrupted non-string
-			// payload cannot reach a controlled textarea value.
+			// payload cannot reach a controlled textarea value. Third-party
+			// lists join array payloads (toDelayLines) so sync agrees with
+			// init instead of dropping backend arrays to '' (#1217 review).
+			if ( typeof next.delayJSThirdPartyDenylist !== 'string' ) {
+				next.delayJSThirdPartyDenylist = toDelayLines(
+					next.delayJSThirdPartyDenylist
+				);
+			}
+			if ( typeof next.delayJSThirdPartyAllowlist !== 'string' ) {
+				next.delayJSThirdPartyAllowlist = toDelayLines(
+					next.delayJSThirdPartyAllowlist
+				);
+			}
 			if ( typeof next.delayJSExcludeUrls !== 'string' ) {
 				next.delayJSExcludeUrls = '';
 			}
@@ -631,6 +737,9 @@ const FileOptimization = ( {
 			if ( typeof next.fontSubsetSubsets !== 'string' ) {
 				next.fontSubsetSubsets = 'latin';
 			}
+			next.usedCSSDeliveryMode = normalizeDeliveryMode(
+				next.usedCSSDeliveryMode
+			);
 			return next;
 		} );
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -652,6 +761,9 @@ const FileOptimization = ( {
 		options.delayJSBuilderPreset,
 		options.delayJSINPPreset,
 		options.delayJSExternalOnly,
+		options.delayJSThirdParty,
+		options.delayJSThirdPartyDenylist,
+		options.delayJSThirdPartyAllowlist,
 		options.delayJSExcludeUrls,
 		options.usedCSSExcludeUrls,
 		options.delayJSDefaultStrategy,
@@ -677,6 +789,7 @@ const FileOptimization = ( {
 		options.unusedCSSSafelistExtra,
 		options.unusedCSSRegressionGuard,
 		options.unusedCSSRegressionThreshold,
+		options.usedCSSDeliveryMode,
 		options.disableEmojis,
 		options.disableEmbeds,
 		options.disableDashicons,
@@ -779,8 +892,8 @@ const FileOptimization = ( {
 					durationMs: 3000,
 				} );
 				// Mutate global so Dashboard banner + next mount reflect new mode without reload.
-				if ( typeof wppoSettings !== 'undefined' && res.data ) {
-					wppoSettings.settings = Object.freeze( res.data );
+				if ( res.data ) {
+					commitSettingsCache( res.data );
 				}
 			} else {
 				notify( {
@@ -902,6 +1015,9 @@ const FileOptimization = ( {
 						),
 					durationMs: 3000,
 				} );
+				// Refresh the staleness banner so it does not linger after a
+				// successful regen until remount (issue #1220).
+				refreshUsedCssStatus();
 			} else {
 				notify( {
 					type: 'error',
@@ -945,6 +1061,9 @@ const FileOptimization = ( {
 						),
 					durationMs: 3000,
 				} );
+				// A purge invalidates used-CSS, so the staleness banner must
+				// reflect the new state immediately (issue #1220).
+				refreshUsedCssStatus();
 			} else {
 				notifyPurge( {
 					type: 'error',
@@ -1435,6 +1554,84 @@ const FileOptimization = ( {
 												</p>
 											</>
 										) }
+										<label
+											className="wppo-field-label wppo-mt-16"
+											htmlFor="usedCSSDeliveryMode"
+										>
+											{ __(
+												'Used CSS Delivery Mode',
+												'performance-optimisation'
+											) }
+										</label>
+										<select
+											className="wppo-select"
+											id="usedCSSDeliveryMode"
+											name="usedCSSDeliveryMode"
+											value={
+												settings.usedCSSDeliveryMode ||
+												'file'
+											}
+											onChange={ handleChange(
+												setSettings
+											) }
+											aria-describedby="usedCSSDeliveryMode-desc"
+										>
+											<option value="file">
+												{ __(
+													'File (render-blocking used CSS)',
+													'performance-optimisation'
+												) }
+											</option>
+											<option value="delay">
+												{ __(
+													'Delay (full CSS on interaction)',
+													'performance-optimisation'
+												) }
+											</option>
+											<option value="async">
+												{ __(
+													'Async (preload + swap)',
+													'performance-optimisation'
+												) }
+											</option>
+											<option value="remove">
+												{ __(
+													'Remove (strip full CSS, auto-downgrades on builders)',
+													'performance-optimisation'
+												) }
+											</option>
+										</select>
+										<p
+											id="usedCSSDeliveryMode-desc"
+											className="wppo-text-muted wppo-text-small wppo-mt-8"
+										>
+											{ __(
+												'File and Delay never serve unstyled pages on a cache miss — the full stylesheet is served instead. Remove auto-downgrades to Delay on builder pages.',
+												'performance-optimisation'
+											) }
+										</p>
+										{ usedCssStatus &&
+											usedCssStatus.is_stale && (
+												<NoticeBanner
+													type="warning"
+													className="wppo-mt-12"
+													message={
+														usedCssStatus.last_regen_human
+															? sprintf(
+																	// translators: %s: last used-CSS regeneration time.
+																	__(
+																		'Used CSS looks stale — last regenerated at %s. Builder or theme updates may have outrun regeneration; use Regenerate Used CSS below.',
+																		'performance-optimisation'
+																	),
+																	usedCssStatus.last_regen_human
+															  )
+															: __(
+																	'Used CSS looks stale — it has never been regenerated. Use Regenerate Used CSS below.',
+																	'performance-optimisation'
+															  )
+													}
+												/>
+											) }
 										<NoticeBanner
 											type="info"
 											className="wppo-mt-12"
@@ -2169,6 +2366,100 @@ const FileOptimization = ( {
 												) }
 												disabled={ optimizerDisabled }
 											/>
+											<SwitchField
+												label={ __(
+													'Delay third-party scripts only',
+													'performance-optimisation'
+												) }
+												description={ __(
+													'One-click delay of known third-party scripts (analytics, ads, social, chat, embeds) plus any cross-origin script. First-party scripts stay eager. Cart, checkout and account stay excluded.',
+													'performance-optimisation'
+												) }
+												name="delayJSThirdParty"
+												checked={
+													settings.delayJSThirdParty
+												}
+												onChange={ handleChange(
+													setSettings
+												) }
+												disabled={ optimizerDisabled }
+											/>
+											{ settings.delayJSThirdParty && (
+												<>
+													<div className="wppo-field wppo-mt-16">
+														<label
+															className="wppo-field-label"
+															htmlFor="delayJSThirdPartyDenylist"
+														>
+															{ __(
+																'Extra third-party patterns to delay',
+																'performance-optimisation'
+															) }
+														</label>
+														<textarea
+															className="wppo-textarea wppo-textarea--mono"
+															id="delayJSThirdPartyDenylist"
+															name="delayJSThirdPartyDenylist"
+															rows="3"
+															disabled={
+																optimizerDisabled
+															}
+															placeholder={ __(
+																'e.g. cdn.example.com/tracker',
+																'performance-optimisation'
+															) }
+															value={
+																settings.delayJSThirdPartyDenylist
+															}
+															onChange={ handleChange(
+																setSettings
+															) }
+														/>
+														<p className="wppo-text-muted wppo-text-small wppo-mt-8">
+															{ __(
+																'One per line — added to the curated built-in denylist. Empty uses the built-in list.',
+																'performance-optimisation'
+															) }
+														</p>
+													</div>
+													<div className="wppo-field wppo-mt-16">
+														<label
+															className="wppo-field-label"
+															htmlFor="delayJSThirdPartyAllowlist"
+														>
+															{ __(
+																'Third-party allowlist (never delay)',
+																'performance-optimisation'
+															) }
+														</label>
+														<textarea
+															className="wppo-textarea wppo-textarea--mono"
+															id="delayJSThirdPartyAllowlist"
+															name="delayJSThirdPartyAllowlist"
+															rows="3"
+															disabled={
+																optimizerDisabled
+															}
+															placeholder={ __(
+																'e.g. consent-manager.js',
+																'performance-optimisation'
+															) }
+															value={
+																settings.delayJSThirdPartyAllowlist
+															}
+															onChange={ handleChange(
+																setSettings
+															) }
+														/>
+														<p className="wppo-text-muted wppo-text-small wppo-mt-8">
+															{ __(
+																'One per line — always wins over the denylist. Use for scripts that must stay eager.',
+																'performance-optimisation'
+															) }
+														</p>
+													</div>
+												</>
+											) }
 											<SwitchField
 												label={ __(
 													'Builder safe preset',

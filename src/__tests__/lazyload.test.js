@@ -1,4 +1,4 @@
-/* global HTMLImageElement, HTMLIFrameElement, HTMLScriptElement */
+/* global Element, HTMLImageElement, HTMLIFrameElement, HTMLScriptElement */
 
 describe( 'Lazy Load (lazyload.js)', () => {
 	let consoleWarnSpy;
@@ -1207,6 +1207,184 @@ describe( 'Lazy Load (lazyload.js)', () => {
 			document.dispatchEvent( new Event( 'DOMContentLoaded' ) );
 			listener();
 			expect( listener ).toHaveBeenCalled();
+		} );
+	} );
+
+	describe( 'delay-JS maturity semantics (#1217)', () => {
+		beforeEach( () => {
+			delete global.IntersectionObserver;
+		} );
+
+		afterEach( () => {
+			delete global.wppoAllowedScriptHosts;
+			delete global.IntersectionObserver;
+		} );
+
+		it( 'loads only interaction-strategy scripts on first flush (idle stays pending)', async () => {
+			document.body.innerHTML =
+				'<script type="wppo/javascript" wppo-src="/interaction-app.js"></script>' +
+				'<script type="wppo/javascript" wppo-src="/idle-app.js" data-wppo-delay-strategy="idle"></script>';
+			await bootLazyload();
+			// Flush the async flush one microtask turn (the swap itself is
+			// synchronous; the idle fallback is a 2000ms timer that never
+			// fires here).
+			await Promise.resolve();
+
+			expect(
+				document.querySelector( 'script[src="/interaction-app.js"]' )
+			).toBeInTheDocument();
+			// The idle placeholder must not be pulled in early.
+			expect(
+				document.querySelector( 'script[wppo-src="/idle-app.js"]' )
+			).toBeInTheDocument();
+			expect(
+				document.querySelector( 'script[src="/idle-app.js"]' )
+			).toBeNull();
+		} );
+
+		it( 'stamps the live replacement with data-wppo-delay-loaded', async () => {
+			document.body.innerHTML =
+				'<script type="wppo/javascript" wppo-src="/interaction-app.js"></script>';
+			await bootLazyload();
+			await Promise.resolve();
+
+			const replacement = document.querySelector(
+				'script[src="/interaction-app.js"]'
+			);
+			expect( replacement ).toBeInTheDocument();
+			expect( replacement.getAttribute( 'data-wppo-delay-loaded' ) ).toBe(
+				'1'
+			);
+		} );
+
+		it( 'skips already-loaded placeholders so loaders never double-execute', async () => {
+			document.body.innerHTML =
+				'<script type="wppo/javascript" wppo-src="/interaction-app.js"></script>' +
+				'<script type="wppo/javascript" wppo-src="/skipped-app.js" data-wppo-delay-loaded="1"></script>';
+			await bootLazyload();
+			await Promise.resolve();
+
+			expect(
+				document.querySelector( 'script[src="/interaction-app.js"]' )
+			).toBeInTheDocument();
+			// Pre-marked placeholder is left untouched (no live duplicate).
+			expect(
+				document.querySelector( 'script[src="/skipped-app.js"]' )
+			).toBeNull();
+			expect(
+				document.querySelector( 'script[wppo-src="/skipped-app.js"]' )
+			).toBeInTheDocument();
+		} );
+
+		it( 'hydrates an async-stamped interaction script', async () => {
+			document.body.innerHTML =
+				'<script type="wppo/javascript" wppo-src="/async-app.js" data-wppo-delay-exec="async"></script>';
+			await bootLazyload();
+			await Promise.resolve();
+			// Async scripts resolve via Promise.allSettled; allow the
+			// microtask queue to flush (jsdom never fires onload, but the
+			// synchronous swap is what this asserts).
+			await new Promise( ( r ) => setTimeout( r, 0 ) );
+
+			const replacement = document.querySelector(
+				'script[src="/async-app.js"]'
+			);
+			expect( replacement ).toBeInTheDocument();
+			expect( replacement.getAttribute( 'data-wppo-delay-loaded' ) ).toBe(
+				'1'
+			);
+		} );
+		it( 'replays defer-stamped scripts in document order', async () => {
+			global.wppoDelayConfig.scriptTimeout = 50;
+			document.body.innerHTML =
+				'<script type="wppo/javascript" wppo-src="/defer-a.js" data-wppo-delay-exec="defer"></script>' +
+				'<script type="wppo/javascript" wppo-src="/defer-b.js" data-wppo-delay-exec="defer"></script>';
+			const order = [];
+			const orig = Element.prototype.setAttribute;
+			const spy = jest
+				.spyOn( Element.prototype, 'setAttribute' )
+				.mockImplementation( function ( name, value ) {
+					if (
+						this.tagName === 'SCRIPT' &&
+						name === 'src' &&
+						( value === '/defer-a.js' || value === '/defer-b.js' )
+					) {
+						order.push( value );
+					}
+					return orig.call( this, name, value );
+				} );
+			try {
+				await bootLazyload();
+				// Sequential replay awaits each load (jsdom never fires
+				// onload, so each step settles via the scriptTimeout above).
+				await new Promise( ( r ) => setTimeout( r, 500 ) );
+			} finally {
+				spy.mockRestore();
+			}
+
+			expect( order ).toEqual( [ '/defer-a.js', '/defer-b.js' ] );
+			expect(
+				document.querySelector( 'script[src="/defer-a.js"]' )
+			).toBeInTheDocument();
+			expect(
+				document.querySelector( 'script[src="/defer-b.js"]' )
+			).toBeInTheDocument();
+		} );
+
+		it( 'loads priority groups high to normal to low regardless of DOM order', async () => {
+			global.wppoDelayConfig.scriptTimeout = 50;
+			document.body.innerHTML =
+				'<script type="wppo/javascript" wppo-src="/prio-low.js" data-wppo-delay-priority="low"></script>' +
+				'<script type="wppo/javascript" wppo-src="/prio-normal.js"></script>' +
+				'<script type="wppo/javascript" wppo-src="/prio-high.js" data-wppo-delay-priority="high"></script>';
+			const order = [];
+			const orig = Element.prototype.setAttribute;
+			const spy = jest
+				.spyOn( Element.prototype, 'setAttribute' )
+				.mockImplementation( function ( name, value ) {
+					if (
+						this.tagName === 'SCRIPT' &&
+						name === 'src' &&
+						String( value ).startsWith( '/prio-' )
+					) {
+						order.push( value );
+					}
+					return orig.call( this, name, value );
+				} );
+			try {
+				await bootLazyload();
+				await new Promise( ( r ) => setTimeout( r, 800 ) );
+			} finally {
+				spy.mockRestore();
+			}
+
+			expect( order ).toEqual( [
+				'/prio-high.js',
+				'/prio-normal.js',
+				'/prio-low.js',
+			] );
+		} );
+
+		it( 'skips a live replacement carrying data-wppo-delay-loaded', async () => {
+			document.body.innerHTML =
+				'<script src="/live-app.js" data-wppo-delay-loaded="1"></script>' +
+				'<script type="wppo/javascript" wppo-src="/fresh-app.js"></script>';
+			await bootLazyload();
+			await Promise.resolve();
+			await new Promise( ( r ) => setTimeout( r, 0 ) );
+
+			// Live replacement is never duplicated or re-executed.
+			expect(
+				document.querySelectorAll( 'script[src="/live-app.js"]' )
+			).toHaveLength( 1 );
+			expect(
+				document.querySelector( 'script[src="/fresh-app.js"]' )
+			).toBeInTheDocument();
+			expect(
+				document
+					.querySelector( 'script[src="/fresh-app.js"]' )
+					.getAttribute( 'data-wppo-delay-loaded' )
+			).toBe( '1' );
 		} );
 	} );
 

@@ -823,6 +823,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'admin_init', array( $this, 'maybe_migrate_ccss_safelist' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_css_queue_defaults' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_speculation_top_urls' ) );
+			add_action( 'admin_init', array( $this, 'maybe_migrate_rum_sample_rate' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_safe_mode' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_sandbox_preview' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_image_alt_edge_defaults' ) );
@@ -1341,6 +1342,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// Clear all cache on structural changes that invalidate every cached page.
 			add_action( 'update_option_permalink_structure', array( __CLASS__, 'clear_all_cache' ) );
 			add_action( 'switch_theme', array( __CLASS__, 'clear_all_cache' ) );
+			// Couple used-CSS regen to theme switches with cooldown plus a
+			// bounded targeted requeue (issue #1220); fail-open inside.
+			add_action( 'switch_theme', array( __CLASS__, 'on_theme_switch_used_css' ), 20, 3 );
 			add_action( 'update_option_wppo_settings', array( __CLASS__, 'on_settings_update' ), 10, 2 );
 			// The canonical host is baked into advanced-cache.php at create()
 			// time; re-bake it when the home/site URL changes (domain migration)
@@ -1567,7 +1571,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Runs on `admin_init` (not the constructor) so a cacheable front-end
 		 * request never triggers a settings write. Only installs whose stored
 		 * settings predate any of the `ccssQueueCap` / `usedCssQueueCap` /
-		 * `ccssViewportVariants` keys (key absent) are backfilled with the
+		 * `ccssViewportVariants` / `usedCSSDeliveryMode` keys (key absent) are backfilled with the
 		 * fail-open defaults; any stored explicit value is preserved verbatim,
 		 * and fresh installs with no stored option are skipped because the
 		 * constructor defaults already match. The check is idempotent (key
@@ -1594,6 +1598,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'ccssQueueCap'         => 5,
 				'usedCssQueueCap'      => 50,
 				'ccssViewportVariants' => false,
+				'usedCSSDeliveryMode'  => 'file',
 			);
 			$changed  = false;
 			foreach ( $defaults as $key => $default ) {
@@ -1665,6 +1670,55 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			Log::add( __( 'Added default RUM-weighted top-URL prefetch limit (2 URLs, prerender stays guarded).', 'performance-optimisation' ) );
+		}
+
+		/**
+		 * One-time backfill for the RUM beacon sample rate (issue #1214).
+		 *
+		 * Runs on `admin_init` (not the constructor) so a cacheable front-end
+		 * request never triggers a settings write. Only installs whose stored
+		 * settings predate the `rum_sample_rate` key (key absent) are
+		 * backfilled with the 100 default (unsampled current behavior); any
+		 * stored explicit value is preserved verbatim, and fresh installs with
+		 * no stored option are skipped because the constructor defaults already
+		 * match. The check is idempotent (key presence is the marker), so no
+		 * extra option row is needed. In-memory options are synced too so the
+		 * current request observes the backfilled value. Uses per-site
+		 * `get_option()` so multisite sites migrate independently with no
+		 * cross-site leakage.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public function maybe_migrate_rum_sample_rate(): void {
+			// allowlist(settings-read-guard): deliberate direct read — must distinguish
+			// "no stored row" (false) from "stored array", which Util::get_settings()
+			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
+			$stored = get_option( 'wppo_settings' );
+			if ( ! is_array( $stored ) ) {
+				return;
+			}
+
+			$audit = isset( $stored['performance_audit'] ) && is_array( $stored['performance_audit'] ) ? $stored['performance_audit'] : array();
+
+			if ( array_key_exists( 'rum_sample_rate', $audit ) ) {
+				return;
+			}
+
+			$default_rate = class_exists( 'PerformanceOptimise\Inc\RUM' ) ? \PerformanceOptimise\Inc\RUM::RUM_SAMPLE_RATE_DEFAULT : 100;
+
+			$audit['rum_sample_rate']    = $default_rate;
+			$stored['performance_audit'] = $audit;
+			update_option( 'wppo_settings', $stored );
+
+			if ( ! isset( $this->options['performance_audit'] ) || ! is_array( $this->options['performance_audit'] ) ) {
+				$this->options['performance_audit'] = array();
+			}
+			if ( ! array_key_exists( 'rum_sample_rate', $this->options['performance_audit'] ) ) {
+				$this->options['performance_audit']['rum_sample_rate'] = $default_rate;
+			}
+
+			Log::add( __( 'Added default RUM beacon sample rate (100 percent, unsampled current behavior kept).', 'performance-optimisation' ) );
 		}
 
 		/**
@@ -2179,6 +2233,44 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					return;
 				}
 				self::clear_all_cache();
+				// Couple used-CSS regen to theme updates with cooldown plus a
+				// bounded targeted requeue (issue #1220). Builder-plugin
+				// updates are handled by Builder_Purge_Watcher; theme updates
+				// land here. Fail-open: guarded by class/method_exists and
+				// internally cooldown-gated.
+				try {
+					$is_theme = 'theme' === ( $hook_extra['type'] ?? '' );
+					if ( $is_theme && class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Used_CSS', 'request_targeted_regen' ) ) {
+						Used_CSS::request_targeted_regen( 'theme-update' );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Queue a bounded targeted used-CSS regen after a theme switch (issue #1220).
+		 *
+		 * Runs alongside clear_all_cache on `switch_theme`. Cooldown-gated
+		 * inside Used_CSS::request_targeted_regen(); no-op when
+		 * removeUnusedCSS is off or Action Scheduler is unavailable.
+		 * Fail-open: never throws.
+		 *
+		 * @param string $new_name  New theme name (unused).
+		 * @param mixed  $new_theme New theme object (unused).
+		 * @param mixed  $old_theme Old theme object (unused).
+		 * @return void
+		 * @since NEXT
+		 */
+		public static function on_theme_switch_used_css( $new_name = '', $new_theme = null, $old_theme = null ): void {
+			unset( $new_name, $new_theme, $old_theme );
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Used_CSS', 'request_targeted_regen' ) ) {
+					Used_CSS::request_targeted_regen( 'theme-switch' );
+				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
@@ -3806,6 +3898,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						return $tag;
 					}
 				}
+				// One-click third-party delay (#1217): when on, only delay
+				// third-party candidates (known denylist host/keyword or
+				// cross-origin src); first-party scripts stay eager. User
+				// allowlist wins. Fail-open: detection errors leave un-delayed.
+				if ( ! empty( $file_opt_for_gate['delayJSThirdParty'] ) ) {
+					try {
+						if ( ! $this->is_delay_third_party_candidate( (string) $tag, (string) $handle ) ) {
+							return $tag;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						return $tag;
+					}
+				}
 				if ( ! $this->is_delay_excluded_handle( $handle ) ) {
 					// Non-executable <script> types are data blocks
 					// (application/json, application/ld+json, text/template,
@@ -3823,9 +3929,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// (e.g. data-wp-fetchpriority=, which core emits alongside the
 					// real attribute) never count as a real fetchpriority.
 					if ( ! preg_match( '/\sfetchpriority\s*=/i', (string) $tag ) ) {
-						$tag = str_replace( '<script ', '<script fetchpriority="low" ', $tag );
+						$tag = self::inject_delay_script_attr( $tag, 'fetchpriority="low" ' );
 					}
-					$tag = str_replace( ' src', ' wppo-src', $tag );
+					// Execution-order preservation (#1217): record the original
+					// async/defer semantics so lazyload.js can replay them —
+					// defer in document order (sequential), async in any order.
+					// Fill-gaps-only: never duplicate when already stamped.
+					// The attr test runs against the tag with quoted values
+					// stripped so `async`/`defer` inside attribute VALUES
+					// (e.g. data-x="async loader") never counts as the real
+					// boolean attribute (#1217 review).
+					if ( false === strpos( $tag, 'data-wppo-delay-exec' ) ) {
+						$tag_unquoted = preg_replace( '/"[^"]*"|\'[^\']*\'/', '""', $tag );
+						if ( ! is_string( $tag_unquoted ) ) {
+							$tag_unquoted = $tag;
+						}
+						if ( preg_match( '/\sasync(?=[\s=\/>])/i', $tag_unquoted ) ) {
+							$tag = self::inject_delay_script_attr( $tag, 'data-wppo-delay-exec="async" ' );
+						} elseif ( preg_match( '/\sdefer(?=[\s=\/>])/i', $tag_unquoted ) ) {
+							$tag = self::inject_delay_script_attr( $tag, 'data-wppo-delay-exec="defer" ' );
+						}
+					}
+					// Whitespace-anchored and case-insensitive so `<SCRIPT
+					// SRC=…>`, `<script\tsrc=…>` and `<script\nsrc=…>` variants
+					// rewrite identically to lowercase markup; anchored so
+					// `data-src`/`wppo-src` (dash-prefixed) never match, and
+					// fill-gaps-safe on re-processing (#1217 review).
+					// Quoted attribute VALUES are masked with equal-length spaces
+					// first so `src=` inside a value (e.g. data-note="use
+					// src=fallback") is never rewritten — only the first real
+					// src attribute outside quotes is renamed.
+					try {
+						$masked = preg_replace_callback(
+							'/"[^"]*"|\'[^\']*\'/',
+							static function ( $m ): string {
+								return str_repeat( ' ', strlen( $m[0] ) );
+							},
+							$tag
+						);
+						if ( is_string( $masked ) && 1 === preg_match( '/\ssrc(?=[\s=])/i', $masked, $src_m, PREG_OFFSET_CAPTURE ) ) {
+							$src_pos = (int) $src_m[0][1];
+							$tag     = substr_replace( $tag, ' wppo-src', $src_pos, 4 );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
 					// Normalise an executable JS type into the delay marker,
 					// carrying the ORIGINAL type through wppo-type so
 					// lazyload.js can restore it (type="module" becomes
@@ -3853,26 +4001,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					if ( false !== strpos( $tag, 'wppo-src' )
 						&& false === strpos( $tag, 'wppo/javascript' )
 					) {
-						$tag = str_replace( '<script ', '<script type="wppo/javascript" wppo-type="text/javascript" ', $tag );
+						$tag = self::inject_delay_script_attr( $tag, 'type="wppo/javascript" wppo-type="text/javascript" ' );
 					}
 
 						// Determine delay strategy for this handle.
 						$strategy = $this->get_delay_strategy_for_handle( $handle );
 					if ( 'interaction' !== $strategy ) {
-						$tag = str_replace(
-							'<script ',
-							'<script data-wppo-delay-strategy="' . esc_attr( $strategy ) . '" ',
-							$tag
+						$tag = self::inject_delay_script_attr(
+							$tag,
+							'data-wppo-delay-strategy="' . esc_attr( $strategy ) . '" '
 						);
 					}
 
 						// Determine priority for this handle.
 						$priority = $this->get_delay_priority_for_handle( $handle );
 					if ( 'normal' !== $priority ) {
-						$tag = str_replace(
-							'<script ',
-							'<script data-wppo-delay-priority="' . esc_attr( $priority ) . '" ',
-							$tag
+						$tag = self::inject_delay_script_attr(
+							$tag,
+							'data-wppo-delay-priority="' . esc_attr( $priority ) . '" '
 						);
 					}
 				}
@@ -5402,6 +5548,351 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		public function on_delay_kill_switch_meta_changed( $meta_id, $post_id, $meta_key ): void {
 			$this->on_aggressive_kill_switch_meta_changed( $meta_id, $post_id, $meta_key );
+		}
+
+		/**
+		 * Curated third-party Delay-JS denylist (one-click delay, issue #1217).
+		 *
+		 * Host/keyword fragments that are safe to delay with one click:
+		 * analytics, ads, social, chat and video embeds. Payment gateways
+		 * (Stripe, PayPal) and consent-management banners (Cookiebot,
+		 * OneTrust, TrustArc, Quantcast) are intentionally NOT in this
+		 * preset: payment SDKs also run on product pages (express checkout)
+		 * and site-wide (fraud detection), and consent banners must stay
+		 * eager for GDPR/ePrivacy ordering (consent before trackers). Users
+		 * who want them delayed can add them via the extra-denylist
+		 * textarea. The user allowlist always wins over this list.
+		 * Filterable via `wppo_delay_js_third_party_denylist`. Fail-open:
+		 * filter failures fall back to the curated preset.
+		 *
+		 * Note: no per-request memoization is used on purpose — the filter
+		 * call is cheap and caching would go stale on mid-request
+		 * add/remove_filter, switch_to_blog, or sequential unit tests.
+		 *
+		 * @since NEXT
+		 * @return string[]
+		 */
+		public static function get_delay_js_third_party_denylist(): array {
+			$preset = array(
+				'googletagmanager.com',
+				'google-analytics.com',
+				'analytics.google.com',
+				'gtag',
+				'googletag',
+				'googleads',
+				'doubleclick.net',
+				'facebook.net',
+				'fbevents',
+				'connect.facebook.net',
+				'platform.twitter.com',
+				'platform.linkedin.com',
+				'linkedin.com/insight',
+				'hotjar.com',
+				'static.hotjar.com',
+				'intercom',
+				'hubspot',
+				'hs-scripts',
+				'clarity.ms',
+				'snapchat.com',
+				'tiktok.com',
+				'pinterest.com',
+				'ads-twitter',
+				'cdn.mxpnl.com',
+				'mixpanel',
+				'segment.com',
+				'amplitude',
+				'fullstory.com',
+				'crazyegg.com',
+				'optimizely.com',
+				'vwo.com',
+				'mouseflow.com',
+				'luckyorange',
+				'zendesk',
+				'drift.com',
+				'crisp.chat',
+				'tawk.to',
+				'livechatinc.com',
+				'youtube.com/iframe_api',
+				'player.vimeo.com',
+				'wistia',
+				'jwplayer',
+				'disqus.com',
+				'addthis.com',
+				'sharethis.com',
+				'quantserve.com',
+				'scorecardresearch.com',
+				'newrelic.com',
+				'nr-data.net',
+				'sentry.io',
+				'bugsnag',
+			);
+			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_third_party_denylist' ) ) {
+				return $preset;
+			}
+			try {
+				$raw = apply_filters( 'wppo_delay_js_third_party_denylist', $preset );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $preset;
+			}
+			if ( ! is_array( $raw ) ) {
+				return $preset;
+			}
+			$filtered = array_values(
+				array_unique(
+					array_filter(
+						array_map(
+							static function ( $val ): string {
+								return is_string( $val ) || is_numeric( $val ) ? (string) $val : '';
+							},
+							$raw
+						),
+						static function ( $val ): bool {
+							return '' !== $val;
+						}
+					)
+				)
+			);
+			return $filtered;
+		}
+
+		/**
+		 * Parse the user-configured third-party allowlist (wins over denylist).
+		 *
+		 * Reads `file_optimisation.delayJSThirdPartyAllowlist` (one entry per
+		 * line) plus the `wppo_delay_js_third_party_allowlist` filter. Fail-open:
+		 * any failure returns an empty list (denylist applies unmodified).
+		 *
+		 * @since NEXT
+		 * @return string[]
+		 */
+		public function get_delay_js_third_party_allowlist(): array {
+			try {
+				// Sandbox preview (#1217 review): read staged lists from the
+				// effective slice so preview renders staged edits instead of
+				// production values on the script_loader_tag path.
+				$file_opt = self::get_effective_file_optimisation( $this->options['file_optimisation'] ?? array() );
+				$raw      = $file_opt['delayJSThirdPartyAllowlist'] ?? '';
+				$list     = array();
+				if ( is_string( $raw ) && '' !== trim( $raw ) ) {
+					// process_urls() splits on newlines only; normalize commas
+					// first so comma-pasted entries also split (#1217 review).
+					$normalized = str_replace( ',', "\n", $raw );
+					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'process_urls' ) ) {
+						$list = (array) Util::process_urls( $normalized );
+					} else {
+						$split = preg_split( '/[\r\n,]+/', $raw );
+						$list  = array_filter( array_map( 'trim', is_array( $split ) ? $split : array() ) );
+					}
+				} elseif ( is_array( $raw ) ) {
+					$list = array_values( array_filter( array_map( 'strval', $raw ) ) );
+				}
+				if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_delay_js_third_party_allowlist' ) ) {
+					$filtered = apply_filters( 'wppo_delay_js_third_party_allowlist', $list );
+					if ( is_array( $filtered ) ) {
+						// Same coerce/dedupe sanitization as the denylist (#1217
+						// review): filter output is untrusted, so non-string
+						// entries are dropped instead of becoming 'Array'.
+						$list = array_values(
+							array_unique(
+								array_filter(
+									array_map(
+										static function ( $val ): string {
+											return is_string( $val ) || is_numeric( $val ) ? (string) $val : '';
+										},
+										$filtered
+									),
+									static function ( $val ): bool {
+										return '' !== trim( (string) $val );
+									}
+								)
+							)
+						);
+					}
+				}
+				return array_values(
+					array_unique(
+						array_filter(
+							array_map(
+								static function ( $val ): string {
+									return is_string( $val ) || is_numeric( $val ) ? (string) $val : '';
+								},
+								(array) $list
+							),
+							static function ( $val ): bool {
+								return '' !== trim( (string) $val );
+							}
+						)
+					)
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
+		 * Whether a script tag/handle is a third-party delay candidate.
+		 *
+		 * When one-click third-party delay (`delayJSThirdParty`) is on, only
+		 * external scripts whose src host differs from the site host — or
+		 * whose handle/src matches the curated denylist plus user additions —
+		 * are delayed. Inline scripts (no src) are never delayed in this mode.
+		 * The user allowlist always wins (returns false). Any detection
+		 * failure fails open to false (leave un-delayed).
+		 *
+		 * Matching semantics: handles use word-boundary matching (consistent
+		 * with the rest of delay matching); src/URL matching is substring.
+		 *
+		 * @since NEXT
+		 * @param string $tag    Script tag markup.
+		 * @param string $handle Script handle.
+		 * @return bool True when the script should be delayed in third-party mode.
+		 */
+		public function is_delay_third_party_candidate( string $tag, string $handle ): bool {
+			try {
+				if ( ! preg_match( '/\ssrc\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i', $tag, $matches ) ) {
+					return false;
+				}
+				$src = trim( ! empty( $matches[2] ) ? $matches[2] : ( $matches[3] ?? '' ) );
+				if ( '' === $src || 0 === strpos( $src, 'data:' ) || 0 === strpos( $src, 'blob:' ) ) {
+					return false;
+				}
+				// User allowlist wins over everything. Handle matching uses the
+				// word-boundary matcher (consistent with the rest of delay
+				// matching) so short entries (gtag, intercom, …) do not match
+				// unrelated first-party handles; src matching stays substring
+				// because URLs rarely align on word boundaries (#1217 review).
+				foreach ( $this->get_delay_js_third_party_allowlist() as $allowed ) {
+					$allowed = trim( (string) $allowed );
+					if ( '' === $allowed ) {
+						continue;
+					}
+					if ( $this->matches_delay_pattern( (string) $handle, $allowed ) || false !== stripos( $src, $allowed ) ) {
+						return false;
+					}
+				}
+				// Curated denylist + user additions match handle or src.
+				// Sandbox preview (#1217 review): user additions come from the
+				// effective slice so staged edits preview on this path too.
+				$denylist = self::get_delay_js_third_party_denylist();
+				$file_opt = self::get_effective_file_optimisation( $this->options['file_optimisation'] ?? array() );
+				$extra    = $file_opt['delayJSThirdPartyDenylist'] ?? '';
+				if ( is_string( $extra ) && '' !== trim( $extra ) ) {
+					// Normalize commas: process_urls() splits on newlines only.
+					$extra_normalized = str_replace( ',', "\n", $extra );
+					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'process_urls' ) ) {
+						$denylist = array_merge( $denylist, (array) Util::process_urls( $extra_normalized ) );
+					} else {
+						$split    = preg_split( '/[\r\n,]+/', $extra );
+						$denylist = array_merge( $denylist, array_filter( array_map( 'trim', is_array( $split ) ? $split : array() ) ) );
+					}
+				} elseif ( is_array( $extra ) ) {
+					$denylist = array_merge( $denylist, array_values( array_filter( array_map( 'strval', $extra ) ) ) );
+				}
+				foreach ( $denylist as $entry ) {
+					$entry = trim( (string) $entry );
+					if ( '' === $entry ) {
+						continue;
+					}
+					if ( $this->matches_delay_pattern( (string) $handle, $entry ) || false !== stripos( $src, $entry ) ) {
+						return true;
+					}
+				}
+				// Host-based auto-detection: external host != site host.
+				// Same-site hosts (apex, www, first-party subdomains/CDN) stay
+				// eager — only genuinely foreign hosts auto-qualify (#1217
+				// review). Fail-open: empty/unparseable hosts are not candidates.
+				$site_host = '';
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$home = function_exists( 'home_url' ) ? home_url() : '';
+					if ( '' !== (string) $home ) {
+						$site_host = strtolower( (string) wp_parse_url( (string) $home, PHP_URL_HOST ) );
+					}
+				}
+				$src_host = '';
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$candidate = $src;
+					if ( 0 === strpos( $candidate, '//' ) ) {
+						$candidate = 'https:' . $candidate;
+					}
+					$src_host = strtolower( (string) wp_parse_url( $candidate, PHP_URL_HOST ) );
+				}
+				if ( '' !== $src_host && '' !== $site_host && ! self::is_same_site_script_host( $src_host, $site_host ) ) {
+					return true;
+				}
+				// Relative src or same host with no denylist hit: not a candidate.
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Whether two script hosts belong to the same site (issue #1217 review).
+		 *
+		 * Hosts are lowercased, trailing dots trimmed, and a leading `www.`
+		 * stripped, then compared equal-or-subdomain in either direction, so a
+		 * first-party CDN (`cdn.example.com`), `www` vs apex mismatches, and
+		 * apex-vs-subdomain pairs stay eager instead of being misclassified as
+		 * third-party. Only genuinely foreign hosts auto-qualify. Fail-open to
+		 * false (not same-site) on any error.
+		 *
+		 * Note: sibling subdomains sharing only a parent (e.g.
+		 * `shop.example.com` vs `cdn.example.com`) are conservatively treated
+		 * as third-party; add the CDN host to the allowlist in that setup.
+		 *
+		 * @since NEXT
+		 * @param string $a First host.
+		 * @param string $b Second host.
+		 * @return bool True when both hosts belong to the same site.
+		 */
+		public static function is_same_site_script_host( string $a, string $b ): bool {
+			try {
+				$normalize = static function ( string $host ): string {
+					$host = strtolower( trim( $host ) );
+					$host = rtrim( $host, '.' );
+					$host = (string) preg_replace( '/^www\./', '', $host );
+					return $host;
+				};
+				$a         = $normalize( $a );
+				$b         = $normalize( $b );
+				if ( '' === $a || '' === $b ) {
+					return false;
+				}
+				if ( $a === $b ) {
+					return true;
+				}
+				return substr( $a, -strlen( '.' . $b ) ) === '.' . $b || substr( $b, -strlen( '.' . $a ) ) === '.' . $a;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Inject an attribute string into a script open tag (issue #1217 review).
+		 *
+		 * Case-insensitive single-occurrence insert that handles `<script>`,
+		 * `<script `, `<script\n` (and uppercase `<SCRIPT …>`) variants, so
+		 * every delayed tag is stamped even when core emits non-lowercase
+		 * markup. Falls back to the original tag when no script open tag is
+		 * found or the rewrite fails.
+		 *
+		 * @since NEXT
+		 * @param string $tag    Script tag markup.
+		 * @param string $insert Attribute string including trailing space, e.g. 'fetchpriority="low" '.
+		 * @return string Tag with the attributes injected.
+		 */
+		private static function inject_delay_script_attr( string $tag, string $insert ): string {
+			try {
+				$result = preg_replace( '/<script(?=[\s>])/i', '<script ' . $insert, $tag, 1 );
+				return is_string( $result ) ? $result : $tag;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $tag;
+			}
 		}
 
 		/**

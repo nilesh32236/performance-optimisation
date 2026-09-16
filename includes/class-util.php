@@ -129,6 +129,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			'wppo_object_cache_circuit',               // Object_Cache::CIRCUIT_OPTION.
 			'wppo_object_cache_circuit_dismissed',     // Object_Cache::CIRCUIT_DISMISSED_OPTION.
 			'wppo_used_css_last_full_regen',           // Used_CSS::LAST_FULL_REGEN_OPTION (issue #1107).
+			'wppo_used_css_last_targeted_regen',       // Used_CSS::TARGETED_REGEN_OPTION (issue #1220).
 			'wppo_settings_snapshot',                  // Single prior wppo_settings copy for one-click undo (issue #1144).
 			'wppo_preload_queue',                      // Resumable sitemap preload queue (issue #1162).
 		);
@@ -312,12 +313,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'ccssQueueCap'                 => 5,
 					'usedCssQueueCap'              => 50,
 					'ccssViewportVariants'         => false,
+					'usedCSSDeliveryMode'          => 'file',
 					'hostGoogleFontsLocally'       => false,
 					'blockAssetsOnDemand'          => function_exists( 'wp_load_classic_theme_block_styles_on_demand' ),
 					'loadAllCoreBlockAssets'       => false,
 					'delayJSDefaultStrategy'       => 'interaction',
 					'delayJSINPPreset'             => false,
 					'delayJSExternalOnly'          => false,
+					'delayJSThirdParty'            => false,
+					'delayJSThirdPartyDenylist'    => '',
+					'delayJSThirdPartyAllowlist'   => '',
 					'delayJSBuilderPreset'         => true,
 					'delayJSCommercePreset'        => true,
 					'delayJSInteractionPreset'     => true,
@@ -409,6 +414,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'server_timing_enabled' => false,
 					'auto_rescan'           => '',
 					'rum_enabled'           => false,
+					'rum_sample_rate'       => 100,
 				),
 				'database_cleanup'      => array(
 					'autoloadThreshold' => 1024,
@@ -4875,7 +4881,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				// Safe-default delay keys (issue #966) — external-only defaults
 				// off (fail-safe: delay everything unless asked), builder preset
 				// defaults on (fail-safe: never delay builder runtimes).
-				if ( in_array( $safe_key, array( 'delayJSExternalOnly' ), true ) && ! is_array( $value ) ) {
+				if ( in_array( $safe_key, array( 'delayJSExternalOnly', 'delayJSThirdParty' ), true ) && ! is_array( $value ) ) {
 					if ( is_bool( $value ) ) {
 						$sanitized[ $safe_key ] = $value;
 					} else {
@@ -4938,6 +4944,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					continue;
 				}
 
+				// Used-CSS delivery mode (issue #1220) — allowlist
+				// file/delay/async/remove. Unknown values fail open to file.
+				if ( 'usedCSSDeliveryMode' === $safe_key && ! is_array( $value ) ) {
+					$mode                   = strtolower( trim( (string) $value ) );
+					$sanitized[ $safe_key ] = in_array( $mode, array( 'file', 'delay', 'async', 'remove' ), true ) ? $mode : 'file';
+					continue;
+				}
+
 				// Max longest edge cap (issue #985 follow-up) — int >= 0.
 				// A cleared numeric field submits '' (or non-numeric text),
 				// which must fall back to the 2560 default rather than
@@ -4966,6 +4980,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					continue;
 				}
 
+				// RUM beacon sample rate (issue #1214) — int clamped to
+				// 1-100 (percent of page views sending the beacon).
+				// Unrecognized values fail open to 100 (unsampled current
+				// behavior). Pinned before the generic is_numeric branch so
+				// 0/negative/huge values can never be stored.
+				if ( 'rum_sample_rate' === $safe_key ) {
+					if ( is_array( $value ) ) {
+						$sanitized[ $safe_key ] = 100;
+						continue;
+					}
+					$rate                   = is_numeric( $value ) ? (int) $value : 100;
+					$sanitized[ $safe_key ] = ( $rate >= 1 && $rate <= 100 ) ? $rate : 100;
+					continue;
+				}
+
 				// Field-LCP minimum-sample threshold (issue #1200) — int
 				// clamped to 1-1000. Covers both the additive
 				// `ai_adaptive.field_lcp_min_samples` key and the legacy
@@ -4986,7 +5015,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				// the generic `url` branch (esc_url_raw would collapse the
 				// multiple lines). Pinned explicitly so a future reorder of the
 				// generic branches cannot corrupt these lists.
-				if ( in_array( $safe_key, array( 'delayJSExcludeUrls', 'usedCSSExcludeUrls' ), true ) && ! is_array( $value ) ) {
+				if ( in_array( $safe_key, array( 'delayJSExcludeUrls', 'usedCSSExcludeUrls', 'delayJSThirdPartyDenylist', 'delayJSThirdPartyAllowlist' ), true ) && ! is_array( $value ) ) {
 					$sanitized[ $safe_key ] = sanitize_textarea_field( (string) $value );
 					continue;
 				}
@@ -5332,6 +5361,105 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			}
 			$image = null;
 			unset( $image );
+		}
+
+		/**
+		 * Release a cURL share handle without triggering the PHP 8.5 deprecation.
+		 *
+		 * On PHP 8.5+ the share handle reference is dropped (null + unset)
+		 * instead of calling `curl_share_close()`; below 8.5 the legacy
+		 * `curl_share_close()` path runs unchanged. Fail-open: when
+		 * `curl_share_close()` is unavailable the reference is dropped on
+		 * every runtime. Multisite-safe: no option/cache changes.
+		 *
+		 * Note: completes the teardown-helper set promised above; no
+		 * production call sites use curl_share handles yet, so this is
+		 * forward-compat API for future callers.
+		 *
+		 * @since NEXT
+		 * @param mixed       $sh          cURL share handle to release (nulled in the caller scope).
+		 * @param string|null $php_version Optional version override for testing; defaults to PHP_VERSION.
+		 * @return void
+		 */
+		public static function close_curl_share_handle( &$sh, ?string $php_version = null ): void {
+			if ( self::is_php85_or_greater( $php_version ) ) {
+				$sh = null;
+				unset( $sh );
+				return;
+			}
+			if ( function_exists( 'curl_share_close' ) ) {
+				// phpcs:ignore Generic.PHP.DeprecatedFunctions.Deprecated,WordPress.WP.AlternativeFunctions.curl_curl_share_close -- legacy close path below PHP 8.5 only.
+				curl_share_close( $sh );
+				return;
+			}
+			$sh = null;
+			unset( $sh );
+		}
+
+		/**
+		 * Release a finfo handle without triggering the PHP 8.5 deprecation.
+		 *
+		 * On PHP 8.5+ the finfo instance reference is dropped (null + unset)
+		 * instead of calling `finfo_close()`; below 8.5 the legacy
+		 * `finfo_close()` path runs unchanged. Fail-open: when `finfo_close()`
+		 * is unavailable the reference is dropped on every runtime.
+		 * Multisite-safe: no option/cache changes.
+		 *
+		 * Note: completes the teardown-helper set promised above; no
+		 * production call sites use finfo handles yet, so this is
+		 * forward-compat API for future callers.
+		 *
+		 * @since NEXT
+		 * @param mixed       $finfo       Finfo handle to release (nulled in the caller scope).
+		 * @param string|null $php_version Optional version override for testing; defaults to PHP_VERSION.
+		 * @return void
+		 */
+		public static function close_finfo_handle( &$finfo, ?string $php_version = null ): void {
+			if ( self::is_php85_or_greater( $php_version ) ) {
+				$finfo = null;
+				unset( $finfo );
+				return;
+			}
+			if ( function_exists( 'finfo_close' ) ) {
+				// phpcs:ignore Generic.PHP.DeprecatedFunctions.Deprecated -- legacy close path below PHP 8.5 only.
+				finfo_close( $finfo );
+				return;
+			}
+			$finfo = null;
+			unset( $finfo );
+		}
+
+		/**
+		 * Release an XML parser without triggering the PHP 8.5 deprecation.
+		 *
+		 * On PHP 8.5+ the parser reference is dropped (null + unset) instead
+		 * of calling `xml_parser_free()`; below 8.5 the legacy
+		 * `xml_parser_free()` path runs unchanged. Fail-open: when
+		 * `xml_parser_free()` is unavailable the reference is dropped on
+		 * every runtime. Multisite-safe: no option/cache changes.
+		 *
+		 * Note: completes the teardown-helper set promised above; no
+		 * production call sites use XML parsers yet, so this is
+		 * forward-compat API for future callers.
+		 *
+		 * @since NEXT
+		 * @param mixed       $parser      XML parser to release (nulled in the caller scope).
+		 * @param string|null $php_version Optional version override for testing; defaults to PHP_VERSION.
+		 * @return void
+		 */
+		public static function free_xml_parser( &$parser, ?string $php_version = null ): void {
+			if ( self::is_php85_or_greater( $php_version ) ) {
+				$parser = null;
+				unset( $parser );
+				return;
+			}
+			if ( function_exists( 'xml_parser_free' ) ) {
+				// phpcs:ignore Generic.PHP.DeprecatedFunctions.Deprecated -- legacy free path below PHP 8.5 only.
+				xml_parser_free( $parser );
+				return;
+			}
+			$parser = null;
+			unset( $parser );
 		}
 
 		/**

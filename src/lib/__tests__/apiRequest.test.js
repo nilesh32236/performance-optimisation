@@ -1,8 +1,10 @@
 import {
 	apiCall,
+	commitSettingsCache,
 	fetchRecentActivities,
 	getWppoSettings,
 	getErrorLogMessage,
+	patchSettingsCache,
 } from '../apiRequest';
 
 const originalFetch = global.fetch;
@@ -967,6 +969,164 @@ describe( 'API Request library', () => {
 			expect( getErrorLogMessage( { custom: 'object' } ) ).not.toContain(
 				'custom'
 			);
+		} );
+	} );
+
+	describe( 'buildAction', () => {
+		it( 'encodes values and skips undefined/null/empty', async () => {
+			const { buildAction } = await import( '../apiRequest' );
+			expect(
+				buildAction( 'suggestions', {
+					url: 'https://example.com/?a=1&b=2',
+				} )
+			).toBe(
+				'suggestions?url=' +
+					encodeURIComponent( 'https://example.com/?a=1&b=2' )
+			);
+			expect(
+				buildAction( 'recent_activities', {
+					page: 2,
+					empty: '',
+					missing: undefined,
+					nil: null,
+				} )
+			).toBe( 'recent_activities?page=2' );
+			// Falsy-but-meaningful values are preserved.
+			expect( buildAction( 'a', { n: 0, f: false } ) ).toBe(
+				'a?n=0&f=false'
+			);
+		} );
+
+		it( 'tolerates an explicit null params argument', async () => {
+			const { buildAction } = await import( '../apiRequest' );
+			expect( buildAction( 'server_rules', null ) ).toBe(
+				'server_rules'
+			);
+		} );
+	} );
+
+	describe( 'assert helpers', () => {
+		it( 'assertScanUrl accepts absolute http(s) URLs', async () => {
+			const { assertScanUrl } = await import( '../apiRequest' );
+			expect( () =>
+				assertScanUrl( 'https://example.com/' )
+			).not.toThrow();
+			expect( () => assertScanUrl( 'javascript:alert(1)' ) ).toThrow(
+				'Invalid scan URL'
+			);
+			expect( () => assertScanUrl( '' ) ).toThrow( 'Invalid scan URL' );
+		} );
+
+		it( 'assertScanUrl allowEmpty accepts empty, undefined and null', async () => {
+			const { assertScanUrl } = await import( '../apiRequest' );
+			expect( () => assertScanUrl( '', true ) ).not.toThrow();
+			expect( () => assertScanUrl( undefined, true ) ).not.toThrow();
+			expect( () => assertScanUrl( null, true ) ).not.toThrow();
+			expect( () => assertScanUrl( null ) ).toThrow( 'Invalid scan URL' );
+		} );
+
+		it( 'assertScanStrategy validates membership with optional empty', async () => {
+			const { assertScanStrategy, SCAN_STRATEGIES } = await import(
+				'../apiRequest'
+			);
+			expect( [ ...SCAN_STRATEGIES ].sort() ).toEqual( [
+				'desktop',
+				'mobile',
+			] );
+			expect( () => assertScanStrategy( 'mobile' ) ).not.toThrow();
+			expect( () => assertScanStrategy( 'tablet' ) ).toThrow(
+				'Invalid strategy'
+			);
+			expect( () => assertScanStrategy( '', true ) ).not.toThrow();
+			expect( () => assertScanStrategy( '', false ) ).toThrow(
+				'Invalid strategy'
+			);
+		} );
+	} );
+
+	describe( 'isAuthErrorCode', () => {
+		it( 'matches the shared code set and rejects non-strings', async () => {
+			const { isAuthErrorCode, AUTH_ERROR_CODES } = await import(
+				'../apiRequest'
+			);
+			for ( const code of AUTH_ERROR_CODES ) {
+				expect( isAuthErrorCode( code ) ).toBe( true );
+			}
+			expect( isAuthErrorCode( 'rest_no_route' ) ).toBe( false );
+			expect( isAuthErrorCode( null ) ).toBe( false );
+			expect( isAuthErrorCode( 42 ) ).toBe( false );
+			expect( isAuthErrorCode( undefined ) ).toBe( false );
+		} );
+	} );
+
+	describe( 'getWppoSettings paths', () => {
+		it( 'resolves nested paths and falls back when missing', () => {
+			global.wppoSettings.settings = { cache: { enabled: true } };
+			expect( getWppoSettings( 'settings.cache.enabled', false ) ).toBe(
+				true
+			);
+			expect( getWppoSettings( 'settings.cache.missing', 'fb' ) ).toBe(
+				'fb'
+			);
+			expect( getWppoSettings( 'settings.nope.deeper', 'fb' ) ).toBe(
+				'fb'
+			);
+			delete global.wppoSettings.settings;
+		} );
+
+		it( 'does not resolve inherited prototype properties', () => {
+			expect( getWppoSettings( 'constructor', 'fb' ) ).toBe( 'fb' );
+			expect( getWppoSettings( 'toString', 'fb' ) ).toBe( 'fb' );
+		} );
+	} );
+
+	describe( 'commitSettingsCache', () => {
+		it( 'freezes the full payload into the shared settings cache', () => {
+			commitSettingsCache( { cache: { enabled: true } } );
+			expect( global.wppoSettings.settings ).toEqual( {
+				cache: { enabled: true },
+			} );
+			expect( Object.isFrozen( global.wppoSettings.settings ) ).toBe(
+				true
+			);
+		} );
+
+		it( 'ignores non-object payloads', () => {
+			global.wppoSettings.settings = { keep: true };
+			commitSettingsCache( null );
+			commitSettingsCache( 'nope' );
+			expect( global.wppoSettings.settings ).toEqual( { keep: true } );
+		} );
+	} );
+
+	describe( 'patchSettingsCache', () => {
+		it( 'merges one tab slice and freezes both levels', () => {
+			global.wppoSettings.settings = {
+				cache: { enabled: false },
+				edge_cache: { enabled: false, ttl: 300 },
+			};
+			patchSettingsCache( 'edge_cache', { enabled: true } );
+			expect( global.wppoSettings.settings.edge_cache ).toEqual( {
+				enabled: true,
+				ttl: 300,
+			} );
+			expect( global.wppoSettings.settings.cache ).toEqual( {
+				enabled: false,
+			} );
+			expect( Object.isFrozen( global.wppoSettings.settings ) ).toBe(
+				true
+			);
+			expect(
+				Object.isFrozen( global.wppoSettings.settings.edge_cache )
+			).toBe( true );
+		} );
+
+		it( 'ignores invalid tab and patch arguments', () => {
+			global.wppoSettings.settings = { keep: true };
+			patchSettingsCache( '', { a: 1 } );
+			patchSettingsCache( 'tab', null );
+			patchSettingsCache( 'tab', 'nope' );
+			expect( global.wppoSettings.settings ).toEqual( { keep: true } );
 		} );
 	} );
 } );
