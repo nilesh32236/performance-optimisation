@@ -578,33 +578,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				}
 			}
 
-			// RUM field data wins over lab guesses when it passes the sample gate.
-			// Field-only here: the stored-PageSpeed fallback lives in its own
-			// tier below so the Optimization Detective tier stays reachable
-			// (manual > RUM field > OD > stored PageSpeed). Gated on the same
-			// fieldLcpOverride toggle the frontend chain uses (issue #1216) so
-			// the settings UI resolves the same hero as the frontend: with the
-			// toggle off both paths skip the RUM-field tier.
-			$field_override = false;
-			try {
-				$stored_opts    = class_exists( 'PerformanceOptimise\Inc\Util' ) ? Util::get_settings() : array();
-				$field_override = is_array( $stored_opts ) && ! empty( $stored_opts['image_optimisation']['fieldLcpOverride'] );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			if ( $field_override && null === $candidate && class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_field_lcp_url' ) ) {
-				try {
-					$field = RUM::get_field_lcp_url( $path );
-					if ( is_array( $field ) && ! empty( $field['url'] ) && is_string( $field['url'] ) ) {
-						$candidate = $field;
-						$source    = 'rum';
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-			}
-
-			// Optimization Detective real-visit hero. OD_Bridge::is_enabled()
+			// Optimization Detective real-visit hero, second tier (issue #1216):
+			// the frontend resolve_auto_lcp_url() chain is manual > OD >
+			// RUM-field/PageSpeed > heuristic, so the settings UI checks OD
+			// before RUM-field to resolve the same hero as the frontend when
+			// both OD and RUM-field data exist. OD_Bridge::is_enabled()
 			// already applies the wppo_od_should_optimize filter with the
 			// correct current URL, so no separate filter pre-check here.
 			if ( null === $candidate && class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) && method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'get_lcp_url' ) ) {
@@ -620,6 +598,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 							);
 							$source    = 'od';
 						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			// RUM field data wins over lab guesses when it passes the sample gate.
+			// Field-only here: the stored-PageSpeed fallback lives in its own
+			// tier below (manual > OD > RUM field > stored PageSpeed, matching
+			// the frontend chain). Gated on the same fieldLcpOverride toggle
+			// the frontend chain uses (issue #1216) so the settings UI resolves
+			// the same hero as the frontend: with the toggle off both paths
+			// skip the RUM-field tier.
+			$field_override = false;
+			try {
+				$stored_opts    = class_exists( 'PerformanceOptimise\Inc\Util' ) ? Util::get_settings() : array();
+				$field_override = is_array( $stored_opts ) && ! empty( $stored_opts['image_optimisation']['fieldLcpOverride'] );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			if ( $field_override && null === $candidate && class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_field_lcp_url' ) ) {
+				try {
+					$field = RUM::get_field_lcp_url( $path );
+					if ( is_array( $field ) && ! empty( $field['url'] ) && is_string( $field['url'] ) ) {
+						$candidate = $field;
+						$source    = 'rum';
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );

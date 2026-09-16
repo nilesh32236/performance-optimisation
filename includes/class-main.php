@@ -162,6 +162,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private static array $font_preload_emitted = array();
 
 		/**
+		 * Per-request memo of stylesheet file stamps (src => "mtime:size").
+		 *
+		 * `get_auto_discovered_font_urls()` stats every queued handle to
+		 * build the transient key (issue #1216); this memo keeps re-entrant
+		 * `wp_head` emissions from repeating realpath/filemtime/filesize
+		 * syscalls in one request. Reset via
+		 * {@see reset_font_preload_emitted()} (tests, switch_blog).
+		 *
+		 * @var array<string,string>
+		 * @since NEXT
+		 */
+		private static array $font_stamp_memo = array();
+
+		/**
+		 * Per-request memo of resolved auto-font lists (cache key => URLs).
+		 *
+		 * Short-circuits the transient read + re-validation on re-entrant
+		 * calls within one request (issue #1216). Keyed by the full
+		 * transient key (queue state), so queue changes naturally miss.
+		 * Reset via {@see reset_font_preload_emitted()}.
+		 *
+		 * @var array<string,string[]>
+		 * @since NEXT
+		 */
+		private static array $auto_fonts_memo = array();
+
+		/**
 		 * Maximum auto-discovered font preloads per page (manual wins).
 		 *
 		 * @since NEXT
@@ -6099,7 +6126,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Reset the per-request font preload dedup guard.
 		 *
-		 * Wired to `switch_blog` in {@see init()} alongside
+		 * Wired to `switch_blog` in {@see Main::setup_hooks()} alongside
 		 * `Image_Optimisation::clear_runtime_caches()` so the dedup map
 		 * cannot leak across sites in `switch_to_blog()` requests; also
 		 * called directly in tests.
@@ -6109,12 +6136,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		public static function reset_font_preload_emitted(): void {
 			self::$font_preload_emitted = array();
+			self::$font_stamp_memo      = array();
+			self::$auto_fonts_memo      = array();
 		}
 
 		/**
 		 * Reset the per-instance LCP memos on the shared image-optimisation instance.
 		 *
-		 * Wired to `switch_blog` in {@see init()} (issue #1216): the
+		 * Wired to `switch_blog` in {@see Main::setup_hooks()} (issue #1216): the
 		 * Image_Optimisation instance is long-lived via Main, so its
 		 * memoized LCP URLs would otherwise leak across sites in
 		 * `switch_to_blog()` requests. Accepts the switch_blog args so the
@@ -6337,6 +6366,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Read the manual font preload URL list (resolved to absolute URLs).
 		 *
+		 * Manual inputs resolve through `resolve_font_url()` with an empty
+		 * stylesheet base (issue #1216) — the same resolver auto-discovery
+		 * uses — so root-relative refs anchor at `home_url()` and bare
+		 * relatives at the home URL, never at `WP_CONTENT_URL`. Shared
+		 * resolution keeps the manual-wins normalized-URL dedup comparing
+		 * like with like instead of missing across bases.
+		 *
 		 * @since NEXT
 		 * @param array $preload_settings Preload settings tab.
 		 * @return string[] Absolute manual font URLs.
@@ -6353,13 +6389,59 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					if ( '' === $font_url ) {
 						continue;
 					}
-					$font_url = preg_match( '/^https?:\/\//i', $font_url ) ? $font_url : Util::cached_content_url( $font_url );
-					$urls[]   = substr( $font_url, 0, 2048 );
+					$resolved = $this->resolve_font_url( $font_url, '' );
+					if ( '' === $resolved ) {
+						continue;
+					}
+					$urls[] = substr( $resolved, 0, 2048 );
 				}
 				return array_values( array_unique( $urls ) );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return array();
+			}
+		}
+
+		/**
+		 * Resolve a same-origin stylesheet URL to a contained local path.
+		 *
+		 * Single shared implementation (issue #1216) for
+		 * `collect_enqueued_font_css_chunks()` and `font_stylesheet_stamp()`
+		 * so a future hardening fix cannot land in one copy only: maps the
+		 * URL path under ABSPATH, canonicalizes with realpath (rejecting
+		 * `..` escapes), and refuses paths outside ABSPATH before any
+		 * file_exists/filesize/file_get_contents probe. Returns '' when
+		 * unresolvable or outside containment. Never fatals.
+		 *
+		 * @since NEXT
+		 * @param string $abs_src Absolute same-origin stylesheet URL.
+		 * @return string Canonical local path, or ''.
+		 */
+		private function resolve_local_stylesheet_path( string $abs_src ): string {
+			try {
+				$path = function_exists( 'wp_parse_url' ) ? wp_parse_url( $abs_src, PHP_URL_PATH ) : parse_url( $abs_src, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url() is unavailable.
+				if ( ! is_string( $path ) || '' === $path ) {
+					return '';
+				}
+				$local = ( defined( 'ABSPATH' ) ? (string) ABSPATH : '' ) . ltrim( $path, '/' );
+				if ( function_exists( 'wp_normalize_path' ) ) {
+					$local = wp_normalize_path( $local );
+				}
+				$real = realpath( $local );
+				if ( ! is_string( $real ) ) {
+					return '';
+				}
+				if ( function_exists( 'wp_normalize_path' ) ) {
+					$real = wp_normalize_path( $real );
+				}
+				$base = ( function_exists( 'wp_normalize_path' ) && defined( 'ABSPATH' ) ) ? wp_normalize_path( (string) ABSPATH ) : (string) ( defined( 'ABSPATH' ) ? ABSPATH : '' );
+				if ( '' === $base || 0 !== strpos( $real, rtrim( $base, '/' ) . '/' ) ) {
+					return '';
+				}
+				return $real;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
 			}
 		}
 
@@ -6377,22 +6459,50 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return array[] Chunks shaped as array{css: string, base: string}.
 		 */
 		private function collect_enqueued_font_css_chunks(): array {
-			$chunks = array();
+			$collected = $this->collect_font_css_chunks_and_hashes();
+			return $collected['chunks'];
+		}
+
+		/**
+		 * Collect CSS chunks plus inline-CSS key hashes in one pass.
+		 *
+		 * Same scan as `collect_enqueued_font_css_chunks()` but additionally
+		 * returns md5 hashes of the scanned inline `before`/`after` CSS so
+		 * `get_auto_discovered_font_urls()` builds the transient key without
+		 * looping the queue twice per request (issue #1216). The key loop
+		 * and the chunk loop previously duplicated stripos/implode/md5 work
+		 * on the hot path, including on cache hits.
+		 *
+		 * @since NEXT
+		 * @return array Shaped as array{chunks: array[], inline_hashes: string[]}.
+		 */
+		private function collect_font_css_chunks_and_hashes(): array {
+			$chunks        = array();
+			$inline_hashes = array();
 			try {
 				if ( ! isset( $GLOBALS['wp_styles'] ) || ! is_object( $GLOBALS['wp_styles'] ) ) {
-					return $chunks;
+					return array(
+						'chunks'        => $chunks,
+						'inline_hashes' => $inline_hashes,
+					);
 				}
 				$registered = $GLOBALS['wp_styles']->registered ?? null;
 				if ( ! is_array( $registered ) ) {
 					if ( is_object( $registered ) && method_exists( $registered, 'getArrayCopy' ) ) {
 						$registered = $registered->getArrayCopy();
 					} else {
-						return $chunks;
+						return array(
+							'chunks'        => $chunks,
+							'inline_hashes' => $inline_hashes,
+						);
 					}
 				}
 				$queue = ( isset( $GLOBALS['wp_styles']->queue ) && is_array( $GLOBALS['wp_styles']->queue ) ) ? $GLOBALS['wp_styles']->queue : array();
 				if ( empty( $queue ) ) {
-					return $chunks;
+					return array(
+						'chunks'        => $chunks,
+						'inline_hashes' => $inline_hashes,
+					);
 				}
 				// Total-bytes budget (issue #1216): a cold miss may probe up to
 				// 10 handles x 512KB; stop reading files past ~1MB total so a
@@ -6415,10 +6525,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 							}
 							$inline = is_array( $extra[ $key ] ) ? implode( "\n", $extra[ $key ] ) : (string) $extra[ $key ];
 							if ( '' !== trim( $inline ) && false !== stripos( $inline, 'font-face' ) ) {
-								$chunks[] = array(
+								$chunks[]        = array(
 									'css'  => substr( $inline, 0, 524288 ),
 									'base' => '',
 								);
+								$inline_hashes[] = md5( substr( $inline, 0, 524288 ) );
 								++$scanned;
 								if ( $scanned >= 10 ) {
 									break 2;
@@ -6440,27 +6551,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					if ( ! $this->is_same_origin_font_url( $abs_src ) ) {
 						continue;
 					}
-					$path = function_exists( 'wp_parse_url' ) ? wp_parse_url( $abs_src, PHP_URL_PATH ) : parse_url( $abs_src, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url() is unavailable.
-					if ( ! is_string( $path ) || '' === $path ) {
+					$local = $this->resolve_local_stylesheet_path( $abs_src );
+					if ( '' === $local ) {
 						continue;
 					}
-					$local = ( defined( 'ABSPATH' ) ? (string) ABSPATH : '' ) . ltrim( $path, '/' );
-					if ( function_exists( 'wp_normalize_path' ) ) {
-						$local = wp_normalize_path( $local );
-					}
-					$real = realpath( $local );
-					$base = ( function_exists( 'wp_normalize_path' ) && defined( 'ABSPATH' ) ) ? wp_normalize_path( (string) ABSPATH ) : (string) ( defined( 'ABSPATH' ) ? ABSPATH : '' );
-					if ( ! is_string( $real ) ) {
-						continue;
-					}
-					if ( function_exists( 'wp_normalize_path' ) ) {
-						$real = wp_normalize_path( $real );
-					}
-					if ( '' === $base || 0 !== strpos( $real, rtrim( $base, '/' ) . '/' ) ) {
-						continue;
-					}
-					$local = $real;
-					$size  = 0;
+					$size = 0;
 					if ( file_exists( $local ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_exists -- Local read-only size probe; WP_Filesystem init per asset is disproportionate.
 						$size = filesize( $local ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize -- Same local probe as above.
 					}
@@ -6492,7 +6587,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
-			return $chunks;
+			return array(
+				'chunks'        => $chunks,
+				'inline_hashes' => $inline_hashes,
+			);
 		}
 
 		/**
@@ -6632,9 +6730,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Best-effort file stamp (mtime:size) for a stylesheet src.
 		 *
 		 * Used only for the auto-font transient key so same-ver CSS edits bust
-		 * the 12h cache (issue #1216). Mirrors the ABSPATH containment in
-		 * {@see collect_enqueued_font_css_chunks()}; unresolvable or
-		 * non-local files yield '' (key falls back to src|ver). Never fatals.
+		 * the 12h cache (issue #1216). Shares
+		 * {@see resolve_local_stylesheet_path()} containment with the chunk
+		 * collector; unresolvable or non-local files yield '' (key falls back
+		 * to src|ver). Memoized per request so re-entrant `wp_head`
+		 * emissions do not repeat stat syscalls. Never fatals.
 		 *
 		 * @since NEXT
 		 * @param string $src Stylesheet src as registered.
@@ -6646,35 +6746,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( '' === $src ) {
 					return '';
 				}
+				if ( isset( self::$font_stamp_memo[ $src ] ) ) {
+					return self::$font_stamp_memo[ $src ];
+				}
+				$stamp   = '';
 				$abs_src = preg_match( '/^(?:https?:)?\/\//i', $src ) ? $src : ( class_exists( 'PerformanceOptimise\Inc\Util' ) ? Util::cached_content_url( $src ) : $src );
-				if ( ! $this->is_same_origin_font_url( $abs_src ) ) {
-					return '';
+				if ( $this->is_same_origin_font_url( $abs_src ) ) {
+					$local = $this->resolve_local_stylesheet_path( $abs_src );
+					if ( '' !== $local ) {
+						$mtime = filemtime( $local ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filemtime -- Local read-only key stamp; WP_Filesystem init per asset is disproportionate.
+						$size  = filesize( $local ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize -- Same local stamp as above.
+						if ( false !== $mtime || false !== $size ) {
+							$stamp = ( false === $mtime ? '0' : (string) (int) $mtime ) . ':' . ( false === $size ? '0' : (string) (int) $size );
+						}
+					}
 				}
-				$path = function_exists( 'wp_parse_url' ) ? wp_parse_url( $abs_src, PHP_URL_PATH ) : parse_url( $abs_src, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url() is unavailable.
-				if ( ! is_string( $path ) || '' === $path ) {
-					return '';
-				}
-				$local = ( defined( 'ABSPATH' ) ? (string) ABSPATH : '' ) . ltrim( $path, '/' );
-				if ( function_exists( 'wp_normalize_path' ) ) {
-					$local = wp_normalize_path( $local );
-				}
-				$real = realpath( $local );
-				if ( ! is_string( $real ) ) {
-					return '';
-				}
-				if ( function_exists( 'wp_normalize_path' ) ) {
-					$real = wp_normalize_path( $real );
-				}
-				$base = ( function_exists( 'wp_normalize_path' ) && defined( 'ABSPATH' ) ) ? wp_normalize_path( (string) ABSPATH ) : (string) ( defined( 'ABSPATH' ) ? ABSPATH : '' );
-				if ( '' === $base || 0 !== strpos( $real, rtrim( $base, '/' ) . '/' ) ) {
-					return '';
-				}
-				$mtime = filemtime( $real ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filemtime -- Local read-only key stamp; WP_Filesystem init per asset is disproportionate.
-				$size  = filesize( $real ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize -- Same local stamp as above.
-				if ( false === $mtime && false === $size ) {
-					return '';
-				}
-				return ( false === $mtime ? '0' : (string) (int) $mtime ) . ':' . ( false === $size ? '0' : (string) (int) $size );
+				self::$font_stamp_memo[ $src ] = $stamp;
+				return $stamp;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return '';
@@ -6689,7 +6777,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * filtered same-origin, minus manual-list overlaps (normalized), then
 		 * capped at MAX_AUTO_FONT_PRELOADS. Results are cached in a
 		 * blog-aware transient (`Util::transient_key()`, multisite-safe, 12h)
-		 * keyed by stylesheet state. Fail-open: any failure returns [].
+		 * keyed by stylesheet state, plus a per-request in-memory memo so
+		 * re-entrant `wp_head` emissions skip the transient round-trip.
+		 * Fail-open: any failure returns [].
+		 *
+		 * Cold-miss cost is bounded (issue #1216): at most 10 queued handles,
+		 * 512 KB per file, ~1 MB total before `wp_head` output, with a stat
+		 * size probe before every full read. File stamps are memoized per
+		 * request and the chunk scan runs once per call (chunks + inline key
+		 * hashes collected in a single pass).
 		 *
 		 * @since NEXT
 		 * @param string[] $manual_urls Manual font URLs (win on conflict).
@@ -6707,10 +6803,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						$manual_keys[ $this->normalize_font_url( $m ) ] = true;
 					}
 				}
-				$cache_key = '';
+				// Single scan pass (issue #1216): chunks for extraction and
+				// inline hashes for the cache key come from one queue walk,
+				// never two.
+				$collected     = $this->collect_font_css_chunks_and_hashes();
+				$inline_hashes = $collected['inline_hashes'];
+				$cache_key     = '';
 				try {
-					$handles = array();
-					$srcs    = array();
+					$srcs = array();
 					// Home host + scheme bind the key (issue #1216): a
 					// poisoned/stale transient (object-cache write, domain
 					// migration) must not serve another origin's font list.
@@ -6728,79 +6828,43 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 							// Same-ver CSS edits (direct edit, minify/combine
 							// rewrite, child-theme override) must bust the 12h
 							// cache (issue #1216): fold filemtime + filesize
-							// into the key best-effort. Unresolvable files
-							// contribute src|ver only (never fatal).
+							// into the key best-effort (memoized per request).
+							// Unresolvable files contribute src|ver only
+							// (never fatal).
 							$stamp  = $this->font_stylesheet_stamp( $src );
 							$srcs[] = (string) $h . '|' . $src . '|' . $ver . '|' . $stamp;
 						}
 					}
-					// Inline before/after CSS is also scanned by
-					// collect_enqueued_font_css_chunks(), so hash it into the
-					// key (issue #1216): editing Customizer additional CSS or
-					// inline @font-face rules must bust the 12h cache. Reads
-					// are in-memory only (no file I/O) so the transient still
-					// avoids stylesheet disk reads on cache hits.
-					$inline_hashes = array();
-					if ( ! empty( $handles ) && isset( $GLOBALS['wp_styles'] ) && is_object( $GLOBALS['wp_styles'] ) ) {
-						$registered = $GLOBALS['wp_styles']->registered ?? array();
-						if ( ! is_array( $registered ) ) {
-							$registered = array();
-						}
-						foreach ( $handles as $h ) {
-							$s = $registered[ $h ] ?? null;
-							if ( ! is_object( $s ) ) {
-								continue;
-							}
-							$extra = $s->extra ?? array();
-							if ( ! is_array( $extra ) ) {
-								continue;
-							}
-							foreach ( array( 'after', 'before' ) as $key ) {
-								if ( empty( $extra[ $key ] ) ) {
-									continue;
-								}
-								$inline = is_array( $extra[ $key ] ) ? implode( "\n", $extra[ $key ] ) : (string) $extra[ $key ];
-								if ( '' !== trim( $inline ) && false !== stripos( $inline, 'font-face' ) ) {
-									$inline_hashes[] = md5( substr( $inline, 0, 524288 ) );
-								}
-							}
-						}
-					}
-					$cache_key = Util::transient_key( 'wppo_auto_fonts_' . md5( $home_id . '|' . wp_json_encode( $srcs ) . '|' . wp_json_encode( $inline_hashes ) . '|' . implode( '|', array_keys( $manual_keys ) ) ) );
+					// Sorted, manual-free key (issue #1216): handle registration
+					// order must not mint orphan keys, and manual-list edits
+					// must not churn the cache — the manual overlap is already
+					// re-filtered on every read (transient hit and miss), so
+					// including manual keys only adds invalidation churn.
+					// Inline before/after CSS is also scanned, so its hashes
+					// join the key: editing Customizer additional CSS or inline
+					// @font-face rules busts the 12h cache.
+					sort( $srcs );
+					$cache_key = Util::transient_key( 'wppo_auto_fonts_' . md5( $home_id . '|' . wp_json_encode( $srcs ) . '|' . wp_json_encode( $inline_hashes ) ) );
 				} catch ( \Throwable $e ) {
 					unset( $e );
 					$cache_key = '';
+				}
+				if ( '' !== $cache_key && isset( self::$auto_fonts_memo[ $cache_key ] ) ) {
+					return $this->filter_auto_font_urls( self::$auto_fonts_memo[ $cache_key ], $manual_keys );
 				}
 				if ( '' !== $cache_key && function_exists( 'get_transient' ) ) {
 					try {
 						$cached = get_transient( $cache_key );
 						if ( is_array( $cached ) ) {
-							// Re-validate cached values on read (issue #1216):
-							// a poisoned/stale transient must not emit
-							// cross-origin fonts or shadow the manual list.
-							$clean = array();
-							foreach ( $cached as $cu ) {
-								$cu = is_string( $cu ) ? substr( trim( $cu ), 0, 2048 ) : '';
-								if ( '' === $cu || ! $this->is_same_origin_font_url( $cu ) ) {
-									continue;
-								}
-								$ck = $this->normalize_font_url( $cu );
-								if ( '' === $ck || isset( $manual_keys[ $ck ] ) || isset( $clean[ $ck ] ) ) {
-									continue;
-								}
-								$clean[ $ck ] = $cu;
-								if ( count( $clean ) >= self::MAX_AUTO_FONT_PRELOADS ) {
-									break;
-								}
-							}
-							return array_values( $clean );
+							self::$auto_fonts_memo[ $cache_key ] = $cached;
+							return $this->filter_auto_font_urls( $cached, $manual_keys );
 						}
 					} catch ( \Throwable $e ) {
 						unset( $e );
 					}
 				}
 				$candidates = array();
-				foreach ( $this->collect_enqueued_font_css_chunks() as $chunk ) {
+				foreach ( $collected['chunks'] as $chunk ) {
 					$css  = is_array( $chunk ) ? (string) ( $chunk['css'] ?? '' ) : (string) $chunk;
 					$base = is_array( $chunk ) ? (string) ( $chunk['base'] ?? '' ) : '';
 					foreach ( self::extract_font_urls_from_css( $css ) as $font_url ) {
@@ -6819,14 +6883,56 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					}
 				}
 				$result = array_values( $candidates );
-				if ( '' !== $cache_key && function_exists( 'set_transient' ) ) {
-					try {
-						set_transient( $cache_key, $result, defined( 'HOUR_IN_SECONDS' ) ? 12 * HOUR_IN_SECONDS : 43200 );
-					} catch ( \Throwable $e ) {
-						unset( $e );
+				if ( '' !== $cache_key ) {
+					self::$auto_fonts_memo[ $cache_key ] = $result;
+					if ( function_exists( 'set_transient' ) ) {
+						try {
+							set_transient( $cache_key, $result, defined( 'HOUR_IN_SECONDS' ) ? 12 * HOUR_IN_SECONDS : 43200 );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
 					}
 				}
 				return $result;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
+		 * Filter candidate font URLs to the emission-safe subset (issue #1216).
+		 *
+		 * Shared by the transient-hit and per-request-memo paths so cached
+		 * values are re-validated on every read: a poisoned/stale transient
+		 * must not emit cross-origin fonts or shadow the manual list. Trims
+		 * to 2048 chars, enforces same-origin, drops manual-list overlaps
+		 * (normalized), dedups, and caps at MAX_AUTO_FONT_PRELOADS.
+		 * Never fatals: any failure returns [].
+		 *
+		 * @since NEXT
+		 * @param mixed[] $urls Candidate URLs (e.g. from the transient).
+		 * @param array   $manual_keys Normalized manual-URL keys winning on conflict.
+		 * @return string[] Clean auto font URLs (zero to two items).
+		 */
+		private function filter_auto_font_urls( array $urls, array $manual_keys ): array {
+			try {
+				$clean = array();
+				foreach ( $urls as $cu ) {
+					$cu = is_string( $cu ) ? substr( trim( $cu ), 0, 2048 ) : '';
+					if ( '' === $cu || ! $this->is_same_origin_font_url( $cu ) ) {
+						continue;
+					}
+					$ck = $this->normalize_font_url( $cu );
+					if ( '' === $ck || isset( $manual_keys[ $ck ] ) || isset( $clean[ $ck ] ) ) {
+						continue;
+					}
+					$clean[ $ck ] = $cu;
+					if ( count( $clean ) >= self::MAX_AUTO_FONT_PRELOADS ) {
+						break;
+					}
+				}
+				return array_values( $clean );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return array();

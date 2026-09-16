@@ -366,7 +366,7 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 	 *
 	 * Each tier test then overrides get_transient (and, for the OD tier,
 	 * the OD metrics global) to steer exactly one tier to a hit while the
-	 * others miss, proving the documented manual > RUM > OD > PageSpeed
+	 * others miss, proving the documented manual > OD > RUM > PageSpeed
 	 * order instead of only covering manual-first and null fail-open.
 	 */
 	private function install_lcp_tier_stubs(): void {
@@ -622,7 +622,7 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that Optimization Detective real-visit data surfaces as the
 	 * candidate with source 'od' when RUM field data misses, proving the OD
-	 * tier is reachable (manual > RUM field > OD > stored PageSpeed).
+	 * tier is reachable (manual > OD > RUM field > stored PageSpeed).
 	 */
 	public function test_get_lcp_preload_candidate_returns_od_candidate(): void {
 		$this->install_lcp_tier_stubs();
@@ -656,6 +656,76 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 
 		try {
 			$request  = new WP_REST_Request( array( 'path' => '/od-tier-page/' ) );
+			$response = $this->rest->get_lcp_preload_candidate( $request );
+
+			$data = $response->get_data()['data'];
+			$this->assertSame( 'od', $data['source'] );
+			$this->assertSame( 'https://example.com/wp-content/uploads/od-hero.jpg', $data['candidate']['url'] );
+		} finally {
+			if ( null === $previous_metrics ) {
+				unset( $GLOBALS['od_metrics_stub'] );
+			} else {
+				$GLOBALS['od_metrics_stub'] = $previous_metrics;
+			}
+			$wp = $previous_wp;
+		}
+	}
+
+	/**
+	 * Test that OD wins over RUM-field when both tiers hit (issue #1216):
+	 * the REST order is manual > OD > RUM-field > stored PageSpeed,
+	 * matching the frontend resolve_auto_lcp_url() chain.
+	 */
+	public function test_get_lcp_preload_candidate_prefers_od_over_rum_field(): void {
+		$this->install_lcp_tier_stubs();
+		$this->ensure_od_stubs_for_lcp_tier();
+		\PerformanceOptimise\Inc\Util::set_settings_cache(
+			array(
+				'image_optimisation' => array(
+					'fieldLcpOverride' => true,
+				),
+			)
+		);
+		Functions\when( 'get_transient' )->alias(
+			static function ( $key ) {
+				if ( is_string( $key ) && false !== strpos( $key, 'wppo_rum_top_' ) ) {
+					return array(
+						'url'      => 'https://example.com/wp-content/uploads/rum-hero.jpg',
+						'n'        => 25,
+						'lastSeen' => time(),
+					);
+				}
+				return false;
+			}
+		);
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook, $value ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- Test-only filter passthrough.
+				$args = func_get_args();
+				return $args[1];
+			}
+		);
+		Functions\when( 'add_query_arg' )->alias(
+			static function () {
+				return 'https://example.com/both-tiers/';
+			}
+		);
+
+		global $wp;
+		$previous_wp = $wp ?? null;
+		$wp          = new \stdClass();
+		$wp->request = 'both-tiers';
+
+		$previous_metrics           = $GLOBALS['od_metrics_stub'] ?? null;
+		$GLOBALS['od_metrics_stub'] = array(
+			new \OD_URL_Metric(
+				array(
+					'lcp' => array( 'src' => 'https://example.com/wp-content/uploads/od-hero.jpg' ),
+				)
+			),
+		);
+
+		try {
+			$request  = new WP_REST_Request( array( 'path' => '/both-tiers/' ) );
 			$response = $this->rest->get_lcp_preload_candidate( $request );
 
 			$data = $response->get_data()['data'];
@@ -1373,6 +1443,105 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertSame( 200, $response->get_status() );
 		$this->assertSame( $old_snapshot, $store['wppo_settings_snapshot'], 'No-op saves must not overwrite the useful undo snapshot' );
+	}
+
+	/**
+	 * Test that a partial preload_settings save preserves the automatic
+	 * LCP + font-discovery toggles when the request omits them (issue
+	 * #1216): an older client posting only known keys must not wipe the
+	 * off-by-default flags.
+	 */
+	public function test_update_settings_preserves_preload_auto_toggles_on_partial_save(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'sanitize_textarea_field' )->alias(
+			static fn( $value ): string => trim( preg_replace( '/<[^>]*>/', '', (string) $value ) )
+		);
+
+		$store = array(
+			'wppo_settings' => array(
+				'preload_settings' => array(
+					'enablePreloadCache' => true,
+					'autoLcpPreload'     => true,
+					'autoDiscoverFonts'  => true,
+				),
+			),
+		);
+		Functions\when( 'get_option' )->alias(
+			static function ( $name, $fallback = false ) use ( &$store ) {
+				return array_key_exists( $name, $store ) ? $store[ $name ] : $fallback;
+			}
+		);
+		Functions\when( 'update_option' )->alias(
+			static function ( $name, $value ) use ( &$store ) {
+				$store[ $name ] = $value;
+				return true;
+			}
+		);
+
+		$request = new WP_REST_Request(
+			array(
+				'tab'      => 'preload_settings',
+				'settings' => array( 'enablePreloadCache' => false ),
+			)
+		);
+
+		$response = $this->rest->update_settings( $request );
+
+		$this->assertSame( 200, $response->get_status() );
+		$tab = $store['wppo_settings']['preload_settings'];
+		$this->assertFalse( $tab['enablePreloadCache'] );
+		$this->assertTrue( $tab['autoLcpPreload'], 'Omitted auto-LCP toggle must survive a partial save' );
+		$this->assertTrue( $tab['autoDiscoverFonts'], 'Omitted font-discovery toggle must survive a partial save' );
+	}
+
+	/**
+	 * Test that posting one new preload toggle preserves its sibling new
+	 * key plus unrelated tab keys (issue #1216): the tab is merged, not
+	 * replaced, so a single-key POST cannot delete siblings.
+	 */
+	public function test_update_settings_partial_auto_toggle_preserves_siblings(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'sanitize_textarea_field' )->alias(
+			static fn( $value ): string => trim( preg_replace( '/<[^>]*>/', '', (string) $value ) )
+		);
+
+		$store = array(
+			'wppo_settings' => array(
+				'preload_settings' => array(
+					'enablePreloadCache' => true,
+					'autoLcpPreload'     => false,
+					'autoDiscoverFonts'  => true,
+				),
+			),
+		);
+		Functions\when( 'get_option' )->alias(
+			static function ( $name, $fallback = false ) use ( &$store ) {
+				return array_key_exists( $name, $store ) ? $store[ $name ] : $fallback;
+			}
+		);
+		Functions\when( 'update_option' )->alias(
+			static function ( $name, $value ) use ( &$store ) {
+				$store[ $name ] = $value;
+				return true;
+			}
+		);
+
+		$request = new WP_REST_Request(
+			array(
+				'tab'      => 'preload_settings',
+				'settings' => array( 'autoLcpPreload' => true ),
+			)
+		);
+
+		$response = $this->rest->update_settings( $request );
+
+		$this->assertSame( 200, $response->get_status() );
+		$tab = $store['wppo_settings']['preload_settings'];
+		$this->assertTrue( $tab['autoLcpPreload'] );
+		$this->assertTrue( $tab['autoDiscoverFonts'], 'Sibling new toggle must survive a single-key save' );
+		$this->assertTrue( $tab['enablePreloadCache'], 'Unrelated tab keys must survive a single-key save' );
 	}
 
 	/**

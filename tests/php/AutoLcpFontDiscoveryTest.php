@@ -320,9 +320,13 @@ class AutoLcpFontDiscoveryTest extends \PHPUnit\Framework\TestCase {
 		$srcset = 'http://example.com/a-400.jpg 400w, http://example.com/a-800.jpg 800w, http://example.com/a-1200.jpg 1200w';
 		$items  = $method->invoke( $image_opt, $srcset, 'http://example.com/a.jpg', array( 'maxWidthImgSize' => 5000 ) );
 
+		// Largest widths win (the likely hero, not thumbnails); media is
+		// generated after the slice so coverage stays gapless from 0.
 		$this->assertCount( 2, $items );
-		$this->assertSame( '(min-width: 0px) and (max-width: 400px)', $items[0]['media'] );
-		$this->assertSame( '(min-width: 401px)', $items[1]['media'] );
+		$this->assertSame( 'http://example.com/a-800.jpg', $items[0]['url'] );
+		$this->assertSame( 'http://example.com/a-1200.jpg', $items[1]['url'] );
+		$this->assertSame( '(min-width: 0px) and (max-width: 800px)', $items[0]['media'] );
+		$this->assertSame( '(min-width: 801px)', $items[1]['media'] );
 	}
 
 	/**
@@ -340,5 +344,132 @@ class AutoLcpFontDiscoveryTest extends \PHPUnit\Framework\TestCase {
 
 		Util::set_settings_cache( array( 'performance_audit' => array( 'rum_enabled' => true ) ) );
 		$this->assertTrue( $method->invoke( $image_opt ) );
+	}
+
+	/**
+	 * Stubs shared by the end-to-end auto-LCP tests: a singular view with
+	 * controllable post meta, an empty OD tier, and no stored transients.
+	 *
+	 * @param array $meta Map of meta key => value returned by get_post_meta().
+	 */
+	private function install_auto_lcp_stubs( array $meta ): void {
+		$this->install_stubs();
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		if ( method_exists( 'PerformanceOptimise\Inc\Util', 'reset_cached_home_urls' ) ) {
+			\PerformanceOptimise\Inc\Util::reset_cached_home_urls();
+		}
+		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook, $value ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- Test-only filter passthrough.
+				$args = func_get_args();
+				return $args[1];
+			}
+		);
+		Functions\when( 'add_query_arg' )->alias(
+			static function () {
+				return 'http://example.com/current-page/';
+			}
+		);
+		Functions\when( 'is_singular' )->justReturn( true );
+		Functions\when( 'is_front_page' )->justReturn( false );
+		Functions\when( 'get_the_ID' )->justReturn( 7 );
+		Functions\when( 'get_post_meta' )->alias(
+			static function ( $post_id, $key, $single ) use ( $meta ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- Test-only meta stub keyed by $key.
+				return $meta[ $key ] ?? '';
+			}
+		);
+		Functions\when( 'get_option' )->justReturn( false );
+		Functions\when( 'get_transient' )->justReturn( false );
+		// Order-independent: OdBridgeTest in the same process may leave OD
+		// metrics behind; empty both globals so the OD tier deterministically
+		// misses unless a test seeds od_metrics_stub itself.
+		$GLOBALS['od_metrics_stub'] = array();
+		$GLOBALS['od_url_metrics']  = array();
+	}
+
+	/**
+	 * Build an Image_Optimisation instance with the given option tabs.
+	 *
+	 * @param array $image_optimisation image_optimisation option tab.
+	 * @param array $preload_settings preload_settings option tab.
+	 * @return Image_Optimisation
+	 */
+	private function make_image_opt( array $image_optimisation, array $preload_settings ): Image_Optimisation {
+		return new Image_Optimisation(
+			array(
+				'image_optimisation' => $image_optimisation,
+				'preload_settings'   => $preload_settings,
+			)
+		);
+	}
+
+	/**
+	 * RUM-off with the new toggle only and no OD data: no auto item, and
+	 * the RUM-dependent tiers stay silent (OD-only subset resolves empty).
+	 */
+	public function test_auto_lcp_rum_off_yields_empty_without_od(): void {
+		$this->install_auto_lcp_stubs( array() );
+		Util::set_settings_cache( array( 'performance_audit' => array( 'rum_enabled' => false ) ) );
+		$image_opt = $this->make_image_opt( array(), array( 'autoLcpPreload' => true ) );
+		$method    = new \ReflectionMethod( Image_Optimisation::class, 'get_auto_lcp_preload_data' );
+		$method->setAccessible( true );
+
+		$this->assertSame( array(), $method->invoke( $image_opt ) );
+	}
+
+	/**
+	 * RUM-on with a stored same-origin PageSpeed hero: exactly one auto
+	 * preload item for the hero URL.
+	 */
+	public function test_auto_lcp_rum_on_emits_single_pagespeed_item(): void {
+		$this->install_auto_lcp_stubs(
+			array( '_wppo_lcp_image_url_mobile' => 'https://example.com/wp-content/uploads/hero.jpg' )
+		);
+		Util::set_settings_cache( array( 'performance_audit' => array( 'rum_enabled' => true ) ) );
+		$image_opt = $this->make_image_opt( array(), array( 'autoLcpPreload' => true ) );
+		$method    = new \ReflectionMethod( Image_Optimisation::class, 'get_auto_lcp_preload_data' );
+		$method->setAccessible( true );
+
+		$items = $method->invoke( $image_opt );
+
+		$this->assertCount( 1, $items );
+		$this->assertSame( 'https://example.com/wp-content/uploads/hero.jpg', $items[0]['url'] );
+	}
+
+	/**
+	 * Manual picker (relative URL) wins the normalized-URL dedup against
+	 * the same auto hero (absolute URL): exactly one item, the manual one.
+	 */
+	public function test_auto_lcp_manual_wins_dedup_absolute_vs_relative(): void {
+		$this->install_auto_lcp_stubs(
+			array(
+				'_wppo_lcp_preload_url'        => '/wp-content/uploads/hero.jpg',
+				'_wppo_lcp_image_url_mobile' => 'https://example.com/wp-content/uploads/hero.jpg',
+			)
+		);
+		Util::set_settings_cache( array( 'performance_audit' => array( 'rum_enabled' => true ) ) );
+		$image_opt = $this->make_image_opt( array(), array( 'autoLcpPreload' => true ) );
+		$method    = new \ReflectionMethod( Image_Optimisation::class, 'get_all_preload_data' );
+		$method->setAccessible( true );
+
+		$items = $method->invoke( $image_opt );
+
+		$this->assertCount( 1, $items );
+		$this->assertSame( 'http://example.com/wp-content/uploads/hero.jpg', $items[0]['url'] );
+	}
+
+	/**
+	 * A cross-origin stored hero never emits an auto preload item.
+	 */
+	public function test_auto_lcp_rejects_cross_origin_hero(): void {
+		$this->install_auto_lcp_stubs(
+			array( '_wppo_lcp_image_url_mobile' => 'https://cdn.evil/hero.jpg' )
+		);
+		Util::set_settings_cache( array( 'performance_audit' => array( 'rum_enabled' => true ) ) );
+		$image_opt = $this->make_image_opt( array(), array( 'autoLcpPreload' => true ) );
+		$method    = new \ReflectionMethod( Image_Optimisation::class, 'get_auto_lcp_preload_data' );
+		$method->setAccessible( true );
+
+		$this->assertSame( array(), $method->invoke( $image_opt ) );
 	}
 }
