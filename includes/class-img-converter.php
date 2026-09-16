@@ -373,17 +373,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * Fallback for Imagick-only AVIF hosts where GD `imageavif()` is
 		 * unavailable. Reads the source file directly (never the GD
 		 * resource) so the generic JPEG/PNG path and the WebP-source path
-		 * share one implementation. Fail-open: returns false on any
-		 * failure; callers fall back to WebP, else the original.
+		 * share one implementation. When `$max_edge` is positive (over-budget
+		 * source, #1236) the decoded image is thumbnailed to that longest
+		 * edge before encoding so the fallback cannot re-introduce the
+		 * full-size allocation the memory guard avoided; a thumbnail
+		 * failure returns false (caller falls back to WebP/original).
+		 * Fail-open: returns false on any failure; callers fall back to
+		 * WebP, else the original.
 		 *
 		 * @since NEXT
 		 *
 		 * @param string $source_image Filesystem path to the source image.
 		 * @param string $dest_path    Filesystem path for the `.avif` output.
 		 * @param int    $quality      Encode quality (1-100).
+		 * @param int    $max_edge     Optional longest-edge cap in pixels (`0` disables).
 		 * @return bool True on success, false on any failure.
 		 */
-		public function encode_avif_via_imagick( string $source_image, string $dest_path, int $quality ): bool {
+		public function encode_avif_via_imagick( string $source_image, string $dest_path, int $quality, int $max_edge = 0 ): bool {
 			if ( '' === $source_image || '' === $dest_path ) {
 				return false;
 			}
@@ -412,6 +418,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					$this->apply_imagick_memory_guard( $imagick );
 
 					$imagick->readImage( $source_image );
+					if ( $max_edge > 0 ) {
+						if ( ! method_exists( $imagick, 'thumbnailImage' ) ) {
+							return false;
+						}
+						if ( method_exists( $imagick, 'getImageWidth' ) && method_exists( $imagick, 'getImageHeight' ) ) {
+							try {
+								$aw_w = (int) $imagick->getImageWidth();
+								$aw_h = (int) $imagick->getImageHeight();
+							} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: fall through to the thumbnail attempt.
+								$aw_w = 0;
+								$aw_h = 0;
+							}
+							// Thumbnail only when the decoded image exceeds
+							// the edge; an already-fitting image (or an
+							// unreadable dimension probe) skips it, while a
+							// failed thumbnail aborts (caller falls back).
+							$aw_fits = ( $aw_w > 0 && $aw_h > 0 && max( $aw_w, $aw_h ) <= $max_edge );
+							if ( ! $aw_fits && ! $imagick->thumbnailImage( $max_edge, $max_edge, true ) ) {
+								return false;
+							}
+						} elseif ( ! $imagick->thumbnailImage( $max_edge, $max_edge, true ) ) {
+							return false;
+						}
+					}
 					$imagick->setImageFormat( 'avif' );
 					if ( method_exists( $imagick, 'setImageCompressionQuality' ) ) {
 						$imagick->setImageCompressionQuality( $quality );
@@ -1068,7 +1098,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				if ( $filtered >= $longest ) {
 					return 0;
 				}
-				return max( 1, $filtered );
+				return max( 256, $filtered );
 			}
 
 			return $safe;
@@ -1112,9 +1142,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * thumbnails to the memory-safe longest edge, then exports to GD via
 		 * `getImageBlob()` + `imagecreatefromstring()` so the shared GD
 		 * encode path runs unchanged. Returns null when Imagick is
-		 * unavailable or any step fails — callers fall back to the legacy GD
-		 * full-size decode inside the existing try/catch (fail-open keeps
-		 * the original on exception). The original file is never modified.
+		 * unavailable or any step fails — callers keep the legacy skipped
+		 * status (never a full-size GD decode) so the guard cannot cascade
+		 * into the OOM it was meant to avoid. The original file is never
+		 * modified.
+		 *
+		 * Limitation: `readImage()` itself may transiently allocate the
+		 * full-size bitmap before `thumbnailImage()` shrinks it; the
+		 * MEMORY/AREA resource limits only make that allocation throw
+		 * (caught here, null returned) rather than preventing it. A
+		 * best-effort `jpeg:size` hint is set before the read so JPEG
+		 * decoders that honour it pre-scale. Callers must treat null as
+		 * "cannot decode safely" and skip, not fall back to a full-size
+		 * `imagecreatefrom*()`.
 		 *
 		 * @since NEXT
 		 *
@@ -1140,9 +1180,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			try {
 				$imagick = new \Imagick();
 				$this->apply_imagick_memory_guard( $imagick );
+				if ( method_exists( $imagick, 'setOption' ) ) {
+					try {
+						// Best-effort pre-scale hint for JPEG decoders that
+						// honour it; ignored for other formats. Fail-open.
+						$imagick->setOption( 'jpeg:size', $safe_edge . 'x' . $safe_edge );
+					} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: hint is best-effort only.
+					}
+				}
 				$imagick->readImage( $source );
-				if ( method_exists( $imagick, 'thumbnailImage' ) ) {
-					$imagick->thumbnailImage( $safe_edge, $safe_edge, true );
+				if ( ! method_exists( $imagick, 'thumbnailImage' ) ) {
+					return null;
+				}
+				if ( ! $imagick->thumbnailImage( $safe_edge, $safe_edge, true ) ) {
+					return null;
 				}
 				if ( ! method_exists( $imagick, 'getImageBlob' ) ) {
 					return null;
@@ -1632,14 +1683,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					case IMAGETYPE_JPEG:
 						// OOM-safe route (#1236): over-budget sources decode
 						// via an Imagick thumbnail so GD never allocates the
-						// full-size bitmap. Falls back to the legacy GD
-						// decode when Imagick is unavailable or fails.
+						// full-size bitmap. When the low-memory route is
+						// unavailable/fails, keep the legacy skip instead of
+						// a full-size GD decode that would risk an
+						// uncatchable allowed-memory fatal.
 						if ( $memory_safe_edge > 0 ) {
 							$lowmem = $this->decode_overbudget_image_via_imagick( $source_image, $memory_safe_edge );
 							if ( null !== $lowmem && ( is_resource( $lowmem ) || $lowmem instanceof \GdImage ) ) {
 								$image = $lowmem;
 								break;
 							}
+							$this->update_conversion_status( $source_image, 'skipped', $format );
+							return false;
 						}
 						$image = imagecreatefromjpeg( $source_image );
 
@@ -1651,7 +1706,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 						break;
 
 					case IMAGETYPE_PNG:
-						// OOM-safe route (#1236): see JPEG branch above.
+						// OOM-safe route (#1236): see JPEG branch above —
+						// low-memory failure keeps the legacy skip, never a
+						// full-size GD decode.
 						if ( $memory_safe_edge > 0 ) {
 							$lowmem = $this->decode_overbudget_image_via_imagick( $source_image, $memory_safe_edge );
 							if ( null !== $lowmem && ( is_resource( $lowmem ) || $lowmem instanceof \GdImage ) ) {
@@ -1660,6 +1717,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 								imagesavealpha( $image, true );
 								break;
 							}
+							$this->update_conversion_status( $source_image, 'skipped', $format );
+							return false;
 						}
 						$image = imagecreatefrompng( $source_image );
 
@@ -1694,12 +1753,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 								// OOM-safe route (#1236): over-budget WebP
 								// sources decode via an Imagick thumbnail so
 								// GD never allocates the full-size bitmap.
+								// Low-memory failure keeps the legacy skip,
+								// never a full-size GD decode.
 								if ( $memory_safe_edge > 0 ) {
 									$lowmem_webp = $this->decode_overbudget_image_via_imagick( $source_image, $memory_safe_edge );
 									if ( null !== $lowmem_webp && ( is_resource( $lowmem_webp ) || $lowmem_webp instanceof \GdImage ) ) {
 										$image = $lowmem_webp;
 									} else {
-										$image = imagecreatefromwebp( $source_image );
+										$this->update_conversion_status( $source_image, 'skipped', $format );
+										return false;
 									}
 								} else {
 									$image = imagecreatefromwebp( $source_image );
@@ -1743,7 +1805,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 								if ( function_exists( 'imageavif' ) && imageavif( $image, $avif_path, $avif_quality ?? $quality ) ) {
 									$webp_source_success = true;
 									$this->record_encoded_sibling( $source_image, $avif_path, 'avif', $webp_source_success );
-								} elseif ( ! function_exists( 'imageavif' ) && $this->encode_avif_via_imagick( $source_image, $avif_path, (int) ( $avif_quality ?? $quality ) ) ) {
+								} elseif ( ! function_exists( 'imageavif' ) && $this->encode_avif_via_imagick( $source_image, $avif_path, (int) ( $avif_quality ?? $quality ), (int) $memory_safe_edge ) ) {
 									// Imagick-only AVIF host: GD decoded the WebP
 									// source but cannot encode AVIF, so encode
 									// from the source file via Imagick instead.
@@ -1778,7 +1840,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 						// When $image is null (format is 'webp' and didn't enter the AVIF branch),
 						// create a temporary GD resource just for placeholder extraction.
-						if ( null === $image && ! $this->is_animated_webp( $source_image ) && function_exists( 'imagecreatefromwebp' ) ) {
+						// Over-budget sources are skipped: a full-size decode
+						// here would reintroduce the OOM just avoided (#1236).
+						if ( null === $image && 0 === $memory_safe_edge && ! $this->is_animated_webp( $source_image ) && function_exists( 'imagecreatefromwebp' ) ) {
 							$webp_gd = imagecreatefromwebp( $source_image );
 							if ( $webp_gd instanceof \GdImage ) {
 								$rel_path       = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $source_image ) );
@@ -1989,7 +2053,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 						$avif_done = false;
 						if ( $avif_encoder && function_exists( 'imageavif' ) && Util::prepare_cache_dir( dirname( $avif_path ) ) && imageavif( $image, $avif_path, $avif_quality ?? $quality ) ) {
 							$avif_done = true;
-						} elseif ( $avif_encoder && ! function_exists( 'imageavif' ) && $this->encode_avif_via_imagick( $source_image, $avif_path, (int) ( $avif_quality ?? $quality ) ) ) {
+						} elseif ( $avif_encoder && ! function_exists( 'imageavif' ) && $this->encode_avif_via_imagick( $source_image, $avif_path, (int) ( $avif_quality ?? $quality ), (int) $memory_safe_edge ) ) {
 							// Imagick-only AVIF host: GD has no imageavif(),
 							// so encode from the source file via Imagick.
 							$avif_done = true;
