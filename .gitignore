@@ -27,3 +27,7 @@ test-lab/
 /diagnose-overflow.js
 /diagnose2.js
 /stubs/
+
+# Private release-rhythm files (local planning only, never commit).
+/AGENT-RELEASE.md
+/RELEASE-SCHEDULE.local.md
