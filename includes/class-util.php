@@ -439,6 +439,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 						'blacklistThreshold' => 3,
 					),
 					'esi'                  => array(
+						// Retained for BC only (#1291): never read, ESI renders inline.
 						'enabled' => false,
 					),
 				),

@@ -67,8 +67,8 @@ Serves revalidatable cache headers for logged-in users so the browser back/forwa
 **📄 llms.txt**
 Auto-generated `/llms.txt` and `/llms-full.txt` virtual files (refreshed daily) so AI crawlers and assistants can understand your site.
 
-**🔌 ESI & Abilities API**
-LiteSpeed ESI bridge for dynamic fragments (LSWS Enterprise; AJAX fallback on OLS) and a WordPress Abilities/MCP surface (abilities like `performance-optimisation/cache-management`) for programmatic access.
+**🔌 Abilities API**
+Note: the Enterprise-only LiteSpeed ESI bridge was removed; dynamic blocks now render inline (fail-open). Includes a WordPress Abilities/MCP surface (abilities like `performance-optimisation/cache-management`) for programmatic access.
 
 **🛠️ Developer Friendly**
 System Info dashboard, Google PageSpeed Insights integration, per-page asset manager, and import/export settings.

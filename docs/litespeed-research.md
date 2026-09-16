@@ -1,5 +1,7 @@
 # LiteSpeed / OpenLiteSpeed Deep Research
 
+> **Note — ESI removed in NEXT (#1291):** ESI bridge + OLS hydrator + wppo_esi_fragment removed; ESI sections below are historical.
+
 **Date:** 2026-08-27  
 **Status:** Planning & Research Phase  
 **Environment:** OpenLiteSpeed 1.9.1 · `server: LiteSpeed` · `lsphp83` · Debian 13 · `nileshportfolio.duckdns.org`  

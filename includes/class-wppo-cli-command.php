@@ -1542,7 +1542,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 			if ( 'standalone' === $raw_mode && $server_ls ) {
 				$warnings[] = 'standalone on LS server (intentional but flagged)';
 			}
-			unset( $esi_enabled, $esi_available );
+			// $esi_enabled / $esi_available intentionally ignored since NEXT (#1291).
+			// Legacy ESI bridge flags kept in the 6-arg signature for BC; no ESI
+			// warning is emitted because the bridge was removed (fail-open inline).
 
 			if ( ! empty( $warnings ) ) {
 				return array(

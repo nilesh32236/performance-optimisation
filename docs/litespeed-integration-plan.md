@@ -1,5 +1,7 @@
 # LiteSpeed / OpenLiteSpeed Integration Plan
 
+> **Note — ESI removed in NEXT (#1291):** ESI bridge + OLS hydrator + wppo_esi_fragment removed; ESI sections below are historical.
+
 **Date:** 2026-08-27  
 **Status:** Shipped — Phases 0–4 implemented and verified (see `docs/litespeed-compatibility-audit-2026-09-01.md` and the ✅ ticks in `docs/litespeed-roadmap.md`). Phase 5 (enterprise/QUIC options) remains deferred.  
 **Companion:** `docs/litespeed-research.md` (deep research)  

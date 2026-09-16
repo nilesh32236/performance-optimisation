@@ -212,6 +212,25 @@ class WppoCliVerifyTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * The removed ESI bridge must stay gone: no class, no AJAX action, no script (issue #1291).
+	 */
+	public function test_esi_bridge_remains_removed(): void {
+		$this->assertFalse( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) );
+		Functions\when( 'has_action' )->alias(
+			static function ( $hook ) {
+				if ( 'wp_ajax_wppo_esi_fragment' === $hook || 'wp_ajax_nopriv_wppo_esi_fragment' === $hook ) {
+					return false;
+				}
+				return false;
+			}
+		);
+		$this->assertFalse( has_action( 'wp_ajax_wppo_esi_fragment' ) );
+		$this->assertFalse( has_action( 'wp_ajax_nopriv_wppo_esi_fragment' ) );
+		Functions\when( 'wp_script_is' )->justReturn( false );
+		$this->assertFalse( wp_script_is( 'wppo-esi', 'enqueued' ) );
+	}
+
+	/**
 	 * Coherent standalone state must pass.
 	 */
 	public function test_litespeed_coherent_passes(): void {

@@ -321,7 +321,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 					'concurrency'        => 2,
 					'blacklistThreshold' => 3,
 				),
-				'esi_available'      => false,
+				'esi_available'      => false, // Legacy (#1291): ESI bridge removed, always false for BC.
 				'dropin'             => array(
 					'advanced_cache' => 'none',
 					'object_cache'   => 'none',

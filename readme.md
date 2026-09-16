@@ -26,7 +26,7 @@ Most performance plugins either do too little or overwhelm you with dozens of co
 
 ## What's New in v2.0.0
 
-- **LiteSpeed/OpenLiteSpeed Coexistence:** Auto/WPPO/LiteSpeed/Standalone modes with native `X-LiteSpeed-*` header protocol, purge sync, ESI punch-holing, per-page/per-post-type TTL overrides, and a background cache crawler.
+- **LiteSpeed/OpenLiteSpeed Coexistence:** Auto/WPPO/LiteSpeed/Standalone modes with native `X-LiteSpeed-*` header protocol, purge sync, per-page/per-post-type TTL overrides, and a background cache crawler.
 - **Edge Cache + CDN:** Purge fan-out for Cloudflare, Bunny, and Varnish, plus per-mapping CDN URL rewriting.
 - **Real-User Monitoring (RUM):** Anonymized field Web Vitals (LCP, INP, CLS) collected with trend charts in the dashboard.
 - **New WP-CLI self-verification:** `wp wppo verify` checks cache dirs, drop-ins, Redis, LiteSpeed state, settings schema, cron, and uninstall hygiene.

@@ -668,29 +668,6 @@ msgstr ""
 msgid "Image conversion failed."
 msgstr ""
 
-#: includes/class-litespeed-esi.php:451
-msgid "Loading shopping cart…"
-msgstr ""
-
-#: includes/class-litespeed-esi.php:452
-msgid "Loading checkout…"
-msgstr ""
-
-#: includes/class-litespeed-esi.php:453
-#: includes/class-litespeed-esi.php:454
-msgid "Loading account menu…"
-msgstr ""
-
-#: includes/class-litespeed-esi.php:455
-msgid "Loading admin bar…"
-msgstr ""
-
-#. translators: %s: ESI block name.
-#: includes/class-litespeed-esi.php:460
-#, php-format
-msgid "Loading %s…"
-msgstr ""
-
 #: includes/class-llms.php:170
 msgid "llms.txt could not be served: response headers already sent."
 msgstr ""

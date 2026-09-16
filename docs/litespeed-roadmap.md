@@ -1,5 +1,7 @@
 # LiteSpeed / OpenLiteSpeed Roadmap & Task Board
 
+> **Note — ESI removed in NEXT (#1291):** ESI bridge + OLS hydrator + wppo_esi_fragment removed; ESI sections below are historical.
+
 **Date:** 2026-08-27 (ticks updated 2026-09-07)  
 **Status:** Phases 0–4 **shipped** — per-task ✅ below, cross-checked against `docs/litespeed-compatibility-audit-2026-09-01.md`. Phase 5 (enterprise/QUIC) remains deferred.  
 **How to use:** Each task has an ID (`LS-0xx`), effort, dependencies, acceptance criteria, and verification. Check off in this doc or move to GitHub Issues / PRs. Review `Open Questions` in `litespeed-integration-plan.md:19` before starting LS-10x.

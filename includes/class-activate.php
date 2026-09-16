@@ -175,6 +175,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 			// once so they stop loading via alloptions on every request.
 			self::maybe_migrate_option_autoload();
 
+			// One-time cleanup: delete the orphaned ESI fallback secret left by
+			// the removed Enterprise-only LiteSpeed ESI bridge (issue #1291).
+			// The option has no readers since the bridge deletion; removing it
+			// here shrinks least-retention exposure instead of waiting for
+			// uninstall. Fail-open: never blocks the upgrade.
+			self::maybe_delete_orphaned_esi_secret();
+
 			// One-time eviction: legacy unsalted keys can only exist once, on
 			// installs that predate the release shipping this fix. Gate on a fixed
 			// version floor so future version bumps never re-flush the shared cache.
@@ -212,6 +219,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 			RUM::migrate_rum_autoload();
 			Pagespeed::migrate_trends_autoload();
 			update_option( 'wppo_autoload_migrated', 1, false );
+		}
+
+		/**
+		 * One-time deletion of the orphaned ESI fallback secret (issue #1291).
+		 *
+		 * The Enterprise-only LiteSpeed ESI bridge was removed; its
+		 * `wppo_esi_fallback_secret` option has no creators or readers left and
+		 * is only retained in the uninstall list for stale installs. Deleting it
+		 * on upgrade honors least-retention instead of keeping a high-value
+		 * secret until uninstall.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function maybe_delete_orphaned_esi_secret(): void {
+			if ( ! function_exists( 'delete_option' ) ) {
+				return;
+			}
+			try {
+				delete_option( 'wppo_esi_fallback_secret' );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 
 		/**

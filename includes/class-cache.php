@@ -3408,8 +3408,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				}
 				// C. comment tag placeholder (purge comment-related cache).
 				$tags[] = 'C.' . (int) $page_id;
-				// W. widget tags (W.{hash}) are only emitted by the ESI bridge —
-				// a bare 'W.' tag has an empty value and is intentionally skipped.
+				// W. widget tags (W.{hash}) were only emitted by the removed ESI
+				// bridge (#1291) — a bare 'W.' tag has an empty value and is
+				// intentionally skipped. Fail-open note: without ESI
+				// hole-punching, previously ESI-gated personalized blocks now
+				// render inline, so such pages must stay non-cacheable via
+				// is_not_cacheable() (DONOTCACHEPAGE, Woo cart/checkout/account,
+				// Store API, cart cookies) rather than public with baked
+				// personal HTML. Expect lower hit rate / higher TTFB on those
+				// dynamic pages; compare RUM / web_vitals_trends before/after.
 				// REST.
 				$tags[] = 'REST';
 				// MIN.

@@ -140,7 +140,6 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (4
 | `class-activate.php` / `class-deactivate.php` | Activation/deactivation hooks |
 | `class-litespeed-integration.php` | LiteSpeed/OLS coexistence modes (auto/wppo/litespeed/standalone), header protocol (X-LiteSpeed-*), TTL, purge sync |
 | `class-litespeed-crawler.php` | curl_multi cache preloader (variant matrix, concurrency, load-limit) |
-| `class-litespeed-esi.php` | ESI bridge (LSWS Enterprise only; OLS → disabled) |
 | `class-edge-cache.php` / `class-edge-purger.php` / `class-cloudflare-purger.php` / `class-cdn-purger.php` | Edge (Cloudflare/Bunny/Varnish) cache config + purge fan-out |
 | `class-cdn.php` | LiteSpeed CDN mapping + URL rewrite |
 | `class-llms.php` | /llms.txt + /llms-full.txt virtual files (daily cron) |

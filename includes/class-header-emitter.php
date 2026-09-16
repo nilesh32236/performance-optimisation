@@ -128,7 +128,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Header_Emitter' ) ) {
 		/**
 		 * Emit a LiteSpeed ESI tag header (X-LiteSpeed-Tag: ESI.{action}).
 		 *
-		 * Retained for tag-format parity although the ESI bridge was removed.
+		 * @deprecated NEXT ESI bridge removed (issue #1291); do not use. The
+		 *             bridge that satisfied these hole-punch tags no longer
+		 *             exists, so emitting them only adds header bytes and tag
+		 *             confusion. Retained for backward compatibility only.
 		 *
 		 * @since 2.0.0
 		 * @param string $action Tag action name (unsanitized).
