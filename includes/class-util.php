@@ -1085,7 +1085,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * mirroring `Cache::is_woo_excluded()` path/safe-mode semantics without
 		 * instantiating Cache (`is_woo_store_api_path()` uncacheable
 		 * unconditionally, otherwise `safe_mode && is_woo_dynamic_path()`).
-		 * Scope note: this covers path/safe-mode semantics only and does not
+		 * Fragment probes (`fragment_checks`) additionally prove the
+		 * query-string dynamic set bypasses the cache: `?wc-ajax=` (pre-boot
+		 * drop-in + storage refusal, unconditional on safe mode),
+		 * `?add-to-cart=` (safe-mode gated, mirroring the drop-in bake and
+		 * `Cache::is_woo_excluded()`), and the plain-permalink Store API
+		 * form (`?rest_route=/wc/store/...`, unconditional via
+		 * `is_woo_store_api_request()`).
+		 * Scope note: this covers path/query/safe-mode semantics only and does not
 		 * evaluate the `wppo_woo_cacheable` / `wppo_should_cache_request`
 		 * overrides, which can re-allow caching of an excluded URL at runtime.
 		 * `donotcachepage_honored` is assumed (not probed): DONOTCACHEPAGE
@@ -1102,7 +1109,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @since 2.0.0
 		 * @since NEXT Added additive `editor_checks` (wp-admin + builder/core preview bypass probes).
-		 * @return array{woo_active: bool, safe_mode: bool, runnable: bool, excluded_paths: string[], donotcachepage_honored: bool, checks: array<int, array{url: string, path: string, is_dynamic: bool, cacheable: bool, donotcachepage_honored: bool, pass: bool, error?: string}>, editor_checks: array<int, array{url: string, bypass: bool, cacheable: bool, donotcachepage_honored: bool, pass: bool, error?: string}>, all_pass: bool} Structured self-test result.
+		 * @since NEXT Added additive `fragment_checks` (wc-ajax / add-to-cart / plain-permalink Store API fragment probes, issue #1197).
+		 * @return array{woo_active: bool, safe_mode: bool, runnable: bool, excluded_paths: string[], donotcachepage_honored: bool, checks: array<int, array{url: string, path: string, is_dynamic: bool, cacheable: bool, donotcachepage_honored: bool, pass: bool, error?: string}>, fragment_checks: array<int, array{url: string, path: string, is_dynamic: bool, cacheable: bool, donotcachepage_honored: bool, pass: bool, error?: string}>, editor_checks: array<int, array{url: string, bypass: bool, cacheable: bool, donotcachepage_honored: bool, pass: bool, error?: string}>, all_pass: bool} Structured self-test result.
 		 */
 		public static function woo_cache_self_test(): array {
 			try {
@@ -1163,6 +1171,62 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					}
 				}
 
+				// Fragment probes (additive, issue #1197): the query-string
+				// dynamic set must bypass the cache. wc-ajax is refused by
+				// the pre-boot drop-in and the storage layer unconditionally
+				// (pre-#922 guards survive safe-mode-off); add-to-cart is
+				// safe-mode gated (drop-in bake + Cache::is_woo_excluded());
+				// the plain-permalink Store API form is unconditional via
+				// is_woo_store_api_request(). Pure query/string checks so
+				// the self-test stays read-only.
+				$fragment_probes = array(
+					'/?wc-ajax=get_refreshed_fragments' => 'wc-ajax',
+					'/?add-to-cart=123'                 => 'add-to-cart',
+					'/?rest_route=/wc/store/v1/cart'    => 'store-api',
+				);
+				$fragment_checks = array();
+				foreach ( $fragment_probes as $probe_url => $kind ) {
+					try {
+						$is_dynamic  = true;
+						$uncacheable = true;
+						if ( 'store-api' === $kind ) {
+							$is_dynamic  = self::is_woo_store_api_request( '/', 'rest_route=/wc/store/v1/cart', '/wc/store/v1/cart' );
+							$uncacheable = $is_dynamic;
+						} elseif ( 'add-to-cart' === $kind ) {
+							$uncacheable = $safe_mode;
+						}
+						$cacheable = ! $uncacheable;
+						$pass      = $is_dynamic && ! $cacheable;
+						try {
+							$url = self::cached_home_url( (string) $probe_url );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$url = (string) $probe_url;
+						}
+						if ( ! is_string( $url ) || '' === $url ) {
+							$url = (string) $probe_url;
+						}
+						$fragment_checks[] = array(
+							'url'                    => $url,
+							'path'                   => (string) $probe_url,
+							'is_dynamic'             => $is_dynamic,
+							'cacheable'              => $cacheable,
+							'donotcachepage_honored' => true,
+							'pass'                   => $pass,
+						);
+					} catch ( \Throwable $e ) {
+						$fragment_checks[] = array(
+							'url'                    => (string) $probe_url,
+							'path'                   => (string) $probe_url,
+							'is_dynamic'             => true,
+							'cacheable'              => false,
+							'donotcachepage_honored' => true,
+							'pass'                   => false,
+							'error'                  => get_class( $e ),
+						);
+					}
+				}
+
 				// Editor/admin bypass probes (additive, issue #1097): wp-admin and
 				// builder/core preview URLs must never be cacheable. Pure path
 				// checks via is_editor_preview_url() so the self-test stays
@@ -1207,11 +1271,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					}
 				}
 
-				$all_pass = ! empty( $checks ) && ! empty( $editor_checks );
+				$all_pass = ! empty( $checks ) && ! empty( $fragment_checks ) && ! empty( $editor_checks );
 				foreach ( $checks as $check ) {
 					if ( empty( $check['pass'] ) ) {
 						$all_pass = false;
 						break;
+					}
+				}
+				if ( $all_pass ) {
+					foreach ( $fragment_checks as $check ) {
+						if ( empty( $check['pass'] ) ) {
+							$all_pass = false;
+							break;
+						}
 					}
 				}
 				if ( $all_pass ) {
@@ -1230,6 +1302,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'excluded_paths'         => array_values( $excluded ),
 					'donotcachepage_honored' => true,
 					'checks'                 => $checks,
+					'fragment_checks'        => $fragment_checks,
 					'editor_checks'          => $editor_checks,
 					'all_pass'               => $all_pass,
 				);
@@ -1242,6 +1315,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'excluded_paths'         => array( 'cart', 'checkout', 'my-account' ),
 					'donotcachepage_honored' => true,
 					'checks'                 => array(),
+					'fragment_checks'        => array(),
 					'editor_checks'          => array(),
 					'all_pass'               => false,
 				);

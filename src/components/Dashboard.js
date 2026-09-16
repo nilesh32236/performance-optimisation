@@ -1415,7 +1415,7 @@ const Dashboard = ( {
 					</button>
 					<p className="wppo-text-muted wppo-text-small">
 						{ __(
-							'Proves in one click that cart, checkout and account paths bypass the static cache under path/safe-mode semantics (DONOTCACHEPAGE enforcement is assumed via Cache::is_not_cacheable(); the wppo_woo_cacheable override is out of scope).',
+							'Proves in one click that cart, checkout and account paths plus cart/checkout fragments (?wc-ajax=, ?add-to-cart=, plain-permalink Store API) bypass the static cache under path/query/safe-mode semantics (DONOTCACHEPAGE enforcement is assumed via Cache::is_not_cacheable(); the wppo_woo_cacheable override is out of scope).',
 							'performance-optimisation'
 						) }
 					</p>
@@ -1481,6 +1481,34 @@ const Dashboard = ( {
 								) ) }
 							</ul>
 						) }
+						{ Array.isArray( wooSelfTest.fragment_checks ) &&
+							wooSelfTest.fragment_checks.length > 0 && (
+								<ul className="wppo-woo-self-test">
+									{ wooSelfTest.fragment_checks.map(
+										( check, index ) => (
+											<li
+												key={ `${
+													check?.path ?? 'fragment'
+												}-${ index }` }
+											>
+												<span>{ check?.path }</span>
+												{ ' — ' }
+												<span>
+													{ check?.pass
+														? __(
+																'Bypassed (pass)',
+																'performance-optimisation'
+														  )
+														: __(
+																'Cacheable (fail)',
+																'performance-optimisation'
+														  ) }
+												</span>
+											</li>
+										)
+									) }
+								</ul>
+							) }
 					</div>
 				) }
 				<div className="wppo-feature-card__footer">
