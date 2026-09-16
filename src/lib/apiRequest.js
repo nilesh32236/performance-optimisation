@@ -138,6 +138,58 @@ const refreshNonce = async () => {
 };
 
 /**
+ * Commit a settings payload to the shared `wppoSettings.settings` cache.
+ *
+ * Single choke point for the frozen-global mutation previously inlined in
+ * apiCall() and copied across AiPanel/EdgeCachePanel/LlmsPanel. Freezing
+ * keeps every component reading the live global on the same snapshot.
+ *
+ * @since NEXT
+ * @param {*} payload Resolved settings payload (typically `data.data`).
+ * @return {void}
+ */
+export const commitSettingsCache = ( payload ) => {
+	if ( typeof wppoSettings === 'undefined' || ! wppoSettings ) {
+		return;
+	}
+	if ( payload && typeof payload === 'object' ) {
+		wppoSettings.settings = Object.freeze( payload );
+	}
+};
+
+/**
+ * Patch a single settings tab into the shared `wppoSettings.settings` cache.
+ *
+ * Components that save one tab optimistically merge the saved slice into the
+ * live global so sibling panels see the new value without a reload. The
+ * merged tab and the top-level object are both frozen like commitSettingsCache().
+ *
+ * @since NEXT
+ * @param {string} tab   Settings tab key (e.g. 'ai_adaptive').
+ * @param {Object} patch Tab settings to merge.
+ * @return {void}
+ */
+export const patchSettingsCache = ( tab, patch ) => {
+	if ( typeof wppoSettings === 'undefined' || ! wppoSettings ) {
+		return;
+	}
+	if ( typeof tab !== 'string' || ! tab ) {
+		return;
+	}
+	if ( ! patch || typeof patch !== 'object' ) {
+		return;
+	}
+	const current =
+		wppoSettings.settings && typeof wppoSettings.settings === 'object'
+			? wppoSettings.settings
+			: {};
+	wppoSettings.settings = Object.freeze( {
+		...current,
+		[ tab ]: Object.freeze( { ...( current[ tab ] || {} ), ...patch } ),
+	} );
+};
+
+/**
  * Make a REST API call to the Performance Optimisation plugin.
  *
  * Mutates wppoSettings.settings globally on successful `update_settings` or
@@ -200,7 +252,7 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 			data.success &&
 			data.data
 		) {
-			wppoSettings.settings = Object.freeze( data.data );
+			commitSettingsCache( data.data );
 		}
 		return data;
 	};

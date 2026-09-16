@@ -13,7 +13,9 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUsers, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import { apiCall } from '../lib/apiRequest';
 import { formatMs } from '../lib/format';
+import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
+import NoticeBanner from './common/NoticeBanner';
 
 /**
  * Aggregate all paths for a day into site-wide metric averages.
@@ -45,51 +47,57 @@ const dayAverages = ( day ) => {
 const WebVitalsRum = () => {
 	const [ data, setData ] = useState( [] );
 	const [ loading, setLoading ] = useState( true );
-	const [ error, setError ] = useState( null );
+	const { notice, notify, dismiss } = useNotice();
 
-	const load = useCallback( async ( signal ) => {
-		setLoading( true );
-		setError( null );
-		try {
-			const response = await apiCall( 'rum_data', {}, 'GET', signal );
-			if ( signal?.aborted ) {
-				return;
+	const load = useCallback(
+		async ( signal ) => {
+			setLoading( true );
+			dismiss();
+			try {
+				const response = await apiCall( 'rum_data', {}, 'GET', signal );
+				if ( signal?.aborted ) {
+					return;
+				}
+				if ( response.success && response.data ) {
+					const rows = Object.entries( response.data )
+						.sort( ( [ a ], [ b ] ) => a.localeCompare( b ) )
+						.map( ( [ day, paths ] ) => ( {
+							day,
+							...dayAverages( paths ),
+						} ) )
+						.slice( -14 );
+					setData( rows );
+				} else {
+					notify( {
+						type: 'error',
+						message:
+							response.message ||
+							__(
+								'Failed to load real-user data.',
+								'performance-optimisation'
+							),
+					} );
+				}
+			} catch ( loadError ) {
+				if ( signal?.aborted || loadError?.name === 'AbortError' ) {
+					return;
+				}
+				notify( {
+					type: 'error',
+					message: __(
+						'Failed to load real-user data.',
+						'performance-optimisation'
+					),
+				} );
+				console.error( 'Error fetching RUM data:', loadError );
+			} finally {
+				if ( ! signal?.aborted ) {
+					setLoading( false );
+				}
 			}
-			if ( response.success && response.data ) {
-				const rows = Object.entries( response.data )
-					.sort( ( [ a ], [ b ] ) => a.localeCompare( b ) )
-					.map( ( [ day, paths ] ) => ( {
-						day,
-						...dayAverages( paths ),
-					} ) )
-					.slice( -14 );
-				setData( rows );
-			} else {
-				setError(
-					response.message ||
-						__(
-							'Failed to load real-user data.',
-							'performance-optimisation'
-						)
-				);
-			}
-		} catch ( loadError ) {
-			if ( signal?.aborted || loadError?.name === 'AbortError' ) {
-				return;
-			}
-			setError(
-				__(
-					'Failed to load real-user data.',
-					'performance-optimisation'
-				)
-			);
-			console.error( 'Error fetching RUM data:', loadError );
-		} finally {
-			if ( ! signal?.aborted ) {
-				setLoading( false );
-			}
-		}
-	}, [] );
+		},
+		[ dismiss, notify ]
+	);
 
 	useEffect( () => {
 		const controller = new AbortController();
@@ -103,8 +111,14 @@ const WebVitalsRum = () => {
 		value === null || value === undefined ? '—' : value.toFixed( 3 );
 
 	let body;
-	if ( error ) {
-		body = <p className="wppo-text-muted">{ error }</p>;
+	if ( notice ) {
+		body = (
+			<NoticeBanner
+				type={ notice.type }
+				message={ notice.message }
+				onDismiss={ dismiss }
+			/>
+		);
 	} else if ( data.length === 0 && ! loading ) {
 		body = (
 			<p className="wppo-text-muted">

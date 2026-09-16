@@ -1,8 +1,10 @@
 import {
 	apiCall,
+	commitSettingsCache,
 	fetchRecentActivities,
 	getWppoSettings,
 	getErrorLogMessage,
+	patchSettingsCache,
 } from '../apiRequest';
 
 const originalFetch = global.fetch;
@@ -1075,6 +1077,56 @@ describe( 'API Request library', () => {
 		it( 'does not resolve inherited prototype properties', () => {
 			expect( getWppoSettings( 'constructor', 'fb' ) ).toBe( 'fb' );
 			expect( getWppoSettings( 'toString', 'fb' ) ).toBe( 'fb' );
+		} );
+	} );
+
+	describe( 'commitSettingsCache', () => {
+		it( 'freezes the full payload into the shared settings cache', () => {
+			commitSettingsCache( { cache: { enabled: true } } );
+			expect( global.wppoSettings.settings ).toEqual( {
+				cache: { enabled: true },
+			} );
+			expect( Object.isFrozen( global.wppoSettings.settings ) ).toBe(
+				true
+			);
+		} );
+
+		it( 'ignores non-object payloads', () => {
+			global.wppoSettings.settings = { keep: true };
+			commitSettingsCache( null );
+			commitSettingsCache( 'nope' );
+			expect( global.wppoSettings.settings ).toEqual( { keep: true } );
+		} );
+	} );
+
+	describe( 'patchSettingsCache', () => {
+		it( 'merges one tab slice and freezes both levels', () => {
+			global.wppoSettings.settings = {
+				cache: { enabled: false },
+				edge_cache: { enabled: false, ttl: 300 },
+			};
+			patchSettingsCache( 'edge_cache', { enabled: true } );
+			expect( global.wppoSettings.settings.edge_cache ).toEqual( {
+				enabled: true,
+				ttl: 300,
+			} );
+			expect( global.wppoSettings.settings.cache ).toEqual( {
+				enabled: false,
+			} );
+			expect( Object.isFrozen( global.wppoSettings.settings ) ).toBe(
+				true
+			);
+			expect(
+				Object.isFrozen( global.wppoSettings.settings.edge_cache )
+			).toBe( true );
+		} );
+
+		it( 'ignores invalid tab and patch arguments', () => {
+			global.wppoSettings.settings = { keep: true };
+			patchSettingsCache( '', { a: 1 } );
+			patchSettingsCache( 'tab', null );
+			patchSettingsCache( 'tab', 'nope' );
+			expect( global.wppoSettings.settings ).toEqual( { keep: true } );
 		} );
 	} );
 } );

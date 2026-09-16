@@ -6,6 +6,17 @@ import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import NoticeBanner from './common/NoticeBanner';
 
+/**
+ * Dismiss the welcome panel server-side.
+ *
+ * Single choke point for the `dismiss_welcome` call shared by
+ * handleStepAction() and handleDismiss() below.
+ *
+ * @since NEXT
+ * @return {Promise<Object>} Resolved dismiss response.
+ */
+export const dismissWelcome = () => apiCall( 'dismiss_welcome' );
+
 const STEPS = [
 	{
 		number: 1,
@@ -109,7 +120,7 @@ const WelcomePanel = () => {
 				return;
 			}
 
-			const dismissRes = await apiCall( 'dismiss_welcome' ).catch(
+			const dismissRes = await dismissWelcome().catch(
 				( dismissError ) => {
 					// The feature is enabled; a thrown dismiss request must
 					// not masquerade as an enable failure. Surface the
@@ -156,7 +167,7 @@ const WelcomePanel = () => {
 		setDismissing( true );
 		dismiss();
 		try {
-			const res = await apiCall( 'dismiss_welcome' );
+			const res = await dismissWelcome();
 			if ( res.success ) {
 				dismissedRef.current = true;
 				setVisible( false );

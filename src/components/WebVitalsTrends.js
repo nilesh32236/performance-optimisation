@@ -11,13 +11,11 @@
 import { useState, useEffect, useCallback } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import {
-	faChartLine,
-	faSpinner,
-	faExclamationCircle,
-} from '@fortawesome/free-solid-svg-icons';
+import { faChartLine, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import { fetchWebVitalsTrends } from '../lib/apiRequest';
+import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
+import NoticeBanner from './common/NoticeBanner';
 
 const SPARK_WIDTH = 640;
 const SPARK_HEIGHT = 160;
@@ -135,7 +133,7 @@ const TrendSeries = ( { strategy, trends } ) => {
 const WebVitalsTrends = ( { url = '' } ) => {
 	const [ trends, setTrends ] = useState( null );
 	const [ loading, setLoading ] = useState( true );
-	const [ error, setError ] = useState( null );
+	const { notice, notify, dismiss } = useNotice();
 
 	const loadTrends = useCallback(
 		async ( signal ) => {
@@ -146,12 +144,12 @@ const WebVitalsTrends = ( { url = '' } ) => {
 					return;
 				}
 				setTrends( null );
-				setError( null );
+				dismiss();
 				setLoading( false );
 				return;
 			}
 			setLoading( true );
-			setError( null );
+			dismiss();
 			try {
 				const response = await fetchWebVitalsTrends( url, '', signal );
 				if ( signal?.aborted ) {
@@ -160,24 +158,27 @@ const WebVitalsTrends = ( { url = '' } ) => {
 				if ( response.success ) {
 					setTrends( response.data?.trends ?? {} );
 				} else {
-					setError(
-						response.message ||
+					notify( {
+						type: 'error',
+						message:
+							response.message ||
 							__(
 								'Failed to load trend data.',
 								'performance-optimisation'
-							)
-					);
+							),
+					} );
 				}
 			} catch ( err ) {
 				if ( signal?.aborted || err?.name === 'AbortError' ) {
 					return;
 				}
-				setError(
-					__(
+				notify( {
+					type: 'error',
+					message: __(
 						'Failed to load trend data.',
 						'performance-optimisation'
-					)
-				);
+					),
+				} );
 				console.error( 'Web Vitals trends load error:', err );
 			} finally {
 				if ( ! signal?.aborted ) {
@@ -185,7 +186,7 @@ const WebVitalsTrends = ( { url = '' } ) => {
 				}
 			}
 		},
-		[ url ]
+		[ url, dismiss, notify ]
 	);
 
 	useEffect( () => {
@@ -209,17 +210,15 @@ const WebVitalsTrends = ( { url = '' } ) => {
 				</p>
 			) }
 
-			{ ! loading && error && (
-				<div className="wppo-notice wppo-notice--error">
-					<FontAwesomeIcon
-						icon={ faExclamationCircle }
-						className="wppo-mr-8"
-					/>
-					{ error }
-				</div>
+			{ ! loading && notice && (
+				<NoticeBanner
+					type={ notice.type }
+					message={ notice.message }
+					onDismiss={ dismiss }
+				/>
 			) }
 
-			{ ! loading && ! error && ! url && (
+			{ ! loading && ! notice && ! url && (
 				<p className="wppo-text-muted">
 					{ __(
 						'Enter a URL to view Web Vitals trend history.',
@@ -228,7 +227,7 @@ const WebVitalsTrends = ( { url = '' } ) => {
 				</p>
 			) }
 
-			{ ! loading && ! error && url && (
+			{ ! loading && ! notice && url && (
 				<div className="wppo-trend-layout">
 					<div className="wppo-trend-layout__title">
 						<FontAwesomeIcon

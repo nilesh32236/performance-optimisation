@@ -7,7 +7,12 @@ import {
 	useCallback,
 } from '@wordpress/element';
 import { handleChange } from '../lib/util';
-import { apiCall, isValidScanUrl, runPerformanceScan } from '../lib/apiRequest';
+import {
+	apiCall,
+	commitSettingsCache,
+	isValidScanUrl,
+	runPerformanceScan,
+} from '../lib/apiRequest';
 import { modeLabel } from '../lib/litespeed';
 import useNotice from '../lib/useNotice';
 import useUnsavedChanges from '../lib/useUnsavedChanges';
@@ -779,8 +784,8 @@ const FileOptimization = ( {
 					durationMs: 3000,
 				} );
 				// Mutate global so Dashboard banner + next mount reflect new mode without reload.
-				if ( typeof wppoSettings !== 'undefined' && res.data ) {
-					wppoSettings.settings = Object.freeze( res.data );
+				if ( res.data ) {
+					commitSettingsCache( res.data );
 				}
 			} else {
 				notify( {
