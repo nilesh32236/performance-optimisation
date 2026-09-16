@@ -4338,6 +4338,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			// assistive-tech users can activate the placeholder.
 			$play_button = apply_filters( 'wppo_video_play_button_html', $play_button, $video_id, $video_type );
 
+			// Enforce the contract post-filter (audit #1268): a third-party
+			// filter that strips aria-label/aria-labelledby (and adds no text
+			// content) would ship an operable-looking control with no
+			// accessible name, so re-inject the default label instead of
+			// trusting the filtered markup.
+			$play_button = $this->ensure_video_play_button_label( $play_button );
+
 			// Stored attrs mirror the client IFRAME_ATTR_ALLOWLIST exactly:
 			// src/width/height/style are owned by the placeholder (the client
 			// sets its own geometry and fullscreen defaults), so storing them
@@ -4372,7 +4379,97 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			// preserve an accessible name for the play control (aria-label or
 			// text content) and a meaningful img alt so the placeholder stays
 			// operable for assistive-tech users.
-			return apply_filters( 'wppo_video_placeholder_html', $placeholder_html, $video_id, $video_type, $thumbnail_url );
+			$placeholder_html = apply_filters( 'wppo_video_placeholder_html', $placeholder_html, $video_id, $video_type, $thumbnail_url );
+
+			// Enforce the contract post-filter (audit #1268): same repair as
+			// above, applied to the final markup so a placeholder-filter
+			// override cannot strip the button label or thumbnail alt.
+			$placeholder_html = $this->ensure_video_play_button_label( $placeholder_html );
+			$placeholder_html = $this->ensure_video_thumbnail_alt( $placeholder_html, $video_id );
+
+			return $placeholder_html;
+		}
+
+		/**
+		 * Re-inject the default accessible name on a video play button.
+		 *
+		 * Parses the given HTML with WP_HTML_Tag_Processor and, when the
+		 * first <button> lacks both aria-label and aria-labelledby and has
+		 * no text content, adds the default aria-label. Markup that already
+		 * names the control (either attribute or visible text) is returned
+		 * untouched so third-party button HTML survives except the repair.
+		 *
+		 * @since NEXT
+		 * @param string $html Button or placeholder HTML to validate.
+		 * @return string Validated HTML with an accessible button name.
+		 */
+		private function ensure_video_play_button_label( string $html ): string {
+			if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
+				return $html;
+			}
+			$tags = new \WP_HTML_Tag_Processor( $html );
+			if ( ! $tags->next_tag( array( 'tag_name' => 'button' ) ) ) {
+				return $html;
+			}
+			$label      = $tags->get_attribute( 'aria-label' );
+			$labelledby = $tags->get_attribute( 'aria-labelledby' );
+			if ( ( is_string( $label ) && '' !== trim( $label ) ) || ( is_string( $labelledby ) && '' !== trim( $labelledby ) ) ) {
+				return $html;
+			}
+			// Text content inside the button also names the control — only
+			// repair truly unnamed buttons. SVG children contribute no text,
+			// so the default markup still qualifies for the repair.
+			$inner_text = '';
+			if ( preg_match( '/<button\b[^>]*>(.*?)<\/button>/is', $html, $matches ) ) {
+				$inner_text = trim( (string) wp_strip_all_tags( $matches[1] ) );
+			}
+			if ( '' !== $inner_text ) {
+				return $html;
+			}
+			// Raw (unescaped) value: the tag processor escapes on output.
+			$tags->set_attribute( 'aria-label', __( 'Play video', 'performance-optimisation' ) );
+			return (string) $tags->get_updated_html();
+		}
+
+		/**
+		 * Re-inject the default alt on the video thumbnail image.
+		 *
+		 * Only targets the placeholder thumbnail (identified by its
+		 * data-wppo-fallback attribute) so the verbatim <noscript> embed is
+		 * never rewritten. Images with a non-empty alt are left untouched.
+		 *
+		 * @since NEXT
+		 * @param string $html     Placeholder HTML to validate.
+		 * @param string $video_id YouTube video ID used in the default alt.
+		 * @return string Validated HTML with a meaningful thumbnail alt.
+		 */
+		private function ensure_video_thumbnail_alt( string $html, string $video_id ): string {
+			if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
+				return $html;
+			}
+			$tags    = new \WP_HTML_Tag_Processor( $html );
+			$updated = false;
+			while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
+				// Only the placeholder thumbnail carries this marker; the
+				// <noscript> fallback re-emits the source embed verbatim.
+				if ( null === $tags->get_attribute( 'data-wppo-fallback' ) ) {
+					continue;
+				}
+				$alt = $tags->get_attribute( 'alt' );
+				if ( is_string( $alt ) && '' !== trim( $alt ) ) {
+					continue;
+				}
+				$tags->set_attribute(
+					'alt',
+					sprintf(
+						/* translators: %s: YouTube video ID, used to distinguish multiple embeds for screen-reader users. */
+						__( 'Video thumbnail (%s)', 'performance-optimisation' ),
+						$video_id
+					)
+				);
+				$updated = true;
+			}
+			return $updated ? (string) $tags->get_updated_html() : $html;
 		}
 
 		/**

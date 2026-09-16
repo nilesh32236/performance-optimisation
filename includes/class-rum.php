@@ -683,15 +683,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP
 			) . ';';
 
-			if ( function_exists( 'wp_print_inline_script_tag' ) ) {
-				wp_print_inline_script_tag( $javascript, array( 'id' => 'wppo-rum-config' ) );
-				return;
-			}
-			// Fallback for very old core without wp_print_inline_script_tag():
-			// the payload above is JSON_HEX-escaped (<, >, quotes and &
-			// encoded), so it cannot break out of the <script> element and
-			// the id attribute is a static allowlisted string.
-			echo '<script id="wppo-rum-config">' . $javascript . "</script>\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $javascript is JSON_HEX_TAG/APOS/QUOT/AMP encoded; esc_js() would mangle the JS.
+			// The plugin floor is WP 6.2, where wp_print_inline_script_tag()
+			// always exists, so there is no pre-6.0 echo fallback (audit
+			// #1268): the fallback would ship without a core CSP nonce.
+			wp_print_inline_script_tag( $javascript, array( 'id' => 'wppo-rum-config' ) );
 		}
 
 		/**

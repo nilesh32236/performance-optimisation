@@ -221,6 +221,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 					<?php if ( ! empty( $assets['scripts'] ) ) : ?>
 						<h4><?php esc_html_e( 'Scripts', 'performance-optimisation' ); ?></h4>
 						<table class="widefat fixed striped" style="margin-bottom: 15px;">
+							<caption class="screen-reader-text"><?php esc_html_e( 'Scripts', 'performance-optimisation' ); ?></caption>
 							<thead>
 								<tr>
 									<th scope="col" style="width: 30px;"><?php esc_html_e( 'Disable', 'performance-optimisation' ); ?></th>
@@ -315,6 +316,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 					<?php if ( ! empty( $assets['styles'] ) ) : ?>
 						<h4><?php esc_html_e( 'Styles', 'performance-optimisation' ); ?></h4>
 						<table class="widefat fixed striped">
+							<caption class="screen-reader-text"><?php esc_html_e( 'Styles', 'performance-optimisation' ); ?></caption>
 							<thead>
 								<tr>
 									<th scope="col" style="width: 30px;"><?php esc_html_e( 'Disable', 'performance-optimisation' ); ?></th>

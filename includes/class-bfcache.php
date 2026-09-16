@@ -369,7 +369,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 			// in-flight navigation. Reload is sufficient to drop stale private
 			// content.
 			//
-			// Use wp_print_inline_script_tag if available (WP 6.0+), else echo.
+			// Use wp_print_inline_script_tag unconditionally: the plugin floor
+			// is WP 6.2, where it always exists, so there is no pre-6.0 echo
+			// fallback (audit #1268) — the fallback would ship without a
+			// core CSP nonce.
 			$json_flags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
 			$js         = sprintf(
 				'(function(){var c=%1$s,t=%2$s,q="wppo_bfcache_reloaded";function g(){var p=c+"=",a=document.cookie.split(/; */);for(var i=0;i<a.length;i++){var kv=a[i];if(kv.indexOf(p)===0){return decodeURIComponent(kv.substring(p.length))}}return null}function i(){var u=new URL(window.location.href);if(u.searchParams.has(q))return;u.searchParams.set(q,String(Math.random()));history.replaceState({},\"\",u.href);window.location.reload()}function h(e){if(e.persisted&&t!==g()){i();return}var u=new URL(window.location.href);if(u.searchParams.has(q)){u.searchParams.delete(q);history.replaceState({},\"\",u.href)}}if(t!==g()){i()}else{window.addEventListener("pageshow",h)}})();',
@@ -377,27 +380,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 				wp_json_encode( $token, $json_flags )
 			);
 
-			if ( function_exists( 'wp_print_inline_script_tag' ) ) {
-				add_action(
-					'wp_footer',
-					static function () use ( $js ) {
-						wp_print_inline_script_tag( $js, array( 'id' => 'wppo-bfcache-invalidation' ) );
-					},
-					20
-				);
-			} else {
-				add_action(
-					'wp_footer',
-					static function () use ( $js ) {
-						// Stored-XSS note (issue #967): $js is a static literal
-						// with zero interpolation — both dynamic values are
-						// embedded as JSON_HEX_* tag-safe JSON above, so the
-						// legacy pre-6.0 fallback needs no escaper.
-						echo '<script id="wppo-bfcache-invalidation">' . $js . '</script>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Static literal; dynamic values embedded as JSON_HEX_* tag-safe JSON.
-					},
-					20
-				);
-			}
+			add_action(
+				'wp_footer',
+				static function () use ( $js ) {
+					wp_print_inline_script_tag( $js, array( 'id' => 'wppo-bfcache-invalidation' ) );
+				},
+				20
+			);
 			// Also print in wp_head for early invalidation on HTTP cache restore (alternative to footer).
 			// The footer hook above is sufficient for bfcache; HTTP cache immediate check also runs there before DOM ready.
 		}

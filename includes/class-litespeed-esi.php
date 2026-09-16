@@ -209,6 +209,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		}
 
 		/**
+		 * Whether core supports the native `strategy` script args (WP 6.3+).
+		 *
+		 * Mirrors RUM::maybe_enqueue_scripts(): the ESI hydration client is
+		 * functionally equivalent to the RUM beacon, so it gets the same
+		 * render-non-blocking treatment on modern core.
+		 *
+		 * @since NEXT
+		 * @return bool
+		 */
+		private static function supports_script_strategy(): bool {
+			if ( isset( $GLOBALS['wp_version'] ) && is_string( $GLOBALS['wp_version'] ) && '' !== $GLOBALS['wp_version'] ) {
+				$wp_version = $GLOBALS['wp_version'];
+			} elseif ( function_exists( 'get_bloginfo' ) ) {
+				$wp_version = (string) get_bloginfo( 'version' );
+			} else {
+				$wp_version = '';
+			}
+			return version_compare( $wp_version, '6.3-alpha', '>=' );
+		}
+
+		/**
 		 * Enqueue the ESI hydration client (build/esi.js) for OLS placeholder mode.
 		 *
 		 * On OpenLiteSpeed there is no native ESI, so the server renders
@@ -227,8 +248,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 *   not load.
 		 *
 		 * Enqueue mirrors RUM::maybe_enqueue_scripts(): build/esi.asset.php
-		 * supplies the version + dependency list, with a classic footer enqueue —
-		 * this client is plain vanilla JS, not a script module.
+		 * supplies the version + dependency list, with a deferred footer
+		 * enqueue on WP 6.3+ (native `strategy: defer`) and the classic
+		 * bool $in_footer fallback on older core — this client is plain
+		 * vanilla JS, not a script module.
 		 *
 		 * @since 2.0.0
 		 * @return void
@@ -262,16 +285,38 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			}
 
 			$asset_file = WPPO_PLUGIN_PATH . 'build/esi.asset.php';
-			$deps       = array();
+			$deps       = array( 'wp-i18n' );
 			$version    = WPPO_VERSION;
 			if ( file_exists( $asset_file ) ) {
 				$asset   = include $asset_file; // phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable
-				$deps    = isset( $asset['dependencies'] ) && is_array( $asset['dependencies'] ) ? $asset['dependencies'] : array();
+				$deps    = isset( $asset['dependencies'] ) && is_array( $asset['dependencies'] ) ? $asset['dependencies'] : array( 'wp-i18n' );
 				$version = isset( $asset['version'] ) ? $asset['version'] : WPPO_VERSION;
+			} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				// Visible failure signal for partial deploys: src/esi.js
+				// imports @wordpress/i18n for translated aria-labels, so a
+				// missing asset file would otherwise ship an untranslated or
+				// broken hydration client with no log.
+				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Debug-only diagnostics, gated above.
+				error_log( 'WPPO ESI: build/esi.asset.php missing; falling back to wp-i18n dependencies.' );
 			}
 
-			// Bool $in_footer (not the array $args form, which needs WP 6.3+)
-			// so the client still loads in the footer on WP 6.2.
+			if ( self::supports_script_strategy() ) {
+				wp_enqueue_script(
+					'wppo-esi',
+					WPPO_PLUGIN_URL . 'build/esi.js',
+					$deps,
+					$version,
+					array(
+						'strategy'  => 'defer',
+						'in_footer' => true,
+					)
+				);
+				return;
+			}
+
+			// Bool $in_footer fallback so the client still loads in the
+			// footer on WP < 6.3 (fail-open: still hydrates, just
+			// render-blocking).
 			wp_enqueue_script( 'wppo-esi', WPPO_PLUGIN_URL . 'build/esi.js', $deps, $version, true );
 		}
 

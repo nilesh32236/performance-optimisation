@@ -537,10 +537,46 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 		$this->assertCount( 1, $this->esi_hook_state['enqueued'], 'ESI hydration client must be enqueued in OLS placeholder mode (audit #898)' );
 		$this->assertSame( 'wppo-esi', $this->esi_hook_state['enqueued'][0]['handle'] );
 		$this->assertSame( WPPO_PLUGIN_URL . 'build/esi.js', $this->esi_hook_state['enqueued'][0]['src'] );
-		$this->assertSame( true, $this->esi_hook_state['enqueued'][0]['args'], 'Client must load in the footer (bool $in_footer keeps WP 6.2 compat; the array $args form needs WP 6.3+)' );
+		$this->assertSame(
+			array(
+				'strategy'  => 'defer',
+				'in_footer' => true,
+			),
+			$this->esi_hook_state['enqueued'][0]['args'],
+			'Client must be render-non-blocking on WP 6.3+ (strategy => defer, mirroring RUM; audit #1268)'
+		);
 		$this->assertIsString( $this->esi_hook_state['enqueued'][0]['ver'], 'Version must come from build/esi.asset.php' );
 		$this->assertNotSame( '', $this->esi_hook_state['enqueued'][0]['ver'] );
 		$this->assertIsArray( $this->esi_hook_state['enqueued'][0]['deps'] );
+		$this->assertContains( 'wp-i18n', $this->esi_hook_state['enqueued'][0]['deps'], 'Hydration client uses translated strings, so wp-i18n must be a dependency (audit #1268)' );
+	}
+
+	public function test_enqueue_hydration_client_uses_bool_footer_on_legacy_core(): void {
+		$this->install_enqueue_stubs( true, false );
+		LiteSpeed_Integration::reset_cache();
+		Util::set_settings_cache(
+			array(
+				'litespeed_integration' => array(
+					'mode' => 'wppo',
+					'esi'  => array( 'enabled' => true ),
+				),
+			)
+		);
+		$had_version           = array_key_exists( 'wp_version', $GLOBALS );
+		$previous_version      = $GLOBALS['wp_version'] ?? null;
+		$GLOBALS['wp_version'] = '6.2';
+		try {
+			LiteSpeed_ESI::enqueue_hydration_client();
+		} finally {
+			if ( $had_version ) {
+				$GLOBALS['wp_version'] = $previous_version;
+			} else {
+				unset( $GLOBALS['wp_version'] );
+			}
+		}
+
+		$this->assertCount( 1, $this->esi_hook_state['enqueued'] );
+		$this->assertSame( true, $this->esi_hook_state['enqueued'][0]['args'], 'Pre-6.3 core has no strategy arg support — classic bool $in_footer fallback (audit #1268)' );
 	}
 
 	public function test_enqueue_hydration_client_skips_enterprise_native_esi(): void {

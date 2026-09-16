@@ -1243,6 +1243,18 @@ let globalObserver = null;
 let mutationObserver = null;
 
 /**
+ * One-way guard watching this bundle's own <script> element.
+ *
+ * When a theme/optimizer detaches the script element without calling
+ * window.wppoLazyloadTeardown() first, this observer fires the (idempotent)
+ * teardown automatically and then disconnects itself. Null when no lazyload
+ * script element was present at init (e.g. tests) or after teardown.
+ *
+ * @type {MutationObserver|null}
+ */
+let scriptRemovalObserver = null;
+
+/**
  * Set of elements already observed by globalObserver.
  * @type {WeakSet<Element>}
  */
@@ -1288,9 +1300,9 @@ const clearSafetyScan = () => {
  * Teardown lazyload observers and safety interval.
  *
  * Idempotent — safe to call multiple times. Runs automatically on
- * pagehide/beforeunload and is exposed as window.wppoLazyloadTeardown for
- * tests and SPA-style teardown (call it before removing this module's script
- * element dynamically; nothing observes script-element removal automatically).
+ * pagehide/beforeunload, when this bundle's <script> element is detached
+ * (see armScriptRemovalGuard below), and is exposed as
+ * window.wppoLazyloadTeardown for tests and SPA-style teardown.
  * Also deletes the `window.wppoNativeLazy` / `window.wppoDelayConfig` config
  * globals injected by Main::enqueue_scripts() on the WP <6.9 classic path.
  *
@@ -1299,6 +1311,10 @@ const clearSafetyScan = () => {
 const teardownLazyload = () => {
 	pendingLazyCount = 0;
 	clearSafetyScan();
+	if ( scriptRemovalObserver ) {
+		scriptRemovalObserver.disconnect();
+		scriptRemovalObserver = null;
+	}
 	// Release any legacy mirror (e.g. set by tests or an older copy) so
 	// teardown stays idempotent and leak-free.
 	if ( window.wppoSafetyScanId ) {
@@ -1337,6 +1353,57 @@ const teardownLazyload = () => {
 window.wppoLazyloadTeardown = teardownLazyload;
 window.addEventListener( 'pagehide', teardownLazyload );
 window.addEventListener( 'beforeunload', teardownLazyload );
+
+/**
+ * Arm the fail-safe script-removal guard (audit #1268).
+ *
+ * The manual teardown contract (call window.wppoLazyloadTeardown() before
+ * detaching the script) is now a back-compat fallback: this one-way
+ * MutationObserver watches this bundle's own <script> element and runs the
+ * idempotent teardown automatically if the element is detached without a
+ * manual call, so observers/globals no longer leak silently on that path.
+ * The guard disconnects itself after firing (or on teardown) and never
+ * re-arms — a re-added bundle copy runs its own module evaluation.
+ *
+ * @since NEXT
+ */
+const armScriptRemovalGuard = () => {
+	if (
+		typeof MutationObserver === 'undefined' ||
+		typeof document === 'undefined' ||
+		! document.documentElement
+	) {
+		return;
+	}
+	let watched = null;
+	try {
+		watched = document.querySelector( 'script[src*="lazyload"]' );
+	} catch {
+		return;
+	}
+	if ( ! watched ) {
+		return;
+	}
+	const target = watched;
+	scriptRemovalObserver = new MutationObserver( () => {
+		// Still in the DOM (e.g. moved, or an unrelated mutation) — keep watching.
+		if ( target.isConnected ) {
+			return;
+		}
+		teardownLazyload();
+	} );
+	try {
+		scriptRemovalObserver.observe( document.documentElement, {
+			childList: true,
+			subtree: true,
+		} );
+	} catch {
+		scriptRemovalObserver.disconnect();
+		scriptRemovalObserver = null;
+	}
+};
+
+armScriptRemovalGuard();
 
 /**
  * Apply placeholder styling (dominant color background / LQIP blur) before
