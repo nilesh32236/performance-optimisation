@@ -3003,6 +3003,244 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Symlink-aware containment check for cache write targets.
+		 *
+		 * Extends {@see is_cache_path_contained()} with `realpath()` symlink
+		 * resolution so a symlink planted inside the cache tree (e.g.
+		 * `{root}/{domain}/<segment>` pointing at `/etc`, or a symlinked
+		 * domain directory itself) cannot bypass the lexical prefix check at
+		 * write time (CVE-2026-18051 class). Both the target and the
+		 * `{root}/{domain}/` anchor are resolved via
+		 * {@see resolve_realpath()} (nearest existing ancestor plus the
+		 * lexical remainder, so brand-new pages and symlinked deploy roots
+		 * keep working) and the resolved target must sit under the resolved
+		 * anchor, which itself must sit under the resolved root
+		 * (trailing-slash aware so `wppo-evil` never prefix-matches `wppo`).
+		 *
+		 * Fail-open uncached, never fatal: when `realpath()` is unavailable
+		 * or nothing on disk resolves yet, the lexical verdict stands. Empty
+		 * root/domain/path, null bytes, and `..` segments fail closed. Pure
+		 * static helper: no I/O beyond `realpath()`, no settings reads.
+		 * Multisite-safe: callers pass the per-site canonical domain.
+		 *
+		 * @param string $cache_root_dir Absolute cache root directory.
+		 * @param string $domain Canonical domain directory segment.
+		 * @param string $path Absolute file or directory path to check.
+		 * @return bool True when contained.
+		 * @since NEXT
+		 */
+		public static function is_realpath_contained( string $cache_root_dir, string $domain, string $path ): bool {
+			if ( '' === $cache_root_dir || '' === $domain || '' === $path ) {
+				return false;
+			}
+			if ( false !== strpos( $path, "\0" ) ) {
+				return false;
+			}
+			// Lexical fail-closed first: unsanitized input must never pass
+			// on the symlink check alone.
+			if ( ! self::is_cache_path_contained( $cache_root_dir, $domain, $path ) ) {
+				return false;
+			}
+			if ( ! function_exists( 'realpath' ) || ! function_exists( 'dirname' ) ) {
+				return true;
+			}
+			try {
+				$domain_seg = trim( $domain, '/' );
+				if ( '' === $domain_seg ) {
+					return false;
+				}
+				if ( function_exists( 'wp_normalize_path' ) ) {
+					$root_norm   = rtrim( wp_normalize_path( $cache_root_dir ), '/' );
+					$target_norm = wp_normalize_path( $path );
+				} else {
+					$root_norm   = rtrim( str_replace( '\\', '/', $cache_root_dir ), '/' );
+					$target_norm = str_replace( '\\', '/', $path );
+				}
+				// Resolved anchor: the on-disk domain directory when it
+				// exists (catches a symlinked domain dir), else the
+				// resolved root plus the lexical domain segment (nothing
+				// exists to symlink yet).
+				$anchor = self::resolve_realpath( $root_norm . '/' . $domain_seg );
+				if ( null === $anchor ) {
+					$root_resolved = self::resolve_realpath( $root_norm );
+					if ( null === $root_resolved ) {
+						return true;
+					}
+					$anchor = rtrim( $root_resolved, '/' ) . '/' . $domain_seg;
+				}
+				// The anchor itself must live under the resolved root: a
+				// symlinked domain directory pointing outside fails closed.
+				$root_resolved = self::resolve_realpath( $root_norm );
+				if ( null === $root_resolved ) {
+					return true;
+				}
+				$anchor_dir = rtrim( $anchor, '/' ) . '/';
+				$root_dir   = rtrim( $root_resolved, '/' ) . '/';
+				if ( 0 !== strpos( $anchor_dir, $root_dir ) ) {
+					return false;
+				}
+				// Resolved target: nearest existing ancestor of the target
+				// directory plus the lexical remainder. The target file
+				// itself rarely exists before a write, so resolve its
+				// directory.
+				$target_dir      = dirname( $target_norm );
+				$target_resolved = self::resolve_realpath( $target_dir );
+				if ( null === $target_resolved ) {
+					return true;
+				}
+				$target_dir_slash = rtrim( $target_resolved, '/' ) . '/';
+				return 0 === strpos( $target_dir_slash, $anchor_dir );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				// Never fatal, never white-screen: the lexical check above
+				// already passed, so serve uncached-fail-open via true.
+				return true;
+			}
+		}
+
+		/**
+		 * Resolve a path via realpath(), keeping the lexical remainder.
+		 *
+		 * `realpath()` returns false for paths that do not (fully) exist
+		 * yet — e.g. a brand-new page directory. This helper walks up to
+		 * the nearest existing ancestor, resolves it, and re-appends the
+		 * non-existing remainder lexically, so symlinked deploy roots keep
+		 * resolving consistently while symlink escapes inside the tree are
+		 * still exposed. Returns null when nothing on disk resolves (or
+		 * `realpath()` is unavailable), in which case callers fall back to
+		 * the lexical verdict. The walk is bounded (64 levels) so
+		 * `dirname( '/' ) === '/'` cannot loop forever.
+		 *
+		 * @param string $lexical_path Normalized absolute path to resolve.
+		 * @return string|null Resolved absolute path, or null when unresolvable.
+		 * @since NEXT
+		 */
+		public static function resolve_realpath( string $lexical_path ): ?string {
+			if ( '' === $lexical_path || ! function_exists( 'realpath' ) || ! function_exists( 'dirname' ) ) {
+				return null;
+			}
+			try {
+				$candidate = $lexical_path;
+				$remainder = array();
+				$depth     = 0;
+				while ( '' !== $candidate && $depth < 64 ) {
+					++$depth;
+					$resolved = realpath( $candidate );
+					if ( false !== $resolved && is_string( $resolved ) && '' !== $resolved ) {
+						if ( function_exists( 'wp_normalize_path' ) ) {
+							$resolved = wp_normalize_path( $resolved );
+						} else {
+							$resolved = str_replace( '\\', '/', $resolved );
+						}
+						if ( array() !== $remainder ) {
+							$resolved = rtrim( $resolved, '/' ) . '/' . implode( '/', $remainder );
+						}
+						return $resolved;
+					}
+					$parent = dirname( $candidate );
+					if ( $parent === $candidate ) {
+						return null;
+					}
+					$segment = substr( $candidate, strlen( $parent ) );
+					$segment = ltrim( $segment, '/' );
+					if ( '' !== $segment ) {
+						array_unshift( $remainder, $segment );
+					}
+					$candidate = $parent;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return null;
+			}
+			return null;
+		}
+
+		/**
+		 * Single-call validator for absolute cache write targets.
+		 *
+		 * Combines traversal-payload rejection (null bytes, `..` segments)
+		 * with lexical ({@see is_cache_path_contained()}) and symlink-aware
+		 * ({@see is_realpath_contained()}) containment. The path is absolute
+		 * by contract, so drive/UNC/protocol-relative *inputs* are refused
+		 * earlier at the sanitize layer; here any target failing containment
+		 * fails closed. Callers skip the write and serve dynamically
+		 * uncached on false.
+		 *
+		 * @param string $cache_root_dir Absolute cache root directory.
+		 * @param string $domain Canonical domain directory segment.
+		 * @param string $path Absolute file path to validate.
+		 * @return bool True when the target may be written.
+		 * @since NEXT
+		 */
+		public static function validate_cache_write_path( string $cache_root_dir, string $domain, string $path ): bool {
+			if ( '' === $cache_root_dir || '' === $domain || '' === $path ) {
+				return false;
+			}
+			if ( false !== strpos( $path, "\0" ) || false !== strpos( $path, '..' ) ) {
+				return false;
+			}
+			if ( ! self::is_cache_path_contained( $cache_root_dir, $domain, $path ) ) {
+				return false;
+			}
+			return self::is_realpath_contained( $cache_root_dir, $domain, $path );
+		}
+
+		/**
+		 * Whether an .htaccess target may be written by the plugin.
+		 *
+		 * Isolation guard keeping htaccess writes out of reach of
+		 * cache-path resolution: the basename must be exactly `.htaccess`
+		 * and the target must never sit inside the static cache tree
+		 * (`{WP_CONTENT_DIR}/cache/wppo/`). Null bytes and `..` segments
+		 * fail closed. Fail-open uncached semantics belong to the caller:
+		 * false means "do not touch the filesystem".
+		 *
+		 * @param string $htaccess_file Absolute .htaccess path candidate.
+		 * @return bool True when the target may be written.
+		 * @since NEXT
+		 */
+		public static function is_htaccess_path_allowed( string $htaccess_file ): bool {
+			if ( '' === $htaccess_file ) {
+				return false;
+			}
+			if ( false !== strpos( $htaccess_file, "\0" ) || false !== strpos( $htaccess_file, '..' ) ) {
+				return false;
+			}
+			try {
+				$base = basename( $htaccess_file );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+			if ( '.htaccess' !== $base ) {
+				return false;
+			}
+			try {
+				if ( function_exists( 'wp_normalize_path' ) ) {
+					$norm = wp_normalize_path( $htaccess_file );
+				} else {
+					$norm = str_replace( '\\', '/', $htaccess_file );
+				}
+				if ( defined( 'WP_CONTENT_DIR' ) ) {
+					if ( function_exists( 'wp_normalize_path' ) ) {
+						$cache_root = rtrim( wp_normalize_path( (string) WP_CONTENT_DIR ), '/' ) . '/cache/wppo/';
+					} else {
+						$cache_root = rtrim( str_replace( '\\', '/', (string) WP_CONTENT_DIR ), '/' ) . '/cache/wppo/';
+					}
+					if ( 0 === strpos( $norm, $cache_root ) ) {
+						return false;
+					}
+				} elseif ( false !== strpos( $norm, '/cache/wppo/' ) ) {
+					return false;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+			return true;
+		}
+
+		/**
 		 * Build a contained absolute cache file path from its parts.
 		 *
 		 * Single auditable containment point for the static HTML cache and

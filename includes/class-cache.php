@@ -3474,9 +3474,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Dual-prefix containment: the normalized path must start with both
 		 * the cache root and the per-domain directory (trailing-slash aware
 		 * so `wppo-evil` never prefix-matches `wppo`). Empty root or domain
-		 * fails closed.
+		 * fails closed. Since NEXT the check is symlink-aware: the resolved
+		 * target must also pass {@see Util::is_realpath_contained()} so a
+		 * symlink planted inside the cache tree cannot redirect a write
+		 * outside the root (CVE-2026-18051 class). On containment failure
+		 * callers skip the write and serve dynamically uncached.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Added realpath symlink containment.
 		 * @param string $path Absolute file or directory path.
 		 * @return bool True when contained.
 		 */
@@ -3484,7 +3489,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// Centralized dual-prefix containment lives in
 			// Util::is_cache_path_contained(); this wrapper only binds the
 			// per-instance root/domain so every call site shares one audit point.
-			return Util::is_cache_path_contained( $this->cache_root_dir, $this->domain, $path );
+			if ( ! Util::is_cache_path_contained( $this->cache_root_dir, $this->domain, $path ) ) {
+				return false;
+			}
+			if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_realpath_contained' ) ) {
+				try {
+					return Util::is_realpath_contained( $this->cache_root_dir, $this->domain, $path );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return false;
+				}
+			}
+			return true;
 		}
 
 		/**

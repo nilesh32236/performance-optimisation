@@ -112,6 +112,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 
 			$htaccess_file = wp_normalize_path( get_home_path() . '.htaccess' );
 
+			// Isolation guard: never write when the resolved target is not
+			// a legitimate `.htaccess` outside the static cache tree.
+			// Fail closed before touching the disk; content stays
+			// byte-identical.
+			if ( ! self::is_htaccess_write_allowed( $htaccess_file ) ) {
+				self::flag_htaccess_failure();
+				return false;
+			}
+
 			$wp_filesystem = Util::init_filesystem();
 
 			if ( ! $wp_filesystem ) {
@@ -722,6 +731,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		}
 
 		/**
+		 * Whether an .htaccess target may be written by the plugin.
+		 *
+		 * Isolation guard keeping htaccess writes out of reach of
+		 * cache-path resolution (CVE-2026-18051 class): delegates to
+		 * {@see Util::is_htaccess_path_allowed()} (exact `.htaccess`
+		 * basename, no null bytes / `..` segments, never inside the static
+		 * cache tree) when available, with an inline basename fallback for
+		 * very old code paths. Fail closed: false means "do not touch the
+		 * filesystem" and callers leave existing content byte-identical.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $htaccess_file Absolute .htaccess path candidate.
+		 * @return bool True when the target may be written.
+		 */
+		private static function is_htaccess_write_allowed( string $htaccess_file ): bool {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_htaccess_path_allowed' ) ) {
+					return Util::is_htaccess_path_allowed( $htaccess_file );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+			if ( '' === $htaccess_file || false !== strpos( $htaccess_file, "\0" ) || false !== strpos( $htaccess_file, '..' ) ) {
+				return false;
+			}
+			try {
+				return '.htaccess' === basename( $htaccess_file );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
 		 * Atomically write .htaccess via temp file + rename with verification.
 		 *
 		 * Writes the spliced contents to a temp file in the same directory (same
@@ -751,6 +796,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				return false;
 			}
 			$rules = $sanitized;
+
+			// Isolation guard: htaccess writes stay out of reach of
+			// cache-path resolution — the target must be a real `.htaccess`
+			// file outside the static cache tree. Fail closed (verified
+			// failure, never null) so callers must NOT fall through to the
+			// legacy path with a hostile target; existing file content stays
+			// byte-identical.
+			if ( ! self::is_htaccess_write_allowed( $htaccess_file ) ) {
+				return false;
+			}
 
 			$required = array( 'exists', 'get_contents', 'put_contents', 'move', 'copy', 'delete' );
 			foreach ( $required as $method ) {
