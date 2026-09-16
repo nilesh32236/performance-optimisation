@@ -2193,6 +2193,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		public function maybe_migrate_comment_image_hardening(): void {
 			try {
+				// Capability-gated: the migration performs a settings
+				// write plus full local + edge cache purges, so it must
+				// only run for administrators (first admin_init by an
+				// editor must not trigger it).
+				if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) ) {
+					return;
+				}
 				if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
 					return;
 				}

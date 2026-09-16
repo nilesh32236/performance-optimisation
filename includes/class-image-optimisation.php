@@ -62,6 +62,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private const MAX_LCP_PRELOADS = 2;
 
 		/**
+		 * Tags visited by the comment-image hardening passes.
+		 *
+		 * Single source of truth for the buffer fast-path, the
+		 * quoted-aware opening-tag pass, and both Tag Processor loops
+		 * (next-gen + lazy). Includes the `<image>` HTML-parser alias
+		 * for `<img>`, plus carriers of denylisted URL attributes
+		 * (`use`/`a` for href, `table`/`body`/`td`/`th` for background).
+		 *
+		 * @since NEXT
+		 * @var string[]
+		 */
+		private const HARDENED_TAGS = array( 'img', 'image', 'source', 'video', 'iframe', 'audio', 'embed', 'object', 'svg', 'math', 'use', 'a', 'table', 'body', 'td', 'th' );
+
+		/**
+		 * Single-URL attributes routed through the scriptable-URL gate.
+		 *
+		 * Shared by the regex path and the Tag Processor path so they
+		 * stay in parity (issue #1271 follow-up). `srcdoc` is dropped
+		 * unconditionally; the rest are removed only when scriptable.
+		 *
+		 * @since NEXT
+		 * @var string[]
+		 */
+		private const HARDENED_URL_ATTRS = array( 'src', 'data-src', 'data', 'codebase', 'usemap', 'poster', 'srcdoc', 'background', 'lowsrc', 'href', 'xlink:href', 'action', 'formaction', 'cite', 'longdesc' );
+
+		/**
+		 * Srcset-family attributes filtered candidate-by-candidate.
+		 *
+		 * @since NEXT
+		 * @var string[]
+		 */
+		private const HARDENED_SRCSET_ATTRS = array( 'srcset', 'data-srcset' );
+
+		/**
+		 * Benign `on*`-prefixed attributes that are not event handlers.
+		 *
+		 * `is_event_attribute_name()` spares these so valid attributes
+		 * (`only`, `one`, `online`, `once`, `onto`, `onion`) survive.
+		 *
+		 * @since NEXT
+		 * @var string[]
+		 */
+		private const BENIGN_ON_PREFIX_ATTRS = array( 'only', 'one', 'online', 'once', 'onto', 'onion' );
+
+		/**
 		 * Configuration options for image optimization.
 		 *
 		 * @var array
@@ -1868,14 +1913,55 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 */
 		private function is_event_attribute_name( string $name ): bool {
 			$lower = strtolower( $name );
-			if ( 'only' === $lower || 'one' === $lower || 'online' === $lower ) {
+			if ( in_array( $lower, self::BENIGN_ON_PREFIX_ATTRS, true ) ) {
 				return false;
 			}
 			return 1 === preg_match( '/^on[a-z]{2,}$/', $lower );
 		}
 
 		/**
-		 * Strip hostile attributes from a single `<img>`/`<source>`/`<video>` tag.
+		 * Whether an upper-case Tag Processor tag name is hardening-scoped.
+		 *
+		 * O(1) lookup replacing the inline 15-way `===` chain in the hot
+		 * loops. The unfiltered `next_tag()` traversal is kept deliberately:
+		 * the multi-tag `tag_names` query filter is unavailable on the
+		 * minimum supported WP 6.2 core, and per-tag filtered passes would
+		 * re-parse the full buffer N times.
+		 *
+		 * @since NEXT
+		 * @param string $tag_name Upper-case tag name from `get_tag()`.
+		 * @return bool True when the tag is in `HARDENED_TAGS`.
+		 */
+		private function is_hardened_tag( string $tag_name ): bool {
+			static $map = null;
+			if ( null === $map ) {
+				$map = array();
+				foreach ( self::HARDENED_TAGS as $tag ) {
+					$map[ strtoupper( $tag ) ] = true;
+				}
+			}
+			return isset( $map[ $tag_name ] );
+		}
+
+		/**
+		 * Regex alternation for the hardening tag scope (e.g. `img|image|...`).
+		 *
+		 * @since NEXT
+		 * @return string Alternation safe for `#<(...)\b` patterns.
+		 */
+		private function hardened_tag_alternation(): string {
+			return implode( '|', self::HARDENED_TAGS );
+		}
+
+		/**
+		 * Strip hostile attributes from a single opening tag.
+		 *
+		 * Handles every tag in `HARDENED_TAGS` (img/image/source/video/
+		 * iframe/audio/embed/object/svg/math plus `use`/`a`/`table`/`body`/
+		 * `td`/`th` carriers of href/background attributes) — not just
+		 * img/source/video. Named `sanitize_image_tag_html` for history;
+		 * runs site-wide on the full buffer (not comment-only) so hostile
+		 * markup can never be laundered into the static cache file.
 		 *
 		 * Denylist approach: event-handler attributes (`on*`), scriptable
 		 * URL attributes, and `style` payloads carrying `expression(` /
@@ -1893,110 +1979,130 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 */
 		private function sanitize_image_tag_html( string $tag ): string {
 			try {
+				// Per-tag fast-path: skip regex steps whose trigger
+				// substring is absent so benign gallery imgs avoid all
+				// four scans plus per-URL entity decoding.
+				$has_on     = false !== stripos( $tag, 'on' );
+				$has_url    = false !== stripos( $tag, 'src' ) || false !== stripos( $tag, 'href' ) || false !== stripos( $tag, 'data' ) || false !== stripos( $tag, 'poster' ) || false !== stripos( $tag, 'srcdoc' ) || false !== stripos( $tag, 'background' ) || false !== stripos( $tag, 'lowsrc' ) || false !== stripos( $tag, 'action' ) || false !== stripos( $tag, 'cite' ) || false !== stripos( $tag, 'longdesc' ) || false !== stripos( $tag, 'codebase' ) || false !== stripos( $tag, 'usemap' );
+				$has_srcset = false !== stripos( $tag, 'srcset' );
+				$has_style  = false !== stripos( $tag, 'style' );
+				if ( ! $has_on && ! $has_url && ! $has_srcset && ! $has_style ) {
+					return $tag;
+				}
 				// 1. Strip inline event handlers (onerror, onload, onclick, on*).
 				// Slash separator allowed: `<img/onerror=...>` is valid HTML.
 				// Callback consults is_event_attribute_name() so benign
-				// `only`/`one`/`online` attributes survive.
-				$cleaned = preg_replace_callback(
-					'#[\s/]+(on[a-z]+)\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s>"\']+)#i',
-					function ( $matches ) {
-						return $this->is_event_attribute_name( $matches[1] ) ? '' : $matches[0];
-					},
-					$tag
-				);
-				if ( null === $cleaned ) {
-					return $tag;
+				// `only`/`one`/`online`/`once`/`onto`/`onion` attributes survive.
+				if ( $has_on ) {
+					$cleaned = preg_replace_callback(
+						'#[\s/]+(on[a-z]+)\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s>"\']+)#i',
+						function ( $matches ) {
+							return $this->is_event_attribute_name( $matches[1] ) ? '' : $matches[0];
+						},
+						$tag
+					);
+					if ( null === $cleaned ) {
+						return $tag;
+					}
+					$tag = $cleaned;
 				}
-				$tag = $cleaned;
 
 				// 2. Drop scriptable single-URL attributes. Slash separator
 				// allowed for parity with step 1 (`<img/src="...">`).
 				// Covers `data`/`codebase`/`usemap` so `<object data=>`
-				// payloads are inspected on both layers.
-				$tag = (string) preg_replace_callback(
-					'#[\s/]+(src|data-src|data|codebase|usemap|poster|srcdoc|background|lowsrc|href|xlink:href|action|formaction|cite|longdesc)\s*=\s*("([^"]*)"|\'([^\']*)\'|([^\s>"\']+))#i',
-					function ( $matches ) {
-						$attr  = strtolower( $matches[1] );
-						$value = '';
-						if ( isset( $matches[3] ) && '' !== $matches[3] ) {
-							$value = $matches[3];
-						} elseif ( isset( $matches[4] ) && '' !== $matches[4] ) {
-							$value = $matches[4];
-						} elseif ( isset( $matches[5] ) ) {
-							$value = $matches[5];
-						}
-						if ( 'srcdoc' === $attr ) {
-							// Inline HTML payload: never legitimate on
-							// image-adjacent tags; drop unconditionally.
-							return '';
-						}
-						if ( $this->is_scriptable_image_url( $value ) ) {
-							return '';
-						}
-						return $matches[0];
-					},
-					$tag
-				);
+				// payloads are inspected on both layers. Attribute list
+				// mirrors HARDENED_URL_ATTRS (kept as a literal here so
+				// the regex stays a single compiled pattern).
+				if ( $has_url ) {
+					$tag = (string) preg_replace_callback(
+						'#[\s/]+(src|data-src|data|codebase|usemap|poster|srcdoc|background|lowsrc|href|xlink:href|action|formaction|cite|longdesc)\s*=\s*("([^"]*)"|\'([^\']*)\'|([^\s>"\']+))#i',
+						function ( $matches ) {
+							$attr  = strtolower( $matches[1] );
+							$value = '';
+							if ( isset( $matches[3] ) && '' !== $matches[3] ) {
+								$value = $matches[3];
+							} elseif ( isset( $matches[4] ) && '' !== $matches[4] ) {
+								$value = $matches[4];
+							} elseif ( isset( $matches[5] ) ) {
+								$value = $matches[5];
+							}
+							if ( 'srcdoc' === $attr ) {
+								// Inline HTML payload: never legitimate on
+								// image-adjacent tags; drop unconditionally.
+								return '';
+							}
+							if ( $this->is_scriptable_image_url( $value ) ) {
+								return '';
+							}
+							return $matches[0];
+						},
+						$tag
+					);
+				}
 
 				// 3. Filter srcset/data-srcset item-by-item so one hostile
 				// candidate cannot poison the whole attribute; gallery
 				// srcsets with only safe candidates stay byte-identical.
 				// Slash separator allowed (`<img/srcset="...">`).
-				$tag = (string) preg_replace_callback(
-					'#[\s/]+((?:data-)?srcset)\s*=\s*("([^"]*)"|\'([^\']*)\'|([^\s>"\']+))#i',
-					function ( $matches ) {
-						$attr  = $matches[1];
-						$first = substr( $matches[2], 0, 1 );
-						$quote = ( '"' === $first || "'" === $first ) ? $first : '"';
-						$raw   = '';
-						if ( isset( $matches[3] ) && '' !== $matches[3] ) {
-							$raw = $matches[3];
-						} elseif ( isset( $matches[4] ) && '' !== $matches[4] ) {
-							$raw = $matches[4];
-						} elseif ( isset( $matches[5] ) ) {
-							$raw = $matches[5];
-						}
-						$kept = array();
-						foreach ( $this->split_srcset_candidates( $raw ) as $item ) {
-							list( $candidate ) = $this->split_srcset_item( $item );
-							if ( $this->is_scriptable_image_url( $candidate ) ) {
-								continue;
+				if ( $has_srcset ) {
+					$tag = (string) preg_replace_callback(
+						'#[\s/]+((?:data-)?srcset)\s*=\s*("([^"]*)"|\'([^\']*)\'|([^\s>"\']+))#i',
+						function ( $matches ) {
+							$attr  = $matches[1];
+							$first = substr( $matches[2], 0, 1 );
+							$quote = ( '"' === $first || "'" === $first ) ? $first : '"';
+							$raw   = '';
+							if ( isset( $matches[3] ) && '' !== $matches[3] ) {
+								$raw = $matches[3];
+							} elseif ( isset( $matches[4] ) && '' !== $matches[4] ) {
+								$raw = $matches[4];
+							} elseif ( isset( $matches[5] ) ) {
+								$raw = $matches[5];
 							}
-							$kept[] = $item;
-						}
-						if ( array() === $kept ) {
-							return '';
-						}
-						$rebuilt = implode( ', ', $kept );
-						if ( $rebuilt === $raw ) {
-							return $matches[0];
-						}
-						return ' ' . $attr . '=' . $quote . $rebuilt . $quote;
-					},
-					$tag
-				);
+							$kept = array();
+							foreach ( $this->split_srcset_candidates( $raw ) as $item ) {
+								list( $candidate ) = $this->split_srcset_item( $item );
+								if ( $this->is_scriptable_image_url( $candidate ) ) {
+									continue;
+								}
+								$kept[] = $item;
+							}
+							if ( array() === $kept ) {
+								return '';
+							}
+							$rebuilt = implode( ', ', $kept );
+							if ( $rebuilt === $raw ) {
+								return $matches[0];
+							}
+							return ' ' . $attr . '=' . $quote . $rebuilt . $quote;
+						},
+						$tag
+					);
+				}
 
 				// 4. Strip style attributes smuggling CSS/script vectors.
 				// Accepts quoted and unquoted values (`style=expression(...)`);
 				// slash separator allowed for parity with step 1.
-				$tag = (string) preg_replace_callback(
-					'#[\s/]+style\s*=\s*("([^"]*)"|\'([^\']*)\'|([^\s>"\']+))#i',
-					function ( $matches ) {
-						$value = '';
-						if ( isset( $matches[2] ) && '' !== $matches[2] ) {
-							$value = $matches[2];
-						} elseif ( isset( $matches[3] ) && '' !== $matches[3] ) {
-							$value = $matches[3];
-						} elseif ( isset( $matches[4] ) ) {
-							$value = $matches[4];
-						}
-						if ( $this->is_hostile_style_value( $value ) ) {
-							return '';
-						}
-						return $matches[0];
-					},
-					$tag
-				);
+				if ( $has_style ) {
+					$tag = (string) preg_replace_callback(
+						'#[\s/]+style\s*=\s*("([^"]*)"|\'([^\']*)\'|([^\s>"\']+))#i',
+						function ( $matches ) {
+							$value = '';
+							if ( isset( $matches[2] ) && '' !== $matches[2] ) {
+								$value = $matches[2];
+							} elseif ( isset( $matches[3] ) && '' !== $matches[3] ) {
+								$value = $matches[3];
+							} elseif ( isset( $matches[4] ) ) {
+								$value = $matches[4];
+							}
+							if ( $this->is_hostile_style_value( $value ) ) {
+								return '';
+							}
+							return $matches[0];
+						},
+						$tag
+					);
+				}
 
 				return $tag;
 			} catch ( \Throwable $e ) {
@@ -2006,13 +2112,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
-		 * Sanitize `<img>`/`<source>`/`<video>` tags across a full buffer.
+		 * Sanitize hardened tags across a full buffer.
 		 *
 		 * Runs before next-gen/lazy rewriting so hostile comment-authored
-		 * markup (`img onerror`, `picture source`, inline `on*` handlers,
-		 * scriptable URLs) renders inert and can never be laundered into
-		 * the static cache file. Safe gallery/`<picture>` markup has no
-		 * such attributes and passes through unchanged (no layout
+		 * markup (`img`/`image` `onerror`, `picture source`, inline `on*`
+		 * handlers, scriptable URLs, `<svg>`/`<math>` active content)
+		 * renders inert and can never be laundered into the static cache
+		 * file. Named `sanitize_comment_images_*` for history; runs
+		 * site-wide on the full buffer (not comment-only) because the
+		 * cache layer caches full pages. Safe gallery/`<picture>` markup
+		 * has no such attributes and passes through unchanged (no layout
 		 * regression). Fail-open: returns the input buffer unchanged when
 		 * hardening is disabled, the buffer is empty, or PCRE fails.
 		 *
@@ -2026,12 +2135,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 			// Cheap fast-path: one combined pre-check instead of N
 			// full-buffer stripos scans (imageless pages pay one scan).
-			if ( 1 !== preg_match( '#<(img|source|video|iframe|audio|embed|object|svg|math|use|a|table|body|td|th)\b#i', $buffer ) ) {
+			$alternation = $this->hardened_tag_alternation();
+			if ( 1 !== preg_match( '#<(' . $alternation . ')\b#i', $buffer ) ) {
 				return $buffer;
 			}
 			try {
 				$result = preg_replace_callback(
-					'#<(img|source|video|iframe|audio|embed|object|svg|math|use|a|table|body|td|th)\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>#i',
+					'#<(' . $alternation . ')\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>#i',
 					function ( $matches ) {
 						return $this->sanitize_image_tag_html( $matches[0] );
 					},
@@ -2042,14 +2152,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				// cannot neutralize `<svg><script>`, `<animate onbegin>`,
 				// `<foreignObject><img onerror>>`, or
 				// `<math><mi href="javascript:">` children. Sanitize each
-				// svg/math subtree fail-closed.
-				$buffer = (string) preg_replace_callback(
-					'#<(svg|math)\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>(.*?)</\1\s*>#is',
-					function ( $matches ) {
-						return $this->sanitize_svg_math_block( $matches[0] );
-					},
-					$buffer
-				);
+				// svg/math subtree fail-closed, including a trailing
+				// unclosed `<svg>`/`<math>` tail (browsers auto-close and
+				// execute it). Guarded so buffers without svg/math skip
+				// this third full-buffer walk.
+				if ( false !== stripos( $buffer, '<svg' ) || false !== stripos( $buffer, '<math' ) ) {
+					$buffer = (string) preg_replace_callback(
+						'#<(svg|math)\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>(.*?)(</\1\s*>|$)#is',
+						function ( $matches ) {
+							return $this->sanitize_svg_math_block( $matches[0] );
+						},
+						$buffer
+					);
+				}
 				return $buffer;
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -2148,14 +2263,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						}
 						continue;
 					}
-					if ( in_array( $lower, array( 'src', 'data-src', 'data', 'codebase', 'usemap', 'poster', 'background', 'lowsrc', 'href', 'xlink:href', 'action', 'formaction', 'cite', 'longdesc' ), true ) ) {
+					if ( in_array( $lower, self::HARDENED_URL_ATTRS, true ) && 'srcdoc' !== $lower ) {
 						$value = $tags->get_attribute( $name );
 						if ( is_string( $value ) && $this->is_scriptable_image_url( $value ) ) {
 							$tags->remove_attribute( $name );
 						}
 						continue;
 					}
-					if ( 'srcset' === $lower || 'data-srcset' === $lower ) {
+					if ( in_array( $lower, self::HARDENED_SRCSET_ATTRS, true ) ) {
 						$value = $tags->get_attribute( $name );
 						if ( ! is_string( $value ) || '' === $value ) {
 							continue;
@@ -2219,14 +2334,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 					// Hoisted per-pass: avoids re-reading the hardening flag
 					// and re-probing method_exists inside every tag visit.
+					// Unfiltered next_tag() is deliberate: the multi-tag
+					// `tag_names` query filter needs newer core than the
+					// WP 6.2 minimum, and per-tag filtered passes would
+					// re-parse the buffer per tag. is_hardened_tag() is an
+					// O(1) map lookup (single HARDENED_TAGS source).
 					$hardening_on = $this->is_comment_hardening_enabled();
 					while ( $tags->next_tag() ) {
 						$tag_name = $tags->get_tag();
 
-						if ( $hardening_on && ( 'IMG' === $tag_name || 'SOURCE' === $tag_name || 'VIDEO' === $tag_name || 'IFRAME' === $tag_name || 'AUDIO' === $tag_name || 'EMBED' === $tag_name || 'OBJECT' === $tag_name || 'SVG' === $tag_name || 'MATH' === $tag_name || 'USE' === $tag_name || 'A' === $tag_name || 'TABLE' === $tag_name || 'BODY' === $tag_name || 'TD' === $tag_name || 'TH' === $tag_name ) ) {
+						if ( $hardening_on && is_string( $tag_name ) && $this->is_hardened_tag( $tag_name ) ) {
 							$this->sanitize_tag_attributes_processor( $tags );
 						}
-						if ( 'IMG' === $tag_name ) {
+						if ( 'IMG' === $tag_name || 'IMAGE' === $tag_name ) {
 							$src = $tags->get_attribute( 'src' );
 							if ( $src ) {
 								$normalized_src = $this->normalize_url( $src );
@@ -2240,7 +2360,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							}
 						}
 
-						if ( 'IMG' === $tag_name || 'SOURCE' === $tag_name ) {
+						if ( 'IMG' === $tag_name || 'IMAGE' === $tag_name || 'SOURCE' === $tag_name ) {
 							$srcset = $tags->get_attribute( 'srcset' );
 							if ( $srcset ) {
 								$new_srcset_parts = array();
@@ -2297,8 +2417,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					// @since 2.0.0 Fixed fallback to handle <source> and <video poster> (previously only <img>).
 					// Prefer the TagProcessor path when available; this fallback preserves
 					// <source> src/srcset and <video> poster handling for older WP.
+					// Quoted-aware matchers (same shape as the sanitizer) so a
+					// `>` inside a quoted value cannot truncate the match and
+					// hide a later src/srcset/poster on the WP<6.2 path.
+					// Covers the `<image>` parser alias for `<img>`.
 					$buffer = preg_replace_callback(
-						'#<img\b[^>]*>#i',
+						'#<(?:img|image)\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>#i',
 						function ( $matches ) use ( $exclude_imgs, $supports_avif, $supports_webp ) {
 							$img_tag = $matches[0];
 
@@ -2349,7 +2473,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 					// Preserve <source> src/srcset when TagProcessor is unavailable.
 					$buffer = preg_replace_callback(
-						'#<source\b[^>]*>#i',
+						'#<source\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>#i',
 						function ( $matches ) use ( $exclude_imgs, $supports_avif, $supports_webp ) {
 							$tag = $matches[0];
 
@@ -2396,7 +2520,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 					// Preserve <video poster> when TagProcessor is unavailable.
 					$buffer = preg_replace_callback(
-						'#<video\b[^>]*>#i',
+						'#<video\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>#i',
 						function ( $matches ) use ( $exclude_imgs, $supports_avif, $supports_webp ) {
 							$tag = $matches[0];
 							return preg_replace_callback(
@@ -7154,15 +7278,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$wppo_tags = new \WP_HTML_Tag_Processor( $buffer );
 
 					// Hoisted per-pass (see maybe_serve_next_gen_images).
+					// Unfiltered next_tag() is deliberate here too (WP 6.2
+					// minimum lacks the multi-tag `tag_names` filter);
+					// is_hardened_tag() keeps the per-node check O(1).
 					$hardening_on = $this->is_comment_hardening_enabled();
 					while ( $wppo_tags->next_tag() ) {
 						$tag_name = $wppo_tags->get_tag();
 
-						if ( $hardening_on && ( 'IMG' === $tag_name || 'IFRAME' === $tag_name || 'SOURCE' === $tag_name || 'VIDEO' === $tag_name || 'AUDIO' === $tag_name || 'EMBED' === $tag_name || 'OBJECT' === $tag_name || 'SVG' === $tag_name || 'MATH' === $tag_name || 'USE' === $tag_name || 'A' === $tag_name || 'TABLE' === $tag_name || 'BODY' === $tag_name || 'TD' === $tag_name || 'TH' === $tag_name ) ) {
+						if ( $hardening_on && is_string( $tag_name ) && $this->is_hardened_tag( $tag_name ) ) {
 							$this->sanitize_tag_attributes_processor( $wppo_tags );
 						}
 
-						if ( 'IMG' === $tag_name ) {
+						if ( 'IMG' === $tag_name || 'IMAGE' === $tag_name ) {
 							$src      = $wppo_tags->get_attribute( 'src' );
 							$data_src = $wppo_tags->get_attribute( 'data-src' );
 							// Same src-or-data-src counting as
