@@ -1618,6 +1618,20 @@ Filters how long a Critical CSS source checksum is kept. @since 2.0.0.
 
 ---
 
+### `wppo_ccss_generation_timeout`
+Filters the wall-clock budget in seconds for one Critical CSS generation run (fetch plus parse). On expiry the run aborts fail-open: the previously stored CSS is left untouched, no partial output is stored or inlined, the miss is logged, and a retry is scheduled with exponential backoff (5min, 10min, 20min, 40min steps, escalating to `failed` after 5 consecutive timeouts). Timeout status is `pending` (1h TTL) while ordinary failures are `failed` (1-day TTL). Stored values heal to the default `25` when missing, non-numeric, zero, or negative; in-range stored values and valid filter output clamp to 1–120. Non-numeric filter output is ignored and the stored budget is kept. Default `25` (stored `file_optimisation.ccssGenTimeout`). @since NEXT.
+
+**Parameters:**
+- `$timeout` *(int)* — Budget in seconds. Default `25`.
+
+**Example:**
+
+```php
+add_filter( 'wppo_ccss_generation_timeout', static function() { return 45; } );
+```
+
+---
+
 ### `wppo_crawler_use_nproc`
 Filters whether `nproc` may be probed (via `shell_exec`) as a fallback for CPU-count detection. Default `false`. @since 2.0.0.
 
