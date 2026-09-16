@@ -1,7 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 // eslint-disable-next-line import/no-extraneous-dependencies
 import React from 'react';
-import NoticeBanner from '../NoticeBanner';
+import NoticeBanner, { NOTICE_TYPES, NOTICE_ICONS } from '../NoticeBanner';
 
 describe( 'NoticeBanner', () => {
 	it( 'renders nothing when message is empty', () => {
@@ -71,5 +71,25 @@ describe( 'NoticeBanner', () => {
 		expect( container.querySelector( '.wppo-notice' ) ).toHaveClass(
 			'wppo-mb-20'
 		);
+	} );
+
+	it( 'exposes a per-type icon map with an info icon distinct from warning', () => {
+		expect( [ ...NOTICE_TYPES ].sort() ).toEqual( [
+			'error',
+			'info',
+			'success',
+			'warning',
+		] );
+		expect( NOTICE_ICONS.info ).toBeDefined();
+		expect( NOTICE_ICONS.info ).not.toBe( NOTICE_ICONS.warning );
+	} );
+
+	it( 'falls back to info styling for unknown types', () => {
+		const { container } = render(
+			<NoticeBanner message="Hmm." type="bogus" />
+		);
+		const banner = container.querySelector( '.wppo-notice' );
+		expect( banner ).toHaveClass( 'wppo-notice--info' );
+		expect( banner ).not.toHaveClass( 'wppo-notice--bogus' );
 	} );
 } );

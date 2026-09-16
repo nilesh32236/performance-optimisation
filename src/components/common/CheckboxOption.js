@@ -4,6 +4,14 @@ import { useId } from '@wordpress/element';
  * A reusable checkbox option component with optional description and nested settings.
  *  * Improved for Premium Indigo Design System.
  *
+ * Prefer `children` for nested fields (textarea, inputs, hints). The legacy
+ * `textarea*` props are kept for backward compatibility with existing callers
+ * but new callers should render their own `<textarea>` as a child instead —
+ * this keeps this generic toggle free of caller-specific field props.
+ * Use `SwitchField` for a plain boolean toggle with label + description and
+ * no nested content; use `CheckboxOption` when nested children appear when
+ * checked.
+ *
  * @param {Object}               props                       Component props.
  * @param {string}               props.label                 The checkbox label.
  * @param {boolean}              props.checked               Whether the checkbox is checked.

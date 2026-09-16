@@ -1077,4 +1077,212 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( '4g', $rows[0]['connection'] );
 		$this->assertSame( 3000.0, $rows[0]['p75'] );
 	}
+
+	/**
+	 * Test that the sample rate defaults to 100 when unset.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_sample_rate_defaults_to_100(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		Util::clear_settings_cache();
+		$this->assertSame( 100, RUM::get_sample_rate() );
+
+		$this->options['wppo_settings']['performance_audit']['rum_sample_rate'] = 10;
+		Util::clear_settings_cache();
+		$this->assertSame( 10, RUM::get_sample_rate() );
+	}
+
+	/**
+	 * Test that invalid sample rates clamp to 100 (fail-open to unsampled).
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_sample_rate_clamps_invalid_values(): void {
+		$this->install_stubs();
+		foreach ( array( 0, -5, 101, 1000, 'nope', array( 10 ), null ) as $bad ) {
+			$this->options['wppo_settings'] = array(
+				'performance_audit' => array(
+					'rum_enabled'     => true,
+					'rum_sample_rate' => $bad,
+				),
+			);
+			Util::clear_settings_cache();
+			$this->assertSame( 100, RUM::get_sample_rate() );
+		}
+	}
+
+	/**
+	 * Test that the sampling decision is deterministic for an explicit roll.
+	 *
+	 * @since NEXT
+	 */
+	public function test_should_keep_sample_decides_by_roll(): void {
+		$this->install_stubs();
+		$this->assertTrue( RUM::should_keep_sample( 100, 100 ) );
+		$this->assertTrue( RUM::should_keep_sample( 10, 5 ) );
+		$this->assertFalse( RUM::should_keep_sample( 10, 50 ) );
+		$this->assertTrue( RUM::should_keep_sample( 0, 100 ) );
+		$this->assertTrue( RUM::should_keep_sample( 101, 100 ) );
+		// Inclusive boundary, matching the JS gate (roll * 100 <= rate).
+		$this->assertTrue( RUM::should_keep_sample( 10, 10 ) );
+		$this->assertFalse( RUM::should_keep_sample( 10, 11 ) );
+	}
+
+	/**
+	 * Test that a sampled-out beacon is dropped lossily but still acknowledged.
+	 *
+	 * The wp_rand() stub returns 2, so a rate of 1 deterministically drops.
+	 *
+	 * @since NEXT
+	 */
+	public function test_collect_drops_sample_when_rate_minimal(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array(
+				'rum_enabled'     => true,
+				'rum_sample_rate' => 1,
+			),
+		);
+		Util::clear_settings_cache();
+		$_SERVER['REMOTE_ADDR'] = '203.0.113.5';
+
+		$result = RUM::collect(
+			array(
+				'token' => $this->valid_token(),
+				'path'  => '/',
+				'lcp'   => 1000,
+			)
+		);
+
+		$this->assertTrue( $result['ok'] );
+		$this->assertSame( 200, $result['status'] );
+		$this->assertSame( array(), RUM::get_data() );
+	}
+
+	/**
+	 * Test that the high-traffic auto-throttle halves the effective rate.
+	 *
+	 * @since NEXT
+	 */
+	public function test_effective_rate_throttles_under_high_traffic(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array(
+				'rum_enabled'     => true,
+				'rum_sample_rate' => 100,
+			),
+		);
+		Util::clear_settings_cache();
+
+		// Below the threshold the configured rate passes through untouched.
+		$this->assertSame( 100, RUM::get_effective_sample_rate() );
+
+		// At/above the threshold the rate halves (floored at 1).
+		$this->transients[ Util::transient_key( 'wppo_rum_global' ) ] = array(
+			'count' => RUM::RUM_THROTTLE_THRESHOLD_DEFAULT,
+			'start' => time(),
+		);
+		$this->assertSame( 50, RUM::get_effective_sample_rate() );
+	}
+
+	/**
+	 * Test that a non-numeric throttle-threshold filter falls back to default.
+	 *
+	 * @since NEXT
+	 */
+	public function test_effective_rate_ignores_non_numeric_threshold_filter(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array(
+				'rum_enabled'     => true,
+				'rum_sample_rate' => 100,
+			),
+		);
+		Util::clear_settings_cache();
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook, $value ) {
+				if ( 'wppo_rum_throttle_threshold' === $hook ) {
+					return array( 'evil' );
+				}
+				return $value;
+			}
+		);
+		// Count 1 would throttle under the legacy (int)-cast of an array
+		// (threshold 1); the guarded fallback (60) must not throttle.
+		$this->transients[ Util::transient_key( 'wppo_rum_global' ) ] = array(
+			'count' => 1,
+			'start' => time(),
+		);
+		$this->assertSame( 100, RUM::get_effective_sample_rate() );
+	}
+
+	/**
+	 * Test that aggregate bounds hold under a 10x traffic replay.
+	 *
+	 * @since NEXT
+	 */
+	public function test_aggregate_bounds_hold_at_replay(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		Util::clear_settings_cache();
+
+		$queue = array();
+		for ( $i = 0; $i < 600; $i++ ) {
+			$queue[] = array(
+				'path' => '/replay-' . $i,
+				'lcp'  => 1000 + ( $i % 500 ),
+				'_ts'  => time(),
+			);
+		}
+		$this->transients[ Util::transient_key( 'wppo_rum_queue' ) ] = $queue;
+
+		RUM::flush_queue();
+		$data = RUM::get_data();
+
+		$total_paths = 0;
+		foreach ( $data as $day_bucket ) {
+			$total_paths += count( is_array( $day_bucket ) ? $day_bucket : array() );
+		}
+		$this->assertLessThanOrEqual( RUM::MAX_TOTAL_PATHS, $total_paths );
+		$this->assertLessThanOrEqual( RUM::MAX_OPTION_BYTES, strlen( (string) wp_json_encode( $data ) ) );
+	}
+
+	/**
+	 * Test that print_config() emits the sampling gate for the beacon.
+	 *
+	 * @since NEXT
+	 */
+	public function test_print_config_emits_sample_rate(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array(
+				'rum_enabled'     => true,
+				'rum_sample_rate' => 10,
+			),
+		);
+		Util::clear_settings_cache();
+		Functions\when( 'rest_url' )->justReturn( 'http://example.com/wp-json/performance-optimisation/v1/rum_collect' );
+
+		$printed = array();
+		Functions\when( 'wp_print_inline_script_tag' )->alias(
+			static function ( $javascript, $attributes = array() ) use ( &$printed ) {
+				$printed[] = array( $javascript, $attributes );
+			}
+		);
+
+		$_SERVER['REQUEST_URI'] = '/sample/';
+
+		RUM::print_config();
+
+		$this->assertCount( 1, $printed );
+		$this->assertStringContainsString( 'sampleRate', $printed[0][0] );
+		// Pin the emitted value, not just the key, so a wrong rate fails.
+		$this->assertStringContainsString( 'sampleRate":10', $printed[0][0] );
+	}
 }

@@ -792,6 +792,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'admin_init', array( $this, 'maybe_migrate_ccss_safelist' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_css_queue_defaults' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_speculation_top_urls' ) );
+			add_action( 'admin_init', array( $this, 'maybe_migrate_rum_sample_rate' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_safe_mode' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_sandbox_preview' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_image_alt_edge_defaults' ) );
@@ -1635,6 +1636,55 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			Log::add( __( 'Added default RUM-weighted top-URL prefetch limit (2 URLs, prerender stays guarded).', 'performance-optimisation' ) );
+		}
+
+		/**
+		 * One-time backfill for the RUM beacon sample rate (issue #1214).
+		 *
+		 * Runs on `admin_init` (not the constructor) so a cacheable front-end
+		 * request never triggers a settings write. Only installs whose stored
+		 * settings predate the `rum_sample_rate` key (key absent) are
+		 * backfilled with the 100 default (unsampled current behavior); any
+		 * stored explicit value is preserved verbatim, and fresh installs with
+		 * no stored option are skipped because the constructor defaults already
+		 * match. The check is idempotent (key presence is the marker), so no
+		 * extra option row is needed. In-memory options are synced too so the
+		 * current request observes the backfilled value. Uses per-site
+		 * `get_option()` so multisite sites migrate independently with no
+		 * cross-site leakage.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public function maybe_migrate_rum_sample_rate(): void {
+			// allowlist(settings-read-guard): deliberate direct read — must distinguish
+			// "no stored row" (false) from "stored array", which Util::get_settings()
+			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
+			$stored = get_option( 'wppo_settings' );
+			if ( ! is_array( $stored ) ) {
+				return;
+			}
+
+			$audit = isset( $stored['performance_audit'] ) && is_array( $stored['performance_audit'] ) ? $stored['performance_audit'] : array();
+
+			if ( array_key_exists( 'rum_sample_rate', $audit ) ) {
+				return;
+			}
+
+			$default_rate = class_exists( 'PerformanceOptimise\Inc\RUM' ) ? \PerformanceOptimise\Inc\RUM::RUM_SAMPLE_RATE_DEFAULT : 100;
+
+			$audit['rum_sample_rate']    = $default_rate;
+			$stored['performance_audit'] = $audit;
+			update_option( 'wppo_settings', $stored );
+
+			if ( ! isset( $this->options['performance_audit'] ) || ! is_array( $this->options['performance_audit'] ) ) {
+				$this->options['performance_audit'] = array();
+			}
+			if ( ! array_key_exists( 'rum_sample_rate', $this->options['performance_audit'] ) ) {
+				$this->options['performance_audit']['rum_sample_rate'] = $default_rate;
+			}
+
+			Log::add( __( 'Added default RUM beacon sample rate (100 percent, unsampled current behavior kept).', 'performance-optimisation' ) );
 		}
 
 		/**

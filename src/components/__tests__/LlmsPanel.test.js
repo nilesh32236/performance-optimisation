@@ -3,9 +3,13 @@ import '@testing-library/jest-dom';
 // eslint-disable-next-line import/no-extraneous-dependencies -- React is required for JSX rendering in tests
 import React from 'react';
 
-jest.mock( '../../lib/apiRequest', () => ( {
-	apiCall: jest.fn(),
-} ) );
+jest.mock( '../../lib/apiRequest', () => {
+	const actual = jest.requireActual( '../../lib/apiRequest' );
+	return {
+		...actual,
+		apiCall: jest.fn(),
+	};
+} );
 
 jest.mock( '../common/FeatureCard', () => ( { children } ) => (
 	<div>{ children }</div>
