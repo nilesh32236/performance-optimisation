@@ -1460,6 +1460,17 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 
 		$recorded = array();
 		$this->stub_defer_strategy_env( $recorded );
+		// The shared helpers gate filter dispatch on has_filter() (issue
+		// #1294), so report the opt-out filter as registered; every other
+		// hook keeps the pinned-false default from stub_defer_strategy_env().
+		Functions\when( 'has_filter' )->alias(
+			static function ( $hook ) {
+				if ( 'wppo_deferred_in_footer' === $hook ) {
+					return true;
+				}
+				return false;
+			}
+		);
 		// Re-configure apply_filters so wppo_deferred_in_footer opts this handle out.
 		Functions\when( 'apply_filters' )->alias(
 			static function ( $hook, $value, ...$args ) {
