@@ -11,6 +11,13 @@ import {
 	getErrorLogMessage,
 	getWppoSettings,
 } from '../lib/apiRequest';
+import {
+	WOO_SELF_TEST_TIMEOUT_MS,
+	formatWooSummary,
+	getWooCheckState,
+	getWooSelfTestNotice,
+	shouldShowWooFixCta,
+} from '../lib/wooSelfTest';
 import { getDbCounts } from '../lib/dbCounts';
 import useNotice from '../lib/useNotice';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
@@ -81,6 +88,29 @@ const toTtlOverride = ( value ) => {
  * Allowed CDN purge services (client-side allowlist; server allowlists too).
  */
 const CDN_PURGE_SERVICES = [ 'none', 'cloudflare', 'varnish' ];
+
+/**
+ * Copy for a Woo self-test check row with explicit tri-state handling.
+ *
+ * A malformed entry with pass missing must never render FAIL copy with no
+ * evidence — it renders an inconclusive label instead.
+ *
+ * @since NEXT
+ * @param {*}      pass     Raw pass value from a check entry.
+ * @param {string} passCopy Pass label.
+ * @param {string} failCopy Fail label.
+ * @return {string} Row label.
+ */
+const getWooCheckCopy = ( pass, passCopy, failCopy ) => {
+	const state = getWooCheckState( pass );
+	if ( state === 'pass' ) {
+		return passCopy;
+	}
+	if ( state === 'fail' ) {
+		return failCopy;
+	}
+	return __( 'Inconclusive (re-run)', 'performance-optimisation' );
+};
 
 /**
  * Parse the Varnish purge-endpoint textarea into validated http(s) URLs.
@@ -323,6 +353,7 @@ const Dashboard = ( {
 	const submittingRef = useRef( false );
 	const wooAbortRef = useRef( null );
 	const wooTimedOutRef = useRef( false );
+	const wooTimeoutRef = useRef( null );
 	const [ confirmRemove, setConfirmRemove ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
 
@@ -385,6 +416,10 @@ const Dashboard = ( {
 	// never call setWooSelfTest/notify after the component is gone.
 	useEffect( () => {
 		return () => {
+			if ( wooTimeoutRef.current ) {
+				clearTimeout( wooTimeoutRef.current );
+				wooTimeoutRef.current = null;
+			}
 			if ( wooAbortRef.current ) {
 				wooAbortRef.current.abort();
 			}
@@ -788,8 +823,13 @@ const Dashboard = ( {
 
 	const runWooCacheSelfTest = useCallback( () => {
 		setWooSelfTestLoading( true );
-		// Abort any previous in-flight test so a rapid re-run can never let
-		// stale first-run results win over the latest run.
+		// Abort any previous in-flight test and clear its timeout first so
+		// a rapid re-run can never let a stale timer misclassify the new
+		// run's abort as a 5s timeout, nor let stale results win.
+		if ( wooTimeoutRef.current ) {
+			clearTimeout( wooTimeoutRef.current );
+			wooTimeoutRef.current = null;
+		}
 		if ( wooAbortRef.current ) {
 			wooAbortRef.current.abort();
 		}
@@ -799,12 +839,12 @@ const Dashboard = ( {
 				: null;
 		wooAbortRef.current = controller;
 		wooTimedOutRef.current = false;
-		const timeoutId = controller
-			? setTimeout( () => {
-					wooTimedOutRef.current = true;
-					controller.abort();
-			  }, 5000 )
-			: null;
+		if ( controller ) {
+			wooTimeoutRef.current = setTimeout( () => {
+				wooTimedOutRef.current = true;
+				controller.abort();
+			}, WOO_SELF_TEST_TIMEOUT_MS );
+		}
 		fetchWooCacheSelfTest( controller?.signal )
 			.then( ( response ) => {
 				// Bail when this run is no longer current (a newer re-run
@@ -818,42 +858,8 @@ const Dashboard = ( {
 				}
 				if ( response.success && response.data ) {
 					setWooSelfTest( response.data );
-					if (
-						! response.data.runnable ||
-						! response.data.woo_active
-					) {
-						notify( {
-							type: 'info',
-							message: response.data.woo_active
-								? __(
-										'The self-test could not run. Default exclusion paths are shown read-only; dynamic pages fail open to uncached.',
-										'performance-optimisation'
-								  )
-								: __(
-										'WooCommerce is not active — showing default exclusion paths read-only. Dynamic pages fail open to uncached.',
-										'performance-optimisation'
-								  ),
-							durationMs: 5000,
-						} );
-					} else if ( response.data.all_pass ) {
-						notify( {
-							type: 'success',
-							message: __(
-								'WooCommerce self-test passed: cart, checkout and account pages bypass the cache; faceted URLs are skipped by preload and the guest cart survives.',
-								'performance-optimisation'
-							),
-							durationMs: 5000,
-						} );
-					} else {
-						notify( {
-							type: 'warning',
-							message: __(
-								'WooCommerce self-test found a cacheable dynamic route. Check safe mode and the results below.',
-								'performance-optimisation'
-							),
-							durationMs: 5000,
-						} );
-					}
+					const descriptor = getWooSelfTestNotice( response.data );
+					notify( { ...descriptor, durationMs: 5000 } );
 				} else {
 					notify( {
 						type: 'error',
@@ -905,8 +911,9 @@ const Dashboard = ( {
 				} );
 			} )
 			.finally( () => {
-				if ( timeoutId ) {
-					clearTimeout( timeoutId );
+				if ( wooTimeoutRef.current ) {
+					clearTimeout( wooTimeoutRef.current );
+					wooTimeoutRef.current = null;
 				}
 				if ( wooAbortRef.current === controller ) {
 					wooAbortRef.current = null;
@@ -1663,28 +1670,33 @@ const Dashboard = ( {
 					</p>
 				</div>
 				{ wooSelfTest && (
-					<div
-						className="wppo-field"
-						role="status"
-						aria-live="polite"
-					>
-						{ ! wooSelfTest.runnable && (
+					<div className="wppo-field">
+						<div role="status" aria-live="polite">
+							{ ! wooSelfTest.runnable && (
+								<p className="wppo-text-muted wppo-text-small">
+									{ __(
+										'The self-test could not run. Default exclusion paths are shown read-only; dynamic pages fail open to uncached.',
+										'performance-optimisation'
+									) }
+								</p>
+							) }
+							{ wooSelfTest.runnable &&
+								! wooSelfTest.woo_active && (
+									<p className="wppo-text-muted wppo-text-small">
+										{ __(
+											'WooCommerce is not active — showing default exclusion paths read-only. Dynamic pages fail open to uncached.',
+											'performance-optimisation'
+										) }
+									</p>
+								) }
 							<p className="wppo-text-muted wppo-text-small">
-								{ __(
-									'The self-test could not run. Default exclusion paths are shown read-only; dynamic pages fail open to uncached.',
-									'performance-optimisation'
+								{ formatWooSummary(
+									wooSelfTest.safe_mode,
+									wooSelfTest.excluded_paths
 								) }
 							</p>
-						) }
-						{ wooSelfTest.runnable && ! wooSelfTest.woo_active && (
-							<p className="wppo-text-muted wppo-text-small">
-								{ __(
-									'WooCommerce is not active — showing default exclusion paths read-only. Dynamic pages fail open to uncached.',
-									'performance-optimisation'
-								) }
-							</p>
-						) }
-						{ wooSelfTest.force_exclude && (
+						</div>
+						{ shouldShowWooFixCta( wooSelfTest ) && (
 							<p className="wppo-text-muted wppo-text-small">
 								{ __(
 									'Self-test failed: force-excluding dynamic routes plus cookie bypass (fail-closed for commerce). Stage WooCommerce safe mode back on, then save below to apply — never a stale cart.',
@@ -1708,20 +1720,6 @@ const Dashboard = ( {
 								</span>
 							</p>
 						) }
-						<p className="wppo-text-muted wppo-text-small">
-							{ __( 'Safe mode:', 'performance-optimisation' ) }{ ' ' }
-							{ wooSelfTest.safe_mode
-								? __( 'On', 'performance-optimisation' )
-								: __( 'Off', 'performance-optimisation' ) }
-							{ ' • ' }
-							{ __(
-								'Excluded paths:',
-								'performance-optimisation'
-							) }{ ' ' }
-							{ Array.isArray( wooSelfTest.excluded_paths )
-								? wooSelfTest.excluded_paths.join( ', ' )
-								: '' }
-						</p>
 						{ Array.isArray( wooSelfTest.checks ) && (
 							<ul className="wppo-woo-self-test">
 								{ wooSelfTest.checks.map( ( check, index ) => (
@@ -1733,15 +1731,17 @@ const Dashboard = ( {
 										<span>{ check?.path }</span>
 										{ ' — ' }
 										<span>
-											{ check?.pass
-												? __(
-														'Bypassed (pass)',
-														'performance-optimisation'
-												  )
-												: __(
-														'Cacheable (fail)',
-														'performance-optimisation'
-												  ) }
+											{ getWooCheckCopy(
+												check?.pass,
+												__(
+													'Bypassed (pass)',
+													'performance-optimisation'
+												),
+												__(
+													'Cacheable (fail)',
+													'performance-optimisation'
+												)
+											) }
 										</span>
 									</li>
 								) ) }
@@ -1774,15 +1774,17 @@ const Dashboard = ( {
 													<span>{ check?.path }</span>
 													{ ' — ' }
 													<span>
-														{ check?.pass
-															? __(
-																	'Bypassed (pass)',
-																	'performance-optimisation'
-															  )
-															: __(
-																	'Cacheable (fail)',
-																	'performance-optimisation'
-															  ) }
+														{ getWooCheckCopy(
+															check?.pass,
+															__(
+																'Bypassed (pass)',
+																'performance-optimisation'
+															),
+															__(
+																'Cacheable (fail)',
+																'performance-optimisation'
+															)
+														) }
 													</span>
 												</li>
 											)
@@ -1816,15 +1818,17 @@ const Dashboard = ( {
 													<span>{ check?.path }</span>
 													{ ' — ' }
 													<span>
-														{ check?.pass
-															? __(
-																	'Skipped (pass)',
-																	'performance-optimisation'
-															  )
-															: __(
-																	'Queued (fail)',
-																	'performance-optimisation'
-															  ) }
+														{ getWooCheckCopy(
+															check?.pass,
+															__(
+																'Skipped (pass)',
+																'performance-optimisation'
+															),
+															__(
+																'Queued (fail)',
+																'performance-optimisation'
+															)
+														) }
 													</span>
 												</li>
 											)
@@ -1858,15 +1862,17 @@ const Dashboard = ( {
 													<span>{ check?.key }</span>
 													{ ' — ' }
 													<span>
-														{ check?.pass
-															? __(
-																	'Bypassed (pass)',
-																	'performance-optimisation'
-															  )
-															: __(
-																	'Cacheable (fail)',
-																	'performance-optimisation'
-															  ) }
+														{ getWooCheckCopy(
+															check?.pass,
+															__(
+																'Bypassed (pass)',
+																'performance-optimisation'
+															),
+															__(
+																'Cacheable (fail)',
+																'performance-optimisation'
+															)
+														) }
 													</span>
 												</li>
 											)

@@ -51,7 +51,9 @@ describe( 'WelcomePanel', () => {
 			screen.getByText( 'Welcome to Performance Optimisation' )
 		).toBeInTheDocument();
 		expect(
-			screen.getByRole( 'button', { name: 'Enable Page Caching' } )
+			screen.getByRole( 'button', {
+				name: 'Enable – Enable Page Caching',
+			} )
 		).toBeInTheDocument();
 	} );
 
@@ -66,7 +68,7 @@ describe( 'WelcomePanel', () => {
 
 		render( <WelcomePanel /> );
 		const cacheButton = screen.getByRole( 'button', {
-			name: 'Enable Page Caching',
+			name: 'Enable – Enable Page Caching',
 		} );
 
 		expect( cacheButton ).not.toHaveAttribute( 'aria-busy', 'true' );
@@ -82,7 +84,7 @@ describe( 'WelcomePanel', () => {
 		// Screen reader label should update
 		expect( cacheButton ).toHaveAttribute(
 			'aria-label',
-			'Enable Page Caching…'
+			'Enabling… – Enable Page Caching…'
 		);
 		// Visual text should update
 		expect( cacheButton ).toHaveTextContent( 'Enabling…' );
@@ -106,7 +108,7 @@ describe( 'WelcomePanel', () => {
 
 		render( <WelcomePanel /> );
 		const cacheButton = screen.getByRole( 'button', {
-			name: 'Enable Page Caching',
+			name: 'Enable – Enable Page Caching',
 		} );
 
 		await act( async () => {
@@ -136,7 +138,7 @@ describe( 'WelcomePanel', () => {
 
 		render( <WelcomePanel /> );
 		const cacheButton = screen.getByRole( 'button', {
-			name: 'Enable Page Caching',
+			name: 'Enable – Enable Page Caching',
 		} );
 
 		await act( async () => {
@@ -165,7 +167,7 @@ describe( 'WelcomePanel', () => {
 
 		render( <WelcomePanel /> );
 		const cacheButton = screen.getByRole( 'button', {
-			name: 'Enable Page Caching',
+			name: 'Enable – Enable Page Caching',
 		} );
 
 		await act( async () => {
@@ -190,7 +192,7 @@ describe( 'WelcomePanel', () => {
 
 		render( <WelcomePanel /> );
 		const cacheButton = screen.getByRole( 'button', {
-			name: 'Enable Page Caching',
+			name: 'Enable – Enable Page Caching',
 		} );
 
 		await act( async () => {
@@ -225,7 +227,7 @@ describe( 'WelcomePanel', () => {
 
 		render( <WelcomePanel /> );
 		const cacheButton = screen.getByRole( 'button', {
-			name: 'Enable Page Caching',
+			name: 'Enable – Enable Page Caching',
 		} );
 
 		await act( async () => {
@@ -247,7 +249,7 @@ describe( 'WelcomePanel', () => {
 
 		render( <WelcomePanel /> );
 		const cacheButton = screen.getByRole( 'button', {
-			name: 'Enable Page Caching',
+			name: 'Enable – Enable Page Caching',
 		} );
 
 		await act( async () => {
@@ -340,7 +342,7 @@ describe( 'WelcomePanel', () => {
 		).toBeInTheDocument();
 		expect(
 			screen.getByRole( 'button', {
-				name: 'Verify WooCommerce Cart Bypass',
+				name: 'Run test – Verify WooCommerce Cart Bypass',
 			} )
 		).toBeInTheDocument();
 	} );
@@ -352,6 +354,25 @@ describe( 'WelcomePanel', () => {
 		expect(
 			getStepAriaLabel( { label: 'Enable Page Caching' }, false, false )
 		).toBe( 'Enable Page Caching' );
+	} );
+
+	it( 'getStepAriaLabel includes visible text when provided', () => {
+		expect(
+			getStepAriaLabel(
+				{ label: 'Verify WooCommerce Cart Bypass' },
+				false,
+				true,
+				'Run test'
+			)
+		).toBe( 'Run test – Verify WooCommerce Cart Bypass' );
+		expect(
+			getStepAriaLabel(
+				{ label: 'Enable Page Caching' },
+				true,
+				false,
+				'Enabling…'
+			)
+		).toBe( 'Enabling… – Enable Page Caching…' );
 	} );
 
 	it( 'scrollToWooSafeMode focuses the switch input', () => {
@@ -382,7 +403,7 @@ describe( 'WelcomePanel', () => {
 		render( <WelcomePanel /> );
 		fireEvent.click(
 			screen.getByRole( 'button', {
-				name: 'Verify WooCommerce Cart Bypass',
+				name: 'Run test – Verify WooCommerce Cart Bypass',
 			} )
 		);
 
@@ -413,7 +434,7 @@ describe( 'WelcomePanel', () => {
 		render( <WelcomePanel /> );
 		fireEvent.click(
 			screen.getByRole( 'button', {
-				name: 'Verify WooCommerce Cart Bypass',
+				name: 'Run test – Verify WooCommerce Cart Bypass',
 			} )
 		);
 
@@ -449,7 +470,7 @@ describe( 'WelcomePanel', () => {
 			render( <WelcomePanel onNavigate={ onNavigate } /> );
 			fireEvent.click(
 				screen.getByRole( 'button', {
-					name: 'Verify WooCommerce Cart Bypass',
+					name: 'Run test – Verify WooCommerce Cart Bypass',
 				} )
 			);
 
@@ -472,13 +493,57 @@ describe( 'WelcomePanel', () => {
 		}
 	} );
 
-	it( 'renders the anchor fallback when onNavigate is absent', async () => {
+	it( 'renders the fail CTA as a button even when onNavigate is absent', async () => {
+		jest.useFakeTimers();
+		try {
+			fetchWooCacheSelfTest.mockResolvedValueOnce( {
+				success: true,
+				data: {
+					woo_active: true,
+					runnable: true,
+					all_pass: false,
+					excluded_paths: [ 'cart' ],
+				},
+			} );
+
+			render( <WelcomePanel /> );
+			fireEvent.click(
+				screen.getByRole( 'button', {
+					name: 'Run test – Verify WooCommerce Cart Bypass',
+				} )
+			);
+
+			await waitFor( () =>
+				expect( fetchWooCacheSelfTest ).toHaveBeenCalled()
+			);
+			const failButton = await screen.findByRole( 'button', {
+				name: 'Enable safe mode in Dashboard → Page Cache',
+			} );
+			expect( failButton.tagName ).toBe( 'BUTTON' );
+			// No anchor fallback: jsdom has no #wppoWooSafeMode, so the
+			// button surfaces the guidance notice instead of hash-jumping.
+			fireEvent.click( failButton );
+			act( () => {
+				// Advance past the last 500ms scroll retry without
+				// reaching the 5s notice auto-dismiss timer.
+				jest.advanceTimersByTime( 600 );
+			} );
+			expect(
+				screen.getByText(
+					'Open Dashboard → Page Cache and turn WooCommerce safe mode back on.'
+				)
+			).toBeInTheDocument();
+		} finally {
+			jest.useRealTimers();
+		}
+	} );
+
+	it( 'treats a malformed payload with all_pass missing as inconclusive', async () => {
 		fetchWooCacheSelfTest.mockResolvedValueOnce( {
 			success: true,
 			data: {
 				woo_active: true,
 				runnable: true,
-				all_pass: false,
 				excluded_paths: [ 'cart' ],
 			},
 		} );
@@ -486,18 +551,25 @@ describe( 'WelcomePanel', () => {
 		render( <WelcomePanel /> );
 		fireEvent.click(
 			screen.getByRole( 'button', {
-				name: 'Verify WooCommerce Cart Bypass',
+				name: 'Run test – Verify WooCommerce Cart Bypass',
 			} )
 		);
 
 		await waitFor( () =>
 			expect( fetchWooCacheSelfTest ).toHaveBeenCalled()
 		);
+		// Inconclusive info notice — never a FAIL warning with no evidence.
 		expect(
-			await screen.findByRole( 'link', {
+			await screen.findByText(
+				'WooCommerce self-test result inconclusive — please re-run the test.'
+			)
+		).toBeInTheDocument();
+		// No fix CTA without explicit failure evidence.
+		expect(
+			screen.queryByRole( 'button', {
 				name: 'Enable safe mode in Dashboard → Page Cache',
 			} )
-		).toHaveAttribute( 'href', '#wppoWooSafeMode' );
+		).not.toBeInTheDocument();
 	} );
 
 	it( 'surfaces a retry hint on AbortError timeout', async () => {
@@ -509,7 +581,7 @@ describe( 'WelcomePanel', () => {
 		render( <WelcomePanel /> );
 		fireEvent.click(
 			screen.getByRole( 'button', {
-				name: 'Verify WooCommerce Cart Bypass',
+				name: 'Run test – Verify WooCommerce Cart Bypass',
 			} )
 		);
 
@@ -546,7 +618,7 @@ describe( 'WelcomePanel', () => {
 		const { unmount } = render( <WelcomePanel /> );
 		fireEvent.click(
 			screen.getByRole( 'button', {
-				name: 'Verify WooCommerce Cart Bypass',
+				name: 'Run test – Verify WooCommerce Cart Bypass',
 			} )
 		);
 		await waitFor( () =>

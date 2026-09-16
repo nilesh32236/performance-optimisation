@@ -62,9 +62,20 @@ jest.mock( '../common/FeatureCard', () => ( { children, footer } ) => (
 		{ footer }
 	</div>
 ) );
-jest.mock( '../common/LoadingSubmitButton', () => ( { onClick, label } ) => (
-	<button onClick={ onClick }>{ label }</button>
-) );
+jest.mock(
+	'../common/LoadingSubmitButton',
+	() =>
+		( { onClick, label, loadingLabel, isLoading, disabled, ...rest } ) => (
+			<button
+				onClick={ onClick }
+				disabled={ disabled || isLoading }
+				aria-busy={ isLoading }
+				{ ...rest }
+			>
+				{ isLoading ? loadingLabel || label : label }
+			</button>
+		)
+);
 jest.mock(
 	'../common/SwitchField',
 	() =>
@@ -653,9 +664,82 @@ describe( 'Dashboard', () => {
 		expect( screen.getAllByText( 'Bypassed (pass)' ) ).toHaveLength( 2 );
 		expect(
 			screen.getByText(
-				'WooCommerce self-test passed: cart, checkout and account pages bypass the cache; faceted URLs are skipped by preload and the guest cart survives.'
+				'WooCommerce self-test passed: cart, checkout and account pages bypass the cache; the guest cart survives.'
 			)
 		).toBeInTheDocument();
+	} );
+
+	it( 'treats a malformed payload with all_pass missing as inconclusive', async () => {
+		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+		await flushDashboardMount();
+
+		fetchWooCacheSelfTest.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				woo_active: true,
+				safe_mode: true,
+				runnable: true,
+				excluded_paths: [ 'cart' ],
+			},
+		} );
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Run Woo Cache Self-Test/i } )
+		);
+
+		await waitFor( () =>
+			expect( fetchWooCacheSelfTest ).toHaveBeenCalled()
+		);
+		// Inconclusive info notice — never a FAIL warning with no evidence.
+		expect(
+			screen.getByText(
+				'WooCommerce self-test result inconclusive — please re-run the test.'
+			)
+		).toBeInTheDocument();
+		// No fix CTA without explicit failure evidence.
+		expect(
+			screen.queryByRole( 'button', { name: 'Stage safe mode on' } )
+		).not.toBeInTheDocument();
+	} );
+
+	it( 'renders inconclusive copy for check rows with pass missing', async () => {
+		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+		await flushDashboardMount();
+
+		fetchWooCacheSelfTest.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				woo_active: true,
+				safe_mode: true,
+				runnable: true,
+				excluded_paths: [ 'cart' ],
+				all_pass: false,
+				force_exclude: true,
+				checks: [
+					{
+						url: 'http://example.com/cart/',
+						path: '/cart/',
+					},
+				],
+			},
+		} );
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Run Woo Cache Self-Test/i } )
+		);
+
+		await waitFor( () =>
+			expect( fetchWooCacheSelfTest ).toHaveBeenCalled()
+		);
+		expect( screen.getByText( '/cart/' ) ).toBeInTheDocument();
+		expect(
+			screen.getByText( 'Inconclusive (re-run)' )
+		).toBeInTheDocument();
+		expect(
+			screen.queryByText( 'Cacheable (fail)' )
+		).not.toBeInTheDocument();
 	} );
 
 	it( 'renders fragment probes under a distinct label', async () => {

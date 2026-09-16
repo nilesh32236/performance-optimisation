@@ -2,10 +2,15 @@ import { useState, useEffect, useRef } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 import {
 	apiCall,
-	fetchWooCacheSelfTest,
 	getErrorLogMessage,
 	getWppoSettings,
 } from '../lib/apiRequest';
+import {
+	WOO_SELF_TEST_TIMEOUT_MS,
+	getWooSelfTestNotice,
+	runWooSelfTest,
+	shouldShowWooFixCta,
+} from '../lib/wooSelfTest';
 import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
@@ -31,15 +36,35 @@ export const dismissWelcome = () => apiCall( 'dismiss_welcome' );
  * Returns the step label alone when idle (STEPS labels already contain the
  * verb, so prefixing another verb would read as "Enable Enable Page
  * Caching" to screen readers) and appends an ellipsis while in flight.
+ * When visibleLabel is provided the accessible name contains the visible
+ * button text first (WCAG 2.5.3 Label in Name), followed by the step title.
  *
  * @since NEXT
- * @param {Object}  step     Step entry from STEPS.
- * @param {boolean} isActive Whether the step action is in flight.
- * @param {boolean} isWoo    Whether this is the Woo self-test step.
+ * @param {Object}  step         Step entry from STEPS.
+ * @param {boolean} isActive     Whether the step action is in flight.
+ * @param {boolean} isWoo        Whether this is the Woo self-test step.
+ * @param {string}  visibleLabel Visible button text (e.g. 'Run test').
  * @return {string} Accessible button label.
  */
-export const getStepAriaLabel = ( step, isActive, isWoo ) => {
+export const getStepAriaLabel = ( step, isActive, isWoo, visibleLabel ) => {
 	const label = step?.label ?? '';
+	const visible = typeof visibleLabel === 'string' ? visibleLabel : '';
+	if ( visible ) {
+		if ( isActive ) {
+			return sprintf(
+				/* translators: 1: visible button text, 2: feature name */
+				__( '%1$s – %2$s…', 'performance-optimisation' ),
+				visible,
+				label
+			);
+		}
+		return sprintf(
+			/* translators: 1: visible button text, 2: feature name */
+			__( '%1$s – %2$s', 'performance-optimisation' ),
+			visible,
+			label
+		);
+	}
 	if ( isActive ) {
 		if ( isWoo ) {
 			return sprintf(
@@ -170,6 +195,8 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 	const dismissedRef = useRef( false );
 	const wooAbortRef = useRef( null );
 	const wooTimedOutRef = useRef( false );
+	const wooTimeoutRef = useRef( null );
+	const scrollTimersRef = useRef( [] );
 
 	// Resync when the global settings arrive late (e.g. localised data
 	// injected after first paint) or change after a save elsewhere.
@@ -182,12 +209,19 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 	}, [ showWelcomeKey ] );
 
 	// Abort any in-flight Woo self-test on unmount so a slow request can
-	// never call setWooSelfTest/notify after the panel is gone.
+	// never call setWooSelfTest/notify after the panel is gone. Also clear
+	// the shared timeout and any pending FAIL-scroll retries.
 	useEffect( () => {
 		return () => {
+			if ( wooTimeoutRef.current ) {
+				clearTimeout( wooTimeoutRef.current );
+				wooTimeoutRef.current = null;
+			}
 			if ( wooAbortRef.current ) {
 				wooAbortRef.current.abort();
 			}
+			scrollTimersRef.current.forEach( clearTimeout );
+			scrollTimersRef.current = [];
 		};
 	}, [] );
 
@@ -215,10 +249,19 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 		// Dashboard is already mounted in this path, so the anchor usually
 		// exists synchronously; retry for ~500ms so a tab switch (if any)
 		// that commits later still lands on the switch.
+		const clearScrollTimers = () => {
+			scrollTimersRef.current.forEach( clearTimeout );
+			scrollTimersRef.current = [];
+		};
 		const attempts = [ 0, 100, 250, 500 ];
+		scrollTimersRef.current.forEach( clearTimeout );
+		scrollTimersRef.current = [];
 		attempts.forEach( ( delay ) => {
-			setTimeout( () => {
+			const id = setTimeout( () => {
 				if ( scrollToWooSafeMode() ) {
+					// Cancel remaining retries once the switch is found —
+					// no redundant scrollIntoView/focus layout passes.
+					clearScrollTimers();
 					return;
 				}
 				if ( delay === 500 ) {
@@ -232,6 +275,7 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 					} );
 				}
 			}, delay );
+			scrollTimersRef.current.push( id );
 		} );
 	};
 
@@ -245,8 +289,13 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 	const handleWooSelfTest = async () => {
 		setActivatingStep( 'woo-verify' );
 		dismiss();
-		// Abort any previous in-flight test so a rapid re-run can never let
-		// stale first-run results win over the latest run.
+		// Abort any previous in-flight test and clear its timeout first so
+		// a rapid re-run can never let a stale timer misclassify the new
+		// run's abort as a 5s timeout, nor let stale results win.
+		if ( wooTimeoutRef.current ) {
+			clearTimeout( wooTimeoutRef.current );
+			wooTimeoutRef.current = null;
+		}
 		if ( wooAbortRef.current ) {
 			wooAbortRef.current.abort();
 		}
@@ -256,14 +305,14 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 				: null;
 		wooAbortRef.current = controller;
 		wooTimedOutRef.current = false;
-		const timeoutId = controller
-			? setTimeout( () => {
-					wooTimedOutRef.current = true;
-					controller.abort();
-			  }, 5000 )
-			: null;
+		if ( controller ) {
+			wooTimeoutRef.current = setTimeout( () => {
+				wooTimedOutRef.current = true;
+				controller.abort();
+			}, WOO_SELF_TEST_TIMEOUT_MS );
+		}
 		try {
-			const res = await fetchWooCacheSelfTest( controller?.signal );
+			const res = await runWooSelfTest( controller?.signal );
 			// Bail when this run is no longer current (a newer re-run
 			// replaced it) or its signal was aborted — stale results must
 			// never overwrite the latest run.
@@ -275,39 +324,8 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 			}
 			if ( res?.success && res?.data ) {
 				setWooSelfTest( res.data );
-				if ( ! res.data.runnable || ! res.data.woo_active ) {
-					notify( {
-						type: 'info',
-						message: res.data.woo_active
-							? __(
-									'The self-test could not run. Default exclusion paths are shown read-only; dynamic pages fail open to uncached.',
-									'performance-optimisation'
-							  )
-							: __(
-									'WooCommerce is not active — showing default exclusion paths read-only. Dynamic pages fail open to uncached.',
-									'performance-optimisation'
-							  ),
-						durationMs: 5000,
-					} );
-				} else if ( res.data.all_pass ) {
-					notify( {
-						type: 'success',
-						message: __(
-							'WooCommerce self-test passed: cart, checkout and account pages bypass the cache; the guest cart survives.',
-							'performance-optimisation'
-						),
-						durationMs: 5000,
-					} );
-				} else {
-					notify( {
-						type: 'warning',
-						message: __(
-							'WooCommerce self-test found a cacheable dynamic route. Re-enable safe mode in Dashboard → Page Cache.',
-							'performance-optimisation'
-						),
-						durationMs: 5000,
-					} );
-				}
+				const descriptor = getWooSelfTestNotice( res.data );
+				notify( { ...descriptor, durationMs: 5000 } );
 			} else {
 				notify( {
 					type: 'error',
@@ -354,13 +372,17 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 				} );
 			}
 		} finally {
-			if ( timeoutId ) {
-				clearTimeout( timeoutId );
+			if ( wooTimeoutRef.current ) {
+				clearTimeout( wooTimeoutRef.current );
+				wooTimeoutRef.current = null;
 			}
+			// Guard the spinner clear to the current run: a superseded
+			// first run must not clear the spinner while the second run
+			// is still in flight.
 			if ( wooAbortRef.current === controller ) {
 				wooAbortRef.current = null;
+				setActivatingStep( null );
 			}
-			setActivatingStep( null );
 		}
 	};
 
@@ -520,6 +542,23 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 			<div className="wppo-welcome-steps">
 				{ STEPS.map( ( step ) => {
 					const isWooStep = step.action === 'woo-self-test';
+					const isStepActive = activatingStep === step.key;
+					let stepVisibleLabel;
+					if ( isStepActive ) {
+						stepVisibleLabel = isWooStep
+							? __( 'Running…', 'performance-optimisation' )
+							: __( 'Enabling…', 'performance-optimisation' );
+					} else if ( isWooStep ) {
+						stepVisibleLabel = __(
+							'Run test',
+							'performance-optimisation'
+						);
+					} else {
+						stepVisibleLabel = __(
+							'Enable',
+							'performance-optimisation'
+						);
+					}
 					const wooVerified =
 						isWooStep && wooSelfTest?.all_pass === true;
 					const enabled = isWooStep ? wooVerified : step.isEnabled();
@@ -629,35 +668,24 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 									</p>
 								) }
 								{ isWooStep &&
-									wooSelfTest?.runnable &&
-									wooSelfTest?.all_pass === false && (
+									shouldShowWooFixCta( wooSelfTest ) && (
 										<p className="wppo-text-muted wppo-text-small">
 											{ __(
 												'Force-excluding dynamic routes plus cookie bypass.',
 												'performance-optimisation'
 											) }{ ' ' }
-											{ typeof onNavigate ===
-											'function' ? (
-												<button
-													type="button"
-													className="wppo-button wppo-button--secondary wppo-button--sm"
-													onClick={
-														handleWooFailNavigate
-													}
-												>
-													{ __(
-														'Enable safe mode in Dashboard → Page Cache',
-														'performance-optimisation'
-													) }
-												</button>
-											) : (
-												<a href="#wppoWooSafeMode">
-													{ __(
-														'Enable safe mode in Dashboard → Page Cache',
-														'performance-optimisation'
-													) }
-												</a>
-											) }
+											<button
+												type="button"
+												className="wppo-button wppo-button--secondary wppo-button--sm"
+												onClick={
+													handleWooFailNavigate
+												}
+											>
+												{ __(
+													'Enable safe mode in Dashboard → Page Cache',
+													'performance-optimisation'
+												) }
+											</button>
 										</p>
 									) }
 							</div>
@@ -678,8 +706,9 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 										}
 										aria-label={ getStepAriaLabel(
 											step,
-											activatingStep === step.key,
-											isWooStep
+											isStepActive,
+											isWooStep,
+											stepVisibleLabel
 										) }
 										onClick={ () =>
 											handleStepAction( step )
