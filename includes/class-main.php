@@ -4420,6 +4420,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$ids = $this->get_registered_module_ids( $modules );
 			}
 
+			// Hoist the reflection fallback read once (issue #1292
+			// follow-up): get_module_fetchpriority() would otherwise build a
+			// new ReflectionObject per module when get_registered() is
+			// unavailable. The third arg signals "already read" via
+			// func_num_args() so even a null (unreadable) store is reused.
+			$fallback_ready   = ! method_exists( $modules, 'get_registered' );
+			$registered_store = $fallback_ready ? $this->read_private_module_store( $modules, 'registered' ) : null;
 			foreach ( $ids as $id ) {
 				if ( in_array( (string) $id, $excluded, true ) ) {
 					continue;
@@ -4456,7 +4463,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// 'high' and a handle can suppress via falsy; '' skips.
 					//
 					// @since NEXT.
-					$existing = $this->get_module_fetchpriority( $modules, (string) $id );
+					$existing = $this->get_module_fetchpriority( $modules, (string) $id, $registered_store );
 					if ( is_string( $existing ) && '' !== trim( $existing ) && 'auto' !== strtolower( trim( $existing ) ) ) {
 						continue;
 					}
@@ -4482,11 +4489,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * @since 2.0.0
 		 *
-		 * @param object $modules Script modules instance from wp_script_modules().
-		 * @param string $id      Module id.
+		 * @param object $modules          Script modules instance from wp_script_modules().
+		 * @param string $id               Module id.
+		 * @param mixed  $registered_store Optional pre-read $registered store (hoisted by the
+		 *                                 caller to avoid per-module reflection; pass-through
+		 *                                 even when null so an unreadable store is not re-read).
 		 * @return mixed Fetchpriority value, or null when missing/unreadable.
 		 */
-		private function get_module_fetchpriority( $modules, string $id ) {
+		private function get_module_fetchpriority( $modules, string $id, $registered_store = null ) {
 			if ( method_exists( $modules, 'get_registered' ) ) {
 				$entry = $modules->get_registered( $id );
 				if ( is_array( $entry ) && array_key_exists( 'fetchpriority', $entry ) ) {
@@ -4497,7 +4507,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 				return null;
 			}
-			$registered = $this->read_private_module_store( $modules, 'registered' );
+			$registered = func_num_args() >= 3 ? $registered_store : $this->read_private_module_store( $modules, 'registered' );
 			if ( is_array( $registered ) && array_key_exists( $id, $registered ) ) {
 				$entry = $registered[ $id ];
 				if ( is_array( $entry ) && array_key_exists( 'fetchpriority', $entry ) ) {
@@ -4554,8 +4564,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 				$prop = $reflection->getProperty( $property );
 				return $prop->getValue( $modules );
-			} catch ( \Throwable $e ) {
-				unset( $e );
+			} catch ( \Throwable $unused_exception ) {
+				unset( $unused_exception );
 				return null;
 			}
 		}

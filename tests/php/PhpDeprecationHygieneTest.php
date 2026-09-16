@@ -529,16 +529,20 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 			$this->assertNotEmpty( $scan( "<?php\n\$ref->setAccessible( true );\n" ), 'Reflection::setAccessible() must be flagged (deprecated on PHP 8.5).' );
 			$this->assertNotEmpty( $scan( "<?php\n\$x = (boolean) \$y;\n" ), 'Non-canonical (boolean) cast must be flagged.' );
 			$this->assertNotEmpty( $scan( "<?php\n\$x = (integer) \$y;\n" ), 'Non-canonical (integer) cast must be flagged.' );
+			$this->assertNotEmpty( $scan( "<?php\n\$x = (double) \$y;\n" ), 'Non-canonical (double) cast must be flagged.' );
+			$this->assertNotEmpty( $scan( "<?php\n\$x = (binary) \$y;\n" ), 'Non-canonical (binary) cast must be flagged.' );
 			$this->assertNotEmpty( $scan( "<?php\nmysqli_execute( \$stmt );\n" ), 'mysqli_execute() alias must be flagged.' );
 			$this->assertNotEmpty( $scan( "<?php\nsocket_set_timeout( \$s, 1 );\n" ), 'socket_set_timeout() alias must be flagged.' );
 			$this->assertNotEmpty( $scan( "<?php\n\$h = \$http_response_header;\n" ), '$http_response_header must be flagged.' );
 			$this->assertNotEmpty( $scan( "<?php\necho DATE_RFC7231;\n" ), 'DATE_RFC7231 must be flagged.' );
 			$this->assertNotEmpty( $scan( "<?php\nclass WPPO_Sleep_Fixture {\npublic function __sleep() { return array(); }\n}\n" ), '__sleep() definition must be flagged.' );
+			$this->assertNotEmpty( $scan( "<?php\nclass WPPO_Wakeup_Fixture {\npublic function __wakeup() {}\n}\n" ), '__wakeup() definition must be flagged.' );
 
 			$this->assertSame( array(), $scan( "<?php\nfunction wppo_good_nullable( ?array \$x = null, mixed \$y = null ) {}\n" ), 'Explicit ?array and mixed defaults must pass.' );
 			$this->assertSame( array(), $scan( "<?php\n\$x = (bool) \$y;\n\$i = (int) \$z;\n\$f = (float) \$w;\n\$s = (string) \$v;\n" ), 'Canonical (bool)/(int)/(float)/(string) casts must pass.' );
 			$this->assertSame( array(), $scan( "<?php\nmysqli_stmt_execute( \$stmt );\nstream_set_timeout( \$s, 1 );\n" ), 'Non-deprecated mysqli/stream functions must pass.' );
 			$this->assertSame( array(), $scan( "<?php\nclass WPPO_Serialize_Fixture {\npublic function __serialize() { return array(); }\n}\n" ), '__serialize() definition must pass.' );
+			$this->assertSame( array(), $scan( "<?php\nclass WPPO_Unserialize_Fixture {\npublic function __unserialize( \$data ) {}\n}\n" ), '__unserialize() definition must pass.' );
 			$this->assertSame( array(), $scan( "<?php\nfunction wppo_good_attr( #[MyAttr] ?string \$x = null ) {}\n" ), 'Attributed explicitly-nullable params must pass.' );
 			$this->assertSame( array(), $scan( "<?php\n\$manager->ping();\n\$manager?->ping();\n" ), 'Method and nullsafe ping() calls must pass.' );
 			$this->assertSame( array(), $scan( "<?php\n\$obj->curl_close( \$ch );\n" ), 'Method teardown calls must pass.' );
@@ -546,7 +550,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 			$this->assertSame( array(), $scan( "<?php\n// E_STRICT in a comment with `backticks`\n\$doc = 'curl_close(null) in a string';\n" ), 'Comment/string mentions must pass.' );
 
 			$util_subdir = $dir . '/includes';
-			mkdir( $util_subdir ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
+			$this->assertTrue( mkdir( $util_subdir ) || is_dir( $util_subdir ), 'Scanner Util fixture dir must be creatable.' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
 			$util_file = $util_subdir . '/class-util.php';
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
 			file_put_contents( $util_file, "<?php\nclass WPPO_Util_Fixture {\npublic static function close_curl_handle( &\$ch ) {\nif ( function_exists( 'curl_close' ) ) {\ncurl_close( \$ch );\n}\n}\n}\n" );
@@ -559,7 +563,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 			$method->invokeArgs( $this, array( $util_file, $dir, &$stray_violations ) );
 			$this->assertNotEmpty( $stray_violations, 'Raw teardown outside the Util legacy helpers must be flagged.' );
 		} finally {
-			foreach ( glob( $dir . '/*.php' ) as $file ) {
+			foreach ( (array) glob( $dir . '/*.php' ) as $file ) {
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
 				unlink( $file );
 			}
@@ -844,7 +848,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 		$depth   = 0;
 		for ( $k = $j + 1; $k < $end; ++$k ) {
 			$token = $tokens[ $k ];
-			if ( '(' === $token || '[' === $token || '{' === $token ) {
+			if ( '(' === $token || '[' === $token || '{' === $token || ( is_array( $token ) && T_ATTRIBUTE === $token[0] ) ) {
 				++$depth;
 			} elseif ( ')' === $token || ']' === $token || '}' === $token ) {
 				--$depth;
@@ -862,7 +866,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 			$depth  = 0;
 			$equals = -1;
 			foreach ( $param as $idx => $token ) {
-				if ( '(' === $token || '[' === $token || '{' === $token || '#[' === $token ) {
+				if ( '(' === $token || '[' === $token || '{' === $token || ( is_array( $token ) && T_ATTRIBUTE === $token[0] ) ) {
 					++$depth;
 				} elseif ( ')' === $token || ']' === $token || '}' === $token ) {
 					--$depth;
@@ -878,6 +882,9 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 
 			$default = '';
 			foreach ( array_slice( $param, $equals + 1 ) as $token ) {
+				if ( is_array( $token ) && in_array( $token[0], array( T_COMMENT, T_DOC_COMMENT, T_WHITESPACE ), true ) ) {
+					continue;
+				}
 				$default .= is_array( $token ) ? $token[1] : $token;
 			}
 			if ( 'null' !== strtolower( trim( $default ) ) ) {

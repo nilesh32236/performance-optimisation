@@ -100,9 +100,9 @@ matrix running `parallel-lint` plus `composer test`, failing on any
   `includes/class-util.php` (fail-open below PHP 8.5); all production call
   sites use the `Util` helpers.
 - **Repeatable grep:** the sweep is now pinned by
-  `PhpDeprecationHygieneTest::test_plugin_sources_are_free_of_php84_85_banned_patterns()`,
+   `PhpDeprecationHygieneTest::test_plugin_sources_are_free_of_php84_85_banned_patterns()`,
   a token-based source scan (no regex false-positives from comments or
-  strings) covering all six patterns above, so PHP 8.5 stays clean on every
+  strings) covering the original six patterns above (extended to 13 in §6 below), so PHP 8.5 stays clean on every
   `composer test` run without CI workflow changes.
 - **Vendor bumps:** Action Scheduler 4.1.0, `voku/html-min` 5.0.0, and
   `matthiasmullie/minify` 1.3.75 are already at their latest releases — no
@@ -166,7 +166,10 @@ and root `*.php`; the machine-checkable subset is pinned by
   `PDO::*` driver constants/methods, `MHASH_*`, `intl.error_level`,
   LDAP wallet calls, `openssl_pkey_derive()` `key_length`,
   `report_memleaks` / `register_argc_argv` ini usage, constant
-  redeclaration.
+  redeclaration, `FILTER_DEFAULT`, `Pdo\Pgsql` transaction-state
+  constants, `ReflectionParameter::allowsNull()`,
+  `ReflectionClass::getConstant()` on missing constants, and
+  `ReflectionProperty::getDefaultValue()` without defaults.
 - **OPcache/JIT guidance:** unchanged — see §3 (JIT) and §4 (OPcache)
   above. No plugin-level tuning was added; the guidance stays a docs-only
   page so hosts can set `php.ini` without the plugin touching server
