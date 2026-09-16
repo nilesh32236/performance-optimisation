@@ -377,6 +377,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'speculationEagerness'     => 'conservative',
 					'speculationRumGating'     => true,
 					'speculationTopUrlsLimit'  => 2,
+					'speculationPrerenderList' => false,
 					'speculationExcludeUrls'   => '',
 					'speculationDocumentRules' => true,
 					'preloadSitemap'           => false,

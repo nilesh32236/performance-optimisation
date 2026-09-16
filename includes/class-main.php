@@ -480,6 +480,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$this->options['preload_settings']['speculationTopUrlsLimit'] = 2;
 			}
 			// Existing installs whose stored settings predate the
+			// high-value prerender list toggle (issue #1237) inherit the
+			// off default in-memory here (no database write on front-end
+			// requests). Multisite-safe: per-site wppo_settings only.
+			if ( ! isset( $this->options['preload_settings']['speculationPrerenderList'] ) ) {
+				$this->options['preload_settings']['speculationPrerenderList'] = false;
+			}
+			// Existing installs whose stored settings predate the
 			// speculation-rules eagerness upgrade (issue #1215) inherit the
 			// conservative defaults in-memory here (prefetch + conservative,
 			// prerender stays opt-in; no database write on front-end
@@ -870,6 +877,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'admin_init', array( $this, 'maybe_migrate_ccss_safelist' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_css_queue_defaults' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_speculation_top_urls' ) );
+			add_action( 'admin_init', array( $this, 'maybe_migrate_speculation_prerender_list' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_rum_sample_rate' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_safe_mode' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_sandbox_preview' ) );
@@ -1729,6 +1737,52 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			Log::add( __( 'Added default RUM-weighted top-URL prefetch limit (2 URLs, prerender stays guarded).', 'performance-optimisation' ) );
+		}
+
+		/**
+		 * One-time backfill for the high-value prerender list toggle (issue #1237).
+		 *
+		 * Runs on `admin_init` (not the constructor) so a cacheable front-end
+		 * request never triggers a settings write. Only installs whose stored
+		 * settings predate the `speculationPrerenderList` key (key absent) are
+		 * backfilled with the off default; any stored explicit value is
+		 * preserved verbatim, and fresh installs with no stored option are
+		 * skipped because the constructor defaults already match. The check is
+		 * idempotent (key presence is the marker), so no extra option row is
+		 * needed. In-memory options are synced too so the current request
+		 * observes the backfilled value. Uses per-site `get_option()` so
+		 * multisite sites migrate independently with no cross-site leakage.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public function maybe_migrate_speculation_prerender_list(): void {
+			// allowlist(settings-read-guard): deliberate direct read — must distinguish
+			// "no stored row" (false) from "stored array", which Util::get_settings()
+			// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
+			$stored = get_option( 'wppo_settings' );
+			if ( ! is_array( $stored ) ) {
+				return;
+			}
+
+			$preload = isset( $stored['preload_settings'] ) && is_array( $stored['preload_settings'] ) ? $stored['preload_settings'] : array();
+
+			if ( array_key_exists( 'speculationPrerenderList', $preload ) ) {
+				return;
+			}
+
+			$preload['speculationPrerenderList'] = false;
+			$stored['preload_settings']          = $preload;
+			update_option( 'wppo_settings', $stored );
+
+			if ( ! isset( $this->options['preload_settings'] ) || ! is_array( $this->options['preload_settings'] ) ) {
+				$this->options['preload_settings'] = array();
+			}
+			if ( ! array_key_exists( 'speculationPrerenderList', $this->options['preload_settings'] ) ) {
+				$this->options['preload_settings']['speculationPrerenderList'] = false;
+			}
+
+			Log::add( __( 'Added default high-value prerender list toggle (off, current prefetch behavior kept).', 'performance-optimisation' ) );
 		}
 
 		/**
@@ -7411,6 +7465,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			);
 
 			add_filter( 'wp_speculation_rules', array( $this, 'filter_speculation_list_rules' ), 10 );
+
+			// Guarded high-value prerender list (issue #1237): merges into
+			// the single core `speculationrules` block on WP 6.8+ via the
+			// `wp_load_speculation_rules` action (WP_Speculation_Rules
+			// object path in wppo_register_speculation_rules()). Guards and
+			// fail-open behavior live in the helper; registering here keeps
+			// the single 6.8-guarded registration point above.
+			add_action( 'wp_load_speculation_rules', array( $this, 'wppo_register_speculation_rules' ) );
 		}
 
 		/**
@@ -8508,6 +8570,243 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * High-value prerender list URLs (issue #1237).
+		 *
+		 * Builds the high-value URL set (home plus capped RUM top URLs via
+		 * {@see get_speculation_list_urls()}, same-site validated with cart,
+		 * checkout, account, and query-string URLs excluded) and trims it to
+		 * the `speculationTopUrlsLimit` fill cap so the rules JSON stays near
+		 * ~0.5 KB. Returns an empty array unless the opt-in
+		 * `preload_settings.speculationPrerenderList` toggle is enabled
+		 * alongside `enableSpeculationRules`.
+		 *
+		 * Guards: same-origin enforcement via
+		 * {@see is_speculation_list_url_valid()}, commerce and auth exclusion
+		 * via {@see is_speculation_commerce_or_auth()}, and logged-in
+		 * exclusion via {@see is_speculation_suppressed_for_visitor()}.
+		 * Fail-open: any empty model, missing toggle, excluded context, or
+		 * failure returns an empty array (conservative document-rule-only
+		 * behavior), never fatal. Multisite-safe: per-site settings and
+		 * model, no cross-site leakage.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string[]|null $candidates     Optional pre-validated candidates (defaults to get_speculation_list_urls()).
+		 * @param array         $existing_rules Existing speculation rules used for list-URL dedupe.
+		 * @return string[] Validated prerender URLs (possibly empty).
+		 */
+		private function get_prerender_list_urls( ?array $candidates = null, array $existing_rules = array() ): array {
+			try {
+				if ( empty( $this->options['preload_settings']['enableSpeculationRules'] ) ) {
+					return array();
+				}
+				if ( empty( $this->options['preload_settings']['speculationPrerenderList'] ) ) {
+					return array();
+				}
+				if ( $this->is_speculation_suppressed_for_visitor() ) {
+					return array();
+				}
+				if ( $this->is_speculation_commerce_or_auth() ) {
+					return array();
+				}
+				if ( null === $candidates ) {
+					$candidates = $this->get_speculation_list_urls();
+				}
+				if ( empty( $candidates ) ) {
+					return array();
+				}
+				$limit = $this->get_speculation_top_urls_limit();
+				$urls  = array();
+				foreach ( $candidates as $candidate ) {
+					if ( ! is_string( $candidate ) || '' === trim( $candidate ) ) {
+						continue;
+					}
+					$clean = function_exists( 'esc_url_raw' ) ? esc_url_raw( trim( $candidate ) ) : trim( $candidate );
+					if ( '' === $clean ) {
+						continue;
+					}
+					if ( in_array( $clean, $urls, true ) ) {
+						continue;
+					}
+					if ( ! $this->is_speculation_list_url_valid( $clean ) ) {
+						continue;
+					}
+					$urls[] = $clean;
+					if ( count( $urls ) >= $limit ) {
+						break;
+					}
+				}
+				if ( empty( $urls ) ) {
+					return array();
+				}
+				return array_values( $this->dedupe_speculation_urls_against_rules( $urls, $existing_rules ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
+		 * Register the guarded high-value prerender list rule (issue #1237).
+		 *
+		 * Wires the high-value URL selection ({@see get_prerender_list_urls()},
+		 * home plus capped RUM top URLs) to a dedicated prerender list rule
+		 * that only fires for safe same-origin candidates: commerce, auth,
+		 * and logged-in contexts stay on conservative prefetch or nothing.
+		 *
+		 * Dual-path merge into the single core `speculationrules` block on
+		 * WP 6.8+: when `$rules` is a `WP_Speculation_Rules` object (the
+		 * `wp_load_speculation_rules` action path) the rule is added via
+		 * `add_rule( 'prerender', 'wppo-high-value-prerender', ... )` with a
+		 * `has_rule()` guard so no duplicate is emitted; otherwise (legacy
+		 * array path, WP <6.8 or unit-test fixtures) the rule is appended to
+		 * the array with dedupe against pre-existing list rules. The WP 6.8+
+		 * object path is additionally guarded by `function_exists` on
+		 * `wp_get_speculation_rules_configuration` plus `version_compare`,
+		 * so pre-6.8 installs fall back to the legacy plugin-owned output.
+		 *
+		 * Backward compatible with WP 6.2+ and PHP 8.2+. Fail-open: toggle
+		 * off, empty model, commerce context, logged-in visitor, or any
+		 * failure returns the input unchanged (current conservative
+		 * document-rule-only behavior), never fatal. Multisite-safe:
+		 * per-site settings and model, no cross-site leakage.
+		 *
+		 * @since NEXT
+		 *
+		 * @param mixed         $rules          Speculation rules (WP_Speculation_Rules object or legacy rules array).
+		 * @param string[]|null $candidate_urls Optional candidate URLs (defaults to the high-value list selection).
+		 * @return mixed Updated rules, or the input unchanged.
+		 */
+		public function wppo_register_speculation_rules( $rules, ?array $candidate_urls = null ) {
+			try {
+				if ( is_object( $rules ) && method_exists( $rules, 'add_rule' ) ) {
+					if ( ! function_exists( 'wp_get_speculation_rules_configuration' ) && ! function_exists( 'wp_get_speculation_rules' ) ) {
+						return $rules;
+					}
+					try {
+						if ( isset( $GLOBALS['wp_version'] ) ) {
+							$wp_version = (string) $GLOBALS['wp_version'];
+						} elseif ( function_exists( 'get_bloginfo' ) ) {
+							$wp_version = (string) get_bloginfo( 'version' );
+						} else {
+							$wp_version = '6.8';
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$wp_version = '6.8';
+					}
+					if ( version_compare( $wp_version, '6.8', '<' ) ) {
+						return $rules;
+					}
+					if ( method_exists( $rules, 'has_rule' ) && $rules->has_rule( 'prerender', 'wppo-high-value-prerender' ) ) {
+						return $rules;
+					}
+					$urls = $this->get_prerender_list_urls( $candidate_urls, array() );
+					if ( empty( $urls ) ) {
+						return $rules;
+					}
+					if ( function_exists( 'apply_filters' ) ) {
+						/**
+						 * Filters the high-value prerender list URLs before the rule is registered.
+						 *
+						 * @since NEXT
+						 * @param string[] $urls Validated prerender URLs (home + capped RUM top URLs).
+						 */
+						$filtered = apply_filters( 'wppo_speculation_prerender_list_urls', $urls );
+						if ( is_array( $filtered ) ) {
+							$urls = array_values( array_filter( $filtered, 'is_string' ) );
+						}
+					}
+					$urls = array_values(
+						array_filter(
+							$urls,
+							array( $this, 'is_speculation_list_url_valid' )
+						)
+					);
+					if ( empty( $urls ) ) {
+						return $rules;
+					}
+					$rules->add_rule(
+						'prerender',
+						'wppo-high-value-prerender',
+						array(
+							'source'    => 'list',
+							'urls'      => array_values( $urls ),
+							'eagerness' => 'moderate',
+						)
+					);
+					return $rules;
+				}
+
+				if ( ! is_array( $rules ) ) {
+					return $rules;
+				}
+
+				$urls = $this->get_prerender_list_urls( $candidate_urls, $rules );
+				if ( empty( $urls ) ) {
+					return $rules;
+				}
+
+				if ( function_exists( 'apply_filters' ) ) {
+					/**
+					 * Filters the high-value prerender list URLs before the rule is appended.
+					 *
+					 * @since NEXT
+					 * @param string[] $urls Validated prerender URLs (home + capped RUM top URLs).
+					 */
+					$filtered = apply_filters( 'wppo_speculation_prerender_list_urls', $urls );
+					if ( is_array( $filtered ) ) {
+						$urls = array_values( array_filter( $filtered, 'is_string' ) );
+					}
+				}
+				$urls = array_values(
+					array_filter(
+						$urls,
+						array( $this, 'is_speculation_list_url_valid' )
+					)
+				);
+				$urls = $this->dedupe_speculation_urls_against_rules( $urls, $rules );
+				if ( empty( $urls ) ) {
+					return $rules;
+				}
+
+				$rule = array(
+					'source'    => 'list',
+					'urls'      => array_values( $urls ),
+					'eagerness' => 'moderate',
+				);
+				if ( function_exists( 'apply_filters' ) ) {
+					/**
+					 * Filters the high-value prerender list rule before it is appended.
+					 *
+					 * @since NEXT
+					 * @param array $rule The prerender list rule.
+					 */
+					$filtered_rule = apply_filters( 'wppo_speculation_prerender_list_rule', $rule );
+					if ( is_array( $filtered_rule ) ) {
+						$rule = $filtered_rule;
+					}
+				}
+				$rules[] = $rule;
+
+				if ( function_exists( 'apply_filters' ) ) {
+					/**
+					 * Filters the speculation rules after the high-value prerender list rule is appended.
+					 *
+					 * @since NEXT
+					 * @param array    $rules Updated rules.
+					 * @param string[] $urls  Prerender list URLs that were appended.
+					 */
+					return apply_filters( 'wppo_speculation_prerender_list_rules', $rules, $urls );
+				}
+				return $rules;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $rules;
+			}
+		}
+
+		/**
 		 * Append the high-value list rule to the `wp_speculation_rules` array.
 		 *
 		 * Runs on WP 6.8+ only (registered inside the `wp_get_speculation_rules`
@@ -8520,11 +8819,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * prerender list rule for the home link on singular views
 		 * ({@see get_singular_home_link_rule()}) and a first-post selector
 		 * document rule on archive views
-		 * ({@see get_archive_first_post_rule()}). URLs are deduped across
+		 * ({@see get_archive_first_post_rule()}). When the opt-in
+		 * `speculationPrerenderList` toggle is enabled, the safest
+		 * high-value URLs are carved out of the generic prefetch list and
+		 * emitted as a dedicated guarded prerender list rule via
+		 * {@see wppo_register_speculation_rules()}. URLs are deduped across
 		 * all emitted entries (and against pre-existing list rules) so no
 		 * URL is speculated twice.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Carve out the opt-in guarded prerender list via wppo_register_speculation_rules().
 		 *
 		 * @param mixed $rules Speculation rules array from core.
 		 * @return mixed Updated rules, or the input unchanged.
@@ -8619,6 +8923,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// earlier contributor) so this method never re-adds them.
 			$urls = $this->dedupe_speculation_urls_against_rules( $urls, $rules );
 
+			// Prerender where provably safe (issue #1237): when the opt-in
+			// prerender list is enabled, carve its URLs out of the generic
+			// prefetch list so the single block carries no duplicates; the
+			// dedicated prerender rule is appended below via
+			// wppo_register_speculation_rules(). Guards (toggle off,
+			// logged-in, commerce/auth) yield an empty set, leaving the
+			// generic list untouched (current behavior).
+			$prerender_urls = $this->get_prerender_list_urls( $urls, $rules );
+			if ( ! empty( $prerender_urls ) ) {
+				$urls = array_values( array_diff( $urls, $prerender_urls ) );
+			}
+
 			$preload_settings = $this->options['preload_settings'] ?? array();
 			$eagerness        = $preload_settings['speculationEagerness'] ?? 'conservative';
 			if ( class_exists( 'WP_Speculation_Rules' ) && method_exists( 'WP_Speculation_Rules', 'is_valid_eagerness' ) ) {
@@ -8676,7 +8992,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			 * @param array    $rules Updated rules.
 			 * @param string[] $urls  List URLs that were appended.
 			 */
-			return apply_filters( 'wppo_speculation_list_rules', $rules, $urls );
+			$rules = apply_filters( 'wppo_speculation_list_rules', $rules, $urls );
+
+			// Append the guarded prerender list rule (issue #1237, opt-in).
+			// The helper re-validates, dedupes against the merged rules
+			// (generic list included), and returns the input unchanged when
+			// guards fail, so the single block stays duplicate-free.
+			if ( ! empty( $prerender_urls ) ) {
+				$rules = $this->wppo_register_speculation_rules( $rules, $prerender_urls );
+			}
+
+			return $rules;
 		}
 
 		/**
