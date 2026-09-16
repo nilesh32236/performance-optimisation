@@ -857,6 +857,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * @return bool|\WP_Error True if connected, WP_Error on failure.
 		 */
 		public function ping( $config = array() ) {
+			// Defense-in-depth: ping() accepts caller-supplied host/port/nodes
+			// (SSRF/port-scan primitive if ever wired without caps), so it
+			// self-enforces the same gate as enable()/disable().
+			if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) && ! ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() ) && ! ( defined( 'WP_CLI' ) && WP_CLI ) ) {
+				return new \WP_Error( 'forbidden', __( 'You are not allowed to manage the object cache.', 'performance-optimisation' ) );
+			}
 			if ( ! class_exists( 'Redis' ) ) {
 				return new \WP_Error( 'missing_extension', __( 'The PhpRedis extension is not installed.', 'performance-optimisation' ) );
 			}
@@ -1071,38 +1077,60 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * The config file lives under the web-reachable wp-content tree and
 		 * only carries an ABSPATH guard, so a server that stops handing .php
 		 * to PHP would serve it as plain text and disclose the Redis
-		 * topology. Adds a `<Files>` deny block to wp-content/.htaccess.
+		 * topology. Adds a `<Files>` deny block to wp-content/.htaccess and
+		 * creates a minimal wp-content/web.config deny (only when absent, so
+		 * an existing site config is never clobbered).
 		 *
 		 * Best-effort only; failures never block enable(). Apache and
-		 * OpenLiteSpeed both read this file; nginx and IIS ignore it, and
-		 * those deployments must deny the file at the server level (this
-		 * method does not write web.config).
+		 * OpenLiteSpeed both read .htaccess; nginx ignores both files, so
+		 * nginx deployments must deny the file at the server level with:
+		 * `location = /wp-content/wppo-redis-config.php { deny all; }`.
 		 *
 		 * @since NEXT
 		 * @return void
 		 */
 		private static function protect_config_file(): void {
 			try {
-				if ( ! function_exists( 'insert_with_markers' ) ) {
-					return;
+				if ( function_exists( 'insert_with_markers' ) ) {
+					$htaccess = wp_normalize_path( (string) WP_CONTENT_DIR ) . '/.htaccess';
+					// Both authz generations are emitted behind IfModule guards:
+					// a bare `Require all denied` is Apache 2.4-only syntax and a
+					// server without mod_authz_core answers 500 for the whole
+					// wp-content tree rather than ignoring the directive.
+					$rule = array(
+						'<Files "wppo-redis-config.php">',
+						'<IfModule mod_authz_core.c>',
+						'Require all denied',
+						'</IfModule>',
+						'<IfModule !mod_authz_core.c>',
+						'Order allow,deny',
+						'Deny from all',
+						'</IfModule>',
+						'</Files>',
+					);
+					insert_with_markers( $htaccess, self::CONFIG_HTACCESS_MARKER, $rule );
 				}
-				$htaccess = wp_normalize_path( (string) WP_CONTENT_DIR ) . '/.htaccess';
-				// Both authz generations are emitted behind IfModule guards:
-				// a bare `Require all denied` is Apache 2.4-only syntax and a
-				// server without mod_authz_core answers 500 for the whole
-				// wp-content tree rather than ignoring the directive.
-				$rule = array(
-					'<Files "wppo-redis-config.php">',
-					'<IfModule mod_authz_core.c>',
-					'Require all denied',
-					'</IfModule>',
-					'<IfModule !mod_authz_core.c>',
-					'Order allow,deny',
-					'Deny from all',
-					'</IfModule>',
-					'</Files>',
-				);
-				insert_with_markers( $htaccess, self::CONFIG_HTACCESS_MARKER, $rule );
+				// IIS: a web.config deny for the config file (created only when
+				// absent so an existing site config is never clobbered). Nginx
+				// has no directory-level config — see the server-level rule
+				// documented on this method.
+				$web_config = wp_normalize_path( (string) WP_CONTENT_DIR ) . '/web.config';
+				$fs         = Util::init_filesystem();
+				if ( $fs && ! $fs->exists( $web_config ) ) {
+					$xml  = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
+					$xml .= "<configuration>\n";
+					$xml .= "  <location path=\"wppo-redis-config.php\">\n";
+					$xml .= "    <system.webServer>\n";
+					$xml .= "      <security>\n";
+					$xml .= "        <authorization>\n";
+					$xml .= "          <deny users=\"*\" />\n";
+					$xml .= "        </authorization>\n";
+					$xml .= "      </security>\n";
+					$xml .= "    </system.webServer>\n";
+					$xml .= "  </location>\n";
+					$xml .= "</configuration>\n";
+					$fs->put_contents( $web_config, $xml, FS_CHMOD_FILE );
+				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
@@ -1309,6 +1337,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * @return bool True when flushed, false otherwise.
 		 */
 		public function flush() {
+			// Defense-in-depth: network/file-cache action, so self-enforce
+			// the same gate as enable()/disable() instead of relying solely
+			// on caller gating (REST/CLI already require manage_options).
+			if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) && ! ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() ) && ! ( defined( 'WP_CLI' ) && WP_CLI ) ) {
+				$this->last_flush_error = new \WP_Error( 'forbidden', __( 'You are not allowed to manage the object cache.', 'performance-optimisation' ) );
+				return false;
+			}
 			if ( ! function_exists( 'wp_cache_flush' ) ) {
 				$this->last_flush_error = new \WP_Error( 'flush_unavailable', __( 'Object cache flush is unavailable.', 'performance-optimisation' ) );
 				return false;
@@ -1369,9 +1404,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * cost of bypassing the foreign-drop-in refusal below; the decision
 		 * is logged via log_redis_failure() so it stays diagnosable.
 		 *
-		 * Capability: callers MUST gate on manage_options (REST and Abilities
-		 * do); this method performs no capability check so WP-CLI and cron
-		 * stays usable, mirroring flush().
+		 * Capability: this method self-enforces the manage_options gate
+		 * (with wp_doing_cron()/WP_CLI exemptions so CLI and cron stay
+		 * usable), mirroring enable()/disable()/flush().
 		 *
 		 * On failure sets last_flush_error (see get_last_flush_error()).
 		 *
@@ -1379,6 +1414,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * @return bool True when the scoped flush succeeded, false otherwise.
 		 */
 		public function flush_scoped(): bool {
+			if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) && ! ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() ) && ! ( defined( 'WP_CLI' ) && WP_CLI ) ) {
+				$this->last_flush_error = new \WP_Error( 'forbidden', __( 'You are not allowed to manage the object cache.', 'performance-optimisation' ) );
+				return false;
+			}
 			$multisite_unknown = false;
 			$is_multisite      = false;
 			if ( function_exists( 'is_multisite' ) ) {

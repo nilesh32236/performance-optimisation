@@ -1458,12 +1458,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			if ( ! $permalink ) {
 				return;
 			}
-			$url_path   = trim( wp_parse_url( $permalink, PHP_URL_PATH ), '/' );
+			$raw_path   = (string) wp_parse_url( $permalink, PHP_URL_PATH );
 			$site_url   = site_url();
 			$parsed_url = wp_parse_url( $site_url );
-			$domain     = sanitize_text_field( $parsed_url['host'] . ( isset( $parsed_url['port'] ) ? ':' . $parsed_url['port'] : '' ) );
+			$raw_host   = isset( $parsed_url['host'] ) ? (string) $parsed_url['host'] : '';
+			$domain     = Util::normalize_cache_host( $raw_host . ( isset( $parsed_url['port'] ) ? ':' . $parsed_url['port'] : '' ) );
+			$url_path   = Util::sanitize_cache_url_path( $raw_path );
+			$cache_root = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo' );
+			$candidate  = wp_normalize_path( WP_CONTENT_DIR . "/cache/wppo/{$domain}/{$url_path}" );
+			if ( '' === $domain || ! Util::is_cache_path_contained( $cache_root, $domain, trailingslashit( $candidate ) ) ) {
+				return;
+			}
 
-			$cache_dir = wp_normalize_path( WP_CONTENT_DIR . "/cache/wppo/{$domain}/{$url_path}" );
+			$cache_dir = $candidate;
 
 			if ( Util::init_filesystem() ) {
 				global $wp_filesystem;

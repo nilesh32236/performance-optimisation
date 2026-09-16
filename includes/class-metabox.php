@@ -88,7 +88,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		public function render_metabox( $post ) {
 			// Retrieve current meta value.
 			$preload_urls = get_post_meta( $post->ID, '_wppo_preload_image_url', true );
-			$lcp_url      = get_post_meta( $post->ID, '_wppo_lcp_preload_url', true );
+			if ( ! is_string( $preload_urls ) ) {
+				$preload_urls = '';
+			}
+			$lcp_url = get_post_meta( $post->ID, '_wppo_lcp_preload_url', true );
 			if ( ! is_string( $lcp_url ) ) {
 				$lcp_url = '';
 			}
@@ -603,7 +606,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 			if ( empty( $raw_data ) ) {
 				return array();
 			}
-			$submitted = array_map( 'sanitize_text_field', $raw_data );
+			// Nested-array input (e.g. name[][x]=1) would fatal inside
+			// sanitize_text_field() on PHP 8 — keep scalars only.
+			$scalars   = array_filter(
+				$raw_data,
+				static function ( $v ) {
+					return is_string( $v ) || is_int( $v );
+				}
+			);
+			$submitted = array_map(
+				static function ( $v ) {
+					return sanitize_text_field( (string) $v );
+				},
+				$scalars
+			);
 			return array_intersect( $submitted, $valid_handles );
 		}
 
@@ -623,8 +639,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 
 			$saved_settings = array();
 			foreach ( $raw_data as $handle => $value ) {
-				$clean_handle = sanitize_text_field( $handle );
-				$clean_value  = sanitize_text_field( $value );
+				if ( ! is_scalar( $handle ) || ! is_scalar( $value ) ) {
+					continue;
+				}
+				$clean_handle = sanitize_text_field( (string) $handle );
+				$clean_value  = sanitize_text_field( (string) $value );
 
 				if ( '' === $clean_value ) {
 					continue;

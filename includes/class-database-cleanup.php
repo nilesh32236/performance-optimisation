@@ -2476,6 +2476,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				return false;
 			}
 
+			// Allowlist against TABLE_MAP values: any $wpdb property table
+			// could otherwise be locked via this public static method.
+			$allowed = array();
+			foreach ( self::TABLE_MAP as $tables ) {
+				foreach ( (array) $tables as $candidate ) {
+					$allowed[] = $candidate;
+				}
+			}
+			if ( ! in_array( $table, array_unique( $allowed ), true ) ) {
+				return false;
+			}
+
 			if ( ! isset( $wpdb->{$table} ) || ! is_string( $wpdb->{$table} ) ) {
 				return false;
 			}

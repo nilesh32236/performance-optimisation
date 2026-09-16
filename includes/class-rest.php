@@ -539,7 +539,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 */
 		public function get_lcp_preload_candidate( \WP_REST_Request $request ): \WP_REST_Response {
 			$params  = $request->get_params();
-			$path    = isset( $params['path'] ) && is_string( $params['path'] ) ? substr( trim( $params['path'] ), 0, 512 ) : null;
+			$path    = isset( $params['path'] ) && is_string( $params['path'] ) ? substr( trim( sanitize_text_field( wp_unslash( $params['path'] ) ) ), 0, 512 ) : null;
 			$post_id = isset( $params['post_id'] ) ? absint( $params['post_id'] ) : 0;
 			if ( is_string( $path ) && '' !== $path && '/' !== $path[0] ) {
 				$path = '/' . $path;
@@ -1069,12 +1069,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			// Preserve the server_timing_enabled flag when the request omits it (no UI toggle exists yet).
 			if ( 'performance_audit' === $tab && ! isset( $params['settings']['server_timing_enabled'] ) && isset( $options['performance_audit']['server_timing_enabled'] ) ) {
-				$sanitized_settings['server_timing_enabled'] = $options['performance_audit']['server_timing_enabled'];
+				$sanitized_settings['server_timing_enabled'] = (bool) $options['performance_audit']['server_timing_enabled'];
 			}
 
 			// Preserve the auto_rescan frequency when the request omits it.
 			if ( 'performance_audit' === $tab && ! isset( $params['settings']['auto_rescan'] ) && isset( $options['performance_audit']['auto_rescan'] ) ) {
-				$sanitized_settings['auto_rescan'] = $options['performance_audit']['auto_rescan'];
+				$stored_rescan                     = $options['performance_audit']['auto_rescan'];
+				$stored_rescan                     = is_string( $stored_rescan ) ? sanitize_text_field( $stored_rescan ) : '';
+				$sanitized_settings['auto_rescan'] = in_array( $stored_rescan, array( '', 'daily', 'weekly' ), true ) ? $stored_rescan : '';
 			}
 
 			// Preserve dismissed AI suggestions when the request omits them
@@ -2275,7 +2277,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			if ( ! in_array( $notice, $allowed, true ) ) {
 				$notice = 'error';
 			}
-			$message = $error->get_error_message();
+			// Scrub backend topology/absolute paths like the flush path —
+			// raw phpredis messages commonly embed host:port and file paths.
+			$sanitized = $this->sanitize_flush_error( $error );
+			$message   = $sanitized->get_error_message();
 			if ( '' === $message ) {
 				$message = __( 'Redis connection failed.', 'performance-optimisation' );
 			}
