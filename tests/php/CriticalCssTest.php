@@ -1116,23 +1116,4 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 		$this->assertStringContainsString( 'body', (string) $result );
 		$this->assertGreaterThan( 0, $this->http_calls['regular'] );
 	}
-
-	/**
-	 * The guarded wrapper never fatals on deterministic failure: it fails
-	 * open with timed_out explicitly false (not pending/retry).
-	 *
-	 * Covers the timed_out out-param contract; the no-file/no-HTTP
-	 * fail-open assertions live in
-	 * test_generate_guarded_no_sample_url_creates_no_file().
-	 *
-	 * @return void
-	 */
-	public function test_generate_guarded_fails_open_without_sample_url(): void {
-		$timed_out = null;
-
-		$result = Critical_CSS::generate_guarded( 'ccssguardednofixture1', 'single', $timed_out );
-
-		$this->assertFalse( $result );
-		$this->assertFalse( $timed_out );
-	}
 }

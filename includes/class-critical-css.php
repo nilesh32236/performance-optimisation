@@ -449,14 +449,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * starve the queue. Oversized values are clamped to MAX_CCSS_QUEUE_CAP.
 		 *
 	 * Note: the historic singular-`css` name predates the double-`s`
-	 * `get_ccss_gen_timeout()` helper; both are kept as-is.
+	 * `get_ccss_queue_cap()` alias; both are kept as-is.
 	 *
 	 * @return int Per-run cap, or PHP_INT_MAX when uncapped.
 	 * @since NEXT
 	 * @see Critical_CSS::get_ccss_gen_timeout()
 	 * @see Critical_CSS::get_ccss_queue_cap()
 	 */
-	public static function get_css_queue_cap(): int {
+		public static function get_css_queue_cap(): int {
 			try {
 				$options = Util::get_settings();
 				if ( ! isset( $options['file_optimisation']['ccssQueueCap'] ) ) {
@@ -470,26 +470,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				if ( $cap <= 0 ) {
 					return PHP_INT_MAX;
 				}
-			return min( $cap, self::MAX_CCSS_QUEUE_CAP );
-		} catch ( \Throwable $e ) {
-			unset( $e );
-			return PHP_INT_MAX;
+				return min( $cap, self::MAX_CCSS_QUEUE_CAP );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return PHP_INT_MAX;
+			}
 		}
-	}
 
-	/**
-	 * Canonical double-`s` spelling of the per-run CCSS queue cap (issue #1235).
-	 *
-	 * New code should prefer this name; get_css_queue_cap() remains as a
-	 * deprecated alias for backward compatibility.
-	 *
-	 * @return int Per-run cap, or PHP_INT_MAX when uncapped.
-	 * @since NEXT
-	 * @see Critical_CSS::get_css_queue_cap()
-	 */
-	public static function get_ccss_queue_cap(): int {
-		return self::get_css_queue_cap();
-	}
+		/**
+		 * Canonical double-`s` spelling of the per-run CCSS queue cap (issue #1235).
+		 *
+		 * New code should prefer this name; get_css_queue_cap() remains as a
+		 * deprecated alias for backward compatibility.
+		 *
+		 * @return int Per-run cap, or PHP_INT_MAX when uncapped.
+		 * @since NEXT
+		 * @see Critical_CSS::get_css_queue_cap()
+		 */
+		public static function get_ccss_queue_cap(): int {
+			return self::get_css_queue_cap();
+		}
 
 		/**
 		 * Read the configured wall-clock budget in seconds for one CCSS
@@ -603,41 +603,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @return int Timeout in seconds, 0 when exhausted, otherwise 1..$fallback.
 		 * @since NEXT
 		 */
-	private static function request_timeout_for_deadline( ?float $deadline, int $fallback ): int {
-		if ( null === $deadline ) {
-			return $fallback;
+		private static function request_timeout_for_deadline( ?float $deadline, int $fallback ): int {
+			if ( null === $deadline ) {
+				return $fallback;
+			}
+			$remaining = (int) floor( $deadline - self::generation_now() );
+			if ( $remaining < 1 ) {
+				return 0;
+			}
+			return min( $remaining, $fallback );
 		}
-		$remaining = (int) floor( $deadline - self::generation_now() );
-		if ( $remaining < 1 ) {
-			return 0;
-		}
-		return min( $remaining, $fallback );
-	}
-
-	/**
-	 * Conventional `is_` alias for the deadline predicate (issue #1235).
-	 *
-	 * The `generation_*` family omits the prefix by design; this wrapper
-	 * keeps call sites that follow the repo `get_/is_` convention readable.
-	 *
-	 * @param float|null $deadline Absolute deadline, or null when uncapped.
-	 * @return bool True when the budget is exhausted.
-	 * @since NEXT
-	 */
-	private static function is_generation_expired( ?float $deadline ): bool {
-		return self::generation_expired( $deadline );
-	}
-
-	/**
-	 * Conventional `get_` alias for the deadline constructor (issue #1235).
-	 *
-	 * @param int $budget Budget in seconds.
-	 * @return float Unix timestamp (fractions) when the budget expires.
-	 * @since NEXT
-	 */
-	private static function get_generation_deadline( int $budget ): float {
-		return self::generation_deadline( $budget );
-	}
 
 		/**
 		 * Whether a template hash is safe to queue, store, or log.
@@ -685,11 +660,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// derive the logged budget from the (clamped) span with floor so
 			// the log never quotes a second that was never enforced — an
 			// already-expired deadline logs 0, not 1 (issue #1235 review).
+			// Non-finite callers (NAN/INF) clamp to now + MAX so the
+			// predicate cannot stay unbounded (NAN never expires).
 			try {
-				$now      = self::generation_now();
-				$deadline = min( $deadline, $now + (float) self::MAX_CCSS_GEN_TIMEOUT );
-				$span     = (int) floor( $deadline - $now );
-				$budget   = min( max( $span, 0 ), self::MAX_CCSS_GEN_TIMEOUT );
+				$now = self::generation_now();
+				if ( ! is_finite( $deadline ) ) {
+					$deadline = $now + (float) self::MAX_CCSS_GEN_TIMEOUT;
+				} else {
+					$deadline = min( $deadline, $now + (float) self::MAX_CCSS_GEN_TIMEOUT );
+				}
+				$span   = (int) floor( $deadline - $now );
+				$budget = min( max( $span, 0 ), self::MAX_CCSS_GEN_TIMEOUT );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
@@ -869,6 +850,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					set_transient( $first_key, time(), 2 * $day );
 				} elseif ( ( time() - (int) $first ) > $day ) {
 					$attempts = max( $attempts, self::MAX_CCSS_TIMEOUT_ATTEMPTS );
+					// Persist the wall-clock bump so the counter and the
+					// transient cannot diverge on the next timeout read.
+					set_transient( Util::transient_key( 'wppo_ccss_timeout_' . $template_hash ), $attempts, $day );
 				}
 			}
 			} catch ( \Throwable $e ) {
@@ -961,7 +945,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 */
 		public static function generate_guarded( string $template_hash, string $template, ?bool &$timed_out = null ): bool {
 			$timed_out = false;
+			$budget    = self::DEFAULT_CCSS_GEN_TIMEOUT;
+			$deadline  = null;
 			try {
+				if ( ! self::is_valid_template_hash( $template_hash ) ) {
+					return false;
+				}
 				list( $budget, $deadline ) = self::resolve_generation_budget();
 
 				$had_file = self::ccss_exists( $template_hash );
@@ -997,20 +986,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				// writes complete CSS, so a timed-out run must leave the
 				// previous file untouched. If a file appeared where none
 				// existed, remove it so a partial can never be served.
+				// Direct filesystem check (not ccss_exists()): the memo
+				// caches the pre-run verdict and the timeout path never
+				// invalidates it, so a memoized re-check would always
+				// report the stale value and miss an external file.
 				try {
-					if ( ! $had_file && self::ccss_exists( $template_hash ) ) {
-						$file = self::get_ccss_file( $template_hash );
-						if ( '' !== $file && file_exists( $file ) ) {
-							$filesystem = Util::init_filesystem();
-							if ( $filesystem ) {
-								$filesystem->delete( $file );
-							} else {
-								// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Local cache invalidation fallback.
-								unlink( $file );
-							}
-							self::invalidate_ccss_memo( $template_hash );
-							clearstatcache( true, $file );
+					$file = self::get_ccss_file( $template_hash );
+					if ( '' !== $file ) {
+						clearstatcache( true, $file );
+					}
+					if ( ! $had_file && '' !== $file && file_exists( $file ) ) {
+						$filesystem = Util::init_filesystem();
+						if ( $filesystem ) {
+							$filesystem->delete( $file );
+						} else {
+							// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Local cache invalidation fallback.
+							unlink( $file );
 						}
+						self::invalidate_ccss_memo( $template_hash );
+						clearstatcache( true, $file );
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
@@ -1019,6 +1013,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return false;
 			} catch ( \Throwable $e ) {
 				unset( $e );
+				// Exceptional tail (DOM/minify/filesystem) past expiry must
+				// still honor the timeout-to-pending-plus-retry contract so
+				// the queue slot is not lost with a stale status and no retry.
+				try {
+					if ( self::is_valid_template_hash( $template_hash ) ) {
+						self::record_generation_failure( $template_hash, $budget, $deadline );
+					}
+				} catch ( \Throwable $ignored ) {
+					unset( $ignored );
+				}
 				return false;
 			}
 		}
@@ -1219,12 +1223,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				if ( '' !== $href && false !== strpos( $href, $skip ) ) {
 					return true;
 				}
-			}
-			if ( 'wp-block-library' === $handle ) {
-				return true;
-			}
-			if ( '' !== $href && false !== strpos( $href, 'wp-block-library' ) ) {
-				return true;
 			}
 			return false;
 		}
@@ -1563,8 +1561,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			 * @param int $ttl Time to live in seconds. Default WEEK_IN_SECONDS.
 			 * @since 2.0.0
 			 */
-			$ttl = function_exists( 'apply_filters' ) ? (int) apply_filters( 'wppo_ccss_checksum_ttl', defined( 'WEEK_IN_SECONDS' ) ? WEEK_IN_SECONDS : 604800 ) : ( defined( 'WEEK_IN_SECONDS' ) ? WEEK_IN_SECONDS : 604800 );
-			return $ttl > 0 ? $ttl : ( defined( 'WEEK_IN_SECONDS' ) ? WEEK_IN_SECONDS : 604800 );
+			$default = defined( 'WEEK_IN_SECONDS' ) ? WEEK_IN_SECONDS : 604800;
+			$ttl     = function_exists( 'apply_filters' ) ? (int) apply_filters( 'wppo_ccss_checksum_ttl', $default ) : $default;
+			if ( $ttl <= 0 ) {
+				return $default;
+			}
+			// Upper clamp (issue #1235): a rogue filter must not pin
+			// checksum transients for years (stale-CCSS pinning + DB bloat).
+			$max = defined( 'YEAR_IN_SECONDS' ) ? YEAR_IN_SECONDS : 31536000;
+			return min( $ttl, $max );
 		}
 
 		/**
@@ -2039,6 +2044,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			if ( array_key_exists( $template_hash, self::$stale_probe_memo ) ) {
 				return self::$stale_probe_memo[ $template_hash ];
 			}
+			// Steady-state skip (issue #1235): with no stored variant
+			// there is nothing to drop as stale, so skip the up-to-20
+			// local file reads plus hashing on every frontend view. A
+			// present variant is always probed regardless of mtime — a
+			// freshly-written file can still be stale when its sources
+			// changed, so an mtime-fresh skip would delay detection.
+			try {
+				if ( ! self::ccss_exists( $template_hash ) ) {
+					self::$stale_probe_memo[ $template_hash ] = false;
+					return false;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 			$result = false;
 			try {
 				// Fail-open gate: no user safelist configured means the feature
@@ -2493,8 +2512,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			} else {
 				// Clamp caller-supplied deadlines so an unbounded external
 				// value can never bypass the 1..120 budget (issue #1235 review).
+				// Non-finite callers (NAN/INF) clamp to now + MAX: min(NAN, x)
+				// stays NAN and now >= NAN is always false, which would
+				// otherwise leave the run unbounded.
 				try {
-					$deadline = min( $deadline, self::generation_now() + (float) self::MAX_CCSS_GEN_TIMEOUT );
+					$now = self::generation_now();
+					if ( ! is_finite( $deadline ) ) {
+						$deadline = $now + (float) self::MAX_CCSS_GEN_TIMEOUT;
+					} else {
+						$deadline = min( $deadline, $now + (float) self::MAX_CCSS_GEN_TIMEOUT );
+					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
@@ -2535,6 +2562,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			$html = wp_remote_retrieve_body( $response );
 			if ( empty( $html ) ) {
 				return false;
+			}
+			// Hard-cap HTML before DOMDocument::loadHTML() (issue #1235):
+			// the synchronous parse has no mid-parse deadline poll, so a
+			// malformed multi-MB page could otherwise stall seconds before
+			// the next generation_expired() check. Known gap: loadHTML()
+			// itself remains uninterruptible once started.
+			if ( strlen( $html ) > self::MAX_CCSS_SOURCE_BYTES ) {
+				$html = substr( $html, 0, self::MAX_CCSS_SOURCE_BYTES );
 			}
 			if ( self::generation_expired( $deadline ) ) {
 				return false;
@@ -2662,9 +2697,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// Minify the critical CSS. The CPU-heavy tail stays inside the
 			// budget (issue #1235 review): expiry is checked before and
 			// after minification so a large payload cannot spend seconds
-			// past the deadline holding the worker.
+			// past the deadline holding the worker. CSSMinifier::minify()
+			// itself is atomic and uninterruptible, so the input is gated
+			// to the scan budget first — a ~2MB buffer is the worst case
+			// that can enter the uninterruptible section.
 			if ( self::generation_expired( $deadline ) ) {
 				return false;
+			}
+			if ( strlen( $critical ) > self::MAX_CCSS_SOURCE_BYTES ) {
+				$critical = substr( $critical, 0, self::MAX_CCSS_SOURCE_BYTES );
 			}
 			try {
 				$minifier = new CSSMinifier( $critical );
@@ -3061,6 +3102,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since 2.0.0
 		 */
 		private static function sanitize_inline_css( string $css ): string {
+			// Per-request memo (issue #1235): output was already sanitized
+			// at generation time before the atomic write, so the inline_ccss()
+			// hot path would otherwise re-run the regex passes on every
+			// frontend hit. Bounded to 20 entries so unbounded variants
+			// cannot grow memory within a long-lived worker.
+			static $memo = array();
+			$key         = md5( $css );
+			if ( array_key_exists( $key, $memo ) ) {
+				return $memo[ $key ];
+			}
 			$css = self::sanitize_inline_css_tokens( $css );
 
 			/**
@@ -3075,9 +3126,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			if ( function_exists( 'has_filter' ) && has_filter( 'wppo_ccss_sanitize_inline' ) ) {
 				$filtered = apply_filters( 'wppo_ccss_sanitize_inline', $css );
 				if ( ! is_string( $filtered ) ) {
+					$memo[ $key ] = $css;
+					if ( count( $memo ) > 20 ) {
+						array_shift( $memo );
+					}
 					return $css;
 				}
-				return self::sanitize_inline_css_tokens( $filtered );
+				$css = self::sanitize_inline_css_tokens( $filtered );
+			}
+			$memo[ $key ] = $css;
+			if ( count( $memo ) > 20 ) {
+				array_shift( $memo );
 			}
 			return $css;
 		}
@@ -3119,7 +3178,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				$critical_parts[] = implode( "\n", $font_faces[0] );
 			}
 			if ( self::generation_expired( $deadline ) ) {
-				return implode( "\n", array_unique( array_filter( $critical_parts ) ) );
+				return '';
 			}
 
 			// Extract @keyframes blocks.
@@ -3128,7 +3187,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				$critical_parts[] = implode( "\n", $keyframes[0] );
 			}
 			if ( self::generation_expired( $deadline ) ) {
-				return implode( "\n", array_unique( array_filter( $critical_parts ) ) );
+				return '';
 			}
 
 			// Extract CSS custom properties from :root.
@@ -3137,7 +3196,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				$critical_parts[] = $root_match[0];
 			}
 			if ( self::generation_expired( $deadline ) ) {
-				return implode( "\n", array_unique( array_filter( $critical_parts ) ) );
+				return '';
 			}
 
 			// Also extract variables from html selector.
@@ -3151,7 +3210,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// Extract media queries for mobile-first approach (max-width queries).
 			preg_match_all( '/@media\s*\(max-width:[^}]+\{(?:[^{}]|\{[^{}]*\})*\}/is', $css, $mobile_queries );
 			if ( self::generation_expired( $deadline ) ) {
-				return implode( "\n", array_unique( array_filter( $critical_parts ) ) );
+				return '';
 			}
 			// The safelist is fetched once and threaded through so settings
 			// are not re-read per rule.
@@ -3159,9 +3218,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			if ( ! empty( $mobile_queries[0] ) ) {
 				foreach ( $mobile_queries[0] as $mq ) {
 					if ( self::generation_expired( $deadline ) ) {
-						return implode( "\n", array_unique( array_filter( $critical_parts ) ) );
+						return '';
 					}
-					$filtered = self::filter_media_query_rules( $mq, $safelist );
+					$filtered = self::filter_media_query_rules( $mq, $safelist, $deadline );
 					if ( ! empty( $filtered ) ) {
 						$critical_parts[] = $filtered;
 					}
@@ -3265,10 +3324,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string        $media_query Full media query block.
 		 * @param string[]|null $safelist Pre-fetched safelist (null = fetch once here).
+		 * @param float|null    $deadline Optional absolute wall-clock deadline; the
+		 *                                per-rule loop aborts early when expired (issue #1235).
 		 * @return string Filtered media query or empty string.
 		 * @since 2.0.0
+		 * @since NEXT Deadline-aware early stop inside the per-rule loop.
 		 */
-		private static function filter_media_query_rules( string $media_query, ?array $safelist = null ): string {
+		private static function filter_media_query_rules( string $media_query, ?array $safelist = null, ?float $deadline = null ): string {
 			$header_end = strpos( $media_query, '{' );
 			if ( false === $header_end ) {
 				return '';
@@ -3280,6 +3342,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			$lines          = explode( '}', $body );
 
 			foreach ( $lines as $rule ) {
+				if ( self::generation_expired( $deadline ) ) {
+					break;
+				}
 				$rule = trim( $rule );
 				if ( empty( $rule ) ) {
 					continue;
@@ -3322,6 +3387,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			}
 
 			$safelist = $safelist ?? self::get_ccss_safelist();
+
+			// Fast path (issue #1235): the common single-selector case has
+			// no comma, so skip the comma-aware preg_split entirely.
+			if ( false === strpos( $selector, ',' ) ) {
+				return self::matches_above_fold_single( $selector, $safelist );
+			}
 
 			// Split multi-selector groups on commas (outside parentheses).
 			$individual_selectors = preg_split( '/,(?=(?:[^()]*\([^()]*\))*[^()]*$)/', $selector );
@@ -3528,7 +3599,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since NEXT Time-boxed generation with fail-open timeout handling.
 		 */
 		private static function generate_and_store( string $template_hash, string $template, ?float $deadline = null, ?int $budget = null ): bool {
-			if ( null === $budget || null === $deadline ) {
+			if ( ! self::is_valid_template_hash( $template_hash ) ) {
+				return false;
+			}
+			if ( null === $deadline && null !== $budget ) {
+				// A caller-supplied budget with no deadline derives its own
+				// deadline instead of re-reading settings, so the logged
+				// budget can never diverge from the enforced one.
+				try {
+					$deadline = self::generation_deadline( max( 1, min( $budget, self::MAX_CCSS_GEN_TIMEOUT ) ) );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$deadline = null;
+				}
+			} elseif ( null === $budget || null === $deadline ) {
 				list( $resolved_budget, $resolved_deadline ) = self::resolve_generation_budget( $deadline );
 				if ( null === $budget ) {
 					$budget = $resolved_budget;
@@ -3559,7 +3643,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// inlined — a poisoned source stylesheet must never reach the CCSS cache.
 			// Fail closed: drop the block instead of caching raw input.
 			// Fail-open rendering: the page serves unoptimised markup, never fatal.
-			if ( false === $critical_css || self::contains_unsafe_css_tokens( $critical_css ) ) {
+			// Deterministic poison (issue #1235 review) marks failed directly:
+			// the failure was already determined, so routing it through the
+			// timeout path would burn up to 5 full-budget retries before
+			// escalation even though no retry can succeed.
+			if ( is_string( $critical_css ) && self::contains_unsafe_css_tokens( $critical_css ) ) {
+				try {
+					self::set_status_cache( $template_hash, 'failed', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				return false;
+			}
+			if ( false === $critical_css ) {
 				// Timeout vs. ordinary failure (issue #1235): an expired
 				// budget keeps existing stylesheets, logs the miss, and
 				// schedules a retry instead of parking the template in the
@@ -3579,7 +3675,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// above missed a novel vector; output is sanitized again in
 			// inline_ccss(). An empty result fails closed like a gate hit.
 			$critical_css = self::sanitize_inline_css( $critical_css );
-			if ( '' === trim( $critical_css ) || self::contains_unsafe_css_tokens( $critical_css ) ) {
+			if ( self::contains_unsafe_css_tokens( $critical_css ) ) {
+				try {
+					self::set_status_cache( $template_hash, 'failed', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				return false;
+			}
+			if ( '' === trim( $critical_css ) ) {
 				self::record_generation_failure( $template_hash, $budget, $deadline );
 				return false;
 			}
@@ -3649,9 +3753,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 						$variant_file = self::get_ccss_variant_file( $template_hash, $variant );
 						if ( '' !== $variant_file && $filesystem ) {
 							Util::atomic_file_put_contents( $filesystem, $variant_file, $critical_css );
+							clearstatcache( true, $variant_file );
 						}
 					}
-					clearstatcache();
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
@@ -4120,7 +4224,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			$templates = self::order_templates_by_rum_priority( $templates );
 
 			try {
-				$cap = self::get_css_queue_cap();
+				$cap = self::get_ccss_queue_cap();
 				if ( PHP_INT_MAX !== $cap && count( $templates ) > $cap ) {
 					$templates = array_slice( $templates, 0, $cap, true );
 				}
