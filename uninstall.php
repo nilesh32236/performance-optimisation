@@ -584,6 +584,7 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 			'wppo_settings_snapshot',                  // Single prior wppo_settings copy for one-click undo (issue #1144).
 			'wppo_preload_queue',                      // Resumable sitemap preload queue (issue #1162).
 			'wppo_esi_fallback_secret',                // Orphaned secret from the removed ESI bridge (issue #1291).
+			'wppo_esi_secret_cleaned',                 // One-time flag for the orphaned ESI secret cleanup (issue #1291).
 		);
 		foreach ( $wppo_options as $wppo_option ) {
 			delete_option( $wppo_option );
@@ -640,9 +641,11 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 		delete_transient( $transient_prefix . 'wppo_redis_last_failure' );
 
 		// Bulk-delete remaining plugin transients (per-URL crawler blacklist
-		// entries, rate-limit counters, CCSS statuses, ESI nonces, audit
+		// entries, rate-limit counters, CCSS statuses, audit
 		// results, lock keys, and their timeout rows). Deleting transients is
-		// always safe — they are regenerable caches.
+		// always safe — they are regenerable caches. Historical note: ESI
+		// nonces from the removed #1291 bridge need no sweep because the bridge
+		// and its wppo_esi_fragment AJAX actions are gone.
 		$like_transient = $wpdb->esc_like( '_transient_' ) . '%';
 		$like_site      = $wpdb->esc_like( '_site_transient_' ) . '%';
 		$like_wppo      = '%' . $wpdb->esc_like( 'wppo_' ) . '%';

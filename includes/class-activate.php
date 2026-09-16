@@ -164,8 +164,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 			$stored_version = get_option( self::VERSION_OPTION, '' );
 
 			// Brand-new install: no legacy keys can exist yet, so record the
-			// version and skip the pointless full flush and log entry.
+			// version and skip the pointless full flush and log entry. Still
+			// sweep the orphaned ESI secret first: a manual file-delete
+			// reinstall can leave the option row behind in wp_options.
 			if ( $is_fresh_install ) {
+				self::maybe_delete_orphaned_esi_secret();
 				update_option( self::VERSION_OPTION, WPPO_VERSION, false );
 				return;
 			}
@@ -230,18 +233,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		 * on upgrade honors least-retention instead of keeping a high-value
 		 * secret until uninstall.
 		 *
+		 * One-time semantics: guarded by the `wppo_esi_secret_cleaned` flag
+		 * (same pattern as `wppo_autoload_migrated`) so the DELETE runs once
+		 * instead of on every admin_init/cron. Multisite converges lazily
+		 * per site: single-site delete_option() only cleans the current blog,
+		 * and each subsite is swept when its own admin_init/cron runs; the
+		 * uninstall loop (switch_to_blog) remains the full network sweep.
+		 *
+		 * @internal Kept public only so PHPUnit can invoke it directly.
 		 * @since NEXT
-		 * @return void
+		 * @return bool True when cleanup was attempted (or already done), false
+		 *              when skipped because the WP option API is unavailable.
 		 */
-		public static function maybe_delete_orphaned_esi_secret(): void {
+		public static function maybe_delete_orphaned_esi_secret(): bool {
+			if ( get_option( 'wppo_esi_secret_cleaned', false ) ) {
+				return true;
+			}
 			if ( ! function_exists( 'delete_option' ) ) {
-				return;
+				return false;
 			}
 			try {
 				delete_option( 'wppo_esi_fallback_secret' );
-			} catch ( \Throwable $e ) {
-				unset( $e );
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- fail-open upgrade, never blocks.
 			}
+			update_option( 'wppo_esi_secret_cleaned', 1, false );
+			return true;
 		}
 
 		/**

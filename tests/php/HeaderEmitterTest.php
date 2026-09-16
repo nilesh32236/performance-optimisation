@@ -176,12 +176,13 @@ class HeaderEmitterTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Verify emit_esi_tag prefixes ESI and strips injection.
+	 * BC shim (deprecated NEXT, #1291): emit_esi_tag is a no-op returning
+	 * false and emitting no header, since the ESI bridge was removed.
 	 */
-	public function test_emit_esi_tag_prefixes_and_strips(): void {
-		Functions\when( 'headers_sent' )->justReturn( false );
-		Header_Emitter::emit_esi_tag( "cart\r\nX: 1" );
-		$this->assertSame( array( 'X-LiteSpeed-Tag: ESI.cartX: 1' ), $this->captured_headers );
+	public function test_emit_esi_tag_is_deprecated_noop(): void {
+		Functions\when( '_deprecated_function' )->justReturn( null );
+		$this->assertFalse( Header_Emitter::emit_esi_tag( "cart\r\nX: 1" ) );
+		$this->assertSame( array(), $this->captured_headers );
 	}
 
 	/**

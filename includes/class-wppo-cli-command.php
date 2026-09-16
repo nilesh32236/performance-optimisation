@@ -1509,7 +1509,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 * @param bool   $esi_available Legacy native-ESI flag (removed in NEXT; ignored, kept for backward compatibility).
 		 * @return array{check:string,status:string,detail:string} Verify row.
 		 */
-		public static function evaluate_litespeed_state( string $raw_mode, string $effective, bool $server_ls, bool $lscache, bool $esi_enabled, bool $esi_available ): array {
+		public static function evaluate_litespeed_state( string $raw_mode, string $effective, bool $server_ls, bool $lscache, bool $esi_enabled, bool $esi_available ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- BC signature (#1291): ESI flags intentionally ignored.
 			$allowed = array( 'auto', 'wppo', 'litespeed', 'standalone' );
 			$base    = sprintf(
 				'mode=%s effective=%s server-ls=%s lscache=%s',

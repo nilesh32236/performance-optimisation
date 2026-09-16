@@ -130,15 +130,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Header_Emitter' ) ) {
 		 *
 		 * @deprecated NEXT ESI bridge removed (issue #1291); do not use. The
 		 *             bridge that satisfied these hole-punch tags no longer
-		 *             exists, so emitting them only adds header bytes and tag
-		 *             confusion. Retained for backward compatibility only.
+		 *             exists, so this is a no-op returning false for backward
+		 *             compatibility only — it emits no header.
 		 *
 		 * @since 2.0.0
-		 * @param string $action Tag action name (unsanitized).
-		 * @return bool True when emitted, false when headers were already sent.
+		 * @param string $action Tag action name (ignored, kept for BC).
+		 * @return bool Always false (no header emitted).
 		 */
-		public static function emit_esi_tag( string $action ): bool {
-			return self::emit( 'X-LiteSpeed-Tag: ESI.' . self::sanitize_tag( $action ), false );
+		public static function emit_esi_tag( string $action ): bool { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- BC shim signature (#1291), param intentionally ignored.
+			if ( function_exists( '_deprecated_function' ) ) {
+				_deprecated_function( __METHOD__, 'NEXT', 'ESI bridge removed (#1291); renders inline' );
+			}
+			return false;
 		}
 
 		/**

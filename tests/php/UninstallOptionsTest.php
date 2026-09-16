@@ -54,7 +54,8 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 	 * queue) plus the issue #934 autoload-remediation priors option plus the
 	 * option-leak hardening additions plus the issue #1107 regen timestamp
 	 * plus the issue #1144 settings snapshot plus the issue #1220 targeted
-	 * regen timestamp.
+	 * regen timestamp plus the issue #1291 orphaned ESI secret and its
+	 * one-time cleanup flag.
 	 *
 	 * @var string[]
 	 */
@@ -108,6 +109,8 @@ class UninstallOptionsTest extends \PHPUnit\Framework\TestCase {
 		'wppo_preload_queue',
 		// Issue #1291 orphaned secret from the removed ESI bridge.
 		'wppo_esi_fallback_secret',
+		// Issue #1291 one-time flag for the orphaned ESI secret cleanup.
+		'wppo_esi_secret_cleaned',
 	);
 
 	/**
