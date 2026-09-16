@@ -82,6 +82,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		const GLOBAL_RATE_LIMIT_PER_MINUTE = 120;
 
 		/**
+		 * Default RUM beacon sample rate (percent of page views sampled).
+		 *
+		 * 100 keeps the pre-sampling behavior verbatim (every beacon sent
+		 * and stored). Stored under `performance_audit.rum_sample_rate`.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		const RUM_SAMPLE_RATE_DEFAULT = 100;
+
+		/**
+		 * Default per-minute collection volume that engages the
+		 * high-traffic auto-throttle.
+		 *
+		 * When the site-wide beacon count for the current minute reaches
+		 * this threshold, the effective sample rate is halved (floored at
+		 * 1). Filterable via `wppo_rum_throttle_threshold`; a non-positive
+		 * value disables the throttle (fail-open). Read from the same
+		 * windowed bucket maintained by is_globally_rate_limited() so the
+		 * throttle adds no new transient writes.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		const RUM_THROTTLE_THRESHOLD_DEFAULT = 60;
+
+		/**
 		 * Transient key for the RUM sample queue.
 		 *
 		 * @var string
@@ -603,6 +630,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * Runs on wp_footer; cached pages generated through WordPress capture it
 		 * and the served (cache-hit) HTML therefore keeps working without WP.
 		 *
+		 * Staleness note: the emitted `sampleRate` is the throttled
+		 * effective rate at generation time and is baked into the static
+		 * HTML cache, so cached pages may serve a pre-throttle rate until
+		 * cache expiry. The client gate is therefore best-effort only;
+		 * the live server-side re-roll in store_sample() stays
+		 * authoritative and still throttles under load.
+		 *
 		 * @return void
 		 */
 		public static function print_config(): void {
@@ -623,6 +657,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				'token'  => self::token_for( time(), $path ),
 				'path'   => $path,
 			);
+
+			// Beacon sampling gate (issue #1214): the client sends only about
+			// this percent of page views. Additive only; a legacy cached page
+			// without the key behaves as 100 (unsampled). Best-effort: the
+			// value is baked into (possibly statically cached) HTML and may
+			// go stale under throttle until cache expiry — the server-side
+			// store_sample() re-roll stays authoritative.
+			$config['sampleRate'] = self::get_effective_sample_rate();
 
 			// Optional template dimension for device × template p75 routing
 			// (issue #986). Additive only: omitted when undetectable so the
@@ -818,6 +860,150 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				$remaining
 			);
 			return false;
+		}
+
+		/**
+		 * Configured RUM beacon sample rate (percent of page views, 1-100).
+		 *
+		 * Reads the additive `performance_audit.rum_sample_rate` setting.
+		 * Missing, non-numeric, or out-of-range values clamp to
+		 * RUM_SAMPLE_RATE_DEFAULT (100) so current behavior is verbatim by
+		 * default. Fail-open: any failure returns 100, never 0 (a dropped
+		 * beacon degrades to unmeasured, but a misread must never silence
+		 * collection entirely).
+		 *
+		 * @since NEXT
+		 * @return int Sample rate in 1-100.
+		 */
+		public static function get_sample_rate(): int {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
+					return self::RUM_SAMPLE_RATE_DEFAULT;
+				}
+				$options = \PerformanceOptimise\Inc\Util::get_settings();
+				if ( ! isset( $options['performance_audit'] ) || ! is_array( $options['performance_audit'] ) ) {
+					return self::RUM_SAMPLE_RATE_DEFAULT;
+				}
+				$raw = $options['performance_audit']['rum_sample_rate'] ?? self::RUM_SAMPLE_RATE_DEFAULT;
+				if ( is_array( $raw ) || ! is_numeric( $raw ) ) {
+					return self::RUM_SAMPLE_RATE_DEFAULT;
+				}
+				$rate = (int) $raw;
+				if ( $rate < 1 || $rate > 100 ) {
+					return self::RUM_SAMPLE_RATE_DEFAULT;
+				}
+				return $rate;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return self::RUM_SAMPLE_RATE_DEFAULT;
+			}
+		}
+
+		/**
+		 * Effective sample rate after the high-traffic auto-throttle.
+		 *
+		 * When the site-wide per-minute collection volume (the windowed
+		 * bucket maintained by is_globally_rate_limited(), so no new
+		 * transient writes) reaches the filterable `wppo_rum_throttle_threshold`
+		 * (default RUM_THROTTLE_THRESHOLD_DEFAULT), the configured rate is
+		 * halved (floored at 1) for the rest of the minute. A non-positive
+		 * threshold disables the throttle. The final value passes through
+		 * the `wppo_rum_effective_sample_rate` filter. Sampling is a lossy
+		 * hint only: fail-open returns the configured rate on any failure.
+		 *
+		 * Dual-gate compounding note: the client (`shouldSendSample` in
+		 * src/rum.js) and the server (`should_keep_sample()` in
+		 * store_sample()) each roll independently at this effective rate,
+		 * so end-to-end stored volume is approximately rate²/100 (rate 10
+		 * stores ~1%, not ~10%). Under throttle each gate halves, so
+		 * stored volume quarters. This is intentional: the client gate is
+		 * a best-effort bandwidth saver while the server gate is
+		 * authoritative (it still throttles when the client rate is stale
+		 * in statically cached HTML — see print_config()).
+		 *
+		 * @since NEXT
+		 * @return int Effective rate in 1-100.
+		 */
+		public static function get_effective_sample_rate(): int {
+			$base = self::get_sample_rate();
+			try {
+				if ( ! function_exists( 'apply_filters' ) || ! function_exists( 'get_transient' ) ) {
+					return $base;
+				}
+				$raw_threshold = apply_filters( 'wppo_rum_throttle_threshold', self::RUM_THROTTLE_THRESHOLD_DEFAULT );
+				$threshold     = ( is_scalar( $raw_threshold ) && is_numeric( $raw_threshold ) ) ? (int) $raw_threshold : self::RUM_THROTTLE_THRESHOLD_DEFAULT;
+				if ( $threshold < 1 ) {
+					return $base;
+				}
+				$bucket    = get_transient( Util::transient_key( 'wppo_rum_global' ) );
+				$count     = ( is_array( $bucket ) && isset( $bucket['count'] ) ) ? (int) $bucket['count'] : 0;
+				$effective = $base;
+				if ( $count >= $threshold ) {
+					$effective = max( 1, (int) floor( $base / 2 ) );
+				}
+				$filtered = (int) apply_filters( 'wppo_rum_effective_sample_rate', $effective, $base );
+				if ( $filtered < 1 || $filtered > 100 ) {
+					return $effective;
+				}
+				return $filtered;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $base;
+			}
+		}
+
+		/**
+		 * Sampling decision for one beacon (lossy hint only, no PII).
+		 *
+		 * A rate of 100 always keeps (no RNG consumed, deterministic).
+		 * Otherwise a uniform roll in 1-100 keeps the sample when
+		 * roll <= rate. An explicit $roll makes the decision deterministic
+		 * for tests; otherwise wp_rand() (mt_rand() fallback outside WP)
+		 * is used. Invalid rates clamp to RUM_SAMPLE_RATE_DEFAULT
+		 * (fail-open to unsampled).
+		 *
+		 * Boundary alignment: the discrete `roll <= rate` here is the
+		 * integer-domain equivalent of the client gate
+		 * (`roll * 100 <= rate` for a continuous roll in [0, 1) in
+		 * src/rum.js) — both keep about `rate` percent, and a roll
+		 * exactly on the boundary is kept on both sides.
+		 *
+		 * Compounding note: the client rolls first and this server gate
+		 * re-rolls independently at the same effective rate, so stored
+		 * volume is approximately rate²/100. The re-roll is deliberate
+		 * so forged/legacy beacons cannot bypass sampling.
+		 *
+		 * @since NEXT
+		 * @param int|null $rate Sample rate in 1-100. Null resolves via get_effective_sample_rate().
+		 * @param int|null $roll Deterministic roll in 1-100. Null draws fresh randomness.
+		 * @return bool True when the beacon should be sent/stored.
+		 */
+		public static function should_keep_sample( ?int $rate = null, ?int $roll = null ): bool {
+			try {
+				if ( null === $rate ) {
+					$rate = self::get_effective_sample_rate();
+				}
+				if ( $rate < 1 || $rate > 100 ) {
+					$rate = self::RUM_SAMPLE_RATE_DEFAULT;
+				}
+				if ( $rate >= 100 ) {
+					return true;
+				}
+				if ( null === $roll ) {
+					if ( function_exists( 'wp_rand' ) ) {
+						$roll = (int) wp_rand( 1, 100 );
+					} else {
+						$roll = mt_rand( 1, 100 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.rand_mt_rand
+					}
+				}
+				if ( $roll < 1 || $roll > 100 ) {
+					return true;
+				}
+				return $roll <= $rate;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
 		}
 
 		/**
@@ -1140,6 +1326,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * @since 2.0.0
 		 */
 		private static function store_sample( array $sample ): void {
+			// Sampling gate (issue #1214): the server re-rolls at the
+			// effective rate even though the client already sampled, so
+			// end-to-end stored volume is about rate²/100 (documented on
+			// get_effective_sample_rate()). The re-roll is deliberate so
+			// forged/legacy beacons cannot bypass the gate. Dropped
+			// samples skip the queue transient read+write entirely (the
+			// footprint win); aggregates stay bounded by the existing
+			// flush caps regardless of traffic. Lossy hint only — a drop
+			// degrades to unmeasured, never fatal.
+			if ( ! self::should_keep_sample() ) {
+				return;
+			}
 			// Attach timestamp so flush can bucket by sample day, not flush day.
 			$sample['_ts'] = time();
 			$queue_key     = Util::transient_key( self::QUEUE_KEY );
