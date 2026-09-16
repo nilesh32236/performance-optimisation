@@ -4,6 +4,7 @@ import {
 	useCallback,
 	useRef,
 	useMemo,
+	memo,
 } from '@wordpress/element';
 import {
 	apiCall,
@@ -60,6 +61,68 @@ const POLL_INTERVAL_MS = 5000;
 const MAX_POLL_ATTEMPTS = 60;
 
 /**
+ * Memoized heavy children: image_job_status ticks image_job_status every 5s
+ * and each tick setStates Dashboard root. Without memo, every tick
+ * re-renders the whole admin view (~12 non-memoized children + inline
+ * closures). These aliases skip re-renders whose props are unchanged while
+ * the poll-driven card (props change each tick) still updates.
+ */
+const MemoPerformanceAudit = memo( PerformanceAudit );
+const MemoPageSpeedPanel = memo( PageSpeedPanel );
+const MemoWebVitalsTrends = memo( WebVitalsTrends );
+const MemoWebVitalsRum = memo( WebVitalsRum );
+const MemoSuggestionsPanel = memo( SuggestionsPanel );
+const MemoSystemInfo = memo( SystemInfo );
+const MemoAutoloadedOptions = memo( AutoloadedOptions );
+const MemoLlmsPanel = memo( LlmsPanel );
+const MemoAiPanel = memo( AiPanel );
+const MemoEdgeCachePanel = memo( EdgeCachePanel );
+const MemoImageOptimizationCard = memo( ImageOptimizationCard );
+const MemoRecentActivityCard = memo( RecentActivityCard );
+
+/**
+ * Defers mounting below-fold panels until they scroll into view so the
+ * mount-time fan-out (~6-9 parallel REST GETs, several hitting expensive
+ * endpoints) doesn't block initial paint for users who only toggle page
+ * cache. Falls back to immediate mount when IntersectionObserver is
+ * unavailable (jsdom/tests, older browsers).
+ *
+ * @param {Object} root0          Props.
+ * @param {*}      root0.children Section content.
+ */
+const LazySection = ( { children } ) => {
+	const ref = useRef( null );
+	const [ visible, setVisible ] = useState(
+		typeof IntersectionObserver === 'undefined'
+	);
+	useEffect( () => {
+		if ( visible || typeof IntersectionObserver === 'undefined' ) {
+			return;
+		}
+		const el = ref.current;
+		if ( ! el ) {
+			setVisible( true );
+			return;
+		}
+		const observer = new IntersectionObserver(
+			( entries ) => {
+				if ( entries.some( ( entry ) => entry.isIntersecting ) ) {
+					setVisible( true );
+					observer.disconnect();
+				}
+			},
+			{ rootMargin: '200px' }
+		);
+		observer.observe( el );
+		return () => observer.disconnect();
+	}, [ visible ] );
+	if ( ! visible ) {
+		return <div ref={ ref } />;
+	}
+	return <>{ children }</>;
+};
+
+/**
  * Coerce a TTL override select value to a finite number, or undefined when
  * the override should be omitted. Guards against tampered non-numeric option
  * values: Number('abc') is NaN and JSON.stringify(NaN) becomes null, which
@@ -72,8 +135,11 @@ const toTtlOverride = ( value ) => {
 	if ( '' === value || null === value || undefined === value ) {
 		return undefined;
 	}
+	if ( typeof value === 'string' && '' === value.trim() ) {
+		return undefined;
+	}
 	const n = Number( value );
-	return Number.isFinite( n ) ? n : undefined;
+	return Number.isFinite( n ) && n >= 0 ? n : undefined;
 };
 
 /**
@@ -82,11 +148,28 @@ const toTtlOverride = ( value ) => {
 const CDN_PURGE_SERVICES = [ 'none', 'cloudflare', 'varnish' ];
 
 /**
+ * Cloudflare Zone IDs are 32-char hex. Client-side normalisation only;
+ * the server treats the value as an opaque scalar (rawurlencode'd on use).
+ */
+const CLOUDFLARE_ZONE_RE = /^[a-f0-9]{32}$/i;
+const normalizeCloudflareZoneId = ( raw ) => {
+	const zone = String( raw ?? '' )
+		.trim()
+		.toLowerCase();
+	return CLOUDFLARE_ZONE_RE.test( zone ) ? zone : '';
+};
+
+/**
  * Parse the Varnish purge-endpoint textarea into validated http(s) URLs.
  * Each URL later receives a server-side PURGE request, so shape-check here
  * as defense-in-depth (server allowlisting remains authoritative).
  *
- * @param {string} raw Raw textarea value (one URL per line).
+ * Note: private/loopback hosts are intentionally allowed — correct for
+ * Varnish topology — behind the manage_options capability gate (admin-only
+ * SSRF by design). Keep throttle parity with performance_scan if this is
+ * ever exposed to lower roles.
+ *
+ * @param {string} raw Raw textarea value (URLs separated by newline, comma, semicolon or whitespace).
  * @return {string[]} Validated http(s) URLs.
  */
 const parseVarnishPurgeUrls = ( raw ) => {
@@ -94,7 +177,7 @@ const parseVarnishPurgeUrls = ( raw ) => {
 		return [];
 	}
 	return raw
-		.split( /\n|,/ )
+		.split( /[\n,;\s]+/ )
 		.map( ( url ) => url.trim() )
 		.filter( ( url ) => {
 			if ( ! url ) {
@@ -120,10 +203,10 @@ const normalizeImageInfo = ( raw ) => {
 	const normalize = ( bucket ) => ( {
 		webp: Array.isArray( bucket?.webp )
 			? bucket.webp.length
-			: bucket?.webp || 0,
+			: Number( bucket?.webp ) || 0,
 		avif: Array.isArray( bucket?.avif )
 			? bucket.avif.length
-			: bucket?.avif || 0,
+			: Number( bucket?.avif ) || 0,
 	} );
 	return {
 		completed: normalize( raw?.completed ),
@@ -414,8 +497,14 @@ const Dashboard = ( {
 			// string ("0"). Strict === 0 would then never detect completion
 			// and poll until MAX_POLL_ATTEMPTS; NaN stays retryable below.
 			const queuedJobs = Number( response.data.queued_jobs ?? NaN );
-			setBgJobsQueued( Number.isFinite( queuedJobs ) ? queuedJobs : 0 );
-			setImgSavings( response.data.savings ?? null );
+			setBgJobsQueued( ( prev ) => {
+				const next = Number.isFinite( queuedJobs ) ? queuedJobs : 0;
+				return prev === next ? prev : next;
+			} );
+			setImgSavings( ( prev ) => {
+				const next = response.data.savings ?? null;
+				return prev === next ? prev : next;
+			} );
 
 			// Reuse the mount/sync-path normalizer so array-of-paths payloads
 			// (like wppoSettings.image_info) never store an Array where a
@@ -470,7 +559,18 @@ const Dashboard = ( {
 			} );
 		}
 		if ( pollingRef.current === currentTimeout ) {
-			pollingRef.current = setTimeout( pollJobStatus, POLL_INTERVAL_MS );
+			// Exponential backoff (5s → 30s cap) plus a visibility pause so
+			// background tabs don't hammer the expensive status endpoint.
+			// image-optimize and PageSpeed run concurrent 5s loops otherwise
+			// (~24 req/min). Base delay keeps the first retry at 5s so the
+			// existing fake-timer tests (advanceTimersByTime 5000) still fire.
+			const backoff = Math.min(
+				POLL_INTERVAL_MS * 2 ** pollRetryRef.current,
+				30000
+			);
+			const hidden = typeof document !== 'undefined' && document.hidden;
+			const delay = hidden ? Math.max( backoff, 15000 ) : backoff;
+			pollingRef.current = setTimeout( pollJobStatus, delay );
 		}
 	}, [ updateState, notify ] );
 
@@ -546,7 +646,10 @@ const Dashboard = ( {
 
 		apiCall( 'optimise_image', {} )
 			.then( ( response ) => {
-				if ( response.data?.background ) {
+				// Gate on success: a failed queue response carrying a stale
+				// background flag must surface the failure, not start a
+				// 60-attempt poll loop until timeout.
+				if ( response.success && response.data?.background ) {
 					// Background (Action Scheduler) path.
 					setBgProcessing( true );
 					const jobsQueued = Number( response.data.jobs_queued ?? 0 );
@@ -623,6 +726,22 @@ const Dashboard = ( {
 		apiCall( 'delete_optimised_image', {} )
 			.then( ( data ) => {
 				if ( data.success ) {
+					// Cancel any in-flight image_job_status poll so the next
+					// tick can't overwrite the just-cleared zeros with stale
+					// job data.
+					if ( pollingRef.current ) {
+						clearTimeout( pollingRef.current );
+						pollingRef.current = null;
+					}
+					if ( pollAbortRef.current ) {
+						pollAbortRef.current.abort();
+						pollAbortRef.current = null;
+					}
+					pollAttemptsRef.current = 0;
+					pollRetryRef.current = 0;
+					setBgProcessing( false );
+					setBgJobsQueued( 0 );
+					setImgSavings( null );
 					setState( ( prev ) => ( {
 						...prev,
 						imageInfo: {
@@ -818,7 +937,7 @@ const Dashboard = ( {
 		return saveCacheTab(
 			{
 				cdnPurgeService: service,
-				cloudflareZoneId,
+				cloudflareZoneId: normalizeCloudflareZoneId( cloudflareZoneId ),
 				varnishPurgeUrls: parseVarnishPurgeUrls( varnishPurgeUrls ),
 			},
 			setSavingCdnPurge,
@@ -1766,10 +1885,7 @@ const Dashboard = ( {
 							value={ varnishPurgeUrls }
 							onChange={ handleVarnishPurgeUrlsChange }
 							aria-describedby="wppo-varnishPurgeUrls-desc"
-							placeholder={ __(
-								'http://127.0.0.1:8081/purge',
-								'performance-optimisation'
-							) }
+							placeholder="http://127.0.0.1:8081/purge"
 						/>
 						<p
 							id="wppo-varnishPurgeUrls-desc"
@@ -1868,46 +1984,58 @@ const Dashboard = ( {
 
 			{ /* Phase 1 — Performance Audit & System Info (v1.5.0) */ }
 			<div className="wppo-stacked-cards">
-				<PerformanceAudit
+				<MemoPerformanceAudit
 					onSuggestionsReady={ setTelemetrySuggestions }
 					onUrlChange={ handleAuditUrlChange }
 				/>
 
 				{ /* Phase 2 — SuggestionsPanel sits directly below PerformanceAudit (v1.6.0) */ }
 				{ allSuggestions.length > 0 && (
-					<SuggestionsPanel
+					<MemoSuggestionsPanel
 						suggestions={ allSuggestions }
 						onNavigate={ onNavigate }
 					/>
 				) }
 
 				{ /* Phase 2 — PageSpeed Insights panel (v1.6.0) */ }
-				<PageSpeedPanel
+				<MemoPageSpeedPanel
 					url={ auditUrl }
 					onSuggestionsReady={ setPagespeedSuggestions }
 				/>
 
 				{ /* Phase 2 — Web Vitals trends (v2.14.0) */ }
-				<WebVitalsTrends url={ auditUrl } />
+				<MemoWebVitalsTrends url={ auditUrl } />
 
-				{ /* Phase 3 — Real-user Web Vitals (v2.18.0) */ }
-				<WebVitalsRum />
+				{ /* Below-fold panels mount on visibility so their REST
+				    fan-out doesn't block initial paint. */ }
+				<LazySection>
+					{ /* Phase 3 — Real-user Web Vitals (v2.18.0) */ }
+					<MemoWebVitalsRum />
+				</LazySection>
 
-				{ /* Phase 3 — Autoloaded options audit (v2.18.0) */ }
-				<AutoloadedOptions />
+				<LazySection>
+					{ /* Phase 3 — Autoloaded options audit (v2.18.0) */ }
+					<MemoAutoloadedOptions />
+				</LazySection>
 
-				<LlmsPanel />
+				<LazySection>
+					<MemoLlmsPanel />
+				</LazySection>
 
-				<AiPanel />
+				<LazySection>
+					<MemoAiPanel />
+				</LazySection>
 
-				<EdgeCachePanel />
+				<LazySection>
+					<MemoEdgeCachePanel />
+				</LazySection>
 
-				<SystemInfo />
+				<MemoSystemInfo />
 			</div>
 
 			{ /* Image optimization + activity log */ }
 			<div className="wppo-stacked-cards wppo-mt-20">
-				<ImageOptimizationCard
+				<MemoImageOptimizationCard
 					completed={ completed }
 					pending={ pending }
 					failed={ failed }
@@ -1922,7 +2050,7 @@ const Dashboard = ( {
 					onRemove={ handleRemoveRequest }
 				/>
 
-				<RecentActivityCard
+				<MemoRecentActivityCard
 					activities={ activities }
 					activitiesError={ activitiesError }
 					onNavigate={ onNavigate }

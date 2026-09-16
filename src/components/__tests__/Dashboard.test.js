@@ -533,6 +533,35 @@ describe( 'Dashboard', () => {
 			target: { value: 'cloudflare' },
 		} );
 		fireEvent.change( screen.getByLabelText( /Cloudflare Zone ID/i ), {
+			target: { value: 'abcdef0123456789abcdef0123456789' },
+		} );
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Save CDN Purge/i } )
+		);
+
+		await waitFor( () =>
+			expect( apiCall ).toHaveBeenCalledWith( 'update_settings', {
+				tab: 'cache_settings',
+				settings: expect.objectContaining( {
+					cdnPurgeService: 'cloudflare',
+					cloudflareZoneId: 'abcdef0123456789abcdef0123456789',
+				} ),
+			} )
+		);
+	} );
+
+	it( 'normalizes an invalid Cloudflare zone ID to empty on save', async () => {
+		apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // mount db counts
+		apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // save
+
+		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+		await flushDashboardMount();
+
+		fireEvent.change( screen.getByLabelText( /CDN Purge Service/i ), {
+			target: { value: 'cloudflare' },
+		} );
+		fireEvent.change( screen.getByLabelText( /Cloudflare Zone ID/i ), {
 			target: { value: 'abc123' },
 		} );
 		fireEvent.click(
@@ -544,10 +573,35 @@ describe( 'Dashboard', () => {
 				tab: 'cache_settings',
 				settings: expect.objectContaining( {
 					cdnPurgeService: 'cloudflare',
-					cloudflareZoneId: 'abc123',
+					cloudflareZoneId: '',
 				} ),
 			} )
 		);
+	} );
+
+	it( 'wires CDN purge fields to their descriptions via aria-describedby', async () => {
+		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+		await flushDashboardMount();
+
+		expect( screen.getByLabelText( /CDN Purge Service/i ) ).toHaveAttribute(
+			'aria-describedby',
+			'wppo-cdnPurgeService-desc'
+		);
+
+		fireEvent.change( screen.getByLabelText( /CDN Purge Service/i ), {
+			target: { value: 'cloudflare' },
+		} );
+		expect(
+			screen.getByLabelText( /Cloudflare Zone ID/i )
+		).toHaveAttribute( 'aria-describedby', 'wppo-cloudflareZoneId-desc' );
+
+		fireEvent.change( screen.getByLabelText( /CDN Purge Service/i ), {
+			target: { value: 'varnish' },
+		} );
+		expect(
+			screen.getByLabelText( /Varnish Purge Endpoints/i )
+		).toHaveAttribute( 'aria-describedby', 'wppo-varnishPurgeUrls-desc' );
 	} );
 
 	it( 'removes optimized images after confirming the dialog', async () => {

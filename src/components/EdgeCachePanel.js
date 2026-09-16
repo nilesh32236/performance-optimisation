@@ -70,12 +70,26 @@ const EdgeCachePanel = () => {
 			typeof wppoSettings !== 'undefined'
 				? wppoSettings?.settings?.edge_cache || {}
 				: {};
-		setEnabled( !! s.enabled );
-		setProvider( s.provider || 'cloudflare' );
-		setTtl( String( s.ttl ?? 300 ) );
-		setSwr( String( s.staleWhileRevalidate ?? 86400 ) );
-		setCfZone( s.cloudflareZoneId || '' );
-		setBunnyZone( s.bunnyPullZoneId || '' );
+		// Guarded setters: the parent Dashboard re-renders on every 5s
+		// image_job_status poll tick, which re-runs this effect via the
+		// snapshot key. Skip identical values so a full poll run doesn't
+		// cause ~360 needless state updates.
+		const nextEnabled = !! s.enabled;
+		const nextProvider = s.provider || 'cloudflare';
+		const nextTtl = String( s.ttl ?? 300 );
+		const nextSwr = String( s.staleWhileRevalidate ?? 86400 );
+		const nextCfZone = s.cloudflareZoneId || '';
+		const nextBunnyZone = s.bunnyPullZoneId || '';
+		setEnabled( ( prev ) => ( prev === nextEnabled ? prev : nextEnabled ) );
+		setProvider( ( prev ) =>
+			prev === nextProvider ? prev : nextProvider
+		);
+		setTtl( ( prev ) => ( prev === nextTtl ? prev : nextTtl ) );
+		setSwr( ( prev ) => ( prev === nextSwr ? prev : nextSwr ) );
+		setCfZone( ( prev ) => ( prev === nextCfZone ? prev : nextCfZone ) );
+		setBunnyZone( ( prev ) =>
+			prev === nextBunnyZone ? prev : nextBunnyZone
+		);
 	}, [ edgeCacheKey, saving ] );
 
 	const handleSave = useCallback( async () => {

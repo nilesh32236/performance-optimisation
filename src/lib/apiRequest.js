@@ -162,9 +162,14 @@ export const commitSettingsCache = ( payload ) => {
 	if ( typeof wppoSettings === 'undefined' || ! wppoSettings ) {
 		return;
 	}
-	if ( payload && typeof payload === 'object' ) {
-		wppoSettings.settings = Object.freeze( payload );
+	if (
+		! payload ||
+		typeof payload !== 'object' ||
+		Array.isArray( payload )
+	) {
+		return;
 	}
+	wppoSettings.settings = Object.freeze( payload );
 };
 
 /**
