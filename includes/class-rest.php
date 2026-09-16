@@ -1084,9 +1084,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// 1-100 like the sanitizer so a legacy extreme stored value
 			// self-heals to unsampled instead of disabling beacons.
 			if ( 'performance_audit' === $tab && ! isset( $params['settings']['rum_sample_rate'] ) && isset( $options['performance_audit']['rum_sample_rate'] ) ) {
+				$rum_default                           = class_exists( 'PerformanceOptimise\Inc\RUM' ) ? \PerformanceOptimise\Inc\RUM::RUM_SAMPLE_RATE_DEFAULT : 100;
 				$stored_rate                           = $options['performance_audit']['rum_sample_rate'];
-				$stored_rate                           = is_numeric( $stored_rate ) ? (int) $stored_rate : 100;
-				$sanitized_settings['rum_sample_rate'] = ( $stored_rate >= 1 && $stored_rate <= 100 ) ? $stored_rate : 100;
+				$stored_rate                           = is_numeric( $stored_rate ) ? (int) $stored_rate : $rum_default;
+				$sanitized_settings['rum_sample_rate'] = ( $stored_rate >= 1 && $stored_rate <= 100 ) ? $stored_rate : $rum_default;
 			}
 
 			// Preserve dismissed AI suggestions when the request omits them

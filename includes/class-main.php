@@ -1667,7 +1667,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 
-			$audit['rum_sample_rate']    = 100;
+			$default_rate = class_exists( 'PerformanceOptimise\Inc\RUM' ) ? \PerformanceOptimise\Inc\RUM::RUM_SAMPLE_RATE_DEFAULT : 100;
+
+			$audit['rum_sample_rate']    = $default_rate;
 			$stored['performance_audit'] = $audit;
 			update_option( 'wppo_settings', $stored );
 
@@ -1675,7 +1677,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$this->options['performance_audit'] = array();
 			}
 			if ( ! array_key_exists( 'rum_sample_rate', $this->options['performance_audit'] ) ) {
-				$this->options['performance_audit']['rum_sample_rate'] = 100;
+				$this->options['performance_audit']['rum_sample_rate'] = $default_rate;
 			}
 
 			Log::add( __( 'Added default RUM beacon sample rate (100 percent, unsampled current behavior kept).', 'performance-optimisation' ) );

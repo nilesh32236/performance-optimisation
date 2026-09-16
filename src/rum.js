@@ -103,6 +103,17 @@ export const RUM_DEFAULT_SAMPLE_RATE = 100;
  * `randomValue` makes the decision deterministic for tests; otherwise
  * `Math.random()` is used. Never throws: any failure sends.
  *
+ * Boundary alignment: `roll * 100 <= rate` for a continuous roll in
+ * [0, 1) is the float-domain equivalent of the server gate
+ * (`roll <= rate` for an integer roll in 1–100 in
+ * `RUM::should_keep_sample()`) — both keep about `rate` percent, and a
+ * roll exactly on the boundary is kept on both sides.
+ *
+ * Compounding note: the server re-rolls independently at the same
+ * effective rate (`RUM::store_sample()`), so end-to-end stored volume
+ * is approximately rate²/100. This client gate is a best-effort
+ * bandwidth saver; the server gate stays authoritative.
+ *
  * @since NEXT
  * @param {*} rate        Configured sample rate (1–100) from `window.wppoRum.sampleRate`.
  * @param {*} randomValue Optional deterministic roll in [0, 1).
@@ -127,7 +138,7 @@ export const shouldSendSample = ( rate, randomValue ) => {
 		if ( ! Number.isFinite( roll ) ) {
 			return true;
 		}
-		return roll * 100 < clamped;
+		return roll * 100 <= clamped;
 	} catch {
 		return true;
 	}

@@ -1127,6 +1127,9 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 		$this->assertFalse( RUM::should_keep_sample( 10, 50 ) );
 		$this->assertTrue( RUM::should_keep_sample( 0, 100 ) );
 		$this->assertTrue( RUM::should_keep_sample( 101, 100 ) );
+		// Inclusive boundary, matching the JS gate (roll * 100 <= rate).
+		$this->assertTrue( RUM::should_keep_sample( 10, 10 ) );
+		$this->assertFalse( RUM::should_keep_sample( 10, 11 ) );
 	}
 
 	/**
@@ -1184,6 +1187,37 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 			'start' => time(),
 		);
 		$this->assertSame( 50, RUM::get_effective_sample_rate() );
+	}
+
+	/**
+	 * Test that a non-numeric throttle-threshold filter falls back to default.
+	 *
+	 * @since NEXT
+	 */
+	public function test_effective_rate_ignores_non_numeric_threshold_filter(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array(
+				'rum_enabled'     => true,
+				'rum_sample_rate' => 100,
+			),
+		);
+		Util::clear_settings_cache();
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook, $value ) {
+				if ( 'wppo_rum_throttle_threshold' === $hook ) {
+					return array( 'evil' );
+				}
+				return $value;
+			}
+		);
+		// Count 1 would throttle under the legacy (int)-cast of an array
+		// (threshold 1); the guarded fallback (60) must not throttle.
+		$this->transients[ Util::transient_key( 'wppo_rum_global' ) ] = array(
+			'count' => 1,
+			'start' => time(),
+		);
+		$this->assertSame( 100, RUM::get_effective_sample_rate() );
 	}
 
 	/**
@@ -1248,5 +1282,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertCount( 1, $printed );
 		$this->assertStringContainsString( 'sampleRate', $printed[0][0] );
+		// Pin the emitted value, not just the key, so a wrong rate fails.
+		$this->assertStringContainsString( 'sampleRate":10', $printed[0][0] );
 	}
 }
