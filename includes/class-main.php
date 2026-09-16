@@ -1198,6 +1198,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// sizes) on blog switches and after cache clears so paths from another
 			// site or pre-clear state are re-verified (audit #888 finding 7).
 			add_action( 'switch_blog', array( 'PerformanceOptimise\Inc\Image_Optimisation', 'clear_runtime_caches' ) );
+			add_action( 'switch_blog', array( 'PerformanceOptimise\Inc\Critical_CSS', 'reset_ccss_memo' ) );
 			add_action( 'switch_blog', array( 'PerformanceOptimise\Inc\Main', 'reset_font_preload_emitted' ) );
 			add_action( 'switch_blog', array( 'PerformanceOptimise\Inc\Main', 'reset_image_lcp_memos' ), 10, 2 );
 			add_action( 'wppo_after_cache_clear', array( 'PerformanceOptimise\Inc\Image_Optimisation', 'clear_runtime_caches' ) );

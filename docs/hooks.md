@@ -1633,7 +1633,7 @@ add_filter( 'wppo_ccss_generation_timeout', static function() { return 45; } );
 ---
 
 ### `wppo_ccss_queue_cap`
-Filters how many RUM-worst-first Critical CSS templates are queued per regeneration run. Templates are ordered slowest-p75-first, so the budget lands on worst pages first; the next cron run picks up the remainder. Stored values heal to the default `5` when missing; non-numeric or non-positive stored values mean uncapped (current behaviour). Valid filter output clamps to 1–100; non-numeric filter output is ignored and the stored cap is kept. Default `5` (stored `file_optimisation.ccssQueueCap`). @since NEXT.
+Filters how many RUM-worst-first Critical CSS templates are queued per regeneration run. Templates are ordered slowest-p75-first, so the budget lands on worst pages first; the next cron run picks up the remainder. Stored values heal to the default `5` when missing; non-numeric or non-positive stored values mean uncapped (current behaviour). Non-numeric or `<1` filter output is ignored and the stored cap is kept; valid filter output clamps to 1–100. Default `5` (stored `file_optimisation.ccssQueueCap`). @since NEXT.
 
 **Parameters:**
 - `$cap` *(int)* — Per-run cap. Default `5`.

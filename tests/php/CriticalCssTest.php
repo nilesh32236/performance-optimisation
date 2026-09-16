@@ -12,6 +12,7 @@
 use PerformanceOptimise\Inc\Critical_CSS;
 use PerformanceOptimise\Inc\Image_Optimisation;
 use PerformanceOptimise\Inc\RUM;
+use PerformanceOptimise\Inc\Util;
 use Brain\Monkey\Functions;
 
 /**
@@ -686,6 +687,11 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 	 * @return void
 	 */
 	public function test_falsy_inline_filter_skips_inline_ccss(): void {
+		Functions\when( 'has_filter' )->alias(
+			static function ( $tag ) {
+				return 'wppo_inline_combined_css' === $tag;
+			}
+		);
 		$this->filter_overrides['wppo_inline_combined_css'] = false;
 
 		ob_start();
@@ -701,6 +707,11 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 	 * @return void
 	 */
 	public function test_falsy_inline_filter_skips_deferral(): void {
+		Functions\when( 'has_filter' )->alias(
+			static function ( $tag ) {
+				return 'wppo_inline_combined_css' === $tag;
+			}
+		);
 		$this->filter_overrides['wppo_inline_combined_css'] = false;
 
 		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- Fixture tag for the deferral filter.
@@ -1602,5 +1613,181 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 		Critical_CSS::reset_ccss_memo();
 
 		$this->assertSame( $tag, $result );
+	}
+
+	/**
+	 * Stub the scheduler + template helpers needed to exercise regenerate_all().
+	 *
+	 * @param array $enqueued Out-param collecting enqueued hook args.
+	 * @return void
+	 */
+	private function stub_regenerate_all_scheduler( array &$enqueued ): void {
+		Functions\when( '__' )->returnArg( 1 );
+		Functions\when( 'wp_kses_post' )->returnArg();
+		Functions\when( 'get_page_templates' )->justReturn( array() );
+		Functions\when( 'delete_transient' )->justReturn( true );
+		Functions\when( 'wp_using_ext_object_cache' )->justReturn( false );
+		Functions\when( 'as_next_scheduled_action' )->justReturn( false );
+		Functions\when( 'as_enqueue_async_action' )->alias(
+			function ( $hook, $args = array(), $group = '' ) use ( &$enqueued ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- Signature must match as_enqueue_async_action().
+				$enqueued[] = $args;
+				return 1;
+			}
+		);
+	}
+
+	/**
+	 * Swap the global $wpdb for a recording stub with an insert() method.
+	 *
+	 * The bootstrap $wpdb is a bare stdClass, so Log::add() (called by
+	 * regenerate_all()) would fatal on the missing insert() method.
+	 *
+	 * @return object Previous $wpdb value for restoration.
+	 */
+	private function swap_wpdb_insert_stub() {
+		$previous        = $GLOBALS['wpdb'];
+		$GLOBALS['wpdb'] = new class() { // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Test-only swap, restored in finally.
+			/**
+			 * Table prefix.
+			 *
+			 * @var string
+			 */
+			public $prefix = 'wp_';
+
+			/**
+			 * Record an insert.
+			 *
+			 * @param string $table  Table name.
+			 * @param array  $data   Row data.
+			 * @param array  $format Formats.
+			 * @return int Insert ID.
+			 */
+			public function insert( $table, $data, $format = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- Signature must match wpdb::insert().
+				return 1;
+			}
+		};
+		return $previous;
+	}
+
+	/**
+	 * The per-run queue cap bounds regenerate_all() and preserves tail variants.
+	 *
+	 * Slice-first rebuild (issue #1255 review): with a cap of 2 only the
+	 * first two FIFO templates are queued, and a stored variant for a
+	 * template beyond the cap survives the run instead of being wiped.
+	 *
+	 * @return void
+	 */
+	public function test_regenerate_all_queues_at_most_cap_and_preserves_tail_variants(): void {
+		$enqueued = array();
+		$this->stub_regenerate_all_scheduler( $enqueued );
+		$this->option_map['wppo_settings'] = array(
+			'file_optimisation' => array( 'ccssQueueCap' => 2 ),
+		);
+		Util::clear_settings_cache();
+
+		// Tail variant: archive is last in FIFO order, beyond the cap of 2.
+		$tail_hash = Critical_CSS::get_template_hash( 'archive' );
+		$dir       = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/ccss' );
+		if ( ! is_dir( $dir ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
+			mkdir( $dir, 0775, true );
+		}
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+		file_put_contents( $dir . '/' . $tail_hash . '.css', str_repeat( 'body.a{color:red}', 40 ) );
+		Critical_CSS::reset_ccss_memo();
+
+		$previous_wpdb = $this->swap_wpdb_insert_stub();
+
+		try {
+			$queued = Critical_CSS::regenerate_all();
+
+			$this->assertSame( 2, $queued );
+			$this->assertCount( 2, $enqueued );
+			$expected = array(
+				Critical_CSS::get_template_hash( 'index' ),
+				Critical_CSS::get_template_hash( 'home' ),
+			);
+			$actual   = array_map(
+				static function ( $args ) {
+					return $args[0]['template_hash'] ?? null;
+				},
+				$enqueued
+			);
+			$this->assertSame( $expected, $actual );
+			$this->assertFileExists( $dir . '/' . $tail_hash . '.css' );
+		} finally {
+			$GLOBALS['wpdb'] = $previous_wpdb;
+			if ( file_exists( $dir . '/' . $tail_hash . '.css' ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+				unlink( $dir . '/' . $tail_hash . '.css' );
+			}
+			Critical_CSS::reset_ccss_memo();
+			Util::clear_settings_cache();
+		}
+	}
+
+	/**
+	 * An invalid stored cap queues every template (fail-open uncapped).
+	 *
+	 * @return void
+	 */
+	public function test_regenerate_all_uncapped_queues_every_template(): void {
+		$enqueued = array();
+		$this->stub_regenerate_all_scheduler( $enqueued );
+		$this->option_map['wppo_settings'] = array(
+			'file_optimisation' => array( 'ccssQueueCap' => 0 ),
+		);
+		Util::clear_settings_cache();
+
+		$previous_wpdb = $this->swap_wpdb_insert_stub();
+
+		try {
+			// Five built-in templates (index, home, single, page, archive).
+			$this->assertSame( 5, Critical_CSS::regenerate_all() );
+			$this->assertCount( 5, $enqueued );
+		} finally {
+			$GLOBALS['wpdb'] = $previous_wpdb;
+			Critical_CSS::reset_ccss_memo();
+			Util::clear_settings_cache();
+		}
+	}
+
+	/**
+	 * The shared image guard rejects single-letter w/h query params.
+	 *
+	 * A poisoned `?w=1` on a non-image URL must not classify it as a
+	 * preloadable image, while real image-service keys still qualify
+	 * (issue #1255 review).
+	 *
+	 * @return void
+	 */
+	public function test_is_image_preload_url_rejects_single_letter_params(): void {
+		$this->assertFalse( Util::is_image_preload_url( 'https://example.com/?w=1' ) );
+		$this->assertFalse( Util::is_image_preload_url( 'https://example.com/wp-login.php?w=1' ) );
+		$this->assertFalse( Util::is_image_preload_url( 'https://example.com/some-page/?h=1' ) );
+		$this->assertTrue( Util::is_image_preload_url( 'https://example.com/cdn/image?width=100&quality=80' ) );
+		$this->assertTrue( Util::is_image_preload_url( 'https://example.com/wp-content/uploads/hero.jpg' ) );
+	}
+
+	/**
+	 * A poisoned single-letter-param aggregate URL never becomes a preload.
+	 *
+	 * End-to-end through the CCSS field-LCP path: even a fresh,
+	 * above-gate RUM entry for `?w=1` fails the image-ness guard and
+	 * resolves to no preload (issue #1255 review).
+	 *
+	 * @return void
+	 */
+	public function test_get_field_lcp_preload_url_rejects_single_letter_query_lcp(): void {
+		$this->seed_field_lcp_fixture(
+			'/slow-page',
+			'https://example.com/?w=1',
+			20,
+			time()
+		);
+
+		$this->assertSame( '', Critical_CSS::get_field_lcp_preload_url( 'http://example.com/slow-page/' ) );
+		RUM::clear_field_lcp_cache();
 	}
 }

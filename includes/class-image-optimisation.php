@@ -2173,11 +2173,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * Text-only LCP (PageSpeed `largest-contentful-paint-element` without
 		 * an image URL) must never produce a preload hint, so candidates are
-		 * rejected unless they look like an image: data/blob/javascript URIs
-		 * are refused, and the URL must either map to a known image MIME
-		 * type, carry an image file extension, or (for extensionless image
-		 * CDN URLs) carry image-ish query params. A non-image URL is never
-		 * preloaded. Any failure returns false.
+		 * rejected unless they look like an image. Thin delegate over the
+		 * shared {@see Util::is_image_preload_url()} helper so the guard
+		 * cannot drift from the Critical-CSS/REST copies (issue #1255
+		 * review). A non-image URL is never preloaded. Any failure returns
+		 * false.
 		 *
 		 * @since NEXT
 		 * @param string $url The candidate URL.
@@ -2185,36 +2185,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 */
 		private function is_image_lcp_url( string $url ): bool {
 			try {
-				$url = trim( $url );
-				if ( '' === $url ) {
-					return false;
-				}
-				$lower = strtolower( ltrim( $url ) );
-				if ( str_starts_with( $lower, 'data:' ) || str_starts_with( $lower, 'blob:' ) || str_starts_with( $lower, 'javascript:' ) || str_starts_with( $lower, 'vbscript:' ) ) {
-					return false;
-				}
-				if ( '' !== Util::get_image_mime_type( $url ) ) {
-					return true;
-				}
-				$path = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url, PHP_URL_PATH ) : ''; // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback only when wp_parse_url() is unavailable (unit contexts).
-				if ( is_string( $path ) && '' !== $path && 1 === preg_match( '/\.(jpe?g|png|gif|webp|avif|svg|heic|heif|jxl)$/i', $path ) ) {
-					return true;
-				}
-				// Extensionless image-CDN URLs (Cloudinary fetch, Photon,
-				// signed asset URLs): accept when the query carries image-ish
-				// params or an image extension so measured OD/PageSpeed heroes
-				// are not silently discarded. Generic keys (ssl, url, src,
-				// strip) also appear on non-image URLs and must not qualify.
-				$query = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url, PHP_URL_QUERY ) : ''; // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback only when wp_parse_url() is unavailable (unit contexts).
-				if ( is_string( $query ) && '' !== $query ) {
-					if ( 1 === preg_match( '/\.(jpe?g|png|gif|webp|avif|svg|heic|heif|jxl)/i', $query ) ) {
-						return true;
-					}
-					if ( 1 === preg_match( '/(^|&)(w|h|width|height|format|fit|crop|resize|quality)(=|&|$)/i', $query ) ) {
-						return true;
-					}
-				}
-				return false;
+				return Util::is_image_preload_url( $url );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;

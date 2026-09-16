@@ -2033,6 +2033,76 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Whether a candidate URL is a plausible LCP image preload target (text-LCP guard).
+		 *
+		 * Single shared implementation behind the image pipeline's
+		 * `is_image_lcp_url()`, `Critical_CSS::is_image_preload_url()`, and
+		 * the REST LCP-candidate guard, so the extension list and query keys
+		 * cannot drift between call sites (issue #1255 review): `data:` /
+		 * `blob:` / script-scheme URLs are refused, and the URL must either
+		 * map to a known image MIME type, carry an image file extension, or
+		 * (for extensionless image-CDN URLs) carry image-service query
+		 * params. Only multi-letter service keys (`width`, `height`,
+		 * `format`, `fit`, `crop`, `resize`, `quality`) qualify — a
+		 * single-letter `w`/`h` param also appears on non-image URLs (e.g. a
+		 * poisoned `?w=1` on a login page) and must not classify a page URL
+		 * as a preloadable image. Fail-open for the page (returns false so
+		 * callers emit nothing), never fatal.
+		 *
+		 * @param string $url The candidate URL.
+		 * @return bool True when the URL may be preloaded as an image.
+		 * @since NEXT
+		 */
+		public static function is_image_preload_url( string $url ): bool {
+			try {
+				$url = trim( $url );
+				if ( '' === $url ) {
+					return false;
+				}
+				$lower = strtolower( ltrim( $url ) );
+				if ( str_starts_with( $lower, 'data:' ) || str_starts_with( $lower, 'blob:' ) || str_starts_with( $lower, 'javascript:' ) || str_starts_with( $lower, 'vbscript:' ) ) {
+					return false;
+				}
+				// Individually guarded: get_image_mime_type() calls
+				// wp_parse_url() unguarded, so a missing WP shim (unit
+				// contexts) must fall through to the extension checks below
+				// instead of rejecting the candidate.
+				try {
+					if ( '' !== self::get_image_mime_type( $url ) ) {
+						return true;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$path  = wp_parse_url( $url, PHP_URL_PATH );
+					$query = wp_parse_url( $url, PHP_URL_QUERY );
+				} else {
+					$path  = parse_url( $url, PHP_URL_PATH ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback only when wp_parse_url() is unavailable (unit contexts).
+					$query = parse_url( $url, PHP_URL_QUERY ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback only when wp_parse_url() is unavailable (unit contexts).
+				}
+				if ( is_string( $path ) && '' !== $path && 1 === preg_match( '/\.(jpe?g|png|gif|webp|avif|svg|heic|heif|jxl)$/i', $path ) ) {
+					return true;
+				}
+				if ( is_string( $query ) && '' !== $query ) {
+					if ( 1 === preg_match( '/\.(jpe?g|png|gif|webp|avif|svg|heic|heif|jxl)/i', $query ) ) {
+						return true;
+					}
+					// Image-service keys only: generic keys (ssl, url, src,
+					// strip) and single-letter w/h params also appear on
+					// non-image URLs and must not qualify.
+					if ( 1 === preg_match( '/(^|&)(width|height|format|fit|crop|resize|quality)(=|&|$)/i', $query ) ) {
+						return true;
+					}
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
 		 * Generates a preload link tag for resources.
 		 *
 		 * Echoes only in front-end HTML contexts (wp_head / template rendering);

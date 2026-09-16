@@ -74,14 +74,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		private static array $sample_url_cache = array();
 
 		/**
-		 * Per-request field-LCP preload dedup set keyed by normalized URL so
-		 * repeated inline_ccss() invocations emit the hint once. Reset via
-		 * reset_ccss_memo().
+		 * Per-request field-LCP preload URL memo keyed by "{blog_id}:{url}".
+		 *
+		 * The field-LCP resolver reads RUM aggregates plus the
+		 * PageSpeed transient tier; without a memo every inline_ccss() call
+		 * (and the later image-pipeline run) re-reads the same rows
+		 * (issue #1255 review). A null input (current request path) uses a
+		 * fixed key segment since the path is constant within one request.
+		 * Blog-scoped so a mid-request switch_to_blog() cannot serve the
+		 * previous site's hero. Reset via reset_ccss_memo() (also wired to
+		 * switch_blog).
 		 *
 		 * @since NEXT
-		 * @var array<string, bool>
+		 * @var array<string, string>
 		 */
-		private static array $lcp_preload_emitted = array();
+		private static array $lcp_preload_url_memo = array();
 
 		/**
 		 * Per-request stylesheet-deferral block list keyed by template hash.
@@ -513,7 +520,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Canonical double-`s` spelling of the per-run CCSS queue cap (issue #1235).
 		 *
 		 * New code should prefer this name; get_css_queue_cap() remains as a
-		 * deprecated alias for backward compatibility.
+		 * historic alias for backward compatibility (not deprecated — both
+		 * names are supported API and neither emits a deprecation notice).
 		 *
 		 * @return int Per-run cap, or PHP_INT_MAX when uncapped.
 		 * @since NEXT
@@ -2090,8 +2098,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
-			$result = false;
+			$result       = false;
+			$cooldown_key = '';
 			try {
+				// Cool-down gate (issue #1255 review): the probe re-hashes up
+				// to 20 local stylesheets, so bound it to once per hour per
+				// template via a blog-aware transient instead of on every
+				// frontend view. A source change is then detected up to an
+				// hour late — an acceptable trade for skipping ~20 file I/Os
+				// per page view.
+				if ( function_exists( 'get_transient' ) && function_exists( 'set_transient' ) ) {
+					$cooldown_key = Util::transient_key( 'wppo_ccss_stale_probe_' . $template_hash );
+					if ( false !== get_transient( $cooldown_key ) ) {
+						self::$stale_probe_memo[ $template_hash ] = false;
+						return false;
+					}
+				}
 				// Fail-open gate: no user safelist configured means the feature
 				// is off — preserve the pre-#1038 behaviour (no regeneration).
 				if ( array() !== self::get_ccss_safelist() && function_exists( 'get_transient' ) ) {
@@ -2115,6 +2137,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				$result = false;
+			}
+			try {
+				if ( '' !== $cooldown_key && function_exists( 'set_transient' ) ) {
+					set_transient( $cooldown_key, 1, defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 			}
 			self::$stale_probe_memo[ $template_hash ] = $result;
 			return $result;
@@ -2146,7 +2175,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since 2.0.0
 		 */
 		private static function is_inline_allowed(): bool {
-			if ( ! function_exists( 'apply_filters' ) ) {
+			// has_filter-guarded like every other hot-path filter here:
+			// defer_stylesheets() calls this per stylesheet tag, so skip
+			// the apply_filters dispatch when no listener is registered
+			// (issue #1255 review).
+			if ( ! function_exists( 'apply_filters' ) || ! function_exists( 'has_filter' ) || ! has_filter( 'wppo_inline_combined_css' ) ) {
 				return true;
 			}
 			return (bool) apply_filters( 'wppo_inline_combined_css', true );
@@ -2191,20 +2224,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Per-template variants are already stored as files; this exposes them
 		 * for over-cap delivery as `<hash>.css?ver=<mtime>` so a regenerate
 		 * automatically busts browser/CDN caches. The URL passes through
-		 * CDN::rewrite_url() when a CDN mapping is configured.
+		 * CDN::rewrite_url() when a CDN mapping is configured. Built from a
+		 * single get_ccss_meta() read so hot paths never stat the same file
+		 * twice (issue #1255 review).
 		 *
 		 * @param string $template_hash Template hash.
 		 * @return string File URL with mtime version, or '' when unavailable.
 		 * @since 2.0.0
 		 */
 		private static function get_ccss_file_url( string $template_hash ): string {
-			$file = self::get_ccss_file( $template_hash );
-			$base = self::get_ccss_url();
-			if ( '' === $file || '' === $base || ! file_exists( $file ) ) {
+			$meta = self::get_ccss_meta( $template_hash );
+			if ( $meta['mtime'] <= 0 ) {
 				return '';
 			}
-			$mtime = filemtime( $file );
-			if ( false === $mtime ) {
+			return self::build_ccss_file_url( $template_hash, $meta['mtime'] );
+		}
+
+		/**
+		 * Assemble a versioned CCSS file URL from a known-good mtime.
+		 *
+		 * Lets callers that already hold get_ccss_meta() reuse its mtime
+		 * instead of re-stating the file (issue #1255 review).
+		 *
+		 * @param string $template_hash Template hash.
+		 * @param int    $mtime         File mtime for the ?ver= parameter.
+		 * @return string File URL with mtime version, or '' when unavailable.
+		 * @since NEXT
+		 */
+		private static function build_ccss_file_url( string $template_hash, int $mtime ): string {
+			if ( '' === $template_hash || 1 !== preg_match( self::TEMPLATE_HASH_PATTERN, $template_hash ) ) {
+				return '';
+			}
+			if ( $mtime <= 0 ) {
+				return '';
+			}
+			$base = self::get_ccss_url();
+			if ( '' === $base ) {
 				return '';
 			}
 			$url = $base . '/' . $template_hash . '.css?ver=' . $mtime;
@@ -2256,13 +2311,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @return void
 		 */
 		public static function reset_ccss_memo(): void {
-			self::$ccss_exists_cache   = array();
-			self::$ccss_content_cache  = array();
-			self::$sample_url_cache    = array();
-			self::$stale_probe_memo    = array();
-			self::$ccss_presets_memo   = null;
-			self::$lcp_preload_emitted = array();
-			self::$ccss_defer_blocked  = array();
+			self::$ccss_exists_cache    = array();
+			self::$ccss_content_cache   = array();
+			self::$sample_url_cache     = array();
+			self::$stale_probe_memo     = array();
+			self::$ccss_presets_memo    = null;
+			self::$lcp_preload_url_memo = array();
+			self::$ccss_defer_blocked   = array();
 		}
 
 		/**
@@ -2285,6 +2340,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					unset( self::$ccss_content_cache[ $key ] );
 				}
 			}
+			// A regeneration makes a previously recorded deferral block
+			// stale: the file URL that was unavailable earlier in the
+			// request may exist now, so deferral must be re-evaluated
+			// instead of forced off (issue #1255 review). The staleness
+			// probe verdict for this hash is stale for the same reason.
+			unset( self::$ccss_defer_blocked[ $template_hash ] );
+			unset( self::$stale_probe_memo[ $template_hash ] );
 		}
 
 		/**
@@ -2524,6 +2586,46 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @see RUM::get_field_lcp_url()
 		 */
 		public static function get_field_lcp_preload_url( ?string $url = null ): string {
+			$memo_key = null;
+			try {
+				// Per-request memo (issue #1255 review): the RUM aggregate
+				// plus PageSpeed transient tier must not be re-read on every
+				// inline_ccss() call. Blog-scoped so a mid-request
+				// switch_to_blog() cannot reuse the previous site's hero.
+				$blog_id  = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
+				$memo_key = $blog_id . ':' . ( null === $url ? "\0current" : $url );
+				if ( array_key_exists( $memo_key, self::$lcp_preload_url_memo ) ) {
+					return self::$lcp_preload_url_memo[ $memo_key ];
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return self::resolve_field_lcp_preload_url( $url );
+			}
+			$result = self::resolve_field_lcp_preload_url( $url );
+			try {
+				if ( null !== $memo_key ) {
+					self::$lcp_preload_url_memo[ $memo_key ] = $result;
+					// Bound the memo so a long-lived worker resolving many
+					// distinct URLs cannot grow memory unboundedly.
+					if ( count( self::$lcp_preload_url_memo ) > 50 ) {
+						array_shift( self::$lcp_preload_url_memo );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $result;
+		}
+
+		/**
+		 * Unmemoized field-LCP preload resolution behind get_field_lcp_preload_url().
+		 *
+		 * @param string|null $url Page URL. Null resolves the current request path. Only the path is used.
+		 * @return string Same-origin LCP image URL, or '' when none resolves.
+		 * @since NEXT
+		 * @see Critical_CSS::get_field_lcp_preload_url()
+		 */
+		private static function resolve_field_lcp_preload_url( ?string $url = null ): string {
 			try {
 				if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) || ! method_exists( 'PerformanceOptimise\Inc\RUM', 'get_lcp_preload_candidate' ) ) {
 					return '';
@@ -2598,13 +2700,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		/**
 		 * Whether a candidate URL is a plausible LCP image (text-LCP guard).
 		 *
-		 * Mirrors Image_Optimisation::is_image_lcp_url() (kept local so this
-		 * static context never depends on that instance pipeline): data/,
-		 * blob: and script-scheme URLs are refused, and the URL must either
-		 * map to a known image MIME type, carry an image file extension, or
-		 * (for extensionless image-CDN URLs) carry image-ish query params.
-		 * Fail-open for the page (returns false so callers emit nothing),
-		 * never fatal.
+		 * Thin delegate over the shared {@see Util::is_image_preload_url()}
+		 * helper so this static context never depends on the instance image
+		 * pipeline and the guard cannot drift from the pipeline/REST copies
+		 * (issue #1255 review). Fail-open for the page (returns false so
+		 * callers emit nothing), never fatal.
 		 *
 		 * @param string $url The candidate URL.
 		 * @return bool True when the URL may be preloaded as an image.
@@ -2612,37 +2712,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 */
 		private static function is_image_preload_url( string $url ): bool {
 			try {
-				$url = trim( $url );
-				if ( '' === $url ) {
-					return false;
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_image_preload_url' ) ) {
+					return \PerformanceOptimise\Inc\Util::is_image_preload_url( $url );
 				}
-				$lower = strtolower( ltrim( $url ) );
-				if ( str_starts_with( $lower, 'data:' ) || str_starts_with( $lower, 'blob:' ) || str_starts_with( $lower, 'javascript:' ) || str_starts_with( $lower, 'vbscript:' ) ) {
-					return false;
-				}
-				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_image_mime_type' ) ) {
-					if ( '' !== \PerformanceOptimise\Inc\Util::get_image_mime_type( $url ) ) {
-						return true;
-					}
-				}
-				$path = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url, PHP_URL_PATH ) : ''; // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback only when wp_parse_url() is unavailable (unit contexts).
-				if ( is_string( $path ) && '' !== $path && 1 === preg_match( '/\.(jpe?g|png|gif|webp|avif|svg|heic|heif|jxl)$/i', $path ) ) {
-					return true;
-				}
-				$query = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url, PHP_URL_QUERY ) : ''; // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback only when wp_parse_url() is unavailable (unit contexts).
-				if ( is_string( $query ) && '' !== $query ) {
-					if ( 1 === preg_match( '/\.(jpe?g|png|gif|webp|avif|svg|heic|heif|jxl)/i', $query ) ) {
-						return true;
-					}
-					if ( 1 === preg_match( '/(^|&)(w|h|width|height|format|fit|crop|resize|quality)(=|&|$)/i', $query ) ) {
-						return true;
-					}
-				}
-				return false;
 			} catch ( \Throwable $e ) {
 				unset( $e );
-				return false;
 			}
+			return false;
 		}
 
 		/**
@@ -2718,9 +2794,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * sample count and freshness TTL) and emits one `<link rel="preload"
 		 * as="image" fetchpriority="high">` through the shared
 		 * Util::generate_preload_link() helper so markup matches the image
-		 * pipeline. Emitted at most once per normalized URL per request;
-		 * a no-op when no candidate resolves. Fail-open: any failure emits
-		 * nothing, never fatal.
+		 * pipeline. Fail-open: any failure emits nothing, never fatal.
 		 *
 		 * Single-emitter coordination (issue #1255 review): the image
 		 * pipeline preloads the same candidate at wp_head:1 with responsive
@@ -2728,8 +2802,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * earlier (wp_head:0) path yields and the pipeline owns the hint;
 		 * otherwise this path emits and claims the URL in the pipeline's
 		 * shared dedup set (Image_Optimisation::has/mark_preload_emitted())
-		 * so the later pipeline run skips the duplicate. This hint belongs
-		 * to the critical-CSS feature and is independent of the
+		 * so the later pipeline run skips the duplicate — one hint per hero
+		 * with no local key space to disagree with the shared one. This hint
+		 * belongs to the critical-CSS feature and is independent of the
 		 * image-pipeline LCP toggles — disable it via the
 		 * `wppo_ccss_field_lcp_preload` filter (see
 		 * is_ccss_field_lcp_preload_allowed()).
@@ -2751,23 +2826,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				if ( '' === $lcp ) {
 					return;
 				}
-				// Shared dedup: the pipeline may already have emitted this
-				// URL (manual/meta/front-page preloads run off-toggle), in
-				// which case there is nothing left to hint.
+				// Shared dedup only (issue #1255 review): the pipeline may
+				// already have emitted this URL (manual/meta/front-page
+				// preloads run off-toggle), in which case there is nothing
+				// left to hint. No local set — the shared key (normalized
+				// URL + query + media) is the single key space, and it is
+				// already reset on switch_blog with the pipeline.
 				$shared_available = class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' )
 					&& method_exists( 'PerformanceOptimise\Inc\Image_Optimisation', 'has_emitted_preload' )
 					&& method_exists( 'PerformanceOptimise\Inc\Image_Optimisation', 'mark_preload_emitted' );
 				if ( $shared_available && \PerformanceOptimise\Inc\Image_Optimisation::has_emitted_preload( $lcp ) ) {
 					return;
 				}
-				$key = class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'normalize_url' )
-					? \PerformanceOptimise\Inc\Util::normalize_url( $lcp )
-					: $lcp;
-				$key = is_string( $key ) && '' !== $key ? $key : $lcp;
-				if ( isset( self::$lcp_preload_emitted[ $key ] ) ) {
-					return;
-				}
-				self::$lcp_preload_emitted[ $key ] = true;
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'generate_preload_link' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_image_mime_type' ) ) {
 					\PerformanceOptimise\Inc\Util::generate_preload_link(
 						$lcp,
@@ -4184,7 +4254,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				// render-blocking, so there is no FOUC; the remaining full
 				// stylesheets are still deferred by defer_stylesheets().
 				if ( strlen( $content ) > $cap || strlen( $content ) > $limit ) {
-					$file_url = self::get_ccss_file_url( $template_hash );
+					// Single-stat file-first delivery (issue #1255 review):
+					// the meta read proves existence and carries the mtime
+					// for the ?ver= parameter, so the file is never stated
+					// twice per hit.
+					$meta     = self::get_ccss_meta( $template_hash );
+					$file_url = $meta['mtime'] > 0 ? self::build_ccss_file_url( $template_hash, $meta['mtime'] ) : '';
 					if ( '' !== $file_url ) {
 						// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- Per-template CCSS file variant served directly (no registered handle exists for it).
 						echo '<link rel="stylesheet" id="wppo-critical-css" href="' . esc_url( $file_url ) . '" media="all" />' . "\n";
@@ -4360,11 +4435,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// Same when inline_ccss() served over-cap output with no file URL
 			// this request (issue #1255 review): the page carries zero
 			// critical CSS, so deferral would open a FOUC window the
-			// render-blocking stylesheets avoid.
-			if ( isset( self::$ccss_defer_blocked[ self::get_template_hash() ] ) ) {
+			// render-blocking stylesheets avoid. The content read (not just
+			// file_exists) is the gate: oversized (>1MB) or empty variants
+			// read back as null while ccss_exists() is still true, and
+			// sub-500B variants never produce inline CSS either — deferring
+			// with zero usable critical CSS on the page is the same FOUC
+			// window. The read is per-request memoized, and the template
+			// hash is computed once per invocation (not per check).
+			$template_hash = self::get_template_hash();
+			if ( isset( self::$ccss_defer_blocked[ $template_hash ] ) ) {
 				return $tag;
 			}
-			if ( ! self::ccss_exists( self::get_template_hash() ) ) {
+			$content = self::get_ccss_content( $template_hash );
+			if ( null === $content || strlen( $content ) < self::MIN_INLINE_SIZE ) {
 				return $tag;
 			}
 
@@ -4560,6 +4643,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * AS group so up to 5 full-budget runs never hold the shared
 		 * `performance_optimisation` worker back-to-back.
 		 *
+		 * Slice-first rebuild (issue #1255 review): the queue is ordered and
+		 * capped BEFORE anything is deleted, and only the queued templates'
+		 * variants are cleared — unqueued templates keep their usable variants
+		 * until a later run rebuilds them instead of losing them to a
+		 * wipe-then-partial-rebuild cycle.
+		 *
 		 * @return int Number of jobs queued.
 		 * @since 2.0.0
 		 * @since NEXT Capped per-run queue with RUM-worst-first ordering.
@@ -4571,8 +4660,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			$templates = self::get_templates();
 			$queued    = 0;
 
-			self::clear_all();
-
 			$templates = self::order_templates_by_rum_priority( $templates );
 
 			try {
@@ -4583,6 +4670,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
+
+			self::clear_queued_templates( array_keys( $templates ) );
 
 			foreach ( $templates as $template => $label ) {
 				$hash = self::get_template_hash( $template );
@@ -4626,6 +4715,79 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			);
 
 			return $queued;
+		}
+
+		/**
+		 * Clear stored CCSS variants and baselines for queued templates only.
+		 *
+		 * Slice-first companion to regenerate_all() (issue #1255 review): a
+		 * full clear_all() before the per-run cap slice deletes usable
+		 * variants for templates that will not be rebuilt this run, leaving
+		 * tail pages unoptimized for a full cycle. Clearing only the queued
+		 * hashes keeps unqueued variants serving while the remainder waits
+		 * for the next cron run. Fail-open and best-effort: any failure
+		 * clears nothing and never fatals; queued templates are still marked
+		 * `pending` by the caller so generation proceeds regardless.
+		 *
+		 * @param array $templates Template identifiers queued this run.
+		 * @return void
+		 * @since NEXT
+		 */
+		private static function clear_queued_templates( array $templates ): void {
+			try {
+				$hashes = array();
+				foreach ( $templates as $template ) {
+					if ( ! is_string( $template ) || '' === $template ) {
+						continue;
+					}
+					try {
+						$hash = self::get_template_hash( $template );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						continue;
+					}
+					if ( self::is_valid_template_hash( $hash ) ) {
+						$hashes[ $hash ] = true;
+					}
+				}
+				if ( array() === $hashes ) {
+					return;
+				}
+				global $wp_filesystem;
+				foreach ( array_keys( $hashes ) as $hash ) {
+					$files   = array( self::get_ccss_file( $hash ) );
+					$files[] = self::get_ccss_variant_file( $hash, 'mobile' );
+					$files[] = self::get_ccss_variant_file( $hash, 'desktop' );
+					foreach ( $files as $file ) {
+						if ( '' === $file ) {
+							continue;
+						}
+						try {
+							if ( isset( $wp_filesystem ) && is_object( $wp_filesystem ) && method_exists( $wp_filesystem, 'delete' ) ) {
+								$wp_filesystem->delete( $file );
+							} elseif ( file_exists( $file ) ) {
+								// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Cache eviction when the WP filesystem API is unavailable (unit/CLI contexts).
+								unlink( $file );
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+					}
+					try {
+						if ( function_exists( 'delete_transient' ) ) {
+							delete_transient( Util::transient_key( 'wppo_ccss_status_' . $hash ) );
+							delete_transient( self::get_source_checksum_key( $hash ) );
+							delete_transient( self::get_source_urls_key( $hash ) );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+					self::invalidate_ccss_memo( $hash );
+				}
+				clearstatcache();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 
 		/**
