@@ -10,6 +10,7 @@ import { handleChange } from '../lib/util';
 import {
 	apiCall,
 	commitSettingsCache,
+	getWppoSettings,
 	isValidScanUrl,
 	runPerformanceScan,
 } from '../lib/apiRequest';
@@ -281,6 +282,94 @@ const FileOptimization = ( {
 		// (issue #1220). Fail-open: a failed fetch leaves the banner hidden.
 		refreshUsedCssStatus();
 	}, [ options.removeUnusedCSS, refreshUsedCssStatus ] );
+	// Upgrade auto-purge status (issue #1276): SPA-visible last-purge
+	// reason + safe-mode preview link bypassing minify (?wppo_nocache=1).
+	// Seeded from wppoSettings.upgradePurge, refreshed from the read-only
+	// upgrade_purge_status endpoint. Fail-open: a failed fetch keeps the seed.
+	const initialUpgradePurge = getWppoSettings( 'upgradePurge', {} ) || {};
+	const [ upgradePurge, setUpgradePurge ] = useState( {
+		last_purge:
+			initialUpgradePurge.last_purge ||
+			initialUpgradePurge.lastPurge ||
+			null,
+		safe_preview_url:
+			initialUpgradePurge.safe_preview_url ||
+			initialUpgradePurge.safePreviewUrl ||
+			'',
+	} );
+	const [ isPurgingDerived, setIsPurgingDerived ] = useState( false );
+	const {
+		notice: derivedPurgeNotice,
+		notify: notifyDerivedPurge,
+		dismiss: dismissDerivedPurge,
+	} = useNotice();
+	const refreshUpgradePurgeStatus = useCallback( async () => {
+		try {
+			const res = await apiCall( 'upgrade_purge_status', {}, 'GET' );
+			if ( res && res.success && res.data ) {
+				setUpgradePurge( {
+					last_purge: res.data.last_purge || null,
+					safe_preview_url: res.data.safe_preview_url || '',
+				} );
+			}
+		} catch {
+			// Fail-open: keep the seeded wppoSettings value.
+		}
+	}, [] );
+	// Note: no auto-fetch on mount/tab-open — the status is seeded from
+	// wppoSettings.upgradePurge (localized by PHP) so existing mocked-apiCall
+	// flows are unaffected; refresh runs after a manual derived purge.
+	const handlePurgeDerivedCaches = async () => {
+		setIsPurgingDerived( true );
+		dismissDerivedPurge();
+		try {
+			const res = await apiCall( 'purge_derived_caches' );
+			if ( res && res.success ) {
+				if ( res.data && res.data.reason !== undefined ) {
+					setUpgradePurge( ( prev ) => ( {
+						...prev,
+						last_purge: res.data,
+					} ) );
+				} else {
+					refreshUpgradePurgeStatus();
+				}
+				notifyDerivedPurge( {
+					type: 'success',
+					message:
+						res.message ||
+						__(
+							'Page cache, used CSS and critical CSS purged.',
+							'performance-optimisation'
+						),
+					durationMs: 3000,
+				} );
+				refreshUsedCssStatus();
+			} else {
+				notifyDerivedPurge( {
+					type: 'error',
+					message:
+						( res && res.message ) ||
+						__(
+							'Failed to purge derived caches.',
+							'performance-optimisation'
+						),
+					durationMs: 3000,
+				} );
+			}
+		} catch ( err ) {
+			console.error( 'Failed to purge derived caches.', err );
+			notifyDerivedPurge( {
+				type: 'error',
+				message: __(
+					'An unexpected error occurred.',
+					'performance-optimisation'
+				),
+				durationMs: 3000,
+			} );
+		} finally {
+			setIsPurgingDerived( false );
+		}
+	};
 	// Sandbox preview (issue #1163): visitor-safe admin preview of
 	// delay/defer/combine with one-click promote/discard + in-preview perf test.
 	const [ sandboxStaged, setSandboxStaged ] = useState( null );
@@ -2071,6 +2160,77 @@ const FileOptimization = ( {
 										) }
 									/>
 								) }
+								<div className="wppo-field wppo-upgrade-purge">
+									<p className="wppo-field-label">
+										{ __(
+											'Upgrade safety — auto-purge on update',
+											'performance-optimisation'
+										) }
+									</p>
+									<p className="wppo-field-description">
+										{ __(
+											'Plugin, theme and core updates auto-clear the page cache, purge used and critical CSS, and bump combined-asset versions so the first visit never shows unstyled content. Use the safe preview link to verify styled output (it bypasses minify via ?wppo_nocache=1).',
+											'performance-optimisation'
+										) }
+									</p>
+									{ upgradePurge &&
+										upgradePurge.last_purge &&
+										upgradePurge.last_purge.reason && (
+											<NoticeBanner
+												type="info"
+												message={ sprintf(
+													// translators: %s: last purge reason.
+													__(
+														'Last purge: %s',
+														'performance-optimisation'
+													),
+													upgradePurge.last_purge
+														.reason
+												) }
+											/>
+										) }
+									{ derivedPurgeNotice && (
+										<NoticeBanner
+											type={ derivedPurgeNotice.type }
+											message={
+												derivedPurgeNotice.message
+											}
+											onDismiss={ dismissDerivedPurge }
+										/>
+									) }
+									<div className="wppo-sandbox-actions">
+										<button
+											type="button"
+											className="button button-secondary"
+											onClick={ handlePurgeDerivedCaches }
+											disabled={ isPurgingDerived }
+										>
+											{ __(
+												'Purge Derived Caches',
+												'performance-optimisation'
+											) }
+										</button>
+										{ upgradePurge &&
+											upgradePurge.safe_preview_url &&
+											isSafePreviewUrl(
+												upgradePurge.safe_preview_url
+											) && (
+												<a
+													className="button button-secondary"
+													href={
+														upgradePurge.safe_preview_url
+													}
+													target="_blank"
+													rel="noopener noreferrer"
+												>
+													{ __(
+														'Open safe preview (bypasses minify)',
+														'performance-optimisation'
+													) }
+												</a>
+											) }
+									</div>
+								</div>
 								<div className="wppo-field wppo-sandbox-preview">
 									<p className="wppo-field-label">
 										{ __(

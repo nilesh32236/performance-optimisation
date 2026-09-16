@@ -903,4 +903,23 @@ describe( 'Dashboard', () => {
 			apiCall.mockReset();
 		}
 	} );
+
+	it( 'shows the last-purge reason and safe preview link from wppoSettings', async () => {
+		global.wppoSettings.upgradePurge = {
+			last_purge: { reason: 'plugin akismet/akismet.php', time: 123 },
+			safe_preview_url: 'https://example.com/?wppo_nocache=1',
+		};
+		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+		await flushDashboardMount();
+
+		expect( screen.getByText( /Last purge:/i ) ).toBeInTheDocument();
+		const safeLink = screen.getByRole( 'link', {
+			name: /bypasses minify/i,
+		} );
+		expect( safeLink ).toHaveAttribute(
+			'href',
+			'https://example.com/?wppo_nocache=1'
+		);
+	} );
 } );

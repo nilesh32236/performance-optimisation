@@ -235,6 +235,8 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			'woo_cache_self_test',
 			'used_css_regenerate',
 			'purge_used_css_cache',
+			'purge_derived_caches',
+			'upgrade_purge_status',
 			'used_css_status',
 			'regenerate_ccss',
 			'ccss_status',
@@ -259,7 +261,7 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 		);
 
 		// Keep in sync with the AGENTS.md endpoint count (33 + 4 sandbox preview + 2 preload + 1 LCP candidate + 1 used-CSS status routes).
-		$this->assertCount( 41, $routes, 'REST route count drifted from the documented endpoint count' );
+		$this->assertCount( 43, $routes, 'REST route count drifted from the documented endpoint count' );
 
 		foreach ( $expected as $route ) {
 			$this->assertArrayHasKey( $route, $routes, "Missing route: {$route}" );

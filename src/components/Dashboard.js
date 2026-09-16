@@ -229,6 +229,33 @@ const Dashboard = ( {
 	);
 	const [ wooSelfTest, setWooSelfTest ] = useState( null );
 	const [ wooSelfTestLoading, setWooSelfTestLoading ] = useState( false );
+	// Upgrade auto-purge status (issue #1276): last-purge reason + safe
+	// preview link bypassing minify. Seeded from wppoSettings.upgradePurge.
+	const initialUpgradePurge = getWppoSettings( 'upgradePurge', {} ) || {};
+	const [ upgradePurge ] = useState( {
+		last_purge:
+			initialUpgradePurge.last_purge ||
+			initialUpgradePurge.lastPurge ||
+			null,
+		safe_preview_url:
+			initialUpgradePurge.safe_preview_url ||
+			initialUpgradePurge.safePreviewUrl ||
+			'',
+	} );
+	// Note: seeded from wppoSettings.upgradePurge (localized by PHP); no
+	// auto-fetch on mount so existing mocked-apiCall flows are unaffected.
+	// The read-only upgrade_purge_status endpoint remains for manual refresh.
+	const isSafeUpgradePreviewUrl = ( url ) => {
+		if ( ! url || typeof url !== 'string' ) {
+			return false;
+		}
+		try {
+			const parsed = new URL( url );
+			return 'http:' === parsed.protocol || 'https:' === parsed.protocol;
+		} catch {
+			return false;
+		}
+	};
 	const [ loggedInCacheEnabled, setLoggedInCacheEnabled ] = useState(
 		!! cacheSettings.enableLoggedInCache
 	);
@@ -1070,6 +1097,50 @@ const Dashboard = ( {
 			/>
 
 			<WelcomePanel />
+
+			{ upgradePurge &&
+				( ( upgradePurge.last_purge &&
+					upgradePurge.last_purge.reason ) ||
+					( upgradePurge.safe_preview_url &&
+						isSafeUpgradePreviewUrl(
+							upgradePurge.safe_preview_url
+						) ) ) && (
+					<div
+						className="wppo-notice wppo-notice--info wppo-mb-16"
+						role="status"
+						aria-live="polite"
+					>
+						<span>
+							{ upgradePurge.last_purge &&
+							upgradePurge.last_purge.reason
+								? __(
+										'Last purge:',
+										'performance-optimisation'
+								  ) +
+								  upgradePurge.last_purge.reason +
+								  ' — '
+								: __(
+										'Updates auto-purge derived caches —',
+										'performance-optimisation'
+								  ) }
+							{ upgradePurge.safe_preview_url &&
+								isSafeUpgradePreviewUrl(
+									upgradePurge.safe_preview_url
+								) && (
+									<a
+										href={ upgradePurge.safe_preview_url }
+										target="_blank"
+										rel="noopener noreferrer"
+									>
+										{ __(
+											'Open safe preview (bypasses minify)',
+											'performance-optimisation'
+										) }
+									</a>
+								) }
+						</span>
+					</div>
+				) }
 
 			{ isCacheMissing && (
 				<div className="wppo-banner wppo-banner--warning" role="alert">

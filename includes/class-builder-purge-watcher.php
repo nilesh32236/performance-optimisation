@@ -124,6 +124,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		);
 
 		/**
+		 * Option key for the last derived-cache purge reason (issue #1276).
+		 *
+		 * Per-site via get_option()/update_option() (multisite-safe),
+		 * non-autoloaded. Surfaced to the SPA so admins can see why the
+		 * last auto-purge ran after a plugin/theme/core update.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		public const LAST_PURGE_OPTION = 'wppo_last_purge';
+
+		/**
+		 * Per-request dedupe so a builder update does not purge twice when
+		 * both on_builder_update() and on_any_upgrade() observe the same
+		 * upgrader_process_complete firing (issue #1276).
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static bool $upgrade_purged_this_request = false;
+
+		/**
 		 * Re-entrancy guard for the drift fan-out (issue #1023).
 		 *
 		 * The regeneration fan-out fires elementor/core/files/clear_cache,
@@ -160,6 +182,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 */
 		public function register(): void {
 			add_action( 'upgrader_process_complete', array( $this, 'on_builder_update' ), 10, 2 );
+			add_action( 'upgrader_process_complete', array( $this, 'on_any_upgrade' ), 20, 2 );
 			add_action( 'elementor/core/files/clear_cache', array( $this, 'on_builder_drift' ), 10, 0 );
 			add_action( 'elementor/editor/after_save', array( $this, 'on_builder_drift_save' ), 10, 2 );
 			add_action( self::DRIFT_PURGE_HOOK, array( $this, 'run_deferred_drift_purge' ), 10, 0 );
@@ -471,6 +494,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 			$this->purge_builder_directories( $matched, $map );
 			$this->fire_builder_regeneration_hooks( $matched, $map );
 			$this->purge_wppo_derived_caches();
+			$this->bump_combined_asset_versions();
+			self::$upgrade_purged_this_request = true;
+			$this->record_last_purge( sprintf( 'Builder update (%s)', implode( ', ', $labels ) ) );
 			$this->write_purge_log( $labels );
 			$this->store_admin_notice( $labels );
 
@@ -483,6 +509,270 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 			 */
 			if ( function_exists( 'do_action' ) ) {
 				do_action( 'wppo_after_builder_purge', $matched );
+			}
+		}
+
+		/**
+		 * Handle any plugin/theme/core update: auto-purge derived caches (issue #1276).
+		 *
+		 * Distinct from on_builder_update() (issue #907, builder slugs only):
+		 * this is the generic upgrade trigger so a non-builder plugin, theme,
+		 * or core update never leaves a first-incognito-hit FOUC from stale
+		 * static HTML + stale used/critical CSS + stale combined/minified
+		 * files (old `?ver=filemtime` URLs). Builder updates are skipped here
+		 * (already handled by on_builder_update() at priority 10); a
+		 * per-request flag also dedupes when both callbacks observe the same
+		 * firing. Guarded and fail-open so an upgrader failure can never
+		 * break the update.
+		 *
+		 * @since NEXT
+		 * @param mixed $upgrader   Upgrader instance (unused).
+		 * @param mixed $hook_extra Update context (action/type/plugin/plugins/theme/themes).
+		 * @return void
+		 */
+		public function on_any_upgrade( $upgrader, $hook_extra ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- Signature must match the upgrader_process_complete action.
+			unset( $upgrader );
+			try {
+				if ( self::$upgrade_purged_this_request ) {
+					return;
+				}
+				if ( ! is_array( $hook_extra ) ) {
+					return;
+				}
+				if ( 'update' !== ( $hook_extra['action'] ?? '' ) ) {
+					return;
+				}
+				if ( ! in_array( ( $hook_extra['type'] ?? '' ), array( 'plugin', 'theme', 'core' ), true ) ) {
+					return;
+				}
+
+				$updated_plugins = array();
+				if ( ! empty( $hook_extra['plugin'] ) && is_string( $hook_extra['plugin'] ) ) {
+					$updated_plugins[] = $hook_extra['plugin'];
+				}
+				if ( ! empty( $hook_extra['plugins'] ) && is_array( $hook_extra['plugins'] ) ) {
+					foreach ( $hook_extra['plugins'] as $plugin_file ) {
+						if ( is_string( $plugin_file ) && '' !== $plugin_file ) {
+							$updated_plugins[] = $plugin_file;
+						}
+					}
+				}
+				$updated_themes = array();
+				if ( ! empty( $hook_extra['theme'] ) && is_string( $hook_extra['theme'] ) ) {
+					$updated_themes[] = $hook_extra['theme'];
+				}
+				if ( ! empty( $hook_extra['themes'] ) && is_array( $hook_extra['themes'] ) ) {
+					foreach ( $hook_extra['themes'] as $theme_slug ) {
+						if ( is_string( $theme_slug ) && '' !== $theme_slug ) {
+							$updated_themes[] = $theme_slug;
+						}
+					}
+				}
+
+				// Builder updates already purged via on_builder_update().
+				$map     = self::get_builder_map();
+				$matched = $this->match_builders( $updated_plugins, $updated_themes, $map );
+				if ( ! empty( $matched ) ) {
+					return;
+				}
+
+				// Nothing identifiable to report (e.g. translation-only bulk
+				// payload with no slugs) — still purge, labelled generically.
+				$reason = $this->describe_upgrade( (string) ( $hook_extra['type'] ?? 'update' ), $updated_plugins, $updated_themes );
+
+				$this->purge_wppo_derived_caches();
+				$this->bump_combined_asset_versions();
+				self::$upgrade_purged_this_request = true;
+				$this->record_last_purge( $reason );
+				if ( class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
+					try {
+						Log::add(
+							sprintf(
+								/* translators: %s: upgrade description, e.g. "plugin akismet/akismet.php" */
+								__( 'Upgrade detected (%s): page cache, used-CSS and critical-CSS purged; combined assets version-bumped.', 'performance-optimisation' ),
+								$reason
+							)
+						);
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( function_exists( 'do_action' ) ) {
+					try {
+						/**
+						 * Fires after WPPO auto-purges derived caches for a generic upgrade.
+						 *
+						 * @since NEXT
+						 *
+						 * @param string $reason Human-readable upgrade description.
+						 */
+						do_action( 'wppo_after_upgrade_purge', $reason );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Describe an upgrade payload for logs + SPA last-purge reason.
+		 *
+		 * @since NEXT
+		 * @param string   $type    Upgrade type (plugin/theme/core).
+		 * @param string[] $plugins Updated plugin files.
+		 * @param string[] $themes  Updated theme slugs.
+		 * @return string Human-readable description (bounded length).
+		 */
+		protected function describe_upgrade( string $type, array $plugins, array $themes ): string {
+			$slugs = array_merge( array_values( $plugins ), array_values( $themes ) );
+			$slugs = array_values( array_filter( array_map( 'strval', $slugs ) ) );
+			if ( empty( $slugs ) ) {
+				return 'core' === $type ? 'core update' : $type . ' update';
+			}
+			$shown = array_slice( $slugs, 0, 3 );
+			$label = implode( ', ', $shown );
+			if ( count( $slugs ) > 3 ) {
+				$label .= sprintf( ' (+%d more)', count( $slugs ) - 3 );
+			}
+			$label = $type . ' ' . $label;
+			if ( function_exists( 'mb_substr' ) ) {
+				return mb_substr( $label, 0, 200 );
+			}
+			return substr( $label, 0, 200 );
+		}
+
+		/**
+		 * Manual purge entry point for the SPA button + REST route (issue #1276).
+		 *
+		 * Clears the page cache, purges coupled used/critical CSS, bumps
+		 * combined-asset versions, and records the SPA-visible last-purge
+		 * reason. Fail-open: never throws.
+		 *
+		 * @since NEXT
+		 * @param string $reason Human-readable reason stored for the SPA.
+		 * @return void
+		 */
+		public function purge_derived_caches( string $reason = 'manual purge' ): void {
+			try {
+				$this->purge_wppo_derived_caches();
+				$this->bump_combined_asset_versions();
+				$this->record_last_purge( '' !== $reason ? $reason : 'manual purge' );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Bump combined/minified asset versions after a purge (issue #1276).
+		 *
+		 * Combined CSS/JS URLs carry `?ver=filemtime()` so deleting the
+		 * blog-scoped min dir (done by Cache::delete_all_cache_files()) is
+		 * already an implicit bump on regen; this explicit salt bump via
+		 * Cache::bump_stats_cache() (method_exists-guarded, fail-open)
+		 * invalidates cached asset manifests/stats immediately so the first
+		 * post-update hit cannot reuse stale version strings.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		protected function bump_combined_asset_versions(): void {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) && method_exists( 'PerformanceOptimise\Inc\Cache', 'bump_stats_cache' ) ) {
+					Cache::bump_stats_cache();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Get the last derived-cache purge record for the SPA (issue #1276).
+		 *
+		 * Per-site via get_option() (multisite-safe). Fail-open to an empty
+		 * record when the option is missing or malformed.
+		 *
+		 * @since NEXT
+		 * @return array{reason:string,time:int} Last-purge record.
+		 */
+		public static function get_last_purge(): array {
+			try {
+				$stored = function_exists( 'get_option' ) ? get_option( self::LAST_PURGE_OPTION, array() ) : array();
+				if ( ! is_array( $stored ) ) {
+					return array(
+						'reason' => '',
+						'time'   => 0,
+					);
+				}
+				return array(
+					'reason' => isset( $stored['reason'] ) && is_string( $stored['reason'] ) ? $stored['reason'] : '',
+					'time'   => isset( $stored['time'] ) ? (int) $stored['time'] : 0,
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array(
+					'reason' => '',
+					'time'   => 0,
+				);
+			}
+		}
+
+		/**
+		 * Record the last derived-cache purge reason (issue #1276).
+		 *
+		 * Non-autoloaded per-site option write. Fail-open: never throws.
+		 *
+		 * @since NEXT
+		 * @param string $reason Human-readable purge reason.
+		 * @return void
+		 */
+		protected function record_last_purge( string $reason ): void {
+			try {
+				if ( ! function_exists( 'update_option' ) ) {
+					return;
+				}
+				$reason = trim( $reason );
+				if ( function_exists( 'mb_substr' ) ) {
+					$reason = mb_substr( $reason, 0, 200 );
+				} else {
+					$reason = substr( $reason, 0, 200 );
+				}
+				update_option(
+					self::LAST_PURGE_OPTION,
+					array(
+						'reason' => $reason,
+						'time'   => time(),
+					),
+					false
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Safe-mode preview URL that bypasses minify (issue #1276).
+		 *
+		 * Appends `?wppo_nocache=1` (honoured by
+		 * Main::is_aggressive_bypass_active()) so delay/defer/used-CSS and
+		 * minify are skipped for the preview hit — proving the post-update
+		 * page renders styled even with aggressive optimisations on.
+		 * Fail-open to '' when home_url() is unavailable.
+		 *
+		 * @since NEXT
+		 * @return string Preview URL, or '' when unresolvable.
+		 */
+		public static function get_safe_preview_url(): string {
+			try {
+				if ( ! function_exists( 'home_url' ) ) {
+					return '';
+				}
+				$url = home_url( '/?wppo_nocache=1' );
+				return is_string( $url ) ? $url : '';
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
 			}
 		}
 
