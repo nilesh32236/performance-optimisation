@@ -764,7 +764,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					$cookie_hash = isset( $_COOKIE['wppo_role_hash'] ) ? sanitize_text_field( wp_unslash( $_COOKIE['wppo_role_hash'] ) ) : null;
 					if ( '' !== $hash && ( null === $cookie_hash || $cookie_hash !== $hash ) ) {
 						if ( ! headers_sent() ) {
-							setcookie( 'wppo_role_hash', $hash, time() + DAY_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), true );
+							setcookie(
+								'wppo_role_hash',
+								$hash,
+								array(
+									'expires'  => time() + DAY_IN_SECONDS,
+									'path'     => COOKIEPATH,
+									'domain'   => COOKIE_DOMAIN,
+									'secure'   => is_ssl(),
+									'httponly' => true,
+									'samesite' => 'Lax',
+								)
+							);
 						}
 					}
 				}
@@ -779,7 +790,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		public function clear_role_hash_cookie(): void {
 			if ( isset( $_COOKIE['wppo_role_hash'] ) && ! headers_sent() ) {
-				setcookie( 'wppo_role_hash', '', time() - YEAR_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), true );
+				setcookie(
+					'wppo_role_hash',
+					'',
+					array(
+						'expires'  => time() - YEAR_IN_SECONDS,
+						'path'     => COOKIEPATH,
+						'domain'   => COOKIE_DOMAIN,
+						'secure'   => is_ssl(),
+						'httponly' => true,
+						'samesite' => 'Lax',
+					)
+				);
 			}
 		}
 

@@ -55,15 +55,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				return;
 			}
 
-			if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ), 'wppo_dismiss_notice' ) ) {
+			$key = sanitize_key( wp_unslash( $_GET['wppo_dismiss'] ) );
+
+			// Allowlist + per-notice nonce binding: a leaked/prefetched dismiss URL
+			// can replay at most its own notice within the nonce lifetime.
+			$allowed = array( 'activation', 'review_done', 'review_snooze', 'litespeed', 'avif_webp_only', 'htaccess_failure', 'object_cache_circuit' );
+			if ( ! in_array( $key, $allowed, true ) ) {
+				return;
+			}
+			if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ), 'wppo_dismiss_notice_' . $key ) ) {
 				return;
 			}
 
 			if ( ! current_user_can( 'manage_options' ) ) {
 				return;
 			}
-
-			$key = sanitize_key( wp_unslash( $_GET['wppo_dismiss'] ) );
 
 			if ( 'activation' === $key ) {
 				delete_transient( Util::transient_key( 'wppo_activation_notices' ) );
@@ -176,7 +182,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 
 			$dismiss = wp_nonce_url(
 				add_query_arg( 'wppo_dismiss', 'activation' ),
-				'wppo_dismiss_notice',
+				'wppo_dismiss_notice_activation',
 				'_wpnonce'
 			);
 
@@ -225,7 +231,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 
 			$dismiss = wp_nonce_url(
 				add_query_arg( 'wppo_dismiss', 'htaccess_failure' ),
-				'wppo_dismiss_notice',
+				'wppo_dismiss_notice_htaccess_failure',
 				'_wpnonce'
 			);
 
@@ -272,7 +278,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 
 			$dismiss = wp_nonce_url(
 				add_query_arg( 'wppo_dismiss', 'object_cache_circuit' ),
-				'wppo_dismiss_notice',
+				'wppo_dismiss_notice_object_cache_circuit',
 				'_wpnonce'
 			);
 
@@ -328,7 +334,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 
 			$dismiss = wp_nonce_url(
 				add_query_arg( 'wppo_dismiss', 'litespeed' ),
-				'wppo_dismiss_notice',
+				'wppo_dismiss_notice_litespeed',
 				'_wpnonce'
 			);
 
@@ -383,7 +389,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 
 			$dismiss = wp_nonce_url(
 				add_query_arg( 'wppo_dismiss', 'avif_webp_only' ),
-				'wppo_dismiss_notice',
+				'wppo_dismiss_notice_avif_webp_only',
 				'_wpnonce'
 			);
 
@@ -512,13 +518,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 
 			$dismiss_done_url = wp_nonce_url(
 				add_query_arg( 'wppo_dismiss', 'review_done' ),
-				'wppo_dismiss_notice',
+				'wppo_dismiss_notice_review_done',
 				'_wpnonce'
 			);
 
 			$dismiss_snooze_url = wp_nonce_url(
 				add_query_arg( 'wppo_dismiss', 'review_snooze' ),
-				'wppo_dismiss_notice',
+				'wppo_dismiss_notice_review_snooze',
 				'_wpnonce'
 			);
 
