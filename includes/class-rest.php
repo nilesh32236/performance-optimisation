@@ -1188,6 +1188,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// Preserve the CCSS generation timeout when the request omits it
 			// (issue #1235): same partial-save hazard as the queue caps above
 			// — an older client/partial save must not wipe a custom budget.
+			// $settings is the $params['settings'] alias (see above);
 			// array_key_exists() (not isset()) so an explicit null still
 			// counts as present; clamped to 1..120 at write time so
 			// 'not-a-number'/0/500 self-heal instead of persisting verbatim.

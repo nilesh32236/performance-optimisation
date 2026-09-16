@@ -1586,7 +1586,7 @@ Filters how long a Critical CSS source checksum is kept. @since 2.0.0.
 ---
 
 ### `wppo_ccss_generation_timeout`
-Filters the wall-clock budget in seconds for one Critical CSS generation run (fetch plus parse). On expiry the run aborts fail-open: the previously stored CSS is left untouched, no partial output is stored or inlined, the miss is logged, and a retry is scheduled with exponential backoff (escalating to `failed` after 5 consecutive timeouts). Values clamp to 1–120; non-numeric values keep the stored budget. Default `25` (stored `file_optimisation.ccssGenTimeout`). @since NEXT.
+Filters the wall-clock budget in seconds for one Critical CSS generation run (fetch plus parse). On expiry the run aborts fail-open: the previously stored CSS is left untouched, no partial output is stored or inlined, the miss is logged, and a retry is scheduled with exponential backoff (escalating to `failed` after 5 consecutive timeouts). Values clamp to 1–120. Non-numeric stored values fall back to the default `25`; non-numeric filter output is ignored and the stored budget is kept. Default `25` (stored `file_optimisation.ccssGenTimeout`). @since NEXT.
 
 **Parameters:**
 - `$timeout` *(int)* — Budget in seconds. Default `25`.

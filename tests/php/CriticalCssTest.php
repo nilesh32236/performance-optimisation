@@ -985,7 +985,9 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * The guarded wrapper fails open without a sample URL and creates no file.
+	 * The guarded wrapper fails open on the live-budget missing-URL path:
+	 * no sample URL means deterministic `failed` (never pending/retry) with
+	 * no file and no HTTP request.
 	 *
 	 * @return void
 	 */
@@ -1116,8 +1118,12 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * The guarded wrapper never fatals when the environment cannot serve a
-	 * sample URL: it fails open with timed_out unset.
+	 * The guarded wrapper never fatals on deterministic failure: it fails
+	 * open with timed_out explicitly false (not pending/retry).
+	 *
+	 * Covers the timed_out out-param contract; the no-file/no-HTTP
+	 * fail-open assertions live in
+	 * test_generate_guarded_no_sample_url_creates_no_file().
 	 *
 	 * @return void
 	 */

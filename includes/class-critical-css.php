@@ -238,6 +238,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		private const MAX_CCSS_TIMEOUT_ATTEMPTS = 5;
 
 		/**
+		 * Shared traversal-guard pattern for template hashes (issue #1235 review).
+		 *
+		 * Single source so get_ccss_file(), is_valid_template_hash() and
+		 * get_ccss_variant_file() can never drift on charset/length.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		private const TEMPLATE_HASH_PATTERN = '/^[A-Za-z0-9_\-]{1,128}$/';
+
+		/**
 		 * Cached microtime() availability probe for the hot deadline path.
 		 *
 		 * @since NEXT
@@ -343,7 +354,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// Defense-in-depth: allow word chars + dash only so a caller
 			// passing ../../foo can never escape the ccss dir via this
 			// delete-capable sink (slashes, dots and NUL are rejected).
-			if ( '' === $template_hash || 1 !== preg_match( '/^[A-Za-z0-9_\-]{1,128}$/', $template_hash ) ) {
+			if ( '' === $template_hash || 1 !== preg_match( self::TEMPLATE_HASH_PATTERN, $template_hash ) ) {
 				return '';
 			}
 			$dir = self::get_ccss_dir();
@@ -453,7 +464,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				if ( ! is_numeric( $raw ) ) {
 					$timeout = self::DEFAULT_CCSS_GEN_TIMEOUT;
 				} else {
-					$timeout = function_exists( 'absint' ) ? absint( $raw ) : abs( (int) $raw );
+					// (int) cast (not absint()): negatives heal to the default
+					// below, matching the write-time clamp in class-rest.php
+					// so one stored row yields one budget on every path.
+					$timeout = (int) $raw;
 					if ( $timeout < 1 ) {
 						$timeout = self::DEFAULT_CCSS_GEN_TIMEOUT;
 					}
@@ -476,6 +490,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * Falls back to second-resolution time() when microtime() is
 		 * unavailable so deadline math never fatals on restricted hosts.
+		 * Naming note: the generation_* helpers omit the get_/is_ prefix by
+		 * design — they form one deadline-clock family with
+		 * generation_deadline()/generation_expired()/request_timeout_for_deadline().
 		 *
 		 * @return float Now.
 		 * @since NEXT
@@ -560,7 +577,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since NEXT
 		 */
 		private static function is_valid_template_hash( $hash ): bool {
-			return is_string( $hash ) && '' !== $hash && 1 === preg_match( '/^[A-Za-z0-9_\-]{1,128}$/', $hash );
+			return is_string( $hash ) && '' !== $hash && 1 === preg_match( self::TEMPLATE_HASH_PATTERN, $hash );
 		}
 
 		/**
@@ -586,6 +603,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				} catch ( \Throwable $e ) {
 					unset( $e );
 					$deadline = null;
+				}
+			} else {
+				// A caller-supplied deadline bounds the run, not the stored
+				// setting: derive the logged budget from the deadline span so
+				// the timeout log can never quote a budget that never bounded
+				// the run (issue #1235 review).
+				try {
+					$span   = (int) ceil( $deadline - self::generation_now() );
+					$budget = min( max( $span, 1 ), self::MAX_CCSS_GEN_TIMEOUT );
+				} catch ( \Throwable $e ) {
+					unset( $e );
 				}
 			}
 			return array( $budget, $deadline );
@@ -644,7 +672,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				// callback must receive the assoc array as one argument.
 				$hook_args = array( array( 'template_hash' => $template_hash ) );
 				$attempts  = self::get_ccss_timeout_attempts( $template_hash );
-				// Exponential backoff: 5min, 10min, 20min, 40min, capped ~1h.
+				// Exponential backoff: 5min, 10min, 20min, 40min (capped).
 				$delay = 300 * ( 1 << min( max( $attempts - 1, 0 ), 3 ) );
 				if ( $delay < 300 ) {
 					$delay = 300;
@@ -708,6 +736,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			try {
 				if ( function_exists( 'delete_transient' ) && self::is_valid_template_hash( $template_hash ) ) {
 					delete_transient( Util::transient_key( 'wppo_ccss_timeout_' . $template_hash ) );
+					delete_transient( Util::transient_key( 'wppo_ccss_timeout_first_' . $template_hash ) );
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -740,29 +769,67 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				if ( function_exists( 'set_transient' ) ) {
 					set_transient( Util::transient_key( 'wppo_ccss_timeout_' . $template_hash ), $attempts, defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
 				}
+				// Wall-clock liveness fallback (issue #1235 review): the
+				// counter above is best-effort — an evicted transient reads
+				// back as 0 and would pin the delay at 5min forever. The
+				// first-timeout stamp survives the same eviction only when
+				// the transient backend persists at all, but when it does, a
+				// run older than a day escalates even if the counter was lost.
+				if ( function_exists( 'get_transient' ) && function_exists( 'set_transient' ) ) {
+					$first_key = Util::transient_key( 'wppo_ccss_timeout_first_' . $template_hash );
+					$first     = get_transient( $first_key );
+					if ( ! is_numeric( $first ) ) {
+						set_transient( $first_key, time(), defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
+					} elseif ( ( time() - (int) $first ) > ( defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 ) ) {
+						$attempts = max( $attempts, self::MAX_CCSS_TIMEOUT_ATTEMPTS );
+					}
+				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
-			// Bounded retries: after MAX attempts escalate to `failed` so a
-			// permanently-slow origin stops burning a full worker per cycle.
-			if ( $attempts > self::MAX_CCSS_TIMEOUT_ATTEMPTS ) {
+			// Bounded retries: after MAX consecutive timeouts escalate to
+			// `failed` so a permanently-slow origin stops burning a full
+			// worker per cycle.
+			if ( $attempts >= self::MAX_CCSS_TIMEOUT_ATTEMPTS ) {
 				try {
 					self::set_status_cache( $template_hash, 'failed', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				try {
+					if ( class_exists( 'PerformanceOptimise\Inc\Log' ) && method_exists( 'PerformanceOptimise\Inc\Log', 'add' ) ) {
+						if ( function_exists( '__' ) ) {
+							$message = sprintf(
+								/* translators: 1: Template hash 2: Consecutive timeout count */
+								__( 'Critical CSS generation escalated to failed for template: %1$s after %2$d consecutive timeouts.', 'performance-optimisation' ),
+								$template_hash,
+								$attempts
+							);
+						} else {
+							$message = sprintf(
+								'Critical CSS generation escalated to failed for template: %s after %d consecutive timeouts.',
+								$template_hash,
+								$attempts
+							);
+						}
+						Log::add( $message );
+					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
 				return;
 			}
 			try {
-				$message = sprintf(
-					'Critical CSS generation timed out for template: %s after %d seconds; existing stylesheets kept, retry scheduled.',
-					$template_hash,
-					$budget
-				);
 				if ( function_exists( '__' ) ) {
 					$message = sprintf(
 						/* translators: 1: Template hash 2: Timeout budget in seconds */
 						__( 'Critical CSS generation timed out for template: %1$s after %2$d seconds; existing stylesheets kept, retry scheduled.', 'performance-optimisation' ),
+						$template_hash,
+						$budget
+					);
+				} else {
+					$message = sprintf(
+						'Critical CSS generation timed out for template: %s after %d seconds; existing stylesheets kept, retry scheduled.',
 						$template_hash,
 						$budget
 					);
@@ -897,7 +964,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			if ( ! in_array( $variant, self::VIEWPORT_VARIANTS, true ) ) {
 				return '';
 			}
-			if ( '' === $template_hash || 1 !== preg_match( '/^[A-Za-z0-9_\-]{1,128}$/', $template_hash ) ) {
+			if ( '' === $template_hash || 1 !== preg_match( self::TEMPLATE_HASH_PATTERN, $template_hash ) ) {
 				return '';
 			}
 			$dir = self::get_ccss_dir();
@@ -1601,15 +1668,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * probe cannot blow memory on large multisheet sites. Fail-open:
 		 * unresolvable URLs are skipped.
 		 *
-		 * @param string[] $urls Ordered stylesheet URLs (document/queue order).
+		 * @param string[]   $urls Ordered stylesheet URLs (document/queue order).
+		 * @param float|null $deadline Optional absolute wall-clock deadline;
+		 *                             the file loop breaks early when expired
+		 *                             (issue #1235 review).
 		 * @return string Concatenated source CSS, or '' when none resolve locally.
 		 * @since 2.0.0
+		 * @since NEXT Optional deadline-aware early break.
 		 */
-		private static function build_local_source_css( array $urls ): string {
+		private static function build_local_source_css( array $urls, ?float $deadline = null ): string {
 			$combined = '';
 			$count    = 0;
 			$seen     = array();
 			foreach ( $urls as $url ) {
+				if ( self::generation_expired( $deadline ) ) {
+					break;
+				}
 				if ( $count >= 20 || strlen( $combined ) >= 2097152 ) {
 					break;
 				}
@@ -2036,6 +2110,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			self::$ccss_content_cache = array();
 			self::$sample_url_cache   = array();
 			self::$stale_probe_memo   = array();
+			self::$ccss_presets_memo  = null;
 		}
 
 		/**
@@ -2383,10 +2458,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			$style_tags = $xpath->query( '//style' );
 			if ( $style_tags ) {
 				foreach ( $style_tags as $tag ) {
+					// Deadline poll (issue #1235 review): many/large inline
+					// blocks must not overrun before the next fetch poll.
+					if ( self::generation_expired( $deadline ) ) {
+						return false;
+					}
 					// phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- DOMNode property.
 					$content = trim( $tag->textContent );
 					if ( ! empty( $content ) ) {
 						$css_content .= $content . "\n";
+						if ( strlen( $css_content ) > self::MAX_CCSS_SOURCE_BYTES ) {
+							$css_content = substr( $css_content, 0, self::MAX_CCSS_SOURCE_BYTES );
+							break;
+						}
 					}
 				}
 			}
@@ -2446,7 +2530,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// frontend probe re-hashes the exact same document-ordered list
 			// instead of re-deriving one from $wp_styles order (audit #9), so
 			// an unchanged source compares equal instead of churning forever.
-			$source_css = self::build_local_source_css( $source_urls );
+			$source_css = self::build_local_source_css( $source_urls, $deadline );
 			if ( null !== $resolved_urls ) {
 				$resolved_urls = $source_urls;
 			}
@@ -2542,12 +2626,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			if ( empty( $content ) ) {
 				return '';
 			}
+			// Per-file cap (issue #1235 review): truncate the remote body
+			// before any regex/recursion so a multi-megabyte sheet cannot OOM
+			// the worker before the deadline polls run.
+			if ( strlen( $content ) > 524288 ) {
+				$content = substr( $content, 0, 524288 );
+			}
+			if ( self::generation_expired( $deadline ) ) {
+				return '';
+			}
 
 			// Resolve @import directives recursively.
 			preg_match_all( '/@import\s+(?:url\([\'"]?|[\'"])([^\'";)]+)(?:[\'"]?\))?[\'"]?\s*;/i', $content, $imports );
 
 			if ( ! empty( $imports[1] ) ) {
-				foreach ( $imports[1] as $import_url ) {
+				// Breadth cap: at most 10 nested imports per file so fan-out
+				// stays bounded next to the depth-3 limit.
+				$imports_list = array_slice( $imports[1], 0, 10 );
+				foreach ( $imports_list as $import_url ) {
 					// Stop expanding imports past the deadline (issue #1235):
 					// return '' (not the partial buffer) so a direct caller
 					// can never mistake the fragment for complete output.
@@ -2559,6 +2655,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 						$imported = self::fetch_stylesheet_with_imports( $resolved, $depth + 1, $deadline );
 						if ( '' !== $imported ) {
 							$content .= "\n" . $imported;
+							// Total-bytes cap: stop expanding once the buffer
+							// exceeds the scan budget.
+							if ( strlen( $content ) > self::MAX_CCSS_SOURCE_BYTES ) {
+								$content = substr( $content, 0, self::MAX_CCSS_SOURCE_BYTES );
+								break;
+							}
 						}
 					}
 				}
@@ -2878,6 +2980,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			if ( self::generation_expired( $deadline ) ) {
 				return '';
 			}
+			// Scan-budget cap (issue #1235 review): truncate oversized input
+			// before the regex passes so each preg_match_all duplicates at
+			// most 2MB instead of an unbounded theme bundle.
+			if ( strlen( $css ) > self::MAX_CCSS_SOURCE_BYTES ) {
+				$css = substr( $css, 0, self::MAX_CCSS_SOURCE_BYTES );
+			}
 			$critical_parts = array();
 
 			// Extract @font-face blocks.
@@ -2925,6 +3033,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			$safelist = self::get_ccss_safelist();
 			if ( ! empty( $mobile_queries[0] ) ) {
 				foreach ( $mobile_queries[0] as $mq ) {
+					if ( self::generation_expired( $deadline ) ) {
+						return implode( "\n", array_unique( array_filter( $critical_parts ) ) );
+					}
 					$filtered = self::filter_media_query_rules( $mq, $safelist );
 					if ( ! empty( $filtered ) ) {
 						$critical_parts[] = $filtered;
@@ -3124,9 +3235,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// selectors are always preserved, even with an empty user
 			// safelist, so capped extraction can never break hidden content
 			// (popups, modals, dialogs). Same match semantics as the user
-			// safelist; fail-open on any filter failure.
+			// safelist; fail-open on any filter failure. Resolved once per
+			// request (issue #1235 review) so a 2MB scan does not re-run the
+			// filter per rule.
 			try {
-				if ( self::matches_ccss_safelist( $selector, self::get_ccss_safelist_presets() ) ) {
+				if ( null === self::$ccss_presets_memo ) {
+					self::$ccss_presets_memo = self::get_ccss_safelist_presets();
+				}
+				if ( self::matches_ccss_safelist( $selector, self::$ccss_presets_memo ) ) {
 					return true;
 				}
 			} catch ( \Throwable $e ) {
@@ -3162,6 +3278,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @var array{exact: array<string, bool>, regex: string}|null
 		 */
 		private static ?array $above_fold_matcher = null;
+
+		/**
+		 * Per-request memo for the built-in safelist presets (issue #1235
+		 * review).
+		 *
+		 * The per-rule matcher runs once per CSS rule, so the presets
+		 * (settings read + filter) are resolved once per request instead of
+		 * once per rule. Reset via reset_ccss_memo().
+		 *
+		 * @since NEXT
+		 * @var string[]|null
+		 */
+		private static ?array $ccss_presets_memo = null;
 
 		/**
 		 * Build the precompiled above-fold matcher (exact hash sets + one alternation).
@@ -3279,7 +3408,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 
 			$url = self::get_sample_url( $template );
 			if ( ! $url ) {
-				self::record_generation_failure( $template_hash, $budget, $deadline );
+				// Deterministic failure (issue #1235 review): with no sample
+				// URL no retry can succeed until content exists, so mark
+				// failed directly instead of expiry-routing to pending.
+				try {
+					self::set_status_cache( $template_hash, 'failed', defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400 );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 				return false;
 			}
 
@@ -3371,6 +3507,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// both; a variant older than the single file is stale and falls
 			// back via get_ccss_variant_content(). Fail-open: variant write
 			// failures never fail the single-variant store.
+			// CPU/IO tail stays inside the budget (issue #1235 review): the
+			// variant mirrors plus checksum/status writes run after the last
+			// pre-commit check, so re-check expiry first and fail fast.
+			if ( self::generation_expired( $deadline ) ) {
+				self::handle_ccss_timeout( $template_hash, $budget );
+				return false;
+			}
 			if ( self::is_viewport_variants_enabled() ) {
 				try {
 					foreach ( self::VIEWPORT_VARIANTS as $variant ) {
@@ -3821,7 +3964,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * scheduler; the next cron run picks up the remainder. Fail-open: an
 		 * invalid cap queues everything (current behaviour). Each template
 		 * runs under the 25s generation budget (max 120s), so fan-out spans
-		 * multiple cron runs rather than one long synchronous loop.
+		 * multiple cron runs rather than one long synchronous loop. Jobs are
+		 * staggered 60s apart (issue #1235 review) so up to 5 full-budget
+		 * sync runs never burst-hold the shared `performance_optimisation`
+		 * worker back-to-back.
 		 *
 		 * @return int Number of jobs queued.
 		 * @since 2.0.0
@@ -3855,11 +4001,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					// callback must receive the assoc array as one argument.
 					$hook_args = array( array( 'template_hash' => $hash ) );
 					if ( ! as_next_scheduled_action( $hook, $hook_args, 'performance_optimisation' ) ) {
-						as_enqueue_async_action(
-							$hook,
-							$hook_args,
-							'performance_optimisation'
-						);
+						// Stagger jobs 60s apart (issue #1235 review) so the
+						// burst never holds the shared worker for 5 back to
+						// back full-budget runs; falls back to async enqueue
+						// when the scheduler lacks single-action support.
+						if ( function_exists( 'as_schedule_single_action' ) ) {
+							as_schedule_single_action( time() + ( $queued * 60 ), $hook, $hook_args, 'performance_optimisation' );
+						} else {
+							as_enqueue_async_action(
+								$hook,
+								$hook_args,
+								'performance_optimisation'
+							);
+						}
 						++$queued;
 					}
 				}

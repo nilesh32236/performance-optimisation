@@ -1648,7 +1648,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * cross-site leakage.
 		 *
 		 * @return void
-		 * @since NEXT
 		 * @since NEXT Also backfills the 25s `ccssGenTimeout` generation budget.
 		 */
 		public function maybe_migrate_css_queue_defaults(): void {
