@@ -8178,7 +8178,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 			}
 
-			$urls = array();
+			$urls    = array();
 			$emitted = array();
 			$checked = 0;
 			foreach ( $candidates as $candidate ) {
@@ -8589,11 +8589,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return void
 		 */
 		public static function reset_speculation_url_memo(): void {
-			self::$speculation_url_validity_memo     = array();
-			self::$speculation_commerce_paths_memo   = null;
-			self::$speculation_commerce_paths_sig    = '';
-			self::$speculation_normalize_memo        = array();
-			self::$speculation_rum_top_memo          = array();
+			self::$speculation_url_validity_memo   = array();
+			self::$speculation_commerce_paths_memo = null;
+			self::$speculation_commerce_paths_sig  = '';
+			self::$speculation_normalize_memo      = array();
+			self::$speculation_rum_top_memo        = array();
 		}
 
 		/**
@@ -8972,8 +8972,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return string[] Normalized prerender URLs (possibly empty).
 		 */
 		private function normalize_prerender_urls( array $urls, array $existing_rules ): array {
-			$urls = array_values( array_filter( $urls, 'is_string' ) );
-			$urls = array_values(
+			$urls  = array_values( array_filter( $urls, 'is_string' ) );
+			$urls  = array_values(
 				array_filter(
 					$urls,
 					array( $this, 'is_speculation_list_url_valid' )
@@ -9577,7 +9577,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( isset( $blocked[ $key ] ) ) {
 					continue;
 				}
-				$remaining[] = $url;
+				$remaining[]     = $url;
 				$blocked[ $key ] = true;
 			}
 			return array_values( $remaining );

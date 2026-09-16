@@ -74,8 +74,8 @@ class SpeculationPrerenderListTest extends \PHPUnit\Framework\TestCase {
 		Main::reset_speculation_url_memo();
 		$this->had_wp_version      = array_key_exists( 'wp_version', $GLOBALS );
 		$this->previous_wp_version = $GLOBALS['wp_version'] ?? null;
-		$this->filter_overrides = array();
-		$overrides              = &$this->filter_overrides;
+		$this->filter_overrides    = array();
+		$overrides                 = &$this->filter_overrides;
 		Functions\when( 'apply_filters' )->alias(
 			static function ( $hook, $value ) use ( &$overrides ) {
 				$hook = (string) $hook;
@@ -178,9 +178,9 @@ class SpeculationPrerenderListTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function prerender_on(): array {
 		return array(
-			'enableSpeculationRules' => true,
+			'enableSpeculationRules'   => true,
 			'speculationPrerenderList' => true,
-			'speculationTopUrlsLimit' => 2,
+			'speculationTopUrlsLimit'  => 2,
 		);
 	}
 
@@ -194,7 +194,13 @@ class SpeculationPrerenderListTest extends \PHPUnit\Framework\TestCase {
 		$main = $this->make_main( array( 'enableSpeculationRules' => true ) );
 
 		$this->assertSame( array(), $main->wppo_register_speculation_rules( array() ) );
-		$rules = array( array( 'source' => 'list', 'urls' => array( 'http://example.com/a/' ), 'eagerness' => 'conservative' ) );
+		$rules = array(
+			array(
+				'source'    => 'list',
+				'urls'      => array( 'http://example.com/a/' ),
+				'eagerness' => 'conservative',
+			),
+		);
 		$this->assertSame( $rules, $main->wppo_register_speculation_rules( $rules ) );
 		$this->assertSame( 'nope', $main->wppo_register_speculation_rules( 'nope' ) );
 		$this->assertNull( $main->wppo_register_speculation_rules( null ) );
@@ -210,7 +216,13 @@ class SpeculationPrerenderListTest extends \PHPUnit\Framework\TestCase {
 		$main = $this->make_main( $this->prerender_on() );
 
 		Functions\when( 'is_user_logged_in' )->justReturn( true );
-		$rules = array( array( 'source' => 'list', 'urls' => array( 'http://example.com/a/' ), 'eagerness' => 'conservative' ) );
+		$rules = array(
+			array(
+				'source'    => 'list',
+				'urls'      => array( 'http://example.com/a/' ),
+				'eagerness' => 'conservative',
+			),
+		);
 		$this->assertSame( $rules, $main->wppo_register_speculation_rules( $rules, array( 'http://example.com/b/' ) ) );
 	}
 
