@@ -543,6 +543,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['file_optimisation']['fontSubsetSubsets'] ) ) {
 				$this->options['file_optimisation']['fontSubsetSubsets'] = 'latin';
 			}
+			// Builder CSS drift purge watcher (issue #1288): additive keys,
+			// default on so existing installs keep the current self-heal
+			// behaviour. In-memory only here (no front-end DB write);
+			// persisted by maybe_migrate_builder_watcher() on admin_init.
+			if ( ! isset( $this->options['file_optimisation']['builderPurgeWatcher'] ) ) {
+				$this->options['file_optimisation']['builderPurgeWatcher'] = true;
+			}
+			if ( ! isset( $this->options['file_optimisation']['builderPurgeDriftLog'] ) ) {
+				$this->options['file_optimisation']['builderPurgeDriftLog'] = true;
+			}
 
 			// Existing installs whose stored settings predate the
 			// speculationRumGating key (issue #1061) inherit the enabled
@@ -998,6 +1008,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'admin_init', array( $this, 'maybe_migrate_preload_auto_defaults' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_object_cache_outage_flag' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_comment_image_hardening' ) );
+			add_action( 'admin_init', array( $this, 'maybe_migrate_builder_watcher' ) );
 			// One-time activity-log notice on admin_init.
 			if ( isset( $this->options['file_optimisation']['removeQueryStrings'] ) ) {
 				add_action( 'admin_init', array( $this, 'maybe_notify_remove_query_strings_removal' ) );
@@ -2642,7 +2653,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( ! is_array( $stored ) ) {
 					return;
 				}
-
 				$image = isset( $stored['image_optimisation'] ) && is_array( $stored['image_optimisation'] ) ? $stored['image_optimisation'] : array();
 
 				if ( array_key_exists( 'hardenCommentImages', $image ) ) {
@@ -2688,6 +2698,67 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					$this->options['image_optimisation'] = array();
 				}
 				$this->options['image_optimisation']['hardenCommentImages'] = true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Backfill the additive builder purge watcher keys (issue #1288).
+		 *
+		 * Adds `file_optimisation.builderPurgeWatcher = true` and
+		 * `file_optimisation.builderPurgeDriftLog = true` to stored settings
+		 * that predate the keys. Runs on `admin_init` (not the constructor)
+		 * so a cacheable front-end request never triggers a settings write.
+		 * Fresh installs with no stored option are skipped (absent keys read
+		 * as enabled). Idempotent (key presence is the marker). Uses per-site
+		 * `get_option()` so multisite sites migrate independently with no
+		 * cross-site leakage.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public function maybe_migrate_builder_watcher(): void {
+			try {
+				if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
+					return;
+				}
+				if ( isset( $this->options['file_optimisation'] ) && is_array( $this->options['file_optimisation'] ) && array_key_exists( 'builderPurgeWatcher', $this->options['file_optimisation'] ) && array_key_exists( 'builderPurgeDriftLog', $this->options['file_optimisation'] ) ) {
+					return;
+				}
+				// allowlist(settings-read-guard): deliberate direct read — must distinguish
+				// "no stored row" (false) from "stored array", which Util::get_settings()
+				// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
+				$stored = get_option( 'wppo_settings' );
+				if ( ! is_array( $stored ) ) {
+					return;
+				}
+				$file = isset( $stored['file_optimisation'] ) && is_array( $stored['file_optimisation'] ) ? $stored['file_optimisation'] : array();
+
+				$changed = false;
+				if ( ! array_key_exists( 'builderPurgeWatcher', $file ) ) {
+					$file['builderPurgeWatcher'] = true;
+					$changed                     = true;
+				}
+				if ( ! array_key_exists( 'builderPurgeDriftLog', $file ) ) {
+					$file['builderPurgeDriftLog'] = true;
+					$changed                      = true;
+				}
+
+				if ( ! $changed ) {
+					return;
+				}
+
+				$stored['file_optimisation'] = $file;
+				update_option( 'wppo_settings', $stored );
+
+				if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
+					$this->options['file_optimisation'] = array();
+				}
+				$this->options['file_optimisation'] = array_merge( $this->options['file_optimisation'], $file );
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
+					Util::set_settings_cache( $stored );
+				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}

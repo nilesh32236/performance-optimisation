@@ -294,20 +294,101 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		}
 
 		/**
+		 * Whether the builder purge watcher is enabled (issue #1288).
+		 *
+		 * Additive `file_optimisation.builderPurgeWatcher` key, default on
+		 * (current behaviour). Fail-open: any read failure keeps the watcher
+		 * enabled so stale builder CSS still self-heals.
+		 *
+		 * @since NEXT
+		 * @return bool True when the watcher may run.
+		 */
+		public static function is_watcher_enabled(): bool {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					return true;
+				}
+				$settings = Util::get_settings();
+				if ( ! isset( $settings['file_optimisation']['builderPurgeWatcher'] ) ) {
+					return true;
+				}
+				return (bool) $settings['file_optimisation']['builderPurgeWatcher'];
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
+		 * Whether drift-path activity-log entries are enabled (issue #1288).
+		 *
+		 * Additive `file_optimisation.builderPurgeDriftLog` key, default on so
+		 * the "activity log records it" criterion passes on fresh installs.
+		 * Fail-open to logging.
+		 *
+		 * @since NEXT
+		 * @return bool True when drift purges should write a log entry.
+		 */
+		public static function is_drift_log_enabled(): bool {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					return true;
+				}
+				$settings = Util::get_settings();
+				if ( ! isset( $settings['file_optimisation']['builderPurgeDriftLog'] ) ) {
+					return true;
+				}
+			return (bool) $settings['file_optimisation']['builderPurgeDriftLog'];
+		} catch ( \Throwable $e ) {
+			unset( $e );
+			return true;
+		}
+	}
+
+		/**
 		 * Register the upgrader hook plus builder-drift hooks.
 		 *
 		 * Drift hooks (issue #1023) listen to Elementor asset-regen signals
 		 * so editing in a builder requeues used-CSS regeneration instead of
 		 * leaving stale used CSS until manual regen/cron.
 		 *
+		 * Hardened (issue #1288): no-ops when the WP hook API is unavailable
+		 * (very old core / bare unit bootstrap) and when the watcher is
+		 * disabled via settings. Each registration is individually guarded so
+		 * one failing hook can never break the rest; fail-open keeps full CSS
+		 * serving.
+		 *
 		 * @since 2.0.0
+		 * @since NEXT Guarded behind function_exists + watcher setting.
 		 * @return void
 		 */
 		public function register(): void {
+		if ( ! function_exists( 'add_action' ) ) {
+			return;
+		}
+			if ( ! self::is_watcher_enabled() ) {
+					return;
+			}
+		try {
 			add_action( 'upgrader_process_complete', array( $this, 'on_builder_update' ), 10, 2 );
+		} catch ( \Throwable $e ) {
+			unset( $e );
+		}
+		try {
 			add_action( 'upgrader_process_complete', array( $this, 'on_any_upgrade' ), 20, 2 );
+		} catch ( \Throwable $e ) {
+			unset( $e );
+		}
+		try {
 			add_action( 'elementor/core/files/clear_cache', array( $this, 'on_builder_drift' ), 10, 0 );
+		} catch ( \Throwable $e ) {
+			unset( $e );
+		}
+		try {
 			add_action( 'elementor/editor/after_save', array( $this, 'on_builder_drift_save' ), 10, 2 );
+		} catch ( \Throwable $e ) {
+			unset( $e );
+		}
 			// Elementor-safe mode (issue #1259): per-post CSS-regen signal.
 			// Fired by Elementor after a post CSS file is (re)generated; the
 			// callback purges that post's static HTML cache so stale HTML
@@ -316,9 +397,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 			// is fully guarded so non-Elementor sites pay nothing. Two
 			// accepted args so the resolvable post ID is not dropped when
 			// Elementor passes ($css_file, $post_id).
+		try {
 			add_action( 'elementor/css-file/post/parse_after', array( $this, 'on_elementor_css_regen' ), 10, 2 );
+		} catch ( \Throwable $e ) {
+			unset( $e );
+		}
+		try {
 			add_action( self::DRIFT_PURGE_HOOK, array( $this, 'run_deferred_drift_purge' ), 10, 0 );
+		} catch ( \Throwable $e ) {
+			unset( $e );
+		}
+		try {
 			add_action( self::UPGRADE_PURGE_HOOK, array( $this, 'run_deferred_upgrade_purge' ), 10, 1 );
+		} catch ( \Throwable $e ) {
+			unset( $e );
+		}
 		}
 
 		/**
@@ -348,6 +441,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * @return void
 		 */
 		public function on_builder_drift(): void {
+			if ( ! self::is_watcher_enabled() ) {
+				return;
+			}
 			if ( self::$drift_suspended || self::$drift_handled_this_request ) {
 				return;
 			}
@@ -425,7 +521,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 */
 		public function run_deferred_drift_purge(): void {
 			try {
+				if ( ! self::is_watcher_enabled() ) {
+					return;
+				}
 				$this->purge_wppo_derived_caches();
+				$this->write_drift_purge_log();
+				$this->store_admin_notice( array( 'Elementor' ) );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
@@ -464,6 +565,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 				if ( $post_id <= 0 ) {
 					return;
 				}
+				if ( ! self::is_watcher_enabled() ) {
+					return;
+				}
 				// Elementor-safe mode (issue #1259): an editor save renames or
 				// deletes uploads/elementor/css/post-*.css, so purge this
 				// post's static HTML cache alongside the Used-CSS requeue.
@@ -484,6 +588,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 					self::$elementor_purged[ $post_id ] = true;
 					return;
 				}
+				// URL-scoped coupled purge first (issue #1288): drop the stale
+				// static HTML + combined-CSS + used-CSS sidecars for the
+				// affected URL only, so the next anonymous hit rebuilds clean
+				// instead of serving a 404 stylesheet. Runs even when the
+				// requeue below skips as fresh — freshness skips must never
+				// leave stale combined artifacts behind.
+				$purged = $this->purge_post_url_caches( $post_id );
 				$this->purge_post_static_cache( $post_id );
 				self::$elementor_purged[ $post_id ] = true;
 				$this->maybe_coalesce_bulk_regen();
@@ -491,9 +602,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 				if ( class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					$queued = $this->requeue_used_css_for_elementor_post( $post_id );
 				}
-				if ( ! $queued ) {
+				if ( ! $purged && ! $queued ) {
 					return;
 				}
+				$this->write_drift_save_log( $post_id );
+				$this->store_admin_notice( array( 'Elementor' ) );
 				if ( function_exists( 'do_action' ) ) {
 					/**
 					 * Fires after builder-drift requeue for a saved post (issue #1023).
@@ -726,9 +839,78 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 					return true;
 				}
 				return (bool) Used_CSS::requeue_for_post( $post_id );
+		} catch ( \Throwable $e ) {
+			unset( $e );
+			return false;
+		}
+	}
+
+		/**
+		 * Purge page-cache + used-CSS sidecars for a single post URL (issue #1288).
+		 *
+		 * Couples to `Used_CSS::purge_coupled()` for the affected URL only, so
+		 * an Elementor save heals within one tick without a full-site purge.
+		 * Legacy fallback: when the coupled seam is unavailable, falls back to
+		 * `Cache::clear_cache( $path )` (which already clears html +
+		 * combined-css + used-css sidecars for one page). Fail-open: any
+		 * failure returns false and full CSS keeps serving.
+		 *
+		 * @since NEXT
+		 * @param int $post_id Post ID just saved in the builder.
+		 * @return bool True when a purge seam ran without throwing.
+		 */
+		protected function purge_post_url_caches( int $post_id ): bool {
+			try {
+				$path = $this->resolve_post_url_path( $post_id );
+				if ( '' === $path ) {
+					return false;
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Used_CSS', 'purge_coupled' ) ) {
+					Used_CSS::purge_coupled( $path );
+					return true;
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) && method_exists( 'PerformanceOptimise\Inc\Cache', 'clear_cache' ) ) {
+					Cache::clear_cache( $path );
+					return true;
+				}
+				return false;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;
+			}
+		}
+
+		/**
+		 * Resolve a post ID to its cache URL path (issue #1288).
+		 *
+		 * Fail-open: returns '' when the permalink API is unavailable or the
+		 * URL cannot be parsed, in which case callers skip the scoped purge.
+		 *
+		 * @since NEXT
+		 * @param int $post_id Post ID.
+		 * @return string URL path (e.g. '/my-page/') or '' when unresolvable.
+		 */
+		protected function resolve_post_url_path( int $post_id ): string {
+			try {
+				if ( ! function_exists( 'get_permalink' ) ) {
+					return '';
+				}
+				$url = get_permalink( $post_id );
+				if ( ! is_string( $url ) || '' === $url ) {
+					return '';
+				}
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$parts = wp_parse_url( $url );
+				} else {
+					$parts = parse_url( $url ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url
+				}
+				if ( ! is_array( $parts ) || empty( $parts['path'] ) || ! is_string( $parts['path'] ) ) {
+					return '';
+				}
+				return $parts['path'];
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
 			}
 		}
 
@@ -762,6 +944,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 				// 40-post query plus up to 20 freshness probes synchronously
 				// in the save action that tripped the threshold.
 				$this->on_builder_drift();
+		} catch ( \Throwable $e ) {
+			unset( $e );
+		}
+	}
+
+		protected function write_drift_purge_log(): void {
+			if ( ! self::is_drift_log_enabled() ) {
+				return;
+			}
+			if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
+				return;
+			}
+			try {
+				Log::add(
+					__( 'Builder CSS regeneration detected (Elementor): builder CSS, page cache, used-CSS and critical-CSS purged.', 'performance-optimisation' )
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Write the drift-save audit entry for an editor save (issue #1288).
+		 *
+		 * Gated by the additive `builderPurgeDriftLog` setting (default on).
+		 *
+		 * @since NEXT
+		 * @param int $post_id Post ID saved in the builder.
+		 * @return void
+		 */
+		protected function write_drift_save_log( int $post_id ): void {
+			if ( ! self::is_drift_log_enabled() ) {
+				return;
+			}
+			if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
+				return;
+			}
+			try {
+				Log::add(
+					sprintf(
+						/* translators: %d: post ID saved in the builder */
+						__( 'Builder drift detected (post %d): page cache and used-CSS purged for the affected URL, regeneration requeued.', 'performance-optimisation' ),
+						$post_id
+					)
+				);
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
@@ -809,6 +1036,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 */
 		public function on_builder_update( $upgrader, $hook_extra ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- Signature must match the upgrader_process_complete action.
 			unset( $upgrader );
+			if ( ! self::is_watcher_enabled() ) {
+				return;
+			}
 			if ( ! is_array( $hook_extra ) ) {
 				return;
 			}
