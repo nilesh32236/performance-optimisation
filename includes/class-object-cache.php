@@ -127,6 +127,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		public const CONFIG_HTACCESS_MARKER = 'WPPO Redis Config';
 
 		/**
+		 * Suffix of the staging sibling used for atomic Redis config writes.
+		 *
+		 * `write_config_atomic()` stages new config at
+		 * `wppo-redis-config.php` + this suffix, verifies it, then renames it
+		 * over the live path — so a process killed mid-write can never leave
+		 * a half-written live file that would fatal the object-cache drop-in
+		 * (which does a bare `include` of the config) on the next request.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		public const CONFIG_TMP_SUFFIX = '.tmp';
+
+		/**
 		 * Canonical circuit-breaker sidecar paths for uninstall cleanup.
 		 *
 		 * Standalone-safe: static, no instance, no filesystem, no filters —
@@ -909,6 +923,223 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 
 
 		/**
+		 * Whether rendered Redis config source looks structurally valid.
+		 *
+		 * Pure-PHP shape check used to verify staged config before it is
+		 * renamed over the live path: the source must be a small PHP file
+		 * returning an array. Deliberately never `include`s the candidate —
+		 * including a torn file is the very fatal being avoided, and the
+		 * ABSPATH guard inside the config makes include-based verification
+		 * fragile outside a booted WordPress request.
+		 *
+		 * @since NEXT
+		 * @param mixed $contents Candidate config source.
+		 * @return bool True when the source has the expected config shape.
+		 */
+		public static function is_valid_config_content( $contents ): bool {
+			if ( ! is_string( $contents ) || '' === $contents ) {
+				return false;
+			}
+			$length = strlen( $contents );
+			if ( $length < 16 || $length > 65536 ) {
+				return false;
+			}
+			if ( 0 !== strpos( ltrim( $contents ), '<?php' ) ) {
+				return false;
+			}
+			if ( false === strpos( $contents, 'return' ) || false === strpos( $contents, 'array' ) ) {
+				return false;
+			}
+			$trimmed = rtrim( $contents );
+			return '' !== $trimmed && ';' === substr( $trimmed, -1 );
+		}
+
+		/**
+		 * Publish Redis config source atomically via tmp-write + verify + rename.
+		 *
+		 * Stages `$content` at the `CONFIG_TMP_SUFFIX` sibling, re-reads it
+		 * byte-identically, syntax-checks it, then renames it over the live
+		 * config path (atomic on the same filesystem for the Direct
+		 * transport; FTP/SSH transports degrade gracefully but still never
+		 * clobber the live file before the staged copy verifies).
+		 *
+		 * On any atomic-step failure the old live config is left untouched and
+		 * a `WP_Error` is returned (fail-closed file, fail-open site: the
+		 * object cache stays on the previous config or disabled, never fatal).
+		 *
+		 * Multisite-safe by construction: the config path is
+		 * installation-wide, no per-site options are read or written here.
+		 *
+		 * @since NEXT
+		 * @param string $content       Rendered config PHP source.
+		 * @param mixed  $wp_filesystem Filesystem object from `Util::init_filesystem()`.
+		 * @return bool|\WP_Error True on verified publish, WP_Error on any failure.
+		 */
+		private function write_config_atomic( string $content, $wp_filesystem ) {
+			if ( ! is_object( $wp_filesystem ) ) {
+				return new \WP_Error( 'write_error', __( 'Cannot write Redis configuration file.', 'performance-optimisation' ) );
+			}
+
+			if ( ! self::is_valid_config_content( $content ) ) {
+				return new \WP_Error( 'write_error', __( 'Cannot write Redis configuration file.', 'performance-optimisation' ) );
+			}
+
+			// Preferred path: the shared verified writer (tmp + byte-identical
+			// re-read + PHP syntax check + backup + rename + post-rename
+			// re-verify with restore). Guarded so a partially-updated Util
+			// class can never fatal this call.
+			if ( method_exists( 'PerformanceOptimise\Inc\Util', 'atomic_write_php_verified' ) ) {
+				try {
+					$atomic = Util::atomic_write_php_verified( $wp_filesystem, $this->config_path, $content, array( self::class, 'is_valid_config_content' ) );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$atomic = false;
+				}
+				if ( true === $atomic ) {
+					$this->sweep_orphan_config_tmp( $wp_filesystem );
+					return true;
+				}
+				if ( false === $atomic ) {
+					return new \WP_Error( 'write_error', __( 'Cannot write Redis configuration file.', 'performance-optimisation' ) );
+				}
+				// Null: the transport lacks methods for the verified writer —
+				// fall through to the manual tmp + verify + rename below.
+			}
+
+			// Manual fallback needing only put_contents()/get_contents() plus
+			// a rename primitive; every other filesystem call is best-effort.
+			try {
+				if ( ! method_exists( $wp_filesystem, 'put_contents' ) || ! method_exists( $wp_filesystem, 'get_contents' ) ) {
+					return new \WP_Error( 'write_error', __( 'Cannot write Redis configuration file.', 'performance-optimisation' ) );
+				}
+
+				$tmp   = $this->config_path . self::CONFIG_TMP_SUFFIX;
+				$chmod = defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644;
+
+				if ( ! $wp_filesystem->put_contents( $tmp, $content, $chmod ) ) {
+					$this->delete_config_tmp_quietly( $wp_filesystem, $tmp );
+					return new \WP_Error( 'write_error', __( 'Cannot write Redis configuration file.', 'performance-optimisation' ) );
+				}
+
+				$staged = $wp_filesystem->get_contents( $tmp );
+				if ( ! is_string( $staged ) || $staged !== $content || ! self::is_valid_config_content( $staged ) ) {
+					$this->delete_config_tmp_quietly( $wp_filesystem, $tmp );
+					return new \WP_Error( 'write_error', __( 'Cannot write Redis configuration file.', 'performance-optimisation' ) );
+				}
+
+				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'verify_php_syntax' ) && ! Util::verify_php_syntax( $staged ) ) {
+					$this->delete_config_tmp_quietly( $wp_filesystem, $tmp );
+					return new \WP_Error( 'write_error', __( 'Cannot write Redis configuration file.', 'performance-optimisation' ) );
+				}
+
+				$moved = false;
+				if ( method_exists( $wp_filesystem, 'move' ) ) {
+					$moved = $wp_filesystem->move( $tmp, $this->config_path, true );
+				} elseif ( function_exists( 'rename' ) ) {
+					// phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename,WordPress.PHP.NoSilencedErrors.Discouraged -- Fallback only when the filesystem transport exposes no move(); the tmp sibling is cleaned on failure.
+					$moved = @rename( $tmp, $this->config_path );
+				}
+
+				if ( ! $moved ) {
+					$this->delete_config_tmp_quietly( $wp_filesystem, $tmp );
+					return new \WP_Error( 'write_error', __( 'Cannot write Redis configuration file.', 'performance-optimisation' ) );
+				}
+
+				$this->sweep_orphan_config_tmp( $wp_filesystem );
+				return true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				try {
+					if ( isset( $tmp ) && is_string( $tmp ) ) {
+						$this->delete_config_tmp_quietly( $wp_filesystem, $tmp );
+					}
+				} catch ( \Throwable $ignored ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Best-effort tmp cleanup must never throw.
+				}
+				return new \WP_Error( 'write_error', __( 'Cannot write Redis configuration file.', 'performance-optimisation' ) );
+			}
+		}
+
+		/**
+		 * Best-effort delete of a staging tmp path; never throws.
+		 *
+		 * @since NEXT
+		 * @param mixed  $wp_filesystem Filesystem object.
+		 * @param string $path          Tmp path to remove.
+		 * @return void
+		 */
+		private function delete_config_tmp_quietly( $wp_filesystem, string $path ): void {
+			try {
+				if ( '' !== $path && is_object( $wp_filesystem ) && method_exists( $wp_filesystem, 'delete' ) ) {
+					$wp_filesystem->delete( $path );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Sweep orphan config staging files left by an interrupted write.
+		 *
+		 * Removes the fixed `CONFIG_TMP_SUFFIX` sibling plus unique
+		 * `*.tmp.*` siblings from killed verified-writes. Best-effort only
+		 * and never throws; a sweep racing a concurrent writer merely fails
+		 * that writer's verification (fail-closed), never corrupts the live
+		 * config.
+		 *
+		 * @since NEXT
+		 * @param mixed $wp_filesystem Filesystem object.
+		 * @return void
+		 */
+		private function sweep_orphan_config_tmp( $wp_filesystem ): void {
+			try {
+				if ( ! is_object( $wp_filesystem ) ) {
+					return;
+				}
+
+				$tmp = $this->config_path . self::CONFIG_TMP_SUFFIX;
+				if ( method_exists( $wp_filesystem, 'exists' ) ) {
+					try {
+						if ( $wp_filesystem->exists( $tmp ) ) {
+							$this->delete_config_tmp_quietly( $wp_filesystem, $tmp );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				} else {
+					$this->delete_config_tmp_quietly( $wp_filesystem, $tmp );
+				}
+
+				if ( ! method_exists( $wp_filesystem, 'dirlist' ) || ! function_exists( 'dirname' ) || ! function_exists( 'basename' ) ) {
+					return;
+				}
+
+				$dir    = dirname( $this->config_path );
+				$prefix = basename( $this->config_path ) . '.tmp.';
+				try {
+					$list = $wp_filesystem->dirlist( $dir );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return;
+				}
+				if ( ! is_array( $list ) ) {
+					return;
+				}
+				foreach ( $list as $name => $info ) {
+					$entry = is_string( $name ) ? $name : '';
+					if ( '' === $entry && is_array( $info ) && isset( $info['name'] ) && is_string( $info['name'] ) ) {
+						$entry = $info['name'];
+					}
+					if ( '' !== $entry && 0 === strpos( $entry, $prefix ) ) {
+						$this->delete_config_tmp_quietly( $wp_filesystem, $dir . '/' . $entry );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+
+		/**
 		 * Install the Redis object-cache drop-in by writing the plugin config and copying the drop-in into place.
 		 *
 		 * May return a WP_Error for conditions such as missing PHP Redis extension, presence of a foreign drop-in,
@@ -978,8 +1209,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				return new \WP_Error( 'write_error', __( 'Unable to initialize filesystem.', 'performance-optimisation' ) );
 			}
 
-			if ( ! $wp_filesystem->put_contents( $this->config_path, $config_content, FS_CHMOD_FILE ) ) {
-				return new \WP_Error( 'write_error', __( 'Cannot write Redis configuration file.', 'performance-optimisation' ) );
+			// Crash-safe publish: stage to a tmp sibling, verify, then rename —
+			// a process killed mid-write can never leave a half-written live
+			// config that would fatal the object-cache drop-in (bare include)
+			// on the next request. On any atomic-step failure the old config
+			// is left untouched (fail-closed file, fail-open site).
+			$published = $this->write_config_atomic( $config_content, $wp_filesystem );
+			if ( is_wp_error( $published ) ) {
+				return $published;
 			}
 
 			// Defense-in-depth: the config file lives under web-reachable
