@@ -206,7 +206,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 				return false;
 			}
 			// Single implementation lives in Cloudflare_Purger::purge_files().
-			return Cloudflare_Purger::purge_files( $zone, $token, array( $url ), 'cloudflare-edge' );
+			// The Edge prefix is passed through so debug-log filters matching
+			// 'Edge purge failed' keep working.
+			$result = Cloudflare_Purger::purge_files( $zone, $token, array( $url ), 'cloudflare-edge', 'Edge purge failed' );
+			if ( ! $result ) {
+				self::mirror_to_activity_log( 'cloudflare-edge', $zone . ': ' . $url );
+			}
+			return $result;
 		}
 
 		/**
@@ -229,7 +235,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 				return false;
 			}
 			// Single implementation lives in Cloudflare_Purger::purge().
-			return Cloudflare_Purger::purge( $zone, $token, 'cloudflare-edge' );
+			// The Edge prefix is passed through so debug-log filters matching
+			// 'Edge purge failed' keep working.
+			$result = Cloudflare_Purger::purge( $zone, $token, 'cloudflare-edge', 'Edge purge failed' );
+			if ( ! $result ) {
+				self::mirror_to_activity_log( 'cloudflare-edge', $zone );
+			}
+			return $result;
 		}
 
 		/**
@@ -276,11 +288,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		 */
 		private static function log_failure( string $service, string $detail ): void {
 			do_action( 'wppo_debug_log', 'Edge purge failed [' . $service . ']: ' . $detail );
-			// Fallback: when no wppo_debug_log listener is attached the
-			// failure would be silent, so mirror it to the activity log.
-			// Fail-open: logging must never break the purge path.
-			// Throttled to one activity-log row per lock window so a
-			// prolonged edge outage cannot spam wppo_activity_logs.
+			self::mirror_to_activity_log( $service, $detail );
+		}
+
+		/**
+		 * Mirror a failure to the activity log when no debug-log listener exists.
+		 *
+		 * Extracted from log_failure() so the thin Cloudflare delegating wrappers
+		 * above can reuse the same throttled fallback: the canonical transport
+		 * already emitted the wppo_debug_log entry (with the Edge prefix passed
+		 * through), and only the activity-log mirror is still needed here.
+		 *
+		 * Fail-open: logging must never break the purge path. Throttled to one
+		 * activity-log row per lock window so a prolonged edge outage cannot
+		 * spam wppo_activity_logs.
+		 *
+		 * @since NEXT
+		 * @param string $service Service.
+		 * @param string $detail Detail.
+		 * @return void
+		 */
+		private static function mirror_to_activity_log( string $service, string $detail ): void {
 			try {
 				if ( ! has_filter( 'wppo_debug_log' ) && class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 					// Per-service throttle key: a shared key would suppress

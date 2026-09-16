@@ -49,12 +49,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cloudflare_Purger' ) ) {
 		 * is_wp_error branch and 2xx status check.
 		 *
 		 * @since 2.0.0
-		 * @param string $zone    Cloudflare zone ID (already sanitized).
-		 * @param string $token   Cloudflare API token (Bearer).
-		 * @param string $log_tag Provider tag for wppo_debug_log ('cloudflare' or 'cloudflare-edge').
+		 * @param string $zone        Cloudflare zone ID (already sanitized).
+		 * @param string $token       Cloudflare API token (Bearer).
+		 * @param string $log_tag     Provider tag for wppo_debug_log ('cloudflare' or 'cloudflare-edge').
+		 * @param string $fail_prefix Log message prefix (callers preserve their historic prefix).
 		 * @return bool True on 2xx, false on WP_Error or non-2xx or empty args.
 		 */
-		public static function purge( string $zone, string $token, string $log_tag = 'cloudflare' ): bool {
+		public static function purge( string $zone, string $token, string $log_tag = 'cloudflare', string $fail_prefix = 'CDN purge failed' ): bool {
 			if ( '' === $zone || '' === $token ) {
 				return false;
 			}
@@ -73,13 +74,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cloudflare_Purger' ) ) {
 			);
 
 			if ( is_wp_error( $response ) ) {
-				self::log_failure( $log_tag, $zone . ': ' . $response->get_error_message() ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Debug log, not HTML output.
+				self::log_failure( $log_tag, $zone . ': ' . $response->get_error_message(), $fail_prefix ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Debug log, not HTML output.
 				return false;
 			}
 
 			$code = (int) wp_remote_retrieve_response_code( $response );
 			if ( $code < 200 || $code >= 300 ) {
-				self::log_failure( $log_tag, $zone . ' (HTTP ' . $code . ')' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Debug log, not HTML output.
+				self::log_failure( $log_tag, $zone . ' (HTTP ' . $code . ')', $fail_prefix ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Debug log, not HTML output.
 				return false;
 			}
 			return true;
@@ -93,13 +94,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cloudflare_Purger' ) ) {
 		 * shape ({files: [...]}), timeout, is_wp_error branch and 2xx status check.
 		 *
 		 * @since NEXT
-		 * @param string $zone    Cloudflare zone ID (already sanitized).
-		 * @param string $token   Cloudflare API token (Bearer).
-		 * @param array  $urls    Absolute URLs to purge.
-		 * @param string $log_tag Provider tag for wppo_debug_log ('cloudflare' or 'cloudflare-edge').
+		 * @param string $zone        Cloudflare zone ID (already sanitized).
+		 * @param string $token       Cloudflare API token (Bearer).
+		 * @param array  $urls        Absolute URLs to purge.
+		 * @param string $log_tag     Provider tag for wppo_debug_log ('cloudflare' or 'cloudflare-edge').
+		 * @param string $fail_prefix Log message prefix (callers preserve their historic prefix).
 		 * @return bool True on 2xx, false on WP_Error or non-2xx or empty args.
 		 */
-		public static function purge_files( string $zone, string $token, array $urls, string $log_tag = 'cloudflare' ): bool {
+		public static function purge_files( string $zone, string $token, array $urls, string $log_tag = 'cloudflare', string $fail_prefix = 'CDN purge failed' ): bool {
 			if ( '' === $zone || '' === $token || empty( $urls ) ) {
 				return false;
 			}
@@ -116,6 +118,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cloudflare_Purger' ) ) {
 				return false;
 			}
 
+			$body = wp_json_encode( array( 'files' => $files ) );
+			if ( false === $body ) {
+				self::log_failure( $log_tag, $zone . ': JSON encoding failed', $fail_prefix ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Debug log, not HTML output.
+				return false;
+			}
+
 			$response = wp_remote_request(
 				'https://api.cloudflare.com/client/v4/zones/' . rawurlencode( $zone ) . '/purge_cache',
 				array(
@@ -124,19 +132,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cloudflare_Purger' ) ) {
 						'Authorization' => 'Bearer ' . $token,
 						'Content-Type'  => 'application/json',
 					),
-					'body'    => (string) wp_json_encode( array( 'files' => $files ) ),
+					'body'    => $body,
 					'timeout' => self::TIMEOUT,
 				)
 			);
 
 			if ( is_wp_error( $response ) ) {
-				self::log_failure( $log_tag, $zone . ': ' . $response->get_error_message() ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Debug log, not HTML output.
+				self::log_failure( $log_tag, $zone . ': ' . $response->get_error_message(), $fail_prefix ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Debug log, not HTML output.
 				return false;
 			}
 
 			$code = (int) wp_remote_retrieve_response_code( $response );
 			if ( $code < 200 || $code >= 300 ) {
-				self::log_failure( $log_tag, $zone . ' (HTTP ' . $code . ')' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Debug log, not HTML output.
+				self::log_failure( $log_tag, $zone . ' (HTTP ' . $code . ')', $fail_prefix ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Debug log, not HTML output.
 				return false;
 			}
 			return true;
@@ -145,18 +153,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cloudflare_Purger' ) ) {
 		/**
 		 * Surface a failed purge via wppo_debug_log.
 		 *
-		 * Keeps the historic 'CDN purge failed [...]' prefix so existing
+		 * Keeps the historic 'CDN purge failed [...]' prefix by default so existing
 		 * debug-log filters, tests and runbooks matching that prefix keep
 		 * working; the $service tag ('cloudflare' vs 'cloudflare-edge')
-		 * still identifies the caller.
+		 * still identifies the caller. Edge callers pass their own prefix
+		 * ('Edge purge failed') so edge filters keep matching.
 		 *
 		 * @since 2.0.0
-		 * @param string $service Log tag (e.g. cloudflare, cloudflare-edge).
-		 * @param string $detail  Endpoint / reason.
+		 * @since NEXT Added $fail_prefix parameter.
+		 * @param string $service     Log tag (e.g. cloudflare, cloudflare-edge).
+		 * @param string $detail      Endpoint / reason.
+		 * @param string $fail_prefix Log message prefix.
 		 * @return void
 		 */
-		private static function log_failure( string $service, string $detail ): void {
-			do_action( 'wppo_debug_log', 'CDN purge failed [' . $service . ']: ' . $detail );
+		private static function log_failure( string $service, string $detail, string $fail_prefix = 'CDN purge failed' ): void {
+			do_action( 'wppo_debug_log', $fail_prefix . ' [' . $service . ']: ' . $detail );
 		}
 	}
 }
