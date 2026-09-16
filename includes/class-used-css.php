@@ -1993,18 +1993,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				return true;
 			}
 
-			$success   = true;
-			$dir_queue = array( $root );
-			while ( ! empty( $dir_queue ) ) {
-				$current = array_shift( $dir_queue );
-				$entries = $fs->dirlist( $current );
+			$success = true;
+			// Head-index queue (O(1) dequeue) with a visited-dir budget so
+			// a huge tree cannot cost O(n) memmoves per dequeue nor walk
+			// unboundedly — mirrors the bounded snapshot queue in Cache.
+			$dir_queue   = array( array( $root, 0 ) );
+			$head        = 0;
+			$visited     = 0;
+			$max_dirs    = 2000;
+			$max_depth   = 20;
+			$root_slash  = rtrim( $root, '/' ) . '/';
+			$queue_total = count( $dir_queue );
+			while ( $head < $queue_total && $visited < $max_dirs ) {
+				$current = $dir_queue[ $head ];
+				++$head;
+				++$visited;
+				$dir   = (string) $current[0];
+				$depth = (int) $current[1];
+				if ( $depth > $max_depth ) {
+					continue;
+				}
+				$entries = $fs->dirlist( $dir );
 				if ( ! is_array( $entries ) ) {
 					continue;
 				}
 				foreach ( $entries as $name => $entry ) {
-					$full_path = trailingslashit( $current ) . $name;
+					$full_path = trailingslashit( $dir ) . $name;
 					if ( ! empty( $entry['type'] ) && 'd' === $entry['type'] ) {
-						$dir_queue[] = $full_path;
+						$dir_queue[] = array( $full_path, $depth + 1 );
+						$queue_total = count( $dir_queue );
 					} else {
 						$purge_names = array( self::USED_CSS_FILENAME, self::USED_CSS_FILENAME . '.sha256' );
 						foreach ( self::VIEWPORT_VARIANTS as $variant ) {
@@ -2012,6 +2029,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 							$purge_names[] = 'used-css.' . $variant . '.css.sha256';
 						}
 						if ( in_array( $name, $purge_names, true ) ) {
+							// Post-purge fallback (issue #1275): retain each
+							// live used-css base before deleting so a full
+							// wipe keeps last-good instead of only the
+							// previous fallback generation. No-op when off.
+							if ( '.sha256' !== substr( (string) $name, -7 ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'retain_purge_fallback_file' ) ) {
+								try {
+									Util::retain_purge_fallback_file(
+										$fs,
+										function ( string $path ) use ( $root_slash ): bool {
+											if ( '' === $path || false !== strpos( $path, "\0" ) || false !== strpos( $path, '..' ) ) {
+												return false;
+											}
+											return 0 === strpos( $path, $root_slash );
+										},
+										$full_path
+									);
+								} catch ( \Throwable $e ) {
+									unset( $e );
+								}
+							}
 							if ( ! $fs->delete( $full_path ) ) {
 								$success = false;
 							}

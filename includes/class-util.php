@@ -1632,11 +1632,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * memoizing avoids re-running get_settings + apply_filters on every
 		 * retain/serve call (3x+ per single-page clear). Cleared alongside
 		 * the settings cache so tests and option updates stay coherent.
+		 * Keyed by blog ID so switch_to_blog() cannot leak one site's
+		 * decision into another (multisite-safe).
 		 *
-		 * @var bool|null
+		 * @var array<int, bool>
 		 * @since NEXT
 		 */
-		private static ?bool $purge_fallback_memo = null;
+		private static array $purge_fallback_memo = array();
 
 		/**
 		 * Resets the home_url static cache for testing isolation.
@@ -1785,7 +1787,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @return void
 		 */
 		public static function clear_settings_cache( $blog_id = null ): void {
-			self::$purge_fallback_memo = null;
+			if ( null !== $blog_id && is_int( $blog_id ) ) {
+				unset( self::$purge_fallback_memo[ (int) $blog_id ] );
+			} else {
+				self::$purge_fallback_memo = array();
+			}
 			if ( null !== $blog_id && is_int( $blog_id ) ) {
 				$bid = (int) $blog_id;
 				unset( self::$settings_cache[ $bid ], self::$settings_cache_loaded[ $bid ] );
@@ -5499,14 +5505,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @return bool True when purge-fallback retention/serving is active.
 		 */
 		public static function is_purge_fallback_enabled(): bool {
-			if ( null !== self::$purge_fallback_memo ) {
-				return self::$purge_fallback_memo;
+			$bid = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
+			if ( array_key_exists( $bid, self::$purge_fallback_memo ) ) {
+				return self::$purge_fallback_memo[ $bid ];
 			}
 			try {
 				if ( defined( 'WPPO_PURGE_FALLBACK' ) ) {
 					$flag = filter_var( WPPO_PURGE_FALLBACK, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
 					if ( true === $flag ) {
-						self::$purge_fallback_memo = true;
+						self::$purge_fallback_memo[ $bid ] = true;
 						return true;
 					}
 				}
@@ -5516,11 +5523,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				$enabled  = true === $enabled;
 			} catch ( \Throwable $e ) {
 				unset( $e );
-				self::$purge_fallback_memo = false;
+				self::$purge_fallback_memo[ $bid ] = false;
 				return false;
 			}
 			if ( ! function_exists( 'apply_filters' ) ) {
-				self::$purge_fallback_memo = $enabled;
+				self::$purge_fallback_memo[ $bid ] = $enabled;
 				return $enabled;
 			}
 			try {
@@ -5533,12 +5540,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				$filtered = apply_filters( 'wppo_purge_fallback_enabled', $enabled );
 			} catch ( \Throwable $e ) {
 				unset( $e );
-				self::$purge_fallback_memo = false;
+				self::$purge_fallback_memo[ $bid ] = false;
 				return false;
 			}
-			$normalized                = filter_var( $filtered, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
-			self::$purge_fallback_memo = true === $normalized;
-			return self::$purge_fallback_memo;
+			$normalized                        = filter_var( $filtered, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+			self::$purge_fallback_memo[ $bid ] = true === $normalized;
+			return self::$purge_fallback_memo[ $bid ];
 		}
 
 		/**
@@ -5671,13 +5678,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				}
 				if ( method_exists( $fs, 'size' ) ) {
 					try {
-						if ( (int) $fs->size( $file_path ) <= 0 ) {
-							return;
-						}
+						$size = $fs->size( $file_path );
 					} catch ( \Throwable $e ) {
 						unset( $e );
-						// Size unknown: probe non-emptiness so an empty base
-						// can never overwrite a good fallback (downgrade).
+						$size = null;
+					}
+					if ( false === $size || null === $size ) {
+						// Stat failure (WP_Filesystem::size() signals via
+						// false): probe non-emptiness so transient stat
+						// failure neither drops last-good retention nor
+						// lets an empty base overwrite a good fallback.
 						if ( method_exists( $fs, 'get_contents' ) ) {
 							try {
 								$probe = $fs->get_contents( $file_path );
@@ -5689,6 +5699,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 								return;
 							}
 						}
+					} elseif ( (int) $size <= 0 ) {
+						return;
 					}
 				}
 				if ( method_exists( $fs, 'copy' ) ) {

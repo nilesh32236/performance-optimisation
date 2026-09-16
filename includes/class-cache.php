@@ -4169,11 +4169,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! Util::is_purge_fallback_enabled() ) {
 					return $miss;
 				}
-				if ( '' === (string) $requested_path || ! $this->is_path_contained( (string) $requested_path ) ) {
+				if ( '' === (string) $requested_path ) {
+					return $miss;
+				}
+				// Domain tree and min tree ({root}/min/) are both servable:
+				// the min tree lives outside the per-domain prefix so
+				// is_path_contained() alone would miss it (layer divergence
+				// with the Nginx snippet, which matches both).
+				$in_domain = $this->is_path_contained( (string) $requested_path );
+				$in_min    = $this->is_min_path( (string) $requested_path );
+				if ( ! $in_domain && ! $in_min ) {
 					return $miss;
 				}
 				$fallback = self::get_purge_fallback_path( (string) $requested_path );
-				if ( '' === $fallback || ! $this->is_path_contained( $fallback ) ) {
+				if ( '' === $fallback ) {
+					return $miss;
+				}
+				$fallback_ok = $this->is_path_contained( $fallback ) || $this->is_min_path( $fallback );
+				if ( ! $fallback_ok ) {
 					return $miss;
 				}
 				$fs = $this->get_filesystem();
@@ -4206,6 +4219,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 						$relative = ltrim( substr( $fallback, strlen( $this->cache_root_dir ) ), '/' );
 						if ( '' !== $relative && '' !== $this->cache_root_url ) {
 							$location = rtrim( $this->cache_root_url, '/' ) . '/' . $relative;
+						}
+					} elseif ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'min_cache_base_dir' ) ) {
+						// Min-tree fallback ({root}/min/...): map to the
+						// content URL so the PHP resolver serves the same
+						// tree the Nginx snippet matches (no layer divergence).
+						$min_base = rtrim( Util::min_cache_base_dir(), '/' ) . '/';
+						if ( '' !== $min_base && 0 === strpos( $fallback, $min_base ) ) {
+							$relative = ltrim( substr( $fallback, strlen( $min_base ) ), '/' );
+							if ( '' !== $relative && method_exists( 'PerformanceOptimise\Inc\Util', 'cached_content_url' ) ) {
+								$location = Util::cached_content_url( 'cache/wppo/min/' . $relative );
+							}
 						}
 					}
 				} catch ( \Throwable $e ) {
@@ -4318,21 +4342,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( defined( 'WPPO_PURGE_FALLBACK_NO_EXIT' ) && WPPO_PURGE_FALLBACK_NO_EXIT ) {
 					return true;
 				}
+				// Headers already sent: fall through to the legacy 404 flow
+				// instead of exiting with a truncated blank response.
+				if ( headers_sent() ) {
+					return false;
+				}
 				if ( function_exists( 'wp_safe_redirect' ) ) {
 					foreach ( $built['headers'] as $header ) {
-						if ( ! headers_sent() ) {
-							header( $header, false ); // phpcs:ignore WordPress.PHP.HeaderURLColon.NoSpaceAfterColon,WordPress.WP.AlternativeFunctions.header_header -- Intentional no-store header format.
-						}
+						header( $header, false ); // phpcs:ignore WordPress.PHP.HeaderURLColon.NoSpaceAfterColon,WordPress.WP.AlternativeFunctions.header_header -- Intentional no-store header format.
 					}
 					wp_safe_redirect( $built['location'], $built['status'] );
 					exit;
 				}
-				if ( ! headers_sent() ) {
-					foreach ( $built['headers'] as $header ) {
-						header( $header, false ); // phpcs:ignore WordPress.PHP.HeaderURLColon.NoSpaceAfterColon,WordPress.WP.AlternativeFunctions.header_header -- Intentional no-store header format.
-					}
-					header( 'Location: ' . $built['location'], true, $built['status'] ); // phpcs:ignore WordPress.PHP.HeaderURLColon.NoSpaceAfterColon -- Intentional canonical header format.
+				foreach ( $built['headers'] as $header ) {
+					header( $header, false ); // phpcs:ignore WordPress.PHP.HeaderURLColon.NoSpaceAfterColon,WordPress.WP.AlternativeFunctions.header_header -- Intentional no-store header format.
 				}
+				header( 'Location: ' . $built['location'], true, $built['status'] ); // phpcs:ignore WordPress.PHP.HeaderURLColon.NoSpaceAfterColon -- Intentional canonical header format.
 				exit;
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -4826,6 +4851,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Whether a file path lives under the min tree (for the PHP resolver).
+		 *
+		 * The min tree (`{WP_CONTENT_DIR}/cache/wppo/min/...`) sits outside
+		 * the per-domain prefix, so {@see is_path_contained()} cannot cover
+		 * it; this routes min-tree misses through {@see is_min_dir_allowed()}
+		 * on the parent dir instead. Fail-closed. Never throws.
+		 *
+		 * @since NEXT
+		 * @param string $path Absolute file candidate.
+		 * @return bool True when the path is min-tree-contained.
+		 */
+		private function is_min_path( string $path ): bool {
+			try {
+				if ( '' === $path || false !== strpos( $path, "\0" ) || false !== strpos( $path, '..' ) ) {
+					return false;
+				}
+				$parent = (string) preg_replace( '#/[^/]*$#', '', $path ) . '/';
+				return $this->is_min_dir_allowed( $parent );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
 		 * Resolve bounded purge-fallback snapshot limits.
 		 *
 		 * Defaults come from the `PURGE_FALLBACK_*` constants; the
@@ -4929,23 +4979,53 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
-		 * Snapshot last-good fallback files under a directory slated for wipe.
+		 * Snapshot domain-tree fallbacks under a directory slated for wipe.
 		 *
-		 * Walks the tree (bounded by {@see purge_fallback_limits()}: file
-		 * count, depth, per-file bytes, visited directories, and total
-		 * bytes) and captures fallback siblings so a full-cache wipe can
-		 * restore them afterwards — a full purge must not leave the first
-		 * hit unstyled either. Oversize fallbacks are skipped via a
-		 * `size()` check before any full read. Returns path => contents.
-		 * Never throws.
+		 * Domain-tree entry point over {@see snapshot_purge_fallbacks_worker()}.
 		 *
-		 * @param string $dir      Absolute directory about to be deleted.
-		 * @param bool   $min_tree Whether $dir lives under the min tree (min-dir containment) instead of the domain tree.
+		 * @param string $dir Absolute domain directory about to be deleted.
 		 * @return array<string, string> Fallback path => file contents.
 		 *
 		 * @since NEXT
 		 */
-		private function snapshot_purge_fallbacks( string $dir, bool $min_tree = false ): array {
+		private function snapshot_domain_purge_fallbacks( string $dir ): array {
+			return $this->snapshot_purge_fallbacks_worker(
+				$dir,
+				function ( string $path ): bool {
+					return $this->is_path_contained( $path );
+				}
+			);
+		}
+
+		/**
+		 * Snapshot min-tree fallbacks under a directory slated for wipe.
+		 *
+		 * Min-tree entry point over {@see snapshot_purge_fallbacks_worker()}.
+		 *
+		 * @param string $dir Absolute min directory about to be deleted.
+		 * @return array<string, string> Fallback path => file contents.
+		 *
+		 * @since NEXT
+		 */
+		private function snapshot_min_purge_fallbacks( string $dir ): array {
+			return $this->snapshot_purge_fallbacks_worker(
+				$dir,
+				function ( string $path ): bool {
+					return $this->is_min_dir_allowed( (string) preg_replace( '#/[^/]*$#', '', $path ) . '/' );
+				}
+			);
+		}
+
+		/**
+		 * Shared snapshot worker behind the domain/min entry points.
+		 *
+		 * @param string   $dir        Absolute directory about to be deleted.
+		 * @param callable $is_allowed Containment validator: fn( string $path ): bool.
+		 * @return array<string, string> Fallback path => file contents.
+		 *
+		 * @since NEXT
+		 */
+		private function snapshot_purge_fallbacks_worker( string $dir, callable $is_allowed ): array {
 			$snapshot = array();
 			try {
 				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! Util::is_purge_fallback_enabled() ) {
@@ -4999,11 +5079,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 						}
 						// Never follow a symlinked entry out of the tree:
 						// validate the exact fallback basename and
-						// containment before any stat/read (min-tree or
-						// domain-tree validator, matching the wiped root).
-						$allowed = $min_tree
-							? $this->is_min_dir_allowed( (string) preg_replace( '#/[^/]*$#', '', $full ) . '/' )
-							: $this->is_path_contained( $full );
+						// containment before any stat/read.
+						try {
+							$allowed = $is_allowed( $full );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$allowed = false;
+						}
 						if ( false !== strpos( $full, "\0" ) || false !== strpos( $full, '..' ) || ! $allowed ) {
 							continue;
 						}
@@ -5035,15 +5117,114 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 						++$collected;
 					}
 				}
-				if ( $capped || $collected >= $max_files || $visited >= $max_dirs || $total_bytes >= $max_total ) {
+				if ( $capped ) {
 					// Throttled signal: the bounded guarantee means larger
 					// sites keep only the first N fallbacks on full wipe.
+					// Only the truncation flag logs — exactly filling a
+					// quota on a complete walk is not a loss.
 					$this->log_snapshot_cap();
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
 			return $snapshot;
+		}
+
+		/**
+		 * Snapshot last-good fallback files under a directory slated for wipe.
+		 *
+		 * Backward-compatible wrapper over the split domain/min entry
+		 * points (kept for existing callers/tests): delegates to
+		 * {@see snapshot_domain_purge_fallbacks()} or
+		 * {@see snapshot_min_purge_fallbacks()} based on $min_tree.
+		 * Never throws.
+		 *
+		 * @param string $dir      Absolute directory about to be deleted.
+		 * @param bool   $min_tree Whether $dir lives under the min tree.
+		 * @return array<string, string> Fallback path => file contents.
+		 *
+		 * @since NEXT
+		 */
+		private function snapshot_purge_fallbacks( string $dir, bool $min_tree = false ): array {
+			if ( $min_tree ) {
+				return $this->snapshot_min_purge_fallbacks( $dir );
+			}
+			return $this->snapshot_domain_purge_fallbacks( $dir );
+		}
+
+		/**
+		 * Retain live bases to sibling fallbacks before a full-tree wipe.
+		 *
+		 * A full wipe otherwise snapshots only the previous fallback
+		 * generation (or nothing on first wipe), defeating the last-good
+		 * guarantee. This bounded pre-pass copies each live `.css`/`.js`
+		 * base to its sibling fallback via the shared
+		 * {@see Util::retain_purge_fallback_file()} helper so the snapshot
+		 * that follows captures the current generation. Uses the same
+		 * limits (max_dirs walk budget) and never throws.
+		 *
+		 * @param string   $dir        Absolute directory about to be deleted.
+		 * @param callable $is_allowed Containment validator: fn( string $path ): bool.
+		 * @return void
+		 *
+		 * @since NEXT
+		 */
+		private function retain_live_bases_for_wipe( string $dir, callable $is_allowed ): void {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! Util::is_purge_fallback_enabled() ) {
+					return;
+				}
+				$fs = $this->get_filesystem();
+				if ( ! $fs || ! method_exists( $fs, 'dirlist' ) ) {
+					return;
+				}
+				$limits      = self::purge_fallback_limits();
+				$max_dirs    = $limits['max_dirs'];
+				$queue       = array( array( $dir, 0 ) );
+				$head        = 0;
+				$visited     = 0;
+				$max_depth   = $limits['max_depth'];
+				$queue_total = count( $queue );
+				while ( $head < $queue_total && $visited < $max_dirs ) {
+					$current = $queue[ $head ];
+					++$head;
+					++$visited;
+					$path  = (string) $current[0];
+					$depth = (int) $current[1];
+					if ( $depth > $max_depth ) {
+						continue;
+					}
+					try {
+						$entries = $fs->dirlist( $path );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						continue;
+					}
+					if ( ! is_array( $entries ) ) {
+						continue;
+					}
+					foreach ( $entries as $name => $entry ) {
+						$full = rtrim( $path, '/' ) . '/' . $name;
+						if ( ! empty( $entry['type'] ) && 'd' === $entry['type'] ) {
+							$queue[]     = array( $full, $depth + 1 );
+							$queue_total = count( $queue );
+							continue;
+						}
+						// Only live bases: skip existing fallbacks (loop
+						// guard handled in the mapper) and non CSS/JS.
+						$lower = strtolower( (string) $name );
+						if ( in_array( $lower, self::PURGE_FALLBACK_NAMES, true ) ) {
+							continue;
+						}
+						if ( ! preg_match( '/\.(?:css|js)(?:\.(?:gz|br))?$/i', $lower ) ) {
+							continue;
+						}
+						Util::retain_purge_fallback_file( $fs, $is_allowed, $full );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 
 		/** Fallback basenames recognized by the snapshot/restore path. */
@@ -5293,14 +5474,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					$this->log_traversal_probe( $cache_dir );
 					$res1 = false;
 				} else {
-					// Post-purge fallback (issue #1275): snapshot last-good
-					// fallbacks, stage them to a temp dir outside the wipe
+					// Post-purge fallback (issue #1275): retain live bases
+					// first (so the current generation becomes last-good),
+					// then snapshot, stage to a temp dir outside the wipe
 					// tree (so a fatal between delete and restore cannot
-					// destroy both copies), then restore for the first
-					// post-purge hit. No-op when the gate is off.
-					$domain_snapshot = $this->snapshot_purge_fallbacks( $cache_dir, false );
+					// destroy both copies), then restore. No-op when off.
+					$this->retain_live_bases_for_wipe(
+						$cache_dir,
+						function ( string $path ): bool {
+							return $this->is_path_contained( $path );
+						}
+					);
+					$domain_snapshot = $this->snapshot_domain_purge_fallbacks( $cache_dir );
 					$domain_staged   = $this->stage_snapshot_to_temp( $domain_snapshot );
-					$res1            = $fs->delete( $cache_dir, true );
+					if ( ! empty( $domain_staged ) ) {
+						// Staging succeeded: drop the in-memory copy so the
+						// bytes are held once (temp files), not twice.
+						unset( $domain_snapshot );
+					}
+					$res1 = $fs->delete( $cache_dir, true );
 					if ( ! empty( $domain_staged ) ) {
 						$this->restore_staged_snapshot(
 							$domain_staged,
@@ -5309,7 +5501,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 							}
 						);
 					} else {
-						$this->restore_purge_fallbacks( $domain_snapshot );
+						$this->restore_purge_fallbacks( isset( $domain_snapshot ) ? $domain_snapshot : array() );
 					}
 				}
 			}
@@ -5323,9 +5515,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					$this->log_traversal_probe( $min_dir );
 					$res2 = false;
 				} else {
-					$min_snapshot = $this->snapshot_purge_fallbacks( $min_dir, true );
+					$this->retain_live_bases_for_wipe(
+						$min_dir,
+						function ( string $path ): bool {
+							return $this->is_min_path( $path );
+						}
+					);
+					$min_snapshot = $this->snapshot_min_purge_fallbacks( $min_dir );
 					$min_staged   = $this->stage_snapshot_to_temp( $min_snapshot );
-					$res2         = $fs->delete( $min_dir, true );
+					if ( ! empty( $min_staged ) ) {
+						unset( $min_snapshot );
+					}
+					$res2 = $fs->delete( $min_dir, true );
 					if ( ! empty( $min_staged ) ) {
 						$this->restore_staged_snapshot(
 							$min_staged,
@@ -5334,7 +5535,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 							}
 						);
 					} else {
-						$this->restore_min_fallbacks( $min_snapshot );
+						$this->restore_min_fallbacks( isset( $min_snapshot ) ? $min_snapshot : array() );
 					}
 				}
 			}

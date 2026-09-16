@@ -275,9 +275,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) ) {
 				$rules[] = '    try_files $uri $uri/ @wppo_fallback;';
 				$rules[] = '}';
 				$rules[] = 'location @wppo_fallback {';
-				$rules[] = '    # Variant-specific fallbacks first (used-CSS mobile/desktop), then generic.';
+				$rules[] = '    # Never cache the fallback redirect itself: without no-store,';
+				$rules[] = '    # browsers/proxies may keep redirecting to fallback.* after the base regenerates.';
+				$rules[] = '    add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;';
+				$rules[] = '    # Loop guard: a missing fallback.* itself falls through here too —';
+				$rules[] = '    # rewriting it onto itself would 302-loop forever (PHP has the same guard).';
+				$rules[] = '    if ($uri ~* "/fallback(\\.(mobile|desktop))?\\.(css|js)(\\.(gz|br))?$") { return 404; }';
+				$rules[] = '    # Variant-specific fallbacks first (used-CSS mobile/desktop CSS + JS), then generic.';
+				$rules[] = '    # Note: compressed-variant misses beside a live base are best-effort here —';
+				$rules[] = '    # the PHP handler (Cache::maybe_serve_purge_fallback) applies the live-base guard precisely.';
 				$rules[] = '    rewrite ^(.*/)[^/]+\.mobile\.css(\.(gz|br))?$ $1fallback.mobile.css redirect;';
 				$rules[] = '    rewrite ^(.*/)[^/]+\.desktop\.css(\.(gz|br))?$ $1fallback.desktop.css redirect;';
+				$rules[] = '    rewrite ^(.*/)[^/]+\.mobile\.js(\.(gz|br))?$ $1fallback.mobile.js redirect;';
+				$rules[] = '    rewrite ^(.*/)[^/]+\.desktop\.js(\.(gz|br))?$ $1fallback.desktop.js redirect;';
 				$rules[] = '    rewrite ^(.*/)[^/]+\.(css|js)(\.(gz|br))?$ $1fallback.$2 redirect;';
 				$rules[] = '}';
 				/**
