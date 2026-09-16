@@ -438,6 +438,47 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Canonical, query-normalized cache key for the current request.
+		 *
+		 * The key is pinned to the allowlisted canonical host resolved from
+		 * `home_url()` via `wp_parse_url()` (both guarded with
+		 * `function_exists()` inside {@see Util::get_canonical_host()}; see
+		 * {@see Util::resolve_canonical_host()}): a forged `Host` header can
+		 * never create its own key — `$this->domain` is the canonical host,
+		 * never the request host, and mismatched requests are served dynamic
+		 * uncached (see {@see is_not_cacheable()}) and never stored (see
+		 * {@see maybe_store_cache()}). The key itself stays canonical on
+		 * mismatch so callers can observe the pinning; servability is decided
+		 * by {@see is_host_mismatched()}, not by this key.
+		 *
+		 * Query-aware by construction: the key is path-only. Known tracking
+		 * params (`utm_*`, `gclid`, `fbclid`, … — the `has_filter()`-guarded
+		 * `wppo_cache_query_allowlist` filter in
+		 * {@see Util::get_cache_query_allowlist()}, classified by
+		 * {@see Util::has_uncacheable_query()}) are cache-neutral for the
+		 * read decision, while the write path refuses ANY query-bearing
+		 * response, so `/?utm_source=x` can never poison the clean-URL entry.
+		 *
+		 * No absolute URL in the key (or in cached output) is ever built from
+		 * `HTTP_HOST`; absolute URLs use `home_url()`/the canonical host with
+		 * legacy Host-derived fallback only when the canonical host is
+		 * unresolvable (early boot/CLI). Multisite-safe: `home_url()` is
+		 * blog-aware, so each site keys its own canonical tree.
+		 *
+		 * @return string `{canonical-host}/{path}` (homepage: `{host}/`), or '' when refused.
+		 * @since NEXT
+		 */
+		public function cache_key(): string {
+			if ( '' === $this->domain || $this->path_rejected ) {
+				return '';
+			}
+			if ( '' === $this->url_path ) {
+				return $this->domain . '/';
+			}
+			return $this->domain . '/' . $this->url_path;
+		}
+
+		/**
 		 * Check whether page caching is allowed for the current (possibly logged-in) user.
 		 *
 		 * - Not logged in: always allowed.
