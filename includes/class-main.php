@@ -3777,8 +3777,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// rewrite identically to lowercase markup; anchored so
 					// `data-src`/`wppo-src` (dash-prefixed) never match, and
 					// fill-gaps-safe on re-processing (#1217 review).
-					$rewritten = preg_replace( '/\ssrc(?=[\s=])/i', ' wppo-src', $tag );
-					$tag       = is_string( $rewritten ) ? $rewritten : $tag;
+					// Quoted attribute VALUES are masked with equal-length spaces
+					// first so `src=` inside a value (e.g. data-note="use
+					// src=fallback") is never rewritten — only the first real
+					// src attribute outside quotes is renamed.
+					try {
+						$masked = preg_replace_callback(
+							'/"[^"]*"|\'[^\']*\'/',
+							static function ( $m ): string {
+								return str_repeat( ' ', strlen( $m[0] ) );
+							},
+							$tag
+						);
+						if ( is_string( $masked ) && 1 === preg_match( '/\ssrc(?=[\s=])/i', $masked, $src_m, PREG_OFFSET_CAPTURE ) ) {
+							$src_pos = (int) $src_m[0][1];
+							$tag     = substr_replace( $tag, ' wppo-src', $src_pos, 4 );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
 					// Normalise an executable JS type into the delay marker,
 					// carrying the ORIGINAL type through wppo-type so
 					// lazyload.js can restore it (type="module" becomes
@@ -5477,7 +5494,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		public function get_delay_js_third_party_allowlist(): array {
 			try {
-				$file_opt = $this->options['file_optimisation'] ?? array();
+				// Sandbox preview (#1217 review): read staged lists from the
+				// effective slice so preview renders staged edits instead of
+				// production values on the script_loader_tag path.
+				$file_opt = self::get_effective_file_optimisation( $this->options['file_optimisation'] ?? array() );
 				$raw      = $file_opt['delayJSThirdPartyAllowlist'] ?? '';
 				$list     = array();
 				if ( is_string( $raw ) && '' !== trim( $raw ) ) {
@@ -5493,13 +5513,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_delay_js_third_party_allowlist' ) ) {
 					$filtered = apply_filters( 'wppo_delay_js_third_party_allowlist', $list );
 					if ( is_array( $filtered ) ) {
-						$list = $filtered;
+						// Same coerce/dedupe sanitization as the denylist (#1217
+						// review): filter output is untrusted, so non-string
+						// entries are dropped instead of becoming 'Array'.
+						$list = array_values(
+							array_unique(
+								array_filter(
+									array_map(
+										static function ( $val ): string {
+											return is_string( $val ) || is_numeric( $val ) ? (string) $val : '';
+										},
+										$filtered
+									),
+									static function ( $val ): bool {
+										return '' !== trim( (string) $val );
+									}
+								)
+							)
+						);
 					}
 				}
 				return array_values(
 					array_unique(
 						array_filter(
-							array_map( 'strval', (array) $list ),
+							array_map(
+								static function ( $val ): string {
+									return is_string( $val ) || is_numeric( $val ) ? (string) $val : '';
+								},
+								(array) $list
+							),
 							static function ( $val ): bool {
 								return '' !== trim( (string) $val );
 							}
@@ -5522,6 +5564,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * The user allowlist always wins (returns false). Any detection
 		 * failure fails open to false (leave un-delayed).
 		 *
+		 * Matching semantics: handles use word-boundary matching (consistent
+		 * with the rest of delay matching); src/URL matching is substring.
+		 *
 		 * @since NEXT
 		 * @param string $tag    Script tag markup.
 		 * @param string $handle Script handle.
@@ -5536,19 +5581,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( '' === $src || 0 === strpos( $src, 'data:' ) || 0 === strpos( $src, 'blob:' ) ) {
 					return false;
 				}
-				// User allowlist wins over everything.
+				// User allowlist wins over everything. Handle matching uses the
+				// word-boundary matcher (consistent with the rest of delay
+				// matching) so short entries (gtag, intercom, …) do not match
+				// unrelated first-party handles; src matching stays substring
+				// because URLs rarely align on word boundaries (#1217 review).
 				foreach ( $this->get_delay_js_third_party_allowlist() as $allowed ) {
 					$allowed = trim( (string) $allowed );
 					if ( '' === $allowed ) {
 						continue;
 					}
-					if ( false !== stripos( $handle, $allowed ) || false !== stripos( $src, $allowed ) ) {
+					if ( $this->matches_delay_pattern( (string) $handle, $allowed ) || false !== stripos( $src, $allowed ) ) {
 						return false;
 					}
 				}
 				// Curated denylist + user additions match handle or src.
+				// Sandbox preview (#1217 review): user additions come from the
+				// effective slice so staged edits preview on this path too.
 				$denylist = self::get_delay_js_third_party_denylist();
-				$file_opt = $this->options['file_optimisation'] ?? array();
+				$file_opt = self::get_effective_file_optimisation( $this->options['file_optimisation'] ?? array() );
 				$extra    = $file_opt['delayJSThirdPartyDenylist'] ?? '';
 				if ( is_string( $extra ) && '' !== trim( $extra ) ) {
 					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'process_urls' ) ) {
@@ -5565,7 +5616,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					if ( '' === $entry ) {
 						continue;
 					}
-					if ( false !== stripos( $handle, $entry ) || false !== stripos( $src, $entry ) ) {
+					if ( $this->matches_delay_pattern( (string) $handle, $entry ) || false !== stripos( $src, $entry ) ) {
 						return true;
 					}
 				}

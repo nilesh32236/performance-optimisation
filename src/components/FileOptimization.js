@@ -552,14 +552,12 @@ const FileOptimization = ( {
 		setBaseline( {
 			...defaultSettings,
 			...options,
-			delayJSThirdPartyDenylist:
-				typeof options.delayJSThirdPartyDenylist === 'string'
-					? options.delayJSThirdPartyDenylist
-					: '',
-			delayJSThirdPartyAllowlist:
-				typeof options.delayJSThirdPartyAllowlist === 'string'
-					? options.delayJSThirdPartyAllowlist
-					: '',
+			delayJSThirdPartyDenylist: toDelayLines(
+				options.delayJSThirdPartyDenylist
+			),
+			delayJSThirdPartyAllowlist: toDelayLines(
+				options.delayJSThirdPartyAllowlist
+			),
 			delayJSExcludeUrls:
 				typeof options.delayJSExcludeUrls === 'string'
 					? options.delayJSExcludeUrls
@@ -665,12 +663,18 @@ const FileOptimization = ( {
 		setSettings( ( prev ) => {
 			const next = { ...prev, ...options };
 			// String-guard textarea-backed keys so a corrupted non-string
-			// payload cannot reach a controlled textarea value.
+			// payload cannot reach a controlled textarea value. Third-party
+			// lists join array payloads (toDelayLines) so sync agrees with
+			// init instead of dropping backend arrays to '' (#1217 review).
 			if ( typeof next.delayJSThirdPartyDenylist !== 'string' ) {
-				next.delayJSThirdPartyDenylist = '';
+				next.delayJSThirdPartyDenylist = toDelayLines(
+					next.delayJSThirdPartyDenylist
+				);
 			}
 			if ( typeof next.delayJSThirdPartyAllowlist !== 'string' ) {
-				next.delayJSThirdPartyAllowlist = '';
+				next.delayJSThirdPartyAllowlist = toDelayLines(
+					next.delayJSThirdPartyAllowlist
+				);
 			}
 			if ( typeof next.delayJSExcludeUrls !== 'string' ) {
 				next.delayJSExcludeUrls = '';
