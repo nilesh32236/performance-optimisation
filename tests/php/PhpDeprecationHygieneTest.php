@@ -489,10 +489,11 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * The banned-pattern scanner must catch each violation class (issue #1260).
 	 *
 	 * Pins the green-path gate above with synthetic fixtures run through
-	 * the private scan helper via reflection: every one of the six
-	 * violation classes must report, while explicit-nullable `?array`,
-	 * `mixed`, attributed `#[MyAttr] ?string`, method-call, and
-	 * comment/string mentions must stay clean.
+	 * the private scan helper via reflection: each violation class
+	 * (including fully-qualified and attributed variants) must report,
+	 * while explicit-nullable `?array`, `mixed`, attributed
+	 * `#[MyAttr] ?string`, method-call, and comment/string mentions
+	 * must stay clean.
 	 *
 	 * @since NEXT
 	 * @return void
@@ -532,6 +533,7 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 			$this->assertSame( array(), $scan( "<?php\n\$manager->ping();\n\$manager?->ping();\n" ), 'Method and nullsafe ping() calls must pass.' );
 			$this->assertSame( array(), $scan( "<?php\n\$obj->curl_close( \$ch );\n" ), 'Method teardown calls must pass.' );
 			$this->assertSame( array(), $scan( "<?php\n\$obj?->curl_close( \$ch );\n" ), 'Nullsafe teardown calls must pass.' );
+			$this->assertSame( array(), $scan( "<?php\n\$obj->mysqli_ping();\n\$obj->curl_close( null );\n\$copy = \$E_STRICT;\n" ), 'Method-call and variable forms of raw patterns must pass.' );
 			$this->assertSame( array(), $scan( "<?php\n// E_STRICT in a comment with `backticks`\n\$doc = 'curl_close(null) in a string';\n" ), 'Comment/string mentions must pass.' );
 
 			$util_subdir = $dir . '/includes';
@@ -610,9 +612,9 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 		}
 
 		$raw_patterns = array(
-			'/\bcurl_close\s*\(\s*null/i' => 'curl_close(null) call',
-			'/\bE_STRICT\b/'              => 'E_STRICT usage',
-			'/\bmysqli_ping\b/i'          => 'mysqli_ping() usage',
+			'/(?<!->)(?<!::)\bcurl_close\s*\(\s*null/i' => 'curl_close(null) call',
+			'/(?<!\$)(?<!->)(?<!::)\bE_STRICT\b/'       => 'E_STRICT usage',
+			'/(?<!->)(?<!::)\bmysqli_ping\b/i'          => 'mysqli_ping() usage',
 		);
 		foreach ( $raw_patterns as $pattern => $label ) {
 			if ( 1 === preg_match( $pattern, $code_only ) ) {
