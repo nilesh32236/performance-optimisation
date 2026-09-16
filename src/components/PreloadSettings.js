@@ -782,11 +782,9 @@ const PreloadSettings = ( { options = {} } ) => {
 											'performance-optimisation'
 										) }
 										name="speculationPrerenderList"
-										checked={
-											Boolean(
-												settings.speculationPrerenderList
-											)
-										}
+										checked={ Boolean(
+											settings.speculationPrerenderList
+										) }
 										onChange={ handleChange( setSettings ) }
 									/>
 								</div>
