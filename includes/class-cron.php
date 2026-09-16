@@ -897,6 +897,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * @return bool True when the URL must not be preloaded.
 		 */
 		private function is_woo_excluded_url( string $url, ?bool $woo_safe = null, ?array $woo_paths = null ): bool {
+			// Single-source fast path: non-batch callers delegate to the
+			// canonical Util::is_woo_excluded_url() so serve-path and
+			// warm-path verdicts can never drift. Batch callers pass
+			// pre-resolved $woo_safe/$woo_paths to skip per-URL option reads.
+			if ( null === $woo_safe && null === $woo_paths && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_excluded_url' ) ) {
+				try {
+					return Util::is_woo_excluded_url( $url );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return true;
+				}
+			}
 			try {
 				$query = (string) wp_parse_url( $url, PHP_URL_QUERY );
 				$path  = (string) wp_parse_url( $url, PHP_URL_PATH );
@@ -994,20 +1006,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_editor_preview_url' ) ) {
 					return Util::is_editor_preview_url( $url );
 				}
-				// Mixed-version fallback: inline the greppable preview signals.
+				// Mixed-version fallback: inline the greppable preview signals,
+				// driven by the shared Util::EDITOR_PREVIEW_PARAMS list so the
+				// fallback cannot drift from the canonical matcher.
 				$path  = (string) wp_parse_url( $url, PHP_URL_PATH );
 				$query = (string) wp_parse_url( $url, PHP_URL_QUERY );
 				if ( (bool) preg_match( '#(^|/)(?:wp-admin|wp-login\.php|admin-ajax\.php)(/|$)#i', '/' . ltrim( $path, '/' ) ) ) {
 					return true;
 				}
-				if ( '' !== $query && (bool) preg_match( '/(?:^|&)(?:elementor-preview|et_fb|et_pb_preview|vc_action|vc_editable|bricks|preview|preview_id|customize_changeset_uuid|customizer)(?:=|&|$)/i', $query ) ) {
-					return true;
+				$preview_params = class_exists( 'PerformanceOptimise\Inc\Util' ) ? Util::EDITOR_PREVIEW_PARAMS : array( 'elementor-preview', 'et_fb', 'et_pb_preview', 'vc_action', 'vc_editable', 'bricks', 'preview', 'preview_id', 'customize_changeset_uuid', 'customizer' );
+				if ( '' !== $query ) {
+					$alternation = implode( '|', array_map( 'preg_quote', $preview_params ) );
+					if ( (bool) preg_match( '/(?:^|&)(' . $alternation . ')(?:=|&|$)/i', $query ) ) {
+						return true;
+					}
 				}
 				$params = array();
 				if ( '' !== $query ) {
 					parse_str( $query, $params );
 				}
-				foreach ( array( 'elementor-preview', 'et_fb', 'et_pb_preview', 'vc_action', 'vc_editable', 'bricks', 'preview', 'preview_id', 'customize_changeset_uuid', 'customizer' ) as $key ) {
+				foreach ( $preview_params as $key ) {
 					if ( isset( $params[ $key ] ) ) {
 						return true;
 					}

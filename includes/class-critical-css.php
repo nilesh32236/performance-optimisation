@@ -1802,6 +1802,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since NEXT
 		 */
 		public static function passes_elementor_smoke( string $html, string $purged_css ): bool {
+			if ( class_exists( 'PerformanceOptimise\Inc\Css_Safelist' ) ) {
+				return Css_Safelist::passes_elementor_smoke( $html, $purged_css );
+			}
 			try {
 				if ( '' === $html ) {
 					return true;
@@ -1848,7 +1851,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since NEXT
 		 */
 		public static function get_ccss_safelist_presets(): array {
-			$presets = array(
+			$presets = class_exists( 'PerformanceOptimise\Inc\Css_Safelist' )
+				? Css_Safelist::get_elementor_presets()
+				: array(
 				'.elementor-',
 				'.elementor-popup-',
 				'.e-con*',

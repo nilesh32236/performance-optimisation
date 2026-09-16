@@ -258,6 +258,27 @@ trait WPPO_Test_Bootstrap {
 			// so speculation tests never reuse another test's verdicts.
 			\PerformanceOptimise\Inc\Main::reset_speculation_url_memo();
 		}
+		if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'reset_delay_context_memo' ) ) {
+			// Delay-exclusion verdicts memoize per process: reset alongside
+			// reset_runtime_caches() so delay tests never reuse another
+			// test's URI/settings verdict.
+			\PerformanceOptimise\Inc\Main::reset_delay_context_memo();
+		}
+		if ( class_exists( 'PerformanceOptimise\Inc\Bfcache' ) && method_exists( 'PerformanceOptimise\Inc\Bfcache', 'reset_state_for_tests' ) ) {
+			// Bfcache duplicate-output guard is per process: reset so each
+			// test can exercise enqueue_scripts() independently.
+			\PerformanceOptimise\Inc\Bfcache::reset_state_for_tests();
+		}
+		if ( class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'reset_memo' ) ) {
+			// Sandbox preview memo is per process: reset so staged-settings
+			// fixtures never leak across tests.
+			\PerformanceOptimise\Inc\Sandbox_Preview::reset_memo();
+		}
+		if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'reset_html_processor_memo' ) ) {
+			// HTML-processor availability probe memoizes per process: reset
+			// so processor-availability fixtures never leak across tests.
+			\PerformanceOptimise\Inc\Util::reset_html_processor_memo();
+		}
 
 		// Pre-register frequently used WP functions to avoid "Cannot redeclare"
 		// PHP fatal errors when multiple test classes share one process.

@@ -1106,7 +1106,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// The set of handles this request would pull into the combined file. The
 			// same skip rules are applied below during generation so the two branches
 			// stay consistent about which styles belong in the file.
-			$eligible_handles = $this->get_combined_handles( $styles, $exclude_combine_css );
+			$eligible_handles = $this->resolve_eligible_handles( $styles, $exclude_combine_css );
 
 			// On small block-theme bundles core's 40KB inline budget (WP 6.9+)
 			// already inlines the eligible styles cheaply — skip creating the
@@ -1159,102 +1159,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 							$version = (string) $cache_mtime;
 							wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
 							$this->register_combine_css_path( $css_file_path );
-							$this->set_combine_css_preload( $css_url, $version, $css_file_path );
+							$this->emit_combined_preload_hint( $css_url, $version, $css_file_path );
 							return;
 						}
 					}
 				}
 			}
 
-			$combined_css       = '';
-			$successful_handles = array();
-
 			// Generate from the pre-classified eligible handles to avoid
 			// re-classifying each handle (triple classify -> single classify).
 			// Dequeue is deferred until the combined payload is verified and
 			// written (safe fallback: never strip originals until replacement
 			// is confirmed present).
-			foreach ( $eligible_handles as $handle ) {
-				if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
-					continue;
-				}
-				$style_data = $wp_styles->registered[ $handle ];
-
-				$src = $wp_styles->registered[ $handle ]->src;
-
-				$css_content = $this->fetch_remote_css( $src );
-
-				if ( false === $css_content ) {
-					continue;
-				}
-
-				if ( ! empty( $style_data->extra['before'] ) ) {
-					$combined_css .= implode( "\n", $style_data->extra['before'] ) . "\n";
-				}
-
-				if ( ! empty( $css_content ) ) {
-					$combined_css .= $css_content . "\n";
-				}
-
-				if ( ! empty( $style_data->extra['after'] ) ) {
-					$combined_css .= implode( "\n", $style_data->extra['after'] ) . "\n";
-				}
-
-				$successful_handles[] = $handle;
-			}
-
-			if ( $this->is_safe_css_combine_fallback_enabled() ) {
-				if ( empty( $successful_handles ) || '' === trim( $combined_css ) ) {
-					$this->log_combine_fallback( 'empty_payload', $eligible_handles );
-					return;
-				}
-			} elseif ( '' === trim( $combined_css ) ) {
-				return;
-			}
-
-			$font_display = 'swap';
-			if ( class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) && method_exists( 'PerformanceOptimise\Inc\Google_Fonts', 'get_font_display' ) ) {
-				try {
-					$font_display = Google_Fonts::get_font_display();
-				} catch ( \Throwable $e ) {
-					unset( $e );
-					$font_display = 'swap';
-				}
-			}
-			if ( '' !== $font_display ) {
-				$combined_css = preg_replace( '/font-display\s*:\s*block\s*;?/i', 'font-display: ' . $font_display . ';', $combined_css );
-				if ( null === $combined_css ) {
-					if ( $this->is_safe_css_combine_fallback_enabled() ) {
-						$this->log_combine_fallback( 'preg_error', $successful_handles );
-					}
-					return;
-				}
-
-				$combined_css = Minify\CSS::inject_font_display_swap( $combined_css, $font_display );
-			}
-
-			$css_minifier = new CSSMinifier( $combined_css );
-			$combined_css = $css_minifier->minify();
-
-			if ( '' === trim( (string) $combined_css ) ) {
+			$fetch_result       = $this->fetch_and_minify_css( $eligible_handles );
+			$combined_css       = $fetch_result['css'];
+			$successful_handles = $fetch_result['handles'];
+			if ( '' !== $fetch_result['error'] ) {
 				if ( $this->is_safe_css_combine_fallback_enabled() ) {
-					$this->log_combine_fallback( 'empty_after_minify', $successful_handles );
+					$log_handles = in_array( $fetch_result['error'], array( 'preg_error', 'empty_after_minify' ), true ) ? $successful_handles : $eligible_handles;
+					$this->log_combine_fallback( $fetch_result['error'], $log_handles );
 				}
 				return;
 			}
 
-			$css_file_path = $this->get_cache_file_path( 'css', '', $css_variant );
+			$write_result  = $this->write_combined_file( $combined_css, $css_variant );
+			$css_file_path = $write_result['path'];
 
-			if ( ! $this->prepare_cache_dir() ) {
+			if ( '' === $css_file_path ) {
 				if ( $this->is_safe_css_combine_fallback_enabled() ) {
-					$this->log_combine_fallback( 'prepare_dir_failed', $successful_handles );
+					$this->log_combine_fallback( $write_result['error'], $successful_handles );
 				}
-				return;
-			}
-			$this->save_cache_files( $combined_css, $css_file_path, 'css' );
-
-			if ( $this->is_safe_css_combine_fallback_enabled() && ! $this->is_combined_css_valid( $css_file_path ) ) {
-				$this->log_combine_fallback( 'write_failure', $successful_handles );
 				return;
 			}
 
@@ -1277,6 +1211,123 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$this->register_combine_css_path( $css_file_path );
 			$this->write_combined_handles( $css_file_path, $eligible_handles );
 
+			$this->emit_combined_preload_hint( $css_url, $version, $css_file_path );
+		}
+
+		/**
+		 * Resolve the handles eligible for CSS combining.
+		 *
+		 * Named extraction over {@see get_combined_handles()} so the
+		 * exclusion / core-block / inline-budget branches of
+		 * {@see combine_css()} read as a staged pipeline with isolated tests.
+		 *
+		 * @since NEXT
+		 * @param array $styles     Queued handles.
+		 * @param array $exclusions Excluded handles/patterns.
+		 * @return array Eligible handles.
+		 */
+		private function resolve_eligible_handles( array $styles, array $exclusions ): array {
+			return $this->get_combined_handles( $styles, $exclusions );
+		}
+
+		/**
+		 * Fetch, concatenate and minify eligible stylesheets.
+		 *
+		 * Extracted from {@see combine_css()} so fetch/minify regressions can
+		 * be tested without driving the full enqueue/write pipeline.
+		 *
+		 * @since NEXT
+		 * @param array $eligible_handles Eligible handles.
+		 * @return array{css:string,handles:array,error:string} Combined CSS + successful handles + error stage ('' on success).
+		 */
+		private function fetch_and_minify_css( array $eligible_handles ): array {
+			global $wp_styles;
+			$combined_css       = '';
+			$successful_handles = array();
+			foreach ( $eligible_handles as $handle ) {
+				if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
+					continue;
+				}
+				$style_data = $wp_styles->registered[ $handle ];
+				$src        = $wp_styles->registered[ $handle ]->src;
+				$css_content = $this->fetch_remote_css( $src );
+				if ( false === $css_content ) {
+					continue;
+				}
+				if ( ! empty( $style_data->extra['before'] ) ) {
+					$combined_css .= implode( "\n", $style_data->extra['before'] ) . "\n";
+				}
+				if ( ! empty( $css_content ) ) {
+					$combined_css .= $css_content . "\n";
+				}
+				if ( ! empty( $style_data->extra['after'] ) ) {
+					$combined_css .= implode( "\n", $style_data->extra['after'] ) . "\n";
+				}
+				$successful_handles[] = $handle;
+			}
+			if ( empty( $successful_handles ) || '' === trim( $combined_css ) ) {
+				return array( 'css' => '', 'handles' => $successful_handles, 'error' => 'empty_payload' );
+			}
+			$font_display = 'swap';
+			if ( class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) && method_exists( 'PerformanceOptimise\Inc\Google_Fonts', 'get_font_display' ) ) {
+				try {
+					$font_display = Google_Fonts::get_font_display();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$font_display = 'swap';
+				}
+			}
+			if ( '' !== $font_display ) {
+				$combined_css = preg_replace( '/font-display\s*:\s*block\s*;?/i', 'font-display: ' . $font_display . ';', $combined_css );
+				if ( null === $combined_css ) {
+					return array( 'css' => '', 'handles' => $successful_handles, 'error' => 'preg_error' );
+				}
+				$combined_css = Minify\CSS::inject_font_display_swap( $combined_css, $font_display );
+			}
+			$css_minifier = new CSSMinifier( $combined_css );
+			$combined_css = $css_minifier->minify();
+			if ( '' === trim( (string) $combined_css ) ) {
+				return array( 'css' => '', 'handles' => $successful_handles, 'error' => 'empty_after_minify' );
+			}
+			return array( 'css' => (string) $combined_css, 'handles' => $successful_handles, 'error' => '' );
+		}
+
+		/**
+		 * Write the combined CSS file to the cache directory.
+		 *
+		 * Extracted from {@see combine_css()} so filesystem failures can be
+		 * tested without driving fetch/minify.
+		 *
+		 * @since NEXT
+		 * @param string $combined_css Combined CSS.
+		 * @param string $css_variant  Cache variant suffix.
+		 * @return array{path:string,error:string} File path ('' on failure) + error stage.
+		 */
+		private function write_combined_file( string $combined_css, string $css_variant ): array {
+			$css_file_path = $this->get_cache_file_path( 'css', '', $css_variant );
+			if ( ! $this->prepare_cache_dir() ) {
+				return array( 'path' => '', 'error' => 'prepare_dir_failed' );
+			}
+			$this->save_cache_files( $combined_css, $css_file_path, 'css' );
+			if ( $this->is_safe_css_combine_fallback_enabled() && ! $this->is_combined_css_valid( $css_file_path ) ) {
+				return array( 'path' => '', 'error' => 'write_failure' );
+			}
+			return array( 'path' => $css_file_path, 'error' => '' );
+		}
+
+		/**
+		 * Emit the preload hint for the combined stylesheet.
+		 *
+		 * Named extraction over {@see set_combine_css_preload()} keeping the
+		 * audit-requested pipeline vocabulary in one place.
+		 *
+		 * @since NEXT
+		 * @param string     $css_url       URL of the combined stylesheet.
+		 * @param int|string $version       Cache-busting version suffix.
+		 * @param string     $css_file_path Absolute path to the combined CSS file.
+		 * @return void
+		 */
+		private function emit_combined_preload_hint( $css_url, $version, string $css_file_path ): void {
 			$this->set_combine_css_preload( $css_url, $version, $css_file_path );
 		}
 
@@ -2771,7 +2822,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( (bool) preg_match( '#(^|/)(?:wp-admin|wp-login\.php|admin-ajax\.php)(/|$)#i', '/' . $fallback_path ) ) {
 					return true;
 				}
-				foreach ( array( 'elementor-preview', 'et_fb', 'et_pb_preview', 'vc_action', 'vc_editable', 'bricks', 'preview', 'preview_id', 'customize_changeset_uuid', 'customizer' ) as $key ) {
+				$preview_params = class_exists( 'PerformanceOptimise\Inc\Util' ) ? Util::EDITOR_PREVIEW_PARAMS : array( 'elementor-preview', 'et_fb', 'et_pb_preview', 'vc_action', 'vc_editable', 'bricks', 'preview', 'preview_id', 'customize_changeset_uuid', 'customizer' );
+				foreach ( $preview_params as $key ) {
 					if ( isset( $_GET[ $key ] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
 						return true;
 					}
@@ -5923,6 +5975,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * List direct children of a cache directory via the WP filesystem.
+		 *
+		 * Single shared `$fs->dirlist()` enumeration point for
+		 * {@see calculate_directory_stats()} and
+		 * {@see collect_cache_entries_by_age()} so cap accounting and
+		 * oldest-entry eviction can never drift apart.
+		 *
+		 * @since NEXT
+		 * @param string $directory Directory path.
+		 * @return array|null Dirlist entries, or null when unavailable.
+		 */
+		private function list_cache_children( string $directory ): ?array {
+			$fs = $this->get_filesystem();
+			if ( ! $fs ) {
+				return null;
+			}
+			$files = $fs->dirlist( $directory );
+			if ( ! $files || ! is_array( $files ) ) {
+				return null;
+			}
+			return $files;
+		}
+
+		/**
 		 * Calculate directory size and cached-page count in a single walk.
 		 *
 		 * Single recursive `$fs->dirlist()` traversal returning both
@@ -5960,9 +6036,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return $empty;
 			}
 
-			$files = $fs->dirlist( $directory );
+			$files = $this->list_cache_children( $directory );
 
-			if ( ! $files ) {
+			if ( null === $files ) {
 				return $empty;
 			}
 
@@ -6269,12 +6345,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( $depth > 20 || count( $out ) >= 5000 ) {
 					return $out;
 				}
-				$fs = $this->get_filesystem();
-				if ( ! $fs ) {
+				$files = $this->list_cache_children( $directory );
+				if ( null === $files ) {
 					return $out;
 				}
-				$files = $fs->dirlist( $directory );
-				if ( ! $files ) {
+				$fs = $this->get_filesystem();
+				if ( ! $fs ) {
 					return $out;
 				}
 				foreach ( $files as $file ) {

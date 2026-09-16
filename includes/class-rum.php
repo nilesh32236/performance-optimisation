@@ -1049,17 +1049,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				return null;
 			}
 
-			$ranges = array(
-				'ttfb' => array( 0, 60000 ),
-				'fcp'  => array( 0, 60000 ),
-				'lcp'  => array( 0, 60000 ),
-				'inp'  => array( 0, 60000 ),
-				'cls'  => array( 0, 1 ),
-			);
+			$ranges = self::get_metric_ranges();
 
 			$sample  = array( 'path' => $path );
 			$has_any = false;
-			foreach ( $ranges as $metric => $range ) {
+			foreach ( array_keys( $ranges ) as $metric ) {
 				if ( ! isset( $params[ $metric ] ) ) {
 					continue;
 				}
@@ -1072,7 +1066,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				if ( ! is_finite( $value ) ) {
 					return null;
 				}
-				$sample[ $metric ] = max( $range[0], min( $range[1], $value ) );
+				$sample[ $metric ] = self::clamp_metric_value( $metric, $value );
 				$has_any           = true;
 			}
 
@@ -1112,6 +1106,118 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		}
 
 		/**
+		 * Shared metric range table for sample validation.
+		 *
+		 * Single source consumed by {@see sanitize_sample()} (intake) and
+		 * {@see flush_queue()} (drain) so a range fix in one path can never
+		 * desync the other and corrupt stored aggregates.
+		 *
+		 * @since NEXT
+		 * @return array<string,array{0:float,1:float}> Metric => [min, max].
+		 */
+		public static function get_metric_ranges(): array {
+			return array(
+				'ttfb' => array( 0, 60000 ),
+				'fcp'  => array( 0, 60000 ),
+				'lcp'  => array( 0, 60000 ),
+				'inp'  => array( 0, 60000 ),
+				'cls'  => array( 0, 1 ),
+			);
+		}
+
+		/**
+		 * Clamp a metric value to its valid range.
+		 *
+		 * Shared by intake and flush via {@see get_metric_ranges()}.
+		 *
+		 * @since NEXT
+		 * @param string $metric Metric name.
+		 * @param float  $value  Raw value (must be finite).
+		 * @return float Clamped value.
+		 */
+		private static function clamp_metric_value( string $metric, float $value ): float {
+			$ranges = self::get_metric_ranges();
+			if ( ! isset( $ranges[ $metric ] ) ) {
+				return $value;
+			}
+			return max( $ranges[ $metric ][0], min( $ranges[ $metric ][1], $value ) );
+		}
+
+		/**
+		 * Normalize a raw segment value against an allowlist.
+		 *
+		 * Single helper behind the device/template/connection normalizers so
+		 * length caps and allowlist semantics live in one place.
+		 *
+		 * @since NEXT
+		 * @param mixed         $raw       Raw value.
+		 * @param string[]|null $allowlist Allowed values (null = free-form slug).
+		 * @param int           $maxlen    Max length before normalization.
+		 * @return string Normalized segment or 'unknown'.
+		 */
+		private static function normalize_segment( $raw, ?array $allowlist, int $maxlen ): string {
+			if ( ! is_string( $raw ) ) {
+				return 'unknown';
+			}
+			$cleaned = function_exists( 'sanitize_text_field' ) ? sanitize_text_field( $raw ) : $raw;
+			$cleaned = strtolower( trim( substr( $cleaned, 0, $maxlen ) ) );
+			if ( null !== $allowlist ) {
+				return in_array( $cleaned, $allowlist, true ) ? $cleaned : 'unknown';
+			}
+			$cleaned = (string) preg_replace( '/[^a-z0-9_-]/', '', $cleaned );
+			if ( '' === $cleaned ) {
+				return 'unknown';
+			}
+			return $cleaned;
+		}
+
+		/**
+		 * Resolve the home host (lowercased) for same-origin checks.
+		 *
+		 * Shared by the three same-origin matchers so host resolution can
+		 * never drift between them. Returns '' when undeterminable.
+		 *
+		 * @since NEXT
+		 * @return string Home host or ''.
+		 */
+		private static function get_home_host(): string {
+			try {
+				$home_url = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::cached_home_url() : ( function_exists( 'home_url' ) ? home_url() : '' );
+				if ( ! function_exists( 'wp_parse_url' ) ) {
+					return '';
+				}
+				return strtolower( (string) wp_parse_url( $home_url, PHP_URL_HOST ) );
+			} catch ( \Throwable $e ) {
+				return '';
+			}
+		}
+
+		/**
+		 * Whether a URL is scheme-like (can never be same-origin relative).
+		 *
+		 * Shared by {@see is_same_origin_url()} and
+		 * {@see is_same_origin_url_strict()} so the dangerous-scheme list
+		 * cannot drift between the fail-open and strict variants.
+		 *
+		 * @since NEXT
+		 * @param string $url Candidate URL.
+		 * @return bool True when scheme-like.
+		 */
+		private static function is_scheme_like_url( string $url ): bool {
+			$lower = strtolower( ltrim( $url ) );
+			foreach ( array( 'data:', 'blob:', 'javascript:', 'vbscript:', 'mailto:' ) as $scheme ) {
+				if ( str_starts_with( $lower, $scheme ) ) {
+					return true;
+				}
+			}
+			if ( 0 === strpos( ltrim( $url ), '//' ) ) {
+				return true;
+			}
+			$before_slash = strtok( $url, '/\\?#' );
+			return is_string( $before_slash ) && false !== strpos( $before_slash, ':' );
+		}
+
+		/**
 		 * Normalize a device value to the segment allowlist.
 		 *
 		 * Shared by beacon intake and queue flush (the queue transient is
@@ -1123,14 +1229,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * @return string Allowlisted device or 'unknown'.
 		 */
 		private static function normalize_segment_device( $raw ): string {
-			if ( ! is_string( $raw ) ) {
-				return 'unknown';
-			}
-			$candidate = strtolower( trim( substr( $raw, 0, 16 ) ) );
-			if ( 'mobile' === $candidate || 'desktop' === $candidate ) {
-				return $candidate;
-			}
-			return 'unknown';
+			$normalized = self::normalize_segment( $raw, array( 'mobile', 'desktop' ), 16 );
+			return $normalized;
 		}
 
 		/**
@@ -1144,19 +1244,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * @return string Sanitized template slug (max 64 chars) or 'unknown'.
 		 */
 		private static function normalize_segment_template( $raw ): string {
-			if ( ! is_string( $raw ) ) {
-				return 'unknown';
-			}
-			$cleaned = function_exists( 'sanitize_text_field' ) ? sanitize_text_field( $raw ) : $raw;
-			$cleaned = strtolower( trim( substr( $cleaned, 0, 64 ) ) );
-			// Single length cap lives here, after the allowlist replace
-			// below (preg_replace only removes characters, so one cap
-			// after it is sufficient and cannot be lengthened past 64).
-			$cleaned = (string) preg_replace( '/[^a-z0-9_-]/', '', $cleaned );
-			if ( '' === $cleaned ) {
-				return 'unknown';
-			}
-			return $cleaned;
+			return self::normalize_segment( $raw, null, 64 );
 		}
 
 		/**
@@ -1175,12 +1263,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			if ( ! is_string( $raw ) ) {
 				return 'unknown';
 			}
-			$cleaned   = function_exists( 'sanitize_text_field' ) ? sanitize_text_field( $raw ) : $raw;
-			$candidate = strtolower( trim( substr( $cleaned, 0, 16 ) ) );
-			if ( in_array( $candidate, self::ALLOWED_CONNECTIONS, true ) ) {
-				return $candidate;
-			}
-			return 'unknown';
+			return self::normalize_segment( $raw, self::ALLOWED_CONNECTIONS, 16 );
 		}
 
 		/**
@@ -1254,8 +1337,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				if ( '' === $host ) {
 					return false;
 				}
-				$home_url = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::cached_home_url() : ( function_exists( 'home_url' ) ? home_url() : '' );
-				$home     = strtolower( (string) wp_parse_url( $home_url, PHP_URL_HOST ) );
+				$home     = self::get_home_host();
 				return '' !== $home && $host === $home;
 			} catch ( \Throwable $e ) {
 				return false;
@@ -1299,26 +1381,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					// never resolve same-origin, matching the intake guard
 					// (`is_same_origin_lcp_url()`) which rejects every
 					// empty-host URL.
-					$lower = strtolower( ltrim( $url ) );
-					if ( str_starts_with( $lower, 'data:' ) || str_starts_with( $lower, 'blob:' ) || str_starts_with( $lower, 'javascript:' ) || str_starts_with( $lower, 'vbscript:' ) || str_starts_with( $lower, 'mailto:' ) ) {
-						return false;
-					}
-					if ( 0 === strpos( ltrim( $url ), '//' ) ) {
-						return false;
-					}
-					$before_slash = strtok( $url, '/\\?#' );
-					if ( is_string( $before_slash ) && false !== strpos( $before_slash, ':' ) ) {
-						return false;
-					}
-					return true;
+					return ! self::is_scheme_like_url( $url );
 				}
-				$home = '';
-				try {
-					$home_url = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::cached_home_url() : ( function_exists( 'home_url' ) ? home_url() : '' );
-					$home     = strtolower( (string) wp_parse_url( $home_url, PHP_URL_HOST ) );
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
+				$home = self::get_home_host();
 				if ( '' === $home ) {
 					// Home host undeterminable: a cross-origin verdict cannot
 					// be proven, so fail open to legacy behaviour.
@@ -1355,17 +1420,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					return false;
 				}
 				// Root-relative and bare relative paths are same-origin by
-				// construction (unless scheme-like).
+				// construction (unless scheme-like, checked above).
 				if ( 0 === strpos( $url, '/' ) && 0 !== strpos( $url, '//' ) ) {
 					return true;
 				}
 				// Protocol-relative URLs skip this block: host must be proven below.
 				if ( 0 !== strpos( ltrim( $url ), '//' ) && false === strpos( $url, '://' ) ) {
-					$before_slash = strtok( $url, '/\\?#' );
-					if ( is_string( $before_slash ) && false !== strpos( $before_slash, ':' ) ) {
-						return false;
-					}
-					return true;
+					return ! self::is_scheme_like_url( $url );
 				}
 				if ( ! function_exists( 'wp_parse_url' ) ) {
 					return false;
@@ -1374,13 +1435,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				if ( '' === $host ) {
 					return false;
 				}
-				$home = '';
-				try {
-					$home_url = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::cached_home_url() : ( function_exists( 'home_url' ) ? home_url() : '' );
-					$home     = strtolower( (string) wp_parse_url( $home_url, PHP_URL_HOST ) );
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
+				$home = self::get_home_host();
 				if ( '' === $home ) {
 					return false;
 				}
@@ -1573,6 +1628,165 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		}
 
 		/**
+		 * Merge one value into a bounded per-path segment map.
+		 *
+		 * Unifies the `lcpSeg` / `inpSeg` merge blocks of
+		 * {@see flush_queue()} (previously near-clone ~60-line blocks) behind
+		 * one reservoir + lowest-n eviction implementation.
+		 *
+		 * @since NEXT
+		 * @param array  $bucket       Bucket to merge into (by ref).
+		 * @param string $map_key      Segment map key ('lcpSeg' or 'inpSeg').
+		 * @param int    $max_segments Max segments per path.
+		 * @param int    $max_samples  Max reservoir samples per segment.
+		 * @param string $device       Normalized device.
+		 * @param string $template     Normalized template.
+		 * @param string $connection   Normalized connection.
+		 * @param float  $value        Clamped metric value.
+		 * @return void
+		 */
+		private static function merge_value_segment( array &$bucket, string $map_key, int $max_segments, int $max_samples, string $device, string $template, string $connection, float $value ): void {
+			$seg_key = $device . '|' . $template . '|' . $connection;
+			if ( ! isset( $bucket[ $map_key ] ) || ! is_array( $bucket[ $map_key ] ) ) {
+				$bucket[ $map_key ] = array();
+			}
+			if ( ! isset( $bucket[ $map_key ][ $seg_key ] ) || ! is_array( $bucket[ $map_key ][ $seg_key ] ) ) {
+				$bucket[ $map_key ][ $seg_key ] = array(
+					'device'     => $device,
+					'template'   => $template,
+					'connection' => $connection,
+					'n'          => 0,
+					'sum'        => 0.0,
+					'min'        => $value,
+					'max'        => $value,
+					'samples'    => array(),
+				);
+			}
+			++$bucket[ $map_key ][ $seg_key ]['n'];
+			$bucket[ $map_key ][ $seg_key ]['sum'] += $value;
+			$bucket[ $map_key ][ $seg_key ]['min']  = min( $bucket[ $map_key ][ $seg_key ]['min'], $value );
+			$bucket[ $map_key ][ $seg_key ]['max']  = max( $bucket[ $map_key ][ $seg_key ]['max'], $value );
+			$samples                                = isset( $bucket[ $map_key ][ $seg_key ]['samples'] ) && is_array( $bucket[ $map_key ][ $seg_key ]['samples'] ) ? $bucket[ $map_key ][ $seg_key ]['samples'] : array();
+			$samples[]                              = $value;
+			if ( count( $samples ) > $max_samples ) {
+				$samples = array_slice( $samples, -$max_samples );
+			}
+			$bucket[ $map_key ][ $seg_key ]['samples'] = array_values( $samples );
+			$seg_count = count( $bucket[ $map_key ] );
+			while ( $seg_count > $max_segments ) {
+				$evict_key = null;
+				$evict_n   = null;
+				foreach ( $bucket[ $map_key ] as $key => $entry ) {
+					$entry_n = isset( $entry['n'] ) ? (int) $entry['n'] : 0;
+					if ( null === $evict_key || $entry_n < $evict_n ) {
+						$evict_key = $key;
+						$evict_n   = $entry_n;
+					}
+				}
+				if ( null === $evict_key ) {
+					break;
+				}
+				unset( $bucket[ $map_key ][ $evict_key ] );
+				--$seg_count;
+			}
+		}
+
+		/**
+		 * Validate one queued sample into a merge-ready shape.
+		 *
+		 * Single Sample validator shared by the flush path: re-validates the
+		 * attacker-writable queue transient (path markup gate, range clamp,
+		 * segment re-normalization) exactly like {@see sanitize_sample()}.
+		 *
+		 * @since NEXT
+		 * @param mixed $sample Raw queued entry.
+		 * @return array{date:string,path:string,ts:int,sample:array}|null Validated sample or null to skip.
+		 */
+		private static function validate_queued_sample( $sample ): ?array {
+			if ( ! is_array( $sample ) ) {
+				return null;
+			}
+			$raw_qpath = isset( $sample['path'] ) && is_string( $sample['path'] ) ? substr( $sample['path'], 0, 512 ) : '';
+			if ( '' === $raw_qpath ) {
+				return null;
+			}
+			$qpath = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::normalize_rum_path( $raw_qpath ) : $raw_qpath;
+			if ( false !== strpbrk( $qpath, '<>"\'`' ) || 1 === preg_match( '/<\/style|<script|<!--|-->|javascript\s*:|vbscript\s*:|data\s*:/i', $qpath ) ) {
+				return null;
+			}
+			$ts   = isset( $sample['_ts'] ) ? (int) $sample['_ts'] : time();
+			$date = gmdate( 'Y-m-d', $ts );
+			return array(
+				'date'   => $date,
+				'path'   => $qpath,
+				'ts'     => $ts,
+				'sample' => $sample,
+			);
+		}
+
+
+		/**
+		 * Persist aggregates with retention + size budgets.
+		 *
+		 * Extracted from {@see flush_queue()}: drops days older than
+		 * retention, enforces the path/byte budgets, and writes the option.
+		 *
+		 * @since NEXT
+		 * @param array $all Aggregates.
+		 * @return void
+		 */
+		private static function persist_aggregate( array $all ): void {
+			$cutoff = gmdate( 'Y-m-d', time() - ( self::MAX_DAYS * DAY_IN_SECONDS ) );
+			foreach ( array_keys( $all ) as $day_key ) {
+				if ( $day_key < $cutoff ) {
+					unset( $all[ $day_key ] );
+				}
+			}
+			while ( ! empty( $all ) ) {
+				$total_paths = 0;
+				foreach ( $all as $day_bucket ) {
+					$total_paths += count( is_array( $day_bucket ) ? $day_bucket : array() );
+				}
+				$under_path_budget = $total_paths <= self::MAX_TOTAL_PATHS;
+				if ( ! $under_path_budget ) {
+					$oldest_day_key = array_key_first( $all );
+					if ( null === $oldest_day_key ) {
+						break;
+					}
+					if ( 1 === count( $all ) && is_array( $all[ $oldest_day_key ] ) ) {
+						$half = array_slice( $all[ $oldest_day_key ], (int) ( count( $all[ $oldest_day_key ] ) / 2 ) );
+						if ( ! empty( $half ) ) {
+							$all[ $oldest_day_key ] = $half;
+						}
+						break;
+					}
+					unset( $all[ $oldest_day_key ] );
+					continue;
+				}
+				$encoded = wp_json_encode( $all );
+				$under_byte_budget = false !== $encoded && strlen( (string) $encoded ) <= self::MAX_OPTION_BYTES;
+				if ( $under_byte_budget ) {
+					break;
+				}
+				$oldest_day_key = array_key_first( $all );
+				if ( null === $oldest_day_key ) {
+					break;
+				}
+				if ( 1 === count( $all ) && is_array( $all[ $oldest_day_key ] ) ) {
+					$half = array_slice( $all[ $oldest_day_key ], (int) ( count( $all[ $oldest_day_key ] ) / 2 ) );
+					if ( ! empty( $half ) ) {
+						$all[ $oldest_day_key ] = $half;
+					}
+					break;
+				}
+				unset( $all[ $oldest_day_key ] );
+			}
+			update_option( self::OPTION, $all, false );
+			self::clear_field_lcp_cache();
+			self::bump_top_url_generation();
+		}
+
+		/**
 		 * Buffer a sample to a transient queue and flush periodically.
 		 *
 		 * Replaces the previous per-beacon get_option+update_option with a
@@ -1677,20 +1891,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					// re-validated here — intake validation alone can be
 					// bypassed by writing the transient directly. Fail-open:
 					// malformed entries are skipped, never fatal.
-					if ( ! is_array( $sample ) ) {
+					$validated = self::validate_queued_sample( $sample );
+					if ( null === $validated ) {
 						continue;
 					}
-					$raw_qpath = isset( $sample['path'] ) && is_string( $sample['path'] ) ? substr( $sample['path'], 0, 512 ) : '';
-					if ( '' === $raw_qpath ) {
-						continue;
-					}
-					$qpath = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::normalize_rum_path( $raw_qpath ) : $raw_qpath;
-					if ( false !== strpbrk( $qpath, '<>"\'`' ) || 1 === preg_match( '/<\/style|<script|<!--|-->|javascript\s*:|vbscript\s*:|data\s*:/i', $qpath ) ) {
-						continue;
-					}
-					$ts   = isset( $sample['_ts'] ) ? (int) $sample['_ts'] : time();
-					$date = gmdate( 'Y-m-d', $ts );
-					$path = $qpath;
+					$sample = $validated['sample'];
+					$ts     = $validated['ts'];
+					$date   = $validated['date'];
+					$path   = $validated['path'];
 
 					if ( ! isset( $all[ $date ] ) || ! is_array( $all[ $date ] ) ) {
 						$all[ $date ] = array();
@@ -1706,7 +1914,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 						if ( ! is_finite( $value ) ) {
 							continue;
 						}
-						$value = max( $ranges[ $metric ][0], min( $ranges[ $metric ][1], $value ) );
+						$value = self::clamp_metric_value( $metric, $value );
 						if ( ! isset( $bucket[ $metric ] ) ) {
 							$bucket[ $metric ] = array(
 								'n'   => 0,
@@ -1775,19 +1983,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					}
 
 					// Device × template × connection LCP segments (issues #986, #1143):
-					// bounded per-path `lcpSeg` map keyed
-					// `{device}|{template}|{connection}` holding n/sum/min/max
-					// plus a capped most-recent reservoir for p75. Evicts the
-					// lowest-n segment when over budget. Reuses the existing
-					// option byte-budget loop below so the size cap still holds;
-					// no new option or transient names. Rows stored before the
-					// connection dimension read back as `unknown`.
+					// bounded per-path `lcpSeg` map; merged via the shared
+					// merge_value_segment() helper (same reservoir + eviction
+					// as `inpSeg` below). Rows stored before the connection
+					// dimension read back as `unknown`.
 					if ( isset( $sample['lcp'] ) && is_numeric( $sample['lcp'] ) ) {
 						$lcp_value = (float) $sample['lcp'];
 						if ( ! is_finite( $lcp_value ) ) {
 							$lcp_value = null;
 						} else {
-							$lcp_value = max( 0, min( 60000, $lcp_value ) );
+							$lcp_value = self::clamp_metric_value( 'lcp', $lcp_value );
 						}
 						if ( null !== $lcp_value ) {
 							// Re-sanitize even though the beacon sanitizes at
@@ -1795,69 +2000,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 							// reuse the shared normalizers (same as
 							// sanitize_sample()) before persisting into the
 							// aggregate option.
-							$device     = self::normalize_segment_device( $sample['device'] ?? null );
-							$template   = self::normalize_segment_template( $sample['template'] ?? null );
-							$connection = self::normalize_segment_connection( $sample['connection'] ?? null );
-							$seg_key    = $device . '|' . $template . '|' . $connection;
-							if ( ! isset( $bucket['lcpSeg'] ) || ! is_array( $bucket['lcpSeg'] ) ) {
-								$bucket['lcpSeg'] = array();
-							}
-							if ( ! isset( $bucket['lcpSeg'][ $seg_key ] ) || ! is_array( $bucket['lcpSeg'][ $seg_key ] ) ) {
-								$bucket['lcpSeg'][ $seg_key ] = array(
-									'device'     => $device,
-									'template'   => $template,
-									'connection' => $connection,
-									'n'          => 0,
-									'sum'        => 0.0,
-									'min'        => $lcp_value,
-									'max'        => $lcp_value,
-									'samples'    => array(),
-								);
-							}
-							++$bucket['lcpSeg'][ $seg_key ]['n'];
-							$bucket['lcpSeg'][ $seg_key ]['sum'] += $lcp_value;
-							$bucket['lcpSeg'][ $seg_key ]['min']  = min( $bucket['lcpSeg'][ $seg_key ]['min'], $lcp_value );
-							$bucket['lcpSeg'][ $seg_key ]['max']  = max( $bucket['lcpSeg'][ $seg_key ]['max'], $lcp_value );
-							$samples                              = isset( $bucket['lcpSeg'][ $seg_key ]['samples'] ) && is_array( $bucket['lcpSeg'][ $seg_key ]['samples'] ) ? $bucket['lcpSeg'][ $seg_key ]['samples'] : array();
-							$samples[]                            = $lcp_value;
-							if ( count( $samples ) > self::MAX_LCP_SAMPLES_PER_SEGMENT ) {
-								$samples = array_slice( $samples, -self::MAX_LCP_SAMPLES_PER_SEGMENT );
-							}
-							$bucket['lcpSeg'][ $seg_key ]['samples'] = array_values( $samples );
-							$lcp_seg_count                           = count( $bucket['lcpSeg'] );
-							while ( $lcp_seg_count > self::MAX_LCP_SEGMENTS_PER_PATH ) {
-								$evict_key = null;
-								$evict_n   = null;
-								foreach ( $bucket['lcpSeg'] as $key => $entry ) {
-									$entry_n = isset( $entry['n'] ) ? (int) $entry['n'] : 0;
-									if ( null === $evict_key || $entry_n < $evict_n ) {
-										$evict_key = $key;
-										$evict_n   = $entry_n;
-									}
-								}
-								if ( null === $evict_key ) {
-									break;
-								}
-								unset( $bucket['lcpSeg'][ $evict_key ] );
-								--$lcp_seg_count;
-							}
+							self::merge_value_segment(
+								$bucket,
+								'lcpSeg',
+								self::MAX_LCP_SEGMENTS_PER_PATH,
+								self::MAX_LCP_SAMPLES_PER_SEGMENT,
+								self::normalize_segment_device( $sample['device'] ?? null ),
+								self::normalize_segment_template( $sample['template'] ?? null ),
+								self::normalize_segment_connection( $sample['connection'] ?? null ),
+								$lcp_value
+							);
 						}
 					}
 
 					// Device × template × connection INP segments (issues #1036, #1143):
-					// bounded per-path `inpSeg` map keyed
-					// `{device}|{template}|{connection}` holding n/sum/min/max
-					// plus a capped most-recent reservoir for p75. Mirrors the
-					// `lcpSeg` block above; reuses the same device/template/
-					// connection sanitization and the existing option
-					// byte-budget loop below. No new option or transient names.
+					// bounded per-path `inpSeg` map; merged via the shared
+					// merge_value_segment() helper (same reservoir + eviction
+					// as `lcpSeg` above). No new option or transient names.
 					// Fail-open: any malformed queue entry is skipped, never fatal.
 					if ( isset( $sample['inp'] ) && is_numeric( $sample['inp'] ) ) {
 						$inp_value = (float) $sample['inp'];
 						if ( ! is_finite( $inp_value ) ) {
 							$inp_value = null;
 						} else {
-							$inp_value = max( 0, min( 60000, $inp_value ) );
+							$inp_value = self::clamp_metric_value( 'inp', $inp_value );
 						}
 						if ( null !== $inp_value ) {
 							// Re-sanitize even though the beacon sanitizes at
@@ -1865,52 +2031,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 							// reuse the shared normalizers (same as
 							// sanitize_sample() and the lcpSeg block above)
 							// before persisting into the aggregate option.
-							$device_inp     = self::normalize_segment_device( $sample['device'] ?? null );
-							$template_inp   = self::normalize_segment_template( $sample['template'] ?? null );
-							$connection_inp = self::normalize_segment_connection( $sample['connection'] ?? null );
-							$inp_seg_key    = $device_inp . '|' . $template_inp . '|' . $connection_inp;
-							if ( ! isset( $bucket['inpSeg'] ) || ! is_array( $bucket['inpSeg'] ) ) {
-								$bucket['inpSeg'] = array();
-							}
-							if ( ! isset( $bucket['inpSeg'][ $inp_seg_key ] ) || ! is_array( $bucket['inpSeg'][ $inp_seg_key ] ) ) {
-								$bucket['inpSeg'][ $inp_seg_key ] = array(
-									'device'     => $device_inp,
-									'template'   => $template_inp,
-									'connection' => $connection_inp,
-									'n'          => 0,
-									'sum'        => 0.0,
-									'min'        => $inp_value,
-									'max'        => $inp_value,
-									'samples'    => array(),
-								);
-							}
-							++$bucket['inpSeg'][ $inp_seg_key ]['n'];
-							$bucket['inpSeg'][ $inp_seg_key ]['sum'] += $inp_value;
-							$bucket['inpSeg'][ $inp_seg_key ]['min']  = min( $bucket['inpSeg'][ $inp_seg_key ]['min'], $inp_value );
-							$bucket['inpSeg'][ $inp_seg_key ]['max']  = max( $bucket['inpSeg'][ $inp_seg_key ]['max'], $inp_value );
-							$inp_samples                              = isset( $bucket['inpSeg'][ $inp_seg_key ]['samples'] ) && is_array( $bucket['inpSeg'][ $inp_seg_key ]['samples'] ) ? $bucket['inpSeg'][ $inp_seg_key ]['samples'] : array();
-							$inp_samples[]                            = $inp_value;
-							if ( count( $inp_samples ) > self::MAX_INP_SAMPLES_PER_SEGMENT ) {
-								$inp_samples = array_slice( $inp_samples, -self::MAX_INP_SAMPLES_PER_SEGMENT );
-							}
-							$bucket['inpSeg'][ $inp_seg_key ]['samples'] = array_values( $inp_samples );
-							$inp_seg_count                               = count( $bucket['inpSeg'] );
-							while ( $inp_seg_count > self::MAX_INP_SEGMENTS_PER_PATH ) {
-								$evict_key = null;
-								$evict_n   = null;
-								foreach ( $bucket['inpSeg'] as $key => $entry ) {
-									$entry_n = isset( $entry['n'] ) ? (int) $entry['n'] : 0;
-									if ( null === $evict_key || $entry_n < $evict_n ) {
-										$evict_key = $key;
-										$evict_n   = $entry_n;
-									}
-								}
-								if ( null === $evict_key ) {
-									break;
-								}
-								unset( $bucket['inpSeg'][ $evict_key ] );
-								--$inp_seg_count;
-							}
+							self::merge_value_segment(
+								$bucket,
+								'inpSeg',
+								self::MAX_INP_SEGMENTS_PER_PATH,
+								self::MAX_INP_SAMPLES_PER_SEGMENT,
+								self::normalize_segment_device( $sample['device'] ?? null ),
+								self::normalize_segment_template( $sample['template'] ?? null ),
+								self::normalize_segment_connection( $sample['connection'] ?? null ),
+								$inp_value
+							);
 						}
 					}
 
@@ -1925,81 +2055,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					$all[ $date ] = $day;
 				}
 
-				// Drop days older than retention.
-				$cutoff = gmdate( 'Y-m-d', time() - ( self::MAX_DAYS * DAY_IN_SECONDS ) );
-				foreach ( array_keys( $all ) as $day_key ) {
-					if ( $day_key < $cutoff ) {
-						unset( $all[ $day_key ] );
-					}
-				}
-
-				// Hard cap the option size (audit #888 finding 10): 14 days ×
-				// 200 paths × 5 metrics can exceed 1MB on high-traffic sites.
-				// Oldest days (and, when only one day remains, its oldest
-				// paths) are dropped until both the bucket count and the
-				// serialized size stay under budget, regardless of traffic.
-				while ( ! empty( $all ) ) {
-					$total_paths = 0;
-					foreach ( $all as $day_bucket ) {
-						$total_paths += count( is_array( $day_bucket ) ? $day_bucket : array() );
-					}
-
-					$under_path_budget = $total_paths <= self::MAX_TOTAL_PATHS;
-					if ( ! $under_path_budget ) {
-						$oldest_day_key = array_key_first( $all );
-						if ( null === $oldest_day_key ) {
-							break;
-						}
-
-						if ( 1 === count( $all ) && is_array( $all[ $oldest_day_key ] ) ) {
-							// Never drop the only day entirely — halve it and stop.
-							// Defensive: a single day is already bounded by
-							// MAX_PATHS_PER_DAY paths, so the byte budget should
-							// hold; this keeps a pathological day from being
-							// discarded wholesale before the loop stops.
-							$half = array_slice( $all[ $oldest_day_key ], (int) ( count( $all[ $oldest_day_key ] ) / 2 ) );
-							if ( ! empty( $half ) ) {
-								$all[ $oldest_day_key ] = $half;
-							}
-							break;
-						}
-						unset( $all[ $oldest_day_key ] );
-						continue;
-					}
-
-					$encoded = wp_json_encode( $all );
-					// A failed encode is treated as over budget so the loop
-					// makes progress (drops the oldest day) instead of
-					// persisting potentially oversized data.
-					$under_byte_budget = false !== $encoded && strlen( (string) $encoded ) <= self::MAX_OPTION_BYTES;
-
-					if ( $under_byte_budget ) {
-						break;
-					}
-
-					$oldest_day_key = array_key_first( $all );
-					if ( null === $oldest_day_key ) {
-						break;
-					}
-
-					if ( 1 === count( $all ) && is_array( $all[ $oldest_day_key ] ) ) {
-						// Never drop the only day entirely — halve it and stop.
-						// Defensive: a single day is already bounded by
-						// MAX_PATHS_PER_DAY paths, so the byte budget should
-						// hold; this keeps a pathological day from being
-						// discarded wholesale before the loop stops.
-						$half = array_slice( $all[ $oldest_day_key ], (int) ( count( $all[ $oldest_day_key ] ) / 2 ) );
-						if ( ! empty( $half ) ) {
-							$all[ $oldest_day_key ] = $half;
-						}
-						break;
-					}
-					unset( $all[ $oldest_day_key ] );
-				}
-
-				update_option( self::OPTION, $all, false );
-				self::clear_field_lcp_cache();
-				self::bump_top_url_generation();
+				self::persist_aggregate( $all );
 			} finally {
 				self::release_flush_lock();
 			}
@@ -2426,23 +2482,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		}
 
 		/**
-		 * Get field LCP p75 segmented by device × template × connection (read-only).
+		 * Get field p75 segmented by device × template × connection (read-only).
 		 *
-		 * Pure read path for AI-Adaptive auto-tune (issues #986, #1143): reads the
-		 * aggregate option only via get_option() — never flushes the queue
-		 * and never calls update_option/set_transient, so the frontend
-		 * incurs no new writes. Segments across all retained days are merged
-		 * by `{path}|{device}|{template}|{connection}`; only segments with n >=
-		 * $min_samples are returned. Rows stored before the connection
-		 * dimension shipped read back with `connection: 'unknown'`.
-		 * Fail-open: any failure returns array().
+		 * Parameterized core behind {@see get_field_lcp_p75_by_segment()} and
+		 * {@see get_field_inp_p75_by_segment()} so the merge/qualify/sort
+		 * pipeline lives in one place instead of two clones.
 		 *
-		 * @since 2.0.0
-		 * @since NEXT Added the `connection` segment dimension.
+		 * @since NEXT
+		 * @param string   $seg_key     Segment map key ('lcpSeg' or 'inpSeg').
 		 * @param int|null $min_samples Minimum samples per segment. Null resolves via get_field_lcp_min_samples().
 		 * @return array[] Rows of array(path,device,template,connection,n,p75).
 		 */
-		public static function get_field_lcp_p75_by_segment( ?int $min_samples = null ): array {
+		public static function get_field_p75_by_segment( string $seg_key, ?int $min_samples = null ): array {
 			try {
 				$min = null === $min_samples ? self::get_field_lcp_min_samples() : (int) $min_samples;
 				if ( $min < 1 ) {
@@ -2451,9 +2502,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				if ( ! function_exists( 'get_option' ) ) {
 					return array();
 				}
-				// Reuse the per-request memo so repeated calls do not each
-				// deserialize the full aggregate option. Read-only: the memo
-				// never flushes the queue.
 				$all = self::get_memoized_aggregate();
 				if ( ! is_array( $all ) || empty( $all ) ) {
 					return array();
@@ -2464,11 +2512,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 						continue;
 					}
 					foreach ( $day_bucket as $bucket_path => $bucket ) {
-						if ( ! is_array( $bucket ) || ! isset( $bucket['lcpSeg'] ) || ! is_array( $bucket['lcpSeg'] ) ) {
+						if ( ! is_array( $bucket ) || ! isset( $bucket[ $seg_key ] ) || ! is_array( $bucket[ $seg_key ] ) ) {
 							continue;
 						}
 						$path = (string) $bucket_path;
-						foreach ( $bucket['lcpSeg'] as $seg ) {
+						foreach ( $bucket[ $seg_key ] as $seg ) {
 							if ( ! is_array( $seg ) ) {
 								continue;
 							}
@@ -2499,9 +2547,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				$rows = array();
 				foreach ( $merged as $entry ) {
 					$n = (int) $entry['n'];
-					// p75 is computed from the capped reservoir, not the
-					// unbounded accumulator: never qualify or report more
-					// observations than actually back the p75 value.
 					$sample_count = count( $entry['samples'] );
 					if ( $sample_count < $n ) {
 						$n = $sample_count;
@@ -2534,6 +2579,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
 				return array();
 			}
+		}
+
+		/**
+		 * Get field LCP p75 segmented by device × template × connection (read-only).
+		 *
+		 * Pure read path for AI-Adaptive auto-tune (issues #986, #1143): reads the
+		 * aggregate option only via get_option() — never flushes the queue
+		 * and never calls update_option/set_transient, so the frontend
+		 * incurs no new writes. Segments across all retained days are merged
+		 * by `{path}|{device}|{template}|{connection}`; only segments with n >=
+		 * $min_samples are returned. Rows stored before the connection
+		 * dimension shipped read back with `connection: 'unknown'`.
+		 * Fail-open: any failure returns array().
+		 *
+		 * @since 2.0.0
+		 * @since NEXT Added the `connection` segment dimension.
+		 * @param int|null $min_samples Minimum samples per segment. Null resolves via get_field_lcp_min_samples().
+		 * @return array[] Rows of array(path,device,template,connection,n,p75).
+		 */
+		public static function get_field_lcp_p75_by_segment( ?int $min_samples = null ): array {
+			return self::get_field_p75_by_segment( 'lcpSeg', $min_samples );
 		}
 
 		/**
@@ -2669,97 +2735,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * @return array[] Rows of array(path,device,template,connection,n,p75).
 		 */
 		public static function get_field_inp_p75_by_segment( ?int $min_samples = null ): array {
-			try {
-				$min = null === $min_samples ? self::get_field_lcp_min_samples() : (int) $min_samples;
-				if ( $min < 1 ) {
-					$min = self::FIELD_LCP_DEFAULT_MIN_SAMPLES;
-				}
-				if ( ! function_exists( 'get_option' ) ) {
-					return array();
-				}
-				// Reuse the per-request memo so repeated calls do not each
-				// deserialize the full aggregate option. Read-only: the memo
-				// never flushes the queue.
-				$all = self::get_memoized_aggregate();
-				if ( ! is_array( $all ) || empty( $all ) ) {
-					return array();
-				}
-				$merged = array();
-				foreach ( $all as $day_bucket ) {
-					if ( ! is_array( $day_bucket ) ) {
-						continue;
-					}
-					foreach ( $day_bucket as $bucket_path => $bucket ) {
-						if ( ! is_array( $bucket ) || ! isset( $bucket['inpSeg'] ) || ! is_array( $bucket['inpSeg'] ) ) {
-							continue;
-						}
-						$path = (string) $bucket_path;
-						foreach ( $bucket['inpSeg'] as $seg ) {
-							if ( ! is_array( $seg ) ) {
-								continue;
-							}
-							$device     = isset( $seg['device'] ) && is_string( $seg['device'] ) ? $seg['device'] : 'unknown';
-							$template   = isset( $seg['template'] ) && is_string( $seg['template'] ) && '' !== $seg['template'] ? $seg['template'] : 'unknown';
-							$connection = isset( $seg['connection'] ) && is_string( $seg['connection'] ) && in_array( $seg['connection'], self::ALLOWED_CONNECTIONS, true ) ? $seg['connection'] : 'unknown';
-							$key        = $path . '|' . $device . '|' . $template . '|' . $connection;
-							if ( ! isset( $merged[ $key ] ) ) {
-								$merged[ $key ] = array(
-									'path'       => $path,
-									'device'     => $device,
-									'template'   => $template,
-									'connection' => $connection,
-									'n'          => 0,
-									'samples'    => array(),
-								);
-							}
-							$merged[ $key ]['n'] += isset( $seg['n'] ) ? (int) $seg['n'] : 0;
-							$samples              = isset( $seg['samples'] ) && is_array( $seg['samples'] ) ? $seg['samples'] : array();
-							foreach ( $samples as $value ) {
-								if ( is_numeric( $value ) ) {
-									$merged[ $key ]['samples'][] = (float) $value;
-								}
-							}
-						}
-					}
-				}
-				$rows = array();
-				foreach ( $merged as $entry ) {
-					$n = (int) $entry['n'];
-					// p75 is computed from the capped reservoir, not the
-					// unbounded accumulator: never qualify or report more
-					// observations than actually back the p75 value.
-					$sample_count = count( $entry['samples'] );
-					if ( $sample_count < $n ) {
-						$n = $sample_count;
-					}
-					if ( $n < $min ) {
-						continue;
-					}
-					$p75    = self::compute_p75( $entry['samples'] );
-					$rows[] = array(
-						'path'       => $entry['path'],
-						'device'     => $entry['device'],
-						'template'   => $entry['template'],
-						'connection' => $entry['connection'] ?? 'unknown',
-						'n'          => $n,
-						'p75'        => $p75,
-					);
-				}
-				usort(
-					$rows,
-					static function ( $a, $b ) {
-						$pa = isset( $a['p75'] ) ? (float) $a['p75'] : 0.0;
-						$pb = isset( $b['p75'] ) ? (float) $b['p75'] : 0.0;
-						if ( $pa === $pb ) {
-							return 0;
-						}
-						return $pa > $pb ? -1 : 1;
-					}
-				);
-				return $rows;
-			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
-				return array();
-			}
+			return self::get_field_p75_by_segment( 'inpSeg', $min_samples );
 		}
 	}
 }
