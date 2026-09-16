@@ -2068,6 +2068,65 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Per-request memo for is_elementor_built_page() (issue #1259).
+		 *
+		 * Both combine_css() and will_combine_css_inline() run the full
+		 * builder detection on the same request; without a memo that is 2x
+		 * queried-object lookups, up to 4x get_post_meta, and 2x
+		 * is_elementor_context() calls. Keyed by resolved post ID
+		 * ('post:{id}') or by queried object ('queried:{id}') when no
+		 * explicit post ID was passed.
+		 *
+		 * @since NEXT
+		 * @var array<string,bool>
+		 */
+		private static array $elementor_built_memo = array();
+
+		/**
+		 * Reset the Elementor-built memo (for tests).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_elementor_memo(): void {
+			self::$elementor_built_memo = array();
+		}
+
+		/**
+		 * Native-only Elementor presence pre-gate (issue #1259).
+		 *
+		 * Centralizes the cheap class/constant/query-var predicate so
+		 * combine_css() and will_combine_css_inline() cannot drift apart.
+		 * Zero WP calls: class_exists() with autoload disabled, defined(),
+		 * and isset() on $_GET only. Callers run the full guarded
+		 * detection only when this returns true.
+		 *
+		 * Note: a bare `?elementor-preview=1` query var forces a skip on
+		 * Elementor-active sites for any visitor appending it. Impact is
+		 * performance-only (unoptimized markup served, no data or
+		 * cache-write exposure); legit preview links need the bypass even
+		 * before per-post builder meta is readable, so this stays lenient
+		 * by design.
+		 *
+		 * @since NEXT
+		 * @return bool True when Elementor looks present on this request.
+		 */
+		public static function looks_like_elementor_request(): bool {
+			try {
+				if ( class_exists( 'Elementor\Plugin', false ) || defined( 'ELEMENTOR_VERSION' ) ) {
+					return true;
+				}
+				if ( isset( $_GET['elementor-preview'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
+					return true;
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
 		 * Backfill the additive elementorSafeMode key (issue #1259).
 		 *
 		 * Runs on admin_init; in-memory default is applied in __construct so
@@ -2143,13 +2202,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Lazy boot: class_exists() / function_exists() guards first so
 		 * non-Elementor sites pay nothing. Checks the Elementor plugin class,
 		 * version markers, per-post `_elementor_data` / `_elementor_edit_mode`
-		 * meta for the queried post, and `data-elementor-type` is left to
+		 * meta for the resolved post, and `data-elementor-type` is left to
 		 * markup-level callers. Any failure fails open to false (no bypass)
 		 * except when the caller explicitly opts into fail-open elsewhere.
 		 *
+		 * Per-request memoized by resolved post ID: combine_css() and
+		 * will_combine_css_inline() share one verdict per request.
+		 *
+		 * Single-post scope: only the resolved post's meta is inspected.
+		 * Archives, home, loops (queried ID 0), Elementor Theme Builder
+		 * archive/header/footer/popup contexts, and posts rendered inside
+		 * another loop are not covered — pass an explicit $post_id for those
+		 * contexts instead of relying on the queried-object fallback.
+		 *
 		 * @since NEXT
 		 *
-		 * @param int|null $post_id Optional post ID (defaults to queried object).
+		 * @param int|null $post_id Optional post ID (defaults to queried object,
+		 *                          then get_the_ID() for loop contexts).
 		 * @return bool True when this looks like an Elementor-built page.
 		 */
 		public static function is_elementor_built_page( ?int $post_id = null ): bool {
@@ -2164,20 +2233,60 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						unset( $e );
 					}
 				}
+				$resolved = $post_id;
+				if ( null === $resolved && function_exists( 'get_queried_object_id' ) ) {
+					try {
+						$qid = (int) get_queried_object_id();
+						if ( $qid > 0 ) {
+							$resolved = $qid;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( ( null === $resolved || $resolved <= 0 ) && function_exists( 'get_the_ID' ) ) {
+					try {
+						$loop_id = (int) get_the_ID();
+						if ( $loop_id > 0 ) {
+							$resolved = $loop_id;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				$memo_key = null !== $resolved && $resolved > 0 ? 'post:' . $resolved : 'queried:0';
+				if ( array_key_exists( $memo_key, self::$elementor_built_memo ) ) {
+					return self::$elementor_built_memo[ $memo_key ];
+				}
+				$result                                  = self::detect_elementor_built_page( $resolved );
+				self::$elementor_built_memo[ $memo_key ] = $result;
+				return $result;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Unmemoized Elementor-built detection (issue #1259).
+		 *
+		 * Split from is_elementor_built_page() so the memo wrapper stays
+		 * trivial. Both the Critical_CSS-precedent branch and the fallback
+		 * branch require a strict `'builder' === (string) $edit_mode`
+		 * comparison: a bare non-empty check false-positives on stale or
+		 * third-party `_elementor_edit_mode` values and diverges between
+		 * full and minimal boots.
+		 *
+		 * @since NEXT
+		 *
+		 * @param int|null $resolved Resolved post ID (or null when unknown).
+		 * @return bool True when this looks like an Elementor-built page.
+		 */
+		private static function detect_elementor_built_page( ?int $resolved ): bool {
+			try {
 				// Reuse the Critical_CSS detection precedent when available.
 				if ( class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'is_elementor_context' ) ) {
 					try {
-						$resolved = $post_id;
-						if ( null === $resolved && function_exists( 'get_queried_object_id' ) ) {
-							try {
-								$qid = (int) get_queried_object_id();
-								if ( $qid > 0 ) {
-									$resolved = $qid;
-								}
-							} catch ( \Throwable $e ) {
-								unset( $e );
-							}
-						}
 						if ( Critical_CSS::is_elementor_context( $resolved ) ) {
 							// is_elementor_context() returns true when the
 							// Elementor plugin is active site-wide; that alone
@@ -2191,7 +2300,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 										return true;
 									}
 									$edit_mode = get_post_meta( $resolved, '_elementor_edit_mode', true );
-									if ( ! empty( $edit_mode ) && 'builder' === (string) $edit_mode ) {
+									if ( 'builder' === (string) $edit_mode ) {
 										return true;
 									}
 								} catch ( \Throwable $e ) {
@@ -2209,14 +2318,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						unset( $e );
 					}
 				}
-				if ( null !== $post_id && $post_id > 0 && function_exists( 'get_post_meta' ) ) {
+				if ( null !== $resolved && $resolved > 0 && function_exists( 'get_post_meta' ) ) {
 					try {
-						$data = get_post_meta( $post_id, '_elementor_data', true );
+						$data = get_post_meta( $resolved, '_elementor_data', true );
 						if ( ! empty( $data ) ) {
 							return true;
 						}
-						$edit_mode = get_post_meta( $post_id, '_elementor_edit_mode', true );
-						if ( ! empty( $edit_mode ) ) {
+						$edit_mode = get_post_meta( $resolved, '_elementor_edit_mode', true );
+						if ( 'builder' === (string) $edit_mode ) {
 							return true;
 						}
 					} catch ( \Throwable $e ) {
@@ -2238,17 +2347,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * run) — the safe-mode default-on path only bypasses positively
 		 * identified builder pages, never on detection failure.
 		 *
+		 * Single-post scope (inherited from is_elementor_built_page()): pass
+		 * an explicit $post_id for archive/loop/Theme Builder contexts where
+		 * the queried object is not the Elementor-built post.
+		 *
 		 * @since NEXT
 		 *
-		 * @param array $file_optimisation Optional `file_optimisation` settings slice.
+		 * @param array    $file_optimisation Optional `file_optimisation` settings slice.
+		 * @param int|null $post_id           Optional post ID forwarded to is_elementor_built_page().
 		 * @return bool True when combine/inline must be skipped.
 		 */
-		public static function should_skip_combine_for_elementor( array $file_optimisation = array() ): bool {
+		public static function should_skip_combine_for_elementor( array $file_optimisation = array(), ?int $post_id = null ): bool {
 			try {
 				if ( ! self::is_elementor_safe_mode_active( $file_optimisation ) ) {
 					return false;
 				}
-				return self::is_elementor_built_page();
+				return self::is_elementor_built_page( $post_id );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;

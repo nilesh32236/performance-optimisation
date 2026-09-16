@@ -709,6 +709,7 @@ const FileOptimization = ( {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [
 		options.safeMode,
+		options.elementorSafeMode,
 		options.minifyJS,
 		options.excludeJS,
 		options.minifyCSS,
@@ -828,6 +829,7 @@ const FileOptimization = ( {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [
 		options.safeMode,
+		options.elementorSafeMode,
 		options.minifyJS,
 		options.excludeJS,
 		options.minifyCSS,

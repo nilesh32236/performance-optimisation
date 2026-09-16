@@ -977,16 +977,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// Elementor-safe mode (issue #1259): default-off combine/inline for
 			// builder-built pages. Uses the sandbox-effective slice so a staged
 			// elementorSafeMode=off can be previewed before promote. Fail-open:
-			// detection failure returns false (combine runs). Native pre-gate
-			// (class/constant/query var only — zero WP calls) so
-			// non-Elementor sites carry zero weight; full detection runs only
-			// when Elementor looks present.
-			if ( class_exists( 'Elementor\Plugin', false ) || defined( 'ELEMENTOR_VERSION' ) || isset( $_GET['elementor-preview'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
+			// detection failure returns false (combine runs). Centralized
+			// native pre-gate (Main::looks_like_elementor_request(): class/
+			// constant/query var only — zero WP calls) so non-Elementor sites
+			// carry zero weight; full detection (memoized per request in
+			// Main::is_elementor_built_page()) runs only when Elementor looks
+			// present.
+			if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'looks_like_elementor_request' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'should_skip_combine_for_elementor' ) && Main::looks_like_elementor_request() ) {
 				try {
-					if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'should_skip_combine_for_elementor' ) ) {
-						if ( Main::should_skip_combine_for_elementor( is_array( $file_opt_for_combine ) ? $file_opt_for_combine : array() ) ) {
-							return;
-						}
+					if ( Main::should_skip_combine_for_elementor( is_array( $file_opt_for_combine ) ? $file_opt_for_combine : array() ) ) {
+						return;
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
@@ -1719,25 +1719,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			// Elementor-safe mode (issue #1259): never inline the combined
 			// file on builder-built pages. Fail-open to production behaviour
-			// on any detection failure. Native pre-gate first (class/constant/
-			// query var only — zero WP calls) so non-Elementor sites, and
-			// unit tests with strict function_exists() expectations, pay
-			// nothing; the full guarded detection runs only when Elementor
-			// looks present.
-			if ( class_exists( 'Elementor\Plugin', false ) || defined( 'ELEMENTOR_VERSION' ) || isset( $_GET['elementor-preview'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
+			// on any detection failure. Centralized native pre-gate
+			// (Main::looks_like_elementor_request(): class/constant/query var
+			// only — zero WP calls) so non-Elementor sites, and unit tests
+			// with strict function_exists() expectations, pay nothing; the
+			// full guarded detection (memoized per request in
+			// Main::is_elementor_built_page()) runs only when Elementor looks
+			// present.
+			if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'looks_like_elementor_request' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'should_skip_combine_for_elementor' ) && Main::looks_like_elementor_request() ) {
 				try {
-					if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'should_skip_combine_for_elementor' ) ) {
-						$file_opt = isset( $this->options['file_optimisation'] ) && is_array( $this->options['file_optimisation'] ) ? $this->options['file_optimisation'] : array();
-						if ( class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_effective_file_optimisation' ) ) {
-							try {
-								$file_opt = Sandbox_Preview::get_effective_file_optimisation( $file_opt );
-							} catch ( \Throwable $e ) {
-								unset( $e );
-							}
+					$file_opt = isset( $this->options['file_optimisation'] ) && is_array( $this->options['file_optimisation'] ) ? $this->options['file_optimisation'] : array();
+					if ( class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_effective_file_optimisation' ) ) {
+						try {
+							$file_opt = Sandbox_Preview::get_effective_file_optimisation( $file_opt );
+						} catch ( \Throwable $e ) {
+							unset( $e );
 						}
-						if ( Main::should_skip_combine_for_elementor( $file_opt ) ) {
-							return false;
-						}
+					}
+					if ( Main::should_skip_combine_for_elementor( $file_opt ) ) {
+						return false;
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );

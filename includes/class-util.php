@@ -5348,6 +5348,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					continue;
 				}
 
+				// Elementor-safe mode (issue #1259) — normalize malformed import
+				// shapes (0/1, '0'/'1', 'false'/'true') to bool so the toggle
+				// check in Main::is_elementor_safe_mode_active() is reliable.
+				// A form-encoded 'false' string would otherwise survive
+				// sanitize_text_field as a truthy non-empty string and read
+				// as ON via !empty(). Unrecognized values fail safe to true
+				// (absent key = enabled), mirroring Sandbox_Preview.
+				if ( 'elementorSafeMode' === $safe_key && ! is_array( $value ) ) {
+					$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+					$sanitized[ $safe_key ] = null === $bool ? true : $bool;
+					continue;
+				}
+
 				if ( is_array( $value ) ) {
 					$sanitized[ $safe_key ] = self::sanitize_settings_recursively( $value );
 				} elseif ( is_bool( $value ) ) {
