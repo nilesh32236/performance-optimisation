@@ -1,4 +1,4 @@
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 import {
 	useState,
 	useRef,
@@ -40,6 +40,18 @@ let cdnRowCounter = 0;
 const cdnRowId = () => {
 	cdnRowCounter += 1;
 	return `cdn-${ Date.now() }-${ cdnRowCounter }`;
+};
+
+// Normalize the used-CSS delivery mode the same way PHP sanitizes it
+// (lowercase + trim, allowlisted, fail-open to 'file') so the UI never
+// disagrees with the server on a single render (issue #1220).
+const normalizeDeliveryMode = ( value ) => {
+	const mode = String( value || 'file' )
+		.toLowerCase()
+		.trim();
+	return [ 'file', 'delay', 'async', 'remove' ].includes( mode )
+		? mode
+		: 'file';
 };
 
 const FileOptimization = ( {
@@ -143,6 +155,7 @@ const FileOptimization = ( {
 				: true,
 		unusedCSSRegressionThreshold:
 			options.unusedCSSRegressionThreshold ?? 20,
+		usedCSSDeliveryMode: options.usedCSSDeliveryMode || 'file',
 		disableEmojis: false,
 		disableEmbeds: false,
 		disableDashicons: false,
@@ -202,6 +215,9 @@ const FileOptimization = ( {
 		typeof options.fontSubsetSubsets === 'string'
 			? options.fontSubsetSubsets
 			: 'latin';
+	defaultSettings.usedCSSDeliveryMode = normalizeDeliveryMode(
+		defaultSettings.usedCSSDeliveryMode
+	);
 
 	const [ settings, setSettings ] = useState( defaultSettings );
 	const [ isLoading, setIsLoading ] = useState( false );
@@ -212,6 +228,30 @@ const FileOptimization = ( {
 		notify: notifyPurge,
 		dismiss: dismissPurge,
 	} = useNotice();
+	// Used-CSS staleness (issue #1220): last-regen time + stale flag from the
+	// read-only used_css_status endpoint, shown as a warning banner while
+	// removeUnusedCSS is on. Fail-open: a failed fetch simply hides the banner.
+	const [ usedCssStatus, setUsedCssStatus ] = useState( null );
+	const refreshUsedCssStatus = useCallback( async () => {
+		try {
+			const res = await apiCall( 'used_css_status', {}, 'GET' );
+			if ( res && res.success && res.data ) {
+				setUsedCssStatus( res.data );
+			}
+		} catch {
+			// Fail-open: leave the banner hidden.
+		}
+	}, [] );
+	useEffect( () => {
+		if ( ! options.removeUnusedCSS ) {
+			// Clear a stale banner when the feature is toggled off.
+			setUsedCssStatus( null );
+			return;
+		}
+		// Reuse the shared fetcher so staleness logic lives in one place
+		// (issue #1220). Fail-open: a failed fetch leaves the banner hidden.
+		refreshUsedCssStatus();
+	}, [ options.removeUnusedCSS, refreshUsedCssStatus ] );
 	// Sandbox preview (issue #1163): visitor-safe admin preview of
 	// delay/defer/combine with one-click promote/discard + in-preview perf test.
 	const [ sandboxStaged, setSandboxStaged ] = useState( null );
@@ -537,6 +577,9 @@ const FileOptimization = ( {
 				typeof options.fontSubsetSubsets === 'string'
 					? options.fontSubsetSubsets
 					: 'latin',
+			usedCSSDeliveryMode: normalizeDeliveryMode(
+				options.usedCSSDeliveryMode
+			),
 		} );
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [
@@ -582,6 +625,7 @@ const FileOptimization = ( {
 		options.unusedCSSSafelistExtra,
 		options.unusedCSSRegressionGuard,
 		options.unusedCSSRegressionThreshold,
+		options.usedCSSDeliveryMode,
 		options.disableEmojis,
 		options.disableEmbeds,
 		options.disableDashicons,
@@ -636,6 +680,9 @@ const FileOptimization = ( {
 			if ( typeof next.fontSubsetSubsets !== 'string' ) {
 				next.fontSubsetSubsets = 'latin';
 			}
+			next.usedCSSDeliveryMode = normalizeDeliveryMode(
+				next.usedCSSDeliveryMode
+			);
 			return next;
 		} );
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -682,6 +729,7 @@ const FileOptimization = ( {
 		options.unusedCSSSafelistExtra,
 		options.unusedCSSRegressionGuard,
 		options.unusedCSSRegressionThreshold,
+		options.usedCSSDeliveryMode,
 		options.disableEmojis,
 		options.disableEmbeds,
 		options.disableDashicons,
@@ -907,6 +955,9 @@ const FileOptimization = ( {
 						),
 					durationMs: 3000,
 				} );
+				// Refresh the staleness banner so it does not linger after a
+				// successful regen until remount (issue #1220).
+				refreshUsedCssStatus();
 			} else {
 				notify( {
 					type: 'error',
@@ -950,6 +1001,9 @@ const FileOptimization = ( {
 						),
 					durationMs: 3000,
 				} );
+				// A purge invalidates used-CSS, so the staleness banner must
+				// reflect the new state immediately (issue #1220).
+				refreshUsedCssStatus();
 			} else {
 				notifyPurge( {
 					type: 'error',
@@ -1440,6 +1494,84 @@ const FileOptimization = ( {
 												</p>
 											</>
 										) }
+										<label
+											className="wppo-field-label wppo-mt-16"
+											htmlFor="usedCSSDeliveryMode"
+										>
+											{ __(
+												'Used CSS Delivery Mode',
+												'performance-optimisation'
+											) }
+										</label>
+										<select
+											className="wppo-select"
+											id="usedCSSDeliveryMode"
+											name="usedCSSDeliveryMode"
+											value={
+												settings.usedCSSDeliveryMode ||
+												'file'
+											}
+											onChange={ handleChange(
+												setSettings
+											) }
+											aria-describedby="usedCSSDeliveryMode-desc"
+										>
+											<option value="file">
+												{ __(
+													'File (render-blocking used CSS)',
+													'performance-optimisation'
+												) }
+											</option>
+											<option value="delay">
+												{ __(
+													'Delay (full CSS on interaction)',
+													'performance-optimisation'
+												) }
+											</option>
+											<option value="async">
+												{ __(
+													'Async (preload + swap)',
+													'performance-optimisation'
+												) }
+											</option>
+											<option value="remove">
+												{ __(
+													'Remove (strip full CSS, auto-downgrades on builders)',
+													'performance-optimisation'
+												) }
+											</option>
+										</select>
+										<p
+											id="usedCSSDeliveryMode-desc"
+											className="wppo-text-muted wppo-text-small wppo-mt-8"
+										>
+											{ __(
+												'File and Delay never serve unstyled pages on a cache miss — the full stylesheet is served instead. Remove auto-downgrades to Delay on builder pages.',
+												'performance-optimisation'
+											) }
+										</p>
+										{ usedCssStatus &&
+											usedCssStatus.is_stale && (
+												<NoticeBanner
+													type="warning"
+													className="wppo-mt-12"
+													message={
+														usedCssStatus.last_regen_human
+															? sprintf(
+																	// translators: %s: last used-CSS regeneration time.
+																	__(
+																		'Used CSS looks stale — last regenerated at %s. Builder or theme updates may have outrun regeneration; use Regenerate Used CSS below.',
+																		'performance-optimisation'
+																	),
+																	usedCssStatus.last_regen_human
+															  )
+															: __(
+																	'Used CSS looks stale — it has never been regenerated. Use Regenerate Used CSS below.',
+																	'performance-optimisation'
+															  )
+													}
+												/>
+											) }
 										<NoticeBanner
 											type="info"
 											className="wppo-mt-12"

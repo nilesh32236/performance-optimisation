@@ -65,6 +65,50 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		private const FULL_REGEN_COOLDOWN_SECONDS = 18000;
 
 		/**
+		 * Option holding the last targeted-regeneration timestamp (issue #1220).
+		 *
+		 * Builder/theme updates requeue only stale variants (bounded), gated
+		 * by this cooldown so a burst of updates cannot flood the scheduler.
+		 * Per-site option (core get_option is multisite-safe).
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		public const TARGETED_REGEN_OPTION = 'wppo_used_css_last_targeted_regen';
+
+		/**
+		 * Default targeted-regeneration cooldown in seconds (issue #1220).
+		 *
+		 * Filterable via wppo_used_css_targeted_cooldown.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const TARGETED_REGEN_COOLDOWN_SECONDS = 3600;
+
+		/**
+		 * Allowed used-CSS delivery modes (issue #1220).
+		 *
+		 * - file:   render-blocking used-CSS link (current behaviour).
+		 * - delay:  used-CSS blocking, full stylesheets load on interaction.
+		 * - async:  used-CSS via preload + media swap, full in noscript.
+		 * - remove: strip full stylesheets; auto-downgrades to delay when the
+		 *           builder smoke check fails (never unstyled, never fatal).
+		 *
+		 * @since NEXT
+		 * @var string[]
+		 */
+		public const DELIVERY_MODES = array( 'file', 'delay', 'async', 'remove' );
+
+		/**
+		 * Age in seconds after which used-CSS counts as stale for the UI warning (issue #1220).
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const STALE_THRESHOLD_SECONDS = 86400;
+
+		/**
 		 * Default per-run cap for the RUM-weighted used-CSS queue (issue #1164).
 		 *
 		 * Bounds the 200-row cursor loop per run; RUM-worst-first ordering
@@ -1788,6 +1832,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( '' !== $checksum_path && $fs->exists( $checksum_path ) ) {
 					$fs->delete( $checksum_path );
 				}
+				// Viewport variants (issue #1220): the single-file delete must
+				// also invalidate used-css.{mobile,desktop}.css (+ sidecars) or
+				// resolve_used_css_path() may keep serving a stale variant.
+				$this->delete_variant_files_for_url( (string) $url );
 				if ( $fs->exists( $file_path ) ) {
 					return $fs->delete( $file_path );
 				}
@@ -1795,6 +1843,52 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			}
 
 			return self::delete_all_used_css();
+		}
+
+		/**
+		 * Delete the viewport-variant sidecars for a URL (issue #1220).
+		 *
+		 * Removes `used-css.{mobile,desktop}.css` (+ `.sha256` checksums)
+		 * beside the single file so a path-scoped purge cannot leave a stale
+		 * variant behind for resolve_used_css_path() to serve. Fail-open:
+		 * never throws, missing files are skipped.
+		 *
+		 * @param string $url Page URL.
+		 * @return void
+		 * @since NEXT
+		 */
+		private function delete_variant_files_for_url( string $url ): void {
+			try {
+				$fs = Util::init_filesystem();
+				if ( ! $fs ) {
+					return;
+				}
+				foreach ( self::VIEWPORT_VARIANTS as $variant ) {
+					try {
+						$variant_path = $this->get_used_css_variant_path( $url, $variant );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						continue;
+					}
+					if ( '' === $variant_path || ! $this->is_path_contained( $variant_path ) ) {
+						continue;
+					}
+					try {
+						$checksum_path = $this->get_checksum_path( $variant_path );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$checksum_path = '';
+					}
+					if ( '' !== $checksum_path && $fs->exists( $checksum_path ) ) {
+						$fs->delete( $checksum_path );
+					}
+					if ( $fs->exists( $variant_path ) ) {
+						$fs->delete( $variant_path );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 
 		/**
@@ -1827,9 +1921,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					$full_path = trailingslashit( $current ) . $name;
 					if ( ! empty( $entry['type'] ) && 'd' === $entry['type'] ) {
 						$dir_queue[] = $full_path;
-					} elseif ( self::USED_CSS_FILENAME === $name || self::USED_CSS_FILENAME . '.sha256' === $name ) {
-						if ( ! $fs->delete( $full_path ) ) {
-							$success = false;
+					} else {
+						$purge_names = array( self::USED_CSS_FILENAME, self::USED_CSS_FILENAME . '.sha256' );
+						foreach ( self::VIEWPORT_VARIANTS as $variant ) {
+							$purge_names[] = 'used-css.' . $variant . '.css';
+							$purge_names[] = 'used-css.' . $variant . '.css.sha256';
+						}
+						if ( in_array( $name, $purge_names, true ) ) {
+							if ( ! $fs->delete( $full_path ) ) {
+								$success = false;
+							}
 						}
 					}
 				}
@@ -1954,6 +2055,292 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
+			}
+		}
+
+		/**
+		 * Effective used-CSS delivery mode (issue #1220).
+		 *
+		 * Additive `file_optimisation.usedCSSDeliveryMode` key; unknown or
+		 * missing values fail open to 'file' (current render-blocking link).
+		 *
+		 * @param array|null $file_opts Optional file_optimisation settings (defaults to plugin settings).
+		 * @return string One of self::DELIVERY_MODES.
+		 * @since NEXT
+		 */
+		public static function get_used_css_delivery_mode( ?array $file_opts = null ): string {
+			try {
+				if ( null === $file_opts ) {
+					$settings  = class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ? Util::get_settings() : array();
+					$file_opts = isset( $settings['file_optimisation'] ) && is_array( $settings['file_optimisation'] ) ? $settings['file_optimisation'] : array();
+				}
+				$mode = isset( $file_opts['usedCSSDeliveryMode'] ) ? strtolower( trim( (string) $file_opts['usedCSSDeliveryMode'] ) ) : 'file';
+				if ( in_array( $mode, self::DELIVERY_MODES, true ) ) {
+					return $mode;
+				}
+				return 'file';
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 'file';
+			}
+		}
+
+		/**
+		 * Timestamp of the last full used-CSS regeneration (issue #1220).
+		 *
+		 * Fail-open: unreadable storage returns 0.
+		 *
+		 * @return int Unix timestamp, or 0 when never recorded.
+		 * @since NEXT
+		 */
+		public static function get_last_full_regen_time(): int {
+			try {
+				if ( ! function_exists( 'get_option' ) ) {
+					return 0;
+				}
+				return (int) get_option( self::LAST_FULL_REGEN_OPTION, 0 );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
+			}
+		}
+
+		/**
+		 * Staleness signal for the admin UI (issue #1220).
+		 *
+		 * Surfaces the last-regen time plus a stale flag (older than
+		 * STALE_THRESHOLD_SECONDS, or never regenerated while the feature is
+		 * on) so operators know when builder/theme edits outran regeneration.
+		 * Read-only and fail-open.
+		 *
+		 * @return array{last_regen:int,last_regen_human:string,is_stale:bool,cooldown_remaining:int,delivery_mode:string}
+		 * @since NEXT
+		 */
+		public static function get_staleness_info(): array {
+			$info = array(
+				'last_regen'         => 0,
+				'last_regen_human'   => '',
+				'is_stale'           => false,
+				'cooldown_remaining' => 0,
+				'delivery_mode'      => 'file',
+			);
+			try {
+				$last               = self::get_last_full_regen_time();
+				$info['last_regen'] = $last > 0 ? $last : 0;
+				if ( $last > 0 && function_exists( 'wp_date' ) ) {
+					try {
+						$info['last_regen_human'] = (string) wp_date( 'Y-m-d H:i:s', $last );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$info['last_regen_human'] = gmdate( 'Y-m-d H:i:s', $last ) . ' UTC';
+					}
+				} elseif ( $last > 0 ) {
+					$info['last_regen_human'] = gmdate( 'Y-m-d H:i:s', $last ) . ' UTC';
+				}
+				$enabled = false;
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					$settings = Util::get_settings();
+					$enabled  = ! empty( $settings['file_optimisation']['removeUnusedCSS'] );
+				}
+				$info['is_stale']      = $enabled && ( $last <= 0 || ( time() - $last ) > self::STALE_THRESHOLD_SECONDS );
+				$info['delivery_mode'] = self::get_used_css_delivery_mode();
+				if ( function_exists( 'get_option' ) ) {
+					$targeted = (int) get_option( self::TARGETED_REGEN_OPTION, 0 );
+					if ( $targeted > 0 ) {
+						$cooldown                   = self::get_effective_targeted_cooldown();
+						$remaining                  = $cooldown - ( time() - $targeted );
+						$info['cooldown_remaining'] = $remaining > 0 ? $remaining : 0;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $info;
+		}
+
+		/**
+		 * Effective targeted-regeneration cooldown in seconds (issue #1220).
+		 *
+		 * Fail-open: any failure returns the default.
+		 *
+		 * @return int Cooldown seconds (>= 0).
+		 * @since NEXT
+		 */
+		private function get_targeted_regen_cooldown(): int {
+			return self::get_effective_targeted_cooldown();
+		}
+
+		/**
+		 * Static variant of the targeted-regen cooldown (issue #1220).
+		 *
+		 * Shares the filterable default with the instance gate so static
+		 * callers (e.g. get_staleness_info()) display the same remaining
+		 * time the gate enforces. Fail-open: any failure returns the default.
+		 *
+		 * @return int Cooldown seconds (>= 0).
+		 * @since NEXT
+		 */
+		private static function get_effective_targeted_cooldown(): int {
+			$default = self::TARGETED_REGEN_COOLDOWN_SECONDS;
+			try {
+				if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_used_css_targeted_cooldown' ) ) {
+					return (int) $default;
+				}
+				/**
+				 * Filter the used-CSS targeted-regeneration cooldown (issue #1220).
+				 *
+				 * Bounds how often builder/theme updates may queue bounded
+				 * targeted requeues.
+				 *
+				 * @since NEXT
+				 *
+				 * @param int $cooldown Cooldown in seconds. Default 1 hour.
+				 */
+				$cooldown = apply_filters( 'wppo_used_css_targeted_cooldown', $default );
+				$cooldown = is_numeric( $cooldown ) ? (int) $cooldown : (int) $default;
+				return $cooldown >= 0 ? $cooldown : (int) $default;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return (int) $default;
+			}
+		}
+
+		/**
+		 * Whether a targeted regeneration is inside the cooldown window (issue #1220).
+		 *
+		 * Fail-open: an unreadable timestamp never blocks work.
+		 *
+		 * @return bool True when the last targeted regen is newer than the cooldown.
+		 * @since NEXT
+		 */
+		private function is_targeted_regen_cooled_down(): bool {
+			try {
+				if ( ! function_exists( 'get_option' ) ) {
+					return false;
+				}
+				$last = (int) get_option( self::TARGETED_REGEN_OPTION, 0 );
+				if ( $last <= 0 ) {
+					return false;
+				}
+				return ( time() - $last ) < $this->get_targeted_regen_cooldown();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Record a targeted-regeneration pass (issue #1220).
+		 *
+		 * Fail-open.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		private function mark_targeted_regen(): void {
+			try {
+				if ( function_exists( 'update_option' ) ) {
+					update_option( self::TARGETED_REGEN_OPTION, time(), false );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Cooldown-gated targeted requeue after builder/theme updates (issue #1220).
+		 *
+		 * Requeues only stale variants (bounded by $cap, most-recently-modified
+		 * first) instead of the whole site, so a burst of builder or theme
+		 * updates cannot flood Action Scheduler. Skipped entirely inside the
+		 * targeted cooldown window or when removeUnusedCSS is off. Fail-open:
+		 * any uncertainty returns 0, never fatal.
+		 *
+		 * Multisite-safe: per-site options only.
+		 *
+		 * @param string $reason Short reason for logging (e.g. 'builder-update').
+		 * @param int    $cap    Maximum posts to requeue in this pass.
+		 * @return int Number of jobs queued.
+		 * @since NEXT
+		 */
+		public static function request_targeted_regen( string $reason = '', int $cap = 20 ): int {
+			try {
+				$options = class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ? Util::get_settings() : array();
+				if ( empty( $options['file_optimisation']['removeUnusedCSS'] ) ) {
+					return 0;
+				}
+				if ( ! function_exists( 'as_enqueue_async_action' ) ) {
+					return 0;
+				}
+				// Note: de-duplication via as_has_scheduled_action() lives
+				// inside requeue_for_post(); no existence check is needed here.
+				$instance = new self( $options );
+				if ( $instance->is_targeted_regen_cooled_down() ) {
+					return 0;
+				}
+				$cap      = $cap > 0 ? min( $cap, 100 ) : 20;
+				$post_ids = array();
+				if ( function_exists( 'get_posts' ) ) {
+					try {
+						$posts = get_posts(
+							array(
+								'numberposts' => $cap * 2,
+								'post_type'   => function_exists( 'get_post_types' ) ? array_values( array_diff( (array) get_post_types( array( 'public' => true ), 'names' ), array( 'attachment' ) ) ) : array( 'post', 'page' ),
+								'post_status' => 'publish',
+								'orderby'     => 'modified',
+								'order'       => 'DESC',
+								'fields'      => 'ids',
+							)
+						);
+						if ( is_array( $posts ) ) {
+							foreach ( $posts as $post_id ) {
+								$post_ids[] = (int) $post_id;
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( empty( $post_ids ) ) {
+					return 0;
+				}
+				$queued = 0;
+				foreach ( $post_ids as $post_id ) {
+					if ( $queued >= $cap ) {
+						break;
+					}
+					if ( $post_id <= 0 ) {
+						continue;
+					}
+					try {
+						if ( self::requeue_for_post( $post_id ) ) {
+							++$queued;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( $queued > 0 ) {
+					$instance->mark_targeted_regen();
+					if ( class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
+						try {
+							Log::add(
+								sprintf(
+									/* translators: 1: number of jobs, 2: reason */
+									__( 'Targeted used-CSS regen queued %1$d jobs (%2$s).', 'performance-optimisation' ),
+									$queued,
+									'' !== $reason ? $reason : 'update'
+								)
+							);
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+					}
+				}
+				return $queued;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
 			}
 		}
 
@@ -2883,14 +3270,198 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		}
 
 		/**
+		 * Smoke-gate the remove delivery mode (issue #1220).
+		 *
+		 * Remove mode strips the full stylesheets entirely, so builder pages
+		 * (Elementor, Divi, Beaver Builder, Bricks, Oxygen, WPBakery, and
+		 * Gutenberg block markers in the stripped buffer) auto-downgrade to
+		 * delay mode instead — the full stylesheets then load on interaction
+		 * rather than vanishing. Non-builder pages keep remove. Fail-open:
+		 * any error keeps the requested mode. The downgrade is logged via the
+		 * safe fallback logger when enabled.
+		 *
+		 * @param string   $buffer_after_strip Buffer with original links stripped.
+		 * @param string   $mode               Requested delivery mode.
+		 * @param string[] $handles            Stripped stylesheet handles.
+		 * @return string Effective delivery mode.
+		 * @since NEXT
+		 */
+		private function resolve_effective_delivery_mode( string $buffer_after_strip, string $mode, array $handles ): string {
+			try {
+				if ( 'remove' !== $mode ) {
+					return $mode;
+				}
+				$builder_markers = array(
+					'data-elementor-type',
+					'elementor-widget',
+					'elementor-popup',
+					'et_pb_',
+					'et-pb-',
+					'fl-builder',
+					'fl-row',
+					'bricks-',
+					'brxe-',
+					'oxy-',
+					'oxygen-',
+					'wpb_',
+					'vc_row',
+					'wp-block-',
+				);
+				$has_builder     = false;
+				foreach ( $builder_markers as $marker ) {
+					if ( false !== strpos( $buffer_after_strip, $marker ) ) {
+						$has_builder = true;
+						break;
+					}
+				}
+				if ( ! $has_builder ) {
+					return 'remove';
+				}
+				try {
+					if ( $this->is_safe_fallback_enabled() ) {
+						$this->log_used_css_fallback( 'remove_downgraded_to_delay', $handles );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				return 'delay';
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $mode;
+			}
+		}
+
+		/**
+		 * Inline loader that swaps interaction-delayed stylesheets (issue #1220).
+		 *
+		 * Converts `link[data-wppo-delayed-css]` preloads to stylesheets on
+		 * first interaction (pointer/key/touch/scroll) with a 5s backstop so
+		 * the full styles always arrive. Tiny, dependency-free, fail-open.
+		 *
+		 * @return string Inline script tag.
+		 * @since NEXT
+		 */
+		private function build_delayed_css_loader(): string {
+			return '<script data-wppo-delayed-css-loader="1">(function(){var d=false;function l(){if(d){return;}d=true;var a=document.querySelectorAll(\'link[data-wppo-delayed-css]\');for(var i=0;i<a.length;i++){try{a[i].rel=\'stylesheet\';a[i].media=a[i].getAttribute(\'data-wppo-delayed-media\')||\'all\';a[i].removeAttribute(\'data-wppo-delayed-css\');}catch(e){}}};function b(){l();window.removeEventListener(\'pointerdown\',b);window.removeEventListener(\'keydown\',b);window.removeEventListener(\'touchstart\',b);window.removeEventListener(\'scroll\',b);}window.addEventListener(\'pointerdown\',b,{passive:true});window.addEventListener(\'keydown\',b);window.addEventListener(\'touchstart\',b,{passive:true});window.addEventListener(\'scroll\',b,{passive:true});setTimeout(l,5000);})();</script>';
+		}
+
+		/**
+		 * Registered stylesheet URL with its version query (issue #1220).
+		 *
+		 * Delay-mode preloads and the noscript fallback must preserve the
+		 * `ver` query so versioned handles keep cache-busting parity with
+		 * the original <link> tags. Fail-open: missing registration or
+		 * source returns ''.
+		 *
+		 * @param string $handle Style handle.
+		 * @return string Full URL with ver query, or '' when unresolvable.
+		 * @since NEXT
+		 */
+		private function get_handle_url_with_ver( string $handle ): string {
+			try {
+				global $wp_styles;
+				if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
+					return '';
+				}
+				$src = (string) ( $wp_styles->registered[ $handle ]->src ?? '' );
+				if ( '' === $src ) {
+					return '';
+				}
+				$ver = isset( $wp_styles->registered[ $handle ]->ver ) ? (string) $wp_styles->registered[ $handle ]->ver : '';
+				if ( '' === $ver ) {
+					return $src;
+				}
+				return $src . ( false === strpos( $src, '?' ) ? '?' : '&' ) . 'ver=' . $ver;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
+		 * Registered stylesheet media (issue #1220).
+		 *
+		 * Preserves per-handle media (e.g. print-only handles) in delay
+		 * mode instead of forcing `all`. Fail-open to 'all'.
+		 *
+		 * @param string $handle Style handle.
+		 * @return string Media attribute value.
+		 * @since NEXT
+		 */
+		private function get_handle_media( string $handle ): string {
+			try {
+				global $wp_styles;
+				if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
+					return 'all';
+				}
+				$media = $wp_styles->registered[ $handle ]->args ?? 'all';
+				if ( is_string( $media ) && '' !== $media ) {
+					return $media;
+				}
+				return 'all';
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 'all';
+			}
+		}
+
+		/**
+		 * Whether the response carries a strict CSP blocking inline handlers (issue #1220).
+		 *
+		 * The async delivery mode swaps via an inline `onload` attribute and
+		 * the delay mode via an inline loader script, both of which a
+		 * `Content-Security-Policy` without 'unsafe-inline' blocks — leaving
+		 * stylesheets never applied. Checks both the `headers_list()` response
+		 * headers and a `<meta http-equiv="Content-Security-Policy">` tag in
+		 * the (already stripped) buffer. Fail-open: any uncertainty returns false.
+		 *
+		 * @param string $buffer Optional HTML buffer to scan for a meta CSP tag.
+		 * @return bool True when a strict CSP is detected.
+		 * @since NEXT
+		 */
+		private function has_strict_csp( string $buffer = '' ): bool {
+			try {
+				if ( function_exists( 'headers_list' ) ) {
+					foreach ( headers_list() as $header ) {
+						if ( 0 !== stripos( (string) $header, 'content-security-policy' ) ) {
+							continue;
+						}
+						if ( false === stripos( (string) $header, 'unsafe-inline' ) ) {
+							return true;
+						}
+					}
+				}
+				if ( '' !== $buffer && false !== stripos( $buffer, 'http-equiv' ) && false !== stripos( $buffer, 'content-security-policy' ) ) {
+					if ( 1 === preg_match( '/<meta[^>]+http-equiv\s*=\s*["\']?\s*content-security-policy\s*["\']?[^>]*>/i', $buffer, $matches ) ) {
+						if ( false === stripos( $matches[0], 'unsafe-inline' ) ) {
+							return true;
+						}
+					}
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
 		 * Inject used-CSS into the buffer: remove original <link> stylesheets
 		 * and insert the used-CSS file with a <noscript> fallback.
+		 *
+		 * Delivery modes (issue #1220): file renders a blocking link;
+		 * async uses preload + media swap; delay keeps the blocking used-CSS
+		 * and interaction-gates the full stylesheets; remove strips the full
+		 * stylesheets (smoke-gated with auto-downgrade to delay on builder
+		 * pages). Misses never reach here stripped — callers return the full
+		 * buffer untouched — so file and delay never serve unstyled pages.
 		 *
 		 * @param string $buffer       The HTML buffer.
 		 * @param string $used_css_url The URL of the used-CSS file (with version).
 		 * @param array  $handles      Array of style handles to remove and include in fallback.
 		 * @return string Modified HTML buffer.
 		 * @since 1.9.0
+		 * @since NEXT Added file/delay/async/remove delivery modes.
 		 */
 		private function inject_used_css( string $buffer, string $used_css_url, array $handles ): string {
 			global $wp_styles;
@@ -2971,24 +3542,80 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 
 			$buffer_after_strip = $stripped;
 
+			// Delivery modes (issue #1220): file (default, render-blocking),
+			// async (preload + media swap), delay (used-CSS blocking, full
+			// stylesheets load on first interaction), remove (full stylesheets
+			// stripped, smoke-gated with auto-downgrade to delay). On any miss
+			// the caller already returned the full buffer untouched, so file and
+			// delay modes never serve unstyled pages.
+			$file_opts_for_mode = $this->options['file_optimisation'] ?? array();
+			$delivery_mode      = self::get_used_css_delivery_mode( is_array( $file_opts_for_mode ) ? $file_opts_for_mode : array() );
+			$delivery_mode      = $this->resolve_effective_delivery_mode( $buffer_after_strip, $delivery_mode, $handles );
+			if ( in_array( $delivery_mode, array( 'async', 'delay' ), true ) && $this->has_strict_csp( $buffer_after_strip ) ) {
+				// Strict Content-Security-Policy (no 'unsafe-inline') blocks
+				// the async onload swap and the delay inline loader below,
+				// leaving stylesheets never applied — downgrade to the
+				// blocking file mode instead (fail-open, never unstyled).
+				// Logged via the safe fallback logger.
+				try {
+					if ( $this->is_safe_fallback_enabled() ) {
+						$this->log_used_css_fallback( $delivery_mode . '_downgraded_to_file_csp', $handles );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				$delivery_mode = 'file';
+			}
+
 			// Build used-CSS link + noscript fallback.
 			// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet
 			$used_css_tag = '<link id="wppo-used-css" rel="stylesheet" href="' . esc_url( $used_css_url ) . '" media="all">';
+			if ( 'async' === $delivery_mode ) {
+				// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet
+				$used_css_tag = '<link id="wppo-used-css" rel="preload" as="style" href="' . esc_url( $used_css_url ) . '" onload="this.onload=null;this.rel=\'stylesheet\';this.media=\'all\'" data-wppo-used-css-async="1">';
+			}
 
 			$noscript_fallback = '';
 			foreach ( $handles as $handle ) {
 				if ( isset( $wp_styles->registered[ $handle ] ) ) {
-					$original_url   = $wp_styles->registered[ $handle ]->src;
-					$original_media = $wp_styles->registered[ $handle ]->args;
+					$original_url = $this->get_handle_url_with_ver( (string) $handle );
+					$media_attr   = $this->get_handle_media( (string) $handle );
 					if ( ! empty( $original_url ) ) {
-						$media_attr = ! empty( $original_media ) ? $original_media : 'all';
 						// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet
 						$noscript_fallback .= '<link rel="stylesheet" href="' . esc_url( $original_url ) . '" media="' . esc_attr( $media_attr ) . '">' . "\n";
 					}
 				}
 			}
 
-			$used_css_tag .= "\n" . '<noscript>' . $noscript_fallback . '</noscript>';
+			if ( 'async' === $delivery_mode ) {
+				// No-JS clients must still get styled content: noscript carries
+				// both the used-CSS and the full originals.
+				// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet
+				$used_css_tag .= "\n" . '<noscript><link id="wppo-used-css-noscript" rel="stylesheet" href="' . esc_url( $used_css_url ) . '" media="all">' . $noscript_fallback . '</noscript>';
+			} else {
+				$used_css_tag .= "\n" . '<noscript>' . $noscript_fallback . '</noscript>';
+			}
+
+			if ( 'delay' === $delivery_mode ) {
+				// Interaction-gated full stylesheets: the blocking used-CSS above
+				// keeps the page styled, so delaying the remainder can never
+				// unstyle the page. Preloads + inline loader swap them to
+				// stylesheets on first interaction (with a timeout backstop).
+				$delayed = '';
+				foreach ( $handles as $handle ) {
+					if ( isset( $wp_styles->registered[ $handle ] ) ) {
+						$original_url = $this->get_handle_url_with_ver( (string) $handle );
+						$media_attr   = $this->get_handle_media( (string) $handle );
+						if ( ! empty( $original_url ) ) {
+							// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet
+							$delayed .= '<link rel="preload" as="style" href="' . esc_url( $original_url ) . '" media="' . esc_attr( $media_attr ) . '" data-wppo-delayed-css="1" data-wppo-delayed-media="' . esc_attr( $media_attr ) . '">' . "\n";
+						}
+					}
+				}
+				if ( '' !== $delayed ) {
+					$used_css_tag .= "\n" . $delayed . $this->build_delayed_css_loader();
+				}
+			}
 
 			// Strict head injection: prefer </head>, fallback to <head> injection,
 			// fail-open to originals when neither is present. Only the FIRST

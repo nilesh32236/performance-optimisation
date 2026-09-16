@@ -211,6 +211,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+				'used_css_status'           => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'get_used_css_status' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
 				'regenerate_ccss'           => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'regenerate_ccss' ),
@@ -2923,6 +2929,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 */
 		public function get_ccss_status( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			$status = Critical_CSS::get_status_all();
+
+			return $this->send_response( $status );
+		}
+
+		/**
+		 * Get used-CSS staleness status (issue #1220).
+		 *
+		 * Read-only: last-regen time, stale flag, targeted-regen cooldown
+		 * remaining, and the active delivery mode for the admin staleness
+		 * warning. Fail-open to safe defaults on any failure.
+		 *
+		 * @param \WP_REST_Request $_request The request object (unused).
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		public function get_used_css_status( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			$status = class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Used_CSS', 'get_staleness_info' )
+				? Used_CSS::get_staleness_info()
+				: array(
+					'last_regen'         => 0,
+					'last_regen_human'   => '',
+					'is_stale'           => false,
+					'cooldown_remaining' => 0,
+					'delivery_mode'      => 'file',
+				);
 
 			return $this->send_response( $status );
 		}

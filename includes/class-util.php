@@ -129,6 +129,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			'wppo_object_cache_circuit',               // Object_Cache::CIRCUIT_OPTION.
 			'wppo_object_cache_circuit_dismissed',     // Object_Cache::CIRCUIT_DISMISSED_OPTION.
 			'wppo_used_css_last_full_regen',           // Used_CSS::LAST_FULL_REGEN_OPTION (issue #1107).
+			'wppo_used_css_last_targeted_regen',       // Used_CSS::TARGETED_REGEN_OPTION (issue #1220).
 			'wppo_settings_snapshot',                  // Single prior wppo_settings copy for one-click undo (issue #1144).
 			'wppo_preload_queue',                      // Resumable sitemap preload queue (issue #1162).
 		);
@@ -312,6 +313,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'ccssQueueCap'                 => 5,
 					'usedCssQueueCap'              => 50,
 					'ccssViewportVariants'         => false,
+					'usedCSSDeliveryMode'          => 'file',
 					'hostGoogleFontsLocally'       => false,
 					'blockAssetsOnDemand'          => function_exists( 'wp_load_classic_theme_block_styles_on_demand' ),
 					'loadAllCoreBlockAssets'       => false,
@@ -4914,6 +4916,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				// contract: selectors never pruned from Critical CSS inlining.
 				if ( in_array( $safe_key, array( 'unusedCSSSafelistExtra', 'ccssSafelistExtra' ), true ) && ! is_array( $value ) ) {
 					$sanitized[ $safe_key ] = sanitize_textarea_field( (string) $value );
+					continue;
+				}
+
+				// Used-CSS delivery mode (issue #1220) — allowlist
+				// file/delay/async/remove. Unknown values fail open to file.
+				if ( 'usedCSSDeliveryMode' === $safe_key && ! is_array( $value ) ) {
+					$mode                   = strtolower( trim( (string) $value ) );
+					$sanitized[ $safe_key ] = in_array( $mode, array( 'file', 'delay', 'async', 'remove' ), true ) ? $mode : 'file';
 					continue;
 				}
 
