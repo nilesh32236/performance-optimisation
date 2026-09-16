@@ -339,6 +339,88 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Whether a preload hint was already emitted for a URL this request.
+		 *
+		 * Shared cross-emitter dedup (issue #1255): the Critical-CSS
+		 * field-LCP preload (wp_head:0) and this pipeline's preload_images()
+		 * (wp_head:1) resolve the same RUM-field → PageSpeed candidate, so
+		 * both consult this one per-request set. Keys are built by
+		 * {@see build_preload_dedup_key()} — identical to the keys
+		 * preload_images() checks — so a URL emitted by either path is
+		 * skipped by the other and exactly one hint prints per resource.
+		 * Fail-open: any failure returns false (caller emits normally).
+		 *
+		 * @since NEXT
+		 * @param string $url   The raw preload URL.
+		 * @param string $media The preload media attribute.
+		 * @return bool True when the URL + media pair already emitted.
+		 */
+		public static function has_emitted_preload( string $url, string $media = '' ): bool {
+			try {
+				return isset( self::$preload_emitted[ self::build_preload_dedup_key( $url, $media ) ] );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Record a preload hint as emitted for this request.
+		 *
+		 * Companion to {@see has_emitted_preload()}: lets an external
+		 * emitter (the Critical-CSS field-LCP path) claim a URL so this
+		 * pipeline's preload_images() skips the duplicate. Reset with
+		 * {@see clear_runtime_caches()}. Never fatal.
+		 *
+		 * @since NEXT
+		 * @param string $url   The raw preload URL.
+		 * @param string $media The preload media attribute.
+		 * @return void
+		 */
+		public static function mark_preload_emitted( string $url, string $media = '' ): void {
+			try {
+				self::$preload_emitted[ self::build_preload_dedup_key( $url, $media ) ] = true;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Build the dedup key for a preload item (normalized URL + query + media).
+		 *
+		 * Static twin of the instance get_preload_dedup_key() below so both
+		 * the instance pipeline and the public has/mark helpers share one
+		 * key space. See that method for the query/media rationale.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $url   The raw preload URL.
+		 * @param string $media The preload media attribute.
+		 * @return string The dedup key.
+		 */
+		private static function build_preload_dedup_key( string $url, string $media ): string {
+			$normalized = '';
+			try {
+				$normalized = self::normalize_image_url_static( $url );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			$base  = ( '' !== $normalized ) ? $normalized : $url;
+			$query = '';
+			try {
+				if ( function_exists( 'wp_parse_url' ) ) {
+					$parsed = wp_parse_url( $url, PHP_URL_QUERY );
+					if ( is_string( $parsed ) && '' !== $parsed ) {
+						$query = '?' . substr( $parsed, 0, 512 );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $base . $query . '|' . $media;
+		}
+
+		/**
 		 * Reset the per-instance LCP memos ($current_lcp_url, $lazy_lcp_exclusion_url).
 		 *
 		 * The static {@see clear_runtime_caches()} cannot reach instance state,
@@ -6098,6 +6180,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string Normalized host + path, or an empty string when unparseable.
 		 */
 		private function normalize_image_url( string $url, bool $strip_size_suffix = true ): string {
+			return self::normalize_image_url_static( $url, $strip_size_suffix );
+		}
+
+		/**
+		 * Static normalization behind normalize_image_url().
+		 *
+		 * The body touches no instance state (only Util helpers and
+		 * wp_parse_url()), so it lives here statically for the shared
+		 * preload-dedup key builder. Kept private: external callers use
+		 * has_emitted_preload()/mark_preload_emitted().
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $url The image URL to normalize.
+		 * @param bool   $strip_size_suffix Whether to strip WP size suffixes.
+		 * @return string Normalized host + path, or empty string.
+		 */
+		private static function normalize_image_url_static( string $url, bool $strip_size_suffix = true ): string {
 			$url = trim( $url );
 
 			if ( '' === $url ) {
@@ -6147,31 +6247,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * parse failure falls back to the normalized URL + media key.
 		 *
 		 * @since 2.0.0
+		 * @since NEXT Delegates to build_preload_dedup_key() so the shared
+		 * cross-emitter helpers use the identical key space.
 		 *
 		 * @param string $url   The raw preload URL.
 		 * @param string $media The preload media attribute.
 		 * @return string The dedup key.
 		 */
 		private function get_preload_dedup_key( string $url, string $media ): string {
-			$normalized = '';
-			try {
-				$normalized = $this->normalize_image_url( $url );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			$base  = ( '' !== $normalized ) ? $normalized : $url;
-			$query = '';
-			try {
-				if ( function_exists( 'wp_parse_url' ) ) {
-					$parsed = wp_parse_url( $url, PHP_URL_QUERY );
-					if ( is_string( $parsed ) && '' !== $parsed ) {
-						$query = '?' . substr( $parsed, 0, 512 );
-					}
-				}
-			} catch ( \Throwable $e ) {
-				unset( $e );
-			}
-			return $base . $query . '|' . $media;
+			return self::build_preload_dedup_key( $url, $media );
 		}
 
 		/**

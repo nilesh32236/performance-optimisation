@@ -10,6 +10,8 @@
  */
 
 use PerformanceOptimise\Inc\Critical_CSS;
+use PerformanceOptimise\Inc\Image_Optimisation;
+use PerformanceOptimise\Inc\RUM;
 use Brain\Monkey\Functions;
 
 /**
@@ -107,7 +109,20 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'is_404' )->justReturn( false );
 		Functions\when( 'get_stylesheet' )->justReturn( 'test-theme' );
 
-		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		// This suite shadows the bootstrap trait's setUp(), so repeat its
+		// static-memo resets here: without them an earlier suite in the same
+		// process (different home_url stub, claimed preload URLs, RUM
+		// aggregates) leaks into these tests (issue #1255 review).
+		\PerformanceOptimise\Inc\Util::reset_runtime_caches();
+		if ( class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
+			\PerformanceOptimise\Inc\Image_Optimisation::clear_runtime_caches();
+		}
+		if ( class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
+			\PerformanceOptimise\Inc\Critical_CSS::reset_ccss_memo();
+		}
+		if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'clear_field_lcp_cache' ) ) {
+			\PerformanceOptimise\Inc\RUM::clear_field_lcp_cache();
+		}
 
 		// Deterministic stand-in for core's private/loopback rejection.
 		Functions\when( 'wp_http_validate_url' )->alias(
@@ -1115,5 +1130,477 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 		$this->assertIsString( $result );
 		$this->assertStringContainsString( 'body', (string) $result );
 		$this->assertGreaterThan( 0, $this->http_calls['regular'] );
+	}
+
+	/**
+	 * The per-run queue cap defaults to 5 and honours the stored setting.
+	 *
+	 * @return void
+	 */
+	public function test_get_css_queue_cap_default_and_override(): void {
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		$this->assertSame( 5, Critical_CSS::get_css_queue_cap() );
+		$this->assertSame( 5, Critical_CSS::get_ccss_queue_cap() );
+
+		$this->option_map['wppo_settings'] = array(
+			'file_optimisation' => array( 'ccssQueueCap' => 3 ),
+		);
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		$this->assertSame( 3, Critical_CSS::get_css_queue_cap() );
+
+		// Non-numeric / non-positive stored values fail open to uncapped.
+		$this->option_map['wppo_settings'] = array(
+			'file_optimisation' => array( 'ccssQueueCap' => 0 ),
+		);
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		$this->assertSame( PHP_INT_MAX, Critical_CSS::get_css_queue_cap() );
+
+		$this->option_map['wppo_settings'] = array(
+			'file_optimisation' => array( 'ccssQueueCap' => 'not-a-number' ),
+		);
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		$this->assertSame( PHP_INT_MAX, Critical_CSS::get_css_queue_cap() );
+
+		// Oversized values clamp to the hard upper bound.
+		$this->option_map['wppo_settings'] = array(
+			'file_optimisation' => array( 'ccssQueueCap' => 500 ),
+		);
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		$this->assertSame( 100, Critical_CSS::get_css_queue_cap() );
+	}
+
+	/**
+	 * The wppo_ccss_queue_cap filter overrides the stored cap (issue #1255).
+	 *
+	 * @return void
+	 */
+	public function test_get_css_queue_cap_applies_filter_when_listener_exists(): void {
+		Functions\when( 'has_filter' )->alias(
+			static function ( $tag ) {
+				return 'wppo_ccss_queue_cap' === $tag;
+			}
+		);
+		$this->filter_overrides['wppo_ccss_queue_cap'] = 10;
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+
+		$this->assertSame( 10, Critical_CSS::get_css_queue_cap() );
+		$this->assertSame( 10, Critical_CSS::get_ccss_queue_cap() );
+	}
+
+	/**
+	 * Oversized / non-numeric filter values clamp to the bound or keep stored.
+	 *
+	 * @return void
+	 */
+	public function test_get_css_queue_cap_clamps_oversized_filter_value(): void {
+		Functions\when( 'has_filter' )->alias(
+			static function ( $tag ) {
+				return 'wppo_ccss_queue_cap' === $tag;
+			}
+		);
+		$this->filter_overrides['wppo_ccss_queue_cap'] = 500;
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+
+		$this->assertSame( 100, Critical_CSS::get_css_queue_cap() );
+
+		$this->filter_overrides['wppo_ccss_queue_cap'] = 'not-a-number';
+
+		$this->assertSame( 5, Critical_CSS::get_css_queue_cap() );
+	}
+
+	/**
+	 * Seed a field-LCP aggregate fixture for one page path.
+	 *
+	 * @param string $path      Page path bucket (e.g. '/slow-page').
+	 * @param string $url       LCP image URL.
+	 * @param int    $n         Sample count.
+	 * @param int    $last_seen Last-seen timestamp.
+	 * @return void
+	 */
+	private function seed_field_lcp_fixture( string $path, string $url, int $n, int $last_seen ): void {
+		$today                           = gmdate( 'Y-m-d' );
+		$this->option_map[ RUM::OPTION ] = array(
+			$today => array(
+				$path => array(
+					'lcpUrls' => array(
+						'fixture-hero' => array(
+							'url'      => $url,
+							'n'        => $n,
+							'lastSeen' => $last_seen,
+						),
+					),
+				),
+			),
+		);
+		RUM::clear_field_lcp_cache();
+	}
+
+	/**
+	 * Fresh field data above the sample gate wins the CCSS preload target.
+	 *
+	 * @return void
+	 */
+	public function test_get_field_lcp_preload_url_returns_field_candidate(): void {
+		$this->seed_field_lcp_fixture(
+			'/slow-page',
+			'https://example.com/wp-content/uploads/hero.jpg',
+			20,
+			time()
+		);
+
+		$this->assertSame(
+			'https://example.com/wp-content/uploads/hero.jpg',
+			Critical_CSS::get_field_lcp_preload_url( 'http://example.com/slow-page/' )
+		);
+	}
+
+	/**
+	 * Under-sampled or stale field data falls back (no field URL wins).
+	 *
+	 * @return void
+	 */
+	public function test_get_field_lcp_preload_url_falls_back_when_under_sampled_or_stale(): void {
+		// Under the 20-sample gate: heuristic fallback (empty in this fixture).
+		$this->seed_field_lcp_fixture(
+			'/slow-page',
+			'https://example.com/wp-content/uploads/hero.jpg',
+			3,
+			time()
+		);
+
+		$this->assertSame( '', Critical_CSS::get_field_lcp_preload_url( 'http://example.com/slow-page/' ) );
+
+		// Stale (>24h): self-corrects back to the heuristic.
+		$this->seed_field_lcp_fixture(
+			'/slow-page',
+			'https://example.com/wp-content/uploads/hero.jpg',
+			25,
+			time() - ( 2 * DAY_IN_SECONDS )
+		);
+
+		$this->assertSame( '', Critical_CSS::get_field_lcp_preload_url( 'http://example.com/slow-page/' ) );
+	}
+
+	/**
+	 * Cross-origin candidates and empty/unknown URLs resolve to nothing.
+	 *
+	 * @return void
+	 */
+	public function test_get_field_lcp_preload_url_rejects_cross_origin_and_empty(): void {
+		$this->seed_field_lcp_fixture(
+			'/slow-page',
+			'https://evil.example/wp-content/uploads/hero.jpg',
+			25,
+			time()
+		);
+
+		$this->assertSame( '', Critical_CSS::get_field_lcp_preload_url( 'http://example.com/slow-page/' ) );
+		$this->assertSame( '', Critical_CSS::get_field_lcp_preload_url( '' ) );
+		$this->assertSame( '', Critical_CSS::get_field_lcp_preload_url( 'http://example.com/unmeasured-path-xyz/' ) );
+		RUM::clear_field_lcp_cache();
+	}
+
+	/**
+	 * Write a CCSS fixture file for the current (home) template hash.
+	 *
+	 * @param string $content File content.
+	 * @return string Template hash.
+	 */
+	private function write_home_ccss_fixture( string $content ): string {
+		$hash = Critical_CSS::get_template_hash( 'home' );
+		$dir  = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/ccss' );
+		if ( ! is_dir( $dir ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
+			mkdir( $dir, 0775, true );
+		}
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+		file_put_contents( $dir . '/' . $hash . '.css', $content );
+		Critical_CSS::reset_ccss_memo();
+
+		return $hash;
+	}
+
+	/**
+	 * Over-cap CCSS serves the file variant, never a truncated inline block.
+	 *
+	 * @return void
+	 */
+	public function test_inline_ccss_over_cap_serves_file_link_without_truncated_inline(): void {
+		$hash = $this->write_home_ccss_fixture( str_repeat( 'body.a{color:red}', 2000 ) );
+
+		try {
+			ob_start();
+			Critical_CSS::inline_ccss();
+			$output = ob_get_clean();
+
+			$this->assertStringContainsString( 'id="wppo-critical-css"', $output );
+			$this->assertStringContainsString( $hash . '.css?ver=', $output );
+			$this->assertStringNotContainsString( 'data-truncated', $output );
+			$this->assertStringNotContainsString( '<style', $output );
+		} finally {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+			unlink( wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/ccss' ) . '/' . $hash . '.css' );
+			Critical_CSS::reset_ccss_memo();
+		}
+	}
+
+	/**
+	 * Under-cap CCSS still inlines normally (emission wiring is a no-op here).
+	 *
+	 * @return void
+	 */
+	public function test_inline_ccss_under_cap_inlines_style(): void {
+		$hash = $this->write_home_ccss_fixture( str_repeat( 'body.a{color:red}', 40 ) );
+
+		try {
+			ob_start();
+			Critical_CSS::inline_ccss();
+			$output = ob_get_clean();
+
+			$this->assertStringContainsString( '<style id="wppo-critical-css">', $output );
+			$this->assertStringNotContainsString( 'data-truncated', $output );
+		} finally {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+			unlink( wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/ccss' ) . '/' . $hash . '.css' );
+			Critical_CSS::reset_ccss_memo();
+		}
+	}
+
+	/**
+	 * An explicit URL on another host never resolves this site's RUM bucket.
+	 *
+	 * Only the path component of an explicit URL is used (buckets are
+	 * per-site), so a cross-host URL is rejected instead of reading the
+	 * local bucket for that path (issue #1255 review).
+	 *
+	 * @return void
+	 */
+	public function test_get_field_lcp_preload_url_rejects_cross_host_explicit_url(): void {
+		$this->seed_field_lcp_fixture(
+			'/slow-page',
+			'https://example.com/wp-content/uploads/hero.jpg',
+			20,
+			time()
+		);
+
+		// Same path, foreign host: must not read this site's bucket.
+		$this->assertSame( '', Critical_CSS::get_field_lcp_preload_url( 'https://other.example/slow-page/' ) );
+		// Same host still resolves.
+		$this->assertSame(
+			'https://example.com/wp-content/uploads/hero.jpg',
+			Critical_CSS::get_field_lcp_preload_url( 'http://example.com/slow-page/' )
+		);
+	}
+
+	/**
+	 * A same-origin non-image candidate is never preloaded as an image.
+	 *
+	 * The stored PageSpeed tiers validate same-origin but never image-ness,
+	 * so the CCSS text-LCP guard (mirroring the image pipeline) must reject
+	 * e.g. a page URL recorded as the LCP element (issue #1255 review).
+	 *
+	 * @return void
+	 */
+	public function test_get_field_lcp_preload_url_rejects_non_image_candidate(): void {
+		$this->seed_field_lcp_fixture(
+			'/slow-page',
+			'https://example.com/slow-page/',
+			20,
+			time()
+		);
+
+		$this->assertSame( '', Critical_CSS::get_field_lcp_preload_url( 'http://example.com/slow-page/' ) );
+		RUM::clear_field_lcp_cache();
+	}
+
+	/**
+	 * The shared preload dedup set round-trips per request.
+	 *
+	 * Both has/mark_preload_emitted() share one key space with the image
+	 * pipeline's own dedup (issue #1255 review), and clear_runtime_caches()
+	 * resets it for the next request.
+	 *
+	 * @return void
+	 */
+	public function test_shared_preload_dedup_roundtrip(): void {
+		$url = 'https://example.com/wp-content/uploads/hero.jpg';
+
+		$this->assertFalse( Image_Optimisation::has_emitted_preload( $url ) );
+
+		Image_Optimisation::mark_preload_emitted( $url );
+
+		$this->assertTrue( Image_Optimisation::has_emitted_preload( $url ) );
+		// Media is part of the key: a different variant is still unclaimed.
+		$this->assertFalse( Image_Optimisation::has_emitted_preload( $url, '(max-width: 768px)' ) );
+
+		Image_Optimisation::clear_runtime_caches();
+
+		$this->assertFalse( Image_Optimisation::has_emitted_preload( $url ) );
+	}
+
+	/**
+	 * Stub the front-end URL helpers needed for current-path LCP resolution.
+	 *
+	 * Util::get_current_url() and Util::get_preload_link() call WP helpers
+	 * this suite does not stub globally; these test-local stubs make the
+	 * wp_head emission path exercisable without touching other tests.
+	 *
+	 * @return void
+	 */
+	private function stub_frontend_url_helpers(): void {
+		Functions\when( 'add_query_arg' )->returnArg( 2 );
+		Functions\when( 'untrailingslashit' )->returnArg();
+		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'sanitize_text_field' )->returnArg();
+		Functions\when( 'wp_unslash' )->returnArg();
+		Functions\when( 'esc_attr' )->returnArg();
+		Functions\when( 'wp_kses' )->returnArg();
+		// generate_preload_link() echoes only in front-end HTML contexts:
+		// pin the request guards so process-persisted stubs from earlier
+		// suites (e.g. an AJAX-true stub) cannot silence the echo here.
+		Functions\when( 'wp_doing_ajax' )->justReturn( false );
+		Functions\when( 'wp_doing_cron' )->justReturn( false );
+		Functions\when( 'wp_is_json_request' )->justReturn( false );
+		$_SERVER['REQUEST_URI'] = '/';
+	}
+
+	/**
+	 * The CCSS path emits the field hero once per request and claims it.
+	 *
+	 * With no image-pipeline auto-LCP toggle on, inline_ccss() prints one
+	 * preload hint for the field-measured hero and a repeated call prints
+	 * no duplicate; the URL is also claimed in the pipeline's shared dedup
+	 * set so the later wp_head:1 run skips it (issue #1255 review).
+	 *
+	 * @return void
+	 */
+	public function test_inline_ccss_emits_field_lcp_preload_once(): void {
+		$this->stub_frontend_url_helpers();
+		$this->seed_field_lcp_fixture(
+			'/',
+			'https://example.com/wp-content/uploads/hero.jpg',
+			20,
+			time()
+		);
+		$hash = $this->write_home_ccss_fixture( str_repeat( 'body.a{color:red}', 40 ) );
+
+		try {
+			ob_start();
+			Critical_CSS::inline_ccss();
+			Critical_CSS::inline_ccss();
+			$output = ob_get_clean();
+
+			$this->assertSame( 1, substr_count( $output, 'rel="preload"' ) );
+			$this->assertStringContainsString( 'https://example.com/wp-content/uploads/hero.jpg', $output );
+			$this->assertStringContainsString( '<style id="wppo-critical-css">', $output );
+			$this->assertTrue(
+				Image_Optimisation::has_emitted_preload( 'https://example.com/wp-content/uploads/hero.jpg' )
+			);
+		} finally {
+			unset( $_SERVER['REQUEST_URI'] );
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+			unlink( wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/ccss' ) . '/' . $hash . '.css' );
+			Critical_CSS::reset_ccss_memo();
+			Image_Optimisation::clear_runtime_caches();
+		}
+	}
+
+	/**
+	 * The CCSS path yields when the image pipeline owns LCP preloading.
+	 *
+	 * With autoPreloadLCP on, the pipeline's wp_head:1 hint (with responsive
+	 * srcset/sizes) wins and the CCSS path prints no second hint for the
+	 * same hero (issue #1255 review).
+	 *
+	 * @return void
+	 */
+	public function test_inline_ccss_skips_preload_when_image_pipeline_active(): void {
+		$this->stub_frontend_url_helpers();
+		$this->seed_field_lcp_fixture(
+			'/',
+			'https://example.com/wp-content/uploads/hero.jpg',
+			20,
+			time()
+		);
+		$this->option_map['wppo_settings'] = array(
+			'image_optimisation' => array( 'autoPreloadLCP' => true ),
+		);
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		$hash = $this->write_home_ccss_fixture( str_repeat( 'body.a{color:red}', 40 ) );
+
+		try {
+			ob_start();
+			Critical_CSS::inline_ccss();
+			$output = ob_get_clean();
+
+			$this->assertStringNotContainsString( 'rel="preload"', $output );
+			$this->assertStringContainsString( '<style id="wppo-critical-css">', $output );
+		} finally {
+			unset( $_SERVER['REQUEST_URI'] );
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+			unlink( wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/ccss' ) . '/' . $hash . '.css' );
+			Critical_CSS::reset_ccss_memo();
+			\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		}
+	}
+
+	/**
+	 * The wppo_ccss_field_lcp_preload filter opts out of the CCSS-path hint.
+	 *
+	 * @return void
+	 */
+	public function test_inline_ccss_skips_preload_when_filter_opts_out(): void {
+		$this->stub_frontend_url_helpers();
+		$this->seed_field_lcp_fixture(
+			'/',
+			'https://example.com/wp-content/uploads/hero.jpg',
+			20,
+			time()
+		);
+		Functions\when( 'has_filter' )->alias(
+			static function ( $tag ) {
+				return 'wppo_ccss_field_lcp_preload' === $tag;
+			}
+		);
+		$this->filter_overrides['wppo_ccss_field_lcp_preload'] = false;
+		$hash = $this->write_home_ccss_fixture( str_repeat( 'body.a{color:red}', 40 ) );
+
+		try {
+			ob_start();
+			Critical_CSS::inline_ccss();
+			$output = ob_get_clean();
+
+			$this->assertStringNotContainsString( 'rel="preload"', $output );
+			$this->assertStringContainsString( '<style id="wppo-critical-css">', $output );
+		} finally {
+			unset( $_SERVER['REQUEST_URI'] );
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+			unlink( wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/ccss' ) . '/' . $hash . '.css' );
+			Critical_CSS::reset_ccss_memo();
+		}
+	}
+
+	/**
+	 * Deferral is blocked for a template whose over-cap CCSS had no file URL.
+	 *
+	 * The inline_ccss() method records the template when over-cap output cannot be
+	 * served from a file (issue #1255 review); defer_stylesheets() must then
+	 * load the full stylesheets normally instead of deferring them with zero
+	 * critical CSS on the page (FOUC guard).
+	 *
+	 * @return void
+	 */
+	public function test_defer_stylesheets_skips_when_ccss_file_url_unavailable(): void {
+		$hash = Critical_CSS::get_template_hash();
+		$prop = new ReflectionProperty( Critical_CSS::class, 'ccss_defer_blocked' );
+		$prop->setAccessible( true );
+		$prop->setValue( null, array( $hash => true ) );
+
+		$tag    = '<link rel="stylesheet" href="http://example.com/wp-content/themes/test-theme/style.css" media="all" />'; // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- Fixture markup for the defer guard stub.
+		$result = Critical_CSS::defer_stylesheets( $tag, 'test-theme-style', 'http://example.com/wp-content/themes/test-theme/style.css' );
+
+		Critical_CSS::reset_ccss_memo();
+
+		$this->assertSame( $tag, $result );
 	}
 }
