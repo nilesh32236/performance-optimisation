@@ -5368,6 +5368,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return string[]
 		 */
 		public static function get_delay_js_third_party_denylist(): array {
+			static $cached = null;
+			if ( null !== $cached ) {
+				return $cached;
+			}
 			$preset = array(
 				'googletagmanager.com',
 				'google-analytics.com',
@@ -5428,16 +5432,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'quantcast',
 			);
 			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_third_party_denylist' ) ) {
-				return $preset;
+				$cached = $preset;
+				return $cached;
 			}
 			try {
 				$raw = apply_filters( 'wppo_delay_js_third_party_denylist', $preset );
 			} catch ( \Throwable $e ) {
 				unset( $e );
-				return $preset;
+				$cached = $preset;
+				return $cached;
 			}
 			if ( ! is_array( $raw ) ) {
-				return $preset;
+				$cached = $preset;
+				return $cached;
 			}
 			$filtered = array_values(
 				array_unique(
@@ -5454,7 +5461,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					)
 				)
 			);
-			return $filtered;
+			$cached   = $filtered;
+			return $cached;
 		}
 
 		/**
@@ -5521,10 +5529,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		public function is_delay_third_party_candidate( string $tag, string $handle ): bool {
 			try {
-				if ( ! preg_match( '/\ssrc\s*=\s*(["\'])(.*?)\1/i', $tag, $matches ) ) {
+				if ( ! preg_match( '/\ssrc\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i', $tag, $matches ) ) {
 					return false;
 				}
-				$src = trim( $matches[2] );
+				$src = trim( ! empty( $matches[2] ) ? $matches[2] : ( $matches[3] ?? '' ) );
 				if ( '' === $src || 0 === strpos( $src, 'data:' ) || 0 === strpos( $src, 'blob:' ) ) {
 					return false;
 				}
@@ -5549,6 +5557,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						$split    = preg_split( '/[\r\n,]+/', $extra );
 						$denylist = array_merge( $denylist, array_filter( array_map( 'trim', is_array( $split ) ? $split : array() ) ) );
 					}
+				} elseif ( is_array( $extra ) ) {
+					$denylist = array_merge( $denylist, array_values( array_filter( array_map( 'strval', $extra ) ) ) );
 				}
 				foreach ( $denylist as $entry ) {
 					$entry = trim( (string) $entry );

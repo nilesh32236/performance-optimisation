@@ -203,14 +203,13 @@ const FileOptimization = ( {
 	// String-guard textarea-backed keys AFTER the spread so a non-string
 	// truthy payload (e.g. array from corrupted settings) cannot flow into
 	// a controlled textarea value via the ...options override above.
-	defaultSettings.delayJSThirdPartyDenylist =
-		typeof options.delayJSThirdPartyDenylist === 'string'
-			? options.delayJSThirdPartyDenylist
-			: '';
-	defaultSettings.delayJSThirdPartyAllowlist =
-		typeof options.delayJSThirdPartyAllowlist === 'string'
-			? options.delayJSThirdPartyAllowlist
-			: '';
+	// toDelayLines joins array payloads instead of clearing them (#1217 review).
+	defaultSettings.delayJSThirdPartyDenylist = toDelayLines(
+		options.delayJSThirdPartyDenylist
+	);
+	defaultSettings.delayJSThirdPartyAllowlist = toDelayLines(
+		options.delayJSThirdPartyAllowlist
+	);
 	defaultSettings.delayJSExcludeUrls =
 		typeof options.delayJSExcludeUrls === 'string'
 			? options.delayJSExcludeUrls
@@ -268,6 +267,13 @@ const FileOptimization = ( {
 		// toggles from the admin preview.
 		delayJSExternalOnly: !! settings.delayJSExternalOnly,
 		minifyInlineJS: !! settings.minifyInlineJS,
+		delayJSThirdParty: !! settings.delayJSThirdParty,
+		delayJSThirdPartyDenylist: toDelayLines(
+			settings.delayJSThirdPartyDenylist
+		),
+		delayJSThirdPartyAllowlist: toDelayLines(
+			settings.delayJSThirdPartyAllowlist
+		),
 		excludeDelayJS: toExcludeLines( settings.excludeDelayJS ),
 		excludeDeferJS: toExcludeLines( settings.excludeDeferJS ),
 		excludeCombineCSS: toExcludeLines( settings.excludeCombineCSS ),
@@ -2254,6 +2260,9 @@ const FileOptimization = ( {
 															id="delayJSThirdPartyDenylist"
 															name="delayJSThirdPartyDenylist"
 															rows="3"
+															disabled={
+																optimizerDisabled
+															}
 															placeholder={ __(
 																'e.g. cdn.example.com/tracker',
 																'performance-optimisation'
@@ -2287,6 +2296,9 @@ const FileOptimization = ( {
 															id="delayJSThirdPartyAllowlist"
 															name="delayJSThirdPartyAllowlist"
 															rows="3"
+															disabled={
+																optimizerDisabled
+															}
 															placeholder={ __(
 																'e.g. consent-manager.js',
 																'performance-optimisation'

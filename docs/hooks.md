@@ -1317,7 +1317,7 @@ Filters the curated one-click third-party delay denylist (analytics, ads, social
 Filters the user third-party allowlist that always wins over the denylist (scripts that must stay eager). @since NEXT.
 
 **Parameters:**
-- `$list` *(string[])* — Allowlist patterns.
+- `$list` *(string[])* — Allowlist patterns, pre-populated from the `delayJSThirdPartyAllowlist` textarea setting. Callbacks should merge/append (e.g. `array_merge( $list, [...] )`) rather than replace, so user entries are preserved.
 
 ---
 

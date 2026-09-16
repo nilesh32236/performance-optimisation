@@ -824,9 +824,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 						if ( ! is_string( $attrs_unquoted ) ) {
 							$attrs_unquoted = $attributes;
 						}
-						if ( preg_match( '/\sasync(?=[\s=\/>])/i', $attrs_unquoted ) ) {
+						if ( preg_match( '/\sasync(?=[\s=\/>]|$)/i', $attrs_unquoted ) ) {
 							$attributes .= ' data-wppo-delay-exec="async"';
-						} elseif ( preg_match( '/\sdefer(?=[\s=\/>])/i', $attrs_unquoted ) ) {
+						} elseif ( preg_match( '/\sdefer(?=[\s=\/>]|$)/i', $attrs_unquoted ) ) {
 							$attributes .= ' data-wppo-delay-exec="defer"';
 						}
 					}
@@ -993,10 +993,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 */
 		private static function is_third_party_delay_candidate( string $attributes, string $content, array $file_opt ): bool {
 			try {
-				if ( ! preg_match( '/\ssrc\s*=\s*(["\'])(.*?)\1/i', $attributes, $matches ) ) {
+				if ( ! preg_match( '/\ssrc\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i', $attributes, $matches ) ) {
 					return false;
 				}
-				$src = trim( $matches[2] );
+				$src = trim( ! empty( $matches[2] ) ? $matches[2] : ( $matches[3] ?? '' ) );
 				if ( '' === $src || 0 === strpos( $src, 'data:' ) || 0 === strpos( $src, 'blob:' ) ) {
 					return false;
 				}
@@ -1047,6 +1047,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				$extra = $file_opt['delayJSThirdPartyDenylist'] ?? '';
 				if ( is_string( $extra ) && '' !== trim( $extra ) ) {
 					$denylist = array_merge( $denylist, (array) Util::process_urls( $extra ) );
+				} elseif ( is_array( $extra ) ) {
+					$denylist = array_merge( $denylist, array_values( array_filter( array_map( 'strval', $extra ) ) ) );
 				}
 				foreach ( $denylist as $entry ) {
 					$entry = trim( (string) $entry );

@@ -883,6 +883,32 @@ async function loadScriptsByPriority( scripts ) {
 		}
 	};
 
+	// Per-script timeout so one hanging third-party never stalls later
+	// deferred scripts indefinitely; defer order is preserved without
+	// indefinite stall (#1217 review). Overridable via
+	// wppoDelayConfig.scriptTimeout (used by Jest, where jsdom never fires
+	// script onload so the swap would otherwise pend forever).
+	const scriptTimeout = ( delayConfig && delayConfig.scriptTimeout ) || 15000;
+	const loadWithTimeout = ( script, ms = scriptTimeout ) => {
+		let timer = null;
+		const timeout = new Promise( ( _, reject ) => {
+			timer = setTimeout(
+				() =>
+					reject(
+						new Error( 'WPPO: deferred script load timed out' )
+					),
+				ms
+			);
+		} );
+		return Promise.race( [ loadScript( script ), timeout ] ).finally(
+			() => {
+				if ( timer ) {
+					clearTimeout( timer );
+				}
+			}
+		);
+	};
+
 	for ( const level of [ 'high', 'normal', 'low' ] ) {
 		const deferred = [];
 		const concurrent = [];
@@ -893,25 +919,43 @@ async function loadScriptsByPriority( scripts ) {
 				deferred.push( script );
 			}
 		} );
-		if ( concurrent.length > 0 ) {
-			const results = await Promise.allSettled(
-				concurrent.map( ( script ) => loadScript( script ) )
-			);
+		// Kick off async scripts without blocking deferred work: async is
+		// non-blocking by definition, so a slow tracker must not
+		// head-of-line-block defer replay (#1217 review). Deferred run
+		// sequentially first, then the concurrent batch settles.
+		const pendingAsync =
+			concurrent.length > 0
+				? Promise.allSettled(
+						concurrent.map( ( script ) =>
+							loadWithTimeout( script )
+						)
+				  )
+				: null;
+		for ( const script of deferred ) {
+			try {
+				await loadWithTimeout( script );
+			} catch ( err ) {
+				console.error( 'Error loading script:', err );
+			} finally {
+				// Dedup rides on the live-replacement stamp inside
+				// loadScript(); this placeholder mark only covers
+				// no-swap paths (blocked/empty). Mark even on failure so
+				// each node is processed once (#1217 review).
+				if ( script.isConnected ) {
+					markLoaded( script );
+				}
+			}
+		}
+		if ( pendingAsync ) {
+			const results = await pendingAsync;
 			results.forEach( ( r, i ) => {
 				if ( r.status === 'rejected' ) {
 					console.error( 'Error loading script:', r.reason );
-				} else {
+				}
+				if ( concurrent[ i ].isConnected ) {
 					markLoaded( concurrent[ i ] );
 				}
 			} );
-		}
-		for ( const script of deferred ) {
-			try {
-				await loadScript( script );
-				markLoaded( script );
-			} catch ( err ) {
-				console.error( 'Error loading script:', err );
-			}
 		}
 	}
 }
@@ -947,7 +991,8 @@ async function loadScripts() {
 			}
 			const strategy =
 				script.getAttribute( 'data-wppo-delay-strategy' ) ||
-				delayConfig.defaultStrategy;
+				( delayConfig && delayConfig.defaultStrategy ) ||
+				'interaction';
 			return strategy === 'interaction';
 		} );
 
@@ -1072,7 +1117,8 @@ const hasInteractionScripts = ( scripts ) => {
 	return Array.from( list ).some( ( script ) => {
 		const strategy =
 			script.getAttribute( 'data-wppo-delay-strategy' ) ||
-			delayConfig.defaultStrategy;
+			( delayConfig && delayConfig.defaultStrategy ) ||
+			'interaction';
 		return strategy === 'interaction';
 	} );
 };
@@ -1089,7 +1135,7 @@ const idleScripts = document.querySelectorAll(
 if ( idleScripts.length > 0 ) {
 	if ( 'requestIdleCallback' in window ) {
 		window.requestIdleCallback( loadIdleScripts, {
-			timeout: delayConfig.idleTimeout,
+			timeout: ( delayConfig && delayConfig.idleTimeout ) || 3000,
 		} );
 	} else {
 		// Fallback: load after a short delay.
@@ -1097,7 +1143,7 @@ if ( idleScripts.length > 0 ) {
 		// Use a shorter explicit delay to avoid excessive waiting when rIC is unavailable.
 		setTimeout(
 			loadIdleScripts,
-			Math.min( 2000, delayConfig.idleTimeout )
+			Math.min( 2000, ( delayConfig && delayConfig.idleTimeout ) || 3000 )
 		);
 	}
 }

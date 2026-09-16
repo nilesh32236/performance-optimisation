@@ -1,4 +1,4 @@
-/* global HTMLImageElement, HTMLIFrameElement, HTMLScriptElement */
+/* global Element, HTMLImageElement, HTMLIFrameElement, HTMLScriptElement */
 
 describe( 'Lazy Load (lazyload.js)', () => {
 	let consoleWarnSpy;
@@ -1293,6 +1293,98 @@ describe( 'Lazy Load (lazyload.js)', () => {
 			expect( replacement.getAttribute( 'data-wppo-delay-loaded' ) ).toBe(
 				'1'
 			);
+		} );
+		it( 'replays defer-stamped scripts in document order', async () => {
+			global.wppoDelayConfig.scriptTimeout = 50;
+			document.body.innerHTML =
+				'<script type="wppo/javascript" wppo-src="/defer-a.js" data-wppo-delay-exec="defer"></script>' +
+				'<script type="wppo/javascript" wppo-src="/defer-b.js" data-wppo-delay-exec="defer"></script>';
+			const order = [];
+			const orig = Element.prototype.setAttribute;
+			const spy = jest
+				.spyOn( Element.prototype, 'setAttribute' )
+				.mockImplementation( function ( name, value ) {
+					if (
+						this.tagName === 'SCRIPT' &&
+						name === 'src' &&
+						( value === '/defer-a.js' || value === '/defer-b.js' )
+					) {
+						order.push( value );
+					}
+					return orig.call( this, name, value );
+				} );
+			try {
+				await bootLazyload();
+				// Sequential replay awaits each load (jsdom never fires
+				// onload, so each step settles via the scriptTimeout above).
+				await new Promise( ( r ) => setTimeout( r, 500 ) );
+			} finally {
+				spy.mockRestore();
+			}
+
+			expect( order ).toEqual( [ '/defer-a.js', '/defer-b.js' ] );
+			expect(
+				document.querySelector( 'script[src="/defer-a.js"]' )
+			).toBeInTheDocument();
+			expect(
+				document.querySelector( 'script[src="/defer-b.js"]' )
+			).toBeInTheDocument();
+		} );
+
+		it( 'loads priority groups high to normal to low regardless of DOM order', async () => {
+			global.wppoDelayConfig.scriptTimeout = 50;
+			document.body.innerHTML =
+				'<script type="wppo/javascript" wppo-src="/prio-low.js" data-wppo-delay-priority="low"></script>' +
+				'<script type="wppo/javascript" wppo-src="/prio-normal.js"></script>' +
+				'<script type="wppo/javascript" wppo-src="/prio-high.js" data-wppo-delay-priority="high"></script>';
+			const order = [];
+			const orig = Element.prototype.setAttribute;
+			const spy = jest
+				.spyOn( Element.prototype, 'setAttribute' )
+				.mockImplementation( function ( name, value ) {
+					if (
+						this.tagName === 'SCRIPT' &&
+						name === 'src' &&
+						String( value ).startsWith( '/prio-' )
+					) {
+						order.push( value );
+					}
+					return orig.call( this, name, value );
+				} );
+			try {
+				await bootLazyload();
+				await new Promise( ( r ) => setTimeout( r, 800 ) );
+			} finally {
+				spy.mockRestore();
+			}
+
+			expect( order ).toEqual( [
+				'/prio-high.js',
+				'/prio-normal.js',
+				'/prio-low.js',
+			] );
+		} );
+
+		it( 'skips a live replacement carrying data-wppo-delay-loaded', async () => {
+			document.body.innerHTML =
+				'<script src="/live-app.js" data-wppo-delay-loaded="1"></script>' +
+				'<script type="wppo/javascript" wppo-src="/fresh-app.js"></script>';
+			await bootLazyload();
+			await Promise.resolve();
+			await new Promise( ( r ) => setTimeout( r, 0 ) );
+
+			// Live replacement is never duplicated or re-executed.
+			expect(
+				document.querySelectorAll( 'script[src="/live-app.js"]' )
+			).toHaveLength( 1 );
+			expect(
+				document.querySelector( 'script[src="/fresh-app.js"]' )
+			).toBeInTheDocument();
+			expect(
+				document
+					.querySelector( 'script[src="/fresh-app.js"]' )
+					.getAttribute( 'data-wppo-delay-loaded' )
+			).toBe( '1' );
 		} );
 	} );
 
