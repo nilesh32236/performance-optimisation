@@ -150,7 +150,6 @@ class SmartCompressLqipTest extends \PHPUnit\Framework\TestCase {
 				continue;
 			}
 			$property = $reflected->getProperty( $prop );
-			$property->setAccessible( true );
 			$property->setValue( null, 'deferred_img_info' === $prop ? null : false );
 		}
 	}
@@ -355,7 +354,6 @@ class SmartCompressLqipTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function native_attrs( Image_Optimisation $instance, string $url, array $exclude = array() ): array {
 		$method = new ReflectionMethod( Image_Optimisation::class, 'get_native_lazy_placeholder_attrs' );
-		$method->setAccessible( true );
 
 		return $method->invoke( $instance, $url, $exclude, '', '' );
 	}
@@ -422,7 +420,6 @@ class SmartCompressLqipTest extends \PHPUnit\Framework\TestCase {
 	public function test_is_lcp_hero_url_matching(): void {
 		$instance = new Image_Optimisation( $this->options );
 		$method   = new ReflectionMethod( Image_Optimisation::class, 'is_lcp_hero_url' );
-		$method->setAccessible( true );
 
 		$hero = 'http://example.com/wp-content/uploads/2026/08/lcp-hero.jpg';
 
@@ -584,7 +581,6 @@ class SmartCompressLqipTest extends \PHPUnit\Framework\TestCase {
 	public function test_is_lcp_hero_url_normalized_matching(): void {
 		$instance = new Image_Optimisation( $this->options );
 		$method   = new ReflectionMethod( Image_Optimisation::class, 'is_lcp_hero_url' );
-		$method->setAccessible( true );
 
 		$hero       = 'http://example.com/wp-content/uploads/2026/08/lcp-hero.jpg';
 		$normalized = Util::normalize_url( $hero );

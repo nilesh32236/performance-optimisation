@@ -89,7 +89,6 @@ class UtilCoreApiHelpersTest extends \PHPUnit\Framework\TestCase {
 		// The memoized value is stored on the class static and survives until
 		// reset (the reflection probe is not repeated on every call).
 		$prop = new \ReflectionProperty( Util::class, 'html_processor_available' );
-		$prop->setAccessible( true );
 		$this->assertTrue( $prop->getValue() );
 
 		Util::reset_html_processor_memo();
@@ -103,7 +102,6 @@ class UtilCoreApiHelpersTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_create_html_processor_returns_null_when_unavailable(): void {
 		$prop = new \ReflectionProperty( Util::class, 'html_processor_available' );
-		$prop->setAccessible( true );
 		$prop->setValue( null, false );
 
 		$this->assertFalse( Util::should_use_html_processor() );

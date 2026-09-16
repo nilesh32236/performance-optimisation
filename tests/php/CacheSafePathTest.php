@@ -156,7 +156,6 @@ class CacheSafePathTest extends \PHPUnit\Framework\TestCase {
 			return;
 		}
 		$prop = new \ReflectionProperty( Cache::class, 'traversal_probe_logged' );
-		$prop->setAccessible( true );
 		$prop->setValue( null, false );
 	}
 
@@ -210,7 +209,6 @@ class CacheSafePathTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function safe_path( Cache $cache, string $url_path, string $filename ): string {
 		$method = new \ReflectionMethod( Cache::class, 'safe_path_for_url' );
-		$method->setAccessible( true );
 		return $method->invoke( $cache, $url_path, $filename );
 	}
 

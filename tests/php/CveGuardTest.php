@@ -94,7 +94,6 @@ class CveGuardTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function read_private_prop( Main $main, string $prop ) {
 		$reflection = new \ReflectionProperty( Main::class, $prop );
-		$reflection->setAccessible( true );
 		return $reflection->getValue( $main );
 	}
 
@@ -108,7 +107,6 @@ class CveGuardTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function invoke_private_method( Main $main, string $name, ...$args ) {
 		$reflection = new \ReflectionMethod( Main::class, $name );
-		$reflection->setAccessible( true );
 		return $reflection->invoke( $main, ...$args );
 	}
 

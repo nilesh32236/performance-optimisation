@@ -33,7 +33,6 @@ class CssCombineFallbackTest extends \PHPUnit\Framework\TestCase {
 	private function invoke_private( string $class_name, string $method, array $args = array() ) {
 		$instance   = ( new \ReflectionClass( $class_name ) )->newInstanceWithoutConstructor();
 		$reflection = new \ReflectionMethod( $class_name, $method );
-		$reflection->setAccessible( true );
 		return $reflection->invokeArgs( $instance, $args );
 	}
 
@@ -45,7 +44,6 @@ class CssCombineFallbackTest extends \PHPUnit\Framework\TestCase {
 	private function make_used_css(): Used_CSS {
 		$instance = ( new \ReflectionClass( Used_CSS::class ) )->newInstanceWithoutConstructor();
 		$prop     = new \ReflectionProperty( Used_CSS::class, 'options' );
-		$prop->setAccessible( true );
 		$prop->setValue( $instance, array( 'file_optimisation' => array() ) );
 		return $instance;
 	}
@@ -168,7 +166,6 @@ class CssCombineFallbackTest extends \PHPUnit\Framework\TestCase {
 		$instance = $this->make_used_css();
 
 		$method = new \ReflectionMethod( Used_CSS::class, 'inject_used_css' );
-		$method->setAccessible( true );
 		$result = $method->invoke( $instance, $buffer, 'http://example.com/used-css.css?ver=1', array( 'theme' ) );
 
 		$this->assertSame( $buffer, $result );
@@ -185,7 +182,6 @@ class CssCombineFallbackTest extends \PHPUnit\Framework\TestCase {
 		$instance = $this->make_used_css();
 
 		$method = new \ReflectionMethod( Used_CSS::class, 'inject_used_css' );
-		$method->setAccessible( true );
 		$result = $method->invoke( $instance, $buffer, 'http://example.com/used-css.css?ver=1', array( 'theme' ) );
 
 		$this->assertSame( $buffer, $result );
@@ -202,7 +198,6 @@ class CssCombineFallbackTest extends \PHPUnit\Framework\TestCase {
 		$instance = $this->make_used_css();
 
 		$method = new \ReflectionMethod( Used_CSS::class, 'inject_used_css' );
-		$method->setAccessible( true );
 		$result = $method->invoke( $instance, $buffer, 'http://example.com/used-css.css?ver=1', array( 'theme' ) );
 
 		$this->assertStringContainsString( 'wppo-used-css', $result );
@@ -224,7 +219,6 @@ class CssCombineFallbackTest extends \PHPUnit\Framework\TestCase {
 		$instance = $this->make_used_css();
 
 		$method = new \ReflectionMethod( Used_CSS::class, 'inject_used_css' );
-		$method->setAccessible( true );
 		return $method->invoke( $instance, $buffer, 'http://example.com/used-css.css?ver=1', array( 'theme' ) );
 	}
 
@@ -434,13 +428,10 @@ class CssCombineFallbackTest extends \PHPUnit\Framework\TestCase {
 
 		$instance       = ( new \ReflectionClass( Cache::class ) )->newInstanceWithoutConstructor();
 		$cache_root_dir = new \ReflectionProperty( Cache::class, 'cache_root_dir' );
-		$cache_root_dir->setAccessible( true );
 		$cache_root_dir->setValue( $instance, '/tmp/wordpress/wp-content/cache/wppo' );
 		$domain = new \ReflectionProperty( Cache::class, 'domain' );
-		$domain->setAccessible( true );
 		$domain->setValue( $instance, 'example.com' );
 		$options = new \ReflectionProperty( Cache::class, 'options' );
-		$options->setAccessible( true );
 		$options->setValue(
 			$instance,
 			array(
@@ -449,16 +440,12 @@ class CssCombineFallbackTest extends \PHPUnit\Framework\TestCase {
 			)
 		);
 		$filesystem = new \ReflectionProperty( Cache::class, 'filesystem' );
-		$filesystem->setAccessible( true );
 		$filesystem->setValue( $instance, $fs );
 		$initialized = new \ReflectionProperty( Cache::class, 'fs_initialized' );
-		$initialized->setAccessible( true );
 		$initialized->setValue( $instance, true );
 		$request_uri = new \ReflectionProperty( Cache::class, 'request_uri' );
-		$request_uri->setAccessible( true );
 		$request_uri->setValue( $instance, '/' );
 		$url_path = new \ReflectionProperty( Cache::class, 'url_path' );
-		$url_path->setAccessible( true );
 		$url_path->setValue( $instance, '' );
 
 		// Util::prepare_cache_dir() uses the global filesystem, not the

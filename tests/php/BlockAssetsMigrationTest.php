@@ -83,11 +83,9 @@ class BlockAssetsMigrationTest extends \PHPUnit\Framework\TestCase {
 		$main = ( new ReflectionClass( Main::class ) )->newInstanceWithoutConstructor();
 
 		$options_prop = new ReflectionProperty( Main::class, 'options' );
-		$options_prop->setAccessible( true );
 		$options_prop->setValue( $main, $options );
 
 		$method = new ReflectionMethod( Main::class, 'migrate_block_assets_setting' );
-		$method->setAccessible( true );
 		$method->invoke( $main, $loads_on_demand );
 
 		return $main;
@@ -175,8 +173,7 @@ class BlockAssetsMigrationTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( array( array( 'wppo_block_assets_migrated', 1 ) ), $writes );
 
 		$options_prop = new ReflectionProperty( Main::class, 'options' );
-		$options_prop->setAccessible( true );
-		$options = $options_prop->getValue( $main );
+		$options      = $options_prop->getValue( $main );
 		$this->assertFalse( $options['file_optimisation']['blockAssetsOnDemand'] );
 	}
 
@@ -222,8 +219,7 @@ class BlockAssetsMigrationTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 1, $marker_write );
 
 		$options_prop = new ReflectionProperty( Main::class, 'options' );
-		$options_prop->setAccessible( true );
-		$options = $options_prop->getValue( $main );
+		$options      = $options_prop->getValue( $main );
 		$this->assertTrue( $options['file_optimisation']['blockAssetsOnDemand'] );
 	}
 

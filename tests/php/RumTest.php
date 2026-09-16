@@ -285,7 +285,6 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 		$this->install_stubs();
 
 		$method = new \ReflectionMethod( RUM::class, 'is_valid_token' );
-		$method->setAccessible( true );
 
 		$today     = 'h_wppo_rum_' . gmdate( 'Ymd' ) . '|/a';
 		$yesterday = 'h_wppo_rum_' . gmdate( 'Ymd', time() - DAY_IN_SECONDS ) . '|/a';

@@ -87,16 +87,13 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 			$cache = new Cache();
 
 			$domain_prop = new \ReflectionProperty( Cache::class, 'domain' );
-			$domain_prop->setAccessible( true );
 			$this->assertSame( 'example.com', $domain_prop->getValue( $cache ) );
 			$this->assertTrue( $cache->is_host_mismatched() );
 
 			$not_cacheable = new ReflectionMethod( Cache::class, 'is_not_cacheable' );
-			$not_cacheable->setAccessible( true );
 			$this->assertTrue( $not_cacheable->invoke( $cache ) );
 
 			$store = new ReflectionMethod( Cache::class, 'maybe_store_cache' );
-			$store->setAccessible( true );
 			$this->assertFalse( $store->invoke( $cache ) );
 		} finally {
 			if ( null === $backup_host ) {
@@ -131,16 +128,13 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 			$cache = new Cache();
 
 			$domain_prop = new \ReflectionProperty( Cache::class, 'domain' );
-			$domain_prop->setAccessible( true );
 			$this->assertSame( 'example.com', $domain_prop->getValue( $cache ) );
 			$this->assertTrue( $cache->is_host_mismatched() );
 
 			$not_cacheable = new ReflectionMethod( Cache::class, 'is_not_cacheable' );
-			$not_cacheable->setAccessible( true );
 			$this->assertTrue( $not_cacheable->invoke( $cache ) );
 
 			$store = new ReflectionMethod( Cache::class, 'maybe_store_cache' );
-			$store->setAccessible( true );
 			$this->assertFalse( $store->invoke( $cache ) );
 		} finally {
 			if ( null === $backup_host ) {
@@ -199,15 +193,12 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 		$this->assertFalse( $cache->is_host_mismatched() );
 
 		$domain_prop = new \ReflectionProperty( Cache::class, 'domain' );
-		$domain_prop->setAccessible( true );
 		$this->assertSame( 'example.com', $domain_prop->getValue( $cache ) );
 
 		$not_cacheable = new ReflectionMethod( Cache::class, 'is_not_cacheable' );
-		$not_cacheable->setAccessible( true );
 		$this->assertFalse( $not_cacheable->invoke( $cache ) );
 
 		$store = new ReflectionMethod( Cache::class, 'maybe_store_cache' );
-		$store->setAccessible( true );
 		$this->assertTrue( $store->invoke( $cache ) );
 	}
 
@@ -305,11 +296,9 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 		$cache = ( new \ReflectionClass( Cache::class ) )->newInstanceWithoutConstructor();
 
 		$options_prop = new \ReflectionProperty( Cache::class, 'options' );
-		$options_prop->setAccessible( true );
 		$options_prop->setValue( $cache, $options );
 
 		$reflection = new ReflectionMethod( Cache::class, 'register_combine_css_path' );
-		$reflection->setAccessible( true );
 		$reflection->invoke( $cache, $temp_file );
 
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink
@@ -360,8 +349,7 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 
 		$cache      = ( new \ReflectionClass( Cache::class ) )->newInstanceWithoutConstructor();
 		$reflection = new ReflectionMethod( Cache::class, 'get_styles_inline_limit' );
-		$reflection->setAccessible( true );
-		$result = $reflection->invoke( $cache );
+		$result     = $reflection->invoke( $cache );
 
 		$this->assertSame( $expected, $result );
 	}
@@ -395,7 +383,6 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 
 		$cache = ( new \ReflectionClass( Cache::class ) )->newInstanceWithoutConstructor();
 		$prop  = new \ReflectionProperty( Cache::class, 'combine_css_preload_url' );
-		$prop->setAccessible( true );
 		$prop->setValue( $cache, 'http://example.com/wp-content/cache/wppo/example.com/index.css?ver=123456' );
 
 		ob_start();
@@ -437,23 +424,18 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 		$cache = ( new \ReflectionClass( Cache::class ) )->newInstanceWithoutConstructor();
 
 		$root_prop = new \ReflectionProperty( Cache::class, 'cache_root_dir' );
-		$root_prop->setAccessible( true );
 		$root_prop->setValue( $cache, '/tmp/wordpress/wp-content/cache/wppo' );
 
 		$domain_prop = new \ReflectionProperty( Cache::class, 'domain' );
-		$domain_prop->setAccessible( true );
 		$domain_prop->setValue( $cache, 'example.com' );
 
 		$fs_prop = new \ReflectionProperty( Cache::class, 'filesystem' );
-		$fs_prop->setAccessible( true );
 		$fs_prop->setValue( $cache, $fs );
 
 		$initialized_prop = new \ReflectionProperty( Cache::class, 'fs_initialized' );
-		$initialized_prop->setAccessible( true );
 		$initialized_prop->setValue( $cache, true );
 
 		$method = new ReflectionMethod( Cache::class, 'delete_cache_files' );
-		$method->setAccessible( true );
 		$result = $method->invoke( $cache, '/tmp/wordpress/wp-content/cache/wppo/example.com/about/index.html' );
 
 		$this->assertTrue( $result );
@@ -486,23 +468,18 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 		$cache = ( new \ReflectionClass( Cache::class ) )->newInstanceWithoutConstructor();
 
 		$root_prop = new \ReflectionProperty( Cache::class, 'cache_root_dir' );
-		$root_prop->setAccessible( true );
 		$root_prop->setValue( $cache, '/tmp/wordpress/wp-content/cache/wppo' );
 
 		$domain_prop = new \ReflectionProperty( Cache::class, 'domain' );
-		$domain_prop->setAccessible( true );
 		$domain_prop->setValue( $cache, 'example.com' );
 
 		$fs_prop = new \ReflectionProperty( Cache::class, 'filesystem' );
-		$fs_prop->setAccessible( true );
 		$fs_prop->setValue( $cache, $fs );
 
 		$initialized_prop = new \ReflectionProperty( Cache::class, 'fs_initialized' );
-		$initialized_prop->setAccessible( true );
 		$initialized_prop->setValue( $cache, true );
 
 		$method = new ReflectionMethod( Cache::class, 'delete_all_cache_files' );
-		$method->setAccessible( true );
 		$result = $method->invoke( $cache );
 
 		$this->assertTrue( $result );
@@ -572,8 +549,7 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 
 		$cache      = ( new \ReflectionClass( Cache::class ) )->newInstanceWithoutConstructor();
 		$reflection = new ReflectionMethod( Cache::class, 'get_combined_handles' );
-		$reflection->setAccessible( true );
-		$result = $reflection->invoke( $cache, $wp_styles->queue, array() );
+		$result     = $reflection->invoke( $cache, $wp_styles->queue, array() );
 
 		$this->assertSame( $expected, $result );
 	}
@@ -586,7 +562,6 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 
 		$cache      = ( new \ReflectionClass( Cache::class ) )->newInstanceWithoutConstructor();
 		$reflection = new ReflectionMethod( Cache::class, 'block_assets_are_separate' );
-		$reflection->setAccessible( true );
 
 		$this->assertTrue( $reflection->invoke( $cache ) );
 	}
@@ -599,7 +574,6 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 
 		$cache      = ( new \ReflectionClass( Cache::class ) )->newInstanceWithoutConstructor();
 		$reflection = new ReflectionMethod( Cache::class, 'block_assets_are_separate' );
-		$reflection->setAccessible( true );
 
 		$this->assertFalse( $reflection->invoke( $cache ) );
 	}
@@ -613,7 +587,6 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 
 		$cache      = ( new \ReflectionClass( Cache::class ) )->newInstanceWithoutConstructor();
 		$reflection = new ReflectionMethod( Cache::class, 'block_assets_are_separate' );
-		$reflection->setAccessible( true );
 
 		$this->assertFalse( $reflection->invoke( $cache ) );
 	}

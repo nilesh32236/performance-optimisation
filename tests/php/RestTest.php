@@ -211,8 +211,7 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_get_routes_contains_expected_endpoints(): void {
 		$reflection = new ReflectionMethod( $this->rest, 'get_routes' );
-		$reflection->setAccessible( true );
-		$routes = $reflection->invoke( $this->rest );
+		$routes     = $reflection->invoke( $this->rest );
 
 		$expected = array(
 			'clear_cache',
@@ -1061,7 +1060,6 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_sanitize_settings_recursively_skips_empty_keys(): void {
 		$reflection = new ReflectionMethod( $this->rest, 'sanitize_settings_recursively' );
-		$reflection->setAccessible( true );
 
 		$result = $reflection->invoke(
 			$this->rest,
@@ -1225,7 +1223,6 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 		);
 
 		$reflection = new ReflectionMethod( $this->rest, 'build_redis_config' );
-		$reflection->setAccessible( true );
 
 		$config = $reflection->invoke( $this->rest, array( 'password' => ' <b>s3cret</b> ' ) );
 
@@ -1248,7 +1245,6 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			->andReturn( false );
 
 		$reflection = new ReflectionMethod( $this->rest, 'build_redis_config' );
-		$reflection->setAccessible( true );
 
 		$config = $reflection->invoke( $this->rest, array( 'password' => 'request-secret' ) );
 
@@ -1270,7 +1266,6 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			->andReturn( true );
 
 		$reflection = new ReflectionMethod( $this->rest, 'build_redis_config' );
-		$reflection->setAccessible( true );
 
 		$config = $reflection->invoke( $this->rest, array( 'password' => 'request-secret' ) );
 
@@ -1282,8 +1277,7 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_each_route_has_permission_callback(): void {
 		$reflection = new ReflectionMethod( $this->rest, 'get_routes' );
-		$reflection->setAccessible( true );
-		$routes = $reflection->invoke( $this->rest );
+		$routes     = $reflection->invoke( $this->rest );
 
 		foreach ( $routes as $route => $config ) {
 			if ( is_array( $config ) ) {

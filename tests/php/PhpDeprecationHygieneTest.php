@@ -403,7 +403,6 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 		$cron = ( new \ReflectionClass( 'PerformanceOptimise\Inc\Cron' ) )->newInstanceWithoutConstructor();
 
 		$is_excluded = new \ReflectionMethod( 'PerformanceOptimise\Inc\Cron', 'is_woo_excluded_url' );
-		$is_excluded->setAccessible( true );
 
 		// Empty URL and plain home URL must not raise; failures fail-open
 		// (excluded) or fail-closed deterministically, never a notice.
@@ -418,26 +417,30 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 		$this->assertTrue( $store_excluded );
 
 		$rest_route = new \ReflectionMethod( 'PerformanceOptimise\Inc\Cron', 'get_rest_route_param' );
-		$rest_route->setAccessible( true );
 
 		$this->assertSame( '', $rest_route->invoke( $cron, 'http://example.com/', '' ) );
 		$this->assertSame( '/wc/store/v1/cart', $rest_route->invoke( $cron, 'http://example.com/?rest_route=/wc/store/v1/cart', 'rest_route=/wc/store/v1/cart' ) );
 	}
 
 	/**
-	 * Repeatable PHP 8.4/8.5 deprecation grep (issue #1260).
+	 * Repeatable PHP 8.4/8.5 deprecation grep (issues #1260, #1292).
 	 *
 	 * Token-scans `includes/`, `templates/`, root `*.php`, and
 	 * `uninstall.php` for the banned patterns from the acceptance
-	 * criteria — `curl_close(null)`, `E_STRICT`, `mysqli_ping`, backtick
-	 * shell execution, implicitly-nullable `Type $x = null` signatures,
-	 * and raw 8.5 resource-teardown calls outside the version-gated
-	 * legacy branches of `Util` — so PHP 8.5 stays clean without
-	 * touching CI workflows. Token-based (not regex) so docblock
-	 * backticks, explicit-nullable `?Type $x = null` signatures, and
-	 * Redis `$manager->ping()` calls cannot false-positive. The WP
-	 * object-cache drop-in keeps core's untyped signatures by design
-	 * (untyped `$x = null` is legal and never flagged here).
+	 * criteria — `curl_close(null)`, `E_STRICT`, `mysqli_ping`,
+	 * `mysqli_execute`, `socket_set_timeout`, `$http_response_header`,
+	 * `DATE_RFC7231`, `__sleep`/`__wakeup` definitions, non-canonical
+	 * casts (`(boolean)`/`(integer)`/`(double)`/`(binary)`),
+	 * `Reflection::setAccessible()`, backtick shell execution,
+	 * implicitly-nullable `Type $x = null` signatures, and raw 8.5
+	 * resource-teardown calls outside the version-gated legacy branches
+	 * of `Util` — so PHP 8.5 stays clean without touching CI workflows.
+	 * Token-based (not regex) so docblock backticks, explicit-nullable
+	 * `?Type $x = null` signatures, and Redis `$manager->ping()` calls
+	 * cannot false-positive; the code-only raw-pattern checks additionally
+	 * ignore comments and strings. The WP object-cache drop-in keeps
+	 * core's untyped signatures by design (untyped `$x = null` is legal
+	 * and never flagged here).
 	 *
 	 * @since NEXT
 	 * @return void
@@ -486,20 +489,20 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * The banned-pattern scanner must catch each violation class (issue #1260).
+	 * The banned-pattern scanner must catch each violation class (issues #1260, #1292).
 	 *
 	 * Pins the green-path gate above with synthetic fixtures run through
-	 * the private scan helper via reflection: every one of the six
+	 * the private scan helper via reflection: every one of the thirteen
 	 * violation classes must report, while explicit-nullable `?array`,
-	 * `mixed`, attributed `#[MyAttr] ?string`, method-call, and
-	 * comment/string mentions must stay clean.
+	 * `mixed`, attributed `#[MyAttr] ?string`, canonical `(bool)` casts,
+	 * `mysqli_stmt_execute()` / `stream_set_timeout()`, `__serialize()`,
+	 * method-call, and comment/string mentions must stay clean.
 	 *
 	 * @since NEXT
 	 * @return void
 	 */
 	public function test_deprecation_scanner_catches_known_violations(): void {
 		$method = new \ReflectionMethod( self::class, 'scan_file_for_deprecation_patterns' );
-		$method->setAccessible( true );
 
 		$dir = sys_get_temp_dir() . '/wppo-scanner-' . uniqid();
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
@@ -523,8 +526,19 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 			$this->assertNotEmpty( $scan( "<?php\nmysqli_ping( \$conn );\n" ), 'mysqli_ping() must be flagged.' );
 			$this->assertNotEmpty( $scan( "<?php\n\$out = `ls`;\n" ), 'Backtick execution must be flagged.' );
 			$this->assertNotEmpty( $scan( "<?php\ncurl_close( \$ch );\n" ), 'Raw curl_close() outside Util must be flagged.' );
+			$this->assertNotEmpty( $scan( "<?php\n\$ref->setAccessible( true );\n" ), 'Reflection::setAccessible() must be flagged (deprecated on PHP 8.5).' );
+			$this->assertNotEmpty( $scan( "<?php\n\$x = (boolean) \$y;\n" ), 'Non-canonical (boolean) cast must be flagged.' );
+			$this->assertNotEmpty( $scan( "<?php\n\$x = (integer) \$y;\n" ), 'Non-canonical (integer) cast must be flagged.' );
+			$this->assertNotEmpty( $scan( "<?php\nmysqli_execute( \$stmt );\n" ), 'mysqli_execute() alias must be flagged.' );
+			$this->assertNotEmpty( $scan( "<?php\nsocket_set_timeout( \$s, 1 );\n" ), 'socket_set_timeout() alias must be flagged.' );
+			$this->assertNotEmpty( $scan( "<?php\n\$h = \$http_response_header;\n" ), '$http_response_header must be flagged.' );
+			$this->assertNotEmpty( $scan( "<?php\necho DATE_RFC7231;\n" ), 'DATE_RFC7231 must be flagged.' );
+			$this->assertNotEmpty( $scan( "<?php\nclass WPPO_Sleep_Fixture {\npublic function __sleep() { return array(); }\n}\n" ), '__sleep() definition must be flagged.' );
 
 			$this->assertSame( array(), $scan( "<?php\nfunction wppo_good_nullable( ?array \$x = null, mixed \$y = null ) {}\n" ), 'Explicit ?array and mixed defaults must pass.' );
+			$this->assertSame( array(), $scan( "<?php\n\$x = (bool) \$y;\n\$i = (int) \$z;\n\$f = (float) \$w;\n\$s = (string) \$v;\n" ), 'Canonical (bool)/(int)/(float)/(string) casts must pass.' );
+			$this->assertSame( array(), $scan( "<?php\nmysqli_stmt_execute( \$stmt );\nstream_set_timeout( \$s, 1 );\n" ), 'Non-deprecated mysqli/stream functions must pass.' );
+			$this->assertSame( array(), $scan( "<?php\nclass WPPO_Serialize_Fixture {\npublic function __serialize() { return array(); }\n}\n" ), '__serialize() definition must pass.' );
 			$this->assertSame( array(), $scan( "<?php\nfunction wppo_good_attr( #[MyAttr] ?string \$x = null ) {}\n" ), 'Attributed explicitly-nullable params must pass.' );
 			$this->assertSame( array(), $scan( "<?php\n\$manager->ping();\n\$manager?->ping();\n" ), 'Method and nullsafe ping() calls must pass.' );
 			$this->assertSame( array(), $scan( "<?php\n\$obj->curl_close( \$ch );\n" ), 'Method teardown calls must pass.' );
@@ -564,13 +578,15 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 	 * Scan one PHP file for the banned 8.4/8.5 patterns.
 	 *
 	 * Appends `file:line description` strings to `$violations` for every
-	 * hit: raw `curl_close(null)` / `E_STRICT` / `mysqli_ping` in code
-	 * tokens, standalone backtick operators, implicitly-nullable
-	 * `Type $param = null` declarations (typed without `?`, `|null`, or
-	 * `mixed`), and raw `curl_close()` / `curl_multi_close()` /
-	 * `curl_share_close()` / `finfo_close()` / `xml_parser_free()` /
-	 * `imagedestroy()` calls outside the version-gated legacy branches
-	 * of `includes/class-util.php`.
+	 * hit: raw `curl_close(null)` / `E_STRICT` / `mysqli_ping` /
+	 * `mysqli_execute` / `socket_set_timeout` / `$http_response_header` /
+	 * `DATE_RFC7231` / `__sleep`+`__wakeup` / non-canonical casts /
+	 * `Reflection::setAccessible()` in code tokens, standalone backtick
+	 * operators, implicitly-nullable `Type $param = null` declarations
+	 * (typed without `?`, `|null`, or `mixed`), and raw `curl_close()` /
+	 * `curl_multi_close()` / `curl_share_close()` / `finfo_close()` /
+	 * `xml_parser_free()` / `imagedestroy()` calls outside the
+	 * version-gated legacy branches of `includes/class-util.php`.
 	 *
 	 * @since NEXT
 	 * @param string   $file       Absolute file path.
@@ -600,9 +616,16 @@ class PhpDeprecationHygieneTest extends \PHPUnit\Framework\TestCase {
 		}
 
 		$raw_patterns = array(
-			'/\bcurl_close\s*\(\s*null/i' => 'curl_close(null) call',
-			'/\bE_STRICT\b/'              => 'E_STRICT usage',
-			'/\bmysqli_ping\b/i'          => 'mysqli_ping() usage',
+			'/\bcurl_close\s*\(\s*null/i'                  => 'curl_close(null) call',
+			'/\bE_STRICT\b/'                               => 'E_STRICT usage',
+			'/\bmysqli_ping\b/i'                           => 'mysqli_ping() usage',
+			'/\bmysqli_execute\b/i'                        => 'mysqli_execute() alias usage (use mysqli_stmt_execute())',
+			'/\bsocket_set_timeout\b/i'                    => 'socket_set_timeout() alias usage (use stream_set_timeout())',
+			'/\$http_response_header\b/'                   => '$http_response_header usage (use http_get_last_response_headers())',
+			'/RFC7231\b/'                                  => 'DATE_RFC7231 usage (timezone is ignored, always GMT)',
+			'/\bfunction\s+__(sleep|wakeup)\b/i'           => '__sleep()/__wakeup() definition (use __serialize()/__unserialize())',
+			'/\(\s*(boolean|integer|double|binary)\s*\)/i' => 'non-canonical cast (use (bool)/(int)/(float)/(string))',
+			'/>\s*setAccessible\s*\(/i'                    => 'Reflection::setAccessible() call (deprecated on PHP 8.5; no-op since PHP 8.1)',
 		);
 		foreach ( $raw_patterns as $pattern => $label ) {
 			if ( 1 === preg_match( $pattern, $code_only ) ) {

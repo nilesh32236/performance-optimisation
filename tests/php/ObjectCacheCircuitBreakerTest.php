@@ -604,7 +604,6 @@ class ObjectCacheCircuitBreakerTest extends \PHPUnit\Framework\TestCase {
 	private function invoke_dropin( string $method, ...$args ) {
 		$instance = ( new \ReflectionClass( 'WP_Object_Cache' ) )->newInstanceWithoutConstructor();
 		$ref      = new \ReflectionMethod( 'WP_Object_Cache', $method );
-		$ref->setAccessible( true );
 		return $ref->invoke( $instance, ...$args );
 	}
 
@@ -1035,7 +1034,6 @@ class ObjectCacheCircuitBreakerTest extends \PHPUnit\Framework\TestCase {
 
 		$notices = new Admin_Notices();
 		$method  = new \ReflectionMethod( Admin_Notices::class, 'maybe_object_cache_circuit_notice' );
-		$method->setAccessible( true );
 
 		ob_start();
 		$method->invoke( $notices );
@@ -1067,7 +1065,6 @@ class ObjectCacheCircuitBreakerTest extends \PHPUnit\Framework\TestCase {
 	public function test_build_redis_config_merges_stored_defaults(): void {
 		$rest   = new Rest();
 		$method = new \ReflectionMethod( Rest::class, 'build_redis_config' );
-		$method->setAccessible( true );
 
 		$stored = array(
 			'mode'     => 'standalone',

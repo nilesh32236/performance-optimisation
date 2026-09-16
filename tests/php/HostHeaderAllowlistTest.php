@@ -105,11 +105,9 @@ class HostHeaderAllowlistTest extends \PHPUnit\Framework\TestCase {
 			$this->assertTrue( $cache->is_host_mismatched() );
 
 			$not_cacheable = new ReflectionMethod( Cache::class, 'is_not_cacheable' );
-			$not_cacheable->setAccessible( true );
 			$this->assertTrue( $not_cacheable->invoke( $cache ) );
 
 			$store = new ReflectionMethod( Cache::class, 'maybe_store_cache' );
-			$store->setAccessible( true );
 			$this->assertFalse( $store->invoke( $cache ) );
 		} finally {
 			$this->restore_superglobals( $backup );
@@ -160,11 +158,9 @@ class HostHeaderAllowlistTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 'example.com/test-page', $tracked->cache_key() );
 
 		$not_cacheable = new ReflectionMethod( Cache::class, 'is_not_cacheable' );
-		$not_cacheable->setAccessible( true );
 		$this->assertFalse( $not_cacheable->invoke( $tracked ) );
 
 		$store = new ReflectionMethod( Cache::class, 'maybe_store_cache' );
-		$store->setAccessible( true );
 		$this->assertFalse( $store->invoke( $tracked ) );
 
 		// Clean URL maps to the identical key and stays storable.

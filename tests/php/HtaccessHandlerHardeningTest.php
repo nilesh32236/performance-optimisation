@@ -135,7 +135,6 @@ class HtaccessHandlerHardeningTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function sanitize( array $rules ) {
 		$method = new \ReflectionMethod( Htaccess_Handler::class, 'sanitize_rules' );
-		$method->setAccessible( true );
 		return $method->invoke( null, $rules );
 	}
 

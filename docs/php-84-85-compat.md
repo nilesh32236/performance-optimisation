@@ -119,3 +119,55 @@ matrix running `parallel-lint` plus `composer test`, failing on any
   `psalm-wpcs-check.yml` from the single PHP 8.2 job to an 8.2–8.5 matrix
   running `parallel-lint` plus `composer test`, failing on any
   `Deprecated:` line in the output.
+
+## 6. Full PHP 8.5 deprecation verdicts (issue #1292)
+
+Source:
+[`migration85.deprecated`](https://www.php.net/manual/en/migration85.deprecated.php).
+Every entry below was grep-verified against `includes/`, `templates/`,
+and root `*.php`; the machine-checkable subset is pinned by
+`PhpDeprecationHygieneTest::test_plugin_sources_are_free_of_php84_85_banned_patterns()`
+(13 pattern classes). Floors unchanged: PHP 8.2 minimum, WP 6.2+;
+`Requires PHP`, `WPPO_REQUIRES_PHP`, and `composer.json` were not touched.
+
+- **Fixed by #1292:**
+  - `Reflection::{Method,Property}::setAccessible()` — removed everywhere
+    (one production call in `Main::read_private_module_store()`, ~320 in
+    `tests/php/`). The calls were no-ops since PHP 8.1 and the plugin
+    requires PHP 8.2+, so deletion is behavior-preserving; reflection
+    reads/invokes work without them on every supported runtime.
+  - Raw `imagedestroy()` in `ImageAvifPictureTest.php` fixture cleanup —
+    now released via `Util::destroy_gd_image()`.
+  - New scanner patterns: `setAccessible`, non-canonical casts,
+    `mysqli_execute`, `socket_set_timeout`, `$http_response_header`,
+    `DATE_RFC7231`/`::RFC7231`, `__sleep`/`__wakeup` definitions —
+    with positive + negative synthetic fixtures.
+- **Already guarded (Util helpers, fail-open legacy path below 8.5):**
+  `curl_close()`, `curl_share_close()`, `finfo_close()`,
+  `xml_parser_free()`, `imagedestroy()`. Note: upstream PHP 8.5
+  deprecates `curl_close()` + `curl_share_close()` but **not**
+  `curl_multi_close()`; the existing `close_curl_multi_handle()`
+  over-gating is harmless (fail-open either way) and is kept for
+  symmetry.
+- **Scanner-pinned, zero hits in shipped code:** non-canonical casts
+  (`(boolean)`/`(integer)`/`(double)`/`(binary)`), backtick operator,
+  `E_STRICT`, `mysqli_ping()`, `mysqli_execute()`,
+  `socket_set_timeout()`, `$http_response_header`, `DATE_RFC7231`,
+  `__sleep()`/`__wakeup()` definitions, implicitly-nullable signatures.
+  (`chr( 10 )` newline joins in `class-image-optimisation.php` are
+  in-range single bytes — not deprecated.)
+- **Audited, not applicable (zero hits, no scanner rule needed):**
+  output-handler echo, `__debugInfo()` returning null, closure-binding
+  edge cases, `null` array offsets, non-numeric string increment,
+  `finfo_buffer()` context arg, `SplObjectStorage::contains/attach/detach`,
+  `ArrayObject`/`ArrayIterator` with objects, `spl_autoload_unregister`
+  with `spl_autoload_call`, `readdir()`/`rewinddir()`/`closedir(null)`,
+  out-of-range `chr()` / multi-byte `ord()`, `case ... ;` terminators,
+  `PDO::*` driver constants/methods, `MHASH_*`, `intl.error_level`,
+  LDAP wallet calls, `openssl_pkey_derive()` `key_length`,
+  `report_memleaks` / `register_argc_argv` ini usage, constant
+  redeclaration.
+- **OPcache/JIT guidance:** unchanged — see §3 (JIT) and §4 (OPcache)
+  above. No plugin-level tuning was added; the guidance stays a docs-only
+  page so hosts can set `php.ini` without the plugin touching server
+  state (fail-open).

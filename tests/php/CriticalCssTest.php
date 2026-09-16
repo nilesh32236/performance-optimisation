@@ -192,7 +192,6 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function invoke_private( string $method, ...$args ) {
 		$reflection = new ReflectionMethod( Critical_CSS::class, $method );
-		$reflection->setAccessible( true );
 
 		return $reflection->invoke( null, ...$args );
 	}
@@ -1593,7 +1592,6 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 	public function test_defer_stylesheets_skips_when_ccss_file_url_unavailable(): void {
 		$hash = Critical_CSS::get_template_hash();
 		$prop = new ReflectionProperty( Critical_CSS::class, 'ccss_defer_blocked' );
-		$prop->setAccessible( true );
 		$prop->setValue( null, array( $hash => true ) );
 
 		$tag    = '<link rel="stylesheet" href="http://example.com/wp-content/themes/test-theme/style.css" media="all" />'; // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- Fixture markup for the defer guard stub.

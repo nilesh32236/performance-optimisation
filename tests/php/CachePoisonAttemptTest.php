@@ -99,7 +99,6 @@ class CachePoisonAttemptTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function can_store( Cache $cache ): bool {
 		$store = new ReflectionMethod( Cache::class, 'maybe_store_cache' );
-		$store->setAccessible( true );
 		return (bool) $store->invoke( $cache );
 	}
 
@@ -113,7 +112,6 @@ class CachePoisonAttemptTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function safe_path( Cache $cache, string $url_path, string $filename ): string {
 		$method = new ReflectionMethod( Cache::class, 'safe_path_for_url' );
-		$method->setAccessible( true );
 		return (string) $method->invoke( $cache, $url_path, $filename );
 	}
 
@@ -182,7 +180,6 @@ class CachePoisonAttemptTest extends \PHPUnit\Framework\TestCase {
 			$this->assertTrue( $cache->is_host_mismatched() );
 
 			$not_cacheable = new ReflectionMethod( Cache::class, 'is_not_cacheable' );
-			$not_cacheable->setAccessible( true );
 			$this->assertTrue( $not_cacheable->invoke( $cache ) );
 			$this->assertFalse( $this->can_store( $cache ) );
 

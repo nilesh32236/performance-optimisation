@@ -73,19 +73,15 @@ class WcAjaxGuardTest extends \PHPUnit\Framework\TestCase {
 		$cache = ( new \ReflectionClass( Cache::class ) )->newInstanceWithoutConstructor();
 
 		$prop = new \ReflectionProperty( Cache::class, 'options' );
-		$prop->setAccessible( true );
 		$prop->setValue( $cache, $options );
 
 		$prop = new \ReflectionProperty( Cache::class, 'cache_root_dir' );
-		$prop->setAccessible( true );
 		$prop->setValue( $cache, WP_CONTENT_DIR . '/cache/wppo' );
 
 		$prop = new \ReflectionProperty( Cache::class, 'domain' );
-		$prop->setAccessible( true );
 		$prop->setValue( $cache, 'example.com' );
 
 		$prop = new \ReflectionProperty( Cache::class, 'request_uri' );
-		$prop->setAccessible( true );
 		$prop->setValue( $cache, $request_uri );
 
 		$parsed = wp_parse_url( $request_uri, PHP_URL_PATH );
@@ -94,11 +90,9 @@ class WcAjaxGuardTest extends \PHPUnit\Framework\TestCase {
 			$path = '';
 		}
 		$prop = new \ReflectionProperty( Cache::class, 'url_path' );
-		$prop->setAccessible( true );
 		$prop->setValue( $cache, $path );
 
 		$prop = new \ReflectionProperty( Cache::class, 'cache_ob_level' );
-		$prop->setAccessible( true );
 		$prop->setValue( $cache, null );
 
 		return $cache;
@@ -114,7 +108,6 @@ class WcAjaxGuardTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function invoke_private( Cache $cache, string $name, array $args = array() ) {
 		$method = new \ReflectionMethod( $cache, $name );
-		$method->setAccessible( true );
 		return $method->invokeArgs( $cache, $args );
 	}
 

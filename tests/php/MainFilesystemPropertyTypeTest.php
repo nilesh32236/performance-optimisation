@@ -35,7 +35,6 @@ class MainFilesystemPropertyTypeTest extends \PHPUnit\Framework\TestCase {
 		require_once __DIR__ . '/../../includes/class-main.php';
 
 		$property = new \ReflectionProperty( Main::class, 'filesystem' );
-		$property->setAccessible( true );
 
 		$type = $property->getType();
 

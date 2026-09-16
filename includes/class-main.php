@@ -4537,7 +4537,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * Returns null when the property does not exist or is unreadable instead
 		 * of raising. Public properties are read directly; non-public ones go
-		 * through reflection with setAccessible().
+		 * through reflection (no setAccessible() call: it is deprecated on
+		 * PHP 8.5 and a no-op since PHP 8.1, and the plugin requires PHP 8.2+).
 		 *
 		 * @since 2.0.0
 		 *
@@ -4552,7 +4553,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					return null;
 				}
 				$prop = $reflection->getProperty( $property );
-				$prop->setAccessible( true );
 				return $prop->getValue( $modules );
 			} catch ( \Throwable $e ) {
 				unset( $e );

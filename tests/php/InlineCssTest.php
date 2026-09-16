@@ -137,7 +137,6 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 		}
 		if ( null !== $this->original_drift_log ) {
 			$prop = new \ReflectionProperty( Cache::class, 'inline_drift_logged' );
-			$prop->setAccessible( true );
 			$prop->setValue( null, $this->original_drift_log );
 			$this->original_drift_log = null;
 		}
@@ -186,7 +185,6 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function invoke_private( $instance, $name, array $args = array() ) {
 		$method = new \ReflectionMethod( $instance, $name );
-		$method->setAccessible( true );
 		return $method->invokeArgs( $instance, $args );
 	}
 
@@ -199,11 +197,9 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 		$main = ( new \ReflectionClass( Main::class ) )->newInstanceWithoutConstructor();
 
 		$prop = new \ReflectionProperty( Main::class, 'exclude_css' );
-		$prop->setAccessible( true );
 		$prop->setValue( $main, array( 'wppo-combine-css' ) );
 
 		$prop = new \ReflectionProperty( Main::class, 'options' );
-		$prop->setAccessible( true );
 		$prop->setValue(
 			$main,
 			array(
@@ -301,7 +297,6 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function reset_inline_drift_logger_flag(): void {
 		$prop = new \ReflectionProperty( Cache::class, 'inline_drift_logged' );
-		$prop->setAccessible( true );
 		if ( null === $this->original_drift_log ) {
 			$this->original_drift_log = (bool) $prop->getValue( null );
 		}
@@ -372,7 +367,6 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 
 		$main = $this->make_main();
 		$prop = new \ReflectionProperty( Main::class, 'options' );
-		$prop->setAccessible( true );
 		$prop->setValue(
 			$main,
 			array(
@@ -954,7 +948,6 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 			$this->assertSame( 1, $wpdb->inserts, 'The drift log must be written exactly once per process' );
 
 			$drift_prop = new \ReflectionProperty( Cache::class, 'inline_drift_detected' );
-			$drift_prop->setAccessible( true );
 			$this->assertTrue( $drift_prop->getValue( $cache ) );
 
 			// The combined file is no longer registered for inlining this request.

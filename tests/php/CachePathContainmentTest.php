@@ -226,7 +226,6 @@ class CachePathContainmentTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function reset_used_css_probe_flag(): void {
 		$prop = new \ReflectionProperty( Used_CSS::class, 'traversal_probe_logged' );
-		$prop->setAccessible( true );
 		$prop->setValue( null, false );
 	}
 

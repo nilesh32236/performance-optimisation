@@ -26,7 +26,6 @@ class UsedCssStripCommentsTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function strip( string $css ): string {
 		$method = new \ReflectionMethod( Used_CSS::class, 'strip_css_comments' );
-		$method->setAccessible( true );
 		return $method->invoke( null, $css );
 	}
 
