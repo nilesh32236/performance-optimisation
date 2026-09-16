@@ -110,6 +110,7 @@ class ObjectCacheRedisResilienceTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'wp_kses_post' )->returnArg();
 		Functions\when( 'wp_using_ext_object_cache' )->justReturn( false );
 		Functions\when( '__' )->returnArg( 1 );
+		Functions\when( 'current_user_can' )->justReturn( true );
 
 		// phpcs:disable WordPress.WP.GlobalVariablesOverride.Prohibited
 		$this->original_wpdb = $GLOBALS['wpdb'];
