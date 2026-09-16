@@ -27,10 +27,14 @@ export const AUTH_ERROR_CODES = Object.freeze( [
 /**
  * Set view of AUTH_ERROR_CODES for O(1) lookup.
  *
+ * Kept module-private so consumers cannot add/delete entries and break the
+ * isAuthErrorCode contract; only the frozen array plus the predicate are
+ * part of the public API.
+ *
  * @since NEXT
  * @type {Set<string>}
  */
-export const AUTH_ERROR_CODE_SET = new Set( AUTH_ERROR_CODES );
+const AUTH_ERROR_CODE_SET = new Set( AUTH_ERROR_CODES );
 
 /**
  * Whether a server payload code signals an auth/nonce failure.

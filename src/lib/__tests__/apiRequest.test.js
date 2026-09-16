@@ -1,13 +1,63 @@
 import {
 	apiCall,
+	assertScanStrategy,
+	assertScanUrl,
+	AUTH_ERROR_CODES,
+	buildAction,
 	commitSettingsCache,
 	fetchRecentActivities,
+	fetchSuggestions,
+	fetchServerRules,
+	fetchSystemInfo,
+	fetchWebVitalsTrends,
+	fetchWooCacheSelfTest,
+	getPagespeedResults,
 	getWppoSettings,
 	getErrorLogMessage,
+	isAuthErrorCode,
+	isValidScanStrategy,
 	patchSettingsCache,
+	queuePagespeedScan,
+	runPerformanceScan,
+	SCAN_STRATEGIES,
 } from '../apiRequest';
 
 const originalFetch = global.fetch;
+
+/**
+ * Queue the standard 3-step nonce-retry fetch sequence:
+ * 1. initial auth-error payload, 2. successful admin-ajax nonce refresh,
+ * 3. successful retry payload.
+ *
+ * @param {Object} options            Optional overrides.
+ * @param {string} options.code       Auth-error code for the first response.
+ * @param {string} options.freshNonce Nonce returned by the refresh response.
+ * @param {Object} options.retryData  Payload returned by the retry response.
+ * @return {Object} The freshNonce and retryData used.
+ */
+const mockAuthRetry = ( {
+	code = 'rest_forbidden',
+	freshNonce = 'freshnonce123',
+	retryData = { success: true, data: { done: true } },
+} = {} ) => {
+	global.fetch
+		.mockResolvedValueOnce( {
+			json: jest
+				.fn()
+				.mockResolvedValueOnce( { code, message: 'Auth error' } ),
+		} )
+		.mockResolvedValueOnce( {
+			ok: true,
+			json: jest.fn().mockResolvedValueOnce( {
+				success: true,
+				data: { nonce: freshNonce },
+			} ),
+		} )
+		.mockResolvedValueOnce( {
+			json: jest.fn().mockResolvedValueOnce( retryData ),
+		} );
+	return { freshNonce, retryData };
+};
 
 describe( 'API Request library', () => {
 	beforeEach( () => {
@@ -86,33 +136,15 @@ describe( 'API Request library', () => {
 		} );
 
 		it( 'should refresh nonce and retry on rest_forbidden', async () => {
-			// 1. Initial request fails with rest_forbidden
-			const initialMockData = {
-				code: 'rest_forbidden',
-				message: 'Forbidden',
-			};
-			// 2. Refresh nonce request succeeds
-			const refreshMockData = {
-				success: true,
-				data: { nonce: 'newnonce123' },
-			};
-			// 3. Retry request succeeds
 			const retryMockData = {
 				success: true,
 				data: { status: 'retried' },
 			};
-
-			global.fetch
-				.mockResolvedValueOnce( {
-					json: jest.fn().mockResolvedValueOnce( initialMockData ),
-				} )
-				.mockResolvedValueOnce( {
-					ok: true,
-					json: jest.fn().mockResolvedValueOnce( refreshMockData ),
-				} )
-				.mockResolvedValueOnce( {
-					json: jest.fn().mockResolvedValueOnce( retryMockData ),
-				} );
+			mockAuthRetry( {
+				code: 'rest_forbidden',
+				freshNonce: 'newnonce123',
+				retryData: retryMockData,
+			} );
 
 			const result = await apiCall( 'some_action', {} );
 
@@ -142,24 +174,19 @@ describe( 'API Request library', () => {
 		} );
 
 		it( 'should throw custom error on retry JSON parse failure', async () => {
-			// 1. Initial request fails with rest_forbidden
-			const initialMockData = {
-				code: 'rest_forbidden',
-				message: 'Forbidden',
-			};
-			// 2. Refresh nonce request succeeds
-			const refreshMockData = {
-				success: true,
-				data: { nonce: 'newnonce123' },
-			};
-
 			global.fetch
 				.mockResolvedValueOnce( {
-					json: jest.fn().mockResolvedValueOnce( initialMockData ),
+					json: jest.fn().mockResolvedValueOnce( {
+						code: 'rest_forbidden',
+						message: 'Forbidden',
+					} ),
 				} )
 				.mockResolvedValueOnce( {
 					ok: true,
-					json: jest.fn().mockResolvedValueOnce( refreshMockData ),
+					json: jest.fn().mockResolvedValueOnce( {
+						success: true,
+						data: { nonce: 'newnonce123' },
+					} ),
 				} )
 				.mockResolvedValueOnce( {
 					json: jest
@@ -227,7 +254,6 @@ describe( 'API Request library', () => {
 				json: jest.fn().mockResolvedValueOnce( mockData ),
 			} );
 
-			const { fetchSystemInfo } = await import( '../apiRequest' );
 			const result = await fetchSystemInfo();
 
 			expect( global.fetch ).toHaveBeenCalledWith(
@@ -246,7 +272,6 @@ describe( 'API Request library', () => {
 			const mockError = new Error( 'Network error' );
 			global.fetch.mockRejectedValueOnce( mockError );
 
-			const { fetchSystemInfo } = await import( '../apiRequest' );
 			await expect( fetchSystemInfo() ).rejects.toThrow(
 				'Network error'
 			);
@@ -260,7 +285,6 @@ describe( 'API Request library', () => {
 				json: jest.fn().mockResolvedValueOnce( mockData ),
 			} );
 
-			const { runPerformanceScan } = await import( '../apiRequest' );
 			const result = await runPerformanceScan(
 				'https://example.com',
 				true
@@ -287,7 +311,6 @@ describe( 'API Request library', () => {
 			const mockError = new Error( 'Network error' );
 			global.fetch.mockRejectedValueOnce( mockError );
 
-			const { runPerformanceScan } = await import( '../apiRequest' );
 			await expect(
 				runPerformanceScan( 'https://example.com', true )
 			).rejects.toThrow( 'Network error' );
@@ -301,7 +324,6 @@ describe( 'API Request library', () => {
 				json: jest.fn().mockResolvedValueOnce( mockData ),
 			} );
 
-			const { queuePagespeedScan } = await import( '../apiRequest' );
 			const result = await queuePagespeedScan(
 				'https://example.com',
 				'desktop'
@@ -328,7 +350,6 @@ describe( 'API Request library', () => {
 			const mockError = new Error( 'Network error' );
 			global.fetch.mockRejectedValueOnce( mockError );
 
-			const { queuePagespeedScan } = await import( '../apiRequest' );
 			await expect(
 				queuePagespeedScan( 'https://example.com', 'desktop' )
 			).rejects.toThrow( 'Network error' );
@@ -340,7 +361,6 @@ describe( 'API Request library', () => {
 				json: jest.fn().mockResolvedValueOnce( mockData ),
 			} );
 
-			const { queuePagespeedScan } = await import( '../apiRequest' );
 			const controller = new AbortController();
 			await queuePagespeedScan(
 				'https://example.com',
@@ -362,7 +382,6 @@ describe( 'API Request library', () => {
 				json: jest.fn().mockResolvedValueOnce( mockData ),
 			} );
 
-			const { getPagespeedResults } = await import( '../apiRequest' );
 			const result = await getPagespeedResults(
 				'https://example.com',
 				'desktop'
@@ -384,36 +403,15 @@ describe( 'API Request library', () => {
 			const mockError = new Error( 'Network error' );
 			global.fetch.mockRejectedValueOnce( mockError );
 
-			const { getPagespeedResults } = await import( '../apiRequest' );
 			await expect(
 				getPagespeedResults( 'https://example.com', 'desktop' )
 			).rejects.toThrow( 'Network error' );
 		} );
 
 		it( 'should refresh nonce and retry on rest_cookie_invalid_nonce', async () => {
-			const freshNonce = 'freshnonce123';
-			const successData = { success: true, data: { done: true } };
-
-			// First call returns expired-nonce error
-			global.fetch.mockResolvedValueOnce( {
-				json: jest.fn().mockResolvedValueOnce( {
-					code: 'rest_cookie_invalid_nonce',
-					message: 'Nonce expired',
-				} ),
-			} );
-
-			// Nonce refresh call (to admin-ajax)
-			global.fetch.mockResolvedValueOnce( {
-				ok: true,
-				json: jest.fn().mockResolvedValueOnce( {
-					success: true,
-					data: { nonce: freshNonce },
-				} ),
-			} );
-
-			// Retry with fresh nonce succeeds
-			global.fetch.mockResolvedValueOnce( {
-				json: jest.fn().mockResolvedValueOnce( successData ),
+			const { freshNonce, retryData: successData } = mockAuthRetry( {
+				code: 'rest_cookie_invalid_nonce',
+				freshNonce: 'freshnonce123',
 			} );
 
 			const result = await apiCall( 'update_settings', { foo: 'bar' } );
@@ -450,26 +448,9 @@ describe( 'API Request library', () => {
 		} );
 
 		it( 'should refresh nonce and retry on rest_forbidden', async () => {
-			const freshNonce = 'freshnonce456';
-			const successData = { success: true, data: { done: true } };
-
-			global.fetch.mockResolvedValueOnce( {
-				json: jest.fn().mockResolvedValueOnce( {
-					code: 'rest_forbidden',
-					message: 'Forbidden',
-				} ),
-			} );
-
-			global.fetch.mockResolvedValueOnce( {
-				ok: true,
-				json: jest.fn().mockResolvedValueOnce( {
-					success: true,
-					data: { nonce: freshNonce },
-				} ),
-			} );
-
-			global.fetch.mockResolvedValueOnce( {
-				json: jest.fn().mockResolvedValueOnce( successData ),
+			const { retryData: successData } = mockAuthRetry( {
+				code: 'rest_forbidden',
+				freshNonce: 'freshnonce456',
 			} );
 
 			const result = await apiCall( 'some_action', {} );
@@ -479,26 +460,9 @@ describe( 'API Request library', () => {
 		} );
 
 		it( 'should refresh nonce and retry on rest_cookie_nonce_invalid', async () => {
-			const freshNonce = 'freshnonce789';
-			const successData = { success: true, data: { done: true } };
-
-			global.fetch.mockResolvedValueOnce( {
-				json: jest.fn().mockResolvedValueOnce( {
-					code: 'rest_cookie_nonce_invalid',
-					message: 'Cookie nonce invalid',
-				} ),
-			} );
-
-			global.fetch.mockResolvedValueOnce( {
-				ok: true,
-				json: jest.fn().mockResolvedValueOnce( {
-					success: true,
-					data: { nonce: freshNonce },
-				} ),
-			} );
-
-			global.fetch.mockResolvedValueOnce( {
-				json: jest.fn().mockResolvedValueOnce( successData ),
+			const { retryData: successData } = mockAuthRetry( {
+				code: 'rest_cookie_nonce_invalid',
+				freshNonce: 'freshnonce789',
 			} );
 
 			const result = await apiCall( 'some_action', {} );
@@ -651,7 +615,6 @@ describe( 'API Request library', () => {
 				json: jest.fn().mockResolvedValueOnce( mockData ),
 			} );
 
-			const { fetchSuggestions } = await import( '../apiRequest' );
 			const result = await fetchSuggestions( 'https://example.com' );
 
 			expect( global.fetch ).toHaveBeenCalledWith(
@@ -670,7 +633,6 @@ describe( 'API Request library', () => {
 			const mockError = new Error( 'Network error' );
 			global.fetch.mockRejectedValueOnce( mockError );
 
-			const { fetchSuggestions } = await import( '../apiRequest' );
 			await expect(
 				fetchSuggestions( 'https://example.com' )
 			).rejects.toThrow( 'Network error' );
@@ -684,7 +646,6 @@ describe( 'API Request library', () => {
 				json: jest.fn().mockResolvedValueOnce( mockData ),
 			} );
 
-			const { fetchServerRules } = await import( '../apiRequest' );
 			const result = await fetchServerRules();
 
 			expect( global.fetch ).toHaveBeenCalledWith(
@@ -703,7 +664,6 @@ describe( 'API Request library', () => {
 			const mockError = new Error( 'Network error' );
 			global.fetch.mockRejectedValueOnce( mockError );
 
-			const { fetchServerRules } = await import( '../apiRequest' );
 			await expect( fetchServerRules() ).rejects.toThrow(
 				'Network error'
 			);
@@ -717,7 +677,6 @@ describe( 'API Request library', () => {
 				json: jest.fn().mockResolvedValueOnce( mockData ),
 			} );
 
-			const { fetchWooCacheSelfTest } = await import( '../apiRequest' );
 			const result = await fetchWooCacheSelfTest();
 
 			expect( global.fetch ).toHaveBeenCalledWith(
@@ -736,7 +695,6 @@ describe( 'API Request library', () => {
 			const mockError = new Error( 'Network error' );
 			global.fetch.mockRejectedValueOnce( mockError );
 
-			const { fetchWooCacheSelfTest } = await import( '../apiRequest' );
 			await expect( fetchWooCacheSelfTest() ).rejects.toThrow(
 				'Network error'
 			);
@@ -745,7 +703,6 @@ describe( 'API Request library', () => {
 
 	describe( 'scan input validation', () => {
 		it( 'exposes isValidScanStrategy for mobile/desktop with optional empty', async () => {
-			const { isValidScanStrategy } = await import( '../apiRequest' );
 			expect( isValidScanStrategy( 'mobile' ) ).toBe( true );
 			expect( isValidScanStrategy( 'desktop' ) ).toBe( true );
 			expect( isValidScanStrategy( 'tablet' ) ).toBe( false );
@@ -755,7 +712,6 @@ describe( 'API Request library', () => {
 		} );
 
 		it( 'getPagespeedResults rejects javascript: URLs without fetching', async () => {
-			const { getPagespeedResults } = await import( '../apiRequest' );
 			await expect(
 				getPagespeedResults( 'javascript:alert(1)', 'mobile' )
 			).rejects.toThrow( 'Invalid scan URL' );
@@ -763,7 +719,6 @@ describe( 'API Request library', () => {
 		} );
 
 		it( 'getPagespeedResults rejects invalid strategies without fetching', async () => {
-			const { getPagespeedResults } = await import( '../apiRequest' );
 			await expect(
 				getPagespeedResults( 'https://example.com', 'tablet' )
 			).rejects.toThrow( 'Invalid strategy' );
@@ -773,7 +728,6 @@ describe( 'API Request library', () => {
 		it( 'getPagespeedResults rejects off-origin URLs when homeUrl is known', async () => {
 			global.wppoSettings.homeUrl = 'https://example.com';
 			try {
-				const { getPagespeedResults } = await import( '../apiRequest' );
 				await expect(
 					getPagespeedResults( 'https://evil.example.net/', 'mobile' )
 				).rejects.toThrow( 'Invalid scan URL' );
@@ -784,7 +738,6 @@ describe( 'API Request library', () => {
 		} );
 
 		it( 'fetchSuggestions rejects non-http(s) URLs without fetching', async () => {
-			const { fetchSuggestions } = await import( '../apiRequest' );
 			await expect(
 				fetchSuggestions( 'javascript:alert(1)' )
 			).rejects.toThrow( 'Invalid scan URL' );
@@ -792,7 +745,6 @@ describe( 'API Request library', () => {
 		} );
 
 		it( 'fetchWebVitalsTrends rejects invalid strategies without fetching', async () => {
-			const { fetchWebVitalsTrends } = await import( '../apiRequest' );
 			await expect(
 				fetchWebVitalsTrends( '', 'tablet' )
 			).rejects.toThrow( 'Invalid strategy' );
@@ -805,7 +757,6 @@ describe( 'API Request library', () => {
 				json: jest.fn().mockResolvedValueOnce( mockData ),
 			} );
 
-			const { fetchWebVitalsTrends } = await import( '../apiRequest' );
 			const result = await fetchWebVitalsTrends( '', '' );
 
 			expect( global.fetch ).toHaveBeenCalledWith(
@@ -887,7 +838,7 @@ describe( 'API Request library', () => {
 			);
 			expect( console.error ).toHaveBeenCalledWith(
 				'API call failed:',
-				'recent_activities?page=1',
+				'recent_activities',
 				'Failed to fetch'
 			);
 		} );
@@ -974,7 +925,6 @@ describe( 'API Request library', () => {
 
 	describe( 'buildAction', () => {
 		it( 'encodes values and skips undefined/null/empty', async () => {
-			const { buildAction } = await import( '../apiRequest' );
 			expect(
 				buildAction( 'suggestions', {
 					url: 'https://example.com/?a=1&b=2',
@@ -998,7 +948,6 @@ describe( 'API Request library', () => {
 		} );
 
 		it( 'tolerates an explicit null params argument', async () => {
-			const { buildAction } = await import( '../apiRequest' );
 			expect( buildAction( 'server_rules', null ) ).toBe(
 				'server_rules'
 			);
@@ -1007,7 +956,6 @@ describe( 'API Request library', () => {
 
 	describe( 'assert helpers', () => {
 		it( 'assertScanUrl accepts absolute http(s) URLs', async () => {
-			const { assertScanUrl } = await import( '../apiRequest' );
 			expect( () =>
 				assertScanUrl( 'https://example.com/' )
 			).not.toThrow();
@@ -1018,7 +966,6 @@ describe( 'API Request library', () => {
 		} );
 
 		it( 'assertScanUrl allowEmpty accepts empty, undefined and null', async () => {
-			const { assertScanUrl } = await import( '../apiRequest' );
 			expect( () => assertScanUrl( '', true ) ).not.toThrow();
 			expect( () => assertScanUrl( undefined, true ) ).not.toThrow();
 			expect( () => assertScanUrl( null, true ) ).not.toThrow();
@@ -1026,9 +973,6 @@ describe( 'API Request library', () => {
 		} );
 
 		it( 'assertScanStrategy validates membership with optional empty', async () => {
-			const { assertScanStrategy, SCAN_STRATEGIES } = await import(
-				'../apiRequest'
-			);
 			expect( [ ...SCAN_STRATEGIES ].sort() ).toEqual( [
 				'desktop',
 				'mobile',
@@ -1046,9 +990,6 @@ describe( 'API Request library', () => {
 
 	describe( 'isAuthErrorCode', () => {
 		it( 'matches the shared code set and rejects non-strings', async () => {
-			const { isAuthErrorCode, AUTH_ERROR_CODES } = await import(
-				'../apiRequest'
-			);
 			for ( const code of AUTH_ERROR_CODES ) {
 				expect( isAuthErrorCode( code ) ).toBe( true );
 			}
@@ -1095,7 +1036,15 @@ describe( 'API Request library', () => {
 			global.wppoSettings.settings = { keep: true };
 			commitSettingsCache( null );
 			commitSettingsCache( 'nope' );
+			commitSettingsCache( [ 'array', 'payload' ] );
 			expect( global.wppoSettings.settings ).toEqual( { keep: true } );
+		} );
+
+		it( 'clones the payload so caller mutation cannot alias the cache', () => {
+			const payload = { cache: { enabled: true } };
+			commitSettingsCache( payload );
+			expect( global.wppoSettings.settings ).toEqual( payload );
+			expect( global.wppoSettings.settings ).not.toBe( payload );
 		} );
 	} );
 
@@ -1126,7 +1075,54 @@ describe( 'API Request library', () => {
 			patchSettingsCache( '', { a: 1 } );
 			patchSettingsCache( 'tab', null );
 			patchSettingsCache( 'tab', 'nope' );
+			patchSettingsCache( 'tab', [ 'array', 'patch' ] );
 			expect( global.wppoSettings.settings ).toEqual( { keep: true } );
+		} );
+
+		it( 'ignores array tab bases instead of spreading numeric keys', () => {
+			global.wppoSettings.settings = { tab: [ 'a', 'b' ] };
+			patchSettingsCache( 'tab', { enabled: true } );
+			expect( global.wppoSettings.settings.tab ).toEqual( {
+				enabled: true,
+			} );
+		} );
+	} );
+
+	describe( 'auth retry scope and null payloads', () => {
+		it( 'returns a null JSON body without throwing or retrying', async () => {
+			global.fetch.mockResolvedValueOnce( {
+				status: 200,
+				json: jest.fn().mockResolvedValueOnce( null ),
+			} );
+
+			const result = await apiCall( 'some_action', {} );
+
+			expect( result ).toBeNull();
+			expect( global.fetch ).toHaveBeenCalledTimes( 1 );
+		} );
+
+		it( 'does not retry a 401 JSON failure without a recognised auth code', async () => {
+			global.fetch.mockResolvedValueOnce( {
+				status: 401,
+				json: jest
+					.fn()
+					.mockResolvedValueOnce( { success: false, data: null } ),
+			} );
+
+			const result = await apiCall( 'some_action', {} );
+
+			expect( result ).toEqual( { success: false, data: null } );
+			expect( global.fetch ).toHaveBeenCalledTimes( 1 );
+		} );
+
+		it( 'truncates long Error messages in getErrorLogMessage', () => {
+			expect(
+				getErrorLogMessage( new Error( 'x'.repeat( 600 ) ) )
+			).toHaveLength( 500 );
+		} );
+
+		it( 'keeps SCAN_STRATEGIES frozen', () => {
+			expect( Object.isFrozen( SCAN_STRATEGIES ) ).toBe( true );
 		} );
 	} );
 } );

@@ -1,10 +1,6 @@
 import { isAuthErrorCode } from './authErrors';
 
-export {
-	AUTH_ERROR_CODES,
-	AUTH_ERROR_CODE_SET,
-	isAuthErrorCode,
-} from './authErrors';
+export { AUTH_ERROR_CODES, isAuthErrorCode } from './authErrors';
 
 /**
  * Safe accessor for the global wppoSettings object injected by PHP via
@@ -63,7 +59,7 @@ export const getWppoSettings = ( path, fallback = {} ) => {
  */
 export const getErrorLogMessage = ( error ) => {
 	if ( error instanceof Error ) {
-		return error.message || 'Unknown error';
+		return ( error.message || 'Unknown error' ).slice( 0, 500 );
 	}
 	if ( typeof error === 'string' ) {
 		return error.slice( 0, 500 ) || 'Unknown error';
@@ -91,9 +87,12 @@ let pendingRefresh = null;
  * guard) so multiple simultaneous 403s share a single admin-ajax round-trip.
  *
  * @since 1.6.0
+ * @since NEXT Accepts an optional AbortSignal so aborting apiCall during the
+ * retry path fails fast instead of running refresh + retry to completion.
+ * @param {AbortSignal} [signal] Optional AbortSignal forwarded to the refresh fetch.
  * @return {Promise<string>} The refreshed nonce string.
  */
-const refreshNonce = async () => {
+const refreshNonce = async ( signal ) => {
 	if ( pendingRefresh ) {
 		return pendingRefresh;
 	}
@@ -111,6 +110,7 @@ const refreshNonce = async () => {
 					action: 'wppo_get_nonce',
 					nonce: wppoSettings.nonce_refresh,
 				} ),
+				...( signal && { signal } ),
 			} );
 			if ( ! res.ok ) {
 				throw new Error(
@@ -162,9 +162,14 @@ export const commitSettingsCache = ( payload ) => {
 	if ( typeof wppoSettings === 'undefined' || ! wppoSettings ) {
 		return;
 	}
-	if ( payload && typeof payload === 'object' ) {
-		wppoSettings.settings = Object.freeze( payload );
+	if (
+		! payload ||
+		typeof payload !== 'object' ||
+		Array.isArray( payload )
+	) {
+		return;
 	}
+	wppoSettings.settings = Object.freeze( { ...payload } );
 };
 
 /**
@@ -186,15 +191,19 @@ export const patchSettingsCache = ( tab, patch ) => {
 	if ( typeof tab !== 'string' || ! tab ) {
 		return;
 	}
-	if ( ! patch || typeof patch !== 'object' ) {
+	if ( ! patch || typeof patch !== 'object' || Array.isArray( patch ) ) {
 		return;
 	}
 	const current =
-		wppoSettings.settings && typeof wppoSettings.settings === 'object'
+		wppoSettings.settings &&
+		typeof wppoSettings.settings === 'object' &&
+		! Array.isArray( wppoSettings.settings )
 			? wppoSettings.settings
 			: {};
 	const base =
-		current[ tab ] && typeof current[ tab ] === 'object'
+		current[ tab ] &&
+		typeof current[ tab ] === 'object' &&
+		! Array.isArray( current[ tab ] )
 			? current[ tab ]
 			: {};
 	wppoSettings.settings = Object.freeze( {
@@ -245,7 +254,7 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 				! isRetrying &&
 				( response.status === 401 || response.status === 403 )
 			) {
-				const freshNonce = await refreshNonce();
+				const freshNonce = await refreshNonce( signal );
 				const retryResponse = await doFetch( freshNonce );
 				return handleResponse( retryResponse, true );
 			}
@@ -256,19 +265,17 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 
 		// Detect expired nonce (rest_forbidden, rest_cookie_invalid_nonce, etc.).
 		// The code list lives in ./authErrors.js; main.js mirrors it
-		// (see authSync.test.js). An HTTP 401/403 with a JSON body but no
-		// recognised code falls back to the same single retry.
-		if (
-			( data.code && isAuthErrorCode( data.code ) ) ||
-			( ( response.status === 401 || response.status === 403 ) &&
-				! data.success )
-		) {
+		// (see authSync.test.js). Only a recognised auth code triggers the
+		// single retry: a 401/403 JSON body without one is a business-logic
+		// failure and is returned as-is (no wasted admin-ajax round-trip).
+		// Optional chaining guards a null JSON body from masking the payload.
+		if ( data?.code && isAuthErrorCode( data.code ) ) {
 			if ( isRetrying ) {
 				throw new Error(
 					'Nonce retry failed — authentication error persists.'
 				);
 			}
-			const freshNonce = await refreshNonce();
+			const freshNonce = await refreshNonce( signal );
 			const retryResponse = await doFetch( freshNonce );
 			return handleResponse( retryResponse, true );
 		}
@@ -293,7 +300,7 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 	} catch ( error ) {
 		console.error(
 			'API call failed:',
-			action,
+			String( action ).split( '?' )[ 0 ],
 			getErrorLogMessage( error )
 		);
 		throw error;
@@ -379,7 +386,7 @@ export const isValidScanUrl = ( url ) => {
  * @since NEXT
  * @type {string[]}
  */
-export const SCAN_STRATEGIES = [ 'mobile', 'desktop' ];
+export const SCAN_STRATEGIES = Object.freeze( [ 'mobile', 'desktop' ] );
 
 /**
  * Build an action path with URL-encoded query params via URLSearchParams.
@@ -461,10 +468,24 @@ export const isValidScanStrategy = ( strategy, allowEmpty = false ) => {
 	if ( typeof strategy !== 'string' ) {
 		return false;
 	}
-	if ( allowEmpty && '' === strategy ) {
-		return true;
-	}
 	return SCAN_STRATEGIES.includes( strategy );
+};
+
+/**
+ * Run a validation callback, converting a thrown validation error into a
+ * rejected promise so scan wrappers share one guard shape.
+ *
+ * @since NEXT
+ * @param {Function} fn Validation callback (assertScanUrl/assertScanStrategy calls).
+ * @return {Promise|null} Rejected promise on validation failure, null when valid.
+ */
+const guardScanInput = ( fn ) => {
+	try {
+		fn();
+	} catch ( error ) {
+		return Promise.reject( error );
+	}
+	return null;
 };
 
 /**
@@ -478,10 +499,9 @@ export const isValidScanStrategy = ( strategy, allowEmpty = false ) => {
  * @return {Promise<Object>} Resolved scan result data.
  */
 export const runPerformanceScan = ( url, force = false, signal ) => {
-	try {
-		assertScanUrl( url );
-	} catch ( error ) {
-		return Promise.reject( error );
+	const guardError = guardScanInput( () => assertScanUrl( url ) );
+	if ( guardError ) {
+		return guardError;
 	}
 	return apiCall( 'performance_scan', { url, force }, 'POST', signal );
 };
@@ -510,11 +530,12 @@ export const fetchSystemInfo = ( signal ) => {
  * @return {Promise<Object>} Resolved response with job_id.
  */
 export const queuePagespeedScan = ( url, strategy = 'mobile', signal ) => {
-	try {
+	const guardError = guardScanInput( () => {
 		assertScanUrl( url );
 		assertScanStrategy( strategy );
-	} catch ( error ) {
-		return Promise.reject( error );
+	} );
+	if ( guardError ) {
+		return guardError;
 	}
 	return apiCall( 'pagespeed_scan', { url, strategy }, 'POST', signal );
 };
@@ -534,11 +555,12 @@ export const queuePagespeedScan = ( url, strategy = 'mobile', signal ) => {
  * @return {Promise<Object>} Resolved result data or not_ready status.
  */
 export const getPagespeedResults = ( url, strategy = 'mobile', signal ) => {
-	try {
+	const guardError = guardScanInput( () => {
 		assertScanUrl( url );
 		assertScanStrategy( strategy );
-	} catch ( error ) {
-		return Promise.reject( error );
+	} );
+	if ( guardError ) {
+		return guardError;
 	}
 	return apiCall(
 		buildAction( 'pagespeed_results', { url, strategy } ),
@@ -562,11 +584,12 @@ export const getPagespeedResults = ( url, strategy = 'mobile', signal ) => {
  * @return {Promise<Object>} Resolved trends data.
  */
 export const fetchWebVitalsTrends = ( url = '', strategy = '', signal ) => {
-	try {
+	const guardError = guardScanInput( () => {
 		assertScanUrl( url, true );
 		assertScanStrategy( strategy, true );
-	} catch ( error ) {
-		return Promise.reject( error );
+	} );
+	if ( guardError ) {
+		return guardError;
 	}
 	const qs = buildAction( 'web_vitals_trends', { url, strategy } );
 	return apiCall( qs, {}, 'GET', signal );
@@ -582,10 +605,9 @@ export const fetchWebVitalsTrends = ( url = '', strategy = '', signal ) => {
  * @return {Promise<Object>} Resolved suggestions array.
  */
 export const fetchSuggestions = ( url, signal ) => {
-	try {
-		assertScanUrl( url );
-	} catch ( error ) {
-		return Promise.reject( error );
+	const guardError = guardScanInput( () => assertScanUrl( url ) );
+	if ( guardError ) {
+		return guardError;
 	}
 	return apiCall( buildAction( 'suggestions', { url } ), {}, 'GET', signal );
 };

@@ -33,7 +33,7 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	 */
 	const getErrorLogMessage = ( error ) => {
 		if ( error instanceof Error ) {
-			return error.message || 'Unknown error';
+			return ( error.message || 'Unknown error' ).slice( 0, 500 );
 		}
 		if ( 'string' === typeof error ) {
 			return error.slice( 0, 500 ) || 'Unknown error';
@@ -150,7 +150,8 @@ document.addEventListener( 'DOMContentLoaded', function () {
 					result &&
 					result.success &&
 					result.data &&
-					result.data.nonce
+					typeof result.data.nonce === 'string' &&
+					result.data.nonce.length > 0
 				) {
 					wppoObject.nonce = result.data.nonce;
 					return true;

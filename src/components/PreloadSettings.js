@@ -81,9 +81,9 @@ const PreloadSettings = ( { options = {} } ) => {
 	] );
 	useUnsavedChanges( settings, baseline );
 
-	const fetchPreloadStatus = async () => {
+	const fetchPreloadStatus = async ( signal ) => {
 		try {
-			const res = await apiCall( 'preload_status', {}, 'GET' );
+			const res = await apiCall( 'preload_status', {}, 'GET', signal );
 			const payload = res && res.data ? res.data : res;
 			if ( payload && payload.preload ) {
 				setPreload( payload.preload );
@@ -92,12 +92,17 @@ const PreloadSettings = ( { options = {} } ) => {
 				setCacheCap( payload.cache );
 			}
 		} catch ( err ) {
+			if ( err && 'AbortError' === err.name ) {
+				return;
+			}
 			console.error( 'Failed fetching preload status', err );
 		}
 	};
 
 	useEffect( () => {
-		fetchPreloadStatus();
+		const controller = new AbortController();
+		fetchPreloadStatus( controller.signal );
+		return () => controller.abort();
 	}, [] );
 
 	const handleResume = async () => {

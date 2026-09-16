@@ -17,7 +17,7 @@ describe( 'auth contract sync (apiRequest ↔ main.js)', () => {
 			// SPA reads the codes via ./authErrors.js (single source).
 			expect( authSrc ).toContain( code );
 		}
-		expect( apiSrc ).toContain( 'AUTH_ERROR_CODE_SET' );
+		expect( apiSrc ).toContain( 'isAuthErrorCode' );
 
 		// No bundle may introduce an extra rest_* code the others lack.
 		const restCodes = ( src ) =>
