@@ -260,7 +260,7 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			'preload_resume',
 		);
 
-		// Keep in sync with the AGENTS.md endpoint count (33 + 4 sandbox preview + 2 preload + 1 LCP candidate + 1 used-CSS status routes).
+		// Keep in sync with the AGENTS.md endpoint count (33 + 4 sandbox + 2 preload + 1 LCP + 1 used-CSS + 2 upgrade-purge routes).
 		$this->assertCount( 43, $routes, 'REST route count drifted from the documented endpoint count' );
 
 		foreach ( $expected as $route ) {

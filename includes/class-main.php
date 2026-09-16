@@ -10874,6 +10874,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Returns the last derived-cache purge record plus a safe-mode
 		 * preview URL (`?wppo_nocache=1`, bypassing minify). Class and
 		 * method-exists guarded + fail-open so localisation never fatals.
+		 * Localised (not lazy-fetched) intentionally: the banner needs the
+		 * seed on first paint and the SPA refreshes via the read-only
+		 * upgrade_purge_status endpoint after cache-clearing actions; the
+		 * cost is a single non-autoloaded option read on admin pages.
 		 *
 		 * @since NEXT
 		 * @return array{last_purge:array{reason:string,time:int},safe_preview_url:string}
@@ -10900,7 +10904,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					}
 				}
 				if ( method_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher', 'get_safe_preview_url' ) ) {
-					$url                            = Builder_Purge_Watcher::get_safe_preview_url();
+					$url                          = Builder_Purge_Watcher::get_safe_preview_url();
 					$fallback['safe_preview_url'] = is_string( $url ) ? $url : '';
 				}
 			} catch ( \Throwable $e ) {

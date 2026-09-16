@@ -47,12 +47,12 @@ class UpgradePurgeWatcherTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Reset the per-request upgrade dedupe flag.
+	 * Reset the per-request upgrade dedupe hashes.
 	 */
 	private function reset_upgrade_flag(): void {
-		$property = new \ReflectionProperty( Builder_Purge_Watcher::class, 'upgrade_purged_this_request' );
+		$property = new \ReflectionProperty( Builder_Purge_Watcher::class, 'upgrade_purged_hashes' );
 		$property->setAccessible( true );
-		$property->setValue( null, false );
+		$property->setValue( null, array() );
 	}
 
 	/**
@@ -183,7 +183,7 @@ class UpgradePurgeWatcherTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * get_last_purge() fails open to an empty record on malformed data.
+	 * Get_last_purge() fails open to an empty record on malformed data.
 	 */
 	public function test_get_last_purge_fail_open(): void {
 		Functions\when( 'get_option' )->justReturn( 'not-an-array' );
@@ -208,6 +208,93 @@ class UpgradePurgeWatcherTest extends \PHPUnit\Framework\TestCase {
 		$url = Builder_Purge_Watcher::get_safe_preview_url();
 		$this->assertStringContainsString( 'wppo_nocache=1', $url );
 	}
+
+	/**
+	 * The same payload observed twice (builder at 10 + generic at 20)
+	 * purges only once.
+	 */
+	public function test_same_payload_purges_once(): void {
+		Functions\when( 'do_action' )->justReturn( null );
+		$payload = array(
+			'action' => 'update',
+			'type'   => 'plugin',
+			'plugin' => 'akismet/akismet.php',
+		);
+		$watcher = new WPPO_Test_Upgrade_Watcher();
+		$watcher->on_any_upgrade( null, $payload );
+		$watcher->on_any_upgrade( null, $payload );
+		$this->assertSame( 1, $watcher->purge_count );
+	}
+
+	/**
+	 * Two distinct payloads in one process (bulk WP-CLI/cron upgrades)
+	 * purge twice — no stale second update.
+	 */
+	public function test_distinct_payloads_purge_twice(): void {
+		Functions\when( 'do_action' )->justReturn( null );
+		$watcher = new WPPO_Test_Upgrade_Watcher();
+		$watcher->on_any_upgrade(
+			null,
+			array(
+				'action' => 'update',
+				'type'   => 'plugin',
+				'plugin' => 'akismet/akismet.php',
+			)
+		);
+		$watcher->on_any_upgrade(
+			null,
+			array(
+				'action' => 'update',
+				'type'   => 'plugin',
+				'plugin' => 'hello-dolly/hello.php',
+			)
+		);
+		$this->assertSame( 2, $watcher->purge_count );
+	}
+
+	/**
+	 * A bulk plugins payload reports every slug, truncated with +N more.
+	 */
+	public function test_bulk_plugins_describe_truncates(): void {
+		Functions\when( 'do_action' )->justReturn( null );
+		$options = array();
+		Functions\when( 'update_option' )->alias(
+			static function ( $key, $value ) use ( &$options ) {
+				$options[ $key ] = $value;
+				return true;
+			}
+		);
+		$watcher = new WPPO_Test_Upgrade_Watcher();
+		$watcher->on_any_upgrade(
+			null,
+			array(
+				'action'  => 'update',
+				'type'    => 'plugin',
+				'plugins' => array( 'a/a.php', 'b/b.php', 'c/c.php', 'd/d.php', 'e/e.php' ),
+			)
+		);
+		$this->assertTrue( $watcher->wppo_purged );
+		$this->assertStringContainsString( 'more', $options[ Builder_Purge_Watcher::LAST_PURGE_OPTION ]['reason'] );
+	}
+
+	/**
+	 * Get_last_purge() returns the stored record on the happy path.
+	 */
+	public function test_get_last_purge_happy_path(): void {
+		Functions\when( 'get_option' )->justReturn(
+			array(
+				'reason' => 'plugin akismet/akismet.php',
+				'time'   => 123,
+			)
+		);
+		$this->assertSame(
+			array(
+				'reason' => 'plugin akismet/akismet.php',
+				'time'   => 123,
+			),
+			Builder_Purge_Watcher::get_last_purge()
+		);
+	}
 }
 
 // phpcs:disable Generic.Files.OneObjectStructurePerFile -- Test-file watcher double.
@@ -226,6 +313,13 @@ class WPPO_Test_Upgrade_Watcher extends Builder_Purge_Watcher {
 	public $wppo_purged = false;
 
 	/**
+	 * How many times purge_wppo_derived_caches() ran.
+	 *
+	 * @var int
+	 */
+	public $purge_count = 0;
+
+	/**
 	 * Whether bump_combined_asset_versions() ran.
 	 *
 	 * @var bool
@@ -239,6 +333,7 @@ class WPPO_Test_Upgrade_Watcher extends Builder_Purge_Watcher {
 	 */
 	protected function purge_wppo_derived_caches(): void {
 		$this->wppo_purged = true;
+		++$this->purge_count;
 	}
 
 	/**

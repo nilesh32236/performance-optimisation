@@ -2996,7 +2996,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * SPA manual counterpart to the automatic `upgrader_process_complete`
 		 * purge (issue #1276): clears the page cache, purges coupled CSS, and
 		 * bumps combined-asset versions so the first post-update hit never
-		 * serves a FOUC. Throttled like regenerate_ccss; fail-open messaging.
+		 * serves a FOUC. Intentionally synchronous (unlike the deferred
+		 * automatic upgrade path): the admin click needs immediate feedback
+		 * plus an up-to-date last-purge record; the 5/60 throttle bounds the
+		 * cost. Throttled like regenerate_ccss; fail-open messaging.
 		 *
 		 * @param \WP_REST_Request $_request The request object (unused).
 		 * @since NEXT
@@ -3008,10 +3011,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$response->header( 'Retry-After', '60' );
 				return $response;
 			}
+			$degraded = ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' );
 			try {
-				if ( class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
+				if ( ! $degraded ) {
 					( new Builder_Purge_Watcher() )->purge_derived_caches( 'manual purge' );
 				} else {
+					if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
+						Cache::clear_cache();
+					}
 					Used_CSS::purge_coupled( null );
 				}
 			} catch ( \Throwable $e ) {
@@ -3024,11 +3031,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					unset( $e );
 				}
 			}
+			$message = $degraded
+				? __( 'Page cache and used CSS purged (degraded mode: version tracking unavailable).', 'performance-optimisation' )
+				: __( 'Page cache, used CSS and critical CSS purged.', 'performance-optimisation' );
 			return $this->send_response(
-				Builder_Purge_Watcher::class && method_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher', 'get_last_purge' ) ? Builder_Purge_Watcher::get_last_purge() : array(),
+				class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) && method_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher', 'get_last_purge' ) ? Builder_Purge_Watcher::get_last_purge() : array(),
 				true,
 				200,
-				__( 'Page cache, used CSS and critical CSS purged.', 'performance-optimisation' )
+				$message
 			);
 		}
 

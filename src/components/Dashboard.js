@@ -33,8 +33,9 @@ import EdgeCachePanel from './EdgeCachePanel';
 import ImageOptimizationCard from './ImageOptimizationCard';
 import RecentActivityCard from './RecentActivityCard';
 import WelcomePanel from './WelcomePanel';
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 import { modeLabel } from '../lib/litespeed';
+import { isSafeHttpUrl } from '../lib/urls';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faServer,
@@ -232,7 +233,7 @@ const Dashboard = ( {
 	// Upgrade auto-purge status (issue #1276): last-purge reason + safe
 	// preview link bypassing minify. Seeded from wppoSettings.upgradePurge.
 	const initialUpgradePurge = getWppoSettings( 'upgradePurge', {} ) || {};
-	const [ upgradePurge ] = useState( {
+	const [ upgradePurge, setUpgradePurge ] = useState( {
 		last_purge:
 			initialUpgradePurge.last_purge ||
 			initialUpgradePurge.lastPurge ||
@@ -244,18 +245,23 @@ const Dashboard = ( {
 	} );
 	// Note: seeded from wppoSettings.upgradePurge (localized by PHP); no
 	// auto-fetch on mount so existing mocked-apiCall flows are unaffected.
-	// The read-only upgrade_purge_status endpoint remains for manual refresh.
-	const isSafeUpgradePreviewUrl = ( url ) => {
-		if ( ! url || typeof url !== 'string' ) {
-			return false;
-		}
+	// The read-only upgrade_purge_status endpoint is used for manual refresh
+	// (e.g. after a derived-cache purge elsewhere in the same admin session).
+	const refreshUpgradePurgeStatus = useCallback( async () => {
 		try {
-			const parsed = new URL( url );
-			return 'http:' === parsed.protocol || 'https:' === parsed.protocol;
+			const res = await apiCall( 'upgrade_purge_status', {}, 'GET' );
+			if ( res && res.success && res.data ) {
+				setUpgradePurge( ( prev ) => ( {
+					last_purge: res.data.last_purge || null,
+					safe_preview_url:
+						res.data.safe_preview_url || prev.safe_preview_url,
+				} ) );
+			}
 		} catch {
-			return false;
+			// Fail-open: keep the seeded wppoSettings value.
 		}
-	};
+	}, [] );
+	const isSafeUpgradePreviewUrl = isSafeHttpUrl;
 	const [ loggedInCacheEnabled, setLoggedInCacheEnabled ] = useState(
 		!! cacheSettings.enableLoggedInCache
 	);
@@ -527,6 +533,7 @@ const Dashboard = ( {
 							),
 							durationMs: 5000,
 						} );
+						refreshUpgradePurgeStatus();
 						updateState( {
 							totalCacheSize: '0 B',
 							totalJs: 0,
@@ -557,7 +564,7 @@ const Dashboard = ( {
 				)
 				.finally( () => handleLoading( 'clear_cache', false ) );
 		},
-		[ handleLoading, updateState, notify ]
+		[ handleLoading, updateState, notify, refreshUpgradePurgeStatus ]
 	);
 
 	const optimizeImages = useCallback( () => {
@@ -1113,12 +1120,14 @@ const Dashboard = ( {
 						<span>
 							{ upgradePurge.last_purge &&
 							upgradePurge.last_purge.reason
-								? __(
-										'Last purge:',
-										'performance-optimisation'
-								  ) +
-								  upgradePurge.last_purge.reason +
-								  ' — '
+								? sprintf(
+										// translators: %s: last purge reason.
+										__(
+											'Last purge: %s —',
+											'performance-optimisation'
+										),
+										upgradePurge.last_purge.reason
+								  )
 								: __(
 										'Updates auto-purge derived caches —',
 										'performance-optimisation'

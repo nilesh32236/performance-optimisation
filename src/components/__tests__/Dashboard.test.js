@@ -922,4 +922,19 @@ describe( 'Dashboard', () => {
 			'https://example.com/?wppo_nocache=1'
 		);
 	} );
+
+	it( 'does not render a clickable safe preview link for non-http(s) URLs', async () => {
+		global.wppoSettings.upgradePurge = {
+			last_purge: { reason: 'plugin akismet/akismet.php', time: 123 },
+			safe_preview_url: 'javascript:alert(1)',
+		};
+		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+		await flushDashboardMount();
+
+		expect( screen.getByText( /Last purge:/i ) ).toBeInTheDocument();
+		expect(
+			screen.queryByRole( 'link', { name: /bypasses minify/i } )
+		).toBeNull();
+	} );
 } );

@@ -15,6 +15,7 @@ import {
 	runPerformanceScan,
 } from '../lib/apiRequest';
 import { modeLabel } from '../lib/litespeed';
+import { isSafeHttpUrl } from '../lib/urls';
 import useNotice from '../lib/useNotice';
 import useUnsavedChanges from '../lib/useUnsavedChanges';
 import UnsavedChangesContext from '../lib/UnsavedChangesContext';
@@ -307,10 +308,11 @@ const FileOptimization = ( {
 		try {
 			const res = await apiCall( 'upgrade_purge_status', {}, 'GET' );
 			if ( res && res.success && res.data ) {
-				setUpgradePurge( {
+				setUpgradePurge( ( prev ) => ( {
 					last_purge: res.data.last_purge || null,
-					safe_preview_url: res.data.safe_preview_url || '',
-				} );
+					safe_preview_url:
+						res.data.safe_preview_url || prev.safe_preview_url,
+				} ) );
 			}
 		} catch {
 			// Fail-open: keep the seeded wppoSettings value.
@@ -320,18 +322,23 @@ const FileOptimization = ( {
 	// wppoSettings.upgradePurge (localized by PHP) so existing mocked-apiCall
 	// flows are unaffected; refresh runs after a manual derived purge.
 	const handlePurgeDerivedCaches = async () => {
+		if ( isPurgingDerived ) {
+			return;
+		}
 		setIsPurgingDerived( true );
 		dismissDerivedPurge();
 		try {
 			const res = await apiCall( 'purge_derived_caches' );
 			if ( res && res.success ) {
-				if ( res.data && res.data.reason !== undefined ) {
+				if (
+					res.data &&
+					typeof res.data.reason === 'string' &&
+					typeof res.data.time === 'number'
+				) {
 					setUpgradePurge( ( prev ) => ( {
 						...prev,
 						last_purge: res.data,
 					} ) );
-				} else {
-					refreshUpgradePurgeStatus();
 				}
 				notifyDerivedPurge( {
 					type: 'success',
@@ -343,7 +350,10 @@ const FileOptimization = ( {
 						),
 					durationMs: 3000,
 				} );
-				refreshUsedCssStatus();
+				await Promise.all( [
+					refreshUpgradePurgeStatus(),
+					refreshUsedCssStatus(),
+				] );
 			} else {
 				notifyDerivedPurge( {
 					type: 'error',
@@ -476,24 +486,14 @@ const FileOptimization = ( {
 	/**
 	 * Whether a URL is safe to render as an external link href (http(s) only).
 	 *
-	 * Mirrors the isHttpUrl gate in LlmsPanel: a tampered server-provided
-	 * preview_url such as javascript:alert(1) must never reach <a href>.
+	 * Shared via src/lib/urls.js (also used by Dashboard): a tampered
+	 * server-provided preview_url such as javascript:alert(1) must never
+	 * reach <a href>.
 	 *
-	 * @since NEXT
 	 * @param {string} url Raw URL.
 	 * @return {boolean} True when the URL parses as http(s).
 	 */
-	const isSafePreviewUrl = ( url ) => {
-		if ( ! url || typeof url !== 'string' ) {
-			return false;
-		}
-		try {
-			const parsed = new URL( url );
-			return 'http:' === parsed.protocol || 'https:' === parsed.protocol;
-		} catch {
-			return false;
-		}
-	};
+	const isSafePreviewUrl = isSafeHttpUrl;
 	const handleSandboxSave = async () => {
 		setSandboxBusy( true );
 		try {
@@ -2161,13 +2161,19 @@ const FileOptimization = ( {
 									/>
 								) }
 								<div className="wppo-field wppo-upgrade-purge">
-									<p className="wppo-field-label">
+									<h4
+										className="wppo-field-label"
+										id="wppo-upgrade-purge-heading"
+									>
 										{ __(
 											'Upgrade safety — auto-purge on update',
 											'performance-optimisation'
 										) }
-									</p>
-									<p className="wppo-field-description">
+									</h4>
+									<p
+										className="wppo-field-description"
+										id="wppo-upgrade-purge-desc"
+									>
 										{ __(
 											'Plugin, theme and core updates auto-clear the page cache, purge used and critical CSS, and bump combined-asset versions so the first visit never shows unstyled content. Use the safe preview link to verify styled output (it bypasses minify via ?wppo_nocache=1).',
 											'performance-optimisation'
@@ -2198,18 +2204,20 @@ const FileOptimization = ( {
 											onDismiss={ dismissDerivedPurge }
 										/>
 									) }
-									<div className="wppo-sandbox-actions">
-										<button
+									<div
+										className="wppo-sandbox-actions"
+										aria-describedby="wppo-upgrade-purge-desc"
+									>
+										<LoadingSubmitButton
 											type="button"
-											className="button button-secondary"
+											className="wppo-button wppo-button--secondary"
+											isLoading={ isPurgingDerived }
 											onClick={ handlePurgeDerivedCaches }
-											disabled={ isPurgingDerived }
-										>
-											{ __(
+											label={ __(
 												'Purge Derived Caches',
 												'performance-optimisation'
 											) }
-										</button>
+										/>
 										{ upgradePurge &&
 											upgradePurge.safe_preview_url &&
 											isSafePreviewUrl(
