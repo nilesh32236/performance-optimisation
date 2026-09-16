@@ -898,16 +898,25 @@ const Dashboard = ( {
 		setWooSafeMode( e.target.checked );
 	}, [] );
 	/**
-	 * Re-enable WooCommerce safe mode from a FAIL self-test result.
+	 * Stage WooCommerce safe mode on from a FAIL self-test result.
 	 *
-	 * Stages the toggle on (the existing Save Page Cache Settings flow
-	 * remains the commit path) and moves focus to the safe-mode switch
-	 * so keyboard and screen-reader users land on the fix.
+	 * Staging only: the existing Save Page Cache Settings flow remains the
+	 * commit path, so the button label and helper copy say so explicitly
+	 * and a notice reminds the user to save. Focus moves to the safe-mode
+	 * switch so keyboard and screen-reader users land on the staged fix.
 	 *
 	 * @since NEXT
 	 */
 	const handleReenableWooSafeMode = useCallback( () => {
 		setWooSafeMode( true );
+		notify( {
+			type: 'info',
+			message: __(
+				'WooCommerce safe mode staged on — click Save Page Cache Settings below to apply.',
+				'performance-optimisation'
+			),
+			durationMs: 5000,
+		} );
 		if ( typeof document !== 'undefined' ) {
 			const anchor = document.getElementById( 'wppoWooSafeMode' );
 			if ( anchor ) {
@@ -927,7 +936,7 @@ const Dashboard = ( {
 				}
 			}
 		}
-	}, [] );
+	}, [ notify ] );
 	const handleCdnPurgeServiceChange = useCallback( ( e ) => {
 		setCdnPurgeService(
 			CDN_PURGE_SERVICES.includes( e.target.value )
@@ -1580,7 +1589,7 @@ const Dashboard = ( {
 						{ wooSelfTest.force_exclude && (
 							<p className="wppo-text-muted wppo-text-small">
 								{ __(
-									'Self-test failed: force-excluding dynamic routes plus cookie bypass (fail-closed for commerce). Re-enable WooCommerce safe mode and serve dynamic — never a stale cart.',
+									'Self-test failed: force-excluding dynamic routes plus cookie bypass (fail-closed for commerce). Stage WooCommerce safe mode back on, then save below to apply — never a stale cart.',
 									'performance-optimisation'
 								) }{ ' ' }
 								<button
@@ -1589,10 +1598,16 @@ const Dashboard = ( {
 									onClick={ handleReenableWooSafeMode }
 								>
 									{ __(
-										'Re-enable safe mode',
+										'Stage safe mode on',
 										'performance-optimisation'
 									) }
-								</button>
+								</button>{ ' ' }
+								<span>
+									{ __(
+										'Staging only — click Save Page Cache Settings to apply.',
+										'performance-optimisation'
+									) }
+								</span>
 							</p>
 						) }
 						<p className="wppo-text-muted wppo-text-small">

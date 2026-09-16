@@ -780,7 +780,7 @@ describe( 'Dashboard', () => {
 		expect( screen.getByText( 'cart_cookie' ) ).toBeInTheDocument();
 		expect(
 			screen.getByText(
-				'Self-test failed: force-excluding dynamic routes plus cookie bypass (fail-closed for commerce). Re-enable WooCommerce safe mode and serve dynamic — never a stale cart.'
+				'Self-test failed: force-excluding dynamic routes plus cookie bypass (fail-closed for commerce). Stage WooCommerce safe mode back on, then save below to apply — never a stale cart.'
 			)
 		).toBeInTheDocument();
 	} );
@@ -936,5 +936,65 @@ describe( 'Dashboard', () => {
 		expect(
 			screen.queryByRole( 'link', { name: /bypasses minify/i } )
 		).toBeNull();
+	} );
+
+	it( 'stages safe mode on without saving and reminds to save', async () => {
+		global.wppoSettings.settings = {
+			cache_settings: { enableCache: true, wooSafeMode: false },
+		};
+		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+		await flushDashboardMount();
+
+		fetchWooCacheSelfTest.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				woo_active: true,
+				safe_mode: false,
+				runnable: true,
+				excluded_paths: [ 'cart', 'checkout' ],
+				all_pass: false,
+				force_exclude: true,
+				checks: [
+					{
+						url: 'http://example.com/cart/',
+						path: '/cart/',
+						pass: false,
+					},
+				],
+			},
+		} );
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Run Woo Cache Self-Test/i } )
+		);
+
+		const stageButton = await screen.findByRole( 'button', {
+			name: 'Stage safe mode on',
+		} );
+		// Explicit staging copy — the fix is not committed until Save.
+		expect(
+			screen.getByText(
+				'Staging only — click Save Page Cache Settings to apply.'
+			)
+		).toBeInTheDocument();
+
+		fireEvent.click( stageButton );
+
+		// Toggle is staged on and the save reminder is surfaced.
+		await waitFor( () =>
+			expect(
+				screen.getByText(
+					'WooCommerce safe mode staged on — click Save Page Cache Settings below to apply.'
+				)
+			).toBeInTheDocument()
+		);
+		const toggle = screen.getByLabelText( 'WooCommerce safe mode' );
+		expect( toggle ).toBeChecked();
+		// Staging must not auto-save: no update_settings call fired.
+		expect( apiCall ).not.toHaveBeenCalledWith(
+			'update_settings',
+			expect.anything()
+		);
 	} );
 } );

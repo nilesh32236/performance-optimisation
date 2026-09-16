@@ -3,6 +3,7 @@ import { __, sprintf } from '@wordpress/i18n';
 import {
 	apiCall,
 	fetchWooCacheSelfTest,
+	getErrorLogMessage,
 	getWppoSettings,
 } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
@@ -34,32 +35,68 @@ export const dismissWelcome = () => apiCall( 'dismiss_welcome' );
  * @return {string} Accessible button label.
  */
 export const getStepAriaLabel = ( step, isActive, isWoo ) => {
+	const label = step?.label ?? '';
 	if ( isActive ) {
 		if ( isWoo ) {
 			return sprintf(
 				/* translators: %s: feature name */
 				__( 'Running %s…', 'performance-optimisation' ),
-				step.label
+				label
 			);
 		}
 		return sprintf(
 			/* translators: %s: feature name */
 			__( 'Enabling %s…', 'performance-optimisation' ),
-			step.label
+			label
 		);
 	}
 	if ( isWoo ) {
 		return sprintf(
 			/* translators: %s: feature name */
 			__( 'Run %s', 'performance-optimisation' ),
-			step.label
+			label
 		);
 	}
 	return sprintf(
 		/* translators: %s: feature name */
 		__( 'Enable %s', 'performance-optimisation' ),
-		step.label
+		label
 	);
+};
+
+/**
+ * Scroll to and focus the WooCommerce safe-mode switch.
+ *
+ * Shared pattern with Dashboard's handleReenableWooSafeMode: the switch is
+ * wrapped in `#wppoWooSafeMode`, so both the WelcomePanel FAIL path (already
+ * on the dashboard tab) and the Dashboard FAIL block land keyboard and
+ * screen-reader users on the fix.
+ *
+ * @since NEXT
+ * @return {void}
+ */
+export const scrollToWooSafeMode = () => {
+	if ( typeof document === 'undefined' ) {
+		return;
+	}
+	const anchor = document.getElementById( 'wppoWooSafeMode' );
+	if ( ! anchor ) {
+		return;
+	}
+	if (
+		anchor.scrollIntoView &&
+		typeof anchor.scrollIntoView === 'function'
+	) {
+		try {
+			anchor.scrollIntoView( { block: 'nearest' } );
+		} catch {
+			// scrollIntoView options unsupported — ignore.
+		}
+	}
+	const input = anchor.querySelector( 'input, button' );
+	if ( input && typeof input.focus === 'function' ) {
+		input.focus( { preventScroll: true } );
+	}
 };
 
 const STEPS = [
@@ -137,6 +174,7 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 	const [ wooSelfTest, setWooSelfTest ] = useState( null );
 	const { notice, notify, dismiss } = useNotice();
 	const dismissedRef = useRef( false );
+	const wooAbortRef = useRef( null );
 
 	// Resync when the global settings arrive late (e.g. localised data
 	// injected after first paint) or change after a save elsewhere.
@@ -148,9 +186,40 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 		setVisible( getWppoSettings()?.show_welcome ?? false );
 	}, [ showWelcomeKey ] );
 
+	// Abort any in-flight Woo self-test on unmount so a slow request can
+	// never call setWooSelfTest/notify after the panel is gone.
+	useEffect( () => {
+		return () => {
+			if ( wooAbortRef.current ) {
+				wooAbortRef.current.abort();
+			}
+		};
+	}, [] );
+
 	if ( ! visible ) {
 		return null;
 	}
+
+	/**
+	 * Navigate to the Page Cache safe-mode switch after a FAIL result.
+	 *
+	 * WelcomePanel only ever mounts inside Dashboard, so `onNavigate(
+	 * 'dashboard' )` alone is a no-op tab re-set with no scroll — and the
+	 * `#wppoWooSafeMode` anchor fallback below is unreachable in that mount
+	 * path. Call onNavigate first (harmless when already on dashboard, still
+	 * correct if ever mounted elsewhere) and then scroll/focus the switch.
+	 *
+	 * @since NEXT
+	 * @return {void}
+	 */
+	const handleWooFailNavigate = () => {
+		if ( typeof onNavigate === 'function' ) {
+			onNavigate( 'dashboard' );
+		}
+		// Dashboard is already mounted in this path, so the anchor exists
+		// synchronously; defer one tick so a tab switch (if any) commits.
+		setTimeout( scrollToWooSafeMode, 0 );
+	};
 
 	/**
 	 * Run the read-only WooCommerce cache self-test.
@@ -168,21 +237,15 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 			typeof AbortController !== 'undefined'
 				? new AbortController()
 				: null;
+		wooAbortRef.current = controller;
 		const timeoutId = controller
 			? setTimeout( () => controller.abort(), 5000 )
 			: null;
 		try {
-			const runner =
-				typeof fetchWooCacheSelfTest === 'function'
-					? () => fetchWooCacheSelfTest( controller?.signal )
-					: () =>
-							apiCall(
-								'woo_cache_self_test',
-								{},
-								'GET',
-								controller?.signal
-							);
-			const res = await runner();
+			const res = await fetchWooCacheSelfTest( controller?.signal );
+			if ( wooAbortRef.current?.signal?.aborted ) {
+				return;
+			}
 			if ( res?.success && res?.data ) {
 				setWooSelfTest( res.data );
 				if ( ! res.data.runnable || ! res.data.woo_active ) {
@@ -229,18 +292,39 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 				} );
 			}
 		} catch ( error ) {
-			console.error( 'Woo self-test failed:', error );
-			notify( {
-				type: 'error',
-				message: __(
-					'Failed to run the WooCommerce self-test.',
-					'performance-optimisation'
-				),
-				durationMs: 5000,
-			} );
+			if ( error?.name === 'AbortError' || controller?.signal?.aborted ) {
+				console.error(
+					'Woo self-test timed out:',
+					getErrorLogMessage( error )
+				);
+				notify( {
+					type: 'error',
+					message: __(
+						'The WooCommerce self-test timed out after 5 seconds. Please retry.',
+						'performance-optimisation'
+					),
+					durationMs: 5000,
+				} );
+			} else {
+				console.error(
+					'Woo self-test failed:',
+					getErrorLogMessage( error )
+				);
+				notify( {
+					type: 'error',
+					message: __(
+						'Failed to run the WooCommerce self-test.',
+						'performance-optimisation'
+					),
+					durationMs: 5000,
+				} );
+			}
 		} finally {
 			if ( timeoutId ) {
 				clearTimeout( timeoutId );
+			}
+			if ( wooAbortRef.current === controller ) {
+				wooAbortRef.current = null;
 			}
 			setActivatingStep( null );
 		}
@@ -488,10 +572,8 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 												<button
 													type="button"
 													className="wppo-button wppo-button--secondary wppo-button--sm"
-													onClick={ () =>
-														onNavigate(
-															'dashboard'
-														)
+													onClick={
+														handleWooFailNavigate
 													}
 												>
 													{ __(
