@@ -1387,6 +1387,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 
 				$tripped_at = time();
 				$clean_msg  = trim( (string) preg_replace( '/<[^>]*>/', '', $msg ) );
+				// Harden the persisted reason: Redis messages can embed
+				// operator-controlled host/port text, and the value is
+				// mirrored to CIRCUIT_OPTION, transients, and the disabled
+				// bridge. Display sites escape (admin notice uses esc_html(),
+				// REST status scrubs), but sanitize before storage too.
+				// Guarded: the trip path must never fatal on missing WP
+				// sanitizers (see log_redis_failure() Brain Monkey note).
+				if ( function_exists( 'sanitize_text_field' ) ) {
+					try {
+						$clean_msg = sanitize_text_field( $clean_msg );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
 				if ( '' === $clean_msg ) {
 					$clean_msg = __( 'Redis connection failed.', 'performance-optimisation' );
 				}
@@ -1397,6 +1411,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				}
 				$clean_code = substr( $clean_code, 0, 64 );
 
+				// Counting is owned by the failures-file writer (drop-in
+				// increments wppo-redis-failures.json); this trip path only
+				// mirrors the current count, matching auto_disable_circuit()
+				// and the "re-trips must not bump the count" expectation.
 				$failures = 0;
 				try {
 					$counter = $this->read_json_state_file( $this->get_failures_path() );
@@ -2134,11 +2152,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				}
 				$live = $wp_filesystem->get_contents( $this->dropin_path );
 				if ( ! is_string( $live ) || $live !== $template || false === strpos( $live, self::DROPIN_MARKER ) ) {
-					try {
-						$wp_filesystem->delete( $this->dropin_path );
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
+					// Leave the live file untouched on read-back mismatch
+					// (FS eventual consistency / adapter read skew): the
+					// docblock contract is that any failure leaves the
+					// previous file (or no file) in place, and deleting a
+					// previously good drop-in here would be destructive.
 					$this->delete_config_tmp_quietly( $wp_filesystem, $tmp );
 					return new \WP_Error( 'write_error', __( 'Cannot copy object-cache.php drop-in.', 'performance-optimisation' ) );
 				}

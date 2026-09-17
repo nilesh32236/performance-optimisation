@@ -76,6 +76,18 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		public function __construct() {
 			global $table_prefix;
 
+			// Resolve $table_prefix once so the multisite / single-site /
+			// pre-boot branches below cannot diverge.
+			$table_prefix_str = '';
+			try {
+				if ( isset( $table_prefix ) && is_scalar( $table_prefix ) && '' !== (string) $table_prefix ) {
+					$table_prefix_str = (string) $table_prefix;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$table_prefix_str = '';
+			}
+
 			$prefix = '';
 			try {
 				if ( function_exists( 'is_multisite' ) && function_exists( 'get_current_blog_id' ) ) {
@@ -92,18 +104,24 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 							unset( $e );
 							$prefix = '';
 						}
-					} elseif ( isset( $table_prefix ) && is_scalar( $table_prefix ) && '' !== (string) $table_prefix ) {
-						$prefix = (string) $table_prefix;
+						if ( '' === $prefix ) {
+							$prefix = $table_prefix_str;
+						}
+					} else {
+						$prefix = $table_prefix_str;
 					}
-				} elseif ( isset( $table_prefix ) && is_scalar( $table_prefix ) && '' !== (string) $table_prefix ) {
-					$prefix = (string) $table_prefix;
+				} else {
+					$prefix = $table_prefix_str;
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
-				$prefix = '';
+				$prefix = $table_prefix_str;
 			}
-			if ( '' === $prefix && isset( $table_prefix ) && is_scalar( $table_prefix ) && '' !== (string) $table_prefix ) {
-				$prefix = (string) $table_prefix;
+			if ( '' === $prefix ) {
+				// Never share one constant keyspace across sites: fall back
+				// to a file-unique prefix so unresolved tenants fail
+				// isolated instead of reading each other's entries.
+				$prefix = md5( __FILE__ );
 			}
 
 			$this->blog_prefix = $prefix . ':';

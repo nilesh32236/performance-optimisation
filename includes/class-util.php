@@ -5393,7 +5393,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				'retries'        => 8,
 				'retry_delay_us' => 50000,
 			);
-			$merged   = array_merge( $defaults, is_array( $args ) ? $args : array() );
+			$merged   = array_merge( $defaults, $args );
 			try {
 				return self::get_with_stampede_lock( $key, $rebuild, $merged );
 			} catch ( \Throwable $e ) {
