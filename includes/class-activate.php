@@ -45,6 +45,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		private const LEGACY_FLUSH_FLOOR = '1.8.1';
 
 		/**
+		 * Anchored match for an uncommented `define( 'WP_CACHE', false );`.
+		 *
+		 * Anchored to start-of-line (multiline `^` plus leading horizontal
+		 * whitespace only) so commented defines (`// define(...)`,
+		 * `# define(...)`, `/* define(...)`, `* define(...)`) can never match.
+		 *
+		 * @var string
+		 * @since NEXT
+		 */
+		private const WP_CACHE_FALSE_PATTERN = '/^[ \t]*define\(\s*[\'"]WP_CACHE[\'"]\s*,\s*false\s*\)\s*;/mi';
+
+		/**
+		 * Anchored match for an uncommented `define( 'WP_CACHE', true )`.
+		 *
+		 * Same anchoring as WP_CACHE_FALSE_PATTERN; used to assert a write
+		 * really enabled the constant instead of trusting a bare substring.
+		 *
+		 * @var string
+		 * @since NEXT
+		 */
+		private const WP_CACHE_TRUE_PATTERN = '/^[ \t]*define\(\s*[\'"]WP_CACHE[\'"]\s*,\s*true\s*\)/mi';
+
+		/**
+		 * Guarded WP_CACHE enable block appended when the constant is absent.
+		 *
+		 * @var string
+		 * @since NEXT
+		 */
+		private const WP_CACHE_GUARD_BLOCK = "/** Enables WordPress Cache */\nif ( ! defined( 'WP_CACHE' ) ) {\n\tdefine( 'WP_CACHE', true );\n}\n";
+
+		/**
 		 * Initializes the activation process.
 		 *
 		 * Includes required files and triggers necessary modifications.
@@ -232,6 +263,71 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		}
 
 		/**
+		 * Builds the new wp-config.php contents enabling WP_CACHE.
+		 *
+		 * Pure content transform (no filesystem access) so the decision logic
+		 * is unit-testable without defining the runtime WP_CACHE constant.
+		 * Returns null when the file must be left untouched (fail-open):
+		 * ambiguous content, an unparseable replacement, or a runtime-false
+		 * constant with no literal uncommented false define to flip.
+		 *
+		 * @param string $contents Current wp-config.php contents.
+		 * @param bool   $runtime_defined_false Whether WP_CACHE is already defined false at runtime.
+		 * @return string|null New file contents, or null when no write should happen.
+		 * @since NEXT
+		 */
+		private static function build_wp_cache_contents( string $contents, bool $runtime_defined_false ): ?string {
+			// If WP_CACHE is defined as false, try to replace it with true.
+			// The pattern is anchored to start-of-line (leading whitespace only)
+			// so commented defines are never matched or uncommented.
+			if ( $runtime_defined_false ) {
+				$replaced    = 0;
+				$new_content = preg_replace(
+					self::WP_CACHE_FALSE_PATTERN,
+					"define( 'WP_CACHE', true );",
+					$contents,
+					1,
+					$replaced
+				);
+
+				if ( ! is_string( $new_content ) || '' === $new_content ) {
+					Log::add( __( 'Failed to replace WP_CACHE in wp-config.php', 'performance-optimisation' ) );
+					return null;
+				}
+
+				if ( $replaced > 0 ) {
+					return $new_content;
+				}
+
+				// No literal uncommented false define matched: the runtime false
+				// comes from a non-literal define (e.g. `0`, a variable), an
+				// external definition (mu-plugin, environment), or only a
+				// commented occurrence exists. A guarded insert would be dead
+				// code — the constant is already defined — and repeat
+				// activations would keep appending duplicates, so leave the
+				// file untouched (fail-open: cache stays unaccelerated).
+				return null;
+			}
+
+			if ( false !== strpos( $contents, 'WP_CACHE' ) ) {
+				// Already present but not necessarily true/false as literal (maybe a variable).
+				// If it's already there and we reached here, it means defined( 'WP_CACHE' ) is false or not matching our expectations.
+				// Deliberately fail-open here: a commented-only presence also takes this
+				// path so ambiguous files are never touched.
+				return null;
+			}
+
+			// Not present at all, add it.
+			$insert_position = strpos( $contents, "/* That's all, stop editing!" );
+
+			if ( false !== $insert_position ) {
+				return substr_replace( $contents, self::WP_CACHE_GUARD_BLOCK, $insert_position, 0 );
+			}
+
+			return $contents . self::WP_CACHE_GUARD_BLOCK;
+		}
+
+		/**
 		 * Adds the WP_CACHE guard block to wp-config.php when the constant is not enabled.
 		 *
 		 * @return string|null Notice key for the admin layer, or null if nothing to report.
@@ -266,34 +362,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				return 'wp_config_read';
 			}
 
-			// If WP_CACHE is defined as false, try to replace it with true.
-			if ( defined( 'WP_CACHE' ) && ! WP_CACHE ) {
-				$new_content = preg_replace(
-					'/define\(\s*[\'"]WP_CACHE[\'"]\s*,\s*false\s*\);/i',
-					"define( 'WP_CACHE', true );",
-					$wp_config_content
-				);
+			$original_content = $wp_config_content;
 
-				if ( null === $new_content || '' === $new_content ) {
-					Log::add( __( 'Failed to replace WP_CACHE in wp-config.php', 'performance-optimisation' ) );
-					return null;
-				}
-				$wp_config_content = $new_content;
-			} elseif ( false !== strpos( $wp_config_content, 'WP_CACHE' ) ) {
-				// Already present but not necessarily true/false as literal (maybe a variable).
-				// If it's already there and we reached here, it means defined( 'WP_CACHE' ) is false or not matching our expectations.
+			$wp_config_content = self::build_wp_cache_contents( $wp_config_content, defined( 'WP_CACHE' ) && ! WP_CACHE );
+
+			if ( ! is_string( $wp_config_content ) ) {
+				// Fail-open: ambiguous or externally-defined state; nothing to do.
 				return null;
-			} else {
-				// Not present at all, add it.
-				$constant_code = "/** Enables WordPress Cache */\nif ( ! defined( 'WP_CACHE' ) ) {\n\tdefine( 'WP_CACHE', true );\n}\n";
-
-				$insert_position = strpos( $wp_config_content, "/* That's all, stop editing!" );
-
-				if ( false !== $insert_position ) {
-					$wp_config_content = substr_replace( $wp_config_content, $constant_code, $insert_position, 0 );
-				} else {
-					$wp_config_content .= $constant_code;
-				}
 			}
 
 			// Atomic path: tmp write + verify + backup + rename with rollback,
@@ -306,7 +381,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 					$wp_config_path,
 					$wp_config_content,
 					static function ( $contents ): bool {
-						return is_string( $contents ) && false !== strpos( $contents, 'WP_CACHE' );
+						return is_string( $contents ) && (bool) preg_match( self::WP_CACHE_TRUE_PATTERN, $contents );
 					}
 				);
 				if ( true === $atomic ) {
@@ -317,9 +392,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				}
 			}
 
-			$ok = $wp_filesystem->put_contents( $wp_config_path, $wp_config_content, FS_CHMOD_FILE );
+			// Legacy direct-write fallback for transports without atomic support:
+			// re-read and verify byte-identical so a torn write never goes
+			// unnoticed. On mismatch restore the in-memory original best-effort
+			// and report failure (fail-open: cache stays unaccelerated).
+			$chmod = defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644;
 
-			return $ok ? null : 'wp_config_write_failed';
+			$restore_and_fail = static function () use ( $wp_filesystem, $wp_config_path, $original_content, $chmod ): string {
+				try {
+					$wp_filesystem->put_contents( $wp_config_path, $original_content, $chmod );
+				} catch ( \Throwable $restore_failed ) {
+					unset( $restore_failed );
+				}
+				return 'wp_config_write_failed';
+			};
+
+			$ok = $wp_filesystem->put_contents( $wp_config_path, $wp_config_content, $chmod );
+
+			if ( ! $ok ) {
+				return 'wp_config_write_failed';
+			}
+
+			$reread = $wp_filesystem->get_contents( $wp_config_path );
+			if ( ! is_string( $reread ) || $reread !== $wp_config_content ) {
+				return $restore_and_fail();
+			}
+			if ( ! (bool) preg_match( self::WP_CACHE_TRUE_PATTERN, $reread ) ) {
+				return $restore_and_fail();
+			}
+			if ( method_exists( 'PerformanceOptimise\Inc\Util', 'verify_php_syntax' ) && ! Util::verify_php_syntax( $reread ) ) {
+				return $restore_and_fail();
+			}
+
+			return null;
 		}
 
 		/**
