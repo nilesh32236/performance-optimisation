@@ -1582,7 +1582,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			} else {
 				// Audit #1362: guard the documented false return (?? only catches null).
 				$cookie_host = wp_parse_url( home_url(), PHP_URL_HOST );
-				$hash = md5( is_string( $cookie_host ) ? $cookie_host : '' );
+				$hash        = md5( is_string( $cookie_host ) ? $cookie_host : '' );
 			}
 			foreach ( $_COOKIE as $key => $value ) {
 				$cookie_name = is_string( $key ) ? sanitize_text_field( wp_unslash( $key ) ) : '';

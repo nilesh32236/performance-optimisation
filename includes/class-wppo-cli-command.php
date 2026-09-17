@@ -228,12 +228,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				$success_count  = 0;
 				foreach ( $table_list as $table ) {
 					if ( '' === $table || ! in_array( $table, $allowed_tables, true ) ) {
+						/* translators: %s: table name. */
 						WP_CLI::warning( sprintf( __( ' - Skipped unknown table: %s', 'performance-optimisation' ), sanitize_text_field( (string) $table ) ) );
 						continue;
 					}
 					$result = Database_Cleanup::optimize_table( $table );
 					if ( $result ) {
 						++$success_count;
+						/* translators: %s: table name. */
 						WP_CLI::log( sprintf( __( ' - Optimized table: %s', 'performance-optimisation' ), sanitize_text_field( (string) $table ) ) );
 					}
 				}
@@ -307,11 +309,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 
 				foreach ( $results as $key => $val ) {
 					if ( is_wp_error( $val ) ) {
+						/* translators: 1: cleanup key, 2: error message. */
 						WP_CLI::warning( sprintf( __( ' - %1$s: %2$s', 'performance-optimisation' ), sanitize_text_field( (string) $key ), $val->get_error_message() ) );
 						continue;
 					}
 					$count  = (int) $val;
 					$total += $count;
+					/* translators: 1: cleanup key, 2: cleaned count. */
 					WP_CLI::log( sprintf( __( ' - %1$s: %2$d cleaned', 'performance-optimisation' ), sanitize_text_field( (string) $key ), $count ) );
 				}
 
