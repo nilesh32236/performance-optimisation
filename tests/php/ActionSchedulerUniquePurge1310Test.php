@@ -170,6 +170,37 @@ class ActionSchedulerUniquePurge1310Test extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Cross-group dedupe: a pending job in an extra (legacy) group blocks
+	 * the primary insert on the AS 4.x atomic path, so no insert runs.
+	 *
+	 * Covers the wppo-ccss vs legacy performance_optimisation disjunction
+	 * rationale (issue #1310 review): the AS 4.x $unique flag dedupes
+	 * per-group only, so the helper must probe extra groups up front.
+	 *
+	 * Runs in a separate process with real 4.x-shaped global functions so
+	 * reflection detects unique support.
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_unique_helper_extra_group_blocks_atomic_insert(): void {
+		if ( ! function_exists( 'as_enqueue_async_action' ) ) {
+			eval( 'function as_enqueue_async_action( $hook, $args = array(), $group = "", $unique = false, $priority = 10 ) { $GLOBALS["wppo_1310_xgroup_calls"][] = func_get_args(); return 99; }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged -- test-only 4.x-shaped scheduler stub in an isolated process.
+		}
+		if ( ! function_exists( 'as_has_scheduled_action' ) ) {
+			eval( 'function as_has_scheduled_action( $hook, $args = array(), $group = "" ) { return "performance_optimisation" === $group; }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged -- test-only group-sensitive guard stub in an isolated process.
+		}
+		$GLOBALS['wppo_1310_xgroup_calls'] = array();
+		$result                            = Util::enqueue_unique_async_action(
+			'wppo_generate_ccss',
+			array( array( 'template_hash' => 'abc' ) ),
+			'wppo-ccss',
+			array( 'performance_optimisation' )
+		);
+		$this->assertSame( 0, $result );
+		$this->assertCount( 0, $GLOBALS['wppo_1310_xgroup_calls'] );
+	}
+
+	/**
 	 * AS 4.x single-action path: the atomic $unique flag is passed as the
 	 * 5th argument and timestamp/hook/args/group are forwarded verbatim.
 	 *
@@ -199,36 +230,6 @@ class ActionSchedulerUniquePurge1310Test extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * AS 4.x recurring path: the atomic $unique flag is passed as the 6th
-	 * argument and timestamp/interval/hook/args/group are forwarded.
-	 *
-	 * Runs in a separate process with real 4.x-shaped global functions so
-	 * reflection detects unique support.
-	 */
-	#[RunInSeparateProcess]
-	#[PreserveGlobalState( false )]
-	public function test_unique_recurring_helper_atomic_path_passes_unique_flag(): void {
-		if ( ! function_exists( 'as_enqueue_async_action' ) ) {
-			eval( 'function as_enqueue_async_action( $hook, $args = array(), $group = "", $unique = false, $priority = 10 ) { return 99; }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged -- test-only 4.x-shaped scheduler stub in an isolated process.
-		}
-		if ( ! function_exists( 'as_schedule_recurring_action' ) ) {
-			eval( 'function as_schedule_recurring_action( $timestamp, $interval, $hook, $args = array(), $group = "", $unique = false, $priority = 10 ) { $GLOBALS["wppo_1310_recurring_calls"][] = func_get_args(); return $unique ? 88 : 89; }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged -- test-only 4.x-shaped scheduler stub in an isolated process.
-		}
-		$GLOBALS['wppo_1310_recurring_calls'] = array();
-		$timestamp                            = time() + 120;
-		$result                               = Util::schedule_unique_recurring_action( $timestamp, 3600, 'wppo_recurring_hook', array( 'scope' => 'all' ), 'performance_optimisation' );
-		$this->assertSame( 88, $result );
-		$this->assertCount( 1, $GLOBALS['wppo_1310_recurring_calls'] );
-		$call = $GLOBALS['wppo_1310_recurring_calls'][0];
-		$this->assertSame( $timestamp, $call[0] );
-		$this->assertSame( 3600, $call[1] );
-		$this->assertSame( 'wppo_recurring_hook', $call[2] );
-		$this->assertSame( array( 'scope' => 'all' ), $call[3] );
-		$this->assertSame( 'performance_optimisation', $call[4] );
-		$this->assertTrue( $call[5] );
-	}
-
-	/**
 	 * Without any scheduler loaded every unique helper fails open to 0 and
 	 * the probe memo can be reset without error.
 	 *
@@ -241,7 +242,6 @@ class ActionSchedulerUniquePurge1310Test extends \PHPUnit\Framework\TestCase {
 		$this->assertFalse( Util::supports_action_scheduler_unique() );
 		$this->assertSame( 0, Util::enqueue_unique_async_action( 'wppo_crawler_warm', array( 'https://example.test/' ), 'performance_optimisation' ) );
 		$this->assertSame( 0, Util::schedule_unique_single_action( time() + 60, 'wppo_generate_ccss', array(), 'wppo-ccss' ) );
-		$this->assertSame( 0, Util::schedule_unique_recurring_action( time() + 60, 3600, 'wppo_recurring_hook', array(), 'performance_optimisation' ) );
 		Util::reset_action_scheduler_unique_cache();
 		$this->assertFalse( Util::supports_action_scheduler_unique() );
 	}

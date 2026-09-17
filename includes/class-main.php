@@ -3436,13 +3436,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					}
 					$url = esc_url_raw( $url );
 					// Atomic unique enqueue (issue #1310) closes the
-					// check-then-act race; legacy guard stays as fallback.
+					// check-then-act race. Util ships in-repo: called
+					// directly (issue #1310 review) — its internal
+					// function_exists + supports_* + try/catch already fails
+					// open, so no method_exists/legacy branch is needed.
 					if ( '' !== $url ) {
-						if ( method_exists( Util::class, 'enqueue_unique_async_action' ) ) {
-							Util::enqueue_unique_async_action( 'wppo_crawler_warm', array( $url ), 'performance_optimisation' );
-						} elseif ( ! as_has_scheduled_action( 'wppo_crawler_warm', array( $url ), 'performance_optimisation' ) ) {
-							as_enqueue_async_action( 'wppo_crawler_warm', array( $url ), 'performance_optimisation' );
-						}
+						Util::enqueue_unique_async_action( 'wppo_crawler_warm', array( $url ), 'performance_optimisation' );
 					}
 				}
 			}
@@ -3548,22 +3547,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 
-			if ( method_exists( Util::class, 'enqueue_unique_async_action' ) ) {
-				Util::enqueue_unique_async_action(
-					'wppo_used_css_generate',
-					array( 'post_id' => $post_id ),
-					'performance_optimisation'
-				);
-				return;
-			}
-
-			if ( ! as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => $post_id ), 'performance_optimisation' ) ) {
-				as_enqueue_async_action(
-					'wppo_used_css_generate',
-					array( 'post_id' => $post_id ),
-					'performance_optimisation'
-				);
-			}
+			// Util ships in-repo: called directly (issue #1310 review) — its
+			// internal function_exists + supports_* + try/catch already
+			// fails open, so no method_exists/legacy branch is needed.
+			Util::enqueue_unique_async_action(
+				'wppo_used_css_generate',
+				array( 'post_id' => $post_id ),
+				'performance_optimisation'
+			);
 		}
 
 		/**

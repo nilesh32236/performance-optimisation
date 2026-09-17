@@ -372,6 +372,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		private static ?array $templates_memo = null;
 
 		/**
+		 * Per-request memo of pending/running CCSS job probes (issue #1310 review).
+		 *
+		 * The probe fans out to up to 4 store queries per call
+		 * and runs on the inline_ccss() frontend hot path plus per-template
+		 * loops; the miss case always pays 4 SELECTs before 1 INSERT. Memo
+		 * keyed by hook+args absorbs repeats within one request; the
+		 * status-cache pending/queued gate already absorbs most repeats.
+		 *
+		 * @since NEXT
+		 * @var array<string, bool>
+		 */
+		private static array $pending_memo = array();
+
+		/**
 		 * Viewport-split variant slugs (issue #1164).
 		 *
 		 * Stored as `{hash}.{variant}.css` next to the single `{hash}.css`
@@ -1236,13 +1250,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					return $none;
 				}
 				$legacy_group = 'performance_optimisation';
-				$use_unique   = method_exists( Util::class, 'schedule_unique_single_action' ) && Util::supports_action_scheduler_unique();
+				// Util ships in-repo: no method_exists guard needed.
+				$use_unique = Util::supports_action_scheduler_unique();
 				if ( $use_unique ) {
 					// Atomic path first (issue #1310): the insert itself
 					// dedupes, so the legacy pre-check below only runs on
 					// older schedulers.
 					$job_id = Util::schedule_unique_single_action( $timestamp, $hook, $hook_args, self::CCSS_AS_GROUP, array( $legacy_group ) );
 					if ( $job_id > 0 ) {
+						try {
+							self::$pending_memo[ md5( $hook . serialize( $hook_args ) ) ] = true; // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize -- Per-request memo key only.
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
 						return array(
 							'id'      => $job_id,
 							'pending' => true,
@@ -1281,6 +1301,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					}
 				}
 				if ( $job_id > 0 ) {
+					try {
+						self::$pending_memo[ md5( $hook . serialize( $hook_args ) ) ] = true; // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize -- Per-request memo key only.
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
 					return array(
 						'id'      => $job_id,
 						'pending' => true,
@@ -2866,6 +2891,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			self::$lcp_preload_emitted = array();
 			self::$ccss_defer_blocked  = array();
 			self::$templates_memo      = null;
+			self::$pending_memo        = array();
 		}
 
 		/**
@@ -4869,12 +4895,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				$hook_args = array( array( 'template_hash' => $template_hash ) );
 				$queued    = false;
 				try {
-					// Accept both `pending` (frontend gate) and `queued`
-					// (bulk/retry writers) so a bulk-queued template does
-					// not miss the flood guard and re-enqueue per pageview
-					// (issue #1310 review).
+					// Accept `pending` (frontend gate), `queued`
+					// (bulk/retry writers) and `processing` (a live
+					// background_generate() run) so every frontend hit
+					// during a run hits the guard instead of paying
+					// schedule_ccss_job() SELECTs per pageview
+					// (issue #1310 review); dedupe alone preserves
+					// correctness but not the storm.
 					$cached = self::get_status_cache( $template_hash );
-					if ( 'pending' === $cached || 'queued' === $cached ) {
+					if ( 'pending' === $cached || 'queued' === $cached || 'processing' === $cached ) {
 						$queued = true;
 					}
 				} catch ( \Throwable $e ) {
@@ -5514,41 +5543,70 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			if ( ! function_exists( 'as_next_scheduled_action' ) ) {
 				return false;
 			}
+			// Per-request memo (issue #1310 review): the frontend hot path
+			// and per-template loops repeat identical probes; the
+			// status-cache gate absorbs most repeats but the memo covers
+			// the rest within one request.
+			try {
+				$memo_key = md5( $hook . serialize( $hook_args ) ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize -- Per-request memo key only.
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$memo_key = '';
+			}
+			if ( '' !== $memo_key && array_key_exists( $memo_key, self::$pending_memo ) ) {
+				return self::$pending_memo[ $memo_key ];
+			}
+			$pending = false;
 			try {
 				if ( (bool) as_next_scheduled_action( $hook, $hook_args, self::CCSS_AS_GROUP )
 					|| (bool) as_next_scheduled_action( $hook, $hook_args, 'performance_optimisation' ) ) {
-					return true;
+					$pending = true;
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
-				return false;
+				// Fall through to the running backstop below instead of
+				// returning false: a transient pending-lookup failure
+				// while the winner is running must not misreport as no
+				// job (which would double-schedule plus mark failed with
+				// a day TTL while a job runs).
+			}
+			if ( $pending ) {
+				if ( '' !== $memo_key ) {
+					self::$pending_memo[ $memo_key ] = true;
+				}
+				return true;
 			}
 			// Running/claimed backstop: only when the store lookup API is
 			// available; a missing API fails open to the pending result
 			// above (false here).
+			$result = false;
 			try {
-				if ( ! function_exists( 'as_get_scheduled_actions' ) || ! class_exists( \ActionScheduler_Store::class ) ) {
-					return false;
-				}
-				foreach ( array( self::CCSS_AS_GROUP, 'performance_optimisation' ) as $ccss_group ) {
-					$running = as_get_scheduled_actions(
-						array(
-							'hook'     => $hook,
-							'args'     => $hook_args,
-							'group'    => $ccss_group,
-							'status'   => \ActionScheduler_Store::STATUS_RUNNING,
-							'per_page' => 1,
-						),
-						'ids'
-					);
-					if ( is_array( $running ) && ! empty( $running ) ) {
-						return true;
+				if ( function_exists( 'as_get_scheduled_actions' ) && class_exists( \ActionScheduler_Store::class ) ) {
+					foreach ( array( self::CCSS_AS_GROUP, 'performance_optimisation' ) as $ccss_group ) {
+						$running = as_get_scheduled_actions(
+							array(
+								'hook'     => $hook,
+								'args'     => $hook_args,
+								'group'    => $ccss_group,
+								'status'   => \ActionScheduler_Store::STATUS_RUNNING,
+								'per_page' => 1,
+							),
+							'ids'
+						);
+						if ( is_array( $running ) && ! empty( $running ) ) {
+							$result = true;
+							break;
+						}
 					}
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
+				$result = false;
 			}
-			return false;
+			if ( '' !== $memo_key ) {
+				self::$pending_memo[ $memo_key ] = $result;
+			}
+			return $result;
 		}
 	}
 }

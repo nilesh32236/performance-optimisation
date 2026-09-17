@@ -126,41 +126,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 					'strategy' => $strategy,
 				),
 			);
-			// Atomic unique enqueue first on AS 4.x (issue #1310): the insert
-			// itself dedupes, so the legacy check-then-act below only runs when
-			// unique inserts are unsupported (saves two SELECTs per scan).
-			if ( method_exists( Util::class, 'enqueue_unique_async_action' ) && Util::supports_action_scheduler_unique() ) {
-				$job_id = (int) Util::enqueue_unique_async_action(
-					self::AS_HOOK,
-					$args,
-					self::AS_GROUP
-				);
-				if ( $job_id > 0 ) {
-					return $job_id;
-				}
-				// A 0 return is ambiguous (deduped race vs scheduler failure):
-				// re-query for the concurrent winner's ID so the REST/UI layer
-				// can poll the pending job instead of reporting failure.
-				$winner = self::find_pending_job_id( $args );
-				if ( $winner > 0 ) {
-					return $winner;
-				}
-				return 0;
-			}
-			if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( self::AS_HOOK, $args, self::AS_GROUP ) ) {
-				// Return existing job ID so callers can distinguish dedup from failure.
-				$existing_id = self::find_pending_job_id( $args );
-				return $existing_id > 0 ? $existing_id : 0;
-			}
-			// Legacy fallback (issue #1310 review): unique inserts are
-			// unsupported here, so the 3-argument enqueue runs directly —
-			// Util ships in-repo, making a second method_exists branch
-			// unreachable dead weight.
-			return (int) as_enqueue_async_action(
+			// Util ships in-repo: called directly (issue #1310 review) — its
+			// internal supports_* probe plus legacy guard already fail open
+			// to 0, so no method_exists branch is needed here. A 0 return is
+			// ambiguous (deduped race vs scheduler failure): re-query for the
+			// concurrent winner's ID so the REST/UI layer can poll the pending
+			// job instead of reporting failure.
+			$job_id = (int) Util::enqueue_unique_async_action(
 				self::AS_HOOK,
 				$args,
 				self::AS_GROUP
 			);
+			if ( $job_id > 0 ) {
+				return $job_id;
+			}
+			$winner = self::find_pending_job_id( $args );
+			if ( $winner > 0 ) {
+				return $winner;
+			}
+			return 0;
 		}
 
 		/**
@@ -308,34 +292,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 							'retry'    => 1,
 						),
 					);
-					// Atomic unique insert first on AS 4.x (issue #1310): it
-					// dedupes by itself, so the legacy pre-check below only
-					// runs when unique inserts are unsupported.
-					$use_unique = method_exists( Util::class, 'schedule_unique_single_action' ) && Util::supports_action_scheduler_unique();
-					if ( ! $use_unique && function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( self::AS_HOOK, $retry_args, self::AS_GROUP ) ) {
-						return;
-					}
-					// Atomic unique insert (issue #1310); legacy branch stays
-					// as fallback for older scheduler versions. The return
-					// is gated (issue #1310 review): a 0 with no job
-					// pending means the scheduler failed, so fall through
-					// to the error handling below instead of logging a
+					// Atomic unique insert via the shared helper (issue #1310):
+					// Util ships in-repo so it is called directly — its
+					// internal function_exists + supports_* + try/catch
+					// already fails open to 0 with no method_exists branch
+					// needed here (issue #1310 review). The return is gated: a
+					// 0 with no job pending means the scheduler failed, so fall
+					// through to the error handling below instead of logging a
 					// phantom 'retry re-queued' with no backing job.
-					$retry_pending = false;
-					if ( method_exists( Util::class, 'schedule_unique_single_action' ) ) {
-						$retry_id      = Util::schedule_unique_single_action( time() + $delay, self::AS_HOOK, $retry_args, self::AS_GROUP );
-						$retry_pending = $retry_id > 0;
-						if ( ! $retry_pending && function_exists( 'as_has_scheduled_action' ) ) {
-							try {
-								$retry_pending = (bool) as_has_scheduled_action( self::AS_HOOK, $retry_args, self::AS_GROUP );
-							} catch ( \Throwable $e ) {
-								unset( $e );
-								$retry_pending = false;
-							}
-						}
-					} else {
-						as_schedule_single_action( time() + $delay, self::AS_HOOK, $retry_args, self::AS_GROUP );
-						$retry_pending = true;
+					$retry_id      = Util::schedule_unique_single_action( time() + $delay, self::AS_HOOK, $retry_args, self::AS_GROUP );
+					$retry_pending = $retry_id > 0;
+					if ( ! $retry_pending ) {
+						$retry_pending = self::find_pending_job_id( $retry_args ) > 0;
 					}
 					if ( $retry_pending ) {
 						/* translators: %d is the retry delay in seconds. */

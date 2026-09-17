@@ -1921,25 +1921,62 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					// Note: query_actions() with 'count' ignores per_page/LIMIT
 					// (the DB store only appends LIMIT for 'select'), so no
 					// per_page is passed here — the count is never capped.
-					if ( in_array( \ActionScheduler_Store::STATUS_COMPLETE, $statuses_to_purge, true ) ) {
-						$reclaimable += (int) $store->query_actions(
-							array(
-								'status'           => \ActionScheduler_Store::STATUS_COMPLETE,
-								'modified'         => $cutoff,
-								'modified_compare' => '<=',
-							),
-							'count'
-						);
-					}
-					if ( in_array( \ActionScheduler_Store::STATUS_CANCELED, $statuses_to_purge, true ) ) {
-						$reclaimable += (int) $store->query_actions(
-							array(
-								'status'           => \ActionScheduler_Store::STATUS_CANCELED,
-								'modified'         => $cutoff,
-								'modified_compare' => '<=',
-							),
-							'count'
-						);
+					// Merged COMPLETE + CANCELED count (issue #1310 review):
+					// one COUNT range scan over the large AS tables instead
+					// of two with the identical cutoff; very old stores
+					// that reject a status array fall back to two queries.
+					$want_complete = in_array( \ActionScheduler_Store::STATUS_COMPLETE, $statuses_to_purge, true );
+					$want_canceled = in_array( \ActionScheduler_Store::STATUS_CANCELED, $statuses_to_purge, true );
+					if ( $want_complete && $want_canceled ) {
+						try {
+							$reclaimable += (int) $store->query_actions(
+								array(
+									'status'           => array( \ActionScheduler_Store::STATUS_COMPLETE, \ActionScheduler_Store::STATUS_CANCELED ),
+									'modified'         => $cutoff,
+									'modified_compare' => '<=',
+								),
+								'count'
+							);
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$reclaimable += (int) $store->query_actions(
+								array(
+									'status'           => \ActionScheduler_Store::STATUS_COMPLETE,
+									'modified'         => $cutoff,
+									'modified_compare' => '<=',
+								),
+								'count'
+							);
+							$reclaimable += (int) $store->query_actions(
+								array(
+									'status'           => \ActionScheduler_Store::STATUS_CANCELED,
+									'modified'         => $cutoff,
+									'modified_compare' => '<=',
+								),
+								'count'
+							);
+						}
+					} else {
+						if ( $want_complete ) {
+							$reclaimable += (int) $store->query_actions(
+								array(
+									'status'           => \ActionScheduler_Store::STATUS_COMPLETE,
+									'modified'         => $cutoff,
+									'modified_compare' => '<=',
+								),
+								'count'
+							);
+						}
+						if ( $want_canceled ) {
+							$reclaimable += (int) $store->query_actions(
+								array(
+									'status'           => \ActionScheduler_Store::STATUS_CANCELED,
+									'modified'         => $cutoff,
+									'modified_compare' => '<=',
+								),
+								'count'
+							);
+						}
 					}
 					if ( $clean_failed && ! in_array( \ActionScheduler_Store::STATUS_FAILED, $statuses_to_purge, true ) ) {
 						// Failed actions are purged on their own (longer) retention
@@ -1971,7 +2008,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				if ( isset( $wpdb->prefix ) ) {
 					$actions_table = $wpdb->prefix . 'actionscheduler_actions';
 					$logs_table    = $wpdb->prefix . 'actionscheduler_logs';
-					$total_bytes   = self::get_table_size( $actions_table ) + self::get_table_size( $logs_table );
+					// Single SUM query over both tables (issue #1310
+					// review): halves the information_schema cost on the
+					// dashboard-polled path instead of two sequential
+					// lookups (plus up to two SHOW TABLE STATUS fallbacks).
+					$total_bytes = self::get_tables_size( array( $actions_table, $logs_table ) );
 					foreach ( array( \ActionScheduler_Store::STATUS_COMPLETE, \ActionScheduler_Store::STATUS_CANCELED, \ActionScheduler_Store::STATUS_FAILED, \ActionScheduler_Store::STATUS_PENDING, \ActionScheduler_Store::STATUS_RUNNING ) as $status ) {
 						$total_rows += (int) ( $counts[ $status ] ?? 0 );
 					}
@@ -2134,6 +2175,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					$deadline = microtime( true ) + self::FAILED_PURGE_BUDGET_SECONDS;
 				}
 				do {
+					// Guard the top of the loop before the query (issue
+					// #1310 review): when a wrapper passes an already-expired
+					// shared deadline this skips one wasted heavy SELECT past
+					// budget; the per-delete check below still bounds slow
+					// stores inside a batch.
+					if ( microtime( true ) >= $deadline ) {
+						break;
+					}
 					$ids = $store->query_actions(
 						array(
 							'status'           => \ActionScheduler_Store::STATUS_FAILED,
@@ -2265,7 +2314,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					$count   = is_array( $deleted ) ? count( $deleted ) : 0;
 					$total  += $count;
 					++$iterations;
-				} while ( $count > 0 && $iterations < $max_iterations && microtime( true ) < $deadline );
+					// Preserve the failed-purge window (issue #1310 review):
+					// one pass deletes up to 100 actions with log cascades
+					// (200+ DELETEs) and can overshoot the shared budget, so
+					// the loop yields while the reserve remains instead of
+					// eating the failed-purge window.
+				} while ( $count > 0 && $iterations < $max_iterations && microtime( true ) < $deadline - self::FAILED_PURGE_RESERVE_SECONDS );
 				$count = $total;
 				// Opt-in 3-month failed-action bound (issue #1310): purely
 				// additive — upstream defaults are untouched, and the purge
@@ -2747,6 +2801,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			if ( $post_type && is_post_type_viewable( $post_type ) ) {
 				self::invalidate_counts_cache();
 			}
+		}
+
+		/**
+		 * Get the combined size (data + index) of several database tables in bytes.
+		 *
+		 * Single `SUM()` query over `information_schema.TABLES` so callers
+		 * that need both AS tables pay one lookup instead of two (issue
+		 * #1310 review); falls back to per-table {@see get_table_size()}
+		 * (which itself falls back to `SHOW TABLE STATUS`) when the SUM
+		 * query is unavailable or fails.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string[] $tables Full table names (including prefix).
+		 * @return int Combined size in bytes, or 0 if unknown.
+		 */
+		private static function get_tables_size( array $tables ): int {
+			$tables = array_values( array_filter( array_map( 'strval', $tables ) ) );
+			if ( empty( $tables ) ) {
+				return 0;
+			}
+			global $wpdb;
+			try {
+				if ( defined( 'DB_NAME' ) && is_string( DB_NAME ) && '' !== DB_NAME ) {
+					$placeholders = implode( ',', array_fill( 0, count( $tables ), '%s' ) );
+					// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Read-only size probe; $placeholders is count-derived, table names bound as values.
+					$size = $wpdb->get_var(
+						// phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $placeholders is count-derived; values spread below.
+						$wpdb->prepare(
+							"SELECT SUM( data_length + index_length ) FROM information_schema.TABLES WHERE table_schema = %s AND table_name IN ($placeholders)", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $placeholders is count-derived.
+							...array_merge( array( DB_NAME ), $tables )
+						)
+					);
+					if ( null !== $size && '' !== $size ) {
+						return max( 0, (int) $size );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			$total = 0;
+			foreach ( $tables as $table ) {
+				$total += self::get_table_size( $table );
+			}
+			return $total;
 		}
 
 		/**

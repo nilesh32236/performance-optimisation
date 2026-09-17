@@ -4697,57 +4697,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
-		 * Schedule a recurring Action Scheduler job idempotently when available.
-		 *
-		 * Passes `$unique = true` on AS 4.x so re-scheduling an already
-		 * scheduled recurring hook+args+group is a no-op; falls back to the
-		 * legacy `as_has_scheduled_action()` / `as_next_scheduled_action()`
-		 * guard plus a plain `as_schedule_recurring_action()` call otherwise.
-		 * Returns 0 when the scheduler API is unavailable or throws.
-		 *
-		 * Not yet called by production code — reserved for future recurring
-		 * jobs (issue #1310). Kept (rather than removed) so the recurring
-		 * path is version-gated and tested alongside the async/single
-		 * helpers before its first caller lands.
-		 *
-		 * @since NEXT
-		 * @param int      $timestamp    First run timestamp.
-		 * @param int      $interval     Seconds between runs.
-		 * @param string   $hook         Action hook.
-		 * @param array    $args         Action arguments.
-		 * @param string   $group        Action group.
-		 * @param string[] $extra_groups Additional groups probed by the legacy fallback guard.
-		 * @return int Action ID, or 0 when deduped, unavailable, or on failure.
-		 */
-		public static function schedule_unique_recurring_action( int $timestamp, int $interval, string $hook, array $args = array(), string $group = '', array $extra_groups = array() ): int {
-			try {
-				if ( ! function_exists( 'as_schedule_recurring_action' ) ) {
-					return 0;
-				}
-				if ( self::supports_action_scheduler_unique() ) {
-					try {
-						if ( self::function_has_unique_param( 'as_schedule_recurring_action', 6 ) ) {
-							return (int) as_schedule_recurring_action( $timestamp, $interval, $hook, $args, $group, true );
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-				}
-				// Single legacy guard (issue #1310 review): the former
-				// as_next_scheduled_action() second probe overlapped this
-				// check and cost an extra SELECT per call, so only the
-				// shared as_already_scheduled() guard remains.
-				if ( self::as_already_scheduled_in_any_group( $hook, $args, $group, $extra_groups ) ) {
-					return 0;
-				}
-				return (int) as_schedule_recurring_action( $timestamp, $interval, $hook, $args, $group );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return 0;
-			}
-		}
-
-		/**
 		 * Whether the stampede guard is enabled.
 		 *
 		 * Operator opt-out via `wppo_settings['cache_settings']['stampedeGuard']`

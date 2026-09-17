@@ -76,6 +76,32 @@ add_action( 'wppo_database_cleanup_completed', function( $type, $count ) {
 
 ---
 
+### `wppo_purge_failed_actions`
+Filters whether failed Action Scheduler actions older than the retention bound are purged (issue #1310). Default off (failed-action debug history is retained unless the site opts in); the `database_cleanup.purgeFailedActions` setting value is passed as the default so either path enables the purge. The purge lifespan is `min( filtered failed-action retention, 3-month cap )` floored at one day, so a rogue retention filter returning 0 cannot destroy just-failed history. @since NEXT.
+
+**Parameters:**
+- `$enabled` *(bool)* — Whether the failed-action purge is enabled. Default from `database_cleanup.purgeFailedActions` (`false`).
+
+**Example:**
+```php
+add_filter( 'wppo_purge_failed_actions', '__return_true' );
+```
+
+---
+
+### `wppo_action_scheduler_cleanup_enabled`
+Filters whether the plugin may delegate to Action Scheduler's queue cleaner (`ActionScheduler_QueueCleaner::delete_old_actions()`) for terminal (complete/canceled, plus failed when upstream enables it) actions past retention (issue #1310). Cautious operators can return `false` to narrow the scope to a no-op (visibility only); site-specific narrowing beyond that should use the upstream `action_scheduler_*` filters. @since NEXT.
+
+**Parameters:**
+- `$enabled` *(bool)* — Whether AS cleanup delegation is enabled. Default `true`.
+
+**Example:**
+```php
+add_filter( 'wppo_action_scheduler_cleanup_enabled', '__return_false' );
+```
+
+---
+
 ### `wppo_should_cache_request`
 Filters whether the current request should be cached. Placed **after** the `DONOTCACHEPAGE` constant check so the constant always wins even if the filter returns true. Return `false` to skip `ob_start` and cache storage. @since 2.0.0.
 
