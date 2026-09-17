@@ -167,6 +167,7 @@ const FILE_OPT_TEXTAREA_KEYS = [
 const FILE_OPT_SYNC_KEYS = [
 	'safeMode',
 	'elementorSafeMode',
+	'cssJsSafeMode',
 	'minifyJS',
 	'excludeJS',
 	'minifyCSS',
@@ -514,6 +515,10 @@ const FileOptimization = ( {
 				options.elementorSafeMode !== undefined
 					? options.elementorSafeMode
 					: true,
+			cssJsSafeMode:
+				options.cssJsSafeMode !== undefined
+					? options.cssJsSafeMode
+					: true,
 			minifyJS: false,
 			excludeJS: '',
 			minifyCSS: false,
@@ -833,6 +838,11 @@ const FileOptimization = ( {
 		deferJS: !! settings.deferJS,
 		combineCSS: !! settings.combineCSS,
 		elementorSafeMode: !! settings.elementorSafeMode,
+		cssJsSafeMode: settings.cssJsSafeMode !== false,
+		minifyJS: !! settings.minifyJS,
+		minifyCSS: !! settings.minifyCSS,
+		excludeCSS: toTextLines( settings.excludeCSS ),
+		excludeJS: toTextLines( settings.excludeJS ),
 		// Staging must mirror what the preview renderer consumes:
 		// safe_minify_js reads delayJSExternalOnly and minifyInlineJS from
 		// the effective slice, so omitting them would silently drop the
@@ -2845,16 +2855,39 @@ const FileOptimization = ( {
 										) }
 									/>
 								) }
+								<SwitchField
+									label={ __(
+										'CSS/JS Safe Mode — breakage-free by default',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Keep minify on with combine scoped by builder auto-exclusions (Elementor, Salient/WPBakery, Woo cart fragments, jquery-core). Stage risky promotions via Sandbox preview before promoting; discard restores identical HTML.',
+										'performance-optimisation'
+									) }
+									name="cssJsSafeMode"
+									checked={ settings.cssJsSafeMode !== false }
+									onChange={ onFieldChange }
+									disabled={ optimizerDisabled }
+								/>
+								{ settings.cssJsSafeMode !== false && (
+									<NoticeBanner
+										type="info"
+										message={ __(
+											'Safe Mode is on — minify stays safe while combine skips builder handles automatically. Use Stage preview to verify before promoting.',
+											'performance-optimisation'
+										) }
+									/>
+								) }
 								<div className="wppo-field wppo-sandbox-preview">
 									<p className="wppo-field-label">
 										{ __(
-											'Sandbox preview — test Delay / Defer / Combine / Elementor-safe safely',
+											'Sandbox preview — test Delay / Defer / Combine / Minify / Safe Mode safely',
 											'performance-optimisation'
 										) }
 									</p>
 									<p className="wppo-field-description">
 										{ __(
-											'Stage the current Delay, Defer and Combine settings, preview them as admin via a no-cache link (visitors keep production markup), then promote or discard. The perf test below always measures the production URL; staged settings are verified visually via the admin preview link.',
+											'Stage the current Delay, Defer, Combine, Minify and Safe Mode settings, preview them as admin via a no-cache link (visitors keep production markup), then promote or discard. Discard restores identical HTML. The perf test below always measures the production URL; staged settings are verified visually via the admin preview link.',
 											'performance-optimisation'
 										) }
 									</p>

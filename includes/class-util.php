@@ -371,6 +371,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'delayJSSafeMode'              => true,
 					'safeMode'                     => false,
 					'elementorSafeMode'            => true,
+					'cssJsSafeMode'                => true,
+					'combineOffenders'             => array(),
 					'sandboxStaged'                => array(),
 					'combineCSS'                   => false,
 					'excludeJS'                    => '',
@@ -6105,6 +6107,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				}
 
 				if ( 'elementorSafeMode' === $safe_key && ! is_array( $value ) ) {
+					$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+					$sanitized[ $safe_key ] = null === $bool ? true : $bool;
+					continue;
+				}
+				// CSS/JS breakage-free Safe Mode (issue #1404) — builder-proof
+				// by default. Unrecognized values fail safe to true (enabled).
+				if ( 'cssJsSafeMode' === $safe_key && ! is_array( $value ) ) {
 					$bool                   = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
 					$sanitized[ $safe_key ] = null === $bool ? true : $bool;
 					continue;

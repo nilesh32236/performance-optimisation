@@ -887,7 +887,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( $this->is_hidden_block_asset_for_combine( $handle ) ) {
 				return true;
 			}
-			return $this->core_will_inline( $handle );
+		}
+
+		/**
+		 * Isolate a combine offender for a URL (issue #1404).
+		 *
+		 * Thin delegate to `Main::record_combine_offender()` so REST and CLI
+		 * callers have a single choke point. Persists the handle in the
+		 * per-URL exclusion map (converges within 3 purges) and fails open
+		 * (false) on any error — production assets keep serving, never fatal.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $url    URL the breakage was reported on.
+		 * @param string $handle Offending style handle to exclude.
+		 * @return bool True when the exclusion was persisted (or already stored).
+		 */
+		public function isolate_combine_offender( string $url, string $handle ): bool {
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'record_combine_offender' ) ) {
+					return Main::record_combine_offender( $url, $handle );
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
 		}
 
 		/**
@@ -1059,7 +1084,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( $is_preview ) {
 				$file_opt_for_combine = $this->get_sandbox_effective_file_opt( $file_opt_for_combine );
 			}
-			if ( ! empty( $file_opt_for_combine['excludeCombineCSS'] ) ) {
+			// Breakage-free Safe Mode (issue #1404): effective exclusions merge
+			// the user list with the builder auto-exclusion preset (when Safe
+			// Mode is on) plus per-URL offender isolations. Falls back to the
+			// user list only when Main is unavailable. Fail-open: any failure
+			// serves current production assets (uncombined), never fatal.
+			if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'get_effective_combine_exclusions' ) ) {
+				try {
+					$current_url         = function_exists( 'home_url' ) ? (string) home_url( '/' ) : '';
+					$exclude_combine_css = Main::get_effective_combine_exclusions( is_array( $file_opt_for_combine ) ? $file_opt_for_combine : array(), $current_url );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$exclude_combine_css = array();
+					if ( ! empty( $file_opt_for_combine['excludeCombineCSS'] ) ) {
+						$exclude_combine_css = Util::process_urls( $file_opt_for_combine['excludeCombineCSS'] );
+					}
+				}
+			} elseif ( ! empty( $file_opt_for_combine['excludeCombineCSS'] ) ) {
 				$exclude_combine_css = Util::process_urls( $file_opt_for_combine['excludeCombineCSS'] );
 			}
 			// Sandbox preview (issue #1163): a staged combineCSS=off must disable

@@ -73,8 +73,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 		 * Only keys with a preview render path are allowlisted: delay/defer
 		 * widen their hook registration and bypass the logged-in/safe-mode
 		 * gates for preview admins, combine_css() bypasses its eligibility
-		 * gate and overlays staged excludes, and the HTML minifier overlays
-		 * staged delay excludes plus delayJSExternalOnly/minifyInlineJS.
+		 * gate and overlays staged excludes, minifyJS/minifyCSS/excludeCSS/
+		 * excludeJS/cssJsSafeMode overlay the effective file-optimisation
+		 * slice read by the combine pipeline (issue #1404), and the HTML
+		 * minifier overlays staged delay excludes plus
+		 * delayJSExternalOnly/minifyInlineJS.
 		 * External minifyJS/minifyCSS have no staged widening (filters
 		 * register on production flags only), so they are deliberately
 		 * excluded until a preview path exists.
@@ -87,6 +90,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 			'deferJS',
 			'combineCSS',
 			'elementorSafeMode',
+			'cssJsSafeMode',
+			'minifyJS',
+			'minifyCSS',
+			'excludeCSS',
+			'excludeJS',
 			'delayJSExternalOnly',
 			'minifyInlineJS',
 			'excludeDelayJS',
@@ -293,7 +301,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 				// feature the caller meant to disable. Fail-safe to false,
 				// except elementorSafeMode which fail-safes to true (absent =
 				// enabled) matching Util::sanitize_settings_recursively().
-				foreach ( array( 'delayJS', 'deferJS', 'combineCSS', 'delayJSExternalOnly', 'minifyInlineJS', 'delayJSThirdParty', 'delayJSThirdPartyAuto' ) as $bool_key ) {
+				foreach ( array( 'delayJS', 'deferJS', 'combineCSS', 'delayJSExternalOnly', 'minifyInlineJS', 'delayJSThirdParty', 'delayJSThirdPartyAuto', 'minifyJS', 'minifyCSS', 'cssJsSafeMode' ) as $bool_key ) {
 					if ( array_key_exists( $bool_key, $staged ) && ! is_bool( $staged[ $bool_key ] ) ) {
 						$bool                = filter_var( $staged[ $bool_key ], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
 						$staged[ $bool_key ] = null === $bool ? false : $bool;

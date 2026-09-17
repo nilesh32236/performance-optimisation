@@ -347,6 +347,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+				'combine_isolate'           => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'isolate_combine_offender' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
 			);
 		}
 
@@ -3630,6 +3636,60 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				return $this->send_response( null, false, 500, __( 'Could not discard sandbox settings.', 'performance-optimisation' ) );
 			}
 			return $this->send_response( array( 'staged' => array() ) );
+		}
+
+		/**
+		 * Isolate a combine offender for a URL (issue #1404).
+		 *
+		 * POST params `url` + `handle` persist a per-URL exclusion (converges
+		 * within 3 purges via `Main::record_combine_offender()`). Fail-open:
+		 * never fatal; production assets keep serving on failure.
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		public function isolate_combine_offender( \WP_REST_Request $request ): \WP_REST_Response {
+			if ( $this->is_endpoint_throttled( 'combine_isolate', 5, 60 ) ) {
+				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
+				$response->header( 'Retry-After', '60' );
+				return $response;
+			}
+			$params = $request->get_params();
+			$url    = isset( $params['url'] ) ? trim( (string) $params['url'] ) : '';
+			$handle = isset( $params['handle'] ) ? trim( (string) $params['handle'] ) : '';
+			if ( '' === $url || '' === $handle ) {
+				return $this->send_response( null, false, 400, __( 'URL and handle are required.', 'performance-optimisation' ) );
+			}
+			if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) || ! method_exists( 'PerformanceOptimise\Inc\Main', 'record_combine_offender' ) ) {
+				return $this->send_response( null, false, 500, __( 'Combine isolation is unavailable.', 'performance-optimisation' ) );
+			}
+			$ok = Main::record_combine_offender( $url, $handle );
+			if ( ! $ok ) {
+				// Already-stored exclusions read back as success so a
+				// duplicate report is not a 500; only fail when the handle
+				// is genuinely absent (e.g. purge cap reached).
+				if ( method_exists( 'PerformanceOptimise\Inc\Main', 'get_combine_offenders_for_url' ) ) {
+					try {
+						$stored = Main::get_combine_offenders_for_url( $url );
+						if ( in_array( $handle, $stored, true ) ) {
+							return $this->send_response( array( 'excluded' => $stored ) );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				return $this->send_response( null, false, 500, __( 'Could not isolate the combine offender.', 'performance-optimisation' ) );
+			}
+			$excluded = array();
+			if ( method_exists( 'PerformanceOptimise\Inc\Main', 'get_combine_offenders_for_url' ) ) {
+				try {
+					$excluded = Main::get_combine_offenders_for_url( $url );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			return $this->send_response( array( 'excluded' => $excluded ) );
 		}
 
 		/**

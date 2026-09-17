@@ -594,6 +594,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['file_optimisation']['elementorSafeMode'] ) ) {
 				$this->options['file_optimisation']['elementorSafeMode'] = true;
 			}
+			// CSS/JS breakage-free Safe Mode (issue #1404): additive key,
+			// defaults to on (minify ON, combine OFF posture with builder
+			// auto-exclusions) so builder sites never render unstyled.
+			// In-memory only here (no front-end DB write); persisted via
+			// update_settings/REST. Multisite-safe: per-site wppo_settings.
+			if ( ! isset( $this->options['file_optimisation']['cssJsSafeMode'] ) ) {
+				$this->options['file_optimisation']['cssJsSafeMode'] = true;
+			}
+			// Combine-offender isolation store (issue #1404): per-URL
+			// exclusion map, defaults to empty. In-memory only here.
+			if ( ! isset( $this->options['file_optimisation']['combineOffenders'] ) || ! is_array( $this->options['file_optimisation']['combineOffenders'] ) ) {
+				$this->options['file_optimisation']['combineOffenders'] = array();
+			}
 			// Sandbox preview staged values (issue #1163): additive key,
 			// defaults to empty so existing installs keep current behaviour.
 			// In-memory only here (no front-end DB write).
@@ -1078,6 +1091,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'admin_init', array( $this, 'maybe_migrate_rum_sample_rate' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_safe_mode' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_elementor_safe_mode' ) );
+			add_action( 'admin_init', array( $this, 'maybe_migrate_css_js_safe_mode' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_sandbox_preview' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_image_alt_edge_defaults' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_preload_auto_defaults' ) );
@@ -2304,6 +2318,361 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$this->options['file_optimisation'] = array();
 			}
 			$this->options['file_optimisation']['elementorSafeMode'] = true;
+		}
+
+		/**
+		 * Backfill the additive CSS/JS Safe Mode keys (issue #1404).
+		 *
+		 * Runs on admin_init; in-memory defaults are applied in __construct so
+		 * front-end requests never pay for a DB write. `cssJsSafeMode`
+		 * defaults to on (minify ON, combine OFF posture with builder
+		 * auto-exclusions); `combineOffenders` defaults to an empty per-URL
+		 * map. Stored explicit values are preserved verbatim. Multisite-safe:
+		 * per-site get_option() so sites migrate independently.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public function maybe_migrate_css_js_safe_mode(): void {
+			// allowlist(settings-read-guard): deliberate direct read — must distinguish
+			// "no stored row" (false) from "stored array".
+			$stored = get_option( 'wppo_settings' );
+			if ( ! is_array( $stored ) ) {
+				return;
+			}
+			$file    = isset( $stored['file_optimisation'] ) && is_array( $stored['file_optimisation'] ) ? $stored['file_optimisation'] : array();
+			$changed = false;
+			if ( ! array_key_exists( 'cssJsSafeMode', $file ) ) {
+				$file['cssJsSafeMode'] = true;
+				$changed               = true;
+			}
+			if ( ! array_key_exists( 'combineOffenders', $file ) || ! is_array( $file['combineOffenders'] ) ) {
+				$file['combineOffenders'] = array();
+				$changed                  = true;
+			}
+			if ( ! $changed ) {
+				return;
+			}
+			$stored['file_optimisation'] = $file;
+			Util::save_settings( $stored );
+			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
+				$this->options['file_optimisation'] = array();
+			}
+			$this->options['file_optimisation']['cssJsSafeMode']    = $file['cssJsSafeMode'];
+			$this->options['file_optimisation']['combineOffenders'] = $file['combineOffenders'];
+		}
+
+		/**
+		 * Whether the emergency safe-bypass constant is armed (issue #1404).
+		 *
+		 * `define( 'WPPO_SAFE_MODE', true )` in wp-config.php forces the
+		 * breakage-free posture (aggressive optimisations bypassed, Safe Mode
+		 * treated as on) without a DB write. Fail-open to false when the
+		 * constant is undefined or falsy. `defined()`-guarded for
+		 * backward compatibility.
+		 *
+		 * @since NEXT
+		 *
+		 * @return bool True when the emergency bypass constant is armed.
+		 */
+		public static function is_safe_mode_constant_active(): bool {
+			try {
+				return defined( 'WPPO_SAFE_MODE' ) && (bool) constant( 'WPPO_SAFE_MODE' );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Whether CSS/JS breakage-free Safe Mode is active (issue #1404).
+		 *
+		 * When on (default), minify stays safe (ON) while combine ships with
+		 * the builder auto-exclusion preset and per-URL offender isolation.
+		 * Absent key (pre-migration) means default-on. The `WPPO_SAFE_MODE`
+		 * constant forces on. Fail-open to enabled when settings are
+		 * unreadable so unknown builder markup degrades to uncombined
+		 * (never broken).
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $file_optimisation Optional `file_optimisation` settings slice.
+		 * @return bool True when CSS/JS Safe Mode is on.
+		 */
+		public static function is_css_js_safe_mode_active( array $file_optimisation = array() ): bool {
+			try {
+				if ( self::is_safe_mode_constant_active() ) {
+					return true;
+				}
+				if ( empty( $file_optimisation ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					try {
+						$settings          = (array) Util::get_settings();
+						$file_optimisation = isset( $settings['file_optimisation'] ) && is_array( $settings['file_optimisation'] ) ? $settings['file_optimisation'] : array();
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				// Absent key (pre-migration) means default-on.
+				$enabled = ! array_key_exists( 'cssJsSafeMode', $file_optimisation ) || ! empty( $file_optimisation['cssJsSafeMode'] );
+				if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_css_js_safe_mode_enabled' ) ) {
+					try {
+						$enabled = (bool) apply_filters( 'wppo_css_js_safe_mode_enabled', $enabled );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				return $enabled;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
+		 * Curated combine-CSS Safe Mode preset exclusions (issue #1404).
+		 *
+		 * Built-in Elementor / Salient (child) / WPBakery / WooCommerce cart
+		 * fragments / jquery-core handles stay un-combined by default so
+		 * builder sites never render unstyled output. Filterable via
+		 * `wppo_safe_mode_combine_exclusions` (has_filter-guarded, fail-open
+		 * to the built-in preset). Merged with user `excludeCombineCSS` via
+		 * array_unique by callers. Per-site settings only; multisite-safe.
+		 *
+		 * @since NEXT
+		 *
+		 * @return string[]
+		 */
+		public static function get_safe_mode_combine_exclusions(): array {
+			$preset = array(
+				'jquery-core',
+				'jquery',
+				'jquery-migrate',
+				'elementor-frontend',
+				'elementor-pro-frontend',
+				'elementor-common',
+				'elementor-global',
+				'salient-child-style',
+				'salient-style',
+				'nectar-style',
+				'js_composer_front',
+				'vc_pageable_owl-carousel-css',
+				'wc-cart-fragments',
+				'wc-checkout',
+				'cart-fragments',
+			);
+			/**
+			 * Filters Safe Mode combine preset exclusions.
+			 *
+			 * @since NEXT
+			 * @param string[] $preset Safe Mode combine preset exclusions.
+			 */
+			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_safe_mode_combine_exclusions' ) ) {
+				return $preset;
+			}
+			try {
+				$raw = apply_filters( 'wppo_safe_mode_combine_exclusions', $preset );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $preset;
+			}
+			if ( ! is_array( $raw ) ) {
+				return $preset;
+			}
+			return array_values(
+				array_unique(
+					array_filter(
+						array_map(
+							static function ( $val ): string {
+								return is_string( $val ) || is_numeric( $val ) ? trim( (string) $val ) : '';
+							},
+							$raw
+						),
+						static function ( $val ): bool {
+							return '' !== $val;
+						}
+					)
+				)
+			);
+		}
+
+		/**
+		 * Effective combine exclusions for a request (issue #1404).
+		 *
+		 * Merges the user `excludeCombineCSS` list with the Safe Mode builder
+		 * preset (when Safe Mode is on) and any per-URL offender isolations
+		 * for the current URL. Fail-open to the user list on any error.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array  $file_optimisation `file_optimisation` settings slice.
+		 * @param string $url               Optional current URL (defaults to home_url when available).
+		 * @return string[] Effective exclusion list.
+		 */
+		public static function get_effective_combine_exclusions( array $file_optimisation = array(), string $url = '' ): array {
+			try {
+				$user = array();
+				if ( ! empty( $file_optimisation['excludeCombineCSS'] ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'process_urls' ) ) {
+					try {
+						$user = Util::process_urls( $file_optimisation['excludeCombineCSS'] );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$user = array();
+					}
+				}
+				$merged = $user;
+				if ( self::is_css_js_safe_mode_active( $file_optimisation ) ) {
+					$merged = array_merge( $merged, self::get_safe_mode_combine_exclusions() );
+				}
+				if ( '' === $url && function_exists( 'home_url' ) ) {
+					try {
+						$url = (string) home_url( '/' );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$url = '';
+					}
+				}
+				if ( '' !== $url ) {
+					try {
+						$offenders = self::get_combine_offenders_for_url( $url, $file_optimisation );
+						if ( ! empty( $offenders ) ) {
+							$merged = array_merge( $merged, $offenders );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				return array_values( array_unique( array_filter( array_map( 'trim', array_map( 'strval', $merged ) ) ) ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
+		 * Per-URL combine-offender exclusions (issue #1404).
+		 *
+		 * Reads the additive `file_optimisation.combineOffenders` map keyed by
+		 * `md5( $url )` with shape `array( 'handles' => string[], 'purges' => int )`.
+		 * Fail-open to an empty list on any error. Multisite-safe: per-site
+		 * settings only.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $url               URL the exclusions were recorded for.
+		 * @param array  $file_optimisation Optional `file_optimisation` slice.
+		 * @return string[] Excluded handles for the URL.
+		 */
+		public static function get_combine_offenders_for_url( string $url, array $file_optimisation = array() ): array {
+			try {
+				if ( '' === trim( $url ) ) {
+					return array();
+				}
+				if ( empty( $file_optimisation ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) ) {
+					try {
+						$settings          = (array) Util::get_settings();
+						$file_optimisation = isset( $settings['file_optimisation'] ) && is_array( $settings['file_optimisation'] ) ? $settings['file_optimisation'] : array();
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				$map = isset( $file_optimisation['combineOffenders'] ) && is_array( $file_optimisation['combineOffenders'] ) ? $file_optimisation['combineOffenders'] : array();
+				$key = md5( $url );
+				if ( ! isset( $map[ $key ] ) || ! is_array( $map[ $key ] ) ) {
+					return array();
+				}
+				$handles = isset( $map[ $key ]['handles'] ) && is_array( $map[ $key ]['handles'] ) ? $map[ $key ]['handles'] : array();
+				return array_values( array_unique( array_filter( array_map( 'trim', array_map( 'strval', $handles ) ) ) ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
+		 * Bisect a combine handle list to isolate an offender (issue #1404).
+		 *
+		 * Returns the first half (ceil) as the next suspect set so repeated
+		 * reports converge within ~log2(n) <= 3 purges for typical builder
+		 * bundles. Pure helper: no WP calls, fail-open to the input list.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string[] $handles Combined handles under suspicion.
+		 * @return string[] Suspect subset to exclude next.
+		 */
+		public static function bisect_combine_handles( array $handles ): array {
+			try {
+				$clean = array_values( array_unique( array_filter( array_map( 'trim', array_map( 'strval', $handles ) ) ) ) );
+				if ( count( $clean ) <= 1 ) {
+					return $clean;
+				}
+				$half = (int) ceil( count( $clean ) / 2 );
+				return array_slice( $clean, 0, $half );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+		}
+
+		/**
+		 * Persist a combine offender for a URL (issue #1404).
+		 *
+		 * Appends `$handle` to the per-URL exclusion entry (capped at 3
+		 * purges per URL: further reports are ignored once `purges >= 3`
+		 * so isolation always converges within 3 purges). Writes via
+		 * `Util::save_settings()` (per-site option, multisite-safe) and
+		 * fails open (false) when WP functions are unavailable. Never fatal.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $url    URL the breakage was reported on.
+		 * @param string $handle Offending style handle to exclude.
+		 * @return bool True when the exclusion was persisted (or already stored).
+		 */
+		public static function record_combine_offender( string $url, string $handle ): bool {
+			try {
+				$url    = trim( $url );
+				$handle = trim( $handle );
+				if ( '' === $url || '' === $handle ) {
+					return false;
+				}
+				if ( ! function_exists( 'get_option' ) || ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! method_exists( 'PerformanceOptimise\Inc\Util', 'get_settings' ) || ! method_exists( 'PerformanceOptimise\Inc\Util', 'save_settings' ) ) {
+					return false;
+				}
+				$settings = (array) Util::get_settings();
+				if ( ! isset( $settings['file_optimisation'] ) || ! is_array( $settings['file_optimisation'] ) ) {
+					$settings['file_optimisation'] = array();
+				}
+				$map = isset( $settings['file_optimisation']['combineOffenders'] ) && is_array( $settings['file_optimisation']['combineOffenders'] ) ? $settings['file_optimisation']['combineOffenders'] : array();
+				// Cap the map so a hostile reporter cannot grow the option unbounded.
+				if ( count( $map ) > 50 ) {
+					$map = array_slice( $map, -50, 50, true );
+				}
+				$key     = md5( $url );
+				$entry   = isset( $map[ $key ] ) && is_array( $map[ $key ] ) ? $map[ $key ] : array(
+					'handles' => array(),
+					'purges'  => 0,
+				);
+				$handles = isset( $entry['handles'] ) && is_array( $entry['handles'] ) ? $entry['handles'] : array();
+				if ( in_array( $handle, $handles, true ) ) {
+					return true;
+				}
+				$purges = isset( $entry['purges'] ) ? (int) $entry['purges'] : 0;
+				if ( $purges >= 3 ) {
+					return false;
+				}
+				$handles[]   = $handle;
+				$map[ $key ] = array(
+					'url'     => $url,
+					'handles' => array_values( array_unique( $handles ) ),
+					'purges'  => $purges + 1,
+				);
+				$settings['file_optimisation']['combineOffenders'] = $map;
+				return (bool) Util::save_settings( $settings );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
 		}
 
 		/**
@@ -7021,6 +7390,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		public static function is_aggressive_bypass_active(): bool {
 			try {
+				// Emergency safe-bypass constant (issue #1404): serve current
+				// production assets unoptimised, never fatal. defined()-guarded.
+				if ( defined( 'WPPO_SAFE_MODE' ) ) {
+					try {
+						if ( (bool) constant( 'WPPO_SAFE_MODE' ) ) {
+							return true;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
 				if ( function_exists( 'is_preview' ) ) {
 					try {
 						if ( is_preview() ) {
