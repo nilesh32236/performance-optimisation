@@ -7180,11 +7180,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				// chain (OD → stored PageSpeed → DOM-first heuristic) so a
 				// detectable hero still preloads when stored data is absent.
 				// Fail-open: detection failure leaves $lcp_url empty and the
-				// markup unmodified, never fatal.
+				// markup unmodified, never fatal. When only the occlusion
+				// flag is on, the occluded list is fetched first and LCP
+				// resolution is skipped when it is empty (no markup change
+				// possible, so the OD/RUM/DOM scan cost is avoided).
 				//
 				// @since NEXT Unified resolution via resolve_auto_lcp_url().
-				$lcp_url = '';
-				if ( $prioritize_enabled || $occlusion_enabled ) {
+				$lcp_url             = '';
+				$occluded_urls_early = null;
+				if ( $occlusion_enabled && ! $prioritize_enabled ) {
+					try {
+						$occluded_urls_early = $this->get_occluded_image_urls_for_request();
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$occluded_urls_early = array();
+					}
+					if ( ! is_array( $occluded_urls_early ) ) {
+						$occluded_urls_early = array();
+					}
+				}
+				if ( $prioritize_enabled || ( is_array( $occluded_urls_early ) && ! empty( $occluded_urls_early ) ) ) {
 					try {
 						if ( method_exists( $this, 'resolve_auto_lcp_url' ) ) {
 							$lcp_url = $this->resolve_auto_lcp_url( $filtered_output );
@@ -7229,7 +7244,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				// the true-LCP node so the single-high invariant holds.
 				if ( $occlusion_enabled ) {
 					try {
-						$occluded_urls = $this->get_occluded_image_urls_for_request();
+						$occluded_urls = is_array( $occluded_urls_early ) ? $occluded_urls_early : $this->get_occluded_image_urls_for_request();
 						if ( ! empty( $occluded_urls ) ) {
 							$buffer = $this->apply_occlusion_fetchpriority_low( $buffer, $occluded_urls, $lcp_url );
 						}

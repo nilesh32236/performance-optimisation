@@ -773,9 +773,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 *
 		 * Covers object methods (`is_occluded()`, `isOccluded()`,
 		 * `is_visible()`/`isVisible()` false, `is_hidden()`/`isHidden()`
-		 * true), matching properties/array keys, plus a geometry fallback
-		 * (`intersectionRatio`/`intersection_ratio` of 0 with a non-empty
-		 * bounding rect, or a zero-area rect). The LCP element itself is
+		 * true), matching properties/array keys (including
+		 * `isHiddenElement`), plus a zero-area-rect geometry fallback.
+		 * A zero `intersectionRatio` alone is not occlusion (it also
+		 * matches ordinary below-the-fold nodes). The LCP element itself is
 		 * never occluded (callers skip LCP first). Fail-open to false.
 		 *
 		 * @since NEXT
@@ -807,7 +808,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 							}
 						}
 					}
-					foreach ( array( 'is_hidden', 'isHidden' ) as $method ) {
+					foreach ( array( 'is_hidden', 'isHidden', 'isHiddenElement' ) as $method ) {
 						if ( method_exists( $element, $method ) ) {
 							try {
 								if ( (bool) $element->$method() ) {
@@ -828,7 +829,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 							return true;
 						}
 					}
-					foreach ( array( 'is_hidden', 'isHidden' ) as $prop ) {
+					foreach ( array( 'is_hidden', 'isHidden', 'isHiddenElement' ) as $prop ) {
 						if ( isset( $element->$prop ) && (bool) $element->$prop ) {
 							return true;
 						}
@@ -863,9 +864,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		/**
 		 * Geometry fallback for occlusion detection.
 		 *
-		 * An element with zero intersection but a non-empty bounding rect
-		 * (occluded/covered), or with a zero-area rect, counts as occluded.
-		 * Missing geometry returns false (fail-open).
+		 * An element with a zero-area rect (either dimension is zero or
+		 * negative) counts as occluded. Missing geometry returns false
+		 * (fail-open).
+		 *
+		 * Limitation: a zero `intersectionRatio` with a non-empty bounding
+		 * rect is intentionally NOT treated as occlusion here. That shape
+		 * is indistinguishable from an ordinary below-the-fold offscreen
+		 * node, so classifying it as occluded would demote below-fold
+		 * eager images that belong to the lazy pipeline instead. Occlusion
+		 * therefore requires an explicit occlusion/visibility signal
+		 * (checked in `element_is_occluded()`) or a zero-area rect.
 		 *
 		 * @since NEXT
 		 * @param array $data Element data as an array.
@@ -873,13 +882,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 */
 		private static function element_geometry_is_occluded( array $data ): bool {
 			try {
-				$ratio = null;
-				foreach ( array( 'intersectionRatio', 'intersection_ratio', 'intersectionratio' ) as $key ) {
-					if ( isset( $data[ $key ] ) && is_numeric( $data[ $key ] ) ) {
-						$ratio = (float) $data[ $key ];
-						break;
-					}
-				}
 				$rect = null;
 				foreach ( array( 'boundingClientRect', 'bounding_client_rect', 'boundingRect', 'bounding_rect', 'rect' ) as $key ) {
 					if ( isset( $data[ $key ] ) && is_array( $data[ $key ] ) ) {
@@ -902,12 +904,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 				}
 				$w = isset( $rect['width'] ) && is_numeric( $rect['width'] ) ? (float) $rect['width'] : null;
 				$h = isset( $rect['height'] ) && is_numeric( $rect['height'] ) ? (float) $rect['height'] : null;
-				if ( null !== $w && null !== $h && $w <= 0 && $h <= 0 ) {
+				if ( null !== $w && null !== $h && ( $w <= 0 || $h <= 0 ) ) {
 					return true;
 				}
-				if ( null !== $ratio && 0.0 === $ratio && null !== $w && null !== $h && $w > 0 && $h > 0 ) {
-					return true;
-				}
+				return false;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
