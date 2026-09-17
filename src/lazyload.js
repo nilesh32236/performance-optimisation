@@ -222,6 +222,19 @@ try {
 				// Assignment can throw on frozen test doubles — keep native.
 			}
 			if ( nativeRemove ) {
+				const getCaptureFlag = ( value ) => {
+					try {
+						if ( typeof value === 'boolean' ) {
+							return value;
+						}
+						if ( value && typeof value === 'object' ) {
+							return !! value.capture;
+						}
+					} catch {
+						// Flag reads are best-effort; fall through to false.
+					}
+					return false;
+				};
 				const patchedRemove = ( type, listener, options ) => {
 					try {
 						if (
@@ -229,12 +242,20 @@ try {
 								type === 'load' ) &&
 							Array.isArray( wppoDelayedListeners[ type ] )
 						) {
+							// Mirror native capture matching: only dequeue
+							// entries whose capture flag equals the removal
+							// capture flag (boolean or options.capture,
+							// defaulting to false), so a listener registered
+							// with both capture values is not dequeued early.
+							const removalCapture = getCaptureFlag( options );
 							wppoDelayedListeners[ type ] = wppoDelayedListeners[
 								type
 							].filter(
 								( entry ) =>
 									entry.listener !== listener ||
-									entry.target !== target
+									entry.target !== target ||
+									getCaptureFlag( entry.options ) !==
+										removalCapture
 							);
 						}
 					} catch {
