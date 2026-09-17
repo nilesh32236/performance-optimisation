@@ -802,22 +802,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * @return bool True when the image exceeds the budget and must be skipped.
 		 */
 		/**
-	 * Whether a detected source MIME may reach an image decoder (audit #1411).
-	 *
-	 * Defense-in-depth before Imagick::readImage(): getimagesize() magic-byte
-	 * parsing already rejects non-images, but an explicit allowlist ensures a
-	 * polyglot accepted by a lenient parser can never reach a delegate-based
-	 * decoder (PostScript/SVG/MVG RCE class). Fail-closed: unknown mimes skip.
-	 *
-	 * @since NEXT
-	 * @param string $mime Detected MIME (e.g. from getimagesize()).
-	 * @return bool True when the MIME is a decodable bitmap type.
-	 */
-	public static function is_allowed_source_mime( string $mime ): bool {
-		return in_array( strtolower( trim( $mime ) ), array( 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif' ), true );
-	}
+		 * Whether a detected source MIME may reach an image decoder (audit #1411).
+		 *
+		 * Defense-in-depth before Imagick::readImage(): getimagesize() magic-byte
+		 * parsing already rejects non-images, but an explicit allowlist ensures a
+		 * polyglot accepted by a lenient parser can never reach a delegate-based
+		 * decoder (PostScript/SVG/MVG RCE class). Fail-closed: unknown mimes skip.
+		 *
+		 * @since NEXT
+		 * @param string $mime Detected MIME (e.g. from getimagesize()).
+		 * @return bool True when the MIME is a decodable bitmap type.
+		 */
+		public static function is_allowed_source_mime( string $mime ): bool {
+			return in_array( strtolower( trim( $mime ) ), array( 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif' ), true );
+		}
 
-	public function exceeds_pixel_budget( int $width, int $height, int $channels = 4 ): bool {
+		/**
+		 * Channels-aware( int $width, int $height, int $channels = 4 ): bool {
 			if ( $width <= 0 || $height <= 0 ) {
 				// Corrupt headers (non-positive dimensions) are not an
 				// oversize skip: return false so the caller falls through
