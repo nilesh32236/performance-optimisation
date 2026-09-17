@@ -1555,16 +1555,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$jobs_queued          = 0;
 
 			if ( $use_action_scheduler ) {
-				// Paginated scheduler snapshot for dedup instead of one
-				// as_has_scheduled_action() query per image (N+1). Falls back
-				// to per-item checks only when the snapshot is incomplete
-				// (unavailable/failed/page-cap hit); a complete snapshot is
-				// trusted (audit #1338). The snapshot is best-effort: a
-				// concurrent process enqueueing between snapshot and enqueue
-				// can still duplicate — the per-item fallback narrows that
-				// window only when the snapshot is known-incomplete.
-				$scheduled         = array();
-				$snapshot_complete = false;
+				// Paginated scheduler snapshot for in-request dedup instead of
+				// one as_has_scheduled_action() query per image (N+1, audit
+				// #1338). The snapshot is best-effort and advisory only: the
+				// atomic `$unique` enqueue below (issue #1408) is the dedup
+				// authority, so a concurrent enqueue between snapshot and
+				// enqueue still dedupes safely in the store.
+				$scheduled = array();
 				// Needed dedup keys (bounded by $jobs_cap): stop paginating as
 				// soon as every needed key is covered instead of fetching up
 				// to 10k rows.
@@ -1594,13 +1591,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 								'offset'   => $as_page * 1000,
 							);
 							$existing_actions = as_get_scheduled_actions( $query, 'ARRAY_A' );
-							// Store failure is NOT complete: fall back to per-item checks
-							// rather than trusting an empty map (avoids double-queueing).
+							// Store failure yields a partial map at worst: the
+							// atomic `$unique` enqueue below still dedupes.
 							if ( ! is_array( $existing_actions ) ) {
 								break;
 							}
 							if ( empty( $existing_actions ) ) {
-								$snapshot_complete = true;
 								break;
 							}
 							foreach ( $existing_actions as $action ) {
@@ -1616,14 +1612,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 									$scheduled[ $action_args[0]['source_path'] . '|' . $action_args[0]['format'] ] = true;
 									// All needed keys covered: stop paginating early.
 									if ( ! empty( $needed ) && ! array_diff_key( $needed, $scheduled ) ) {
-										$snapshot_complete = true;
 										break 2;
 									}
 								}
 							}
 							// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
 							if ( count( $existing_actions ) < 1000 ) {
-								$snapshot_complete = true;
 								break;
 							}
 						}

@@ -473,7 +473,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * stay as they are (full CSS keeps serving).
 		 *
 		 * @since 2.0.0
-		 * @return bool True when an event was enqueued or already pending.
+		 * @return bool True when a new event was enqueued. False when already pending (stays retryable) or on failure.
 		 */
 		protected function schedule_deferred_drift_purge(): bool {
 			try {
