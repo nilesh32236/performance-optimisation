@@ -442,4 +442,63 @@ class MetaboxTest extends \PHPUnit\Framework\TestCase {
 			unset( $_POST['wppo_preload_image_nonce'], $_POST['wppo_preload_image_url'], $_POST['wppo_lcp_preload_url'] );
 		}
 	}
+
+	/**
+	 * Saving with the disable checkbox persists the auto-LCP kill switch.
+	 */
+	public function test_save_preload_image_urls_persists_disable_auto_lcp(): void {
+		$_POST['wppo_preload_image_nonce'] = 'valid-nonce';
+		$_POST['wppo_disable_auto_lcp']    = '1';
+
+		Functions\when( 'wp_verify_nonce' )->justReturn( true );
+		Functions\when( 'esc_url_raw' )->returnArg();
+		$saved = array();
+		Functions\when( 'update_post_meta' )->alias(
+			function ( $post_id, $key, $value ) use ( &$saved ) {
+				$saved[ $key ] = $value;
+				return true;
+			}
+		);
+		Functions\when( 'delete_post_meta' )->justReturn( true );
+
+		$metabox    = $this->make_metabox();
+		$reflection = new \ReflectionClass( $metabox );
+		$method     = $reflection->getMethod( 'save_preload_image_urls' );
+
+		try {
+			$method->invokeArgs( $metabox, array( 123 ) );
+			$this->assertSame( '1', $saved['_wppo_disable_auto_lcp'] );
+		} finally {
+			unset( $_POST['wppo_preload_image_nonce'], $_POST['wppo_disable_auto_lcp'] );
+		}
+	}
+
+	/**
+	 * Saving without the disable checkbox deletes the kill-switch meta.
+	 */
+	public function test_save_preload_image_urls_deletes_disable_auto_lcp_when_unchecked(): void {
+		$_POST['wppo_preload_image_nonce'] = 'valid-nonce';
+
+		Functions\when( 'wp_verify_nonce' )->justReturn( true );
+		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'update_post_meta' )->justReturn( true );
+		$deleted = array();
+		Functions\when( 'delete_post_meta' )->alias(
+			function ( $post_id, $key ) use ( &$deleted ) {
+				$deleted[] = $key;
+				return true;
+			}
+		);
+
+		$metabox    = $this->make_metabox();
+		$reflection = new \ReflectionClass( $metabox );
+		$method     = $reflection->getMethod( 'save_preload_image_urls' );
+
+		try {
+			$method->invokeArgs( $metabox, array( 123 ) );
+			$this->assertContains( '_wppo_disable_auto_lcp', $deleted );
+		} finally {
+			unset( $_POST['wppo_preload_image_nonce'] );
+		}
+	}
 }

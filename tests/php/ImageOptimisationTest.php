@@ -1947,6 +1947,87 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that an empty generate_img_preload() resolves the stable RUM
+	 * signal, emits one fetchpriority=high tag, and dedups the repeat.
+	 */
+	public function test_generate_img_preload_empty_resolves_stable_signal_once(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'wp_doing_ajax' )->justReturn( false );
+		Functions\when( 'wp_doing_cron' )->justReturn( false );
+		Functions\when( 'wp_is_json_request' )->justReturn( false );
+		Functions\when( 'esc_attr' )->returnArg();
+		Functions\when( 'esc_url' )->returnArg();
+		Functions\when( 'wp_kses' )->returnArg( 1 );
+		Functions\when( 'get_the_ID' )->justReturn( 0 );
+		$this->stub_field_lcp_environment(
+			array( 'image_optimisation' => array( 'fieldLcpMinSamples' => 20 ) ),
+			$this->make_rum_aggregate( '/hero-page/', 'https://example.com/wp-content/uploads/signal.jpg', 20, time() ),
+			''
+		);
+		$_SERVER['REQUEST_URI']     = '/hero-page/';
+		$GLOBALS['od_metrics_stub'] = array();
+		$GLOBALS['od_url_metrics']  = array();
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+
+		ob_start();
+		$image_opt->generate_img_preload( '' );
+		$first = (string) ob_get_clean();
+
+		$this->assertSame( 1, substr_count( $first, 'rel="preload"' ) );
+		$this->assertStringContainsString( 'fetchpriority="high"', $first );
+		$this->assertStringContainsString( 'https://example.com/wp-content/uploads/signal.jpg', $first );
+
+		ob_start();
+		$image_opt->generate_img_preload( '' );
+		$second = (string) ob_get_clean();
+
+		$this->assertSame( 0, substr_count( $second, 'rel="preload"' ) );
+	}
+
+	/**
+	 * Test that the per-post disable meta suppresses the stable signal
+	 * path and the unified auto chain.
+	 */
+	public function test_stable_signal_suppressed_by_disable_meta(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'esc_attr' )->returnArg();
+		Functions\when( 'esc_url' )->returnArg();
+		Functions\when( 'wp_kses' )->returnArg( 1 );
+		$this->stub_field_lcp_environment(
+			array( 'image_optimisation' => array( 'fieldLcpMinSamples' => 20 ) ),
+			$this->make_rum_aggregate( '/hero-page/', 'https://example.com/wp-content/uploads/signal.jpg', 20, time() ),
+			''
+		);
+		$_SERVER['REQUEST_URI']     = '/hero-page/';
+		$GLOBALS['od_metrics_stub'] = array();
+		$GLOBALS['od_url_metrics']  = array();
+		Functions\when( 'is_singular' )->justReturn( true );
+		Functions\when( 'get_the_ID' )->justReturn( 42 );
+		Functions\when( 'get_post_meta' )->alias(
+			static function ( $post_id, $key ) {
+				if ( '_wppo_disable_auto_lcp' === $key ) {
+					return '1';
+				}
+				return '';
+			}
+		);
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+
+		$signal = new \ReflectionMethod( Image_Optimisation::class, 'get_stable_signal_lcp_url' );
+		$signal->setAccessible( true );
+		$this->assertSame( '', $signal->invoke( $image_opt ) );
+
+		$resolve = new \ReflectionMethod( Image_Optimisation::class, 'resolve_auto_lcp_url' );
+		$resolve->setAccessible( true );
+		$this->assertSame( '', $resolve->invoke( $image_opt, null ) );
+	}
+
+	/**
 	 * Test that the field-measured LCP candidate is excluded from lazy load
 	 * when the fieldLcpOverride toggle is on.
 	 *

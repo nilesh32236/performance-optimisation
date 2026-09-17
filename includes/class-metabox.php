@@ -95,6 +95,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 			if ( ! is_string( $lcp_url ) ) {
 				$lcp_url = '';
 			}
+			$disable_auto_lcp = ! empty( get_post_meta( $post->ID, '_wppo_disable_auto_lcp', true ) );
 
 			// Add a nonce for security.
 			wp_nonce_field( 'save_preload_image_url', 'wppo_preload_image_nonce' );
@@ -107,6 +108,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 				<label for="wppo_lcp_preload_url"><?php esc_html_e( 'LCP Image URL (manual override):', 'performance-optimisation' ); ?></label>
 				<input type="url" id="wppo_lcp_preload_url" name="wppo_lcp_preload_url" style="width: 100%;" maxlength="2048" placeholder="https://example.com/hero.jpg" value="<?php echo esc_attr( $lcp_url ); ?>" />
 				<span class="description"><?php esc_html_e( 'Optional single hero URL. Wins over auto-detect (RUM / Optimization Detective / PageSpeed) and is preloaded with fetchpriority high. Leave empty to use auto-detect.', 'performance-optimisation' ); ?></span>
+			</p>
+			<p>
+				<label for="wppo_disable_auto_lcp">
+					<input type="checkbox" id="wppo_disable_auto_lcp" name="wppo_disable_auto_lcp" value="1" <?php checked( $disable_auto_lcp ); ?> />
+					<?php esc_html_e( 'Disable automatic LCP preload on this page', 'performance-optimisation' ); ?>
+				</label>
+				<br />
+				<span class="description"><?php esc_html_e( 'Suppresses the signal-driven (RUM / Optimization Detective) hero preload + lazy exclusion. A manual LCP URL above still applies.', 'performance-optimisation' ); ?></span>
 			</p>
 			<?php
 		}
@@ -434,6 +443,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 				} else {
 					update_post_meta( $post_id, '_wppo_lcp_preload_url', $lcp_url );
 				}
+			}
+
+			// Per-post automatic-LCP kill switch (issue #1273): suppresses
+			// the signal-driven hero preload + lazy exclusion. Checkbox-only;
+			// absent (unchecked) deletes the meta so the default stays enabled.
+			//
+			// @since NEXT.
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above via wppo_preload_image_nonce.
+			$disable_auto_lcp = isset( $_POST['wppo_disable_auto_lcp'] ) && ! empty( $_POST['wppo_disable_auto_lcp'] );
+			if ( $disable_auto_lcp ) {
+				if ( function_exists( 'update_post_meta' ) ) {
+					update_post_meta( $post_id, '_wppo_disable_auto_lcp', '1' );
+				}
+			} elseif ( function_exists( 'delete_post_meta' ) ) {
+				delete_post_meta( $post_id, '_wppo_disable_auto_lcp' );
 			}
 
 			if ( ! isset( $_POST['wppo_preload_image_url'] ) ) {
