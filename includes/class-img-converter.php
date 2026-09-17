@@ -420,6 +420,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 			$quality = min( 100, max( 1, $quality ) );
 
+			// Pre-read dimension cap: a hostile/oversized header must skip
+			// before readImage() transiently allocates the full bitmap.
+			// Fail-open returns false (caller falls back to WebP/original).
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- getimagesize() parses headers only; silenced for corrupt-file safety.
+			$probe = @getimagesize( $source_image );
+			if ( is_array( $probe ) && isset( $probe[0], $probe[1] ) && $this->exceeds_imagick_dimension_cap( (int) $probe[0], (int) $probe[1] ) ) {
+				return false;
+			}
+
 			try {
 				$imagick = new \Imagick();
 				try {
@@ -725,12 +734,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			if ( ! defined( 'WP_CONTENT_DIR' ) ) {
 				return false;
 			}
-			$content = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( WP_CONTENT_DIR ) : str_replace( '\\', '/', WP_CONTENT_DIR );
-			$wppo    = rtrim( $content, '/' ) . '/wppo/';
+			$content    = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( WP_CONTENT_DIR ) : str_replace( '\\', '/', WP_CONTENT_DIR );
+			$wppo       = rtrim( $content, '/' ) . '/wppo/';
+			$lexical_ok = false;
 			if ( 0 === strpos( $candidate, $wppo ) ) {
-				return true;
+				$lexical_ok = true;
 			}
-			if ( function_exists( 'wp_upload_dir' ) ) {
+			if ( ! $lexical_ok && function_exists( 'wp_upload_dir' ) ) {
 				$blog_id            = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
 				static $upload_dirs = array();
 				if ( ! isset( $upload_dirs[ $blog_id ] ) ) {
@@ -747,13 +757,114 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					}
 				}
 				if ( '' !== $upload_dirs[ $blog_id ] && 0 === strpos( $candidate, $upload_dirs[ $blog_id ] ) ) {
-					return true;
+					$lexical_ok = true;
 				}
 				// Converted outputs rewritten under `wppo/` keep the uploads
 				// sub-path (e.g. `wppo/uploads/2024/01/a.webp`); the prefix
 				// check above already covers them.
 			}
-			return false;
+			if ( ! $lexical_ok ) {
+				return false;
+			}
+			// Realpath re-containment: a symlink inside uploads (or the wppo
+			// tree) pointing outside passes the lexical gate above, so when
+			// the target exists its canonical path must also be confined.
+			// Refused deletes fail open (caller keeps the file, serves the
+			// original) — never delete out of scope.
+			return self::is_realpath_confined( $path );
+		}
+
+		/**
+		 * Whether a delete/write target stays confined to uploads after symlink resolution.
+		 *
+		 * Resolves `realpath()` on the candidate when it exists (and on its
+		 * parent directory for not-yet-existing write targets) and requires
+		 * the canonical path to sit under the per-site uploads basedir or
+		 * `WP_CONTENT_DIR/wppo/`. Non-existent paths with an unresolvable
+		 * parent fall back to the lexical verdict (fail-open for pre-write
+		 * targets; the write itself still runs through is_safe_write_path()).
+		 * Multisite-safe: per-site uploads basedir only; no cross-site paths.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $path Absolute filesystem path proposed for delete/write.
+		 * @return bool True when the resolved path is confined (or unresolvable pre-write).
+		 */
+		protected static function is_realpath_confined( string $path ): bool {
+			if ( '' === $path || false !== strpos( $path, "\0" ) ) {
+				return false;
+			}
+			if ( ! defined( 'WP_CONTENT_DIR' ) || ! function_exists( 'wp_upload_dir' ) ) {
+				// Without the uploads API the lexical gate already confined
+				// to WP_CONTENT_DIR/wppo; nothing further to resolve against.
+				return true;
+			}
+			$normalize = function ( string $p ): string {
+				$n = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $p ) : str_replace( '\\', '/', $p );
+				return rtrim( $n, '/' ) . '/';
+			};
+			$content   = function_exists( 'wp_normalize_path' ) ? wp_normalize_path( WP_CONTENT_DIR ) : str_replace( '\\', '/', WP_CONTENT_DIR );
+			$roots     = array( $normalize( rtrim( $content, '/' ) . '/wppo' ) );
+			$dir       = wp_upload_dir();
+			$base      = isset( $dir['basedir'] ) ? (string) $dir['basedir'] : '';
+			if ( '' !== $base ) {
+				$roots[] = $normalize( $base );
+			}
+			$contains = function ( string $candidate ) use ( $roots, $normalize ): bool {
+				$candidate = $normalize( $candidate );
+				foreach ( $roots as $root ) {
+					if ( 0 === strpos( $candidate, $root ) ) {
+						return true;
+					}
+				}
+				return false;
+			};
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- realpath() emits warnings on missing paths; false is the handled signal.
+			$resolved = @realpath( $path );
+			if ( false !== $resolved ) {
+				return $contains( (string) $resolved );
+			}
+			$parent = dirname( $path );
+			if ( '' !== $parent && '.' !== $parent ) {
+				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- realpath() emits warnings on missing paths; false is the handled signal.
+				$resolved_parent = @realpath( $parent );
+				if ( false !== $resolved_parent ) {
+					return $contains( (string) $resolved_parent );
+				}
+			}
+			return true;
+		}
+
+		/**
+		 * Whether an absolute path is confined to the uploads tree after symlink resolution.
+		 *
+		 * Public uploads-confinement probe for backup/delete/resolved paths:
+		 * requires the lexical uploads/wppo containment (same gate as
+		 * is_safe_delete_path()) AND, when the file exists, that its
+		 * `realpath()` canonical form is still inside the per-site uploads
+		 * basedir or `WP_CONTENT_DIR/wppo/`. Guarded for WP 6.2 compat:
+		 * returns false when `WP_CONTENT_DIR` is undefined or
+		 * `wp_upload_dir()` is unavailable. Fail-open direction: out-of-scope
+		 * paths return false (callers skip + serve the original, never delete).
+		 * Multisite-safe: uploads-dir-relative only; per-site options; no
+		 * cross-site deletes.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $path Absolute filesystem path to check.
+		 * @return bool True when the path is confined to uploads.
+		 */
+		public static function is_path_confined_to_uploads( string $path ): bool {
+			if ( '' === $path || false !== strpos( $path, "\0" ) ) {
+				return false;
+			}
+			if ( ! defined( 'WP_CONTENT_DIR' ) || ! function_exists( 'wp_upload_dir' ) ) {
+				return false;
+			}
+			if ( ! self::is_safe_delete_path( $path ) ) {
+				return false;
+			}
+			return self::is_realpath_confined( $path );
 		}
 
 		/**
@@ -1113,14 +1224,135 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		}
 
 		/**
+		 * Resolve the Imagick memory cap in bytes.
+		 *
+		 * Additive `imagickMemoryLimitMB` setting (default 256) plus the
+		 * `wppo_imagick_memory_limit_bytes` filter. The filter/setting value
+		 * is untrusted: coerced to a positive int with fallback to the
+		 * default so a 0/negative/non-numeric return can neither disable the
+		 * guard nor block all conversions. Fail-open: probe failures keep
+		 * the 256MB default.
+		 *
+		 * @since NEXT
+		 *
+		 * @return int Cap in bytes (>= 1).
+		 */
+		public function get_imagick_memory_limit_bytes(): int {
+			$default = 256 * 1024 * 1024;
+			try {
+				$mb = $this->options['image_optimisation']['imagickMemoryLimitMB'] ?? 256;
+				if ( function_exists( 'apply_filters' ) && function_exists( 'has_filter' ) && has_filter( 'wppo_imagick_memory_limit_bytes' ) ) {
+					/**
+					 * Filter the Imagick memory cap in bytes.
+					 *
+					 * @since NEXT
+					 * @param int $bytes Cap in bytes.
+					 */
+					$filtered = apply_filters( 'wppo_imagick_memory_limit_bytes', (int) $mb * 1024 * 1024 );
+					if ( is_numeric( $filtered ) && (int) $filtered > 0 ) {
+						return (int) $filtered;
+					}
+					return $default;
+				}
+				if ( ! is_numeric( $mb ) || (int) $mb < 1 ) {
+					return $default;
+				}
+				return (int) $mb * 1024 * 1024;
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: default cap on probe failure.
+				return $default;
+			}
+		}
+
+		/**
+		 * Resolve the per-side Imagick dimension cap in pixels.
+		 *
+		 * Additive `imagickMaxDimensionPx` setting (default 8000) plus the
+		 * `wppo_imagick_max_dimension_px` filter. `0` disables the per-side
+		 * check (the area budget via get_max_source_pixels() still applies).
+		 * Fail-open: probe failures keep the default.
+		 *
+		 * @since NEXT
+		 *
+		 * @return int Cap in pixels (>= 0). `0` means disabled.
+		 */
+		public function get_imagick_max_dimension_px(): int {
+			$default = 8000;
+			try {
+				$cap = $this->options['image_optimisation']['imagickMaxDimensionPx'] ?? $default;
+				if ( function_exists( 'apply_filters' ) && function_exists( 'has_filter' ) && has_filter( 'wppo_imagick_max_dimension_px' ) ) {
+					/**
+					 * Filter the per-side Imagick dimension cap in pixels.
+					 *
+					 * @since NEXT
+					 * @param int $cap Cap in pixels. `0` disables the per-side check.
+					 */
+					$filtered = apply_filters( 'wppo_imagick_max_dimension_px', $cap );
+					if ( ! is_scalar( $filtered ) ) {
+						return $default;
+					}
+					$filtered = (int) $filtered;
+					return $filtered < 0 ? 0 : $filtered;
+				}
+				if ( ! is_scalar( $cap ) ) {
+					return $default;
+				}
+				$cap = (int) $cap;
+				return $cap < 0 ? 0 : $cap;
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: default cap on probe failure.
+				return $default;
+			}
+		}
+
+		/**
+		 * Whether source dimensions breach the Imagick decode caps.
+		 *
+		 * Pre-`readImage()` gate for every Imagick decode site: refuses when
+		 * either side exceeds get_imagick_max_dimension_px() (when enabled)
+		 * or when the pixel area exceeds get_max_source_pixels(). Header-only
+		 * inputs (no decode, no allocation) — callers skip + mark failed and
+		 * serve the original, never fatal. Fail-open direction: oversize
+		 * returns true (skip), corrupt/unknown dimensions return false so the
+		 * caller keeps its normal `failed` path.
+		 *
+		 * @since NEXT
+		 *
+		 * @param int $width  Source width in pixels.
+		 * @param int $height Source height in pixels.
+		 * @return bool True when the caps are breached and decode must be skipped.
+		 */
+		public function exceeds_imagick_dimension_cap( int $width, int $height ): bool {
+			if ( $width <= 0 || $height <= 0 ) {
+				return false;
+			}
+			try {
+				$max_side = $this->get_imagick_max_dimension_px();
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: per-side check skipped on probe failure.
+				$max_side = 0;
+			}
+			if ( $max_side > 0 && ( $width > $max_side || $height > $max_side ) ) {
+				return true;
+			}
+			try {
+				$max_area = $this->get_max_source_pixels();
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: area check skipped on probe failure.
+				return false;
+			}
+			if ( $max_area > 0 ) {
+				return ( (float) $width * (float) $height ) > (float) $max_area;
+			}
+			return false;
+		}
+
+		/**
 		 * Apply best-effort Imagick memory guard resource limits.
 		 *
 		 * Shared helper for every Imagick decode path (over-budget stills,
-		 * GIF-to-WebP, AVIF fallback): bounds decoded memory and area to the
-		 * pre-decode pixel budget so multi-frame or huge sources cannot OOM
-		 * the worker. Fail-open: any probe failure is a no-op and the read
-		 * below still runs inside the caller's try/catch. Multisite-safe:
-		 * pure compute, no options/DB writes.
+		 * GIF-to-WebP, AVIF fallback): bounds decoded memory, area, width,
+		 * height, map, and disk to the pre-decode pixel/dimension budget so
+		 * multi-frame or huge sources cannot OOM the worker. Fail-open: any
+		 * probe failure is a no-op and the read below still runs inside the
+		 * caller's try/catch. Multisite-safe: pure compute, no options/DB
+		 * writes.
 		 *
 		 * @since NEXT
 		 *
@@ -1132,11 +1364,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				if ( ! is_object( $imagick ) || ! method_exists( $imagick, 'setResourceLimit' ) ) {
 					return;
 				}
+				if ( ! class_exists( 'Imagick' ) ) {
+					return;
+				}
+				$memory = $this->get_imagick_memory_limit_bytes();
 				if ( defined( 'Imagick::RESOURCETYPE_MEMORY' ) ) {
-					$imagick->setResourceLimit( \Imagick::RESOURCETYPE_MEMORY, 256 * 1024 * 1024 );
+					$imagick->setResourceLimit( \Imagick::RESOURCETYPE_MEMORY, $memory );
 				}
 				if ( defined( 'Imagick::RESOURCETYPE_AREA' ) ) {
 					$imagick->setResourceLimit( \Imagick::RESOURCETYPE_AREA, $this->get_max_source_pixels() );
+				}
+				$max_side = $this->get_imagick_max_dimension_px();
+				if ( $max_side > 0 ) {
+					if ( defined( 'Imagick::RESOURCETYPE_WIDTH' ) ) {
+						$imagick->setResourceLimit( \Imagick::RESOURCETYPE_WIDTH, $max_side );
+					}
+					if ( defined( 'Imagick::RESOURCETYPE_HEIGHT' ) ) {
+						$imagick->setResourceLimit( \Imagick::RESOURCETYPE_HEIGHT, $max_side );
+					}
+				}
+				if ( defined( 'Imagick::RESOURCETYPE_MAP' ) ) {
+					$imagick->setResourceLimit( \Imagick::RESOURCETYPE_MAP, $memory );
+				}
+				if ( defined( 'Imagick::RESOURCETYPE_DISK' ) ) {
+					$imagick->setResourceLimit( \Imagick::RESOURCETYPE_DISK, $memory * 2 );
 				}
 			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: resource caps are best-effort hardening.
 			}
@@ -1181,6 +1432,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				return null;
 			}
 			if ( ! file_exists( $source ) || ! is_readable( $source ) ) {
+				return null;
+			}
+
+			// Pre-read dimension cap: refuse oversized headers before
+			// readImage() transiently allocates the full bitmap. Null
+			// keeps the legacy skip (never a full-size GD decode).
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- getimagesize() parses headers only; silenced for corrupt-file safety.
+			$probe = @getimagesize( $source );
+			if ( is_array( $probe ) && isset( $probe[0], $probe[1] ) && $this->exceeds_imagick_dimension_cap( (int) $probe[0], (int) $probe[1] ) ) {
 				return null;
 			}
 
@@ -1929,6 +2189,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 							// Best-effort no-op on Imagick builds without
 							// setResourceLimit; the read below still runs fail-open.
 							$this->apply_imagick_memory_guard( $imagick );
+							// Pre-read dimension cap: refuse oversized GIF
+							// headers before readImage() decodes every frame
+							// into memory. Skip + mark failed, serve original.
+							// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- getimagesize() parses headers only; silenced for corrupt-file safety.
+							$gif_probe = @getimagesize( $source_image );
+							if ( is_array( $gif_probe ) && isset( $gif_probe[0], $gif_probe[1] ) && $this->exceeds_imagick_dimension_cap( (int) $gif_probe[0], (int) $gif_probe[1] ) ) {
+								$this->update_conversion_status( $source_image, 'failed', $format );
+								return false;
+							}
 							$imagick->readImage( $source_image );
 
 							// Longest-edge cap for the GIF-via-Imagick path

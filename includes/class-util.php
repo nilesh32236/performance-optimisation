@@ -443,6 +443,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'lazyRenderBelowFold'        => false,
 					'lazyRenderExcludeBuilders'  => true,
 					'hardenCommentImages'        => true,
+					'imagickMemoryLimitMB'       => 256,
+					'imagickMaxDimensionPx'      => 8000,
 				),
 				'performance_audit'     => array(
 					'pagespeed_api_key'     => '',

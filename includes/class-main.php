@@ -566,6 +566,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['image_optimisation']['hardenCommentImages'] ) ) {
 				$this->options['image_optimisation']['hardenCommentImages'] = true;
 			}
+			// Imagick hardening (issue #1346): additive keys capping Imagick
+			// memory + per-side dimensions so hostile/oversized images skip
+			// instead of OOMing the worker. In-memory only here (no
+			// front-end DB write); persisted via update_settings/REST.
+			// Multisite-safe: per-site wppo_settings only.
+			if ( ! isset( $this->options['image_optimisation']['imagickMemoryLimitMB'] ) ) {
+				$this->options['image_optimisation']['imagickMemoryLimitMB'] = 256;
+			}
+			if ( ! isset( $this->options['image_optimisation']['imagickMaxDimensionPx'] ) ) {
+				$this->options['image_optimisation']['imagickMaxDimensionPx'] = 8000;
+			}
 			if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
 				$this->options['file_optimisation'] = array();
 			}
