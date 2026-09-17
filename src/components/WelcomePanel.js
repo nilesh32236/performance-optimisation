@@ -136,7 +136,7 @@ const STEPS = [
 
 		settings: {
 			tab: 'cache_settings',
-			payload: { enableCache: true },
+			payload: { enableCache: true, wooSafeMode: true },
 		},
 		isEnabled: () =>
 			getWppoSettings()?.settings?.cache_settings?.enableCache ?? false,
@@ -429,6 +429,33 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 					durationMs: 5000,
 				} );
 				return;
+			}
+
+			// Onboarding proof (issue #1383): after page cache is enabled,
+			// auto-run the read-only WooCommerce self-test so cart/checkout/
+			// account and Store API routes are proven uncached before the
+			// merchant goes live. Best-effort: never blocks dismissal. On an
+			// explicit FAIL the panel stays visible so the FAIL banner (via
+			// useNotice + NoticeBanner) surfaces instead of being dismissed
+			// away with the proof hidden.
+			if ( step.key === 'cache' ) {
+				try {
+					const testRes = await runWooSelfTest();
+					if ( testRes?.success && testRes?.data ) {
+						setWooSelfTest( testRes.data );
+						const descriptor = getWooSelfTestNotice( testRes.data );
+						notify( { ...descriptor, durationMs: 5000 } );
+						if (
+							testRes.data?.runnable &&
+							testRes.data?.woo_active &&
+							testRes.data?.all_pass === false
+						) {
+							return;
+						}
+					}
+				} catch {
+					// Best-effort proof — ignore and continue to dismiss.
+				}
 			}
 
 			const dismissRes = await dismissWelcome().catch(

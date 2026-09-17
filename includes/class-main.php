@@ -498,6 +498,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$stored        = Util::get_settings();
 			$this->options = ! empty( $stored ) ? $stored : $defaults;
 
+			// WooCommerce safe mode (issue #1383): additive key, defaults to
+			// on so cart/checkout/account and Store API routes are proven
+			// uncached before the merchant goes live. In-memory only here
+			// (no front-end DB write); persisted via update_settings/REST.
+			// Multisite-safe: per-site wppo_settings only.
+			if ( ! isset( $this->options['cache_settings'] ) || ! is_array( $this->options['cache_settings'] ) ) {
+				$this->options['cache_settings'] = array();
+			}
+			if ( ! isset( $this->options['cache_settings']['wooSafeMode'] ) ) {
+				$this->options['cache_settings']['wooSafeMode'] = true;
+			}
+
 			// WP 6.9+ loads core block assets on demand in classic themes by default. Existing
 			// installs whose stored settings predate the `blockAssetsOnDemand` key inherit that
 			// default in-memory here (no database write on front-end requests); the persisted
@@ -9512,6 +9524,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'/my-account/*',
 					'/account/*',
 				);
+
+				// Canonical Woo exclusion list (issue #1383): inherit
+				// Util::get_woo_excluded_paths() so custom/nested/translated
+				// slugs resolved via wc_get_page_id() (e.g. shop/basket) stay
+				// out of speculation rules. Fail-open: resolution failure keeps
+				// the hardcoded seed above (never fatal, 0 queries when Woo is
+				// absent). Multisite-safe: per-site page resolution only.
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_woo_excluded_paths' ) ) {
+					try {
+						foreach ( Util::get_woo_excluded_paths() as $woo_path ) {
+							$candidate = strtolower( trim( (string) $woo_path, '/' ) );
+							if ( '' === $candidate ) {
+								continue;
+							}
+							$pattern = '/' . $candidate . '/*';
+							if ( ! in_array( $pattern, $excludes, true ) ) {
+								$excludes[] = $pattern;
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
 
 				$custom_excludes = ! empty( $preload_settings['speculationExcludeUrls'] )
 					? Util::process_urls( $preload_settings['speculationExcludeUrls'] )
