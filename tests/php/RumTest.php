@@ -2094,7 +2094,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 			$today => array(
 				'/a' => array(
 					'slowResources' => array(
-						'example.com/nav'  => array(
+						'example.com/nav'   => array(
 							'url'           => 'https://example.com/nav',
 							'type'          => 'navigation',
 							'n'             => 99,

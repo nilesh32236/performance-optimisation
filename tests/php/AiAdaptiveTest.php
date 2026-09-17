@@ -2284,6 +2284,9 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$this->assertStringContainsString( 'https://example.com/new.js', $slow['value'] );
 	}
 
+	/**
+	 * Attribution suggestions stay absent when the model predates attribution keys.
+	 */
 	public function test_get_suggestions_omits_attribution_without_model_keys(): void {
 		$this->install_stubs();
 		$this->seed_eager_rum();

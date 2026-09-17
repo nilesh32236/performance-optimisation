@@ -356,9 +356,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 
 		/**
 		 * Per-request memo for top-LCP-selector lookups, keyed by
-		 * normalized path + sample gate.
+		 * Normalized path and sample gate.
 		 *
-		 * heuristic_learn() otherwise re-scans the whole memoized
+		 * The heuristic learner otherwise re-scans the whole memoized
 		 * aggregate once per selector/slow query on top of the segment
 		 * scans; this collapses repeats to one scan per key per request.
 		 *
@@ -575,42 +575,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			}
 
 			// Security: rate limiting runs BEFORE token validation so
-		// invalid-token beacons still consume throttle budget — otherwise
-		// an attacker could send unlimited 401s for token brute-force /
-		// CPU burn without ever hitting a 429.
-		// Rate limiting trusts REMOTE_ADDR only (issue #1181):
-		// X-Forwarded-For / X-Real-IP are attacker-controlled and must
-		// never bypass limits.
-		$raw_ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
-		$ip     = self::normalize_ip( $raw_ip );
-		// Fail closed: an empty/unparseable IP falls back to the site-wide
-		// bucket instead of skipping the throttle (proxies stripping
-		// REMOTE_ADDR must not silently disable rate limiting).
-		if ( '' === $ip ) {
-			if ( self::is_globally_rate_limited() ) {
+			// invalid-token beacons still consume throttle budget — otherwise
+			// an attacker could send unlimited 401s for token brute-force /
+			// CPU burn without ever hitting a 429.
+			// Rate limiting trusts REMOTE_ADDR only (issue #1181):
+			// X-Forwarded-For / X-Real-IP are attacker-controlled and must
+			// never bypass limits.
+			$raw_ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
+			$ip     = self::normalize_ip( $raw_ip );
+			// Fail closed: an empty/unparseable IP falls back to the site-wide
+			// bucket instead of skipping the throttle (proxies stripping
+			// REMOTE_ADDR must not silently disable rate limiting).
+			if ( '' === $ip ) {
+				if ( self::is_globally_rate_limited() ) {
+					return array(
+						'ok'      => false,
+						'status'  => 429,
+						'message' => __( 'Too many beacons.', 'performance-optimisation' ),
+					);
+				}
+			} elseif ( self::is_rate_limited( $ip ) || self::is_globally_rate_limited() ) {
 				return array(
 					'ok'      => false,
 					'status'  => 429,
 					'message' => __( 'Too many beacons.', 'performance-optimisation' ),
 				);
 			}
-		} elseif ( self::is_rate_limited( $ip ) || self::is_globally_rate_limited() ) {
-			return array(
-				'ok'      => false,
-				'status'  => 429,
-				'message' => __( 'Too many beacons.', 'performance-optimisation' ),
-			);
-		}
 
-		$token = isset( $params['token'] ) ? sanitize_text_field( (string) $params['token'] ) : '';
-		$path  = isset( $params['path'] ) ? sanitize_text_field( (string) $params['path'] ) : '/';
-		if ( ! self::is_valid_token( $token, $path ) ) {
-			return array(
-				'ok'      => false,
-				'status'  => 401,
-				'message' => __( 'Invalid beacon token.', 'performance-optimisation' ),
-			);
-		}
+			$token = isset( $params['token'] ) ? sanitize_text_field( (string) $params['token'] ) : '';
+			$path  = isset( $params['path'] ) ? sanitize_text_field( (string) $params['path'] ) : '/';
+			if ( ! self::is_valid_token( $token, $path ) ) {
+				return array(
+					'ok'      => false,
+					'status'  => 401,
+					'message' => __( 'Invalid beacon token.', 'performance-optimisation' ),
+				);
+			}
 
 			$sample = self::sanitize_sample( $params );
 			if ( null === $sample ) {
@@ -2215,6 +2215,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			return true;
 		}
 
+		/**
+		 * Persist the aggregate with path-count and byte budgets.
+		 *
+		 * @since NEXT
+		 * @param array $all Aggregate buckets keyed by day.
+		 * @return void
+		 */
 		private static function persist_aggregate( array $all ): void {
 			$cutoff = gmdate( 'Y-m-d', time() - ( self::MAX_DAYS * DAY_IN_SECONDS ) );
 			foreach ( array_keys( $all ) as $day_key ) {
@@ -2239,12 +2246,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			}
 			// Phase 2: encode once; evict oldest-first only while the byte
 			// budget is actually exceeded.
-			$encoded = wp_json_encode( $all );
-			while ( false !== $encoded && strlen( (string) $encoded ) > self::MAX_OPTION_BYTES && ! empty( $all ) ) {
+			$encoded     = wp_json_encode( $all );
+			$encoded_len = false !== $encoded ? strlen( (string) $encoded ) : 0;
+			$over_budget = false !== $encoded && $encoded_len > self::MAX_OPTION_BYTES;
+			while ( $over_budget && ! empty( $all ) ) {
 				if ( ! self::drop_oldest_aggregate_day( $all ) ) {
 					break;
 				}
-				$encoded = wp_json_encode( $all );
+				$encoded     = wp_json_encode( $all );
+				$encoded_len = false !== $encoded ? strlen( (string) $encoded ) : 0;
+				$over_budget = false !== $encoded && $encoded_len > self::MAX_OPTION_BYTES;
 			}
 			update_option( self::OPTION, $all, false );
 			self::clear_field_lcp_cache();
@@ -3030,6 +3041,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			return $ad > $bd;
 		}
 
+		/**
+		 * Top slow sub-resources across paths, ranked by count then average duration.
+		 *
+		 * @since NEXT
+		 * @param int $limit Maximum rows to return.
+		 * @return array
+		 */
 		public static function get_top_slow_resources( int $limit = 3 ): array {
 			try {
 				$limit = max( 1, min( 10, $limit ) );
@@ -3121,8 +3139,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				// $limit are ever returned, so a full usort is wasteful on
 				// the heuristic_learn() hot path. Freshness was already
 				// enforced per entry above, so only the average remains.
-				$top = array();
-				foreach ( $merged as $row ) {
+				$top         = array();
+				$merged_rows = array_values( $merged );
+				$merged_len  = count( $merged_rows );
+				for ( $m = 0; $m < $merged_len; $m++ ) {
+					$row = $merged_rows[ $m ];
 					unset( $row['_raw_n'] );
 					$row['avgDuration'] = $row['n'] > 0 ? (float) $row['totalDuration'] / (int) $row['n'] : 0.0;
 					unset( $row['totalDuration'] );
@@ -3131,7 +3152,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 						continue;
 					}
 					$weakest_idx = -1;
-					for ( $i = 0; $i < count( $top ); $i++ ) {
+					$top_len     = count( $top );
+					for ( $i = 0; $i < $top_len; $i++ ) {
 						if ( self::slow_row_outranks( $row, $top[ $i ] ) && ( -1 === $weakest_idx || self::slow_row_outranks( $top[ $weakest_idx ], $top[ $i ] ) ) ) {
 							$weakest_idx = $i;
 						}

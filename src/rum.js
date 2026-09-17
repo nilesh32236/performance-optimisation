@@ -354,7 +354,10 @@ export const sanitizeSlowResourceEntry = ( entry ) => {
 		if ( ! Number.isFinite( rawDuration ) || rawDuration < 0 ) {
 			return null;
 		}
-		const duration = Math.min( Math.round( rawDuration ), RUM_MAX_METRIC_MS );
+		const duration = Math.min(
+			Math.round( rawDuration ),
+			RUM_MAX_METRIC_MS
+		);
 		const name = entry.name;
 		if (
 			typeof name !== 'string' ||
