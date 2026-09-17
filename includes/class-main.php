@@ -3438,7 +3438,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// Atomic unique enqueue (issue #1310) closes the
 					// check-then-act race; legacy guard stays as fallback.
 					if ( '' !== $url ) {
-						if ( method_exists( 'PerformanceOptimise\Inc\Util', 'enqueue_unique_async_action' ) ) {
+						if ( method_exists( Util::class, 'enqueue_unique_async_action' ) ) {
 							Util::enqueue_unique_async_action( 'wppo_crawler_warm', array( $url ), 'performance_optimisation' );
 						} elseif ( ! as_has_scheduled_action( 'wppo_crawler_warm', array( $url ), 'performance_optimisation' ) ) {
 							as_enqueue_async_action( 'wppo_crawler_warm', array( $url ), 'performance_optimisation' );
@@ -3548,7 +3548,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 
-			if ( method_exists( 'PerformanceOptimise\Inc\Util', 'enqueue_unique_async_action' ) ) {
+			if ( method_exists( Util::class, 'enqueue_unique_async_action' ) ) {
 				Util::enqueue_unique_async_action(
 					'wppo_used_css_generate',
 					array( 'post_id' => $post_id ),

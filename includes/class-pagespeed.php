@@ -126,38 +126,86 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 					'strategy' => $strategy,
 				),
 			);
-			if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( self::AS_HOOK, $args, self::AS_GROUP ) ) {
-				// Return existing job ID so callers can distinguish dedup from failure.
-				if ( function_exists( 'as_get_scheduled_actions' ) ) {
-					$existing = as_get_scheduled_actions(
-						array(
-							'hook'   => self::AS_HOOK,
-							'args'   => $args,
-							'group'  => self::AS_GROUP,
-							'status' => \ActionScheduler_Store::STATUS_PENDING,
-						),
-						'ids'
-					);
-					if ( is_array( $existing ) && ! empty( $existing ) ) {
-						return (int) reset( $existing );
-					}
-				}
-				return 0;
-			}
-			// Atomic unique enqueue (issue #1310) closes the check-then-act
-			// race above; legacy 3-argument call stays as fallback.
-			if ( method_exists( 'PerformanceOptimise\Inc\Util', 'enqueue_unique_async_action' ) ) {
-				return (int) Util::enqueue_unique_async_action(
+			// Atomic unique enqueue first on AS 4.x (issue #1310): the insert
+			// itself dedupes, so the legacy check-then-act below only runs when
+			// unique inserts are unsupported (saves two SELECTs per scan).
+			if ( method_exists( Util::class, 'enqueue_unique_async_action' ) && Util::supports_action_scheduler_unique() ) {
+				$job_id = (int) Util::enqueue_unique_async_action(
 					self::AS_HOOK,
 					$args,
 					self::AS_GROUP
 				);
+				if ( $job_id > 0 ) {
+					return $job_id;
+				}
+				// A 0 return is ambiguous (deduped race vs scheduler failure):
+				// re-query for the concurrent winner's ID so the REST/UI layer
+				// can poll the pending job instead of reporting failure.
+				$winner = self::find_pending_job_id( $args );
+				if ( $winner > 0 ) {
+					return $winner;
+				}
+				return 0;
+			}
+			if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( self::AS_HOOK, $args, self::AS_GROUP ) ) {
+				// Return existing job ID so callers can distinguish dedup from failure.
+				$existing_id = self::find_pending_job_id( $args );
+				return $existing_id > 0 ? $existing_id : 0;
+			}
+			// Atomic unique enqueue (issue #1310) closes the check-then-act
+			// race above; legacy 3-argument call stays as fallback.
+			if ( method_exists( Util::class, 'enqueue_unique_async_action' ) ) {
+				$job_id = (int) Util::enqueue_unique_async_action(
+					self::AS_HOOK,
+					$args,
+					self::AS_GROUP
+				);
+				if ( $job_id > 0 ) {
+					return $job_id;
+				}
+				$winner = self::find_pending_job_id( $args );
+				return $winner > 0 ? $winner : 0;
 			}
 			return (int) as_enqueue_async_action(
 				self::AS_HOOK,
 				$args,
 				self::AS_GROUP
 			);
+		}
+
+		/**
+		 * Find the pending Action Scheduler job ID for the given args.
+		 *
+		 * Single home for the "re-query the winner" lookup used after a
+		 * deduped enqueue so queue_scan() never reports failure while a job is
+		 * pending (issue #1310 review). Fail-open: returns 0 when the lookup
+		 * API is unavailable or finds nothing.
+		 *
+		 * @since NEXT
+		 * @param array $args Action arguments.
+		 * @return int Pending job ID, or 0 when none is found.
+		 */
+		private static function find_pending_job_id( array $args ): int {
+			try {
+				if ( ! function_exists( 'as_get_scheduled_actions' ) ) {
+					return 0;
+				}
+				$existing = as_get_scheduled_actions(
+					array(
+						'hook'   => self::AS_HOOK,
+						'args'   => $args,
+						'group'  => self::AS_GROUP,
+						'status' => \ActionScheduler_Store::STATUS_PENDING,
+					),
+					'ids'
+				);
+				if ( is_array( $existing ) && ! empty( $existing ) ) {
+					return (int) reset( $existing );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return 0;
 		}
 
 		/**
@@ -251,12 +299,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 							'retry'    => 1,
 						),
 					);
-					if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( self::AS_HOOK, $retry_args, self::AS_GROUP ) ) {
+					// Atomic unique insert first on AS 4.x (issue #1310): it
+					// dedupes by itself, so the legacy pre-check below only
+					// runs when unique inserts are unsupported.
+					$use_unique = method_exists( Util::class, 'schedule_unique_single_action' ) && Util::supports_action_scheduler_unique();
+					if ( ! $use_unique && function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( self::AS_HOOK, $retry_args, self::AS_GROUP ) ) {
 						return;
 					}
 					// Atomic unique insert (issue #1310); legacy branch stays
 					// as fallback for older scheduler versions.
-					if ( method_exists( 'PerformanceOptimise\Inc\Util', 'schedule_unique_single_action' ) ) {
+					if ( method_exists( Util::class, 'schedule_unique_single_action' ) ) {
 						Util::schedule_unique_single_action( time() + $delay, self::AS_HOOK, $retry_args, self::AS_GROUP );
 					} else {
 						as_schedule_single_action( time() + $delay, self::AS_HOOK, $retry_args, self::AS_GROUP );

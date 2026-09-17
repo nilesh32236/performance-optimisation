@@ -106,6 +106,10 @@ class ActionSchedulerUniquePurge1310Test extends \PHPUnit\Framework\TestCase {
 		$this->assertCount( 1, $calls );
 		// Legacy fallback passes exactly hook+args+group (no $unique flag).
 		$this->assertCount( 3, $calls[0] );
+		// Hook, args, and group are forwarded verbatim.
+		$this->assertSame( 'wppo_used_css_generate', $calls[0][0] );
+		$this->assertSame( array( 'post_id' => 7 ), $calls[0][1] );
+		$this->assertSame( 'performance_optimisation', $calls[0][2] );
 	}
 
 	/**
@@ -123,6 +127,11 @@ class ActionSchedulerUniquePurge1310Test extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 43, Util::schedule_unique_single_action( time() + 60, 'wppo_generate_ccss', array( array( 'template_hash' => 'abc' ) ), 'wppo-ccss' ) );
 		$this->assertCount( 1, $calls );
 		$this->assertCount( 4, $calls[0] );
+		// Timestamp, hook, args, and group are forwarded verbatim (no $unique flag).
+		$this->assertIsInt( $calls[0][0] );
+		$this->assertSame( 'wppo_generate_ccss', $calls[0][1] );
+		$this->assertSame( array( array( 'template_hash' => 'abc' ) ), $calls[0][2] );
+		$this->assertSame( 'wppo-ccss', $calls[0][3] );
 	}
 
 	/**
@@ -146,6 +155,83 @@ class ActionSchedulerUniquePurge1310Test extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * AS 4.x single-action path: the atomic $unique flag is passed as the
+	 * 5th argument and timestamp/hook/args/group are forwarded verbatim.
+	 *
+	 * Runs in a separate process with real 4.x-shaped global functions so
+	 * reflection detects unique support.
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_unique_single_helper_atomic_path_passes_unique_flag(): void {
+		if ( ! function_exists( 'as_enqueue_async_action' ) ) {
+			eval( 'function as_enqueue_async_action( $hook, $args = array(), $group = "", $unique = false, $priority = 10 ) { return 99; }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged -- test-only 4.x-shaped scheduler stub in an isolated process.
+		}
+		if ( ! function_exists( 'as_schedule_single_action' ) ) {
+			eval( 'function as_schedule_single_action( $timestamp, $hook, $args = array(), $group = "", $unique = false, $priority = 10 ) { $GLOBALS["wppo_1310_single_calls"][] = func_get_args(); return $unique ? 77 : 78; }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged -- test-only 4.x-shaped scheduler stub in an isolated process.
+		}
+		$GLOBALS['wppo_1310_single_calls'] = array();
+		$timestamp                         = time() + 60;
+		$result                            = Util::schedule_unique_single_action( $timestamp, 'wppo_generate_ccss', array( array( 'template_hash' => 'abc' ) ), 'wppo-ccss' );
+		$this->assertSame( 77, $result );
+		$this->assertCount( 1, $GLOBALS['wppo_1310_single_calls'] );
+		$call = $GLOBALS['wppo_1310_single_calls'][0];
+		$this->assertSame( $timestamp, $call[0] );
+		$this->assertSame( 'wppo_generate_ccss', $call[1] );
+		$this->assertSame( array( array( 'template_hash' => 'abc' ) ), $call[2] );
+		$this->assertSame( 'wppo-ccss', $call[3] );
+		$this->assertTrue( $call[4] );
+	}
+
+	/**
+	 * AS 4.x recurring path: the atomic $unique flag is passed as the 6th
+	 * argument and timestamp/interval/hook/args/group are forwarded.
+	 *
+	 * Runs in a separate process with real 4.x-shaped global functions so
+	 * reflection detects unique support.
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_unique_recurring_helper_atomic_path_passes_unique_flag(): void {
+		if ( ! function_exists( 'as_enqueue_async_action' ) ) {
+			eval( 'function as_enqueue_async_action( $hook, $args = array(), $group = "", $unique = false, $priority = 10 ) { return 99; }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged -- test-only 4.x-shaped scheduler stub in an isolated process.
+		}
+		if ( ! function_exists( 'as_schedule_recurring_action' ) ) {
+			eval( 'function as_schedule_recurring_action( $timestamp, $interval, $hook, $args = array(), $group = "", $unique = false, $priority = 10 ) { $GLOBALS["wppo_1310_recurring_calls"][] = func_get_args(); return $unique ? 88 : 89; }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged -- test-only 4.x-shaped scheduler stub in an isolated process.
+		}
+		$GLOBALS['wppo_1310_recurring_calls'] = array();
+		$timestamp                            = time() + 120;
+		$result                               = Util::schedule_unique_recurring_action( $timestamp, 3600, 'wppo_recurring_hook', array( 'scope' => 'all' ), 'performance_optimisation' );
+		$this->assertSame( 88, $result );
+		$this->assertCount( 1, $GLOBALS['wppo_1310_recurring_calls'] );
+		$call = $GLOBALS['wppo_1310_recurring_calls'][0];
+		$this->assertSame( $timestamp, $call[0] );
+		$this->assertSame( 3600, $call[1] );
+		$this->assertSame( 'wppo_recurring_hook', $call[2] );
+		$this->assertSame( array( 'scope' => 'all' ), $call[3] );
+		$this->assertSame( 'performance_optimisation', $call[4] );
+		$this->assertTrue( $call[5] );
+	}
+
+	/**
+	 * Without any scheduler loaded every unique helper fails open to 0 and
+	 * the probe memo can be reset without error.
+	 *
+	 * Runs in a separate process where no AS functions exist.
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_unique_helpers_return_zero_without_scheduler(): void {
+		$this->assertFalse( function_exists( 'as_enqueue_async_action' ) );
+		$this->assertFalse( Util::supports_action_scheduler_unique() );
+		$this->assertSame( 0, Util::enqueue_unique_async_action( 'wppo_crawler_warm', array( 'https://example.test/' ), 'performance_optimisation' ) );
+		$this->assertSame( 0, Util::schedule_unique_single_action( time() + 60, 'wppo_generate_ccss', array(), 'wppo-ccss' ) );
+		$this->assertSame( 0, Util::schedule_unique_recurring_action( time() + 60, 3600, 'wppo_recurring_hook', array(), 'performance_optimisation' ) );
+		Util::reset_action_scheduler_unique_cache();
+		$this->assertFalse( Util::supports_action_scheduler_unique() );
+	}
+
+	/**
 	 * A broken legacy guard must not fail the enqueue (fail-open).
 	 *
 	 * Regression coverage for stale test doubles (or a half-loaded
@@ -164,7 +250,7 @@ class ActionSchedulerUniquePurge1310Test extends \PHPUnit\Framework\TestCase {
 			eval( 'function as_has_scheduled_action( $hook, $args = array(), $group = "" ) { throw new \Exception( "stale guard" ); }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged -- test-only broken guard stub in an isolated process.
 		}
 		$GLOBALS['wppo_1310_legacy_calls'] = array();
-		$result = Util::enqueue_unique_async_action( 'wppo_used_css_generate', array( 'post_id' => 5 ), 'performance_optimisation' );
+		$result                            = Util::enqueue_unique_async_action( 'wppo_used_css_generate', array( 'post_id' => 5 ), 'performance_optimisation' );
 		$this->assertSame( 55, $result );
 		$this->assertCount( 1, $GLOBALS['wppo_1310_legacy_calls'] );
 	}
@@ -232,5 +318,31 @@ class ActionSchedulerUniquePurge1310Test extends \PHPUnit\Framework\TestCase {
 			$this->assertSame( '<=', $query['modified_compare'] );
 			$this->assertLessThanOrEqual( 100, $query['per_page'] );
 		}
+	}
+
+	/**
+	 * When every delete_action() throws, the purge stops after the first
+	 * zero-progress iteration instead of re-querying the same batch for
+	 * all 10 iterations.
+	 *
+	 * Runs in a separate process with a stub store whose delete always
+	 * throws and whose query always returns the same IDs.
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_purge_failed_actions_breaks_on_zero_progress(): void {
+		if ( ! class_exists( 'ActionScheduler_Store' ) ) {
+			eval( // phpcs:ignore Squiz.PHP.Eval.Discouraged -- test-only stub store in an isolated process; no real AS tables exist in unit tests.
+				'abstract class ActionScheduler_Store { const STATUS_FAILED = "failed"; public static $wppo_1310_zp_queries = 0; public static function instance() { return new ActionScheduler_1310_ZeroProgress_Store(); } public function query_actions( $query = array(), $query_type = "select" ) { ++self::$wppo_1310_zp_queries; return array( 21, 22 ); } public function delete_action( $action_id ) { throw new \Exception( "locked row" ); } }'
+				. 'class ActionScheduler_1310_ZeroProgress_Store extends ActionScheduler_Store {}'
+			);
+		}
+		\Brain\Monkey\Functions\when( 'get_option' )->justReturn( array() );
+		\Brain\Monkey\Filters\expectApplied( 'wppo_purge_failed_actions' )->once()->with( false )->andReturn( true );
+
+		$deleted = Database_Cleanup::purge_failed_actions( 50 );
+
+		$this->assertSame( 0, $deleted );
+		$this->assertSame( 1, \ActionScheduler_Store::$wppo_1310_zp_queries );
 	}
 }

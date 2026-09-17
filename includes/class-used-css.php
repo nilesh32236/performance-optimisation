@@ -2627,10 +2627,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				}
 				// Atomic unique enqueue (issue #1310) closes the
 				// check-then-act race above; legacy call stays as fallback.
-				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'enqueue_unique_async_action' ) ) {
-					Util::enqueue_unique_async_action( 'wppo_used_css_generate', $args, 'performance_optimisation' );
+				// The return is gated (issue #1310 review): a 0 with no job
+				// pending means the enqueue failed, so report false instead
+				// of counting a phantom job.
+				$job_id = 0;
+				if ( method_exists( Util::class, 'enqueue_unique_async_action' ) ) {
+					$job_id = Util::enqueue_unique_async_action( 'wppo_used_css_generate', $args, 'performance_optimisation' );
 				} else {
-					as_enqueue_async_action( 'wppo_used_css_generate', $args, 'performance_optimisation' );
+					$job_id = (int) as_enqueue_async_action( 'wppo_used_css_generate', $args, 'performance_optimisation' );
+				}
+				if ( 0 === $job_id ) {
+					// Strict gate: without a verifiable pending job the 0
+					// is a scheduler failure, so report false instead of
+					// counting a phantom job.
+					$race_won = false;
+					if ( function_exists( 'as_has_scheduled_action' ) ) {
+						try {
+							$race_won = (bool) as_has_scheduled_action( 'wppo_used_css_generate', $args, 'performance_optimisation' );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$race_won = false;
+						}
+					}
+					if ( ! $race_won ) {
+						return false;
+					}
 				}
 				return true;
 			} catch ( \Throwable $e ) {
@@ -3168,7 +3189,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					if ( isset( $scheduled[ $post_id ] ) ) {
 						continue;
 					}
-					if ( ! $lookup_ok && function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => $post_id ), 'performance_optimisation' ) ) {
+					// Atomic unique insert (issue #1310) dedupes by itself,
+					// so the per-row pre-check below only runs when unique
+					// inserts are unsupported (saves N SELECTs per batch).
+					$use_unique = method_exists( Util::class, 'enqueue_unique_async_action' ) && Util::supports_action_scheduler_unique();
+					if ( ! $use_unique && ! $lookup_ok && function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => $post_id ), 'performance_optimisation' ) ) {
 						$scheduled[ $post_id ] = true;
 						continue;
 					}
@@ -3176,21 +3201,43 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 						continue;
 					}
 					try {
-						// Atomic unique enqueue (issue #1310); the
-						// as_has_scheduled_action() pre-check above stays as
-						// a cheap fast path, the unique insert closes the race.
-						if ( method_exists( 'PerformanceOptimise\Inc\Util', 'enqueue_unique_async_action' ) ) {
-							Util::enqueue_unique_async_action(
+						// The helper return is gated (issue #1310 review): a
+						// 0 from a lost unique-race or a swallowed failure
+						// must not be counted as queued (which would inflate
+						// logs and consume queue_cap while blocking real
+						// jobs). A 0 with a now-pending job means a
+						// concurrent process won the race — still counts as
+						// scheduled without consuming cap twice.
+						$job_id = 0;
+						if ( method_exists( Util::class, 'enqueue_unique_async_action' ) ) {
+							$job_id = Util::enqueue_unique_async_action(
 								'wppo_used_css_generate',
 								array( 'post_id' => $post_id ),
 								'performance_optimisation'
 							);
 						} else {
-							as_enqueue_async_action(
+							$job_id = (int) as_enqueue_async_action(
 								'wppo_used_css_generate',
 								array( 'post_id' => $post_id ),
 								'performance_optimisation'
 							);
+						}
+						if ( 0 === $job_id ) {
+							// Strict gate: without a verifiable pending job
+							// the 0 is a scheduler failure, so skip instead
+							// of counting a phantom job.
+							$race_won = false;
+							if ( function_exists( 'as_has_scheduled_action' ) ) {
+								try {
+									$race_won = (bool) as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => $post_id ), 'performance_optimisation' );
+								} catch ( \Throwable $e ) {
+									unset( $e );
+									$race_won = false;
+								}
+							}
+							if ( ! $race_won ) {
+								continue;
+							}
 						}
 					} catch ( \Throwable $e ) {
 						unset( $e );

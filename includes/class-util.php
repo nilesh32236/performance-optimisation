@@ -1759,10 +1759,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Resets all Util runtime memos (test-isolation entry point).
 		 *
-		 * Covers settings, home, canonical-host, normalized-host, and
-		 * permalink memos. Prefer this over calling the individual
-		 * resetters so future memos are not silently missed by test
-		 * setUp() methods.
+		 * Covers settings, home, canonical-host, normalized-host,
+		 * permalink, and Action Scheduler unique-probe memos. Prefer this
+		 * over calling the individual resetters so future memos are not
+		 * silently missed by test setUp() methods.
 		 *
 		 * @since NEXT
 		 * @return void
@@ -1771,6 +1771,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			self::reset_cached_home_urls();
 			self::clear_settings_cache();
 			self::clear_permalink_cache();
+			self::reset_action_scheduler_unique_cache();
 		}
 
 		/**
@@ -4416,10 +4417,66 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * instead of via a racy check-then-act. Fail-open: returns false when
 		 * the scheduler is absent, older than 4.x, or reflection fails.
 		 *
+		 * The probe result is memoized in a static so bulk paths
+		 * (regenerate_all loops, crawler bursts) pay the reflection and
+		 * `ActionScheduler_Versions` lookup once per request instead of once
+		 * per job (issue #1310 review). Use
+		 * {@see reset_action_scheduler_unique_cache()} to clear the memo in
+		 * tests.
+		 *
 		 * @since NEXT
 		 * @return bool True when the `$unique` parameter may be passed.
 		 */
 		public static function supports_action_scheduler_unique(): bool {
+			if ( null !== self::$as_unique_support ) {
+				return self::$as_unique_support;
+			}
+			self::$as_unique_support = self::probe_action_scheduler_unique();
+			return self::$as_unique_support;
+		}
+
+		/**
+		 * Memoized probe result for {@see supports_action_scheduler_unique()}.
+		 *
+		 * Null until the first probe runs; afterwards true/false for the
+		 * remainder of the request.
+		 *
+		 * @var bool|null
+		 */
+		private static $as_unique_support = null;
+
+		/**
+		 * Memoized per-function `$unique`-parameter arity probes.
+		 *
+		 * Maps function name => bool so the single/recurring helpers do not
+		 * repeat reflection on every call.
+		 *
+		 * @var array<string, bool>
+		 */
+		private static $as_unique_arity = array();
+
+		/**
+		 * Reset the memoized Action Scheduler unique-support probes.
+		 *
+		 * Test-only seam: production code never needs to re-probe within a
+		 * request, but unit tests that swap scheduler stubs between cases
+		 * must clear the memo to observe the new stub.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_action_scheduler_unique_cache(): void {
+			self::$as_unique_support = null;
+			self::$as_unique_arity   = array();
+		}
+
+		/**
+		 * Unmemoized Action Scheduler unique-support probe.
+		 *
+		 * @since NEXT
+		 * @return bool True when the `$unique` parameter may be passed.
+		 */
+		private static function probe_action_scheduler_unique(): bool {
 			try {
 				if ( ! function_exists( 'as_enqueue_async_action' ) ) {
 					return false;
@@ -4437,8 +4494,63 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 						unset( $e );
 					}
 				}
-				$ref = new \ReflectionFunction( 'as_enqueue_async_action' );
-				return $ref->getNumberOfParameters() >= 4;
+				return self::function_has_unique_param( 'as_enqueue_async_action', 4 );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Whether a scheduler function accepts the AS 4.x `$unique` parameter.
+		 *
+		 * Memoized per function name: repeated reflection is paid once per
+		 * request no matter how many jobs a bulk path enqueues.
+		 *
+		 * @since NEXT
+		 * @param string $function_name Function name to inspect.
+		 * @param int    $min_params    Minimum parameter count that implies `$unique` support.
+		 * @return bool True when the function exists and declares at least `$min_params` parameters.
+		 */
+		private static function function_has_unique_param( string $function_name, int $min_params ): bool {
+			if ( array_key_exists( $function_name, self::$as_unique_arity ) ) {
+				return self::$as_unique_arity[ $function_name ];
+			}
+			try {
+				if ( ! function_exists( $function_name ) ) {
+					self::$as_unique_arity[ $function_name ] = false;
+					return false;
+				}
+				$ref                                     = new \ReflectionFunction( $function_name );
+				self::$as_unique_arity[ $function_name ] = $ref->getNumberOfParameters() >= $min_params;
+				return self::$as_unique_arity[ $function_name ];
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				self::$as_unique_arity[ $function_name ] = false;
+				return false;
+			}
+		}
+
+		/**
+		 * Fail-open "already scheduled" guard shared by the unique helpers.
+		 *
+		 * Single home for the legacy `as_has_scheduled_action()` check so
+		 * future guard fixes land on all three helpers at once (issue #1310
+		 * review). A missing or throwing guard degrades to "not scheduled"
+		 * rather than failing the enqueue.
+		 *
+		 * @since NEXT
+		 * @param string $hook  Action hook.
+		 * @param array  $args  Action arguments.
+		 * @param string $group Action group.
+		 * @return bool True when a matching action is already scheduled.
+		 */
+		private static function as_already_scheduled( string $hook, array $args, string $group ): bool {
+			if ( ! function_exists( 'as_has_scheduled_action' ) ) {
+				return false;
+			}
+			try {
+				return (bool) as_has_scheduled_action( $hook, $args, $group );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;
@@ -4473,19 +4585,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 						unset( $e );
 					}
 				}
-				// Legacy guard isolated in its own try/catch: a broken guard
-				// must degrade to "not scheduled" rather than fail the
-				// enqueue (fail-open).
-				$already_scheduled = false;
-				if ( function_exists( 'as_has_scheduled_action' ) ) {
-					try {
-						$already_scheduled = (bool) as_has_scheduled_action( $hook, $args, $group );
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						$already_scheduled = false;
-					}
-				}
-				if ( $already_scheduled ) {
+				// Legacy guard (fail-open — see as_already_scheduled()).
+				if ( self::as_already_scheduled( $hook, $args, $group ) ) {
 					return 0;
 				}
 				return (int) as_enqueue_async_action( $hook, $args, $group );
@@ -4515,26 +4616,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				}
 				if ( self::supports_action_scheduler_unique() ) {
 					try {
-						$ref = new \ReflectionFunction( 'as_schedule_single_action' );
-						if ( $ref->getNumberOfParameters() >= 5 ) {
+						if ( self::function_has_unique_param( 'as_schedule_single_action', 5 ) ) {
 							return (int) as_schedule_single_action( $timestamp, $hook, $args, $group, true );
 						}
 					} catch ( \Throwable $e ) {
 						unset( $e );
 					}
 				}
-				// Legacy guard isolated in its own try/catch (fail-open —
-				// see enqueue_unique_async_action()).
-				$already_scheduled = false;
-				if ( function_exists( 'as_has_scheduled_action' ) ) {
-					try {
-						$already_scheduled = (bool) as_has_scheduled_action( $hook, $args, $group );
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						$already_scheduled = false;
-					}
-				}
-				if ( $already_scheduled ) {
+				// Legacy guard (fail-open — see as_already_scheduled()).
+				if ( self::as_already_scheduled( $hook, $args, $group ) ) {
 					return 0;
 				}
 				return (int) as_schedule_single_action( $timestamp, $hook, $args, $group );
@@ -4553,6 +4643,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * guard plus a plain `as_schedule_recurring_action()` call otherwise.
 		 * Returns 0 when the scheduler API is unavailable or throws.
 		 *
+		 * Not yet called by production code — reserved for future recurring
+		 * jobs (issue #1310). Kept (rather than removed) so the recurring
+		 * path is version-gated and tested alongside the async/single
+		 * helpers before its first caller lands.
+		 *
 		 * @since NEXT
 		 * @param int    $timestamp First run timestamp.
 		 * @param int    $interval  Seconds between runs.
@@ -4568,24 +4663,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				}
 				if ( self::supports_action_scheduler_unique() ) {
 					try {
-						$ref = new \ReflectionFunction( 'as_schedule_recurring_action' );
-						if ( $ref->getNumberOfParameters() >= 6 ) {
+						if ( self::function_has_unique_param( 'as_schedule_recurring_action', 6 ) ) {
 							return (int) as_schedule_recurring_action( $timestamp, $interval, $hook, $args, $group, true );
 						}
 					} catch ( \Throwable $e ) {
 						unset( $e );
 					}
 				}
-				$already_scheduled = false;
-				if ( function_exists( 'as_has_scheduled_action' ) ) {
-					try {
-						$already_scheduled = (bool) as_has_scheduled_action( $hook, $args, $group );
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						$already_scheduled = false;
-					}
+				if ( self::as_already_scheduled( $hook, $args, $group ) ) {
+					return 0;
 				}
-				if ( ! $already_scheduled && function_exists( 'as_next_scheduled_action' ) ) {
+				$already_scheduled = false;
+				if ( function_exists( 'as_next_scheduled_action' ) ) {
 					try {
 						$already_scheduled = (bool) as_next_scheduled_action( $hook, $args, $group );
 					} catch ( \Throwable $e ) {
@@ -5634,11 +5723,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 
 				// Automatic LCP hero preload + font discovery toggles (issue
 				// #1216) plus the high-value prerender list toggle (issue
-				// #1237) — normalize malformed import shapes to bool so a
+				// #1237) and the opt-in failed-action purge toggle (issue
+				// #1310, `database_cleanup.purgeFailedActions`) — normalize
+				// malformed import shapes to bool so a
 				// string 'false' (textarea/text branches preserve strings, and
 				// !empty('false') is truthy at every read site) cannot silently
 				// enable the features. Unrecognized values fail safe to false
-				// (all three features default off). Pinned before the generic
+				// (all four features default off). Pinned before the generic
 				// stripos 'list' branch so speculationPrerenderList never
 				// falls through to sanitize_textarea_field.
 				if ( in_array( $safe_key, array( 'autoLcpPreload', 'autoDiscoverFonts', 'speculationPrerenderList', 'purgeFailedActions' ), true ) && ! is_array( $value ) ) {

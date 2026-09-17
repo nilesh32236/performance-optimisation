@@ -52,6 +52,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		);
 
 		/**
+		 * Upper bound for the opt-in failed-action purge lifespan.
+		 *
+		 * Three months in seconds (31-day months), mirroring the
+		 * `action_scheduler_retention_period_for_failed` default read by
+		 * {@see get_action_scheduler_retention()}. The purge uses
+		 * `min( filtered retention, this cap )` so the retention filters
+		 * stay authoritative while the documented 3-month bound holds even
+		 * when an operator raises the upstream retention (issue #1310
+		 * review).
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const FAILED_PURGE_MAX_LIFESPAN = 3 * 2678400;
+
+		/**
 		 * Maps cleanup method names to their cleanup type keys for TABLE_MAP lookup.
 		 *
 		 * @since 2.0.0
@@ -1663,6 +1679,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		}
 
 		/**
+		 * Whether the Action Scheduler store API alone is available.
+		 *
+		 * Narrower than {@see is_action_scheduler_available()}: store-only
+		 * readers/purgers (failed-action purge, queue health) must not
+		 * require the Cleaner class (issue #1310 review).
+		 *
+		 * @since NEXT
+		 * @return bool True when the store class exists.
+		 */
+		public static function is_action_scheduler_store_available(): bool {
+			try {
+				return class_exists( 'ActionScheduler_Store' );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
 		 * Resolve the Action Scheduler retention cutoffs using AS's own filters.
 		 *
 		 * Reads `action_scheduler_retention_period` (complete/canceled) and
@@ -1920,12 +1955,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * wall-clock budget to avoid long table locks. Fail-open: returns 0
 		 * when AS is absent, the opt-in is off, or the store throws.
 		 *
+		 * Only the store is touched, so this gates on
+		 * {@see is_action_scheduler_store_available()} (Store alone) rather
+		 * than {@see is_action_scheduler_available()} (Store + Cleaner): a
+		 * missing Cleaner class must not disable the Store-only purge
+		 * (issue #1310 review).
+		 *
 		 * @since NEXT
-		 * @param int $batch_size Maximum rows deleted per iteration. Default 50, clamped to 1-100.
+		 * @param int  $batch_size Maximum rows deleted per iteration. Default 50, clamped to 1-100.
+		 * @param bool $log        Whether to write the activity-log row and invalidate the counts cache. Pass false when a wrapper (e.g. clean_action_scheduler()) logs the combined total itself, so one purge emits one row and invalidates once (issue #1310 review).
 		 * @return int Number of failed actions deleted.
 		 */
-		public static function purge_failed_actions( int $batch_size = 50 ): int {
-			if ( ! self::is_action_scheduler_available() ) {
+		public static function purge_failed_actions( int $batch_size = 50, bool $log = true ): int {
+			if ( ! self::is_action_scheduler_store_available() ) {
 				return 0;
 			}
 			if ( ! self::is_failed_action_purge_enabled() ) {
@@ -1937,7 +1979,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				if ( ! $store || ! method_exists( $store, 'query_actions' ) || ! method_exists( $store, 'delete_action' ) ) {
 					return 0;
 				}
-				$cutoff = self::get_action_scheduler_cutoff( 3 * 2678400 );
+				// Single source of truth for the bound (issue #1310
+				// review): the filtered failed-action retention, capped at
+				// the 3-month FAILED_PURGE_MAX_LIFESPAN so the documented
+				// bound holds even when an operator raises the upstream
+				// retention.
+				$retention = self::get_action_scheduler_retention();
+				$lifespan  = min( max( 0, (int) $retention['lifespan_failed'] ), self::FAILED_PURGE_MAX_LIFESPAN );
+				$cutoff    = self::get_action_scheduler_cutoff( $lifespan );
 				if ( null === $cutoff ) {
 					return 0;
 				}
@@ -1970,12 +2019,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					}
 					$total += $count;
 					++$iterations;
+					if ( 0 === $count ) {
+						// Zero progress (every delete threw): the next
+						// query would return the same batch, so stop
+						// instead of burning the remaining iterations
+						// re-scanning identical IDs (issue #1310 review).
+						break;
+					}
 					$fetched = count( $ids );
 					if ( $fetched < $batch_size ) {
 						break;
 					}
 				} while ( $iterations < $max_iterations && microtime( true ) < $deadline );
-				if ( $total > 0 ) {
+				if ( $log && $total > 0 ) {
 					self::invalidate_counts_cache();
 					Log::add(
 						sprintf(
@@ -2013,6 +2069,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * nothing — bounded by an iteration cap and a wall-clock budget so a
 		 * 168 MB backlog is actually reclaimed in one invocation without
 		 * risking a REST timeout (issue #1106 review).
+		 *
+		 * The opt-in failed-action purge below runs after the upstream loop,
+		 * so one invocation can perform up to ~20 store passes with two
+		 * 15s budgets back to back (issue #1310 review). The purge is
+		 * called with `$log = false` so the combined total is logged once
+		 * and the counts cache is invalidated once, in this wrapper only.
 		 *
 		 * @since NEXT
 		 * @return int Number of actions deleted (0 when AS absent, disabled, or nothing past retention).
@@ -2059,8 +2121,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				// additive — upstream defaults are untouched, and the purge
 				// is a no-op (returns 0) unless the site opted in via the
 				// `wppo_purge_failed_actions` filter or the
-				// `database_cleanup.purgeFailedActions` setting.
-				$count += self::purge_failed_actions();
+				// `database_cleanup.purgeFailedActions` setting. Logging is
+				// suppressed here ($log = false) so the combined total below
+				// is the single activity-log row and the counts cache is
+				// invalidated once.
+				$count += self::purge_failed_actions( 50, false );
 				if ( $count > 0 ) {
 					self::invalidate_counts_cache();
 					Log::add(
