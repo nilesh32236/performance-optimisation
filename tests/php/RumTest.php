@@ -1285,4 +1285,273 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 		// Pin the emitted value, not just the key, so a wrong rate fails.
 		$this->assertStringContainsString( 'sampleRate":10', $printed[0][0] );
 	}
+
+	/**
+	 * Test that a held flush lock makes flush_queue() return early.
+	 *
+	 * The queued samples must be left untouched for the lock holder.
+	 *
+	 * @since NEXT
+	 */
+	public function test_flush_returns_early_when_lock_held(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		Util::clear_settings_cache();
+		// Exercise the transient lock path (no external object cache).
+		Functions\when( 'wp_using_ext_object_cache' )->justReturn( false );
+
+		$this->transients[ Util::transient_key( 'wppo_rum_flush_lock' ) ] = 1;
+		$this->transients[ Util::transient_key( 'wppo_rum_queue' ) ]      = array(
+			array(
+				'path' => '/locked',
+				'lcp'  => 1000,
+				'_ts'  => time(),
+			),
+		);
+
+		RUM::flush_queue();
+
+		// Queue untouched, nothing aggregated, lock still held.
+		$this->assertCount( 1, $this->transients[ Util::transient_key( 'wppo_rum_queue' ) ] );
+		$this->assertSame( array(), RUM::get_aggregate_readonly() );
+		$this->assertSame( 1, $this->transients[ Util::transient_key( 'wppo_rum_flush_lock' ) ] );
+	}
+
+	/**
+	 * Test that flush_queue() always clears the lock.
+	 *
+	 * @since NEXT
+	 */
+	public function test_flush_clears_lock(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		Util::clear_settings_cache();
+
+		$this->transients[ Util::transient_key( 'wppo_rum_queue' ) ] = array(
+			array(
+				'path' => '/unlocked',
+				'lcp'  => 1000,
+				'_ts'  => time(),
+			),
+		);
+
+		RUM::flush_queue();
+
+		$this->assertArrayNotHasKey( Util::transient_key( 'wppo_rum_flush_lock' ), $this->transients );
+		$this->assertArrayNotHasKey( Util::transient_key( 'wppo_rum_queue' ), $this->transients );
+	}
+
+	/**
+	 * Test that the low-traffic cron is scheduled only on the 0-to-1 transition.
+	 *
+	 * The wp_rand() stub returns 2 so the random-flush branch never fires;
+	 * the first beacon schedules the flush event and the second must not
+	 * issue another wp_next_scheduled() query.
+	 *
+	 * @since NEXT
+	 */
+	public function test_cron_scheduled_only_on_empty_to_nonempty_transition(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		Util::clear_settings_cache();
+		$_SERVER['REMOTE_ADDR'] = '203.0.113.5';
+
+		$scheduled_count      = 0;
+		$next_scheduled_count = 0;
+		Functions\when( 'wp_schedule_single_event' )->alias(
+			static function () use ( &$scheduled_count ) {
+				++$scheduled_count;
+				return true;
+			}
+		);
+		Functions\when( 'wp_next_scheduled' )->alias(
+			static function () use ( &$next_scheduled_count ) {
+				++$next_scheduled_count;
+				return false;
+			}
+		);
+
+		RUM::collect(
+			array(
+				'token' => $this->valid_token(),
+				'path'  => '/',
+				'lcp'   => 1000,
+			)
+		);
+		RUM::collect(
+			array(
+				'token' => $this->valid_token(),
+				'path'  => '/',
+				'lcp'   => 2000,
+			)
+		);
+
+		$this->assertSame( 1, $scheduled_count );
+		$this->assertSame( 1, $next_scheduled_count );
+	}
+
+	/**
+	 * Test that the transient fallback queue stays capped at QUEUE_MAX (100).
+	 *
+	 * @since NEXT
+	 */
+	public function test_queue_capped_at_max_without_object_cache(): void {
+		$this->install_stubs();
+		// Exercise the transient fallback path (no external object cache).
+		Functions\when( 'wp_using_ext_object_cache' )->justReturn( false );
+
+		$method = new \ReflectionMethod( RUM::class, 'append_to_queue_atomic' );
+		$method->setAccessible( true );
+
+		$result = array( true, 0 );
+		for ( $i = 0; $i < 105; $i++ ) {
+			$result = $method->invoke(
+				null,
+				array(
+					'path' => '/capped',
+					'lcp'  => 1000 + $i,
+					'_ts'  => time(),
+				)
+			);
+		}
+
+		// First append reports the 0-to-1 transition; the queue stays bounded.
+		$this->assertSame( 100, $result[1] );
+		$queue = $this->transients[ Util::transient_key( 'wppo_rum_queue' ) ];
+		$this->assertCount( 100, $queue );
+	}
+
+	/**
+	 * Test that the CAS path preserves every sample with zero loss.
+	 *
+	 * Simulates 20 sequential appends through wp_cache_add/wp_cache_get
+	 * semantics (atomic add) and asserts all samples survive.
+	 *
+	 * @since NEXT
+	 */
+	public function test_atomic_append_preserves_all_samples_with_object_cache(): void {
+		$this->install_stubs();
+		Functions\when( 'wp_using_ext_object_cache' )->justReturn( true );
+
+		// Array-backed object cache so the real wp_cache_* functions (loaded
+		// from templates/object-cache.php at bootstrap, unstubbable via
+		// Brain Monkey) exercise the atomic-add CAS path with true add
+		// (SET NX) semantics.
+		$original_cache = $GLOBALS['wp_object_cache'] ?? null;
+		// phpcs:disable WordPress.WP.GlobalVariablesOverride.Prohibited
+		$GLOBALS['wp_object_cache'] = new class() {
+			/**
+			 * In-memory cache store keyed by group + key.
+			 *
+			 * @var array
+			 */
+			public $store = array();
+
+			/**
+			 * Get a cached value with found flag.
+			 *
+			 * @param int|string $key   Cache key.
+			 * @param string     $group Cache group.
+			 * @param bool       $force Whether to force.
+			 * @param bool|null  $found Whether the value was found.
+			 * @return mixed
+			 */
+			public function get( $key, $group = 'default', $force = false, &$found = null ) {
+				$slot  = $group . '|' . $key;
+				$found = array_key_exists( $slot, $this->store );
+				return $found ? $this->store[ $slot ] : false;
+			}
+
+			/**
+			 * Add a value only when the slot is empty (atomic SET NX).
+			 *
+			 * @param int|string $key    Cache key.
+			 * @param mixed      $data   Cache data.
+			 * @param string     $group  Cache group.
+			 * @param int        $expire Expiration in seconds.
+			 * @return bool
+			 */
+			public function add( $key, $data, $group = 'default', $expire = 0 ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+				$slot = $group . '|' . $key;
+				if ( array_key_exists( $slot, $this->store ) ) {
+					return false;
+				}
+				$this->store[ $slot ] = $data;
+				return true;
+			}
+
+			/**
+			 * Overwrite a cached value.
+			 *
+			 * @param int|string $key    Cache key.
+			 * @param mixed      $data   Cache data.
+			 * @param string     $group  Cache group.
+			 * @param int        $expire Expiration in seconds.
+			 * @return bool
+			 */
+			public function set( $key, $data, $group = 'default', $expire = 0 ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+				$this->store[ $group . '|' . $key ] = $data;
+				return true;
+			}
+
+			/**
+			 * Delete a cached value.
+			 *
+			 * @param int|string $key   Cache key.
+			 * @param string     $group Cache group.
+			 * @return bool
+			 */
+			public function delete( $key, $group = 'default' ) {
+				unset( $this->store[ $group . '|' . $key ] );
+				return true;
+			}
+		};
+		// phpcs:enable WordPress.WP.GlobalVariablesOverride.Prohibited
+
+		try {
+			$method = new \ReflectionMethod( RUM::class, 'append_to_queue_atomic' );
+			$method->setAccessible( true );
+
+			$first = $method->invoke(
+				null,
+				array(
+					'path' => '/cas',
+					'lcp'  => 1000,
+					'_ts'  => time(),
+				)
+			);
+			$this->assertTrue( $first[0] );
+			$this->assertSame( 1, $first[1] );
+
+			for ( $i = 1; $i < 20; $i++ ) {
+				$result = $method->invoke(
+					null,
+					array(
+						'path' => '/cas',
+						'lcp'  => 1000 + $i,
+						'_ts'  => time(),
+					)
+				);
+				$this->assertFalse( $result[0] );
+				$this->assertSame( $i + 1, $result[1] );
+			}
+
+			$queue = $GLOBALS['wp_object_cache']->store[ 'wppo|' . Util::transient_key( 'wppo_rum_queue' ) ];
+			$this->assertCount( 20, $queue );
+		} finally {
+			// phpcs:disable WordPress.WP.GlobalVariablesOverride.Prohibited
+			if ( null === $original_cache ) {
+				unset( $GLOBALS['wp_object_cache'] );
+			} else {
+				$GLOBALS['wp_object_cache'] = $original_cache;
+			}
+			// phpcs:enable WordPress.WP.GlobalVariablesOverride.Prohibited
+		}
+	}
 }

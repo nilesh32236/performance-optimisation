@@ -1391,6 +1391,188 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		}
 
 		/**
+		 * Whether a persistent external object cache is available.
+		 *
+		 * `wp_cache_add()` is only atomic (`SET NX EX`) on a persistent
+		 * backend; without one it is per-request memory and every worker
+		 * would "win". Fail-open: any failure means no external cache.
+		 *
+		 * @since NEXT
+		 * @return bool True when wp_using_ext_object_cache() reports a persistent cache.
+		 */
+		private static function has_ext_object_cache(): bool {
+			try {
+				if ( function_exists( 'wp_using_ext_object_cache' ) ) {
+					return (bool) wp_using_ext_object_cache();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return false;
+		}
+
+		/**
+		 * Atomically append a sample to the RUM queue.
+		 *
+		 * With a persistent object cache the append uses an
+		 * optimistic-concurrency loop (`wp_cache_get` with `$found` +
+		 * `wp_cache_add` for creates / `wp_cache_set` for updates, up to 3
+		 * retries) so concurrent beacons stop overwriting each other. The
+		 * result is mirrored to the transient so DB-backed readers and the
+		 * flush path still see the queue. Without an external cache (or on
+		 * any failure) the current `get_transient`/`set_transient` behavior
+		 * is kept verbatim: bounded at QUEUE_MAX with eventual consistency.
+		 * Fail-open: samples are dropped under pressure, never fatal.
+		 *
+		 * @since NEXT
+		 * @param array $sample Normalized sample (with `_ts` attached).
+		 * @return array{0:bool,1:int} Tuple of (was_empty before append, count after append).
+		 */
+		private static function append_to_queue_atomic( array $sample ): array {
+			$queue_key = Util::transient_key( self::QUEUE_KEY );
+			$cap       = self::QUEUE_MAX;
+			if ( self::has_ext_object_cache() && function_exists( 'wp_cache_add' ) && function_exists( 'wp_cache_get' ) && function_exists( 'wp_cache_set' ) ) {
+				try {
+					for ( $attempt = 0; $attempt < 3; $attempt++ ) {
+						$found = false;
+						$queue = wp_cache_get( $queue_key, 'wppo', false, $found );
+						if ( ! $found || ! is_array( $queue ) ) {
+							// Seed from the durable transient so legacy
+							// entries queued before this deploy are not lost
+							// when the object-cache copy is cold.
+							$seed      = function_exists( 'get_transient' ) ? get_transient( $queue_key ) : false;
+							$was_empty = ! is_array( $seed ) || empty( $seed );
+							$queue     = is_array( $seed ) ? $seed : array();
+							$queue[]   = $sample;
+							if ( count( $queue ) > $cap ) {
+								$queue = array_slice( $queue, -$cap );
+							}
+							$count = count( $queue );
+							if ( wp_cache_add( $queue_key, $queue, 'wppo', HOUR_IN_SECONDS ) ) {
+								if ( function_exists( 'set_transient' ) ) {
+									try {
+										set_transient( $queue_key, $queue, HOUR_IN_SECONDS );
+									} catch ( \Throwable $e ) {
+										unset( $e );
+									}
+								}
+								return array( $was_empty, $count );
+							}
+							continue;
+						}
+						$was_empty = empty( $queue );
+						$queue[]   = $sample;
+						if ( count( $queue ) > $cap ) {
+							$queue = array_slice( $queue, -$cap );
+						}
+						$count = count( $queue );
+						if ( wp_cache_set( $queue_key, $queue, 'wppo', HOUR_IN_SECONDS ) ) {
+							if ( function_exists( 'set_transient' ) ) {
+								try {
+									set_transient( $queue_key, $queue, HOUR_IN_SECONDS );
+								} catch ( \Throwable $e ) {
+									unset( $e );
+								}
+							}
+							return array( $was_empty, $count );
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			$queue = function_exists( 'get_transient' ) ? get_transient( $queue_key ) : false;
+			if ( ! is_array( $queue ) ) {
+				$queue = array();
+			}
+			$was_empty = empty( $queue );
+			$queue[]   = $sample;
+			if ( count( $queue ) > $cap ) {
+				$queue = array_slice( $queue, -$cap );
+			}
+			if ( function_exists( 'set_transient' ) ) {
+				try {
+					set_transient( $queue_key, $queue, HOUR_IN_SECONDS );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			return array( $was_empty, count( $queue ) );
+		}
+
+		/**
+		 * Atomically acquire the RUM flush lock.
+		 *
+		 * With a persistent object cache this is `wp_cache_add()` (`SET NX
+		 * EX`, 30s TTL) so only one flusher wins. Without one it is a
+		 * best-effort transient check-and-set (documented non-atomic: two
+		 * flushes can both observe a miss). Fail-open: any failure returns
+		 * false (flush skipped), never fatal.
+		 *
+		 * @since NEXT
+		 * @return bool True when this worker owns the lock.
+		 */
+		private static function acquire_flush_lock(): bool {
+			$lock_key = Util::transient_key( self::FLUSH_LOCK_KEY );
+			if ( self::has_ext_object_cache() && function_exists( 'wp_cache_add' ) ) {
+				try {
+					return (bool) wp_cache_add( $lock_key, 1, 'wppo', 30 );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					// Fall through to the transient check-and-set below:
+					// a backend without add() (or a broken one) must not
+					// wedge the flush path, it only loses atomicity.
+				}
+			}
+			try {
+				if ( function_exists( 'get_transient' ) && function_exists( 'set_transient' ) ) {
+					if ( false !== get_transient( $lock_key ) ) {
+						return false;
+					}
+					// Fire-and-forget like the previous implementation:
+					// the return value is ignored so a backend reporting
+					// failure (or a stub returning null) cannot wedge the
+					// flush path. Best-effort and documented non-atomic.
+					set_transient( $lock_key, 1, 30 );
+					return true;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+			return false;
+		}
+
+		/**
+		 * Release the RUM flush lock from both namespaces.
+		 *
+		 * Deletes the object-cache copy and the transient copy so the lock
+		 * is always cleared regardless of which path acquired it. Called
+		 * from the `finally` block of flush_queue(). Fail-open: throwables
+		 * are swallowed, never fatal.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private static function release_flush_lock(): void {
+			$lock_key = Util::transient_key( self::FLUSH_LOCK_KEY );
+			try {
+				if ( function_exists( 'wp_cache_delete' ) ) {
+					wp_cache_delete( $lock_key, 'wppo' );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			try {
+				if ( function_exists( 'delete_transient' ) ) {
+					delete_transient( $lock_key );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
 		 * Buffer a sample to a transient queue and flush periodically.
 		 *
 		 * Replaces the previous per-beacon get_option+update_option with a
@@ -1415,24 +1597,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				return;
 			}
 			// Attach timestamp so flush can bucket by sample day, not flush day.
-			$sample['_ts'] = time();
-			$queue_key     = Util::transient_key( self::QUEUE_KEY );
-			$queue         = get_transient( $queue_key );
-			if ( ! is_array( $queue ) ) {
-				$queue = array();
-			}
-			$queue[] = $sample;
-			if ( count( $queue ) > self::QUEUE_MAX ) {
-				$queue = array_slice( $queue, -self::QUEUE_MAX );
-			}
-			set_transient( $queue_key, $queue, HOUR_IN_SECONDS );
+			$sample['_ts']             = time();
+			list( $was_empty, $count ) = self::append_to_queue_atomic( $sample );
 
-			if ( count( $queue ) >= self::FLUSH_THRESHOLD ) {
+			if ( $count >= self::FLUSH_THRESHOLD ) {
 				self::flush_queue();
-			} elseif ( 1 === wp_rand( 1, 10 ) ) {
+			} elseif ( function_exists( 'wp_rand' ) && 1 === wp_rand( 1, 10 ) ) {
 				self::flush_queue();
-			} elseif ( function_exists( 'wp_next_scheduled' ) && function_exists( 'wp_schedule_single_event' ) ) {
+			} elseif ( $was_empty && function_exists( 'wp_next_scheduled' ) && function_exists( 'wp_schedule_single_event' ) ) {
 				// Ensure a cron will eventually flush the queue even on low traffic.
+				// Scheduled only on the 0-to-1 queue transition so steady-state
+				// beacons skip the extra wp_next_scheduled() DB query.
 				if ( ! wp_next_scheduled( 'wppo_rum_flush' ) ) {
 					wp_schedule_single_event( time() + 300, 'wppo_rum_flush' );
 				}
@@ -1450,20 +1625,38 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * @return void
 		 */
 		public static function flush_queue(): void {
-			$lock_key = Util::transient_key( self::FLUSH_LOCK_KEY );
-			if ( get_transient( $lock_key ) ) {
+			if ( ! self::acquire_flush_lock() ) {
 				return;
 			}
-			set_transient( $lock_key, 1, 30 );
 			try {
 				$queue_key = Util::transient_key( self::QUEUE_KEY );
-				$queue     = get_transient( $queue_key );
+				$queue     = false;
+				if ( self::has_ext_object_cache() && function_exists( 'wp_cache_get' ) ) {
+					try {
+						$queue = wp_cache_get( $queue_key, 'wppo' );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$queue = false;
+					}
+				}
+				if ( ! is_array( $queue ) || empty( $queue ) ) {
+					$queue = function_exists( 'get_transient' ) ? get_transient( $queue_key ) : false;
+				}
 				if ( empty( $queue ) || ! is_array( $queue ) ) {
 					return;
 				}
 				// Copy and clear queue before processing so new beacons arriving
 				// during aggregation queue separately.
-				delete_transient( $queue_key );
+				if ( function_exists( 'delete_transient' ) ) {
+					delete_transient( $queue_key );
+				}
+				if ( function_exists( 'wp_cache_delete' ) ) {
+					try {
+						wp_cache_delete( $queue_key, 'wppo' );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
 
 				$all = get_option( self::OPTION, array() );
 				if ( ! is_array( $all ) ) {
@@ -1808,7 +2001,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				self::clear_field_lcp_cache();
 				self::bump_top_url_generation();
 			} finally {
-				delete_transient( $lock_key );
+				self::release_flush_lock();
 			}
 		}
 
