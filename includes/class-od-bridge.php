@@ -650,6 +650,342 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		}
 
 		/**
+		 * Get per-breakpoint LCP element detail for responsive preloads.
+		 *
+		 * Read-only additive accessor (issue #1429) wrapping the private
+		 * `get_url_metrics()` scan: returns one entry per measured viewport
+		 * group shaped `array{url: string, srcset: string, sizes: string,
+		 * media: string, type: string}` where `type` is one of `img`,
+		 * `picture`, `background`, or `video-poster`. Entries preserve
+		 * viewport order (mobile-first) and keep duplicates so callers can
+		 * majority-vote the winning URL. Callers skip art-directed
+		 * `picture` entries carrying a non-empty `media` value instead of
+		 * mispredicting the candidate (fail-open skip).
+		 *
+		 * Guards: `is_enabled()` (fires the `wppo_od_should_optimize`
+		 * filter, current-URL context, memoized per request) plus
+		 * `function_exists('od_get_url_metrics')` /
+		 * `class_exists('OD_URL_Metric', 'OD_URL_Metric_Group_Collection')`
+		 * via `is_od_available()` inside `is_enabled()`. Fail-open to
+		 * `array()` on any failure. Memoized per request (`breakpoint:`
+		 * memo key, bounded with the shared memo). Multisite-safe: metrics
+		 * describe the current site URL only; no cross-site leakage
+		 * (in-memory per-request state).
+		 *
+		 * @since NEXT
+		 * @return array<int, array{url: string, srcset: string, sizes: string, media: string, type: string}> Breakpoint LCP entries.
+		 */
+		public static function get_breakpoint_lcp_elements(): array {
+			try {
+				if ( ! self::is_enabled() ) {
+					return array();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
+			}
+
+			$memo_key = self::request_memo_key( 'breakpoint:' );
+			if ( array_key_exists( $memo_key, self::$request_memo ) && is_array( self::$request_memo[ $memo_key ] ) ) {
+				return self::$request_memo[ $memo_key ];
+			}
+
+			try {
+				$metrics = self::get_url_metrics();
+				if ( empty( $metrics ) ) {
+					self::request_memo_set( $memo_key, array() );
+					return array();
+				}
+
+				$entries = array();
+				foreach ( $metrics as $metric ) {
+					$lcp_elements = self::collect_lcp_elements_from_metric( $metric );
+					foreach ( $lcp_elements as $el ) {
+						$url = self::extract_url_from_element( $el );
+						if ( ! is_string( $url ) || '' === trim( $url ) ) {
+							continue;
+						}
+						$url = trim( $url );
+						// Reject non-http(s) absolute schemes at the source;
+						// relative URLs stay eligible for same-site resolution.
+						$scheme = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url, PHP_URL_SCHEME ) : parse_url( $url, PHP_URL_SCHEME ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Fallback when wp_parse_url() is unavailable.
+						if ( is_string( $scheme ) && '' !== $scheme && ! in_array( strtolower( $scheme ), array( 'http', 'https' ), true ) ) {
+							continue;
+						}
+						$entries[] = array(
+							'url'    => substr( $url, 0, 2048 ),
+							'srcset' => substr( self::extract_srcset_from_element( $el ), 0, 4096 ),
+							'sizes'  => substr( self::extract_sizes_from_element( $el ), 0, 1024 ),
+							'media'  => substr( self::extract_media_from_element( $el ), 0, 1024 ),
+							'type'   => self::extract_type_from_element( $el ),
+						);
+					}
+				}
+
+				$result = array_values( $entries );
+				self::request_memo_set( $memo_key, $result );
+				return $result;
+			} catch ( \Throwable $e ) {
+				self::debug_log( 'WPPO OD bridge breakpoint elements error: ' . $e->getMessage() );
+				return array();
+			}
+		}
+
+		/**
+		 * Collect LCP elements (not just URLs) from a single OD metric.
+		 *
+		 * Mirrors the `collect_raw_lcp_urls()` object/array handling but
+		 * returns the raw elements so callers can extract srcset/sizes/
+		 * media/type per viewport group. Fail-open to an empty list.
+		 *
+		 * @since NEXT
+		 * @param mixed $metric Single OD metric object or array.
+		 * @return array List of LCP elements.
+		 */
+		private static function collect_lcp_elements_from_metric( $metric ): array {
+			$found = array();
+			try {
+				if ( is_object( $metric ) ) {
+					if ( method_exists( $metric, 'get_lcp_element' ) ) {
+						try {
+							$el = $metric->get_lcp_element();
+							if ( null !== $el ) {
+								$found[] = $el;
+								return $found;
+							}
+						} catch ( \Throwable $e ) {
+							self::debug_log( 'WPPO OD bridge get_lcp_element error: ' . $e->getMessage() );
+						}
+					}
+					if ( method_exists( $metric, 'get_elements' ) ) {
+						try {
+							$elements = $metric->get_elements();
+							if ( is_array( $elements ) ) {
+								foreach ( $elements as $el ) {
+									if ( self::element_is_lcp( $el ) ) {
+										$found[] = $el;
+									}
+								}
+								return $found;
+							}
+						} catch ( \Throwable $e ) {
+							self::debug_log( 'WPPO OD bridge get_elements error: ' . $e->getMessage() );
+						}
+					}
+					if ( method_exists( $metric, 'get_url' ) && method_exists( $metric, 'get_xpath' ) ) {
+						if ( self::element_is_lcp( $metric ) ) {
+							$found[] = $metric;
+						}
+						return $found;
+					}
+					if ( self::element_is_lcp( $metric ) ) {
+						$found[] = $metric;
+					}
+					return $found;
+				}
+				if ( is_array( $metric ) ) {
+					if ( isset( $metric['elements'] ) && is_array( $metric['elements'] ) ) {
+						foreach ( $metric['elements'] as $el ) {
+							if ( self::element_is_lcp( $el ) ) {
+								$found[] = $el;
+							}
+						}
+						return $found;
+					}
+					if ( self::element_is_lcp( $metric ) ) {
+						$found[] = $metric;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				self::debug_log( 'WPPO OD bridge breakpoint collect error: ' . $e->getMessage() );
+			}
+			return $found;
+		}
+
+		/**
+		 * Extract a string attribute from an OD element (method → property → array).
+		 *
+		 * Mirrors the `extract_url_from_element()` lookup order so object
+		 * (`getAttribute('srcset')` / `get_attribute()`), property, and
+		 * array (`attributes.srcset`) shapes all resolve.
+		 *
+		 * @since NEXT
+		 * @param mixed  $element Element object or array.
+		 * @param string $name    Attribute name (e.g. 'srcset').
+		 * @return string Attribute value or empty string.
+		 */
+		private static function extract_element_attr( $element, string $name ): string {
+			try {
+				if ( is_object( $element ) ) {
+					foreach ( array( 'getAttribute', 'get_attribute' ) as $method ) {
+						if ( method_exists( $element, $method ) ) {
+							try {
+								$val = $element->$method( $name );
+								if ( is_string( $val ) && '' !== trim( $val ) ) {
+									return trim( $val );
+								}
+							} catch ( \Throwable $e ) {
+								unset( $e );
+							}
+						}
+					}
+					$camel = str_replace( ' ', '', ucwords( str_replace( array( '-', '_' ), ' ', $name ) ) );
+					foreach ( array( 'get' . $camel, 'get_' . strtolower( $name ) ) as $getter ) {
+						if ( method_exists( $element, $getter ) ) {
+							try {
+								$val = $element->$getter();
+								if ( is_string( $val ) && '' !== trim( $val ) ) {
+									return trim( $val );
+								}
+							} catch ( \Throwable $e ) {
+								unset( $e );
+							}
+						}
+					}
+					foreach ( array( $name, strtolower( $name ) ) as $prop ) {
+						if ( isset( $element->$prop ) && is_string( $element->$prop ) && '' !== trim( $element->$prop ) ) {
+							return trim( $element->$prop );
+						}
+					}
+					if ( $element instanceof \ArrayAccess ) {
+						foreach ( array( $name, strtolower( $name ) ) as $key ) {
+							if ( isset( $element[ $key ] ) && is_string( $element[ $key ] ) && '' !== trim( $element[ $key ] ) ) {
+								return trim( $element[ $key ] );
+							}
+						}
+					}
+					if ( method_exists( $element, 'to_array' ) ) {
+						try {
+							$arr = $element->to_array();
+							if ( is_array( $arr ) ) {
+								return self::extract_element_attr( $arr, $name );
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+					}
+					return '';
+				}
+				if ( is_array( $element ) ) {
+					foreach ( array( $name, strtolower( $name ), strtoupper( $name ) ) as $key ) {
+						if ( isset( $element[ $key ] ) && is_string( $element[ $key ] ) && '' !== trim( $element[ $key ] ) ) {
+							return trim( $element[ $key ] );
+						}
+					}
+					if ( isset( $element['attributes'] ) && is_array( $element['attributes'] ) ) {
+						foreach ( array( $name, strtolower( $name ) ) as $key ) {
+							if ( isset( $element['attributes'][ $key ] ) && is_string( $element['attributes'][ $key ] ) && '' !== trim( $element['attributes'][ $key ] ) ) {
+								return trim( $element['attributes'][ $key ] );
+							}
+						}
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return '';
+		}
+
+		/**
+		 * Extract the srcset value from an OD element.
+		 *
+		 * @since NEXT
+		 * @param mixed $element Element object or array.
+		 * @return string Srcset value or empty string.
+		 */
+		private static function extract_srcset_from_element( $element ): string {
+			$val = self::extract_element_attr( $element, 'srcset' );
+			if ( '' === $val ) {
+				$val = self::extract_element_attr( $element, 'srcSet' );
+			}
+			return $val;
+		}
+
+		/**
+		 * Extract the sizes value from an OD element.
+		 *
+		 * @since NEXT
+		 * @param mixed $element Element object or array.
+		 * @return string Sizes value or empty string.
+		 */
+		private static function extract_sizes_from_element( $element ): string {
+			return self::extract_element_attr( $element, 'sizes' );
+		}
+
+		/**
+		 * Extract the media value from an OD element.
+		 *
+		 * Non-empty media on a `picture` source marks art-directed output
+		 * that the single-preload emitter skips instead of mispredicting.
+		 *
+		 * @since NEXT
+		 * @param mixed $element Element object or array.
+		 * @return string Media value or empty string.
+		 */
+		private static function extract_media_from_element( $element ): string {
+			return self::extract_element_attr( $element, 'media' );
+		}
+
+		/**
+		 * Extract the LCP element type for per-type preload coverage.
+		 *
+		 * Returns one of `img`, `picture`, `background`, or
+		 * `video-poster`: explicit `type`/`tagName`/`tag`/`nodeName` values
+		 * win, then `poster`/`background` keys, then xpath sniffing
+		 * (`picture`/`source` → picture, `video` → video-poster),
+		 * defaulting to `img`. Fail-open to `img`.
+		 *
+		 * @since NEXT
+		 * @param mixed $element Element object or array.
+		 * @return string Element type.
+		 */
+		private static function extract_type_from_element( $element ): string {
+			try {
+				foreach ( array( 'type', 'tagName', 'tag', 'nodeName', 'node_name', 'elementType' ) as $key ) {
+					$val = self::extract_element_attr( $element, $key );
+					if ( '' !== $val ) {
+						$lower = strtolower( trim( $val ) );
+						if ( false !== strpos( $lower, 'picture' ) || false !== strpos( $lower, 'source' ) ) {
+							return 'picture';
+						}
+						if ( false !== strpos( $lower, 'video' ) || false !== strpos( $lower, 'poster' ) ) {
+							return 'video-poster';
+						}
+						if ( false !== strpos( $lower, 'background' ) ) {
+							return 'background';
+						}
+						if ( false !== strpos( $lower, 'img' ) || 'image' === $lower ) {
+							return 'img';
+						}
+					}
+				}
+				// Poster key marks video-poster LCP; background keys mark CSS heroes.
+				$poster = self::extract_element_attr( $element, 'poster' );
+				if ( '' !== $poster ) {
+					return 'video-poster';
+				}
+				foreach ( array( 'background', 'backgroundImage', 'background-image' ) as $key ) {
+					if ( '' !== self::extract_element_attr( $element, $key ) ) {
+						return 'background';
+					}
+				}
+				$xpath = self::extract_element_attr( $element, 'xpath' );
+				if ( '' !== $xpath ) {
+					$lower = strtolower( $xpath );
+					if ( false !== strpos( $lower, 'picture' ) || false !== strpos( $lower, 'source' ) ) {
+						return 'picture';
+					}
+					if ( false !== strpos( $lower, 'video' ) ) {
+						return 'video-poster';
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return 'img';
+		}
+
+		/**
 		 * Retrieve URL metrics via the OD API.
 		 *
 		 * Tries od_get_url_metrics() first (Lab 6.9). Falls back to
