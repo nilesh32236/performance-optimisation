@@ -2653,7 +2653,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * imagesrcset/imagesizes; its auto-LCP path runs only when
 		 * `image_optimisation.autoPreloadLCP` or
 		 * `preload_settings.autoLcpPreload` is enabled. When either is on,
-		 * the CCSS-path hint (wp_head:0, no responsive hints) yields so
+		 * the CCSS-path hint (wp_head:0) yields so
 		 * exactly one preload prints. Fail-open: any failure returns false
 		 * (CCSS path emits normally).
 		 *
@@ -2769,6 +2769,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				}
 				self::$lcp_preload_emitted[ $key ] = true;
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'generate_preload_link' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_image_mime_type' ) ) {
+					$imagesrcset = '';
+					$imagesizes  = '';
+					try {
+						if ( class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) && method_exists( 'PerformanceOptimise\Inc\Image_Optimisation', 'get_lcp_responsive_data_for_url' ) ) {
+							$responsive  = \PerformanceOptimise\Inc\Image_Optimisation::get_lcp_responsive_data_for_url( $lcp );
+							$imagesrcset = is_array( $responsive ) ? (string) ( $responsive['srcset'] ?? '' ) : '';
+							$imagesizes  = is_array( $responsive ) ? (string) ( $responsive['sizes'] ?? '' ) : '';
+							if ( '' === $imagesrcset || '' === $imagesizes ) {
+								$imagesrcset = '';
+								$imagesizes  = '';
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$imagesrcset = '';
+						$imagesizes  = '';
+					}
 					\PerformanceOptimise\Inc\Util::generate_preload_link(
 						$lcp,
 						'preload',
@@ -2776,7 +2793,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 						false,
 						\PerformanceOptimise\Inc\Util::get_image_mime_type( $lcp ),
 						'',
-						'high'
+						'high',
+						$imagesrcset,
+						$imagesizes
 					);
 					if ( $shared_available ) {
 						\PerformanceOptimise\Inc\Image_Optimisation::mark_preload_emitted( $lcp );
