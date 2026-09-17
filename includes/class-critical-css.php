@@ -3527,9 +3527,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 */
 		public static function generate( string $url, ?string &$source_css = null, ?array &$resolved_urls = null, ?float $deadline = null ) {
 			// SSRF guard: reuse the stylesheet allowlist (same-site + scheme).
-			// function_exists() keeps unit-test doubles working; production
-			// core always defines wp_http_validate_url().
-			if ( function_exists( 'wp_http_validate_url' ) && ! self::is_safe_stylesheet_url( $url ) ) {
+			// Fail closed when the validator is unavailable: without
+			// wp_http_validate_url() the gate below cannot run, so any URL
+			// must be refused instead of fetched.
+			if ( ! function_exists( 'wp_http_validate_url' ) || ! self::is_safe_stylesheet_url( $url ) ) {
 				return false;
 			}
 			// Generation budget (issue #1235): a slow or hung source-CSS fetch
@@ -3912,10 +3913,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 
 			// If import URL starts with /, it's root-relative.
 			if ( 0 === strpos( $import_url, '/' ) ) {
-				return $scheme . '://' . $host . $port . $import_url;
+				return $scheme . '://' . $host . $port . self::normalize_url_path( $import_url );
 			}
 
-			return $scheme . '://' . $host . $port . $base_dir . '/' . $import_url;
+			return $scheme . '://' . $host . $port . self::normalize_url_path( $base_dir . '/' . $import_url );
+		}
+
+		/**
+		 * Collapse duplicate slashes and resolve `.`/`..` segments in a URL path.
+		 *
+		 * Keeps relative @import resolution canonical: a root-level base
+		 * otherwise yields a double slash and `../` segments survive verbatim,
+		 * producing non-canonical URL identities downstream.
+		 *
+		 * @param string $path URL path to normalize.
+		 * @return string Normalized path, always leading-slash rooted.
+		 * @since NEXT
+		 */
+		private static function normalize_url_path( string $path ): string {
+			$path     = preg_replace( '#/+#', '/', $path );
+			$segments = array();
+			foreach ( explode( '/', (string) $path ) as $segment ) {
+				if ( '' === $segment || '.' === $segment ) {
+					continue;
+				}
+				if ( '..' === $segment ) {
+					array_pop( $segments );
+					continue;
+				}
+				$segments[] = $segment;
+			}
+			return '/' . implode( '/', $segments );
 		}
 
 		/**
@@ -3924,12 +3952,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Allows localhost / private-IP development sites to keep using their
 		 * own stylesheets even though core URL validation rejects such hosts.
 		 *
+		 * The match is host-only by design, so credentials and non-web ports
+		 * are rejected before the own-host fast path: a same-host URL such as
+		 * http://own-host:6379/ or user:pass@own-host must never be fetched
+		 * with the plain HTTP API (same-host arbitrary-port SSRF).
+		 *
 		 * @param string $url The URL to inspect.
 		 * @return bool True when the URL host matches home_url().
 		 * @since 2.0.0
+		 * @since NEXT Rejects userinfo and non-web ports.
 		 */
 		private static function is_same_site_host( string $url ): bool {
-			$host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
+			$parts = wp_parse_url( $url );
+			if ( ! is_array( $parts ) ) {
+				return false;
+			}
+			// Credentials in a server-side fetched URL leak to the target —
+			// never treat such URLs as same-site.
+			if ( isset( $parts['user'] ) || isset( $parts['pass'] ) ) {
+				return false;
+			}
+			// Only default web ports take the plain-API fast path; anything
+			// else (e.g. :6379, :22) is not same-site for fetch purposes.
+			if ( isset( $parts['port'] ) ) {
+				$port = (int) $parts['port'];
+				if ( 80 !== $port && 443 !== $port ) {
+					return false;
+				}
+			}
+			$host = strtolower( (string) ( $parts['host'] ?? '' ) );
 			if ( '' === $host ) {
 				return false;
 			}
@@ -3964,6 +4015,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 
 			$host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
 			if ( '' === $host ) {
+				return false;
+			}
+
+			// Credentials must never be fetched server-side, even for an
+			// explicitly allowlisted host (they would leak to the target).
+			$parts = wp_parse_url( $url );
+			if ( is_array( $parts ) && ( isset( $parts['user'] ) || isset( $parts['pass'] ) ) ) {
 				return false;
 			}
 

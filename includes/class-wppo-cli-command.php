@@ -106,7 +106,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 			$page = $assoc_args['page'] ?? null;
 
 			if ( $page ) {
-				$path    = wp_normalize_path( trim( (string) wp_parse_url( $page, PHP_URL_PATH ), '/' ) );
+				$path = wp_normalize_path( trim( (string) wp_parse_url( $page, PHP_URL_PATH ), '/' ) );
+				if ( '' === $path ) {
+					// Homepage URLs carry no path component — purge '/'.
+					// An empty string is falsy and would take the delete-all
+					// branch in Cache::clear_cache(), wiping the entire cache
+					// when only the homepage was requested.
+					$path = '/';
+				}
 				$cleared = Cache::clear_cache( $path );
 
 				if ( $cleared ) {
@@ -227,13 +234,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				$success_count  = 0;
 				foreach ( $table_list as $table ) {
 					if ( '' === $table || ! in_array( $table, $allowed_tables, true ) ) {
-						WP_CLI::warning( sprintf( ' - Skipped unknown table: %s', $table ) );
+						/* translators: %s: Skipped database table name */
+						WP_CLI::warning( sprintf( __( ' - Skipped unknown table: %s', 'performance-optimisation' ), $table ) );
 						continue;
 					}
 					$result = Database_Cleanup::optimize_table( $table );
 					if ( $result ) {
 						++$success_count;
-						WP_CLI::log( sprintf( ' - Optimized table: %s', $table ) );
+						/* translators: %s: Optimized database table name */
+						WP_CLI::log( sprintf( __( ' - Optimized table: %s', 'performance-optimisation' ), $table ) );
 					}
 				}
 				/* translators: %d: Number of tables optimized */
@@ -306,12 +315,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 
 				foreach ( $results as $key => $val ) {
 					if ( is_wp_error( $val ) ) {
-						WP_CLI::warning( sprintf( ' - %s: %s', $key, $val->get_error_message() ) );
+						/* translators: 1: Cleanup type, 2: Error message */
+						WP_CLI::warning( sprintf( __( ' - %1$s: %2$s', 'performance-optimisation' ), $key, $val->get_error_message() ) );
 						continue;
 					}
 					$count  = (int) $val;
 					$total += $count;
-					WP_CLI::log( sprintf( ' - %s: %d cleaned', $key, $count ) );
+					/* translators: 1: Cleanup type, 2: Number of items cleaned */
+					WP_CLI::log( sprintf( __( ' - %1$s: %2$d cleaned', 'performance-optimisation' ), $key, $count ) );
 				}
 
 				/* translators: %d: Total items removed */
@@ -1966,7 +1977,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 * Check 3 — Redis reachable when enabled (live probe).
 		 *
 		 * "Enabled" is derived live from stored settings (non-empty host/nodes)
-		 * AND own drop-in presence — never from get_status() caches.
+		 * AND own drop-in presence — never from get_status() caches. The ping
+		 * config mirrors the runtime merge (stored settings, then the on-disk
+		 * file for keys the settings lack, plus constant/env/filter overrides
+		 * via get_redis_config()) so a file/constant-configured site pings
+		 * with its real credentials instead of false-failing.
 		 *
 		 * @since 2.0.0
 		 * @param array $stored Raw wppo_settings array.
@@ -1974,18 +1989,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 */
 		private function check_verify_redis( array $stored ): array {
 			$oc_settings = isset( $stored['object_cache'] ) && is_array( $stored['object_cache'] ) ? $stored['object_cache'] : array();
-			$has_host    = ! empty( $oc_settings['host'] ) || ! empty( $oc_settings['nodes'] );
 
 			$own_dropin = false;
+			$merged     = array();
 			try {
 				$manager    = new Object_Cache();
 				$oc_path    = $manager->get_dropin_path();
 				$content    = $this->read_small_file( $oc_path );
 				$own_dropin = is_string( $content ) && Object_Cache::is_own_dropin_content( $content );
+				$merged     = $manager->get_redis_config();
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				$own_dropin = false;
 			}
+			if ( ! is_array( $merged ) ) {
+				$merged = array();
+			}
+			// A file/constant-configured site has no stored host but is still
+			// enabled — consult the runtime-merged config as well.
+			$has_host = ! empty( $oc_settings['host'] ) || ! empty( $oc_settings['nodes'] ) || ! empty( $merged['host'] ) || ! empty( $merged['nodes'] );
 
 			if ( ! $has_host || ! $own_dropin ) {
 				$detail = __( 'Redis disabled — skipped.', 'performance-optimisation' );
@@ -2009,8 +2031,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 
 			$config = self::build_redis_config_from_settings( $stored );
 			try {
-				$manager = new Object_Cache();
-				$ping    = $manager->ping( $config );
+				$manager = isset( $manager ) ? $manager : new Object_Cache();
+				// Fill keys the settings lack from the runtime-merged config
+				// (on-disk file + constant/env + filter) so file-configured
+				// sites ping with real credentials. Settings win on conflict.
+				$config = array_merge( $merged, $config );
+				$ping   = $manager->ping( $config );
 			} catch ( \Throwable $e ) {
 				return array(
 					'check'  => 'redis',

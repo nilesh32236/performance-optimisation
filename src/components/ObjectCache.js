@@ -443,7 +443,7 @@ const ObjectCache = ( { options = {} } ) => {
 						</strong>
 						<p>
 							{ __(
-								'Nginx ignores .htaccess rules, so the connection file stays fetchable unless denied at server level. The file never holds the password, but add these rules to hide topology (for the strongest protection, define WPPO_REDIS_CONFIG_PATH outside the web root):',
+								'Nginx ignores .htaccess rules, so the connection file stays fetchable unless denied at server level. The file never holds the password, but add these rules to hide topology (adjust /wp-content if your content directory is renamed; for the strongest protection, define WPPO_REDIS_CONFIG_PATH outside the web root):',
 								'performance-optimisation'
 							) }
 						</p>

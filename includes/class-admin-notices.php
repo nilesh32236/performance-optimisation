@@ -474,14 +474,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				'_wpnonce'
 			);
 
-			echo '<div class="notice notice-warning" role="alert" aria-live="assertive"><p><strong>' . esc_html__( 'Performance Optimisation — Redis config exposed', 'performance-optimisation' ) . '</strong> — ';
-			echo esc_html__( 'Your server runs Nginx, which ignores .htaccess deny rules, and wp-content/wppo-redis-config.php appears directly fetchable. It holds no password but discloses Redis topology (hosts, ports, TLS mode). For the strongest protection, define WPPO_REDIS_CONFIG_PATH outside the web root.', 'performance-optimisation' ) . ' ';
-			echo wp_kses(
-				sprintf(
-				/* translators: %s: Nginx deny rule snippet (a <code> element) */
-					__( 'Add %s to your Nginx server block, then re-save the Object Cache settings.', 'performance-optimisation' ),
-					'<code>location = /wp-content/wppo-redis-config.php { deny all; }<br>location ~ ^/wp-content/wppo-redis-config\\.php\\.(wppo-bak|tmp.*)$ { deny all; }</code>'
-				),
+		echo '<div class="notice notice-warning" role="alert" aria-live="assertive"><p><strong>' . esc_html__( 'Performance Optimisation — Redis config exposed', 'performance-optimisation' ) . '</strong> — ';
+		echo esc_html__( 'Your server runs Nginx, which ignores .htaccess deny rules, and wp-content/wppo-redis-config.php appears directly fetchable. It holds no password but discloses Redis topology (hosts, ports, TLS mode). For the strongest protection, define WPPO_REDIS_CONFIG_PATH outside the web root.', 'performance-optimisation' ) . ' ';
+		// Derive the public config path from content_url() so renamed
+		// content directories get a deny rule for the real URL instead of
+		// a hardcoded /wp-content/... path that denies nothing.
+		$config_rel = '/wp-content/' . Object_Cache::CONFIG_FILENAME;
+		if ( function_exists( 'content_url' ) ) {
+			try {
+				$content_path = wp_parse_url( content_url(), PHP_URL_PATH );
+				if ( is_string( $content_path ) && '' !== $content_path ) {
+					$config_rel = rtrim( $content_path, '/' ) . '/' . Object_Cache::CONFIG_FILENAME;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+		$config_rx = str_replace( '.', '\\.', $config_rel );
+		echo wp_kses(
+			sprintf(
+			/* translators: 1: Nginx exact-deny rule, 2: Nginx sibling-deny rule (each a <code> element) */
+				__( 'Add %1$s to your Nginx server block, then re-save the Object Cache settings.', 'performance-optimisation' ),
+				'<code>location = ' . $config_rel . ' { deny all; }<br>location ~ ^' . $config_rx . '\\.(wppo-bak|tmp.*)$ { deny all; }</code>'
+			),
 				array(
 					'code' => array(),
 					'br'   => array(),
@@ -689,14 +704,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		 *
 		 * @return void
 		 */
-		private function maybe_review_notice(): void {
-			$screen = get_current_screen();
-
-			// Limit the review ask to the plugin's own admin screen so it does
-			// not nag on every wp-admin page (matches Main::admin_enqueue_scripts()).
-			if ( ! $screen || 'toplevel_page_performance-optimisation' !== $screen->base ) {
-				return;
+	private function maybe_review_notice(): void {
+		$screen = null;
+		// Guard like is_notice_screen(): get_current_screen() is an admin
+		// API that may not exist in every context — fail open instead of
+		// fataling where other notice paths already do.
+		if ( function_exists( 'get_current_screen' ) ) {
+			try {
+				$screen = get_current_screen();
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$screen = null;
 			}
+		}
+
+		// Limit the review ask to the plugin's own admin screen so it does
+		// not nag on every wp-admin page (matches Main::admin_enqueue_scripts()).
+		if ( ! is_object( $screen ) || 'toplevel_page_performance-optimisation' !== $screen->base ) {
+			return;
+		}
 
 			if ( ! current_user_can( 'manage_options' ) ) {
 				return;

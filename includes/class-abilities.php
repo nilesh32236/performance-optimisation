@@ -800,10 +800,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 					'error'   => __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ),
 				);
 			}
-			// Never fall through to a full wipe: unknown/empty scopes and a
-			// single scope without a URL are refused instead of clearing all
-			// (the schema enum is not enforced at execute time).
-			$scope = $input['scope'] ?? 'all';
+			// Never fall through to a full wipe: the scope must be explicitly
+			// 'all' or 'single' (the schema enum is not enforced at execute
+			// time), so a missing/unknown/empty scope — or a single scope
+			// without a URL — is refused instead of clearing all.
+			$scope = isset( $input['scope'] ) && is_string( $input['scope'] ) ? $input['scope'] : '';
 			if ( ! in_array( $scope, array( 'all', 'single' ), true ) ) {
 				return array( 'cleared' => false );
 			}
@@ -973,8 +974,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 					'error'  => __( 'Invalid URL: only URLs on this site may be scanned.', 'performance-optimisation' ),
 				);
 			}
-			$format = isset( $input['strategy'] ) ? sanitize_text_field( $input['strategy'] ) : 'mobile';
-			$job_id = Pagespeed::queue_scan( $url, $format );
+			$strategy = isset( $input['strategy'] ) ? sanitize_text_field( $input['strategy'] ) : 'mobile';
+			if ( ! in_array( $strategy, array( 'mobile', 'desktop' ), true ) ) {
+				$strategy = 'mobile';
+			}
+			$job_id = Pagespeed::queue_scan( $url, $strategy );
 			return array( 'queued' => $job_id > 0 );
 		}
 
@@ -993,8 +997,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 			if ( '' === $url ) {
 				return array( 'error' => __( 'Invalid URL: only URLs on this site may be scanned.', 'performance-optimisation' ) );
 			}
-			$format  = isset( $input['strategy'] ) ? sanitize_text_field( $input['strategy'] ) : 'mobile';
-			$results = Pagespeed::get_results( $url, $format );
+			$strategy = isset( $input['strategy'] ) ? sanitize_text_field( $input['strategy'] ) : 'mobile';
+			if ( ! in_array( $strategy, array( 'mobile', 'desktop' ), true ) ) {
+				$strategy = 'mobile';
+			}
+			$results = Pagespeed::get_results( $url, $strategy );
 			return is_array( $results ) ? $results : array();
 		}
 
@@ -1469,7 +1476,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * is `manage_options` gated and therefore not anonymous) but enforces
 		 * the same 5/60 per-actor throttle as `execute_clear_cache()` so
 		 * repeat runs cannot churn egress. Input URLs are validated via
-		 * `wp_http_validate_url()` and capped to 20. Same-site enforcement
+		 * `wp_http_validate_url()` and capped to 20; a supplied `url` takes
+		 * precedence and `urls` is ignored then. Same-site enforcement
 		 * aligns with the home-host check formerly in the removed
 		 * `Rest::handle_crawler()` route (#900); an unknown home host fails
 		 * closed instead of crawling off-site.
@@ -1487,13 +1495,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 				return array( 'error' => __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
 			}
 
+			// `url` takes precedence: when a single URL is supplied, `urls`
+			// is ignored (per the schema description) instead of merged.
 			$raw = array();
 
 			if ( ! empty( $input['url'] ) ) {
 				$raw[] = $input['url'];
-			}
-			if ( ! empty( $input['urls'] ) && is_array( $input['urls'] ) ) {
-				$raw = array_merge( $raw, array_values( $input['urls'] ) );
+			} elseif ( ! empty( $input['urls'] ) && is_array( $input['urls'] ) ) {
+				$raw = array_values( $input['urls'] );
 			}
 			if ( empty( $raw ) && class_exists( LiteSpeed_Crawler::class ) ) {
 				$raw = LiteSpeed_Crawler::get_urls_to_crawl( 20 );

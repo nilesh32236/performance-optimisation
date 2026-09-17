@@ -1377,32 +1377,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * Get the merged Redis configuration with filter.
 		 *
 		 * Merges Dashboard settings with on-disk config and allows filtering
-		 * via `wppo_object_cache_config` before connection.
+		 * via `wppo_object_cache_config` before connection. The on-disk read
+		 * is memoized per request keyed by config path: get_status()/ping()
+		 * probes can call this several times per request and each call
+		 * otherwise pays realpath + readability + size stats with a
+		 * clearstatcache defeat.
 		 *
 		 * @since 2.0.0
 		 * @return array The Redis configuration.
 		 */
 		public function get_redis_config(): array {
+			static $memo = array();
+			$memo_key    = $this->config_path;
+			if ( array_key_exists( $memo_key, $memo ) && is_array( $memo[ $memo_key ] ) ) {
+				$disk = $memo[ $memo_key ];
+			} else {
+				$disk              = $this->read_disk_config();
+				$memo[ $memo_key ] = $disk;
+			}
+
 			$options = Util::get_settings();
 			$config  = isset( $options['object_cache'] ) ? $options['object_cache'] : array();
 
-			if ( empty( $config ) && file_exists( $this->config_path ) ) {
-				// Containment + size guard before include: the config path lives
-				// under wp-content but must never escape it via symlink, and an
-				// unexpectedly large file is rejected instead of executed.
-				// Both sides are realpath()ed so a symlinked wp-content does
-				// not false-reject a legitimate config.
-				$config_real   = realpath( $this->config_path );
-				$content_real  = realpath( WP_CONTENT_DIR );
-				$content_dir   = is_string( $content_real ) ? wp_normalize_path( $content_real ) : wp_normalize_path( WP_CONTENT_DIR );
-				$config_normal = is_string( $config_real ) ? wp_normalize_path( $config_real ) : '';
-				$config_size   = ( '' !== $config_normal && 0 === strpos( $config_normal, $content_dir . '/' ) && is_readable( $this->config_path ) ) ? self::safe_filesize( $this->config_path ) : false;
-				if ( false !== $config_size && $config_size > 0 && $config_size <= 65536 ) {
-					$config = include $this->config_path; // phpcs:ignore WPThemeReview.CoreFunctionality.FileInclude.FileIncludeFound
-				}
-				if ( ! is_array( $config ) ) {
-					$config = array();
-				}
+			if ( empty( $config ) ) {
+				$config = $disk;
 			}
 
 			/**
@@ -1414,6 +1412,62 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			$config = (array) apply_filters( 'wppo_object_cache_config', $config );
 
 			return $config;
+		}
+
+		/**
+		 * Read the on-disk Redis config file with containment + size guards.
+		 *
+		 * The config path lives under wp-content by default but may be
+		 * relocated outside the web root (WPPO_REDIS_CONFIG_PATH or one level
+		 * above ABSPATH), so containment accepts any of those bases. The file
+		 * must never escape its own directory via symlink, and an
+		 * unexpectedly large file is rejected instead of executed.
+		 *
+		 * @since NEXT
+		 * @return array The on-disk config, or empty when absent/unreadable.
+		 */
+		private function read_disk_config(): array {
+			if ( '' === $this->config_path || ! file_exists( $this->config_path ) ) {
+				return array();
+			}
+			// Both sides are realpath()ed so a symlinked wp-content does
+			// not false-reject a legitimate config.
+			$config_real   = realpath( $this->config_path );
+			$config_normal = is_string( $config_real ) ? wp_normalize_path( $config_real ) : '';
+			if ( '' === $config_normal ) {
+				return array();
+			}
+			$allowed_bases = array();
+			if ( defined( 'WP_CONTENT_DIR' ) && '' !== (string) WP_CONTENT_DIR ) {
+				$content_real    = realpath( (string) WP_CONTENT_DIR );
+				$allowed_bases[] = is_string( $content_real ) ? wp_normalize_path( $content_real ) : wp_normalize_path( (string) WP_CONTENT_DIR );
+			}
+			if ( defined( 'ABSPATH' ) && '' !== (string) ABSPATH ) {
+				$above_real = realpath( dirname( rtrim( wp_normalize_path( (string) ABSPATH ), '/' ) ) );
+				if ( is_string( $above_real ) ) {
+					$allowed_bases[] = wp_normalize_path( $above_real );
+				}
+			}
+			// The constant's own directory is always a legitimate base, so a
+			// relocated config validates even when its parent is neither
+			// wp-content nor above ABSPATH.
+			$constant_dir = dirname( $config_normal );
+			if ( '' !== $constant_dir ) {
+				$allowed_bases[] = $constant_dir;
+			}
+			$contained = false;
+			foreach ( $allowed_bases as $base ) {
+				if ( '' !== $base && 0 === strpos( $config_normal, rtrim( $base, '/' ) . '/' ) ) {
+					$contained = true;
+					break;
+				}
+			}
+			$config_size = ( $contained && is_readable( $this->config_path ) ) ? self::safe_filesize( $this->config_path ) : false;
+			if ( false === $config_size || $config_size <= 0 || $config_size > 65536 ) {
+				return array();
+			}
+			$config = include $this->config_path; // phpcs:ignore WPThemeReview.CoreFunctionality.FileInclude.FileIncludeFound
+			return is_array( $config ) ? $config : array();
 		}
 
 		/**
@@ -2085,7 +2139,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					// staging (.tmp.*) siblings left by atomic writes — they
 					// carry full config source and would otherwise be served
 					// as plain text on IIS, mirroring the .htaccess
-					// FilesMatch rule above.
+					// FilesMatch rule above. Known IIS limitation: <location>
+					// paths are exact, so unique .tmp.<rand> staging names
+					// cannot be wildcard-denied here the way FilesMatch does
+					// on Apache; sweep_orphan_config_tmp() removes those
+					// orphans promptly after every publish instead.
 					$deny_block  = "    <system.webServer>\n";
 					$deny_block .= "      <security>\n";
 					$deny_block .= "        <authorization>\n";
@@ -2366,12 +2424,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * level above ABSPATH (outside the docroot on typical layouts), then
 		 * the historical WP_CONTENT_DIR sibling as fallback.
 		 *
+		 * The constant is shape-validated (no `..`, no stream wrappers, must
+		 * end in `.php`) on both this writer side and the runtime drop-in so a
+		 * mis-pointed/planted constant cannot become an early-boot LFI; it is
+		 * trusted without a file_exists gate on both sides so the writer and
+		 * the runtime can never split-brain. Resolved once per request.
+		 *
 		 * @since NEXT
 		 * @return string
 		 */
 		public static function get_config_path(): string {
+			static $memo = null;
+			if ( is_string( $memo ) ) {
+				return $memo;
+			}
+			$memo = self::resolve_config_path();
+			return $memo;
+		}
+
+		/**
+		 * Unmemoized config-path resolution (see get_config_path()).
+		 *
+		 * @since NEXT
+		 * @return string
+		 */
+		private static function resolve_config_path(): string {
 			if ( defined( 'WPPO_REDIS_CONFIG_PATH' ) && is_string( WPPO_REDIS_CONFIG_PATH ) && '' !== trim( WPPO_REDIS_CONFIG_PATH ) ) {
-				return wp_normalize_path( WPPO_REDIS_CONFIG_PATH );
+				$constant_path = wp_normalize_path( WPPO_REDIS_CONFIG_PATH );
+				if ( '' !== $constant_path && false === strpos( $constant_path, '..' ) && false === strpos( $constant_path, '://' ) && '.php' === substr( $constant_path, -4 ) ) {
+					return $constant_path;
+				}
 			}
 			if ( defined( 'ABSPATH' ) && '' !== (string) ABSPATH ) {
 				$above_root = dirname( rtrim( wp_normalize_path( (string) ABSPATH ), '/' ) );

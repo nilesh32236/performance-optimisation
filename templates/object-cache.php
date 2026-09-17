@@ -201,35 +201,39 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				$plugins_dir = defined( 'WP_PLUGIN_DIR' ) ? WP_PLUGIN_DIR : ( ( defined( 'WP_CONTENT_DIR' ) ? rtrim( WP_CONTENT_DIR, '/\\' ) : '' ) . '/plugins' );
 				// Resolved hits are memoized per request alongside the config
 				// lookup: the hardcoded plugin-slug path is probed first and
-				// the glob() fallback runs at most once per found helper,
-				// never on every construction. Misses are NOT memoized — a
-				// helper that appears later in the same request is still
-				// picked up instead of pinning a stale miss.
+				// the glob() fallback runs at most once per request — hits are
+				// trusted without a re-stat and misses are memoized with a
+				// sentinel so a missing helper never re-scans every
+				// construction on the wp_cache_init hot path.
 				static $resolved_helper_file = null;
+				static $helper_searched      = false;
 				$helper_file                 = $resolved_helper_file;
-				if ( null === $helper_file ) {
+				if ( null === $helper_file && ! $helper_searched ) {
 					$helper_file = $plugins_dir . '/performance-optimisation/includes/redis-connect-helper.php';
 					if ( ! file_exists( $helper_file ) ) {
 						// Fallback: the plugin directory may have been renamed
 						// (e.g. mu-plugins installs or custom slugs). Glob every
-						// plugin's helper and prefer a directory matching the
-						// performance-optimisation slug fragment.
+						// plugin's helper and require an exact plugin-directory
+						// match — a substring match would also accept
+						// performance-optimisation-evil in this unauthenticated
+						// drop-in context.
 						$helper_file = '';
 						$candidates  = glob( $plugins_dir . '/*/includes/redis-connect-helper.php' );
 						if ( is_array( $candidates ) ) {
 							foreach ( $candidates as $candidate ) {
-								if ( false !== strpos( $candidate, 'performance-optimisation' ) ) {
+								if ( 'performance-optimisation' === basename( dirname( dirname( $candidate ) ) ) ) {
 									$helper_file = $candidate;
 									break;
 								}
 							}
 						}
 					}
+					$helper_searched = true;
 					if ( '' !== $helper_file ) {
 						$resolved_helper_file = $helper_file;
 					}
 				}
-				if ( '' !== $helper_file && file_exists( $helper_file ) ) {
+				if ( is_string( $helper_file ) && '' !== $helper_file && ( $helper_file === $resolved_helper_file || file_exists( $helper_file ) ) ) {
 					require_once $helper_file;
 				}
 			}
@@ -765,16 +769,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 
 				return $this->redis->set( $formatted_key, $data );
 			} catch ( \Throwable $e ) {
-				// First failed write after a healthy connection: degrade to the
-				// in-memory store and log once so outages are diagnosable
-				// without flooding the log.
-				$this->redis_connected = false;
-				// Drop the replica handle too: get()/get_multiple() prefer it
-				// over the primary, so a stale connected flag plus a dead
-				// replica could route reads to a broken connection.
-				$this->redis_replica = null;
-				$this->log_redis_failure_once( 'WPPO Redis object cache: write failed — ' . $e->getMessage() . ' Dropping to memory until next boot.' );
-				$this->record_redis_failure( 'write_fail', $e->getMessage() );
+				$this->fail_open_to_memory( 'write_fail', $e->getMessage() );
 				$this->cache[ $formatted_key ] = $data;
 				return true;
 			}
@@ -904,7 +899,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 * @param array  $data   Array of keys and values.
 		 * @param string $group  Cache group.
 		 * @param int    $expire Expiration.
-		 * @return bool True on success.
+		 * @return bool[] Per-key success map.
 		 */
 		public function set_multiple( $data, $group = 'default', $expire = 0 ) {
 			if ( empty( $data ) ) {
@@ -989,7 +984,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 *
 		 * @param array  $keys  Array of keys.
 		 * @param string $group Cache group.
-		 * @return bool True on success.
+		 * @return bool[] Per-key success map.
 		 */
 		public function delete_multiple( $keys, $group = 'default' ) {
 			if ( empty( $keys ) ) {

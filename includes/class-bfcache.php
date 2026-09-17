@@ -304,6 +304,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 			if ( ! self::is_enabled() ) {
 				return $headers;
 			}
+			// Cheap directive check first: most responses carry no no-store,
+			// so the session-token lookup (DB/session read) below must not run
+			// for nothing on the frontend hot path.
+			$directives = (array) preg_split( '/\s*,\s*/', $headers['Cache-Control'] );
+			if ( ! in_array( 'no-store', $directives, true ) ) {
+				return $headers;
+			}
 			// Only strip no-store for sessions that opted into bfcache (have a token).
 			$token = self::get_user_token();
 			if ( null === $token ) {
@@ -320,10 +327,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 				}
 			}
 
-			$directives = (array) preg_split( '/\s*,\s*/', $headers['Cache-Control'] );
-			if ( ! in_array( 'no-store', $directives, true ) ) {
-				return $headers;
-			}
 			$directives               = array_diff( $directives, array( 'no-store', 'public' ) );
 			$directives               = array_unique(
 				array_merge(
