@@ -46,6 +46,12 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	protected function setUp(): void {
 		parent::setUp();
 		\Brain\Monkey\setUp();
+		// Per-request preload dedup (issue #1312): the buffer companions now
+		// record their emission via mark_preload_emitted(), so the static
+		// set must be reset per test like the shared bootstrap does.
+		if ( class_exists( Image_Optimisation::class ) ) {
+			Image_Optimisation::clear_runtime_caches();
+		}
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Test-only superglobal backup/restore.
 		$this->request_uri_had_value = isset( $_SERVER['REQUEST_URI'] );
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Test-only superglobal backup/restore.

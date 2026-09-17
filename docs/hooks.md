@@ -946,6 +946,22 @@ add_filter( 'wppo_od_should_optimize', function( $should, $url ) {
 
 ---
 
+### `wppo_computed_css_hero_url`
+Passes a server-side computed CSS-hero background URL (e.g. derived from enqueued stylesheets where no inline `style=""` exists). Validated as an image on an allowed origin (same-origin or configured CDN); anything else is ignored. @since NEXT.
+
+**Parameters:**
+- `$url` *(string)* — Computed hero URL (default `''`).
+- `$buffer` *(string|null)* — Current HTML buffer for context.
+
+**Example:**
+```php
+add_filter( 'wppo_computed_css_hero_url', function( $url, $buffer ) {
+    return 'https://example.com/wp-content/uploads/hero-bg.jpg';
+}, 10, 2 );
+```
+
+---
+
 ### `wppo_lcp_first_n`
 Filters how many leading images are treated as above-the-fold and never lazy-loaded. @since 2.0.0.
 
