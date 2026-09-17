@@ -37,12 +37,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 		/**
 		 * Per-request memo of the activity cache version (audit #1325):
 		 * avoids one option lookup per paginated recent_activities call.
-		 * Null until first read; tests may reset via reset_version_memo().
+		 * Blog-keyed so switch_to_blog() in multisite never serves another
+		 * site's version. Null until first read; tests may reset via
+		 * reset_version_memo().
 		 *
 		 * @since NEXT
-		 * @var int|null
+		 * @var array<int, int>
 		 */
-		private static $version_memo = null;
+		private static $version_memo = array();
 
 		/**
 		 * Reset the version memo (tests only).
@@ -51,20 +53,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 		 * @return void
 		 */
 		public static function reset_version_memo(): void {
-			self::$version_memo = null;
+			self::$version_memo = array();
 		}
 
 		/**
-		 * Get the activity cache version, memoized per request.
+		 * Get the activity cache version, memoized per request per site.
 		 *
 		 * @since NEXT
 		 * @return int
 		 */
 		private static function get_cache_version(): int {
-			if ( null === self::$version_memo ) {
-				self::$version_memo = (int) get_option( 'wppo_activity_cache_version', 0 );
+			$bid = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
+			if ( ! isset( self::$version_memo[ $bid ] ) ) {
+				self::$version_memo[ $bid ] = (int) get_option( 'wppo_activity_cache_version', 0 );
 			}
-			return self::$version_memo;
+			return self::$version_memo[ $bid ];
 		}
 
 		/**
@@ -154,8 +157,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 					update_option( 'wppo_activity_cache_version', $new_version, false );
 					// Keep the per-request memo coherent with the bump so a
 					// list-after-add in the same request cannot serve stale
-					// cache (audit #1325).
-					self::$version_memo = $new_version;
+					// cache (audit #1325). Blog-keyed like the reader.
+					$memo_bid                        = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
+					self::$version_memo[ $memo_bid ] = $new_version;
 				}
 			}
 		}

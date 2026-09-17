@@ -709,7 +709,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 
 			$activation_time = get_option( 'wppo_activation_time' );
 			if ( false === $activation_time ) {
-				update_option( 'wppo_activation_time', time() );
+				update_option( 'wppo_activation_time', time(), false );
 				return;
 			}
 

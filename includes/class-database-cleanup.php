@@ -876,6 +876,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		public static function get_autoloaded_options( int $limit = 20 ): array {
 			global $wpdb;
 
+			// Audit #1325: clamp like get_autoload_candidates() so a future
+			// direct caller cannot force a full-table filesort.
+			$limit = max( 1, min( 100, $limit ) );
+
 			$autoload_values = self::get_autoloadable_values();
 			$placeholders    = implode( ',', array_fill( 0, count( $autoload_values ), '%s' ) );
 

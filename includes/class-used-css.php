@@ -3118,37 +3118,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			$run_use_unique = Util::supports_action_scheduler_unique();
 			if ( ! $run_use_unique && function_exists( 'as_get_scheduled_actions' ) ) {
 				try {
-					// Audit #1325: short-TTL cache for the pending post_id
-					// set (legacy non-unique path only). The full pagination
-					// ran on every cron tick; a 5-minute memo bounds that.
-					// Fail-open: transient access is isolated in its own
-					// try/catch (transients may not exist in unit-test or
-					// minimal environments) so a cache failure can never
-					// poison $lookup_ok — a miss/empty cache falls through
-					// to the live pagination below.
-					$pending_cache_key = Util::transient_key( 'wppo_used_css_pending' );
-					$cached_pending    = false;
-					try {
-						if ( function_exists( 'get_transient' ) ) {
-							$cached_pending = get_transient( $pending_cache_key );
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-						$cached_pending = false;
-					}
-					if ( is_array( $cached_pending ) && ! empty( $cached_pending ) ) {
-						foreach ( $cached_pending as $cached_pid ) {
-							$scheduled[ (int) $cached_pid ] = true;
-						}
-						$lookup_ok = true;
-					} else {
-						$as_offset   = 0;
-						$as_per_page = 1000;
-						// Capped at 5 pages (5000 rows): beyond that the
-						// dedup map is already large enough to matter and
-						// the unique-insert path handles the rest on AS 4.x.
-						// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
-						for ( $page = 0; $page < 5; $page++ ) {
+					// Audit #1325: the legacy pagination ran up to 20 pages
+					// on every cron tick. Capped at 5 pages (5000 rows).
+					// Deliberately no transient memo here: a stale snapshot
+					// would miss recently-enqueued posts and re-enqueue
+					// duplicates while $lookup_ok suppresses the per-row
+					// fallback check (review feedback on #1326).
+					$as_offset   = 0;
+					$as_per_page = 1000;
+					// Capped at 5 pages (5000 rows): beyond that the dedup
+					// map is already large enough and the unique-insert path
+					// handles the rest on AS 4.x.
+					// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
+					for ( $page = 0; $page < 5; $page++ ) {
 							$batch_actions = as_get_scheduled_actions(
 								array(
 									'hook'     => 'wppo_used_css_generate',
@@ -3159,41 +3141,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 								),
 								'ARRAY_A'
 							);
-							if ( ! is_array( $batch_actions ) || empty( $batch_actions ) ) {
-								break;
+						if ( ! is_array( $batch_actions ) || empty( $batch_actions ) ) {
+							break;
+						}
+						foreach ( $batch_actions as $action ) {
+							if ( ! is_array( $action ) ) {
+								continue;
 							}
-							foreach ( $batch_actions as $action ) {
-								if ( ! is_array( $action ) ) {
-									continue;
-								}
-								$action_args = $action['args'] ?? null;
-								if ( is_string( $action_args ) ) {
-									$decoded     = json_decode( $action_args, true );
-									$action_args = is_array( $decoded ) ? $decoded : null;
-								}
-								if ( is_array( $action_args ) && isset( $action_args['post_id'] ) ) {
-									$scheduled[ (int) $action_args['post_id'] ] = true;
-								}
+							$action_args = $action['args'] ?? null;
+							if ( is_string( $action_args ) ) {
+								$decoded     = json_decode( $action_args, true );
+								$action_args = is_array( $decoded ) ? $decoded : null;
 							}
+							if ( is_array( $action_args ) && isset( $action_args['post_id'] ) ) {
+								$scheduled[ (int) $action_args['post_id'] ] = true;
+							}
+						}
 						// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
-							if ( count( $batch_actions ) < $as_per_page ) {
-								break;
-							}
+						if ( count( $batch_actions ) < $as_per_page ) {
+							break;
+						}
 							$as_offset += $as_per_page;
-						}
-						$lookup_ok = true;
-						// Memoize for 5 minutes so the next cron ticks skip the
-						// pagination entirely (bounded post_id list only).
-						if ( ! empty( $scheduled ) ) {
-							try {
-								if ( function_exists( 'set_transient' ) ) {
-									set_transient( $pending_cache_key, array_keys( $scheduled ), 5 * MINUTE_IN_SECONDS );
-								}
-							} catch ( \Throwable $e ) {
-								unset( $e );
-							}
-						}
 					}
+					$lookup_ok = true;
 				} catch ( \Throwable ) {
 					$scheduled = array();
 					$lookup_ok = false;

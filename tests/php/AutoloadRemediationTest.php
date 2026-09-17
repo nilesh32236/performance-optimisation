@@ -71,6 +71,16 @@ class AutoloadRemediationTest extends \PHPUnit\Framework\TestCase {
 	private int $total_bytes = 0;
 
 	/**
+	 * Tear down the $wpdb fixture (audit #1325 review): Brain Monkey resets
+	 * function stubs, not globals, so the mock must not leak into the next
+	 * test class.
+	 */
+	protected function tearDown(): void {
+		unset( $GLOBALS['wpdb'] );
+		parent::tearDown();
+	}
+
+	/**
 	 * Set up the Autoload fixture + WP function stubs.
 	 */
 	protected function setUp(): void {
