@@ -33,6 +33,241 @@ const getLogMessage = ( err ) => {
 let scriptLoadPromise = null;
 
 /**
+ * Exactly-once lifecycle replay flag (issue #1385).
+ *
+ * Delayed scripts plus any DOMContentLoaded listeners registered before
+ * release must fire exactly once after the delayed queue flushes. The flag
+ * guards the replay so interaction, idle, and viewport flushes can never
+ * double-fire lifecycle events. Fail-open: replay failures never block
+ * script loading and never fatal.
+ *
+ * @type {boolean}
+ */
+let wppoDelayReplayed = false;
+
+/**
+ * Captured DOMContentLoaded/load listeners registered while delay is pending.
+ *
+ * Native DOMContentLoaded has typically already fired before the first
+ * user interaction releases the delayed queue, so document/window
+ * `addEventListener('DOMContentLoaded'|'load', …)` callbacks registered
+ * before release would otherwise never run. The capture shim below queues
+ * them; replayDelayedLifecycleEvents() invokes each exactly once and then
+ * dispatches the lifecycle events for non-captured (e.g. jQuery ready,
+ * on* property) consumers.
+ *
+ * @type {{ DOMContentLoaded: Array, load: Array }}
+ */
+const wppoDelayedListeners = { DOMContentLoaded: [], load: [] };
+
+const hasPendingDelayedScripts = () => {
+	try {
+		return (
+			document.querySelector(
+				'script[type="wppo/javascript"], script[wppo-src]'
+			) !== null
+		);
+	} catch {
+		return false;
+	}
+};
+
+// Capture shim: queue DOMContentLoaded/load listeners registered while the
+// delayed queue is still pending so they can be replayed exactly once after
+// release. Installed once at bundle evaluation; fail-open on any error so
+// event registration itself can never break when the DOM APIs are stubbed
+// (e.g. jsdom without full EventTarget support).
+try {
+	if (
+		typeof document !== 'undefined' &&
+		document &&
+		typeof window !== 'undefined' &&
+		window
+	) {
+		const captureTargets = [];
+		if ( document.addEventListener ) {
+			captureTargets.push( document );
+		}
+		if ( window.addEventListener && window !== document ) {
+			captureTargets.push( window );
+		}
+		captureTargets.forEach( ( target ) => {
+			if ( target.__wppoDelayCaptureInstalled ) {
+				return;
+			}
+			const nativeAdd = target.addEventListener.bind( target );
+			const nativeRemove = target.removeEventListener
+				? target.removeEventListener.bind( target )
+				: null;
+			const patchedAdd = ( type, listener, options ) => {
+				try {
+					if (
+						( type === 'DOMContentLoaded' || type === 'load' ) &&
+						! wppoDelayReplayed &&
+						hasPendingDelayedScripts() &&
+						( typeof listener === 'function' ||
+							( listener &&
+								typeof listener.handleEvent === 'function' ) )
+					) {
+						wppoDelayedListeners[ type ].push( {
+							target,
+							listener,
+							options,
+						} );
+					}
+				} catch {
+					// Queueing is best-effort; registration still proceeds.
+				}
+				return nativeAdd( type, listener, options );
+			};
+			try {
+				target.addEventListener = patchedAdd;
+				target.__wppoDelayCaptureInstalled = true;
+			} catch {
+				// Assignment can throw on frozen test doubles — keep native.
+			}
+			if ( nativeRemove ) {
+				const patchedRemove = ( type, listener, options ) => {
+					try {
+						if (
+							( type === 'DOMContentLoaded' ||
+								type === 'load' ) &&
+							Array.isArray( wppoDelayedListeners[ type ] )
+						) {
+							wppoDelayedListeners[ type ] = wppoDelayedListeners[
+								type
+							].filter(
+								( entry ) =>
+									entry.listener !== listener ||
+									entry.target !== target
+							);
+						}
+					} catch {
+						// Filtering is best-effort; removal still proceeds.
+					}
+					return nativeRemove( type, listener, options );
+				};
+				try {
+					target.removeEventListener = patchedRemove;
+				} catch {
+					// Keep the native removal on frozen test doubles.
+				}
+			}
+		} );
+	}
+} catch {
+	// Capture is best-effort; delay loading still proceeds.
+}
+
+/**
+ * Replay captured lifecycle listeners plus lifecycle events exactly once.
+ *
+ * Invokes every captured DOMContentLoaded/load callback once (in
+ * registration order, each inside its own try/catch so one throw cannot
+ * starve the rest), then dispatches DOMContentLoaded, load, and pageshow so
+ * non-captured consumers (on* properties, jQuery ready, ScrollTrigger)
+ * observe the release. The wppoDelayReplayed flag makes the whole replay
+ * idempotent across interaction/idle/viewport flushes. Never throws.
+ *
+ * @since NEXT
+ * @return {void}
+ */
+const replayDelayedLifecycleEvents = () => {
+	if ( wppoDelayReplayed ) {
+		return;
+	}
+	wppoDelayReplayed = true;
+	try {
+		if ( typeof window !== 'undefined' && window ) {
+			try {
+				window.wppoDelayReplayed = true;
+			} catch {
+				// Test doubles may freeze window — flag above still guards.
+			}
+		}
+	} catch {
+		// Window exposure is best-effort.
+	}
+	[ 'DOMContentLoaded', 'load' ].forEach( ( type ) => {
+		const queued = Array.isArray( wppoDelayedListeners[ type ] )
+			? wppoDelayedListeners[ type ].splice( 0 )
+			: [];
+		queued.forEach( ( entry ) => {
+			try {
+				const { listener, target } = entry;
+				if ( typeof listener === 'function' ) {
+					listener.call(
+						target,
+						new Event( type, {
+							bubbles: type === 'DOMContentLoaded',
+							cancelable: false,
+						} )
+					);
+				} else if (
+					listener &&
+					typeof listener.handleEvent === 'function'
+				) {
+					listener.handleEvent(
+						new Event( type, {
+							bubbles: type === 'DOMContentLoaded',
+							cancelable: false,
+						} )
+					);
+				}
+			} catch ( err ) {
+				console.error(
+					'Error in delayed lifecycle listener:',
+					getLogMessage( err )
+				);
+			}
+		} );
+	} );
+	const dispatchOnce = ( target, type, init ) => {
+		try {
+			if ( ! target || ! target.dispatchEvent ) {
+				return;
+			}
+			let event = null;
+			try {
+				event = new Event( type, init );
+			} catch {
+				return;
+			}
+			target.dispatchEvent( event );
+		} catch ( err ) {
+			console.error(
+				'Error replaying delayed lifecycle event:',
+				getLogMessage( err )
+			);
+		}
+	};
+	try {
+		if ( typeof document !== 'undefined' && document ) {
+			dispatchOnce( document, 'DOMContentLoaded', {
+				bubbles: true,
+				cancelable: false,
+			} );
+		}
+	} catch {
+		// Dispatch is best-effort.
+	}
+	try {
+		if ( typeof window !== 'undefined' && window ) {
+			dispatchOnce( window, 'load', {
+				bubbles: false,
+				cancelable: false,
+			} );
+			dispatchOnce( window, 'pageshow', {
+				bubbles: false,
+				cancelable: false,
+			} );
+		}
+	} catch {
+		// Dispatch is best-effort.
+	}
+};
+
+/**
  * Read the runtime config exported by PHP through the WordPress
  * `script_module_data_wppo-lazyload` filter (WP 6.9+). The data is printed as a
  * `<script type="application/json" id="wp-script-module-data-wppo-lazyload">`
@@ -1089,12 +1324,28 @@ async function loadScripts() {
 			console.error( 'Error loading script:', getLogMessage( err ) );
 		}
 
-		if ( document.readyState === 'loading' ) {
-			document.dispatchEvent( new Event( 'DOMContentLoaded' ) );
+		// Lifecycle-event replay (#1385): captured DOMContentLoaded/load
+		// listeners fire exactly once (wppoDelayReplayed guard) plus fresh
+		// DOMContentLoaded/load/pageshow dispatches for non-captured
+		// consumers. Fail-open: replay never throws into the loader.
+		try {
+			replayDelayedLifecycleEvents();
+		} catch ( err ) {
+			console.error(
+				'Error replaying delayed lifecycle events:',
+				getLogMessage( err )
+			);
 		}
 
 		if ( typeof jQuery !== 'undefined' ) {
-			jQuery( document ).triggerHandler( 'ready' );
+			try {
+				jQuery( document ).triggerHandler( 'ready' );
+			} catch ( err ) {
+				console.error(
+					'Error triggering jQuery ready:',
+					getLogMessage( err )
+				);
+			}
 		}
 
 		// Refresh GSAP ScrollTrigger if active
@@ -1135,6 +1386,15 @@ const loadIdleScripts = async () => {
 			await loadScriptsByPriority( idleScripts );
 		} catch ( err ) {
 			console.error( 'Error loading idle script:', getLogMessage( err ) );
+		} finally {
+			// Idle-only pages still release lifecycle listeners exactly
+			// once; the wppoDelayReplayed guard keeps this idempotent with
+			// the interaction flush (#1385). Fail-open by design.
+			try {
+				replayDelayedLifecycleEvents();
+			} catch {
+				// Replay is best-effort.
+			}
 		}
 	}
 };
