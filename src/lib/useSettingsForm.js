@@ -285,6 +285,9 @@ export const useAbortableFetch = () => {
  * @param {Function} config.dismiss   useNotice dismiss().
  * @param {Function} [config.setBusy] Busy-flag setter (defaults to noop).
  * @return {Function} runAction(fn, { successMessage }) wrapping fn().
+ *   Resolves with fn()'s result, or with `undefined` when fn() throws
+ *   (the error is already notified via notify()). Callers must check for
+ *   `undefined` before chaining dependent work (e.g. chained purges).
  */
 export const useApiAction = ( { notify, dismiss, setBusy } ) => {
 	return useCallback(
@@ -384,7 +387,9 @@ export const useFetchWithAbort = ( fetchFn, { onSuccess, onError } = {} ) => {
 				}
 			}
 		} )();
-		return () => controller.abort();
+		// No return value: refresh() is invoked as an event handler, not as
+		// a React effect, so a returned cleanup would be discarded by
+		// callers. Callers needing cancellation use abort() from this hook.
 	}, [ fetchFn, onSuccess, onError ] );
 
 	useEffect( () => {

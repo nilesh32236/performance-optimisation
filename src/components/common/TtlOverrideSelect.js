@@ -77,7 +77,11 @@ const TtlOverrideSelect = ( {
 			className="wppo-select"
 			id={ id }
 			name={ name }
-			value={ '' === value ? '' : String( value ) }
+			value={
+				'' === value || null === value || undefined === value
+					? ''
+					: String( value )
+			}
 			onChange={ onChange }
 			aria-describedby={ describedBy }
 		>

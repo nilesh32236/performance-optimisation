@@ -41,6 +41,16 @@ export const getWppoSettings = ( path, fallback = {} ) => {
 			: Object.prototype.hasOwnProperty.call( obj, key );
 	let current = wppoSettings;
 	for ( const key of path.split( '.' ) ) {
+		// Fail closed on prototype-pollution segments: even when an own
+		// `__proto__` key exists, walking into it would expose the
+		// prototype object instead of a settings value.
+		if (
+			key === '__proto__' ||
+			key === 'constructor' ||
+			key === 'prototype'
+		) {
+			return fallback;
+		}
 		if (
 			! current ||
 			typeof current !== 'object' ||
