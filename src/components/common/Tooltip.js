@@ -52,7 +52,10 @@ const Tooltip = ( { content, children, label } ) => {
 		if (
 			hasChildren &&
 			e.target.closest &&
-			e.target.closest( 'button, input, [role="switch"], a' )
+			// Audit #1354 review: widen to missed interactive descendants.
+			e.target.closest(
+				'button, input, select, textarea, a, [role="switch"], [contenteditable]'
+			)
 		) {
 			return;
 		}
@@ -68,10 +71,15 @@ const Tooltip = ( { content, children, label } ) => {
 					: ' wppo-tooltip-container--icon'
 			}${ visible ? ' wppo-tooltip-container--visible' : '' }` }
 			{ ...( hasChildren
-				? { 'aria-describedby': id }
+				? {
+						'aria-expanded': visible,
+						...( visible && {
+							'aria-describedby': id,
+						} ),
+				  }
 				: {
 						role: 'button',
-						tabIndex: '0',
+						tabIndex: 0,
 						'aria-expanded': visible,
 						...( ( label || typeof content !== 'string' ) && {
 							'aria-describedby': id,
@@ -99,7 +107,13 @@ const Tooltip = ( { content, children, label } ) => {
 					aria-hidden="true"
 				/>
 			) }
-			<span className="wppo-tooltip-content" role="tooltip" id={ id }>
+			{ /* Audit #1354: hidden tooltip content is inert to AT. */ }
+			<span
+				className="wppo-tooltip-content"
+				role="tooltip"
+				id={ id }
+				aria-hidden={ visible ? undefined : true }
+			>
 				{ content }
 			</span>
 		</span>

@@ -33,7 +33,8 @@ class ErrorBoundary extends Component {
 	render() {
 		if ( this.state.hasError ) {
 			return (
-				<div className="wppo-error-boundary">
+				// Audit #1354: announce crashes to screen readers.
+				<div className="wppo-error-boundary" role="alert">
 					<h3>
 						{ __(
 							'Something went wrong',

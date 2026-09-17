@@ -1,5 +1,5 @@
 import { __, sprintf } from '@wordpress/i18n';
-import { memo, useMemo, useState } from '@wordpress/element';
+import { memo, useMemo, useRef, useState } from '@wordpress/element';
 import {
 	faCheckCircle,
 	faExclamationTriangle,
@@ -11,11 +11,13 @@ import LoadingSubmitButton from './common/LoadingSubmitButton';
 import { formatBytes } from '../lib/util';
 import { getErrorLogMessage } from '../lib/apiRequest';
 
-const READY_CONFIG = {
+// Audit #1354: built lazily per call — module-scope __() would freeze
+// translations at import time.
+const buildReadyConfig = () => ( {
 	icon: faCheckCircle,
 	className: 'wppo-badge--success',
 	label: __( 'Generated', 'performance-optimisation' ),
-};
+} );
 
 // Length of the hash prefix shown when an entry has no label.
 const HASH_PREFIX_LEN = 8;
@@ -29,29 +31,34 @@ const pendingConfig = ( label ) => ( {
 	label,
 } );
 
-const STATUS_CONFIG = {
-	ready: READY_CONFIG,
-	// Copy (issue #1274 review): done === ready today, but a shared
-	// reference would let a future mutation hit both entries.
-	done: { ...READY_CONFIG },
-	queued: pendingConfig( __( 'Queued', 'performance-optimisation' ) ),
-	pending: pendingConfig( __( 'Pending', 'performance-optimisation' ) ),
-	processing: pendingConfig( __( 'Processing', 'performance-optimisation' ) ),
-	skipped: {
-		icon: faExclamationTriangle,
-		className: 'wppo-badge--warning',
-		label: __( 'Skipped', 'performance-optimisation' ),
-	},
-	failed: {
-		icon: faTimesCircle,
-		className: 'wppo-badge--error',
-		label: __( 'Failed', 'performance-optimisation' ),
-	},
-	none: {
-		icon: faExclamationTriangle,
-		className: 'wppo-badge--warning',
-		label: __( 'Not Generated', 'performance-optimisation' ),
-	},
+const getStatusConfig = () => {
+	const readyConfig = buildReadyConfig();
+	return {
+		ready: readyConfig,
+		// Copy (issue #1274 review): done === ready today, but a shared
+		// reference would let a future mutation hit both entries.
+		done: { ...readyConfig },
+		queued: pendingConfig( __( 'Queued', 'performance-optimisation' ) ),
+		pending: pendingConfig( __( 'Pending', 'performance-optimisation' ) ),
+		processing: pendingConfig(
+			__( 'Processing', 'performance-optimisation' )
+		),
+		skipped: {
+			icon: faExclamationTriangle,
+			className: 'wppo-badge--warning',
+			label: __( 'Skipped', 'performance-optimisation' ),
+		},
+		failed: {
+			icon: faTimesCircle,
+			className: 'wppo-badge--error',
+			label: __( 'Failed', 'performance-optimisation' ),
+		},
+		none: {
+			icon: faExclamationTriangle,
+			className: 'wppo-badge--warning',
+			label: __( 'Not Generated', 'performance-optimisation' ),
+		},
+	};
 };
 
 /**
@@ -110,6 +117,9 @@ export const normalizeCcssEntry = ( hash, entry ) => {
  * @return {{icon: *, className: string, label: string}} Badge config.
  */
 export const statusConfigFor = ( statusKey ) => {
+	// Audit #1354: config built per call so labels localize at render
+	// time, not at module import.
+	const STATUS_CONFIG = getStatusConfig();
 	const hasOwn = Object.hasOwn
 		? Object.hasOwn( STATUS_CONFIG, statusKey )
 		: Object.prototype.hasOwnProperty.call( STATUS_CONFIG, statusKey );
@@ -122,6 +132,19 @@ const CriticalCssPanel = ( {
 	onRegenerateSingle,
 } ) => {
 	const [ isRegenerating, setIsRegenerating ] = useState( false );
+	// Audit #1354 review: per-render config cache so entries.map does
+	// not rebuild 8 objects + __() lookups per row.
+	const configCacheRef = useRef( new Map() );
+	configCacheRef.current.clear();
+	const configFor = ( statusKey ) => {
+		if ( ! configCacheRef.current.has( statusKey ) ) {
+			configCacheRef.current.set(
+				statusKey,
+				statusConfigFor( statusKey )
+			);
+		}
+		return configCacheRef.current.get( statusKey );
+	};
 	const [ singleBusy, setSingleBusy ] = useState( null );
 	// No local useNotice/NoticeBanner here (issue #1274 review): the
 	// parent (FileOptimization via withNotification) is the single
@@ -198,7 +221,7 @@ const CriticalCssPanel = ( {
 						const normalized = normalizeCcssEntry( hash, entry );
 						const { statusKey, label, size, truncated } =
 							normalized;
-						const config = statusConfigFor( statusKey );
+						const config = configFor( statusKey );
 						return (
 							<div key={ hash } className="wppo-ccss-status-item">
 								<span className="wppo-ccss-status-hash">

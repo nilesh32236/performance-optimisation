@@ -19,7 +19,10 @@ describe( 'auth contract sync (apiRequest ↔ main.js ↔ esi.js)', () => {
 			// SPA reads the codes via ./authErrors.js (single source).
 			expect( authSrc ).toContain( code );
 		}
-		expect( apiSrc ).toContain( 'AUTH_ERROR_CODE_SET' );
+		// Audit #1354: the raw Set is module-private; the SPA must
+		// only reach it through isAuthErrorCode().
+		expect( apiSrc ).toContain( 'isAuthErrorCode' );
+		expect( apiSrc ).not.toContain( 'AUTH_ERROR_CODE_SET' );
 
 		// No bundle may introduce an extra rest_* code the others lack.
 		const restCodes = ( src ) =>

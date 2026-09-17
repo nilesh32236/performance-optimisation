@@ -200,9 +200,10 @@ describe( 'ESI placeholder hydration (esi.js)', () => {
 
 		await hydrateElement( el );
 
-		// AT must not be stuck announcing the loading state forever.
-		expect( el.hasAttribute( 'role' ) ).toBe( false );
-		expect( el.hasAttribute( 'aria-live' ) ).toBe( false );
+		// Audit #1354: failure keeps a live-region role so the label
+		// is announced; only the busy flag is cleared.
+		expect( el.getAttribute( 'role' ) ).toBe( 'status' );
+		expect( el.getAttribute( 'aria-live' ) ).toBe( 'polite' );
 		expect( el.hasAttribute( 'aria-busy' ) ).toBe( false );
 		expect( el.getAttribute( 'aria-label' ) ).toBe(
 			'Embedded content failed to load.'
@@ -283,7 +284,7 @@ describe( 'ESI placeholder hydration (esi.js)', () => {
 
 		expect( console.warn ).toHaveBeenCalled();
 		expect( el.hasAttribute( 'aria-busy' ) ).toBe( false );
-		expect( el.hasAttribute( 'role' ) ).toBe( false );
+		expect( el.getAttribute( 'role' ) ).toBe( 'status' );
 		expect( el.getAttribute( 'aria-label' ) ).toBe(
 			'Embedded content failed to load.'
 		);

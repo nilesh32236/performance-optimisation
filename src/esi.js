@@ -36,6 +36,34 @@
 import { __ } from '@wordpress/i18n';
 
 /**
+ * Extract a safe log message without leaking response bodies.
+ *
+ * Dependency-free mirror of lazyload.js getLogMessage() (audit #1354):
+ * console output persists in devtools, so only the message is logged,
+ * never full objects.
+ *
+ * @since NEXT
+ * @param {*} err Caught error value.
+ * @return {string} Safe message string.
+ */
+const getEsiLogMessage = ( err ) => {
+	if ( err instanceof Error ) {
+		return err.message || 'Unknown error';
+	}
+	if ( typeof err === 'string' ) {
+		return err.slice( 0, 500 ) || 'Unknown error';
+	}
+	if ( err === null || typeof err === 'undefined' ) {
+		return 'Unknown error';
+	}
+	try {
+		return String( err ).slice( 0, 500 );
+	} catch {
+		return 'Unknown error';
+	}
+};
+
+/**
  * Attributes whose values are URLs and must be scheme-checked before the
  * fragment is inserted into the live DOM.
  *
@@ -325,9 +353,11 @@ const applyFragmentToElement = ( el, frag ) => {
  * @return {void}
  */
 const markElementFailed = ( el ) => {
+	// Audit #1354: keep a live-region role so the failure label is
+	// announced — a role-less aria-label is ignored by assistive tech.
 	el.removeAttribute( 'aria-busy' );
-	el.removeAttribute( 'aria-live' );
-	el.removeAttribute( 'role' );
+	el.setAttribute( 'role', 'status' );
+	el.setAttribute( 'aria-live', 'polite' );
 	el.setAttribute(
 		'aria-label',
 		__( 'Embedded content failed to load.', 'performance-optimisation' )
@@ -512,7 +542,7 @@ export const hydrateElement = async ( el, signal ) => {
 				'WPPO ESI hydration failed; embedded content could not be loaded.',
 				'performance-optimisation'
 			),
-			err
+			getEsiLogMessage( err )
 		);
 		markElementFailed( el );
 	}
@@ -530,14 +560,16 @@ export const hydrateElement = async ( el, signal ) => {
  * @return {void}
  */
 export const hydrateESIPlaceholders = ( signal ) => {
-	const els = document.querySelectorAll( '[data-wppo-esi]' );
-	if ( ! els.length ) {
-		return;
-	}
 	const activeSignal = isAbortSignal( signal )
 		? signal
 		: getHydrationSignal();
 	const run = () => {
+		// Audit #1354: query at frame time so placeholders inserted
+		// before the frame runs are included in the batch.
+		const els = document.querySelectorAll( '[data-wppo-esi]' );
+		if ( ! els.length ) {
+			return;
+		}
 		const groups = new Map();
 		els.forEach( ( el ) => {
 			const info = readBlockInfo( el );
@@ -582,18 +614,21 @@ export const hydrateESIPlaceholders = ( signal ) => {
 							'WPPO ESI hydration failed; embedded content could not be loaded.',
 							'performance-optimisation'
 						),
-						err
+						getEsiLogMessage( err )
 					);
 					targets.forEach( ( el ) => markElementFailed( el ) );
 				}
 			} )
 		).catch( ( err ) => {
+			if ( isAbortError( err ) ) {
+				return;
+			}
 			console.warn(
 				__(
 					'WPPO ESI hydration failed; embedded content could not be loaded.',
 					'performance-optimisation'
 				),
-				err
+				getEsiLogMessage( err )
 			);
 		} );
 	};

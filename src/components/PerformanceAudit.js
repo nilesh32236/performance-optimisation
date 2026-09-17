@@ -143,6 +143,23 @@ const numericStatus = ( value, good, poor ) => {
 };
 
 /**
+ * Format a metric value with a unit, falling back to an em dash when
+ * the field is absent (audit #1354: avoids rendering "undefined s/ms").
+ *
+ * @since NEXT
+ * @param {*}      value Raw metric value.
+ * @param {string} unit  Unit suffix.
+ * @return {string} Formatted value or '—'.
+ */
+const fmtMetric = ( value, unit ) => {
+	const num = Number( value );
+	if ( ! Number.isFinite( num ) ) {
+		return '—';
+	}
+	return `${ num } ${ unit }`;
+};
+
+/**
  * Derive a status string from a boolean pass/fail value.
  *
  * Non-boolean telemetry (undefined, null, numbers, strings) renders
@@ -218,7 +235,7 @@ const MetricOverview = ( { result } ) => (
 				<Tooltip content={ METRIC_INFO.load_time() } />
 			</div>
 			<span className="wppo-audit-overview-card__value">
-				{ result.load_time } s
+				{ fmtMetric( result.load_time, 's' ) }
 			</span>
 			<div className="wppo-audit-overview-card__status">
 				<StatusBadge
@@ -232,7 +249,7 @@ const MetricOverview = ( { result } ) => (
 				<Tooltip content={ METRIC_INFO.ttfb() } />
 			</div>
 			<span className="wppo-audit-overview-card__value">
-				{ result.ttfb } ms
+				{ fmtMetric( result.ttfb, 'ms' ) }
 			</span>
 			<div className="wppo-audit-overview-card__status">
 				<StatusBadge
@@ -658,7 +675,10 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 											'SSL Handshake',
 											'performance-optimisation'
 										) }
-										value={ `${ result.ssl_time } ms` }
+										value={ fmtMetric(
+											result.ssl_time,
+											'ms'
+										) }
 										tooltipKey="ssl"
 									/>
 									<ResultRow
@@ -666,7 +686,10 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 											'True TTFB',
 											'performance-optimisation'
 										) }
-										value={ `${ result.ttfb } ms` }
+										value={ `${ fmtMetric(
+											result.ttfb,
+											'ms'
+										) }` }
 										tooltipKey="ttfb"
 									/>
 									<ResultRow

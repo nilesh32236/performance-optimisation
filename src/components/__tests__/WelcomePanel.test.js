@@ -410,11 +410,15 @@ describe( 'WelcomePanel', () => {
 		await waitFor( () =>
 			expect( fetchWooCacheSelfTest ).toHaveBeenCalled()
 		);
-		expect(
-			screen.getByText(
-				'WooCommerce self-test passed: cart, checkout and account pages bypass the cache; the guest cart survives.'
-			)
-		).toBeInTheDocument();
+		// Audit #1354: await the rendered result — the timeout wrapper
+		// resolves a microtask later than the direct call did.
+		await waitFor( () =>
+			expect(
+				screen.getByText(
+					'WooCommerce self-test passed: cart, checkout and account pages bypass the cache; the guest cart survives.'
+				)
+			).toBeInTheDocument()
+		);
 		expect( screen.getByText( /Cart, checkout/ ) ).toBeInTheDocument();
 		// Read-only proof must not dismiss onboarding.
 		expect( apiCall ).not.toHaveBeenCalledWith( 'dismiss_welcome' );

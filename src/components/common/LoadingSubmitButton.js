@@ -27,29 +27,38 @@ const LoadingSubmitButton = ( {
 	const isDisabled = Boolean( disabled ) || Boolean( isLoading );
 
 	return (
-		<button
-			{ ...rest }
-			type={ type }
-			className={ className }
-			disabled={ isDisabled }
-			aria-busy={ isLoading }
-		>
-			{ isLoading && (
-				<FontAwesomeIcon
-					icon={ faSpinner }
-					spin
-					aria-hidden="true"
-					className="wppo-mr-8"
-				/>
-			) }
-			{ isLoading ? (
-				<span role="status" aria-live="polite">
-					{ loadingLabel || label || children }
+		<>
+			<button
+				{ ...rest }
+				type={ type }
+				className={ className }
+				disabled={ isDisabled }
+				aria-busy={ isLoading || undefined }
+			>
+				{ isLoading && (
+					<FontAwesomeIcon
+						icon={ faSpinner }
+						spin
+						aria-hidden="true"
+						className="wppo-mr-8"
+					/>
+				) }
+				<span>
+					{ isLoading
+						? loadingLabel || label || children
+						: label || children }
 				</span>
-			) : (
-				<span>{ label || children }</span>
-			) }
-		</button>
+			</button>
+			{ /* Audit #1354 review: persistent region (toggled text, not
+			mount) so SRs never miss the announcement. */ }
+			<span
+				role="status"
+				aria-live="polite"
+				className="wppo-screen-reader-text"
+			>
+				{ isLoading ? loadingLabel || label : '' }
+			</span>
+		</>
 	);
 };
 

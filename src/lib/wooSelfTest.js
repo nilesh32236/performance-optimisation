@@ -192,12 +192,55 @@ export const getWooRuleRemediation = ( kind, pass ) => {
 /**
  * Run the read-only WooCommerce cache self-test with an AbortSignal.
  *
- * Thin shared wrapper so both call sites hit the same endpoint + signal
- * contract; AbortController creation, timeout, and stale-run guards stay
- * with the calling component (which owns its refs).
+ * Enforces WOO_SELF_TEST_TIMEOUT_MS here (audit #1354) so a hung request
+ * cannot depend on each caller remembering a timeout: the caller signal
+ * (if any) and the timeout race, whichever aborts first wins.
  *
  * @since NEXT
  * @param {AbortSignal} [signal] Optional AbortSignal for cancellation.
  * @return {Promise<Object>} Resolved self-test response.
  */
-export const runWooSelfTest = ( signal ) => fetchWooCacheSelfTest( signal );
+export const runWooSelfTest = ( signal ) => {
+	// Audit #1354 review: each abort source forwards its own reason so
+	// callers can distinguish timeout vs caller-cancel; a setTimeout
+	// fallback covers runtimes without AbortSignal.timeout.
+	const controller =
+		typeof AbortController !== 'undefined' ? new AbortController() : null;
+	if ( ! controller ) {
+		return fetchWooCacheSelfTest( undefined );
+	}
+	const onCallerAbort = () => controller.abort( signal.reason );
+	const timers = [];
+	if ( signal ) {
+		if ( signal.aborted ) {
+			onCallerAbort();
+		} else {
+			signal.addEventListener( 'abort', onCallerAbort, { once: true } );
+		}
+	}
+	let timeoutSignal = null;
+	if ( typeof AbortSignal !== 'undefined' && AbortSignal.timeout ) {
+		timeoutSignal = AbortSignal.timeout( WOO_SELF_TEST_TIMEOUT_MS );
+		const onTimeoutAbort = () => controller.abort( timeoutSignal.reason );
+		timeoutSignal.addEventListener( 'abort', onTimeoutAbort, {
+			once: true,
+		} );
+		timers.push( () =>
+			timeoutSignal.removeEventListener( 'abort', onTimeoutAbort )
+		);
+	} else {
+		const timerId = setTimeout(
+			() => controller.abort( new Error( 'Woo self-test timed out' ) ),
+			WOO_SELF_TEST_TIMEOUT_MS
+		);
+		timers.push( () => clearTimeout( timerId ) );
+	}
+	if ( signal ) {
+		timers.push( () =>
+			signal.removeEventListener( 'abort', onCallerAbort )
+		);
+	}
+	return fetchWooCacheSelfTest( controller.signal ).finally( () => {
+		timers.forEach( ( cleanup ) => cleanup() );
+	} );
+};

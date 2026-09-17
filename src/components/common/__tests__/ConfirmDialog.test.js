@@ -170,8 +170,9 @@ describe( 'ConfirmDialog', () => {
 
 	it( 'calls onCancel when overlay is clicked', () => {
 		render( <ConfirmDialog { ...defaultProps } /> );
-		// The overlay is the div with role="presentation"
-		fireEvent.click( screen.getByRole( 'presentation' ) );
+		// Audit #1354: overlay carries no role; query by class.
+		const overlay = document.querySelector( '.wppo-dialog-overlay' );
+		fireEvent.click( overlay );
 		expect( defaultProps.onCancel ).toHaveBeenCalledTimes( 1 );
 	} );
 
@@ -183,14 +184,14 @@ describe( 'ConfirmDialog', () => {
 
 	it( 'does not call onCancel when Enter key is pressed on overlay (keyboard path removed)', () => {
 		render( <ConfirmDialog { ...defaultProps } /> );
-		const overlay = screen.getByRole( 'presentation' );
+		const overlay = document.querySelector( '.wppo-dialog-overlay' );
 		fireEvent.keyDown( overlay, { key: 'Enter', code: 'Enter' } );
 		expect( defaultProps.onCancel ).toHaveBeenCalledTimes( 0 );
 	} );
 
 	it( 'does not call onCancel when Space key is pressed on overlay (keyboard path removed)', () => {
 		render( <ConfirmDialog { ...defaultProps } /> );
-		const overlay = screen.getByRole( 'presentation' );
+		const overlay = document.querySelector( '.wppo-dialog-overlay' );
 		fireEvent.keyDown( overlay, { key: ' ', code: 'Space' } );
 		expect( defaultProps.onCancel ).toHaveBeenCalledTimes( 0 );
 	} );

@@ -4307,6 +4307,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						$lazy_config['nativeLazy'] = true;
 					}
 
+					// Audit #1354: translated video iframe title for the lazyload
+					// bundle (English fallback client-side and on the WP < 6.9 path).
+					$lazy_config['videoPlayerLabel'] = __( 'Video player', 'performance-optimisation' );
+
 					if ( $delay_js ) {
 						$idle_timeout = ! empty( $this->options['file_optimisation']['delayJSIdleTimeout'] )
 						? absint( $this->options['file_optimisation']['delayJSIdleTimeout'] )

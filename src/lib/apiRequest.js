@@ -1,10 +1,8 @@
 import { isAuthErrorCode } from './authErrors';
 
-export {
-	AUTH_ERROR_CODES,
-	AUTH_ERROR_CODE_SET,
-	isAuthErrorCode,
-} from './authErrors';
+// Audit #1354: the raw lookup Set stays module-private in
+// authErrors.js — re-export only the frozen list and the lookup.
+export { AUTH_ERROR_CODES, isAuthErrorCode } from './authErrors';
 
 /**
  * Safe accessor for the global wppoSettings object injected by PHP via
@@ -129,9 +127,14 @@ let pendingRefresh = null;
  * guard) so multiple simultaneous 403s share a single admin-ajax round-trip.
  *
  * @since 1.6.0
+ * @param {AbortSignal|undefined} signal Optional abort signal (audit #1354).
  * @return {Promise<string>} The refreshed nonce string.
  */
-const refreshNonce = async () => {
+const refreshNonce = async ( signal ) => {
+	// Audit #1354 review: restore the shared-promise guard — concurrent
+	// 403s share one round-trip. (A caller-specific signal cannot abort
+	// the shared fetch; callers needing cancellation pass their signal
+	// to apiCall(), which aborts its own request.)
 	if ( pendingRefresh ) {
 		return pendingRefresh;
 	}
@@ -142,6 +145,7 @@ const refreshNonce = async () => {
 		try {
 			const res = await fetch( wppoSettings.ajaxUrl, {
 				method: 'POST',
+				signal: signal || undefined,
 				headers: {
 					'Content-Type': 'application/x-www-form-urlencoded',
 				},
@@ -283,7 +287,7 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 				! isRetrying &&
 				( response.status === 401 || response.status === 403 )
 			) {
-				const freshNonce = await refreshNonce();
+				const freshNonce = await refreshNonce( signal );
 				const retryResponse = await doFetch( freshNonce );
 				return handleResponse( retryResponse, true );
 			}
@@ -306,7 +310,7 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 					'Nonce retry failed — authentication error persists.'
 				);
 			}
-			const freshNonce = await refreshNonce();
+			const freshNonce = await refreshNonce( signal );
 			const retryResponse = await doFetch( freshNonce );
 			return handleResponse( retryResponse, true );
 		}

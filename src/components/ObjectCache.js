@@ -4,6 +4,7 @@ import {
 	useId,
 	useCallback,
 	useContext,
+	useRef,
 } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall, getErrorLogMessage } from '../lib/apiRequest';
@@ -118,6 +119,14 @@ const ObjectCache = ( { options = {} } ) => {
 	const [ confirmDisable, setConfirmDisable ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
 
+	// Audit #1354: skip state updates after unmount.
+	const isMountedRef = useRef( true );
+	useEffect( () => {
+		return () => {
+			isMountedRef.current = false;
+		};
+	}, [] );
+
 	const fetchStatus = useCallback(
 		async ( signal ) => {
 			try {
@@ -148,7 +157,13 @@ const ObjectCache = ( { options = {} } ) => {
 					} ) );
 				}
 			} catch ( error ) {
-				if ( signal?.aborted || error?.name === 'AbortError' ) {
+				// Audit #1354 review: signal-less callers (handleAction) still
+				// need the mount check before notifying.
+				if (
+					signal?.aborted ||
+					error?.name === 'AbortError' ||
+					! isMountedRef.current
+				) {
 					return;
 				}
 				console.error(
@@ -250,6 +265,9 @@ const ObjectCache = ( { options = {} } ) => {
 					: { mode: settings.mode } ),
 			};
 			const res = await apiCall( 'object_cache', payload );
+			if ( ! isMountedRef.current ) {
+				return;
+			}
 
 			if ( ! res?.success ) {
 				notify( {
@@ -277,6 +295,9 @@ const ObjectCache = ( { options = {} } ) => {
 				[ 'enable', 'disable', 'ping', 'recover' ].includes( action )
 			) {
 				await fetchStatus();
+				if ( ! isMountedRef.current ) {
+					return;
+				}
 			}
 			notify( {
 				type: 'success',
@@ -296,7 +317,9 @@ const ObjectCache = ( { options = {} } ) => {
 				durationMs: 5000,
 			} );
 		} finally {
-			setActiveAction( null );
+			if ( isMountedRef.current ) {
+				setActiveAction( null );
+			}
 		}
 	};
 

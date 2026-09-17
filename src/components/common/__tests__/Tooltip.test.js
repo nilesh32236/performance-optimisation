@@ -128,8 +128,12 @@ describe( 'Tooltip', () => {
 			'.wppo-tooltip-container'
 		);
 
-		expect( tooltipContainer ).toHaveAttribute( 'aria-describedby' );
+		// Audit #1354: describedby only while visible; hidden tooltip
+		// content is aria-hidden so AT cannot resolve it.
+		expect( tooltipContainer ).not.toHaveAttribute( 'aria-describedby' );
 		expect( tooltipContainer ).not.toHaveAttribute( 'role' );
+		fireEvent.mouseEnter( tooltipContainer );
+		expect( tooltipContainer ).toHaveAttribute( 'aria-describedby' );
 		expect(
 			screen.getByRole( 'button', { name: /Hover Me/i } )
 		).toBeInTheDocument();

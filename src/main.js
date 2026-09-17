@@ -48,6 +48,19 @@ document.addEventListener( 'DOMContentLoaded', function () {
 		}
 	};
 
+	// Audit #1354: shared controller so admin-bar requests die on
+	// navigation instead of resolving into a torn-down page.
+	const pageController =
+		typeof AbortController !== 'undefined' ? new AbortController() : null;
+	if (
+		pageController &&
+		typeof window !== 'undefined' &&
+		window.addEventListener
+	) {
+		window.addEventListener( 'pagehide', () => pageController.abort(), {
+			once: true,
+		} );
+	}
 	/**
 	 * Shared helper for POST JSON requests.
 	 *
@@ -59,6 +72,7 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	const postJsonRequest = ( endpointPath, payload, isRetry = false ) => {
 		return fetch( wppoObject.apiUrl + endpointPath, {
 			method: 'POST',
+			signal: pageController ? pageController.signal : undefined,
 			headers: {
 				'Content-Type': 'application/json',
 				'X-WP-Nonce': wppoObject.nonce,

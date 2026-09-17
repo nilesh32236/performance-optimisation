@@ -41,12 +41,18 @@ const FALLBACK_ALLOWED_KEYS = [
 	'litespeed_integration',
 	'llms_txt',
 ];
-const ALLOWED_IMPORT_KEYS =
-	typeof wppoSettings !== 'undefined' &&
-	Array.isArray( wppoSettings.allowedSettingsKeys ) &&
-	wppoSettings.allowedSettingsKeys.length
-		? wppoSettings.allowedSettingsKeys
-		: FALLBACK_ALLOWED_KEYS;
+// Audit #1354: resolved lazily at call time — a module-load snapshot
+// goes stale when wppoSettings is localised after import.
+const getAllowedImportKeys = () => {
+	if (
+		typeof wppoSettings !== 'undefined' &&
+		Array.isArray( wppoSettings.allowedSettingsKeys ) &&
+		wppoSettings.allowedSettingsKeys.length
+	) {
+		return wppoSettings.allowedSettingsKeys;
+	}
+	return FALLBACK_ALLOWED_KEYS;
+};
 
 /**
  * Maximum accepted settings-file size (512KB). Real exports are <100KB;
@@ -73,7 +79,11 @@ const MAX_IMPORT_DEPTH = 10;
  *
  * @since 2.0.0
  */
-const MAX_IMPORT_TOP_KEYS = ALLOWED_IMPORT_KEYS.length;
+// Audit #1354 review: the cap must track the live allowlist, not the
+// fallback length, or a newly-added server tab is rejected client-side.
+// Kept as a constant for the static MAX check; validateImportData uses
+// the live list (see below).
+const MAX_IMPORT_TOP_KEYS = 64;
 
 /**
  * Maximum keys/entries accepted in a nested object or array inside an
@@ -108,10 +118,14 @@ const validateImportData = ( data ) => {
 	if ( keys.length > MAX_IMPORT_TOP_KEYS ) {
 		return false;
 	}
+	const allowedKeys = getAllowedImportKeys();
+	if ( keys.length > allowedKeys.length ) {
+		return false;
+	}
 	return keys.every( ( key ) => {
 		if (
 			isPollutionKey( key ) ||
-			! ALLOWED_IMPORT_KEYS.includes( key ) ||
+			! allowedKeys.includes( key ) ||
 			typeof data[ key ] !== 'object' ||
 			data[ key ] === null ||
 			Array.isArray( data[ key ] )
@@ -818,6 +832,9 @@ const PluginSetting = ( { options } ) => {
 						'performance-optimisation'
 					),
 				} );
+				// Audit #1354: clear the invalid selection like every other
+				// failure path so a retry starts clean.
+				resetFileInput();
 				setIsImporting( false );
 			}
 		};
@@ -953,6 +970,16 @@ const PluginSetting = ( { options } ) => {
 											<div className="wppo-activity-text">
 												{ entry.activity }
 											</div>
+											{ entry.created_at && (
+												<time className="wppo-activity-time">
+													{ new Date(
+														entry.created_at.replace(
+															' ',
+															'T'
+														)
+													).toLocaleString() }
+												</time>
+											) }
 										</li>
 									) ) }
 								</ul>
@@ -1328,7 +1355,9 @@ const PluginSetting = ( { options } ) => {
 								<input
 									type="file"
 									id="import-config"
-									accept="application/json"
+									// Audit #1354: match by extension as well — some
+									// browsers filter file pickers by extension.
+									accept="application/json,.json"
 									onChange={ handleFileSelection }
 									ref={ fileInputRef }
 									className="wppo-input"

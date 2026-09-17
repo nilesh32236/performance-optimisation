@@ -175,7 +175,8 @@ describe( 'SystemInfo Component', () => {
 		fireEvent.click( loadButton );
 
 		await waitFor( () => {
-			expect( screen.getByText( 'unknown_key' ) ).toBeInTheDocument();
+			// Audit #1354: unmapped keys humanize instead of raw snake_case.
+			expect( screen.getByText( 'Unknown Key' ) ).toBeInTheDocument();
 			expect( screen.queryByText( 'Database' ) ).not.toBeInTheDocument();
 			expect( screen.queryByText( 'WordPress' ) ).not.toBeInTheDocument();
 		} );

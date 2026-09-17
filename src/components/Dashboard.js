@@ -20,6 +20,7 @@ import {
 	shouldShowWooFixCta,
 } from '../lib/wooSelfTest';
 import { getDbCounts } from '../lib/dbCounts';
+import { formatBytes } from '../lib/util';
 import useNotice from '../lib/useNotice';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import ConfirmDialog from './common/ConfirmDialog';
@@ -224,7 +225,8 @@ const Dashboard = ( {
 
 	// Initialize state
 	const [ state, setState ] = useState( {
-		totalCacheSize: getWppoSettings( 'cache_size', '0 B' ),
+		// Audit #1354: localized zero instead of hardcoded '0 B'.
+		totalCacheSize: getWppoSettings( 'cache_size', formatBytes( 0 ) ),
 		totalJs: getWppoSettings( 'total_js_css.js', 0 ),
 		totalCss: getWppoSettings( 'total_js_css.css', 0 ),
 		imageInfo: normalizeImageInfo( getWppoSettings( 'image_info', {} ) ),
@@ -562,9 +564,13 @@ const Dashboard = ( {
 			} );
 		}
 		if ( pollingRef.current === currentTimeout ) {
+			// Audit #1354 review: back off while hidden (mirrors PageSpeed).
+			const delay = getPollDelay( pollAttemptsRef.current );
 			pollingRef.current = setTimeout(
 				pollJobStatus,
-				getPollDelay( pollAttemptsRef.current )
+				typeof document !== 'undefined' && document.hidden
+					? Math.max( delay, 30000 )
+					: delay
 			);
 		}
 	}, [ updateState, notify ] );
@@ -597,7 +603,7 @@ const Dashboard = ( {
 						} );
 						refreshUpgradePurgeStatus();
 						updateState( {
-							totalCacheSize: '0 B',
+							totalCacheSize: formatBytes( 0 ),
 							totalJs: 0,
 							totalCss: 0,
 						} );
@@ -614,7 +620,12 @@ const Dashboard = ( {
 						} );
 					}
 				} )
-				.catch( () =>
+				// Audit #1354: log rejections like the other handlers do.
+				.catch( ( clearError ) => {
+					console.error(
+						'Failed to clear cache.',
+						getErrorLogMessage( clearError )
+					);
 					notify( {
 						type: 'error',
 						message: __(
@@ -622,8 +633,8 @@ const Dashboard = ( {
 							'performance-optimisation'
 						),
 						durationMs: 5000,
-					} )
-				)
+					} );
+				} )
 				.finally( () => handleLoading( 'clear_cache', false ) );
 		},
 		[ handleLoading, updateState, notify, refreshUpgradePurgeStatus ]
@@ -691,7 +702,12 @@ const Dashboard = ( {
 					}
 				}
 			} )
-			.catch( () =>
+			// Audit #1354: log rejections like pollJobStatus does.
+			.catch( ( optimizeError ) => {
+				console.error(
+					'Image optimisation failed.',
+					getErrorLogMessage( optimizeError )
+				);
 				notify( {
 					type: 'error',
 					message: __(
@@ -699,8 +715,8 @@ const Dashboard = ( {
 						'performance-optimisation'
 					),
 					durationMs: 5000,
-				} )
-			)
+				} );
+			} )
 			.finally( () => {
 				submittingRef.current = false;
 				handleLoading( 'optimize_images', false );

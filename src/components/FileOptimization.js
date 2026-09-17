@@ -863,20 +863,25 @@ const FileOptimization = ( {
 	} );
 	// Hydrate sandbox state when the Scripts tab opens so a staged
 	// experiment from a prior session is visible without re-staging.
-	// Skipped when staged data is already present (e.g. just staged in
-	// this session) so rapid tab toggling does not fire redundant
-	// authenticated calls.
+	// Audit #1354: a ref guard (not sandboxStaged identity) prevents
+	// refetching after every promote/discard reset to {}.
+	const sandboxHydratedRef = useRef( false );
+	// Audit #1354: mount guard so unmount mid-request cannot setState in
+	// the save/promote/discard handlers below.
+	const isSandboxMountedRef = useRef( true );
+	useEffect( () => {
+		return () => {
+			isSandboxMountedRef.current = false;
+		};
+	}, [] );
 	useEffect( () => {
 		if ( activeSubTab !== 'scripts' ) {
 			return;
 		}
-		if (
-			sandboxStaged &&
-			typeof sandboxStaged === 'object' &&
-			Object.keys( sandboxStaged ).length > 0
-		) {
+		if ( sandboxHydratedRef.current ) {
 			return;
 		}
+		sandboxHydratedRef.current = true;
 		let cancelled = false;
 		( async () => {
 			try {
@@ -907,7 +912,7 @@ const FileOptimization = ( {
 		return () => {
 			cancelled = true;
 		};
-	}, [ activeSubTab, sandboxStaged ] );
+	}, [ activeSubTab ] );
 	const handleSandboxSave = async () => {
 		setSandboxBusy( true );
 		try {
@@ -953,7 +958,9 @@ const FileOptimization = ( {
 				),
 			} );
 		} finally {
-			setSandboxBusy( false );
+			if ( isSandboxMountedRef.current ) {
+				setSandboxBusy( false );
+			}
 		}
 	};
 	const handleSandboxPromote = async () => {
@@ -1022,7 +1029,9 @@ const FileOptimization = ( {
 				message: __( 'Could not promote.', 'performance-optimisation' ),
 			} );
 		} finally {
-			setSandboxBusy( false );
+			if ( isSandboxMountedRef.current ) {
+				setSandboxBusy( false );
+			}
 		}
 	};
 	const handleSandboxDiscard = async () => {
@@ -1056,7 +1065,9 @@ const FileOptimization = ( {
 				message: __( 'Could not discard.', 'performance-optimisation' ),
 			} );
 		} finally {
-			setSandboxBusy( false );
+			if ( isSandboxMountedRef.current ) {
+				setSandboxBusy( false );
+			}
 		}
 	};
 	const handleSandboxPerfTest = async () => {
@@ -1106,7 +1117,9 @@ const FileOptimization = ( {
 				message: __( 'Perf test failed.', 'performance-optimisation' ),
 			} );
 		} finally {
-			setSandboxBusy( false );
+			if ( isSandboxMountedRef.current ) {
+				setSandboxBusy( false );
+			}
 		}
 	};
 	const { setIsDirty } = useContext( UnsavedChangesContext );
@@ -2199,10 +2212,9 @@ const FileOptimization = ( {
 													id="wppoSinglePostId"
 													min="1"
 													step="1"
-													placeholder={ __(
-														'123',
-														'performance-optimisation'
-													) }
+													// Audit #1354: never translate numeric
+													// placeholders — translators could break them.
+													placeholder="123"
 													value={ singlePostId }
 													onChange={ ( e ) =>
 														setSinglePostId(
@@ -2891,15 +2903,20 @@ const FileOptimization = ( {
 													) }
 												</a>
 											) : (
-												<span
+												<button
+													type="button"
 													className="wppo-button wppo-button--secondary"
-													aria-disabled="true"
+													disabled={ true }
+													title={ __(
+														'Stage a preview first to enable the admin preview link.',
+														'performance-optimisation'
+													) }
 												>
 													{ __(
 														'Open admin preview',
 														'performance-optimisation'
 													) }
-												</span>
+												</button>
 											) ) }
 										<button
 											type="button"

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from '@wordpress/element';
+import { useEffect, useRef, useCallback, useId } from '@wordpress/element';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faExclamationTriangle } from '@fortawesome/free-solid-svg-icons';
 
@@ -30,7 +30,8 @@ const ConfirmDialog = ( {
 	children,
 } ) => {
 	const dialogRef = useRef( null );
-	const confirmBtnRef = useRef( null );
+	// Audit #1354: unique title id so two mounted dialogs never share one.
+	const titleId = useId();
 	const focusableRef = useRef( [] );
 	const previouslyFocusedRef = useRef( null );
 
@@ -78,7 +79,9 @@ const ConfirmDialog = ( {
 		[ onCancel ]
 	);
 
-	useEffect( () => {
+	// Audit #1354: rebuild when children change too — async detail
+	// lists added while open would otherwise leave a stale trap list.
+	const rebuildTrapList = useCallback( () => {
 		if ( isOpen && dialogRef.current ) {
 			focusableRef.current = Array.from(
 				dialogRef.current.querySelectorAll(
@@ -89,9 +92,13 @@ const ConfirmDialog = ( {
 			focusableRef.current = [];
 		}
 	}, [ isOpen ] );
+	useEffect( () => {
+		rebuildTrapList();
+	}, [ rebuildTrapList, children ] );
 
 	useEffect( () => {
-		if ( isOpen && confirmBtnRef.current ) {
+		// Audit #1354 review: gate on dialogRef (mounted dialog).
+		if ( isOpen && dialogRef.current ) {
 			const cancelBtn = dialogRef.current?.querySelector(
 				'.wppo-dialog-cancel'
 			);
@@ -146,21 +153,17 @@ const ConfirmDialog = ( {
 	}
 
 	return (
-		<div
-			className="wppo-dialog-overlay"
-			onClick={ onCancel }
-			role="presentation"
-		>
-			{ /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */ }
+		/* eslint-disable jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions, jsx-a11y/no-noninteractive-element-interactions -- overlay click is progressive enhancement; Esc + buttons are the keyboard paths (audit #1354). */
+		<div className="wppo-dialog-overlay" onClick={ onCancel }>
 			<div
 				className="wppo-dialog"
 				ref={ dialogRef }
 				role="dialog"
 				aria-modal="true"
-				aria-labelledby="wppo-dialog-title"
+				aria-labelledby={ titleId }
 				onClick={ ( e ) => e.stopPropagation() }
 			>
-				<h3 id="wppo-dialog-title">
+				<h3 id={ titleId }>
 					<FontAwesomeIcon
 						icon={ faExclamationTriangle }
 						aria-hidden="true"
@@ -186,7 +189,6 @@ const ConfirmDialog = ( {
 								: 'wppo-button--primary'
 						}` }
 						onClick={ onConfirm }
-						ref={ confirmBtnRef }
 					>
 						{ confirmLabel ||
 							__( 'Confirm', 'performance-optimisation' ) }
@@ -195,6 +197,7 @@ const ConfirmDialog = ( {
 			</div>
 		</div>
 	);
+	/* eslint-enable jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions, jsx-a11y/no-noninteractive-element-interactions */
 };
 
 export default ConfirmDialog;

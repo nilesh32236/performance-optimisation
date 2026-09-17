@@ -110,8 +110,15 @@ const WebVitalsRum = () => {
 
 	const fmtMs = ( value ) =>
 		value === null || value === undefined ? '—' : formatMs( value );
-	const fmtCls = ( value ) =>
-		value === null || value === undefined ? '—' : value.toFixed( 3 );
+	// Audit #1354: coerce — a string CLS value from the API would
+	// otherwise throw TypeError and break the panel.
+	const fmtCls = ( value ) => {
+		if ( value === null || value === undefined ) {
+			return '—';
+		}
+		const num = Number( value );
+		return Number.isFinite( num ) ? num.toFixed( 3 ) : '—';
+	};
 
 	let body;
 	if ( notice ) {
