@@ -1637,16 +1637,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			$ok = Util::atomic_file_put_contents( $fs, $file_path, $css );
 			if ( $ok && class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
 				try {
+					// Write-path health check is content-only (no HTTP
+					// probe): this runs inside process_buffer during page
+					// generation, so a sync wp_remote_head loopback would
+					// charge the first visitor after purge up to +5s. Disk
+					// write + content check already prove success; the HTTP
+					// probe still runs on promote/admin paths.
+					$slot = self::rollout_slot_for_url( $url );
 					if ( Css_Rollout::is_health_check_enabled() ) {
 						$check = Css_Rollout::health_check_content( $css );
-						$probe = Css_Rollout::probe_live_file( $file_path, $this->get_used_css_url( $url ) );
-						if ( ! $check['ok'] || ! $probe['ok'] ) {
-							$reason = ! $check['ok'] ? $check['reason'] : $probe['reason'];
-							self::rollback_used_css( $url, $reason );
+						if ( ! $check['ok'] ) {
+							self::rollback_used_css( $url, $check['reason'] );
 							return false;
 						}
-						Css_Rollout::record_event( self::rollout_slot_for_url( $url ), 'done', 'used-CSS direct apply', 'hit (direct)' );
 					}
+					Css_Rollout::record_event( $slot, 'done', 'used-CSS direct apply', 'hit (direct)' );
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
@@ -1842,16 +1847,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				}
 				if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
 					$slot = self::rollout_slot_for_url( $url );
-					Css_Rollout::record_event( $slot, 'done', 'used-CSS staged output promoted to live', 'hit (promoted)' );
+					// Health gate first: record `done` only after it passes
+					// (no phantom success + rollback double-bump). On breach
+					// the known-bad staged sidecar is deleted so preview
+					// stops offering Promote for the same payload.
 					if ( Css_Rollout::is_health_check_enabled() ) {
 						$check = Css_Rollout::health_check_content( $staged );
 						$probe = Css_Rollout::probe_live_file( $live_path, $this->get_used_css_url( $url ) );
 						if ( ! $check['ok'] || ! $probe['ok'] ) {
 							$reason = ! $check['ok'] ? $check['reason'] : $probe['reason'];
 							self::rollback_used_css( $url, $reason );
+							try {
+								if ( function_exists( 'wp_delete_file' ) ) {
+									wp_delete_file( $staged_path );
+								} elseif ( file_exists( $staged_path ) ) {
+									unlink( $staged_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Best-effort stale staged sidecar cleanup after a health-gate breach.
+								}
+							} catch ( \Throwable $e ) {
+								unset( $e );
+							}
 							return false;
 						}
 					}
+					Css_Rollout::record_event( $slot, 'done', 'used-CSS staged output promoted to live', 'hit (promoted)' );
 				}
 				try {
 					if ( function_exists( 'wp_delete_file' ) ) {
@@ -1898,12 +1916,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 						}
 					}
 				}
-				if ( ! $restored && file_exists( $live_path ) ) {
+				if ( ! $restored ) {
+					// No usable backup: fail open to unoptimized by removing
+					// the broken live file (best-effort, never fatal). An
+					// absent live file is the safe unoptimized state, so a
+					// missing file with no backup restores trivially true
+					// (mirrors Critical_CSS::rollback_ccss()).
 					try {
-						if ( function_exists( 'wp_delete_file' ) ) {
-							wp_delete_file( $live_path );
-						} else {
-							unlink( $live_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Fail-open removal of broken used-CSS.
+						if ( file_exists( $live_path ) ) {
+							if ( function_exists( 'wp_delete_file' ) ) {
+								wp_delete_file( $live_path );
+							} else {
+								unlink( $live_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Fail-open removal of broken used-CSS.
+							}
 						}
 						$restored = ! file_exists( $live_path );
 					} catch ( \Throwable $e ) {

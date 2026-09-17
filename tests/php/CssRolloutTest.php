@@ -40,7 +40,7 @@ class CssRolloutTest extends \PHPUnit\Framework\TestCase {
 		if ( class_exists( 'PerformanceOptimise\Inc\Log' ) && method_exists( 'PerformanceOptimise\Inc\Log', 'reset_version_memo' ) ) {
 			\PerformanceOptimise\Inc\Log::reset_version_memo();
 		}
-		$transients       = &$this->transients;
+		$transients = &$this->transients;
 		Functions\when( 'get_transient' )->alias(
 			static function ( $key ) use ( &$transients ) {
 				return array_key_exists( $key, $transients ) ? $transients[ $key ] : false;
@@ -229,5 +229,64 @@ class CssRolloutTest extends \PHPUnit\Framework\TestCase {
 		$slot = Used_CSS::rollout_slot_for_url( 'http://example.com/some/page/' );
 		$this->assertMatchesRegularExpression( '/^[A-Za-z0-9_-]+$/', $slot );
 		$this->assertSame( 'used-css-global', Used_CSS::rollout_slot_for_url( '' ) );
+	}
+
+	/**
+	 * Health check is case-insensitive without allocating a copy (issue #1348 review).
+	 */
+	public function test_health_check_rejects_uppercase_tokens(): void {
+		$result = Css_Rollout::health_check_content( '.a{color:red}</STYLE>' );
+		$this->assertFalse( $result['ok'] );
+		$result = Css_Rollout::health_check_content( '.a{background:JAVASCRIPT:alert(1)}' );
+		$this->assertFalse( $result['ok'] );
+	}
+
+	/**
+	 * Post-promote health gate keeps parity with the strict pre-cache gate (issue #1348 review).
+	 */
+	public function test_health_check_rejects_strict_gate_tokens(): void {
+		$this->assertFalse( Css_Rollout::health_check_content( '.a{background:url(data:text/html;base64,xxx)}' )['ok'] );
+		$this->assertFalse( Css_Rollout::health_check_content( '.a{background:url(data:image/svg+xml;utf8,xxx)}' )['ok'] );
+		$this->assertFalse( Css_Rollout::health_check_content( '.a{-moz-binding:url(x)}' )['ok'] );
+		$this->assertFalse( Css_Rollout::health_check_content( '.a<!--comment' )['ok'] );
+	}
+
+	/**
+	 * Rollout state TTL stays short-lived so per-page transients cannot
+	 * accumulate rows in wp_options without a persistent object cache (issue #1348 review).
+	 */
+	public function test_state_ttl_is_one_day(): void {
+		$this->assertSame( 86400, Css_Rollout::STATE_TTL );
+	}
+
+	/**
+	 * Stage -> preview -> promote -> verify state machine transitions (issue #1348 review).
+	 */
+	public function test_state_machine_stage_promote_verify(): void {
+		$slot = 'statemachine1';
+		Css_Rollout::clear_state( $slot );
+		$this->assertSame( 'none', Css_Rollout::get_state( $slot )['state'] );
+
+		$live   = '.hero{color:#fff}';
+		$staged = '.hero{color:#000;margin:0}';
+		Css_Rollout::record_event( $slot, 'staged', 'dry-run staged', 'bypass (staged preview)' );
+		$this->assertSame( 'staged', Css_Rollout::get_state( $slot )['state'] );
+
+		$preview = Css_Rollout::build_preview( $live, $staged );
+		$this->assertSame( strlen( $live ), $preview['live_size'] );
+		$this->assertSame( strlen( $staged ), $preview['staged_size'] );
+		$this->assertSame( strlen( $staged ) - strlen( $live ), $preview['delta_bytes'] );
+
+		$healthy = Css_Rollout::health_check_content( $staged );
+		$this->assertTrue( $healthy['ok'] );
+		Css_Rollout::record_event( $slot, 'done', 'staged output promoted to live', 'hit (promoted)' );
+		$this->assertSame( 'done', Css_Rollout::get_state( $slot )['state'] );
+		$this->assertSame( 2, Css_Rollout::get_state( $slot )['version'] );
+
+		// No-backup fail-open: a rolled_back event is recordable and readable.
+		Css_Rollout::record_event( $slot, 'rolled_back', 'auto-rollback: empty live payload', 'bypass (unoptimized)' );
+		$this->assertSame( 'rolled_back', Css_Rollout::get_state( $slot )['state'] );
+		Css_Rollout::clear_state( $slot );
+		$this->assertSame( 'none', Css_Rollout::get_state( $slot )['state'] );
 	}
 }

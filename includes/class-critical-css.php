@@ -721,6 +721,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				}
 				self::invalidate_ccss_memo( $template_hash );
 				clearstatcache( true, $live_file );
+				// Post-apply health gate first: record `done` only after the
+				// gate passes so a breach logs rolled_back alone (no phantom
+				// success + double version bump). On breach the known-bad
+				// staged sidecar is deleted so status stops offering Promote
+				// for the same payload (no promote-fail loop).
+				if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) && Css_Rollout::is_health_check_enabled() ) {
+					if ( ! self::verify_live_ccss( $template_hash ) ) {
+						try {
+							if ( function_exists( 'wp_delete_file' ) ) {
+								wp_delete_file( $staged_file );
+							} elseif ( file_exists( $staged_file ) ) {
+								unlink( $staged_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Best-effort stale staged sidecar cleanup after a health-gate breach; guarded by hash allowlist.
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+						return false;
+					}
+				}
 				if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
 					Css_Rollout::record_event( $template_hash, 'done', 'staged output promoted to live', 'hit (promoted v' . ( Css_Rollout::get_state( $template_hash )['version'] + 1 ) . ')' );
 				}
@@ -728,13 +747,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					self::set_status_cache( $template_hash, 'done', defined( 'WEEK_IN_SECONDS' ) ? WEEK_IN_SECONDS : 604800 );
 				} catch ( \Throwable $e ) {
 					unset( $e );
-				}
-				// Post-apply health gate: probe the just-promoted live file
-				// and auto-rollback on breach (missing/empty/404).
-				if ( class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) && Css_Rollout::is_health_check_enabled() ) {
-					if ( ! self::verify_live_ccss( $template_hash ) ) {
-						return false;
-					}
 				}
 				// Promote success: drop the staged sidecar so a later status
 				// cannot preview stale output. Best-effort, never fatal.
@@ -3471,9 +3483,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 							$statuses[ $hash ]['status'] = 'rolled_back';
 						}
 						$statuses[ $hash ]['rollout'] = $rollout;
-						$preview                      = self::get_ccss_preview( $hash );
-						if ( ! empty( $preview['has_staged'] ) ) {
-							$statuses[ $hash ]['preview'] = $preview;
+						// On-demand preview: get_ccss_preview() reads both
+						// slot files + 2x sha256 per template, so only pay
+						// for it when a staged sidecar actually exists (the
+						// per-slot preview endpoint serves the full payload
+						// on demand). Every SPA poll hits this loop, often
+						// twice per mount (ccss + rollout status endpoints).
+						$staged_file_check = self::get_ccss_staged_file( $hash );
+						if ( '' !== $staged_file_check && file_exists( $staged_file_check ) ) {
+							$preview = self::get_ccss_preview( $hash );
+							if ( ! empty( $preview['has_staged'] ) ) {
+								$statuses[ $hash ]['preview'] = $preview;
+							}
 						}
 					}
 				} catch ( \Throwable $e ) {

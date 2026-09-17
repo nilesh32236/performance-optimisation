@@ -324,6 +324,10 @@ const CriticalCssPanel = ( {
 												rolloutBusy ===
 												`promote:${ hash }`
 											}
+											aria-busy={
+												rolloutBusy ===
+												`promote:${ hash }`
+											}
 											aria-label={ sprintf(
 												/* translators: %s: template label. */
 												__(
@@ -336,10 +340,16 @@ const CriticalCssPanel = ( {
 												handleRollout( hash, 'promote' )
 											}
 										>
-											{ __(
-												'Promote',
-												'performance-optimisation'
-											) }
+											{ rolloutBusy ===
+											`promote:${ hash }`
+												? __(
+														'Promoting…',
+														'performance-optimisation'
+												  )
+												: __(
+														'Promote',
+														'performance-optimisation'
+												  ) }
 										</button>
 									) }
 								{ ( statusKey === 'staged' ||
@@ -349,6 +359,10 @@ const CriticalCssPanel = ( {
 											className="wppo-button wppo-button--secondary wppo-button--small"
 											type="button"
 											disabled={
+												rolloutBusy ===
+												`rollback:${ hash }`
+											}
+											aria-busy={
 												rolloutBusy ===
 												`rollback:${ hash }`
 											}
@@ -367,10 +381,16 @@ const CriticalCssPanel = ( {
 												)
 											}
 										>
-											{ __(
-												'Roll back',
-												'performance-optimisation'
-											) }
+											{ rolloutBusy ===
+											`rollback:${ hash }`
+												? __(
+														'Rolling back…',
+														'performance-optimisation'
+												  )
+												: __(
+														'Roll back',
+														'performance-optimisation'
+												  ) }
 										</button>
 									) }
 								{ hitReason && (
@@ -398,9 +418,11 @@ const CriticalCssPanel = ( {
 											),
 											( preview.delta_bytes >= 0
 												? '+'
-												: '' ) +
-												String(
-													preview.delta_bytes || 0
+												: '-' ) +
+												formatBytes(
+													Math.abs(
+														preview.delta_bytes || 0
+													)
 												)
 										) }
 									</span>

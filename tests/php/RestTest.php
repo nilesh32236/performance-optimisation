@@ -1671,6 +1671,56 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			'Current settings must stay intact when no snapshot exists'
 		);
 	}
+
+	/**
+	 * Promote requires exactly one of slot/url: neither is a 400 (issue #1348).
+	 */
+	public function test_promote_css_rollout_requires_slot_or_url(): void {
+		$response = $this->rest->promote_css_rollout( new WP_REST_Request( array() ) );
+		$this->assertSame( 400, $response->get_status() );
+		$this->assertFalse( $response->get_data()['success'] );
+	}
+
+	/**
+	 * Promote rejects dual-supplied slot+url instead of silently preferring slot (issue #1348).
+	 */
+	public function test_promote_css_rollout_rejects_slot_and_url_together(): void {
+		$response = $this->rest->promote_css_rollout(
+			new WP_REST_Request(
+				array(
+					'slot' => 'abc123',
+					'url'  => 'http://example.com/',
+				)
+			)
+		);
+		$this->assertSame( 400, $response->get_status() );
+		$this->assertFalse( $response->get_data()['success'] );
+	}
+
+	/**
+	 * Rollback requires exactly one of slot/url: neither is a 400 (issue #1348).
+	 */
+	public function test_rollback_css_rollout_requires_slot_or_url(): void {
+		$response = $this->rest->rollback_css_rollout( new WP_REST_Request( array() ) );
+		$this->assertSame( 400, $response->get_status() );
+		$this->assertFalse( $response->get_data()['success'] );
+	}
+
+	/**
+	 * Rollback rejects dual-supplied slot+url instead of silently preferring slot (issue #1348).
+	 */
+	public function test_rollback_css_rollout_rejects_slot_and_url_together(): void {
+		$response = $this->rest->rollback_css_rollout(
+			new WP_REST_Request(
+				array(
+					'slot' => 'abc123',
+					'url'  => 'http://example.com/',
+				)
+			)
+		);
+		$this->assertSame( 400, $response->get_status() );
+		$this->assertFalse( $response->get_data()['success'] );
+	}
 }
 
 // phpcs:disable Generic.Files.OneObjectStructurePerFile

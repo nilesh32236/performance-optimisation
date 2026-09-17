@@ -131,6 +131,53 @@ export const normalizeDeliveryMode = ( value ) => {
 		: 'file';
 };
 
+// Normalize the safe-rollout mode the same way PHP sanitizes it
+// (lowercase + trim, allowlisted staged/direct, fail-open to 'direct')
+// so backend arrays/rogue strings never reach state verbatim.
+// Exported for direct Jest coverage.
+// @since NEXT
+export const normalizeRolloutMode = ( value ) => {
+	if ( Array.isArray( value ) ) {
+		return 'direct';
+	}
+	const mode = String( value ?? '' )
+		.toLowerCase()
+		.trim();
+	return 'staged' === mode ? 'staged' : 'direct';
+};
+
+// Normalize a rollout boolean toggle the same way PHP sanitizes it
+// (booleans pass through, 'false'/'no'/'0' parse, unrecognized fails
+// safe to true) so the UI matches server defaults on a single render.
+// Exported for direct Jest coverage.
+// @since NEXT
+export const normalizeRolloutBool = ( value ) => {
+	if ( typeof value === 'boolean' ) {
+		return value;
+	}
+	if ( Array.isArray( value ) ) {
+		return true;
+	}
+	if (
+		value === undefined ||
+		value === null ||
+		'' === String( value ).trim()
+	) {
+		return true;
+	}
+	const s = String( value ).trim().toLowerCase();
+	if ( [ 'false', '0', 'no', 'off', 'disabled' ].includes( s ) ) {
+		return false;
+	}
+	if (
+		[ 'true', '1', 'yes', 'on', 'enabled' ].includes( s ) ||
+		/^[0-9]+$/.test( s )
+	) {
+		return '0' !== s;
+	}
+	return true;
+};
+
 // Textarea-backed file-optimisation keys: newline-delimited lists the backend
 // may return as arrays (via sanitize/process_urls). Every one normalises
 // through toTextLines() so a backend array can never reach a controlled
@@ -207,6 +254,9 @@ const FILE_OPT_SYNC_KEYS = [
 	'ccssSafelistExtra',
 	'ccssExcludedPostTypes',
 	'ccssMaxRetries',
+	'cssRolloutMode',
+	'cssRolloutHealthCheck',
+	'cssRolloutKeepLastGood',
 	'hostGoogleFontsLocally',
 	'fontMetricFallback',
 	'fontSubset',
@@ -426,6 +476,22 @@ const normalizeFileOpt = ( source = {} ) => {
 	}
 	if ( 'ccssMaxRetries' in next ) {
 		next.ccssMaxRetries = normalizeRetries( next.ccssMaxRetries );
+	}
+	// Safe-rollout keys (issue #1348): normalize through the PHP-mirroring
+	// allowlists so backend arrays/rogue strings never reach state verbatim.
+	// Guarded by `in` so partial slices never inject defaults.
+	if ( 'cssRolloutMode' in next ) {
+		next.cssRolloutMode = normalizeRolloutMode( next.cssRolloutMode );
+	}
+	if ( 'cssRolloutHealthCheck' in next ) {
+		next.cssRolloutHealthCheck = normalizeRolloutBool(
+			next.cssRolloutHealthCheck
+		);
+	}
+	if ( 'cssRolloutKeepLastGood' in next ) {
+		next.cssRolloutKeepLastGood = normalizeRolloutBool(
+			next.cssRolloutKeepLastGood
+		);
 	}
 	// Numeric display parity: the sync path spreads raw server values, so
 	// clamp here (mirroring the server sanitizers) instead of letting

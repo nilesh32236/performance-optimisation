@@ -445,4 +445,51 @@ describe( 'safe rollout badges and actions', () => {
 		expect( screen.queryByRole( 'alert' ) ).not.toBeInTheDocument();
 		errorSpy.mockRestore();
 	} );
+
+	it( 'formats the staged preview delta with human-readable sizes', () => {
+		render(
+			<CriticalCssPanel
+				status={ {
+					abcdef1234567890: {
+						status: 'staged',
+						label: 'Home',
+						size: 0,
+						preview: {
+							has_staged: true,
+							staged_size: 2048,
+							delta_bytes: 1024,
+						},
+					},
+				} }
+				onRegenerate={ jest.fn() }
+				onPromote={ jest.fn() }
+			/>
+		);
+
+		expect(
+			screen.getByText( 'Preview: 2.0 KB (+1.0 KB)' )
+		).toBeInTheDocument();
+	} );
+
+	it( 'announces promote/rollback busy state via aria-busy', () => {
+		render(
+			<CriticalCssPanel
+				status={ {
+					abcdef1234567890: {
+						status: 'staged',
+						label: 'Home',
+						size: 0,
+					},
+				} }
+				onRegenerate={ jest.fn() }
+				onPromote={ jest.fn() }
+				onRollback={ jest.fn() }
+			/>
+		);
+
+		const promote = screen.getByRole( 'button', {
+			name: 'Promote staged CSS for Home',
+		} );
+		expect( promote ).toHaveAttribute( 'aria-busy', 'false' );
+	} );
 } );

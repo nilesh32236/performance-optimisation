@@ -62,10 +62,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
 		/**
 		 * Rollout state TTL in seconds.
 		 *
+		 * Short-lived (one day): the SPA only needs recent staged/done /
+		 * rolled_back state, and per-page used-CSS transients must not
+		 * accumulate hundreds of rows in wp_options when no persistent
+		 * object cache is present.
+		 *
 		 * @since NEXT
 		 * @var int
 		 */
-		public const STATE_TTL = 604800;
+		public const STATE_TTL = 86400;
 
 		/**
 		 * Allowed rollout states.
@@ -251,10 +256,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
 						'hit'    => 'miss (empty)',
 					);
 				}
-				$lower  = strtolower( $css );
-				$unsafe = array( '</style', '</script', 'javascript:', 'vbscript:', 'expression(' );
+				// Case-insensitive search with no strtolower() copy: the
+				// payload can be up to 1MB and this runs on every
+				// save/promote/verify call. Token list mirrors the strict
+				// pre-cache gate (contains_unsafe_css_tokens) so post-promote
+				// parity holds; the staged gate + sanitize_inline_css remain
+				// the authoritative pre-cache defense.
+				$unsafe = array( '</style', '</script', '<!--', '-->', 'javascript:', 'vbscript:', 'expression(', 'data:text/html', 'data:image/svg', '-moz-binding', 'behavior', 'behaviour' );
 				foreach ( $unsafe as $token ) {
-					if ( false !== strpos( $lower, $token ) ) {
+					if ( false !== stripos( $css, $token ) ) {
 						return array(
 							'ok'     => false,
 							'reason' => 'unsafe token: ' . $token,
@@ -309,7 +319,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
 				}
 				if ( '' !== $live_url && function_exists( 'wp_remote_head' ) && function_exists( 'is_wp_error' ) ) {
 					try {
-						$response = wp_remote_head( $live_url, array( 'timeout' => 5 ) );
+						// Short 2s HEAD with no redirects: this runs inside
+						// the 25s CCSS generation budget and on promote
+						// clicks, so one hung loopback must not consume the
+						// budget or stall admin.
+						$response = wp_remote_head(
+							$live_url,
+							array(
+								'timeout'     => 2,
+								'redirection' => 0,
+							)
+						);
 						if ( ! is_wp_error( $response ) && function_exists( 'wp_remote_retrieve_response_code' ) ) {
 							$code = (int) wp_remote_retrieve_response_code( $response );
 							if ( 404 === $code || ( $code >= 400 && 0 !== $code ) ) {
@@ -430,6 +450,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Css_Rollout' ) ) {
 		/**
 		 * Record a rollout event: persist state + log the cache-hit reason.
 		 *
+		 * Best-effort under concurrency: the version is read-then-write
+		 * (get_state + 1) with no atomicity, so two concurrent promotes for
+		 * the same slot can both persist vN+1 with one event overwriting the
+		 * other. Promote/rollback callers are admin-throttled (5/60) and the
+		 * last writer wins; the live file itself is written atomically via
+		 * the shared tmp+rename helper, so state skew never affects safety.
 		 * Never fatal: persistence/logging failures degrade silently.
 		 *
 		 * @since NEXT

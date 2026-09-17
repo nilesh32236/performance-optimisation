@@ -3547,6 +3547,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$params = $request->get_params();
 			$slot   = isset( $params['slot'] ) ? sanitize_text_field( substr( trim( (string) $params['slot'] ), 0, 128 ) ) : '';
 			$url    = isset( $params['url'] ) ? sanitize_text_field( substr( trim( (string) $params['url'] ), 0, 2048 ) ) : '';
+			// Exactly one of slot/url is required: dual-supplied input must
+			// not silently prefer slot and ignore url.
+			if ( ( '' !== $slot ) === ( '' !== $url ) ) {
+				return $this->send_response( null, false, 400, __( 'Provide exactly one of slot or url.', 'performance-optimisation' ) );
+			}
 			try {
 				if ( '' !== $slot ) {
 					if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) || ! method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'promote_staged_ccss' ) ) {
@@ -3632,6 +3637,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$slot   = isset( $params['slot'] ) ? sanitize_text_field( substr( trim( (string) $params['slot'] ), 0, 128 ) ) : '';
 			$url    = isset( $params['url'] ) ? sanitize_text_field( substr( trim( (string) $params['url'] ), 0, 2048 ) ) : '';
 			$reason = isset( $params['reason'] ) ? sanitize_text_field( substr( trim( (string) $params['reason'] ), 0, 200 ) ) : 'manual rollback';
+			// Exactly one of slot/url is required: dual-supplied input must
+			// not silently prefer slot and ignore url.
+			if ( ( '' !== $slot ) === ( '' !== $url ) ) {
+				return $this->send_response( null, false, 400, __( 'Provide exactly one of slot or url.', 'performance-optimisation' ) );
+			}
 			try {
 				if ( '' !== $slot ) {
 					if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) || ! method_exists( 'PerformanceOptimise\Inc\Critical_CSS', 'rollback_ccss' ) ) {

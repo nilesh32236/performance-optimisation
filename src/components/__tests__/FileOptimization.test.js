@@ -11,6 +11,8 @@ import React from 'react';
 import FileOptimization, {
 	normalizeRetries,
 	normalizeDeliveryMode,
+	normalizeRolloutMode,
+	normalizeRolloutBool,
 	stripPreviewParams,
 	withCdnRowIds,
 	stripCdnIds,
@@ -1663,6 +1665,36 @@ describe( 'FileOptimization Component', () => {
 			expect( normalizeDeliveryMode( [ 'delay' ] ) ).toBe( 'file' );
 			expect( normalizeDeliveryMode( 42 ) ).toBe( 'file' );
 			expect( normalizeDeliveryMode( 'eager' ) ).toBe( 'file' );
+		} );
+	} );
+
+	describe( 'normalizeRolloutMode', () => {
+		it( 'accepts staged case-insensitively', () => {
+			expect( normalizeRolloutMode( 'staged' ) ).toBe( 'staged' );
+			expect( normalizeRolloutMode( ' STAGED ' ) ).toBe( 'staged' );
+		} );
+
+		it( 'fails open to direct for arrays, rogue strings and missing values', () => {
+			expect( normalizeRolloutMode( [ 'staged' ] ) ).toBe( 'direct' );
+			expect( normalizeRolloutMode( 'banana' ) ).toBe( 'direct' );
+			expect( normalizeRolloutMode( undefined ) ).toBe( 'direct' );
+			expect( normalizeRolloutMode( '' ) ).toBe( 'direct' );
+		} );
+	} );
+
+	describe( 'normalizeRolloutBool', () => {
+		it( 'passes booleans through and fails safe to true', () => {
+			expect( normalizeRolloutBool( true ) ).toBe( true );
+			expect( normalizeRolloutBool( false ) ).toBe( false );
+			expect( normalizeRolloutBool( undefined ) ).toBe( true );
+			expect( normalizeRolloutBool( [ true ] ) ).toBe( true );
+			expect( normalizeRolloutBool( 'banana' ) ).toBe( true );
+		} );
+
+		it( 'parses falsy string shapes', () => {
+			expect( normalizeRolloutBool( 'false' ) ).toBe( false );
+			expect( normalizeRolloutBool( '0' ) ).toBe( false );
+			expect( normalizeRolloutBool( 'no' ) ).toBe( false );
 		} );
 	} );
 
