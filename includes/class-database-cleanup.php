@@ -52,6 +52,89 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		);
 
 		/**
+		 * Month length in seconds shared by the Action Scheduler bounds below.
+		 *
+		 * A single named constant so the 3-month purge cap and the retention
+		 * defaults cannot drift apart when one of them is bumped (issue
+		 * #1310 review). 31-day months, matching the upstream AS default.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const MONTH_SECONDS = 2678400;
+
+		/**
+		 * Upper bound for the opt-in failed-action purge lifespan.
+		 *
+		 * Three months in seconds (31-day months), mirroring the
+		 * `action_scheduler_retention_period_for_failed` default read by
+		 * {@see get_action_scheduler_retention()}. The purge uses
+		 * `min( filtered retention, this cap )` so the retention filters
+		 * stay authoritative while the documented 3-month bound holds even
+		 * when an operator raises the upstream retention (issue #1310
+		 * review).
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const FAILED_PURGE_MAX_LIFESPAN = 3 * self::MONTH_SECONDS;
+
+		/**
+		 * Bounds for the opt-in failed-action purge loop.
+		 *
+		 * Named so the batch clamp, iteration cap, wall-clock budget, and
+		 * wrapper reserve cannot drift when one call site is bumped
+		 * (issue #1310 review).
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const FAILED_PURGE_BATCH_MAX = 100;
+
+		/**
+		 * Maximum store passes per purge invocation.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const FAILED_PURGE_MAX_ITERATIONS = 10;
+
+		/**
+		 * Wall-clock budget in seconds shared by the upstream cleaner loop
+		 * and the failed-action purge in one invocation.
+		 *
+		 * @since NEXT
+		 * @var float
+		 */
+		private const FAILED_PURGE_BUDGET_SECONDS = 15.0;
+
+		/**
+		 * Budget reserve in seconds: the wrapper skips the purge when less
+		 * than this remains so one invocation never stacks two full
+		 * budgets back to back.
+		 *
+		 * @since NEXT
+		 * @var float
+		 */
+		private const FAILED_PURGE_RESERVE_SECONDS = 2.0;
+
+		/**
+		 * Per-request memo for the Action Scheduler health payload plus its timestamp.
+		 *
+		 * @since NEXT
+		 * @var array|null
+		 */
+		private static $health_memo = null;
+
+		/**
+		 * Microtime when the health memo was stored.
+		 *
+		 * @since NEXT
+		 * @var float
+		 */
+		private static $health_memo_time = 0.0;
+
+		/**
 		 * Maps cleanup method names to their cleanup type keys for TABLE_MAP lookup.
 		 *
 		 * @since 2.0.0
@@ -1663,6 +1746,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		}
 
 		/**
+		 * Whether the Action Scheduler store API alone is available.
+		 *
+		 * Narrower than {@see is_action_scheduler_available()}: store-only
+		 * readers/purgers (failed-action purge, queue health) must not
+		 * require the Cleaner class (issue #1310 review).
+		 *
+		 * @since NEXT
+		 * @return bool True when the store class exists.
+		 */
+		public static function is_action_scheduler_store_available(): bool {
+			try {
+				return class_exists( 'ActionScheduler_Store' );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
 		 * Resolve the Action Scheduler retention cutoffs using AS's own filters.
 		 *
 		 * Reads `action_scheduler_retention_period` (complete/canceled) and
@@ -1674,7 +1776,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * @return array{lifespan:int,lifespan_failed:int}
 		 */
 		private static function get_action_scheduler_retention(): array {
-			$month = 2678400;
+			$month = self::MONTH_SECONDS;
 			try {
 				$lifespan = function_exists( 'apply_filters' ) ? apply_filters( 'action_scheduler_retention_period', $month ) : $month;
 				$lifespan = is_numeric( $lifespan ) ? max( 0, (int) $lifespan ) : $month;
@@ -1734,6 +1836,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				'reclaimable_bytes'          => 0,
 				'total_bytes'                => 0,
 			);
+			// Per-request memo plus a ~60s transient (issue #1310 review):
+			// the health payload issues ~6-7 heavy store queries and is
+			// read twice per dashboard poll (counts rebuild + REST), so a
+			// second call within the TTL reuses the first result instead
+			// of hammering the AS tables.
+			try {
+				if ( is_array( self::$health_memo ) && ( microtime( true ) - self::$health_memo_time ) < 60.0 ) {
+					return self::$health_memo;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			try {
+				if ( function_exists( 'get_transient' ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {
+					$cached = get_transient( Util::transient_key( 'wppo_as_health' ) );
+					if ( is_array( $cached ) && isset( $cached['available'] ) ) {
+						self::$health_memo      = $cached;
+						self::$health_memo_time = microtime( true );
+						return $cached;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 			if ( ! self::is_action_scheduler_available() ) {
 				return $empty;
 			}
@@ -1795,25 +1921,62 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					// Note: query_actions() with 'count' ignores per_page/LIMIT
 					// (the DB store only appends LIMIT for 'select'), so no
 					// per_page is passed here — the count is never capped.
-					if ( in_array( \ActionScheduler_Store::STATUS_COMPLETE, $statuses_to_purge, true ) ) {
-						$reclaimable += (int) $store->query_actions(
-							array(
-								'status'           => \ActionScheduler_Store::STATUS_COMPLETE,
-								'modified'         => $cutoff,
-								'modified_compare' => '<=',
-							),
-							'count'
-						);
-					}
-					if ( in_array( \ActionScheduler_Store::STATUS_CANCELED, $statuses_to_purge, true ) ) {
-						$reclaimable += (int) $store->query_actions(
-							array(
-								'status'           => \ActionScheduler_Store::STATUS_CANCELED,
-								'modified'         => $cutoff,
-								'modified_compare' => '<=',
-							),
-							'count'
-						);
+					// Merged COMPLETE + CANCELED count (issue #1310 review):
+					// one COUNT range scan over the large AS tables instead
+					// of two with the identical cutoff; very old stores
+					// that reject a status array fall back to two queries.
+					$want_complete = in_array( \ActionScheduler_Store::STATUS_COMPLETE, $statuses_to_purge, true );
+					$want_canceled = in_array( \ActionScheduler_Store::STATUS_CANCELED, $statuses_to_purge, true );
+					if ( $want_complete && $want_canceled ) {
+						try {
+							$reclaimable += (int) $store->query_actions(
+								array(
+									'status'           => array( \ActionScheduler_Store::STATUS_COMPLETE, \ActionScheduler_Store::STATUS_CANCELED ),
+									'modified'         => $cutoff,
+									'modified_compare' => '<=',
+								),
+								'count'
+							);
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							$reclaimable += (int) $store->query_actions(
+								array(
+									'status'           => \ActionScheduler_Store::STATUS_COMPLETE,
+									'modified'         => $cutoff,
+									'modified_compare' => '<=',
+								),
+								'count'
+							);
+							$reclaimable += (int) $store->query_actions(
+								array(
+									'status'           => \ActionScheduler_Store::STATUS_CANCELED,
+									'modified'         => $cutoff,
+									'modified_compare' => '<=',
+								),
+								'count'
+							);
+						}
+					} else {
+						if ( $want_complete ) {
+							$reclaimable += (int) $store->query_actions(
+								array(
+									'status'           => \ActionScheduler_Store::STATUS_COMPLETE,
+									'modified'         => $cutoff,
+									'modified_compare' => '<=',
+								),
+								'count'
+							);
+						}
+						if ( $want_canceled ) {
+							$reclaimable += (int) $store->query_actions(
+								array(
+									'status'           => \ActionScheduler_Store::STATUS_CANCELED,
+									'modified'         => $cutoff,
+									'modified_compare' => '<=',
+								),
+								'count'
+							);
+						}
 					}
 					if ( $clean_failed && ! in_array( \ActionScheduler_Store::STATUS_FAILED, $statuses_to_purge, true ) ) {
 						// Failed actions are purged on their own (longer) retention
@@ -1827,7 +1990,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 							),
 							'count'
 						);
-					} elseif ( in_array( \ActionScheduler_Store::STATUS_FAILED, $statuses_to_purge, true ) ) {
+					} elseif ( $clean_failed && in_array( \ActionScheduler_Store::STATUS_FAILED, $statuses_to_purge, true ) ) {
 						$reclaimable += (int) $store->query_actions(
 							array(
 								'status'           => \ActionScheduler_Store::STATUS_FAILED,
@@ -1845,7 +2008,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				if ( isset( $wpdb->prefix ) ) {
 					$actions_table = $wpdb->prefix . 'actionscheduler_actions';
 					$logs_table    = $wpdb->prefix . 'actionscheduler_logs';
-					$total_bytes   = self::get_table_size( $actions_table ) + self::get_table_size( $logs_table );
+					// Single SUM query over both tables (issue #1310
+					// review): halves the information_schema cost on the
+					// dashboard-polled path instead of two sequential
+					// lookups (plus up to two SHOW TABLE STATUS fallbacks).
+					$total_bytes = self::get_tables_size( array( $actions_table, $logs_table ) );
 					foreach ( array( \ActionScheduler_Store::STATUS_COMPLETE, \ActionScheduler_Store::STATUS_CANCELED, \ActionScheduler_Store::STATUS_FAILED, \ActionScheduler_Store::STATUS_PENDING, \ActionScheduler_Store::STATUS_RUNNING ) as $status ) {
 						$total_rows += (int) ( $counts[ $status ] ?? 0 );
 					}
@@ -1855,7 +2022,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					$reclaimable_bytes = (int) ( $total_bytes * ( $reclaimable / $total_rows ) );
 				}
 
-				return array(
+				$result                 = array(
 					'available'                  => true,
 					'pending'                    => max( 0, $pending ),
 					'failed'                     => max( 0, $failed ),
@@ -1864,9 +2031,218 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					'reclaimable_bytes'          => max( 0, $reclaimable_bytes ),
 					'total_bytes'                => max( 0, $total_bytes ),
 				);
+				self::$health_memo      = $result;
+				self::$health_memo_time = microtime( true );
+				try {
+					if ( function_exists( 'set_transient' ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {
+						set_transient( Util::transient_key( 'wppo_as_health' ), $result, 60 );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				return $result;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return $empty;
+			}
+		}
+
+		/**
+		 * Reset the Action Scheduler health memo (test seam).
+		 *
+		 * Production code never needs to clear the ~60s memo within a
+		 * request; unit tests that swap store stubs between cases must
+		 * reset it (and the transient) to observe the new stub.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_action_scheduler_health_cache(): void {
+			self::$health_memo      = null;
+			self::$health_memo_time = 0.0;
+			try {
+				if ( function_exists( 'delete_transient' ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {
+					delete_transient( Util::transient_key( 'wppo_as_health' ) );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Whether the opt-in failed-action purge is enabled.
+		 *
+		 * Additive opt-in (issue #1310): reads the
+		 * `database_cleanup.purgeFailedActions` setting (default off, absent
+		 * key migrates to off) and applies the `wppo_purge_failed_actions`
+		 * filter last so operators can opt in via code. Defaults to off so
+		 * failed-action debug history is retained unless the site opts in.
+		 * Purely additive — upstream
+		 * `action_scheduler_enable_failed_action_cleanup` defaults are never
+		 * altered here.
+		 *
+		 * @since NEXT
+		 * @return bool True when failed actions older than 3 months may be purged.
+		 */
+		public static function is_failed_action_purge_enabled(): bool {
+			try {
+				// Util is always loaded via Main::includes(), so no
+				// class_exists/method_exists guard is needed here (issue
+				// #1310 review); read-time normalization mirrors the
+				// sanitizer so a raw string 'false' (e.g. via direct
+				// update_option/DB edit bypassing sanitize) cannot enable
+				// deletion through !empty() truthiness.
+				$settings = Util::get_settings();
+				$raw      = $settings['database_cleanup']['purgeFailedActions'] ?? false;
+				if ( is_bool( $raw ) ) {
+					$opt_in = $raw;
+				} else {
+					$parsed = filter_var( $raw, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+					$opt_in = true === $parsed;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				$opt_in = false;
+			}
+			/**
+			 * Filters whether failed Action Scheduler actions older than 3 months are purged.
+			 *
+			 * Default off (debug retention). Return true to opt in; the
+			 * `database_cleanup.purgeFailedActions` setting value is passed as
+			 * the default so either path enables the purge.
+			 *
+			 * @since NEXT
+			 * @param bool $enabled Whether the failed-action purge is enabled.
+			 */
+			return function_exists( 'apply_filters' ) ? (bool) apply_filters( 'wppo_purge_failed_actions', $opt_in ) : (bool) $opt_in;
+		}
+
+		/**
+		 * Purge failed Action Scheduler actions older than 3 months in batches.
+		 *
+		 * Opt-in companion to {@see clean_action_scheduler()}: guarantees a
+		 * 3-month bound on failed rows even when upstream failed-action
+		 * cleanup is disabled, without touching pending/in-progress/claimed
+		 * rows. Batched via `query_actions()` + `delete_action()` (so log
+		 * cascades are honored) with a per-batch cap, an iteration cap, and a
+		 * wall-clock budget to avoid long table locks. Fail-open: returns 0
+		 * when AS is absent, the opt-in is off, or the store throws.
+		 *
+		 * Only the store is touched, so this gates on
+		 * {@see is_action_scheduler_store_available()} (Store alone) rather
+		 * than {@see is_action_scheduler_available()} (Store + Cleaner): a
+		 * missing Cleaner class must not disable the Store-only purge
+		 * (issue #1310 review).
+		 *
+		 * @since NEXT
+		 * @param int        $batch_size Maximum rows deleted per iteration. Default 50, clamped to 1-100.
+		 * @param bool       $log        Whether to write the activity-log row and invalidate the counts cache. Pass false when a wrapper (e.g. clean_action_scheduler()) logs the combined total itself, so one purge emits one row and invalidates once (issue #1310 review).
+		 * @param float|null $deadline   Optional shared wall-clock deadline (microtime(true) value) inherited from a wrapper that already spent part of its budget. Null starts a fresh 15s budget for standalone calls.
+		 * @return int Number of failed actions deleted.
+		 */
+		public static function purge_failed_actions( int $batch_size = 50, bool $log = true, ?float $deadline = null ): int {
+			if ( ! self::is_action_scheduler_store_available() ) {
+				return 0;
+			}
+			if ( ! self::is_failed_action_purge_enabled() ) {
+				return 0;
+			}
+			$batch_size = max( 1, min( self::FAILED_PURGE_BATCH_MAX, $batch_size ) );
+			try {
+				$store = \ActionScheduler_Store::instance();
+				if ( ! $store || ! method_exists( $store, 'query_actions' ) || ! method_exists( $store, 'delete_action' ) ) {
+					return 0;
+				}
+				// Single source of truth for the bound (issue #1310
+				// review): the filtered failed-action retention, capped at
+				// the 3-month FAILED_PURGE_MAX_LIFESPAN so the documented
+				// bound holds even when an operator raises the upstream
+				// retention. Floored at one day so a lowered/rogue
+				// retention filter returning 0 cannot make cutoff=now and
+				// destroy just-failed debug history (fail-open to the
+				// floor instead of fail-destructive).
+				$day       = defined( 'DAY_IN_SECONDS' ) ? DAY_IN_SECONDS : 86400;
+				$retention = self::get_action_scheduler_retention();
+				$lifespan  = min( max( $day, (int) $retention['lifespan_failed'] ), self::FAILED_PURGE_MAX_LIFESPAN );
+				$cutoff    = self::get_action_scheduler_cutoff( $lifespan );
+				if ( null === $cutoff ) {
+					return 0;
+				}
+				$total          = 0;
+				$iterations     = 0;
+				$max_iterations = self::FAILED_PURGE_MAX_ITERATIONS;
+				if ( null === $deadline ) {
+					$deadline = microtime( true ) + self::FAILED_PURGE_BUDGET_SECONDS;
+				}
+				do {
+					// Guard the top of the loop before the query (issue
+					// #1310 review): when a wrapper passes an already-expired
+					// shared deadline this skips one wasted heavy SELECT past
+					// budget; the per-delete check below still bounds slow
+					// stores inside a batch.
+					if ( microtime( true ) >= $deadline ) {
+						break;
+					}
+					$ids = $store->query_actions(
+						array(
+							'status'           => \ActionScheduler_Store::STATUS_FAILED,
+							'modified'         => $cutoff,
+							'modified_compare' => '<=',
+							'per_page'         => $batch_size,
+							'orderby'          => 'none',
+						)
+					);
+					if ( ! is_array( $ids ) || empty( $ids ) ) {
+						break;
+					}
+					$count = 0;
+					foreach ( $ids as $action_id ) {
+						// Per-delete deadline (issue #1310 review): a slow
+						// store must not overshoot the shared budget inside
+						// one up-to-100-row batch, stacking on the upstream
+						// cleaner loop.
+						if ( microtime( true ) >= $deadline ) {
+							break 2;
+						}
+						try {
+							$store->delete_action( $action_id );
+							++$count;
+						} catch ( \Throwable $e ) {
+							unset( $e );
+							continue;
+						}
+					}
+					$total += $count;
+					++$iterations;
+					if ( 0 === $count ) {
+						// Zero progress (every delete threw): the next
+						// query would return the same batch, so stop
+						// instead of burning the remaining iterations
+						// re-scanning identical IDs (issue #1310 review).
+						break;
+					}
+					$fetched = count( $ids );
+					if ( $fetched < $batch_size ) {
+						break;
+					}
+				} while ( $iterations < $max_iterations && microtime( true ) < $deadline );
+				if ( $log && $total > 0 ) {
+					self::invalidate_counts_cache();
+					self::reset_action_scheduler_health_cache();
+					$lifespan_days = max( 1, (int) round( $lifespan / $day ) );
+					Log::add(
+						sprintf(
+							/* translators: 1: Number of failed Action Scheduler actions purged 2: Retention bound in days */
+							__( 'Action Scheduler cleanup: %1$d failed actions past retention (%2$d days) purged.', 'performance-optimisation' ),
+							$total,
+							$lifespan_days
+						)
+					);
+				}
+				return $total;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
 			}
 		}
 
@@ -1891,6 +2267,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * nothing — bounded by an iteration cap and a wall-clock budget so a
 		 * 168 MB backlog is actually reclaimed in one invocation without
 		 * risking a REST timeout (issue #1106 review).
+		 *
+		 * The opt-in failed-action purge below runs after the upstream loop
+		 * against the same shared deadline (issue #1310 review), so one
+		 * invocation is bounded by a single 15s budget across both passes.
+		 * The purge is called with `$log = false` so the combined total is
+		 * logged once and the counts cache is invalidated once, in this
+		 * wrapper only.
 		 *
 		 * @since NEXT
 		 * @return int Number of actions deleted (0 when AS absent, disabled, or nothing past retention).
@@ -1924,21 +2307,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				}
 				$total          = 0;
 				$iterations     = 0;
-				$max_iterations = 10;
-				$deadline       = microtime( true ) + 15.0;
+				$max_iterations = self::FAILED_PURGE_MAX_ITERATIONS;
+				$deadline       = microtime( true ) + self::FAILED_PURGE_BUDGET_SECONDS;
 				do {
 					$deleted = $cleaner->delete_old_actions();
 					$count   = is_array( $deleted ) ? count( $deleted ) : 0;
 					$total  += $count;
 					++$iterations;
-				} while ( $count > 0 && $iterations < $max_iterations && microtime( true ) < $deadline );
+					// Preserve the failed-purge window (issue #1310 review):
+					// one pass deletes up to 100 actions with log cascades
+					// (200+ DELETEs) and can overshoot the shared budget, so
+					// the loop yields while the reserve remains instead of
+					// eating the failed-purge window.
+				} while ( $count > 0 && $iterations < $max_iterations && microtime( true ) < $deadline - self::FAILED_PURGE_RESERVE_SECONDS );
 				$count = $total;
+				// Opt-in 3-month failed-action bound (issue #1310): purely
+				// additive — upstream defaults are untouched, and the purge
+				// is a no-op (returns 0) unless the site opted in via the
+				// `wppo_purge_failed_actions` filter or the
+				// `database_cleanup.purgeFailedActions` setting. Logging is
+				// suppressed here ($log = false) so the combined total below
+				// is the single activity-log row and the counts cache is
+				// invalidated once. The wrapper deadline is shared (issue
+				// #1310 review) so one invocation cannot stack two
+				// independent 15s budgets back to back; when under 2s of
+				// budget remains the purge is deferred to the next run.
+				if ( microtime( true ) < $deadline - self::FAILED_PURGE_RESERVE_SECONDS ) {
+					$count += self::purge_failed_actions( 50, false, $deadline );
+				}
 				if ( $count > 0 ) {
 					self::invalidate_counts_cache();
 					Log::add(
 						sprintf(
 							/* translators: %d: Number of Action Scheduler actions purged */
-							__( 'Action Scheduler cleanup: %d terminal actions purged via Action Scheduler cleaner.', 'performance-optimisation' ),
+							__( 'Action Scheduler cleanup: %d actions purged (terminal retention plus opt-in failed-action purge).', 'performance-optimisation' ),
 							$count
 						)
 					);
@@ -2399,6 +2801,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			if ( $post_type && is_post_type_viewable( $post_type ) ) {
 				self::invalidate_counts_cache();
 			}
+		}
+
+		/**
+		 * Get the combined size (data + index) of several database tables in bytes.
+		 *
+		 * Single `SUM()` query over `information_schema.TABLES` so callers
+		 * that need both AS tables pay one lookup instead of two (issue
+		 * #1310 review); falls back to per-table {@see get_table_size()}
+		 * (which itself falls back to `SHOW TABLE STATUS`) when the SUM
+		 * query is unavailable or fails.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string[] $tables Full table names (including prefix).
+		 * @return int Combined size in bytes, or 0 if unknown.
+		 */
+		private static function get_tables_size( array $tables ): int {
+			$tables = array_values( array_filter( array_map( 'strval', $tables ) ) );
+			if ( empty( $tables ) ) {
+				return 0;
+			}
+			global $wpdb;
+			try {
+				if ( defined( 'DB_NAME' ) && is_string( DB_NAME ) && '' !== DB_NAME ) {
+					$placeholders = implode( ',', array_fill( 0, count( $tables ), '%s' ) );
+					// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Read-only size probe; $placeholders is count-derived, table names bound as values.
+					$size = $wpdb->get_var(
+						// phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $placeholders is count-derived; values spread below.
+						$wpdb->prepare(
+							"SELECT SUM( data_length + index_length ) FROM information_schema.TABLES WHERE table_schema = %s AND table_name IN ($placeholders)", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $placeholders is count-derived.
+							...array_merge( array( DB_NAME ), $tables )
+						)
+					);
+					if ( null !== $size && '' !== $size ) {
+						return max( 0, (int) $size );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			$total = 0;
+			foreach ( $tables as $table ) {
+				$total += self::get_table_size( $table );
+			}
+			return $total;
 		}
 
 		/**

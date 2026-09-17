@@ -126,29 +126,79 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 					'strategy' => $strategy,
 				),
 			);
-			if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( self::AS_HOOK, $args, self::AS_GROUP ) ) {
-				// Return existing job ID so callers can distinguish dedup from failure.
-				if ( function_exists( 'as_get_scheduled_actions' ) ) {
-					$existing = as_get_scheduled_actions(
-						array(
-							'hook'   => self::AS_HOOK,
-							'args'   => $args,
-							'group'  => self::AS_GROUP,
-							'status' => \ActionScheduler_Store::STATUS_PENDING,
-						),
-						'ids'
-					);
-					if ( is_array( $existing ) && ! empty( $existing ) ) {
-						return (int) reset( $existing );
-					}
-				}
-				return 0;
-			}
-			return (int) as_enqueue_async_action(
+			// Util ships in-repo: called directly (issue #1310 review) — its
+			// internal supports_* probe plus legacy guard already fail open
+			// to 0, so no method_exists branch is needed here. A 0 return is
+			// ambiguous (deduped race vs scheduler failure): re-query for the
+			// concurrent winner's ID so the REST/UI layer can poll the pending
+			// job instead of reporting failure.
+			$job_id = (int) Util::enqueue_unique_async_action(
 				self::AS_HOOK,
 				$args,
 				self::AS_GROUP
 			);
+			if ( $job_id > 0 ) {
+				return $job_id;
+			}
+			$winner = self::find_pending_job_id( $args );
+			if ( $winner > 0 ) {
+				return $winner;
+			}
+			return 0;
+		}
+
+		/**
+		 * Find the pending Action Scheduler job ID for the given args.
+		 *
+		 * Single home for the "re-query the winner" lookup used after a
+		 * deduped enqueue so queue_scan() never reports failure while a job is
+		 * pending (issue #1310 review). Fail-open: returns 0 when the lookup
+		 * API is unavailable or finds nothing.
+		 *
+		 * @since NEXT
+		 * @param array $args Action arguments.
+		 * @return int Pending job ID, or 0 when none is found.
+		 */
+		private static function find_pending_job_id( array $args ): int {
+			try {
+				if ( ! function_exists( 'as_get_scheduled_actions' ) || ! class_exists( \ActionScheduler_Store::class ) ) {
+					return 0;
+				}
+				// Bound to 1 row (issue #1310 review): only reset($existing)
+				// is used, so retry storms must not materialize N rows.
+				$existing = as_get_scheduled_actions(
+					array(
+						'hook'     => self::AS_HOOK,
+						'args'     => $args,
+						'group'    => self::AS_GROUP,
+						'status'   => \ActionScheduler_Store::STATUS_PENDING,
+						'per_page' => 1,
+					),
+					'ids'
+				);
+				if ( is_array( $existing ) && ! empty( $existing ) ) {
+					return (int) reset( $existing );
+				}
+				// Running backstop (issue #1310 review): a winner that
+				// transitioned to running between the 0 return and the
+				// re-query must not be misreported as scheduler failure.
+				$running = as_get_scheduled_actions(
+					array(
+						'hook'     => self::AS_HOOK,
+						'args'     => $args,
+						'group'    => self::AS_GROUP,
+						'status'   => \ActionScheduler_Store::STATUS_RUNNING,
+						'per_page' => 1,
+					),
+					'ids'
+				);
+				if ( is_array( $running ) && ! empty( $running ) ) {
+					return (int) reset( $running );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return 0;
 		}
 
 		/**
@@ -242,13 +292,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 							'retry'    => 1,
 						),
 					);
-					if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( self::AS_HOOK, $retry_args, self::AS_GROUP ) ) {
+					// Atomic unique insert via the shared helper (issue #1310):
+					// Util ships in-repo so it is called directly — its
+					// internal function_exists + supports_* + try/catch
+					// already fails open to 0 with no method_exists branch
+					// needed here (issue #1310 review). The return is gated: a
+					// 0 with no job pending means the scheduler failed, so fall
+					// through to the error handling below instead of logging a
+					// phantom 'retry re-queued' with no backing job.
+					$retry_id      = Util::schedule_unique_single_action( time() + $delay, self::AS_HOOK, $retry_args, self::AS_GROUP );
+					$retry_pending = $retry_id > 0;
+					if ( ! $retry_pending ) {
+						$retry_pending = self::find_pending_job_id( $retry_args ) > 0;
+					}
+					if ( $retry_pending ) {
+						/* translators: %d is the retry delay in seconds. */
+						Log::add( sprintf( __( 'PageSpeed transport error; retry re-queued in %d seconds.', 'performance-optimisation' ), $delay ) );
 						return;
 					}
-					as_schedule_single_action( time() + $delay, self::AS_HOOK, $retry_args, self::AS_GROUP );
-					/* translators: %d is the retry delay in seconds. */
-					Log::add( sprintf( __( 'PageSpeed transport error; retry re-queued in %d seconds.', 'performance-optimisation' ), $delay ) );
-					return;
 				}
 				if ( ! $already_retried && ! function_exists( 'as_schedule_single_action' ) ) {
 					// No scheduler (e.g. unit tests): one immediate retry

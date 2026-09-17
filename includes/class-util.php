@@ -453,7 +453,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'rum_sample_rate'       => 100,
 				),
 				'database_cleanup'      => array(
-					'autoloadThreshold' => 1024,
+					'autoloadThreshold'  => 1024,
+					'purgeFailedActions' => false,
 				),
 				'object_cache'          => array(),
 				'litespeed_integration' => array(
@@ -588,10 +589,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'bunnyPullZoneId'      => 'scalar',
 				),
 				'database_cleanup'   => array(
-					'dbSchedule'      => 'scalar',
-					'dbRevMaxAge'     => 'scalar',
-					'dbRevKeepLatest' => 'scalar',
-					'dbOptimize'      => 'scalar',
+					'dbSchedule'         => 'scalar',
+					'dbRevMaxAge'        => 'scalar',
+					'dbRevKeepLatest'    => 'scalar',
+					'dbOptimize'         => 'scalar',
+					'autoloadThreshold'  => 'scalar',
+					'purgeFailedActions' => 'scalar',
 				),
 				// Mirrors Object_Cache::ALLOWED_KEYS. `password` is stripped by
 				// the REST layer but may survive in imported/legacy payloads.
@@ -1758,10 +1761,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Resets all Util runtime memos (test-isolation entry point).
 		 *
-		 * Covers settings, home, canonical-host, normalized-host, and
-		 * permalink memos. Prefer this over calling the individual
-		 * resetters so future memos are not silently missed by test
-		 * setUp() methods.
+		 * Covers settings, home, canonical-host, normalized-host,
+		 * permalink, and Action Scheduler unique-probe memos. Prefer this
+		 * over calling the individual resetters so future memos are not
+		 * silently missed by test setUp() methods.
 		 *
 		 * @since NEXT
 		 * @return void
@@ -1770,6 +1773,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			self::reset_cached_home_urls();
 			self::clear_settings_cache();
 			self::clear_permalink_cache();
+			self::reset_action_scheduler_unique_cache();
 		}
 
 		/**
@@ -4406,6 +4410,293 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Whether the loaded Action Scheduler supports atomic unique actions.
+		 *
+		 * Action Scheduler 4.x added a `$unique` parameter (after `$group`,
+		 * before `$priority`) to `as_enqueue_async_action()`,
+		 * `as_schedule_single_action()` and `as_schedule_recurring_action()`
+		 * so hook+args+group deduplication happens atomically in the store
+		 * instead of via a racy check-then-act. Fail-open: returns false when
+		 * the scheduler is absent, older than 4.x, or reflection fails.
+		 *
+		 * The probe result is memoized in a static so bulk paths
+		 * (regenerate_all loops, crawler bursts) pay the reflection and
+		 * `ActionScheduler_Versions` lookup once per request instead of once
+		 * per job (issue #1310 review). Use
+		 * {@see reset_action_scheduler_unique_cache()} to clear the memo in
+		 * tests.
+		 *
+		 * @since NEXT
+		 * @return bool True when the `$unique` parameter may be passed.
+		 */
+		public static function supports_action_scheduler_unique(): bool {
+			if ( null !== self::$as_unique_support ) {
+				return self::$as_unique_support;
+			}
+			self::$as_unique_support = self::probe_action_scheduler_unique();
+			return self::$as_unique_support;
+		}
+
+		/**
+		 * Memoized probe result for {@see supports_action_scheduler_unique()}.
+		 *
+		 * Null until the first probe runs; afterwards true/false for the
+		 * remainder of the request.
+		 *
+		 * @var bool|null
+		 */
+		private static ?bool $as_unique_support = null;
+
+		/**
+		 * Memoized per-function `$unique`-parameter arity probes.
+		 *
+		 * Maps function name => bool so the single/recurring helpers do not
+		 * repeat reflection on every call.
+		 *
+		 * @var array<string, bool>
+		 */
+		private static array $as_unique_arity = array();
+
+		/**
+		 * Reset the memoized Action Scheduler unique-support probes.
+		 *
+		 * Test-only seam: production code never needs to re-probe within a
+		 * request, but unit tests that swap scheduler stubs between cases
+		 * must clear the memo to observe the new stub.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_action_scheduler_unique_cache(): void {
+			self::$as_unique_support = null;
+			self::$as_unique_arity   = array();
+		}
+
+		/**
+		 * Unmemoized Action Scheduler unique-support probe.
+		 *
+		 * @since NEXT
+		 * @return bool True when the `$unique` parameter may be passed.
+		 */
+		private static function probe_action_scheduler_unique(): bool {
+			try {
+				if ( ! function_exists( 'as_enqueue_async_action' ) ) {
+					return false;
+				}
+				if ( class_exists( 'ActionScheduler_Versions' ) && method_exists( 'ActionScheduler_Versions', 'instance' ) ) {
+					try {
+						$versions = \ActionScheduler_Versions::instance();
+						if ( is_object( $versions ) && method_exists( $versions, 'latest_version' ) ) {
+							$latest = $versions->latest_version();
+							if ( is_string( $latest ) && '' !== $latest && version_compare( $latest, '4.0', '<' ) ) {
+								return false;
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				return self::function_has_unique_param( 'as_enqueue_async_action', 4 );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Whether a scheduler function accepts the AS 4.x `$unique` parameter.
+		 *
+		 * Memoized per function name: repeated reflection is paid once per
+		 * request no matter how many jobs a bulk path enqueues.
+		 *
+		 * @since NEXT
+		 * @param string $function_name Function name to inspect.
+		 * @param int    $min_params    Minimum parameter count that implies `$unique` support.
+		 * @return bool True when the function exists and declares at least `$min_params` parameters.
+		 */
+		private static function function_has_unique_param( string $function_name, int $min_params ): bool {
+			if ( array_key_exists( $function_name, self::$as_unique_arity ) ) {
+				return self::$as_unique_arity[ $function_name ];
+			}
+			try {
+				if ( ! function_exists( $function_name ) ) {
+					self::$as_unique_arity[ $function_name ] = false;
+					return false;
+				}
+				$ref                                     = new \ReflectionFunction( $function_name );
+				self::$as_unique_arity[ $function_name ] = $ref->getNumberOfParameters() >= $min_params;
+				return self::$as_unique_arity[ $function_name ];
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				self::$as_unique_arity[ $function_name ] = false;
+				return false;
+			}
+		}
+
+		/**
+		 * Fail-open "already scheduled" guard shared by the unique helpers.
+		 *
+		 * Single home for the legacy `as_has_scheduled_action()` check so
+		 * future guard fixes land on all three helpers at once (issue #1310
+		 * review). A missing or throwing guard degrades to "not scheduled"
+		 * rather than failing the enqueue.
+		 *
+		 * @since NEXT
+		 * @param string $hook  Action hook.
+		 * @param array  $args  Action arguments.
+		 * @param string $group Action group.
+		 * @return bool True when a matching action is already scheduled.
+		 */
+		private static function as_already_scheduled( string $hook, array $args, string $group ): bool {
+			if ( ! function_exists( 'as_has_scheduled_action' ) ) {
+				return false;
+			}
+			try {
+				return (bool) as_has_scheduled_action( $hook, $args, $group );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Fail-open "already scheduled" check across several AS groups.
+		 *
+		 * The CCSS pipeline schedules on the dedicated `wppo-ccss` group but
+		 * must still dedupe against pre-split jobs in the legacy
+		 * `performance_optimisation` group; a guard that only probes the
+		 * passed group would double-schedule on pre-4.x schedulers when a
+		 * legacy-group job lands between checks (issue #1310 review).
+		 * Callers pass the extra groups so every legacy fallback below
+		 * probes the same disjunction the atomic path dedupes.
+		 *
+		 * @since NEXT
+		 * @param string   $hook         Action hook.
+		 * @param array    $args         Action arguments.
+		 * @param string   $group        Primary action group.
+		 * @param string[] $extra_groups Additional groups to probe.
+		 * @return bool True when a matching action is already scheduled in any of the groups.
+		 */
+		private static function as_already_scheduled_in_any_group( string $hook, array $args, string $group, array $extra_groups = array() ): bool {
+			if ( self::as_already_scheduled( $hook, $args, $group ) ) {
+				return true;
+			}
+			foreach ( $extra_groups as $extra_group ) {
+				if ( ! is_string( $extra_group ) || '' === $extra_group || $extra_group === $group ) {
+					continue;
+				}
+				if ( self::as_already_scheduled( $hook, $args, $extra_group ) ) {
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/**
+		 * Enqueue an async Action Scheduler job with atomic dedup when available.
+		 *
+		 * Tries `as_enqueue_async_action( $hook, $args, $group, true )` first so
+		 * concurrent processes cannot double-insert the same hook+args+group;
+		 * falls back to the legacy `as_has_scheduled_action()` guard plus a
+		 * 3-argument enqueue on older scheduler versions. Never fatal: any
+		 * scheduler API failure returns 0.
+		 *
+		 * @since NEXT
+		 * @param string   $hook         Action hook.
+		 * @param array    $args         Action arguments.
+		 * @param string   $group        Action group.
+		 * @param string[] $extra_groups Additional groups probed by the legacy fallback guard (e.g. the CCSS legacy group).
+		 * @return int Action ID, or 0 when deduped, unavailable, or on failure.
+		 */
+		public static function enqueue_unique_async_action( string $hook, array $args = array(), string $group = '', array $extra_groups = array() ): int {
+			try {
+				if ( ! function_exists( 'as_enqueue_async_action' ) ) {
+					return 0;
+				}
+				if ( self::supports_action_scheduler_unique() ) {
+					// Cross-group dedupe (issue #1310 review): the AS 4.x
+					// `$unique` flag dedupes per-group only, so a pending
+					// job in an extra (legacy) group would not block the
+					// insert below. Probe the extra groups up front; the
+					// both-group re-check on a 0 return stays as the
+					// race backstop.
+					foreach ( $extra_groups as $extra_group ) {
+						if ( ! is_string( $extra_group ) || '' === $extra_group || $extra_group === $group ) {
+							continue;
+						}
+						if ( self::as_already_scheduled( $hook, $args, $extra_group ) ) {
+							return 0;
+						}
+					}
+					try {
+						$result = as_enqueue_async_action( $hook, $args, $group, true );
+						return (int) $result;
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				// Legacy guard (fail-open — see as_already_scheduled()).
+				if ( self::as_already_scheduled_in_any_group( $hook, $args, $group, $extra_groups ) ) {
+					return 0;
+				}
+				return (int) as_enqueue_async_action( $hook, $args, $group );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
+			}
+		}
+
+		/**
+		 * Schedule a one-off Action Scheduler job with atomic dedup when available.
+		 *
+		 * Same fail-open contract as {@see enqueue_unique_async_action()} but
+		 * for delayed single actions.
+		 *
+		 * @since NEXT
+		 * @param int      $timestamp    When the job will run.
+		 * @param string   $hook         Action hook.
+		 * @param array    $args         Action arguments.
+		 * @param string   $group        Action group.
+		 * @param string[] $extra_groups Additional groups probed by the legacy fallback guard (e.g. the CCSS legacy group).
+		 * @return int Action ID, or 0 when deduped, unavailable, or on failure.
+		 */
+		public static function schedule_unique_single_action( int $timestamp, string $hook, array $args = array(), string $group = '', array $extra_groups = array() ): int {
+			try {
+				if ( ! function_exists( 'as_schedule_single_action' ) ) {
+					return 0;
+				}
+				if ( self::supports_action_scheduler_unique() ) {
+					// Cross-group dedupe (issue #1310 review): see
+					// enqueue_unique_async_action() — probe extra groups
+					// before the per-group atomic insert.
+					foreach ( $extra_groups as $extra_group ) {
+						if ( ! is_string( $extra_group ) || '' === $extra_group || $extra_group === $group ) {
+							continue;
+						}
+						if ( self::as_already_scheduled( $hook, $args, $extra_group ) ) {
+							return 0;
+						}
+					}
+					try {
+						if ( self::function_has_unique_param( 'as_schedule_single_action', 5 ) ) {
+							return (int) as_schedule_single_action( $timestamp, $hook, $args, $group, true );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				// Legacy guard (fail-open — see as_already_scheduled()).
+				if ( self::as_already_scheduled_in_any_group( $hook, $args, $group, $extra_groups ) ) {
+					return 0;
+				}
+				return (int) as_schedule_single_action( $timestamp, $hook, $args, $group );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
+			}
+		}
+
+		/**
 		 * Whether the stampede guard is enabled.
 		 *
 		 * Operator opt-out via `wppo_settings['cache_settings']['stampedeGuard']`
@@ -5436,14 +5727,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 
 				// Automatic LCP hero preload + font discovery toggles (issue
 				// #1216) plus the high-value prerender list toggle (issue
-				// #1237) — normalize malformed import shapes to bool so a
+				// #1237) and the opt-in failed-action purge toggle (issue
+				// #1310, `database_cleanup.purgeFailedActions`) — normalize
+				// malformed import shapes to bool so a
 				// string 'false' (textarea/text branches preserve strings, and
 				// !empty('false') is truthy at every read site) cannot silently
 				// enable the features. Unrecognized values fail safe to false
-				// (all three features default off). Pinned before the generic
+				// (all four features default off). Pinned before the generic
 				// stripos 'list' branch so speculationPrerenderList never
 				// falls through to sanitize_textarea_field.
-				if ( in_array( $safe_key, array( 'autoLcpPreload', 'autoDiscoverFonts', 'speculationPrerenderList' ), true ) && ! is_array( $value ) ) {
+				if ( in_array( $safe_key, array( 'autoLcpPreload', 'autoDiscoverFonts', 'speculationPrerenderList', 'purgeFailedActions' ), true ) && ! is_array( $value ) ) {
 					if ( is_bool( $value ) ) {
 						$sanitized[ $safe_key ] = $value;
 					} else {

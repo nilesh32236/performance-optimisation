@@ -3435,8 +3435,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						return;
 					}
 					$url = esc_url_raw( $url );
-					if ( '' !== $url && ! as_has_scheduled_action( 'wppo_crawler_warm', array( $url ), 'performance_optimisation' ) ) {
-						as_enqueue_async_action( 'wppo_crawler_warm', array( $url ), 'performance_optimisation' );
+					// Atomic unique enqueue (issue #1310) closes the
+					// check-then-act race. Util ships in-repo: called
+					// directly (issue #1310 review) — its internal
+					// function_exists + supports_* + try/catch already fails
+					// open, so no method_exists/legacy branch is needed.
+					if ( '' !== $url ) {
+						Util::enqueue_unique_async_action( 'wppo_crawler_warm', array( $url ), 'performance_optimisation' );
 					}
 				}
 			}
@@ -3518,7 +3523,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Queue used-CSS generation when post content is saved.
 		 *
 		 * Skips revisions and autosaves, and checks the removeUnusedCSS setting
-		 * before enqueueing. Uses as_has_scheduled_action() to prevent duplicate jobs.
+		 * before enqueueing. Uses atomic unique enqueue (issue #1310) to
+		 * prevent duplicate jobs, with the legacy as_has_scheduled_action()
+		 * guard as fallback.
 		 *
 		 * @param int      $post_id Post ID.
 		 * @param \WP_Post $post    Post object.
@@ -3540,13 +3547,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 
-			if ( ! as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => $post_id ), 'performance_optimisation' ) ) {
-				as_enqueue_async_action(
-					'wppo_used_css_generate',
-					array( 'post_id' => $post_id ),
-					'performance_optimisation'
-				);
-			}
+			// Util ships in-repo: called directly (issue #1310 review) — its
+			// internal function_exists + supports_* + try/catch already
+			// fails open, so no method_exists/legacy branch is needed.
+			Util::enqueue_unique_async_action(
+				'wppo_used_css_generate',
+				array( 'post_id' => $post_id ),
+				'performance_optimisation'
+			);
 		}
 
 		/**
