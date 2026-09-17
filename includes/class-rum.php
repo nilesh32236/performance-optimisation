@@ -2899,7 +2899,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 */
 		public static function get_stored_pagespeed_lcp_url( ?string $path = null ): string {
 			try {
-				$memo_key = null === $path ? '' : (string) $path;
+				// Memo key (audit #1338 review): blog-scoped; null (current-request
+				// tiers) gets its own bucket so it can never collide with an
+				// explicit '' path; explicit paths are normalized so /About and
+				// /about share one entry.
+				$blog_id = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
+				if ( null === $path ) {
+					$memo_key = $blog_id . '|\0current';
+				} else {
+					$norm_key = (string) $path;
+					if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'normalize_rum_path' ) ) {
+						try {
+							$norm_key = \PerformanceOptimise\Inc\Util::normalize_rum_path( (string) $path );
+						} catch ( \Throwable $norm_error ) {
+							unset( $norm_error );
+						}
+					}
+					$memo_key = $blog_id . '|' . $norm_key;
+				}
 				if ( array_key_exists( $memo_key, self::$stored_lcp_memo ) ) {
 					return self::$stored_lcp_memo[ $memo_key ];
 				}
@@ -2949,12 +2966,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 
 				// Priority 3: Transient keyed by strategy + URL hash.
 				if ( ! function_exists( 'get_transient' ) ) {
+					self::$stored_lcp_memo[ $memo_key ] = '';
 					return '';
 				}
 				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
+					self::$stored_lcp_memo[ $memo_key ] = '';
 					return '';
 				}
 				if ( ! function_exists( 'untrailingslashit' ) || ! function_exists( 'esc_url_raw' ) ) {
+					self::$stored_lcp_memo[ $memo_key ] = '';
 					return '';
 				}
 				try {
@@ -2965,9 +2985,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 						$lookup_url = untrailingslashit( esc_url_raw( \PerformanceOptimise\Inc\Util::cached_home_url() . $norm_path ) );
 					}
 				} catch ( \Throwable $e ) {
+					self::$stored_lcp_memo[ $memo_key ] = '';
 					return '';
 				}
 				if ( '' === $lookup_url ) {
+					self::$stored_lcp_memo[ $memo_key ] = '';
 					return '';
 				}
 				foreach ( $strategies as $strategy ) {
@@ -2985,6 +3007,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
+			self::$stored_lcp_memo[ $memo_key ] = '';
 			return '';
 		}
 

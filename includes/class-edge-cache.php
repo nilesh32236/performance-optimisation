@@ -178,9 +178,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 
 			$template_path = WPPO_PLUGIN_PATH . 'templates/cloudflare-worker.js';
 			$content       = '';
-			// Audit #1338: cap template reads (fall back to inline below on
-			// missing/unreadable/oversized files).
-			$template_size = ( file_exists( $template_path ) && is_readable( $template_path ) ) ? @filesize( $template_path ) : false; // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- filesize() emits warnings on races; guarded with is_int check below.
+			// Audit #1338: a single filesize probe gates the read (it implies
+			// existence/readability and bounds size); fall back to inline
+			// below on missing/unreadable/oversized files.
+			$template_size = @filesize( $template_path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- filesize() emits warnings on races; guarded with is_int check below.
 			if ( is_int( $template_size ) && $template_size > 0 && $template_size <= 1024 * 1024 ) {
 				$content = file_get_contents( $template_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
 			}
@@ -265,7 +266,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 			// Audit #1338: capped like the Cloudflare template above.
 			$template_path = WPPO_PLUGIN_PATH . 'templates/bunny-edge.js';
 			$content       = '';
-			$template_size = ( file_exists( $template_path ) && is_readable( $template_path ) ) ? @filesize( $template_path ) : false; // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- filesize() emits warnings on races; guarded with is_int check below.
+			$template_size = @filesize( $template_path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- filesize() emits warnings on races; guarded with is_int check below.
 			if ( is_int( $template_size ) && $template_size > 0 && $template_size <= 1024 * 1024 ) {
 				$content = file_get_contents( $template_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
 			}

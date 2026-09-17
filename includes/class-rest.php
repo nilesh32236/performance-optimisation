@@ -1558,9 +1558,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				// as_has_scheduled_action() query per image (N+1). Falls back
 				// to per-item checks only when the snapshot is incomplete
 				// (unavailable/failed/page-cap hit); a complete snapshot is
-				// trusted (audit #1338).
+				// trusted (audit #1338). The snapshot is best-effort: a
+				// concurrent process enqueueing between snapshot and enqueue
+				// can still duplicate — the per-item fallback narrows that
+				// window only when the snapshot is known-incomplete.
 				$scheduled         = array();
 				$snapshot_complete = false;
+				// Needed dedup keys (bounded by $jobs_cap): stop paginating as
+				// soon as every needed key is covered instead of fetching up
+				// to 10k rows.
+				$needed = array();
+				foreach ( $webp_images as $webp_image ) {
+					$needed[ $this->resolve_optimise_source_path( $webp_image, $normalized_abspath ) . '|webp' ] = true;
+				}
+				foreach ( $avif_images as $avif_image ) {
+					$needed[ $this->resolve_optimise_source_path( $avif_image, $normalized_abspath ) . '|avif' ] = true;
+				}
 				if ( function_exists( 'as_get_scheduled_actions' ) ) {
 					try {
 						$statuses = array( 'pending', 'in-progress' );
@@ -1580,7 +1593,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 								'offset'   => $as_page * 1000,
 							);
 							$existing_actions = as_get_scheduled_actions( $query, 'ARRAY_A' );
-							if ( ! is_array( $existing_actions ) || empty( $existing_actions ) ) {
+							// Store failure is NOT complete: fall back to per-item checks
+							// rather than trusting an empty map (avoids double-queueing).
+							if ( ! is_array( $existing_actions ) ) {
+								break;
+							}
+							if ( empty( $existing_actions ) ) {
 								$snapshot_complete = true;
 								break;
 							}
@@ -1595,6 +1613,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 								}
 								if ( is_array( $action_args ) && isset( $action_args[0]['source_path'], $action_args[0]['format'] ) ) {
 									$scheduled[ $action_args[0]['source_path'] . '|' . $action_args[0]['format'] ] = true;
+									// All needed keys covered: stop paginating early.
+									if ( ! empty( $needed ) && ! array_diff_key( $needed, $scheduled ) ) {
+										$snapshot_complete = true;
+										break 2;
+									}
 								}
 							}
 							// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
@@ -2728,15 +2751,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			// Audit #1338: no REST-layer pre-check — queue_scan() resolves the
 			// winner's ID internally (unique insert + re-query), so a separate
-			// as_has_scheduled_action() here paid an extra scheduler read for
-			// an already_queued distinction no consumer reads.
+			// as_has_scheduled_action() here paid an extra scheduler read.
+			// already_queued stays in the shape (always false: dedup is
+			// internal now) so external pollers never see it go undefined.
 			$job_id = Pagespeed::queue_scan( $url, $strategy );
 
 			return $this->send_response(
 				array(
-					'job_id'   => $job_id,
-					'url'      => $url,
-					'strategy' => $strategy,
+					'job_id'         => $job_id,
+					'url'            => $url,
+					'strategy'       => $strategy,
+					'already_queued' => false,
 				),
 				true,
 				202

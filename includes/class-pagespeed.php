@@ -910,6 +910,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 				$existing    = get_option( $option_name, '' );
 				if ( $existing !== $lcp_url ) {
 					update_option( $option_name, $lcp_url, false );
+					RUM::clear_stored_lcp_memo();
 				}
 				return;
 			}
@@ -918,12 +919,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			$post_id = url_to_postid( $url );
 			if ( $post_id > 0 ) {
 				update_post_meta( $post_id, '_wppo_lcp_image_url_' . $strategy_suffix, $lcp_url );
+				RUM::clear_stored_lcp_memo();
 				return;
 			}
 
 			// Case 3: Arbitrary URL — store in transient keyed by strategy + URL hash.
 			$transient_key = Util::transient_key( 'wppo_lcp_url_' . $strategy_suffix . '_' . md5( $normalised_scan_url ) );
 			set_transient( $transient_key, $lcp_url, DAY_IN_SECONDS );
+			RUM::clear_stored_lcp_memo();
 		}
 
 		/**
