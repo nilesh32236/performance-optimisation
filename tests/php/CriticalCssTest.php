@@ -41,6 +41,13 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 	private array $filter_overrides = array();
 
 	/**
+	 * Extra apply_filters arguments captured per tag (audit #1357 review).
+	 *
+	 * @var array
+	 */
+	private array $filter_calls = array();
+
+	/**
 	 * In-memory option map backing the get_option stub.
 	 *
 	 * @var array
@@ -60,6 +67,7 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 			'safe'    => 0,
 		);
 		$this->filter_overrides = array();
+		$this->filter_calls     = array();
 
 		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
 		Functions\when( 'wp_normalize_path' )->alias(
@@ -72,6 +80,8 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 
 		Functions\when( 'apply_filters' )->alias(
 			function ( $tag, $value = null ) {
+				$args = func_get_args();
+				$this->filter_calls[ $tag ][] = array_slice( $args, 2 );
 				return $this->filter_overrides[ $tag ] ?? $value;
 			}
 		);
@@ -231,6 +241,8 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 		$this->assertFalse( $this->invoke_private( 'is_safe_stylesheet_url', 'https://fonts.cdn-example.net/s.css' ) );
 		$this->filter_overrides['wppo_ccss_allowed_stylesheet_host'] = true;
 		$this->assertTrue( $this->invoke_private( 'is_safe_stylesheet_url', 'https://fonts.cdn-example.net/s.css' ) );
+		// The production filter receives the lowercased candidate host.
+		$this->assertSame( 'fonts.cdn-example.net', $this->filter_calls['wppo_ccss_allowed_stylesheet_host'][0][0] ?? null );
 	}
 
 	/**
@@ -314,6 +326,8 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 'http://example.com/wp-content/themes/a/../c.css', $this->invoke_private( 'resolve_import_url', '../c.css', $base ) );
 		$this->assertSame( 'http://example.com/c.css', $this->invoke_private( 'resolve_import_url', '/c.css', $base ) );
 		$this->assertSame( '', $this->invoke_private( 'resolve_import_url', '//cdn.ext/x.css', $base ) );
+		// Same-site protocol-relative imports still resolve (audit #1357 review).
+		$this->assertSame( 'http://example.com/x.css', $this->invoke_private( 'resolve_import_url', '//example.com/x.css', $base ) );
 	}
 
 	/**

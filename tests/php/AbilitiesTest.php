@@ -75,6 +75,51 @@ class AbilitiesTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Off-site ability URLs fail closed with an error (audit #1357 review).
+	 *
+	 * @since NEXT
+	 */
+	public function test_scan_wrappers_reject_off_site_urls(): void {
+		Functions\when( '__' )->returnArg( 1 );
+		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'wp_http_validate_url' )->justReturn( true );
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+
+		$evil = array( 'url' => 'https://evil.example/x' );
+		$scan = Abilities::execute_run_performance_scan( $evil );
+		$this->assertArrayHasKey( 'error', $scan );
+		$queue = Abilities::execute_queue_pagespeed_scan( $evil );
+		$this->assertFalse( $queue['queued'] );
+		$this->assertArrayHasKey( 'error', $queue );
+		$results = Abilities::execute_get_pagespeed_results( $evil );
+		$this->assertArrayHasKey( 'error', $results );
+		$suggest = Abilities::execute_get_suggestions( $evil );
+		$this->assertSame( array(), $suggest['suggestions'] );
+		$this->assertArrayHasKey( 'error', $suggest );
+	}
+
+	/**
+	 * Single-scope clear with an off-site URL reports cleared:false.
+	 *
+	 * @since NEXT
+	 */
+	public function test_execute_clear_cache_rejects_off_site_url(): void {
+		Functions\when( '__' )->returnArg( 1 );
+		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'wp_http_validate_url' )->justReturn( true );
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+
+		$result = Abilities::execute_clear_cache( array( 'scope' => 'single', 'url' => 'https://evil.example/x' ) );
+		$this->assertFalse( $result['cleared'] );
+		$missing = Abilities::execute_clear_cache( array( 'scope' => 'single' ) );
+		$this->assertFalse( $missing['cleared'] );
+	}
+
+	/**
 	 * Test that execute_database_cleanup accepts trashed_posts and rejects the legacy trash alias.
 	 *
 	 * @since 2.0.0
