@@ -67,10 +67,10 @@ const redactLogSecrets = ( raw ) => {
 	}
 	return raw
 		.replace( /AIza[0-9A-Za-z\-_]{10,}/g, '[redacted-key]' )
-		.replace(
-			/(password|passwd|pwd|secret|api[_-]?key|auth[_-]?token|bearer|token)\s*[:=]\s*\S+/gi,
-			'$1=[redacted]'
-		);
+		.replace( /(api[_-]?key|auth[_-]?token)\s*[:=]\s*\S+/gi, '$1=[redacted]' )
+		.replace( /\b(bearer)\s+([A-Za-z0-9\-._~+/=]{8,})/gi, '$1=[redacted]' )
+		.replace( /([?&](?:key|api[_-]?key|token|secret|password|pwd)\s*=)[^&\s]*/gi, '$1[redacted]' )
+		.replace( /\b(password|passwd|pwd|secret|token)\b\s*[:=\s]\s*(['"]?)\S+\2/gi, '$1=[redacted]' );
 };
 
 /**

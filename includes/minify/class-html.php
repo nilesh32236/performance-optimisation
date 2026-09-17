@@ -1673,9 +1673,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 						$allowlist = Util::coerce_string_list( $allowlist );
 					}
 				}
+				// Match the allowlist against attributes as well as src (parity
+				// with the manual path): an entry naming a handle, id/class,
+				// or inline context must exempt even when it is not a URL
+				// substring. NUL-joined so an entry can never span fields.
+				$haystack = $attributes . "\0" . $src;
 				foreach ( $allowlist as $allowed ) {
 					$allowed = trim( (string) $allowed );
-					if ( '' !== $allowed && false !== stripos( $src, $allowed ) ) {
+					if ( '' !== $allowed && false !== stripos( $haystack, $allowed ) ) {
 						return false;
 					}
 				}

@@ -8043,9 +8043,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( '' !== (string) $handle && ! empty( $allowlist ) && $this->matches_any_delay_pattern( (string) $handle, $allowlist ) ) {
 					return false;
 				}
+				// Match the allowlist against the full tag as well as src
+				// (parity with the manual path): an entry naming an element
+				// id/class or inline context must exempt even when it is not
+				// a URL substring. NUL-joined so an entry can never span fields.
+				$allow_haystack = (string) $tag . "\0" . $src;
 				foreach ( $allowlist as $allowed ) {
 					$allowed = trim( (string) $allowed );
-					if ( '' !== $allowed && false !== stripos( $src, $allowed ) ) {
+					if ( '' !== $allowed && false !== stripos( $allow_haystack, $allowed ) ) {
 						return false;
 					}
 				}
