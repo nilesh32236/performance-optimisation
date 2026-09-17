@@ -59,7 +59,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 
 			// Allowlist + per-notice nonce binding: a leaked/prefetched dismiss URL
 			// can replay at most its own notice within the nonce lifetime.
-			$allowed = array( 'activation', 'review_done', 'review_snooze', 'litespeed', 'avif_webp_only', 'htaccess_failure', 'object_cache_circuit' );
+			$allowed = array( 'activation', 'review_done', 'review_snooze', 'litespeed', 'avif_webp_only', 'htaccess_failure', 'object_cache_circuit', 'nginx_redis_config' );
 			if ( ! in_array( $key, $allowed, true ) ) {
 				return;
 			}
@@ -117,6 +117,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				delete_transient( Util::transient_key( Object_Cache::CIRCUIT_NOTICE_TRANSIENT ) );
 			}
 
+			if ( 'nginx_redis_config' === $key ) {
+				update_user_meta( get_current_user_id(), 'wppo_nginx_redis_config_dismissed', 1 );
+				if ( class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
+					try {
+						Object_Cache::clear_nginx_probe_cache();
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+			}
+
 			wp_safe_redirect( remove_query_arg( array( 'wppo_dismiss', '_wpnonce' ) ) );
 			exit;
 		}
@@ -136,6 +147,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			$this->maybe_competing_plugins_notice();
 			$this->maybe_litespeed_coexistence_notice();
 			$this->maybe_object_cache_circuit_notice();
+			$this->maybe_nginx_redis_config_notice();
 			$this->maybe_avif_webp_only_notice();
 			$this->maybe_builder_purge_notice();
 			$this->maybe_review_notice();
@@ -295,6 +307,55 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			echo esc_html( $reason ) . ' ' . esc_html( $when ) . ' ';
 			echo esc_html__( 'Redis will be re-checked automatically, or re-enable it manually once Redis recovers.', 'performance-optimisation' );
 			echo ' <a href="' . esc_url( admin_url( 'admin.php?page=performance-optimisation' ) ) . '">' . esc_html__( 'Open settings', 'performance-optimisation' ) . '</a>';
+			echo ' &middot; <a href="' . esc_url( $dismiss ) . '">' . esc_html__( 'Dismiss', 'performance-optimisation' ) . '</a>';
+			echo '</p></div>';
+		}
+
+		/**
+		 * Nginx Redis-config exposure warning.
+		 *
+		 * Nginx ignores the `.htaccess`/`web.config` deny rules written by
+		 * Object_Cache::protect_config_file(), so without a manual
+		 * server-level deny the Redis config file
+		 * (`wp-content/wppo-redis-config.php`, topology but no password) is
+		 * directly fetchable. Renders only when the loopback probe in
+		 * Object_Cache::is_nginx_config_exposed() has evidence (verdict
+		 * cached in a transient, so no probe runs on every pageload).
+		 * Dismissible per user; re-enabling Redis re-probes via a cleared
+		 * probe cache.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private function maybe_nginx_redis_config_notice(): void {
+			if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
+				return;
+			}
+
+			$user_id = get_current_user_id();
+			if ( $user_id && get_user_meta( $user_id, 'wppo_nginx_redis_config_dismissed', true ) ) {
+				return;
+			}
+
+			try {
+				if ( ! Object_Cache::is_nginx_config_exposed() ) {
+					return;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return;
+			}
+
+			$dismiss = wp_nonce_url(
+				add_query_arg( 'wppo_dismiss', 'nginx_redis_config' ),
+				'wppo_dismiss_notice_nginx_redis_config',
+				'_wpnonce'
+			);
+
+			echo '<div class="notice notice-warning" role="alert" aria-live="assertive"><p><strong>' . esc_html__( 'Performance Optimisation — Redis config exposed', 'performance-optimisation' ) . '</strong> — ';
+			echo esc_html__( 'Your server runs Nginx, which ignores .htaccess deny rules, and wp-content/wppo-redis-config.php appears directly fetchable. It holds no password but discloses Redis topology (hosts, ports, TLS mode).', 'performance-optimisation' ) . ' ';
+			/* translators: %s: Nginx deny rule snippet */
+			printf( esc_html__( 'Add %s to your Nginx server block, then re-save the Object Cache settings.', 'performance-optimisation' ), '<code>location = /wp-content/wppo-redis-config.php { deny all; }</code>' );
 			echo ' &middot; <a href="' . esc_url( $dismiss ) . '">' . esc_html__( 'Dismiss', 'performance-optimisation' ) . '</a>';
 			echo '</p></div>';
 		}

@@ -149,6 +149,66 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		}
 
 		/**
+		 * Per-IP fixed-window throttle for the public fragment endpoint.
+		 *
+		 * The handler is registered for nopriv (guests hydrate cart/nonce
+		 * holes through it), so bound the request rate per client IP with a
+		 * transient bucket mirroring Rest::is_endpoint_throttled() semantics:
+		 * 60 hits per 60s; the TTL is set on the first increment and later
+		 * hits re-store with the remaining TTL instead of extending it.
+		 * Fail-open when the transient API is unavailable (early boot or
+		 * unit stubs): the nonce gate below still applies.
+		 *
+		 * @since NEXT
+		 * @param int $limit  Max hits per window.
+		 * @param int $window Window in seconds.
+		 * @return bool True when throttled.
+		 */
+		private static function is_fragment_throttled( int $limit = 60, int $window = 60 ): bool {
+			if ( ! function_exists( 'get_transient' ) || ! function_exists( 'set_transient' ) ) {
+				return false;
+			}
+			try {
+				$ip = '';
+				if ( isset( $_SERVER['REMOTE_ADDR'] ) && is_string( $_SERVER['REMOTE_ADDR'] ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+					$ip = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+				}
+				$key    = Util::transient_key( 'wppo_esi_throttle_' . md5( '' !== $ip ? $ip : 'anon' ) );
+				$bucket = get_transient( $key );
+				$now    = time();
+				if ( ! is_array( $bucket ) || ! isset( $bucket['count'], $bucket['start'] ) || (int) $bucket['start'] > $now || ( $now - (int) $bucket['start'] ) >= $window ) {
+					set_transient(
+						$key,
+						array(
+							'count' => 1,
+							'start' => $now,
+						),
+						$window
+					);
+					return false;
+				}
+				$count = (int) $bucket['count'];
+				if ( $count >= $limit ) {
+					return true;
+				}
+				$elapsed   = $now - (int) $bucket['start'];
+				$remaining = max( 1, min( $window, $window - $elapsed ) );
+				set_transient(
+					$key,
+					array(
+						'count' => $count + 1,
+						'start' => (int) $bucket['start'],
+					),
+					$remaining
+				);
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
 		 * Emit the private pair, fail-closed when the emitter is unavailable.
 		 *
 		 * The ESI bridge can run on admin-ajax/early hooks where the emitter
@@ -549,6 +609,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 *
 		 * Enterprise: <esi:include src="...">; OLS: <div data-wppo-esi="block" data-nonce="...">
 		 *
+		 * The embedded `wppo_esi` nonce is a per-session CSRF token, not a
+		 * secrecy boundary: placeholders rendered before the static-HTML
+		 * cache is generated are baked into cache files served to guests for
+		 * the nonce lifetime, so the fragment nonce is semi-public by design.
+		 * Authorization must not rest on nonce secrecy alone — the
+		 * `adminbar` block additionally requires `is_user_logged_in()`, which
+		 * is the real boundary, and every fragment passes through wp_kses().
+		 *
 		 * @since 2.0.0
 		 * @param string $block Block name (cart, adminbar, nonce).
 		 * @param array  $attrs Optional attributes.
@@ -876,10 +944,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * get_allowed_fragment_html() before it is echoed. Never return raw
 		 * untrusted markup from this endpoint.
 		 *
+		 * ## Nonce model
+		 *
+		 * Every block (including `cart`) requires a valid `wppo_esi` nonce
+		 * supplied in the POST body. The nonce is a per-session CSRF token,
+		 * not a secrecy boundary: placeholders rendered before the static-HTML
+		 * cache is generated are baked into cache files served to guests for
+		 * the nonce lifetime, so the check must never be the sole
+		 * authorization gate (the `adminbar` block additionally requires
+		 * `is_user_logged_in()`, which is the real boundary there).
+		 *
 		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function handle_ajax_fragment(): void {
+			// Per-IP throttle (fail-open when transients are unavailable, e.g.
+			// early boot or unit stubs without the transient API).
+			if ( self::is_fragment_throttled() ) {
+				self::emit_private_fail_closed();
+				if ( function_exists( 'wp_send_json_error' ) ) {
+					wp_send_json_error( array( 'message' => 'Too many requests. Please try again shortly.' ), 429 );
+				}
+				return;
+			}
 			$block = '';
 			if ( isset( $_GET['block'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
 				$block = strtolower( sanitize_text_field( wp_unslash( $_GET['block'] ) ) ); // phpcs:ignore WordPress.Security.NonceVerification
@@ -890,7 +977,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 				$block = 'cart';
 			}
 
-			// Require valid 'wppo_esi' nonce for all blocks except public cart.
+			// Require a valid 'wppo_esi' nonce for every block, including the
+			// cart fragment. Guests present the nonce embedded in the page
+			// placeholder, so hydration keeps working; no block is reachable
+			// without proving receipt of a server-minted placeholder.
 			// POST body only: a query-string nonce would leak into server/proxy logs and Referer headers (src/esi.js is POST-only).
 			$nonce = '';
 			if ( isset( $_POST['_wpnonce'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
@@ -898,7 +988,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			}
 			$nonce_valid = function_exists( 'wp_verify_nonce' ) ? wp_verify_nonce( $nonce, 'wppo_esi' ) : false;
 
-			if ( ! $nonce_valid && 'cart' !== $block && 'nonce' !== $block ) {
+			if ( ! $nonce_valid ) {
 				self::emit_private_fail_closed();
 				if ( function_exists( 'wp_send_json_error' ) ) {
 					wp_send_json_error( array( 'message' => 'Unauthorized' ), 403 );

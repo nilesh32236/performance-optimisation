@@ -1509,7 +1509,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				return false;
 			}
 			foreach ( $_COOKIE as $key => $value ) {
-				$cookie_name = is_string( $key ) ? sanitize_text_field( $key ) : '';
+				$cookie_name = is_string( $key ) ? sanitize_text_field( wp_unslash( $key ) ) : '';
 				if ( '' !== $cookie_name && 0 === strpos( $cookie_name, 'comment_author_' ) ) {
 					return '' !== $value;
 				}
@@ -1538,7 +1538,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				$hash = md5( wp_parse_url( home_url(), PHP_URL_HOST ) ?? '' );
 			}
 			foreach ( $_COOKIE as $key => $value ) {
-				$cookie_name = is_string( $key ) ? sanitize_text_field( $key ) : '';
+				$cookie_name = is_string( $key ) ? sanitize_text_field( wp_unslash( $key ) ) : '';
 				if ( '' !== $cookie_name && 0 === strpos( $cookie_name, 'wp-postpass_' . $hash ) ) {
 					return '' !== $value;
 				}
@@ -1582,8 +1582,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			$groups = self::get_vary_groups();
 			if ( ! $groups['role'] && ! $groups['guest'] && ! $groups['mobile'] && ! $groups['webp'] ) {
 				// No active vary groups — clear stale cookie if present.
-				if ( isset( $_COOKIE['_lscache_vary'] ) ) {
-					setcookie( '_lscache_vary', '', time() - YEAR_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), true );
+				if ( isset( $_COOKIE['_lscache_vary'] ) && ! headers_sent() ) {
+					setcookie(
+						'_lscache_vary',
+						'',
+						array(
+							'expires'  => time() - YEAR_IN_SECONDS,
+							'path'     => COOKIEPATH,
+							'domain'   => COOKIE_DOMAIN,
+							'secure'   => is_ssl(),
+							'httponly' => true,
+							'samesite' => 'Lax',
+						)
+					);
 				}
 				return;
 			}
@@ -1613,7 +1624,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				if ( function_exists( 'headers_sent' ) && headers_sent() ) {
 					return;
 				}
-				setcookie( '_lscache_vary', $value, time() + DAY_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), true );
+				setcookie(
+					'_lscache_vary',
+					$value,
+					array(
+						'expires'  => time() + DAY_IN_SECONDS,
+						'path'     => COOKIEPATH,
+						'domain'   => COOKIE_DOMAIN,
+						'secure'   => is_ssl(),
+						'httponly' => true,
+						'samesite' => 'Lax',
+					)
+				);
 			}
 		}
 

@@ -413,6 +413,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$limit = max( 1, min( Database_Cleanup::AUTOLOAD_LIMIT_MAX, $limit ) );
 
 			if ( 'apply' === $mode ) {
+				if ( $this->is_endpoint_throttled( 'autoload_remediate', 5, 60 ) ) {
+					$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
+					$response->header( 'Retry-After', '60' );
+					return $response;
+				}
 				$result               = Database_Cleanup::remediate_autoload( $threshold, $limit );
 				$result['remediated'] = Database_Cleanup::get_remediated_options();
 				return $this->send_response( $result );
@@ -872,46 +877,56 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return bool True when throttled.
 		 */
 		private function is_endpoint_throttled( string $endpoint, int $limit = 10, int $window = 60 ): bool {
-			// Per-user/IP key so one actor cannot exhaust the budget for
-			// everyone sharing the endpoint slug.
-			$suffix = function_exists( 'get_current_user_id' ) ? (int) get_current_user_id() : 0;
-			if ( 0 === $suffix ) {
-				$suffix = self::throttle_client_suffix();
+			// Fail-open when the transient API is unavailable (unit stubs
+			// without the transient helpers): throttling is best-effort.
+			if ( ! function_exists( 'get_transient' ) || ! function_exists( 'set_transient' ) ) {
+				return false;
 			}
-			$key    = Util::transient_key( 'wppo_throttle_' . sanitize_key( $endpoint ) . '_' . md5( (string) $suffix ) );
-			$bucket = get_transient( $key );
-			$now    = time();
-			// Fixed window: the TTL is set only on the first increment; later
-			// hits re-store with the remaining TTL instead of extending it.
-			if ( ! is_array( $bucket ) || ! isset( $bucket['count'], $bucket['start'] ) || (int) $bucket['start'] > $now || ( $now - (int) $bucket['start'] ) >= $window ) {
+			try {
+				// Per-user/IP key so one actor cannot exhaust the budget for
+				// everyone sharing the endpoint slug.
+				$suffix = function_exists( 'get_current_user_id' ) ? (int) get_current_user_id() : 0;
+				if ( 0 === $suffix ) {
+					$suffix = self::throttle_client_suffix();
+				}
+				$key    = Util::transient_key( 'wppo_throttle_' . ( function_exists( 'sanitize_key' ) ? sanitize_key( $endpoint ) : strtolower( (string) preg_replace( '/[^a-z0-9_-]/i', '', $endpoint ) ) ) . '_' . md5( (string) $suffix ) );
+				$bucket = get_transient( $key );
+				$now    = time();
+				// Fixed window: the TTL is set only on the first increment; later
+				// hits re-store with the remaining TTL instead of extending it.
+				if ( ! is_array( $bucket ) || ! isset( $bucket['count'], $bucket['start'] ) || (int) $bucket['start'] > $now || ( $now - (int) $bucket['start'] ) >= $window ) {
+					set_transient(
+						$key,
+						array(
+							'count' => 1,
+							'start' => $now,
+						),
+						$window
+					);
+					return false;
+				}
+				$count = (int) $bucket['count'];
+				if ( $count >= $limit ) {
+					return true;
+				}
+				// Clamp into [1, $window]: a future-dated (corrupted or tampered)
+				// start would otherwise persist the bucket past one window. Future
+				// starts reset above; the min() cap bounds this call's TTL regardless.
+				$elapsed   = $now - (int) $bucket['start'];
+				$remaining = max( 1, min( $window, $window - $elapsed ) );
 				set_transient(
 					$key,
 					array(
-						'count' => 1,
-						'start' => $now,
+						'count' => $count + 1,
+						'start' => (int) $bucket['start'],
 					),
-					$window
+					$remaining
 				);
 				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
 			}
-			$count = (int) $bucket['count'];
-			if ( $count >= $limit ) {
-				return true;
-			}
-			// Clamp into [1, $window]: a future-dated (corrupted or tampered)
-			// start would otherwise persist the bucket past one window. Future
-			// starts reset above; the min() cap bounds this call's TTL regardless.
-			$elapsed   = $now - (int) $bucket['start'];
-			$remaining = max( 1, min( $window, $window - $elapsed ) );
-			set_transient(
-				$key,
-				array(
-					'count' => $count + 1,
-					'start' => (int) $bucket['start'],
-				),
-				$remaining
-			);
-			return false;
 		}
 
 		/**
@@ -976,6 +991,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function clear_cache( \WP_REST_Request $request ) {
+			if ( $this->is_endpoint_throttled( 'clear_cache', 5, 60 ) ) {
+				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
+				$response->header( 'Retry-After', '60' );
+				return $response;
+			}
 			$params = $request->get_params();
 			$action = isset( $params['action'] ) ? sanitize_text_field( $params['action'] ) : '';
 			$path   = isset( $params['path'] ) ? sanitize_text_field( $params['path'] ) : '';
@@ -1402,6 +1422,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function optimise_image( \WP_REST_Request $request ) {
+			if ( $this->is_endpoint_throttled( 'optimise_image', 10, 60 ) ) {
+				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
+				$response->header( 'Retry-After', '60' );
+				return $response;
+			}
 			// Defense-in-depth capability re-check on the conversion/delete
 			// trigger path (the route permission_callback already requires
 			// manage_options). Guarded so unit stubs without the pluggable
@@ -1412,8 +1437,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			$params = $request->get_params();
 
-			$webp_images = isset( $params['webp'] ) ? array_map( 'sanitize_text_field', (array) $params['webp'] ) : array();
-			$avif_images = isset( $params['avif'] ) ? array_map( 'sanitize_text_field', (array) $params['avif'] ) : array();
+			// Nested-array input (e.g. webp[][x]=1) would throw a TypeError
+			// inside sanitize_text_field() on PHP 8 — keep scalars only and
+			// reject anything else with the 400 invalid-path response below.
+			$raw_webp = isset( $params['webp'] ) ? (array) $params['webp'] : array();
+			$raw_avif = isset( $params['avif'] ) ? (array) $params['avif'] : array();
+			foreach ( array_merge( $raw_webp, $raw_avif ) as $entry ) {
+				if ( ! is_string( $entry ) && ! is_int( $entry ) ) {
+					return $this->send_response( null, false, 400, __( 'Invalid image path provided.', 'performance-optimisation' ) );
+				}
+			}
+			$webp_images = array_map(
+				static function ( $v ) {
+					return sanitize_text_field( (string) $v );
+				},
+				$raw_webp
+			);
+			$avif_images = array_map(
+				static function ( $v ) {
+					return sanitize_text_field( (string) $v );
+				},
+				$raw_avif
+			);
 
 			// If no paths sent from client, fall back to reading pending paths from DB.
 			if ( empty( $webp_images ) && empty( $avif_images ) ) {
@@ -1671,6 +1716,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function delete_optimised_image(): \WP_REST_Response {
+			if ( $this->is_endpoint_throttled( 'delete_optimised_image', 5, 60 ) ) {
+				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
+				$response->header( 'Retry-After', '60' );
+				return $response;
+			}
 			// Defense-in-depth capability re-check on the delete trigger
 			// (the route permission_callback already requires
 			// manage_options). Guarded so unit stubs cannot fatal.
@@ -1725,6 +1775,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function import_settings( \WP_REST_Request $request ) {
+			if ( $this->is_endpoint_throttled( 'import_settings', 10, 60 ) ) {
+				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
+				$response->header( 'Retry-After', '60' );
+				return $response;
+			}
 			$data = $request->get_json_params();
 
 			if ( ! is_array( $data ) ) {

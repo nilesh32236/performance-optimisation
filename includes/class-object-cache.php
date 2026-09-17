@@ -127,6 +127,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		public const CONFIG_HTACCESS_MARKER = 'WPPO Redis Config';
 
 		/**
+		 * Config filename (web-reachable under WP_CONTENT_DIR).
+		 *
+		 * The file carries an ABSPATH guard and never stores the Redis
+		 * password, but it does disclose topology (hosts, ports, TLS mode,
+		 * sentinel/cluster layout). Apache/OLS/IIS are shielded by
+		 * protect_config_file(); Nginx ignores those files and needs a
+		 * server-level deny (see is_nginx_config_exposed()).
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		public const CONFIG_FILENAME = 'wppo-redis-config.php';
+
+		/**
+		 * Transient (blog-prefixed) caching the Nginx exposure probe verdict.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		public const NGINX_PROBE_TRANSIENT = 'wppo_nginx_config_probe';
+
+		/**
 		 * Suffix of the staging sibling used for atomic Redis config writes.
 		 *
 		 * `write_config_atomic()` stages new config at
@@ -1823,6 +1845,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			// it (Apache + OLS .htaccess, IIS web.config) so topology is
 			// not disclosed when PHP handling is disabled.
 			self::protect_config_file();
+			// Config (re)written — drop the cached Nginx exposure verdict so
+			// the next admin pageload re-probes instead of serving stale state.
+			self::clear_nginx_probe_cache();
 
 			// Copy drop-in.
 			if ( ! $wp_filesystem->copy( $this->template_path, $this->dropin_path, true, FS_CHMOD_FILE ) ) {
@@ -1888,6 +1913,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			if ( file_exists( $this->config_path ) ) {
 				$wp_filesystem->delete( $this->config_path );
 			}
+			// Config removed — the exposure question is moot; drop any cached
+			// probe verdict with it.
+			self::clear_nginx_probe_cache();
 
 			// A deliberate manual disable resolves any parked circuit state
 			// too, so a stale "auto-disabled" notice never outlives it.
@@ -1917,6 +1945,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * OpenLiteSpeed both read .htaccess; nginx ignores both files, so
 		 * nginx deployments must deny the file at the server level with:
 		 * `location = /wp-content/wppo-redis-config.php { deny all; }`.
+		 * Until that rule exists, is_nginx_config_exposed() reports the
+		 * file as fetchable and Admin_Notices surfaces a warning.
 		 *
 		 * @since NEXT
 		 * @return void
@@ -2210,6 +2240,105 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			}
 
 			return true;
+		}
+
+		/**
+		 * Absolute path of the Redis config file ('' when undeterminable).
+		 *
+		 * @since NEXT
+		 * @return string
+		 */
+		public static function get_config_path(): string {
+			if ( ! defined( 'WP_CONTENT_DIR' ) || '' === (string) WP_CONTENT_DIR ) {
+				return '';
+			}
+			return rtrim( wp_normalize_path( (string) WP_CONTENT_DIR ), '/' ) . '/' . self::CONFIG_FILENAME;
+		}
+
+		/**
+		 * Whether the Redis config file is directly fetchable over HTTP on Nginx.
+		 *
+		 * Nginx ignores the `.htaccess`/`web.config` deny rules written by
+		 * protect_config_file(), so a deployment without the manual
+		 * server-level deny (`location = /wp-content/wppo-redis-config.php
+		 * { deny all; }`) serves the file to anyone. The file never holds
+		 * the password, but it discloses topology (hosts, ports, TLS mode,
+		 * sentinel/cluster layout).
+		 *
+		 * Detection is a loopback HTTP probe of the public config URL: 200
+		 * means fetchable (the ABSPATH guard exits with an empty 200 body,
+		 * which still proves reachability). The verdict is cached in a
+		 * transient (1h when exposed so a fresh deny rule clears the notice
+		 * promptly, 12h when safe). Fail-open throughout: any missing API,
+		 * missing file, non-Nginx server, or probe error returns false so
+		 * admins are never nagged without evidence.
+		 *
+		 * @since NEXT
+		 * @return bool True when the config file looks directly fetchable.
+		 */
+		public static function is_nginx_config_exposed(): bool {
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) || 'nginx' !== Server_Rules::get_server_type() ) {
+					return false;
+				}
+				$path = self::get_config_path();
+				if ( '' === $path || ! file_exists( $path ) ) {
+					return false;
+				}
+				if ( ! function_exists( 'get_transient' ) || ! function_exists( 'set_transient' ) ) {
+					return false;
+				}
+				$cached = get_transient( Util::transient_key( self::NGINX_PROBE_TRANSIENT ) );
+				if ( 'exposed' === $cached ) {
+					return true;
+				}
+				if ( 'safe' === $cached ) {
+					return false;
+				}
+				if ( ! function_exists( 'content_url' ) || ! function_exists( 'wp_remote_get' ) || ! function_exists( 'wp_remote_retrieve_response_code' ) || ! function_exists( 'is_wp_error' ) ) {
+					return false;
+				}
+				$url      = content_url( '/' . self::CONFIG_FILENAME );
+				$response = wp_remote_get(
+					$url,
+					array(
+						'timeout'     => 5,
+						'redirection' => 0,
+					)
+				);
+				if ( is_wp_error( $response ) ) {
+					return false;
+				}
+				$exposed = 200 === (int) wp_remote_retrieve_response_code( $response );
+				set_transient(
+					Util::transient_key( self::NGINX_PROBE_TRANSIENT ),
+					$exposed ? 'exposed' : 'safe',
+					$exposed ? HOUR_IN_SECONDS : 12 * HOUR_IN_SECONDS
+				);
+				return $exposed;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Drop the cached Nginx exposure probe verdict.
+		 *
+		 * Called after protect/enable/disable flows so the next admin
+		 * pageload re-probes instead of serving a stale verdict.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function clear_nginx_probe_cache(): void {
+			try {
+				if ( function_exists( 'delete_transient' ) ) {
+					delete_transient( Util::transient_key( self::NGINX_PROBE_TRANSIENT ) );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 
 		/**

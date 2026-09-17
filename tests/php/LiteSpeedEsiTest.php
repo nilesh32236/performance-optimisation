@@ -259,8 +259,9 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 				$captured = $data;
 			}
 		);
-		Functions\when( 'wp_verify_nonce' )->justReturn( false );
-		$_GET['block'] = 'cart';
+		Functions\when( 'wp_verify_nonce' )->justReturn( 1 );
+		$_GET['block']     = 'cart';
+		$_POST['_wpnonce'] = 'nonce123';
 		LiteSpeed_ESI::handle_ajax_fragment();
 		$this->assertIsArray( $captured );
 		$this->assertArrayHasKey( 'html', $captured );
@@ -278,6 +279,44 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 		}
 		$this->assertTrue( $found_private, 'Cache-Control private,no-cache not found' );
 		$this->assertTrue( $found_vary, 'X-LiteSpeed-Cache-Control private,no-vary not found' );
+		unset( $_GET['block'], $_POST['_wpnonce'] );
+	}
+
+	/**
+	 * Security audit: the cart fragment requires a valid wppo_esi nonce
+	 * like every other block — no public nonce-bypass entry point.
+	 */
+	public function test_ajax_handler_cart_requires_nonce(): void {
+		Functions\when( 'headers_sent' )->justReturn( false );
+		Functions\when( 'header' )->alias(
+			static function () {
+			}
+		);
+		Functions\when( 'sanitize_text_field' )->returnArg();
+		Functions\when( 'wp_unslash' )->returnArg();
+		Functions\when( 'get_transient' )->justReturn( false );
+		Functions\when( 'set_transient' )->justReturn( true );
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'is_multisite' )->justReturn( false );
+
+		$captured_error = null;
+		$captured_code  = null;
+		Functions\when( 'wp_send_json_error' )->alias(
+			static function ( $data, $code ) use ( &$captured_error, &$captured_code ) {
+				$captured_error = $data;
+				$captured_code  = $code;
+			}
+		);
+
+		Functions\when( 'wp_verify_nonce' )->justReturn( false );
+		$_GET['block'] = 'cart';
+		unset( $_POST['_wpnonce'] );
+
+		LiteSpeed_ESI::handle_ajax_fragment();
+
+		$this->assertSame( 403, $captured_code );
+		$this->assertSame( 'Unauthorized', $captured_error['message'] );
+
 		unset( $_GET['block'] );
 	}
 
