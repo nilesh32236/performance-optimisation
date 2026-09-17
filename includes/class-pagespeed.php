@@ -117,6 +117,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * @return int Action Scheduler job ID.
 		 */
 		public static function queue_scan( string $url, string $strategy = 'mobile' ): int {
+			// Audit #1434: allowlist before enqueue — an invalid strategy must
+			// not reach the Google API request.
+			if ( ! in_array( $strategy, array( 'mobile', 'desktop' ), true ) ) {
+				$strategy = 'mobile';
+			}
 			if ( ! function_exists( 'as_enqueue_async_action' ) ) {
 				return 0;
 			}
@@ -215,6 +220,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		public static function run_scan( array $args ): void {
 			$url      = isset( $args['url'] ) ? esc_url_raw( $args['url'] ) : '';
 			$strategy = isset( $args['strategy'] ) ? sanitize_text_field( $args['strategy'] ) : 'mobile';
+			if ( ! in_array( $strategy, array( 'mobile', 'desktop' ), true ) ) {
+				$strategy = 'mobile';
+			}
 
 			if ( empty( $url ) ) {
 				Log::add( __( 'PageSpeed scan skipped: empty URL.', 'performance-optimisation' ) );
@@ -329,7 +337,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 
 			if ( 200 !== $http_code ) {
 				// Translators: %1$d is the HTTP status code, %2$s is the URL.
-				$msg = sprintf( __( 'PageSpeed API returned HTTP %1$d for %2$s.', 'performance-optimisation' ), $http_code, esc_url( $url ) );
+				// Audit #1434: raw for storage (esc_url display-encoding pollutes stored data).
+				$msg = sprintf( __( 'PageSpeed API returned HTTP %1$d for %2$s.', 'performance-optimisation' ), $http_code, esc_url_raw( $url ) );
 				Log::add( $msg );
 				self::store_failure( $url, $strategy, $msg );
 				return;
@@ -367,8 +376,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 				sprintf(
 					/* translators: %1$s is the URL, %2$s is the strategy (mobile/desktop), %3$d is the performance score. */
 					__( 'PageSpeed scan completed for %1$s (%2$s). Performance score: %3$d.', 'performance-optimisation' ),
-					esc_url( $url ),
-					esc_html( $strategy ),
+					esc_url_raw( $url ),
+					sanitize_key( $strategy ),
 					(int) ( $prepared['scores']['performance'] ?? 0 )
 				)
 			);
@@ -386,6 +395,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * @return array|false Prepared result array, or false if not ready.
 		 */
 		public static function get_results( string $url, string $strategy = 'mobile' ) {
+			// Audit #1434: allowlist at the sink (covers direct callers).
+			if ( ! in_array( $strategy, array( 'mobile', 'desktop' ), true ) ) {
+				$strategy = 'mobile';
+			}
 			return get_transient( self::get_transient_key( $url, $strategy ) );
 		}
 

@@ -425,8 +425,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 						}
 					}
 				} catch ( \Throwable $te ) {
+					// Audit #1434: capture before unset — $te is undefined after.
+					$telemetry_message = $te->getMessage();
 					unset( $te );
-					$status['telemetry_error'] = defined( 'WP_DEBUG' ) && WP_DEBUG ? $te->getMessage() : __( 'Redis telemetry error.', 'performance-optimisation' );
+					$status['telemetry_error'] = defined( 'WP_DEBUG' ) && WP_DEBUG ? $telemetry_message : __( 'Redis telemetry error.', 'performance-optimisation' );
 				} finally {
 					if ( method_exists( $redis, 'close' ) ) {
 						try {
@@ -437,9 +439,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					}
 				}
 			} catch ( \Throwable $e ) {
+				// Audit #1434: capture before unset — $e is undefined after.
+				$connection_message = $e->getMessage();
 				unset( $e );
 				$status['redis_reachable'] = false;
-				$status['telemetry_error'] = defined( 'WP_DEBUG' ) && WP_DEBUG ? $e->getMessage() : __( 'Redis connection error.', 'performance-optimisation' );
+				$status['telemetry_error'] = defined( 'WP_DEBUG' ) && WP_DEBUG ? $connection_message : __( 'Redis connection error.', 'performance-optimisation' );
 			}
 
 			return $status;

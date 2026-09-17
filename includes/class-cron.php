@@ -247,7 +247,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 						unset( $e );
 					}
 				}
-				if ( $rescheduled > 0 ) {
+				if ( 0 < $rescheduled ) { // Audit #1434: Yoda.
 					$queue['queued'] = $pending;
 					$queue['failed'] = array();
 					$queue['total']  = count( $pending ) + (int) $queue['done'];
@@ -285,7 +285,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					}
 					$this->process_url( $url );
 					++$count;
-					if ( $count >= self::PRELOAD_RESUME_CHUNK_SIZE ) {
+					if ( self::PRELOAD_RESUME_CHUNK_SIZE <= $count ) { // Audit #1434: Yoda.
 						break;
 					}
 				}
@@ -680,7 +680,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			// job could neither be queued nor confirmed pending, so the
 			// timestamp must not advance — otherwise the rescan is marked
 			// completed without scans actually being scheduled.
-			if ( $all_queued && $newly_queued > 0 ) {
+			if ( $all_queued && 0 < $newly_queued ) { // Audit #1434: Yoda. {
 				update_option( 'wppo_web_vitals_last_rescan', time(), false );
 			}
 		}
@@ -1340,7 +1340,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				$warmup_failure = sprintf( /* translators: %1$s: URL, %2$s: error. */ __( 'Cache warmup failed for %1$s: %2$s', 'performance-optimisation' ), esc_url_raw( $url ), $clean_error );
 			} else {
 				$http_code = (int) wp_remote_retrieve_response_code( $response );
-				if ( $http_code >= 400 ) {
+				if ( 400 <= $http_code ) { // Audit #1434: Yoda.
 					// Strip CR/LF so a crafted URL cannot spoof debug.log lines.
 					$log_url = sanitize_text_field( str_replace( array( "\r", "\n" ), ' ', $url ) );
 					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {

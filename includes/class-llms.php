@@ -246,7 +246,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 				return;
 			}
 			$url = Util::cached_home_url( '/llms.txt' );
-			header( sprintf( 'Link: <%s>; rel="alternate"; type="text/markdown"', esc_url( $url ) ), false );
+			// Audit #1434: raw for HTTP headers (esc_url is HTML-display encoding).
+			header( sprintf( 'Link: <%s>; rel="alternate"; type="text/markdown"', esc_url_raw( $url ) ), false );
 		}
 
 		/**

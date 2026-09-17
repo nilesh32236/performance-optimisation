@@ -652,7 +652,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			$asset_file = WPPO_PLUGIN_PATH . 'build/rum.asset.php';
 			$deps       = array();
 			$version    = WPPO_VERSION;
-			if ( file_exists( $asset_file ) ) {
+			// Audit #1434: local build-artifact probe.
+			if ( file_exists( $asset_file ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_exists -- Local build artifact probe; WP_Filesystem unnecessary.
 				$asset = include $asset_file; // phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable
 				if ( is_array( $asset ) ) {
 					// Trust-but-verify the build artifact (mirrors
@@ -2574,7 +2575,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					}
 				}
 				return $top;
-			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+			} catch ( \Throwable $e ) { // Audit #1434: non-empty catch — stray suppression removed.
 				return null;
 			}
 		}
@@ -3060,7 +3061,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 						return min( self::FIELD_LCP_MIN_SAMPLES_MAX, $min );
 					}
 				}
-			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Intentionally empty: fall through to default.
 			}
 			return self::FIELD_LCP_DEFAULT_MIN_SAMPLES;
 		}
@@ -3182,7 +3183,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					}
 				);
 				return $rows;
-			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+			} catch ( \Throwable $e ) { // Audit #1434: non-empty catch — stray suppression removed.
 				return array();
 			}
 		}
@@ -3246,7 +3247,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				}
 				arsort( $scores, SORT_NUMERIC );
 				return $scores;
-			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+			} catch ( \Throwable $e ) { // Audit #1434: non-empty catch — stray suppression removed.
 				return array();
 			}
 		}
@@ -3313,7 +3314,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					}
 				}
 				return $best >= 0 ? (float) $best : 0.0;
-			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+			} catch ( \Throwable $e ) { // Audit #1434: non-empty catch — stray suppression removed.
 				return 0.0;
 			}
 		}

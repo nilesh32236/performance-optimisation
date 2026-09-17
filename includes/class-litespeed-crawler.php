@@ -767,7 +767,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 				}
 				curl_multi_add_handle( $mh, $ch ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_multi_add_handle -- crawler requires curl_multi
 				$handles[]                 = $ch;
-				$index_to_url[ (int) $ch ] = $req['url'];
+				// Audit #1434: spl_object_id() — (int) cast on PHP 8 CurlHandle
+				// objects collides (all cast to 1), misattributing results.
+				$index_to_url[ spl_object_id( $ch ) ] = $req['url'];
 			};
 
 			// Prime initial batch.
@@ -788,7 +790,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 					$ch   = $info['handle'];
 					$code = (int) curl_getinfo( $ch, CURLINFO_HTTP_CODE ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_getinfo -- crawler requires curl
 					$err  = curl_error( $ch ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_error
-					$url  = $index_to_url[ (int) $ch ] ?? '';
+					$url  = $index_to_url[ spl_object_id( $ch ) ] ?? '';
 					if ( '' !== $url ) {
 						if ( '' !== $err || $code >= 400 || 0 === $code ) {
 							self::record_failure( $url );

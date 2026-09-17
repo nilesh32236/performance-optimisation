@@ -69,7 +69,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\JS' ) ) {
 		 *
 		 * @since 1.0.0
 		 */
-		public function __construct( $file_path, $cache_dir ) {
+		public function __construct( string $file_path, string $cache_dir ) { // Audit #1434: typed like Minify\CSS.
 			// Traversal-safe by construction (issue #1179): the shared
 			// Util::validate_minify_path() gate rejects ../, NUL bytes,
 			// stream wrappers, and .php targets, resolves symlinks via
@@ -116,7 +116,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\JS' ) ) {
 		 * @since 1.0.0
 		 */
 		public function minify() {
-			if ( empty( $this->file_path ) || ! is_readable( $this->file_path ) ) {
+			// Audit #1434: readability pre-gate before WP_Filesystem boots (mirrors Minify\CSS).
+			if ( empty( $this->file_path ) || ! is_readable( $this->file_path ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_readable -- Filesystem object not yet initialized at this pre-gate.
 				return '';
 			}
 			$cache_file = $this->get_cache_file_path();
