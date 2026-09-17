@@ -410,6 +410,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				return false;
 			}
 
+			// Audit #1411: sniff-gate at the sink — never readImage() a file
+			// whose magic bytes do not declare an allowed bitmap MIME.
+			$sniffed = function_exists( 'wp_get_image_mime' ) ? wp_get_image_mime( $source_image ) : '';
+			if ( ! is_string( $sniffed ) || ! self::is_allowed_source_mime( $sniffed ) ) {
+				return false;
+			}
+
 			if ( ! extension_loaded( 'imagick' ) || ! class_exists( 'Imagick' ) ) {
 				return false;
 			}
@@ -794,7 +801,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * @param int $channels Channel count (clamped to 1-4, default 4).
 		 * @return bool True when the image exceeds the budget and must be skipped.
 		 */
-		public function exceeds_pixel_budget( int $width, int $height, int $channels = 4 ): bool {
+		/**
+	 * Whether a detected source MIME may reach an image decoder (audit #1411).
+	 *
+	 * Defense-in-depth before Imagick::readImage(): getimagesize() magic-byte
+	 * parsing already rejects non-images, but an explicit allowlist ensures a
+	 * polyglot accepted by a lenient parser can never reach a delegate-based
+	 * decoder (PostScript/SVG/MVG RCE class). Fail-closed: unknown mimes skip.
+	 *
+	 * @since NEXT
+	 * @param string $mime Detected MIME (e.g. from getimagesize()).
+	 * @return bool True when the MIME is a decodable bitmap type.
+	 */
+	public static function is_allowed_source_mime( string $mime ): bool {
+		return in_array( strtolower( trim( $mime ) ), array( 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif' ), true );
+	}
+
+	public function exceeds_pixel_budget( int $width, int $height, int $channels = 4 ): bool {
 			if ( $width <= 0 || $height <= 0 ) {
 				// Corrupt headers (non-positive dimensions) are not an
 				// oversize skip: return false so the caller falls through
@@ -1610,6 +1633,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 			if ( empty( $image_info ) ) {
 				$this->update_conversion_status( $source_image, 'failed', $format );
+				return false;
+			}
+
+			// Audit #1411: explicit MIME allowlist before any decoder — a
+			// polyglot that slips past header parsing never reaches Imagick.
+			$detected_mime = isset( $image_info['mime'] ) && is_string( $image_info['mime'] ) ? $image_info['mime'] : '';
+			if ( ! self::is_allowed_source_mime( $detected_mime ) ) {
+				$this->update_conversion_status( $source_image, 'skipped', $format );
 				return false;
 			}
 
