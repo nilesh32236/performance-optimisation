@@ -1810,7 +1810,7 @@ Filters the Critical CSS user safelist (selectors always kept in Critical CSS, e
 **Parameters:**
 - `$list` *(string[])* — Safelisted selectors.
 
-> **Note — checksum auto-regen and inline cap:** source-CSS checksums stored at generation time trigger regeneration when stylesheet content changes even if mtime is preserved (see `wppo_ccss_checksum_ttl`); oversize Critical CSS is served from a per-template file instead of inline (20 KB `ccssMaxSize` cap). Unlisted dynamic content stays deferred by design.
+> **Note — checksum auto-regen and inline cap:** source-CSS checksums stored at generation time trigger regeneration when stylesheet content changes even if mtime is preserved (see `wppo_ccss_checksum_ttl`); oversize Critical CSS is served from a per-template file instead of inline (20 KB `ccssMaxSize` cap). Unlisted dynamic content stays deferred by design. Checksum-triggered regen (frontend probe plus `save_post` requeue) is gated by the additive `file_optimisation.ccssChecksumRegen` setting (default true, issue #1388) — set it to `false` to opt out and keep the pre-feature safelist-only behaviour.
 
 ---
 
@@ -1846,6 +1846,20 @@ Filters how many RUM-worst-first Critical CSS templates are queued per regenerat
 
 ```php
 add_filter( 'wppo_ccss_queue_cap', static function() { return 10; } );
+```
+
+---
+
+### `wppo_ccss_inline_budget`
+Filters the gzipped inline budget in bytes for Critical CSS output (issue #1388). Over-budget output is never inlined: the prior good file is kept, no inline CSS is emitted, and stylesheet deferral is skipped for the request (deferred full stylesheet plus used CSS only). The over-budget warning is throttled to once per template per 12h. Stored values heal to the default `14` KB when missing or out of range; valid filter output clamps to 1–100 KB (`MIN..MAX_CCSS_INLINE_BUDGET_BYTES`); non-numeric filter output is ignored and the stored budget is kept. Default `14 * 1024` (stored `file_optimisation.ccssInlineBudgetKb`). @since NEXT.
+
+**Parameters:**
+- `$budget` *(int)* — Budget in bytes. Default `14336`.
+
+**Example:**
+
+```php
+add_filter( 'wppo_ccss_inline_budget', static function() { return 20 * 1024; } );
 ```
 
 ---

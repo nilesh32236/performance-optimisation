@@ -744,7 +744,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * shopper with items in the cart, so consulting them would disable
 		 * critical CSS site-wide for exactly the users being optimized. Only
 		 * cart/checkout pages are commerce contexts. Result is memoized per
-		 * request (reset via reset_ccss_memo()). Fail-open to false: any
+		 * request (reset via reset_ccss_memo()). Must only be called after
+		 * the main query is set up (after parse_query): an early call before
+		 * conditional tags resolve would memoize a premature "not commerce"
+		 * verdict for the later inline_ccss()/defer_stylesheets() consumers
+		 * (which run post-query at wp_head/style_loader_tag). Fail-open to false: any
 		 * failure reports "not commerce" and the caller keeps current
 		 * behaviour.
 		 *
@@ -852,7 +856,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Whether checksum-triggered CCSS regen on save is enabled (issue #1388).
 		 *
 		 * Reads `file_optimisation.ccssChecksumRegen` (default true).
-		 * Fail-open to enabled when the setting cannot be read.
+		 * Fail-open to enabled when the setting cannot be read. Set
+		 * `file_optimisation.ccssChecksumRegen` to false to opt out: the
+		 * frontend stale probe in maybe_check_stale_and_requeue() and the
+		 * save_post requeue in maybe_regen_on_save() both stay inert, and
+		 * empty-safelist sites keep the pre-#1038 behaviour verbatim (no
+		 * per-view checksum file reads for stored variants).
 		 *
 		 * @return bool True when checksum regen is active.
 		 * @since NEXT
