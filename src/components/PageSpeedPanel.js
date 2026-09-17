@@ -23,7 +23,11 @@ import {
 	faMobileAlt,
 	faDesktop,
 } from '@fortawesome/free-solid-svg-icons';
-import { queuePagespeedScan, getPagespeedResults } from '../lib/apiRequest';
+import {
+	queuePagespeedScan,
+	getPagespeedResults,
+	getErrorLogMessage,
+} from '../lib/apiRequest';
 import { scoreToStatus } from '../lib/status';
 import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
@@ -255,7 +259,10 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 							),
 						} );
 					}
-					console.error( 'PageSpeed poll error:', err );
+					console.error(
+						'PageSpeed poll error:',
+						getErrorLogMessage( err )
+					);
 				}
 			};
 			pollRef.current = setTimeout( poll, POLL_INTERVAL_MS );
@@ -324,7 +331,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 					'performance-optimisation'
 				),
 			} );
-			console.error( 'PageSpeed scan error:', err );
+			console.error( 'PageSpeed scan error:', getErrorLogMessage( err ) );
 		}
 	}, [
 		url,

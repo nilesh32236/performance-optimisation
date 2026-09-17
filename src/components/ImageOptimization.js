@@ -1257,7 +1257,10 @@ const ImageOptimization = ( { options = {} } ) => {
 										id="preloadFrontPageImagesUrls"
 										name="preloadFrontPageImagesUrls"
 										rows="3"
-										placeholder="/wp-content/uploads/hero.jpg"
+										placeholder={ __(
+											'/wp-content/uploads/hero.jpg',
+											'performance-optimisation'
+										) }
 										value={
 											settings.preloadFrontPageImagesUrls
 										}

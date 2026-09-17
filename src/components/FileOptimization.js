@@ -13,6 +13,7 @@ import useUnsavedChanges, { stableStringify } from '../lib/useUnsavedChanges';
 import {
 	apiCall,
 	commitSettingsCache,
+	getErrorLogMessage,
 	getWppoSettings,
 	isValidScanUrl,
 	runPerformanceScan,
@@ -652,7 +653,10 @@ const FileOptimization = ( {
 				} );
 			}
 		} catch ( err ) {
-			console.error( 'Failed to purge derived caches.', err );
+			console.error(
+				'Failed to purge derived caches.',
+				getErrorLogMessage( err )
+			);
 			notifyDerivedPurge( {
 				type: 'error',
 				message: __(
@@ -1090,7 +1094,7 @@ const FileOptimization = ( {
 				} );
 			}
 		} catch ( err ) {
-			console.error( 'LiteSpeed save failed', err );
+			console.error( 'LiteSpeed save failed', getErrorLogMessage( err ) );
 			notify( {
 				type: 'error',
 				message: __(
@@ -1130,7 +1134,7 @@ const FileOptimization = ( {
 				} );
 			}
 		} catch ( err ) {
-			console.error( errorMessage, err );
+			console.error( errorMessage, getErrorLogMessage( err ) );
 			notify( {
 				type: 'error',
 				message: __(
@@ -1215,7 +1219,10 @@ const FileOptimization = ( {
 				} );
 			}
 		} catch ( err ) {
-			console.error( 'Failed to regenerate used CSS.', err );
+			console.error(
+				'Failed to regenerate used CSS.',
+				getErrorLogMessage( err )
+			);
 			notify( {
 				type: 'error',
 				message: __(
@@ -1261,7 +1268,10 @@ const FileOptimization = ( {
 				} );
 			}
 		} catch ( err ) {
-			console.error( 'Failed to purge page cache and used CSS.', err );
+			console.error(
+				'Failed to purge page cache and used CSS.',
+				getErrorLogMessage( err )
+			);
 			notifyPurge( {
 				type: 'error',
 				message: __(
@@ -1353,7 +1363,10 @@ const FileOptimization = ( {
 				onCcssRefresh();
 			}
 		} catch ( err ) {
-			console.error( 'Failed to regenerate CCSS for template', err );
+			console.error(
+				'Failed to regenerate CCSS for template',
+				getErrorLogMessage( err )
+			);
 			notify( {
 				type: 'error',
 				message: __(
@@ -1405,7 +1418,10 @@ const FileOptimization = ( {
 				refreshUsedCssStatus();
 			}
 		} catch ( err ) {
-			console.error( 'Failed to regenerate used CSS for post.', err );
+			console.error(
+				'Failed to regenerate used CSS for post.',
+				getErrorLogMessage( err )
+			);
 			notify( {
 				type: 'error',
 				message: __(
@@ -1458,7 +1474,10 @@ const FileOptimization = ( {
 				} );
 			}
 		} catch ( err ) {
-			console.error( 'Failed to update settings.', err );
+			console.error(
+				'Failed to update settings.',
+				getErrorLogMessage( err )
+			);
 			notify( {
 				type: 'error',
 				message: __(
@@ -3681,7 +3700,10 @@ const FileOptimization = ( {
 													?.advanced_cache ||
 													serverRules.litespeed.dropin
 														?.advanced_cache ||
-													'none' }{ ' ' }
+													__(
+														'none',
+														'performance-optimisation'
+													) }{ ' ' }
 												—{ ' ' }
 												{ __(
 													'Object cache:',
@@ -3691,7 +3713,10 @@ const FileOptimization = ( {
 													?.object_cache ||
 													serverRules.litespeed.dropin
 														?.object_cache ||
-													'none' }
+													__(
+														'none',
+														'performance-optimisation'
+													) }
 											</p>
 											{ ( litespeedInfo?.dropin
 												?.object_cache === 'foreign' ||

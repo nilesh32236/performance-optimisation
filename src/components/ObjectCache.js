@@ -6,7 +6,7 @@ import {
 	useContext,
 } from '@wordpress/element';
 import { handleChange } from '../lib/util';
-import { apiCall } from '../lib/apiRequest';
+import { apiCall, getErrorLogMessage } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
 import useUnsavedChanges from '../lib/useUnsavedChanges';
 import UnsavedChangesContext from '../lib/UnsavedChangesContext';
@@ -31,7 +31,7 @@ import SwitchField from './common/SwitchField';
 import NoticeBanner from './common/NoticeBanner';
 import ConfirmDialog from './common/ConfirmDialog';
 
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 
 /**
  * Object-cache REST actions that authenticate against Redis and therefore may
@@ -83,6 +83,8 @@ const ObjectCache = ( { options = {} } ) => {
 	const [ baseline, setBaseline ] = useState( defaultSettings );
 	useEffect( () => {
 		setBaseline( { ...defaultSettings, ...options } );
+		// Per-key deps (not object identity) so parent re-renders with an
+		// identical payload do not reset the baseline.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [
 		options.mode,
@@ -148,7 +150,10 @@ const ObjectCache = ( { options = {} } ) => {
 				if ( signal?.aborted || error?.name === 'AbortError' ) {
 					return;
 				}
-				console.error( 'Error fetching cache status', error );
+				console.error(
+					'Error fetching cache status',
+					getErrorLogMessage( error )
+				);
 				setCacheStatus( ( prev ) => ( {
 					...prev,
 					statusLoaded: true,
@@ -224,7 +229,10 @@ const ObjectCache = ( { options = {} } ) => {
 				),
 				durationMs: 5000,
 			} );
-			console.error( err );
+			console.error(
+				'Error saving settings:',
+				getErrorLogMessage( err )
+			);
 		} finally {
 			setIsLoading( false );
 		}
@@ -277,7 +285,10 @@ const ObjectCache = ( { options = {} } ) => {
 				durationMs: 5000,
 			} );
 		} catch ( err ) {
-			console.error( 'Object cache action failed:', err );
+			console.error(
+				'Object cache action failed:',
+				getErrorLogMessage( err )
+			);
 			notify( {
 				type: 'error',
 				message: __( 'Action failed.', 'performance-optimisation' ),
@@ -302,6 +313,17 @@ const ObjectCache = ( { options = {} } ) => {
 			) || 0;
 		const total = hits + misses;
 		return total > 0 ? ( ( hits / total ) * 100 ).toFixed( 1 ) : '0.0';
+	} )();
+
+	// Width bucket (5% steps) for the progress-bar fill SCSS modifier class,
+	// so dynamic progress needs no inline style. The exact ratio stays
+	// exposed via aria-valuenow/aria-valuetext on the progressbar.
+	const hitRatioBucket = ( () => {
+		const parsed = Number.parseFloat( hitRatio );
+		if ( ! Number.isFinite( parsed ) ) {
+			return 0;
+		}
+		return Math.min( 100, Math.max( 0, Math.round( parsed / 5 ) * 5 ) );
 	} )();
 
 	const connectionBadge = ( () => {
@@ -526,12 +548,9 @@ const ObjectCache = ( { options = {} } ) => {
 							aria-valuenow={ parseFloat( hitRatio ) }
 							aria-valuetext={ `${ hitRatio }%` }
 						>
-							{ /* dynamic progress via CSS var for consistency */ }
+							{ /* Width via SCSS bucket class; exact value in aria-valuetext. */ }
 							<div
-								className="wppo-progress-bar__fill"
-								style={ {
-									'--wppo-hit-ratio': `${ hitRatio }%`,
-								} }
+								className={ `wppo-progress-bar__fill wppo-progress-bar__fill--p${ hitRatioBucket }` }
 							></div>
 						</div>
 						<span
@@ -604,13 +623,16 @@ const ObjectCache = ( { options = {} } ) => {
 						</span>
 						<span className="wppo-text-muted">
 							{ __( 'Uptime:', 'performance-optimisation' ) }{ ' ' }
-							{ cacheStatus.telemetry?.uptime_in_seconds
-								? (
-										cacheStatus.telemetry
-											.uptime_in_seconds / 3600
-								  ).toFixed( 1 )
-								: '0' }
-							h
+							{ sprintf(
+								/* translators: %s: uptime in hours. */
+								__( '%s h', 'performance-optimisation' ),
+								cacheStatus.telemetry?.uptime_in_seconds
+									? (
+											cacheStatus.telemetry
+												.uptime_in_seconds / 3600
+									  ).toFixed( 1 )
+									: '0'
+							) }
 						</span>
 					</div>
 				</div>

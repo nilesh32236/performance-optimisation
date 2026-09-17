@@ -25,7 +25,10 @@ const readModuleData = () => {
 	try {
 		return JSON.parse( el.textContent );
 	} catch ( _err ) {
-		console.warn( 'WPPO: invalid lazyload module data', _err );
+		console.warn(
+			'WPPO: invalid lazyload module data',
+			_err?.message ?? String( _err )
+		);
 	}
 	return {};
 };
@@ -978,7 +981,10 @@ async function loadScriptsByPriority( scripts ) {
 			try {
 				await loadWithTimeout( script );
 			} catch ( err ) {
-				console.error( 'Error loading script:', err );
+				console.error(
+					'Error loading script:',
+					err?.message ?? String( err )
+				);
 			} finally {
 				// Dedup rides on the live-replacement stamp inside
 				// loadScript(); this placeholder mark only covers
@@ -993,7 +999,10 @@ async function loadScriptsByPriority( scripts ) {
 			const results = await pendingAsync;
 			results.forEach( ( r, i ) => {
 				if ( r.status === 'rejected' ) {
-					console.error( 'Error loading script:', r.reason );
+					console.error(
+						'Error loading script:',
+						r.reason?.message ?? String( r.reason )
+					);
 				}
 				if ( concurrent[ i ].isConnected ) {
 					markLoaded( concurrent[ i ] );
@@ -1048,7 +1057,10 @@ async function loadScripts() {
 		try {
 			await loadScriptsByPriority( inlineScripts );
 		} catch ( err ) {
-			console.error( 'Error loading script:', err );
+			console.error(
+				'Error loading script:',
+				err?.message ?? String( err )
+			);
 		}
 
 		if ( document.readyState === 'loading' ) {
@@ -1092,7 +1104,10 @@ const loadIdleScripts = async () => {
 		try {
 			await loadScriptsByPriority( idleScripts );
 		} catch ( err ) {
-			console.error( 'Error loading idle script:', err );
+			console.error(
+				'Error loading idle script:',
+				err?.message ?? String( err )
+			);
 		}
 	}
 };
@@ -1133,7 +1148,10 @@ const observeViewportScripts = () => {
 				pendingViewportCount -= toLoad.length;
 				loadScriptsByPriority( toLoad )
 					.catch( ( err ) =>
-						console.error( 'Error loading viewport scripts:', err )
+						console.error(
+							'Error loading viewport scripts:',
+							err?.message ?? String( err )
+						)
 					)
 					.finally( () => {
 						if ( pendingViewportCount <= 0 ) {

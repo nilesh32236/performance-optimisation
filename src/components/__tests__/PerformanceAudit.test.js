@@ -8,6 +8,8 @@ import PerformanceAudit from '../PerformanceAudit';
 jest.mock( '../../lib/apiRequest', () => ( {
 	runPerformanceScan: jest.fn(),
 	fetchSuggestions: jest.fn(),
+	getErrorLogMessage: ( error ) =>
+		error instanceof Error ? error.message : String( error ),
 } ) );
 
 import { runPerformanceScan, fetchSuggestions } from '../../lib/apiRequest';
@@ -372,7 +374,7 @@ describe( 'PerformanceAudit Component', () => {
 		expect( onSuggestionsReady ).not.toHaveBeenCalled();
 		expect( consoleSpy ).toHaveBeenCalledWith(
 			'Could not fetch suggestions:',
-			expect.any( Error )
+			expect.any( String )
 		);
 		consoleSpy.mockRestore();
 	} );

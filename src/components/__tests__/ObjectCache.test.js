@@ -11,7 +11,11 @@ import React from 'react';
 import ObjectCache from '../ObjectCache';
 import { apiCall } from '../../lib/apiRequest';
 
-jest.mock( '../../lib/apiRequest', () => ( { apiCall: jest.fn() } ) );
+jest.mock( '../../lib/apiRequest', () => ( {
+	apiCall: jest.fn(),
+	getErrorLogMessage: ( error ) =>
+		error instanceof Error ? error.message : String( error ),
+} ) );
 
 describe( 'ObjectCache Component', () => {
 	beforeEach( () => {

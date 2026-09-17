@@ -177,10 +177,10 @@
 
 	// Fallback for browsers without color-mix
 	@supports not (color: color-mix(in srgb, red, white)) {
-		&--cache .wppo-stat-icon { background: #e0f2fe; }
-		&--files .wppo-stat-icon { background: #ede9fe; }
-		&--db .wppo-stat-icon { background: #fef3c7; }
-		&--images .wppo-stat-icon { background: #d1fae5; }
+		&--cache .wppo-stat-icon { background: var(--wppo-stat-icon-cache, #e0f2fe); }
+		&--files .wppo-stat-icon { background: var(--wppo-stat-icon-files, #ede9fe); }
+		&--db .wppo-stat-icon { background: var(--wppo-stat-icon-db, #fef3c7); }
+		&--images .wppo-stat-icon { background: var(--wppo-stat-icon-images, #d1fae5); }
 	}
 
 	.wppo-stat-value {

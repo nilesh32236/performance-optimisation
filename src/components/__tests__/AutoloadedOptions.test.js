@@ -5,6 +5,8 @@ import React from 'react';
 
 jest.mock( '../../lib/apiRequest', () => ( {
 	apiCall: jest.fn(),
+	getErrorLogMessage: ( error ) =>
+		error instanceof Error ? error.message : String( error ),
 } ) );
 
 jest.mock( '../common/FeatureCard', () => ( { children, title } ) => (

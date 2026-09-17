@@ -7,6 +7,8 @@ import SystemInfo from '../SystemInfo';
 // Mock the API request
 jest.mock( '../../lib/apiRequest', () => ( {
 	fetchSystemInfo: jest.fn(),
+	getErrorLogMessage: ( error ) =>
+		error instanceof Error ? error.message : String( error ),
 } ) );
 
 import { fetchSystemInfo } from '../../lib/apiRequest';
@@ -239,7 +241,7 @@ describe( 'SystemInfo Component', () => {
 
 		expect( consoleSpy ).toHaveBeenCalledWith(
 			'System info fetch error:',
-			expect.any( Error )
+			expect.any( String )
 		);
 		consoleSpy.mockRestore();
 	} );

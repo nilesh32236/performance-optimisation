@@ -9,7 +9,7 @@
  */
 
 import { useState, useRef, useEffect, memo } from '@wordpress/element';
-import { fetchSystemInfo } from '../lib/apiRequest';
+import { fetchSystemInfo, getErrorLogMessage } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
@@ -151,7 +151,10 @@ const SystemInfo = () => {
 					'performance-optimisation'
 				),
 			} );
-			console.error( 'System info fetch error:', err );
+			console.error(
+				'System info fetch error:',
+				getErrorLogMessage( err )
+			);
 		} finally {
 			if ( loadControllerRef.current === controller ) {
 				loadControllerRef.current = null;

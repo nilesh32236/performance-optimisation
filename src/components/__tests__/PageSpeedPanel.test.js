@@ -13,6 +13,8 @@ jest.mock( '../../lib/apiRequest', () => ( {
 	queuePageseedScan: jest.fn(),
 	queuePagespeedScan: jest.fn(),
 	getPagespeedResults: jest.fn(),
+	getErrorLogMessage: ( error ) =>
+		error instanceof Error ? error.message : String( error ),
 } ) );
 
 jest.mock( '@fortawesome/react-fontawesome', () => ( {

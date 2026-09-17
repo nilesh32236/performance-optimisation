@@ -12,7 +12,7 @@ import { useState, useEffect, useCallback } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faChartLine, faSpinner } from '@fortawesome/free-solid-svg-icons';
-import { fetchWebVitalsTrends } from '../lib/apiRequest';
+import { fetchWebVitalsTrends, getErrorLogMessage } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
 import NoticeBanner from './common/NoticeBanner';
@@ -179,7 +179,10 @@ const WebVitalsTrends = ( { url = '' } ) => {
 						'performance-optimisation'
 					),
 				} );
-				console.error( 'Web Vitals trends load error:', err );
+				console.error(
+					'Web Vitals trends load error:',
+					getErrorLogMessage( err )
+				);
 			} finally {
 				if ( ! signal?.aborted ) {
 					setLoading( false );

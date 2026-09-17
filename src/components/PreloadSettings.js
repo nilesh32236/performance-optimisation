@@ -1,7 +1,7 @@
 import { __, sprintf } from '@wordpress/i18n';
 import { useState, useEffect, useContext } from '@wordpress/element';
 import { handleChange } from '../lib/util';
-import { apiCall } from '../lib/apiRequest';
+import { apiCall, getErrorLogMessage } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
 import useUnsavedChanges from '../lib/useUnsavedChanges';
 import UnsavedChangesContext from '../lib/UnsavedChangesContext';
@@ -92,7 +92,10 @@ const PreloadSettings = ( { options = {} } ) => {
 				setCacheCap( payload.cache );
 			}
 		} catch ( err ) {
-			console.error( 'Failed fetching preload status', err );
+			console.error(
+				'Failed fetching preload status',
+				getErrorLogMessage( err )
+			);
 		}
 	};
 
@@ -121,7 +124,10 @@ const PreloadSettings = ( { options = {} } ) => {
 				durationMs: 5000,
 			} );
 		} catch ( err ) {
-			console.error( 'Failed resuming preload queue', err );
+			console.error(
+				'Failed resuming preload queue',
+				getErrorLogMessage( err )
+			);
 			notify( {
 				type: 'error',
 				message: __(
@@ -216,7 +222,10 @@ const PreloadSettings = ( { options = {} } ) => {
 				} );
 			}
 		} catch ( err ) {
-			console.error( 'Failed updating preload settings', err );
+			console.error(
+				'Failed updating preload settings',
+				getErrorLogMessage( err )
+			);
 			notify( {
 				type: 'error',
 				message: __(

@@ -7,7 +7,7 @@ import {
 	useRef,
 } from '@wordpress/element';
 import { handleChange } from '../lib/util';
-import { apiCall } from '../lib/apiRequest';
+import { apiCall, getErrorLogMessage } from '../lib/apiRequest';
 import { getDbCounts, clearDbCountsCache } from '../lib/dbCounts';
 import useNotice from '../lib/useNotice';
 import useUnsavedChanges from '../lib/useUnsavedChanges';
@@ -163,6 +163,8 @@ const DatabaseCleanup = ( { options = {} } ) => {
 	const [ baseline, setBaseline ] = useState( defaultSettings );
 	useEffect( () => {
 		setBaseline( { ...defaultSettings, ...options } );
+		// Per-key deps (not object identity) so parent re-renders with an
+		// identical payload do not reset the baseline.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [
 		options.dbSchedule,
@@ -197,7 +199,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				}
 				console.error(
 					'Error fetching database cleanup counts:',
-					error
+					getErrorLogMessage( error )
 				);
 				notify( {
 					type: 'error',
@@ -267,7 +269,10 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				} );
 			}
 		} catch ( err ) {
-			console.error( 'Error saving settings:', err );
+			console.error(
+				'Error saving settings:',
+				getErrorLogMessage( err )
+			);
 			notify( {
 				type: 'error',
 				message:
@@ -350,7 +355,10 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				}
 			}
 		} catch ( error ) {
-			console.error( 'Database cleanup error:', error );
+			console.error(
+				'Database cleanup error:',
+				getErrorLogMessage( error )
+			);
 			notify( {
 				type: 'error',
 				message: __(
@@ -448,7 +456,10 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				} );
 			}
 		} catch ( error ) {
-			console.error( 'Error exporting expired transients:', error );
+			console.error(
+				'Error exporting expired transients:',
+				getErrorLogMessage( error )
+			);
 			notify( {
 				type: 'error',
 				message: __(

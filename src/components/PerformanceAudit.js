@@ -17,7 +17,11 @@ import {
 	faChartBar,
 	faLightbulb,
 } from '@fortawesome/free-solid-svg-icons';
-import { runPerformanceScan, fetchSuggestions } from '../lib/apiRequest';
+import {
+	runPerformanceScan,
+	fetchSuggestions,
+	getErrorLogMessage,
+} from '../lib/apiRequest';
 import { formatBytes } from '../lib/util';
 import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
@@ -333,7 +337,10 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 					'performance-optimisation'
 				),
 			} );
-			console.error( 'Performance scan error:', err );
+			console.error(
+				'Performance scan error:',
+				getErrorLogMessage( err )
+			);
 		} finally {
 			submittingRef.current = false;
 			setScanning( false );
@@ -355,7 +362,10 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 				}
 			} catch ( sugErr ) {
 				if ( ! abortController.signal.aborted ) {
-					console.warn( 'Could not fetch suggestions:', sugErr );
+					console.warn(
+						'Could not fetch suggestions:',
+						getErrorLogMessage( sugErr )
+					);
 				}
 			}
 		}

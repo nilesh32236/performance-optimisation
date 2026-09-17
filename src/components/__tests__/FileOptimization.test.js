@@ -154,7 +154,7 @@ describe( 'FileOptimization Component', () => {
 
 		expect( consoleSpy ).toHaveBeenCalledWith(
 			'Failed to update settings.',
-			mockError
+			mockError.message
 		);
 
 		consoleSpy.mockRestore();
@@ -647,7 +647,7 @@ describe( 'FileOptimization Component', () => {
 		await waitFor( () => {
 			expect( consoleSpy ).toHaveBeenCalledWith(
 				'Failed to regenerate critical CSS.',
-				mockError
+				mockError.message
 			);
 		} );
 

@@ -18,6 +18,15 @@
 	}
 }
 
+// Width buckets (5% steps) so dynamic progress needs no inline style.
+// The exact value stays exposed via aria-valuenow/aria-valuetext.
+@for $i from 0 through 20 {
+	$pct: $i * 5;
+	.wppo-progress-bar__fill--p#{$pct} {
+		width: #{$pct}#{'%'};
+	}
+}
+
 .wppo-progress-section {
 	.wppo-progress-header {
 		display: flex;
