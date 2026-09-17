@@ -371,6 +371,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'fontSubset'                   => false,
 					'fontSubsetSubsets'            => 'latin',
 					'purgeFallbackEnabled'         => false,
+					'builderPurgeWatcher'          => true,
+					'builderPurgeDriftLog'         => true,
 				),
 				'preload_settings'      => array(
 					'enablePreloadCache'       => false,
