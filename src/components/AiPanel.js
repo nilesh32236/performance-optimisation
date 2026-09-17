@@ -32,6 +32,8 @@ const AiPanel = () => {
 	const [ useWpAiClient, setUseWpAiClient ] = useState(
 		!! initial.use_wp_ai_client
 	);
+	const [ cssRefreshOnLcpRegression, setCssRefreshOnLcpRegression ] =
+		useState( !! initial.css_refresh_on_lcp_regression );
 	const [ saving, setSaving ] = useState( false );
 	const [ learning, setLearning ] = useState( false );
 	const [ model, setModel ] = useState( null );
@@ -124,6 +126,7 @@ const AiPanel = () => {
 				settings: {
 					enabled,
 					use_wp_ai_client: useWpAiClient,
+					css_refresh_on_lcp_regression: cssRefreshOnLcpRegression,
 					dismissed_suggestions: dismissed,
 				},
 			} );
@@ -131,6 +134,7 @@ const AiPanel = () => {
 				patchSettingsCache( 'ai_adaptive', {
 					enabled,
 					use_wp_ai_client: useWpAiClient,
+					css_refresh_on_lcp_regression: cssRefreshOnLcpRegression,
 					dismissed_suggestions: dismissed,
 				} );
 				notify( {
@@ -283,6 +287,7 @@ const AiPanel = () => {
 				settings: {
 					enabled,
 					use_wp_ai_client: useWpAiClient,
+					css_refresh_on_lcp_regression: cssRefreshOnLcpRegression,
 					dismissed_suggestions: current,
 				},
 			} );
@@ -290,6 +295,7 @@ const AiPanel = () => {
 				patchSettingsCache( 'ai_adaptive', {
 					enabled,
 					use_wp_ai_client: useWpAiClient,
+					css_refresh_on_lcp_regression: cssRefreshOnLcpRegression,
 					dismissed_suggestions: [ ...current ],
 				} );
 				notify( {
@@ -321,6 +327,54 @@ const AiPanel = () => {
 				),
 			} );
 			fetchSuggestions();
+		}
+	};
+
+	const [ regeneratingMetrics, setRegeneratingMetrics ] = useState( [] );
+	const handleRegenerateCss = async ( suggestion ) => {
+		const postId = suggestion?.ai_payload?.css_refresh?.post_id;
+		if ( ! postId ) {
+			return;
+		}
+		if ( regeneratingMetrics.includes( suggestion.metric ) ) {
+			return;
+		}
+		setRegeneratingMetrics( ( prev ) => [ ...prev, suggestion.metric ] );
+		try {
+			const res = await apiCall( 'used_css_regenerate', {
+				post_id: postId,
+			} );
+			notify( {
+				type: res.success ? 'success' : 'error',
+				message:
+					res.message ||
+					( res.success
+						? __(
+								'Used CSS regeneration queued.',
+								'performance-optimisation'
+						  )
+						: __(
+								'Failed to regenerate used CSS.',
+								'performance-optimisation'
+						  ) ),
+				durationMs: 3000,
+			} );
+		} catch ( err ) {
+			console.error(
+				'Failed to regenerate used CSS.',
+				getErrorLogMessage( err )
+			);
+			notify( {
+				type: 'error',
+				message: __(
+					'Failed to regenerate used CSS.',
+					'performance-optimisation'
+				),
+			} );
+		} finally {
+			setRegeneratingMetrics( ( prev ) =>
+				prev.filter( ( metric ) => metric !== suggestion.metric )
+			);
 		}
 	};
 
@@ -358,6 +412,21 @@ const AiPanel = () => {
 				name="aiAdaptiveUseWpAiClient"
 				checked={ useWpAiClient }
 				onChange={ ( e ) => setUseWpAiClient( e.target.checked ) }
+			/>
+			<SwitchField
+				label={ __(
+					'Auto-refresh CSS on LCP regression',
+					'performance-optimisation'
+				) }
+				description={ __(
+					'Off by default (suggest-only). When on, a field LCP regression queues at most one used-CSS regeneration per URL per cooldown window.',
+					'performance-optimisation'
+				) }
+				name="aiAdaptiveCssRefreshOnLcpRegression"
+				checked={ cssRefreshOnLcpRegression }
+				onChange={ ( e ) =>
+					setCssRefreshOnLcpRegression( e.target.checked )
+				}
 			/>
 			<p className="wppo-text-muted wppo-text-small">
 				{ __(
@@ -416,6 +485,61 @@ const AiPanel = () => {
 								<span className="wppo-suggestion-card__value">
 									{ formatValue( s.value, s.unit ) }
 								</span>
+								{ s.metric === 'ai_lcp_regression' &&
+									s.ai_payload?.css_refresh && (
+										<span className="wppo-text-muted wppo-text-small">
+											{ sprintf(
+												// translators: %1$s is the before LCP in ms, %2$s is the current LCP in ms.
+												__(
+													'LCP before: %1$sms, after: %2$sms',
+													'performance-optimisation'
+												),
+												Math.round(
+													s.ai_payload.css_refresh
+														.before_lcp ?? 0
+												),
+												Math.round(
+													s.ai_payload.css_refresh
+														.current_lcp ?? 0
+												)
+											) }
+											{ s.ai_payload.css_refresh.queued &&
+												' ' +
+													__(
+														'(refresh queued)',
+														'performance-optimisation'
+													) }
+										</span>
+									) }
+								{ s.metric === 'ai_lcp_regression' &&
+									s.ai_payload?.css_refresh?.post_id > 0 && (
+										<button
+											type="button"
+											className="wppo-button wppo-button--sm wppo-button--secondary wppo-ml-8"
+											onClick={ () =>
+												handleRegenerateCss( s )
+											}
+											disabled={ regeneratingMetrics.includes(
+												s.metric
+											) }
+											aria-label={ __(
+												'Regenerate used CSS for the regressed URL',
+												'performance-optimisation'
+											) }
+										>
+											{ regeneratingMetrics.includes(
+												s.metric
+											)
+												? __(
+														'Regenerating…',
+														'performance-optimisation'
+												  )
+												: __(
+														'Regenerate CSS',
+														'performance-optimisation'
+												  ) }
+										</button>
+									) }
 								{ s.ai_payload && (
 									<button
 										type="button"
