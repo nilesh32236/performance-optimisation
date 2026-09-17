@@ -13,6 +13,7 @@ import FeatureCard from './common/FeatureCard';
 import SwitchField from './common/SwitchField';
 import NoticeBanner from './common/NoticeBanner';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
+import getWppoString from '../lib/getWppoString';
 
 /**
  * AI Adaptive panel (N1).
@@ -362,7 +363,7 @@ const AiPanel = () => {
 						'Save AI Settings',
 						'performance-optimisation'
 					) }
-					loadingLabel={ __( 'Saving…', 'performance-optimisation' ) }
+					loadingLabel={ getWppoString( 'saving', 'Saving…' ) }
 				/>
 				<LoadingSubmitButton
 					className="wppo-button wppo-button--secondary wppo-ml-8"

@@ -31,6 +31,7 @@ import LoadingSubmitButton from './common/LoadingSubmitButton';
 import SwitchField from './common/SwitchField';
 import NoticeBanner from './common/NoticeBanner';
 import ConfirmDialog from './common/ConfirmDialog';
+import getWppoString from '../lib/getWppoString';
 
 import { __, sprintf } from '@wordpress/i18n';
 
@@ -205,9 +206,9 @@ const ObjectCache = ( { options = {} } ) => {
 				setIsDirty( false );
 				notify( {
 					type: 'success',
-					message: __(
-						'Settings saved successfully.',
-						'performance-optimisation'
+					message: getWppoString(
+						'saved',
+						'Settings saved successfully.'
 					),
 				} );
 			} else {
@@ -215,19 +216,13 @@ const ObjectCache = ( { options = {} } ) => {
 					type: 'error',
 					message:
 						res.message ||
-						__(
-							'Error saving settings.',
-							'performance-optimisation'
-						),
+						getWppoString( 'error', 'Error saving settings.' ),
 				} );
 			}
 		} catch ( err ) {
 			notify( {
 				type: 'error',
-				message: __(
-					'Error saving settings.',
-					'performance-optimisation'
-				),
+				message: getWppoString( 'error', 'Error saving settings.' ),
 				durationMs: 5000,
 			} );
 			console.error(

@@ -4267,8 +4267,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'translations'                         => array(
 						'dismiss' => __( 'Dismiss', 'performance-optimisation' ),
 						'saving'  => __( 'Saving…', 'performance-optimisation' ),
-						'saved'   => __( 'Settings saved.', 'performance-optimisation' ),
-						'error'   => __( 'Something went wrong. Please try again.', 'performance-optimisation' ),
+						'saved'   => __( 'Settings saved successfully.', 'performance-optimisation' ),
+						'error'   => __( 'Error saving settings.', 'performance-optimisation' ),
 					),
 					// Upgrade auto-purge status (issue #1276): SPA-visible
 					// last-purge reason + safe-mode preview link bypassing

@@ -111,6 +111,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		private static bool $loadcss_emitted = false;
 
 		/**
+		 * Per-request main CCSS output guard (issue #1333).
+		 *
+		 * Covers the id="wppo-critical-css" payload (over-cap <link> and
+		 * inline <style> paths) alongside $loadcss_emitted so a double
+		 * wp_head or direct double-call cannot duplicate the id. Set on
+		 * every output path in inline_ccss(). Reset via reset_ccss_memo().
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static bool $ccss_output_emitted = false;
+
+		/**
 		 * Above-fold selectors to match during extraction.
 		 *
 		 * Uses precise token-based matching to avoid false positives.
@@ -2905,6 +2918,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			self::$lcp_preload_emitted = array();
 			self::$ccss_defer_blocked  = array();
 			self::$loadcss_emitted     = false;
+			self::$ccss_output_emitted = false;
 			self::$templates_memo      = null;
 			self::$pending_memo        = array();
 		}
@@ -4884,6 +4898,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return;
 			}
 
+			// Main-output guard (issue #1333): a double wp_head or direct
+			// double-call must not duplicate id="wppo-critical-css".
+			// The LCP helper above has its own dedup; the loader stub has
+			// $loadcss_emitted. This flag covers every output path below.
+			if ( self::$ccss_output_emitted ) {
+				return;
+			}
+
 			$template_slug = self::get_current_template_slug();
 			$template_hash = self::get_template_hash( $template_slug );
 
@@ -4905,6 +4927,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					// wp_inline_script_attributes filter can attach a CSP
 					// nonce (issue #1333; same as RUM/bfcache). Once per
 					// request so a double-call cannot duplicate the tag id.
+					self::$ccss_output_emitted = true;
 					self::maybe_emit_loadcss_loader();
 					return;
 				}
@@ -4918,6 +4941,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				if ( strlen( $content ) > $cap || strlen( $content ) > $limit ) {
 					$file_url = self::get_ccss_file_url( $template_hash );
 					if ( '' !== $file_url ) {
+						self::$ccss_output_emitted = true;
 						// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- Per-template CCSS file variant served directly (no registered handle exists for it).
 						echo '<link rel="stylesheet" id="wppo-critical-css" href="' . esc_url( $file_url ) . '" media="all" />' . "\n";
 						return;
@@ -4930,8 +4954,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					// stylesheets normally instead of deferring them with zero
 					// critical CSS on the page (review FOUC guard).
 					self::$ccss_defer_blocked[ $template_hash ] = true;
+					self::$ccss_output_emitted                  = true;
 					return;
 				}
+				self::$ccss_output_emitted = true;
 				echo '<style id="wppo-critical-css">' . "\n";
 				// Sanitized against HTML breakout tokens; see sanitize_inline_css().
 				echo self::sanitize_inline_css( $content ) . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- CSS content sanitized for the <style> context by sanitize_inline_css().
@@ -5008,7 +5034,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				// pagehide/beforeunload (audit #1077 finding 5). Emitted via
 				// wp_print_inline_script_tag() for a core CSP nonce
 				// (issue #1333; same as RUM/bfcache). Once per request so a
-				// double-call cannot duplicate the tag id.
+				// double-call cannot duplicate the tag id. The main-output
+				// guard above makes the second call a no-op (no re-queue).
+				self::$ccss_output_emitted = true;
 				self::maybe_emit_loadcss_loader();
 			}
 		}

@@ -6,6 +6,7 @@ import FeatureCard from './common/FeatureCard';
 import SwitchField from './common/SwitchField';
 import NoticeBanner from './common/NoticeBanner';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
+import getWppoString from '../lib/getWppoString';
 
 /**
  * Whether a URL is safe to render as an external link href (http(s) only).
@@ -180,7 +181,7 @@ const LlmsPanel = () => {
 						'Save LLMs.txt Settings',
 						'performance-optimisation'
 					) }
-					loadingLabel={ __( 'Saving…', 'performance-optimisation' ) }
+					loadingLabel={ getWppoString( 'saving', 'Saving…' ) }
 				/>
 			</div>
 		</FeatureCard>

@@ -228,7 +228,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 			$protected_css = Asset_Manager::get_protected_styles();
 			?>
 			<div class="wppo-asset-manager">
-				<style>.wppo-protected-row{background-color:var(--wppo-protected-bg,#f0f0f1);border-left:4px solid var(--wppo-protected-border,#8c8f94);}</style>
+				<?php // Protected-row cue (issue #1333): inline (not the SPA stylesheet) because this metabox renders on post.php where build/style-index.css is never enqueued. Colors use var() with hex fallbacks so admin color schemes can override via --wppo-protected-bg/--wppo-protected-border. ?>
+				<style>
+				.wppo-protected-row {
+					background-color: var(--wppo-protected-bg, #f0f0f1);
+					border-left: 4px solid var(--wppo-protected-border, #8c8f94);
+				}
+				</style>
 				<h4><?php esc_html_e( 'Delay JS Overrides', 'performance-optimisation' ); ?></h4>
 				<p>
 					<label for="wppo_delay_disabled">

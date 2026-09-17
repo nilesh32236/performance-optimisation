@@ -16,6 +16,7 @@ import {
 import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
 import NoticeBanner from './common/NoticeBanner';
+import getWppoString from '../lib/getWppoString';
 
 const CLIENT_SIDE_MIME_OPTIONS = [
 	{ value: 'image/jpeg', label: 'JPEG' },
@@ -435,9 +436,9 @@ const ImageOptimization = ( { options = {} } ) => {
 					type: 'success',
 					message:
 						res.message ||
-						__(
-							'Settings saved successfully.',
-							'performance-optimisation'
+						getWppoString(
+							'saved',
+							'Settings saved successfully.'
 						),
 					durationMs: 5000,
 				} );
@@ -446,10 +447,7 @@ const ImageOptimization = ( { options = {} } ) => {
 					type: 'error',
 					message:
 						res.message ||
-						__(
-							'Error saving settings.',
-							'performance-optimisation'
-						),
+						getWppoString( 'error', 'Error saving settings.' ),
 					durationMs: 5000,
 				} );
 			}
@@ -458,7 +456,7 @@ const ImageOptimization = ( { options = {} } ) => {
 				type: 'error',
 				message:
 					error.message ||
-					__( 'Error saving settings.', 'performance-optimisation' ),
+					getWppoString( 'error', 'Error saving settings.' ),
 				durationMs: 5000,
 			} );
 		} finally {

@@ -12,6 +12,7 @@ import FeatureCard from './common/FeatureCard';
 import SwitchField from './common/SwitchField';
 import NoticeBanner from './common/NoticeBanner';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
+import getWppoString from '../lib/getWppoString';
 
 /**
  * Edge Cache panel (N2).
@@ -326,7 +327,7 @@ const EdgeCachePanel = () => {
 						'Save Edge Cache',
 						'performance-optimisation'
 					) }
-					loadingLabel={ __( 'Saving…', 'performance-optimisation' ) }
+					loadingLabel={ getWppoString( 'saving', 'Saving…' ) }
 				/>
 			</div>
 

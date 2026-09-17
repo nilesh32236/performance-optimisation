@@ -21,6 +21,7 @@ import LoadingSubmitButton from './common/LoadingSubmitButton';
 import ConfirmDialog from './common/ConfirmDialog';
 import NoticeBanner from './common/NoticeBanner';
 import Tooltip from './common/Tooltip';
+import getWppoString from '../lib/getWppoString';
 
 const RISK_BADGE_MAP = {
 	revisions: {
@@ -250,9 +251,9 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				setIsDirty( false );
 				notify( {
 					type: 'success',
-					message: __(
-						'Settings saved successfully.',
-						'performance-optimisation'
+					message: getWppoString(
+						'saved',
+						'Settings saved successfully.'
 					),
 					durationMs: 5000,
 				} );
@@ -261,10 +262,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 					type: 'error',
 					message:
 						res?.message ||
-						__(
-							'Error saving settings.',
-							'performance-optimisation'
-						),
+						getWppoString( 'error', 'Error saving settings.' ),
 					durationMs: 5000,
 				} );
 			}
@@ -277,7 +275,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				type: 'error',
 				message:
 					err?.message ||
-					__( 'Error saving settings.', 'performance-optimisation' ),
+					getWppoString( 'error', 'Error saving settings.' ),
 				durationMs: 5000,
 			} );
 		} finally {

@@ -64,6 +64,29 @@ describe( 'NoticeBanner', () => {
 		expect( onDismiss ).toHaveBeenCalledTimes( 1 );
 	} );
 
+	it( 'uses the MO-backed translations.dismiss map for the dismiss label', () => {
+		const prev = global.wppoSettings;
+		global.wppoSettings = {
+			translations: { dismiss: 'Schliessen-Mo-Map' },
+		};
+		try {
+			render(
+				<NoticeBanner
+					message="Info."
+					type="info"
+					onDismiss={ jest.fn() }
+				/>
+			);
+			expect(
+				screen.getByRole( 'button', {
+					name: 'Schliessen-Mo-Map',
+				} )
+			).toBeInTheDocument();
+		} finally {
+			global.wppoSettings = prev;
+		}
+	} );
+
 	it( 'appends a custom className', () => {
 		const { container } = render(
 			<NoticeBanner message="Info." type="info" className="wppo-mb-20" />
