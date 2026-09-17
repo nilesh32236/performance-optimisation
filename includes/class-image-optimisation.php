@@ -666,13 +666,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Claim the single hero preload slot for a URL.
 		 *
-		 * Centralised emission guard (issue #1312) consulted by every preload
-		 * emitter (`preload_images()` via has/mark, `maybe_preload_hero_image()`,
+		 * Centralised emission guard (issue #1312) consulted by the buffer
+		 * companions (`maybe_preload_hero_image()`,
 		 * `maybe_inject_css_hero_preload()`): returns false when the hero was
 		 * already emitted this request (any media variant) or already present
 		 * in the buffer, otherwise records the claim and returns true so the
 		 * caller may emit exactly one `<link rel="preload" as="image">` with
-		 * eager plus fetchpriority high. Fail-open: any failure returns true
+		 * eager plus fetchpriority high. `preload_images()` (wp_head manual
+		 * lists) records exact media-key emissions via has/mark and stays
+		 * authoritative by run order (wp_head runs before the buffer flush),
+		 * so the any-media scan guarantee covers the buffer companions while
+		 * manual lists win by order. Fail-open: any failure returns true
 		 * (caller emits normally, never a white screen).
 		 *
 		 * @since NEXT
@@ -870,7 +874,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( ! is_string( $raw ) || '' === trim( $raw ) ) {
 					return '';
 				}
-				$url = trim( substr( $raw, 0, 2048 ) );
+				$url = trim( substr( trim( $raw ), 0, 2048 ) );
 				if ( ! $this->is_image_lcp_url( $url ) || ! $this->is_allowed_hero_preload_url( $url ) ) {
 					return '';
 				}
@@ -3685,7 +3689,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * viewport observations, or a single measured group). Manual picker,
 		 * stored PageSpeed, and DOM-heuristic tiers are deliberately
 		 * excluded here. Every candidate must pass `is_image_lcp_url()` +
-		 * `is_same_origin_preload_url()`. Returns '' when the per-post
+		 * `is_allowed_hero_preload_url()` (same-origin or configured CDN).
+		 * Returns '' when the per-post
 		 * disable meta is set, when no stable signal exists, or on any
 		 * failure (fail-open to no-preload, never broken markup).
 		 *
@@ -3719,7 +3724,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$field       = \PerformanceOptimise\Inc\RUM::get_field_lcp_url( $field_path );
 					if ( is_array( $field ) && ! empty( $field['url'] ) && is_string( $field['url'] ) ) {
 						$candidate = trim( $field['url'] );
-						if ( '' !== $candidate && $this->is_image_lcp_url( $candidate ) && $this->is_same_origin_preload_url( $candidate ) ) {
+						if ( '' !== $candidate && $this->is_image_lcp_url( $candidate ) && $this->is_allowed_hero_preload_url( $candidate ) ) {
 							$resolved = $candidate;
 						}
 					}
@@ -3738,7 +3743,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						} elseif ( method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'get_lcp_url' ) ) {
 							$od_url = \PerformanceOptimise\Inc\OD_Bridge::get_lcp_url();
 						}
-						if ( is_string( $od_url ) && '' !== $od_url && $this->is_image_lcp_url( $od_url ) && $this->is_same_origin_preload_url( $od_url ) ) {
+						if ( is_string( $od_url ) && '' !== $od_url && $this->is_image_lcp_url( $od_url ) && $this->is_allowed_hero_preload_url( $od_url ) ) {
 							$resolved = $od_url;
 						}
 					}
@@ -3757,7 +3762,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * Subset of `resolve_auto_lcp_url()` needing no RUM state (issue
 		 * #1216): the manual picker and the Optimization Detective tiers are
-		 * guarded (image + same-origin) and fire no RUM lookups, so they stay
+		 * guarded (image + allowed origin: same-origin or configured CDN)
+		 * and fire no RUM lookups, so they stay
 		 * available when the RUM gate is unsatisfied. The OD tier relies on
 		 * the stability-gated `OD_Bridge::get_stable_lcp_url()` (issue
 		 * #1273 — at least two agreeing viewport observations, or a single
@@ -3778,7 +3784,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private function resolve_od_only_lcp_url(): string {
 			try {
 				$manual = $this->get_manual_lcp_url();
-				if ( '' !== $manual && $this->is_image_lcp_url( $manual ) && $this->is_same_origin_preload_url( $manual ) ) {
+				if ( '' !== $manual && $this->is_image_lcp_url( $manual ) && $this->is_allowed_hero_preload_url( $manual ) ) {
 					return $manual;
 				}
 			} catch ( \Throwable $e ) {
@@ -3801,7 +3807,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						} elseif ( method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'get_lcp_url' ) ) {
 							$od_url = \PerformanceOptimise\Inc\OD_Bridge::get_lcp_url();
 						}
-						if ( is_string( $od_url ) && '' !== $od_url && $this->is_image_lcp_url( $od_url ) && $this->is_same_origin_preload_url( $od_url ) ) {
+						if ( is_string( $od_url ) && '' !== $od_url && $this->is_image_lcp_url( $od_url ) && $this->is_allowed_hero_preload_url( $od_url ) ) {
 							return $od_url;
 						}
 					}
@@ -3833,9 +3839,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * `_wppo_disable_auto_lcp` meta suppresses every automatic tier
 		 * (P0 OD, P1 stored, P1b signal, P2 heuristic) but never the
 		 * manual picker, which is explicit opt-in. Text-only LCP never resolves: every
-		 * candidate must pass `is_image_lcp_url()`. Cross-origin candidates never resolve either:
-		 * every tier must pass `is_same_origin_preload_url()` so at most one
-		 * same-origin `<link rel="preload" as="image" fetchpriority="high">`
+		 * candidate must pass `is_image_lcp_url()`. Untrusted-origin candidates never resolve either:
+		 * every tier must pass `is_allowed_hero_preload_url()` (same-origin
+		 * or configured CDN) so at most one allowed-origin
+		 * `<link rel="preload" as="image" fetchpriority="high">`
 		 * is ever emitted. Multisite-safe: the
 		 * stored tier uses `Util::transient_key()` blog-aware keys.
 		 *
@@ -3880,7 +3887,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			// P1: Stored PageSpeed (+ RUM-field override) chain.
 			try {
 				$stored = $this->get_current_lcp_url();
-				if ( is_string( $stored ) && '' !== $stored && $this->is_image_lcp_url( $stored ) && $this->is_same_origin_preload_url( $stored ) ) {
+				if ( is_string( $stored ) && '' !== $stored && $this->is_image_lcp_url( $stored ) && $this->is_allowed_hero_preload_url( $stored ) ) {
 					return $stored;
 				}
 			} catch ( \Throwable $e ) {
@@ -3906,7 +3913,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			if ( is_string( $buffer ) && '' !== $buffer && false !== strpos( $buffer, '<img' ) ) {
 				try {
 					$heuristic = $this->get_heuristic_lcp_url( $buffer );
-					if ( '' !== $heuristic && $this->is_image_lcp_url( $heuristic ) && $this->is_same_origin_preload_url( $heuristic ) ) {
+					if ( '' !== $heuristic && $this->is_image_lcp_url( $heuristic ) && $this->is_allowed_hero_preload_url( $heuristic ) ) {
 						return $heuristic;
 					}
 				} catch ( \Throwable $e ) {
@@ -4255,7 +4262,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					} elseif ( method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'get_lcp_url' ) ) {
 						$od_url = \PerformanceOptimise\Inc\OD_Bridge::get_lcp_url();
 					}
-					if ( is_string( $od_url ) && '' !== $od_url && $this->is_image_lcp_url( $od_url ) && $this->is_same_origin_preload_url( $od_url ) ) {
+					if ( is_string( $od_url ) && '' !== $od_url && $this->is_image_lcp_url( $od_url ) && $this->is_allowed_hero_preload_url( $od_url ) ) {
 						$this->current_lcp_url = $od_url;
 						return $this->current_lcp_url;
 					}
@@ -4842,7 +4849,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( '' === $img_url ) {
 					return;
 				}
-				if ( ! $this->is_image_lcp_url( $img_url ) || ! $this->is_same_origin_preload_url( $img_url ) ) {
+				if ( ! $this->is_image_lcp_url( $img_url ) || ! $this->is_allowed_hero_preload_url( $img_url ) ) {
 					return;
 				}
 				if ( self::has_emitted_preload( $img_url ) ) {
@@ -6236,6 +6243,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return $iframe_tag;
 			}
 
+			// High-priority iframes are never lazy (issue #1312 parity with
+			// the Tag Processor loop in add_delay_load_img()): an
+			// author-marked fetchpriority high hint wins, so force eager and
+			// skip deferral instead of emitting lazy+high together.
+			if ( 1 === preg_match( '#fetchpriority\s*=\s*["\']?high["\']?#i', $iframe_tag ) ) {
+				if ( class_exists( 'WP_HTML_Tag_Processor' ) ) {
+					try {
+						$high_tags = new \WP_HTML_Tag_Processor( $iframe_tag );
+						if ( $high_tags->next_tag( array( 'tag_name' => 'iframe' ) ) ) {
+							$high_loading = $high_tags->get_attribute( 'loading' );
+							if ( ( is_string( $high_loading ) && 'lazy' === strtolower( trim( $high_loading ) ) ) || null === $high_loading ) {
+								$high_tags->set_attribute( 'loading', 'eager' );
+							}
+							$updated = $high_tags->get_updated_html();
+							if ( is_string( $updated ) && '' !== $updated ) {
+								return $updated;
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( 1 === preg_match( '#loading\s*=\s*["\']?lazy["\']?#i', $iframe_tag ) ) {
+					$fixed = preg_replace( '#loading\s*=\s*["\']?lazy["\']?#i', 'loading="eager"', $iframe_tag, 1 );
+					if ( is_string( $fixed ) && '' !== $fixed ) {
+						return $fixed;
+					}
+				} elseif ( false === stripos( $iframe_tag, 'loading=' ) ) {
+					$with_eager = preg_replace( '#<iframe\b#i', '<iframe loading="eager"', $iframe_tag, 1 );
+					if ( is_string( $with_eager ) && '' !== $with_eager ) {
+						return $with_eager;
+					}
+				}
+				return $iframe_tag;
+			}
+
 			$use_native_lazy = ! empty( $this->options['image_optimisation']['lazyLoadNative'] );
 
 			if ( $use_native_lazy ) {
@@ -6896,7 +6939,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					return $attr;
 				}
 				try {
-					if ( ! $this->is_image_lcp_url( $lcp_url ) || ! $this->is_same_origin_preload_url( $lcp_url ) ) {
+					if ( ! $this->is_image_lcp_url( $lcp_url ) || ! $this->is_allowed_hero_preload_url( $lcp_url ) ) {
 						return $attr;
 					}
 				} catch ( \Throwable $e ) {
@@ -7016,7 +7059,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( ! is_string( $lcp_url ) || '' === $lcp_url ) {
 					return $this->fetchpriority_lcp_url;
 				}
-				if ( ! $this->is_image_lcp_url( $lcp_url ) || ! $this->is_same_origin_preload_url( $lcp_url ) ) {
+				if ( ! $this->is_image_lcp_url( $lcp_url ) || ! $this->is_allowed_hero_preload_url( $lcp_url ) ) {
 					return $this->fetchpriority_lcp_url;
 				}
 				$this->fetchpriority_lcp_url = $lcp_url;
@@ -8154,8 +8197,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				// `<style>`-block fallback below.
 				if ( ! $this->is_html_api_available() && false !== strpos( $buffer, 'style=' ) ) {
 					$inline_styles = array();
-					if ( preg_match_all( '#\bstyle\s*=\s*(["\'])(.*?)\1#is', $buffer, $inline_matches ) && isset( $inline_matches[2] ) ) {
-						$inline_styles = $inline_matches[2];
+					if ( preg_match_all( '#<[^>]+\bstyle\s*=\s*(["\'])(.*?)\1[^>]*>#is', $buffer, $inline_matches ) && isset( $inline_matches[0] ) && isset( $inline_matches[2] ) ) {
+						foreach ( $inline_matches[0] as $idx => $tag_html ) {
+							// Skip deferred lazy backgrounds (parity with the
+							// Tag Processor branch above): preloading them
+							// would defeat their lazy deferral.
+							if ( false !== stripos( (string) $tag_html, 'data-wppo-bg' ) ) {
+								continue;
+							}
+							$inline_styles[] = $inline_matches[2][ $idx ];
+						}
 					}
 					foreach ( $inline_styles as $style ) {
 						if ( ! is_string( $style ) || '' === $style || false === stripos( $style, 'background' ) ) {
@@ -8739,6 +8790,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							$allowed = apply_filters( 'wppo_lazyload_iframe_allowed', true, $src, '' );
 							if ( ! $allowed ) {
 								continue;
+							}
+
+							// High-priority iframes are never lazy (issue #1312
+							// parity with the IMG branch above): an author-marked
+							// fetchpriority high hint wins, so force eager and skip
+							// both the native and JS-lazy deferral paths instead
+							// of emitting the invalid lazy+high pair.
+							try {
+								$iframe_priority = $wppo_tags->get_attribute( 'fetchpriority' );
+								if ( is_string( $iframe_priority ) && 'high' === strtolower( trim( $iframe_priority ) ) ) {
+									$iframe_loading = $wppo_tags->get_attribute( 'loading' );
+									if ( is_string( $iframe_loading ) && 'lazy' === strtolower( trim( $iframe_loading ) ) ) {
+										$wppo_tags->set_attribute( 'loading', 'eager' );
+									} elseif ( null === $iframe_loading ) {
+										$wppo_tags->set_attribute( 'loading', 'eager' );
+									}
+									continue;
+								}
+							} catch ( \Throwable $e ) {
+								unset( $e );
 							}
 
 							if ( $use_native_lazy ) {
