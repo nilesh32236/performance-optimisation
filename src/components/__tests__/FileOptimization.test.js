@@ -987,6 +987,83 @@ describe( 'FileOptimization Component', () => {
 		} );
 	} );
 
+	it( 'toggles auto-delay for known third parties and persists via update_settings', async () => {
+		// Opening the Scripts tab hydrates sandbox state first, so the
+		// first mock serves sandbox_preview and the second serves the save.
+		apiCall
+			.mockResolvedValueOnce( {
+				success: true,
+				data: { staged: {}, has_staged: false, preview_url: '' },
+			} )
+			.mockResolvedValueOnce( {
+				success: true,
+				message: 'Settings updated successfully.',
+			} );
+
+		render(
+			<FileOptimization
+				options={ { delayJS: true, delayJSThirdParty: true } }
+				serverRules={ {} }
+			/>
+		);
+
+		const scriptsTab = screen.getByRole( 'tab', { name: /Scripts/i } );
+		fireEvent.click( scriptsTab );
+
+		const autoToggle = screen.getByLabelText(
+			/Auto-delay known third parties/i
+		);
+		expect( autoToggle ).not.toBeChecked();
+
+		fireEvent.click( autoToggle );
+		expect( autoToggle ).toBeChecked();
+
+		const submitButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+		await act( async () => {
+			fireEvent.click( submitButton );
+		} );
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				expect.objectContaining( {
+					tab: 'file_optimisation',
+					settings: expect.objectContaining( {
+						delayJSThirdPartyAuto: true,
+					} ),
+				} )
+			);
+		} );
+
+		await waitFor( () => {
+			// The success banner renders in each visible tab section,
+			// so assert on all matches instead of a single node.
+			expect(
+				screen.getAllByText( 'Settings updated successfully.' ).length
+			).toBeGreaterThan( 0 );
+		} );
+	} );
+
+	it( 'shows the auto-delay toggle standalone when third-party mode is off', () => {
+		render(
+			<FileOptimization
+				options={ { delayJS: true, delayJSThirdParty: false } }
+				serverRules={ {} }
+			/>
+		);
+
+		const scriptsTab = screen.getByRole( 'tab', { name: /Scripts/i } );
+		fireEvent.click( scriptsTab );
+
+		// Auto mode is an independent OR with manual mode on the backend, so
+		// the toggle renders standalone (auto-only is a supported state).
+		expect(
+			screen.getByLabelText( /Auto-delay known third parties/i )
+		).toBeInTheDocument();
+	} );
+
 	it( 'toggles Remove HTML Comments switch', () => {
 		render(
 			<FileOptimization

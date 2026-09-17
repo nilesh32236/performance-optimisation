@@ -92,6 +92,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 			'excludeDelayJS',
 			'excludeDeferJS',
 			'excludeCombineCSS',
+			'delayJSThirdParty',
+			'delayJSThirdPartyAuto',
+			'delayJSThirdPartyDenylist',
+			'delayJSThirdPartyAllowlist',
 		);
 
 		/**
@@ -289,7 +293,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 				// feature the caller meant to disable. Fail-safe to false,
 				// except elementorSafeMode which fail-safes to true (absent =
 				// enabled) matching Util::sanitize_settings_recursively().
-				foreach ( array( 'delayJS', 'deferJS', 'combineCSS', 'delayJSExternalOnly', 'minifyInlineJS' ) as $bool_key ) {
+				foreach ( array( 'delayJS', 'deferJS', 'combineCSS', 'delayJSExternalOnly', 'minifyInlineJS', 'delayJSThirdParty', 'delayJSThirdPartyAuto' ) as $bool_key ) {
 					if ( array_key_exists( $bool_key, $staged ) && ! is_bool( $staged[ $bool_key ] ) ) {
 						$bool                = filter_var( $staged[ $bool_key ], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
 						$staged[ $bool_key ] = null === $bool ? false : $bool;

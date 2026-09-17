@@ -1544,6 +1544,22 @@ Filters the user third-party allowlist that always wins over the denylist (scrip
 
 ---
 
+### `wppo_delay_js_third_party_auto_patterns`
+Filters the curated known-vendor URL patterns used by the opt-in auto third-party delay mode (`delayJSThirdPartyAuto`). Auto-matched scripts delay until the browser is idle (load-when-idle parity with the manual idle list). Fail-open: non-array or throwing callbacks fall back to the built-in preset; a valid empty array is honored and disables auto mode. Guarded with `has_filter()` so requests without a registered callback never pay for the filter. Matching is src-substring on both output paths; handle matching (pre-slash segment, word-boundary) applies on the `script_loader_tag` path only — the buffered path has no handle. Callbacks should merge/append (e.g. `$patterns[] = 'cdn.example.com/tracker';`) rather than replace, so built-in vendors are preserved. @since NEXT.
+
+**Parameters:**
+- `$preset` *(string[])* — Auto third-party URL patterns.
+
+**Example:**
+```php
+add_filter( 'wppo_delay_js_third_party_auto_patterns', function( $patterns ) {
+	$patterns[] = 'cdn.example.com/tracker';
+	return $patterns;
+} );
+```
+
+---
+
 ### `wppo_htaccess_cache_vary_rules`
 Filters the `.htaccess` cache-vary rules block before writing. @since 2.0.0.
 

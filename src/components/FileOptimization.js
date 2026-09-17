@@ -188,6 +188,7 @@ const FILE_OPT_SYNC_KEYS = [
 	'delayJSINPPreset',
 	'delayJSExternalOnly',
 	'delayJSThirdParty',
+	'delayJSThirdPartyAuto',
 	'delayJSThirdPartyDenylist',
 	'delayJSThirdPartyAllowlist',
 	'delayJSExcludeUrls',
@@ -494,6 +495,10 @@ const FileOptimization = ( {
 				options.delayJSThirdParty !== undefined
 					? options.delayJSThirdParty
 					: false,
+			delayJSThirdPartyAuto:
+				options.delayJSThirdPartyAuto !== undefined
+					? options.delayJSThirdPartyAuto
+					: false,
 			// Raw values: the single normalizeFileOpt() call below joins
 			// backend arrays via toTextLines(), so no manual calls here.
 			delayJSThirdPartyDenylist: options.delayJSThirdPartyDenylist,
@@ -794,6 +799,7 @@ const FileOptimization = ( {
 		delayJSExternalOnly: !! settings.delayJSExternalOnly,
 		minifyInlineJS: !! settings.minifyInlineJS,
 		delayJSThirdParty: !! settings.delayJSThirdParty,
+		delayJSThirdPartyAuto: !! settings.delayJSThirdPartyAuto,
 		delayJSThirdPartyDenylist: toTextLines(
 			settings.delayJSThirdPartyDenylist
 		),
@@ -3157,6 +3163,22 @@ const FileOptimization = ( {
 													</div>
 												</>
 											) }
+											<SwitchField
+												label={ __(
+													'Auto-delay known third parties when idle',
+													'performance-optimisation'
+												) }
+												description={ __(
+													'One-click deferral of known third-party vendors (analytics, ads, social, chat, embeds) until the browser is idle — same load-when-idle behavior as the idle list. Works on its own or together with the manual third-party mode above. Your allowlist and exclusions still win, and builders plus cart, checkout and account stay excluded.',
+													'performance-optimisation'
+												) }
+												name="delayJSThirdPartyAuto"
+												checked={
+													settings.delayJSThirdPartyAuto
+												}
+												onChange={ onFieldChange }
+												disabled={ optimizerDisabled }
+											/>
 											<SwitchField
 												label={ __(
 													'Builder safe preset',
