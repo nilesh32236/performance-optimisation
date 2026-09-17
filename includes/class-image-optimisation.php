@@ -460,16 +460,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return void
 		 */
 		public static function clear_runtime_caches(): void {
-			self::$file_exists_cache      = array();
-			self::$img_size_cache         = array();
-			self::$preload_emitted        = array();
-			self::$preload_emitted_urls   = array();
-			self::$placeholder_info_cache = null;
-			self::$placeholder_path_cache = array();
-			self::$heuristic_lcp_memo     = array();
-			self::$derived_alt_map_memo   = null;
-			self::$derived_alt_map_dirty  = false;
-			self::$parent_title_cache     = array();
+			self::$file_exists_cache               = array();
+			self::$img_size_cache                  = array();
+			self::$preload_emitted                 = array();
+			self::$preload_emitted_urls            = array();
+			self::$placeholder_info_cache          = null;
+			self::$placeholder_path_cache          = array();
+			self::$heuristic_lcp_memo              = array();
+			self::$derived_alt_map_memo            = null;
+			self::$derived_alt_map_dirty           = false;
+			self::$derived_alt_shutdown_registered = false;
+			self::$parent_title_cache              = array();
 			if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) && method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'clear_request_memo' ) ) {
 				try {
 					\PerformanceOptimise\Inc\OD_Bridge::clear_request_memo();
@@ -4363,6 +4364,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			try {
 				if ( '' === $buffer ) {
 					return '';
+				}
+				// Skip the memo (and its full-buffer md5) for oversized
+				// buffers: hashing 100-200KB per caller costs more than the
+				// scan it memoizes when inter-caller mutations miss the
+				// exact-bytes key anyway. Large buffers scan directly.
+				if ( strlen( $buffer ) > 262144 ) {
+					return $this->get_first_image_src_in_buffer( $buffer );
 				}
 				$hash = md5( $buffer );
 				if ( isset( self::$heuristic_lcp_memo[ $hash ] ) ) {

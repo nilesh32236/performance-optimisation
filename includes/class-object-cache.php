@@ -2407,17 +2407,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					return false;
 				}
 				// Legacy fallback: pre-fix installs cached the verdict under
-				// the raw per-URL key (without the blog prefix) or the
-				// network-global key. Honour them (and migrate to the
-				// blog-prefixed per-URL key) so upgrading does not force a
-				// re-probe storm. The legacy per-URL key is checked first:
-				// on multisite with a shared object cache the global key
-				// may hold another site's verdict and must not be
-				// persisted into this site's prefixed per-URL key.
+				// the raw per-URL key (without the blog prefix). Honour it
+				// (and migrate to the blog-prefixed per-URL key) so upgrading
+				// does not force a re-probe storm. The network-global legacy
+				// key is intentionally ignored here: on multisite with a
+				// shared object cache it may hold another site's verdict,
+				// and persisting that into this site's prefixed per-URL key
+				// would poison it for up to 2h (safe hides real exposure,
+				// exposed false-alarms). Ignored sites re-probe once.
 				$legacy = get_transient( self::NGINX_PROBE_TRANSIENT . '_' . md5( $url ) );
-				if ( 'exposed' !== $legacy && 'safe' !== $legacy ) {
-					$legacy = get_transient( self::NGINX_PROBE_TRANSIENT );
-				}
 				if ( 'exposed' === $legacy || 'safe' === $legacy ) {
 					$migrated                             = ( 'exposed' === $legacy );
 					self::$nginx_probe_memo[ $probe_key ] = $migrated;

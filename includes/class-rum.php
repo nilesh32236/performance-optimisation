@@ -364,6 +364,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		private static bool $score_trends_loaded = false;
 
 		/**
+		 * Per-request memo for the RUM path-priority map, keyed by sample gate.
+		 *
+		 * Ordering N queue URLs without this memo recomputes
+		 * get_path_lcp_priority() -> get_field_lcp_p75_by_segment() (merging
+		 * up to 600 paths x 6 segments x 100 samples + usort) per call
+		 * (N+1 CPU). Reset alongside the aggregate memo via
+		 * clear_field_lcp_cache().
+		 *
+		 * @since NEXT
+		 * @var array<string, array<string, float>>
+		 */
+		private static array $path_priority_memo = array();
+
+		/**
 		 * Generation counter for the per-path top-URL transient index.
 		 *
 		 * Bumped on every aggregate flush so stale per-path entries are
@@ -422,6 +436,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			self::$field_lcp_result_memo = array();
 			self::$score_trends_memo     = null;
 			self::$score_trends_loaded   = false;
+			self::$path_priority_memo    = array();
 			self::$top_url_generation    = -1;
 			self::$stored_lcp_memo       = array();
 		}
@@ -1402,12 +1417,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				if ( '' === $cleaned ) {
 					return '';
 				}
-				if ( 1 !== preg_match( '/^[a-z0-9#\._\-\s:~+\[\]=\']{1,256}$/i', $cleaned ) ) {
+				if ( 1 !== preg_match( '/^[a-z0-9#\._\-\s:~+\[\]=]{1,256}$/i', $cleaned ) ) {
 					return '';
 				}
 				// Authoritative markup/breakout rejection (mirrored by
 				// sanitizeRumValues() in src/rum.js): angle brackets,
-				// double quotes and backticks never pass, so the regex
+				// single/double quotes and backticks never pass, so the regex
 				// above intentionally omits them.
 				if ( false !== strpbrk( $cleaned, '<>"`' ) ) {
 					return '';
@@ -1580,6 +1595,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				$home = self::get_home_host();
 				return '' !== $home && $host === $home;
 			} catch ( \Throwable $e ) {
+				unset( $e );
 				return false;
 			}
 		}
@@ -1631,6 +1647,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				}
 				return $host === $home;
 			} catch ( \Throwable $e ) {
+				unset( $e );
 				return true;
 			}
 		}
@@ -1681,6 +1698,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				}
 				return $host === $home;
 			} catch ( \Throwable $e ) {
+				unset( $e );
 				return false;
 			}
 		}
@@ -2498,53 +2516,104 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				}
 				$now  = time();
 				$best = array();
+				$util = class_exists( 'PerformanceOptimise\Inc\Util' );
+				// Fast path: direct-index each day bucket by the normalized
+				// path (O(days)) instead of scanning every path in every
+				// bucket (O(days*paths)) on the frontend hot path.
+				$direct_hit = false;
 				foreach ( $all as $day_bucket ) {
-					if ( ! is_array( $day_bucket ) ) {
+					if ( ! is_array( $day_bucket ) || ! isset( $day_bucket[ $normalized_path ] ) || ! is_array( $day_bucket[ $normalized_path ] ) ) {
 						continue;
 					}
-					// Match the normalized path against normalized bucket
-					// keys so legacy trailing-slash buckets ('/hero-page/')
-					// still resolve after the store side was normalized.
-					foreach ( $day_bucket as $bucket_path => $bucket ) {
-						if ( ! is_array( $bucket ) ) {
+					$direct_hit = true;
+					$bucket     = $day_bucket[ $normalized_path ];
+					$urls       = $bucket['lcpUrls'] ?? null;
+					if ( ! is_array( $urls ) ) {
+						continue;
+					}
+					foreach ( $urls as $entry ) {
+						if ( ! is_array( $entry ) || empty( $entry['url'] ) || ! is_string( $entry['url'] ) ) {
 							continue;
 						}
-						$bucket_norm = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::normalize_rum_path( (string) $bucket_path ) : (string) $bucket_path;
-						if ( $bucket_norm !== $normalized_path ) {
+						// Aggregate by normalized URL (fall back to raw
+						// when unparseable) so http vs https vs
+						// root-relative observations of the same image
+						// share one candidate and jointly pass the
+						// sample gate. Keep the highest-n raw URL for
+						// preload output.
+						$norm = $util ? \PerformanceOptimise\Inc\Util::normalize_url( $entry['url'] ) : '';
+						$key  = ( '' !== $norm ) ? $norm : $entry['url'];
+						if ( ! isset( $best[ $key ] ) ) {
+							$best[ $key ] = array(
+								'url'      => $entry['url'],
+								'n'        => 0,
+								'lastSeen' => 0,
+							);
+						}
+						$entry_n                  = isset( $entry['n'] ) ? (int) $entry['n'] : 0;
+						$best[ $key ]['n']       += $entry_n;
+						$best[ $key ]['lastSeen'] = max( $best[ $key ]['lastSeen'], isset( $entry['lastSeen'] ) ? (int) $entry['lastSeen'] : 0 );
+						// Prefer the raw URL variant with the most
+						// observations for output.
+						$best[ $key ]['_raw_n'] = ( $best[ $key ]['_raw_n'] ?? 0 );
+						if ( $entry_n >= $best[ $key ]['_raw_n'] ) {
+							$best[ $key ]['url']    = $entry['url'];
+							$best[ $key ]['_raw_n'] = $entry_n;
+						}
+					}
+				}
+				if ( ! $direct_hit ) {
+					// Legacy fallback: buckets written before path
+					// normalization (e.g. trailing-slash variants) key on
+					// the raw path, so scan with per-bucket normalization.
+					foreach ( $all as $day_bucket ) {
+						if ( ! is_array( $day_bucket ) ) {
 							continue;
 						}
-						$urls = $bucket['lcpUrls'] ?? null;
-						if ( ! is_array( $urls ) ) {
-							continue;
-						}
-						foreach ( $urls as $entry ) {
-							if ( ! is_array( $entry ) || empty( $entry['url'] ) || ! is_string( $entry['url'] ) ) {
+						// Match the normalized path against normalized bucket
+						// keys so legacy trailing-slash buckets ('/hero-page/')
+						// still resolve after the store side was normalized.
+						foreach ( $day_bucket as $bucket_path => $bucket ) {
+							if ( ! is_array( $bucket ) ) {
 								continue;
 							}
-							// Aggregate by normalized URL (fall back to raw
-							// when unparseable) so http vs https vs
-							// root-relative observations of the same image
-							// share one candidate and jointly pass the
-							// sample gate. Keep the highest-n raw URL for
-							// preload output.
-							$norm = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::normalize_url( $entry['url'] ) : '';
-							$key  = ( '' !== $norm ) ? $norm : $entry['url'];
-							if ( ! isset( $best[ $key ] ) ) {
-								$best[ $key ] = array(
-									'url'      => $entry['url'],
-									'n'        => 0,
-									'lastSeen' => 0,
-								);
+							$bucket_norm = $util ? \PerformanceOptimise\Inc\Util::normalize_rum_path( (string) $bucket_path ) : (string) $bucket_path;
+							if ( $bucket_norm !== $normalized_path ) {
+								continue;
 							}
-							$entry_n                  = isset( $entry['n'] ) ? (int) $entry['n'] : 0;
-							$best[ $key ]['n']       += $entry_n;
-							$best[ $key ]['lastSeen'] = max( $best[ $key ]['lastSeen'], isset( $entry['lastSeen'] ) ? (int) $entry['lastSeen'] : 0 );
-							// Prefer the raw URL variant with the most
-							// observations for output.
-							$best[ $key ]['_raw_n'] = ( $best[ $key ]['_raw_n'] ?? 0 );
-							if ( $entry_n >= $best[ $key ]['_raw_n'] ) {
-								$best[ $key ]['url']    = $entry['url'];
-								$best[ $key ]['_raw_n'] = $entry_n;
+							$urls = $bucket['lcpUrls'] ?? null;
+							if ( ! is_array( $urls ) ) {
+								continue;
+							}
+							foreach ( $urls as $entry ) {
+								if ( ! is_array( $entry ) || empty( $entry['url'] ) || ! is_string( $entry['url'] ) ) {
+									continue;
+								}
+								// Aggregate by normalized URL (fall back to raw
+								// when unparseable) so http vs https vs
+								// root-relative observations of the same image
+								// share one candidate and jointly pass the
+								// sample gate. Keep the highest-n raw URL for
+								// preload output.
+								$norm = $util ? \PerformanceOptimise\Inc\Util::normalize_url( $entry['url'] ) : '';
+								$key  = ( '' !== $norm ) ? $norm : $entry['url'];
+								if ( ! isset( $best[ $key ] ) ) {
+									$best[ $key ] = array(
+										'url'      => $entry['url'],
+										'n'        => 0,
+										'lastSeen' => 0,
+									);
+								}
+								$entry_n                  = isset( $entry['n'] ) ? (int) $entry['n'] : 0;
+								$best[ $key ]['n']       += $entry_n;
+								$best[ $key ]['lastSeen'] = max( $best[ $key ]['lastSeen'], isset( $entry['lastSeen'] ) ? (int) $entry['lastSeen'] : 0 );
+								// Prefer the raw URL variant with the most
+								// observations for output.
+								$best[ $key ]['_raw_n'] = ( $best[ $key ]['_raw_n'] ?? 0 );
+								if ( $entry_n >= $best[ $key ]['_raw_n'] ) {
+									$best[ $key ]['url']    = $entry['url'];
+									$best[ $key ]['_raw_n'] = $entry_n;
+								}
 							}
 						}
 					}
@@ -2620,7 +2689,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					$path = self::resolve_current_path();
 				}
 				$field = self::get_field_lcp_url( $path );
-				if ( is_array( $field ) && ! empty( $field['url'] ) && is_string( $field['url'] ) && self::is_same_origin_url( $field['url'] ) ) {
+				if ( is_array( $field ) && ! empty( $field['url'] ) && is_string( $field['url'] ) && self::is_same_origin_url_strict( $field['url'] ) ) {
 					return $field;
 				}
 			} catch ( \Throwable $e ) {
@@ -2628,7 +2697,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			}
 			try {
 				$fallback = self::get_stored_pagespeed_lcp_url( $path );
-				if ( '' !== $fallback && self::is_same_origin_url( $fallback ) ) {
+				if ( '' !== $fallback && self::is_same_origin_url_strict( $fallback ) ) {
 					return array(
 						'url'      => $fallback,
 						'n'        => 0,
@@ -2927,7 +2996,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			// LCP URL to site B.
 			$blog = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
 			if ( null !== $path ) {
-				return 'path:' . $blog . ':' . $path;
+				// Normalize before keying so trailing-slash variants
+				// (/about vs /about/) share one memo entry instead of
+				// paying duplicate storage I/O per request.
+				$key_path = class_exists( 'PerformanceOptimise\Inc\Util' ) ? \PerformanceOptimise\Inc\Util::normalize_rum_path( $path ) : $path;
+				return 'path:' . $blog . ':' . $key_path;
 			}
 			$post_part  = '0';
 			$front_part = '0';
@@ -2965,49 +3038,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 
 				// Priority 1: Singular post — check post meta (mobile first, then desktop).
 				// Current-request context only: an explicit path cannot be mapped to a post ID.
-				// Both strategy keys are read with a single get_post_meta()
-				// call (no per-strategy round trip).
+				// Two narrow keyed reads transfer less than materializing the
+				// full postmeta row (page-builder posts can carry 50-200KB),
+				// so the single-call optimization is intentionally not used
+				// here (no persistent-cache assumption on the hot path).
 				if ( null === $path && function_exists( 'is_singular' ) && function_exists( 'get_the_ID' ) && function_exists( 'get_post_meta' ) ) {
 					try {
 						if ( is_singular() ) {
 							$post_id = get_the_ID();
 							if ( ! empty( $post_id ) ) {
-								$handled_single_call = false;
-								try {
-									$all_meta = get_post_meta( $post_id );
-									if ( is_array( $all_meta ) ) {
-										// Page-builder posts can carry 50-200KB
-										// of postmeta; materializing all of it
-										// to read two keys costs more than two
-										// narrow keyed reads without a
-										// persistent object cache, so fall
-										// through to the per-key path.
-										if ( count( $all_meta ) <= 100 ) {
-											$handled_single_call = true;
-											foreach ( $strategies as $strategy ) {
-												$values   = $all_meta[ '_wppo_lcp_image_url_' . $strategy ] ?? '';
-												$meta_lcp = is_array( $values ) ? ( $values[0] ?? '' ) : $values;
-												// Same-origin only (issue #1180): a
-												// cross-origin tier value is skipped so a
-												// later same-origin tier can still win.
-												if ( ! empty( $meta_lcp ) && is_string( $meta_lcp ) && self::is_same_origin_url( $meta_lcp ) ) {
-													return $meta_lcp;
-												}
-											}
-										}
-									}
-								} catch ( \Throwable $e ) {
-									unset( $e );
-								}
-								if ( ! $handled_single_call ) {
-									foreach ( $strategies as $strategy ) {
+								foreach ( $strategies as $strategy ) {
+									try {
 										$meta_lcp = get_post_meta( $post_id, '_wppo_lcp_image_url_' . $strategy, true );
-										// Same-origin only (issue #1180): a
-										// cross-origin tier value is skipped so a
-										// later same-origin tier can still win.
-										if ( ! empty( $meta_lcp ) && is_string( $meta_lcp ) && self::is_same_origin_url( $meta_lcp ) ) {
-											return $meta_lcp;
-										}
+									} catch ( \Throwable $e ) {
+										unset( $e );
+										continue;
+									}
+									// Same-origin only (issue #1180): a
+									// cross-origin tier value is skipped so a
+									// later same-origin tier can still win.
+									if ( ! empty( $meta_lcp ) && is_string( $meta_lcp ) && self::is_same_origin_url( $meta_lcp ) ) {
+										return $meta_lcp;
 									}
 								}
 							}
@@ -3315,7 +3366,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					return 0.0;
 				}
 				if ( null === $priority ) {
-					$priority = self::get_path_lcp_priority();
+					// Per-request memo keyed by the resolved sample gate:
+					// ordering N queue URLs must not recompute the full
+					// aggregate merge + sort N times.
+					$min_key = null;
+					try {
+						$min_key = self::get_field_lcp_min_samples();
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$min_key = null;
+					}
+					$memo_key = 'min:' . (string) (int) $min_key;
+					if ( ! array_key_exists( $memo_key, self::$path_priority_memo ) ) {
+						self::$path_priority_memo[ $memo_key ] = self::get_path_lcp_priority();
+					}
+					$priority = self::$path_priority_memo[ $memo_key ];
 				}
 				$path = '/';
 				if ( function_exists( 'wp_parse_url' ) ) {

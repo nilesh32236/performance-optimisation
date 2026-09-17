@@ -2016,11 +2016,9 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$image_opt = new Image_Optimisation( $this->default_options );
 
 		$signal = new \ReflectionMethod( Image_Optimisation::class, 'get_stable_signal_lcp_url' );
-		$signal->setAccessible( true );
 		$this->assertSame( '', $signal->invoke( $image_opt ) );
 
 		$resolve = new \ReflectionMethod( Image_Optimisation::class, 'resolve_auto_lcp_url' );
-		$resolve->setAccessible( true );
 		$this->assertSame( '', $resolve->invoke( $image_opt, null ) );
 	}
 

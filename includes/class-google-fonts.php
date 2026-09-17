@@ -469,6 +469,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * @return void
 		 */
 		private function maybe_queue_download( string $key, string $url ): void {
+			// Per-request memo of queued CSS keys: process_buffer() runs on
+			// every frontend cache-miss render, so without this 2-3 font
+			// URLs cost 2-3 as_has_scheduled_action() scheduler reads per
+			// page view. Repeat keys in the same request skip the query.
+			static $queued_keys = array();
+			if ( isset( $queued_keys[ $key ] ) ) {
+				return;
+			}
+			$queued_keys[ $key ] = true;
 			// Action Scheduler (and wp_schedule_single_event) forward args
 			// positionally via array_values()/do_action_ref_array(), so the
 			// key/url pair must travel as ONE positional array element.
@@ -826,13 +835,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 
 			// Early abort: a truthful Content-Length over the 5MB cap skips
 			// the full network+disk download. The post-download size gate
-			// below stays as the backstop for lying/missing lengths.
+			// below stays as the backstop for lying/missing lengths. The
+			// HEAD preflight uses a short timeout: it is pure overhead for
+			// the common small-woff2 case (which still needs the GET), so
+			// it must never stall the AS worker.
 			try {
 				if ( function_exists( 'wp_remote_head' ) && function_exists( 'wp_remote_retrieve_header' ) && function_exists( 'is_wp_error' ) ) {
 					$head = wp_remote_head(
 						$url,
 						array(
-							'timeout'    => 10,
+							'timeout'    => 3,
 							'user-agent' => self::CHROME_UA,
 						)
 					);
@@ -919,11 +931,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		/**
 		 * Whether a downloaded file looks like a real font file.
 		 *
-		 * Guards against persisting an error/HTML body as .woff2: prefers
-		 * the finfo MIME check (font MIME or generic octet-stream, which
-		 * some builds report for woff2), with a woff2/woff magic-signature
-		 * fallback when finfo is unavailable. Fail-closed: any unreadable
-		 * or unrecognized file returns false.
+		 * Guards against persisting an error/HTML body as .woff2: explicit
+		 * font MIMEs short-circuit true, while the generic
+		 * application/octet-stream (which some builds report for woff2 AND
+		 * for arbitrary binary/HTML bodies) still falls through to the
+		 * authoritative woff2/woff magic-signature check below. Fail-closed:
+		 * any unreadable or unrecognized file returns false.
 		 *
 		 * @since NEXT
 		 * @param string $path Local temp file path.
@@ -945,7 +958,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 						}
 						Util::close_finfo_handle( $finfo );
 						if ( is_string( $mime ) && '' !== $mime ) {
-							if ( in_array( $mime, array( 'font/woff', 'font/woff2', 'font/ttf', 'font/otf', 'font/collection', 'application/font-woff', 'application/font-woff2', 'application/octet-stream' ), true ) ) {
+							if ( in_array( $mime, array( 'font/woff', 'font/woff2', 'font/ttf', 'font/otf', 'font/collection', 'application/font-woff', 'application/font-woff2' ), true ) ) {
 								return true;
 							}
 							// Otherwise fall through to the magic-signature
@@ -953,7 +966,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 							// vary across builds, so a non-allowlisted MIME
 							// alone must not reject a real font — while an
 							// HTML error body can never match a font
-							// signature and stays rejected.
+							// signature and stays rejected. Note
+							// application/octet-stream intentionally does NOT
+							// short-circuit: it is the generic fallback MIME
+							// a MITM/error HTML body is most likely to be
+							// mis-detected as.
 						}
 					}
 				}
@@ -969,7 +986,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 					0 === strpos( $head, 'OTTO' ) ||
 					0 === strpos( $head, 'true' ) ||
 					0 === strpos( $head, 'typ1' )
-				);
+					);
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;

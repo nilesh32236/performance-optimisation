@@ -1573,7 +1573,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 						$snapshot_complete = true;
 						// Wanted dedup keys for the capped batch: once all are
 						// seen the snapshot is sufficient and pagination can
-						// stop early instead of deserializing up to 10x1000
+						// stop early instead of deserializing up to 2x1000
 						// rows to replace at most 100 per-item checks.
 						$wanted_keys = array();
 						foreach ( $webp_images as $wanted_image ) {
@@ -1589,7 +1589,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 							}
 						}
 						// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop.
-						for ( $as_page = 0; $as_page < 10; $as_page++ ) {
+						for ( $as_page = 0; $as_page < 2; $as_page++ ) {
 							$query            = array(
 								'hook'     => 'wppo_convert_image_background',
 								'group'    => 'performance_optimisation',
@@ -1638,7 +1638,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 							if ( count( $existing_actions ) < 1000 ) {
 								break;
 							}
-							if ( 9 === $as_page ) {
+							if ( 1 === $as_page ) {
 								// Pagination budget exhausted with a full
 								// final page: the snapshot may be missing
 								// rows, so per-item fallbacks stay enabled.
@@ -1670,13 +1670,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 							$scheduled[ $dedup_key ] = true;
 							continue;
 						}
-						as_enqueue_async_action(
+						// Atomic unique insert closes the snapshot TOCTOU: a
+						// concurrent request enqueueing the same
+						// source_path|format between the snapshot and this
+						// loop dedupes instead of creating a duplicate job.
+						// A 0 return means already-queued (or scheduler
+						// failure, which the next request retries) — either
+						// way the key is marked scheduled and not counted.
+						$enqueued                = Util::enqueue_unique_async_action(
 							'wppo_convert_image_background',
 							$args,
 							'performance_optimisation'
 						);
 						$scheduled[ $dedup_key ] = true;
-						++$jobs_queued;
+						if ( $enqueued > 0 ) {
+							++$jobs_queued;
+						}
 					}
 				}
 
@@ -1698,13 +1707,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 							$scheduled[ $dedup_key ] = true;
 							continue;
 						}
-						as_enqueue_async_action(
+						// Atomic unique insert closes the snapshot TOCTOU (see
+						// the webp loop above).
+						$enqueued                = Util::enqueue_unique_async_action(
 							'wppo_convert_image_background',
 							$args,
 							'performance_optimisation'
 						);
 						$scheduled[ $dedup_key ] = true;
-						++$jobs_queued;
+						if ( $enqueued > 0 ) {
+							++$jobs_queued;
+						}
 					}
 				}
 
@@ -2796,8 +2809,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// correctly-deduped scan must not surface as scheduler failure
 			// in the SPA, so check the completed result first, then fall
 			// back to 202 when a job is still scheduled but unlocatable.
+			// Only a non-error result counts as completed: a stored failure
+			// sentinel (array with 'error') must fall through to the 500
+			// below so the SPA surfaces the failure instead of polling
+			// forever for a job_id that will never arrive.
 			try {
-				if ( false !== Pagespeed::get_results( $url, $strategy ) ) {
+				$cached = Pagespeed::get_results( $url, $strategy );
+				if ( is_array( $cached ) && empty( $cached['error'] ) ) {
 					return $this->send_response(
 						array(
 							'url'      => $url,
