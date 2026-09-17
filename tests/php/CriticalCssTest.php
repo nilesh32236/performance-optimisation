@@ -221,12 +221,14 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Public URLs passing core validation are allowed.
+	 * External URLs are denied by default (audit #1357): wp_http_validate_url()
+	 * only checks syntax, so it must never act as a default-allow fallback.
+	 * Non-same-site hosts require the wppo_ccss_allowed_stylesheet_host filter.
 	 *
 	 * @return void
 	 */
-	public function test_is_safe_stylesheet_url_allows_public_urls_passing_validation(): void {
-		$this->assertTrue( $this->invoke_private( 'is_safe_stylesheet_url', 'https://fonts.cdn-example.net/s.css' ) );
+	public function test_is_safe_stylesheet_url_denies_external_urls_by_default(): void {
+		$this->assertFalse( $this->invoke_private( 'is_safe_stylesheet_url', 'https://fonts.cdn-example.net/s.css' ) );
 	}
 
 	/**
@@ -267,12 +269,27 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * External stylesheets go through wp_safe_remote_get() so redirect hops
-	 * are re-validated against private ranges.
+	 * External stylesheets are refused by default before any HTTP request.
 	 *
 	 * @return void
 	 */
-	public function test_fetch_routes_external_host_through_safe_api(): void {
+	public function test_fetch_refuses_external_host_by_default(): void {
+		$result = $this->invoke_private( 'fetch_stylesheet_with_imports', 'https://fonts.cdn-example.net/style.css' );
+
+		$this->assertSame( '', $result );
+		$this->assertSame( 0, $this->http_calls['safe'] );
+		$this->assertSame( 0, $this->http_calls['regular'] );
+	}
+
+	/**
+	 * Allowlisted external stylesheets go through wp_safe_remote_get() so
+	 * redirect hops are re-validated against private ranges.
+	 *
+	 * @return void
+	 */
+	public function test_fetch_routes_allowlisted_external_host_through_safe_api(): void {
+		$this->filter_overrides['wppo_ccss_allowed_stylesheet_host'] = true;
+
 		$result = $this->invoke_private( 'fetch_stylesheet_with_imports', 'https://fonts.cdn-example.net/style.css' );
 
 		$this->assertSame( 'a{color:red}', $result );
@@ -289,11 +306,12 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 		$base = 'http://example.com/wp-content/themes/a/b.css';
 
 		$this->assertSame( '', $this->invoke_private( 'resolve_import_url', 'http://169.254.169.254/x.css', $base ) );
-		$this->assertSame( 'https://cdn.ext/x.css', $this->invoke_private( 'resolve_import_url', 'https://cdn.ext/x.css', $base ) );
+		$this->assertSame( '', $this->invoke_private( 'resolve_import_url', 'https://cdn.ext/x.css', $base ) );
 	}
 
 	/**
-	 * Relative / root-relative / protocol-relative imports resolve as before.
+	 * Relative / root-relative imports resolve as before; protocol-relative
+	 * imports pointing at external hosts are refused by the safety gate.
 	 *
 	 * @return void
 	 */
@@ -302,7 +320,7 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertSame( 'http://example.com/wp-content/themes/a/../c.css', $this->invoke_private( 'resolve_import_url', '../c.css', $base ) );
 		$this->assertSame( 'http://example.com/c.css', $this->invoke_private( 'resolve_import_url', '/c.css', $base ) );
-		$this->assertSame( 'http://cdn.ext/x.css', $this->invoke_private( 'resolve_import_url', '//cdn.ext/x.css', $base ) );
+		$this->assertSame( '', $this->invoke_private( 'resolve_import_url', '//cdn.ext/x.css', $base ) );
 	}
 
 	/**

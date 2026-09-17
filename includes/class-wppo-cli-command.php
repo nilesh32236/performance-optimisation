@@ -1914,8 +1914,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				&& false === strpos( $oc_content, Object_Cache::DROPIN_MARKER )
 				&& false !== strpos( $oc_content, Object_Cache::LEGACY_DROPIN_MARKER );
 
-			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_readable
-			$config_path   = wp_normalize_path( WP_CONTENT_DIR . '/wppo-redis-config.php' );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_readable
+			$config_path   = ( class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) && is_callable( array( 'PerformanceOptimise\Inc\Object_Cache', 'get_config_path' ) ) && '' !== Object_Cache::get_config_path() ) ? wp_normalize_path( Object_Cache::get_config_path() ) : wp_normalize_path( WP_CONTENT_DIR . '/wppo-redis-config.php' );
 			$config_exists = is_readable( $config_path );
 
 			$oc_settings = isset( $stored['object_cache'] ) && is_array( $stored['object_cache'] ) ? $stored['object_cache'] : array();

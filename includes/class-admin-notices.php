@@ -475,14 +475,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			);
 
 			echo '<div class="notice notice-warning" role="alert" aria-live="assertive"><p><strong>' . esc_html__( 'Performance Optimisation — Redis config exposed', 'performance-optimisation' ) . '</strong> — ';
-			echo esc_html__( 'Your server runs Nginx, which ignores .htaccess deny rules, and wp-content/wppo-redis-config.php appears directly fetchable. It holds no password but discloses Redis topology (hosts, ports, TLS mode).', 'performance-optimisation' ) . ' ';
+			echo esc_html__( 'Your server runs Nginx, which ignores .htaccess deny rules, and wp-content/wppo-redis-config.php appears directly fetchable. It holds no password but discloses Redis topology (hosts, ports, TLS mode). For the strongest protection, define WPPO_REDIS_CONFIG_PATH outside the web root.', 'performance-optimisation' ) . ' ';
 			echo wp_kses(
 				sprintf(
-					/* translators: %s: Nginx deny rule snippet (a <code> element) */
+				/* translators: %s: Nginx deny rule snippet (a <code> element) */
 					__( 'Add %s to your Nginx server block, then re-save the Object Cache settings.', 'performance-optimisation' ),
-					'<code>location = /wp-content/wppo-redis-config.php { deny all; }</code>'
+					'<code>location = /wp-content/wppo-redis-config.php { deny all; }<br>location ~ ^/wp-content/wppo-redis-config\\.php\\.(wppo-bak|tmp.*)$ { deny all; }</code>'
 				),
-				array( 'code' => array() )
+				array(
+					'code' => array(),
+					'br'   => array(),
+				)
 			);
 			echo ' &middot; <a href="' . esc_url( $dismiss ) . '" aria-label="' . esc_attr__( 'Dismiss Redis config notice', 'performance-optimisation' ) . '">' . esc_html__( 'Dismiss', 'performance-optimisation' ) . '</a>';
 			echo '</p></div>';

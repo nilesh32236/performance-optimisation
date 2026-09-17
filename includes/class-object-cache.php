@@ -127,13 +127,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		public const CONFIG_HTACCESS_MARKER = 'WPPO Redis Config';
 
 		/**
-		 * Config filename (web-reachable under WP_CONTENT_DIR).
+		 * Config filename (web-reachable under WP_CONTENT_DIR by default).
 		 *
 		 * The file carries an ABSPATH guard and never stores the Redis
 		 * password, but it does disclose topology (hosts, ports, TLS mode,
 		 * sentinel/cluster layout). Apache/OLS/IIS are shielded by
 		 * protect_config_file(); Nginx ignores those files and needs a
-		 * server-level deny (see is_nginx_config_exposed()).
+		 * server-level deny (see is_nginx_config_exposed()). Defining
+		 * WPPO_REDIS_CONFIG_PATH outside the web root removes the exposure
+		 * entirely (see get_config_path()).
 		 *
 		 * @since NEXT
 		 * @var string
@@ -289,8 +291,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				$dropin_path = $default_dropin;
 			}
 
-			$this->dropin_path   = $dropin_path;
-			$this->config_path   = WP_CONTENT_DIR . '/wppo-redis-config.php';
+			$this->dropin_path = $dropin_path;
+			// The config defaults to the web-reachable WP_CONTENT_DIR sibling,
+			// but operators may relocate it outside the web root via the
+			// WPPO_REDIS_CONFIG_PATH constant (or by moving the file one level
+			// above ABSPATH, which is honoured when present). The resolver
+			// falls back to the historical path so existing installs keep
+			// working untouched.
+			$resolved_config     = self::get_config_path();
+			$this->config_path   = '' !== $resolved_config ? $resolved_config : WP_CONTENT_DIR . '/wppo-redis-config.php';
 			$this->template_path = WPPO_PLUGIN_PATH . 'templates/object-cache.php';
 		}
 
@@ -1989,6 +1998,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			if ( file_exists( $this->config_path ) ) {
 				$wp_filesystem->delete( $this->config_path );
 			}
+			// The live config is gone — sweep staging (.tmp*) and backup
+			// (.wppo-bak) orphans too. They carry full config source, the deny
+			// rule only just started covering them, and nothing else references
+			// them once the live file is deleted.
+			$this->sweep_orphan_config_tmp( $wp_filesystem );
 			// Config removed — the exposure question is moot; drop any cached
 			// probe verdict with it.
 			self::clear_nginx_probe_cache();
@@ -2020,9 +2034,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * Best-effort only; failures never block enable(). Apache and
 		 * OpenLiteSpeed both read .htaccess; nginx ignores both files, so
 		 * nginx deployments must deny the file at the server level with:
-		 * `location = /wp-content/wppo-redis-config.php { deny all; }`.
-		 * Until that rule exists, is_nginx_config_exposed() reports the
-		 * file as fetchable and Admin_Notices surfaces a warning.
+		 * `location = /wp-content/wppo-redis-config.php { deny all; }` plus
+		 * `location ~ ^/wp-content/wppo-redis-config\.php\.(wppo-bak|tmp.*)$ { deny all; }`
+		 * for the backup/staging siblings. Until those rules exist,
+		 * is_nginx_config_exposed() reports the file as fetchable and
+		 * Admin_Notices surfaces a warning. Prefer defining
+		 * WPPO_REDIS_CONFIG_PATH outside the web root, which removes the
+		 * exposure entirely.
 		 *
 		 * @since NEXT
 		 * @return void
@@ -2035,8 +2053,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					// a bare `Require all denied` is Apache 2.4-only syntax and a
 					// server without mod_authz_core answers 500 for the whole
 					// wp-content tree rather than ignoring the directive.
+					// FilesMatch (not Files) so the backup (.wppo-bak) and
+					// staging (.tmp*) siblings left by an interrupted publish
+					// are denied too — they carry full config source and the
+					// .wppo-bak sibling would otherwise be served as plain text.
 					$rule = array(
-						'<Files "wppo-redis-config.php">',
+						'<FilesMatch "^wppo-redis-config\\.php(\\.wppo-bak|\\.tmp.*)?$">',
 						'<IfModule mod_authz_core.c>',
 						'Require all denied',
 						'</IfModule>',
@@ -2044,7 +2066,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 						'Order allow,deny',
 						'Deny from all',
 						'</IfModule>',
-						'</Files>',
+						'</FilesMatch>',
 					);
 					insert_with_markers( $htaccess, self::CONFIG_HTACCESS_MARKER, $rule );
 				}
@@ -2328,10 +2350,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Absolute path of the Redis config file ('' when undeterminable).
 		 *
+		 * Resolution order: an explicit WPPO_REDIS_CONFIG_PATH constant (opt-in
+		 * relocation outside the web root — preferred on nginx, which ignores
+		 * directory-level deny files), then a config file already moved one
+		 * level above ABSPATH (outside the docroot on typical layouts), then
+		 * the historical WP_CONTENT_DIR sibling as fallback.
+		 *
 		 * @since NEXT
 		 * @return string
 		 */
 		public static function get_config_path(): string {
+			if ( defined( 'WPPO_REDIS_CONFIG_PATH' ) && is_string( WPPO_REDIS_CONFIG_PATH ) && '' !== trim( WPPO_REDIS_CONFIG_PATH ) ) {
+				return wp_normalize_path( WPPO_REDIS_CONFIG_PATH );
+			}
+			if ( defined( 'ABSPATH' ) && '' !== (string) ABSPATH ) {
+				$above_root = dirname( rtrim( wp_normalize_path( (string) ABSPATH ), '/' ) );
+				if ( '' !== $above_root ) {
+					$candidate = $above_root . '/' . self::CONFIG_FILENAME;
+					if ( file_exists( $candidate ) ) {
+						return $candidate;
+					}
+				}
+			}
 			if ( ! defined( 'WP_CONTENT_DIR' ) || '' === (string) WP_CONTENT_DIR ) {
 				return '';
 			}
@@ -2344,9 +2384,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * Nginx ignores the `.htaccess`/`web.config` deny rules written by
 		 * protect_config_file(), so a deployment without the manual
 		 * server-level deny (`location = /wp-content/wppo-redis-config.php
-		 * { deny all; }`) serves the file to anyone. The file never holds
+		 * { deny all; }` plus `location ~
+		 * ^/wp-content/wppo-redis-config\.php\.(wppo-bak|tmp.*)$ { deny all; }`
+		 * for the backup/staging siblings) serves the file to anyone. The file never holds
 		 * the password, but it discloses topology (hosts, ports, TLS mode,
-		 * sentinel/cluster layout).
+		 * sentinel/cluster layout). Defining WPPO_REDIS_CONFIG_PATH outside
+		 * the web root removes the exposure entirely.
 		 *
 		 * Detection is a loopback HTTP probe of the public config URL with
 		 * redirects followed (an http→https/login/maintenance redirect chain

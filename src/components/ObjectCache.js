@@ -443,14 +443,14 @@ const ObjectCache = ( { options = {} } ) => {
 						</strong>
 						<p>
 							{ __(
-								'Nginx ignores .htaccess rules, so the connection file stays fetchable unless denied at server level. The file never holds the password, but add this rule to hide topology:',
+								'Nginx ignores .htaccess rules, so the connection file stays fetchable unless denied at server level. The file never holds the password, but add these rules to hide topology (for the strongest protection, define WPPO_REDIS_CONFIG_PATH outside the web root):',
 								'performance-optimisation'
 							) }
 						</p>
 						<pre>
 							<code>
 								{
-									'location = /wp-content/wppo-redis-config.php { deny all; }'
+									'location = /wp-content/wppo-redis-config.php { deny all; }\nlocation ~ ^/wp-content/wppo-redis-config\\.php\\.(wppo-bak|tmp.*)$ { deny all; }'
 								}
 							</code>
 						</pre>

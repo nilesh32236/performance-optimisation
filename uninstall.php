@@ -45,12 +45,28 @@ if ( ! function_exists( 'wppo_cleanup_network_files' ) ) {
 		$wppo_dir = WP_CONTENT_DIR . '/wppo/';
 		wppo_delete_directory( $wppo_dir );
 
-		// Remove Redis config file (verified: retry once, fail-open).
-		$redis_config = WP_CONTENT_DIR . '/wppo-redis-config.php';
-		if ( file_exists( $redis_config ) ) {
-			wp_delete_file( $redis_config );
-			if ( file_exists( $redis_config ) ) {
-				wp_delete_file( $redis_config );
+		// Remove Redis config file (verified: retry once, fail-open). Covers
+		// the historical wp-content sibling plus a relocated config
+		// (WPPO_REDIS_CONFIG_PATH or one level above ABSPATH) and its
+		// backup/staging siblings.
+		$redis_configs = array( WP_CONTENT_DIR . '/wppo-redis-config.php' );
+		if ( defined( 'WPPO_REDIS_CONFIG_PATH' ) && is_string( WPPO_REDIS_CONFIG_PATH ) && '' !== WPPO_REDIS_CONFIG_PATH ) {
+			$redis_configs[] = WPPO_REDIS_CONFIG_PATH;
+		}
+		if ( defined( 'ABSPATH' ) && '' !== (string) ABSPATH ) {
+			$above_root = dirname( rtrim( str_replace( '\\', '/', (string) ABSPATH ), '/' ) );
+			if ( '' !== $above_root ) {
+				$redis_configs[] = $above_root . '/wppo-redis-config.php';
+			}
+		}
+		foreach ( array_unique( $redis_configs ) as $redis_config ) {
+			foreach ( array( $redis_config, $redis_config . '.wppo-bak', $redis_config . '.tmp' ) as $candidate ) {
+				if ( file_exists( $candidate ) ) {
+					wp_delete_file( $candidate );
+					if ( file_exists( $candidate ) ) {
+						wp_delete_file( $candidate );
+					}
+				}
 			}
 		}
 

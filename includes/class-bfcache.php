@@ -273,9 +273,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 			$path        = defined( 'COOKIEPATH' ) ? COOKIEPATH : '/';
 			$domain      = defined( 'COOKIE_DOMAIN' ) ? COOKIE_DOMAIN : '';
 			$site_path   = defined( 'SITECOOKIEPATH' ) ? SITECOOKIEPATH : $path;
-			setcookie( $cookie_name, ' ', time() - YEAR_IN_SECONDS, $path, $domain, false, false );
-			if ( $site_path !== $path ) {
-				setcookie( $cookie_name, ' ', time() - YEAR_IN_SECONDS, $site_path, $domain, false, false );
+			// Clear with both secure=false and secure=true: set_token_cookie()
+			// sets the cookie Secure on HTTPS, and a Secure cookie is not
+			// removed by a non-Secure clear — without the second call logout
+			// would leave a stale session-token cookie in the browser.
+			foreach ( array( $path, $site_path ) as $cookie_path ) {
+				setcookie( $cookie_name, ' ', time() - YEAR_IN_SECONDS, $cookie_path, $domain, false, false );
+				setcookie( $cookie_name, ' ', time() - YEAR_IN_SECONDS, $cookie_path, $domain, true, false );
 			}
 		}
 

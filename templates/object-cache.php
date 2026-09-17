@@ -94,7 +94,9 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		/**
 		 * Initializes and connects the object cache to Redis using the configuration file.
 		 *
-		 * Reads WP_CONTENT_DIR . '/wppo-redis-config.php' (expects an array). If a valid
+		 * Reads the Redis config (WPPO_REDIS_CONFIG_PATH when defined, else a
+		 * file moved one level above ABSPATH, else WP_CONTENT_DIR .
+		 * '/wppo-redis-config.php') (expects an array). If a valid
 		 * config is present, attempts to connect a primary Redis client and, when
 		 * configured for standalone mode with replicas, attempts to establish a replica
 		 * connection. On success assigns the client(s) to $this->redis and
@@ -141,7 +143,23 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 			}
 
 			$config_file = $content_dir . '/wppo-redis-config.php';
-			$config      = array();
+			// Honour an operator-relocated config outside the web root
+			// (WPPO_REDIS_CONFIG_PATH, or a file moved one level above ABSPATH),
+			// mirroring Object_Cache::get_config_path(). The historical
+			// WP_CONTENT_DIR sibling stays the fallback so existing installs
+			// keep working untouched.
+			if ( defined( 'WPPO_REDIS_CONFIG_PATH' ) && is_string( WPPO_REDIS_CONFIG_PATH ) && '' !== WPPO_REDIS_CONFIG_PATH && @file_exists( WPPO_REDIS_CONFIG_PATH ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+				$config_file = WPPO_REDIS_CONFIG_PATH;
+			} elseif ( defined( 'ABSPATH' ) && '' !== (string) ABSPATH ) {
+				$above_root = dirname( rtrim( str_replace( '\\', '/', (string) ABSPATH ), '/' ) );
+				if ( '' !== $above_root ) {
+					$outside = $above_root . '/wppo-redis-config.php';
+					if ( @file_exists( $outside ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+						$config_file = $outside;
+					}
+				}
+			}
+			$config = array();
 
 			if ( file_exists( $config_file ) ) {
 				$config = include $config_file; // phpcs:ignore WPThemeReview.CoreFunctionality.FileInclude.FileIncludeFound
