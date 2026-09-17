@@ -1345,7 +1345,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				unset( $e );
 				return '';
 			}
-			return $css;
+			return '';
 		}
 
 		/**

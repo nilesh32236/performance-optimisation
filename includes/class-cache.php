@@ -1343,7 +1343,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private function sanitize_combined_css( string $combined_css ): string {
 			try {
 				if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) || ! method_exists( 'PerformanceOptimise\Inc\Util', 'sanitize_inline_css' ) ) {
-					return $combined_css;
+					return '';
 				}
 				$sanitized = Util::sanitize_inline_css( $combined_css );
 				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'contains_unsafe_css_tokens' ) && Util::contains_unsafe_css_tokens( $sanitized ) ) {
