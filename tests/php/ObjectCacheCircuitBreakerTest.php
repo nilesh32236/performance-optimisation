@@ -1048,6 +1048,7 @@ class ObjectCacheCircuitBreakerTest extends \PHPUnit\Framework\TestCase {
 
 		// Dismissed for this trip: silent.
 		$this->options[ Object_Cache::CIRCUIT_DISMISSED_OPTION ] = $tripped_at;
+		Admin_Notices::reset_memo_cache_for_tests();
 		ob_start();
 		$method->invoke( $notices );
 		$dismissed_html = (string) ob_get_clean();
@@ -1055,6 +1056,7 @@ class ObjectCacheCircuitBreakerTest extends \PHPUnit\Framework\TestCase {
 
 		// A newer trip re-arms the notice.
 		$this->options[ Object_Cache::CIRCUIT_OPTION ]['tripped_at'] = $tripped_at + 100;
+		Admin_Notices::reset_memo_cache_for_tests();
 		ob_start();
 		$method->invoke( $notices );
 		$rearmed_html = (string) ob_get_clean();

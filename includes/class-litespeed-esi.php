@@ -55,9 +55,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * @return void
 		 */
 		public static function reset_asset_cache_for_tests(): void {
-			self::$asset_cache     = null;
-			self::$asset_cache_set = false;
+			self::$asset_cache         = null;
+			self::$asset_cache_set     = false;
+			self::$nonce_wildcard_memo = array();
 		}
+
+		/**
+		 * Per-request memo of confirmed ESI wildcard allowlist keys.
+		 *
+		 * The nonce injector runs on every fragment hydration (including
+		 * valid-nonce hydrations that skip the throttle); the memo skips
+		 * the repeated get_transient() once this request has confirmed (or
+		 * written) the wildcard. Keyed by transient key. Reset by
+		 * reset_asset_cache_for_tests().
+		 *
+		 * @since NEXT
+		 * @var array<string,bool>
+		 */
+		private static $nonce_wildcard_memo = array();
 
 		/**
 		 * Whether ESI is available (Enterprise only).
@@ -400,10 +415,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 					$raw_deps = isset( $asset['dependencies'] ) && is_array( $asset['dependencies'] ) ? $asset['dependencies'] : array();
 					$clean    = array();
 					foreach ( $raw_deps as $dep ) {
-						if ( ! is_scalar( $dep ) ) {
+						// Only non-empty strings are valid script deps: a
+						// tampered artifact's true/1 would otherwise enqueue
+						// a bogus '1' dependency.
+						if ( ! is_string( $dep ) ) {
 							continue;
 						}
-						$dep = trim( (string) $dep );
+						$dep = trim( $dep );
 						if ( '' !== $dep ) {
 							$clean[] = $dep;
 						}
@@ -655,9 +673,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			// Store 12h transient blog-prefixed.
 			$transient_key = Util::transient_key( 'wppo_esi_nonce_' . md5( $nonce . $block ) );
 			set_transient( $transient_key, $nonce, 12 * HOUR_IN_SECONDS );
-			// Also store wildcard allowlist key for wppo_esi_nonces.
+			// Also store the wildcard allowlist key — but only when it is
+			// missing, so page renders do not rewrite the identical value
+			// on every block (write amplification under DB-backed
+			// transients on the render path).
 			$wildcard_key = Util::transient_key( 'wppo_esi_nonce_' . $block );
-			set_transient( $wildcard_key, 1, 12 * HOUR_IN_SECONDS );
+			if ( ! function_exists( 'get_transient' ) || false === get_transient( $wildcard_key ) ) {
+				set_transient( $wildcard_key, 1, 12 * HOUR_IN_SECONDS );
+			}
 
 			$src = '';
 			if ( function_exists( 'admin_url' ) ) {
@@ -970,18 +993,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * expired — can mint a fresh one instead of 403ing forever.
 		 *
 		 * Throttling runs after verification and only gates invalid-nonce
-		 * attempts (plus `nonce` refreshes): valid hydrations skip the
+		 * attempts (60/60s per IP+block) plus `nonce` refreshes (tighter
+		 * 10/60s per IP+block, since each refresh mints a fresh nonce that
+		 * unlocks unthrottled valid hydrations): valid hydrations skip the
 		 * transient get+set entirely.
 		 *
 		 * @since 2.0.0
 		 * @return void
 		 */
 		public static function handle_ajax_fragment(): void {
+			// POST body first (OLS hydration client), query-string fallback
+			// for Enterprise <esi:include> server-side GET sub-requests —
+			// matching the _wpnonce read order below so a mixed-source
+			// request cannot route one source's block against the other's
+			// nonce scope.
 			$block = '';
-			if ( isset( $_GET['block'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
-				$block = strtolower( sanitize_text_field( wp_unslash( $_GET['block'] ) ) ); // phpcs:ignore WordPress.Security.NonceVerification
-			} elseif ( isset( $_POST['block'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
-				$block = strtolower( sanitize_text_field( wp_unslash( $_POST['block'] ) ) ); // phpcs:ignore WordPress.Security.NonceVerification
+			if ( isset( $_POST['block'] ) && is_string( $_POST['block'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+				$block = strtolower( sanitize_text_field( wp_unslash( $_POST['block'] ) ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+			} elseif ( isset( $_GET['block'] ) && is_string( $_GET['block'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+				$block = strtolower( sanitize_text_field( wp_unslash( $_GET['block'] ) ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 			}
 			if ( '' === $block ) {
 				$block = 'cart';
@@ -1002,9 +1032,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 
 			// The nonce-refresh block stays reachable with a stale/expired
 			// presented nonce (stale static-HTML cache recovery), but the
-			// minting oracle is rate-limited per IP+block.
+			// minting oracle is rate-limited per IP+block at a tighter
+			// bound than invalid attempts: a refresh mints a fresh 12h
+			// nonce that unlocks unthrottled valid hydrations, so
+			// refresh-then-replay must not give unlimited fragment hits.
 			if ( $is_nonce_refresh ) {
-				if ( self::is_fragment_throttled( $block ) ) {
+				if ( self::is_fragment_throttled( $block, 10, 60 ) ) {
 					self::emit_private_fail_closed();
 					if ( function_exists( 'wp_send_json_error' ) ) {
 						wp_send_json_error( array( 'message' => 'Too many requests. Please try again shortly.' ), 429 );
@@ -1134,14 +1167,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			set_transient( $key, $nonce, 12 * HOUR_IN_SECONDS );
 			// Wildcard allowlist transient for ESI (wppo_-prefixed to avoid
 			// collisions with other plugins on shared object-cache backends).
+			// Per-request memo: this injector runs on every fragment
+			// hydration, so once this request has confirmed (or written) the
+			// wildcard, later hydrations skip the get+set entirely.
 			$wildcard = Util::transient_key( 'wppo_esi_nonces' );
-			$existing = get_transient( $wildcard );
-			if ( ! is_array( $existing ) ) {
-				$existing = array();
-			}
-			if ( ! in_array( 'wppo_esi', $existing, true ) ) {
-				$existing[] = 'wppo_esi';
-				set_transient( $wildcard, $existing, 12 * HOUR_IN_SECONDS );
+			if ( empty( self::$nonce_wildcard_memo[ $wildcard ] ) ) {
+				$existing = get_transient( $wildcard );
+				if ( ! is_array( $existing ) ) {
+					$existing = array();
+				}
+				if ( ! in_array( 'wppo_esi', $existing, true ) ) {
+					$existing[] = 'wppo_esi';
+					set_transient( $wildcard, $existing, 12 * HOUR_IN_SECONDS );
+				}
+				self::$nonce_wildcard_memo[ $wildcard ] = true;
 			}
 
 			// Replace placeholder tokens.

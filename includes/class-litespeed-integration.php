@@ -1510,8 +1510,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			}
 			foreach ( $_COOKIE as $key => $value ) {
 				$cookie_name = is_string( $key ) ? sanitize_text_field( wp_unslash( $key ) ) : '';
-				if ( '' !== $cookie_name && 0 === strpos( $cookie_name, 'comment_author_' ) ) {
-					return '' !== $value;
+				if ( '' === $cookie_name || 0 !== strpos( $cookie_name, 'comment_author_' ) ) {
+					continue;
+				}
+				// Guard the value: an array cookie (?comment_author_x[]=1)
+				// must not read as non-empty, and an empty first match must
+				// not shadow a real commenter cookie later in the jar.
+				if ( is_string( $value ) && '' !== $value ) {
+					return true;
 				}
 			}
 			return false;
@@ -1539,8 +1545,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			}
 			foreach ( $_COOKIE as $key => $value ) {
 				$cookie_name = is_string( $key ) ? sanitize_text_field( wp_unslash( $key ) ) : '';
-				if ( '' !== $cookie_name && 0 === strpos( $cookie_name, 'wp-postpass_' . $hash ) ) {
-					return '' !== $value;
+				if ( '' === $cookie_name || 0 !== strpos( $cookie_name, 'wp-postpass_' . $hash ) ) {
+					continue;
+				}
+				// Same guard as is_commenter_request(): array values are
+				// never a match, and empty values do not shadow later hits.
+				if ( is_string( $value ) && '' !== $value ) {
+					return true;
 				}
 			}
 			return false;

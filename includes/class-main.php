@@ -8607,7 +8607,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						unset( $e );
 					}
 				}
-				if ( ! empty( $_COOKIE['woocommerce_items_in_cart'] ) || ! empty( $_COOKIE['woocommerce_cart_hash'] ) ) {
+				// is_string-guarded like the ESI cookie reads: an array-valued
+				// cookie must not force suppression (attacker-influenced
+				// cache behavior); only non-empty string values count.
+				if ( ( isset( $_COOKIE['woocommerce_items_in_cart'] ) && is_string( $_COOKIE['woocommerce_items_in_cart'] ) && '' !== $_COOKIE['woocommerce_items_in_cart'] ) || ( isset( $_COOKIE['woocommerce_cart_hash'] ) && is_string( $_COOKIE['woocommerce_cart_hash'] ) && '' !== $_COOKIE['woocommerce_cart_hash'] ) ) {
 					return true;
 				}
 				return false;
@@ -9593,7 +9596,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						unset( $e );
 					}
 				}
-				if ( ! empty( $_COOKIE['woocommerce_items_in_cart'] ) || ! empty( $_COOKIE['woocommerce_cart_hash'] ) ) {
+				// is_string-guarded like the ESI cookie reads: an array-valued
+				// cookie must not force suppression; only non-empty strings.
+				if ( ( isset( $_COOKIE['woocommerce_items_in_cart'] ) && is_string( $_COOKIE['woocommerce_items_in_cart'] ) && '' !== $_COOKIE['woocommerce_items_in_cart'] ) || ( isset( $_COOKIE['woocommerce_cart_hash'] ) && is_string( $_COOKIE['woocommerce_cart_hash'] ) && '' !== $_COOKIE['woocommerce_cart_hash'] ) ) {
 					return true;
 				}
 				return false;

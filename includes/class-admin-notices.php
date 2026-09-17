@@ -38,6 +38,81 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		);
 
 		/**
+		 * Per-request memo of the object-cache circuit state.
+		 *
+		 * The circuit notice calls get_circuit_state() (get_option +
+		 * state-file reads with filesystem init); the memo keeps one admin
+		 * pageload to a single read. Reset by reset_memo_cache_for_tests().
+		 *
+		 * @since NEXT
+		 * @var array|null Null when not yet read this request.
+		 */
+		private static $circuit_state_memo = null;
+
+		/**
+		 * Whether the circuit-state memo has been populated this request.
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static $circuit_state_memo_set = false;
+
+		/**
+		 * Per-request memo of the Advanced_Cache_Handler drop-in check.
+		 *
+		 * The drop-in check does filesystem init + a full get_contents of
+		 * advanced-cache.php; the memo keeps one pageload to a single
+		 * check. Reset by reset_memo_cache_for_tests().
+		 *
+		 * @since NEXT
+		 * @var bool|null Null when not yet checked this request.
+		 */
+		private static $dropin_memo = null;
+
+		/**
+		 * Reset the per-request memos (unit-test helper).
+		 *
+		 * Mirrors LiteSpeed_Integration::reset_cache(): PHPUnit runs many
+		 * invokes in one process, so tests that change circuit/drop-in
+		 * state between phases reset here instead of seeing stale memos.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_memo_cache_for_tests(): void {
+			self::$circuit_state_memo     = null;
+			self::$circuit_state_memo_set = false;
+			self::$dropin_memo            = null;
+		}
+
+		/**
+		 * Whether the current admin screen is one of the allowed notice screens.
+		 *
+		 * Notices that need I/O (circuit state, drop-in reads, loopback
+		 * probes) run only on the plugin, plugins, and update-core screens
+		 * instead of every wp-admin pageload. Unknown screens (no
+		 * get_current_screen yet, e.g. unit tests) fail open to true.
+		 *
+		 * @since NEXT
+		 * @return bool True when the notice I/O may run.
+		 */
+		private static function is_notice_screen(): bool {
+			if ( ! function_exists( 'get_current_screen' ) ) {
+				return true;
+			}
+			try {
+				$screen = get_current_screen();
+				$base   = ( is_object( $screen ) && isset( $screen->base ) && is_string( $screen->base ) ) ? $screen->base : '';
+				if ( '' !== $base && ! in_array( $base, array( 'toplevel_page_performance-optimisation', 'plugins', 'update-core' ), true ) ) {
+					return false;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return true;
+		}
+
+		/**
 		 * Register hooks.
 		 */
 		public function __construct() {
@@ -52,6 +127,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		 */
 		public function handle_dismiss(): void {
 			if ( ! isset( $_GET['wppo_dismiss'], $_GET['_wpnonce'] ) ) {
+				return;
+			}
+
+			// Reject non-string input before unslash/sanitize: an array
+			// (?wppo_dismiss[]=x) would TypeError sanitize_key() on PHP 8.2
+			// via admin_init (admin DoS).
+			if ( ! is_string( $_GET['wppo_dismiss'] ) || ! is_string( $_GET['_wpnonce'] ) ) {
 				return;
 			}
 
@@ -268,8 +350,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				return;
 			}
 
+			// Screen-gated like the nginx notice: the circuit read
+			// (get_option + state-file reads with filesystem init) runs
+			// only on the plugin/plugins/update-core screens.
+			if ( ! self::is_notice_screen() ) {
+				return;
+			}
+
 			try {
-				$circuit = ( new Object_Cache() )->get_circuit_state();
+				if ( self::$circuit_state_memo_set && is_array( self::$circuit_state_memo ) ) {
+					$circuit = self::$circuit_state_memo;
+				} else {
+					$circuit                      = ( new Object_Cache() )->get_circuit_state();
+					self::$circuit_state_memo     = $circuit;
+					self::$circuit_state_memo_set = true;
+				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return;
@@ -334,16 +429,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				return;
 			}
 
-			if ( function_exists( 'get_current_screen' ) ) {
-				try {
-					$screen = get_current_screen();
-					$base   = ( is_object( $screen ) && isset( $screen->base ) && is_string( $screen->base ) ) ? $screen->base : '';
-					if ( '' !== $base && ! in_array( $base, array( 'toplevel_page_performance-optimisation', 'plugins', 'update-core' ), true ) ) {
-						return;
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
+			if ( ! self::is_notice_screen() ) {
+				return;
 			}
 
 			$user_id = function_exists( 'get_current_user_id' ) ? get_current_user_id() : 0;
@@ -378,8 +465,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 
 			echo '<div class="notice notice-warning" role="alert" aria-live="assertive"><p><strong>' . esc_html__( 'Performance Optimisation — Redis config exposed', 'performance-optimisation' ) . '</strong> — ';
 			echo esc_html__( 'Your server runs Nginx, which ignores .htaccess deny rules, and wp-content/wppo-redis-config.php appears directly fetchable. It holds no password but discloses Redis topology (hosts, ports, TLS mode).', 'performance-optimisation' ) . ' ';
-			/* translators: %s: Nginx deny rule snippet */
-			printf( esc_html__( 'Add %s to your Nginx server block, then re-save the Object Cache settings.', 'performance-optimisation' ), '<code>location = /wp-content/wppo-redis-config.php { deny all; }</code>' );
+			printf(
+				/* translators: %s: Nginx deny rule snippet (a <code> element) */
+				wp_kses( __( 'Add %s to your Nginx server block, then re-save the Object Cache settings.', 'performance-optimisation' ), array( 'code' => array() ) ),
+				'<code>location = /wp-content/wppo-redis-config.php { deny all; }</code>'
+			);
 			echo ' &middot; <a href="' . esc_url( $dismiss ) . '">' . esc_html__( 'Dismiss', 'performance-optimisation' ) . '</a>';
 			echo '</p></div>';
 		}
@@ -490,7 +580,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		 * @return void
 		 */
 		private function maybe_competing_plugins_notice(): void {
-			if ( ! Advanced_Cache_Handler::is_our_dropin() ) {
+			// Screen-gated like the nginx/circuit notices: the drop-in
+			// check (filesystem init + full get_contents) must not run on
+			// every admin pageload.
+			if ( ! self::is_notice_screen() ) {
+				return;
+			}
+
+			if ( null === self::$dropin_memo ) {
+				self::$dropin_memo = Advanced_Cache_Handler::is_our_dropin();
+			}
+			if ( ! self::$dropin_memo ) {
 				return;
 			}
 

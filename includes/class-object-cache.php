@@ -141,12 +141,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		public const CONFIG_FILENAME = 'wppo-redis-config.php';
 
 		/**
-		 * Transient caching the Nginx exposure probe verdict.
+		 * Transient prefix caching the Nginx exposure probe verdict.
 		 *
-		 * Network-global (deliberately NOT blog-prefixed): the config file
-		 * lives in the shared WP_CONTENT_DIR, so one probe serves every site
-		 * on multisite instead of paying N loopbacks, and one clear call
-		 * invalidates the single verdict.
+		 * The live key is this prefix + '_' + md5() of the probed public
+		 * URL: content_url() is per-site on domain-mapped multisite, so a
+		 * single network-global key would serve site A's verdict for
+		 * deny-ruled site B and vice versa. The bare (unprefixed) value is
+		 * kept only as a legacy read/migration path for pre-fix installs
+		 * (see is_nginx_config_exposed()).
 		 *
 		 * @since NEXT
 		 * @var string
@@ -156,14 +158,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		/**
 		 * Per-request memo of the Nginx exposure probe verdict.
 		 *
-		 * Null means "not yet probed this request" (distinct from a probed
-		 * false), so admin_notices fan-out and repeated callers share one
-		 * loopback at most. Reset by clear_nginx_probe_cache().
+		 * Keyed by probe key (see is_nginx_config_exposed()): the transient
+		 * verdict is scoped by content-URL hash, so the memo must be too —
+		 * otherwise site A's verdict would be served for site B after a
+		 * switch_to_blog() mid-request. The `'server'` key holds the
+		 * deterministic non-Nginx false. Reset by clear_nginx_probe_cache().
 		 *
 		 * @since NEXT
-		 * @var bool|null
+		 * @var array<string,bool>
 		 */
-		private static $nginx_probe_memo = null;
+		private static $nginx_probe_memo = array();
 
 		/**
 		 * Suffix of the staging sibling used for atomic Redis config writes.
@@ -2287,48 +2291,73 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * is resolved instead of misread as safe). A 200 alone is not
 		 * trusted: catch-all 200 themes/WAF pages are filtered by body
 		 * markers — an executed config exits via the ABSPATH guard with an
-		 * empty 200 body, while a raw-served config leaks `<?php` /
-		 * wppo-redis markers; any other 200 body is treated as safe. The
-		 * verdict is cached in a network-global transient (1h when exposed
-		 * so a fresh deny rule clears the notice promptly, 2h when safe so
-		 * a safe→exposed flip surfaces quickly) plus a per-request memo so
-		 * repeated callers share one loopback at most. Fail-open
+		 * empty 200 body (safe, nothing disclosed), while a raw-served
+		 * config leaks `<?php` / wppo-redis markers; any other 200 body
+		 * (including empty) is treated as safe. Only marker bodies count
+		 * as exposed.
+		 *
+		 * The verdict is cached in a transient keyed by content-URL hash
+		 * (content_url() is per-site on domain-mapped multisite, so a
+		 * network-global key would serve site A's verdict for deny-ruled
+		 * site B and vice versa) — 1h when exposed so a fresh deny rule
+		 * clears the notice promptly, 2h when safe so a safe→exposed flip
+		 * surfaces quickly — plus a per-request memo keyed the same way so
+		 * repeated callers share one loopback at most. The transient is
+		 * checked before the file_exists() stat so cache hits skip I/O;
+		 * deterministic false returns (non-Nginx, missing file, transport
+		 * failure) set the memo too, so a blocked loopback costs one
+		 * request per pageload, not one per caller. Fail-open
 		 * throughout: any missing API, missing file, non-Nginx server, or
-		 * probe error returns false WITHOUT caching, so a blocked loopback
-		 * (WP_Error) stays "unknown" and re-probes next time instead of
-		 * pinning a stale safe verdict.
+		 * probe error returns false WITHOUT caching a transient, so a
+		 * blocked loopback (WP_Error) stays "unknown" and re-probes next
+		 * request instead of pinning a stale safe verdict.
 		 *
 		 * @since NEXT
 		 * @return bool True when the config file looks directly fetchable.
 		 */
 		public static function is_nginx_config_exposed(): bool {
 			try {
-				if ( null !== self::$nginx_probe_memo ) {
-					return self::$nginx_probe_memo;
-				}
 				if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) || 'nginx' !== Server_Rules::get_server_type() ) {
-					return false;
-				}
-				$path = self::get_config_path();
-				if ( '' === $path || ! file_exists( $path ) ) {
+					self::$nginx_probe_memo['server'] = false;
 					return false;
 				}
 				if ( ! function_exists( 'get_transient' ) || ! function_exists( 'set_transient' ) ) {
-					return false;
-				}
-				$cached = get_transient( self::NGINX_PROBE_TRANSIENT );
-				if ( 'exposed' === $cached ) {
-					self::$nginx_probe_memo = true;
-					return true;
-				}
-				if ( 'safe' === $cached ) {
-					self::$nginx_probe_memo = false;
+					self::$nginx_probe_memo['server'] = false;
 					return false;
 				}
 				if ( ! function_exists( 'content_url' ) || ! function_exists( 'wp_remote_get' ) || ! function_exists( 'wp_remote_retrieve_response_code' ) || ! function_exists( 'wp_remote_retrieve_body' ) || ! function_exists( 'is_wp_error' ) ) {
+					self::$nginx_probe_memo['server'] = false;
 					return false;
 				}
-				$url      = content_url( '/' . self::CONFIG_FILENAME );
+				$url       = content_url( self::CONFIG_FILENAME );
+				$probe_key = self::NGINX_PROBE_TRANSIENT . '_' . md5( $url );
+				if ( isset( self::$nginx_probe_memo[ $probe_key ] ) ) {
+					return self::$nginx_probe_memo[ $probe_key ];
+				}
+				$cached = get_transient( $probe_key );
+				if ( 'exposed' === $cached ) {
+					self::$nginx_probe_memo[ $probe_key ] = true;
+					return true;
+				}
+				if ( 'safe' === $cached ) {
+					self::$nginx_probe_memo[ $probe_key ] = false;
+					return false;
+				}
+				// Legacy fallback: pre-fix installs cached the verdict under
+				// the network-global key. Honour it (and migrate it to the
+				// per-URL key) so upgrading does not force a re-probe storm.
+				$legacy = get_transient( self::NGINX_PROBE_TRANSIENT );
+				if ( 'exposed' === $legacy || 'safe' === $legacy ) {
+					$migrated                             = ( 'exposed' === $legacy );
+					self::$nginx_probe_memo[ $probe_key ] = $migrated;
+					set_transient( $probe_key, $legacy, $migrated ? HOUR_IN_SECONDS : 2 * HOUR_IN_SECONDS );
+					return $migrated;
+				}
+				$path = self::get_config_path();
+				if ( '' === $path || ! file_exists( $path ) ) {
+					self::$nginx_probe_memo[ $probe_key ] = false;
+					return false;
+				}
 				$response = wp_remote_get(
 					$url,
 					array(
@@ -2337,25 +2366,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					)
 				);
 				if ( is_wp_error( $response ) ) {
-					// Unknown, not safe: never cache transport failures.
+					// Unknown, not safe: never cache transport failures as a
+					// transient, but memoize for this request so N callers
+					// share one loopback instead of doubling it.
+					self::$nginx_probe_memo[ $probe_key ] = false;
 					return false;
 				}
 				$exposed = false;
 				if ( 200 === (int) wp_remote_retrieve_response_code( $response ) ) {
 					$body    = trim( (string) wp_remote_retrieve_body( $response ) );
 					$exposed = (
-						'' === $body ||
 						false !== stripos( $body, '<?php' ) ||
 						false !== stripos( $body, 'wppo-redis' ) ||
 						false !== stripos( $body, 'wppo_redis' )
 					);
 				}
 				set_transient(
-					self::NGINX_PROBE_TRANSIENT,
+					$probe_key,
 					$exposed ? 'exposed' : 'safe',
 					$exposed ? HOUR_IN_SECONDS : 2 * HOUR_IN_SECONDS
 				);
-				self::$nginx_probe_memo = $exposed;
+				self::$nginx_probe_memo[ $probe_key ] = $exposed;
 				return $exposed;
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -2368,18 +2399,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 *
 		 * Called after protect/enable/disable flows so the next admin
 		 * pageload re-probes instead of serving a stale verdict. Clears the
-		 * network-global key plus the legacy blog-prefixed key (pre-fix
-		 * installs), and resets the per-request memo. Never called from the
-		 * notice dismiss path: one admin's dismiss must not force a
-		 * re-probe for everyone else.
+		 * per-URL probe key for the current site plus the legacy
+		 * network-global and blog-prefixed keys (pre-fix installs), and
+		 * resets the per-request memo. Never called from the notice dismiss
+		 * path: one admin's dismiss must not force a re-probe for everyone
+		 * else.
 		 *
 		 * @since NEXT
 		 * @return void
 		 */
 		public static function clear_nginx_probe_cache(): void {
 			try {
-				self::$nginx_probe_memo = null;
+				self::$nginx_probe_memo = array();
 				if ( function_exists( 'delete_transient' ) ) {
+					if ( function_exists( 'content_url' ) ) {
+						try {
+							$url = content_url( self::CONFIG_FILENAME );
+							delete_transient( self::NGINX_PROBE_TRANSIENT . '_' . md5( $url ) );
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+					}
 					delete_transient( self::NGINX_PROBE_TRANSIENT );
 					delete_transient( Util::transient_key( self::NGINX_PROBE_TRANSIENT ) );
 				}

@@ -2339,6 +2339,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					return max( 1, min( 65535, (int) $value ) );
 				case 'database':
 					return max( 0, min( 15, (int) $value ) );
+				case 'timeout':
+					// Clamp to a sane float range: an array/object here
+					// would otherwise flow raw into connect calls and
+					// var_export'ed config (type confusion downstream).
+					if ( is_array( $value ) || is_object( $value ) ) {
+						return 1.0;
+					}
+					return max( 0.1, min( 30.0, (float) $value ) );
+				case 'prefix':
+					// Redis key prefix: charset + length sanitized so it
+					// cannot smuggle whitespace/control sequences into keys
+					// or the var_export'ed drop-in config.
+					if ( ! is_string( $value ) && ! is_numeric( $value ) ) {
+						return '';
+					}
+					$prefix = sanitize_text_field( (string) $value );
+					$prefix = (string) preg_replace( '/[^A-Za-z0-9_\-:]/', '', $prefix );
+					return substr( $prefix, 0, 64 );
 				case 'password':
 					// When WPPO_REDIS_PASSWORD is defined the constant takes
 					// precedence: supplied passwords are dropped unless
