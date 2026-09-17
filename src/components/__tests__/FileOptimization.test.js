@@ -11,6 +11,9 @@ import React from 'react';
 import FileOptimization, {
 	normalizeRetries,
 	normalizeDeliveryMode,
+	stripPreviewParams,
+	withCdnRowIds,
+	stripCdnIds,
 } from '../FileOptimization';
 
 // Mock the API request (sandbox perf test goes through the validated
@@ -1605,5 +1608,44 @@ describe( 'FileOptimization Component', () => {
 			'href',
 			'https://example.com/?wppo_nocache=1'
 		);
+	} );
+
+	describe( 'stripPreviewParams', () => {
+		it( 'strips preview args from absolute http(s) URLs', () => {
+			expect(
+				stripPreviewParams(
+					'https://example.com/?wppo_preview=1&_wppo_preview_nonce=abc&p=1'
+				)
+			).toBe( 'https://example.com/?p=1' );
+		} );
+
+		it( 'rejects non-http(s) and relative URLs', () => {
+			expect( stripPreviewParams( 'javascript:alert(1)' ) ).toBe( '' );
+			expect( stripPreviewParams( '/relative/path' ) ).toBe( '' );
+			expect( stripPreviewParams( '' ) ).toBe( '' );
+		} );
+	} );
+
+	describe( 'withCdnRowIds / stripCdnIds', () => {
+		it( 'assigns deterministic index ids and preserves existing ids', () => {
+			const rows = withCdnRowIds( [
+				{ cdn_url: 'a' },
+				{ cdn_url: 'b', id: 'cdn-9' },
+			] );
+			expect( rows[ 0 ].id ).toBe( 'cdn-row-0' );
+			expect( rows[ 1 ].id ).toBe( 'cdn-9' );
+			expect( withCdnRowIds( 'corrupt' ) ).toEqual( [] );
+		} );
+
+		it( 'strips client ids without touching other keys', () => {
+			const stripped = stripCdnIds( {
+				cdnURL: 'x',
+				cdnMapping: [ { id: 'cdn-row-0', cdn_url: 'a' } ],
+			} );
+			expect( stripped ).toEqual( {
+				cdnURL: 'x',
+				cdnMapping: [ { cdn_url: 'a' } ],
+			} );
+		} );
 	} );
 } );

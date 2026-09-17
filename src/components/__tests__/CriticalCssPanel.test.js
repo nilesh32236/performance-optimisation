@@ -173,13 +173,13 @@ describe( 'CriticalCssPanel', () => {
 		);
 	} );
 
-	it( 'rethrows single-regen failures so the parent owns feedback', async () => {
+	it( 'logs single-regen failures without rethrowing (parent owns feedback)', async () => {
 		const onRegenerateSingle = jest.fn( async () => {
 			throw new Error( 'nope' );
 		} );
-		// Harness mimics the parent (FileOptimization): it awaits the child
-		// and owns the banner, proving the child rethrew instead of
-		// notifying a second time for the same click.
+		// Harness mimics the parent (FileOptimization): it notifies
+		// internally and owns the banner; the child only logs, proving no
+		// second banner and no unhandled rejection for the same click.
 		let caught = null;
 		const catchingParent = async ( hash ) => {
 			try {

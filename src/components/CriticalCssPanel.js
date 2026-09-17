@@ -1,5 +1,5 @@
 import { __, sprintf } from '@wordpress/i18n';
-import { useState } from '@wordpress/element';
+import { memo, useMemo, useState } from '@wordpress/element';
 import {
 	faCheckCircle,
 	faExclamationTriangle,
@@ -16,26 +16,26 @@ const READY_CONFIG = {
 	label: __( 'Generated', 'performance-optimisation' ),
 };
 
+// Length of the hash prefix shown when an entry has no label.
+const HASH_PREFIX_LEN = 8;
+
+// Factory for the pending-style badges (queued/pending/processing share one
+// icon + className; only the label differs). Single source so a future
+// icon/class change needs one edit.
+const pendingConfig = ( label ) => ( {
+	icon: faClock,
+	className: 'wppo-badge--info',
+	label,
+} );
+
 const STATUS_CONFIG = {
 	ready: READY_CONFIG,
 	// Copy (issue #1274 review): done === ready today, but a shared
 	// reference would let a future mutation hit both entries.
 	done: { ...READY_CONFIG },
-	queued: {
-		icon: faClock,
-		className: 'wppo-badge--info',
-		label: __( 'Queued', 'performance-optimisation' ),
-	},
-	pending: {
-		icon: faClock,
-		className: 'wppo-badge--info',
-		label: __( 'Pending', 'performance-optimisation' ),
-	},
-	processing: {
-		icon: faClock,
-		className: 'wppo-badge--info',
-		label: __( 'Processing', 'performance-optimisation' ),
-	},
+	queued: pendingConfig( __( 'Queued', 'performance-optimisation' ) ),
+	pending: pendingConfig( __( 'Pending', 'performance-optimisation' ) ),
+	processing: pendingConfig( __( 'Processing', 'performance-optimisation' ) ),
 	skipped: {
 		icon: faExclamationTriangle,
 		className: 'wppo-badge--warning',
@@ -66,7 +66,8 @@ const STATUS_CONFIG = {
  */
 export const normalizeCcssEntry = ( hash, entry ) => {
 	const safeHash = typeof hash === 'string' ? hash : String( hash ?? '' );
-	const fallbackLabel = ( safeHash ? safeHash.substring( 0, 8 ) : '?' ) + '…';
+	const fallbackLabel =
+		( safeHash ? safeHash.substring( 0, HASH_PREFIX_LEN ) : '?' ) + '…';
 	if ( typeof entry === 'string' ) {
 		return {
 			statusKey: entry || 'none',
@@ -149,21 +150,26 @@ const CriticalCssPanel = ( {
 		try {
 			await onRegenerateSingle( hash );
 		} catch ( err ) {
-			// Single-owner feedback: the parent (FileOptimization
-			// handleRegenerateSingleCcss via withNotification) owns the
-			// banner, so log locally and rethrow instead of notifying a
-			// second time for the same click.
+			// No rethrow: the parent (FileOptimization
+			// handleRegenerateSingleCcss) notifies internally and owns the
+			// banner, and the click site here has no catch — rethrowing
+			// would only risk an unhandled rejection with no UI benefit.
 			console.error( 'Failed to regenerate CCSS for template', err );
-			throw err;
 		} finally {
 			setSingleBusy( null );
 		}
 	};
 
-	const entries =
-		status && typeof status === 'object' && ! Array.isArray( status )
-			? Object.entries( status )
-			: [];
+	const entries = useMemo( () => {
+		if (
+			! status ||
+			typeof status !== 'object' ||
+			Array.isArray( status )
+		) {
+			return [];
+		}
+		return Object.entries( status );
+	}, [ status ] );
 
 	return (
 		<div className="wppo-ccss-panel wppo-mt-20">
@@ -267,4 +273,4 @@ const CriticalCssPanel = ( {
 	);
 };
 
-export default CriticalCssPanel;
+export default memo( CriticalCssPanel );

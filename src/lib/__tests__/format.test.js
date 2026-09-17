@@ -35,6 +35,12 @@ describe( 'format helpers (lib/format.js)', () => {
 			expect( formatPercent( 75 ) ).toBe( '75%' );
 		} );
 
+		it( 'honours an explicit ratio option instead of range-sniffing', () => {
+			expect( formatPercent( 0.5, { ratio: false } ) ).toBe( '0.5%' );
+			expect( formatPercent( 0.5, { ratio: true } ) ).toBe( '50%' );
+			expect( formatPercent( 75, { ratio: false } ) ).toBe( '75%' );
+		} );
+
 		it( 'falls back for non-finite input', () => {
 			expect( formatPercent( NaN ) ).toBe( '—' );
 		} );
@@ -77,6 +83,12 @@ describe( 'format helpers (lib/format.js)', () => {
 			expect( savingsPercent( 1000, 1200 ) ).toBeNull();
 			expect( savingsPercent( 0, 0 ) ).toBeNull();
 			expect( savingsPercent( NaN, 10 ) ).toBeNull();
+		} );
+
+		it( 'rejects booleans and arrays instead of coercing', () => {
+			expect( savingsPercent( true, 1 ) ).toBeNull();
+			expect( savingsPercent( 1000, [ 500 ] ) ).toBeNull();
+			expect( savingsPercent( [ 1000 ], 500 ) ).toBeNull();
 		} );
 	} );
 } );

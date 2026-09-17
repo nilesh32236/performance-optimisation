@@ -111,11 +111,13 @@ describe( 'handleChange', () => {
 } );
 
 describe( 'formatBytes', () => {
-	it( 'formats zero, negative and non-numeric input as "0 B"', () => {
+	it( 'formats actual zero as "0 B" and invalid input as fallback', () => {
 		expect( formatBytes( 0 ) ).toBe( '0 B' );
-		expect( formatBytes( -10 ) ).toBe( '0 B' );
-		expect( formatBytes( NaN ) ).toBe( '0 B' );
-		expect( formatBytes( undefined ) ).toBe( '0 B' );
+		expect( formatBytes( -10 ) ).toBe( '—' );
+		expect( formatBytes( NaN ) ).toBe( '—' );
+		expect( formatBytes( undefined ) ).toBe( '—' );
+		expect( formatBytes( false ) ).toBe( '—' );
+		expect( formatBytes( [] ) ).toBe( '—' );
 	} );
 
 	it( 'formats byte counts below 1 KB', () => {
@@ -147,8 +149,8 @@ describe( 'toTextLines', () => {
 		expect( toTextLines( [] ) ).toBe( '' );
 	} );
 
-	it( 'returns empty string for numbers, null and undefined', () => {
-		expect( toTextLines( 42 ) ).toBe( '' );
+	it( 'stringifies finite numbers, empties null and undefined', () => {
+		expect( toTextLines( 42 ) ).toBe( '42' );
 		expect( toTextLines( null ) ).toBe( '' );
 		expect( toTextLines( undefined ) ).toBe( '' );
 	} );
