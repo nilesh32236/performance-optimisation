@@ -145,6 +145,51 @@ export const formatWooSummary = ( safeMode, excludedPaths ) => {
 };
 
 /**
+ * Plain-language remediation for a failing self-test rule.
+ *
+ * Rendered next to each failing row so store owners know what to do
+ * before going live. Pass-through for passing rows (returns empty).
+ *
+ * @since NEXT
+ * @param {string} kind Check group: route|fragment|editor|preload|cart.
+ * @param {*}      pass Raw pass value from a check entry.
+ * @return {string} Remediation copy, or empty string when passing.
+ */
+export const getWooRuleRemediation = ( kind, pass ) => {
+	if ( pass !== false ) {
+		return '';
+	}
+	switch ( kind ) {
+		case 'fragment':
+			return __(
+				'Remediation: enable WooCommerce safe mode, then save Page Cache settings — fragments must never serve cached HTML.',
+				'performance-optimisation'
+			);
+		case 'editor':
+			return __(
+				'Remediation: editor and preview pages must never be cached — clear any cached admin or preview file.',
+				'performance-optimisation'
+			);
+		case 'preload':
+			return __(
+				'Remediation: keep this URL pattern out of preload and warm-up so filtered pages are never queued.',
+				'performance-optimisation'
+			);
+		case 'cart':
+			return __(
+				'Remediation: re-enable safe mode so cart and session cookies bypass the cache — otherwise the guest cart can go stale.',
+				'performance-optimisation'
+			);
+		case 'route':
+		default:
+			return __(
+				'Remediation: enable WooCommerce safe mode, then save Page Cache settings — cart, checkout and account must never serve cached HTML.',
+				'performance-optimisation'
+			);
+	}
+};
+
+/**
  * Run the read-only WooCommerce cache self-test with an AbortSignal.
  *
  * Thin shared wrapper so both call sites hit the same endpoint + signal
