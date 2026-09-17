@@ -675,13 +675,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 */
 		public static function execute_clear_cache( array $input = array() ): array {
 			$scope = $input['scope'] ?? 'all';
-			if ( 'single' === $scope && ! empty( $input['url'] ) ) {
+			// Audit #1357 review: scope=single without a URL must not fall
+			// through to clear-all — refuse instead.
+			if ( 'single' === $scope && empty( $input['url'] ) ) {
+				return array( 'cleared' => false );
+			}
+			if ( 'single' === $scope ) {
 				$url = esc_url_raw( $input['url'] );
-				if ( '' !== $url ) {
-					$path = wp_parse_url( $url, PHP_URL_PATH );
-					Cache::clear_cache( $path );
-					return array( 'cleared' => true );
+				// Audit #1357 review: same-site parity with Rest::clear_cache() —
+				// refuse off-site URLs. Traversal is still blocked downstream
+				// (safe_path_for_url + containment).
+				$url = self::same_site_url_or_home( $url, '' );
+				if ( '' === $url ) {
+					return array( 'cleared' => false );
 				}
+				$path = wp_parse_url( $url, PHP_URL_PATH );
+				// A bare host yields no path: coerce to '/' so a null path can
+				// never escalate to the falsy-path clear-all branch.
+				if ( ! is_string( $path ) || '' === $path ) {
+					$path = '/';
+				}
+				$cleared = Cache::clear_cache( $path );
+				return array( 'cleared' => (bool) $cleared );
 			}
 			Main::clear_all_cache();
 			return array( 'cleared' => true );
@@ -772,6 +787,59 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		}
 
 		/**
+		 * Validate a caller-supplied URL as same-site, falling back to home.
+		 *
+		 * Mirrors Rest::is_same_site_url() (audit #1357): wp_http_validate_url()
+		 * plus http(s) scheme plus home-host comparison, so ability consumers
+		 * (including show_in_rest) cannot trigger off-site fetches/scans.
+		 *
+		 * @since NEXT
+		 * @param string $url      Caller-supplied URL (already esc_url_raw'd).
+		 * @param string $fallback Home URL fallback on mismatch.
+		 * @return string Same-site URL or the fallback.
+		 */
+		/**
+		 * Resolve the caller URL input: empty/missing falls back to home,
+		 * a provided URL must be same-site (audit #1357 review).
+		 *
+		 * Single home for the esc_url_raw + fallback wiring previously
+		 * repeated in all four scan/suggestion wrappers.
+		 *
+		 * @since NEXT
+		 * @param array $input Ability input.
+		 * @return string Resolved URL, or '' when a provided URL is off-site.
+		 */
+		private static function resolve_input_url( array $input ): string {
+			$raw = isset( $input['url'] ) && is_string( $input['url'] ) ? $input['url'] : '';
+			if ( '' === $raw ) {
+				return Util::cached_home_url( '/' );
+			}
+			return self::same_site_url_or_home( esc_url_raw( $raw ), '' );
+		}
+
+		/**
+		 * Validate a caller-supplied URL as same-site, else the fallback.
+		 *
+		 * Thin BC wrapper over Util::same_site_url_or_home() (audit #1357
+		 * review) so comparator rules cannot drift between call sites.
+		 *
+		 * @since NEXT
+		 * @param string $url      Caller URL (already esc_url_raw'd by caller).
+		 * @param string $fallback Fallback (home URL, or '' to fail closed).
+		 * @return string Same-site URL or the fallback.
+		 */
+		private static function same_site_url_or_home( string $url, string $fallback ): string {
+			if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'same_site_url_or_home' ) ) {
+				try {
+					return Util::same_site_url_or_home( $url, $fallback );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			return $fallback;
+		}
+
+		/**
 		 * Execute callback: Run Performance Scan (operational).
 		 *
 		 * Delegates to Telemetry::scan().
@@ -782,7 +850,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * @return array Scan results or error.
 		 */
 		public static function execute_run_performance_scan( array $input ): array {
-			$url    = isset( $input['url'] ) ? esc_url_raw( $input['url'] ) : Util::cached_home_url( '/' );
+			$url = self::resolve_input_url( $input );
+			if ( '' === $url ) {
+				return array( 'error' => __( 'You can only query URLs belonging to this website.', 'performance-optimisation' ) );
+			}
 			$result = Telemetry::scan( $url, 'manual', false );
 			if ( is_wp_error( $result ) ) {
 				return array( 'error' => $result->get_error_message() );
@@ -801,7 +872,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * @return array{queued: bool}
 		 */
 		public static function execute_queue_pagespeed_scan( array $input ): array {
-			$url    = isset( $input['url'] ) ? esc_url_raw( $input['url'] ) : Util::cached_home_url( '/' );
+			$url = self::resolve_input_url( $input );
+			if ( '' === $url ) {
+				return array(
+					'queued' => false,
+					'error'  => __( 'You can only query URLs belonging to this website.', 'performance-optimisation' ),
+				);
+			}
 			$format = isset( $input['strategy'] ) ? sanitize_text_field( $input['strategy'] ) : 'mobile';
 			$job_id = Pagespeed::queue_scan( $url, $format );
 			return array( 'queued' => $job_id > 0 );
@@ -818,7 +895,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * @return array PageSpeed results.
 		 */
 		public static function execute_get_pagespeed_results( array $input ): array {
-			$url     = isset( $input['url'] ) ? esc_url_raw( $input['url'] ) : Util::cached_home_url( '/' );
+			$url = self::resolve_input_url( $input );
+			if ( '' === $url ) {
+				return array( 'error' => __( 'You can only query URLs belonging to this website.', 'performance-optimisation' ) );
+			}
 			$format  = isset( $input['strategy'] ) ? sanitize_text_field( $input['strategy'] ) : 'mobile';
 			$results = Pagespeed::get_results( $url, $format );
 			return is_array( $results ) ? $results : array();
@@ -835,7 +915,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * @return array{suggestions: array} Suggestions.
 		 */
 		public static function execute_get_suggestions( array $input ): array {
-			$url           = isset( $input['url'] ) ? esc_url_raw( $input['url'] ) : Util::cached_home_url( '/' );
+			$url = self::resolve_input_url( $input );
+			if ( '' === $url ) {
+				return array(
+					'suggestions' => array(),
+					'error'       => __( 'You can only query URLs belonging to this website.', 'performance-optimisation' ),
+				);
+			}
 			$transient_key = Util::transient_key( 'wppo_audit_' . md5( $url ) );
 			$telemetry     = get_transient( $transient_key );
 			if ( false === $telemetry ) {

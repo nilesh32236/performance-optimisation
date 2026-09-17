@@ -3072,6 +3072,97 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Memoized lowercase home host for same-site checks, keyed by blog.
+		 *
+		 * @since NEXT
+		 * @var array<int, string>
+		 */
+		private static $same_site_home_host = array();
+
+		/**
+		 * Whether a URL's host matches the home host (case-insensitive).
+		 *
+		 * Canonical home-host comparator (audit #1357 review): DNS is
+		 * case-insensitive, so both sides lowercase (Rest::is_same_site_url()
+		 * compared raw === and was the outlier). Host-only — no scheme or
+		 * syntax validation; use is_same_site_url() for full checks.
+		 *
+		 * @since NEXT
+		 * @param string $url URL to check.
+		 * @return bool True when hosts match and home host is known.
+		 */
+		public static function is_same_site_host( string $url ): bool {
+			try {
+				$blog_id = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
+				if ( ! array_key_exists( $blog_id, self::$same_site_home_host ) ) {
+					$home_host                             = function_exists( 'wp_parse_url' ) ? wp_parse_url( self::cached_home_url(), PHP_URL_HOST ) : '';
+					self::$same_site_home_host[ $blog_id ] = ( is_string( $home_host ) ) ? strtolower( $home_host ) : '';
+				}
+				if ( '' === self::$same_site_home_host[ $blog_id ] ) {
+					return false;
+				}
+				$host = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url, PHP_URL_HOST ) : '';
+				return is_string( $host ) && '' !== $host && strtolower( $host ) === self::$same_site_home_host[ $blog_id ];
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Whether a URL is same-site and safe for server-side fetching.
+		 *
+		 * Canonical full check (audit #1357 review): wp_http_validate_url()
+		 * syntax + http(s) scheme + is_same_site_host(). Delegates:
+		 * Rest::is_same_site_url(), Critical_CSS::is_same_site_host() (host
+		 * part), and Abilities::same_site_url_or_home() all funnel here so
+		 * port/case/IDN edge cases cannot drift apart.
+		 *
+		 * @since NEXT
+		 * @param string $url URL to check.
+		 * @return bool True when safe.
+		 */
+		public static function is_same_site_url( string $url ): bool {
+			try {
+				if ( '' === $url ) {
+					return false;
+				}
+				if ( function_exists( 'wp_http_validate_url' ) && ! wp_http_validate_url( $url ) ) {
+					return false;
+				}
+				$parsed = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url ) : false;
+				if ( ! is_array( $parsed ) ) {
+					return false;
+				}
+				$scheme = $parsed['scheme'] ?? '';
+				if ( ! in_array( $scheme, array( 'http', 'https' ), true ) ) {
+					return false;
+				}
+				return self::is_same_site_host( $url );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Validate a caller-supplied URL as same-site, else the fallback.
+		 *
+		 * @since NEXT
+		 * @param string $url      Caller URL (already esc_url_raw'd by caller).
+		 * @param string $fallback Fallback (home URL, or '' to fail closed).
+		 * @return string Same-site URL or the fallback.
+		 */
+		public static function same_site_url_or_home( string $url, string $fallback ): string {
+			try {
+				return self::is_same_site_url( $url ) ? $url : $fallback;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $fallback;
+			}
+		}
+
+		/**
 		 * Normalize a raw host value into a safe cache-key domain.
 		 *
 		 * Lowercases, converts IDN to ASCII, strips any port, and applies the

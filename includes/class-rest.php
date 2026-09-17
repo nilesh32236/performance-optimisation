@@ -974,16 +974,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return bool
 		 */
 		private function is_same_site_url( string $url ): bool {
-			if ( '' === $url || ! wp_http_validate_url( $url ) ) {
-				return false;
+			// Audit #1357 review: canonical Util comparator (lowercases both
+			// sides; the old raw === was the case-sensitivity outlier).
+			if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_same_site_url' ) ) {
+				try {
+					return Util::is_same_site_url( $url );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 			}
-			$parsed = wp_parse_url( $url );
-			$scheme = $parsed['scheme'] ?? '';
-			if ( ! in_array( $scheme, array( 'http', 'https' ), true ) ) {
-				return false;
-			}
-			$home_host = wp_parse_url( Util::cached_home_url(), PHP_URL_HOST );
-			return ( $parsed['host'] ?? '' ) === $home_host;
+			return false;
 		}
 
 		/**
