@@ -135,6 +135,12 @@ class DelayThirdPartyAutoTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'get_the_ID' )->justReturn( 0 );
 		Functions\when( 'get_post_meta' )->justReturn( '' );
 		Functions\when( 'has_block' )->justReturn( false );
+		// compute_delay_excluded_context() calls wp_parse_url() inside the
+		// fail-closed Store-API probe (#1315): without this stub Brain Monkey
+		// throws, the probe returns true, and every buffered-path delay test
+		// sees unchanged markup. Alias to PHP's parse_url (same signature).
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		Functions\when( 'wp_unslash' )->returnArg();
 	}
 
 	/**
@@ -372,8 +378,11 @@ class DelayThirdPartyAutoTest extends \PHPUnit\Framework\TestCase {
 			),
 		);
 
+		// Fixture uses mouseflow (an auto pattern with no always-on base-preset
+		// exclusion): googletagmanager/gtm fixtures stay eager via the
+		// always-applied base preset, so they cannot prove auto delay here.
 		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for buffered-path tests.
-		$vendor = new \PerformanceOptimise\Inc\Minify\HTML( '<html><head></head><body><script src="https://www.googletagmanager.com/gtm.js?id=GTM-X"></script></body></html>', $options );
+		$vendor = new \PerformanceOptimise\Inc\Minify\HTML( '<html><head></head><body><script src="https://cdn.mouseflow.com/website.js"></script></body></html>', $options );
 		$markup = $vendor->get_minified_html();
 		$this->assertStringContainsString( 'wppo/javascript', $markup );
 		$this->assertStringContainsString( 'data-wppo-delay-strategy="idle"', $markup );
@@ -393,12 +402,14 @@ class DelayThirdPartyAutoTest extends \PHPUnit\Framework\TestCase {
 			'file_optimisation' => array(
 				'delayJS'                    => true,
 				'delayJSThirdPartyAuto'      => true,
-				'delayJSThirdPartyAllowlist' => "googletagmanager.com\n",
+				'delayJSThirdPartyAllowlist' => "mouseflow.com\n",
 			),
 		);
 
+		// Same mouseflow fixture as the parity test so the allowlist (not the
+		// base preset) is what keeps the tag eager.
 		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for buffered-path tests.
-		$html = new \PerformanceOptimise\Inc\Minify\HTML( '<html><head></head><body><script src="https://www.googletagmanager.com/gtm.js?id=GTM-X"></script></body></html>', $options );
+		$html = new \PerformanceOptimise\Inc\Minify\HTML( '<html><head></head><body><script src="https://cdn.mouseflow.com/website.js"></script></body></html>', $options );
 		$this->assertStringNotContainsString( 'wppo/javascript', $html->get_minified_html() );
 	}
 
