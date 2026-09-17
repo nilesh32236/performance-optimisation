@@ -63,6 +63,10 @@ export const getWppoSettings = ( path, fallback = {} ) => {
  * deep) to match patchSettingsCache(), so no path can mutate shared
  * global state that another path assumes frozen.
  *
+ * Freeze contract is intentionally one level deep: objects nested deeper
+ * than a tab (e.g. settings.cache.nested) remain mutable, so callers must
+ * replace rather than mutate nested state to keep snapshots consistent.
+ *
  * Contract verified in includes/class-rest.php: both `update_settings` and
  * `restore_settings` respond with the full merged `wppo_settings` option
  * (via `send_response( $response_settings )` / `send_response( $merged_settings )`),

@@ -82,8 +82,9 @@ export const SCAN_STRATEGIES = [ 'mobile', 'desktop' ];
  */
 export const buildAction = ( action, params = {} ) => {
 	// Fail fast on non-object params: Object.entries() on a string/number
-	// would iterate characters/indices into junk query keys.
-	if ( ! params || typeof params !== 'object' ) {
+	// would iterate characters/indices into junk query keys. Arrays are
+	// rejected too (typeof [] === 'object') so they cannot emit numeric keys.
+	if ( ! params || typeof params !== 'object' || Array.isArray( params ) ) {
 		return action;
 	}
 	const search = new URLSearchParams();
