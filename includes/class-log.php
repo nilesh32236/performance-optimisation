@@ -200,12 +200,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 			}
 
 			if ( false === $data ) {
-				/* phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery */
+				/* phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- custom table has no core API; static query, no placeholders to prepare (audit #1362). */
 				// Direct query is required for custom table operations.
 
 				// Get total number of activities.
 				$total_items = (int) $wpdb->get_var(
-					$wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->prefix}wppo_activity_logs" )
+					"SELECT COUNT(*) FROM {$wpdb->prefix}wppo_activity_logs"
 				);
 
 				// Calculate total pages.
