@@ -151,7 +151,11 @@ describe( 'DatabaseCleanup Component', () => {
 		fireEvent.click( saveButton );
 
 		await waitFor( () => {
-			expect( screen.getByText( 'Save Error' ) ).toBeInTheDocument();
+			// Audit #1420: raw backend/JS errors stay in console.error;
+			// the UI shows only the translated generic string.
+			expect(
+				screen.getByText( 'Error saving settings.' )
+			).toBeInTheDocument();
 		} );
 	} );
 

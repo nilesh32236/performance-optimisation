@@ -34,7 +34,7 @@ import FeatureCard from './common/FeatureCard';
 import StatusBadge from './common/StatusBadge';
 import NoticeBanner from './common/NoticeBanner';
 
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 
 // apiKeyConfigured is now derived inside the component for reactivity.
 
@@ -88,6 +88,26 @@ const scoreStatus = ( score ) => {
 };
 
 /**
+ * Format a fetched_at timestamp for display, falling back to the raw
+ * value when it cannot be parsed.
+ *
+ * @since NEXT
+ * @param {*} raw Raw fetched_at value from the API.
+ * @return {*} Localized date-time string, or the raw value as fallback.
+ */
+const formatFetchedAt = ( raw ) => {
+	try {
+		const parsed = new Date( raw );
+		if ( Number.isNaN( parsed.getTime() ) ) {
+			return raw;
+		}
+		return parsed.toLocaleString();
+	} catch {
+		return raw;
+	}
+};
+
+/**
  * A single Lighthouse category score gauge.
  *
  * @param {Object} props
@@ -101,7 +121,12 @@ const ScoreGauge = ( { label, score } ) => {
 		<div
 			className={ `wppo-score-gauge wppo-score-gauge--${ status }` }
 			role="img"
-			aria-label={ `${ label }: ${ score }` }
+			aria-label={ sprintf(
+				/* translators: %1$s: metric label, %2$s: score value. */
+				__( '%1$s: %2$s', 'performance-optimisation' ),
+				label,
+				score
+			) }
 		>
 			<div className="wppo-score-gauge__circle" aria-hidden="true">
 				<span className="wppo-score-gauge__value">{ score }</span>
@@ -483,7 +508,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 			{ pending && (
 				<div
 					className="wppo-notice wppo-notice--info"
-					role="alert"
+					role="status"
 					aria-live="polite"
 				>
 					<FontAwesomeIcon
@@ -567,7 +592,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 							? __( 'Desktop', 'performance-optimisation' )
 							: __( 'Mobile', 'performance-optimisation' ) }
 						{ ' · ' }
-						{ result.fetched_at }
+						{ formatFetchedAt( result.fetched_at ) }
 					</p>
 				</div>
 			) }

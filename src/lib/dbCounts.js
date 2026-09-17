@@ -1,3 +1,4 @@
+import { __ } from '@wordpress/i18n';
 import { apiCall } from './apiRequest';
 
 /**
@@ -88,7 +89,11 @@ export const createDbCountsCache = ( {
 					return { ...response.data };
 				}
 				throw new Error(
-					response?.message || 'Failed to load counts.'
+					response?.message ||
+						__(
+							'Failed to load counts.',
+							'performance-optimisation'
+						)
 				);
 			} );
 			localInflight = request.finally( () => {

@@ -163,6 +163,9 @@ const DatabaseCleanup = ( { options = {} } ) => {
 	const [ baseline, setBaseline ] = useState( defaultSettings );
 	useEffect( () => {
 		setBaseline( { ...defaultSettings, ...options } );
+		if ( ! isSaving && options && Object.keys( options ).length > 0 ) {
+			setSettings( ( prev ) => ( { ...prev, ...options } ) );
+		}
 		// Per-key deps (not object identity) so parent re-renders with an
 		// identical payload do not reset the baseline.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -239,13 +242,17 @@ const DatabaseCleanup = ( { options = {} } ) => {
 		if ( e ) {
 			e.preventDefault();
 		}
+		if ( isSaving ) {
+			return;
+		}
 		setIsSaving( true );
+		dismiss();
 		try {
 			const res = await apiCall( 'update_settings', {
 				tab: 'database_cleanup',
 				settings,
 			} );
-			if ( res && res.success !== false ) {
+			if ( res && res.success ) {
 				setBaseline( { ...settings } );
 				setIsDirty( false );
 				notify( {
@@ -275,9 +282,10 @@ const DatabaseCleanup = ( { options = {} } ) => {
 			);
 			notify( {
 				type: 'error',
-				message:
-					err?.message ||
-					__( 'Error saving settings.', 'performance-optimisation' ),
+				message: __(
+					'Error saving settings.',
+					'performance-optimisation'
+				),
 				durationMs: 5000,
 			} );
 		} finally {
@@ -406,7 +414,11 @@ const DatabaseCleanup = ( { options = {} } ) => {
 	}, 0 );
 
 	const handleExportTransients = async () => {
+		if ( exporting ) {
+			return;
+		}
 		setExporting( true );
+		dismiss();
 		try {
 			const EXPORT_LIMIT = 500;
 
@@ -420,7 +432,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				document.body.appendChild( link );
 				link.click();
 				link.remove();
-				URL.revokeObjectURL( url );
+				setTimeout( () => URL.revokeObjectURL( url ), 1000 );
 			};
 			const response = await apiCall(
 				`expired_transients_export?limit=${ EXPORT_LIMIT }`,
@@ -706,14 +718,16 @@ const DatabaseCleanup = ( { options = {} } ) => {
 						<span className="wppo-stat-hero__value">
 							{ loadingCounts
 								? '…'
-								: `${ Number(
-										totalItems
-								  ).toLocaleString() } ${ _n(
-										'item',
-										'items',
-										totalItems,
-										'performance-optimisation'
-								  ) }` }
+								: sprintf(
+										/* translators: %s: number of items. */
+										_n(
+											'%s item',
+											'%s items',
+											totalItems,
+											'performance-optimisation'
+										),
+										Number( totalItems ).toLocaleString()
+								  ) }
 						</span>
 						<span className="wppo-stat-hero__label">
 							{ __(
@@ -901,7 +915,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 					),
 					confirmDialog.type === 'all'
 						? __( 'overhead items', 'performance-optimisation' )
-						: confirmDialog.label.toLowerCase()
+						: confirmDialog.label.toLocaleLowerCase()
 				) }
 				confirmLabel={ __( 'Delete', 'performance-optimisation' ) }
 				variant="danger"

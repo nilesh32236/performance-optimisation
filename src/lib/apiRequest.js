@@ -94,12 +94,19 @@ let pendingRefresh = null;
  *
  * Deduplicates concurrent refreshes via a shared promise (thundering-herd
  * guard) so multiple simultaneous 403s share a single admin-ajax round-trip.
+ * The shared fetch is intentionally signal-free: forwarding a caller signal
+ * would let one unmount abort the refresh for all concurrent callers.
+ * Callers needing cancellation pass their signal to apiCall(), which aborts
+ * its own request.
  *
  * @since 1.6.0
- * @param {AbortSignal|undefined} signal Optional abort signal (audit #1354).
+ * @param {AbortSignal|undefined} signal Ignored/reserved (kept for backward compatibility; the shared refresh is never aborted by callers).
  * @return {Promise<string>} The refreshed nonce string.
  */
 const refreshNonce = async ( signal ) => {
+	// Shared refresh is intentionally signal-free (see JSDoc); reference the
+	// reserved parameter so linters do not flag it as unused.
+	void signal;
 	// Audit #1354 review: restore the shared-promise guard — concurrent
 	// 403s share one round-trip. (A caller-specific signal cannot abort
 	// the shared fetch; callers needing cancellation pass their signal
@@ -114,7 +121,6 @@ const refreshNonce = async ( signal ) => {
 		try {
 			const res = await fetch( wppoSettings.ajaxUrl, {
 				method: 'POST',
-				signal: signal || undefined,
 				headers: {
 					'Content-Type': 'application/x-www-form-urlencoded',
 				},
@@ -416,6 +422,29 @@ export const buildAction = ( action, params = {} ) => {
 };
 
 /**
+ * Resolve a validation message with i18n priority: the
+ * wppoSettings.translations map (server-translated via MO) first, then the
+ * English fallback. Keeps this module free of a @wordpress/i18n import.
+ *
+ * @since NEXT
+ * @param {string} key      Translation key in wppoSettings.translations.
+ * @param {string} fallback English fallback string.
+ * @return {string} Localized string.
+ */
+const getValidationMessage = ( key, fallback ) => {
+	if (
+		typeof wppoSettings !== 'undefined' &&
+		wppoSettings &&
+		wppoSettings.translations &&
+		'string' === typeof wppoSettings.translations[ key ] &&
+		wppoSettings.translations[ key ]
+	) {
+		return wppoSettings.translations[ key ];
+	}
+	return fallback;
+};
+
+/**
  * Throw when a scan URL fails client-side validation.
  *
  * @since NEXT
@@ -429,7 +458,10 @@ export const assertScanUrl = ( url, allowEmpty = false ) => {
 	}
 	if ( ! isValidScanUrl( url ) ) {
 		throw new Error(
-			'Invalid scan URL: must be a same-origin http(s) URL.'
+			getValidationMessage(
+				'invalidScanUrl',
+				'Invalid scan URL: must be a same-origin http(s) URL.'
+			)
 		);
 	}
 };
@@ -446,8 +478,14 @@ export const assertScanStrategy = ( strategy, allowEmpty = false ) => {
 	if ( ! isValidScanStrategy( strategy, allowEmpty ) ) {
 		throw new Error(
 			allowEmpty
-				? "Invalid strategy: must be 'mobile', 'desktop' or ''."
-				: "Invalid strategy: must be 'mobile' or 'desktop'."
+				? getValidationMessage(
+						'invalidStrategyEmpty',
+						"Invalid strategy: must be 'mobile', 'desktop' or ''."
+				  )
+				: getValidationMessage(
+						'invalidStrategy',
+						"Invalid strategy: must be 'mobile' or 'desktop'."
+				  )
 		);
 	}
 };

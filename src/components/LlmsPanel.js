@@ -98,7 +98,7 @@ const LlmsPanel = () => {
 	return (
 		<FeatureCard
 			title={ __( 'LLMs.txt', 'performance-optimisation' ) }
-			icon={ <i className="fas fa-robot"></i> }
+			icon={ <i className="fas fa-robot" aria-hidden="true"></i> }
 		>
 			{ notice && (
 				<NoticeBanner

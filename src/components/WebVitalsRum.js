@@ -8,7 +8,7 @@
  */
 
 import { useState, useEffect, useCallback } from '@wordpress/element';
-import { __, sprintf } from '@wordpress/i18n';
+import { __, _n, sprintf } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUsers, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import { apiCall, getErrorLogMessage } from '../lib/apiRequest';
@@ -206,9 +206,11 @@ const WebVitalsRum = () => {
 			{ data.length > 0 && (
 				<p className="wppo-text-muted wppo-text-small">
 					{ sprintf(
-						/* translators: %d: number of sample days retained */
-						__(
+						/* translators: %d: number of sample days retained. */
+						_n(
+							'Showing up to %d day.',
 							'Showing up to %d days.',
+							14,
 							'performance-optimisation'
 						),
 						14

@@ -9,7 +9,7 @@
  * @param {import('react').ReactNode} [props.children]    Extra content below the header row.
  */
 const FeatureHeader = ( { title, description, status, actions, children } ) => (
-	<div className="wppo-feature-header">
+	<header className="wppo-feature-header">
 		<div className="wppo-feature-header__main">
 			<div className="wppo-feature-header__title">
 				<h2>{ title }</h2>
@@ -27,7 +27,7 @@ const FeatureHeader = ( { title, description, status, actions, children } ) => (
 		{ children && (
 			<div className="wppo-feature-header__extra">{ children }</div>
 		) }
-	</div>
+	</header>
 );
 
 export default FeatureHeader;

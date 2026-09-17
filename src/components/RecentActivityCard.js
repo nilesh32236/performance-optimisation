@@ -18,10 +18,12 @@ import NoticeBanner from './common/NoticeBanner';
 const RecentActivityCard = ( {
 	activities,
 	activitiesError = false,
-	onNavigate,
+	loading = false,
+	onNavigate = () => {},
 } ) => {
 	const showList = Array.isArray( activities ) && activities.length > 0;
-	const showEmptyState = ! showList && ! activitiesError;
+	const isLoading = loading || activities === undefined;
+	const showEmptyState = ! showList && ! activitiesError && ! isLoading;
 	return (
 		<FeatureCard
 			title={ __(
@@ -33,14 +35,18 @@ const RecentActivityCard = ( {
 				<button
 					type="button"
 					className="wppo-button wppo-button--secondary"
-					onClick={ () => onNavigate( 'tools' ) }
+					onClick={ () => {
+						if ( typeof onNavigate === 'function' ) {
+							onNavigate( 'tools' );
+						}
+					} }
 					aria-label={ __(
 						'View Full Optimisation Activity Log',
 						'performance-optimisation'
 					) }
 				>
 					{ __( 'View Full Log', 'performance-optimisation' ) }
-					<FontAwesomeIcon icon={ faArrowRight } />
+					<FontAwesomeIcon icon={ faArrowRight } aria-hidden="true" />
 				</button>
 			}
 		>
@@ -70,6 +76,18 @@ const RecentActivityCard = ( {
 							</li>
 						) ) }
 					</ul>
+				) }
+				{ isLoading && (
+					<div
+						className="wppo-empty-state"
+						role="status"
+						aria-live="polite"
+					>
+						{ __(
+							'Loading recent activity…',
+							'performance-optimisation'
+						) }
+					</div>
 				) }
 				{ showEmptyState && (
 					<div className="wppo-empty-state">

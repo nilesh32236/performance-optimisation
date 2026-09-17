@@ -1473,7 +1473,9 @@ describe( 'FileOptimization Component', () => {
 			expect( apiCall ).toHaveBeenCalledWith(
 				'sandbox_preview',
 				{},
-				'GET'
+				'GET',
+				// Audit #1420: sandbox hydration threads an AbortSignal.
+				expect.any( AbortSignal )
 			);
 		} );
 		await waitFor( () => {

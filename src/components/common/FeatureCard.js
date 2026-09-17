@@ -22,7 +22,7 @@ const FeatureCard = ( {
 			<div className="wppo-feature-card__header">
 				{ title && (
 					<h3>
-						{ icon }
+						<span aria-hidden="true">{ icon }</span>
 						{ title }
 					</h3>
 				) }

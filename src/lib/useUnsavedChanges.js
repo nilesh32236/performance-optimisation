@@ -1,4 +1,4 @@
-import { useEffect, useContext, useMemo } from '@wordpress/element';
+import { useEffect, useContext, useMemo, useRef } from '@wordpress/element';
 import UnsavedChangesContext from './UnsavedChangesContext';
 
 /**
@@ -83,7 +83,14 @@ export const stableStringify = ( value ) => {
  * @param {Object} baseline Baseline derived from props / defaults.
  */
 const useUnsavedChanges = ( settings, baseline ) => {
-	const { setIsDirty } = useContext( UnsavedChangesContext );
+	const ctx = useContext( UnsavedChangesContext );
+	if ( ! ctx || typeof ctx.setIsDirty !== 'function' ) {
+		throw new Error(
+			'useUnsavedChanges must be used within UnsavedChangesContext.Provider'
+		);
+	}
+	const { setIsDirty } = ctx;
+	const ownedRef = useRef( false );
 
 	const baselineKey = useMemo(
 		() => stableStringify( baseline ),
@@ -96,6 +103,7 @@ const useUnsavedChanges = ( settings, baseline ) => {
 
 	useEffect( () => {
 		const dirty = baselineKey !== settingsKey;
+		ownedRef.current = dirty;
 		setIsDirty( dirty );
 	}, [ baselineKey, settingsKey, setIsDirty ] );
 
@@ -105,7 +113,9 @@ const useUnsavedChanges = ( settings, baseline ) => {
 			// dirty owner, clear the flag so a newly mounted tab starts clean.
 			// The App guard captures pending navigation synchronously before
 			// unmount, so clearing here does not race with the confirm dialog.
-			setIsDirty( false );
+			if ( ownedRef.current ) {
+				setIsDirty( false );
+			}
 		};
 	}, [ setIsDirty ] );
 };

@@ -56,7 +56,7 @@ const LoadingSubmitButton = ( {
 				aria-live="polite"
 				className="wppo-screen-reader-text"
 			>
-				{ isLoading ? loadingLabel || label : '' }
+				{ isLoading ? loadingLabel || label || children : '' }
 			</span>
 		</>
 	);

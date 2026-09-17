@@ -17,6 +17,7 @@ import { __ } from '@wordpress/i18n';
  * @param {string}               [props.cancelLabel]  Label for the cancel button.
  * @param {string}               [props.variant]      'warning' | 'danger' — controls confirm button style.
  * @param {import('react').Node} [props.children]     Optional extra content (e.g., a detail list).
+ * @param {boolean}              [props.isConfirming] Whether the confirm action is in flight; disables both buttons.
  */
 const ConfirmDialog = ( {
 	isOpen,
@@ -28,6 +29,7 @@ const ConfirmDialog = ( {
 	cancelLabel,
 	variant = 'danger',
 	children,
+	isConfirming = false,
 } ) => {
 	const dialogRef = useRef( null );
 	// Audit #1354: unique title id so two mounted dialogs never share one.
@@ -47,6 +49,8 @@ const ConfirmDialog = ( {
 			if ( e.key === 'Tab' && dialogRef.current ) {
 				const focusable = focusableRef.current;
 				if ( focusable.length === 0 ) {
+					e.preventDefault();
+					dialogRef.current.focus();
 					return;
 				}
 				const first = focusable[ 0 ];
@@ -161,6 +165,7 @@ const ConfirmDialog = ( {
 				role="dialog"
 				aria-modal="true"
 				aria-labelledby={ titleId }
+				tabIndex={ -1 }
 				onClick={ ( e ) => e.stopPropagation() }
 			>
 				<h3 id={ titleId }>
@@ -177,6 +182,7 @@ const ConfirmDialog = ( {
 						type="button"
 						className="wppo-button wppo-button--secondary wppo-dialog-cancel"
 						onClick={ onCancel }
+						disabled={ isConfirming }
 					>
 						{ cancelLabel ||
 							__( 'Cancel', 'performance-optimisation' ) }
@@ -189,6 +195,8 @@ const ConfirmDialog = ( {
 								: 'wppo-button--primary'
 						}` }
 						onClick={ onConfirm }
+						disabled={ isConfirming }
+						aria-busy={ isConfirming || undefined }
 					>
 						{ confirmLabel ||
 							__( 'Confirm', 'performance-optimisation' ) }

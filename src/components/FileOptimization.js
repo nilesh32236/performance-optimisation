@@ -701,8 +701,12 @@ const FileOptimization = ( {
 			if ( res && res.success && res.data ) {
 				setUsedCssStatus( res.data );
 			}
-		} catch {
+		} catch ( err ) {
 			// Fail-open: leave the banner hidden.
+			console.error(
+				'Failed fetching used CSS status:',
+				getErrorLogMessage( err )
+			);
 		}
 	}, [] );
 	useEffect( () => {
@@ -747,8 +751,12 @@ const FileOptimization = ( {
 						res.data.safe_preview_url || prev.safe_preview_url,
 				} ) );
 			}
-		} catch {
+		} catch ( err ) {
 			// Fail-open: keep the seeded wppoSettings value.
+			console.error(
+				'Failed fetching upgrade purge status:',
+				getErrorLogMessage( err )
+			);
 		}
 	}, [] );
 	// Note: no auto-fetch on mount/tab-open — the status is seeded from
@@ -872,12 +880,19 @@ const FileOptimization = ( {
 			return;
 		}
 		sandboxHydratedRef.current = true;
+		const controller = new AbortController();
 		let cancelled = false;
 		( async () => {
 			try {
-				const status = await apiCall( 'sandbox_preview', {}, 'GET' );
+				const status = await apiCall(
+					'sandbox_preview',
+					{},
+					'GET',
+					controller.signal
+				);
 				if (
 					cancelled ||
+					controller.signal.aborted ||
 					! status ||
 					! status.success ||
 					! status.data
@@ -894,13 +909,21 @@ const FileOptimization = ( {
 				if ( status.data.preview_url ) {
 					setSandboxPreviewUrl( status.data.preview_url );
 				}
-			} catch {
+			} catch ( err ) {
 				// Best-effort: the stage/promote/discard controls still work
 				// without prior status.
+				if ( controller.signal.aborted || err?.name === 'AbortError' ) {
+					return;
+				}
+				console.error(
+					'Failed fetching sandbox preview:',
+					getErrorLogMessage( err )
+				);
 			}
 		} )();
 		return () => {
 			cancelled = true;
+			controller.abort();
 		};
 	}, [ activeSubTab ] );
 	const handleSandboxSave = async () => {
@@ -1354,10 +1377,11 @@ const FileOptimization = ( {
 	const handleRegenerateUsedCSS = async () => {
 		setIsRegenerating( true );
 		dismiss();
+		const snapshot = stripCdnRowIds( { ...settings } );
 		try {
 			const saveRes = await apiCall( 'update_settings', {
 				tab: 'file_optimisation',
-				settings: stripCdnRowIds( { ...settings } ),
+				settings: snapshot,
 			} );
 			if ( ! saveRes.success ) {
 				notify( {
@@ -1372,7 +1396,7 @@ const FileOptimization = ( {
 				} );
 				return;
 			}
-			setBaseline( stripCdnRowIds( { ...settings } ) );
+			setBaseline( snapshot );
 			setIsDirty( false );
 			const res = await apiCall( 'used_css_regenerate' );
 			if ( res.success ) {
@@ -1470,6 +1494,9 @@ const FileOptimization = ( {
 
 	const [ singlePostId, setSinglePostId ] = useState( '' );
 	const [ singleTemplate, setSingleTemplate ] = useState( '' );
+	const handleSinglePostIdChange = useCallback( ( e ) => {
+		setSinglePostId( e.target.value );
+	}, [] );
 
 	const handleRegenerateSingleCcss = async ( hash ) => {
 		// Defense-in-depth before hitting the privileged regenerate_ccss
@@ -2206,10 +2233,8 @@ const FileOptimization = ( {
 													// placeholders — translators could break them.
 													placeholder="123"
 													value={ singlePostId }
-													onChange={ ( e ) =>
-														setSinglePostId(
-															e.target.value
-														)
+													onChange={
+														handleSinglePostIdChange
 													}
 												/>
 												<button
@@ -4233,7 +4258,7 @@ const FileOptimization = ( {
 								{ ( settings.cdnMapping || [] ).map(
 									( entry, idx ) => (
 										<div
-											key={ entry.id ?? idx }
+											key={ entry.id }
 											className="wppo-mt-12 wppo-file-opt-card"
 										>
 											<div className="wppo-field">

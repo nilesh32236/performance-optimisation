@@ -35,6 +35,7 @@ const SwitchField = ( {
 	};
 
 	const labelId = useId();
+	const descId = useId();
 
 	return (
 		<div className="wppo-switch-field">
@@ -49,7 +50,9 @@ const SwitchField = ( {
 						</span>
 					) }
 					{ description && (
-						<p className="wppo-text-muted">{ description }</p>
+						<p id={ descId } className="wppo-text-muted">
+							{ description }
+						</p>
 					) }
 				</div>
 			) }
@@ -60,6 +63,7 @@ const SwitchField = ( {
 				label={ label }
 				hideLabelFromVision={ true }
 				disabled={ disabled }
+				aria-describedby={ description ? descId : undefined }
 				{ ...( showLabel ? { 'aria-labelledby': labelId } : {} ) }
 			/>
 		</div>

@@ -14,11 +14,18 @@
 import StatusBadge from './StatusBadge';
 
 const MetricCard = ( { label, value, unit = '', status = null } ) => {
+	const isMissing = value === null || value === undefined;
 	return (
-		<div className="wppo-metric-card">
+		<div
+			className="wppo-metric-card"
+			aria-label={ `${ label }: ${ isMissing ? '—' : value }` }
+		>
 			<span className="wppo-metric-card__label">{ label }</span>
-			<span className="wppo-metric-card__value">
-				{ value }
+			<span
+				className="wppo-metric-card__value"
+				aria-busy={ isMissing || undefined }
+			>
+				{ isMissing ? '—' : value }
 				{ unit !== null && unit !== undefined && unit !== '' && (
 					<span className="wppo-metric-card__unit"> { unit }</span>
 				) }

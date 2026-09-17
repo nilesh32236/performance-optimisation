@@ -1247,20 +1247,35 @@ const delayedScripts = document.querySelectorAll(
 	'script[type="wppo/javascript"], script[wppo-src]'
 );
 
+/**
+ * Handle for the pending idle-script callback, so teardown can cancel it.
+ *
+ * @type {number|null}
+ */
+let idleHandle = null;
+
+/**
+ * Whether idleHandle is a setTimeout id (true) or a requestIdleCallback id (false).
+ *
+ * @type {boolean}
+ */
+let idleTimeoutFallback = false;
+
 // Schedule idle scripts via requestIdleCallback.
 const idleScripts = document.querySelectorAll(
 	'script[data-wppo-delay-strategy="idle"]'
 );
 if ( idleScripts.length > 0 ) {
 	if ( 'requestIdleCallback' in window ) {
-		window.requestIdleCallback( loadIdleScripts, {
+		idleHandle = window.requestIdleCallback( loadIdleScripts, {
 			timeout: ( delayConfig && delayConfig.idleTimeout ) || 3000,
 		} );
 	} else {
 		// Fallback: load after a short delay.
 		// requestIdleCallback's timeout is a deadline (max wait), while setTimeout is a minimum delay.
 		// Use a shorter explicit delay to avoid excessive waiting when rIC is unavailable.
-		setTimeout(
+		idleTimeoutFallback = true;
+		idleHandle = setTimeout(
 			loadIdleScripts,
 			Math.min( 2000, ( delayConfig && delayConfig.idleTimeout ) || 3000 )
 		);
@@ -1392,6 +1407,18 @@ const clearSafetyScan = () => {
  */
 const teardownLazyload = () => {
 	pendingLazyCount = 0;
+	if ( idleHandle !== null ) {
+		if (
+			idleTimeoutFallback ||
+			typeof window.cancelIdleCallback === 'undefined'
+		) {
+			clearTimeout( idleHandle );
+		} else {
+			window.cancelIdleCallback( idleHandle );
+		}
+		idleHandle = null;
+		idleTimeoutFallback = false;
+	}
 	if ( loadImagesTimer !== null ) {
 		clearTimeout( loadImagesTimer );
 		loadImagesTimer = null;
@@ -2460,7 +2487,15 @@ const loadImages = () => {
 								} );
 								el.load();
 								if ( el.hasAttribute( 'data-wppo-autoplay' ) ) {
-									el.play().catch( () => {} );
+									// Fire-and-forget by design: autoplay may
+									// be blocked by the browser policy.
+									el.play().catch( () => {
+										if ( window.console && console.warn ) {
+											console.warn(
+												'wppo: autoplay prevented'
+											);
+										}
+									} );
 								}
 							}
 
@@ -2717,7 +2752,15 @@ const loadImages = () => {
 							} );
 							el.load();
 							if ( el.hasAttribute( 'data-wppo-autoplay' ) ) {
-								el.play().catch( () => {} );
+								// Fire-and-forget by design: autoplay may be
+								// blocked by the browser policy.
+								el.play().catch( () => {
+									if ( window.console && console.warn ) {
+										console.warn(
+											'wppo: autoplay prevented'
+										);
+									}
+								} );
 							}
 							el.classList.remove( 'wppo-lazy-video' );
 						} else {
@@ -3011,6 +3054,23 @@ const initVideoPlaceholders = () => {
 		};
 
 		el.addEventListener( 'click', loadVideo );
+		// Keyboard access: placeholders are click-only by default, so expose
+		// the same activation via Enter/Space for keyboard users.
+		if ( ! el.hasAttribute( 'tabindex' ) ) {
+			el.setAttribute( 'tabindex', '0' );
+		}
+		if ( ! el.hasAttribute( 'role' ) ) {
+			el.setAttribute( 'role', 'button' );
+		}
+		if ( ! el.hasAttribute( 'aria-label' ) ) {
+			el.setAttribute( 'aria-label', 'Play video' );
+		}
+		el.addEventListener( 'keydown', ( event ) => {
+			if ( event.key === 'Enter' || event.key === ' ' ) {
+				event.preventDefault();
+				loadVideo();
+			}
+		} );
 	} );
 };
 

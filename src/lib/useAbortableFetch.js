@@ -14,6 +14,8 @@ import { useEffect, useRef } from '@wordpress/element';
  * Mounted ref: false after unmount. Gate setState/notify behind it.
  *
  * @since NEXT
+ * @deprecated Prefer AbortController signals / runAbortable() cancel in
+ * effect cleanup over isMounted checks.
  * @return {Object} Ref object with .current boolean.
  */
 export const useIsMounted = () => {
@@ -33,14 +35,30 @@ export const useIsMounted = () => {
  * @param {*} error Caught error value.
  * @return {boolean} True for AbortError.
  */
-export const isAbortError = ( error ) => error?.name === 'AbortError';
+export const isAbortError = ( error ) =>
+	error?.name === 'AbortError' || error?.code === 20;
 
 /**
  * Run an async task guarded by a fresh AbortController.
  *
- * Creates the controller, runs the task, and aborts on cleanup. Returns
- * the task promise so callers can await it; rejections other than abort
- * propagate to the caller.
+ * Does not auto-abort on unmount by itself: the caller must call the
+ * returned `cancel` in its effect cleanup. For an effect-bound variant
+ * that auto-aborts, use `useAbortableEffect`.
+ *
+ * Example:
+ * ```js
+ * useEffect( () => {
+ * 	const { promise, cancel } = runAbortable( ( signal ) =>
+ * 		fetch( url, { signal } )
+ * 	);
+ * 	promise.catch( ( err ) => {
+ * 		if ( ! isAbortError( err ) ) {
+ * 			throw err;
+ * 		}
+ * 	} );
+ * 	return cancel;
+ * }, [ url ] );
+ * ```
  *
  * @since NEXT
  * @param {Function} task Async task receiving the signal.
@@ -58,4 +76,21 @@ export const runAbortable = ( task ) => {
 			}
 		},
 	};
+};
+
+/**
+ * Effect-bound abortable task that auto-aborts on cleanup/dep change.
+ *
+ * @since NEXT
+ * @param {Function} task Async task receiving the signal.
+ * @param {Array}    deps Effect dependencies.
+ * @return {void}
+ */
+export const useAbortableEffect = ( task, deps ) => {
+	useEffect( () => {
+		const { promise, cancel } = runAbortable( task );
+		promise.catch( () => {} );
+		return cancel;
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- task is intentionally keyed by caller deps.
+	}, deps );
 };

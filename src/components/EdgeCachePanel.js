@@ -4,11 +4,16 @@ import {
 	useCallback,
 	useId,
 	useMemo,
+	useRef,
 } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faGlobe } from '@fortawesome/free-solid-svg-icons';
-import { apiCall, patchSettingsCache } from '../lib/apiRequest';
+import {
+	apiCall,
+	getErrorLogMessage,
+	patchSettingsCache,
+} from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
 import SwitchField from './common/SwitchField';
@@ -52,6 +57,12 @@ const EdgeCachePanel = () => {
 	);
 	const [ saving, setSaving ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
+	const mountedRef = useRef( true );
+	useEffect( () => {
+		return () => {
+			mountedRef.current = false;
+		};
+	}, [] );
 
 	// Resync when the global settings arrive late or change after a save
 	// elsewhere. The global is not reactive, so derive a snapshot key that
@@ -112,6 +123,9 @@ const EdgeCachePanel = () => {
 					cloudflareZoneId: cfZone,
 					bunnyPullZoneId: bunnyZone,
 				} );
+				if ( ! mountedRef.current ) {
+					return;
+				}
 				notify( {
 					type: 'success',
 					message: __(
@@ -121,6 +135,9 @@ const EdgeCachePanel = () => {
 					durationMs: 3000,
 				} );
 			} else {
+				if ( ! mountedRef.current ) {
+					return;
+				}
 				notify( {
 					type: 'error',
 					message:
@@ -131,7 +148,14 @@ const EdgeCachePanel = () => {
 						),
 				} );
 			}
-		} catch {
+		} catch ( err ) {
+			console.error(
+				'Failed to save edge cache settings:',
+				getErrorLogMessage( err )
+			);
+			if ( ! mountedRef.current ) {
+				return;
+			}
 			notify( {
 				type: 'error',
 				message: __(
@@ -140,7 +164,9 @@ const EdgeCachePanel = () => {
 				),
 			} );
 		} finally {
-			setSaving( false );
+			if ( mountedRef.current ) {
+				setSaving( false );
+			}
 		}
 	}, [ enabled, provider, ttl, swr, cfZone, bunnyZone, notify, dismiss ] );
 

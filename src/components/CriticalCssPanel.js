@@ -1,5 +1,5 @@
 import { __, sprintf } from '@wordpress/i18n';
-import { memo, useMemo, useRef, useState } from '@wordpress/element';
+import { memo, useEffect, useMemo, useRef, useState } from '@wordpress/element';
 import {
 	faCheckCircle,
 	faExclamationTriangle,
@@ -132,10 +132,22 @@ const CriticalCssPanel = ( {
 	onRegenerateSingle,
 } ) => {
 	const [ isRegenerating, setIsRegenerating ] = useState( false );
+	const entries = useMemo( () => {
+		if (
+			! status ||
+			typeof status !== 'object' ||
+			Array.isArray( status )
+		) {
+			return [];
+		}
+		return Object.entries( status );
+	}, [ status ] );
 	// Audit #1354 review: per-render config cache so entries.map does
 	// not rebuild 8 objects + __() lookups per row.
 	const configCacheRef = useRef( new Map() );
-	configCacheRef.current.clear();
+	useEffect( () => {
+		configCacheRef.current.clear();
+	}, [ entries ] );
 	const configFor = ( statusKey ) => {
 		if ( ! configCacheRef.current.has( statusKey ) ) {
 			configCacheRef.current.set(
@@ -189,17 +201,6 @@ const CriticalCssPanel = ( {
 			setSingleBusy( null );
 		}
 	};
-
-	const entries = useMemo( () => {
-		if (
-			! status ||
-			typeof status !== 'object' ||
-			Array.isArray( status )
-		) {
-			return [];
-		}
-		return Object.entries( status );
-	}, [ status ] );
 
 	return (
 		<div className="wppo-ccss-panel wppo-mt-20">
@@ -255,7 +256,10 @@ const CriticalCssPanel = ( {
 								<span
 									className={ `wppo-badge ${ config.className }` }
 								>
-									<FontAwesomeIcon icon={ config.icon } />
+									<FontAwesomeIcon
+										icon={ config.icon }
+										aria-hidden="true"
+									/>
 									{ config.label }
 								</span>
 								{ onRegenerateSingle && (

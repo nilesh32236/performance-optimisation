@@ -465,7 +465,10 @@ const refreshEsiNonce = ( signal, staleNonce = '' ) => {
 	} )
 		.then( ( response ) => ( response.ok ? response.json() : null ) )
 		.then( ( data ) => extractFragmentHtml( data ) )
-		.catch( () => '' );
+		.catch( () => {
+			console.warn( 'wppo: ESI nonce refresh failed' );
+			return '';
+		} );
 
 	pendingNonceRefresh = refresh.finally( () => {
 		pendingNonceRefresh = null;

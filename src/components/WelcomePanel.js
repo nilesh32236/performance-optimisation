@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from '@wordpress/element';
-import { __, sprintf } from '@wordpress/i18n';
+import { __, sprintf, _n } from '@wordpress/i18n';
 import {
 	apiCall,
 	getErrorLogMessage,
@@ -362,11 +362,20 @@ const WelcomePanel = ( { onNavigate } = {} ) => {
 					'Woo self-test timed out:',
 					getErrorLogMessage( error )
 				);
+				const timeoutSeconds = Math.round(
+					WOO_SELF_TEST_TIMEOUT_MS / 1000
+				);
 				notify( {
 					type: 'error',
-					message: __(
-						'The WooCommerce self-test timed out after 5 seconds. Please retry.',
-						'performance-optimisation'
+					message: sprintf(
+						/* translators: %d: timeout in seconds. */
+						_n(
+							'The WooCommerce self-test timed out after %d second. Please retry.',
+							'The WooCommerce self-test timed out after %d seconds. Please retry.',
+							timeoutSeconds,
+							'performance-optimisation'
+						),
+						timeoutSeconds
 					),
 					durationMs: 5000,
 				} );

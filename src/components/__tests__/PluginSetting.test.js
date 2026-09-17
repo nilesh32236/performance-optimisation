@@ -281,7 +281,8 @@ describe( 'PluginSetting', () => {
 			} )
 		);
 		expect(
-			screen.getByText( /Skipped 2 invalid URL\(s\)/ )
+			// Audit #1420: _n() plural forms replace the hardcoded "URL(s)".
+			screen.getByText( /Skipped 2 invalid URLs/ )
 		).toBeInTheDocument();
 	} );
 

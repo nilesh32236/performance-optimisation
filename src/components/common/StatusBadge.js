@@ -43,6 +43,8 @@ const StatusBadge = ( { status } ) => {
 	return (
 		<span
 			className={ `wppo-status-badge wppo-status-badge--${ safeStatus }` }
+			role="status"
+			aria-live="polite"
 		>
 			{ label }
 		</span>

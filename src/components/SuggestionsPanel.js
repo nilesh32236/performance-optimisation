@@ -54,6 +54,7 @@ const SuggestionIcon = ( { status } ) => {
 			<FontAwesomeIcon
 				icon={ faCheckCircle }
 				className="wppo-suggestion-icon wppo-suggestion-icon--good"
+				aria-hidden="true"
 			/>
 		);
 	}
@@ -62,6 +63,7 @@ const SuggestionIcon = ( { status } ) => {
 			<FontAwesomeIcon
 				icon={ faExclamationTriangle }
 				className="wppo-suggestion-icon wppo-suggestion-icon--warning"
+				aria-hidden="true"
 			/>
 		);
 	}
@@ -69,6 +71,7 @@ const SuggestionIcon = ( { status } ) => {
 		<FontAwesomeIcon
 			icon={ faTimesCircle }
 			className="wppo-suggestion-icon wppo-suggestion-icon--poor"
+			aria-hidden="true"
 		/>
 	);
 };
@@ -144,7 +147,12 @@ export const formatValue = ( value, unit ) => {
 	if ( unit === undefined || unit === null || unit === '' ) {
 		return String( value );
 	}
-	return `${ value } ${ unit }`;
+	return sprintf(
+		/* translators: %1$s: metric value, %2$s: unit label. */
+		__( '%1$s %2$s', 'performance-optimisation' ),
+		value,
+		unit
+	);
 };
 
 /**

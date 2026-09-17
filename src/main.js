@@ -92,8 +92,12 @@ document.addEventListener( 'DOMContentLoaded', function () {
 		} )
 			.then( ( response ) => {
 				if ( ! response.ok ) {
-					// Handle 403 Forbidden (likely invalid nonce) by refreshing the nonce.
-					if ( 403 === response.status && ! isRetry ) {
+					// Handle 401/403 Forbidden (likely invalid nonce) by refreshing the nonce.
+					if (
+						( 401 === response.status ||
+							403 === response.status ) &&
+						! isRetry
+					) {
 						return refreshNonce().then( ( success ) => {
 							if ( success ) {
 								return postJsonRequest(
@@ -162,6 +166,7 @@ document.addEventListener( 'DOMContentLoaded', function () {
 
 		const refreshPromise = fetch( wppoObject.ajaxUrl, {
 			method: 'POST',
+			signal: pageController ? pageController.signal : undefined,
 			body: formData,
 		} )
 			.then( ( response ) => {
@@ -183,6 +188,9 @@ document.addEventListener( 'DOMContentLoaded', function () {
 				return false;
 			} )
 			.catch( ( error ) => {
+				if ( error && error.name === 'AbortError' ) {
+					return false;
+				}
 				console.error(
 					'Failed to refresh nonce:',
 					getErrorLogMessage( error )
@@ -318,6 +326,17 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	if ( clearAllCacheBtn ) {
 		clearAllCacheBtn.addEventListener( 'click', function ( event ) {
 			event.preventDefault();
+			if ( clearAllCacheBtn.dataset.busy === '1' ) {
+				return;
+			}
+			clearAllCacheBtn.dataset.busy = '1';
+			clearAllCacheBtn.setAttribute( 'aria-disabled', 'true' );
+			clearAllCacheBtn.setAttribute( 'aria-busy', 'true' );
+			const restore = () => {
+				delete clearAllCacheBtn.dataset.busy;
+				clearAllCacheBtn.removeAttribute( 'aria-disabled' );
+				clearAllCacheBtn.removeAttribute( 'aria-busy' );
+			};
 			postJsonRequest( '/clear_cache', { action: 'clear_cache' } )
 				.then( ( res ) => {
 					if ( res.success ) {
@@ -350,7 +369,8 @@ document.addEventListener( 'DOMContentLoaded', function () {
 						),
 						'error'
 					);
-				} );
+				} )
+				.finally( restore );
 		} );
 	}
 
@@ -361,6 +381,17 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	if ( clearCacheBtn ) {
 		clearCacheBtn.addEventListener( 'click', function ( event ) {
 			event.preventDefault();
+			if ( clearCacheBtn.dataset.busy === '1' ) {
+				return;
+			}
+			clearCacheBtn.dataset.busy = '1';
+			clearCacheBtn.setAttribute( 'aria-disabled', 'true' );
+			clearCacheBtn.setAttribute( 'aria-busy', 'true' );
+			const restore = () => {
+				delete clearCacheBtn.dataset.busy;
+				clearCacheBtn.removeAttribute( 'aria-disabled' );
+				clearCacheBtn.removeAttribute( 'aria-busy' );
+			};
 			let path = window.location.pathname;
 			let decodedPath;
 			try {
@@ -412,7 +443,8 @@ document.addEventListener( 'DOMContentLoaded', function () {
 						),
 						'error'
 					);
-				} );
+				} )
+				.finally( restore );
 		} );
 	}
 } );

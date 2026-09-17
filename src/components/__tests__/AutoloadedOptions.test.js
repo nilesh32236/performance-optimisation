@@ -202,7 +202,8 @@ describe( 'AutoloadedOptions', () => {
 
 		await waitFor( () =>
 			expect(
-				screen.getByText( 'Remediation applied to 1 options.' )
+				// Audit #1420: singular form via _n() for count 1.
+				screen.getByText( 'Remediation applied to 1 option.' )
 			).toBeInTheDocument()
 		);
 		expect( apiCall ).toHaveBeenCalledWith(
@@ -430,7 +431,8 @@ describe( 'AutoloadedOptions', () => {
 
 		await waitFor( () =>
 			expect(
-				screen.getByText( 'Remediation applied to 1 options.' )
+				// Audit #1420: singular form via _n() for count 1.
+				screen.getByText( 'Remediation applied to 1 option.' )
 			).toBeInTheDocument()
 		);
 		// Dry-run report is preserved (not overwritten by the apply payload).

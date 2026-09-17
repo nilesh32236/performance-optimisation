@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from '@wordpress/element';
+import { useState, useEffect, useCallback, useRef } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faBrain } from '@fortawesome/free-solid-svg-icons';
@@ -37,6 +37,9 @@ const AiPanel = () => {
 	const [ model, setModel ] = useState( null );
 	const [ suggestions, setSuggestions ] = useState( [] );
 	const { notice, notify, dismiss } = useNotice();
+	// Run-id guard: ignores stale fetchSuggestions resolutions (e.g. a
+	// save-triggered refresh resolving after unmount or a newer fetch).
+	const fetchRunRef = useRef( 0 );
 
 	const fetchModel = useCallback(
 		async ( signal ) => {
@@ -67,6 +70,7 @@ const AiPanel = () => {
 
 	const fetchSuggestions = useCallback(
 		async ( signal ) => {
+			const runId = ++fetchRunRef.current;
 			try {
 				const res = await apiCall(
 					'ai_suggestions',
@@ -74,11 +78,10 @@ const AiPanel = () => {
 					'GET',
 					signal
 				);
-				if (
-					res.success &&
-					res.data?.suggestions &&
-					! signal?.aborted
-				) {
+				if ( runId !== fetchRunRef.current || signal?.aborted ) {
+					return;
+				}
+				if ( res.success && res.data?.suggestions ) {
 					setSuggestions( res.data.suggestions );
 				}
 			} catch ( err ) {
@@ -153,7 +156,11 @@ const AiPanel = () => {
 						),
 				} );
 			}
-		} catch {
+		} catch ( saveErr ) {
+			console.error(
+				'Failed to save AI settings.',
+				getErrorLogMessage( saveErr )
+			);
 			notify( {
 				type: 'error',
 				message: __(

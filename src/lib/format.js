@@ -115,6 +115,7 @@ export const formatBytesShared = ( value ) => {
 		return '—';
 	}
 	if ( num < 1024 ) {
+		// SI unit symbols are universal; callers needing localized UI should format via sprintf( __() ).
 		return `${ Math.round( num ) } B`;
 	}
 	const units = [ 'KB', 'MB', 'GB', 'TB', 'PB' ];

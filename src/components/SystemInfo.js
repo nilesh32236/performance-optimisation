@@ -38,21 +38,11 @@ const InfoRow = ( { label, value } ) => (
 );
 
 /**
- * Humanize an unmapped machine key for display.
- *
- * @param {string} key Machine key (snake_case).
- * @return {string} Title-cased label.
- */
-const humanizeKey = ( key ) =>
-	String( key )
-		.split( '_' )
-		.map( ( word ) =>
-			word ? word[ 0 ].toUpperCase() + word.slice( 1 ) : word
-		)
-		.join( ' ' );
-
-/**
  * A labelled table of InfoRow items.
+ *
+ * Known keys carry explicit translated labels via the `labels` prop.
+ * Unknown keys fall back to the raw machine key (never synthesized
+ * English) so untranslated strings cannot leak into other locales.
  *
  * @param {Object} props
  * @param {string} props.title  Section heading.
@@ -72,7 +62,7 @@ const InfoTable = ( { title, data, labels = {} } ) => {
 					{ Object.entries( data ).map( ( [ key, value ] ) => (
 						<InfoRow
 							key={ key }
-							label={ labels[ key ] || humanizeKey( key ) }
+							label={ labels[ key ] || key }
 							value={ value }
 						/>
 					) ) }

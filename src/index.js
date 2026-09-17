@@ -8,4 +8,8 @@ if ( rootElement ) {
 	const root = createRoot( rootElement );
 
 	root.render( <App /> );
+} else {
+	console.error(
+		'Performance Optimisation: mount node #performance-optimisation not found.'
+	);
 }

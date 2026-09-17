@@ -24,7 +24,7 @@ import FeatureCard from './common/FeatureCard';
 import NoticeBanner from './common/NoticeBanner';
 import CheckboxOption from './common/CheckboxOption';
 
-import { __, sprintf } from '@wordpress/i18n';
+import { __, sprintf, _n } from '@wordpress/i18n';
 
 // Keep in sync with PHP Util::ALLOWED_SETTINGS_KEYS (single source).
 // At runtime the list is also available as wppoSettings.allowedSettingsKeys
@@ -381,6 +381,37 @@ const PluginSetting = ( { options } ) => {
 			: ''
 	);
 	const [ savingMonitoring, setSavingMonitoring ] = useState( false );
+	const performanceAuditSlice =
+		typeof wppoSettings !== 'undefined'
+			? wppoSettings?.settings?.performance_audit ?? null
+			: null;
+	const performanceAuditKey = useMemo(
+		() => JSON.stringify( performanceAuditSlice ),
+		[ performanceAuditSlice ]
+	);
+	useEffect( () => {
+		if ( savingMonitoring ) {
+			return;
+		}
+		const s =
+			typeof wppoSettings !== 'undefined'
+				? wppoSettings?.settings?.performance_audit || {}
+				: {};
+		const nextServerTiming = !! s.server_timing_enabled;
+		const nextRum = !! s.rum_enabled;
+		const nextUrls = Array.isArray( s.high_value_urls )
+			? s.high_value_urls.join( '\n' )
+			: '';
+		setServerTimingEnabled( nextServerTiming );
+		setRumEnabled( nextRum );
+		setHighValueUrls( nextUrls );
+		setBaseline( ( prev ) => ( {
+			...prev,
+			serverTimingEnabled: nextServerTiming,
+			rumEnabled: nextRum,
+			highValueUrls: nextUrls,
+		} ) );
+	}, [ performanceAuditKey, savingMonitoring ] );
 	const [ baseline, setBaseline ] = useState( {
 		newApiKey: '',
 		autoRescan,
@@ -501,8 +532,10 @@ const PluginSetting = ( { options } ) => {
 								type: 'warning',
 								message: sprintf(
 									/* translators: 1: number of skipped URLs, 2: comma-separated list of skipped URLs */
-									__(
-										'Monitoring settings saved. Skipped %1$s invalid URL(s): %2$s.',
+									_n(
+										'Monitoring settings saved. Skipped %1$d invalid URL: %2$s.',
+										'Monitoring settings saved. Skipped %1$d invalid URLs: %2$s.',
+										invalidUrls.length,
 										'performance-optimisation'
 									),
 									invalidUrls.length,
@@ -615,11 +648,29 @@ const PluginSetting = ( { options } ) => {
 			.split( '.' )[ 0 ];
 	};
 
+	const logAbortRef = useRef( null );
+	useEffect( () => {
+		return () => {
+			if ( logAbortRef.current ) {
+				logAbortRef.current.abort();
+				logAbortRef.current = null;
+			}
+		};
+	}, [] );
+
 	const loadActivityLog = async ( page = 1 ) => {
+		if ( logAbortRef.current ) {
+			logAbortRef.current.abort();
+		}
+		const controller = new AbortController();
+		logAbortRef.current = controller;
 		setLogLoading( true );
 		dismissLog();
 		try {
-			const data = await fetchRecentActivities( page );
+			const data = await fetchRecentActivities( page, controller.signal );
+			if ( controller.signal.aborted ) {
+				return;
+			}
 			if ( data?.activities ) {
 				setLogEntries( data.activities );
 				setLogPage( data.current_page || 1 );
@@ -627,6 +678,9 @@ const PluginSetting = ( { options } ) => {
 				setLogLoaded( true );
 			}
 		} catch ( err ) {
+			if ( controller.signal.aborted || err?.name === 'AbortError' ) {
+				return;
+			}
 			notifyLog( {
 				type: 'error',
 				message: __(
@@ -639,7 +693,9 @@ const PluginSetting = ( { options } ) => {
 				getErrorLogMessage( err )
 			);
 		} finally {
-			setLogLoading( false );
+			if ( ! controller.signal.aborted ) {
+				setLogLoading( false );
+			}
 		}
 	};
 
@@ -943,7 +999,12 @@ const PluginSetting = ( { options } ) => {
 												{ entry.activity }
 											</div>
 											{ entry.created_at && (
-												<time className="wppo-activity-time">
+												<time
+													className="wppo-activity-time"
+													dateTime={
+														entry.created_at
+													}
+												>
 													{ new Date(
 														entry.created_at.replace(
 															' ',
@@ -1004,6 +1065,7 @@ const PluginSetting = ( { options } ) => {
 						className={ `wppo-notice wppo-notice--${
 							apiKeyConfigured ? 'success' : 'warning'
 						} wppo-mb-16` }
+						role="status"
 					>
 						<FontAwesomeIcon
 							icon={
@@ -1135,7 +1197,12 @@ const PluginSetting = ( { options } ) => {
 				{ /* Monitoring: Server-Timing + high-value URLs */ }
 				<FeatureCard
 					title={ __( 'Monitoring', 'performance-optimisation' ) }
-					icon={ <i className="fas fa-tachometer-alt"></i> }
+					icon={
+						<i
+							className="fas fa-tachometer-alt"
+							aria-hidden="true"
+						></i>
+					}
 				>
 					<CheckboxOption
 						checked={ serverTimingEnabled }
@@ -1178,14 +1245,8 @@ const PluginSetting = ( { options } ) => {
 						value={ highValueUrls }
 						onChange={ ( e ) => setHighValueUrls( e.target.value ) }
 						placeholder={ [
-							__(
-								'http://example.com/about/',
-								'performance-optimisation'
-							),
-							__(
-								'http://example.com/contact/',
-								'performance-optimisation'
-							),
+							'http://example.com/about/',
+							'http://example.com/contact/',
 						].join( '\n' ) }
 						aria-describedby="wppo-high-value-urls-desc"
 					/>

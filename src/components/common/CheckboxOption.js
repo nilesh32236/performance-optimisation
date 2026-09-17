@@ -88,7 +88,7 @@ export const CheckboxOption = ( {
 								// Audit #1354 review: always controlled so
 								// async settings loads never leave stale text;
 								// readOnly when no change handler exists.
-								value={ textareaValue }
+								value={ textareaValue ?? '' }
 								onChange={ onTextareaChange }
 								readOnly={ ! onTextareaChange }
 							/>

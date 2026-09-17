@@ -69,7 +69,11 @@ const PluginSettings = lazy( () =>
 );
 
 const TabFallback = () => (
-	<div className="wppo-loading-placeholder wppo-loading-placeholder--fallback">
+	<div
+		className="wppo-loading-placeholder wppo-loading-placeholder--fallback"
+		role="status"
+		aria-live="polite"
+	>
 		<FontAwesomeIcon icon={ faSpinner } spin />
 		<span>{ __( 'Loading…', 'performance-optimisation' ) }</span>
 	</div>
@@ -199,12 +203,12 @@ const App = () => {
 		setCcssRefreshTrigger( ( c ) => c + 1 );
 	}, [] );
 
-	const renderContent = () => {
+	const tabContent = useMemo( () => {
 		const settings =
 			typeof wppoSettings !== 'undefined'
 				? wppoSettings?.settings ?? {}
 				: {};
-		const components = {
+		return {
 			dashboard: (
 				<Dashboard
 					activities={ recentActivities?.activities }
@@ -240,8 +244,20 @@ const App = () => {
 			objectCache: <ObjectCache options={ settings.object_cache } />,
 			tools: <PluginSettings options={ settings } />,
 		};
+	}, [
+		recentActivities,
+		activitiesError,
+		serverRules,
+		serverRulesError,
+		ccssStatus,
+		ccssError,
+		handleTabChange,
+		handleRetryRules,
+		handleCcssRefresh,
+	] );
 
-		const activeComponent = components[ activeTab ] || components.dashboard;
+	const renderContent = () => {
+		const activeComponent = tabContent[ activeTab ] || tabContent.dashboard;
 
 		return (
 			<Suspense fallback={ <TabFallback /> }>
@@ -276,18 +292,27 @@ const App = () => {
 			return;
 		}
 
-		const focusable = sidebar.querySelectorAll(
+		const doc = sidebar.ownerDocument;
+		const focusableNodes = sidebar.querySelectorAll(
 			'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
 		);
+		const overlay = doc.querySelector( '.wppo-sidebar-overlay' );
+		const focusable = overlay
+			? [ overlay, ...focusableNodes ]
+			: [ ...focusableNodes ];
 		const first = focusable[ 0 ];
 		const last = focusable[ focusable.length - 1 ];
-		const doc = sidebar.ownerDocument;
 
 		if ( first ) {
 			first.focus();
 		}
 
 		const handleKeyDown = ( e ) => {
+			if ( e.key === 'Escape' ) {
+				setMobileMenuOpen( false );
+				toggleBtn?.focus();
+				return;
+			}
 			if ( e.key !== 'Tab' ) {
 				return;
 			}
@@ -305,10 +330,10 @@ const App = () => {
 			}
 		};
 
-		sidebar.addEventListener( 'keydown', handleKeyDown );
+		doc.addEventListener( 'keydown', handleKeyDown );
 
 		return () => {
-			sidebar.removeEventListener( 'keydown', handleKeyDown );
+			doc.removeEventListener( 'keydown', handleKeyDown );
 			if ( toggleBtn ) {
 				toggleBtn.focus();
 			}
@@ -422,10 +447,14 @@ const App = () => {
 				} else {
 					hasFetchedRules.current = false;
 				}
-			} catch {
+			} catch ( err ) {
 				hasFetchedRules.current = false;
 				if ( ! rulesController.signal.aborted ) {
 					setServerRulesError( true );
+					console.error(
+						'wppo: server rules fetch failed:',
+						err?.message || err
+					);
 				}
 			}
 		};
@@ -453,10 +482,14 @@ const App = () => {
 					hasFetchedCcss.current = false;
 					setCcssError( true );
 				}
-			} catch {
+			} catch ( err ) {
 				if ( ! ccssController.signal.aborted ) {
 					hasFetchedCcss.current = false;
 					setCcssError( true );
+					console.error(
+						'wppo: server rules fetch failed:',
+						err?.message || err
+					);
 				}
 			}
 		};
@@ -484,6 +517,9 @@ const App = () => {
 		// effect run plus AbortController teardown/recreation after each
 		// fetch and could abort the parallel CCSS request when serverRules
 		// resolves first.
+		// recentActivities/serverRules are intentionally omitted from deps:
+		// the hasFetched* refs gate re-fetch, so including that
+		// effect-written state would retrigger the effect needlessly.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [ activeTab, rulesRetryTrigger, ccssRefreshTrigger ] );
 
@@ -495,8 +531,14 @@ const App = () => {
 
 	const wppoVersion = getWppoSettings()?.version ?? '';
 
+	// setIsDirty is a stable setState so [ isDirty ] suffices.
+	const unsavedCtx = useMemo(
+		() => ( { isDirty, setIsDirty } ),
+		[ isDirty ]
+	);
+
 	return (
-		<UnsavedChangesContext.Provider value={ { isDirty, setIsDirty } }>
+		<UnsavedChangesContext.Provider value={ unsavedCtx }>
 			<div className="wppo-container">
 				{ /* Mobile Top Header */ }
 				<div className="wppo-mobile-header">

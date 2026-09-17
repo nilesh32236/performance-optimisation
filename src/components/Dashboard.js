@@ -42,7 +42,7 @@ import EdgeCachePanel from './EdgeCachePanel';
 import ImageOptimizationCard from './ImageOptimizationCard';
 import RecentActivityCard from './RecentActivityCard';
 import WelcomePanel, { scrollToWooSafeMode } from './WelcomePanel';
-import { __, sprintf } from '@wordpress/i18n';
+import { __, _n, sprintf } from '@wordpress/i18n';
 import { modeLabel } from '../lib/litespeed';
 import { isSafeHttpUrl } from '../lib/urls';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -302,7 +302,11 @@ const Dashboard = ( {
 						res.data.safe_preview_url || prev.safe_preview_url,
 				} ) );
 			}
-		} catch {
+		} catch ( err ) {
+			console.error(
+				'Failed to refresh upgrade purge status:',
+				getErrorLogMessage( err )
+			);
 			// Fail-open: keep the seeded wppoSettings value.
 		}
 	}, [] );
@@ -764,16 +768,20 @@ const Dashboard = ( {
 					} );
 				}
 			} )
-			.catch( () =>
-				notify( {
+			.catch( ( err ) => {
+				console.error(
+					'Failed to remove optimized images:',
+					getErrorLogMessage( err )
+				);
+				return notify( {
 					type: 'error',
 					message: __(
 						'Failed to remove optimized images.',
 						'performance-optimisation'
 					),
 					durationMs: 5000,
-				} )
-			)
+				} );
+			} )
 			.finally( () => handleLoading( 'remove_images', false ) );
 	}, [ handleLoading, notify ] );
 
@@ -814,13 +822,17 @@ const Dashboard = ( {
 						} );
 					}
 				} )
-				.catch( () =>
-					notify( {
+				.catch( ( err ) => {
+					console.error(
+						'Failed to save cache settings:',
+						getErrorLogMessage( err )
+					);
+					return notify( {
 						type: 'error',
 						message: failureMessage,
 						durationMs: 5000,
-					} )
-				)
+					} );
+				} )
 				.finally( () => setSaving( false ) );
 		},
 		[ cacheSettings, notify ]
@@ -1395,7 +1407,12 @@ const Dashboard = ( {
 						{ optimizedFilesCount }
 					</span>
 					<span className="wppo-stat-unit">
-						{ __( 'files', 'performance-optimisation' ) }
+						{ _n(
+							'file',
+							'files',
+							optimizedFilesCount,
+							'performance-optimisation'
+						) }
 					</span>
 					<div className="wppo-stat-footer">
 						<button
@@ -1418,7 +1435,12 @@ const Dashboard = ( {
 					</div>
 					<span className="wppo-stat-value">{ dbOverheadCount }</span>
 					<span className="wppo-stat-unit">
-						{ __( 'items', 'performance-optimisation' ) }
+						{ _n(
+							'item',
+							'items',
+							dbOverheadCount,
+							'performance-optimisation'
+						) }
 						<span
 							className={ `wppo-status-badge ${ dbBadgeClass }` }
 						>

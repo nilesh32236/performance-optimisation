@@ -72,7 +72,6 @@ const Tooltip = ( { content, children, label } ) => {
 			}${ visible ? ' wppo-tooltip-container--visible' : '' }` }
 			{ ...( hasChildren
 				? {
-						'aria-expanded': visible,
 						...( visible && {
 							'aria-describedby': id,
 						} ),

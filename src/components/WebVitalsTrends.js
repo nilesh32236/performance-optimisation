@@ -110,7 +110,9 @@ const TrendSeries = ( { strategy, trends } ) => {
 							'%s performance score trend chart',
 							'performance-optimisation'
 						),
-						strategy
+						strategy === 'mobile'
+							? __( 'Mobile', 'performance-optimisation' )
+							: __( 'Desktop', 'performance-optimisation' )
 					) }
 				>
 					<polyline
@@ -209,6 +211,7 @@ const WebVitalsTrends = ( { url = '' } ) => {
 					<FontAwesomeIcon
 						icon={ faSpinner }
 						spin
+						aria-hidden="true"
 						className="wppo-mr-8"
 					/>
 					{ __( 'Loading trends…', 'performance-optimisation' ) }

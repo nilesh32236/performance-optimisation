@@ -235,7 +235,9 @@ const MetricOverview = ( { result } ) => (
 				<Tooltip content={ METRIC_INFO.assets() } />
 			</div>
 			<span className="wppo-audit-overview-card__value">
-				{ result.css_count + result.js_count + result.media_count }
+				{ ( Number( result.css_count ) || 0 ) +
+					( Number( result.js_count ) || 0 ) +
+					( Number( result.media_count ) || 0 ) }
 			</span>
 		</div>
 	</div>
@@ -335,7 +337,9 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 			);
 		} finally {
 			submittingRef.current = false;
-			setScanning( false );
+			if ( ! abortController.signal.aborted ) {
+				setScanning( false );
+			}
 		}
 
 		// Phase 2 — fetch telemetry-based suggestions after scan completes.
@@ -374,7 +378,7 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 			{ /* Modern Scan Bar */ }
 			<form className="wppo-audit-controls" onSubmit={ handleScan }>
 				<div className="wppo-audit-controls__icon">
-					<FontAwesomeIcon icon={ faSearch } />
+					<FontAwesomeIcon icon={ faSearch } aria-hidden="true" />
 				</div>
 				<input
 					id="wppo-audit-url"
@@ -613,7 +617,10 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 											'DNS Lookup',
 											'performance-optimisation'
 										) }
-										value={ `${ result.dns_lookup_time } ms` }
+										value={ fmtMetric(
+											result.dns_lookup_time,
+											'ms'
+										) }
 										tooltipKey="dns"
 									/>
 									<ResultRow
@@ -621,7 +628,10 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 											'TCP Connection',
 											'performance-optimisation'
 										) }
-										value={ `${ result.connect_time } ms` }
+										value={ fmtMetric(
+											result.connect_time,
+											'ms'
+										) }
 										tooltipKey="connect"
 									/>
 									<ResultRow
@@ -640,10 +650,7 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 											'True TTFB',
 											'performance-optimisation'
 										) }
-										value={ `${ fmtMetric(
-											result.ttfb,
-											'ms'
-										) }` }
+										value={ fmtMetric( result.ttfb, 'ms' ) }
 										tooltipKey="ttfb"
 									/>
 									<ResultRow
@@ -651,7 +658,10 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 											'Server Processing',
 											'performance-optimisation'
 										) }
-										value={ `${ result.server_wait_time } ms` }
+										value={ fmtMetric(
+											result.server_wait_time,
+											'ms'
+										) }
 										tooltipKey="server_wait"
 									/>
 

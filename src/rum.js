@@ -643,7 +643,13 @@ export const sanitizeRumValues = ( raw ) => {
 			body: payload,
 			credentials: 'omit',
 			keepalive: true,
-		} ).catch( () => {} );
+		} ).catch( () => {
+			// Intentionally silent: beacon delivery is best-effort on
+			// pagehide/unload. Warn only, never a user-facing error.
+			if ( typeof console !== 'undefined' && console.warn ) {
+				console.warn( 'wppo: beacon failed' );
+			}
+		} );
 	};
 
 	// TTFB + FCP from navigation and paint timing.

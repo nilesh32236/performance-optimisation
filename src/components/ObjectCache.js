@@ -4,6 +4,7 @@ import {
 	useId,
 	useCallback,
 	useContext,
+	useMemo,
 	useRef,
 } from '@wordpress/element';
 import { handleChange } from '../lib/util';
@@ -33,7 +34,7 @@ import SwitchField from './common/SwitchField';
 import NoticeBanner from './common/NoticeBanner';
 import ConfirmDialog from './common/ConfirmDialog';
 
-import { __, sprintf } from '@wordpress/i18n';
+import { __, sprintf, _n } from '@wordpress/i18n';
 
 /**
  * Object-cache REST actions that authenticate against Redis and therefore may
@@ -65,41 +66,44 @@ const getCompressionLabel = ( statusLoaded, supported, key ) => {
 
 const ObjectCache = ( { options = {} } ) => {
 	const hitRatioLabelId = useId();
-	const defaultSettings = {
-		mode: 'standalone',
-		host: '127.0.0.1',
-		port: 6379,
-		password: '',
-		database: 0,
-		nodes: '',
-		master_name: 'mymaster',
-		use_tls: false,
-		persistent: false,
-		compression: 'none',
-		...options,
-	};
+	const defaultSettings = useMemo(
+		() => ( {
+			mode: 'standalone',
+			host: '127.0.0.1',
+			port: 6379,
+			password: '',
+			database: 0,
+			nodes: '',
+			master_name: 'mymaster',
+			use_tls: false,
+			persistent: false,
+			compression: 'none',
+			...options,
+		} ),
+		// Per-key deps (not object identity) so parent re-renders with an
+		// identical payload do not rebuild the defaults.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[
+			options.mode,
+			options.host,
+			options.port,
+			options.password,
+			options.database,
+			options.nodes,
+			options.master_name,
+			options.use_tls,
+			options.persistent,
+			options.compression,
+		]
+	);
 
 	const [ settings, setSettings ] = useState( defaultSettings );
 	const [ isLoading, setIsLoading ] = useState( false );
 	const { setIsDirty } = useContext( UnsavedChangesContext );
 	const [ baseline, setBaseline ] = useState( defaultSettings );
 	useEffect( () => {
-		setBaseline( { ...defaultSettings, ...options } );
-		// Per-key deps (not object identity) so parent re-renders with an
-		// identical payload do not reset the baseline.
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [
-		options.mode,
-		options.host,
-		options.port,
-		options.password,
-		options.database,
-		options.nodes,
-		options.master_name,
-		options.use_tls,
-		options.persistent,
-		options.compression,
-	] );
+		setBaseline( { ...defaultSettings } );
+	}, [ defaultSettings ] );
 	useUnsavedChanges( settings, baseline );
 	const [ activeAction, setActiveAction ] = useState( null );
 	const isActionLoading = Boolean( activeAction );
@@ -381,10 +385,16 @@ const ObjectCache = ( { options = {} } ) => {
 		}
 		if ( cacheStatus.failure_count > 0 ) {
 			parts.push(
-				`(${ cacheStatus.failure_count } ${ __(
-					'failures',
-					'performance-optimisation'
-				) })`
+				sprintf(
+					/* translators: %d: failure count. */
+					_n(
+						'(%d failure)',
+						'(%d failures)',
+						cacheStatus.failure_count,
+						'performance-optimisation'
+					),
+					cacheStatus.failure_count
+				)
 			);
 		}
 		return parts.join( ' ' );
@@ -586,7 +596,13 @@ const ObjectCache = ( { options = {} } ) => {
 							/>
 							{ __( 'Hit Ratio', 'performance-optimisation' ) }
 						</span>
-						<span className="wppo-stat-value">{ hitRatio }%</span>
+						<span className="wppo-stat-value">
+							{ sprintf(
+								/* translators: %s: cache hit ratio. */
+								__( '%s%%', 'performance-optimisation' ),
+								hitRatio
+							) }
+						</span>
 						<div
 							className="wppo-progress-bar"
 							role="progressbar"
