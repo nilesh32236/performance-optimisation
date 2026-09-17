@@ -1518,6 +1518,14 @@ Filters the user third-party allowlist that always wins over the denylist (scrip
 
 ---
 
+### `wppo_delay_js_third_party_auto_patterns`
+Filters the curated known-vendor URL patterns used by the opt-in auto third-party delay mode (`delayJSThirdPartyAuto`). Auto-matched scripts delay until the browser is idle (load-when-idle parity with the manual idle list). Fail-open: non-array or throwing callbacks fall back to the built-in preset. @since NEXT.
+
+**Parameters:**
+- `$preset` *(string[])* — Auto third-party URL patterns.
+
+---
+
 ### `wppo_htaccess_cache_vary_rules`
 Filters the `.htaccess` cache-vary rules block before writing. @since 2.0.0.
 

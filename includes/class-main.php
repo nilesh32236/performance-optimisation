@@ -552,6 +552,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! isset( $this->options['file_optimisation']['delayJSSafeMode'] ) ) {
 				$this->options['file_optimisation']['delayJSSafeMode'] = true;
 			}
+			// Auto third-party delay (issue #1314): additive key, defaults to
+			// off so existing installs keep current behaviour. In-memory only
+			// here (no front-end DB write); persisted via update_settings/REST
+			// and backfilled once by maybe_migrate_third_party_auto().
+			// Multisite-safe: per-site wppo_settings only.
+			if ( ! isset( $this->options['file_optimisation']['delayJSThirdPartyAuto'] ) ) {
+				$this->options['file_optimisation']['delayJSThirdPartyAuto'] = false;
+			}
 			// Unified safe-mode kill switch (issue #1098): additive key, defaults
 			// to off so existing installs keep current behaviour. In-memory only
 			// here (no front-end DB write); persisted via update_settings/REST.
@@ -1056,6 +1064,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'admin_init', array( $this, 'maybe_migrate_object_cache_outage_flag' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_comment_image_hardening' ) );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_builder_watcher' ) );
+			add_action( 'admin_init', array( $this, 'maybe_migrate_third_party_auto' ) );
 			// One-time activity-log notice on admin_init.
 			if ( isset( $this->options['file_optimisation']['removeQueryStrings'] ) ) {
 				add_action( 'admin_init', array( $this, 'maybe_notify_remove_query_strings_removal' ) );
@@ -2879,6 +2888,58 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					$this->options['file_optimisation'] = array();
 				}
 				$this->options['file_optimisation'] = array_merge( $this->options['file_optimisation'], $file );
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
+					Util::set_settings_cache( $stored );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Backfill the additive auto third-party delay key (issue #1314).
+		 *
+		 * Runs on admin_init; in-memory default is applied in __construct so
+		 * front-end requests never pay for a DB write. Defaults to off so
+		 * upgraded installs keep current behaviour. Multisite-safe: per-site
+		 * get_option() so sites migrate independently. Fail-open: never fatals.
+		 *
+		 * @return void
+		 * @since NEXT
+		 */
+		public function maybe_migrate_third_party_auto(): void {
+			try {
+				if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
+					return;
+				}
+				// allowlist(settings-read-guard): deliberate direct read — must distinguish
+				// "no stored row" (false) from "stored array", which Util::get_settings()
+				// normalizes to array(). See tests/php/SettingsReadGuardTest.php.
+				// Gate on the persisted row (not the in-memory backfill) so the
+				// migration branch stays reachable and single-key rows heal.
+				$stored = get_option( 'wppo_settings' );
+				if ( ! is_array( $stored ) ) {
+					return;
+				}
+				$file_opts = $stored['file_optimisation'] ?? null;
+				if ( is_array( $file_opts ) && array_key_exists( 'delayJSThirdPartyAuto', $file_opts ) ) {
+					return;
+				}
+
+				$file = isset( $stored['file_optimisation'] ) && is_array( $stored['file_optimisation'] ) ? $stored['file_optimisation'] : array();
+
+				$file['delayJSThirdPartyAuto'] = false;
+
+				$stored['file_optimisation'] = $file;
+				$updated                     = update_option( 'wppo_settings', $stored );
+				if ( ! $updated ) {
+					return;
+				}
+
+				if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
+					$this->options['file_optimisation'] = array();
+				}
+				$this->options['file_optimisation']['delayJSThirdPartyAuto'] = false;
 				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'set_settings_cache' ) ) {
 					Util::set_settings_cache( $stored );
 				}
@@ -5130,13 +5191,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						return $tag;
 					}
 				}
-				// One-click third-party delay (#1217): when on, only delay
-				// third-party candidates (known denylist host/keyword or
-				// cross-origin src); first-party scripts stay eager. User
-				// allowlist wins. Fail-open: detection errors leave un-delayed.
-				if ( ! empty( $file_opt_for_gate['delayJSThirdParty'] ) ) {
+				// One-click third-party delay (#1217) plus auto third-party
+				// delay (#1314): when either is on, only delay third-party
+				// candidates (known denylist host/keyword or cross-origin src
+				// for the manual mode; curated known-vendor URL patterns for
+				// auto mode); first-party scripts stay eager. User allowlist
+				// wins on both paths. Manual exclusions and per-page overrides
+				// below still apply — auto patterns merge additively, never
+				// replacing them. Fail-open: detection errors leave un-delayed.
+				if ( ! empty( $file_opt_for_gate['delayJSThirdParty'] ) || ! empty( $file_opt_for_gate['delayJSThirdPartyAuto'] ) ) {
 					try {
-						if ( ! $this->is_delay_third_party_candidate( (string) $tag, (string) $handle ) ) {
+						$is_candidate = false;
+						if ( ! empty( $file_opt_for_gate['delayJSThirdParty'] ) ) {
+							$is_candidate = $this->is_delay_third_party_candidate( (string) $tag, (string) $handle );
+						}
+						if ( ! $is_candidate && ! empty( $file_opt_for_gate['delayJSThirdPartyAuto'] ) ) {
+							$is_candidate = $this->is_delay_third_party_auto_candidate( (string) $tag, (string) $handle );
+						}
+						if ( ! $is_candidate ) {
 							return $tag;
 						}
 					} catch ( \Throwable $e ) {
@@ -5249,8 +5321,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						$tag = self::inject_delay_script_attr( $tag, 'type="wppo/javascript" wppo-type="text/javascript" ' );
 					}
 
-						// Determine delay strategy for this handle.
-						$strategy = $this->get_delay_strategy_for_handle( $handle );
+					// Determine delay strategy for this handle.
+					$strategy = $this->get_delay_strategy_for_handle( $handle, (string) $tag );
 					if ( 'interaction' !== $strategy ) {
 						$tag = self::inject_delay_script_attr(
 							$tag,
@@ -5661,6 +5733,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			self::$delay_excluded_context_memo     = null;
 			self::$delay_excluded_context_memo_sig = '';
 			self::$delay_pattern_regex_cache       = array();
+			self::$delay_js_third_party_auto_cache = null;
 		}
 
 		/**
@@ -5898,9 +5971,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 1.9.0
 		 *
 		 * @param string $handle The script handle.
+		 * @param string $tag    Optional script tag markup (for auto-mode src matching).
 		 * @return string The strategy: 'interaction', 'idle', or 'viewport'.
 		 */
-		private function get_delay_strategy_for_handle( string $handle ): string {
+		private function get_delay_strategy_for_handle( string $handle, string $tag = '' ): string {
 			if ( in_array( $handle, $this->delay_js_idle_list, true ) ) {
 				return 'idle';
 			}
@@ -5914,6 +5988,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 			if ( $this->matches_any_delay_pattern( $handle, $this->delay_js_viewport_list ) ) {
 				return 'viewport';
+			}
+			// Auto third-party mode (#1314): load-when-idle parity — scripts
+			// matching the curated auto patterns resolve to the idle strategy
+			// (same as the manual delayJSIdleList path) instead of the
+			// interaction default. Manual idle/viewport lists and per-page
+			// overrides above win. Only upgrades the interaction default: an
+			// explicit viewport default is never loosened. Builder and commerce
+			// exclusions never reach here (their tags return early). The auto
+			// pattern list lazy-boots only on this path, so it costs nothing
+			// when the toggle is off.
+			if ( 'interaction' === $this->delay_js_default_strategy ) {
+				$file_opt = $this->options['file_optimisation'] ?? array();
+				if ( ! empty( $file_opt['delayJSThirdPartyAuto'] ) ) {
+					try {
+						if ( self::matches_third_party_auto_pattern( (string) $handle, (string) $tag ) ) {
+							return 'idle';
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
 			}
 			return $this->delay_js_default_strategy;
 		}
@@ -7447,6 +7542,232 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					return true;
 				}
 				return substr( $a, -strlen( '.' . $b ) ) === '.' . $b || substr( $b, -strlen( '.' . $a ) ) === '.' . $a;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Per-request memo for the curated auto third-party patterns (#1314).
+		 *
+		 * Lazily booted by get_delay_js_third_party_auto_patterns() only when
+		 * delay is enabled, so requests without Delay-JS never pay for the
+		 * list build. Reset alongside the delay-context memo in tests.
+		 *
+		 * @since NEXT
+		 * @var string[]|null
+		 */
+		private static ?array $delay_js_third_party_auto_cache = null;
+
+		/**
+		 * Reset the auto third-party pattern memo (for tests).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_delay_third_party_auto_cache(): void {
+			self::$delay_js_third_party_auto_cache = null;
+		}
+
+		/**
+		 * Curated known-vendor URL patterns for auto third-party delay (#1314).
+		 *
+		 * URL-host-oriented fragments (analytics, ads, social, chat, video
+		 * embeds, error tracking) matched as substrings against the script
+		 * src. Filterable via `wppo_delay_js_third_party_auto_patterns`.
+		 * Fail-open: any failure returns the built-in preset. Lazily booted:
+		 * callers must only invoke this when Delay-JS (and the auto toggle)
+		 * is enabled.
+		 *
+		 * @since NEXT
+		 * @return string[]
+		 */
+		public static function get_delay_js_third_party_auto_patterns(): array {
+			if ( null !== self::$delay_js_third_party_auto_cache ) {
+				return self::$delay_js_third_party_auto_cache;
+			}
+			$preset = array(
+				'googletagmanager.com',
+				'google-analytics.com',
+				'analytics.google.com',
+				'googlesyndication.com',
+				'doubleclick.net',
+				'connect.facebook.net',
+				'facebook.net',
+				'platform.twitter.com',
+				'platform.linkedin.com',
+				'linkedin.com/insight',
+				'snap.licdn.com',
+				'static.hotjar.com',
+				'hotjar.com',
+				'clarity.ms',
+				'cdn.mxpnl.com',
+				'cdn.segment.com',
+				'segment.io',
+				'fullstory.com',
+				'optimizely.com',
+				'vwo.com',
+				'mouseflow.com',
+				'widget.intercom.io',
+				'js.intercomcdn.com',
+				'js.hs-scripts.com',
+				'hs-scripts.com',
+				'connect.tiktok.com',
+				'platform.pinterest.com',
+				'static.crisp.chat',
+				'crisp.chat',
+				'tawk.to',
+				'youtube.com/iframe_api',
+				'player.vimeo.com',
+				'fast.wistia.com',
+				'disqus.com',
+				'newrelic.com',
+				'nr-data.net',
+				'browser.sentry-cdn.com',
+				'sentry.io',
+			);
+			if ( ! function_exists( 'has_filter' ) || ! function_exists( 'apply_filters' ) || ! has_filter( 'wppo_delay_js_third_party_auto_patterns' ) ) {
+				self::$delay_js_third_party_auto_cache = $preset;
+				return $preset;
+			}
+			try {
+				$raw = apply_filters( 'wppo_delay_js_third_party_auto_patterns', $preset );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				self::$delay_js_third_party_auto_cache = $preset;
+				return $preset;
+			}
+			if ( ! is_array( $raw ) ) {
+				self::$delay_js_third_party_auto_cache = $preset;
+				return $preset;
+			}
+			$filtered                              = array_values(
+				array_unique(
+					array_filter(
+						array_map(
+							static function ( $val ): string {
+								return is_string( $val ) || is_numeric( $val ) ? (string) $val : '';
+							},
+							$raw
+						),
+						static function ( $val ): bool {
+							return '' !== trim( (string) $val );
+						}
+					)
+				)
+			);
+			self::$delay_js_third_party_auto_cache = $filtered;
+			return $filtered;
+		}
+
+		/**
+		 * Whether a handle/tag matches the curated auto third-party patterns (#1314).
+		 *
+		 * Handles use word-boundary matching (consistent with the rest of delay
+		 * matching); the src extracted from the tag (or a full tag passed as
+		 * $tag) uses substring matching because URLs rarely align on word
+		 * boundaries. Fail-open to false on any error. The pattern list
+		 * lazy-boots here, so callers must gate on the auto toggle first.
+		 *
+		 * @since NEXT
+		 * @param string $handle Script handle (may be empty on buffered paths).
+		 * @param string $tag    Script tag markup or src URL.
+		 * @return bool True on match.
+		 */
+		public static function matches_third_party_auto_pattern( string $handle, string $tag ): bool {
+			try {
+				$patterns = self::get_delay_js_third_party_auto_patterns();
+				if ( empty( $patterns ) ) {
+					return false;
+				}
+				$src = '';
+				if ( '' !== $tag ) {
+					if ( preg_match( '/\ssrc\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i', ' ' . $tag, $matches ) ) {
+						$src = trim( ! empty( $matches[2] ) ? $matches[2] : ( $matches[3] ?? '' ) );
+					} elseif ( false === strpos( $tag, '<' ) ) {
+						$src = trim( $tag );
+					}
+				}
+				foreach ( $patterns as $pattern ) {
+					$pattern = trim( (string) $pattern );
+					if ( '' === $pattern ) {
+						continue;
+					}
+					if ( '' !== $handle ) {
+						$regex = '/\b' . preg_quote( $pattern, '/' ) . '\b/';
+						try {
+							if ( preg_match( $regex, $handle ) ) {
+								return true;
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
+					}
+					if ( '' !== $src && false !== stripos( $src, $pattern ) ) {
+						return true;
+					}
+					// Buffered-markup fallback: when no src attribute parsed
+					// (opaque markup), match the pattern against the raw tag so
+					// src-adjacent fragments still qualify.
+					if ( '' === $src && '' !== $tag && false !== stripos( $tag, $pattern ) ) {
+						return true;
+					}
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Whether a script tag/handle is an auto third-party delay candidate (#1314).
+		 *
+		 * Builder and commerce exclusions are unconditional: excluded contexts
+		 * (cart/checkout/account, builder previews) never auto-delay. The user
+		 * allowlist always wins. Manual exclusions and per-page overrides are
+		 * applied by the caller (add_defer_attribute) after this gate, so auto
+		 * patterns merge additively and never replace them. Any detection
+		 * failure fails open to false (leave un-delayed).
+		 *
+		 * @since NEXT
+		 * @param string $tag    Script tag markup.
+		 * @param string $handle Script handle.
+		 * @return bool True when the script should be delayed in auto mode.
+		 */
+		public function is_delay_third_party_auto_candidate( string $tag, string $handle ): bool {
+			try {
+				if ( ! preg_match( '/\ssrc\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i', $tag, $matches ) ) {
+					return false;
+				}
+				$src = trim( ! empty( $matches[2] ) ? $matches[2] : ( $matches[3] ?? '' ) );
+				if ( '' === $src || 0 === strpos( $src, 'data:' ) || 0 === strpos( $src, 'blob:' ) ) {
+					return false;
+				}
+				// Builder/commerce guardrail: unconditional, mirrors the
+				// add_defer_attribute() gate for defence in depth.
+				try {
+					if ( self::is_delay_excluded_context() ) {
+						return false;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					return false;
+				}
+				// User allowlist wins over auto patterns (parity with the
+				// manual third-party path). Handle matching uses the
+				// word-boundary matcher; src matching stays substring.
+				foreach ( $this->get_delay_js_third_party_allowlist() as $allowed ) {
+					$allowed = trim( (string) $allowed );
+					if ( '' === $allowed ) {
+						continue;
+					}
+					if ( $this->matches_delay_pattern( (string) $handle, $allowed ) || false !== stripos( $src, $allowed ) ) {
+						return false;
+					}
+				}
+				return self::matches_third_party_auto_pattern( (string) $handle, $src );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;

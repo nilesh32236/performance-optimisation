@@ -957,13 +957,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 					}
 				}
 
-				// One-click third-party delay (#1217): mirror Main — inline
-				// scripts (no src) stay eager; external scripts must match the
-				// curated denylist/host check and survive the user allowlist.
-				// Fail-open: detection errors leave the tag untouched.
-				if ( ! $skip_delay && ! empty( $file_opt_for_preview['delayJSThirdParty'] ) ) {
+				// One-click third-party delay (#1217) plus auto third-party
+				// delay (#1314): mirror Main — inline scripts (no src) stay
+				// eager; external scripts must match the curated denylist/host
+				// check (manual mode) or the curated auto patterns (auto mode)
+				// and survive the user allowlist. Auto patterns merge
+				// additively with manual exclusions and per-page overrides
+				// below, never replacing them. Fail-open: detection errors
+				// leave the tag untouched.
+				$manual_third_party_on = ! empty( $file_opt_for_preview['delayJSThirdParty'] );
+				$auto_third_party_on   = ! empty( $file_opt_for_preview['delayJSThirdPartyAuto'] );
+				if ( ! $skip_delay && ( $manual_third_party_on || $auto_third_party_on ) ) {
 					try {
-						$skip_delay = ! self::is_third_party_delay_candidate( (string) $attributes, (string) $content, $file_opt_for_preview );
+						$is_candidate = false;
+						if ( $manual_third_party_on ) {
+							$is_candidate = self::is_third_party_delay_candidate( (string) $attributes, (string) $content, $file_opt_for_preview );
+						}
+						if ( ! $is_candidate && $auto_third_party_on ) {
+							$is_candidate = self::is_third_party_auto_delay_candidate( (string) $attributes, (string) $content, $file_opt_for_preview );
+						}
+						$skip_delay = ! $is_candidate;
 					} catch ( \Throwable $e ) {
 						unset( $e );
 						$skip_delay = true;
@@ -1104,7 +1117,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 							$attributes .= ' data-wppo-delay-exec="defer"';
 						}
 					}
-					$strategy = $this->get_delay_strategy_for_inline( $attributes, $content );
+					$strategy = $this->get_delay_strategy_for_inline( $attributes, $content, $file_opt_for_preview );
 					if ( 'interaction' !== $strategy ) {
 						$attributes .= ' data-wppo-delay-strategy="' . esc_attr( $strategy ) . '"';
 					}
@@ -1156,9 +1169,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 *
 		 * @param string $attributes Script tag attributes string.
 		 * @param string $content    Inline script content.
+		 * @param array  $file_opt   Optional effective file_optimisation slice (preview-aware).
 		 * @return string Strategy: 'interaction', 'idle', or 'viewport'.
 		 */
-		private function get_delay_strategy_for_inline( string $attributes, string $content ): string {
+		private function get_delay_strategy_for_inline( string $attributes, string $content, array $file_opt = array() ): string {
 			$search_in = $attributes . ' ' . $content;
 			if ( null !== $this->delay_idle_re ) {
 				try {
@@ -1206,6 +1220,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 					if ( false !== strpos( $search_in, $pattern ) ) {
 						return 'viewport';
 					}
+				}
+			}
+			// Auto third-party mode (#1314): load-when-idle parity — markup
+			// matching the curated auto patterns resolves to the idle strategy
+			// (same as the manual delayJSIdleList path) instead of the
+			// interaction default. Manual idle/viewport lists above win. Only
+			// upgrades the interaction default: an explicit viewport default
+			// is never loosened. Builder and commerce contexts never reach
+			// here (safe_minify_js returns early). Fail-open to the default.
+			if ( 'interaction' === $this->delay_js_default_strategy ) {
+				try {
+					$slice = $file_opt;
+					if ( empty( $slice ) && isset( $this->options['file_optimisation'] ) && is_array( $this->options['file_optimisation'] ) ) {
+						$slice = $this->options['file_optimisation'];
+					}
+					if ( ! empty( $slice['delayJSThirdPartyAuto'] ) && self::markup_matches_third_party_auto_patterns( $attributes, $content ) ) {
+						return 'idle';
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
 				}
 			}
 			return $this->delay_js_default_strategy;
@@ -1495,6 +1529,145 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 					return false;
 				}
 				return substr( $norm_src, -strlen( '.' . $norm_site ) ) !== '.' . $norm_site && substr( $norm_site, -strlen( '.' . $norm_src ) ) !== '.' . $norm_src;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Whether markup matches the curated auto third-party patterns (#1314).
+		 *
+		 * Lazily boots the pattern list via Main when available (single source
+		 * of truth); fails open to false when Main is unavailable or on any
+		 * error. The matcher itself lazy-boots, so callers must gate on the
+		 * auto toggle first.
+		 *
+		 * @since NEXT
+		 * @param string $attributes Script attributes string.
+		 * @param string $content    Inline script content.
+		 * @return bool True on match.
+		 */
+		private static function markup_matches_third_party_auto_patterns( string $attributes, string $content ): bool {
+			try {
+				$patterns = array();
+				if ( class_exists( Main::class ) && method_exists( Main::class, 'get_delay_js_third_party_auto_patterns' ) ) {
+					try {
+						$patterns = Main::get_delay_js_third_party_auto_patterns();
+					} catch ( \Throwable $e ) {
+						unset( $e );
+						$patterns = array();
+					}
+				}
+				if ( empty( $patterns ) ) {
+					return false;
+				}
+				$haystack = $attributes . ' ' . $content;
+				foreach ( $patterns as $pattern ) {
+					$pattern = trim( (string) $pattern );
+					if ( '' !== $pattern && false !== stripos( $haystack, $pattern ) ) {
+						return true;
+					}
+				}
+				return false;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
+		 * Whether buffered-path markup is an auto third-party delay candidate (#1314).
+		 *
+		 * Mirrors Main::is_delay_third_party_auto_candidate() for buffered
+		 * HTML: scripts without src stay eager; builder/commerce contexts
+		 * never auto-delay (unconditional); the user allowlist (settings plus
+		 * the `wppo_delay_js_third_party_allowlist` filter, mirroring
+		 * Main::get_delay_js_third_party_allowlist()) always wins; then the
+		 * curated auto patterns decide. Manual exclusions and per-page
+		 * overrides are applied by the caller, so auto patterns merge
+		 * additively. Fail-open to false on any error.
+		 *
+		 * @since NEXT
+		 * @param string $attributes Script attributes string.
+		 * @param string $content    Inline script content.
+		 * @param array  $file_opt   Effective file_optimisation slice.
+		 * @return bool True when the script should be delayed in auto mode.
+		 */
+		private static function is_third_party_auto_delay_candidate( string $attributes, string $content, array $file_opt ): bool {
+			try {
+				if ( ! preg_match( '/\ssrc\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i', $attributes, $matches ) ) {
+					return false;
+				}
+				$src = trim( ! empty( $matches[2] ) ? $matches[2] : ( $matches[3] ?? '' ) );
+				if ( '' === $src || 0 === strpos( $src, 'data:' ) || 0 === strpos( $src, 'blob:' ) ) {
+					return false;
+				}
+				// Builder/commerce guardrail: unconditional, mirrors the
+				// safe_minify_js() gate for defence in depth.
+				if ( self::is_delay_excluded_context() ) {
+					return false;
+				}
+				$haystack = $attributes . ' ' . $content;
+				// User allowlist wins. The settings-derived list is built
+				// first and passed into the filter (mirroring
+				// Main::get_delay_js_third_party_allowlist()) so filters
+				// written as array_merge($list, [...]) keep the user's
+				// textarea entries on this path too.
+				$settings_allowlist = array();
+				$allow_raw          = $file_opt['delayJSThirdPartyAllowlist'] ?? '';
+				if ( is_string( $allow_raw ) && '' !== trim( $allow_raw ) ) {
+					$settings_allowlist = (array) Util::process_urls( str_replace( ',', "\n", $allow_raw ) );
+				} elseif ( is_array( $allow_raw ) ) {
+					$settings_allowlist = array_values(
+						array_filter(
+							array_map(
+								static function ( $v ): string {
+									return is_string( $v ) || is_numeric( $v ) ? (string) $v : '';
+								},
+								$allow_raw
+							),
+							static function ( $v ): bool {
+								return '' !== trim( (string) $v );
+							}
+						)
+					);
+				}
+				foreach ( $settings_allowlist as $allowed ) {
+					$allowed = trim( (string) $allowed );
+					if ( '' !== $allowed && false !== stripos( $haystack, $allowed ) ) {
+						return false;
+					}
+				}
+				if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_delay_js_third_party_allowlist' ) ) {
+					try {
+						$filtered = apply_filters( 'wppo_delay_js_third_party_allowlist', $settings_allowlist );
+						if ( is_array( $filtered ) ) {
+							$coerced = array_values(
+								array_filter(
+									array_map(
+										static function ( $v ): string {
+											return is_string( $v ) || is_numeric( $v ) ? (string) $v : '';
+										},
+										$filtered
+									),
+									static function ( $v ): bool {
+										return '' !== trim( (string) $v );
+									}
+								)
+							);
+							foreach ( $coerced as $allowed ) {
+								$allowed = trim( (string) $allowed );
+								if ( '' !== $allowed && false !== stripos( $haystack, $allowed ) ) {
+									return false;
+								}
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				return self::markup_matches_third_party_auto_patterns( $attributes, $content );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;

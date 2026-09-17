@@ -347,6 +347,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'delayJSINPPreset'             => false,
 					'delayJSExternalOnly'          => false,
 					'delayJSThirdParty'            => false,
+					'delayJSThirdPartyAuto'        => false,
 					'delayJSThirdPartyDenylist'    => '',
 					'delayJSThirdPartyAllowlist'   => '',
 					'delayJSBuilderPreset'         => true,
@@ -5476,17 +5477,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					continue;
 				}
 
-				// Safe-default delay keys (issues #966 and #1308) — external-only
-				// defaults off (fail-safe: delay everything unless asked),
-				// builder preset defaults on (fail-safe: never delay builder
-				// runtimes), and the four #1308 opt-in compat presets
-				// (consent/analytics/gallery/jquery) default off so upgrades
-				// preserve manual exclusions.
+				// Safe-default delay keys (issues #966, #1308, and #1314) —
+				// external-only defaults off (fail-safe: delay everything
+				// unless asked), builder preset defaults on (fail-safe: never
+				// delay builder runtimes), and the four #1308 opt-in compat
+				// presets (consent/analytics/gallery/jquery) default off so
+				// upgrades preserve manual exclusions.
 				if ( in_array(
 					$safe_key,
 					array(
 						'delayJSExternalOnly',
 						'delayJSThirdParty',
+						'delayJSThirdPartyAuto',
 						'delayJSConsentPreset',
 						'delayJSAnalyticsPreset',
 						'delayJSGalleryPreset',
