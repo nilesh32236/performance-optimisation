@@ -707,6 +707,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		 * @since 2.0.0
 		 * @since NEXT Added $blocked stripping for crafted-POST hardening.
 		 */
+		/**
+		 * Normalize an asset handle for case-insensitive comparison.
+		 *
+		 * Mirrors Asset_Manager::normalize_handle(): lowercase plus
+		 * sanitize_key() when available, with a regex fallback.
+		 *
+		 * @param mixed $handle Raw handle value.
+		 * @return string Normalized handle, or '' when unusable.
+		 * @since NEXT
+		 */
+		private static function normalize_asset_handle( $handle ): string {
+			if ( ! is_scalar( $handle ) ) {
+				return '';
+			}
+			$lower = strtolower( (string) $handle );
+			if ( '' === $lower ) {
+				return '';
+			}
+			if ( function_exists( 'sanitize_key' ) ) {
+				return (string) sanitize_key( $lower );
+			}
+			return (string) preg_replace( '/[^a-z0-9_\-]/', '', $lower );
+		}
+
+		/**
+		 * Helper method to process disabled assets.
+		 *
+		 * @param array $raw_data      Raw input array from $_POST.
+		 * @param array $valid_handles Array of valid handles for the page.
+		 * @param array $blocked       Array of blocked handles that must never persist (issue #1406).
+		 * @return array Sanitized and whitelisted array of disabled handles.
+		 * @since 2.0.0
+		 * @since NEXT Added $blocked stripping for crafted-POST hardening.
+		 */
 		private function process_disabled_assets( array $raw_data, array $valid_handles, array $blocked = array() ): array {
 			if ( empty( $raw_data ) ) {
 				return array();
@@ -729,7 +763,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 			if ( empty( $blocked ) ) {
 				return array_values( $whitelisted );
 			}
-			return array_values( array_diff( $whitelisted, $blocked ) );
+			// Case-insensitive blocked stripping: the runtime guard
+			// case-folds every handle, so compare normalized forms here as
+			// well; otherwise a mixed-case captured handle could persist a
+			// protected value past save-time stripping. Original submitted
+			// values are preserved in the output.
+			$blocked_lookup = array();
+			foreach ( $blocked as $blocked_handle ) {
+				$clean = self::normalize_asset_handle( $blocked_handle );
+				if ( '' !== $clean ) {
+					$blocked_lookup[ $clean ] = true;
+				}
+			}
+			$filtered = array();
+			foreach ( $whitelisted as $handle ) {
+				if ( ! isset( $blocked_lookup[ self::normalize_asset_handle( $handle ) ] ) ) {
+					$filtered[] = $handle;
+				}
+			}
+			return array_values( $filtered );
 		}
 
 		/**

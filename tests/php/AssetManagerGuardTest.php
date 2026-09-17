@@ -39,6 +39,7 @@ class AssetManagerGuardTest extends \PHPUnit\Framework\TestCase {
 		\Brain\Monkey\setUp();
 		$this->register_common_function_stubs();
 		\PerformanceOptimise\Inc\Util::reset_runtime_caches();
+		\PerformanceOptimise\Inc\Asset_Manager::reset_request_state();
 		$this->settings_fixture                       = array();
 		$GLOBALS['wppo_asset_guard_dequeued_scripts'] = array();
 		$GLOBALS['wppo_asset_guard_dequeued_styles']  = array();
@@ -116,6 +117,7 @@ class AssetManagerGuardTest extends \PHPUnit\Framework\TestCase {
 	 * first) and drops this file's doubles, so no stub leaks across files.
 	 */
 	protected function tearDown(): void { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid
+		\PerformanceOptimise\Inc\Asset_Manager::reset_request_state();
 		unset( $_SERVER['REQUEST_URI'] );
 		unset( $GLOBALS['wp_scripts'], $GLOBALS['wp_styles'] );
 		\Brain\Monkey\tearDown();

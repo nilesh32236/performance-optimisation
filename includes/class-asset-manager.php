@@ -85,6 +85,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 		);
 
 		/**
+		 * Once-per-request guard for the dequeue pass.
+		 *
+		 * The pass is hooked to three print-time actions; without a guard
+		 * one singular request re-fetches settings/post meta and rebuilds
+		 * dependency maps up to 3x. Reset via reset_request_state() (tests).
+		 *
+		 * @var bool
+		 * @since NEXT
+		 */
+		private static bool $did_dequeue_pass = false;
+
+		/**
+		 * Whether this request actually dequeued/deregistered anything.
+		 *
+		 * Used by capture_page_assets() to skip overwriting the captured
+		 * asset transient with a post-dequeue list (self-clearing loop).
+		 * Reset via reset_request_state() (tests).
+		 *
+		 * @var bool
+		 * @since NEXT
+		 */
+		private static bool $stripped_any = false;
+
+		/**
 		 * Constructor.
 		 *
 		 * Registers the hooks for asset dequeuing and capturing.
@@ -124,6 +148,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 		 * @since NEXT Added global gate, dependency guard, and commerce bypass.
 		 */
 		public function dequeue_selected_assets(): void {
+			// Once-per-request guard: the pass is hooked to three
+			// print-time actions; the second/third fires are no-ops.
+			if ( self::$did_dequeue_pass ) {
+				return;
+			}
+			self::$did_dequeue_pass = true;
+
 			// Audit #1392: typed per convention.
 			$is_sandbox_preview = false;
 			try {
@@ -206,6 +237,72 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 			foreach ( $safe_styles as $handle ) {
 				wp_dequeue_style( $handle );
 				wp_deregister_style( $handle );
+			}
+
+			if ( ! empty( $safe_scripts ) || ! empty( $safe_styles ) ) {
+				self::$stripped_any = true;
+			}
+		}
+
+		/**
+		 * Reset per-request dequeue state (tests / long-lived workers).
+		 *
+		 * Clears the once-per-request dequeue guard and the stripped-any
+		 * flag so a fresh pass and capture can run.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_request_state(): void {
+			self::$did_dequeue_pass = false;
+			self::$stripped_any     = false;
+		}
+
+		/**
+		 * Whether this request dequeued anything via dequeue_selected_assets().
+		 *
+		 * @since NEXT
+		 * @return bool True when at least one handle was dequeued this request.
+		 */
+		public static function did_strip_assets_this_request(): bool {
+			return self::$stripped_any;
+		}
+
+		/**
+		 * Handles visible for capture: union of printed ($done) and queued
+		 * ($queue) handles, deduped and order-preserving.
+		 *
+		 * $done alone misses footer-queued handles not yet printed when
+		 * wp_footer fires; $queue alone misses already-printed head
+		 * handles. Fail-open: unreadable registries yield an empty list.
+		 *
+		 * @since NEXT
+		 * @param mixed $registry WP_Scripts/WP_Styles instance or null.
+		 * @return string[] Handles to capture.
+		 */
+		private static function capture_handles( $registry ): array {
+			try {
+				if ( ! is_object( $registry ) ) {
+					return array();
+				}
+				$handles = array();
+				$seen    = array();
+				foreach ( array( 'done', 'queue' ) as $prop ) {
+					if ( ! isset( $registry->{$prop} ) || ! is_array( $registry->{$prop} ) ) {
+						continue;
+					}
+					foreach ( $registry->{$prop} as $handle ) {
+						if ( ! is_string( $handle ) || '' === $handle || isset( $seen[ $handle ] ) ) {
+							continue;
+						}
+						$seen[ $handle ] = true;
+						$handles[]       = $handle;
+					}
+				}
+				return $handles;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array();
 			}
 		}
 
@@ -661,6 +758,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 				return;
 			}
 
+			// Self-clearing guard: the dequeue pass runs before wp_footer,
+			// so a logged-out capture visit would otherwise store the
+			// post-dequeue list (disabled handles vanish from the metabox
+			// and the next save silently drops them). Skip overwriting the
+			// transient when this request stripped anything.
+			if ( self::$stripped_any ) {
+				return;
+			}
+
 			global $wp_scripts, $wp_styles;
 
 			$scripts = array();
@@ -677,7 +783,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 					$per_page_priorities = array();
 				}
 
-				foreach ( $wp_scripts->done as $handle ) {
+				foreach ( self::capture_handles( $wp_scripts ) as $handle ) {
 					if ( isset( $wp_scripts->registered[ $handle ] ) ) {
 						$registered = $wp_scripts->registered[ $handle ];
 						$scripts[]  = array(
@@ -692,7 +798,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 			}
 
 			if ( $wp_styles instanceof \WP_Styles ) {
-				foreach ( $wp_styles->done as $handle ) {
+				foreach ( self::capture_handles( $wp_styles ) as $handle ) {
 					if ( isset( $wp_styles->registered[ $handle ] ) ) {
 						$registered = $wp_styles->registered[ $handle ];
 						$styles[]   = array(
