@@ -4137,6 +4137,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				if ( function_exists( 'exec' ) && ! $exec_disabled && is_readable( $tmp_file_for_lint ) ) {
 					try {
 						$binary = (string) constant( 'PHP_BINARY' );
+						// Audit #1329: both parts escapeshellarg()'d; never
+						// interpolate unescaped variables here (RCE risk).
 						$cmd    = escapeshellarg( $binary ) . ' -l ' . escapeshellarg( $tmp_file_for_lint ) . ' 2>&1';
 						$output = array();
 						$rc     = 1;

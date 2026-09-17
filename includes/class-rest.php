@@ -683,6 +683,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function resume_preload( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			if ( $this->is_endpoint_throttled( 'resume_preload', 5, 60 ) ) {
+				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
+				$response->header( 'Retry-After', '60' );
+				return $response;
+			}
 			$rescheduled = 0;
 			try {
 				if ( class_exists( 'PerformanceOptimise\Inc\Cron' ) && method_exists( 'PerformanceOptimise\Inc\Cron', 'resume_preload_queue' ) ) {
@@ -882,7 +887,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		private function is_endpoint_throttled( string $endpoint, int $limit = 10, int $window = 60 ): bool {
 			// Fail-open when the transient API is unavailable (unit stubs
 			// without the transient helpers): throttling is best-effort.
+			// Degrade loudly so inert throttling never goes unnoticed
+			// (audit #1329): full denial here would lock admins out when
+			// object cache backends flap, so log instead of blocking.
 			if ( ! function_exists( 'get_transient' ) || ! function_exists( 'set_transient' ) ) {
+				if ( class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
+					try {
+						Log::add( sprintf( 'Endpoint throttle inert for %s: transient API unavailable', $endpoint ) );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
 				return false;
 			}
 			try {
@@ -1096,6 +1111,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function update_settings( \WP_REST_Request $request ) {
+			if ( $this->is_endpoint_throttled( 'update_settings', 5, 60 ) ) {
+				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
+				$response->header( 'Retry-After', '60' );
+				return $response;
+			}
 			$params   = $request->get_params();
 			$tab      = isset( $params['tab'] ) ? sanitize_text_field( $params['tab'] ) : '';
 			$settings = isset( $params['settings'] ) && is_array( $params['settings'] ) ? $params['settings'] : array();
@@ -1888,6 +1908,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @since NEXT
 		 */
 		public function restore_settings( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Signature must match the REST callback.
+			if ( $this->is_endpoint_throttled( 'restore_settings', 5, 60 ) ) {
+				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
+				$response->header( 'Retry-After', '60' );
+				return $response;
+			}
 			$restored = Util::restore_settings_snapshot();
 
 			if ( ! is_array( $restored ) ) {
@@ -2150,6 +2175,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function handle_object_cache( \WP_REST_Request $request ) {
+			if ( $this->is_endpoint_throttled( 'object_cache', 5, 60 ) ) {
+				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
+				$response->header( 'Retry-After', '60' );
+				return $response;
+			}
 			$params = $request->get_params();
 			$action = isset( $params['action'] ) ? sanitize_text_field( $params['action'] ) : '';
 
@@ -3036,6 +3066,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @since 2.0.0
 		 */
 		public function purge_used_css_cache( \WP_REST_Request $request ): \WP_REST_Response {
+			if ( $this->is_endpoint_throttled( 'purge_used_css_cache', 5, 60 ) ) {
+				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
+				$response->header( 'Retry-After', '60' );
+				return $response;
+			}
 			$params = $request->get_params();
 			$path   = isset( $params['path'] ) ? sanitize_text_field( $params['path'] ) : null;
 
@@ -3508,6 +3543,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @since NEXT
 		 */
 		public function save_sandbox_preview( \WP_REST_Request $request ): \WP_REST_Response {
+			if ( $this->is_endpoint_throttled( 'sandbox_save', 5, 60 ) ) {
+				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
+				$response->header( 'Retry-After', '60' );
+				return $response;
+			}
 			$params   = $request->get_params();
 			$settings = isset( $params['settings'] ) && is_array( $params['settings'] ) ? $params['settings'] : array();
 			if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
@@ -3528,6 +3568,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @since NEXT
 		 */
 		public function promote_sandbox_preview( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			if ( $this->is_endpoint_throttled( 'sandbox_promote', 5, 60 ) ) {
+				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
+				$response->header( 'Retry-After', '60' );
+				return $response;
+			}
 			if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 				return $this->send_response( null, false, 500, __( 'Sandbox preview is unavailable.', 'performance-optimisation' ) );
 			}
@@ -3551,6 +3596,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @since NEXT
 		 */
 		public function discard_sandbox_preview( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			if ( $this->is_endpoint_throttled( 'sandbox_discard', 5, 60 ) ) {
+				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
+				$response->header( 'Retry-After', '60' );
+				return $response;
+			}
 			if ( ! class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) ) {
 				return $this->send_response( null, false, 500, __( 'Sandbox preview is unavailable.', 'performance-optimisation' ) );
 			}

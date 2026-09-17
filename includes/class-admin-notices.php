@@ -145,11 +145,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			if ( ! in_array( $key, $allowed, true ) ) {
 				return;
 			}
-			if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ), 'wppo_dismiss_notice_' . $key ) ) {
+			// Audit #1329: capability before nonce — unauthorized actors get
+			// no nonce-validity oracle, and no verification work is spent.
+			if ( ! current_user_can( 'manage_options' ) ) {
 				return;
 			}
-
-			if ( ! current_user_can( 'manage_options' ) ) {
+			if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ), 'wppo_dismiss_notice_' . $key ) ) {
 				return;
 			}
 
