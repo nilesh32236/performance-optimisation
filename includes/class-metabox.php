@@ -121,6 +121,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		}
 
 		/**
+		 * Stable aria-describedby id for a protected asset row (issue #1333).
+		 *
+		 * Derived from the asset handle (not the foreach index) so the id is
+		 * stable when asset order changes. Prefers sanitize_html_class() +
+		 * wp_hash() with pure-PHP fallbacks so rendering never fatals where
+		 * those helpers are unavailable.
+		 *
+		 * @param string $prefix  Id prefix (with trailing dash).
+		 * @param string $handle  Script/style handle.
+		 * @return string Stable element id.
+		 * @since NEXT
+		 */
+		private static function protected_note_id( string $prefix, string $handle ): string {
+			if ( function_exists( 'sanitize_html_class' ) ) {
+				$sanitized = (string) sanitize_html_class( $handle );
+			} else {
+				$sanitized = (string) preg_replace( '/[^A-Za-z0-9_-]/', '', $handle );
+			}
+			if ( '' === $sanitized ) {
+				$sanitized = 'protected';
+			}
+			if ( function_exists( 'wp_hash' ) ) {
+				$hash = substr( (string) wp_hash( $handle, 'nonce' ), 0, 8 );
+			} else {
+				$hash = substr( (string) md5( $handle ), 0, 8 );
+			}
+			return $prefix . $sanitized . '-' . $hash;
+		}
+
+		/**
 		 * Renders the Asset Manager metabox content.
 		 *
 		 * Displays a list of all scripts and styles captured on the frontend
@@ -284,19 +314,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 								</tr>
 							</thead>
 							<tbody>
-								<?php foreach ( $assets['scripts'] as $script_index => $script ) : ?>
-									<?php
-									$is_protected = in_array( $script['handle'], $protected_js, true );
-									$is_disabled  = in_array( $script['handle'], $disabled_scripts, true );
-									$strategy     = $delay_strategies[ $script['handle'] ] ?? '';
-									$priority     = $delay_priorities[ $script['handle'] ] ?? '';
-									$note_id      = 'wppo-protected-script-' . (int) $script_index;
-									?>
-								<tr
-									<?php if ( $is_protected ) : ?>
-									style="opacity: 0.5;"
-								<?php endif; ?>
-								>
+							<?php foreach ( $assets['scripts'] as $script_index => $script ) : ?>
+								<?php
+								$is_protected = in_array( $script['handle'], $protected_js, true );
+								$is_disabled  = in_array( $script['handle'], $disabled_scripts, true );
+								$strategy     = $delay_strategies[ $script['handle'] ] ?? '';
+								$priority     = $delay_priorities[ $script['handle'] ] ?? '';
+								// Stable AT id derived from the handle (issue #1333):
+								// an index-based id shifts when asset order
+								// changes, breaking the aria-describedby
+								// reference. sanitize_html_class() keeps the id
+								// valid; the short hash suffix keeps handles
+								// that sanitize identically unique.
+								$note_id = self::protected_note_id( 'wppo-protected-script-', (string) $script['handle'] );
+								?>
+							<tr
+								<?php if ( $is_protected ) : ?>
+								style="background-color: #f0f0f1;border-left: 4px solid #8c8f94;"
+							<?php endif; ?>
+							>
 									<td>
 										<input
 											type="checkbox"
@@ -377,17 +413,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 								</tr>
 							</thead>
 							<tbody>
-								<?php foreach ( $assets['styles'] as $style_index => $style ) : ?>
-									<?php
-									$is_protected = in_array( $style['handle'], $protected_css, true );
-									$is_disabled  = in_array( $style['handle'], $disabled_styles, true );
-									$note_id      = 'wppo-protected-style-' . (int) $style_index;
-									?>
-								<tr
-									<?php if ( $is_protected ) : ?>
-									style="opacity: 0.5;"
-								<?php endif; ?>
-								>
+							<?php foreach ( $assets['styles'] as $style_index => $style ) : ?>
+								<?php
+								$is_protected = in_array( $style['handle'], $protected_css, true );
+								$is_disabled  = in_array( $style['handle'], $disabled_styles, true );
+								// Stable AT id derived from the handle (issue #1333):
+								// see the scripts loop above for the rationale.
+								$note_id = self::protected_note_id( 'wppo-protected-style-', (string) $style['handle'] );
+								?>
+							<tr
+								<?php if ( $is_protected ) : ?>
+								style="background-color: #f0f0f1;border-left: 4px solid #8c8f94;"
+							<?php endif; ?>
+							>
 									<td>
 										<input
 											type="checkbox"

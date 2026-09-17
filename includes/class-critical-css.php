@@ -4775,6 +4775,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
+		 * Async loadCSS fallback payload (issue #1333).
+		 *
+		 * Single source for the inline loader emitted by inline_ccss() in
+		 * both the too-short and queued branches. Returned without the
+		 * surrounding <script> tags so callers emit via
+		 * wp_print_inline_script_tag(), letting the core
+		 * wp_inline_script_attributes filter attach a CSP nonce (same as
+		 * RUM and bfcache). Uncached requests get the nonce; cached HTML
+		 * carries the tag as-is like every other inline script.
+		 *
+		 * @return string Inner JavaScript for the loadCSS stub.
+		 * @since NEXT
+		 */
+		private static function get_loadcss_loader_script(): string {
+			return '!function(e){"use strict";var T=[],c=function(h){var i=T.indexOf(h);if(i>-1){T.splice(i,1)}clearTimeout(h)},n=function(n,t,o){var r=e.document.createElement("link"),a=t||e.document.getElementsByTagName("script")[0];r.rel="stylesheet",r.href=n,r.media="only x",a.parentNode.insertBefore(r,a);var h=setTimeout(function(){c(h),r.media=o||"all"},0);T.push(h),r.onload=function(){c(h),r.media=o||"all"}};e.wppoLoadCSS=n;var f=function(){for(var i=0;i<T.length;i++){clearTimeout(T[i])}T.length=0};e.addEventListener("pagehide",f),e.addEventListener("beforeunload",f)}(window);';
+		}
+
+		/**
 		 * Inline critical CSS in the <head> for non-logged-in visitors.
 		 *
 		 * Hooked to wp_head at priority 0. Computes the template hash using
@@ -4849,7 +4867,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				if ( strlen( $content ) < self::MIN_INLINE_SIZE ) {
 					// Timer handles are tracked so the media-swap fallback is
 					// cleared on pagehide/beforeunload (audit #1077 finding 5).
-					echo '<script>!function(e){"use strict";var T=[],c=function(h){var i=T.indexOf(h);if(i>-1){T.splice(i,1)}clearTimeout(h)},n=function(n,t,o){var r=e.document.createElement("link"),a=t||e.document.getElementsByTagName("script")[0];r.rel="stylesheet",r.href=n,r.media="only x",a.parentNode.insertBefore(r,a);var h=setTimeout(function(){c(h),r.media=o||"all"},0);T.push(h),r.onload=function(){c(h),r.media=o||"all"}};e.wppoLoadCSS=n;var f=function(){for(var i=0;i<T.length;i++){clearTimeout(T[i])}T.length=0};e.addEventListener("pagehide",f),e.addEventListener("beforeunload",f)}(window);</script>' . "\n";
+					// Emitted via wp_print_inline_script_tag() so the core
+					// wp_inline_script_attributes filter can attach a CSP
+					// nonce (issue #1333; same as RUM/bfcache).
+					wp_print_inline_script_tag( self::get_loadcss_loader_script(), array( 'id' => 'wppo-loadcss-fallback' ) );
 					return;
 				}
 				$cap   = self::get_ccss_max_size();
@@ -4949,8 +4970,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				// Non-blocking fallback: expose the async loader while the
 				// critical CSS is generated in the background. Timer handles
 				// are tracked so the media-swap fallback is cleared on
-				// pagehide/beforeunload (audit #1077 finding 5).
-				echo '<script>!function(e){"use strict";var T=[],c=function(h){var i=T.indexOf(h);if(i>-1){T.splice(i,1)}clearTimeout(h)},n=function(n,t,o){var r=e.document.createElement("link"),a=t||e.document.getElementsByTagName("script")[0];r.rel="stylesheet",r.href=n,r.media="only x",a.parentNode.insertBefore(r,a);var h=setTimeout(function(){c(h),r.media=o||"all"},0);T.push(h),r.onload=function(){c(h),r.media=o||"all"}};e.wppoLoadCSS=n;var f=function(){for(var i=0;i<T.length;i++){clearTimeout(T[i])}T.length=0};e.addEventListener("pagehide",f),e.addEventListener("beforeunload",f)}(window);</script>' . "\n";
+				// pagehide/beforeunload (audit #1077 finding 5). Emitted via
+				// wp_print_inline_script_tag() for a core CSP nonce
+				// (issue #1333; same as RUM/bfcache).
+				wp_print_inline_script_tag( self::get_loadcss_loader_script(), array( 'id' => 'wppo-loadcss-fallback' ) );
 			}
 		}
 

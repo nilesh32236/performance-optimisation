@@ -286,7 +286,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			foreach ( array_unique( $messages ) as $html ) {
 				echo '<li>' . wp_kses_post( $html ) . '</li>';
 			}
-			echo '</ul><p><a href="' . esc_url( $dismiss ) . '">' . esc_html__( 'Dismiss this notice', 'performance-optimisation' ) . '</a></p></div>';
+			echo '</ul><p><a href="' . esc_url( $dismiss ) . '" aria-label="' . esc_attr__( 'Dismiss activation notice', 'performance-optimisation' ) . '">' . esc_html__( 'Dismiss this notice', 'performance-optimisation' ) . '</a></p></div>';
 		}
 
 		/**
@@ -333,7 +333,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 
 			echo '<div class="notice notice-error" role="alert" aria-live="assertive"><p><strong>' . esc_html__( 'Performance Optimisation', 'performance-optimisation' ) . '</strong> — ';
 			echo esc_html__( 'Failed to update .htaccess rules. The previous file was left intact and the plugin keeps working. Please check file permissions, then re-save settings to retry.', 'performance-optimisation' );
-			echo ' &middot; <a href="' . esc_url( $dismiss ) . '">' . esc_html__( 'Dismiss', 'performance-optimisation' ) . '</a>';
+			echo ' &middot; <a href="' . esc_url( $dismiss ) . '" aria-label="' . esc_attr__( 'Dismiss htaccess failure notice', 'performance-optimisation' ) . '">' . esc_html__( 'Dismiss', 'performance-optimisation' ) . '</a>';
 			echo '</p></div>';
 		}
 
@@ -410,7 +410,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			echo esc_html( $reason ) . ' ' . esc_html( $when ) . ' ';
 			echo esc_html__( 'Redis will be re-checked automatically, or re-enable it manually once Redis recovers.', 'performance-optimisation' );
 			echo ' <a href="' . esc_url( admin_url( 'admin.php?page=performance-optimisation' ) ) . '">' . esc_html__( 'Open settings', 'performance-optimisation' ) . '</a>';
-			echo ' &middot; <a href="' . esc_url( $dismiss ) . '">' . esc_html__( 'Dismiss', 'performance-optimisation' ) . '</a>';
+			echo ' &middot; <a href="' . esc_url( $dismiss ) . '" aria-label="' . esc_attr__( 'Dismiss object cache notice', 'performance-optimisation' ) . '">' . esc_html__( 'Dismiss', 'performance-optimisation' ) . '</a>';
 			echo '</p></div>';
 		}
 
@@ -484,7 +484,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				),
 				array( 'code' => array() )
 			);
-			echo ' &middot; <a href="' . esc_url( $dismiss ) . '">' . esc_html__( 'Dismiss', 'performance-optimisation' ) . '</a>';
+			echo ' &middot; <a href="' . esc_url( $dismiss ) . '" aria-label="' . esc_attr__( 'Dismiss Redis config notice', 'performance-optimisation' ) . '">' . esc_html__( 'Dismiss', 'performance-optimisation' ) . '</a>';
 			echo '</p></div>';
 		}
 
@@ -531,7 +531,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			echo esc_html__( 'Both Performance Optimisation and LiteSpeed Cache are active. In Auto mode, file cache & minify/combine/defer are paused to avoid double processing.', 'performance-optimisation' ) . ' ';
 			echo esc_html__( 'Choose the cache owner in Performance → File Optimisation → Network → LiteSpeed.', 'performance-optimisation' );
 			echo ' <a href="' . esc_url( admin_url( 'admin.php?page=performance-optimisation' ) ) . '">' . esc_html__( 'Open settings', 'performance-optimisation' ) . '</a>';
-			echo ' &middot; <a href="' . esc_url( $dismiss ) . '">' . esc_html__( 'Dismiss', 'performance-optimisation' ) . '</a>';
+			echo ' &middot; <a href="' . esc_url( $dismiss ) . '" aria-label="' . esc_attr__( 'Dismiss LiteSpeed notice', 'performance-optimisation' ) . '">' . esc_html__( 'Dismiss', 'performance-optimisation' ) . '</a>';
 			echo '</p></div>';
 		}
 
@@ -584,7 +584,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 
 			echo '<div class="notice notice-info is-dismissible" role="status" aria-live="polite"><p><strong>' . esc_html__( 'Performance Optimisation — WebP-only mode', 'performance-optimisation' ) . '</strong> — ';
 			echo esc_html__( 'AVIF conversion is requested but this server has no AVIF encoder (GD imageavif on PHP 8.2+ or Imagick with AVIF support). Images convert to WebP instead, with the original kept as fallback — no action needed.', 'performance-optimisation' );
-			echo ' &middot; <a href="' . esc_url( $dismiss ) . '">' . esc_html__( 'Dismiss', 'performance-optimisation' ) . '</a>';
+			echo ' &middot; <a href="' . esc_url( $dismiss ) . '" aria-label="' . esc_attr__( 'Dismiss WebP-only mode notice', 'performance-optimisation' ) . '">' . esc_html__( 'Dismiss', 'performance-optimisation' ) . '</a>';
 			echo '</p></div>';
 		}
 

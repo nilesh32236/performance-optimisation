@@ -3798,14 +3798,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * Inline loader that swaps interaction-delayed stylesheets (issue #1220).
 		 *
 		 * Converts `link[data-wppo-delayed-css]` preloads to stylesheets on
-		 * first interaction (pointer/key/touch/scroll) with a 5s backstop so
-		 * the full styles always arrive. Tiny, dependency-free, fail-open.
+		 * first interaction (pointer/key/touch/scroll/hover) with a 5s backstop
+		 * so the full styles always arrive. The backstop timer is cleared on
+		 * pagehide/beforeunload (mirroring the critical-css loadCSS pattern)
+		 * so a late timer cannot fire after navigation. Tiny,
+		 * dependency-free, fail-open.
 		 *
 		 * @return string Inline script tag.
 		 * @since NEXT
 		 */
 		private function build_delayed_css_loader(): string {
-			return '<script data-wppo-delayed-css-loader="1">(function(){var d=false,t=null;function l(){if(d){return;}d=true;if(t!==null){clearTimeout(t);t=null;}var a=document.querySelectorAll(\'link[data-wppo-delayed-css]\');for(var i=0;i<a.length;i++){try{a[i].rel=\'stylesheet\';a[i].media=a[i].getAttribute(\'data-wppo-delayed-media\')||\'all\';a[i].removeAttribute(\'data-wppo-delayed-css\');}catch(e){}}};function b(){l();window.removeEventListener(\'pointerdown\',b);window.removeEventListener(\'keydown\',b);window.removeEventListener(\'touchstart\',b);window.removeEventListener(\'scroll\',b);}window.addEventListener(\'pointerdown\',b,{passive:true});window.addEventListener(\'keydown\',b);window.addEventListener(\'touchstart\',b,{passive:true});window.addEventListener(\'scroll\',b,{passive:true});t=setTimeout(l,5000);})();</script>';
+			return '<script data-wppo-delayed-css-loader="1">(function(){var d=false,t=null;function l(){if(d){return;}d=true;if(t!==null){clearTimeout(t);t=null;}var a=document.querySelectorAll(\'link[data-wppo-delayed-css]\');for(var i=0;i<a.length;i++){try{a[i].rel=\'stylesheet\';a[i].media=a[i].getAttribute(\'data-wppo-delayed-media\')||\'all\';a[i].removeAttribute(\'data-wppo-delayed-css\');}catch(e){}}};function b(){l();window.removeEventListener(\'pointerdown\',b);window.removeEventListener(\'keydown\',b);window.removeEventListener(\'touchstart\',b);window.removeEventListener(\'scroll\',b);window.removeEventListener(\'mouseover\',b);window.removeEventListener(\'mouseenter\',b);}function c(){if(t!==null){clearTimeout(t);t=null;}}window.addEventListener(\'pointerdown\',b,{passive:true});window.addEventListener(\'keydown\',b);window.addEventListener(\'touchstart\',b,{passive:true});window.addEventListener(\'scroll\',b,{passive:true});window.addEventListener(\'mouseover\',b,{passive:true});window.addEventListener(\'mouseenter\',b,{passive:true});window.addEventListener(\'pagehide\',c);window.addEventListener(\'beforeunload\',c);t=setTimeout(l,5000);})();</script>';
 		}
 
 		/**

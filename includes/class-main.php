@@ -4259,6 +4259,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// Allowlisted top-level settings keys — single source is Util::ALLOWED_SETTINGS_KEYS
 					// (exposed here so JS `ALLOWED_IMPORT_KEYS` can stay in sync without codegen).
 					'allowedSettingsKeys'                  => Util::ALLOWED_SETTINGS_KEYS,
+					// Server-translated first-paint strings (issue #1333): the
+					// SPA primarily uses wp_set_script_translations() JSON
+					// below, but this MO-backed map is always available (like
+					// wppoObject.translations for the admin-bar bundle) when
+					// the JSON has not loaded yet.
+					'translations'                         => array(
+						'dismiss' => __( 'Dismiss', 'performance-optimisation' ),
+						'saving'  => __( 'Saving…', 'performance-optimisation' ),
+						'saved'   => __( 'Settings saved.', 'performance-optimisation' ),
+						'error'   => __( 'Something went wrong. Please try again.', 'performance-optimisation' ),
+					),
 					// Upgrade auto-purge status (issue #1276): SPA-visible
 					// last-purge reason + safe-mode preview link bypassing
 					// minify (?wppo_nocache=1). Class/method-exists guarded +
