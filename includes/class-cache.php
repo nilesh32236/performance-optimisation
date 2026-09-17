@@ -562,7 +562,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *                     before the first initialization attempt.
 		 * @since 1.6.0
 		 */
-		private function get_filesystem(): object|false|null { // Audit #1392: typed per docblock (false on init failure).
+		private function get_filesystem(): object|false|null {
+			// Audit #1392: typed per docblock (false on init failure).
 			if ( ! $this->fs_initialized ) {
 				$this->filesystem     = Util::init_filesystem();
 				$this->fs_initialized = true;

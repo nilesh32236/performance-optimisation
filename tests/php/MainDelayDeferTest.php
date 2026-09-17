@@ -417,7 +417,7 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		$main = new Main();
 
 		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- Static fixture HTML for defer parity test.
-		$tag = '<script src="https://example.com/app.js" id="app-js"></script>';
+		$tag    = '<script src="https://example.com/app.js" id="app-js"></script>';
 		$modern = $main->add_defer_attribute( $tag, 'app' );
 		$legacy = $main->add_defer_attribute_legacy( $tag, 'app' );
 

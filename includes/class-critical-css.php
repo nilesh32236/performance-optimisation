@@ -4925,6 +4925,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					}
 					// Timer handles are tracked so the media-swap fallback is
 					// cleared on pagehide/beforeunload (audit #1077 finding 5).
+					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- loadcss_loader_tag() returns fully static markup with no dynamic parts.
 					echo self::loadcss_loader_tag();
 					return;
 				}
@@ -5026,6 +5027,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				// critical CSS is generated in the background. Timer handles
 				// are tracked so the media-swap fallback is cleared on
 				// pagehide/beforeunload (audit #1077 finding 5).
+				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- loadcss_loader_tag() returns fully static markup with no dynamic parts.
 				echo self::loadcss_loader_tag();
 			}
 		}
