@@ -4269,6 +4269,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// bundle (English fallback client-side and on the WP < 6.9 path).
 					$lazy_config['videoPlayerLabel'] = __( 'Video player', 'performance-optimisation' );
 
+					// Issue #1420 review: accessible name for the lazyload
+					// video placeholder button ("Play video" action — not the
+					// iframe title above). Exported via module data on
+					// WP 6.9+ and via window.wppoVideoPlayLabel on the
+					// WP < 6.9 classic path below, so src/lazyload.js never
+					// falls back to the English-only string.
+					// @since NEXT.
+					$lazy_config['videoPlayLabel'] = __( 'Play video', 'performance-optimisation' );
+
 					if ( $delay_js ) {
 						$idle_timeout = ! empty( $this->options['file_optimisation']['delayJSIdleTimeout'] )
 						? absint( $this->options['file_optimisation']['delayJSIdleTimeout'] )
@@ -4435,6 +4444,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						if ( $delay_js ) {
 							$delay_config = wp_json_encode( $lazy_config['delayConfig'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP );
 							wp_add_inline_script( 'wppo-lazyload', 'window.wppoDelayConfig=' . $delay_config . ';', 'before' );
+						}
+
+						if ( $lazy_load_videos || $enable_video_placeholder ) {
+							$video_play_label = wp_json_encode( $lazy_config['videoPlayLabel'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP );
+							wp_add_inline_script( 'wppo-lazyload', 'window.wppoVideoPlayLabel=' . $video_play_label . ';', 'before' );
 						}
 					}
 				}

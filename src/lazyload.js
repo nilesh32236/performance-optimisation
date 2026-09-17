@@ -76,6 +76,36 @@ const readModuleData = () => {
 const moduleData = readModuleData();
 
 /**
+ * Localized accessible name for video placeholder buttons.
+ *
+ * Prefers the server-localized `videoPlayLabel` from module data (WP 6.9+),
+ * then the classic-path `window.wppoVideoPlayLabel` global (WP < 6.9,
+ * Main::enqueue_scripts()), then the legacy `window.wppoLazyload.i18n`
+ * shape, with an English fallback.
+ *
+ * Note: `moduleData.videoPlayerLabel` is intentionally NOT used here — it
+ * localizes the iframe title ("Video player"), not the placeholder button
+ * action ("Play video").
+ *
+ * @since NEXT
+ * @return {string} Localized "Play video" label.
+ */
+const getVideoPlayLabel = () => {
+	if (
+		typeof moduleData.videoPlayLabel === 'string' &&
+		moduleData.videoPlayLabel
+	) {
+		return moduleData.videoPlayLabel;
+	}
+	const legacy =
+		window.wppoLazyload?.i18n?.playVideo ?? window.wppoVideoPlayLabel;
+	if ( typeof legacy === 'string' && legacy ) {
+		return legacy;
+	}
+	return 'Play video';
+};
+
+/**
  * Whether native lazy loading is active (loading="lazy" on img/iframe instead of IntersectionObserver).
  * Provided by PHP via the script-module data filter (WP 6.9+) or via
  * wp_add_inline_script on the classic-script fallback path (WP < 6.9).
@@ -1400,8 +1430,9 @@ const clearSafetyScan = () => {
  * pagehide/beforeunload, when this bundle's <script> element is detached
  * (see armScriptRemovalGuard below), and is exposed as
  * window.wppoLazyloadTeardown for tests and SPA-style teardown.
- * Also deletes the `window.wppoNativeLazy` / `window.wppoDelayConfig` config
- * globals injected by Main::enqueue_scripts() on the WP <6.9 classic path.
+ * Also deletes the `window.wppoNativeLazy` / `window.wppoDelayConfig` /
+ * `window.wppoVideoPlayLabel` config globals injected by
+ * Main::enqueue_scripts() on the WP <6.9 classic path.
  *
  * @since 2.0.0
  */
@@ -1460,6 +1491,7 @@ const teardownLazyload = () => {
 	try {
 		delete window.wppoNativeLazy;
 		delete window.wppoDelayConfig;
+		delete window.wppoVideoPlayLabel;
 	} catch {
 		// Non-configurable global; nothing to release.
 	}
@@ -3063,10 +3095,7 @@ const initVideoPlaceholders = () => {
 			el.setAttribute( 'role', 'button' );
 		}
 		if ( ! el.hasAttribute( 'aria-label' ) ) {
-			el.setAttribute(
-				'aria-label',
-				window.wppoLazyload?.i18n?.playVideo || 'Play video'
-			);
+			el.setAttribute( 'aria-label', getVideoPlayLabel() );
 		}
 		el.addEventListener( 'keydown', ( event ) => {
 			if ( event.key === 'Enter' || event.key === ' ' ) {

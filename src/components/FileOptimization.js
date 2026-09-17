@@ -679,6 +679,19 @@ const FileOptimization = ( {
 			return { ...prev, cdnMapping: m };
 		} );
 	}, [] );
+	// Render-time row-id choke point (issue #1420 review): every producer
+	// path (init defaults, props sync, sandbox promote, add/remove/update)
+	// already assigns stable ids via withCdnRowIds(), but normalizing once
+	// more here makes the `key={ entry.id }` below total — an id-less row
+	// from any future sync path can never collide on key=undefined. Rows
+	// with ids pass through untouched, so existing keys stay stable and no
+	// remount occurs. Memoized on the mapping identity so unrelated renders
+	// reuse the same row objects.
+	// @since NEXT
+	const cdnRows = useMemo(
+		() => withCdnRowIds( settings.cdnMapping ),
+		[ settings.cdnMapping ]
+	);
 	// Split busy flags: saving the form must not show the Save button as
 	// loading while a background regen runs, nor disable unrelated regen
 	// actions while saving.
@@ -4255,199 +4268,191 @@ const FileOptimization = ( {
 										'performance-optimisation'
 									) }
 								</p>
-								{ ( settings.cdnMapping || [] ).map(
-									( entry, idx ) => (
-										<div
-											key={ entry.id ?? idx }
-											className="wppo-mt-12 wppo-file-opt-card"
-										>
-											<div className="wppo-field">
-												<label
-													className="wppo-field-label"
-													htmlFor={ `wppo-cdn-url-${ idx }` }
-												>
-													{ __(
-														'CDN URL',
-														'performance-optimisation'
-													) }
-												</label>
-												<input
-													className="wppo-input"
-													id={ `wppo-cdn-url-${ idx }` }
-													type="url"
-													placeholder="https://cdn.example.com"
-													value={
-														entry.cdn_url || ''
-													}
-													onChange={ ( e ) =>
-														updateCdnEntry(
-															idx,
-															'cdn_url',
-															e.target.value
-														)
-													}
-												/>
-											</div>
-											<div className="wppo-field wppo-mt-8">
-												<label
-													className="wppo-field-label"
-													htmlFor={ `wppo-cdn-ori-${ idx }` }
-												>
-													{ __(
-														'Origin URL (ori)',
-														'performance-optimisation'
-													) }
-												</label>
-												<input
-													className="wppo-input"
-													id={ `wppo-cdn-ori-${ idx }` }
-													type="url"
-													placeholder="https://example.com"
-													value={ entry.ori || '' }
-													onChange={ ( e ) =>
-														updateCdnEntry(
-															idx,
-															'ori',
-															e.target.value
-														)
-													}
-												/>
-											</div>
-											<div className="wppo-field wppo-mt-8">
-												<label
-													className="wppo-field-label"
-													htmlFor={ `wppo-cdn-ori-dir-${ idx }` }
-												>
-													{ __(
-														'Origin Dir (ori_dir) — wildcard * allowed, pipe-separated',
-														'performance-optimisation'
-													) }
-												</label>
-												<input
-													className="wppo-input"
-													id={ `wppo-cdn-ori-dir-${ idx }` }
-													type="text"
-													placeholder="wp-content|wp-includes"
-													value={
-														entry.ori_dir || ''
-													}
-													onChange={ ( e ) =>
-														updateCdnEntry(
-															idx,
-															'ori_dir',
-															e.target.value
-														)
-													}
-												/>
-											</div>
-											<div className="wppo-field wppo-mt-8">
-												<label
-													className="wppo-field-label"
-													htmlFor={ `wppo-cdn-include-dirs-${ idx }` }
-												>
-													{ __(
-														'Include Dirs',
-														'performance-optimisation'
-													) }
-												</label>
-												<input
-													className="wppo-input"
-													id={ `wppo-cdn-include-dirs-${ idx }` }
-													type="text"
-													placeholder="wp-content|wp-includes"
-													value={
-														entry.include_dirs || ''
-													}
-													onChange={ ( e ) =>
-														updateCdnEntry(
-															idx,
-															'include_dirs',
-															e.target.value
-														)
-													}
-												/>
-											</div>
-											<div className="wppo-field wppo-mt-8">
-												<label
-													className="wppo-field-label"
-													htmlFor={ `wppo-cdn-include-filetypes-${ idx }` }
-												>
-													{ __(
-														'Include Filetypes (comma-separated)',
-														'performance-optimisation'
-													) }
-												</label>
-												<input
-													className="wppo-input"
-													id={ `wppo-cdn-include-filetypes-${ idx }` }
-													type="text"
-													placeholder="jpg,png,css,js"
-													value={
-														entry.include_filetypes ||
-														''
-													}
-													onChange={ ( e ) =>
-														updateCdnEntry(
-															idx,
-															'include_filetypes',
-															e.target.value
-														)
-													}
-												/>
-											</div>
-											<div className="wppo-field wppo-mt-8">
-												<label
-													className="wppo-field-label"
-													htmlFor={ `wppo-cdn-attr-${ idx }` }
-												>
-													{ __(
-														'CDN Attr allowlist (cdn_attr) — e.g. src,href,srcset',
-														'performance-optimisation'
-													) }
-												</label>
-												<input
-													className="wppo-input"
-													id={ `wppo-cdn-attr-${ idx }` }
-													type="text"
-													placeholder="src,href,srcset"
-													value={
-														entry.cdn_attr || ''
-													}
-													onChange={ ( e ) =>
-														updateCdnEntry(
-															idx,
-															'cdn_attr',
-															e.target.value
-														)
-													}
-												/>
-											</div>
-											<button
-												className="wppo-button wppo-button--secondary wppo-mt-8"
-												type="button"
-												onClick={ () => {
-													setSettings( ( prev ) => {
-														const m = [
-															...( prev.cdnMapping ||
-																[] ),
-														];
-														m.splice( idx, 1 );
-														return {
-															...prev,
-															cdnMapping: m,
-														};
-													} );
-												} }
+								{ cdnRows.map( ( entry, idx ) => (
+									<div
+										key={ entry.id }
+										className="wppo-mt-12 wppo-file-opt-card"
+									>
+										<div className="wppo-field">
+											<label
+												className="wppo-field-label"
+												htmlFor={ `wppo-cdn-url-${ idx }` }
 											>
 												{ __(
-													'Remove',
+													'CDN URL',
 													'performance-optimisation'
 												) }
-											</button>
+											</label>
+											<input
+												className="wppo-input"
+												id={ `wppo-cdn-url-${ idx }` }
+												type="url"
+												placeholder="https://cdn.example.com"
+												value={ entry.cdn_url || '' }
+												onChange={ ( e ) =>
+													updateCdnEntry(
+														idx,
+														'cdn_url',
+														e.target.value
+													)
+												}
+											/>
 										</div>
-									)
-								) }
-								{ ( settings.cdnMapping || [] ).length < 5 && (
+										<div className="wppo-field wppo-mt-8">
+											<label
+												className="wppo-field-label"
+												htmlFor={ `wppo-cdn-ori-${ idx }` }
+											>
+												{ __(
+													'Origin URL (ori)',
+													'performance-optimisation'
+												) }
+											</label>
+											<input
+												className="wppo-input"
+												id={ `wppo-cdn-ori-${ idx }` }
+												type="url"
+												placeholder="https://example.com"
+												value={ entry.ori || '' }
+												onChange={ ( e ) =>
+													updateCdnEntry(
+														idx,
+														'ori',
+														e.target.value
+													)
+												}
+											/>
+										</div>
+										<div className="wppo-field wppo-mt-8">
+											<label
+												className="wppo-field-label"
+												htmlFor={ `wppo-cdn-ori-dir-${ idx }` }
+											>
+												{ __(
+													'Origin Dir (ori_dir) — wildcard * allowed, pipe-separated',
+													'performance-optimisation'
+												) }
+											</label>
+											<input
+												className="wppo-input"
+												id={ `wppo-cdn-ori-dir-${ idx }` }
+												type="text"
+												placeholder="wp-content|wp-includes"
+												value={ entry.ori_dir || '' }
+												onChange={ ( e ) =>
+													updateCdnEntry(
+														idx,
+														'ori_dir',
+														e.target.value
+													)
+												}
+											/>
+										</div>
+										<div className="wppo-field wppo-mt-8">
+											<label
+												className="wppo-field-label"
+												htmlFor={ `wppo-cdn-include-dirs-${ idx }` }
+											>
+												{ __(
+													'Include Dirs',
+													'performance-optimisation'
+												) }
+											</label>
+											<input
+												className="wppo-input"
+												id={ `wppo-cdn-include-dirs-${ idx }` }
+												type="text"
+												placeholder="wp-content|wp-includes"
+												value={
+													entry.include_dirs || ''
+												}
+												onChange={ ( e ) =>
+													updateCdnEntry(
+														idx,
+														'include_dirs',
+														e.target.value
+													)
+												}
+											/>
+										</div>
+										<div className="wppo-field wppo-mt-8">
+											<label
+												className="wppo-field-label"
+												htmlFor={ `wppo-cdn-include-filetypes-${ idx }` }
+											>
+												{ __(
+													'Include Filetypes (comma-separated)',
+													'performance-optimisation'
+												) }
+											</label>
+											<input
+												className="wppo-input"
+												id={ `wppo-cdn-include-filetypes-${ idx }` }
+												type="text"
+												placeholder="jpg,png,css,js"
+												value={
+													entry.include_filetypes ||
+													''
+												}
+												onChange={ ( e ) =>
+													updateCdnEntry(
+														idx,
+														'include_filetypes',
+														e.target.value
+													)
+												}
+											/>
+										</div>
+										<div className="wppo-field wppo-mt-8">
+											<label
+												className="wppo-field-label"
+												htmlFor={ `wppo-cdn-attr-${ idx }` }
+											>
+												{ __(
+													'CDN Attr allowlist (cdn_attr) — e.g. src,href,srcset',
+													'performance-optimisation'
+												) }
+											</label>
+											<input
+												className="wppo-input"
+												id={ `wppo-cdn-attr-${ idx }` }
+												type="text"
+												placeholder="src,href,srcset"
+												value={ entry.cdn_attr || '' }
+												onChange={ ( e ) =>
+													updateCdnEntry(
+														idx,
+														'cdn_attr',
+														e.target.value
+													)
+												}
+											/>
+										</div>
+										<button
+											className="wppo-button wppo-button--secondary wppo-mt-8"
+											type="button"
+											onClick={ () => {
+												setSettings( ( prev ) => {
+													const m = [
+														...( prev.cdnMapping ||
+															[] ),
+													];
+													m.splice( idx, 1 );
+													return {
+														...prev,
+														cdnMapping: m,
+													};
+												} );
+											} }
+										>
+											{ __(
+												'Remove',
+												'performance-optimisation'
+											) }
+										</button>
+									</div>
+								) ) }
+								{ cdnRows.length < 5 && (
 									<button
 										className="wppo-button wppo-button--secondary wppo-mt-12"
 										type="button"
