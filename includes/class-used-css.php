@@ -3083,6 +3083,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 							array(
 								'hook'     => 'wppo_used_css_generate',
 								'group'    => 'performance_optimisation',
+								'status'   => 'pending',
 								'per_page' => $as_per_page,
 								'offset'   => $as_offset,
 							),
@@ -3142,6 +3143,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				unset( $e );
 				$signals_ok = false;
 			}
+			// Hoisted unique probe (issue #1310 review): method_exists +
+			// supports_action_scheduler_unique() paid once per run, not once
+			// per post (up to 200/batch, 500/run) on the bulk hot path.
+			$run_use_unique = method_exists( Util::class, 'enqueue_unique_async_action' ) && Util::supports_action_scheduler_unique();
 			do {
 				// Cursor pagination via ID > last_id avoids O(offset) MySQL scans.
 				$prepare_args   = array_values( $post_types );
@@ -3216,7 +3221,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					// Atomic unique insert (issue #1310) dedupes by itself,
 					// so the per-row pre-check below only runs when unique
 					// inserts are unsupported (saves N SELECTs per batch).
-					$use_unique = method_exists( Util::class, 'enqueue_unique_async_action' ) && Util::supports_action_scheduler_unique();
+					$use_unique = $run_use_unique;
 					if ( ! $use_unique && ! $lookup_ok && function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => $post_id ), 'performance_optimisation' ) ) {
 						$scheduled[ $post_id ] = true;
 						continue;

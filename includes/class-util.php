@@ -4442,6 +4442,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * Null until the first probe runs; afterwards true/false for the
 		 * remainder of the request.
+		 *
+		 * @var bool|null
 		 */
 		private static ?bool $as_unique_support = null;
 
@@ -4612,6 +4614,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					return 0;
 				}
 				if ( self::supports_action_scheduler_unique() ) {
+					// Cross-group dedupe (issue #1310 review): the AS 4.x
+					// `$unique` flag dedupes per-group only, so a pending
+					// job in an extra (legacy) group would not block the
+					// insert below. Probe the extra groups up front; the
+					// both-group re-check on a 0 return stays as the
+					// race backstop.
+					foreach ( $extra_groups as $extra_group ) {
+						if ( ! is_string( $extra_group ) || '' === $extra_group || $extra_group === $group ) {
+							continue;
+						}
+						if ( self::as_already_scheduled( $hook, $args, $extra_group ) ) {
+							return 0;
+						}
+					}
 					try {
 						$result = as_enqueue_async_action( $hook, $args, $group, true );
 						return (int) $result;
@@ -4650,6 +4666,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					return 0;
 				}
 				if ( self::supports_action_scheduler_unique() ) {
+					// Cross-group dedupe (issue #1310 review): see
+					// enqueue_unique_async_action() — probe extra groups
+					// before the per-group atomic insert.
+					foreach ( $extra_groups as $extra_group ) {
+						if ( ! is_string( $extra_group ) || '' === $extra_group || $extra_group === $group ) {
+							continue;
+						}
+						if ( self::as_already_scheduled( $hook, $args, $extra_group ) ) {
+							return 0;
+						}
+					}
 					try {
 						if ( self::function_has_unique_param( 'as_schedule_single_action', 5 ) ) {
 							return (int) as_schedule_single_action( $timestamp, $hook, $args, $group, true );

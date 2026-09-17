@@ -152,20 +152,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 				$existing_id = self::find_pending_job_id( $args );
 				return $existing_id > 0 ? $existing_id : 0;
 			}
-			// Atomic unique enqueue (issue #1310) closes the check-then-act
-			// race above; legacy 3-argument call stays as fallback.
-			if ( method_exists( Util::class, 'enqueue_unique_async_action' ) ) {
-				$job_id = (int) Util::enqueue_unique_async_action(
-					self::AS_HOOK,
-					$args,
-					self::AS_GROUP
-				);
-				if ( $job_id > 0 ) {
-					return $job_id;
-				}
-				$winner = self::find_pending_job_id( $args );
-				return $winner > 0 ? $winner : 0;
-			}
+			// Legacy fallback (issue #1310 review): unique inserts are
+			// unsupported here, so the 3-argument enqueue runs directly —
+			// Util ships in-repo, making a second method_exists branch
+			// unreachable dead weight.
 			return (int) as_enqueue_async_action(
 				self::AS_HOOK,
 				$args,
@@ -190,17 +180,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 				if ( ! function_exists( 'as_get_scheduled_actions' ) || ! class_exists( \ActionScheduler_Store::class ) ) {
 					return 0;
 				}
+				// Bound to 1 row (issue #1310 review): only reset($existing)
+				// is used, so retry storms must not materialize N rows.
 				$existing = as_get_scheduled_actions(
 					array(
-						'hook'   => self::AS_HOOK,
-						'args'   => $args,
-						'group'  => self::AS_GROUP,
-						'status' => \ActionScheduler_Store::STATUS_PENDING,
+						'hook'     => self::AS_HOOK,
+						'args'     => $args,
+						'group'    => self::AS_GROUP,
+						'status'   => \ActionScheduler_Store::STATUS_PENDING,
+						'per_page' => 1,
 					),
 					'ids'
 				);
 				if ( is_array( $existing ) && ! empty( $existing ) ) {
 					return (int) reset( $existing );
+				}
+				// Running backstop (issue #1310 review): a winner that
+				// transitioned to running between the 0 return and the
+				// re-query must not be misreported as scheduler failure.
+				$running = as_get_scheduled_actions(
+					array(
+						'hook'     => self::AS_HOOK,
+						'args'     => $args,
+						'group'    => self::AS_GROUP,
+						'status'   => \ActionScheduler_Store::STATUS_RUNNING,
+						'per_page' => 1,
+					),
+					'ids'
+				);
+				if ( is_array( $running ) && ! empty( $running ) ) {
+					return (int) reset( $running );
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );

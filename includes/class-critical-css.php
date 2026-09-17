@@ -1237,7 +1237,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				}
 				$legacy_group = 'performance_optimisation';
 				$use_unique   = method_exists( Util::class, 'schedule_unique_single_action' ) && Util::supports_action_scheduler_unique();
-				if ( $use_unique && method_exists( Util::class, 'schedule_unique_single_action' ) ) {
+				if ( $use_unique ) {
 					// Atomic path first (issue #1310): the insert itself
 					// dedupes, so the legacy pre-check below only runs on
 					// older schedulers.
@@ -4869,7 +4869,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				$hook_args = array( array( 'template_hash' => $template_hash ) );
 				$queued    = false;
 				try {
-					if ( 'pending' === self::get_status_cache( $template_hash ) ) {
+					// Accept both `pending` (frontend gate) and `queued`
+					// (bulk/retry writers) so a bulk-queued template does
+					// not miss the flood guard and re-enqueue per pageview
+					// (issue #1310 review).
+					$cached = self::get_status_cache( $template_hash );
+					if ( 'pending' === $cached || 'queued' === $cached ) {
 						$queued = true;
 					}
 				} catch ( \Throwable $e ) {
@@ -5485,7 +5490,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
-		 * Whether a CCSS generation job is pending in either AS group.
+		 * Whether a CCSS generation job is pending or running in either AS group.
 		 *
 		 * Single home for the dedicated-group-plus-legacy-group disjunction
 		 * so the pre-check and the post-race re-check can never drift apart
@@ -5494,22 +5499,56 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * `wppo-ccss`, never fall through to a double-schedule. Fail-open:
 		 * returns false when the lookup API is unavailable or throws.
 		 *
+		 * The probe covers pending plus running/claimed (issue #1310
+		 * review): a winner that transitioned to running between the 0
+		 * return and the re-check must still disambiguate as "job live"
+		 * rather than scheduler failure, otherwise the template is marked
+		 * failed with a day TTL while its job runs.
+		 *
 		 * @since NEXT
 		 * @param string $hook      Action hook.
 		 * @param array  $hook_args Action arguments.
-		 * @return bool True when a matching action is pending in either group.
+		 * @return bool True when a matching action is pending or running in either group.
 		 */
 		private static function has_pending_ccss_job( string $hook, array $hook_args ): bool {
 			if ( ! function_exists( 'as_next_scheduled_action' ) ) {
 				return false;
 			}
 			try {
-				return (bool) as_next_scheduled_action( $hook, $hook_args, self::CCSS_AS_GROUP )
-					|| (bool) as_next_scheduled_action( $hook, $hook_args, 'performance_optimisation' );
+				if ( (bool) as_next_scheduled_action( $hook, $hook_args, self::CCSS_AS_GROUP )
+					|| (bool) as_next_scheduled_action( $hook, $hook_args, 'performance_optimisation' ) ) {
+					return true;
+				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;
 			}
+			// Running/claimed backstop: only when the store lookup API is
+			// available; a missing API fails open to the pending result
+			// above (false here).
+			try {
+				if ( ! function_exists( 'as_get_scheduled_actions' ) || ! class_exists( \ActionScheduler_Store::class ) ) {
+					return false;
+				}
+				foreach ( array( self::CCSS_AS_GROUP, 'performance_optimisation' ) as $ccss_group ) {
+					$running = as_get_scheduled_actions(
+						array(
+							'hook'     => $hook,
+							'args'     => $hook_args,
+							'group'    => $ccss_group,
+							'status'   => \ActionScheduler_Store::STATUS_RUNNING,
+							'per_page' => 1,
+						),
+						'ids'
+					);
+					if ( is_array( $running ) && ! empty( $running ) ) {
+						return true;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return false;
 		}
 	}
 }

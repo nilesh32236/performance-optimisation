@@ -80,6 +80,61 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		private const FAILED_PURGE_MAX_LIFESPAN = 3 * self::MONTH_SECONDS;
 
 		/**
+		 * Bounds for the opt-in failed-action purge loop.
+		 *
+		 * Named so the batch clamp, iteration cap, wall-clock budget, and
+		 * wrapper reserve cannot drift when one call site is bumped
+		 * (issue #1310 review).
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const FAILED_PURGE_BATCH_MAX = 100;
+
+		/**
+		 * Maximum store passes per purge invocation.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const FAILED_PURGE_MAX_ITERATIONS = 10;
+
+		/**
+		 * Wall-clock budget in seconds shared by the upstream cleaner loop
+		 * and the failed-action purge in one invocation.
+		 *
+		 * @since NEXT
+		 * @var float
+		 */
+		private const FAILED_PURGE_BUDGET_SECONDS = 15.0;
+
+		/**
+		 * Budget reserve in seconds: the wrapper skips the purge when less
+		 * than this remains so one invocation never stacks two full
+		 * budgets back to back.
+		 *
+		 * @since NEXT
+		 * @var float
+		 */
+		private const FAILED_PURGE_RESERVE_SECONDS = 2.0;
+
+		/**
+		 * Per-request memo for the Action Scheduler health payload plus its timestamp.
+		 *
+		 * @since NEXT
+		 * @var array|null
+		 */
+		private static $health_memo = null;
+
+		/**
+		 * Microtime when the health memo was stored.
+		 *
+		 * @since NEXT
+		 * @var float
+		 */
+		private static $health_memo_time = 0.0;
+
+		/**
 		 * Maps cleanup method names to their cleanup type keys for TABLE_MAP lookup.
 		 *
 		 * @since 2.0.0
@@ -1781,6 +1836,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				'reclaimable_bytes'          => 0,
 				'total_bytes'                => 0,
 			);
+			// Per-request memo plus a ~60s transient (issue #1310 review):
+			// the health payload issues ~6-7 heavy store queries and is
+			// read twice per dashboard poll (counts rebuild + REST), so a
+			// second call within the TTL reuses the first result instead
+			// of hammering the AS tables.
+			try {
+				if ( is_array( self::$health_memo ) && ( microtime( true ) - self::$health_memo_time ) < 60.0 ) {
+					return self::$health_memo;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			try {
+				if ( function_exists( 'get_transient' ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {
+					$cached = get_transient( Util::transient_key( 'wppo_as_health' ) );
+					if ( is_array( $cached ) && isset( $cached['available'] ) ) {
+						self::$health_memo      = $cached;
+						self::$health_memo_time = microtime( true );
+						return $cached;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 			if ( ! self::is_action_scheduler_available() ) {
 				return $empty;
 			}
@@ -1874,7 +1953,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 							),
 							'count'
 						);
-					} elseif ( in_array( \ActionScheduler_Store::STATUS_FAILED, $statuses_to_purge, true ) ) {
+					} elseif ( $clean_failed && in_array( \ActionScheduler_Store::STATUS_FAILED, $statuses_to_purge, true ) ) {
 						$reclaimable += (int) $store->query_actions(
 							array(
 								'status'           => \ActionScheduler_Store::STATUS_FAILED,
@@ -1902,7 +1981,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					$reclaimable_bytes = (int) ( $total_bytes * ( $reclaimable / $total_rows ) );
 				}
 
-				return array(
+				$result                 = array(
 					'available'                  => true,
 					'pending'                    => max( 0, $pending ),
 					'failed'                     => max( 0, $failed ),
@@ -1911,9 +1990,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					'reclaimable_bytes'          => max( 0, $reclaimable_bytes ),
 					'total_bytes'                => max( 0, $total_bytes ),
 				);
+				self::$health_memo      = $result;
+				self::$health_memo_time = microtime( true );
+				try {
+					if ( function_exists( 'set_transient' ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {
+						set_transient( Util::transient_key( 'wppo_as_health' ), $result, 60 );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				return $result;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return $empty;
+			}
+		}
+
+		/**
+		 * Reset the Action Scheduler health memo (test seam).
+		 *
+		 * Production code never needs to clear the ~60s memo within a
+		 * request; unit tests that swap store stubs between cases must
+		 * reset it (and the transient) to observe the new stub.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_action_scheduler_health_cache(): void {
+			self::$health_memo      = null;
+			self::$health_memo_time = 0.0;
+			try {
+				if ( function_exists( 'delete_transient' ) && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'transient_key' ) ) {
+					delete_transient( Util::transient_key( 'wppo_as_health' ) );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
 			}
 		}
 
@@ -1995,7 +2106,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			if ( ! self::is_failed_action_purge_enabled() ) {
 				return 0;
 			}
-			$batch_size = max( 1, min( 100, $batch_size ) );
+			$batch_size = max( 1, min( self::FAILED_PURGE_BATCH_MAX, $batch_size ) );
 			try {
 				$store = \ActionScheduler_Store::instance();
 				if ( ! $store || ! method_exists( $store, 'query_actions' ) || ! method_exists( $store, 'delete_action' ) ) {
@@ -2018,9 +2129,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				}
 				$total          = 0;
 				$iterations     = 0;
-				$max_iterations = 10;
+				$max_iterations = self::FAILED_PURGE_MAX_ITERATIONS;
 				if ( null === $deadline ) {
-					$deadline = microtime( true ) + 15.0;
+					$deadline = microtime( true ) + self::FAILED_PURGE_BUDGET_SECONDS;
 				}
 				do {
 					$ids = $store->query_actions(
@@ -2037,6 +2148,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					}
 					$count = 0;
 					foreach ( $ids as $action_id ) {
+						// Per-delete deadline (issue #1310 review): a slow
+						// store must not overshoot the shared budget inside
+						// one up-to-100-row batch, stacking on the upstream
+						// cleaner loop.
+						if ( microtime( true ) >= $deadline ) {
+							break 2;
+						}
 						try {
 							$store->delete_action( $action_id );
 							++$count;
@@ -2061,6 +2179,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				} while ( $iterations < $max_iterations && microtime( true ) < $deadline );
 				if ( $log && $total > 0 ) {
 					self::invalidate_counts_cache();
+					self::reset_action_scheduler_health_cache();
 					$lifespan_days = max( 1, (int) round( $lifespan / $day ) );
 					Log::add(
 						sprintf(
@@ -2139,8 +2258,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				}
 				$total          = 0;
 				$iterations     = 0;
-				$max_iterations = 10;
-				$deadline       = microtime( true ) + 15.0;
+				$max_iterations = self::FAILED_PURGE_MAX_ITERATIONS;
+				$deadline       = microtime( true ) + self::FAILED_PURGE_BUDGET_SECONDS;
 				do {
 					$deleted = $cleaner->delete_old_actions();
 					$count   = is_array( $deleted ) ? count( $deleted ) : 0;
@@ -2159,7 +2278,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				// #1310 review) so one invocation cannot stack two
 				// independent 15s budgets back to back; when under 2s of
 				// budget remains the purge is deferred to the next run.
-				if ( microtime( true ) < $deadline - 2.0 ) {
+				if ( microtime( true ) < $deadline - self::FAILED_PURGE_RESERVE_SECONDS ) {
 					$count += self::purge_failed_actions( 50, false, $deadline );
 				}
 				if ( $count > 0 ) {
