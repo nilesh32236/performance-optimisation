@@ -1799,6 +1799,65 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test CLS RUM corroboration requires the absolute shift, not just a non-negative average.
+	 *
+	 * Given a near-zero CLS baseline with persisted trend degradation When
+	 * field data sits barely above the baseline Then no page fires (the
+	 * old rum_avg >= baseline check was vacuous there); when field data
+	 * confirms the +0.05 absolute shift Then one notice fires (issue
+	 * #1384).
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_detect_anomalies_cls_rum_requires_absolute_shift(): void {
+		$this->install_stubs();
+		$now    = 1700000000;
+		$trends = $this->make_anomaly_trends_persisted( 'cls', 10, 0.0, 0.08 );
+
+		$thin_field = $this->make_anomaly_rum( 'cls', 12, 0.02 );
+		$this->assertSame( array(), AI_Adaptive::detect_anomalies( $trends, $thin_field, $now ) );
+
+		unset( $this->options['wppo_ai_anomaly_last_alarm'] );
+
+		$confirming = $this->make_anomaly_rum( 'cls', 12, 0.08 );
+		$fired      = AI_Adaptive::detect_anomalies( $trends, $confirming, $now );
+		$this->assertCount( 1, $fired );
+		$this->assertSame( 'cls', $fired[0]['metric'] );
+	}
+
+	/**
+	 * Test a filtered persistence of 30 is clamped to a reachable value.
+	 *
+	 * Trend history holds 30 snapshots per URL+strategy while detection
+	 * needs persistence+1 samples, so persistence=30 could never fire.
+	 * Given a filter requesting 30 windows When evaluated over a full
+	 * 30-snapshot history Then the clamp (29) keeps the value reachable
+	 * and one notice fires (issue #1384).
+	 *
+	 * @since NEXT
+	 *
+	 * @return void
+	 */
+	public function test_detect_anomalies_persistence_clamped_to_reachable_max(): void {
+		$this->install_stubs(
+			static function ( $hook, $value ) {
+				if ( 'wppo_ai_anomaly_persistence_windows' === $hook ) {
+					return 30;
+				}
+				return $value;
+			}
+		);
+		$trends = $this->make_anomaly_trends_persisted( 'lcp', 1, 2000.0, 3000.0, 29 );
+		$rum    = $this->make_anomaly_rum( 'lcp', 12, 2600.0 );
+
+		$fired = AI_Adaptive::detect_anomalies( $trends, $rum, 1700000000 );
+		$this->assertCount( 1, $fired );
+		$this->assertSame( 'lcp', $fired[0]['metric'] );
+	}
+
+	/**
 	 * Test detector throwables degrade to an empty result (fail-open).
 	 *
 	 * @since 2.0.0

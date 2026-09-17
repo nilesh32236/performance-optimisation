@@ -1415,16 +1415,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		private const ANOMALY_P75_MIN_SAMPLES = 10;
 
 		/**
-		 * Upper clamp for anomaly gate resolvers (issue #1384).
+		 * Upper clamp for the p75 sample-floor resolver (issue #1384).
 		 *
-		 * Guards the persistence-window and p75 sample-floor resolvers so
-		 * a misbehaving `wppo_ai_anomaly_*` filter (or stored setting)
+		 * Guards the p75 sample-floor resolver so a misbehaving
+		 * `wppo_ai_anomaly_p75_min_samples` filter (or stored setting)
 		 * cannot silently disable paging forever with an enormous value.
+		 * The persistence-window resolver uses ANOMALY_PERSISTENCE_MAX.
 		 *
 		 * @since NEXT
 		 * @var int
 		 */
 		private const ANOMALY_GATE_MAX = 30;
+
+		/**
+		 * Upper clamp for the persistence-window resolver (issue #1384).
+		 *
+		 * Trend history is capped at 30 snapshots per URL+strategy
+		 * (Pagespeed::TREND_LIMIT) while detection requires
+		 * count >= persistence+1 for a non-empty baseline prior, so
+		 * persistence=30 (admittable under ANOMALY_GATE_MAX) could never
+		 * fire. Clamping to 29 keeps every admittable value reachable.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const ANOMALY_PERSISTENCE_MAX = 29;
 
 		/**
 		 * Resolve the anomaly minimum-sample threshold.
@@ -1502,10 +1517,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * Reads the additive `ai_adaptive.anomaly_persistence_windows`
 		 * setting, falling back to ANOMALY_PERSISTENCE_WINDOWS. Filterable
 		 * via `wppo_ai_anomaly_persistence_windows`. Fail-open to 3.
-		 * Clamped to ANOMALY_GATE_MAX so a misbehaving filter cannot
-		 * silently disable paging forever.
+		 * Clamped to ANOMALY_PERSISTENCE_MAX (29 = trend cap 30 minus 1
+		 * for the baseline prior) so every admittable value remains
+		 * reachable and a misbehaving filter cannot silently disable
+		 * paging forever.
 		 *
-		 * @return int Trailing windows that must each breach (>=1, <=30).
+		 * @return int Trailing windows that must each breach (>=1, <=29).
 		 * @since NEXT
 		 */
 		private static function anomaly_persistence_windows(): int {
@@ -1516,20 +1533,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 					if ( isset( $settings['ai_adaptive']['anomaly_persistence_windows'] ) ) {
 						$candidate = (int) $settings['ai_adaptive']['anomaly_persistence_windows'];
 						if ( $candidate >= 1 ) {
-							$windows = min( $candidate, self::ANOMALY_GATE_MAX );
+							$windows = min( $candidate, self::ANOMALY_PERSISTENCE_MAX );
 						}
 					}
 				}
 				if ( function_exists( 'apply_filters' ) ) {
 					$filtered = apply_filters( 'wppo_ai_anomaly_persistence_windows', $windows );
 					if ( is_numeric( $filtered ) && (int) $filtered >= 1 ) {
-						$windows = min( (int) $filtered, self::ANOMALY_GATE_MAX );
+						$windows = min( (int) $filtered, self::ANOMALY_PERSISTENCE_MAX );
 					}
 				}
 				if ( $windows < 1 ) {
 					return self::ANOMALY_PERSISTENCE_WINDOWS;
 				}
-				return min( $windows, self::ANOMALY_GATE_MAX );
+				return min( $windows, self::ANOMALY_PERSISTENCE_MAX );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return self::ANOMALY_PERSISTENCE_WINDOWS;
@@ -1765,8 +1782,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		 * total `n >= anomaly_p75_min_samples()` (undersampled returns
 		 * false — thin data never pages). Corroboration passes when the
 		 * global RUM average is degraded vs the trend baseline (LCP:
-		 * rum_avg >= baseline; CLS: rum_avg >= baseline). Fail-open: any
-		 * failure returns false (no alarm).
+		 * rum_avg >= baseline; CLS: rum_avg - baseline >=
+		 * CLS_ABSOLUTE_DELTA, mirroring the trend arm — a bare
+		 * rum_avg >= baseline check is vacuous for near-zero CLS
+		 * baselines since any non-negative field average would pass).
+		 * Fail-open: any failure returns false (no alarm).
 		 *
 		 * RUM-disabled short-circuit: when no aggregate is injected (live
 		 * read path) and RUM collection is disabled, returns false
@@ -1837,9 +1857,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				if ( 'lcp' === $metric ) {
 					return $rum_avg >= $baseline;
 				}
-				// CLS arm: absolute-scale metric; corroborate when field
-				// average is at/above the lab baseline.
-				return $rum_avg >= $baseline;
+				// CLS arm: absolute-scale metric; corroborate only when the
+				// field average confirms the same absolute shift the trend
+				// gate requires. A bare rum_avg >= baseline check would be
+				// vacuous for near-zero baselines (any non-negative field
+				// average passes), leaving the trend delta gate to do all
+				// the work.
+				return ( $rum_avg - $baseline ) >= self::CLS_ABSOLUTE_DELTA;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;

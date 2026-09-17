@@ -1180,7 +1180,7 @@ Filters the minimum numeric samples before an anomaly arm may fire (trend arm an
 ---
 
 ### `wppo_ai_anomaly_persistence_windows`
-Filters the number of trailing windows that must each breach the ratio/delta gate before an anomaly may page (single noisy windows never page). @since NEXT. Values are clamped to 1–30.
+Filters the number of trailing windows that must each breach the ratio/delta gate before an anomaly may page (single noisy windows never page). @since NEXT. Values are clamped to 1–29 (trend history holds 30 snapshots and detection needs persistence+1 samples for a non-empty baseline, so 29 keeps every admittable value reachable).
 
 **Parameters:**
 - `$windows` *(int)* — Trailing windows (default 3, from `ai_adaptive.anomaly_persistence_windows`).
