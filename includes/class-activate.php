@@ -295,7 +295,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 					return null;
 				}
 
-				if ( $replaced > 0 ) {
+				if ( 0 < $replaced ) {
 					return $new_content;
 				}
 

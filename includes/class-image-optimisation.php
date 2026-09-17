@@ -3176,7 +3176,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string Updated image URL.
 		 */
 		private function replace_image_with_next_gen( $img_url, $exclude_imgs, $supports_avif, $supports_webp ) {
-			$img_extension = pathinfo( $img_url, PATHINFO_EXTENSION );
+			$img_path      = function_exists( 'wp_parse_url' ) ? wp_parse_url( (string) $img_url, PHP_URL_PATH ) : (string) $img_url;
+			$img_extension = strtolower( pathinfo( (string) $img_path, PATHINFO_EXTENSION ) );
 
 			$img_converter     = $this->get_img_converter();
 			$conversion_format = $img_converter->get_format();
@@ -5955,7 +5956,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$local_path = Util::get_local_path( $original_src );
 
 					if ( ! empty( $local_path ) && $this->cached_file_exists( $local_path ) && is_readable( $local_path ) && is_file( $local_path ) ) {
-						$size = getimagesize( $local_path );
+						$size = $this->get_cached_image_size( $local_path );
 
 						if ( is_array( $size ) ) {
 							if ( ! $has_width ) {

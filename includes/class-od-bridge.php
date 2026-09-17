@@ -35,7 +35,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * @since 2.0.0
 		 * @var string
 		 */
-		const SETTINGS_KEY = 'od_integration';
+		public const SETTINGS_KEY = 'od_integration';
 
 		/**
 		 * Filter to control whether OD optimization should be applied.
@@ -43,7 +43,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * @since 2.0.0
 		 * @var string
 		 */
-		const FILTER_SHOULD_OPTIMIZE = 'wppo_od_should_optimize';
+		public const FILTER_SHOULD_OPTIMIZE = 'wppo_od_should_optimize';
 
 		/**
 		 * Per-request memo for OD lookups keyed by current URL.

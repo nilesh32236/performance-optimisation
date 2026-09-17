@@ -246,7 +246,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 				return;
 			}
 			$url = Util::cached_home_url( '/llms.txt' );
-			header( sprintf( 'Link: <%s>; rel="alternate"; type="text/markdown"', esc_url( $url ) ), false );
+			header( sprintf( 'Link: <%s>; rel="alternate"; type="text/markdown"', esc_url_raw( $url ) ), false );
 		}
 
 		/**
@@ -495,8 +495,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 						// Strip CR/LF: later-iteration $current comes from remote
 						// sitemap <loc> content, so it must not reach debug.log raw.
 						$log_current = sanitize_text_field( str_replace( array( "\r", "\n" ), ' ', $current ) );
-						// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-						error_log( 'WPPO sitemap discovery skipped ' . $log_current . ': ' . sanitize_text_field( str_replace( ABSPATH, '', $response->get_error_message() ) ) );
+						do_action( 'wppo_debug_log', 'WPPO sitemap discovery skipped ' . $log_current . ': ' . sanitize_text_field( str_replace( ABSPATH, '', $response->get_error_message() ) ) );
 					}
 					continue;
 				}
@@ -505,8 +504,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 						// Strip CR/LF: $current may come from remote sitemap <loc> content.
 						$log_current = sanitize_text_field( str_replace( array( "\r", "\n" ), ' ', $current ) );
-						// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-						error_log( 'WPPO sitemap discovery skipped ' . $log_current . ': HTTP status ' . $http_code );
+						do_action( 'wppo_debug_log', 'WPPO sitemap discovery skipped ' . $log_current . ': HTTP status ' . $http_code );
 					}
 					continue;
 				}
@@ -515,8 +513,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 						// Strip CR/LF: $current may come from remote sitemap <loc> content.
 						$log_current = sanitize_text_field( str_replace( array( "\r", "\n" ), ' ', $current ) );
-						// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-						error_log( 'WPPO sitemap discovery skipped ' . $log_current . ': empty body' );
+						do_action( 'wppo_debug_log', 'WPPO sitemap discovery skipped ' . $log_current . ': empty body' );
 					}
 					continue;
 				}

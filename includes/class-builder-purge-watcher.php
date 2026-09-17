@@ -1660,6 +1660,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 					return;
 				}
 				$reason = trim( $reason );
+				if ( function_exists( 'sanitize_text_field' ) ) {
+					$reason = sanitize_text_field( $reason );
+				}
 				if ( function_exists( 'mb_substr' ) ) {
 					$reason = mb_substr( $reason, 0, 200 );
 				} else {

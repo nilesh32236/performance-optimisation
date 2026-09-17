@@ -79,14 +79,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ) {
 				if ( ! is_array( $s ) || empty( $s['metric'] ) ) {
 					continue;
 				}
+				$status = (string) ( $s['status'] ?? 'needs_improvement' );
+				if ( ! in_array( $status, array( 'good', 'needs_improvement', 'poor' ), true ) ) {
+					$status = 'needs_improvement';
+				}
 				$validated[] = self::build(
 					(string) $s['metric'],
 					$s['value'] ?? '',
 					(string) ( $s['unit'] ?? 'string' ),
-					(string) ( $s['status'] ?? 'needs_improvement' ),
+					$status,
 					(string) ( $s['description'] ?? $s['metric'] ),
 					(string) ( $s['fix_action'] ?? 'no_action_required' )
-				) + ( isset( $s['ai_payload'] ) ? array( 'ai_payload' => $s['ai_payload'] ) : array() );
+				);
 			}
 			return $validated;
 		}
@@ -376,6 +380,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ) {
 		 * @return array Suggestion object with all 6 required fields.
 		 */
 		private static function build( string $metric, $value, string $unit, string $status, string $description, string $fix_action ): array {
+			// Invariant: status must always be a member of the documented contract.
+			if ( ! in_array( $status, array( 'good', 'needs_improvement', 'poor' ), true ) ) {
+				$status = 'needs_improvement';
+			}
 			// Invariant: fix_action must always be a member of VALID_FIX_ACTIONS.
 			if ( ! in_array( $fix_action, self::VALID_FIX_ACTIONS, true ) ) {
 				$fix_action = 'no_action_required';

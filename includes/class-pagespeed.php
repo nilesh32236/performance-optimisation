@@ -117,6 +117,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * @return int Action Scheduler job ID.
 		 */
 		public static function queue_scan( string $url, string $strategy = 'mobile' ): int {
+			if ( ! in_array( $strategy, array( 'mobile', 'desktop' ), true ) ) {
+				$strategy = 'mobile';
+			}
 			if ( ! function_exists( 'as_enqueue_async_action' ) ) {
 				return 0;
 			}
@@ -215,6 +218,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		public static function run_scan( array $args ): void {
 			$url      = isset( $args['url'] ) ? esc_url_raw( $args['url'] ) : '';
 			$strategy = isset( $args['strategy'] ) ? sanitize_text_field( $args['strategy'] ) : 'mobile';
+			if ( ! in_array( $strategy, array( 'mobile', 'desktop' ), true ) ) {
+				$strategy = 'mobile';
+			}
 
 			if ( empty( $url ) ) {
 				Log::add( __( 'PageSpeed scan skipped: empty URL.', 'performance-optimisation' ) );
@@ -263,7 +269,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			$redacted_url  = $redacted_base . '&' . implode( '&', array_map( fn( $cat ) => 'category=' . rawurlencode( $cat ), $categories ) );
 
 			/* translators: %s is the PageSpeed API request URL (API key redacted). */
-			Log::add( sprintf( __( 'PageSpeed API request: %s', 'performance-optimisation' ), esc_url( $redacted_url ) ) );
+			Log::add( sprintf( __( 'PageSpeed API request: %s', 'performance-optimisation' ), esc_url_raw( $redacted_url ) ) );
 
 			/**
 			 * Filters the PageSpeed API request timeout in seconds.
@@ -329,7 +335,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 
 			if ( 200 !== $http_code ) {
 				// Translators: %1$d is the HTTP status code, %2$s is the URL.
-				$msg = sprintf( __( 'PageSpeed API returned HTTP %1$d for %2$s.', 'performance-optimisation' ), $http_code, esc_url( $url ) );
+				$msg = sprintf( __( 'PageSpeed API returned HTTP %1$d for %2$s.', 'performance-optimisation' ), $http_code, esc_url_raw( $url ) );
 				Log::add( $msg );
 				self::store_failure( $url, $strategy, $msg );
 				return;
@@ -367,8 +373,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 				sprintf(
 					/* translators: %1$s is the URL, %2$s is the strategy (mobile/desktop), %3$d is the performance score. */
 					__( 'PageSpeed scan completed for %1$s (%2$s). Performance score: %3$d.', 'performance-optimisation' ),
-					esc_url( $url ),
-					esc_html( $strategy ),
+					esc_url_raw( $url ),
+					sanitize_key( $strategy ),
 					(int) ( $prepared['scores']['performance'] ?? 0 )
 				)
 			);

@@ -53,7 +53,18 @@ if ( ! trait_exists( 'PerformanceOptimise\Inc\Purge_Logger' ) ) {
 					if ( false === get_transient( $throttle_key ) ) {
 						set_transient( $throttle_key, 1, $throttle_ttl > 0 ? $throttle_ttl : 60 );
 						// Audit #1362: byte-truncation can split multibyte text.
-						$excerpt = function_exists( 'mb_substr' ) ? mb_substr( $detail, 0, 200, 'UTF-8' ) : substr( $detail, 0, 200 );
+						if ( function_exists( 'mb_substr' ) ) {
+							$excerpt = mb_substr( $detail, 0, 200, 'UTF-8' );
+						} else {
+							// No mbstring: cut at a valid UTF-8 boundary so a multibyte
+							// sequence is never split mid-character (mirrors Log::add()).
+							$excerpt       = substr( $detail, 0, 200 );
+							$utf8_attempts = 0;
+							while ( '' !== $excerpt && 1 !== preg_match( '//u', $excerpt ) && $utf8_attempts < 3 ) {
+								$excerpt = substr( $excerpt, 0, -1 );
+								++$utf8_attempts;
+							}
+						}
 						Log::add( $log_prefix . ' [' . $service . ']: ' . $excerpt );
 					}
 				}

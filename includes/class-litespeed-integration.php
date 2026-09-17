@@ -202,6 +202,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		private static ?array $purge_tags_memo = null;
 
 		/**
+		 * Per-request memo of the processed preload-exclude URL list.
+		 *
+		 * Promoted from a function-static so reset_cache() (long-lived
+		 * workers/tests) can clear it after settings change.
+		 *
+		 * @since NEXT
+		 * @var string[]|null
+		 */
+		private static ?array $exclude_urls_memo = null;
+
+		/**
 		 * Whether Phase 3 hooks (send_headers, vary) are registered.
 		 *
 		 * Prevents double-registration when init() is called multiple times.
@@ -1412,11 +1423,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			if ( $cacheable ) {
 				$options = Util::get_settings();
 				if ( ! empty( $options['preload_settings']['enablePreloadCache'] ) && ! empty( $options['preload_settings']['excludePreloadCache'] ) ) {
-					static $exclude_urls_memo = null;
-					if ( null === $exclude_urls_memo ) {
-						$exclude_urls_memo = Util::process_urls( $options['preload_settings']['excludePreloadCache'] );
+					if ( null === self::$exclude_urls_memo ) {
+						self::$exclude_urls_memo = Util::process_urls( $options['preload_settings']['excludePreloadCache'] );
 					}
-					$exclude_urls = $exclude_urls_memo;
+					$exclude_urls = self::$exclude_urls_memo;
 					$request_uri  = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
 					$home_path    = wp_parse_url( Util::cached_home_url(), PHP_URL_PATH ) ?? '';
 					if ( $home_path && '/' !== $home_path && 0 === strpos( $request_uri, $home_path ) ) {
@@ -1674,7 +1684,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			// Re-validate after the filter: keep only hex up to 12 chars so
 			// a filter returning ;/whitespace/control bytes cannot
 			// split/poison the cookie value. Bail when empty.
-			$filtered_value = function_exists( 'preg_replace' ) ? preg_replace( '/[^a-f0-9]/', '', strtolower( $value ) ) : '';
+			$filtered_value = preg_replace( '/[^a-f0-9]/', '', strtolower( $value ) );
 			$value          = is_string( $filtered_value ) ? substr( $filtered_value, 0, 12 ) : '';
 			if ( '' === $value ) {
 				return;
@@ -2724,6 +2734,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			self::$cached_can_cdn           = null;
 			self::$uri_post_memo            = array();
 			self::$purge_tags_memo          = null;
+			self::$exclude_urls_memo        = null;
 			self::$hooks_registered         = false;
 			self::$queue_shutdown_hooked    = false;
 			self::$tag_buffer               = array();

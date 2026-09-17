@@ -868,6 +868,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 				);
 			}
 			$format = isset( $input['strategy'] ) ? sanitize_text_field( $input['strategy'] ) : 'mobile';
+			if ( ! in_array( $format, array( 'mobile', 'desktop' ), true ) ) {
+				$format = 'mobile';
+			}
 			$job_id = Pagespeed::queue_scan( $url, $format );
 			return array( 'queued' => $job_id > 0 );
 		}
@@ -887,7 +890,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 			if ( '' === $url ) {
 				return array( 'error' => __( 'You can only query URLs belonging to this website.', 'performance-optimisation' ) );
 			}
-			$format  = isset( $input['strategy'] ) ? sanitize_text_field( $input['strategy'] ) : 'mobile';
+			$format = isset( $input['strategy'] ) ? sanitize_text_field( $input['strategy'] ) : 'mobile';
+			if ( ! in_array( $format, array( 'mobile', 'desktop' ), true ) ) {
+				$format = 'mobile';
+			}
 			$results = Pagespeed::get_results( $url, $format );
 			return is_array( $results ) ? $results : array();
 		}
@@ -1273,7 +1279,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 				if ( empty( $permission_callback ) || ! is_callable( $permission_callback ) ) {
 					continue;
 				}
-				if ( null === $result && ! wp_has_ability( $ability['id'] ) && class_exists( 'WP_Abilities_Registry' ) ) {
+				if ( null === $result && function_exists( 'wp_has_ability' ) && ! wp_has_ability( $ability['id'] ) && class_exists( 'WP_Abilities_Registry' ) ) {
 					$registry = \WP_Abilities_Registry::get_instance();
 					if ( null !== $registry && method_exists( $registry, 'register' ) ) {
 						$registry->register( $ability['id'], $ability['args'] );
@@ -1373,7 +1379,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		public static function execute_crawler( array $input = array() ): array {
 			$urls = array();
 
-			if ( ! empty( $input['url'] ) ) {
+			if ( ! empty( $input['url'] ) && is_string( $input['url'] ) ) {
 				$urls[] = esc_url_raw( $input['url'] );
 			}
 			if ( ! empty( $input['urls'] ) && is_array( $input['urls'] ) ) {

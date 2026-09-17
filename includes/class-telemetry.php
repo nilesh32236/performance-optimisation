@@ -362,7 +362,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				if ( 0 === strpos( $location, '/' ) ) {
 					$resolved = $scheme . '://' . $host . $port . $location;
 				} else {
-					$resolved = $scheme . '://' . $host . $port . $base_dir . '/' . $location;
+					$resolved = $scheme . '://' . $host . $port . rtrim( $base_dir, '/' ) . '/' . $location;
 				}
 			}
 
@@ -748,8 +748,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				// closure runs up to N times per scan on the request thread,
 				// so initializing the filesystem abstraction per asset would
 				// dominate the scan cost; reads are local-only and fail-open.
-				$local_path = Util::get_local_path( $url ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_exists,WordPress.WP.AlternativeFunctions.file_system_operations_filesize -- Local read-only size probe on the scan hot path; WP_Filesystem init per asset is disproportionate, failures return 0.
-				if ( $local_path && file_exists( $local_path ) ) {
+				$local_path = Util::get_local_path( $url ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize -- Local read-only size probe on the scan hot path; WP_Filesystem init per asset is disproportionate, failures return 0.
+				if ( $local_path && file_exists( $local_path ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_exists -- Local read-only probe on the scan hot path; WP_Filesystem init per asset is disproportionate.
 					// Race guard: the file can vanish between file_exists()
 					// and filesize(), which would emit a warning — return 0
 					// quietly instead.

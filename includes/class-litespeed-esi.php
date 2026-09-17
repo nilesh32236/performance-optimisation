@@ -465,8 +465,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 				// imports @wordpress/i18n for translated aria-labels, so a
 				// missing asset file would otherwise ship an untranslated or
 				// broken hydration client with no log.
-				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Debug-only diagnostics, gated above.
-				error_log( 'WPPO ESI: build/esi.asset.php missing; falling back to wp-i18n dependencies.' );
+				if ( class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
+					Log::add( 'WPPO ESI: build/esi.asset.php missing; falling back to wp-i18n dependencies.' );
+				}
 			}
 
 			if ( self::supports_script_strategy() ) {

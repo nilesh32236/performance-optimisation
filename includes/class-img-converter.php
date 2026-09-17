@@ -508,7 +508,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			}
 
 			$threshold = (int) $threshold;
-			if ( $threshold < 0 ) {
+			if ( 0 > $threshold ) {
 				$threshold = 0;
 			}
 
@@ -835,7 +835,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * @return bool True when the image exceeds the budget and must be skipped.
 		 */
 		public function exceeds_pixel_budget( int $width, int $height, int $channels = 4 ): bool {
-			if ( $width <= 0 || $height <= 0 ) {
+			if ( 0 >= $width || 0 >= $height ) {
 				// Corrupt headers (non-positive dimensions) are not an
 				// oversize skip: return false so the caller falls through
 				// to the normal `failed` path instead of `skipped`.

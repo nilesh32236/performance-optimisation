@@ -2040,7 +2040,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					}
 				}
 				$reclaimable_bytes = 0;
-				if ( $reclaimable > 0 && $total_rows > 0 && $total_bytes > 0 ) {
+				if ( 0 < $reclaimable && 0 < $total_rows && 0 < $total_bytes ) {
 					$reclaimable_bytes = (int) ( $total_bytes * ( $reclaimable / $total_rows ) );
 				}
 
@@ -2500,7 +2500,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					// Translators: %s is the cleanup type label.
 					Log::add( sprintf( __( 'Auto cleanup failed: %s', 'performance-optimisation' ), $label ) );
 					$failures[] = $method;
-				} elseif ( $result > 0 ) {
+				} elseif ( 0 < $result ) {
 					$type = self::METHOD_TO_TYPE[ $method ] ?? '';
 					if ( isset( self::TABLE_MAP[ $type ] ) ) {
 						$affected_tables = array_merge( $affected_tables, self::TABLE_MAP[ $type ] );

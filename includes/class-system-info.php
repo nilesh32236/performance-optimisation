@@ -111,11 +111,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 * }
 		 */
 		public static function get_php(): array {
-			$memory_limit        = ini_get( 'memory_limit' );
-			$max_execution_time  = ini_get( 'max_execution_time' );
-			$upload_max_filesize = ini_get( 'upload_max_filesize' );
-			$post_max_size       = ini_get( 'post_max_size' );
-			$display_errors      = ini_get( 'display_errors' );
+			$memory_limit        = function_exists( 'ini_get' ) ? ini_get( 'memory_limit' ) : false;
+			$max_execution_time  = function_exists( 'ini_get' ) ? ini_get( 'max_execution_time' ) : false;
+			$upload_max_filesize = function_exists( 'ini_get' ) ? ini_get( 'upload_max_filesize' ) : false;
+			$post_max_size       = function_exists( 'ini_get' ) ? ini_get( 'post_max_size' ) : false;
+			$display_errors      = function_exists( 'ini_get' ) ? ini_get( 'display_errors' ) : false;
 
 			return array(
 				// Security: expose only the major.minor series so the exact,
@@ -622,7 +622,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			}
 
 			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Warning emitted when opcache.restrict_api blocks access.
-			$opcache = opcache_get_status( false );
+			$opcache = @opcache_get_status( false );
 
 			if ( false === $opcache || ! is_array( $opcache ) ) {
 				return array(
@@ -660,8 +660,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			}
 
 			if (
-			isset( $opcache['interned_strings_usage']['used_memory'], $opcache['interned_strings_usage']['buffer_size'] )
-			&& ! empty( $opcache['interned_strings_usage']['buffer_size'] )
+				isset( $opcache['interned_strings_usage']['used_memory'], $opcache['interned_strings_usage']['buffer_size'] )
+				&& ! empty( $opcache['interned_strings_usage']['buffer_size'] )
 			) {
 				$info['interned_strings'] = sprintf(
 					/* translators: 1: Percentage used, 2: Total memory, 3: Free memory */
@@ -702,7 +702,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 
 			try {
 				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- ini_get() may emit on hardened hosts.
-				$value = ini_get( $key );
+				$value = @ini_get( $key );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return self::not_available_label();
@@ -757,9 +757,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 
 			try {
 				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- ini_get() may emit on hardened hosts.
-				$jit = ini_get( 'opcache.jit' );
+				$jit = @ini_get( 'opcache.jit' );
 				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- ini_get() may emit on hardened hosts.
-				$buffer_size = ini_get( 'opcache.jit_buffer_size' );
+				$buffer_size = @ini_get( 'opcache.jit_buffer_size' );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return $unavailable;

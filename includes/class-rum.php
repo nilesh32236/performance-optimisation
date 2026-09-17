@@ -652,7 +652,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			$asset_file = WPPO_PLUGIN_PATH . 'build/rum.asset.php';
 			$deps       = array();
 			$version    = WPPO_VERSION;
-			if ( file_exists( $asset_file ) ) {
+			if ( file_exists( $asset_file ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_exists -- Local read-only build-artifact probe; WP_Filesystem init is disproportionate.
 				$asset = include $asset_file; // phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable
 				if ( is_array( $asset ) ) {
 					// Trust-but-verify the build artifact (mirrors
@@ -2574,7 +2574,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					}
 				}
 				return $top;
-			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+			} catch ( \Throwable $e ) {
 				return null;
 			}
 		}
@@ -3182,7 +3182,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					}
 				);
 				return $rows;
-			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+			} catch ( \Throwable $e ) {
 				return array();
 			}
 		}
@@ -3246,7 +3246,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				}
 				arsort( $scores, SORT_NUMERIC );
 				return $scores;
-			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+			} catch ( \Throwable $e ) {
 				return array();
 			}
 		}
@@ -3313,7 +3313,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					}
 				}
 				return $best >= 0 ? (float) $best : 0.0;
-			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+			} catch ( \Throwable $e ) {
 				return 0.0;
 			}
 		}

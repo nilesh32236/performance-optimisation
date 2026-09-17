@@ -188,14 +188,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			if ( 'object_cache_circuit' === $key ) {
 				// Dismiss only this trip: persist its tripped_at timestamp so
 				// the next trip (newer timestamp) automatically re-arms the notice.
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) || ! defined( 'PerformanceOptimise\Inc\Object_Cache::CIRCUIT_DISMISSED_OPTION' ) ) {
+					wp_safe_redirect( remove_query_arg( array( 'wppo_dismiss', '_wpnonce' ) ) );
+					exit;
+				}
 				$tripped_at = 0;
-				if ( class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
-					try {
-						$circuit    = ( new Object_Cache() )->get_circuit_state();
-						$tripped_at = isset( $circuit['tripped_at'] ) ? (int) $circuit['tripped_at'] : 0;
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
+				try {
+					$circuit    = ( new Object_Cache() )->get_circuit_state();
+					$tripped_at = isset( $circuit['tripped_at'] ) ? (int) $circuit['tripped_at'] : 0;
+				} catch ( \Throwable $e ) {
+					unset( $e );
 				}
 				update_option( Object_Cache::CIRCUIT_DISMISSED_OPTION, $tripped_at > 0 ? $tripped_at : time(), false );
 				delete_transient( Util::transient_key( Object_Cache::CIRCUIT_NOTICE_TRANSIENT ) );
@@ -362,6 +364,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				return;
 			}
 
+			if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
+				return;
+			}
 			try {
 				if ( self::$circuit_state_memo_set && is_array( self::$circuit_state_memo ) ) {
 					$circuit = self::$circuit_state_memo;
@@ -507,11 +512,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				return;
 			}
 
-			if ( LiteSpeed_Integration::get_mode() !== LiteSpeed_Integration::MODE_AUTO ) {
+			if ( LiteSpeed_Integration::MODE_AUTO !== LiteSpeed_Integration::get_mode() ) {
 				return;
 			}
 
-			if ( LiteSpeed_Integration::effective_mode() !== LiteSpeed_Integration::MODE_LITESPEED ) {
+			if ( LiteSpeed_Integration::MODE_LITESPEED !== LiteSpeed_Integration::effective_mode() ) {
 				return;
 			}
 
@@ -602,6 +607,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			}
 
 			if ( null === self::$dropin_memo ) {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) || ! method_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler', 'is_our_dropin' ) ) {
+					return;
+				}
 				self::$dropin_memo = Advanced_Cache_Handler::is_our_dropin();
 			}
 			if ( ! self::$dropin_memo ) {
@@ -687,6 +695,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		 * @return void
 		 */
 		private function maybe_review_notice(): void {
+			if ( ! function_exists( 'get_current_screen' ) ) {
+				return;
+			}
 			$screen = get_current_screen();
 
 			// Limit the review ask to the plugin's own admin screen so it does

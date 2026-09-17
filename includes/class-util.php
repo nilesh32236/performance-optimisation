@@ -2396,7 +2396,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 */
 		public static function get_image_mime_type( $url ) {
 			// Infer MIME type from URL extension.
-			$extension = strtolower( pathinfo( wp_parse_url( $url, PHP_URL_PATH ), PATHINFO_EXTENSION ) );
+			$extension = strtolower( pathinfo( (string) wp_parse_url( (string) $url, PHP_URL_PATH ), PATHINFO_EXTENSION ) );
 
 			switch ( $extension ) {
 				case 'jpg':

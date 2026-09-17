@@ -39,7 +39,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @var string
 		 * @since 1.6.0
 		 */
-		private $cache_dir;
+		private string $cache_dir;
 
 		/**
 		 * Constructor.
@@ -1362,7 +1362,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return array The sanitized settings array.
 		 * @since 1.1.1
 		 */
-		private function sanitize_settings_recursively( $settings ) {
+		private function sanitize_settings_recursively( array $settings ): array {
 			return Util::sanitize_settings_recursively( $settings );
 		}
 

@@ -87,7 +87,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 			// is redundant here (and tripped the sniff without justification).
 			if ( $wp_filesystem && $wp_filesystem->exists( $object_cache_file ) ) {
 				$dropin_size = filesize( $object_cache_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_filesize
-				if ( false !== $dropin_size && $dropin_size < 1048576 ) {
+				if ( false !== $dropin_size && 1048576 > $dropin_size ) {
 					$content = $wp_filesystem->get_contents( $object_cache_file );
 					$is_own  = false;
 					if ( is_string( $content ) ) {

@@ -425,8 +425,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 						}
 					}
 				} catch ( \Throwable $te ) {
+					$te_message = $te->getMessage();
 					unset( $te );
-					$status['telemetry_error'] = defined( 'WP_DEBUG' ) && WP_DEBUG ? $te->getMessage() : __( 'Redis telemetry error.', 'performance-optimisation' );
+					$status['telemetry_error'] = defined( 'WP_DEBUG' ) && WP_DEBUG ? $te_message : __( 'Redis telemetry error.', 'performance-optimisation' );
 				} finally {
 					if ( method_exists( $redis, 'close' ) ) {
 						try {
@@ -437,9 +438,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					}
 				}
 			} catch ( \Throwable $e ) {
+				$e_message = $e->getMessage();
 				unset( $e );
 				$status['redis_reachable'] = false;
-				$status['telemetry_error'] = defined( 'WP_DEBUG' ) && WP_DEBUG ? $e->getMessage() : __( 'Redis connection error.', 'performance-optimisation' );
+				$status['telemetry_error'] = defined( 'WP_DEBUG' ) && WP_DEBUG ? $e_message : __( 'Redis connection error.', 'performance-optimisation' );
 			}
 
 			return $status;
@@ -1484,10 +1486,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 							unset( $close_error );
 						}
 					}
-					if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'ABSPATH' ) ) {
-						// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-						error_log( 'Redis ping exception: ' . self::scrub_redis_message( $e->getMessage() ) );
-					}
 					$error = new \WP_Error( 'ping_exception', __( 'Redis connection failed.', 'performance-optimisation' ) );
 					self::arm_in_request_bypass( $error );
 					if ( $this->arm_outage_flag() ) {
@@ -2149,11 +2147,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				// latest failure is surfaced via get_status()['last_failure'].
 			} catch ( \Throwable $e ) {
 				unset( $e );
-			}
-
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-				error_log( 'WPPO Redis failure (' . $code . '): ' . $message );
 			}
 		}
 
