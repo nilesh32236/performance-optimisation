@@ -520,12 +520,81 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				return;
 			}
 			$hooked = true;
+			if ( ! function_exists( 'add_action' ) ) {
+				return;
+			}
 			add_action( 'update_option_' . self::OPTION, array( self::class, 'clear_field_lcp_cache' ) );
 			add_action( 'add_option_' . self::OPTION, array( self::class, 'clear_field_lcp_cache' ) );
 			add_action( 'delete_option_' . self::OPTION, array( self::class, 'clear_field_lcp_cache' ) );
 			// The stored-LCP memo caches site-scoped postmeta/options/
 			// transients, so flush it on site switches too.
 			add_action( 'switch_blog', array( self::class, 'clear_field_lcp_cache' ) );
+			// Tier-1 (singular postmeta _wppo_lcp_image_url_*) and tier-2
+			// (front-page options wppo_front_page_lcp_*): a mid-request
+			// store (AS worker/REST poll completing a scan) after the memo
+			// primed to empty would otherwise return stale empty for the
+			// rest of the request. Tier-3 transients are covered by the
+			// generic setted/deleted_transient prefix check below.
+			add_action( 'added_post_meta', array( self::class, 'maybe_clear_stored_lcp_memo_for_meta' ), 10, 3 );
+			add_action( 'updated_post_meta', array( self::class, 'maybe_clear_stored_lcp_memo_for_meta' ), 10, 3 );
+			add_action( 'deleted_post_meta', array( self::class, 'maybe_clear_stored_lcp_memo_for_meta' ), 10, 3 );
+			foreach ( array( 'mobile', 'desktop' ) as $strategy ) {
+				add_action( 'update_option_wppo_front_page_lcp_' . $strategy, array( self::class, 'clear_field_lcp_cache' ) );
+				add_action( 'add_option_wppo_front_page_lcp_' . $strategy, array( self::class, 'clear_field_lcp_cache' ) );
+				add_action( 'delete_option_wppo_front_page_lcp_' . $strategy, array( self::class, 'clear_field_lcp_cache' ) );
+			}
+			add_action( 'setted_transient', array( self::class, 'maybe_clear_stored_lcp_memo_for_transient' ), 10, 1 );
+			add_action( 'deleted_transient', array( self::class, 'maybe_clear_stored_lcp_memo_for_transient' ), 10, 1 );
+		}
+
+		/**
+		 * Clear the stored-LCP memo when a tier-1 LCP postmeta key changes.
+		 *
+		 * Generic postmeta-hook entry point: only the
+		 * `_wppo_lcp_image_url_{mobile,desktop}` keys invalidate; all other
+		 * meta writes are ignored so normal post saves stay cheap.
+		 *
+		 * @since NEXT
+		 * @param int    $meta_id  Meta row ID (unused).
+		 * @param int    $object_id Object ID (unused).
+		 * @param string $meta_key Meta key that changed.
+		 * @return void
+		 */
+		public static function maybe_clear_stored_lcp_memo_for_meta( $meta_id = 0, $object_id = 0, $meta_key = '' ): void {
+			try {
+				if ( ! is_string( $meta_key ) || '' === $meta_key ) {
+					return;
+				}
+				if ( 0 === strpos( $meta_key, '_wppo_lcp_image_url_' ) ) {
+					self::clear_field_lcp_cache();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Clear the stored-LCP memo when a tier-3 LCP transient changes.
+		 *
+		 * Generic transient-hook entry point: only keys containing the
+		 * `wppo_lcp_url_` tier-3 marker invalidate (blog-prefixed or
+		 * legacy); all other transients are ignored.
+		 *
+		 * @since NEXT
+		 * @param string $transient Transient name that changed.
+		 * @return void
+		 */
+		public static function maybe_clear_stored_lcp_memo_for_transient( $transient = '' ): void {
+			try {
+				if ( ! is_string( $transient ) || '' === $transient ) {
+					return;
+				}
+				if ( false !== strpos( $transient, 'wppo_lcp_url_' ) ) {
+					self::clear_field_lcp_cache();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 		}
 
 		/**
@@ -632,9 +701,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		public static function get_data(): array {
 			// Opportunistically flush queued beacons before reading.
 			self::flush_queue();
-			self::clear_field_lcp_cache();
-			$data = get_option( self::OPTION, array() );
-			return is_array( $data ) ? $data : array();
+			// Serve the per-request memoized aggregate: flush_queue() (via
+			// persist_aggregate()) already refreshed/cleared the memo when
+			// it wrote, so this reuses a single deserialization shared
+			// with the segmented field-LCP/INP readers instead of
+			// deserializing the up-to-480KB option a second time.
+			return self::get_memoized_aggregate();
 		}
 
 		/**
@@ -2659,7 +2731,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					}
 				}
 				return $top;
-			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+			} catch ( \Throwable $e ) {
+				unset( $e );
 				return null;
 			}
 		}
@@ -2982,9 +3055,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		/**
 		 * Build the per-request memo key for a stored-LCP lookup.
 		 *
-		 * Explicit paths key on the path itself; current-request lookups
-		 * key on the singular post ID + front-page flag (cheap
-		 * conditional tags, no storage I/O).
+		 * Explicit paths key on the normalized path itself; current-request
+		 * lookups key on the main-query object (not the loop post) plus the
+		 * lookup-URL hash, because tier 3 resolves path-sensitively via
+		 * Util::get_current_url(): the same post served under different URL
+		 * forms uses different transients and must not share one memo entry,
+		 * and a secondary-loop get_the_ID() must never poison the memo with
+		 * the loop post instead of the main page.
 		 *
 		 * @since NEXT
 		 * @param string|null $path Page path, or null for the current request.
@@ -3004,8 +3081,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			}
 			$post_part  = '0';
 			$front_part = '0';
+			$url_hash   = '';
 			try {
-				if ( function_exists( 'is_singular' ) && function_exists( 'get_the_ID' ) && is_singular() ) {
+				// Main-query object, not the loop post: get_the_ID() follows
+				// the global $post (secondary loops/related-posts widgets),
+				// while get_queried_object_id() describes the page being
+				// rendered. Falls back to the singular loop ID when the
+				// queried-object helper is unavailable (unit contexts).
+				if ( function_exists( 'get_queried_object_id' ) ) {
+					$queried_id = get_queried_object_id();
+					if ( ! empty( $queried_id ) ) {
+						$post_part = (string) (int) $queried_id;
+					}
+				} elseif ( function_exists( 'is_singular' ) && function_exists( 'get_the_ID' ) && is_singular() ) {
 					$post_id = get_the_ID();
 					if ( ! empty( $post_id ) ) {
 						$post_part = (string) $post_id;
@@ -3014,10 +3102,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				if ( function_exists( 'is_front_page' ) && is_front_page() ) {
 					$front_part = '1';
 				}
+				// Tier 3 is path-sensitive (strategy + URL-hash transient),
+				// so the lookup URL participates in the key: same post via
+				// different URL forms resolves different transients.
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_current_url' ) ) {
+					$url_hash = md5( (string) \PerformanceOptimise\Inc\Util::get_current_url() );
+				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
-			return 'current:' . $blog . ':' . $post_part . ':' . $front_part;
+			return 'current:' . $blog . ':' . $post_part . ':' . $front_part . ':' . $url_hash;
 		}
 
 		/**
@@ -3155,7 +3249,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 						return min( self::FIELD_LCP_MIN_SAMPLES_MAX, $min );
 					}
 				}
-			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+			} catch ( \Throwable $e ) {
+				unset( $e );
 			}
 			return self::FIELD_LCP_DEFAULT_MIN_SAMPLES;
 		}
@@ -3277,7 +3372,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					}
 				);
 				return $rows;
-			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+			} catch ( \Throwable $e ) {
+				unset( $e );
 				return array();
 			}
 		}
@@ -3341,7 +3437,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				}
 				arsort( $scores, SORT_NUMERIC );
 				return $scores;
-			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+			} catch ( \Throwable $e ) {
+				unset( $e );
 				return array();
 			}
 		}
@@ -3422,7 +3519,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					}
 				}
 				return $best >= 0 ? (float) $best : 0.0;
-			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+			} catch ( \Throwable $e ) {
+				unset( $e );
 				return 0.0;
 			}
 		}

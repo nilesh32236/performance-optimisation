@@ -478,6 +478,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 				return;
 			}
 			$queued_keys[ $key ] = true;
+			// Cross-request negative cache: the within-request static only
+			// dedupes repeats in one page view, so N distinct links still
+			// cost N scheduler reads on every cache-miss render until the
+			// AS job converges. A short-lived transient records that the
+			// key was recently confirmed queued, skipping the scheduler
+			// read for a few minutes. Fail-open: transient helpers missing
+			// (unit contexts) falls through to the scheduler read.
+			$neg_key = '';
+			if ( function_exists( 'get_transient' ) && function_exists( 'set_transient' ) && class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
+				try {
+					$neg_key = Util::transient_key( 'wppo_gf_q_' . $key );
+					if ( false !== get_transient( $neg_key ) ) {
+						return;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+					$neg_key = '';
+				}
+			}
 			// Action Scheduler (and wp_schedule_single_event) forward args
 			// positionally via array_values()/do_action_ref_array(), so the
 			// key/url pair must travel as ONE positional array element.
@@ -494,6 +513,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 					if ( ! as_has_scheduled_action( self::AS_HOOK, $payload, 'performance_optimisation' ) ) {
 						as_enqueue_async_action( self::AS_HOOK, $payload, 'performance_optimisation' );
 					}
+					// Remember the confirmed-queued state briefly so the
+					// next cache-miss render skips the scheduler read.
+					if ( '' !== $neg_key ) {
+						set_transient( $neg_key, 1, 5 * MINUTE_IN_SECONDS );
+					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
@@ -503,6 +527,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 				try {
 					if ( false === wp_next_scheduled( self::AS_HOOK, $payload ) ) {
 						wp_schedule_single_event( time() + MINUTE_IN_SECONDS, self::AS_HOOK, $payload );
+					}
+					if ( '' !== $neg_key ) {
+						set_transient( $neg_key, 1, 5 * MINUTE_IN_SECONDS );
 					}
 				} catch ( \Throwable $e ) {
 					unset( $e );
@@ -605,6 +632,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 
 			$css = wp_remote_retrieve_body( $response );
 			if ( empty( $css ) ) {
+				set_transient( $fail_key, 1, self::backoff_ttl() );
+				return false;
+			}
+
+			// Cap the write path like the read path: an uncapped remote CSS
+			// body would cost memory plus poison the cache until a manual
+			// clear. Over-cap bodies back off instead of writing.
+			if ( ! is_string( $css ) || strlen( $css ) > self::MAX_CACHED_CSS_BYTES ) {
 				set_transient( $fail_key, 1, self::backoff_ttl() );
 				return false;
 			}
@@ -979,14 +1014,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 					return false;
 				}
 				// woff2 "wOF2", woff "wOFF", TrueType 0x00010000, OTTO (CFF).
+				// Only the authoritative font signatures count: generic
+				// 'true'/'typ1' 4-byte prefixes also match non-font text
+				// bodies starting with those bytes, so they must not pass
+				// the fallthrough (finfo already handles MIME variance).
 				return (
-					0 === strpos( $head, 'wOF2' ) ||
-					0 === strpos( $head, 'wOFF' ) ||
-					0 === strpos( $head, "\x00\x01\x00\x00" ) ||
-					0 === strpos( $head, 'OTTO' ) ||
-					0 === strpos( $head, 'true' ) ||
-					0 === strpos( $head, 'typ1' )
-					);
+				0 === strpos( $head, 'wOF2' ) ||
+				0 === strpos( $head, 'wOFF' ) ||
+				0 === strpos( $head, "\x00\x01\x00\x00" ) ||
+				0 === strpos( $head, 'OTTO' )
+				);
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return false;
@@ -1095,8 +1132,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			if ( empty( $this->options['file_optimisation']['fontMetricFallback'] ) ) {
 				return $buffer;
 			}
+			// Early bail: no font-family marker means no fallback CSS can
+			// apply — skip the full-buffer regex on every render (e.g.
+			// pages without webfonts). Scope the family scan to <head>
+			// where font links/styles live instead of O(buffer) over the
+			// whole page.
+			if ( false === stripos( $buffer, 'font-family' ) ) {
+				return $buffer;
+			}
+			$scope    = $buffer;
+			$head_pos = stripos( $buffer, '</head>' );
+			if ( false !== $head_pos ) {
+				$scope = substr( $buffer, 0, $head_pos );
+			}
 			// Extract font-family names from buffer Google Fonts links or cached CSS references.
-			preg_match_all( '/font-family:\s*[\'"]?([^\'";,]+)[\'"]?/i', $buffer, $matches );
+			preg_match_all( '/font-family:\s*[\'"]?([^\'";,]+)[\'"]?/i', $scope, $matches );
 			if ( empty( $matches[1] ) ) {
 				return $buffer;
 			}

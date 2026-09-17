@@ -73,7 +73,6 @@ class WpConfigAtomicTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function build_wp_cache_contents( string $contents, bool $runtime_false ): ?string {
 		$method = new \ReflectionMethod( Activate::class, 'build_wp_cache_contents' );
-		$method->setAccessible( true );
 		return $method->invoke( null, $contents, $runtime_false );
 	}
 

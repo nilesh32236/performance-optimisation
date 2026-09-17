@@ -281,7 +281,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 * Exposes detection + coexistence mode + drop-in arbitration for the SPA.
 		 * Null-safe and cached per request via LiteSpeed_Integration statics.
 		 *
-		 * @since  NEXT
+		 * @since NEXT
 		 * @return array{
 		 *     detected: bool,
 		 *     server_type: string,
@@ -531,7 +531,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 * zero and multisite transients cannot leak across sites.
 		 *
 		 * @since  1.8.0
-		 * @since  NEXT `opcache_enabled`, `opcache_enable_cli`, `jit_enabled`
+		 * @since NEXT `opcache_enabled`, `opcache_enable_cli`, `jit_enabled`
 		 *               and `jit_mode` rows plus brief per-site transient cache
 		 *               with fail-open `try/catch` probing.
 		 * @return array {
@@ -902,7 +902,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 * "-log") so exact server versions cannot be fingerprinted from the
 		 * system info endpoint. Unparseable values are reported as null.
 		 *
-		 * @since  NEXT
+		 * @since NEXT
 		 * @param  string|null $version Raw version string.
 		 * @return string|null Major.minor version series, or null when unavailable or unparseable.
 		 */
@@ -924,7 +924,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 * The raw banner embeds exact version numbers (e.g. "Apache/2.4.41"),
 		 * which is fingerprintable; only the product family is exposed.
 		 *
-		 * @since  NEXT
+		 * @since NEXT
 		 * @param  string|null $software Raw SERVER_SOFTWARE value.
 		 * @return string|null Normalized family name, 'Unknown' for unrecognized
 		 *                     servers, or null when unavailable.

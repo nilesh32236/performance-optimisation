@@ -317,7 +317,6 @@ class CacheTraversalProbeBatteryTest extends \PHPUnit\Framework\TestCase {
 			return;
 		}
 		$prop = new \ReflectionProperty( Cache::class, 'traversal_probe_logged' );
-		$prop->setAccessible( true );
 		$prop->setValue( null, false );
 	}
 
@@ -408,7 +407,6 @@ class CacheTraversalProbeBatteryTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function safe_path( Cache $cache, string $url_path, string $filename ): string {
 		$method = new \ReflectionMethod( Cache::class, 'safe_path_for_url' );
-		$method->setAccessible( true );
 		return $method->invoke( $cache, $url_path, $filename );
 	}
 
@@ -577,10 +575,8 @@ class CacheTraversalProbeBatteryTest extends \PHPUnit\Framework\TestCase {
 		// Point the choke point at the temp fixture tree (unique root, so the
 		// memoized realpath anchor cannot collide with other tests).
 		$root_prop = new \ReflectionProperty( Cache::class, 'cache_root_dir' );
-		$root_prop->setAccessible( true );
 		$root_prop->setValue( $cache, $root );
 		$domain_prop = new \ReflectionProperty( Cache::class, 'domain' );
-		$domain_prop->setAccessible( true );
 		$domain_prop->setValue( $cache, 'example.com' );
 
 		// Benign control: a real directory under the domain still resolves.
@@ -687,7 +683,6 @@ class CacheTraversalProbeBatteryTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function atomic_write_htaccess( string $path, $fs, array $rules ) {
 		$method = new \ReflectionMethod( Htaccess_Handler::class, 'atomic_write_verified' );
-		$method->setAccessible( true );
 		return $method->invoke( null, $path, $fs, $rules );
 	}
 }

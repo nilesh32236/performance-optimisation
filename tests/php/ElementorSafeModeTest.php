@@ -164,7 +164,6 @@ class ElementorSafeModeTest extends \PHPUnit\Framework\TestCase {
 	public function test_resolve_elementor_post_id(): void {
 		$watcher = new Builder_Purge_Watcher();
 		$method  = new \ReflectionMethod( Builder_Purge_Watcher::class, 'resolve_elementor_post_id' );
-		$method->setAccessible( true );
 
 		$this->assertSame( 42, $method->invoke( $watcher, 42 ) );
 		$this->assertSame( 42, $method->invoke( $watcher, '42' ) );
@@ -193,7 +192,6 @@ class ElementorSafeModeTest extends \PHPUnit\Framework\TestCase {
 	public function test_resolve_rejects_float_object_post_id(): void {
 		$watcher = new Builder_Purge_Watcher();
 		$method  = new \ReflectionMethod( Builder_Purge_Watcher::class, 'resolve_elementor_post_id' );
-		$method->setAccessible( true );
 
 		$float_css = new class() {
 			/**
@@ -232,7 +230,6 @@ class ElementorSafeModeTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( array( 101, 102, 103, 104, 105, 106 ), $watcher->purged_posts );
 
 		$flag = new \ReflectionProperty( Builder_Purge_Watcher::class, 'bulk_regen_coalesced' );
-		$flag->setAccessible( true );
 		$this->assertTrue( $flag->getValue(), 'Six distinct posts must trip bulk-regen coalescing (archive fan-out + targeted regen).' );
 	}
 
@@ -245,7 +242,6 @@ class ElementorSafeModeTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( array(), $watcher->purged_posts, 'Unresolvable payloads must not purge a wrong URL.' );
 
 		$drifted = new \ReflectionProperty( Builder_Purge_Watcher::class, 'drift_handled_this_request' );
-		$drifted->setAccessible( true );
 		$this->assertTrue( $drifted->getValue(), 'Unresolvable regen must schedule the deferred full purge.' );
 		Builder_Purge_Watcher::reset_drift_state();
 		$this->assertFalse( $drifted->getValue(), 'Named drift reset must clear the flag without reflection writes.' );
@@ -283,10 +279,8 @@ class ElementorSafeModeTest extends \PHPUnit\Framework\TestCase {
 	public function test_cache_bypass_choke_point(): void {
 		$cache   = ( new \ReflectionClass( Cache::class ) )->newInstanceWithoutConstructor();
 		$options = new \ReflectionProperty( Cache::class, 'options' );
-		$options->setAccessible( true );
 		$options->setValue( $cache, array( 'file_optimisation' => array( 'elementorSafeMode' => true ) ) );
 		$method = new \ReflectionMethod( Cache::class, 'should_bypass_combine_for_elementor' );
-		$method->setAccessible( true );
 
 		// Non-Elementor request: no bypass (pre-gate short-circuits, no meta reads).
 		$this->assertFalse( $method->invoke( $cache, array( 'elementorSafeMode' => true ) ) );

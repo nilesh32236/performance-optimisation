@@ -2501,9 +2501,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 						if ( function_exists( 'is_multisite' ) && is_multisite() && function_exists( 'get_sites' ) && function_exists( 'switch_to_blog' ) && function_exists( 'restore_current_blog' ) ) {
 							// Paginated fan-out: networks over 500 sites must
 							// not leave siblings stale up to 2h. Loop with an
-							// offset until a short page.
+							// offset until a short page, capped so a 5k-site
+							// network cannot stall the admin request with ~20k
+							// synchronous deletes: at most 4 pages (2000 sites)
+							// are swept here; beyond that the 2h transient TTL
+							// plus the on-demand re-probe converge the rest.
 							$fanout_offset = 0;
+							$fanout_pages  = 0;
 							do {
+								++$fanout_pages;
 								$sites = get_sites(
 									array(
 										'number' => 500,
@@ -2514,7 +2520,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 								if ( ! is_array( $sites ) || empty( $sites ) ) {
 									break;
 								}
-								$fanout_offset += count( $sites );
+									$fanout_offset += count( $sites );
 								foreach ( $sites as $site_id ) {
 									$site_id = (int) $site_id;
 									if ( $site_id <= 0 ) {
@@ -2540,6 +2546,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 								}
 								// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- bounded pagination loop over the site list.
 								if ( count( $sites ) < 500 ) {
+									break;
+								}
+								if ( $fanout_pages >= 4 ) {
 									break;
 								}
 							} while ( true );

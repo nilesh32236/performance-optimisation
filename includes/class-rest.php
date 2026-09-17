@@ -641,7 +641,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			if ( $field_override && null === $candidate && class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_field_lcp_url' ) ) {
 				try {
 					$field = RUM::get_field_lcp_url( $path );
-					if ( is_array( $field ) && ! empty( $field['url'] ) && is_string( $field['url'] ) ) {
+					// Same gates as the manual/OD tiers below: stored
+					// beacon-influenced URLs must be plausible same-origin
+					// images before surfacing in the admin UI.
+					if ( is_array( $field ) && ! empty( $field['url'] ) && is_string( $field['url'] ) && $this->is_image_candidate_url( $field['url'] ) && $this->is_same_origin_candidate_url( $field['url'] ) ) {
 						$candidate = $field;
 						$source    = 'rum';
 					}
@@ -654,7 +657,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			if ( null === $candidate && class_exists( 'PerformanceOptimise\Inc\RUM' ) && method_exists( 'PerformanceOptimise\Inc\RUM', 'get_stored_pagespeed_lcp_url' ) ) {
 				try {
 					$stored = RUM::get_stored_pagespeed_lcp_url( $path );
-					if ( is_string( $stored ) && '' !== $stored ) {
+					if ( is_string( $stored ) && '' !== $stored && $this->is_image_candidate_url( $stored ) && $this->is_same_origin_candidate_url( $stored ) ) {
 						$candidate = array(
 							'url'      => $stored,
 							'n'        => 0,
@@ -1496,6 +1499,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// check when the file exists. Fail-open: invalid paths are
 			// rejected with the file intact, never converted.
 			$normalized_abspath = trailingslashit( wp_normalize_path( ABSPATH ) );
+			// Resolve once per client path: the validation, wanted-keys, and
+			// enqueue loops below would otherwise re-run
+			// resolve_optimise_source_path() + file_exists() 3-4x per image
+			// (~300 normalizations + ~200 stats for a 100-image batch).
+			$resolved_map = array();
 			foreach ( array_merge( $webp_images, $avif_images ) as $img_path ) {
 				if ( false !== strpos( $img_path, "\0" ) ) {
 					return $this->send_response( null, false, 400, __( 'Invalid image path provided.', 'performance-optimisation' ) );
@@ -1506,7 +1514,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				if ( 1 === preg_match( '#(^|/)\.\.(/|$)#', $decoded_segments ) ) {
 					return $this->send_response( null, false, 400, __( 'Invalid image path provided.', 'performance-optimisation' ) );
 				}
-				$source_path = $this->resolve_optimise_source_path( $img_path, $normalized_abspath );
+				$source_path               = $this->resolve_optimise_source_path( $img_path, $normalized_abspath );
+				$resolved_map[ $img_path ] = $source_path;
 				if ( method_exists( 'PerformanceOptimise\Inc\Img_Converter', 'is_path_in_allowlist' ) && ! Img_Converter::is_path_in_allowlist( $source_path ) ) {
 					return $this->send_response( null, false, 400, __( 'Invalid image path provided.', 'performance-optimisation' ) );
 				}
@@ -1577,13 +1586,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 						// rows to replace at most 100 per-item checks.
 						$wanted_keys = array();
 						foreach ( $webp_images as $wanted_image ) {
-							$wanted_path = $this->resolve_optimise_source_path( $wanted_image, $normalized_abspath );
+							$wanted_path = $resolved_map[ $wanted_image ] ?? $this->resolve_optimise_source_path( $wanted_image, $normalized_abspath );
 							if ( '' !== $wanted_path ) {
 								$wanted_keys[ $wanted_path . '|webp' ] = true;
 							}
 						}
 						foreach ( $avif_images as $wanted_image ) {
-							$wanted_path = $this->resolve_optimise_source_path( $wanted_image, $normalized_abspath );
+							$wanted_path = $resolved_map[ $wanted_image ] ?? $this->resolve_optimise_source_path( $wanted_image, $normalized_abspath );
 							if ( '' !== $wanted_path ) {
 								$wanted_keys[ $wanted_path . '|avif' ] = true;
 							}
@@ -1653,7 +1662,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				}
 				// Schedule background jobs via Action Scheduler with deduplication.
 				foreach ( $webp_images as $webp_image ) {
-					$source_path = $this->resolve_optimise_source_path( $webp_image, $normalized_abspath );
+					$source_path = $resolved_map[ $webp_image ] ?? $this->resolve_optimise_source_path( $webp_image, $normalized_abspath );
 
 					if ( file_exists( $source_path ) ) {
 						$args      = array(
@@ -1690,7 +1699,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				}
 
 				foreach ( $avif_images as $avif_image ) {
-					$source_path = $this->resolve_optimise_source_path( $avif_image, $normalized_abspath );
+					$source_path = $resolved_map[ $avif_image ] ?? $this->resolve_optimise_source_path( $avif_image, $normalized_abspath );
 
 					if ( file_exists( $source_path ) ) {
 						$args      = array(
@@ -1709,12 +1718,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 						}
 						// Atomic unique insert closes the snapshot TOCTOU (see
 						// the webp loop above).
-						$enqueued                = Util::enqueue_unique_async_action(
+						$enqueued                    = Util::enqueue_unique_async_action(
 							'wppo_convert_image_background',
 							$args,
 							'performance_optimisation'
 						);
-						$scheduled[ $dedup_key ] = true;
+							$scheduled[ $dedup_key ] = true;
 						if ( $enqueued > 0 ) {
 							++$jobs_queued;
 						}
@@ -1748,7 +1757,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$img_converter = new Img_Converter( $options );
 
 			foreach ( $webp_images as $webp_image ) {
-				$source_path = $this->resolve_optimise_source_path( $webp_image, $normalized_abspath );
+				$source_path = $resolved_map[ $webp_image ] ?? $this->resolve_optimise_source_path( $webp_image, $normalized_abspath );
 
 				if ( file_exists( $source_path ) ) {
 					$img_converter->convert_image( $source_path, 'webp' );
@@ -1756,7 +1765,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			foreach ( $avif_images as $avif_image ) {
-				$source_path = $this->resolve_optimise_source_path( $avif_image, $normalized_abspath );
+				$source_path = $resolved_map[ $avif_image ] ?? $this->resolve_optimise_source_path( $avif_image, $normalized_abspath );
 
 				if ( file_exists( $source_path ) ) {
 					$img_converter->convert_image( $source_path, 'avif' );
@@ -2816,13 +2825,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			try {
 				$cached = Pagespeed::get_results( $url, $strategy );
 				if ( is_array( $cached ) && empty( $cached['error'] ) ) {
+					// Fast-completed winner: the result transient is already
+					// readable while the pending/running re-query misses it.
+					// Return the available data directly (200/ready, the same
+					// shape as the results endpoint) so the SPA can correlate
+					// without an extra poll round-trip or an expiry race where
+					// the transient lapses into not_ready forever.
 					return $this->send_response(
 						array(
 							'url'      => $url,
 							'strategy' => $strategy,
+							'data'     => $cached,
+							'status'   => 'ready',
 						),
 						true,
-						202
+						200
 					);
 				}
 			} catch ( \Throwable $e ) {
@@ -2843,6 +2860,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 						array(
 							'url'      => $url,
 							'strategy' => $strategy,
+							'status'   => 'pending',
 						),
 						true,
 						202

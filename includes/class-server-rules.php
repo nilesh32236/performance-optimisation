@@ -53,7 +53,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) ) {
 		/**
 		 * Check if the current server is LiteSpeed / OpenLiteSpeed.
 		 *
-		 * @since  NEXT
+		 * @since NEXT
 		 * @return bool True if LiteSpeed or OpenLiteSpeed is detected.
 		 */
 		public static function is_litespeed(): bool {

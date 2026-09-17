@@ -456,10 +456,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * eviction per request, so this is a correctness flush, not the growth
 		 * bound.
 		 *
+		 * Buffered derived-alt entries need care here: this method is hooked
+		 * to switch_blog, which fires AFTER the blog context has already
+		 * switched, so committing the memo here would persist blog A's
+		 * entries under blog B's transient key. On a site switch the buffer
+		 * is therefore dropped (it re-derives on the next request) and the
+		 * pending shutdown hook is removed so it cannot commit under the
+		 * wrong blog later. On same-blog clears the buffer is committed
+		 * first so entries are not lost. Either way the shutdown-registered
+		 * flag is reset so the next blog re-registers cleanly (no duplicate
+		 * callbacks).
+		 *
 		 * @since 2.0.0
+		 * @param int|null $new_blog_id New blog ID when invoked via switch_blog, null otherwise.
 		 * @return void
 		 */
-		public static function clear_runtime_caches(): void {
+		public static function clear_runtime_caches( $new_blog_id = null ): void {
+			$is_site_switch = null !== $new_blog_id;
+			if ( ! $is_site_switch && self::$derived_alt_map_dirty && null !== self::$derived_alt_map_memo ) {
+				try {
+					self::commit_derived_alt_map();
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			if ( function_exists( 'remove_action' ) ) {
+				try {
+					remove_action( 'shutdown', array( __CLASS__, 'commit_derived_alt_map' ) );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
 			self::$file_exists_cache               = array();
 			self::$img_size_cache                  = array();
 			self::$preload_emitted                 = array();
@@ -471,6 +498,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			self::$derived_alt_map_dirty           = false;
 			self::$derived_alt_shutdown_registered = false;
 			self::$parent_title_cache              = array();
+			self::$derived_alt_resolutions         = 0;
 			if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) && method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'clear_request_memo' ) ) {
 				try {
 					\PerformanceOptimise\Inc\OD_Bridge::clear_request_memo();
@@ -5253,6 +5281,43 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private static $parent_title_cache = array();
 
 		/**
+		 * Per-request count of heavy attachment resolutions in get_derived_alt().
+		 *
+		 * Bounds the DB-heavy attachment_url_to_postid() + parent lookup
+		 * path per request (20); over-budget images defer to later
+		 * requests once earlier entries persist. Reset via
+		 * clear_runtime_caches().
+		 *
+		 * @var int
+		 * @since NEXT
+		 */
+		private static $derived_alt_resolutions = 0;
+
+		/**
+		 * Normalize a derived-alt map key to its bounded persisted form.
+		 *
+		 * The persisted map truncates keys (full image URLs are unbounded),
+		 * so lookups must apply the same truncation or long URLs never hit
+		 * the map and re-run attachment_url_to_postid() on every request.
+		 * Uses mb_substr() when available so a byte-wise cut cannot split
+		 * a multibyte character.
+		 *
+		 * @since NEXT
+		 * @param string $src Raw image src URL.
+		 * @return string Bounded lookup key ('' when empty).
+		 */
+		private static function normalize_derived_alt_key( string $src ): string {
+			$trimmed = trim( $src );
+			if ( '' === $trimmed ) {
+				return '';
+			}
+			if ( function_exists( 'mb_substr' ) ) {
+				return mb_substr( $trimmed, 0, 512 );
+			}
+			return substr( $trimmed, 0, 512 );
+		}
+
+		/**
 		 * Read the bounded persistent src-to-title map for derived alt text.
 		 *
 		 * The map is memoized per request: the first call reads
@@ -5265,17 +5330,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			if ( null !== self::$derived_alt_map_memo ) {
 				return self::$derived_alt_map_memo;
 			}
+			$string_entry = static function ( $value, $map_key ): bool {
+				return is_string( $map_key ) && is_string( $value );
+			};
 			try {
 				if ( function_exists( 'wp_cache_get' ) ) {
 					$hit = wp_cache_get( Util::transient_key( 'wppo_derived_alt_map' ), 'wppo' );
 					if ( is_array( $hit ) ) {
-						self::$derived_alt_map_memo = $hit;
+						// Filter on read: a directly-written or legacy
+						// poisoned non-string entry must never reach
+						// consumers (commit filters on write, but the
+						// store can be written by other paths).
+						self::$derived_alt_map_memo = array_filter( $hit, $string_entry, ARRAY_FILTER_USE_BOTH );
 						return self::$derived_alt_map_memo;
 					}
 				}
 				if ( function_exists( 'get_transient' ) ) {
 					$map                        = get_transient( Util::transient_key( 'wppo_derived_alt_map' ) );
-					self::$derived_alt_map_memo = is_array( $map ) ? $map : array();
+					self::$derived_alt_map_memo = is_array( $map ) ? array_filter( $map, $string_entry, ARRAY_FILTER_USE_BOTH ) : array();
 					return self::$derived_alt_map_memo;
 				}
 			} catch ( \Throwable $e ) {
@@ -5305,8 +5377,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				// Bound the persisted map: truncate unbounded $src keys
 				// (full URLs) and $title values at entry time (the 125-char
 				// cap elsewhere is output-only), so 200 long-URL entries
-				// cannot bloat the per-site transient/object cache.
-				$src = substr( trim( $src ), 0, 512 );
+				// cannot bloat the per-site transient/object cache. The
+				// key normalization is shared with the lookup path so
+				// long URLs actually hit the map.
+				$src = self::normalize_derived_alt_key( $src );
 				if ( function_exists( 'mb_substr' ) ) {
 					$title = mb_substr( trim( $title ), 0, 125 );
 				} else {
@@ -5447,21 +5521,38 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					if ( ! array_key_exists( $cache_key, self::$parent_title_cache ) ) {
 						// Check the bounded persistent map first so repeat page
 						// views do not re-run attachment lookups per image.
+						// The lookup uses the same normalized (truncated) key
+						// as the write path so long URLs actually hit.
 						$persistent = self::get_derived_alt_map();
-						if ( array_key_exists( $src, $persistent ) ) {
-							self::$parent_title_cache[ $cache_key ] = $persistent[ $src ];
+						$lookup_key = self::normalize_derived_alt_key( $src );
+						$persisted  = '' !== $lookup_key && array_key_exists( $lookup_key, $persistent ) ? $persistent[ $lookup_key ] : null;
+						if ( is_string( $persisted ) ) {
+							self::$parent_title_cache[ $cache_key ] = $persisted;
 						} else {
-							// Resolve the image's own attachment so the fallback title
-							// comes from the attachment's parent post, not the global
-							// post loop context (which describes the rendered page).
-							$attachment_id = (int) attachment_url_to_postid( $src );
-							$parent_id     = $attachment_id > 0 ? (int) wp_get_post_parent_id( $attachment_id ) : 0;
-							$title         = $parent_id > 0 ? get_the_title( $parent_id ) : '';
-							if ( function_exists( 'sanitize_text_field' ) ) {
-								$title = sanitize_text_field( (string) $title );
+							// Per-request resolution budget: the cold-miss
+							// path costs a DB-heavy attachment_url_to_postid()
+							// plus parent lookup per distinct src, so an
+							// image-heavy page with N new images would pay N
+							// DB lookups on first view. Budget the heavy
+							// resolutions per request; over-budget images
+							// resolve on later requests once earlier entries
+							// persist via the shutdown commit.
+							if ( self::$derived_alt_resolutions >= 20 ) {
+								self::$parent_title_cache[ $cache_key ] = '';
+							} else {
+								++self::$derived_alt_resolutions;
+								// Resolve the image's own attachment so the fallback title
+								// comes from the attachment's parent post, not the global
+								// post loop context (which describes the rendered page).
+								$attachment_id = (int) attachment_url_to_postid( $src );
+								$parent_id     = $attachment_id > 0 ? (int) wp_get_post_parent_id( $attachment_id ) : 0;
+								$title         = $parent_id > 0 ? get_the_title( $parent_id ) : '';
+								if ( function_exists( 'sanitize_text_field' ) ) {
+									$title = sanitize_text_field( (string) $title );
+								}
+								self::$parent_title_cache[ $cache_key ] = is_string( $title ) ? trim( $title ) : '';
+								self::set_derived_alt_map_entry( $src, self::$parent_title_cache[ $cache_key ] );
 							}
-							self::$parent_title_cache[ $cache_key ] = is_string( $title ) ? trim( $title ) : '';
-							self::set_derived_alt_map_entry( $src, self::$parent_title_cache[ $cache_key ] );
 						}
 						if ( count( self::$parent_title_cache ) > 200 ) {
 							self::$parent_title_cache = array_slice( self::$parent_title_cache, -200, 200, true );
@@ -5471,6 +5562,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						$alt = self::$parent_title_cache[ $cache_key ];
 					}
 				} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Fail-open: fall through with empty alt.
+					unset( $e );
 				}
 			}
 

@@ -762,7 +762,6 @@ class BuilderPurgeWatcherTest extends \PHPUnit\Framework\TestCase {
 
 		$watcher = new Builder_Purge_Watcher();
 		$method  = new \ReflectionMethod( $watcher, 'resolve_post_url_path' );
-		$method->setAccessible( true );
 
 		Util::clear_permalink_cache();
 		$this->assertSame( '/my-page/', $method->invoke( $watcher, 7 ) );
@@ -782,7 +781,6 @@ class BuilderPurgeWatcherTest extends \PHPUnit\Framework\TestCase {
 
 		$watcher = new Builder_Purge_Watcher();
 		$method  = new \ReflectionMethod( $watcher, 'purge_post_url_caches' );
-		$method->setAccessible( true );
 
 		// Cache::clear_cache() returns false with no filesystem; the coupled
 		// seam must propagate that instead of reporting success.
@@ -846,7 +844,6 @@ class BuilderPurgeWatcherTest extends \PHPUnit\Framework\TestCase {
 
 		$watcher = new Builder_Purge_Watcher();
 		$method  = new \ReflectionMethod( $watcher, 'resolve_post_url_path' );
-		$method->setAccessible( true );
 
 		Util::clear_permalink_cache();
 		$this->assertSame( '', $method->invoke( $watcher, 11 ), 'Subdir plain permalink must be rejected, not mapped to the subdir homepage.' );
@@ -930,7 +927,6 @@ class BuilderPurgeWatcherTest extends \PHPUnit\Framework\TestCase {
 		);
 		$watcher = new Builder_Purge_Watcher();
 		$method  = new \ReflectionMethod( $watcher, 'write_drift_purge_log' );
-		$method->setAccessible( true );
 		$method->invoke( $watcher, true );
 		$this->assertCount( 0, $recorder->inserts, 'Drift-log=false must skip Log::add().' );
 
@@ -963,7 +959,6 @@ class BuilderPurgeWatcherTest extends \PHPUnit\Framework\TestCase {
 		);
 		$watcher = new Builder_Purge_Watcher();
 		$method  = new \ReflectionMethod( $watcher, 'write_drift_save_log' );
-		$method->setAccessible( true );
 
 		$method->invoke( $watcher, 7, true, true );
 		$method->invoke( $watcher, 8, true, false );
@@ -1138,7 +1133,6 @@ class BuilderPurgeWatcherTest extends \PHPUnit\Framework\TestCase {
 
 		$main         = ( new \ReflectionClass( \PerformanceOptimise\Inc\Main::class ) )->newInstanceWithoutConstructor();
 		$options_prop = new \ReflectionProperty( \PerformanceOptimise\Inc\Main::class, 'options' );
-		$options_prop->setAccessible( true );
 		$options_prop->setValue( $main, $options );
 		$main->maybe_migrate_builder_watcher();
 
@@ -1190,8 +1184,7 @@ class BuilderPurgeWatcherTest extends \PHPUnit\Framework\TestCase {
 		$this->assertTrue( $settings_write['file_optimisation']['builderPurgeDriftLog'], 'Missing key must backfill to true.' );
 
 		$options_prop = new \ReflectionProperty( \PerformanceOptimise\Inc\Main::class, 'options' );
-		$options_prop->setAccessible( true );
-		$options = $options_prop->getValue( $main );
+		$options      = $options_prop->getValue( $main );
 		$this->assertTrue( $options['file_optimisation']['builderPurgeDriftLog'] );
 	}
 
@@ -1223,9 +1216,8 @@ class BuilderPurgeWatcherTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertNotEmpty( $writes, 'Migration must attempt the write.' );
 		$options_prop = new \ReflectionProperty( \PerformanceOptimise\Inc\Main::class, 'options' );
-		$options_prop->setAccessible( true );
-		$options = $options_prop->getValue( $main );
-		$file    = isset( $options['file_optimisation'] ) && is_array( $options['file_optimisation'] ) ? $options['file_optimisation'] : array();
+		$options      = $options_prop->getValue( $main );
+		$file         = isset( $options['file_optimisation'] ) && is_array( $options['file_optimisation'] ) ? $options['file_optimisation'] : array();
 		$this->assertArrayNotHasKey( 'builderPurgeWatcher', $file, 'Failed write must not merge into the in-request memo.' );
 	}
 

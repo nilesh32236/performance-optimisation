@@ -51,7 +51,6 @@ class UpgradePurgeWatcherTest extends \PHPUnit\Framework\TestCase {
 	 */
 	private function reset_upgrade_flag(): void {
 		$property = new \ReflectionProperty( Builder_Purge_Watcher::class, 'upgrade_purged_hashes' );
-		$property->setAccessible( true );
 		$property->setValue( null, array() );
 	}
 

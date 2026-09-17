@@ -3726,7 +3726,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * {@see Main::emit_server_timing_header()}.
 		 *
 		 * @since  1.9.0
-		 * @since  NEXT Streaming tradeoff note and cross-reference.
+		 * @since NEXT Streaming tradeoff note and cross-reference.
 		 * @return bool True when Server-Timing telemetry is active.
 		 */
 		public function server_timing_enabled(): bool {

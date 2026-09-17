@@ -237,7 +237,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 *
 		 * Split out from fetch_via_curl() so tests can stub the transport layer.
 		 *
-		 * @since  NEXT
+		 * @since NEXT
 		 * @param  string $url URL to request.
 		 * @return array {
 		 *     @type string|false $raw_response Raw response (headers + body), or false on transport failure.
@@ -297,7 +297,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * Mirrors the original single-hop parsing: only the final header block
 		 * is considered (robust against interim 100 Continue responses).
 		 *
-		 * @since  NEXT
+		 * @since NEXT
 		 * @param  string $header_raw Raw header text (everything before the body).
 		 * @return array Lowercase header name => value map.
 		 */
@@ -327,7 +327,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * URL: wp_http_validate_url(), http/https schemes only, and the same
 		 * host as this website's home URL.
 		 *
-		 * @since  NEXT
+		 * @since NEXT
 		 * @param  string $location    Raw Location header value.
 		 * @param  string $current_url URL of the response that sent the Location.
 		 * @return string|false Absolute validated URL, or false when the hop is not allowed.
@@ -394,7 +394,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * (transport failure or terminal non-200/non-3xx status), matching the
 		 * pre-hardening behaviour of scan().
 		 *
-		 * @since  NEXT
+		 * @since NEXT
 		 * @param  string $url Validated scan URL.
 		 * @return array|\WP_Error|null {
 		 *     Success payload on a 200 response, WP_Error on an unsafe hop or
@@ -478,7 +478,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * by resolve_redirect() before the next request is issued (same rules
 		 * as the cURL path).
 		 *
-		 * @since  NEXT
+		 * @since NEXT
 		 * @param  string $url Validated scan URL.
 		 * @return array|\WP_Error Success payload, or WP_Error on failure/unsafe hop/hop limit.
 		 */

@@ -1406,7 +1406,6 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'wp_using_ext_object_cache' )->justReturn( false );
 
 		$method = new \ReflectionMethod( RUM::class, 'append_to_queue_atomic' );
-		$method->setAccessible( true );
 
 		$result = array( true, 0 );
 		for ( $i = 0; $i < 105; $i++ ) {
@@ -1515,7 +1514,6 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 
 		try {
 			$method = new \ReflectionMethod( RUM::class, 'append_to_queue_atomic' );
-			$method->setAccessible( true );
 
 			$first = $method->invoke(
 				null,
