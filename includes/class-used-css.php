@@ -2474,7 +2474,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 						continue;
 					}
 					try {
-						if ( self::requeue_for_post( $post_id, $scheduled_hints, $instance ) ) {
+						// Already-vs-new distinction (issue #1310 review):
+						// a hint-hit or lost unique-race means the job is
+						// pending but not newly scheduled — it must not
+						// inflate the queued count, consume cap, or trigger
+						// mark_targeted_regen()/logging on its own.
+						$already_scheduled = false;
+						if ( self::requeue_for_post( $post_id, $scheduled_hints, $instance, $already_scheduled ) && ! $already_scheduled ) {
 							++$queued;
 						}
 					} catch ( \Throwable $e ) {
@@ -2570,6 +2576,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		}
 
 		/**
+		 * Whether a used-CSS generation job is pending or running.
+		 *
+		 * Single home for the 0-return disambiguation used after a
+		 * `Util::enqueue_unique_async_action()` 0 return (issue #1310
+		 * review): pending is probed via `as_has_scheduled_action()` and a
+		 * winner that already transitioned to running is caught via a
+		 * bounded `STATUS_RUNNING` lookup, mirroring the CCSS
+		 * `has_pending_ccss_job()` and PageSpeed `find_pending_job_id()`
+		 * backstops. Fail-open: returns false when the lookup APIs are
+		 * unavailable or throw.
+		 *
+		 * @since NEXT
+		 * @param array $args Action arguments.
+		 * @return bool True when a matching job is pending or running.
+		 */
+		private static function is_used_css_job_live( array $args ): bool {
+			try {
+				if ( function_exists( 'as_has_scheduled_action' ) && (bool) as_has_scheduled_action( 'wppo_used_css_generate', $args, 'performance_optimisation' ) ) {
+					return true;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			try {
+				if ( ! function_exists( 'as_get_scheduled_actions' ) || ! class_exists( \ActionScheduler_Store::class ) ) {
+					return false;
+				}
+				$running = as_get_scheduled_actions(
+					array(
+						'hook'     => 'wppo_used_css_generate',
+						'args'     => $args,
+						'group'    => 'performance_optimisation',
+						'status'   => \ActionScheduler_Store::STATUS_RUNNING,
+						'per_page' => 1,
+					),
+					'ids'
+				);
+				return is_array( $running ) && ! empty( $running );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
 		 * Queue used-CSS regeneration for a single post (builder-drift requeue).
 		 *
 		 * De-duplicates via as_has_scheduled_action(). Skips queueing when
@@ -2583,12 +2634,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @param int        $post_id Post ID to requeue.
 		 * @param array|null $scheduled_hints Optional hoisted pending-job map (post ID => true); null falls back to per-post lookup.
 		 * @param self|null  $instance Optional hoisted instance (shares parsed safelist/memo across loop calls).
+		 * @param bool|null  $already_scheduled Optional out flag: set to true when the job was already pending (hint-hit, pre-check hit, or lost unique-race) rather than newly scheduled; false when a new job was inserted. Untouched (stays false) on skip/failure. Lets bulk callers count only genuinely new jobs (issue #1310).
 		 * @return bool True when a job was queued or already scheduled; false when skipped as fresh or on failure.
 		 * @since 2.0.0
 		 * @since NEXT Optional $scheduled_hints for batched targeted regen.
 		 * @since NEXT Optional $instance to avoid per-post re-construction.
+		 * @since NEXT Optional $already_scheduled out flag distinguishing already-pending from newly-scheduled.
 		 */
-		public static function requeue_for_post( int $post_id, ?array $scheduled_hints = null, ?self $instance = null ): bool {
+		public static function requeue_for_post( int $post_id, ?array $scheduled_hints = null, ?self $instance = null, ?bool &$already_scheduled = null ): bool {
+			$already_scheduled = false;
 			if ( $post_id <= 0 ) {
 				return false;
 			}
@@ -2606,9 +2660,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				// so N posts cost one query instead of N
 				// as_has_scheduled_action() reads.
 				if ( null !== $scheduled_hints && isset( $scheduled_hints[ $post_id ] ) ) {
+					$already_scheduled = true;
 					return true;
 				}
-				if ( function_exists( 'as_has_scheduled_action' ) && ( null === $scheduled_hints ) && as_has_scheduled_action( 'wppo_used_css_generate', $args, 'performance_optimisation' ) ) {
+				// Atomic-first on AS 4.x (issue #1310 review): the unique
+				// enqueue below dedupes by itself, so the per-post
+				// pre-check SELECT only runs when unique inserts are
+				// unsupported (one redundant SELECT saved per post save).
+				// Util ships in-repo: no method_exists guard needed.
+				$use_unique = Util::supports_action_scheduler_unique();
+				if ( ! $use_unique && function_exists( 'as_has_scheduled_action' ) && ( null === $scheduled_hints ) && as_has_scheduled_action( 'wppo_used_css_generate', $args, 'performance_optimisation' ) ) {
+					$already_scheduled = true;
 					return true;
 				}
 				try {
@@ -2625,7 +2687,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
-				as_enqueue_async_action( 'wppo_used_css_generate', $args, 'performance_optimisation' );
+				// Atomic unique enqueue (issue #1310) closes the
+				// check-then-act race above; Util ships in-repo so the
+				// helper is called directly — its internal function_exists
+				// + supports_* + try/catch already fails open to 0.
+				// The return is gated (issue #1310 review): a 0 with no job
+				// pending means the enqueue failed, so report false instead
+				// of counting a phantom job.
+				$job_id = Util::enqueue_unique_async_action( 'wppo_used_css_generate', $args, 'performance_optimisation' );
+				if ( 0 === $job_id ) {
+					// Strict gate with running backstop (issue #1310
+					// review): without a verifiable pending or running job
+					// the 0 is a scheduler failure, so report false instead
+					// of counting a phantom job. A lost unique-race (job now
+					// live, foreign winner) reports true but flags
+					// already-scheduled so callers count only new jobs.
+					$race_won = self::is_used_css_job_live( $args );
+					if ( ! $race_won ) {
+						return false;
+					}
+					$already_scheduled = true;
+				}
 				return true;
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -3027,7 +3109,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			// from "lookup unavailable/failed", gating the per-post fallback.
 			$scheduled = array();
 			$lookup_ok = false;
-			if ( function_exists( 'as_get_scheduled_actions' ) ) {
+			// Hoisted unique probe first (issue #1310 review): on AS 4.x
+			// the atomic unique insert below dedupes by itself, so the
+			// full pending snapshot (up to 20 pages x 1000 rows + JSON
+			// decode per row) is pure overhead on every cron run — skip
+			// it and rely on the per-row 0-return re-check for races.
+			// Util ships in-repo: no method_exists guard needed.
+			$run_use_unique = Util::supports_action_scheduler_unique();
+			if ( ! $run_use_unique && function_exists( 'as_get_scheduled_actions' ) ) {
 				try {
 					$as_offset   = 0;
 					$as_per_page = 1000;
@@ -3037,6 +3126,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 							array(
 								'hook'     => 'wppo_used_css_generate',
 								'group'    => 'performance_optimisation',
+								'status'   => 'pending',
 								'per_page' => $as_per_page,
 								'offset'   => $as_offset,
 							),
@@ -3096,6 +3186,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				unset( $e );
 				$signals_ok = false;
 			}
+			// Hoisted unique probe already computed above (issue #1310
+			// review): reused here so the supports_* probe is paid once
+			// per run, not once per post on the bulk hot path.
 			do {
 				// Cursor pagination via ID > last_id avoids O(offset) MySQL scans.
 				$prepare_args   = array_values( $post_types );
@@ -3134,9 +3227,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				// One permalink resolution per post per batch: the map is
 				// shared by RUM-priority ordering and the freshness check
 				// below instead of each pass calling get_permalink()
-				// separately (issue #1274 review).
+				// separately (issue #1274 review). Built lazily (issue
+				// #1310 review): with RUM/trends signals empty (the
+				// default) ordering is a FIFO no-op, so pre-resolving 200
+				// permalinks just for the sort is wasted — the freshness
+				// check resolves per-post itself when the map is empty.
+				$needs_map     = $signals_ok && ( ! empty( $run_priority ) || ! empty( $run_trends ) );
 				$permalink_map = array();
-				if ( function_exists( 'get_permalink' ) ) {
+				if ( $needs_map && function_exists( 'get_permalink' ) ) {
 					foreach ( $post_ids as $pid ) {
 						try {
 							$resolved = get_permalink( (int) $pid );
@@ -3162,7 +3260,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					if ( isset( $scheduled[ $post_id ] ) ) {
 						continue;
 					}
-					if ( ! $lookup_ok && function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => $post_id ), 'performance_optimisation' ) ) {
+					// Atomic unique insert (issue #1310) dedupes by itself,
+					// so the per-row pre-check below only runs when unique
+					// inserts are unsupported (saves N SELECTs per batch).
+					$use_unique = $run_use_unique;
+					if ( ! $use_unique && ! $lookup_ok && function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => $post_id ), 'performance_optimisation' ) ) {
 						$scheduled[ $post_id ] = true;
 						continue;
 					}
@@ -3170,11 +3272,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 						continue;
 					}
 					try {
-						as_enqueue_async_action(
+						// The helper return is gated (issue #1310 review): a
+						// 0 from a swallowed failure must not be counted as
+						// queued (which would inflate logs and consume
+						// queue_cap while blocking real jobs). A 0 with a
+						// now-live job means a concurrent process won
+						// the race — record it as scheduled WITHOUT
+						// counting it as newly queued, so two concurrent
+						// runs never double-count the same job. Util ships
+						// in-repo: called directly, no method_exists guard.
+						$job_id = Util::enqueue_unique_async_action(
 							'wppo_used_css_generate',
 							array( 'post_id' => $post_id ),
 							'performance_optimisation'
 						);
+						if ( 0 === $job_id ) {
+							// Strict gate with running backstop (issue #1310
+							// review): without a verifiable pending or
+							// running job the 0 is a scheduler failure, so
+							// skip instead of counting a phantom job.
+							if ( ! self::is_used_css_job_live( array( 'post_id' => $post_id ) ) ) {
+								continue;
+							}
+							$scheduled[ $post_id ] = true;
+							continue;
+						}
 					} catch ( \Throwable $e ) {
 						unset( $e );
 						continue;

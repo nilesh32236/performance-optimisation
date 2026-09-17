@@ -8,6 +8,8 @@
 use PerformanceOptimise\Inc\Img_Converter;
 use PerformanceOptimise\Inc\Util;
 use Brain\Monkey\Functions;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 
 /**
  * Tests for Img_Converter client-side media processing integration.
@@ -1480,6 +1482,8 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	 *
 	 * @since NEXT
 	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
 	public function test_get_memory_safe_edge_px_math_and_fit(): void {
 		// phpcs:ignore WordPress.PHP.IniSet.memory_limit_Disallowed -- Test pins a deterministic memory limit.
 		$previous = ini_set( 'memory_limit', '80M' );
@@ -1510,6 +1514,8 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	 *
 	 * @since NEXT
 	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
 	public function test_get_memory_safe_edge_px_filter_floor_and_disable(): void {
 		// phpcs:ignore WordPress.PHP.IniSet.memory_limit_Disallowed -- Test pins a deterministic memory limit.
 		$previous = ini_set( 'memory_limit', '80M' );

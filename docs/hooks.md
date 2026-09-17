@@ -76,6 +76,32 @@ add_action( 'wppo_database_cleanup_completed', function( $type, $count ) {
 
 ---
 
+### `wppo_purge_failed_actions`
+Filters whether failed Action Scheduler actions older than the retention bound are purged (issue #1310). Default off (failed-action debug history is retained unless the site opts in); the `database_cleanup.purgeFailedActions` setting value is passed as the default so either path enables the purge. The purge lifespan is `min( filtered failed-action retention, 3-month cap )` floored at one day, so a rogue retention filter returning 0 cannot destroy just-failed history. @since NEXT.
+
+**Parameters:**
+- `$enabled` *(bool)* — Whether the failed-action purge is enabled. Default from `database_cleanup.purgeFailedActions` (`false`).
+
+**Example:**
+```php
+add_filter( 'wppo_purge_failed_actions', '__return_true' );
+```
+
+---
+
+### `wppo_action_scheduler_cleanup_enabled`
+Filters whether the plugin may delegate to Action Scheduler's queue cleaner (`ActionScheduler_QueueCleaner::delete_old_actions()`) for terminal (complete/canceled, plus failed when upstream enables it) actions past retention (issue #1310). Cautious operators can return `false` to narrow the scope to a no-op (visibility only); site-specific narrowing beyond that should use the upstream `action_scheduler_*` filters. @since NEXT.
+
+**Parameters:**
+- `$enabled` *(bool)* — Whether AS cleanup delegation is enabled. Default `true`.
+
+**Example:**
+```php
+add_filter( 'wppo_action_scheduler_cleanup_enabled', '__return_false' );
+```
+
+---
+
 ### `wppo_should_cache_request`
 Filters whether the current request should be cached. Placed **after** the `DONOTCACHEPAGE` constant check so the constant always wins even if the filter returns true. Return `false` to skip `ob_start` and cache storage. @since 2.0.0.
 
@@ -382,9 +408,9 @@ add_filter( 'wppo_builder_used_css_full_regen', '__return_true' );
 ---
 
 ### `wppo_exclude_delay_js`
-Filters the list of script handles or URL substrings excluded from JavaScript delay loading.
+Filters the list of script handles or URL substrings excluded from JavaScript delay loading. Applied to the resolved exclusion list after preset merging, so entries added here win over preset contents and per-page preset opt-outs are subtracted afterwards (filter-then-subtract).
 
-Exclusions apply to both halves of delay loading: the handle-level strategy assigned in `Main`, and the HTML rewrite that swaps a `<script>` to `type="wppo/javascript"` with the real source in `wppo-src`. A script is only genuinely eager when neither path rewrites it, so entries added here suppress both. @since NEXT the HTML rewrite honours this filter.
+Exclusions apply to both halves of delay loading: the handle-level strategy assigned in `Main`, and the HTML rewrite that swaps a `<script>` to `type="wppo/javascript"` with the real source in `wppo-src`. A script is only genuinely eager when neither path rewrites it, so entries added here suppress both. @since 2.0.0; @since NEXT the HTML rewrite honours this filter.
 
 **Parameters:**
 - `$exclusions` *(array)* — Array of excluded script handles/URLs.
@@ -946,6 +972,22 @@ add_filter( 'wppo_od_should_optimize', function( $should, $url ) {
 
 ---
 
+### `wppo_computed_css_hero_url`
+Passes a server-side computed CSS-hero background URL (e.g. derived from enqueued stylesheets where no inline `style=""` exists). Validated as an image on an allowed origin (same-origin or configured CDN); anything else is ignored. @since NEXT.
+
+**Parameters:**
+- `$url` *(string)* — Computed hero URL (default `''`).
+- `$buffer` *(string|null)* — Current HTML buffer for context.
+
+**Example:**
+```php
+add_filter( 'wppo_computed_css_hero_url', function( $url, $buffer ) {
+    return 'https://example.com/wp-content/uploads/hero-bg.jpg';
+}, 10, 2 );
+```
+
+---
+
 ### `wppo_lcp_first_n`
 Filters how many leading images are treated as above-the-fold and never lazy-loaded. @since 2.0.0.
 
@@ -1406,14 +1448,6 @@ Filters whether the combined/minified CSS is inlined via core `wp_maybe_inline_s
 
 ---
 
-### `wppo_exclude_delay_js`
-Filters the resolved delay-JS exclusion list after preset merging. @since 2.0.0.
-
-**Parameters:**
-- `$preset` *(string[])* — Exclusion patterns.
-
----
-
 ### `wppo_exclude_defer_js`
 Filters the resolved defer-JS exclusion list after preset merging. @since 2.0.0.
 
@@ -1451,6 +1485,46 @@ Filters the delay-JS slider preset exclusions (revslider, swiper, slick, etc.). 
 
 **Parameters:**
 - `$preset` *(string[])* — Slider preset exclusion patterns.
+
+---
+
+### `wppo_delay_js_interaction_exclusions`
+Filters the delay-JS first-click interaction preset exclusions (popup/dialog, mobile-menu, add-to-cart handles). Merged into the global preset when `delayJSInteractionPreset` is on (default). @since 2.0.0.
+
+**Parameters:**
+- `$preset` *(string[])* — Interaction preset exclusion patterns.
+
+---
+
+### `wppo_delay_js_consent_exclusions`
+Filters the delay-JS consent compatibility preset exclusions (CookieYes, Cookiebot, Complianz, Borlabs, OneTrust, etc.). Opt-in via the `delayJSConsentPreset` setting; merged additively with manual exclusions. @since NEXT.
+
+**Parameters:**
+- `$preset` *(string[])* — Consent preset exclusion patterns.
+
+---
+
+### `wppo_delay_js_analytics_exclusions`
+Filters the delay-JS analytics compatibility preset exclusions (GA4 gtag, Matomo, Plausible, etc.). Opt-in via the `delayJSAnalyticsPreset` setting; merged additively with manual exclusions. @since NEXT.
+
+**Parameters:**
+- `$preset` *(string[])* — Analytics preset exclusion patterns.
+
+---
+
+### `wppo_delay_js_gallery_exclusions`
+Filters the delay-JS gallery compatibility preset exclusions (PhotoSwipe, Fancybox, Envira, FooGallery, etc.). Opt-in via the `delayJSGalleryPreset` setting; merged additively with manual exclusions. @since NEXT.
+
+**Parameters:**
+- `$preset` *(string[])* — Gallery preset exclusion patterns.
+
+---
+
+### `wppo_delay_js_jquery_exclusions`
+Filters the delay-JS jQuery legacy preset exclusions (jQuery UI and legacy jQuery plugins; shops stay covered by the commerce preset). Opt-in via the `delayJSJqueryPreset` setting; merged additively with manual exclusions. @since NEXT.
+
+**Parameters:**
+- `$preset` *(string[])* — jQuery preset exclusion patterns.
 
 ---
 

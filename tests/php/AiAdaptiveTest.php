@@ -2052,4 +2052,94 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$this->assertStringContainsString( 'slow-2g', $eagerness['value'] );
 		$this->assertSame( 'moderate', $eagerness['ai_payload']['settings']['speculationEagerness'] );
 	}
+
+	/**
+	 * Test that LCP attribution + slow resources surface read-only suggestions.
+	 *
+	 * The seeded hero selector and slowest sub-resource must produce
+	 * `ai_lcp_preload` / `ai_slow_resource_preload` suggestions targeting
+	 * the preload tab with empty settings payloads (never auto-applied).
+	 *
+	 * @since NEXT
+	 * @return void
+	 */
+	public function test_get_suggestions_emits_attribution_preload_candidates(): void {
+		$this->install_stubs();
+		$today                                   = gmdate( 'Y-m-d' );
+		$this->options['wppo_web_vitals_rum']    = array(
+			$today => array(
+				'/slow/' => array(
+					'lcp'           => array(
+						'n'   => 25,
+						'sum' => 100000,
+						'min' => 3000,
+						'max' => 5000,
+					),
+					'lcpSelectors'  => array(
+						'img#hero-image' => array(
+							'n'        => 25,
+							'lastSeen' => time(),
+						),
+					),
+					'slowResources' => array(
+						'example.com/slow.js' => array(
+							'url'           => 'https://example.com/slow.js',
+							'type'          => 'script',
+							'n'             => 5,
+							'totalDuration' => 5000.0,
+							'maxDuration'   => 1200.0,
+							'lastSeen'      => time(),
+						),
+					),
+				),
+			),
+		);
+		$this->options['wppo_web_vitals_trends'] = array();
+		$this->options['wppo_settings']          = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		Util::clear_settings_cache();
+		Functions\when( 'is_admin' )->justReturn( true );
+		Functions\when( 'is_user_logged_in' )->justReturn( true );
+
+		$suggestions = AI_Adaptive::get_suggestions();
+
+		$attr = $this->find_suggestion( $suggestions, 'ai_lcp_preload' );
+		$this->assertNotNull( $attr );
+		$this->assertStringContainsString( 'img#hero-image', $attr['value'] );
+		$this->assertSame( 'open_preload_tab', $attr['fix_action'] );
+		$this->assertSame( 'preload_settings', $attr['ai_payload']['tab'] );
+		$this->assertSame( array(), $attr['ai_payload']['settings'] );
+
+		$slow = $this->find_suggestion( $suggestions, 'ai_slow_resource_preload' );
+		$this->assertNotNull( $slow );
+		$this->assertStringContainsString( 'https://example.com/slow.js', $slow['value'] );
+		$this->assertSame( 'open_preload_tab', $slow['fix_action'] );
+		$this->assertSame( 'preload_settings', $slow['ai_payload']['tab'] );
+		$this->assertSame( array(), $slow['ai_payload']['settings'] );
+	}
+
+	/**
+	 * Test that models persisted before attribution emit no suggestions.
+	 *
+	 * Missing `attributed_lcp` / `slow_resources` keys fail open: no fatal,
+	 * no attribution suggestions, pre-existing suggestions unaffected.
+	 *
+	 * @since NEXT
+	 * @return void
+	 */
+	public function test_get_suggestions_omits_attribution_without_model_keys(): void {
+		$this->install_stubs();
+		$this->seed_eager_rum();
+		$this->options[ AI_Adaptive::OPTION ] = array(
+			'prefetch_urls' => array( 'http://example.com/a/' ),
+			'exclude_js'    => array( 'handle-a' ),
+			'exclude_css'   => array( 'style-a' ),
+			'eagerness'     => 'moderate',
+		);
+		Functions\when( 'is_admin' )->justReturn( true );
+		Functions\when( 'is_user_logged_in' )->justReturn( true );
+
+		$suggestions = AI_Adaptive::get_suggestions();
+		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_lcp_preload' ) );
+		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_slow_resource_preload' ) );
+	}
 }

@@ -46,6 +46,12 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	protected function setUp(): void {
 		parent::setUp();
 		\Brain\Monkey\setUp();
+		// Per-request preload dedup (issue #1312): the buffer companions now
+		// record their emission via mark_preload_emitted(), so the static
+		// set must be reset per test like the shared bootstrap does.
+		if ( class_exists( Image_Optimisation::class ) ) {
+			Image_Optimisation::clear_runtime_caches();
+		}
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Test-only superglobal backup/restore.
 		$this->request_uri_had_value = isset( $_SERVER['REQUEST_URI'] );
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Test-only superglobal backup/restore.
@@ -891,14 +897,16 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'wp_parse_url' )->alias(
 			static function ( $url, $component = -1 ) {
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Emulates wp_parse_url() in tests.
-				$parts = parse_url( $url );
-				if ( false === $parts ) {
-					return false;
-				}
 				if ( -1 !== $component ) {
-					return $parts[ $component ] ?? null;
+					// parse_url() with a component argument returns the
+					// component value directly (not an array): indexing the
+					// full parts array by the integer component constant
+					// would always miss and return null.
+					// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Emulates wp_parse_url() in tests.
+					return parse_url( $url, $component );
 				}
-				return $parts;
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Emulates wp_parse_url() in tests.
+				return parse_url( $url );
 			}
 		);
 		Functions\when( 'wp_normalize_path' )->alias(
@@ -2600,5 +2608,256 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		// b.jpg (no dimensions) and the <source> node stay untouched.
 		$this->assertStringContainsString( '<img data-src="http://example.com/b.jpg" data-srcset="http://example.com/b.jpg 100w" />', $result );
 		$this->assertStringContainsString( '<source data-srcset="http://example.com/e.webp" />', $result );
+	}
+
+	/**
+	 * Hero slot claim/release cycle: claim wins once, release re-opens it.
+	 *
+	 * Guards the issue #1312 review fix where a failed link-tag build
+	 * releases the slot so the sibling emitter may still emit exactly one
+	 * preload instead of being suppressed into zero.
+	 *
+	 * @since NEXT
+	 */
+	public function test_hero_slot_claim_release_cycle(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		$this->stub_local_path_resolution();
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+		$url       = 'https://example.com/wp-content/uploads/hero.jpg';
+
+		$claim   = new \ReflectionMethod( Image_Optimisation::class, 'claim_hero_preload_slot' );
+		$release = new \ReflectionMethod( Image_Optimisation::class, 'release_hero_preload_slot' );
+
+		$this->assertTrue( $claim->invoke( $image_opt, $url, '' ) );
+		// A second claim for the same hero is suppressed (exactly-one guard).
+		$this->assertFalse( $claim->invoke( $image_opt, $url, '' ) );
+		// Releasing after a failed emission re-opens the slot for the sibling emitter.
+		$release->invoke( null, $url, '' );
+		$this->assertTrue( $claim->invoke( $image_opt, $url, '' ) );
+	}
+
+	/**
+	 * Manual preload lists stay authoritative over auto-detect (any-media dedup).
+	 *
+	 * A wp_head manual emission with a media variant claims the hero, so the
+	 * buffer companions (empty media) must skip the same URL.
+	 *
+	 * @since NEXT
+	 */
+	public function test_manual_preload_claim_wins_over_auto(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		$this->stub_local_path_resolution();
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+		$url       = 'https://example.com/wp-content/uploads/hero.jpg';
+
+		// Simulate the manual wp_head emission claiming the slot first.
+		Image_Optimisation::mark_preload_emitted( $url, '(max-width: 600px)' );
+
+		$claim = new \ReflectionMethod( Image_Optimisation::class, 'claim_hero_preload_slot' );
+		$this->assertFalse( $claim->invoke( $image_opt, $url, '' ) );
+	}
+
+	/**
+	 * The lazy/high sweep forces eager on img and iframe nodes alike.
+	 *
+	 * Covers both the Tag Processor branch (WP 6.2+) and the regex fallback
+	 * (pre-6.2): any element carrying fetchpriority high must never keep
+	 * loading lazy, while lower-priority nodes are untouched.
+	 *
+	 * @since NEXT
+	 */
+	public function test_sweep_lazy_high_conflicts_covers_img_and_iframe(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		$this->stub_local_path_resolution();
+		Functions\when( 'get_bloginfo' )->justReturn( '6.8' );
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+		$sweep     = new \ReflectionMethod( Image_Optimisation::class, 'sweep_lazy_high_conflicts' );
+
+		$buffer = '<img src="https://example.com/a.jpg" loading="lazy" fetchpriority="high" />'
+			. '<iframe src="https://example.com/embed" loading="lazy" fetchpriority="high"></iframe>'
+			. '<img src="https://example.com/b.jpg" loading="lazy" fetchpriority="low" />';
+
+		$result = $sweep->invoke( $image_opt, $buffer );
+
+		$this->assertSame( 1, substr_count( $result, 'loading="lazy"' ) );
+		$this->assertSame( 2, substr_count( $result, 'loading="eager"' ) );
+		$this->assertSame( 2, substr_count( $result, 'fetchpriority="high"' ) );
+		$this->assertStringContainsString( 'fetchpriority="low"', $result );
+
+		// Pre-6.2 regex fallback branch: same invariant without the HTML API.
+		$had_version           = array_key_exists( 'wp_version', $GLOBALS );
+		$previous_version      = $GLOBALS['wp_version'] ?? null;
+		$GLOBALS['wp_version'] = '6.1';
+		try {
+			$fallback_result = $sweep->invoke( $image_opt, $buffer );
+		} finally {
+			if ( $had_version ) {
+				$GLOBALS['wp_version'] = $previous_version;
+			} else {
+				unset( $GLOBALS['wp_version'] );
+			}
+		}
+
+		$this->assertSame( 1, substr_count( $fallback_result, 'loading="lazy"' ) );
+		$this->assertSame( 2, substr_count( $fallback_result, 'loading="eager"' ) );
+	}
+
+	/**
+	 * A `<style>`-block stylesheet hero emits exactly one preload link.
+	 *
+	 * @since NEXT
+	 */
+	public function test_style_block_hero_emits_exactly_one_preload(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+		Functions\when( 'esc_attr' )->returnArg();
+		Functions\when( 'esc_url' )->returnArg();
+		Functions\when( 'wp_kses' )->returnArg( 1 );
+		$this->stub_field_lcp_environment(
+			array( 'image_optimisation' => array( 'fieldLcpOverride' => false ) ),
+			array(),
+			'https://example.com/wp-content/uploads/hero.jpg'
+		);
+
+		$options = $this->default_options;
+		$options['image_optimisation']['prioritizeLCPImages'] = true;
+		$options['image_optimisation']['cssHeroPreload']      = true;
+		$image_opt = new Image_Optimisation( $options );
+
+		$html   = '<html><head><title>T</title><style>.hero{background-image:url("https://example.com/wp-content/uploads/hero.jpg");}</style></head><body><div class="hero">Hi</div></body></html>';
+		$result = $image_opt->prioritize_lcp_in_buffer( $html, $html );
+
+		$this->assertSame( 1, substr_count( $result, 'rel="preload"' ) );
+		$this->assertStringContainsString( 'https://example.com/wp-content/uploads/hero.jpg', $result );
+		$this->assertStringContainsString( 'fetchpriority="high"', $result );
+	}
+
+	/**
+	 * The computed-URL filter fires at most once and wins on buffer mismatch.
+	 *
+	 * The buffer scan finds an unrelated hero while the server-side computed
+	 * context matches the LCP target: exactly one preload emits and the
+	 * side-effecting filter ran a single time.
+	 *
+	 * @since NEXT
+	 */
+	public function test_computed_css_hero_filter_fires_once_and_honored(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		$this->stub_local_path_resolution();
+		Functions\when( 'get_bloginfo' )->justReturn( '6.8' );
+		Functions\when( 'home_url' )->justReturn( 'https://example.com' );
+		Functions\when( 'untrailingslashit' )->returnArg();
+		Functions\when( 'esc_attr' )->returnArg();
+		Functions\when( 'esc_url' )->returnArg();
+		Functions\when( 'wp_kses' )->returnArg( 1 );
+
+		$lcp_url                               = 'https://example.com/wp-content/uploads/hero.jpg';
+		$GLOBALS['wppo_computed_filter_calls'] = 0;
+		$GLOBALS['wp_filter']['wppo_computed_css_hero_url'] = array( true );
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook_name, $value = null ) use ( $lcp_url ) {
+				if ( 'wppo_computed_css_hero_url' === $hook_name ) {
+					$GLOBALS['wppo_computed_filter_calls'] = (int) ( $GLOBALS['wppo_computed_filter_calls'] ?? 0 ) + 1;
+					return $lcp_url;
+				}
+				return $value;
+			}
+		);
+
+		$options = $this->default_options;
+		$options['image_optimisation']['cssHeroPreload'] = true;
+		$image_opt                                       = new Image_Optimisation( $options );
+
+		$inject = new \ReflectionMethod( Image_Optimisation::class, 'maybe_inject_css_hero_preload' );
+
+		$buffer = '<html><head></head><body><div style="background-image: url(\'https://example.com/wp-content/uploads/other.jpg\')">Hi</div></body></html>';
+		$calls  = 0;
+		try {
+			$result = $inject->invoke( $image_opt, $buffer, $lcp_url );
+			$calls  = (int) ( $GLOBALS['wppo_computed_filter_calls'] ?? 0 );
+		} finally {
+			unset( $GLOBALS['wp_filter']['wppo_computed_css_hero_url'], $GLOBALS['wppo_computed_filter_calls'] );
+		}
+
+		$this->assertSame( 1, substr_count( $result, 'rel="preload"' ) );
+		$this->assertStringContainsString( $lcp_url, $result );
+		$this->assertSame( 1, $calls );
+	}
+
+	/**
+	 * A cross-origin computed-URL value is rejected (no preload emitted).
+	 *
+	 * @since NEXT
+	 */
+	public function test_computed_css_hero_rejected_by_origin(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		$this->stub_local_path_resolution();
+		Functions\when( 'get_bloginfo' )->justReturn( '6.8' );
+		Functions\when( 'home_url' )->justReturn( 'https://example.com' );
+		Functions\when( 'untrailingslashit' )->returnArg();
+		Functions\when( 'esc_attr' )->returnArg();
+		Functions\when( 'esc_url' )->returnArg();
+		Functions\when( 'wp_kses' )->returnArg( 1 );
+
+		$GLOBALS['wp_filter']['wppo_computed_css_hero_url'] = array( true );
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook_name, $value = null ) {
+				if ( 'wppo_computed_css_hero_url' === $hook_name ) {
+					return 'https://evil.example/wp-content/uploads/hero.jpg';
+				}
+				return $value;
+			}
+		);
+
+		$options = $this->default_options;
+		$options['image_optimisation']['cssHeroPreload'] = true;
+		$image_opt                                       = new Image_Optimisation( $options );
+
+		$inject = new \ReflectionMethod( Image_Optimisation::class, 'maybe_inject_css_hero_preload' );
+
+		$lcp_url = 'https://example.com/wp-content/uploads/hero.jpg';
+		$buffer  = '<html><head></head><body><div style="background-image: url(\'https://example.com/wp-content/uploads/other.jpg\')">Hi</div></body></html>';
+		try {
+			$result = $inject->invoke( $image_opt, $buffer, $lcp_url );
+		} finally {
+			unset( $GLOBALS['wp_filter']['wppo_computed_css_hero_url'] );
+		}
+
+		$this->assertSame( 0, substr_count( $result, 'rel="preload"' ) );
+		$this->assertSame( $buffer, $result );
+	}
+
+	/**
+	 * Inline `style=""` heroes are found without the HTML API (pre-6.2 regex fallback).
+	 *
+	 * @since NEXT
+	 */
+	public function test_inline_style_hero_detected_without_html_api(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		$this->stub_local_path_resolution();
+
+		$had_version           = array_key_exists( 'wp_version', $GLOBALS );
+		$previous_version      = $GLOBALS['wp_version'] ?? null;
+		$GLOBALS['wp_version'] = '6.1';
+		try {
+			$image_opt = new Image_Optimisation( $this->default_options );
+			$scan      = new \ReflectionMethod( Image_Optimisation::class, 'get_css_hero_url_from_buffer' );
+
+			$buffer = '<div class="hero" style="background-image: url(\'https://example.com/wp-content/uploads/hero.jpg\'); color: red;">Hi</div>';
+			$result = $scan->invoke( $image_opt, $buffer );
+		} finally {
+			if ( $had_version ) {
+				$GLOBALS['wp_version'] = $previous_version;
+			} else {
+				unset( $GLOBALS['wp_version'] );
+			}
+		}
+
+		$this->assertSame( 'https://example.com/wp-content/uploads/hero.jpg', $result );
 	}
 }

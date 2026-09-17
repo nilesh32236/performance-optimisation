@@ -181,6 +181,10 @@ const FILE_OPT_SYNC_KEYS = [
 	'delayJSCommercePreset',
 	'delayJSBuilderPreset',
 	'delayJSInteractionPreset',
+	'delayJSConsentPreset',
+	'delayJSAnalyticsPreset',
+	'delayJSGalleryPreset',
+	'delayJSJqueryPreset',
 	'delayJSINPPreset',
 	'delayJSExternalOnly',
 	'delayJSThirdParty',
@@ -261,6 +265,12 @@ export const stripPreviewParams = ( url ) => {
 		const parsed = new URL( url );
 		parsed.searchParams.delete( 'wppo_preview' );
 		parsed.searchParams.delete( '_wppo_preview_nonce' );
+		// Hardening: strip embedded credentials and the fragment so a
+		// credentialed same-host URL can never land in logs/telemetry.
+		// Server-side same-host allowlisting remains authoritative.
+		parsed.username = '';
+		parsed.password = '';
+		parsed.hash = '';
 		return parsed.toString();
 	} catch {
 		return '';
@@ -284,19 +294,18 @@ export const withCdnRowIds = ( mapping ) => {
 				: {};
 		if (
 			( typeof base.id === 'string' && '' !== base.id ) ||
-			typeof base.id === 'number'
+			( typeof base.id === 'number' && Number.isFinite( base.id ) )
 		) {
 			return { ...base };
 		}
 		return { ...base, id: `cdn-row-${ index }` };
 	} );
 };
-
 // Strip client-only CDN row ids before submit/baseline/dirty-compare so the
 // payload never persists synthetic ids server-side and the id-less server
 // baseline compares clean against local state.
 // @since NEXT
-export const stripCdnIds = ( source = {} ) => {
+export const stripCdnRowIds = ( source = {} ) => {
 	if ( ! source || typeof source !== 'object' ) {
 		return source;
 	}
@@ -318,6 +327,45 @@ export const stripCdnIds = ( source = {} ) => {
 		} ),
 	};
 };
+// Backward-compatibility alias for the pre-rename `stripCdnIds` export
+// (kept so existing imports/tests keep working).
+// @since NEXT
+export const stripCdnIds = stripCdnRowIds;
+// Numeric clamps mirroring the server-side sanitizers so a raw server value
+// can never reach state/submit verbatim (display/UX parity — the server
+// stays authoritative).
+// @since NEXT
+export const normalizeIdleTimeout = ( value ) => {
+	let n;
+	if ( typeof value === 'number' ) {
+		n = value;
+	} else if ( '' === String( value ?? '' ).trim() ) {
+		n = NaN;
+	} else {
+		n = Number( value );
+	}
+	if ( ! Number.isFinite( n ) || n <= 0 ) {
+		return 3000;
+	}
+	return Math.min( 20000, Math.max( 500, Math.trunc( n ) ) );
+};
+// @since NEXT
+export const normalizeCcssMaxSize = ( value ) => {
+	const n = typeof value === 'number' ? value : Number( value );
+	if ( ! Number.isFinite( n ) || n <= 0 ) {
+		return 20480;
+	}
+	return Math.trunc( n );
+};
+// @since NEXT
+export const normalizeRegressionThreshold = ( value ) => {
+	const n = typeof value === 'number' ? value : Number( value );
+	if ( ! Number.isFinite( n ) ) {
+		return 20;
+	}
+	const t = Math.trunc( n );
+	return t >= 5 && t <= 50 ? t : 20;
+};
 // toTextLines() (after spread, so backend arrays win correctly), delivery
 // mode via the PHP-mirroring allowlist, CCSS retries clamped 0..5, blank
 // CCSS exclusions reset to the builder defaults (mirroring PHP), font
@@ -334,6 +382,23 @@ const normalizeFileOpt = ( source = {} ) => {
 		next.usedCSSDeliveryMode
 	);
 	next.ccssMaxRetries = normalizeRetries( next.ccssMaxRetries );
+	// Numeric display parity: the sync path spreads raw server values, so
+	// clamp here (mirroring the server sanitizers) instead of letting
+	// out-of-range values reach state/submit verbatim. The server stays
+	// authoritative; this only keeps the UI consistent on a single render.
+	if ( 'delayJSIdleTimeout' in next ) {
+		next.delayJSIdleTimeout = normalizeIdleTimeout(
+			next.delayJSIdleTimeout
+		);
+	}
+	if ( 'ccssMaxSize' in next ) {
+		next.ccssMaxSize = normalizeCcssMaxSize( next.ccssMaxSize );
+	}
+	if ( 'unusedCSSRegressionThreshold' in next ) {
+		next.unusedCSSRegressionThreshold = normalizeRegressionThreshold(
+			next.unusedCSSRegressionThreshold
+		);
+	}
 	// An empty or whitespace-only exclusions string normalizes to the
 	// builder defaults (mirroring PHP, where empty keeps defaults) so the
 	// UI never shows "no exclusions" while the server enforces the builder
@@ -445,6 +510,22 @@ const FileOptimization = ( {
 				options.delayJSInteractionPreset !== undefined
 					? options.delayJSInteractionPreset
 					: true,
+			delayJSConsentPreset:
+				options.delayJSConsentPreset !== undefined
+					? options.delayJSConsentPreset
+					: false,
+			delayJSAnalyticsPreset:
+				options.delayJSAnalyticsPreset !== undefined
+					? options.delayJSAnalyticsPreset
+					: false,
+			delayJSGalleryPreset:
+				options.delayJSGalleryPreset !== undefined
+					? options.delayJSGalleryPreset
+					: false,
+			delayJSJqueryPreset:
+				options.delayJSJqueryPreset !== undefined
+					? options.delayJSJqueryPreset
+					: false,
 			delayJSExcludeUrls:
 				typeof options.delayJSExcludeUrls === 'string'
 					? options.delayJSExcludeUrls
@@ -531,6 +612,27 @@ const FileOptimization = ( {
 	// Lazy-init from the memoized defaults: the state initializer runs once,
 	// so later renders never pay the derivation cost through useState.
 	const [ settings, setSettings ] = useState( () => defaultSettings );
+	// Single stable change handler shared by every input in this large form:
+	// calling handleChange( setSettings ) inline would allocate a new closure
+	// per input (~80 inputs) on every render, churning GC on each keystroke.
+	// setSettings is a stable React setter, so memoizing once is safe.
+	// @since NEXT
+	const onFieldChange = useMemo(
+		() => handleChange( setSettings ),
+		[ setSettings ]
+	);
+	// Single CDN-mapping field updater replacing six duplicated inline
+	// setSettings closures (one per field key). Stable identity avoids
+	// re-allocating O(rows) closures and re-rendering the large form on
+	// every CDN keystroke.
+	// @since NEXT
+	const updateCdnEntry = useCallback( ( idx, key, value ) => {
+		setSettings( ( prev ) => {
+			const m = [ ...( prev.cdnMapping || [] ) ];
+			m[ idx ] = { ...m[ idx ], [ key ]: value };
+			return { ...prev, cdnMapping: m };
+		} );
+	}, [] );
 	// Split busy flags: saving the form must not show the Save button as
 	// loading while a background regen runs, nor disable unrelated regen
 	// actions while saving.
@@ -812,9 +914,20 @@ const FileOptimization = ( {
 						? res.data.file_optimisation
 						: sandboxStaged;
 				if ( promotedSlice && typeof promotedSlice === 'object' ) {
-					const synced = { ...promotedSlice };
+					// Normalize through the shared normalizer so backend
+					// arrays never reach controlled textareas verbatim
+					// (which would render "a,b" while the baseline stays
+					// equal and the bad display persists as clean).
+					const synced = normalizeFileOpt( { ...promotedSlice } );
+					// Re-attach deterministic row ids so synced server rows
+					// keep React keys instead of remounting; the baseline
+					// stays id-less to match the server payload.
+					synced.cdnMapping = withCdnRowIds( synced.cdnMapping );
 					setSettings( ( prev ) => ( { ...prev, ...synced } ) );
-					setBaseline( ( prev ) => ( { ...prev, ...synced } ) );
+					setBaseline( ( prev ) => ( {
+						...prev,
+						...stripCdnRowIds( synced ),
+					} ) );
 				}
 				setSandboxStaged( {} );
 				setSandboxPreviewUrl( '' );
@@ -937,7 +1050,7 @@ const FileOptimization = ( {
 	// is id-less, so comparing id-bearing state against an id-bearing
 	// baseline would report a permanent dirty state.
 	const [ baseline, setBaseline ] = useState( () =>
-		stripCdnIds( defaultSettings )
+		stripCdnRowIds( defaultSettings )
 	);
 	// Baseline is intentionally derived per-key (not per-object-identity)
 	// so parent re-renders with an identical payload do not reset the form.
@@ -949,7 +1062,7 @@ const FileOptimization = ( {
 	// the shared key list is the single source of truth).
 	useEffect(
 		() => {
-			const next = stripCdnIds(
+			const next = stripCdnRowIds(
 				normalizeFileOpt( { ...defaultSettings, ...options } )
 			);
 			setBaseline( ( prev ) =>
@@ -964,7 +1077,7 @@ const FileOptimization = ( {
 	// Dirty-compare on the id-stripped form state so CDN row bookkeeping
 	// never flags the form dirty on its own.
 	const settingsForCompare = useMemo(
-		() => stripCdnIds( settings ),
+		() => stripCdnRowIds( settings ),
 		[ settings ]
 	);
 	useUnsavedChanges( settingsForCompare, baseline );
@@ -994,8 +1107,8 @@ const FileOptimization = ( {
 				// order, so synced server rows keep focus instead of
 				// remounting.
 				merged.cdnMapping = withCdnRowIds( merged.cdnMapping );
-				return stableStringify( stripCdnIds( merged ) ) ===
-					stableStringify( stripCdnIds( prev ) )
+				return stableStringify( stripCdnRowIds( merged ) ) ===
+					stableStringify( stripCdnRowIds( prev ) )
 					? prev
 					: merged;
 			} );
@@ -1174,7 +1287,7 @@ const FileOptimization = ( {
 		try {
 			const saveRes = await apiCall( 'update_settings', {
 				tab: 'file_optimisation',
-				settings: stripCdnIds( { ...settings } ),
+				settings: stripCdnRowIds( { ...settings } ),
 			} );
 			if ( ! saveRes.success ) {
 				notify( {
@@ -1189,7 +1302,7 @@ const FileOptimization = ( {
 				} );
 				return;
 			}
-			setBaseline( stripCdnIds( { ...settings } ) );
+			setBaseline( stripCdnRowIds( { ...settings } ) );
 			setIsDirty( false );
 			const res = await apiCall( 'used_css_regenerate' );
 			if ( res.success ) {
@@ -1446,10 +1559,10 @@ const FileOptimization = ( {
 				tab: 'file_optimisation',
 				// Strip client-only CDN row ids: they are React keys, not
 				// settings, and must never persist server-side.
-				settings: stripCdnIds( { ...settings } ),
+				settings: stripCdnRowIds( { ...settings } ),
 			} );
 			if ( res.success ) {
-				setBaseline( stripCdnIds( { ...settings } ) );
+				setBaseline( stripCdnRowIds( { ...settings } ) );
 				setIsDirty( false );
 				notify( {
 					type: 'success',
@@ -1639,7 +1752,7 @@ const FileOptimization = ( {
 										) }
 										name="minifyCSS"
 										checked={ settings.minifyCSS }
-										onChange={ handleChange( setSettings ) }
+										onChange={ onFieldChange }
 										disabled={ optimizerDisabled }
 									/>
 								</Tooltip>
@@ -1659,7 +1772,7 @@ const FileOptimization = ( {
 										) }
 										name="combineCSS"
 										checked={ settings.combineCSS }
-										onChange={ handleChange( setSettings ) }
+										onChange={ onFieldChange }
 										disabled={ optimizerDisabled }
 									/>
 								</Tooltip>
@@ -1695,9 +1808,7 @@ const FileOptimization = ( {
 												'performance-optimisation'
 											) }
 											value={ settings.excludeCombineCSS }
-											onChange={ handleChange(
-												setSettings
-											) }
+											onChange={ onFieldChange }
 											aria-describedby="excludeCombineCSS-desc"
 										/>
 										<p
@@ -1732,7 +1843,7 @@ const FileOptimization = ( {
 										) }
 										name="removeUnusedCSS"
 										checked={ settings.removeUnusedCSS }
-										onChange={ handleChange( setSettings ) }
+										onChange={ onFieldChange }
 										disabled={ optimizerDisabled }
 									/>
 								</Tooltip>
@@ -1757,9 +1868,7 @@ const FileOptimization = ( {
 												'performance-optimisation'
 											) }
 											value={ settings.excludeUnusedCSS }
-											onChange={ handleChange(
-												setSettings
-											) }
+											onChange={ onFieldChange }
 											aria-describedby="excludeUnusedCSS-desc"
 										/>
 										<p
@@ -1792,9 +1901,7 @@ const FileOptimization = ( {
 											value={
 												settings.unusedCSSSafelistExtra
 											}
-											onChange={ handleChange(
-												setSettings
-											) }
+											onChange={ onFieldChange }
 											aria-describedby="unusedCSSSafelistExtra-desc"
 										/>
 										<p
@@ -1827,9 +1934,7 @@ const FileOptimization = ( {
 											value={
 												settings.usedCSSExcludeUrls
 											}
-											onChange={ handleChange(
-												setSettings
-											) }
+											onChange={ onFieldChange }
 											aria-describedby="usedCSSExcludeUrls-desc"
 										/>
 										<p
@@ -1855,9 +1960,7 @@ const FileOptimization = ( {
 												checked={
 													settings.unusedCSSRegressionGuard
 												}
-												onChange={ handleChange(
-													setSettings
-												) }
+												onChange={ onFieldChange }
 												disabled={ optimizerDisabled }
 											/>
 										</div>
@@ -1884,9 +1987,7 @@ const FileOptimization = ( {
 													value={
 														settings.unusedCSSRegressionThreshold
 													}
-													onChange={ handleChange(
-														setSettings
-													) }
+													onChange={ onFieldChange }
 													aria-describedby="unusedCSSRegressionThreshold-desc"
 												/>
 												<p
@@ -1917,9 +2018,7 @@ const FileOptimization = ( {
 												settings.usedCSSDeliveryMode ||
 												'file'
 											}
-											onChange={ handleChange(
-												setSettings
-											) }
+											onChange={ onFieldChange }
 											aria-describedby="usedCSSDeliveryMode-desc"
 										>
 											<option value="file">
@@ -2088,9 +2187,7 @@ const FileOptimization = ( {
 												'performance-optimisation'
 											) }
 											value={ settings.excludeCSS }
-											onChange={ handleChange(
-												setSettings
-											) }
+											onChange={ onFieldChange }
 											aria-describedby="excludeCSS-desc"
 										/>
 										<p
@@ -2120,7 +2217,7 @@ const FileOptimization = ( {
 										) }
 										name="criticalCSS"
 										checked={ settings.criticalCSS }
-										onChange={ handleChange( setSettings ) }
+										onChange={ onFieldChange }
 										disabled={ optimizerDisabled }
 									/>
 								</Tooltip>
@@ -2146,9 +2243,7 @@ const FileOptimization = ( {
 												max="102400"
 												step="1024"
 												value={ settings.ccssMaxSize }
-												onChange={ handleChange(
-													setSettings
-												) }
+												onChange={ onFieldChange }
 												aria-describedby="ccssMaxSize-desc"
 											/>
 											<p
@@ -2186,9 +2281,7 @@ const FileOptimization = ( {
 														? settings.ccssSafelistExtra
 														: ''
 												}
-												onChange={ handleChange(
-													setSettings
-												) }
+												onChange={ onFieldChange }
 												aria-describedby="ccssSafelistExtra-desc"
 											/>
 											<p
@@ -2226,9 +2319,7 @@ const FileOptimization = ( {
 														? settings.ccssExcludedPostTypes
 														: ''
 												}
-												onChange={ handleChange(
-													setSettings
-												) }
+												onChange={ onFieldChange }
 												aria-describedby="ccssExcludedPostTypes-desc"
 											/>
 											<p
@@ -2263,9 +2354,7 @@ const FileOptimization = ( {
 												value={ normalizeRetries(
 													settings.ccssMaxRetries
 												) }
-												onChange={ handleChange(
-													setSettings
-												) }
+												onChange={ onFieldChange }
 												aria-describedby="ccssMaxRetries-desc"
 											/>
 											<p
@@ -2366,7 +2455,7 @@ const FileOptimization = ( {
 										checked={
 											settings.hostGoogleFontsLocally
 										}
-										onChange={ handleChange( setSettings ) }
+										onChange={ onFieldChange }
 										disabled={ optimizerDisabled }
 									/>
 								</Tooltip>
@@ -2386,7 +2475,7 @@ const FileOptimization = ( {
 										) }
 										name="fontMetricFallback"
 										checked={ settings.fontMetricFallback }
-										onChange={ handleChange( setSettings ) }
+										onChange={ onFieldChange }
 										disabled={ optimizerDisabled }
 									/>
 								</Tooltip>
@@ -2406,7 +2495,7 @@ const FileOptimization = ( {
 										) }
 										name="fontSubset"
 										checked={ settings.fontSubset }
-										onChange={ handleChange( setSettings ) }
+										onChange={ onFieldChange }
 										disabled={ optimizerDisabled }
 									/>
 								</Tooltip>
@@ -2432,9 +2521,7 @@ const FileOptimization = ( {
 													? settings.fontSubsetSubsets
 													: 'latin'
 											}
-											onChange={ handleChange(
-												setSettings
-											) }
+											onChange={ onFieldChange }
 											disabled={ optimizerDisabled }
 											aria-describedby="fontSubsetSubsets-desc"
 										/>
@@ -2476,7 +2563,7 @@ const FileOptimization = ( {
 										) }
 										name="minifyHTML"
 										checked={ settings.minifyHTML }
-										onChange={ handleChange( setSettings ) }
+										onChange={ onFieldChange }
 										disabled={ optimizerDisabled }
 									/>
 								</Tooltip>
@@ -2491,7 +2578,7 @@ const FileOptimization = ( {
 									) }
 									name="removeHTMLComments"
 									checked={ settings.removeHTMLComments }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 								/>
 								<Tooltip
 									content={
@@ -2509,7 +2596,7 @@ const FileOptimization = ( {
 										) }
 										name="minifyInlineCSS"
 										checked={ settings.minifyInlineCSS }
-										onChange={ handleChange( setSettings ) }
+										onChange={ onFieldChange }
 										disabled={ optimizerDisabled }
 									/>
 								</Tooltip>
@@ -2529,7 +2616,7 @@ const FileOptimization = ( {
 										) }
 										name="minifyInlineJS"
 										checked={ settings.minifyInlineJS }
-										onChange={ handleChange( setSettings ) }
+										onChange={ onFieldChange }
 										disabled={ optimizerDisabled }
 									/>
 								</Tooltip>
@@ -2575,7 +2662,7 @@ const FileOptimization = ( {
 									) }
 									name="safeMode"
 									checked={ settings.safeMode }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 									disabled={ optimizerDisabled }
 								/>
 								{ settings.safeMode && (
@@ -2651,7 +2738,7 @@ const FileOptimization = ( {
 												upgradePurge.safe_preview_url
 											) && (
 												<a
-													className="button button-secondary"
+													className="wppo-button wppo-button--secondary"
 													href={
 														upgradePurge.safe_preview_url
 													}
@@ -2677,7 +2764,7 @@ const FileOptimization = ( {
 									) }
 									name="elementorSafeMode"
 									checked={ !! settings.elementorSafeMode }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 									disabled={ optimizerDisabled }
 								/>
 								{ !! settings.elementorSafeMode && (
@@ -2712,7 +2799,7 @@ const FileOptimization = ( {
 									<div className="wppo-sandbox-actions">
 										<button
 											type="button"
-											className="button button-secondary"
+											className="wppo-button wppo-button--secondary"
 											onClick={ handleSandboxSave }
 											disabled={ sandboxBusy }
 										>
@@ -2726,7 +2813,7 @@ const FileOptimization = ( {
 												sandboxPreviewUrl
 											) ? (
 												<a
-													className="button button-secondary"
+													className="wppo-button wppo-button--secondary"
 													href={ sandboxPreviewUrl }
 													target="_blank"
 													rel="noopener noreferrer"
@@ -2738,7 +2825,7 @@ const FileOptimization = ( {
 												</a>
 											) : (
 												<span
-													className="button button-secondary"
+													className="wppo-button wppo-button--secondary"
 													aria-disabled="true"
 												>
 													{ __(
@@ -2749,7 +2836,7 @@ const FileOptimization = ( {
 											) ) }
 										<button
 											type="button"
-											className="button button-secondary"
+											className="wppo-button wppo-button--secondary"
 											onClick={ handleSandboxPerfTest }
 											disabled={
 												sandboxBusy ||
@@ -2763,7 +2850,7 @@ const FileOptimization = ( {
 										</button>
 										<button
 											type="button"
-											className="button button-primary"
+											className="wppo-button wppo-button--primary"
 											onClick={ handleSandboxPromote }
 											disabled={ sandboxBusy }
 										>
@@ -2774,7 +2861,7 @@ const FileOptimization = ( {
 										</button>
 										<button
 											type="button"
-											className="button button-secondary"
+											className="wppo-button wppo-button--secondary"
 											onClick={ handleSandboxDiscard }
 											disabled={ sandboxBusy }
 										>
@@ -2824,7 +2911,7 @@ const FileOptimization = ( {
 										) }
 										name="minifyJS"
 										checked={ settings.minifyJS }
-										onChange={ handleChange( setSettings ) }
+										onChange={ onFieldChange }
 										disabled={ optimizerDisabled }
 									/>
 								</Tooltip>
@@ -2844,7 +2931,7 @@ const FileOptimization = ( {
 										) }
 										name="deferJS"
 										checked={ settings.deferJS }
-										onChange={ handleChange( setSettings ) }
+										onChange={ onFieldChange }
 										disabled={ optimizerDisabled }
 									/>
 								</Tooltip>
@@ -2869,9 +2956,7 @@ const FileOptimization = ( {
 												'performance-optimisation'
 											) }
 											value={ settings.excludeDeferJS }
-											onChange={ handleChange(
-												setSettings
-											) }
+											onChange={ onFieldChange }
 										/>
 										<p className="wppo-text-muted wppo-text-small wppo-mt-8">
 											{ __(
@@ -2897,7 +2982,7 @@ const FileOptimization = ( {
 										) }
 										name="delayJS"
 										checked={ settings.delayJS }
-										onChange={ handleChange( setSettings ) }
+										onChange={ onFieldChange }
 										disabled={ optimizerDisabled }
 									/>
 								</Tooltip>
@@ -2934,9 +3019,7 @@ const FileOptimization = ( {
 													'performance-optimisation'
 												) }
 												value={ settings.excludeJS }
-												onChange={ handleChange(
-													setSettings
-												) }
+												onChange={ onFieldChange }
 											/>
 											<p className="wppo-text-muted wppo-text-small wppo-mt-8">
 												{ __(
@@ -2979,9 +3062,7 @@ const FileOptimization = ( {
 												checked={
 													settings.delayJSExternalOnly
 												}
-												onChange={ handleChange(
-													setSettings
-												) }
+												onChange={ onFieldChange }
 												disabled={ optimizerDisabled }
 											/>
 											<SwitchField
@@ -2997,9 +3078,7 @@ const FileOptimization = ( {
 												checked={
 													settings.delayJSThirdParty
 												}
-												onChange={ handleChange(
-													setSettings
-												) }
+												onChange={ onFieldChange }
 												disabled={ optimizerDisabled }
 											/>
 											{ settings.delayJSThirdParty && (
@@ -3029,9 +3108,9 @@ const FileOptimization = ( {
 															value={
 																settings.delayJSThirdPartyDenylist
 															}
-															onChange={ handleChange(
-																setSettings
-															) }
+															onChange={
+																onFieldChange
+															}
 														/>
 														<p className="wppo-text-muted wppo-text-small wppo-mt-8">
 															{ __(
@@ -3065,9 +3144,9 @@ const FileOptimization = ( {
 															value={
 																settings.delayJSThirdPartyAllowlist
 															}
-															onChange={ handleChange(
-																setSettings
-															) }
+															onChange={
+																onFieldChange
+															}
 														/>
 														<p className="wppo-text-muted wppo-text-small wppo-mt-8">
 															{ __(
@@ -3091,9 +3170,7 @@ const FileOptimization = ( {
 												checked={
 													settings.delayJSBuilderPreset
 												}
-												onChange={ handleChange(
-													setSettings
-												) }
+												onChange={ onFieldChange }
 												disabled={ optimizerDisabled }
 											/>
 											<SwitchField
@@ -3109,9 +3186,7 @@ const FileOptimization = ( {
 												checked={
 													settings.delayJSCommercePreset
 												}
-												onChange={ handleChange(
-													setSettings
-												) }
+												onChange={ onFieldChange }
 												disabled={ optimizerDisabled }
 											/>
 											<SwitchField
@@ -3127,9 +3202,71 @@ const FileOptimization = ( {
 												checked={
 													settings.delayJSInteractionPreset
 												}
-												onChange={ handleChange(
-													setSettings
+												onChange={ onFieldChange }
+												disabled={ optimizerDisabled }
+											/>
+											<SwitchField
+												label={ __(
+													'Consent compatibility preset',
+													'performance-optimisation'
 												) }
+												description={ __(
+													'Keep consent banners and scanners (CookieYes, Cookiebot, Complianz, Borlabs, OneTrust) un-delayed. Off by default; enable if your banner breaks.',
+													'performance-optimisation'
+												) }
+												name="delayJSConsentPreset"
+												checked={
+													settings.delayJSConsentPreset
+												}
+												onChange={ onFieldChange }
+												disabled={ optimizerDisabled }
+											/>
+											<SwitchField
+												label={ __(
+													'Analytics compatibility preset',
+													'performance-optimisation'
+												) }
+												description={ __(
+													'Keep analytics beacons (GA4 gtag, Matomo, Plausible) un-delayed so hits are not lost before interaction. Off by default.',
+													'performance-optimisation'
+												) }
+												name="delayJSAnalyticsPreset"
+												checked={
+													settings.delayJSAnalyticsPreset
+												}
+												onChange={ onFieldChange }
+												disabled={ optimizerDisabled }
+											/>
+											<SwitchField
+												label={ __(
+													'Gallery compatibility preset',
+													'performance-optimisation'
+												) }
+												description={ __(
+													'Keep galleries and lightboxes (PhotoSwipe, Fancybox, Envira, FooGallery) un-delayed so they work before interaction. Off by default.',
+													'performance-optimisation'
+												) }
+												name="delayJSGalleryPreset"
+												checked={
+													settings.delayJSGalleryPreset
+												}
+												onChange={ onFieldChange }
+												disabled={ optimizerDisabled }
+											/>
+											<SwitchField
+												label={ __(
+													'jQuery legacy preset',
+													'performance-optimisation'
+												) }
+												description={ __(
+													'Keep jQuery UI and legacy jQuery plugins un-delayed for themes with jQuery-dependent widgets. Off by default; shops are already covered by the commerce preset.',
+													'performance-optimisation'
+												) }
+												name="delayJSJqueryPreset"
+												checked={
+													settings.delayJSJqueryPreset
+												}
+												onChange={ onFieldChange }
 												disabled={ optimizerDisabled }
 											/>
 											<div className="wppo-field">
@@ -3154,9 +3291,7 @@ const FileOptimization = ( {
 													value={
 														settings.excludeDelayJS
 													}
-													onChange={ handleChange(
-														setSettings
-													) }
+													onChange={ onFieldChange }
 												/>
 												<p className="wppo-text-muted wppo-text-small wppo-mt-8">
 													{ __(
@@ -3187,9 +3322,7 @@ const FileOptimization = ( {
 													value={
 														settings.delayJSExcludeUrls
 													}
-													onChange={ handleChange(
-														setSettings
-													) }
+													onChange={ onFieldChange }
 													aria-describedby="delayJSExcludeUrls-desc"
 												/>
 												<p
@@ -3220,9 +3353,7 @@ const FileOptimization = ( {
 													value={
 														settings.delayJSDefaultStrategy
 													}
-													onChange={ handleChange(
-														setSettings
-													) }
+													onChange={ onFieldChange }
 												>
 													<option value="interaction">
 														{ __(
@@ -3276,9 +3407,9 @@ const FileOptimization = ( {
 														value={
 															settings.delayJSIdleTimeout
 														}
-														onChange={ handleChange(
-															setSettings
-														) }
+														onChange={
+															onFieldChange
+														}
 														aria-describedby="delayJSIdleTimeout-desc"
 													/>
 													<p
@@ -3315,9 +3446,7 @@ const FileOptimization = ( {
 													value={
 														settings.delayJSIdleList
 													}
-													onChange={ handleChange(
-														setSettings
-													) }
+													onChange={ onFieldChange }
 												/>
 												<p className="wppo-text-muted wppo-text-small wppo-mt-8">
 													{ __(
@@ -3349,9 +3478,7 @@ const FileOptimization = ( {
 													value={
 														settings.delayJSViewportList
 													}
-													onChange={ handleChange(
-														setSettings
-													) }
+													onChange={ onFieldChange }
 												/>
 												<p className="wppo-text-muted wppo-text-small wppo-mt-8">
 													{ __(
@@ -3383,9 +3510,7 @@ const FileOptimization = ( {
 													value={
 														settings.delayJSPriority
 													}
-													onChange={ handleChange(
-														setSettings
-													) }
+													onChange={ onFieldChange }
 												/>
 												<p className="wppo-text-muted wppo-text-small wppo-mt-8">
 													{ __(
@@ -3462,7 +3587,7 @@ const FileOptimization = ( {
 									) }
 									name="removeWooCSSJS"
 									checked={ settings.removeWooCSSJS }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 								/>
 
 								{ settings.removeWooCSSJS && (
@@ -3500,9 +3625,7 @@ const FileOptimization = ( {
 												value={
 													settings.excludeUrlToKeepJSCSS
 												}
-												onChange={ handleChange(
-													setSettings
-												) }
+												onChange={ onFieldChange }
 											/>
 											<p className="wppo-text-muted wppo-text-small wppo-mt-8">
 												{ __(
@@ -3533,9 +3656,7 @@ const FileOptimization = ( {
 												value={
 													settings.removeCssJsHandle
 												}
-												onChange={ handleChange(
-													setSettings
-												) }
+												onChange={ onFieldChange }
 											/>
 											<p className="wppo-text-muted wppo-text-small wppo-mt-8">
 												{ __(
@@ -3845,9 +3966,7 @@ const FileOptimization = ( {
 													serverRules?.server_type !==
 														'litespeed'
 												}
-												onChange={ handleChange(
-													setSettings
-												) }
+												onChange={ onFieldChange }
 											/>
 										</Tooltip>
 
@@ -3991,7 +4110,7 @@ const FileOptimization = ( {
 									name="cdnURL"
 									placeholder="https://cdn.example.com"
 									value={ settings.cdnURL }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 									aria-describedby="cdnURL-desc"
 								/>
 								<p
@@ -4051,27 +4170,13 @@ const FileOptimization = ( {
 													value={
 														entry.cdn_url || ''
 													}
-													onChange={ ( e ) => {
-														const v =
-															e.target.value;
-														setSettings(
-															( prev ) => {
-																const m = [
-																	...( prev.cdnMapping ||
-																		[] ),
-																];
-																m[ idx ] = {
-																	...m[ idx ],
-																	cdn_url: v,
-																};
-																return {
-																	...prev,
-																	cdnMapping:
-																		m,
-																};
-															}
-														);
-													} }
+													onChange={ ( e ) =>
+														updateCdnEntry(
+															idx,
+															'cdn_url',
+															e.target.value
+														)
+													}
 												/>
 											</div>
 											<div className="wppo-field wppo-mt-8">
@@ -4090,27 +4195,13 @@ const FileOptimization = ( {
 													type="url"
 													placeholder="https://example.com"
 													value={ entry.ori || '' }
-													onChange={ ( e ) => {
-														const v =
-															e.target.value;
-														setSettings(
-															( prev ) => {
-																const m = [
-																	...( prev.cdnMapping ||
-																		[] ),
-																];
-																m[ idx ] = {
-																	...m[ idx ],
-																	ori: v,
-																};
-																return {
-																	...prev,
-																	cdnMapping:
-																		m,
-																};
-															}
-														);
-													} }
+													onChange={ ( e ) =>
+														updateCdnEntry(
+															idx,
+															'ori',
+															e.target.value
+														)
+													}
 												/>
 											</div>
 											<div className="wppo-field wppo-mt-8">
@@ -4131,27 +4222,13 @@ const FileOptimization = ( {
 													value={
 														entry.ori_dir || ''
 													}
-													onChange={ ( e ) => {
-														const v =
-															e.target.value;
-														setSettings(
-															( prev ) => {
-																const m = [
-																	...( prev.cdnMapping ||
-																		[] ),
-																];
-																m[ idx ] = {
-																	...m[ idx ],
-																	ori_dir: v,
-																};
-																return {
-																	...prev,
-																	cdnMapping:
-																		m,
-																};
-															}
-														);
-													} }
+													onChange={ ( e ) =>
+														updateCdnEntry(
+															idx,
+															'ori_dir',
+															e.target.value
+														)
+													}
 												/>
 											</div>
 											<div className="wppo-field wppo-mt-8">
@@ -4172,28 +4249,13 @@ const FileOptimization = ( {
 													value={
 														entry.include_dirs || ''
 													}
-													onChange={ ( e ) => {
-														const v =
-															e.target.value;
-														setSettings(
-															( prev ) => {
-																const m = [
-																	...( prev.cdnMapping ||
-																		[] ),
-																];
-																m[ idx ] = {
-																	...m[ idx ],
-																	include_dirs:
-																		v,
-																};
-																return {
-																	...prev,
-																	cdnMapping:
-																		m,
-																};
-															}
-														);
-													} }
+													onChange={ ( e ) =>
+														updateCdnEntry(
+															idx,
+															'include_dirs',
+															e.target.value
+														)
+													}
 												/>
 											</div>
 											<div className="wppo-field wppo-mt-8">
@@ -4215,28 +4277,13 @@ const FileOptimization = ( {
 														entry.include_filetypes ||
 														''
 													}
-													onChange={ ( e ) => {
-														const v =
-															e.target.value;
-														setSettings(
-															( prev ) => {
-																const m = [
-																	...( prev.cdnMapping ||
-																		[] ),
-																];
-																m[ idx ] = {
-																	...m[ idx ],
-																	include_filetypes:
-																		v,
-																};
-																return {
-																	...prev,
-																	cdnMapping:
-																		m,
-																};
-															}
-														);
-													} }
+													onChange={ ( e ) =>
+														updateCdnEntry(
+															idx,
+															'include_filetypes',
+															e.target.value
+														)
+													}
 												/>
 											</div>
 											<div className="wppo-field wppo-mt-8">
@@ -4257,27 +4304,13 @@ const FileOptimization = ( {
 													value={
 														entry.cdn_attr || ''
 													}
-													onChange={ ( e ) => {
-														const v =
-															e.target.value;
-														setSettings(
-															( prev ) => {
-																const m = [
-																	...( prev.cdnMapping ||
-																		[] ),
-																];
-																m[ idx ] = {
-																	...m[ idx ],
-																	cdn_attr: v,
-																};
-																return {
-																	...prev,
-																	cdnMapping:
-																		m,
-																};
-															}
-														);
-													} }
+													onChange={ ( e ) =>
+														updateCdnEntry(
+															idx,
+															'cdn_attr',
+															e.target.value
+														)
+													}
 												/>
 											</div>
 											<button
@@ -4369,7 +4402,7 @@ const FileOptimization = ( {
 									) }
 									name="disableEmojis"
 									checked={ settings.disableEmojis }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 								/>
 								<SwitchField
 									label={ __(
@@ -4382,7 +4415,7 @@ const FileOptimization = ( {
 									) }
 									name="disableEmbeds"
 									checked={ settings.disableEmbeds }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 								/>
 								<SwitchField
 									label={ __(
@@ -4395,7 +4428,7 @@ const FileOptimization = ( {
 									) }
 									name="disableDashicons"
 									checked={ settings.disableDashicons }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 								/>
 								<SwitchField
 									label={ __(
@@ -4408,7 +4441,7 @@ const FileOptimization = ( {
 									) }
 									name="disableXMLRPC"
 									checked={ settings.disableXMLRPC }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 								/>
 								<SwitchField
 									label={ __(
@@ -4421,7 +4454,7 @@ const FileOptimization = ( {
 									) }
 									name="disableRestApiLinks"
 									checked={ settings.disableRestApiLinks }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 								/>
 								<SwitchField
 									label={ __(
@@ -4434,7 +4467,7 @@ const FileOptimization = ( {
 									) }
 									name="disableRssFeeds"
 									checked={ settings.disableRssFeeds }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 								/>
 								<SwitchField
 									label={ __(
@@ -4447,7 +4480,7 @@ const FileOptimization = ( {
 									) }
 									name="disableShortlinks"
 									checked={ settings.disableShortlinks }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 								/>
 								<SwitchField
 									label={ __(
@@ -4460,7 +4493,7 @@ const FileOptimization = ( {
 									) }
 									name="disableGeneratorTag"
 									checked={ settings.disableGeneratorTag }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 								/>
 								<SwitchField
 									label={ __(
@@ -4473,7 +4506,7 @@ const FileOptimization = ( {
 									) }
 									name="disableJQueryMigrate"
 									checked={ settings.disableJQueryMigrate }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 								/>
 								<SwitchField
 									label={ __(
@@ -4486,7 +4519,7 @@ const FileOptimization = ( {
 									) }
 									name="disablePasswordStrength"
 									checked={ settings.disablePasswordStrength }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 								/>
 								<SwitchField
 									label={ __(
@@ -4499,7 +4532,7 @@ const FileOptimization = ( {
 									) }
 									name="disableSelfPingbacks"
 									checked={ settings.disableSelfPingbacks }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 								/>
 								<SwitchField
 									label={ __(
@@ -4512,7 +4545,7 @@ const FileOptimization = ( {
 									) }
 									name="disableRSD"
 									checked={ settings.disableRSD }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 								/>
 								<SwitchField
 									label={ __(
@@ -4525,7 +4558,7 @@ const FileOptimization = ( {
 									) }
 									name="disableWLWManifest"
 									checked={ settings.disableWLWManifest }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 								/>
 								<SwitchField
 									label={ __(
@@ -4538,7 +4571,7 @@ const FileOptimization = ( {
 									) }
 									name="disableGlobalStyles"
 									checked={ settings.disableGlobalStyles }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 								/>
 								<SwitchField
 									label={ __(
@@ -4553,7 +4586,7 @@ const FileOptimization = ( {
 									checked={
 										settings.disableClassicThemeStyles
 									}
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 								/>
 								<SwitchField
 									label={ __(
@@ -4566,7 +4599,7 @@ const FileOptimization = ( {
 									) }
 									name="disableWooCartFragments"
 									checked={ settings.disableWooCartFragments }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 								/>
 								<SwitchField
 									label={ __(
@@ -4581,7 +4614,7 @@ const FileOptimization = ( {
 									checked={
 										settings.disableRecentCommentsStyle
 									}
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 								/>
 								<SwitchField
 									label={ __(
@@ -4594,7 +4627,7 @@ const FileOptimization = ( {
 									) }
 									name="disableCommentReply"
 									checked={ settings.disableCommentReply }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 								/>
 								<SwitchField
 									label={ __(
@@ -4607,7 +4640,7 @@ const FileOptimization = ( {
 									) }
 									name="disableOEmbedDiscovery"
 									checked={ settings.disableOEmbedDiscovery }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 								/>
 								<SwitchField
 									label={ __(
@@ -4620,7 +4653,7 @@ const FileOptimization = ( {
 									) }
 									name="disableBlockWidgets"
 									checked={ settings.disableBlockWidgets }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 								/>
 								<SwitchField
 									label={ __(
@@ -4633,7 +4666,7 @@ const FileOptimization = ( {
 									) }
 									name="blockAssetsOnDemand"
 									checked={ settings.blockAssetsOnDemand }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 								/>
 								<SwitchField
 									label={ __(
@@ -4646,7 +4679,7 @@ const FileOptimization = ( {
 									) }
 									name="loadAllCoreBlockAssets"
 									checked={ settings.loadAllCoreBlockAssets }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 								/>
 							</div>
 						</FeatureCard>
@@ -4673,7 +4706,7 @@ const FileOptimization = ( {
 									id="heartbeatControl"
 									name="heartbeatControl"
 									value={ settings.heartbeatControl }
-									onChange={ handleChange( setSettings ) }
+									onChange={ onFieldChange }
 									aria-describedby="heartbeatControl-desc"
 								>
 									<option value="default">
