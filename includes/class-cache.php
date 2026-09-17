@@ -344,6 +344,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private array $html_render_locks = array();
 
 		/**
+		 * Pre-render lock losers for this request, keyed by lock key.
+		 *
+		 * Set in {@see process_buffer_for_cache()} when
+		 * {@see try_acquire_html_render_lock()} returns false (another
+		 * worker observably holds the render lock, so this request serves
+		 * the unprocessed dynamic response). Consulted in
+		 * {@see stash_cache()} so a loser never persists its unprocessed
+		 * output over (or instead of) the winner's optimized file. Only
+		 * explicit losers are tracked — fail-open owners (guard off, empty
+		 * path, no lock infrastructure) still save normally.
+		 *
+		 * @var array<string,true>
+		 * @since NEXT
+		 */
+		private array $html_render_skipped = array();
+
+		/**
 		 * Whether the DONOTCACHEPAGE marker has been written for this request.
 		 *
 		 * Ensures the marker write and stale-file purge happen at most once per request.
@@ -2438,6 +2455,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( '' !== $file_path ) {
 				$render_lock = $this->try_acquire_html_render_lock( $file_path );
 				if ( false === $render_lock ) {
+					// Loser: serve dynamic unprocessed AND remember the skip
+					// so stash_cache() does not persist this unprocessed
+					// output over the winner's optimized file.
+					$skip_key = $this->html_render_lock_key( $file_path );
+					if ( '' !== $skip_key ) {
+						$this->html_render_skipped[ $skip_key ] = true;
+					}
 					return $filtered_output;
 				}
 			}
@@ -2478,6 +2502,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			$role_hash = ! empty( $this->current_role_hash ) ? $this->current_role_hash : $this->get_logged_in_role_hash();
 			$file_path = $this->get_cache_file_path( 'html', $role_hash );
+
+			// Pre-render loser: process_buffer_for_cache() served this request
+			// dynamic unprocessed, so never persist that output — it would
+			// poison the static cache with unminified/no-CDN/no-used-CSS HTML.
+			// Fail-open owners are never tracked here, so they still save.
+			$skip_key = $this->html_render_lock_key( $file_path );
+			if ( '' !== $skip_key && isset( $this->html_render_skipped[ $skip_key ] ) ) {
+				unset( $this->html_render_skipped[ $skip_key ] );
+				return;
+			}
 
 			try {
 				$this->save_processed_buffer( $output, $file_path );
@@ -3338,11 +3372,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					unset( $e );
 					$owner = $no_lock_owner;
 				}
-				if ( '' !== $owner && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'acquire_stampede_lock' ) ) {
-					if ( Util::acquire_stampede_lock( $lock_key, $owner, $ttl ) ) {
-						$this->html_render_locks[ $lock_key ] = $owner;
-						return $owner;
-					}
+				if ( '' !== $owner && Util::acquire_stampede_lock( $lock_key, $owner, $ttl ) ) {
+					$this->html_render_locks[ $lock_key ] = $owner;
+					return $owner;
 				}
 				// Acquire failed with nobody observably holding the lock
 				// (e.g. transient write failure): fail open and render rather

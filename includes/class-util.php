@@ -4062,10 +4062,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					$fs->delete( $tmp );
 					return false;
 				}
-				// Durability best-effort: fsync the renamed file so a crash
-				// cannot leave a zero-length/torn index.html for the
-				// advanced-cache.php drop-in readfile() path. Local files
-				// only (FTP/SSH transports skip silently); failures are
+				// Durability best-effort (data only, not rename durability):
+				// fsync the renamed file so a crash is less likely to leave a
+				// zero-length/torn index.html for the advanced-cache.php
+				// drop-in readfile() path. This intentionally does NOT fsync
+				// the directory entry, so the rename itself is still not
+				// crash-durable; the atomic tmp+rename already prevents torn
+				// reads, and WP_Filesystem exposes no file descriptor (or
+				// directory fd) to fsync the tmp file before rename. Local
+				// files only (FTP/SSH transports skip silently); failures are
 				// swallowed — the write already succeeded. Never fatal.
 				try {
 					if ( is_readable( $path ) && function_exists( 'fopen' ) ) {
@@ -5297,10 +5302,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			}
 
 			// Another worker rebuilds: bounded retry on the fresh key, then stale.
-			// Jittered so concurrent waiters do not wake in lockstep.
+			// Jittered so concurrent waiters do not wake in lockstep. The
+			// worst-case sleep per retry stays bounded by retry_delay_us
+			// (half base + half jitter) to preserve the pre-jitter tail
+			// latency contract while still spreading wakeups.
 			for ( $i = 0; $i < $retries; $i++ ) {
 				if ( $retry_delay_us > 0 ) {
-					self::stampede_jittered_sleep_us( $retry_delay_us, $retry_delay_us );
+					$half = (int) ( $retry_delay_us / 2 );
+					self::stampede_jittered_sleep_us( $half, $retry_delay_us - $half );
 				}
 				$cached = $read_cached( $key );
 				if ( false !== $cached ) {
