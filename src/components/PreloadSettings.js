@@ -23,6 +23,8 @@ const PreloadSettings = ( { options = {} } ) => {
 		enablePreloadCache: false,
 		excludePreloadCache: 'my-account/(.*)\ncart/(.*)\ncheckout/(.*)',
 		preloadSitemap: false,
+		preloadExcludeTracking: true,
+		preloadVerifyDirectory: true,
 		preconnect: false,
 		preconnectOrigins: '',
 		prefetchDNS: false,
@@ -61,6 +63,8 @@ const PreloadSettings = ( { options = {} } ) => {
 		options.enablePreloadCache,
 		options.excludePreloadCache,
 		options.preloadSitemap,
+		options.preloadExcludeTracking,
+		options.preloadVerifyDirectory,
 		options.preconnect,
 		options.preconnectOrigins,
 		options.prefetchDNS,
@@ -187,6 +191,8 @@ const PreloadSettings = ( { options = {} } ) => {
 		options.enablePreloadCache,
 		options.excludePreloadCache,
 		options.preloadSitemap,
+		options.preloadExcludeTracking,
+		options.preloadVerifyDirectory,
 		options.preconnect,
 		options.preconnectOrigins,
 		options.prefetchDNS,
@@ -370,6 +376,32 @@ const PreloadSettings = ( { options = {} } ) => {
 							checked={ settings.preloadSitemap }
 							onChange={ onFieldChange }
 						/>
+						<SwitchField
+							label={ __(
+								'Strip Tracking Params',
+								'performance-optimisation'
+							) }
+							description={ __(
+								'Warm the clean URL for tracking variants like ?utm_source=x or ?gclid=y instead of spending cron slots on each variant. Cart, checkout, account, and functional query URLs are always excluded.',
+								'performance-optimisation'
+							) }
+							name="preloadExcludeTracking"
+							checked={ settings.preloadExcludeTracking }
+							onChange={ onFieldChange }
+						/>
+						<SwitchField
+							label={ __(
+								'Verify Against Cache Directory',
+								'performance-optimisation'
+							) }
+							description={ __(
+								'Count warmed files in the cache directory for preload status, so progress never reports complete when zero files were written.',
+								'performance-optimisation'
+							) }
+							name="preloadVerifyDirectory"
+							checked={ settings.preloadVerifyDirectory }
+							onChange={ onFieldChange }
+						/>
 						{ cacheCap && 'warn' === cacheCap.state && (
 							<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
 								{ __(
@@ -402,6 +434,42 @@ const PreloadSettings = ( { options = {} } ) => {
 										preload.failed || 0
 									) }
 								</p>
+								{ ( 'undefined' !== typeof preload.cached ||
+									'undefined' !==
+										typeof preload.skipped ) && (
+									<p className="wppo-text-muted wppo-text-small">
+										{ sprintf(
+											/* translators: %1$d: verified cached count, %2$d: skipped count. */
+											__(
+												'Verified cached files: %1$d, skipped: %2$d.',
+												'performance-optimisation'
+											),
+											preload.cached ?? 0,
+											preload.skipped ?? 0
+										) }
+									</p>
+								) }
+								{ preload.skipped_reasons &&
+									Object.keys( preload.skipped_reasons )
+										.length > 0 && (
+										<p className="wppo-text-muted wppo-text-small">
+											{ sprintf(
+												/* translators: %s: comma-separated skip reasons with counts. */
+												__(
+													'Skipped details: %s.',
+													'performance-optimisation'
+												),
+												Object.entries(
+													preload.skipped_reasons
+												)
+													.map(
+														( [ reason, count ] ) =>
+															`${ reason }: ${ count }`
+													)
+													.join( ', ' )
+											) }
+										</p>
+									) }
 								{ ( preload.queued > 0 ||
 									preload.failed > 0 ) && (
 									<LoadingSubmitButton

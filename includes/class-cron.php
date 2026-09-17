@@ -30,7 +30,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		/**
 		 * Option name storing the resumable sitemap preload queue.
 		 *
-		 * Shape: `array{queued: string[], done: int, failed: string[], total: int, status: string, updated_at: int}`.
+		 * Shape: `array{queued: string[], done: int, failed: string[], skipped: int, skipped_reasons: array<string,int>, total: int, status: string, updated_at: int}`.
 		 * Multisite-safe via per-site options; deleted on uninstall and on
 		 * {@see clear_cron_jobs()}. Fail-open: malformed values reset to idle.
 		 *
@@ -43,16 +43,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * Read the resumable sitemap preload queue.
 		 *
 		 * @since NEXT
-		 * @return array{queued:string[],done:int,failed:string[],total:int,status:string,updated_at:int}
+		 * @return array{queued:string[],done:int,failed:string[],skipped:int,skipped_reasons:array<string,int>,total:int,status:string,updated_at:int}
 		 */
 		public static function get_preload_queue(): array {
 			$defaults = array(
-				'queued'     => array(),
-				'done'       => 0,
-				'failed'     => array(),
-				'total'      => 0,
-				'status'     => 'idle',
-				'updated_at' => 0,
+				'queued'          => array(),
+				'done'            => 0,
+				'failed'          => array(),
+				'skipped'         => 0,
+				'skipped_reasons' => array(),
+				'total'           => 0,
+				'status'          => 'idle',
+				'updated_at'      => 0,
 			);
 			try {
 				if ( ! function_exists( 'get_option' ) ) {
@@ -62,11 +64,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				if ( ! is_array( $stored ) ) {
 					return $defaults;
 				}
-				$queue           = array_merge( $defaults, $stored );
-				$queue['queued'] = array_values( array_filter( array_map( 'strval', (array) $queue['queued'] ) ) );
-				$queue['failed'] = array_values( array_filter( array_map( 'strval', (array) $queue['failed'] ) ) );
-				$queue['done']   = max( 0, (int) $queue['done'] );
-				$queue['total']  = max( 0, (int) $queue['total'] );
+				$queue            = array_merge( $defaults, $stored );
+				$queue['queued']  = array_values( array_filter( array_map( 'strval', (array) $queue['queued'] ) ) );
+				$queue['failed']  = array_values( array_filter( array_map( 'strval', (array) $queue['failed'] ) ) );
+				$queue['done']    = max( 0, (int) $queue['done'] );
+				$queue['total']   = max( 0, (int) $queue['total'] );
+				$queue['skipped'] = max( 0, (int) $queue['skipped'] );
+				$reasons          = array();
+				if ( is_array( $queue['skipped_reasons'] ) ) {
+					foreach ( array_slice( $queue['skipped_reasons'], 0, 20 ) as $reason => $count ) {
+						$key = is_string( $reason ) ? substr( $reason, 0, 64 ) : '';
+						if ( '' === $key ) {
+							continue;
+						}
+						$reasons[ $key ] = max( 0, (int) $count );
+					}
+				}
+				$queue['skipped_reasons'] = $reasons;
 				if ( ! in_array( $queue['status'], array( 'idle', 'running', 'complete' ), true ) ) {
 					$queue['status'] = 'idle';
 				}
@@ -112,15 +126,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			try {
 				$queue = self::get_preload_queue();
 				$fresh = array_values( array_unique( array_filter( array_map( 'strval', $urls ) ) ) );
-				if ( empty( $fresh ) && empty( $queue['queued'] ) && 0 === (int) $queue['done'] && empty( $queue['failed'] ) ) {
+				if ( empty( $fresh ) && empty( $queue['queued'] ) && 0 === (int) $queue['done'] && empty( $queue['failed'] ) && 0 === (int) $queue['skipped'] ) {
 					return;
 				}
 				$merged = array_values( array_unique( array_merge( $queue['queued'], $fresh ) ) );
 				// Drop URLs already resolved in this cycle.
 				$merged          = array_values( array_diff( $merged, $queue['failed'] ) );
 				$queue['queued'] = array_values( array_slice( $merged, 0, 500 ) );
-				$queue['total']  = count( $queue['queued'] ) + (int) $queue['done'] + count( $queue['failed'] );
-				$queue['status'] = empty( $queue['queued'] ) ? 'complete' : 'running';
+				$queue['total']  = count( $queue['queued'] ) + (int) $queue['done'] + count( $queue['failed'] ) + (int) $queue['skipped'];
+				self::recompute_queue_status( $queue );
 				self::save_preload_queue( $queue );
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -148,9 +162,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				}
 				$queue['queued'] = array_values( array_diff( $queue['queued'], array( $url ) ) );
 				++$queue['done'];
-				if ( empty( $queue['queued'] ) ) {
-					$queue['status'] = 'complete';
-				}
+				self::recompute_queue_status( $queue );
 				self::save_preload_queue( $queue );
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -183,9 +195,105 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 						$queue['failed'] = array_values( array_slice( $queue['failed'], -500 ) );
 					}
 				}
-				if ( empty( $queue['queued'] ) ) {
-					$queue['status'] = 'complete';
+				self::recompute_queue_status( $queue );
+				self::save_preload_queue( $queue );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Honest terminal-state guard for the preload queue.
+		 *
+		 * A drained queue reports `complete` only when at least one URL
+		 * actually warmed (`done > 0`); a drained queue with failures stays
+		 * `running` so the SPA keeps offering the one-click resume, and a
+		 * drained queue with zero files written falls back to `idle` (never
+		 * a false green check). Directory verification against
+		 * `index.html` files happens in {@see get_preload_status()}.
+		 *
+		 * @since NEXT
+		 * @param array $queue Queue payload (updated in place).
+		 * @return void
+		 */
+		private static function recompute_queue_status( array &$queue ): void {
+			if ( ! empty( $queue['queued'] ) ) {
+				$queue['status'] = 'running';
+				return;
+			}
+			if ( ! empty( $queue['failed'] ) ) {
+				$queue['status'] = 'running';
+				return;
+			}
+			$queue['status'] = (int) $queue['done'] > 0 ? 'complete' : 'idle';
+		}
+
+		/**
+		 * Record a preload skip without queue membership (schedule-time skips).
+		 *
+		 * Schedule-time exclusions (Woo dynamic routes, editor previews,
+		 * tracking/functional queries) never entered the queue, so there is
+		 * no URL to remove — only the `skipped` counter and the per-reason
+		 * breakdown grow. Reasons are capped at 20 keys; counts are
+		 * unbounded. Fail-open: never fatal.
+		 *
+		 * @since NEXT
+		 * @param string $reason Skip reason slug (e.g. `woo-excluded`).
+		 * @return void
+		 */
+		public static function record_preload_skip( string $reason ): void {
+			try {
+				$reason = substr( trim( $reason ), 0, 64 );
+				if ( '' === $reason ) {
+					$reason = 'excluded';
 				}
+				$queue = self::get_preload_queue();
+				++$queue['skipped'];
+				if ( ! isset( $queue['skipped_reasons'][ $reason ] ) && count( $queue['skipped_reasons'] ) >= 20 ) {
+					$queue['skipped_reasons']['other'] = (int) ( $queue['skipped_reasons']['other'] ?? 0 ) + 1;
+				} else {
+					$queue['skipped_reasons'][ $reason ] = (int) ( $queue['skipped_reasons'][ $reason ] ?? 0 ) + 1;
+				}
+				$queue['total'] = count( $queue['queued'] ) + (int) $queue['done'] + count( $queue['failed'] ) + (int) $queue['skipped'];
+				self::save_preload_queue( $queue );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Mark a queued sitemap URL as skipped (removes it from queued).
+		 *
+		 * Skips are honest non-success: unlike {@see mark_preload_done()},
+		 * they never inflate the warmed counter. When the URL was never
+		 * queued (schedule-time skip), only the skip counters grow.
+		 *
+		 * @since NEXT
+		 * @param string $url    Skipped URL.
+		 * @param string $reason Skip reason slug (e.g. `woo-excluded`).
+		 * @return void
+		 */
+		public static function mark_preload_skipped( string $url, string $reason = 'excluded' ): void {
+			try {
+				if ( '' === $url ) {
+					return;
+				}
+				$reason = substr( trim( $reason ), 0, 64 );
+				if ( '' === $reason ) {
+					$reason = 'excluded';
+				}
+				$queue = self::get_preload_queue();
+				if ( in_array( $url, $queue['queued'], true ) ) {
+					$queue['queued'] = array_values( array_diff( $queue['queued'], array( $url ) ) );
+				}
+				++$queue['skipped'];
+				if ( ! isset( $queue['skipped_reasons'][ $reason ] ) && count( $queue['skipped_reasons'] ) >= 20 ) {
+					$queue['skipped_reasons']['other'] = (int) ( $queue['skipped_reasons']['other'] ?? 0 ) + 1;
+				} else {
+					$queue['skipped_reasons'][ $reason ] = (int) ( $queue['skipped_reasons'][ $reason ] ?? 0 ) + 1;
+				}
+				$queue['total'] = count( $queue['queued'] ) + (int) $queue['done'] + count( $queue['failed'] ) + (int) $queue['skipped'];
+				self::recompute_queue_status( $queue );
 				self::save_preload_queue( $queue );
 			} catch ( \Throwable $e ) {
 				unset( $e );
@@ -195,30 +303,64 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		/**
 		 * Honest preload progress counters for the SPA.
 		 *
+		 * Counters come from the queue option (single `get_option` read) plus
+		 * a directory verification walk (`index.html` files under the
+		 * current-domain cache directory) when
+		 * `preload_settings.preloadVerifyDirectory` is on (default). The
+		 * zero-file guard downgrades a stored `complete` to `idle` (or
+		 * `running` when failures await resume) whenever neither the `done`
+		 * counter nor the directory walk shows a warmed file — a preload run
+		 * with zero files written never reports completed. Fail-open: queue
+		 * or filesystem failures return counter-only idle payloads.
+		 *
 		 * @since NEXT
-		 * @return array{queued:int,done:int,failed:int,total:int,status:string,failed_urls:string[]}
+		 * @return array{queued:int,done:int,failed:int,total:int,status:string,failed_urls:string[],cached:int,skipped:int,skipped_reasons:array<string,int>,verified_at:int}
 		 */
 		public static function get_preload_status(): array {
-			$queue = self::get_preload_queue();
-			return array(
-				'queued'      => count( $queue['queued'] ),
-				'done'        => (int) $queue['done'],
-				'failed'      => count( $queue['failed'] ),
-				'total'       => (int) $queue['total'],
-				'status'      => (string) $queue['status'],
-				'failed_urls' => array_values( array_slice( $queue['failed'], 0, 50 ) ),
+			$queue  = self::get_preload_queue();
+			$status = array(
+				'queued'          => count( $queue['queued'] ),
+				'done'            => (int) $queue['done'],
+				'failed'          => count( $queue['failed'] ),
+				'total'           => (int) $queue['total'],
+				'status'          => (string) $queue['status'],
+				'failed_urls'     => array_values( array_slice( $queue['failed'], 0, 50 ) ),
+				'cached'          => (int) $queue['done'],
+				'skipped'         => (int) $queue['skipped'],
+				'skipped_reasons' => $queue['skipped_reasons'],
+				'verified_at'     => 0,
 			);
+			try {
+				$verify = true;
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_preload_directory_verify_enabled' ) ) {
+					$verify = Util::is_preload_directory_verify_enabled();
+				}
+				if ( $verify && class_exists( 'PerformanceOptimise\Inc\Cache' ) && method_exists( 'PerformanceOptimise\Inc\Cache', 'count_cached_files' ) ) {
+					$status['cached']      = Cache::count_cached_files();
+					$status['verified_at'] = function_exists( 'time' ) ? time() : 0;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			// Zero-file guard: never report completed when neither the
+			// counter nor the directory shows a warmed file.
+			if ( 'complete' === $status['status'] && 0 === (int) $status['done'] && 0 === (int) $status['cached'] ) {
+				$status['status'] = $status['failed'] > 0 ? 'running' : 'idle';
+			}
+			return $status;
 		}
 
 		/**
-		 * Resume the preload queue by re-scheduling queued + failed URLs.
+		 * Resume the preload queue by re-scheduling failed URLs only.
 		 *
-		 * Failed URLs move back to queued so a resume retries them once.
-		 * URLs are re-scheduled in chunks of 50 per `wppo_preload_url_batch`
+		 * Failed URLs move back to queued so a resume retries them once;
+		 * still-queued URLs are already scheduled and are left untouched
+		 * (re-scheduling them would duplicate cron rows). URLs are
+		 * re-scheduled in chunks of 50 per `wppo_preload_url_batch`
 		 * event (staggered 0-300s) instead of one single event per URL, so a
-		 * resume of a 500-URL queue inserts ~10 cron rows instead of ~500
-		 * (wp-cron option bloat). Fail-open: scheduler failures simply leave
-		 * the queue untouched.
+		 * resume of a 500-URL failure queue inserts ~10 cron rows instead of
+		 * ~500 (wp-cron option bloat). Fail-open: scheduler failures simply
+		 * leave the queue untouched.
 		 *
 		 * @since NEXT
 		 * @return int Number of URLs re-scheduled.
@@ -230,7 +372,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					return 0;
 				}
 				$queue   = self::get_preload_queue();
-				$pending = array_values( array_unique( array_merge( $queue['queued'], $queue['failed'] ) ) );
+				$pending = array_values( array_unique( $queue['failed'] ) );
 				if ( empty( $pending ) ) {
 					return 0;
 				}
@@ -248,9 +390,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					}
 				}
 				if ( $rescheduled > 0 ) {
-					$queue['queued'] = $pending;
+					$queue['queued'] = array_values( array_unique( array_merge( $queue['queued'], $pending ) ) );
 					$queue['failed'] = array();
-					$queue['total']  = count( $pending ) + (int) $queue['done'];
+					$queue['total']  = count( $queue['queued'] ) + (int) $queue['done'] + (int) $queue['skipped'];
 					$queue['status'] = 'running';
 					self::save_preload_queue( $queue );
 				}
@@ -894,37 +1036,71 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				unset( $e );
 			}
 
+			// WooCommerce-safe default (issue #1372): tracking-only params
+			// (utm_*, gclid, …) are stripped so `?utm_source=x` variants
+			// dedupe to the clean URL instead of consuming cron slots.
+			$strip_tracking = true;
+			try {
+				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_preload_tracking_strip_enabled' ) ) {
+					$strip_tracking = Util::is_preload_tracking_strip_enabled();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+
 			// Snapshot scheduled URL args once so the per-URL check below is
 			// an in-memory lookup instead of up to 500 cron-array scans.
 			$scheduled_urls = $this->get_scheduled_args_set( 'wppo_generate_static_url' );
 
 			$newly_scheduled = array();
+			$seen_clean      = array();
 
 			foreach ( $sitemap_urls as $url ) {
-				if ( Util::is_url_excluded( $url, $exclude_urls ) ) {
+				$clean = is_string( $url ) ? $url : '';
+				try {
+					if ( '' !== $clean && class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'clean_preload_url' ) ) {
+						$clean = Util::clean_preload_url( $clean, $strip_tracking );
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+				if ( '' === $clean ) {
+					self::record_preload_skip( self::classify_preload_skip( is_string( $url ) ? $url : '' ) );
+					continue;
+				}
+				// Tracking-param variants dedupe to the clean URL.
+				if ( isset( $seen_clean[ $clean ] ) ) {
+					continue;
+				}
+				$seen_clean[ $clean ] = true;
+
+				if ( Util::is_url_excluded( $clean, $exclude_urls ) ) {
+					self::record_preload_skip( 'excluded' );
 					continue;
 				}
 
 				// WooCommerce dynamic routes (issue #962): never preload cart /
 				// checkout / account, custom Woo slugs, or Store API routes.
-				if ( $this->is_woo_excluded_url( $url, $woo_safe, $woo_paths ) ) {
+				if ( $this->is_woo_excluded_url( $clean, $woo_safe, $woo_paths ) ) {
+					self::record_preload_skip( 'woo-excluded' );
 					continue;
 				}
 
 				// Editor/admin previews (issue #1097): never preload wp-admin or
 				// builder/core preview URLs.
-				if ( $this->is_editor_preview_url( $url ) ) {
+				if ( $this->is_editor_preview_url( $clean ) ) {
+					self::record_preload_skip( 'editor-preview' );
 					continue;
 				}
 
-				if ( $this->is_hook_arg_scheduled( 'wppo_generate_static_url', array( $url ), $scheduled_urls ) ) {
+				if ( $this->is_hook_arg_scheduled( 'wppo_generate_static_url', array( $clean ), $scheduled_urls ) ) {
 					continue;
 				}
-				wp_schedule_single_event( time() + wp_rand( 0, 1800 ), 'wppo_generate_static_url', array( $url ) );
+				wp_schedule_single_event( time() + wp_rand( 0, 1800 ), 'wppo_generate_static_url', array( $clean ) );
 				if ( is_array( $scheduled_urls ) ) {
-					$scheduled_urls[ wp_json_encode( array( $url ) ) ] = true;
+					$scheduled_urls[ wp_json_encode( array( $clean ) ) ] = true;
 				}
-				$newly_scheduled[] = $url;
+				$newly_scheduled[] = $clean;
 			}
 
 			// Resumable queue (issue #1162): persist freshly scheduled URLs
@@ -932,6 +1108,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			// Fail-open: queue failure never blocks scheduling above.
 			if ( ! empty( $newly_scheduled ) ) {
 				self::init_preload_queue( $newly_scheduled );
+			}
+		}
+
+		/**
+		 * Classify why a sitemap URL was refused from the preload queue.
+		 *
+		 * Reason slugs feed the `skipped_reasons` breakdown in
+		 * {@see get_preload_status()} so the SPA can render what was skipped
+		 * and why. Fail-open: any failure returns `excluded`.
+		 *
+		 * @since NEXT
+		 * @param string $url Raw sitemap URL.
+		 * @return string Reason slug (`woo-excluded`, `editor-preview`, `uncacheable-query`, `excluded`).
+		 */
+		private static function classify_preload_skip( string $url ): string {
+			try {
+				if ( '' === trim( $url ) ) {
+					return 'excluded';
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_excluded_url' ) && Util::is_woo_excluded_url( $url ) ) {
+					return 'woo-excluded';
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_editor_preview_url' ) && Util::is_editor_preview_url( $url ) ) {
+					return 'editor-preview';
+				}
+				if ( function_exists( 'wp_parse_url' ) || function_exists( 'parse_url' ) ) {
+					$query = function_exists( 'wp_parse_url' ) ? (string) wp_parse_url( $url, PHP_URL_QUERY ) : (string) ( parse_url( $url, PHP_URL_QUERY ) ?? '' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- wp_parse_url unavailable in unit tests; native fallback is fail-open.
+					if ( '' !== $query && method_exists( 'PerformanceOptimise\Inc\Util', 'has_uncacheable_query' ) && Util::has_uncacheable_query( $query ) ) {
+						return 'uncacheable-query';
+					}
+				}
+				return 'excluded';
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 'excluded';
 			}
 		}
 
@@ -1291,20 +1502,48 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			if ( function_exists( 'wp_http_validate_url' ) && ! wp_http_validate_url( $url ) ) {
 				return;
 			}
+			// WooCommerce-safe default (issue #1372): strip tracking-only
+			// params so `?utm_source=x` variants warm the canonical file.
+			// A refused canonical (Woo/editor/functional query) is an honest
+			// skip — never a false `done`.
+			$raw_url = $url;
+			try {
+				$strip = true;
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'is_preload_tracking_strip_enabled' ) ) {
+					$strip = Util::is_preload_tracking_strip_enabled();
+				}
+				if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'clean_preload_url' ) ) {
+					$cleaned = Util::clean_preload_url( $url, $strip );
+					if ( '' === $cleaned ) {
+						self::mark_preload_skipped( $raw_url, self::classify_preload_skip( $raw_url ) );
+						return;
+					}
+					if ( $cleaned !== $url ) {
+						self::mark_preload_skipped( $raw_url, 'tracking-param' );
+						$url = $cleaned;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
 			// Same-host re-check at the sink: a scheduled URL must never turn
 			// into an off-host server-side GET.
 			if ( function_exists( 'wp_parse_url' ) && function_exists( 'home_url' ) ) {
 				$home_host = wp_parse_url( home_url(), PHP_URL_HOST );
 				if ( ( wp_parse_url( $url, PHP_URL_HOST ) ) !== $home_host ) {
-					self::mark_preload_done( $url );
+					self::mark_preload_skipped( $raw_url, 'off-host' );
 					return;
 				}
 			}
 
 			// Defensive Woo skip (issue #962): never warm dynamic routes.
 			// Defensive editor skip (issue #1097): never warm previews.
-			if ( $this->is_woo_excluded_url( $url ) || $this->is_editor_preview_url( $url ) ) {
-				self::mark_preload_done( $url );
+			if ( $this->is_woo_excluded_url( $url ) ) {
+				self::mark_preload_skipped( $raw_url, 'woo-excluded' );
+				return;
+			}
+			if ( $this->is_editor_preview_url( $url ) ) {
+				self::mark_preload_skipped( $raw_url, 'editor-preview' );
 				return;
 			}
 

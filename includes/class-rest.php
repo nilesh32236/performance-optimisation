@@ -493,6 +493,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Resumable sitemap preload progress plus bounded-cache cap status.
 		 *
+		 * The `preload` payload reports honest counters: `queued`/`done`/
+		 * `failed` from the queue option, `cached` verified against
+		 * `index.html` files in the cache directory, `skipped` with a
+		 * per-reason breakdown, and `verified_at`. A run with zero files
+		 * written never reports `complete`.
+		 *
 		 * Fail-open: queue/cache failures return idle/ok payloads, never fatal.
 		 *
 		 * @since NEXT
@@ -501,12 +507,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 */
 		public function get_preload_status( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			$preload = array(
-				'queued'      => 0,
-				'done'        => 0,
-				'failed'      => 0,
-				'total'       => 0,
-				'status'      => 'idle',
-				'failed_urls' => array(),
+				'queued'          => 0,
+				'done'            => 0,
+				'failed'          => 0,
+				'total'           => 0,
+				'status'          => 'idle',
+				'failed_urls'     => array(),
+				'cached'          => 0,
+				'skipped'         => 0,
+				'skipped_reasons' => array(),
+				'verified_at'     => 0,
 			);
 			$cache   = array(
 				'bytes'     => 0,
@@ -676,7 +686,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		}
 
 		/**
-		 * Resume the sitemap preload queue (re-schedule queued + failed URLs).
+		 * Resume the sitemap preload queue (re-schedule failed URLs only).
+		 *
+		 * Still-queued URLs are already scheduled and are left untouched;
+		 * only the failed queue retries, once. Throttled to 5/minute.
 		 *
 		 * @since NEXT
 		 * @param \WP_REST_Request $request The request object.

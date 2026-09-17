@@ -418,6 +418,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'preloadSitemap'           => false,
 					'autoLcpPreload'           => false,
 					'autoDiscoverFonts'        => false,
+					'preloadExcludeTracking'   => true,
+					'preloadVerifyDirectory'   => true,
 				),
 				'image_optimisation'    => array(
 					'lazyLoadImages'             => false,
@@ -3638,6 +3640,195 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			} catch ( \Throwable $e ) {
 				unset( $e );
 				return true;
+			}
+		}
+
+		/**
+		 * Whether preload strips tracking-only query params before warming.
+		 *
+		 * Additive `preload_settings` key (issue #1372):
+		 * `preloadExcludeTracking` (default true). Absent key defaults to
+		 * enabled (fail-safe); explicit false disables. Existing sites are
+		 * unaffected until they save: absent key reads as enabled in memory
+		 * without a database write.
+		 *
+		 * @since NEXT
+		 * @param array|null $settings Optional settings array (defaults to get_settings()).
+		 * @return bool True when tracking params are stripped from preload URLs.
+		 */
+		public static function is_preload_tracking_strip_enabled( ?array $settings = null ): bool {
+			try {
+				if ( null === $settings ) {
+					$settings = self::get_settings();
+				}
+				if ( ! isset( $settings['preload_settings']['preloadExcludeTracking'] ) ) {
+					return true;
+				}
+				$value = $settings['preload_settings']['preloadExcludeTracking'];
+				if ( ! is_scalar( $value ) && null !== $value ) {
+					return true;
+				}
+				$parsed = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+				return null === $parsed ? true : $parsed;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
+		 * Whether preload status verifies counts against the cache directory.
+		 *
+		 * Additive `preload_settings` key (issue #1372):
+		 * `preloadVerifyDirectory` (default true). Absent key defaults to
+		 * enabled (fail-safe); explicit false falls back to counter-only
+		 * counts. Fail-open: detection failure returns true.
+		 *
+		 * @since NEXT
+		 * @param array|null $settings Optional settings array (defaults to get_settings()).
+		 * @return bool True when status walks the cache directory.
+		 */
+		public static function is_preload_directory_verify_enabled( ?array $settings = null ): bool {
+			try {
+				if ( null === $settings ) {
+					$settings = self::get_settings();
+				}
+				if ( ! isset( $settings['preload_settings']['preloadVerifyDirectory'] ) ) {
+					return true;
+				}
+				$value = $settings['preload_settings']['preloadVerifyDirectory'];
+				if ( ! is_scalar( $value ) && null !== $value ) {
+					return true;
+				}
+				$parsed = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+				return null === $parsed ? true : $parsed;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
+			}
+		}
+
+		/**
+		 * Strip cache-neutral tracking params from a URL, keeping functional ones.
+		 *
+		 * A param is tracking-only when it appears in
+		 * {@see get_cache_query_allowlist()} or carries the `utm_` prefix
+		 * (case-insensitive) — the same classification
+		 * {@see has_uncacheable_query()} uses. URLs whose remaining query is
+		 * empty lose the `?` entirely; valueless params and fragments are
+		 * preserved. Pure static helper: no I/O, no settings reads.
+		 * Fail-open: any failure returns the original URL.
+		 *
+		 * @since NEXT
+		 * @param string $url Absolute URL.
+		 * @return string URL without tracking params (original on failure).
+		 */
+		public static function strip_tracking_params( string $url ): string {
+			try {
+				if ( '' === trim( $url ) ) {
+					return $url;
+				}
+				$parts = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url ) : parse_url( $url ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- wp_parse_url unavailable in unit tests; native fallback is fail-open.
+				if ( ! is_array( $parts ) || empty( $parts['query'] ) ) {
+					return $url;
+				}
+				$allowlist = self::get_cache_query_allowlist();
+				$allowed   = array_flip( $allowlist );
+				$kept      = array();
+				$pairs     = preg_split( '/[&;]/', (string) $parts['query'] );
+				if ( ! is_array( $pairs ) ) {
+					return $url;
+				}
+				foreach ( $pairs as $pair ) {
+					if ( '' === trim( (string) $pair ) ) {
+						continue;
+					}
+					$eq_pos = strpos( $pair, '=' );
+					$name   = false === $eq_pos ? $pair : substr( $pair, 0, $eq_pos );
+					$lname  = strtolower( trim( (string) rawurldecode( $name ) ) );
+					if ( '' === $lname ) {
+						continue;
+					}
+					if ( isset( $allowed[ $lname ] ) || 0 === strpos( $lname, 'utm_' ) ) {
+						continue;
+					}
+					$kept[] = $pair;
+				}
+				$base = '';
+				if ( isset( $parts['scheme'] ) ) {
+					$base .= $parts['scheme'] . '://';
+				}
+				if ( isset( $parts['user'] ) ) {
+					$base .= $parts['user'];
+					if ( isset( $parts['pass'] ) ) {
+						$base .= ':' . $parts['pass'];
+					}
+					$base .= '@';
+				}
+				if ( isset( $parts['host'] ) ) {
+					$base .= $parts['host'];
+				}
+				if ( isset( $parts['port'] ) ) {
+					$base .= ':' . $parts['port'];
+				}
+				if ( isset( $parts['path'] ) ) {
+					$base .= $parts['path'];
+				}
+				if ( ! empty( $kept ) ) {
+					$base .= '?' . implode( '&', $kept );
+				}
+				if ( isset( $parts['fragment'] ) ) {
+					$base .= '#' . $parts['fragment'];
+				}
+				if ( '' === $base ) {
+					return $url;
+				}
+				return $base;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return $url;
+			}
+		}
+
+		/**
+		 * Canonicalize a preload URL or refuse it with an empty string.
+		 *
+		 * Returns `''` when the URL must never be warmed: WooCommerce dynamic
+		 * routes ({@see is_woo_excluded_url()}), editor/admin previews
+		 * ({@see is_editor_preview_url()}), or a remaining functional/unknown
+		 * query ({@see has_uncacheable_query()}). Otherwise returns the URL
+		 * with tracking-only params stripped (when `$strip_tracking` is
+		 * true). Pure static helper: no I/O. Fail-open direction on error:
+		 * detection failure returns `''` (skip, never warm dynamic content).
+		 *
+		 * @since NEXT
+		 * @param string $url            Absolute URL.
+		 * @param bool   $strip_tracking Whether to strip tracking params first.
+		 * @return string Clean URL, or `''` when the URL must be skipped.
+		 */
+		public static function clean_preload_url( string $url, bool $strip_tracking = true ): string {
+			try {
+				if ( '' === trim( $url ) ) {
+					return '';
+				}
+				$candidate = $strip_tracking ? self::strip_tracking_params( $url ) : $url;
+				if ( '' === trim( $candidate ) ) {
+					return '';
+				}
+				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_woo_excluded_url' ) && self::is_woo_excluded_url( $candidate ) ) {
+					return '';
+				}
+				if ( method_exists( 'PerformanceOptimise\Inc\Util', 'is_editor_preview_url' ) && self::is_editor_preview_url( $candidate ) ) {
+					return '';
+				}
+				$query = function_exists( 'wp_parse_url' ) ? (string) wp_parse_url( $candidate, PHP_URL_QUERY ) : (string) ( parse_url( $candidate, PHP_URL_QUERY ) ?? '' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- wp_parse_url unavailable in unit tests; native fallback is fail-open.
+				if ( '' !== $query && self::has_uncacheable_query( $query ) ) {
+					return '';
+				}
+				return $candidate;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
 			}
 		}
 

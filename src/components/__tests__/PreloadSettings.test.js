@@ -561,4 +561,48 @@ describe( 'PreloadSettings Component', () => {
 			).toBeInTheDocument();
 		} );
 	} );
+
+	it( 'renders verified cached and skipped counts with reasons', async () => {
+		apiCall.mockImplementation( async ( action ) => {
+			if ( 'preload_status' === action ) {
+				return {
+					success: true,
+					data: {
+						preload: {
+							queued: 0,
+							done: 0,
+							failed: 0,
+							total: 2,
+							status: 'idle',
+							failed_urls: [],
+							cached: 0,
+							skipped: 2,
+							skipped_reasons: { 'woo-excluded': 2 },
+							verified_at: 1726000000,
+						},
+						cache: { state: 'ok' },
+					},
+				};
+			}
+			return {
+				success: true,
+				message: 'Settings updated successfully.',
+			};
+		} );
+
+		render( <PreloadSettings /> );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( /Verified cached files: 0, skipped: 2/i )
+			).toBeInTheDocument();
+		} );
+		expect(
+			screen.getByText( /Skipped details: woo-excluded: 2/i )
+		).toBeInTheDocument();
+		// Zero files written: no resume button and no false progress.
+		expect(
+			screen.queryByRole( 'button', { name: /Resume Preload/i } )
+		).not.toBeInTheDocument();
+	} );
 } );

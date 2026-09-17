@@ -6218,6 +6218,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Honest count of cached pages verified against the cache directory.
+		 *
+		 * Counts `index.html` files under the current-domain cache directory
+		 * in a single walk ({@see calculate_directory_stats()}), so preload
+		 * status can report what actually warmed instead of counter-only
+		 * progress. Fail-open: returns 0 when the filesystem or directory
+		 * is unavailable. Multisite-safe: per-domain directory structure.
+		 *
+		 * @since NEXT
+		 * @return int Number of cached pages, or 0 on failure.
+		 */
+		public static function count_cached_files(): int {
+			try {
+				$instance = new self();
+				if ( ! $instance->get_filesystem() ) {
+					return 0;
+				}
+				$dir = trailingslashit( $instance->cache_root_dir );
+				if ( '' !== $instance->domain ) {
+					$dir .= $instance->domain;
+				}
+				if ( ! $instance->filesystem->is_dir( $dir ) ) {
+					return 0;
+				}
+				$stats = $instance->calculate_directory_stats( $dir );
+				return max( 0, (int) ( $stats['count'] ?? 0 ) );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return 0;
+			}
+		}
+
+		/**
 		 * Total static-cache size in bytes for the current domain.
 		 *
 		 * Fail-open: returns 0 when the filesystem or directory is
