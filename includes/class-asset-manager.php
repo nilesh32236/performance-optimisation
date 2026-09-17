@@ -268,7 +268,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 				if ( ! is_string( $src ) || '' === $src ) {
 					return null;
 				}
-				if ( isset( self::$size_cache[ $src ] ) ) {
+				if ( array_key_exists( $src, self::$size_cache ) ) {
 					return self::$size_cache[ $src ];
 				}
 				if ( function_exists( 'has_filter' ) && has_filter( 'wppo_page_asset_size' ) ) {
