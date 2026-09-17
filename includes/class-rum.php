@@ -404,7 +404,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * @return void
 		 */
 		public static function clear_field_lcp_cache(): void {
-			self::$field_lcp_aggregate   = null;
+			self::$field_lcp_aggregate = null;
 			// Stored-LCP memo shares the same invalidation: a mid-request
 			// PageSpeed store must be visible to later same-request readers.
 			self::$stored_lcp_memo       = array();

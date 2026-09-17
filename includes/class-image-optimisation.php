@@ -5296,7 +5296,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			try {
 				// Truncate frontend-controlled keys/values so 200 multi-KB
 				// entries cannot inflate the persistent transient.
-				$src = substr( $src, 0, 2048 );
+				$src   = substr( $src, 0, 2048 );
 				$title = substr( $title, 0, 200 );
 				if ( '' === $src ) {
 					return;
@@ -5304,11 +5304,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$blog_id = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
 				if ( ! isset( self::$deferred_alt_entries[ $blog_id ] ) || ! is_array( self::$deferred_alt_entries[ $blog_id ] ) ) {
 					self::$deferred_alt_entries[ $blog_id ] = array();
-				// Cap blog buckets drop-oldest: a long-lived process touching
-				// unbounded sites must not grow the buffer per site.
-				if ( count( self::$deferred_alt_entries ) > 10 ) {
-					self::$deferred_alt_entries = array_slice( self::$deferred_alt_entries, -10, null, true );
-				}
+					// Cap blog buckets drop-oldest: a long-lived process touching
+					// unbounded sites must not grow the buffer per site.
+					if ( count( self::$deferred_alt_entries ) > 10 ) {
+						self::$deferred_alt_entries = array_slice( self::$deferred_alt_entries, -10, null, true );
+					}
 				}
 				self::$deferred_alt_entries[ $blog_id ][ $src ] = $title;
 				// Cap each blog bucket drop-oldest so unbounded galleries cannot
@@ -5374,7 +5374,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 								$map = array_slice( $map, -200, 200, true );
 							}
 							self::$derived_alt_memo[ $blog_id ] = $map;
-							$use_manual_cache = function_exists( 'wp_using_ext_object_cache' ) ? ! wp_using_ext_object_cache() : true;
+							$use_manual_cache                   = function_exists( 'wp_using_ext_object_cache' ) ? ! wp_using_ext_object_cache() : true;
 							if ( $use_manual_cache && function_exists( 'wp_cache_set' ) ) {
 								wp_cache_set( $key, $map, 'wppo', DAY_IN_SECONDS );
 							}
