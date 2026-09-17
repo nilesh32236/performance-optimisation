@@ -2359,6 +2359,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 * as exposed.
 		 *
 		 * The verdict is cached in a transient keyed by content-URL hash
+		 * with the multisite blog prefix (`Util::transient_key()`)
 		 * (content_url() is per-site on domain-mapped multisite, so a
 		 * network-global key would serve site A's verdict for deny-ruled
 		 * site B and vice versa) — 1h when exposed so a fresh deny rule
@@ -2392,7 +2393,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					return false;
 				}
 				$url       = content_url( self::CONFIG_FILENAME );
-				$probe_key = self::NGINX_PROBE_TRANSIENT . '_' . md5( $url );
+				$probe_key = Util::transient_key( self::NGINX_PROBE_TRANSIENT . '_' . md5( $url ) );
 				if ( isset( self::$nginx_probe_memo[ $probe_key ] ) ) {
 					return self::$nginx_probe_memo[ $probe_key ];
 				}
@@ -2406,9 +2407,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					return false;
 				}
 				// Legacy fallback: pre-fix installs cached the verdict under
-				// the network-global key. Honour it (and migrate it to the
-				// per-URL key) so upgrading does not force a re-probe storm.
+				// the network-global key (or the raw per-URL key without the
+				// blog prefix). Honour it (and migrate it to the
+				// blog-prefixed per-URL key) so upgrading does not force a
+				// re-probe storm.
 				$legacy = get_transient( self::NGINX_PROBE_TRANSIENT );
+				if ( 'exposed' !== $legacy && 'safe' !== $legacy ) {
+					$legacy = get_transient( self::NGINX_PROBE_TRANSIENT . '_' . md5( $url ) );
+				}
 				if ( 'exposed' === $legacy || 'safe' === $legacy ) {
 					$migrated                             = ( 'exposed' === $legacy );
 					self::$nginx_probe_memo[ $probe_key ] = $migrated;
@@ -2477,6 +2483,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					if ( function_exists( 'content_url' ) ) {
 						try {
 							$url = content_url( self::CONFIG_FILENAME );
+							delete_transient( Util::transient_key( self::NGINX_PROBE_TRANSIENT . '_' . md5( $url ) ) );
+							// Legacy raw per-URL key (pre blog-prefix fix).
 							delete_transient( self::NGINX_PROBE_TRANSIENT . '_' . md5( $url ) );
 						} catch ( \Throwable $e ) {
 							unset( $e );
@@ -2506,6 +2514,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 									try {
 										if ( function_exists( 'content_url' ) ) {
 											$site_url = content_url( self::CONFIG_FILENAME );
+											delete_transient( Util::transient_key( self::NGINX_PROBE_TRANSIENT . '_' . md5( $site_url ) ) );
+											// Legacy raw per-URL key (pre blog-prefix fix).
 											delete_transient( self::NGINX_PROBE_TRANSIENT . '_' . md5( $site_url ) );
 										}
 										delete_transient( self::NGINX_PROBE_TRANSIENT );

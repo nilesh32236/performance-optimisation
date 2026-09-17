@@ -467,6 +467,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			self::$placeholder_info_cache = null;
 			self::$placeholder_path_cache = array();
 			self::$heuristic_lcp_memo     = array();
+			self::$derived_alt_map_memo   = null;
+			self::$derived_alt_map_dirty  = false;
 			if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) && method_exists( 'PerformanceOptimise\Inc\OD_Bridge', 'clear_request_memo' ) ) {
 				try {
 					\PerformanceOptimise\Inc\OD_Bridge::clear_request_memo();
@@ -5198,34 +5200,77 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Per-request memo of the bounded persistent src-to-title map.
+		 *
+		 * Null until the first get_derived_alt_map() read per request;
+		 * afterwards the cached array (possibly extended by
+		 * set_derived_alt_map_entry()) so a page with N distinct images
+		 * issues one cache/transient read instead of N. Reset via
+		 * clear_runtime_caches().
+		 *
+		 * @var array<string, string>|null
+		 * @since NEXT
+		 */
+		private static $derived_alt_map_memo = null;
+
+		/**
+		 * Whether the per-request derived-alt memo has unsaved entries.
+		 *
+		 * @var bool
+		 * @since NEXT
+		 */
+		private static $derived_alt_map_dirty = false;
+
+		/**
+		 * Whether the derived-alt shutdown commit hook is registered.
+		 *
+		 * @var bool
+		 * @since NEXT
+		 */
+		private static $derived_alt_shutdown_registered = false;
+
+		/**
 		 * Read the bounded persistent src-to-title map for derived alt text.
+		 *
+		 * The map is memoized per request: the first call reads
+		 * wp_cache_get/get_transient, later calls reuse the memo.
 		 *
 		 * @since 2.0.0
 		 * @return array<string, string>
 		 */
 		private static function get_derived_alt_map(): array {
+			if ( null !== self::$derived_alt_map_memo ) {
+				return self::$derived_alt_map_memo;
+			}
 			try {
 				if ( function_exists( 'wp_cache_get' ) ) {
 					$hit = wp_cache_get( Util::transient_key( 'wppo_derived_alt_map' ), 'wppo' );
 					if ( is_array( $hit ) ) {
-						return $hit;
+						self::$derived_alt_map_memo = $hit;
+						return self::$derived_alt_map_memo;
 					}
 				}
 				if ( function_exists( 'get_transient' ) ) {
-					$map = get_transient( Util::transient_key( 'wppo_derived_alt_map' ) );
-					return is_array( $map ) ? $map : array();
+					$map                        = get_transient( Util::transient_key( 'wppo_derived_alt_map' ) );
+					self::$derived_alt_map_memo = is_array( $map ) ? $map : array();
+					return self::$derived_alt_map_memo;
 				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
-			return array();
+			self::$derived_alt_map_memo = array();
+			return self::$derived_alt_map_memo;
 		}
 
 		/**
 		 * Store one src-to-title entry in the bounded persistent map.
 		 *
-		 * Capped at 200 entries (drop-oldest) with a day TTL so the map
-		 * cannot grow unbounded.
+		 * Buffered per request and persisted once on shutdown via
+		 * commit_derived_alt_map() (same deferred-commit pattern
+		 * Img_Converter uses for wppo_img_info), so a page with N new
+		 * images issues one transient/option write instead of N DB
+		 * writes on the render path. Capped at 200 entries
+		 * (drop-oldest) with a day TTL so the map cannot grow unbounded.
 		 *
 		 * @since 2.0.0
 		 * @param string $src   Image src URL.
@@ -5234,18 +5279,72 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 */
 		private static function set_derived_alt_map_entry( string $src, string $title ): void {
 			try {
-				$key         = Util::transient_key( 'wppo_derived_alt_map' );
-				$map         = self::get_derived_alt_map();
+				$map = self::get_derived_alt_map();
+				if ( array_key_exists( $src, $map ) && $map[ $src ] === $title ) {
+					return;
+				}
 				$map[ $src ] = $title;
 				if ( count( $map ) > 200 ) {
 					$map = array_slice( $map, -200, 200, true );
 				}
+				self::$derived_alt_map_memo  = $map;
+				self::$derived_alt_map_dirty = true;
+				if ( ! self::$derived_alt_shutdown_registered && function_exists( 'add_action' ) ) {
+					add_action( 'shutdown', array( __CLASS__, 'commit_derived_alt_map' ) );
+					self::$derived_alt_shutdown_registered = true;
+				}
+				// Unit contexts without a shutdown hook (no add_action):
+				// persist immediately so the entry is not silently lost.
+				if ( ! self::$derived_alt_shutdown_registered ) {
+					self::commit_derived_alt_map();
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * Persist buffered derived-alt map entries (shutdown commit).
+		 *
+		 * Re-reads the persistent map and merges the per-request memo
+		 * over it (memo wins) so concurrent requests cannot clobber
+		 * each other's entries, then writes once via wp_cache_set /
+		 * set_transient. No-op unless the memo is dirty. Fail-open
+		 * throughout.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function commit_derived_alt_map(): void {
+			if ( ! self::$derived_alt_map_dirty || null === self::$derived_alt_map_memo ) {
+				return;
+			}
+			try {
+				$key  = Util::transient_key( 'wppo_derived_alt_map' );
+				$memo = self::$derived_alt_map_memo;
+				$live = null;
+				if ( function_exists( 'wp_cache_get' ) ) {
+					$hit = wp_cache_get( $key, 'wppo' );
+					if ( is_array( $hit ) ) {
+						$live = $hit;
+					}
+				}
+				if ( null === $live && function_exists( 'get_transient' ) ) {
+					$stored = get_transient( $key );
+					$live   = is_array( $stored ) ? $stored : array();
+				}
+				$merged = is_array( $live ) ? array_merge( $live, $memo ) : $memo;
+				if ( count( $merged ) > 200 ) {
+					$merged = array_slice( $merged, -200, 200, true );
+				}
 				if ( function_exists( 'wp_cache_set' ) ) {
-					wp_cache_set( $key, $map, 'wppo', DAY_IN_SECONDS );
+					wp_cache_set( $key, $merged, 'wppo', DAY_IN_SECONDS );
 				}
 				if ( function_exists( 'set_transient' ) ) {
-					set_transient( $key, $map, DAY_IN_SECONDS );
+					set_transient( $key, $merged, DAY_IN_SECONDS );
 				}
+				self::$derived_alt_map_memo  = $merged;
+				self::$derived_alt_map_dirty = false;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}

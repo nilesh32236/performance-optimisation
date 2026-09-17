@@ -42,6 +42,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		private const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 		/**
+		 * Upper bound for reading the cached CSS file into memory.
+		 *
+		 * Google Fonts CSS responses are tens of KB; anything larger is
+		 * treated as unconverged (regenerate) instead of being read
+		 * uncapped into memory.
+		 *
+		 * @var int
+		 * @since NEXT
+		 */
+		private const MAX_CACHED_CSS_BYTES = 524288;
+
+		/**
+		 * Upper bound for a single downloaded font file.
+		 *
+		 * Woff2 files are KB-sized (rarely over 1MB); an oversized
+		 * streamed body is rejected before rename() into the cache dir.
+		 *
+		 * @var int
+		 * @since NEXT
+		 */
+		private const MAX_FONT_FILE_BYTES = 5242880;
+
+		/**
 		 * Plugin settings.
 		 *
 		 * @var array
@@ -521,16 +544,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 				// Read through WP_Filesystem (FTP/SSH-method hosts) with a
 				// direct-read fallback; an unreadable cache is treated as
 				// unconverged (fall through and regenerate) rather than
-				// converged, so remote URLs can never get stuck.
-				$cached           = null;
-				$filesystem_probe = Util::init_filesystem();
-				if ( $filesystem_probe && method_exists( $filesystem_probe, 'get_contents' ) ) {
-					$probe = $filesystem_probe->get_contents( $css_file );
-					if ( is_string( $probe ) ) {
-						$cached = $probe;
+				// converged, so remote URLs can never get stuck. Files
+				// that are missing, unreadable, or oversized are likewise
+				// treated as unconverged instead of being read uncapped
+				// into memory.
+				$cached = null;
+				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- filesize() emits warnings on races; guarded with strict checks below.
+				$css_size = @filesize( $css_file );
+				if ( is_int( $css_size ) && $css_size > 0 && $css_size <= self::MAX_CACHED_CSS_BYTES ) {
+					$filesystem_probe = Util::init_filesystem();
+					if ( $filesystem_probe && method_exists( $filesystem_probe, 'get_contents' ) ) {
+						$probe = $filesystem_probe->get_contents( $css_file );
+						if ( is_string( $probe ) ) {
+							$cached = $probe;
+						}
 					}
 				}
-				if ( null === $cached ) {
+				if ( null === $cached && is_int( $css_size ) && $css_size > 0 && $css_size <= self::MAX_CACHED_CSS_BYTES ) {
 					$direct = file_get_contents( $css_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local cache staleness probe fallback when WP_Filesystem is unavailable; writes still go through WP_Filesystem.
 					if ( is_string( $direct ) ) {
 						$cached = $direct;
@@ -813,6 +843,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- filesize() emits warnings on races; guarded with a false check below.
 			$size = @filesize( $tmp );
 			if ( false === $size || 0 === $size ) {
+				if ( file_exists( $tmp ) ) {
+					wp_delete_file( $tmp );
+				}
+				set_transient( $fail_key, 1, self::backoff_ttl() );
+				return false;
+			}
+			if ( $size > self::MAX_FONT_FILE_BYTES ) {
+				// Oversized remote body: reject before rename() into the
+				// cache dir so one bad response cannot fill the disk.
 				if ( file_exists( $tmp ) ) {
 					wp_delete_file( $tmp );
 				}

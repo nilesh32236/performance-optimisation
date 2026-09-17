@@ -6,6 +6,7 @@
  */
 
 use PerformanceOptimise\Inc\Image_Optimisation;
+use PerformanceOptimise\Inc\RUM;
 use Brain\Monkey\Filters;
 use Brain\Monkey\Functions;
 
@@ -51,6 +52,12 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		// set must be reset per test like the shared bootstrap does.
 		if ( class_exists( Image_Optimisation::class ) ) {
 			Image_Optimisation::clear_runtime_caches();
+		}
+		// Per-request stored-LCP memo (RUM): repeat lookups within a
+		// request skip storage reads, so reset per test like the shared
+		// bootstrap does for other static memos.
+		if ( class_exists( RUM::class ) ) {
+			RUM::clear_field_lcp_cache();
 		}
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Test-only superglobal backup/restore.
 		$this->request_uri_had_value = isset( $_SERVER['REQUEST_URI'] );

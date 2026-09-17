@@ -6,6 +6,7 @@
  */
 
 use PerformanceOptimise\Inc\Rest;
+use PerformanceOptimise\Inc\RUM;
 use Brain\Monkey\Functions;
 use PHPUnit\Framework\Attributes\PreserveGlobalState;
 use PHPUnit\Framework\Attributes\RunInSeparateProcess;
@@ -31,6 +32,11 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 	protected function setUp(): void {
 		parent::setUp();
 		\Brain\Monkey\setUp();
+		// Per-request stored-LCP memo (RUM): reset per test so stubbed
+		// storage reads cannot leak across cases in the same process.
+		if ( class_exists( RUM::class ) ) {
+			RUM::clear_field_lcp_cache();
+		}
 		// Salted-cache gate default (issue #882).
 		Functions\when( 'wp_using_ext_object_cache' )->justReturn( true );
 

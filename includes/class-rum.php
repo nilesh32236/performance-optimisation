@@ -376,10 +376,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		private static int $top_url_generation = -1;
 
 		/**
+		 * Per-request memo of resolved PageSpeed LCP URLs.
+		 *
+		 * Keyed by lookup context (explicit path, or current-request post
+		 * ID + front-page flag) so repeat calls within the request skip
+		 * the post-meta / option / transient reads. Reset via
+		 * clear_field_lcp_cache().
+		 *
+		 * @since NEXT
+		 * @var array<string, string>
+		 */
+		private static array $stored_lcp_memo = array();
+
+		/**
 		 * Flush when queue reaches this size.
 		 *
-		 * @var int
 		 * @since 2.0.0
+		 * @var int
 		 */
 		private const FLUSH_THRESHOLD = 20;
 
@@ -410,6 +423,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			self::$score_trends_memo     = null;
 			self::$score_trends_loaded   = false;
 			self::$top_url_generation    = -1;
+			self::$stored_lcp_memo       = array();
 		}
 
 		/**
@@ -2878,22 +2892,105 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 */
 		public static function get_stored_pagespeed_lcp_url( ?string $path = null ): string {
 			try {
+				$memo_key = self::stored_lcp_memo_key( $path );
+				if ( array_key_exists( $memo_key, self::$stored_lcp_memo ) ) {
+					return self::$stored_lcp_memo[ $memo_key ];
+				}
+				$resolved                           = self::resolve_stored_pagespeed_lcp_url( $path );
+				self::$stored_lcp_memo[ $memo_key ] = $resolved;
+				return $resolved;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return '';
+		}
+
+		/**
+		 * Build the per-request memo key for a stored-LCP lookup.
+		 *
+		 * Explicit paths key on the path itself; current-request lookups
+		 * key on the singular post ID + front-page flag (cheap
+		 * conditional tags, no storage I/O).
+		 *
+		 * @since NEXT
+		 * @param string|null $path Page path, or null for the current request.
+		 * @return string Memo key.
+		 */
+		private static function stored_lcp_memo_key( ?string $path ): string {
+			if ( null !== $path ) {
+				return 'path:' . $path;
+			}
+			$post_part  = '0';
+			$front_part = '0';
+			try {
+				if ( function_exists( 'is_singular' ) && function_exists( 'get_the_ID' ) && is_singular() ) {
+					$post_id = get_the_ID();
+					if ( ! empty( $post_id ) ) {
+						$post_part = (string) $post_id;
+					}
+				}
+				if ( function_exists( 'is_front_page' ) && is_front_page() ) {
+					$front_part = '1';
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return 'current:' . $post_part . ':' . $front_part;
+		}
+
+		/**
+		 * Resolve the stored PageSpeed LCP image URL without memoization.
+		 *
+		 * Single home for the three-tier lookup (singular post meta →
+		 * front-page option → strategy+URL-hash transient) called once
+		 * per lookup context per request by
+		 * {@see get_stored_pagespeed_lcp_url()}.
+		 *
+		 * @since NEXT
+		 * @param string|null $path Page path (e.g. "/about/"). Defaults to the current request URL.
+		 * @return string The PageSpeed LCP image URL, or empty string when none is stored.
+		 */
+		private static function resolve_stored_pagespeed_lcp_url( ?string $path = null ): string {
+			try {
 				$strategies = array( 'mobile', 'desktop' );
 
 				// Priority 1: Singular post — check post meta (mobile first, then desktop).
 				// Current-request context only: an explicit path cannot be mapped to a post ID.
+				// Both strategy keys are read with a single get_post_meta()
+				// call (no per-strategy round trip).
 				if ( null === $path && function_exists( 'is_singular' ) && function_exists( 'get_the_ID' ) && function_exists( 'get_post_meta' ) ) {
 					try {
 						if ( is_singular() ) {
 							$post_id = get_the_ID();
 							if ( ! empty( $post_id ) ) {
-								foreach ( $strategies as $strategy ) {
-									$meta_lcp = get_post_meta( $post_id, '_wppo_lcp_image_url_' . $strategy, true );
-									// Same-origin only (issue #1180): a
-									// cross-origin tier value is skipped so a
-									// later same-origin tier can still win.
-									if ( ! empty( $meta_lcp ) && is_string( $meta_lcp ) && self::is_same_origin_url( $meta_lcp ) ) {
-										return $meta_lcp;
+								$handled_single_call = false;
+								try {
+									$all_meta = get_post_meta( $post_id );
+									if ( is_array( $all_meta ) ) {
+										$handled_single_call = true;
+										foreach ( $strategies as $strategy ) {
+											$values   = $all_meta[ '_wppo_lcp_image_url_' . $strategy ] ?? '';
+											$meta_lcp = is_array( $values ) ? ( $values[0] ?? '' ) : $values;
+											// Same-origin only (issue #1180): a
+											// cross-origin tier value is skipped so a
+											// later same-origin tier can still win.
+											if ( ! empty( $meta_lcp ) && is_string( $meta_lcp ) && self::is_same_origin_url( $meta_lcp ) ) {
+												return $meta_lcp;
+											}
+										}
+									}
+								} catch ( \Throwable $e ) {
+									unset( $e );
+								}
+								if ( ! $handled_single_call ) {
+									foreach ( $strategies as $strategy ) {
+										$meta_lcp = get_post_meta( $post_id, '_wppo_lcp_image_url_' . $strategy, true );
+										// Same-origin only (issue #1180): a
+										// cross-origin tier value is skipped so a
+										// later same-origin tier can still win.
+										if ( ! empty( $meta_lcp ) && is_string( $meta_lcp ) && self::is_same_origin_url( $meta_lcp ) ) {
+											return $meta_lcp;
+										}
 									}
 								}
 							}

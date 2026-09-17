@@ -7,6 +7,7 @@
 
 use PerformanceOptimise\Inc\Image_Optimisation;
 use PerformanceOptimise\Inc\Main;
+use PerformanceOptimise\Inc\RUM;
 use PerformanceOptimise\Inc\Util;
 use Brain\Monkey\Functions;
 
@@ -38,6 +39,7 @@ class AutoLcpFontDiscoveryTest extends \PHPUnit\Framework\TestCase {
 	 * Install the WP function stubs shared by these tests.
 	 */
 	private function install_stubs(): void {
+		RUM::clear_field_lcp_cache();
 		Functions\when( 'is_multisite' )->justReturn( false );
 		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
 		Functions\when( 'home_url' )->alias(

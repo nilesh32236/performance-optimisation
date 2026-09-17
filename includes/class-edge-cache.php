@@ -62,6 +62,48 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 		const FILTER_BUNNY_CONTENT = 'wppo_edge_cache_bunny_content';
 
 		/**
+		 * Upper bound for reading an edge template file into memory.
+		 *
+		 * The shipped templates are a few KB; anything larger (or
+		 * missing/unreadable) falls back to the inline template instead
+		 * of being read uncapped into memory.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const MAX_TEMPLATE_BYTES = 262144;
+
+		/**
+		 * Read an edge template file with a size cap.
+		 *
+		 * Returns the file contents, or an empty string when the file is
+		 * missing, unreadable, empty, or oversized (callers fall back to
+		 * their inline template).
+		 *
+		 * @since NEXT
+		 * @param string $filename Template filename under templates/.
+		 * @return string Template contents, or empty string on any failure.
+		 */
+		private static function read_template( string $filename ): string {
+			try {
+				$template_path = WPPO_PLUGIN_PATH . 'templates/' . $filename;
+				if ( ! file_exists( $template_path ) || ! is_readable( $template_path ) ) {
+					return '';
+				}
+				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- filesize() emits warnings on races; guarded with strict checks below.
+				$size = @filesize( $template_path );
+				if ( ! is_int( $size ) || $size <= 0 || $size > self::MAX_TEMPLATE_BYTES ) {
+					return '';
+				}
+				$content = file_get_contents( $template_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+				return is_string( $content ) ? $content : '';
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '';
+			}
+		}
+
+		/**
 		 * Whether edge cache is enabled.
 		 *
 		 * Reads wppo_settings[edge_cache][enabled] (false default) and
@@ -176,12 +218,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 			$ttl    = isset( $config['cache_ttl'] ) ? (int) $config['cache_ttl'] : 300;
 			$swr    = isset( $config['swr'] ) ? (int) $config['swr'] : 86400;
 
-			$template_path = WPPO_PLUGIN_PATH . 'templates/cloudflare-worker.js';
-			$content       = '';
-			if ( file_exists( $template_path ) && is_readable( $template_path ) ) {
-				$content = file_get_contents( $template_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
-			}
-			if ( false === $content || '' === $content ) {
+			$content = self::read_template( 'cloudflare-worker.js' );
+			if ( '' === $content ) {
 				// Fallback inline template with SWR semantics.
 				$content = "export default {\n  async fetch(request, env, ctx) {\n    const cache = caches.default;\n    let response = await cache.match(request);\n    if (response) {\n      ctx.waitUntil(fetch(request).then(r=>{ if(r.ok){ const c=r.clone(); c.headers.set('Cache-Control','public, max-age={{CACHE_TTL}}, stale-while-revalidate={{SWR}}'); cache.put(request,c);} }).catch(()=>{}));\n      response.headers.set('Cache-Control','public, max-age={{CACHE_TTL}}, stale-while-revalidate={{SWR}}');\n      response.headers.set('X-Edge-Cache','HIT');\n      return response;\n    }\n    const originRes = await fetch(request);\n    if (originRes.ok) {\n      const res = new Response(originRes.body, originRes);\n      res.headers.set('Cache-Control','public, max-age={{CACHE_TTL}}, stale-while-revalidate={{SWR}}');\n      res.headers.set('X-Edge-Cache','MISS');\n      ctx.waitUntil(cache.put(request, res.clone()).catch(()=>{}));\n      return res;\n    }\n    return originRes;\n  }\n}\n";
 			}
@@ -259,12 +297,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Cache' ) ) {
 			$swr    = isset( $config['swr'] ) ? (int) $config['swr'] : 86400;
 
 			// Try template file if present, else inline fallback.
-			$template_path = WPPO_PLUGIN_PATH . 'templates/bunny-edge.js';
-			$content       = '';
-			if ( file_exists( $template_path ) && is_readable( $template_path ) ) {
-				$content = file_get_contents( $template_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
-			}
-			if ( false === $content || '' === $content ) {
+			$content = self::read_template( 'bunny-edge.js' );
+			if ( '' === $content ) {
 				$content = "// Bunny Edge — stale-while-revalidate for WPPO cache semantics\n// Origin: {{ORIGIN_URL}} TTL={{CACHE_TTL}} SWR={{SWR}}\nasync function handleRequest(event){\n  const request=event.request;\n  const cache=caches.default;\n  let response=await cache.match(request);\n  if(response){\n    event.waitUntil(fetch(request).then(r=>{ if(r.ok){ const c=r.clone(); c.headers.set('Cache-Control','public, max-age={{CACHE_TTL}}, stale-while-revalidate={{SWR}}'); cache.put(request,c);} }).catch(()=>{}));\n    response.headers.set('X-Edge-Cache','HIT');\n    return response;\n  }\n  const originRes=await fetch(request);\n  if(originRes.ok){\n    const res=new Response(originRes.body, originRes);\n    res.headers.set('Cache-Control','public, max-age={{CACHE_TTL}}, stale-while-revalidate={{SWR}}');\n    res.headers.set('X-Edge-Cache','MISS');\n    event.waitUntil(cache.put(request,res.clone()).catch(()=>{}));\n    return res;\n  }\n  return originRes;\n}\naddEventListener('fetch',e=>e.respondWith(handleRequest(e)));\n";
 			}
 
