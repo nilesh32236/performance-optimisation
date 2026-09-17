@@ -6242,10 +6242,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					}
 				}
 				if ( isset( $settings['cacheMaxFiles'] ) && is_numeric( $settings['cacheMaxFiles'] ) ) {
-					$max_files = (int) $settings['cacheMaxFiles'];
-					if ( $max_files >= 100 && $max_files <= 100000 ) {
-						$defaults['max_files'] = $max_files;
-					}
+					$max_files             = (int) $settings['cacheMaxFiles'];
+					$defaults['max_files'] = max( 100, min( 100000, $max_files ) );
 				}
 				if ( array_key_exists( 'cacheRandomizedQueryGuard', $settings ) ) {
 					$parsed = filter_var( $settings['cacheRandomizedQueryGuard'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
@@ -6260,6 +6258,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Total static-cache bytes + file count in a single directory walk.
+		 *
+		 * Shared single-walk helper behind {@see get_cache_size_bytes()},
+		 * {@see get_cache_file_count()}, and {@see get_cache_cap_status()}
+		 * so status paths enumerate large caches once instead of once per
+		 * dimension. Fail-open: returns zeros when the filesystem or
+		 * directory is unavailable.
+		 *
+		 * @since NEXT
+		 * @return array{bytes:int,files:int} Bytes used and file count.
+		 */
+		public static function get_cache_bytes_and_files(): array {
+			try {
+				$instance = new self();
+				if ( ! $instance->get_filesystem() ) {
+					return array(
+						'bytes' => 0,
+						'files' => 0,
+					);
+				}
+				$dir = trailingslashit( $instance->cache_root_dir );
+				if ( '' !== $instance->domain ) {
+					$dir .= $instance->domain;
+				}
+				if ( ! $instance->filesystem->is_dir( $dir ) ) {
+					return array(
+						'bytes' => 0,
+						'files' => 0,
+					);
+				}
+				$stats = $instance->calculate_directory_stats( $dir );
+				return array(
+					'bytes' => max( 0, (int) ( $stats['size'] ?? 0 ) ),
+					'files' => max( 0, (int) ( $stats['count'] ?? 0 ) ),
+				);
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return array(
+					'bytes' => 0,
+					'files' => 0,
+				);
+			}
+		}
+
+		/**
 		 * Total static-cache size in bytes for the current domain.
 		 *
 		 * Fail-open: returns 0 when the filesystem or directory is
@@ -6270,24 +6313,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return int Bytes used, or 0 on failure.
 		 */
 		public static function get_cache_size_bytes(): int {
-			try {
-				$instance = new self();
-				if ( ! $instance->get_filesystem() ) {
-					return 0;
-				}
-				$dir = trailingslashit( $instance->cache_root_dir );
-				if ( '' !== $instance->domain ) {
-					$dir .= $instance->domain;
-				}
-				if ( ! $instance->filesystem->is_dir( $dir ) ) {
-					return 0;
-				}
-				$stats = $instance->calculate_directory_stats( $dir );
-				return max( 0, (int) ( $stats['size'] ?? 0 ) );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return 0;
-			}
+			$stats = self::get_cache_bytes_and_files();
+			return max( 0, (int) ( $stats['bytes'] ?? 0 ) );
 		}
 
 		/**
@@ -6302,24 +6329,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return int File count, or 0 on failure.
 		 */
 		public static function get_cache_file_count(): int {
-			try {
-				$instance = new self();
-				if ( ! $instance->get_filesystem() ) {
-					return 0;
-				}
-				$dir = trailingslashit( $instance->cache_root_dir );
-				if ( '' !== $instance->domain ) {
-					$dir .= $instance->domain;
-				}
-				if ( ! $instance->filesystem->is_dir( $dir ) ) {
-					return 0;
-				}
-				$stats = $instance->calculate_directory_stats( $dir );
-				return max( 0, (int) ( $stats['count'] ?? 0 ) );
-			} catch ( \Throwable $e ) {
-				unset( $e );
-				return 0;
-			}
+			$stats = self::get_cache_bytes_and_files();
+			return max( 0, (int) ( $stats['files'] ?? 0 ) );
 		}
 
 		/**
@@ -6352,7 +6363,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					return false;
 				}
 				$randomized_keys = array( 'ver', 'version', 'v', 't', 'ts', 'timestamp', 'time', 'rand', 'random', 'nonce', '_' );
-				$pairs           = explode( '&', $query );
+				$pairs           = preg_split( '/[&;]/', (string) $query );
+				if ( ! is_array( $pairs ) ) {
+					$pairs = explode( '&', (string) $query );
+				}
 				foreach ( $pairs as $pair ) {
 					$kv    = explode( '=', $pair, 2 );
 					$key   = strtolower( trim( (string) ( $kv[0] ?? '' ) ) );
@@ -6361,8 +6375,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 						continue;
 					}
 					$decoded = function_exists( 'urldecode' ) ? urldecode( $value ) : $value;
-					// Long digit runs (timestamps), long hex (uniqid/md5), or mixed alnum tokens.
-					if ( 1 === preg_match( '/^\d{8,}$/', $decoded ) ) {
+					// Long digit runs (epoch timestamps, 10+ digits so YYYYMMDD
+					// date versions stay combinable), long hex (uniqid/md5),
+					// or mixed alnum tokens.
+					if ( 1 === preg_match( '/^\d{10,}$/', $decoded ) ) {
 						return true;
 					}
 					if ( 1 === preg_match( '/^[0-9a-f]{10,}$/i', $decoded ) ) {
@@ -6409,8 +6425,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				'warn_files' => $warn_files,
 			);
 			try {
-				$bytes           = self::get_cache_size_bytes();
-				$files           = self::get_cache_file_count();
+				// Single directory walk for both dimensions so accounting
+				// and eviction never drift on large caches.
+				$both            = self::get_cache_bytes_and_files();
+				$bytes           = (int) ( $both['bytes'] ?? 0 );
+				$files           = (int) ( $both['files'] ?? 0 );
 				$status['bytes'] = $bytes;
 				$status['files'] = $files;
 				$over_bytes      = $bytes >= $cap_bytes;
@@ -6564,8 +6583,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * Oldest-mtime-first via the shared {@see collect_cache_entries_by_age()}
 		 * enumeration so byte-cap and file-count-cap eviction can never drift.
-		 * Bounded to 2000 deletions per run. Fail-open: filesystem failures
-		 * stop silently.
+		 * Bounded to 2000 deletions per run; large overshoots converge over
+		 * multiple throttled runs (see {@see maybe_enforce_cache_cap()}).
+		 * Fail-open: filesystem failures stop silently.
 		 *
 		 * @since NEXT
 		 * @param int $files_to_free Minimum entries to remove.
