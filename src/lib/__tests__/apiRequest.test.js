@@ -981,14 +981,16 @@ describe( 'API Request library', () => {
 			expect(
 				getErrorLogMessage( 'GET /api?key=SECRET123 failed' )
 			).toBe( 'GET /api?key=[redacted] failed' );
-			expect(
-				getErrorLogMessage( 'denied token=abc123' )
-			).toBe( 'denied token=[redacted]' );
+			expect( getErrorLogMessage( 'denied token=abc123' ) ).toBe(
+				'denied token=[redacted]'
+			);
 		} );
 
 		it( 'redacts space-separated passwords', () => {
 			expect(
-				getErrorLogMessage( "Access denied for user 'admin' using password hunter2" )
+				getErrorLogMessage(
+					"Access denied for user 'admin' using password hunter2"
+				)
 			).not.toContain( 'hunter2' );
 		} );
 	} );
