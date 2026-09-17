@@ -2043,7 +2043,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					// and the post-success sweep must not leave topology source
 					// fetchable as plain text.
 					$rule = array(
-					'<FilesMatch "^wppo-redis-config\\.php(\\.wppo-bak|\\.tmp.*)?$">',
+						'<FilesMatch "^wppo-redis-config\\.php(\\.wppo-bak|\\.tmp.*)?$">',
 						'<IfModule mod_authz_core.c>',
 						'Require all denied',
 						'</IfModule>',
