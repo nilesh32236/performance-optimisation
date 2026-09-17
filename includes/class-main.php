@@ -3511,6 +3511,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// Allowlisted top-level settings keys — single source is Util::ALLOWED_SETTINGS_KEYS
 					// (exposed here so JS `ALLOWED_IMPORT_KEYS` can stay in sync without codegen).
 					'allowedSettingsKeys'                  => Util::ALLOWED_SETTINGS_KEYS,
+					// Upgrade auto-purge status (issue #1276): SPA-visible
+					// last-purge reason + safe-mode preview link bypassing
+					// minify (?wppo_nocache=1). Class/method-exists guarded +
+					// fail-open so a missing watcher never breaks localisation.
+					'upgradePurge'                         => $this->get_upgrade_purge_for_client(),
 				),
 			);
 
@@ -11012,6 +11017,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				);
 			}
 			return $sanitized;
+		}
+
+		/**
+		 * Upgrade auto-purge status for the SPA (issue #1276).
+		 *
+		 * Returns the last derived-cache purge record plus a safe-mode
+		 * preview URL (`?wppo_nocache=1`, bypassing minify). Class and
+		 * method-exists guarded + fail-open so localisation never fatals.
+		 * Localised (not lazy-fetched) intentionally: the banner needs the
+		 * seed on first paint and the SPA refreshes via the read-only
+		 * upgrade_purge_status endpoint after cache-clearing actions; the
+		 * cost is a single non-autoloaded option read on admin pages.
+		 *
+		 * @since NEXT
+		 * @return array{last_purge:array{reason:string,time:int},safe_preview_url:string}
+		 */
+		private function get_upgrade_purge_for_client(): array {
+			$fallback = array(
+				'last_purge'       => array(
+					'reason' => '',
+					'time'   => 0,
+				),
+				'safe_preview_url' => '',
+			);
+			try {
+				if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
+					return $fallback;
+				}
+				if ( method_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher', 'get_last_purge' ) ) {
+					$last = Builder_Purge_Watcher::get_last_purge();
+					if ( is_array( $last ) ) {
+						$fallback['last_purge'] = array(
+							'reason' => isset( $last['reason'] ) && is_string( $last['reason'] ) ? $last['reason'] : '',
+							'time'   => isset( $last['time'] ) ? (int) $last['time'] : 0,
+						);
+					}
+				}
+				if ( method_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher', 'get_safe_preview_url' ) ) {
+					$url                          = Builder_Purge_Watcher::get_safe_preview_url();
+					$fallback['safe_preview_url'] = is_string( $url ) ? $url : '';
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $fallback;
 		}
 
 		/**

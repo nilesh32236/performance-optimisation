@@ -10,10 +10,12 @@ import { handleChange } from '../lib/util';
 import {
 	apiCall,
 	commitSettingsCache,
+	getWppoSettings,
 	isValidScanUrl,
 	runPerformanceScan,
 } from '../lib/apiRequest';
 import { modeLabel } from '../lib/litespeed';
+import { isSafeHttpUrl } from '../lib/urls';
 import useNotice from '../lib/useNotice';
 import useUnsavedChanges from '../lib/useUnsavedChanges';
 import UnsavedChangesContext from '../lib/UnsavedChangesContext';
@@ -281,6 +283,106 @@ const FileOptimization = ( {
 		// (issue #1220). Fail-open: a failed fetch leaves the banner hidden.
 		refreshUsedCssStatus();
 	}, [ options.removeUnusedCSS, refreshUsedCssStatus ] );
+	// Upgrade auto-purge status (issue #1276): SPA-visible last-purge
+	// reason + safe-mode preview link bypassing minify (?wppo_nocache=1).
+	// Seeded from wppoSettings.upgradePurge, refreshed from the read-only
+	// upgrade_purge_status endpoint. Fail-open: a failed fetch keeps the seed.
+	const initialUpgradePurge = getWppoSettings( 'upgradePurge', {} ) || {};
+	const [ upgradePurge, setUpgradePurge ] = useState( {
+		last_purge:
+			initialUpgradePurge.last_purge ||
+			initialUpgradePurge.lastPurge ||
+			null,
+		safe_preview_url:
+			initialUpgradePurge.safe_preview_url ||
+			initialUpgradePurge.safePreviewUrl ||
+			'',
+	} );
+	const [ isPurgingDerived, setIsPurgingDerived ] = useState( false );
+	const purgingDerivedRef = useRef( false );
+	const {
+		notice: derivedPurgeNotice,
+		notify: notifyDerivedPurge,
+		dismiss: dismissDerivedPurge,
+	} = useNotice();
+	const refreshUpgradePurgeStatus = useCallback( async () => {
+		try {
+			const res = await apiCall( 'upgrade_purge_status', {}, 'GET' );
+			if ( res && res.success && res.data ) {
+				setUpgradePurge( ( prev ) => ( {
+					last_purge: res.data.last_purge || null,
+					safe_preview_url:
+						res.data.safe_preview_url || prev.safe_preview_url,
+				} ) );
+			}
+		} catch {
+			// Fail-open: keep the seeded wppoSettings value.
+		}
+	}, [] );
+	// Note: no auto-fetch on mount/tab-open — the status is seeded from
+	// wppoSettings.upgradePurge (localized by PHP) so existing mocked-apiCall
+	// flows are unaffected; refresh runs after a manual derived purge.
+	const handlePurgeDerivedCaches = async () => {
+		if ( isPurgingDerived || purgingDerivedRef.current ) {
+			return;
+		}
+		purgingDerivedRef.current = true;
+		setIsPurgingDerived( true );
+		dismissDerivedPurge();
+		try {
+			const res = await apiCall( 'purge_derived_caches' );
+			if ( res && res.success ) {
+				if (
+					res.data &&
+					typeof res.data.reason === 'string' &&
+					typeof res.data.time === 'number'
+				) {
+					setUpgradePurge( ( prev ) => ( {
+						...prev,
+						last_purge: res.data,
+					} ) );
+				}
+				notifyDerivedPurge( {
+					type: 'success',
+					message:
+						res.message ||
+						__(
+							'Page cache, used CSS and critical CSS purged.',
+							'performance-optimisation'
+						),
+					durationMs: 3000,
+				} );
+				await Promise.all( [
+					refreshUpgradePurgeStatus(),
+					refreshUsedCssStatus(),
+				] );
+			} else {
+				notifyDerivedPurge( {
+					type: 'error',
+					message:
+						( res && res.message ) ||
+						__(
+							'Failed to purge derived caches.',
+							'performance-optimisation'
+						),
+					durationMs: 3000,
+				} );
+			}
+		} catch ( err ) {
+			console.error( 'Failed to purge derived caches.', err );
+			notifyDerivedPurge( {
+				type: 'error',
+				message: __(
+					'An unexpected error occurred.',
+					'performance-optimisation'
+				),
+				durationMs: 3000,
+			} );
+		} finally {
+			purgingDerivedRef.current = false;
+			setIsPurgingDerived( false );
+		}
+	};
 	// Sandbox preview (issue #1163): visitor-safe admin preview of
 	// delay/defer/combine with one-click promote/discard + in-preview perf test.
 	const [ sandboxStaged, setSandboxStaged ] = useState( null );
@@ -369,40 +471,16 @@ const FileOptimization = ( {
 	// server-provided preview_url to the resource-intensive scan endpoint.
 	// Server-side host allowlisting + rate limiting remains authoritative.
 	const stripPreviewParams = ( url ) => {
-		if ( ! url || typeof url !== 'string' ) {
+		if ( ! isSafeHttpUrl( url ) ) {
 			return '';
 		}
 		try {
 			const parsed = new URL( url );
-			if ( 'http:' !== parsed.protocol && 'https:' !== parsed.protocol ) {
-				return '';
-			}
 			parsed.searchParams.delete( 'wppo_preview' );
 			parsed.searchParams.delete( '_wppo_preview_nonce' );
 			return parsed.toString();
 		} catch {
 			return '';
-		}
-	};
-	/**
-	 * Whether a URL is safe to render as an external link href (http(s) only).
-	 *
-	 * Mirrors the isHttpUrl gate in LlmsPanel: a tampered server-provided
-	 * preview_url such as javascript:alert(1) must never reach <a href>.
-	 *
-	 * @since NEXT
-	 * @param {string} url Raw URL.
-	 * @return {boolean} True when the URL parses as http(s).
-	 */
-	const isSafePreviewUrl = ( url ) => {
-		if ( ! url || typeof url !== 'string' ) {
-			return false;
-		}
-		try {
-			const parsed = new URL( url );
-			return 'http:' === parsed.protocol || 'https:' === parsed.protocol;
-		} catch {
-			return false;
 		}
 	};
 	const handleSandboxSave = async () => {
@@ -1219,6 +1297,7 @@ const FileOptimization = ( {
 						type={ notice.type }
 						message={ notice.message }
 						className="wppo-mb-20"
+						onDismiss={ dismiss }
 					/>
 				) }
 
@@ -2071,6 +2150,85 @@ const FileOptimization = ( {
 										) }
 									/>
 								) }
+								<div className="wppo-field wppo-upgrade-purge">
+									<h4
+										className="wppo-field-label"
+										id="wppo-upgrade-purge-heading"
+									>
+										{ __(
+											'Upgrade safety — auto-purge on update',
+											'performance-optimisation'
+										) }
+									</h4>
+									<p
+										className="wppo-field-description"
+										id="wppo-upgrade-purge-desc"
+									>
+										{ __(
+											'Plugin, theme and core updates auto-clear the page cache, purge used and critical CSS, and bump combined-asset versions so the first visit never shows unstyled content. Use the safe preview link to verify styled output (it bypasses minify via ?wppo_nocache=1).',
+											'performance-optimisation'
+										) }
+									</p>
+									{ upgradePurge &&
+										upgradePurge.last_purge &&
+										upgradePurge.last_purge.reason && (
+											<NoticeBanner
+												type="info"
+												message={ sprintf(
+													// translators: %s: last purge reason.
+													__(
+														'Last purge: %s',
+														'performance-optimisation'
+													),
+													upgradePurge.last_purge
+														.reason
+												) }
+											/>
+										) }
+									{ derivedPurgeNotice && (
+										<NoticeBanner
+											type={ derivedPurgeNotice.type }
+											message={
+												derivedPurgeNotice.message
+											}
+											onDismiss={ dismissDerivedPurge }
+										/>
+									) }
+									<div
+										className="wppo-sandbox-actions"
+										aria-describedby="wppo-upgrade-purge-desc"
+									>
+										<LoadingSubmitButton
+											type="button"
+											className="wppo-button wppo-button--secondary"
+											isLoading={ isPurgingDerived }
+											onClick={ handlePurgeDerivedCaches }
+											label={ __(
+												'Purge Derived Caches',
+												'performance-optimisation'
+											) }
+										/>
+										{ upgradePurge &&
+											upgradePurge.safe_preview_url &&
+											isSafeHttpUrl(
+												upgradePurge.safe_preview_url
+											) && (
+												<a
+													className="button button-secondary"
+													href={
+														upgradePurge.safe_preview_url
+													}
+													target="_blank"
+													rel="noopener noreferrer"
+												>
+													{ __(
+														'Open safe preview (bypasses minify)',
+														'performance-optimisation'
+													) }
+												</a>
+											) }
+									</div>
+								</div>
 								<div className="wppo-field wppo-sandbox-preview">
 									<p className="wppo-field-label">
 										{ __(
@@ -2104,7 +2262,7 @@ const FileOptimization = ( {
 											) }
 										</button>
 										{ sandboxPreviewUrl &&
-											( isSafePreviewUrl(
+											( isSafeHttpUrl(
 												sandboxPreviewUrl
 											) ? (
 												<a

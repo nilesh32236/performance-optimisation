@@ -211,6 +211,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+				'purge_derived_caches'      => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'purge_derived_caches' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
+				'upgrade_purge_status'      => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'get_upgrade_purge_status' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
 				'used_css_status'           => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_used_css_status' ),
@@ -2975,6 +2987,111 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				true,
 				200,
 				$message
+			);
+		}
+
+		/**
+		 * Manually purge all derived caches (page cache + used-CSS + critical-CSS).
+		 *
+		 * SPA manual counterpart to the automatic `upgrader_process_complete`
+		 * purge (issue #1276): clears the page cache, purges coupled CSS, and
+		 * bumps combined-asset versions so the first post-update hit never
+		 * serves a FOUC. Intentionally synchronous (unlike the deferred
+		 * automatic upgrade path): the admin click needs immediate feedback
+		 * plus an up-to-date last-purge record; the 5/60 throttle bounds the
+		 * cost. Throttled like regenerate_ccss; fail-open messaging.
+		 *
+		 * @param \WP_REST_Request $_request The request object (unused).
+		 * @since NEXT
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function purge_derived_caches( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			if ( $this->is_endpoint_throttled( 'purge_derived_caches', 5, 60 ) ) {
+				$response = $this->send_response( null, false, 429, __( 'Too many requests. Please try again shortly.', 'performance-optimisation' ) );
+				$response->header( 'Retry-After', '60' );
+				return $response;
+			}
+			$degraded = ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) || ! method_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher', 'purge_derived_caches' );
+			try {
+				if ( ! $degraded ) {
+					( new Builder_Purge_Watcher() )->purge_derived_caches( 'manual purge' );
+				} else {
+					if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
+						Cache::clear_cache();
+						if ( method_exists( 'PerformanceOptimise\Inc\Cache', 'bump_stats_cache' ) ) {
+							Cache::bump_stats_cache();
+						}
+					}
+					if ( class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
+						Used_CSS::purge_coupled( null );
+					}
+					if ( class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
+						Critical_CSS::clear_all();
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			if ( class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
+				try {
+					Log::add( __( 'Manual purge: page cache, used-CSS and critical-CSS purged; combined assets version-bumped.', 'performance-optimisation' ) );
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			$message    = $degraded
+				? __( 'Page cache and used CSS purged (degraded mode: version tracking unavailable).', 'performance-optimisation' )
+				: __( 'Page cache, used CSS and critical CSS purged.', 'performance-optimisation' );
+			$last_purge = array(
+				'reason' => '',
+				'time'   => 0,
+			);
+			if ( class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) && method_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher', 'get_last_purge' ) ) {
+				$last_purge = Builder_Purge_Watcher::get_last_purge();
+			}
+			return $this->send_response(
+				$last_purge,
+				true,
+				200,
+				$message
+			);
+		}
+
+		/**
+		 * SPA-visible upgrade-purge status: last-purge reason + safe-mode preview link.
+		 *
+		 * Read-only GET (issue #1276). The safe preview URL carries
+		 * `?wppo_nocache=1` (honoured by Main::is_aggressive_bypass_active())
+		 * so it bypasses minify/delay/defer/used-CSS for a one-click styled
+		 * proof after an upgrade.
+		 *
+		 * @param \WP_REST_Request $_request The request object (unused).
+		 * @since NEXT
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function get_upgrade_purge_status( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			$last_purge = array(
+				'reason' => '',
+				'time'   => 0,
+			);
+			$safe_url   = '';
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
+					if ( method_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher', 'get_last_purge' ) ) {
+						$last_purge = Builder_Purge_Watcher::get_last_purge();
+					}
+					if ( method_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher', 'get_safe_preview_url' ) ) {
+						$safe_url = Builder_Purge_Watcher::get_safe_preview_url();
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			return $this->send_response(
+				array(
+					'last_purge'       => $last_purge,
+					'safe_preview_url' => $safe_url,
+				)
 			);
 		}
 

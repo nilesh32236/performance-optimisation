@@ -1517,4 +1517,51 @@ describe( 'FileOptimization Component', () => {
 		);
 		expect( previewLink ).toHaveAttribute( 'rel', 'noopener noreferrer' );
 	} );
+
+	it( 'purge derived caches button calls purge_derived_caches and shows feedback', async () => {
+		apiCall.mockResolvedValue( { success: true, data: {} } );
+		apiCall.mockResolvedValueOnce( { success: true, data: {} } );
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+		fireEvent.click( screen.getByRole( 'tab', { name: /Scripts/i } ) );
+
+		const purgeButton = await screen.findByText( 'Purge Derived Caches' );
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			message: 'Page cache, used CSS and critical CSS purged.',
+			data: { reason: 'manual purge', time: 123 },
+		} );
+		fireEvent.click( purgeButton );
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith( 'purge_derived_caches' );
+		} );
+		await waitFor( () => {
+			expect(
+				screen.getByText(
+					'Page cache, used CSS and critical CSS purged.'
+				)
+			).toBeInTheDocument();
+		} );
+	} );
+
+	it( 'shows the SPA-visible last-purge reason and safe preview link', async () => {
+		global.wppoSettings.upgradePurge = {
+			last_purge: { reason: 'plugin akismet/akismet.php', time: 123 },
+			safe_preview_url: 'https://example.com/?wppo_nocache=1',
+		};
+		apiCall.mockResolvedValue( { success: true, data: {} } );
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+		fireEvent.click( screen.getByRole( 'tab', { name: /Scripts/i } ) );
+
+		expect(
+			await screen.findByText( /Last purge: plugin akismet/i )
+		).toBeInTheDocument();
+		const safeLink = screen.getByRole( 'link', {
+			name: /bypasses minify/i,
+		} );
+		expect( safeLink ).toHaveAttribute(
+			'href',
+			'https://example.com/?wppo_nocache=1'
+		);
+	} );
 } );
