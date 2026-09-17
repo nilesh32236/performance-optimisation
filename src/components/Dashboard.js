@@ -69,6 +69,30 @@ const POLL_INTERVAL_MS = 5000;
 const MAX_POLL_ATTEMPTS = 60;
 
 /**
+ * Maximum delay between image_job_status poll ticks.
+ *
+ * Polling backs off (5s for the first 10 attempts, then +5s per 10
+ * attempts) so deep queues do not hammer admin-ajax at the same rate as
+ * near-complete ones.
+ *
+ * @since NEXT
+ */
+const MAX_POLL_DELAY_MS = 15000;
+
+/**
+ * Delay before the next poll tick, backing off with the attempt count.
+ *
+ * @since NEXT
+ * @param {number} attempts 1-based poll attempt count.
+ * @return {number} Milliseconds to wait before the next tick.
+ */
+const getPollDelay = ( attempts ) =>
+	Math.min(
+		POLL_INTERVAL_MS * Math.max( 1, Math.ceil( attempts / 10 ) ),
+		MAX_POLL_DELAY_MS
+	);
+
+/**
  * Coerce a TTL override select value to a finite number, or undefined when
  * the override should be omitted. Guards against tampered non-numeric option
  * values: Number('abc') is NaN and JSON.stringify(NaN) becomes null, which
@@ -441,7 +465,7 @@ const Dashboard = ( {
 	const pollJobStatus = useCallback( async () => {
 		const currentTimeout = pollingRef.current;
 		pollAttemptsRef.current += 1;
-		if ( pollAttemptsRef.current > MAX_POLL_ATTEMPTS ) {
+		if ( pollAttemptsRef.current >= MAX_POLL_ATTEMPTS ) {
 			setBgProcessing( false );
 			pollingRef.current = null;
 			notify( {
@@ -538,7 +562,10 @@ const Dashboard = ( {
 			} );
 		}
 		if ( pollingRef.current === currentTimeout ) {
-			pollingRef.current = setTimeout( pollJobStatus, POLL_INTERVAL_MS );
+			pollingRef.current = setTimeout(
+				pollJobStatus,
+				getPollDelay( pollAttemptsRef.current )
+			);
 		}
 	}, [ updateState, notify ] );
 

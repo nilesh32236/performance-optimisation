@@ -36,6 +36,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * - wppo_img_conversion → img_convert_cron
 		 * - cron_schedules (filter) → add_custom_cron_interval
 		 * - wppo_generate_static_page → process_page (priority 10, 1 arg)
+		 * - wppo_generate_static_url → process_url (priority 10, 1 arg)
+		 * - wppo_preload_url_batch → preload_url_batch (priority 10, 1 arg)
 		 * - wppo_database_cleanup_cron → database_cleanup_cron
 		 *
 		 * @since 1.0.0
@@ -228,7 +230,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * Resume the preload queue by re-scheduling queued + failed URLs.
 		 *
 		 * Failed URLs move back to queued so a resume retries them once.
-		 * Fail-open: scheduler failures simply leave the queue untouched.
+		 * URLs are re-scheduled in chunks of 50 per `wppo_preload_url_batch`
+		 * event (staggered 0-300s) instead of one single event per URL, so a
+		 * resume of a 500-URL queue inserts ~10 cron rows instead of ~500
+		 * (wp-cron option bloat). Fail-open: scheduler failures simply leave
+		 * the queue untouched.
 		 *
 		 * @since NEXT
 		 * @return int Number of URLs re-scheduled.
@@ -244,11 +250,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				if ( empty( $pending ) ) {
 					return 0;
 				}
-				foreach ( $pending as $url ) {
+				$chunks = array_chunk( $pending, self::PRELOAD_RESUME_CHUNK_SIZE );
+				foreach ( $chunks as $index => $chunk ) {
 					try {
 						$delay = function_exists( 'wp_rand' ) ? wp_rand( 0, 300 ) : 60;
-						if ( wp_schedule_single_event( time() + (int) $delay, 'wppo_generate_static_url', array( $url ) ) ) {
-							++$rescheduled;
+						// Stagger chunks so batch events do not stampede the origin.
+						$at = time() + (int) $delay + ( (int) $index * 60 );
+						if ( wp_schedule_single_event( $at, 'wppo_preload_url_batch', array( $chunk ) ) ) {
+							$rescheduled += count( $chunk );
 						}
 					} catch ( \Throwable $e ) {
 						unset( $e );
@@ -266,6 +275,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			}
 			return $rescheduled;
 		}
+
+		/**
+		 * Process a resumed preload batch (chunk of URLs).
+		 *
+		 * Scheduled by {@see resume_preload_queue()}: each event carries up
+		 * to PRELOAD_RESUME_CHUNK_SIZE URLs and warms them synchronously via
+		 * {@see process_url()} instead of fanning out into N single-URL cron
+		 * rows. Non-string entries are skipped; per-URL done/failed
+		 * bookkeeping stays inside process_url().
+		 *
+		 * @since NEXT
+		 * @param mixed $urls Chunk of URLs to preload.
+		 * @return void
+		 */
+		public function preload_url_batch( $urls ): void {
+			try {
+				if ( ! is_array( $urls ) ) {
+					return;
+				}
+				$count = 0;
+				foreach ( $urls as $url ) {
+					if ( ! is_string( $url ) || '' === trim( $url ) ) {
+						continue;
+					}
+					$this->process_url( $url );
+					++$count;
+					if ( $count >= self::PRELOAD_RESUME_CHUNK_SIZE ) {
+						break;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
+		 * URLs per `wppo_preload_url_batch` resume event.
+		 *
+		 * Keeps a 500-URL resume to ~10 cron rows instead of ~500 single-URL
+		 * events (wp-cron option bloat).
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const PRELOAD_RESUME_CHUNK_SIZE = 50;
 
 		/**
 		 * Maximum number of child sitemaps to fetch from an index.
@@ -299,6 +353,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			'wppo_page_cron_batch',      // Single-event batch continuation.
 			'wppo_generate_static_page', // Single-event per-post preload.
 			'wppo_generate_static_url',  // Single-event per-URL preload (sitemap).
+			'wppo_preload_url_batch',    // Single-event per-chunk preload resume (50 URLs per event).
 			'wppo_img_conversion',       // Hourly image conversion dispatcher.
 			'wppo_database_cleanup_cron', // Daily DB cleanup.
 			'wppo_web_vitals_rescan',    // Daily Web Vitals auto-rescan.
@@ -348,6 +403,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 
 			add_action( 'wppo_generate_static_page', array( $this, 'process_page' ), 10, 1 );
 			add_action( 'wppo_generate_static_url', array( $this, 'process_url' ), 10, 1 );
+			add_action( 'wppo_preload_url_batch', array( $this, 'preload_url_batch' ), 10, 1 );
 			add_action( 'wppo_litespeed_crawler_batch', array( $this, 'litespeed_crawler_batch' ), 10, 1 );
 			add_action( 'wppo_crawler_warm', array( $this, 'crawler_warm_single' ), 10, 1 );
 

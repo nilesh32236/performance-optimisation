@@ -17,7 +17,7 @@ import { useState, useEffect, useCallback, useRef } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faDatabase, faSpinner } from '@fortawesome/free-solid-svg-icons';
-import { apiCall } from '../lib/apiRequest';
+import { apiCall, getErrorLogMessage } from '../lib/apiRequest';
 import { formatBytes } from '../lib/util';
 import useNotice from '../lib/useNotice';
 import NoticeBanner from './common/NoticeBanner';
@@ -117,7 +117,7 @@ const AutoloadedOptions = () => {
 				} );
 				console.error(
 					'Error fetching autoloaded options:',
-					loadError
+					getErrorLogMessage( loadError )
 				);
 			} finally {
 				if ( ! signal?.aborted && isMounted.current ) {
@@ -173,7 +173,10 @@ const AutoloadedOptions = () => {
 			if ( dryRunError?.name === 'AbortError' ) {
 				return;
 			}
-			console.error( 'Error building remediation report:', dryRunError );
+			console.error(
+				'Error building remediation report:',
+				getErrorLogMessage( dryRunError )
+			);
 			notify( {
 				type: 'error',
 				message: __(
@@ -247,7 +250,10 @@ const AutoloadedOptions = () => {
 			if ( applyError?.name === 'AbortError' ) {
 				return;
 			}
-			console.error( 'Error applying remediation:', applyError );
+			console.error(
+				'Error applying remediation:',
+				getErrorLogMessage( applyError )
+			);
 			notify( {
 				type: 'error',
 				message: __(
@@ -351,7 +357,10 @@ const AutoloadedOptions = () => {
 				if ( revertError?.name === 'AbortError' ) {
 					return;
 				}
-				console.error( 'Error reverting option:', revertError );
+				console.error(
+					'Error reverting option:',
+					getErrorLogMessage( revertError )
+				);
 				notify( {
 					type: 'error',
 					message: __(
@@ -424,7 +433,10 @@ const AutoloadedOptions = () => {
 			if ( revertAllError?.name === 'AbortError' ) {
 				return;
 			}
-			console.error( 'Error reverting options:', revertAllError );
+			console.error(
+				'Error reverting options:',
+				getErrorLogMessage( revertAllError )
+			);
 			notify( {
 				type: 'error',
 				message: __(

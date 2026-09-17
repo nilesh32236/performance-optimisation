@@ -13,6 +13,8 @@ jest.mock( '../../lib/apiRequest', () => ( {
 	queuePageseedScan: jest.fn(),
 	queuePagespeedScan: jest.fn(),
 	getPagespeedResults: jest.fn(),
+	getErrorLogMessage: ( error ) =>
+		error instanceof Error ? error.message : String( error ),
 } ) );
 
 jest.mock( '@fortawesome/react-fontawesome', () => ( {
@@ -231,11 +233,12 @@ describe( 'PageSpeedPanel Component', () => {
 			).toBeInTheDocument();
 		} );
 
-		// Advance timers one poll interval at a time, flushing microtasks
-		// between each so the async poll continuation can execute.
+		// Advance timers in max-delay steps (polling backs off 5s → 15s),
+		// flushing microtasks between each so the async poll continuation
+		// can execute.
 		for ( let i = 0; i <= 60; i++ ) {
 			await act( async () => {
-				jest.advanceTimersByTime( 5000 );
+				jest.advanceTimersByTime( 15000 );
 			} );
 		}
 

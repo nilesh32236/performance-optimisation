@@ -27,6 +27,7 @@ import {
 	apiCall,
 	fetchRecentActivities,
 	fetchServerRules,
+	getErrorLogMessage,
 	getWppoSettings,
 } from './lib/apiRequest';
 import ErrorBoundary from './components/common/ErrorBoundary';
@@ -386,7 +387,7 @@ const App = () => {
 							'Failed to fetch activities:',
 							'performance-optimisation'
 						),
-						error
+						getErrorLogMessage( error )
 					);
 				}
 			}

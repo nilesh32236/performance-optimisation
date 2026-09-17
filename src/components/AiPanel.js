@@ -2,7 +2,11 @@ import { useState, useEffect, useCallback } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faBrain } from '@fortawesome/free-solid-svg-icons';
-import { apiCall, patchSettingsCache } from '../lib/apiRequest';
+import {
+	apiCall,
+	getErrorLogMessage,
+	patchSettingsCache,
+} from '../lib/apiRequest';
 import { suggestionKey } from './SuggestionsPanel';
 import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
@@ -44,7 +48,10 @@ const AiPanel = () => {
 				if ( err?.name === 'AbortError' || signal?.aborted ) {
 					return;
 				}
-				console.error( 'Failed to load AI model.', err );
+				console.error(
+					'Failed to load AI model.',
+					getErrorLogMessage( err )
+				);
 				notify( {
 					type: 'error',
 					message: __(
@@ -77,7 +84,10 @@ const AiPanel = () => {
 				if ( err?.name === 'AbortError' || signal?.aborted ) {
 					return;
 				}
-				console.error( 'Failed to load AI suggestions.', err );
+				console.error(
+					'Failed to load AI suggestions.',
+					getErrorLogMessage( err )
+				);
 				notify( {
 					type: 'error',
 					message: __(

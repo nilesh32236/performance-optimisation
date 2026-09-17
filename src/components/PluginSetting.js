@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo } from '@wordpress/element';
 import {
 	apiCall,
 	fetchRecentActivities,
+	getErrorLogMessage,
 	isValidScanUrl,
 } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
@@ -175,6 +176,10 @@ const redactSecrets = ( value ) => {
  * Rejects excessive depth, oversized strings and non-plain values.
  * Server-side allowlist + PHP sanitization remains authoritative.
  *
+ * Arrays may contain plain objects (real exports carry
+ * file_optimisation.cdnMapping as an array of { key, value } rows), so
+ * items recurse with the same depth guard instead of being rejected.
+ *
  * @since 2.0.0
  * @param {*}      value Value to check.
  * @param {number} depth Current depth.
@@ -198,12 +203,7 @@ const isValidImportValue = ( value, depth ) => {
 		if ( value.length > MAX_IMPORT_NESTED_KEYS ) {
 			return false;
 		}
-		return value.every( ( item ) => {
-			if ( item !== null && typeof item === 'object' ) {
-				return false;
-			}
-			return isValidImportValue( item, depth + 1 );
-		} );
+		return value.every( ( item ) => isValidImportValue( item, depth + 1 ) );
 	}
 	if ( type === 'object' ) {
 		const proto = Object.getPrototypeOf( value );
@@ -489,7 +489,10 @@ const PluginSetting = ( { options } ) => {
 					'performance-optimisation'
 				),
 			} );
-			console.error( 'Save monitoring error:', err );
+			console.error(
+				'Save monitoring error:',
+				getErrorLogMessage( err )
+			);
 		} finally {
 			setSavingMonitoring( false );
 		}
@@ -539,7 +542,10 @@ const PluginSetting = ( { options } ) => {
 					'performance-optimisation'
 				),
 			} );
-			console.error( 'Save auto-rescan error:', err );
+			console.error(
+				'Save auto-rescan error:',
+				getErrorLogMessage( err )
+			);
 		} finally {
 			setSavingAutoRescan( false );
 		}
@@ -589,7 +595,7 @@ const PluginSetting = ( { options } ) => {
 					'performance-optimisation'
 				),
 			} );
-			console.error( 'Save API key error:', err );
+			console.error( 'Save API key error:', getErrorLogMessage( err ) );
 		} finally {
 			setSavingApiKey( false );
 		}
@@ -601,7 +607,11 @@ const PluginSetting = ( { options } ) => {
 	const [ logLoaded, setLogLoaded ] = useState( false );
 	const [ logPage, setLogPage ] = useState( 1 );
 	const [ logTotalPages, setLogTotalPages ] = useState( 1 );
-	const [ logError, setLogError ] = useState( null );
+	const {
+		notice: logNotice,
+		notify: notifyLog,
+		dismiss: dismissLog,
+	} = useNotice();
 
 	const getTimestamp = () => {
 		return new Date()
@@ -612,7 +622,7 @@ const PluginSetting = ( { options } ) => {
 
 	const loadActivityLog = async ( page = 1 ) => {
 		setLogLoading( true );
-		setLogError( null );
+		dismissLog();
 		try {
 			const data = await fetchRecentActivities( page );
 			if ( data?.activities ) {
@@ -622,10 +632,17 @@ const PluginSetting = ( { options } ) => {
 				setLogLoaded( true );
 			}
 		} catch ( err ) {
-			setLogError(
-				__( 'Failed to load activity log.', 'performance-optimisation' )
+			notifyLog( {
+				type: 'error',
+				message: __(
+					'Failed to load activity log.',
+					'performance-optimisation'
+				),
+			} );
+			console.error(
+				'Failed to load activity log:',
+				getErrorLogMessage( err )
 			);
-			console.error( 'Failed to load activity log:', err );
 		} finally {
 			setLogLoading( false );
 		}
@@ -910,21 +927,21 @@ const PluginSetting = ( { options } ) => {
 						</div>
 					) }
 
-					{ logError && (
-						<div
-							className="wppo-notice wppo-notice--error"
-							role="alert"
-							aria-live="assertive"
-						>
-							{ logError }
+					{ logNotice && (
+						<>
+							<NoticeBanner
+								type={ logNotice.type }
+								message={ logNotice.message }
+								onDismiss={ dismissLog }
+							/>
 							<button
 								type="button"
-								className="wppo-button wppo-button--secondary wppo-button--sm wppo-ml-12"
+								className="wppo-button wppo-button--secondary wppo-button--sm wppo-mt-8"
 								onClick={ () => loadActivityLog( logPage ) }
 							>
 								{ __( 'Retry', 'performance-optimisation' ) }
 							</button>
-						</div>
+						</>
 					) }
 
 					{ logLoaded && (
@@ -1036,7 +1053,7 @@ const PluginSetting = ( { options } ) => {
 											'Leave empty to keep current key',
 											'performance-optimisation'
 									  )
-									: 'AIza...'
+									: __( 'AIza…', 'performance-optimisation' )
 							}
 							autoComplete="off"
 							aria-describedby="pagespeed-api-key-desc"

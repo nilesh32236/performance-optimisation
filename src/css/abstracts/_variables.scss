@@ -65,6 +65,12 @@
 	--wppo-accent-images: #10b981;
 	--wppo-accent-images-light: #34d399;
 
+	/* Stat icon tints (no-color-mix fallback backgrounds) */
+	--wppo-stat-icon-cache: #e0f2fe;
+	--wppo-stat-icon-files: #ede9fe;
+	--wppo-stat-icon-db: #fef3c7;
+	--wppo-stat-icon-images: #d1fae5;
+
 	/* Header gradient */
 	--wppo-header-gradient-start: #ffffff;
 	--wppo-header-gradient-mid: #eef2ff;

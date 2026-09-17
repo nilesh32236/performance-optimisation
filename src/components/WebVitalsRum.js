@@ -11,7 +11,7 @@ import { useState, useEffect, useCallback } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUsers, faSpinner } from '@fortawesome/free-solid-svg-icons';
-import { apiCall } from '../lib/apiRequest';
+import { apiCall, getErrorLogMessage } from '../lib/apiRequest';
 import { formatMs } from '../lib/format';
 import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
@@ -89,7 +89,10 @@ const WebVitalsRum = () => {
 						'performance-optimisation'
 					),
 				} );
-				console.error( 'Error fetching RUM data:', loadError );
+				console.error(
+					'Error fetching RUM data:',
+					getErrorLogMessage( loadError )
+				);
 			} finally {
 				if ( ! signal?.aborted ) {
 					setLoading( false );

@@ -7,6 +7,8 @@ import PreloadSettings from '../PreloadSettings';
 // Mock the API request
 jest.mock( '../../lib/apiRequest', () => ( {
 	apiCall: jest.fn(),
+	getErrorLogMessage: ( error ) =>
+		error instanceof Error ? error.message : String( error ),
 } ) );
 
 import { apiCall } from '../../lib/apiRequest';

@@ -23,7 +23,11 @@ import {
 	faMobileAlt,
 	faDesktop,
 } from '@fortawesome/free-solid-svg-icons';
-import { queuePagespeedScan, getPagespeedResults } from '../lib/apiRequest';
+import {
+	queuePagespeedScan,
+	getPagespeedResults,
+	getErrorLogMessage,
+} from '../lib/apiRequest';
 import { scoreToStatus } from '../lib/status';
 import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
@@ -44,6 +48,30 @@ const POLL_INTERVAL_MS = 5000;
  * Maximum number of poll attempts before giving up (~5 minutes).
  */
 const MAX_POLL_ATTEMPTS = 60;
+
+/**
+ * Maximum delay between PageSpeed poll ticks.
+ *
+ * Polling backs off (5s for the first 10 attempts, then +5s per 10
+ * attempts, capped at 15s) so slow PageSpeed jobs do not hit the REST
+ * endpoint at the same rate as near-complete ones.
+ *
+ * @since NEXT
+ */
+const MAX_POLL_DELAY_MS = 15000;
+
+/**
+ * Delay before the next poll tick, backing off with the attempt count.
+ *
+ * @since NEXT
+ * @param {number} attempts 1-based poll attempt count.
+ * @return {number} Milliseconds to wait before the next tick.
+ */
+const getPollDelay = ( attempts ) =>
+	Math.min(
+		POLL_INTERVAL_MS * Math.max( 1, Math.ceil( attempts / 10 ) ),
+		MAX_POLL_DELAY_MS
+	);
 
 /**
  * Score colour based on Lighthouse thresholds.
@@ -159,7 +187,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 			const poll = async () => {
 				pollCountRef.current += 1;
 
-				if ( pollCountRef.current > MAX_POLL_ATTEMPTS ) {
+				if ( pollCountRef.current >= MAX_POLL_ATTEMPTS ) {
 					stopPolling();
 					if ( isMounted.current ) {
 						setPending( false );
@@ -216,7 +244,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 						if ( isMounted.current ) {
 							pollRef.current = setTimeout(
 								poll,
-								POLL_INTERVAL_MS
+								getPollDelay( pollCountRef.current )
 							);
 						}
 						return;
@@ -255,10 +283,15 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 							),
 						} );
 					}
-					console.error( 'PageSpeed poll error:', err );
+					console.error(
+						'PageSpeed poll error:',
+						getErrorLogMessage( err )
+					);
 				}
 			};
-			pollRef.current = setTimeout( poll, POLL_INTERVAL_MS );
+			// First tick fires immediately so results that are already ready
+			// do not wait a full interval; later ticks back off via getPollDelay().
+			pollRef.current = setTimeout( poll, 0 );
 		},
 		[ stopPolling, onSuggestionsReady, notify ]
 	);
@@ -324,7 +357,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 					'performance-optimisation'
 				),
 			} );
-			console.error( 'PageSpeed scan error:', err );
+			console.error( 'PageSpeed scan error:', getErrorLogMessage( err ) );
 		}
 	}, [
 		url,

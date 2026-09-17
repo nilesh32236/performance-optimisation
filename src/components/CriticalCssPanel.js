@@ -9,6 +9,7 @@ import {
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import { formatBytes } from '../lib/util';
+import { getErrorLogMessage } from '../lib/apiRequest';
 
 const READY_CONFIG = {
 	icon: faCheckCircle,
@@ -135,7 +136,10 @@ const CriticalCssPanel = ( {
 			// parent handleRegenerateCss via withNotification owns the
 			// banner, so log locally and rethrow instead of notifying a
 			// second time for the same click.
-			console.error( 'Failed to regenerate CCSS', err );
+			console.error(
+				'Failed to regenerate CCSS',
+				getErrorLogMessage( err )
+			);
 			throw err;
 		} finally {
 			setIsRegenerating( false );
@@ -154,7 +158,10 @@ const CriticalCssPanel = ( {
 			// handleRegenerateSingleCcss) notifies internally and owns the
 			// banner, and the click site here has no catch — rethrowing
 			// would only risk an unhandled rejection with no UI benefit.
-			console.error( 'Failed to regenerate CCSS for template', err );
+			console.error(
+				'Failed to regenerate CCSS for template',
+				getErrorLogMessage( err )
+			);
 		} finally {
 			setSingleBusy( null );
 		}

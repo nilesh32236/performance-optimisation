@@ -13,6 +13,8 @@ import DatabaseCleanup from '../DatabaseCleanup';
 // Mock the API request
 jest.mock( '../../lib/apiRequest', () => ( {
 	apiCall: jest.fn(),
+	getErrorLogMessage: ( error ) =>
+		error instanceof Error ? error.message : String( error ),
 } ) );
 
 import { apiCall } from '../../lib/apiRequest';
@@ -232,7 +234,7 @@ describe( 'DatabaseCleanup Component', () => {
 
 			expect( consoleSpy ).toHaveBeenCalledWith(
 				'Database cleanup error:',
-				expect.any( Error )
+				expect.any( String )
 			);
 		} finally {
 			consoleSpy.mockRestore();
@@ -277,7 +279,7 @@ describe( 'DatabaseCleanup Component', () => {
 
 			expect( consoleSpy ).toHaveBeenCalledWith(
 				'Database cleanup error:',
-				{}
+				'[object Object]'
 			);
 		} finally {
 			consoleSpy.mockRestore();
@@ -387,7 +389,7 @@ describe( 'DatabaseCleanup Component', () => {
 
 			expect( consoleSpy ).toHaveBeenCalledWith(
 				'Error fetching database cleanup counts:',
-				expect.any( Error )
+				expect.any( String )
 			);
 		} finally {
 			consoleSpy.mockRestore();
