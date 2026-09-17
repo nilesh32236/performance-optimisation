@@ -2224,7 +2224,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * limitation: purging a template ID purges the template permalink,
 		 * not its consumers. Hosts covering those contexts should pass an
 		 * explicit post ID or override via the `wppo_is_elementor_page`
-		 * filter (return non-null to force a verdict).
+		 * filter (return non-null to force a verdict; receives the resolved
+		 * post ID as 2nd arg and the raw caller $post_id as 3rd arg for BC).
 		 *
 		 * Fail direction: detection failure degrades to skip (true) while
 		 * Elementor-safe mode is on — uncombined markup costs perf only,
@@ -2246,9 +2247,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		public static function is_elementor_built_page( ?int $post_id = null, array $file_opt = array() ): bool {
 			try {
+				$resolved = self::resolve_elementor_post_id( $post_id );
+				// Resolve first, filter second: the common no-ID path must
+				// hand post-specific overrides the resolved ID (2nd arg), not
+				// null. The raw $post_id rides along as a 3rd arg so legacy
+				// two-arg callbacks keep working unchanged.
 				if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_is_elementor_page' ) ) {
 					try {
-						$filtered = apply_filters( 'wppo_is_elementor_page', null, $post_id );
+						$filtered = apply_filters( 'wppo_is_elementor_page', null, $resolved ?? $post_id, $post_id );
 						if ( null !== $filtered ) {
 							return (bool) $filtered;
 						}
@@ -2256,35 +2262,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						unset( $e );
 					}
 				}
-				$resolved = $post_id;
-				if ( null === $resolved && function_exists( 'get_queried_object_id' ) ) {
-					try {
-						$qid = (int) get_queried_object_id();
-						if ( $qid > 0 ) {
-							$resolved = $qid;
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-				}
-				// Loop fallback is singular-only: on archives/home/loop
-				// (queried ID 0) get_the_ID() returns whichever post the
-				// loop currently points at, so inheriting it would skip
-				// combine for a whole archive containing one Elementor post
-				// and memoize under a loop-position-dependent key.
-				if ( ( null === $resolved || $resolved <= 0 ) && function_exists( 'is_singular' ) && function_exists( 'get_the_ID' ) ) {
-					try {
-						if ( is_singular() ) {
-							$loop_id = (int) get_the_ID();
-							if ( $loop_id > 0 ) {
-								$resolved = $loop_id;
-							}
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-				}
-				$memo_key = null !== $resolved && $resolved > 0 ? 'post:' . $resolved : 'queried:0';
+				// The exception path below returns a safe-mode-dependent
+				// verdict, so the memo key carries the safe-mode bit: a
+				// memoized production verdict must never be reused for a
+				// staged elementorSafeMode=off preview (or vice versa).
+				$safe_bit = self::is_elementor_safe_mode_active( $file_opt ) ? 's1' : 's0';
+				$memo_key = ( null !== $resolved && $resolved > 0 ? 'post:' . $resolved : 'queried:0' ) . ':' . $safe_bit;
 				if ( array_key_exists( $memo_key, self::$elementor_built_memo ) ) {
 					return self::$elementor_built_memo[ $memo_key ];
 				}
@@ -2293,12 +2276,73 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return $result;
 			} catch ( \Throwable $e ) {
 				unset( $e );
+				return self::elementor_safe_fallback( $file_opt );
+			}
+		}
+
+		/**
+		 * Resolve the Elementor post ID from explicit, queried, and loop sources (issue #1259).
+		 *
+		 * Queried-object ID first; the get_the_ID() loop fallback applies on
+		 * singular views only — on archives/home/loop (queried ID 0)
+		 * get_the_ID() returns whichever post the loop currently points at,
+		 * so inheriting it would skip combine for a whole archive containing
+		 * one Elementor post and memoize under a loop-position-dependent key.
+		 * Fail-open to null when no ID resolves.
+		 *
+		 * @since NEXT
+		 *
+		 * @param int|null $post_id Explicit post ID (or null to resolve).
+		 * @return int|null Resolved post ID, or null when unknown.
+		 */
+		private static function resolve_elementor_post_id( ?int $post_id ): ?int {
+			if ( null !== $post_id && $post_id > 0 ) {
+				return $post_id;
+			}
+			if ( function_exists( 'get_queried_object_id' ) ) {
 				try {
-					return self::is_elementor_safe_mode_active( $file_opt );
-				} catch ( \Throwable $e2 ) {
-					unset( $e2 );
-					return true;
+					$qid = (int) get_queried_object_id();
+					if ( $qid > 0 ) {
+						return $qid;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
 				}
+			}
+			if ( function_exists( 'is_singular' ) && function_exists( 'get_the_ID' ) ) {
+				try {
+					if ( is_singular() ) {
+						$loop_id = (int) get_the_ID();
+						if ( $loop_id > 0 ) {
+							return $loop_id;
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			return null;
+		}
+
+		/**
+		 * Fail-safe verdict for Elementor detection failures (issue #1259).
+		 *
+		 * Detection failure degrades to skip (true) while safe mode is on —
+		 * uncombined markup costs perf only, while combining through a
+		 * detection failure risks broken Elementor layout/FOUC. With safe
+		 * mode off, failure returns false (optimisations run).
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $file_opt Optional `file_optimisation` settings slice.
+		 * @return bool Safe-mode-active verdict (true on unreadable settings).
+		 */
+		private static function elementor_safe_fallback( array $file_opt = array() ): bool {
+			try {
+				return self::is_elementor_safe_mode_active( $file_opt );
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return true;
 			}
 		}
 
@@ -2370,12 +2414,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						}
 					} catch ( \Throwable $e ) {
 						unset( $e );
-						try {
-							return self::is_elementor_safe_mode_active( $file_opt );
-						} catch ( \Throwable $e2 ) {
-							unset( $e2 );
-							return true;
-						}
+						return self::elementor_safe_fallback( $file_opt );
 					}
 					// Plugin active but this post carries no builder meta:
 					// not a builder-built page — unless this is a preview.
@@ -2393,12 +2432,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return false;
 			} catch ( \Throwable $e ) {
 				unset( $e );
-				try {
-					return self::is_elementor_safe_mode_active( $file_opt );
-				} catch ( \Throwable $e2 ) {
-					unset( $e2 );
-					return true;
-				}
+				return self::elementor_safe_fallback( $file_opt );
 			}
 		}
 
@@ -2431,12 +2465,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return self::is_elementor_built_page( $post_id, $file_optimisation );
 			} catch ( \Throwable $e ) {
 				unset( $e );
-				try {
-					return self::is_elementor_safe_mode_active( $file_optimisation );
-				} catch ( \Throwable $e2 ) {
-					unset( $e2 );
-					return true;
-				}
+				return self::elementor_safe_fallback( $file_optimisation );
 			}
 		}
 
@@ -5487,9 +5516,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 
 				// Builder preview/edit contexts only (never blanket-disable rendered frontend).
-				// Elementor.
+				// Elementor: the preview query var alone must not disable
+				// delay-JS for any visitor appending it — gate on the same
+				// cheap Elementor markers used by detect_elementor_built_page()
+				// (perf-only kill-switch otherwise).
 				if ( isset( $_GET['elementor-preview'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing check, no state change.
-					return true;
+					if ( class_exists( 'Elementor\Plugin', false ) || defined( 'ELEMENTOR_VERSION' ) || function_exists( 'elementor_pro_load_plugin' ) ) {
+						return true;
+					}
 				}
 				if ( class_exists( 'Elementor\Plugin' ) ) {
 					try {

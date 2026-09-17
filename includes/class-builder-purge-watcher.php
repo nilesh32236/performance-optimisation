@@ -281,6 +281,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		}
 
 		/**
+		 * Reset the drift-signal per-request state (for tests).
+		 *
+		 * Named reset so tests never reach into private statics via
+		 * reflection to clear the drift dedupe flag.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_drift_state(): void {
+			self::$drift_handled_this_request = false;
+		}
+
+		/**
 		 * Register the upgrader hook plus builder-drift hooks.
 		 *
 		 * Drift hooks (issue #1023) listen to Elementor asset-regen signals
@@ -463,6 +476,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 				if ( isset( self::$elementor_purged[ $post_id ] ) ) {
 					return;
 				}
+				if ( self::$bulk_regen_coalesced ) {
+					// A deferred full purge is already scheduled and owns
+					// the remaining work (archive fan-out + background
+					// targeted regen): record dedupe and skip per-post file
+					// I/O for posts past the coalescing threshold.
+					self::$elementor_purged[ $post_id ] = true;
+					return;
+				}
 				$this->purge_post_static_cache( $post_id );
 				self::$elementor_purged[ $post_id ] = true;
 				$this->maybe_coalesce_bulk_regen();
@@ -529,6 +550,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 					return;
 				}
 				if ( isset( self::$elementor_purged[ $post_id ] ) ) {
+					return;
+				}
+				if ( self::$bulk_regen_coalesced ) {
+					// Same coalesced fast-skip as on_builder_drift_save():
+					// the scheduled deferred full purge owns archives and
+					// the background targeted regen owns Used-CSS.
+					self::$elementor_purged[ $post_id ] = true;
 					return;
 				}
 				// Dedupe is marked AFTER the purge attempt so a failed purge
@@ -637,10 +665,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 *
 		 * @since NEXT
 		 *
-		 * @param int $post_id Post ID whose cache must be purged.
+		 * @param int  $post_id Post ID whose cache must be purged.
+		 * @param bool $bump_stats Whether to bump dashboard stats. Bulk-regen
+		 *                         callers pass false: the deferred full purge
+		 *                         bumps once instead of N inline option writes.
 		 * @return void
 		 */
-		protected function purge_post_static_cache( int $post_id ): void {
+		protected function purge_post_static_cache( int $post_id, bool $bump_stats = true ): void {
 			try {
 				if ( $post_id <= 0 ) {
 					return;
@@ -664,7 +695,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 					}
 					self::$shared_purge_cache = $cache;
 				}
-				$cache->invalidate_single_static_html( $post_id );
+				$cache->invalidate_single_static_html( $post_id, $bump_stats );
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
@@ -674,11 +705,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 		 * Requeue Used-CSS for one Elementor post, coalesced for bulk regen (issue #1259).
 		 *
 		 * Fast path (at or below BULK_REGEN_THRESHOLD distinct posts):
-		 * per-post Used_CSS::requeue_for_post(). Beyond the threshold a
-		 * single Used_CSS::request_targeted_regen() owns the remaining
-		 * work so bulk regen (global style change, import) cannot stampede
-		 * the scheduler table with N per-post SELECT + freshness + INSERT
-		 * sequences; per-post calls after coalescing are skipped.
+		 * per-post Used_CSS::requeue_for_post(). Beyond the threshold the
+		 * deferred full purge (scheduled by maybe_coalesce_bulk_regen())
+		 * owns the remaining work — its background callback runs the
+		 * targeted regen off the editor request — so per-post calls after
+		 * coalescing are skipped instead of stalling the save with a
+		 * 40-post query plus up to 20 freshness probes inline.
 		 *
 		 * @since NEXT
 		 *
@@ -691,11 +723,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 					return false;
 				}
 				if ( self::$bulk_regen_coalesced ) {
-					return true;
-				}
-				if ( count( self::$elementor_purged ) > self::BULK_REGEN_THRESHOLD && method_exists( 'PerformanceOptimise\Inc\Used_CSS', 'request_targeted_regen' ) ) {
-					Used_CSS::request_targeted_regen( 'elementor-bulk-regen' );
-					self::$bulk_regen_coalesced = true;
 					return true;
 				}
 				return (bool) Used_CSS::requeue_for_post( $post_id );
@@ -728,14 +755,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Builder_Purge_Watcher' ) ) {
 					return;
 				}
 				self::$bulk_regen_coalesced = true;
+				// Deferred only: on_builder_drift() schedules the background
+				// full purge, whose callback (purge_wppo_derived_caches())
+				// runs the targeted Used-CSS regen off the editor request.
+				// No inline request_targeted_regen() here — it costs a
+				// 40-post query plus up to 20 freshness probes synchronously
+				// in the save action that tripped the threshold.
 				$this->on_builder_drift();
-				if ( class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) && method_exists( 'PerformanceOptimise\Inc\Used_CSS', 'request_targeted_regen' ) ) {
-					try {
-						Used_CSS::request_targeted_regen( 'elementor-bulk-regen' );
-					} catch ( \Throwable $e ) {
-						unset( $e );
-					}
-				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}

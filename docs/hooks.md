@@ -352,7 +352,8 @@ Filters the Elementor-built verdict for the current request (issue #1259). Retur
 
 **Parameters:**
 - `$verdict` *(bool|null)* — Forced verdict. Default `null` (run built-in detection).
-- `$post_id` *(int|null)* — Resolved post ID, or `null` when unknown.
+- `$post_id` *(int|null)* — Resolved post ID (queried object with singular loop fallback applied), or `null` when unknown.
+- `$raw_post_id` *(int|null)* — The caller-supplied post ID before resolution (`null` on the common no-ID path). Added for BC; two-arg callbacks keep working unchanged.
 
 **Example:**
 ```php

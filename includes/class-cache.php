@@ -909,25 +909,47 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Per-request memo for the sandbox-effective slice (issue #1259).
+		 *
+		 * Runs on both combine_css() and will_combine_css_inline() per
+		 * request; the memo collapses the duplicate slice resolution
+		 * (is_preview_request + get_settings).
+		 *
+		 * @since NEXT
+		 * @var array<string,array>
+		 */
+		private array $sandbox_effective_file_opt_memo = array();
+
+		/**
 		 * Sandbox-effective `file_optimisation` slice (issue #1259).
 		 *
 		 * Single choke point for the Elementor-safe-mode slice resolution
 		 * so combine_css() and will_combine_css_inline() cannot drift
-		 * apart. Fail-open to the production slice on any failure.
+		 * apart. Delegates to Main::get_effective_file_optimisation() (the
+		 * canonical sandbox-preview resolution) and memos per request keyed
+		 * by the production slice. Fail-open to the production slice on any
+		 * failure.
 		 *
 		 * @since NEXT
 		 *
 		 * @param array $file_opt Production `file_optimisation` slice.
 		 * @return array Effective slice (staged values merged in preview).
 		 */
-		private function get_effective_file_opt_for_elementor( array $file_opt ): array {
+		private function get_sandbox_effective_file_opt( array $file_opt ): array {
 			try {
-				if ( class_exists( 'PerformanceOptimise\Inc\Sandbox_Preview' ) && method_exists( 'PerformanceOptimise\Inc\Sandbox_Preview', 'get_effective_file_optimisation' ) ) {
-					$effective = Sandbox_Preview::get_effective_file_optimisation( $file_opt );
-					if ( is_array( $effective ) ) {
-						return $effective;
+				$memo_key = md5( serialize( $file_opt ) ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize -- Per-request memo key only.
+				if ( array_key_exists( $memo_key, $this->sandbox_effective_file_opt_memo ) ) {
+					return $this->sandbox_effective_file_opt_memo[ $memo_key ];
+				}
+				$effective = $file_opt;
+				if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'get_effective_file_optimisation' ) ) {
+					$resolved = Main::get_effective_file_optimisation( $file_opt );
+					if ( is_array( $resolved ) ) {
+						$effective = $resolved;
 					}
 				}
+				$this->sandbox_effective_file_opt_memo[ $memo_key ] = $effective;
+				return $effective;
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}
@@ -940,16 +962,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Single choke point for both combine_css() and
 		 * will_combine_css_inline() so the pre-gate, sandbox-effective
 		 * slice, and skip predicate cannot drift between call sites.
-		 * Fail-open to production behaviour (false) on any detection
-		 * failure; Main::should_skip_combine_for_elementor() itself
-		 * fail-safes to skip while safe mode is on.
+		 * Fail-closed to skip while safe mode is on: Main::elementor_safe_fallback()
+		 * verdict is returned on detection failure (uncombined markup costs
+		 * perf only; combining through a failure risks broken Elementor
+		 * layout/FOUC).
 		 *
 		 * @since NEXT
 		 *
-		 * @param array $file_opt Sandbox-effective `file_optimisation` slice.
+		 * @param array     $file_opt  Sandbox-effective `file_optimisation` slice.
+		 * @param bool|null $looks_like Pre-computed Main::looks_like_elementor_request()
+		 *                              verdict (null to compute here). Threaded through
+		 *                              so will_combine_css_inline() evaluates the
+		 *                              pre-gate once instead of twice per request.
 		 * @return bool True when combine/inline must be skipped.
 		 */
-		private function should_bypass_combine_for_elementor( array $file_opt ): bool {
+		private function should_bypass_combine_for_elementor( array $file_opt, ?bool $looks_like = null ): bool {
 			try {
 				if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) || ! method_exists( 'PerformanceOptimise\Inc\Main', 'looks_like_elementor_request' ) || ! method_exists( 'PerformanceOptimise\Inc\Main', 'should_skip_combine_for_elementor' ) ) {
 					return false;
@@ -960,13 +987,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				// nothing; the full guarded detection (memoized per request
 				// in Main::is_elementor_built_page()) runs only when
 				// Elementor looks present.
-				if ( ! Main::looks_like_elementor_request() ) {
+				if ( null === $looks_like ) {
+					$looks_like = Main::looks_like_elementor_request();
+				}
+				if ( ! $looks_like ) {
 					return false;
 				}
 				return Main::should_skip_combine_for_elementor( $file_opt );
 			} catch ( \Throwable $e ) {
 				unset( $e );
-				return false;
+				try {
+					if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'is_elementor_safe_mode_active' ) ) {
+						return Main::is_elementor_safe_mode_active( $file_opt );
+					}
+				} catch ( \Throwable $e2 ) {
+					unset( $e2 );
+				}
+				return true;
 			}
 		}
 
@@ -1019,7 +1056,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// array-safe (string or array payload).
 			$file_opt_for_combine = isset( $this->options['file_optimisation'] ) && is_array( $this->options['file_optimisation'] ) ? $this->options['file_optimisation'] : array();
 			if ( $is_preview ) {
-				$file_opt_for_combine = $this->get_effective_file_opt_for_elementor( $file_opt_for_combine );
+				$file_opt_for_combine = $this->get_sandbox_effective_file_opt( $file_opt_for_combine );
 			}
 			if ( ! empty( $file_opt_for_combine['excludeCombineCSS'] ) ) {
 				$exclude_combine_css = Util::process_urls( $file_opt_for_combine['excludeCombineCSS'] );
@@ -1768,13 +1805,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// combine_css() (see should_bypass_combine_for_elementor()).
 			// Cheap native pre-gate first so the sandbox-effective slice
 			// is resolved only when Elementor looks present — this is the
-			// hottest frontend path for non-Elementor visitors.
+			// hottest frontend path for non-Elementor visitors. The pre-gate
+			// verdict is threaded into the choke point so it is evaluated
+			// exactly once per call instead of twice.
 			try {
-				$elementor_ruled_out = class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'looks_like_elementor_request' ) && ! Main::looks_like_elementor_request();
-				if ( ! $elementor_ruled_out ) {
+				$looks_like = class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'looks_like_elementor_request' ) ? Main::looks_like_elementor_request() : false;
+				if ( $looks_like ) {
 					$file_opt = isset( $this->options['file_optimisation'] ) && is_array( $this->options['file_optimisation'] ) ? $this->options['file_optimisation'] : array();
-					$file_opt = $this->get_effective_file_opt_for_elementor( $file_opt );
-					if ( $this->should_bypass_combine_for_elementor( $file_opt ) ) {
+					$file_opt = $this->get_sandbox_effective_file_opt( $file_opt );
+					if ( $this->should_bypass_combine_for_elementor( $file_opt, $looks_like ) ) {
 						return false;
 					}
 				}
@@ -3597,11 +3636,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * cross-site leakage. Fail-open: any failure is swallowed — callers must
 		 * never fatal a meta save. No new WP/PHP APIs; safe on WP 6.2+ / PHP 8.2+.
 		 *
+		 * Bulk callers (e.g. Elementor bulk regen, issue #1259) pass
+		 * $bump_stats=false and rely on the deferred full purge — which bumps
+		 * once — instead of paying 6x delete_transient + get_option +
+		 * update_option per post inline.
+		 *
 		 * @since 2.0.0
-		 * @param int $page_id Post ID whose single URL cache must be purged.
+		 * @param int  $page_id Post ID whose single URL cache must be purged.
+		 * @param bool $bump_stats Whether to bump dashboard stats (6x transient
+		 *                         deletes + option write). Default true.
 		 * @return void
 		 */
-		public function invalidate_single_static_html( int $page_id ): void {
+		public function invalidate_single_static_html( int $page_id, bool $bump_stats = true ): void {
 			try {
 				if ( $page_id <= 0 ) {
 					return;
@@ -3669,7 +3715,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					}
 				}
 
-				self::bump_stats_cache();
+				if ( $bump_stats ) {
+					self::bump_stats_cache();
+				}
 			} catch ( \Throwable $e ) {
 				unset( $e );
 			}

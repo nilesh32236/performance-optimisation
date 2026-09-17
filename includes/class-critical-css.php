@@ -1262,18 +1262,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		/**
 		 * Whether the current request is an Elementor context (issue #1164).
 		 *
-		 * Elementor pages (editor preview, `_elementor_data` post meta, or
-		 * `data-elementor-type` markup) keep full stylesheets: deferring or
-		 * purging builder CSS risks FOUC on popups/dialogs that render in
-		 * hidden containers. Fail-open: any error returns false (no exemption).
+		 * Elementor-built pages (per-post `_elementor_edit_mode === 'builder'`
+		 * or non-empty `_elementor_data` meta, or a gated editor-preview
+		 * request) keep full stylesheets: deferring or purging builder CSS
+		 * risks FOUC on popups/dialogs that render in hidden containers.
+		 * Fail-closed: any error returns true (exemption = unoptimized
+		 * output, never broken builder markup), matching the Main detector's
+		 * fail direction.
 		 *
 		 * Meta verdicts delegate to the memoized
 		 * Main::is_elementor_built_page() (issue #1259) so the combine and
 		 * CCSS pipelines share one meta-read pair — and one strict
 		 * `'builder' === (string) $edit_mode` predicate — instead of each
 		 * fetching and unserializing the large `_elementor_data` blob.
-		 * The `?elementor-preview` bypass applies only when Elementor
-		 * looks active (same gating as the Main detector).
+		 * Plugin-active alone is NOT a context: every page on an
+		 * Elementor-active site would otherwise be exempt, defeating CCSS
+		 * deferral on non-builder pages. The `?elementor-preview` bypass
+		 * applies only when Elementor looks active (same gating as the Main
+		 * detector).
 		 *
 		 * @param int|null $post_id Optional post ID to inspect.
 		 * @return bool True when Elementor handling applies.
@@ -1294,9 +1300,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				} catch ( \Throwable $e ) {
 					unset( $e );
 				}
-				if ( $plugin_active ) {
-					return true;
-				}
 				if ( null !== $post_id && $post_id > 0 ) {
 					if ( class_exists( 'PerformanceOptimise\Inc\Main' ) && method_exists( 'PerformanceOptimise\Inc\Main', 'is_elementor_built_page' ) ) {
 						try {
@@ -1305,18 +1308,43 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 							}
 						} catch ( \Throwable $e ) {
 							unset( $e );
-						}
-					} elseif ( function_exists( 'get_post_meta' ) ) {
-						// Minimal-boot fallback (Main unavailable): same
-						// strict predicate and tiny-first meta order as the
-						// Main detector so verdicts cannot drift.
-						$edit_mode = get_post_meta( $post_id, '_elementor_edit_mode', true );
-						if ( 'builder' === (string) $edit_mode ) {
+							// Fail-closed: a transient meta failure must not
+							// optimize through builder markup in one pipeline
+							// while the Main detector skips in the other.
 							return true;
 						}
-						$data = get_post_meta( $post_id, '_elementor_data', true );
-						if ( ! empty( $data ) ) {
-							return true;
+					} else {
+						// Minimal-boot fallback (Main unavailable): consult
+						// the documented wppo_is_elementor_page escape hatch
+						// first so Theme Builder overrides are honoured in
+						// exactly the degraded boot that needs them, then the
+						// same strict predicate and tiny-first meta order as
+						// the Main detector so verdicts cannot drift.
+						if ( function_exists( 'has_filter' ) && function_exists( 'apply_filters' ) && has_filter( 'wppo_is_elementor_page' ) ) {
+							try {
+								$filtered = apply_filters( 'wppo_is_elementor_page', null, $post_id, $post_id );
+								if ( null !== $filtered ) {
+									return (bool) $filtered;
+								}
+							} catch ( \Throwable $e ) {
+								unset( $e );
+								return true;
+							}
+						}
+						if ( function_exists( 'get_post_meta' ) ) {
+							try {
+								$edit_mode = get_post_meta( $post_id, '_elementor_edit_mode', true );
+								if ( 'builder' === (string) $edit_mode ) {
+									return true;
+								}
+								$data = get_post_meta( $post_id, '_elementor_data', true );
+								if ( ! empty( $data ) ) {
+									return true;
+								}
+							} catch ( \Throwable $e ) {
+								unset( $e );
+								return true;
+							}
 						}
 					}
 				}
@@ -1326,7 +1354,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return false;
 			} catch ( \Throwable $e ) {
 				unset( $e );
-				return false;
+				return true;
 			}
 		}
 

@@ -68,6 +68,130 @@ const normalizeDeliveryMode = ( value ) => {
 		: 'file';
 };
 
+// Textarea-backed file-optimisation keys: newline-delimited lists the backend
+// may return as arrays (via sanitize/process_urls). Every one normalises
+// through toTextLines() so a backend array can never reach a controlled
+// textarea or be dropped to '' inconsistently between init, baseline, and
+// sync (issue #1259 review).
+const FILE_OPT_TEXTAREA_KEYS = [
+	'excludeJS',
+	'excludeCSS',
+	'excludeCombineCSS',
+	'excludeDeferJS',
+	'excludeDelayJS',
+	'delayJSThirdPartyDenylist',
+	'delayJSThirdPartyAllowlist',
+	'delayJSExcludeUrls',
+	'usedCSSExcludeUrls',
+	'delayJSIdleList',
+	'delayJSViewportList',
+	'delayJSPriority',
+	'excludeUrlToKeepJSCSS',
+	'removeCssJsHandle',
+	'excludeUnusedCSS',
+	'unusedCSSSafelistExtra',
+	'ccssSafelistExtra',
+];
+
+// Every file-optimisation key synced from incoming props in the baseline +
+// sync effects below. Single source of truth for both dep arrays so adding a
+// setting needs one edit, not three (issue #1259 review).
+const FILE_OPT_SYNC_KEYS = [
+	'safeMode',
+	'elementorSafeMode',
+	'minifyJS',
+	'excludeJS',
+	'minifyCSS',
+	'excludeCSS',
+	'combineCSS',
+	'excludeCombineCSS',
+	'removeQueryStrings',
+	'minifyHTML',
+	'deferJS',
+	'excludeDeferJS',
+	'delayJS',
+	'excludeDelayJS',
+	'delayJSCommercePreset',
+	'delayJSBuilderPreset',
+	'delayJSINPPreset',
+	'delayJSExternalOnly',
+	'delayJSThirdParty',
+	'delayJSThirdPartyDenylist',
+	'delayJSThirdPartyAllowlist',
+	'delayJSExcludeUrls',
+	'usedCSSExcludeUrls',
+	'delayJSDefaultStrategy',
+	'delayJSIdleList',
+	'delayJSViewportList',
+	'delayJSPriority',
+	'delayJSIdleTimeout',
+	'removeWooCSSJS',
+	'excludeUrlToKeepJSCSS',
+	'removeCssJsHandle',
+	'enableServerRules',
+	'criticalCSS',
+	'ccssMaxSize',
+	'ccssSafelistExtra',
+	'hostGoogleFontsLocally',
+	'fontMetricFallback',
+	'fontSubset',
+	'fontSubsetSubsets',
+	'cdnURL',
+	'cdnMapping',
+	'removeUnusedCSS',
+	'excludeUnusedCSS',
+	'unusedCSSSafelistExtra',
+	'unusedCSSRegressionGuard',
+	'unusedCSSRegressionThreshold',
+	'usedCSSDeliveryMode',
+	'disableEmojis',
+	'disableEmbeds',
+	'disableDashicons',
+	'disableXMLRPC',
+	'disableRestApiLinks',
+	'disableRssFeeds',
+	'disableShortlinks',
+	'disableGeneratorTag',
+	'disableJQueryMigrate',
+	'disablePasswordStrength',
+	'disableSelfPingbacks',
+	'disableRSD',
+	'disableWLWManifest',
+	'disableGlobalStyles',
+	'disableClassicThemeStyles',
+	'disableWooCartFragments',
+	'disableRecentCommentsStyle',
+	'disableCommentReply',
+	'disableOEmbedDiscovery',
+	'disableBlockWidgets',
+	'blockAssetsOnDemand',
+	'loadAllCoreBlockAssets',
+	'heartbeatControl',
+	'minifyInlineCSS',
+	'minifyInlineJS',
+	'removeHTMLComments',
+];
+
+// Normalize one file-optimisation options object: textarea-backed keys via
+// toTextLines() (after spread, so backend arrays win correctly), delivery
+// mode via the PHP-mirroring allowlist, font subsets with the 'latin'
+// fallback. Idempotent — safe to run on init, baseline, and sync payloads.
+const normalizeFileOpt = ( source = {} ) => {
+	const next = { ...source };
+	for ( const key of FILE_OPT_TEXTAREA_KEYS ) {
+		if ( key in next ) {
+			next[ key ] = toTextLines( next[ key ] );
+		}
+	}
+	next.usedCSSDeliveryMode = normalizeDeliveryMode(
+		next.usedCSSDeliveryMode
+	);
+	if ( typeof next.fontSubsetSubsets !== 'string' ) {
+		next.fontSubsetSubsets = 'latin';
+	}
+	return next;
+};
+
 const FileOptimization = ( {
 	options = {},
 	serverRules = null,
@@ -98,7 +222,7 @@ const FileOptimization = ( {
 		return tabRefCallbacks.current[ id ];
 	}, [] );
 
-	const defaultSettings = {
+	const defaultSettings = normalizeFileOpt( {
 		safeMode: options.safeMode !== undefined ? options.safeMode : false,
 		elementorSafeMode:
 			options.elementorSafeMode !== undefined
@@ -214,7 +338,7 @@ const FileOptimization = ( {
 		minifyInlineJS: false,
 		removeHTMLComments: true,
 		...options,
-	};
+	} );
 
 	// Backfill stable row ids so CDN-mapping rows keep identity across
 	// add/remove (index keys would reuse the wrong input state/focus).
@@ -665,112 +789,17 @@ const FileOptimization = ( {
 	const [ baseline, setBaseline ] = useState( defaultSettings );
 	// Baseline is intentionally derived per-key (not per-object-identity)
 	// so parent re-renders with an identical payload do not reset the form.
-	useEffect( () => {
-		setBaseline( {
-			...defaultSettings,
-			...options,
-			delayJSThirdPartyDenylist: toTextLines(
-				options.delayJSThirdPartyDenylist
-			),
-			delayJSThirdPartyAllowlist: toTextLines(
-				options.delayJSThirdPartyAllowlist
-			),
-			delayJSExcludeUrls:
-				typeof options.delayJSExcludeUrls === 'string'
-					? options.delayJSExcludeUrls
-					: '',
-			usedCSSExcludeUrls:
-				typeof options.usedCSSExcludeUrls === 'string'
-					? options.usedCSSExcludeUrls
-					: '',
-			ccssSafelistExtra:
-				typeof options.ccssSafelistExtra === 'string'
-					? options.ccssSafelistExtra
-					: '',
-			fontSubsetSubsets:
-				typeof options.fontSubsetSubsets === 'string'
-					? options.fontSubsetSubsets
-					: 'latin',
-			usedCSSDeliveryMode: normalizeDeliveryMode(
-				options.usedCSSDeliveryMode
-			),
-		} );
+	// Deps are FILE_OPT_SYNC_KEYS mapped over options (non-literal by design;
+	// the shared key list is the single source of truth).
+	useEffect(
+		() => {
+			setBaseline(
+				normalizeFileOpt( { ...defaultSettings, ...options } )
+			);
+		},
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [
-		options.safeMode,
-		options.elementorSafeMode,
-		options.minifyJS,
-		options.excludeJS,
-		options.minifyCSS,
-		options.excludeCSS,
-		options.combineCSS,
-		options.excludeCombineCSS,
-		options.removeQueryStrings,
-		options.minifyHTML,
-		options.deferJS,
-		options.excludeDeferJS,
-		options.delayJS,
-		options.excludeDelayJS,
-		options.delayJSCommercePreset,
-		options.delayJSBuilderPreset,
-		options.delayJSINPPreset,
-		options.delayJSExternalOnly,
-		options.delayJSThirdParty,
-		options.delayJSThirdPartyDenylist,
-		options.delayJSThirdPartyAllowlist,
-		options.delayJSExcludeUrls,
-		options.usedCSSExcludeUrls,
-		options.delayJSDefaultStrategy,
-		options.delayJSIdleList,
-		options.delayJSViewportList,
-		options.delayJSPriority,
-		options.delayJSIdleTimeout,
-		options.removeWooCSSJS,
-		options.excludeUrlToKeepJSCSS,
-		options.removeCssJsHandle,
-		options.enableServerRules,
-		options.criticalCSS,
-		options.ccssMaxSize,
-		options.ccssSafelistExtra,
-		options.hostGoogleFontsLocally,
-		options.fontMetricFallback,
-		options.fontSubset,
-		options.fontSubsetSubsets,
-		options.cdnURL,
-		options.cdnMapping,
-		options.removeUnusedCSS,
-		options.excludeUnusedCSS,
-		options.unusedCSSSafelistExtra,
-		options.unusedCSSRegressionGuard,
-		options.unusedCSSRegressionThreshold,
-		options.usedCSSDeliveryMode,
-		options.disableEmojis,
-		options.disableEmbeds,
-		options.disableDashicons,
-		options.disableXMLRPC,
-		options.disableRestApiLinks,
-		options.disableRssFeeds,
-		options.disableShortlinks,
-		options.disableGeneratorTag,
-		options.disableJQueryMigrate,
-		options.disablePasswordStrength,
-		options.disableSelfPingbacks,
-		options.disableRSD,
-		options.disableWLWManifest,
-		options.disableGlobalStyles,
-		options.disableClassicThemeStyles,
-		options.disableWooCartFragments,
-		options.disableRecentCommentsStyle,
-		options.disableCommentReply,
-		options.disableOEmbedDiscovery,
-		options.disableBlockWidgets,
-		options.blockAssetsOnDemand,
-		options.loadAllCoreBlockAssets,
-		options.heartbeatControl,
-		options.minifyInlineCSS,
-		options.minifyInlineJS,
-		options.removeHTMLComments,
-	] );
+		FILE_OPT_SYNC_KEYS.map( ( key ) => options[ key ] )
+	);
 	useUnsavedChanges( settings, baseline );
 
 	// Sync local state when parent props change after mount.
@@ -778,119 +807,23 @@ const FileOptimization = ( {
 	// parent re-renders with an identical payload — or a replacement of the
 	// global settings object while the user is editing — do not merge saved
 	// values over in-progress edits. Mirrors PreloadSettings/ImageOptimization.
-	useEffect( () => {
-		if ( ! options || Object.keys( options ).length === 0 ) {
-			return;
-		}
-		setSettings( ( prev ) => {
-			const next = { ...prev, ...options };
-			// String-guard textarea-backed keys so a corrupted non-string
-			// payload cannot reach a controlled textarea value. Third-party
-			// lists join array payloads (toTextLines) so sync agrees with
-			// init instead of dropping backend arrays to '' (#1217 review).
-			if ( typeof next.delayJSThirdPartyDenylist !== 'string' ) {
-				next.delayJSThirdPartyDenylist = toTextLines(
-					next.delayJSThirdPartyDenylist
-				);
+	// Deps are FILE_OPT_SYNC_KEYS mapped over options (non-literal by design).
+	useEffect(
+		() => {
+			if ( ! options || Object.keys( options ).length === 0 ) {
+				return;
 			}
-			if ( typeof next.delayJSThirdPartyAllowlist !== 'string' ) {
-				next.delayJSThirdPartyAllowlist = toTextLines(
-					next.delayJSThirdPartyAllowlist
-				);
-			}
-			if ( typeof next.delayJSExcludeUrls !== 'string' ) {
-				next.delayJSExcludeUrls = '';
-			}
-			if ( typeof next.usedCSSExcludeUrls !== 'string' ) {
-				next.usedCSSExcludeUrls = '';
-			}
-			if ( typeof next.ccssSafelistExtra !== 'string' ) {
-				next.ccssSafelistExtra = '';
-			}
-			if ( typeof next.fontSubsetSubsets !== 'string' ) {
-				next.fontSubsetSubsets = 'latin';
-			}
-			next.usedCSSDeliveryMode = normalizeDeliveryMode(
-				next.usedCSSDeliveryMode
+			setSettings( ( prev ) =>
+				// Shared normalizeFileOpt(): every textarea-backed key routes
+				// through toTextLines() after spread, so backend arrays join
+				// (never drop to '' or reach a controlled textarea), matching
+				// init and baseline (#1217 review, issue #1259 review).
+				normalizeFileOpt( { ...prev, ...options } )
 			);
-			return next;
-		} );
+		},
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [
-		options.safeMode,
-		options.elementorSafeMode,
-		options.minifyJS,
-		options.excludeJS,
-		options.minifyCSS,
-		options.excludeCSS,
-		options.combineCSS,
-		options.excludeCombineCSS,
-		options.removeQueryStrings,
-		options.minifyHTML,
-		options.deferJS,
-		options.excludeDeferJS,
-		options.delayJS,
-		options.excludeDelayJS,
-		options.delayJSCommercePreset,
-		options.delayJSBuilderPreset,
-		options.delayJSINPPreset,
-		options.delayJSExternalOnly,
-		options.delayJSThirdParty,
-		options.delayJSThirdPartyDenylist,
-		options.delayJSThirdPartyAllowlist,
-		options.delayJSExcludeUrls,
-		options.usedCSSExcludeUrls,
-		options.delayJSDefaultStrategy,
-		options.delayJSIdleList,
-		options.delayJSViewportList,
-		options.delayJSPriority,
-		options.delayJSIdleTimeout,
-		options.removeWooCSSJS,
-		options.excludeUrlToKeepJSCSS,
-		options.removeCssJsHandle,
-		options.enableServerRules,
-		options.criticalCSS,
-		options.ccssMaxSize,
-		options.ccssSafelistExtra,
-		options.hostGoogleFontsLocally,
-		options.fontMetricFallback,
-		options.fontSubset,
-		options.fontSubsetSubsets,
-		options.cdnURL,
-		options.cdnMapping,
-		options.removeUnusedCSS,
-		options.excludeUnusedCSS,
-		options.unusedCSSSafelistExtra,
-		options.unusedCSSRegressionGuard,
-		options.unusedCSSRegressionThreshold,
-		options.usedCSSDeliveryMode,
-		options.disableEmojis,
-		options.disableEmbeds,
-		options.disableDashicons,
-		options.disableXMLRPC,
-		options.disableRestApiLinks,
-		options.disableRssFeeds,
-		options.disableShortlinks,
-		options.disableGeneratorTag,
-		options.disableJQueryMigrate,
-		options.disablePasswordStrength,
-		options.disableSelfPingbacks,
-		options.disableRSD,
-		options.disableWLWManifest,
-		options.disableGlobalStyles,
-		options.disableClassicThemeStyles,
-		options.disableWooCartFragments,
-		options.disableRecentCommentsStyle,
-		options.disableCommentReply,
-		options.disableOEmbedDiscovery,
-		options.disableBlockWidgets,
-		options.blockAssetsOnDemand,
-		options.loadAllCoreBlockAssets,
-		options.heartbeatControl,
-		options.minifyInlineCSS,
-		options.minifyInlineJS,
-		options.removeHTMLComments,
-	] );
+		FILE_OPT_SYNC_KEYS.map( ( key ) => options[ key ] )
+	);
 
 	// INP-first preset (#932): one-click idle + viewport delay with 60s
 	// heartbeat. Enabling fills delayJS/strategy/heartbeat client-side (only

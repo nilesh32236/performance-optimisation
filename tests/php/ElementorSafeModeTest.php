@@ -13,6 +13,7 @@
  */
 
 use PerformanceOptimise\Inc\Builder_Purge_Watcher;
+use PerformanceOptimise\Inc\Cache;
 use PerformanceOptimise\Inc\Main;
 use PerformanceOptimise\Inc\Util;
 use Brain\Monkey\Functions;
@@ -34,6 +35,7 @@ class ElementorSafeModeTest extends \PHPUnit\Framework\TestCase {
 		$this->register_common_function_stubs();
 		Main::reset_elementor_memo();
 		Builder_Purge_Watcher::reset_elementor_purge_memo();
+		Builder_Purge_Watcher::reset_drift_state();
 		Functions\when( 'get_option' )->justReturn( array() );
 		Functions\when( 'update_option' )->justReturn( true );
 		Functions\when( 'get_transient' )->justReturn( false );
@@ -54,6 +56,7 @@ class ElementorSafeModeTest extends \PHPUnit\Framework\TestCase {
 		unset( $_GET['elementor-preview'] );
 		Main::reset_elementor_memo();
 		Builder_Purge_Watcher::reset_elementor_purge_memo();
+		Builder_Purge_Watcher::reset_drift_state();
 		\Brain\Monkey\tearDown();
 		parent::tearDown();
 	}
@@ -241,10 +244,73 @@ class ElementorSafeModeTest extends \PHPUnit\Framework\TestCase {
 		$watcher->on_elementor_css_regen( null );
 		$this->assertSame( array(), $watcher->purged_posts, 'Unresolvable payloads must not purge a wrong URL.' );
 
-		$flag = new \ReflectionProperty( Builder_Purge_Watcher::class, 'drift_handled_this_request' );
-		$flag->setAccessible( true );
-		$this->assertTrue( $flag->getValue(), 'Unresolvable regen must schedule the deferred full purge.' );
-		$flag->setValue( null, false );
+		$drifted = new \ReflectionProperty( Builder_Purge_Watcher::class, 'drift_handled_this_request' );
+		$drifted->setAccessible( true );
+		$this->assertTrue( $drifted->getValue(), 'Unresolvable regen must schedule the deferred full purge.' );
+		Builder_Purge_Watcher::reset_drift_state();
+		$this->assertFalse( $drifted->getValue(), 'Named drift reset must clear the flag without reflection writes.' );
+	}
+
+	/**
+	 * Posts past the bulk threshold skip per-post file I/O (deferred owns them).
+	 */
+	public function test_coalesced_posts_skip_per_post_io(): void {
+		$watcher = new WPPO_Test_Elementor_Counting_Watcher();
+
+		for ( $post_id = 201; $post_id <= 206; $post_id++ ) {
+			$watcher->on_elementor_css_regen( $post_id );
+		}
+		$this->assertSame( array( 201, 202, 203, 204, 205, 206 ), $watcher->purged_posts );
+
+		// Post 7+: deferred full purge already scheduled — no more file I/O,
+		// but the dedupe set still records the post.
+		$watcher->on_elementor_css_regen( 207 );
+		$this->assertSame( array( 201, 202, 203, 204, 205, 206 ), $watcher->purged_posts, 'Coalesced posts must skip per-post file I/O.' );
+
+		$watcher->on_builder_drift_save( 208, array() );
+		$this->assertSame( array( 201, 202, 203, 204, 205, 206 ), $watcher->purged_posts, 'Coalesced editor saves must skip per-post file I/O.' );
+	}
+
+	/**
+	 * The shared Cache bypass choke point skips combine on builder pages only.
+	 *
+	 * Note: the native pre-gate (no Elementor class/constant on the test
+	 * bench) short-circuits non-Elementor requests before any meta read, so
+	 * the positive case rides the `?elementor-preview` pre-gate signal plus
+	 * strict per-post builder meta — the same combination a real preview
+	 * request on an Elementor site presents.
+	 */
+	public function test_cache_bypass_choke_point(): void {
+		$cache   = ( new \ReflectionClass( Cache::class ) )->newInstanceWithoutConstructor();
+		$options = new \ReflectionProperty( Cache::class, 'options' );
+		$options->setAccessible( true );
+		$options->setValue( $cache, array( 'file_optimisation' => array( 'elementorSafeMode' => true ) ) );
+		$method = new \ReflectionMethod( Cache::class, 'should_bypass_combine_for_elementor' );
+		$method->setAccessible( true );
+
+		// Non-Elementor request: no bypass (pre-gate short-circuits, no meta reads).
+		$this->assertFalse( $method->invoke( $cache, array( 'elementorSafeMode' => true ) ) );
+
+		// Bare preview query var on a non-builder post: still no bypass
+		// (preview bypass is gated on per-post builder meta).
+		$this->stub_builder_meta( '', '' );
+		Functions\when( 'get_queried_object_id' )->justReturn( 42 );
+		$_GET['elementor-preview'] = '1'; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Test fixture for read-only routing check.
+		Main::reset_elementor_memo();
+		$this->assertFalse( $method->invoke( $cache, array( 'elementorSafeMode' => true ) ), 'Bare preview on a non-builder post must not bypass.' );
+
+		// Same preview signal on a builder-built post with safe mode on: bypass.
+		$this->stub_builder_meta( '', 'builder' );
+		Main::reset_elementor_memo();
+		$this->assertTrue( $method->invoke( $cache, array( 'elementorSafeMode' => true ) ), 'Builder-built pages must bypass combine.' );
+
+		// Same builder page with safe mode off: no bypass.
+		Main::reset_elementor_memo();
+		$this->assertFalse( $method->invoke( $cache, array( 'elementorSafeMode' => false ) ), 'Safe mode off must not bypass.' );
+
+		unset( $_GET['elementor-preview'] );
+		Functions\when( 'get_queried_object_id' )->justReturn( 0 );
+		Main::reset_elementor_memo();
 	}
 
 	/**
@@ -369,6 +435,9 @@ class WPPO_Test_Elementor_Css_File {
 
 /**
  * Counting watcher double: records purge_post_static_cache() calls.
+ *
+ * The Used-CSS fan-out is stubbed to a recorded no-op so scheduler writes
+ * are never exercised (unit scope stops at the watcher seam).
  */
 class WPPO_Test_Elementor_Counting_Watcher extends Builder_Purge_Watcher {
 	/**
@@ -379,12 +448,32 @@ class WPPO_Test_Elementor_Counting_Watcher extends Builder_Purge_Watcher {
 	public $purged_posts = array();
 
 	/**
+	 * Requeued post IDs in call order.
+	 *
+	 * @var int[]
+	 */
+	public $requeued_posts = array();
+
+	/**
 	 * Record instead of touching the filesystem.
 	 *
-	 * @param int $post_id Post ID whose cache must be purged.
+	 * @param int  $post_id Post ID whose cache must be purged.
+	 * @param bool $bump_stats Whether stats would be bumped (unused).
 	 */
-	protected function purge_post_static_cache( int $post_id ): void {
+	protected function purge_post_static_cache( int $post_id, bool $bump_stats = true ): void {
+		unset( $bump_stats );
 		$this->purged_posts[] = $post_id;
+	}
+
+	/**
+	 * Record instead of touching the scheduler.
+	 *
+	 * @param int $post_id Post ID whose Used-CSS would be requeued.
+	 * @return bool Always true (job recorded as queued).
+	 */
+	protected function requeue_used_css_for_elementor_post( int $post_id ): bool {
+		$this->requeued_posts[] = $post_id;
+		return true;
 	}
 }
 // phpcs:enable Generic.Files.OneObjectStructurePerFile
