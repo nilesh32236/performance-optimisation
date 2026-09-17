@@ -480,7 +480,9 @@ describe( 'sanitizeRumValues attribution branches', () => {
 			'img[src="hero.jpg"]',
 			'<script>alert(1)</script>',
 			'img`onerror=alert(1)`',
-			'javascript:alert(1)',
+			'javascript:alert',
+			'vbscript:msgbox',
+			'imgdata:data:x',
 			'a'.repeat( 257 ),
 			123,
 		];

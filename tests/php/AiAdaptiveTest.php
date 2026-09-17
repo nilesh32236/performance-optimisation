@@ -2118,6 +2118,59 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that stale attribution entries emit no suggestions.
+	 *
+	 * Entries whose `lastSeen` is older than the 24h window must not
+	 * persist as `ai_lcp_preload` / `ai_slow_resource_preload`
+	 * suggestions until the next learn run refreshes them.
+	 *
+	 * @since NEXT
+	 * @return void
+	 */
+	public function test_get_suggestions_omits_stale_attribution(): void {
+		$this->install_stubs();
+		$stale                                   = time() - ( 2 * DAY_IN_SECONDS );
+		$today                                   = gmdate( 'Y-m-d' );
+		$this->options['wppo_web_vitals_rum']    = array(
+			$today => array(
+				'/slow/' => array(
+					'lcp'           => array(
+						'n'   => 25,
+						'sum' => 100000,
+						'min' => 3000,
+						'max' => 5000,
+					),
+					'lcpSelectors'  => array(
+						'img#hero-image' => array(
+							'n'        => 25,
+							'lastSeen' => $stale,
+						),
+					),
+					'slowResources' => array(
+						'example.com/slow.js' => array(
+							'url'           => 'https://example.com/slow.js',
+							'type'          => 'script',
+							'n'             => 5,
+							'totalDuration' => 5000.0,
+							'maxDuration'   => 1200.0,
+							'lastSeen'      => $stale,
+						),
+					),
+				),
+			),
+		);
+		$this->options['wppo_web_vitals_trends'] = array();
+		$this->options['wppo_settings']          = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		Util::clear_settings_cache();
+		Functions\when( 'is_admin' )->justReturn( true );
+		Functions\when( 'is_user_logged_in' )->justReturn( true );
+
+		$suggestions = AI_Adaptive::get_suggestions();
+		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_lcp_preload' ) );
+		$this->assertNull( $this->find_suggestion( $suggestions, 'ai_slow_resource_preload' ) );
+	}
+
+	/**
 	 * Test that models persisted before attribution emit no suggestions.
 	 *
 	 * Missing `attributed_lcp` / `slow_resources` keys fail open: no fatal,

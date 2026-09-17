@@ -229,6 +229,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		public const SLOW_RESOURCE_MAX_DURATION_MS = 60000;
 
 		/**
+		 * Minimum duration (ms) for a slow-resource entry to be stored.
+		 *
+		 * Mirrors the client-side `RUM_SLOW_RESOURCE_THRESHOLD_MS` in
+		 * src/rum.js: beacons whose top-3 fallback carries fast assets
+		 * (e.g. 5–50 ms on quiet pages) are dropped here so they can
+		 * never surface as `ai_slow_resource_preload` suggestions.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		public const SLOW_RESOURCE_MIN_DURATION_MS = 300;
+
+		/**
 		 * Maximum distinct LCP element selectors tracked per path bucket.
 		 *
 		 * Bounds the `lcpSelectors` map added for LCP-element attribution
@@ -1180,20 +1193,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 
 			// Optional slow-resource audit (issue #1311). Lazily booted:
 			// only parsed when the field is present. Accepts both
-			// `slowResources` and the legacy-shaped `slow_resources` key.
-			// Fail-open: malformed entries are dropped; an empty result
-			// omits the key, never rejecting the sample.
-			$slow_raw = null;
+			// `slowResources` and the legacy-shaped `slow_resources` key,
+			// preferring the former but falling back to the latter when
+			// the primary sanitizes empty (a present-but-invalid primary
+			// must not shadow a valid legacy key). Fail-open: malformed
+			// entries are dropped; an empty result omits the key, never
+			// rejecting the sample.
+			$slow_clean = array();
 			if ( array_key_exists( 'slowResources', $params ) ) {
-				$slow_raw = $params['slowResources'];
-			} elseif ( array_key_exists( 'slow_resources', $params ) ) {
-				$slow_raw = $params['slow_resources'];
+				$slow_clean = self::sanitize_slow_resources( $params['slowResources'] );
 			}
-			if ( null !== $slow_raw ) {
-				$slow_clean = self::sanitize_slow_resources( $slow_raw );
-				if ( ! empty( $slow_clean ) ) {
-					$sample['slowResources'] = $slow_clean;
-				}
+			if ( empty( $slow_clean ) && array_key_exists( 'slow_resources', $params ) ) {
+				$slow_clean = self::sanitize_slow_resources( $params['slow_resources'] );
+			}
+			if ( ! empty( $slow_clean ) ) {
+				$sample['slowResources'] = $slow_clean;
 			}
 
 			return $sample;
@@ -1393,7 +1407,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				if ( false !== strpbrk( $cleaned, '<>"`' ) ) {
 					return '';
 				}
-				if ( false !== stripos( $cleaned, '</style' ) || false !== stripos( $cleaned, '<script' ) || false !== stripos( $cleaned, '<!--' ) || false !== strpos( $cleaned, '-->' ) || false !== stripos( $cleaned, 'javascript:' ) ) {
+				if ( false !== stripos( $cleaned, '</style' ) || false !== stripos( $cleaned, '<script' ) || false !== stripos( $cleaned, '<!--' ) || false !== strpos( $cleaned, '-->' ) || false !== stripos( $cleaned, 'javascript:' ) || false !== stripos( $cleaned, 'vbscript:' ) || false !== stripos( $cleaned, 'data:' ) ) {
 					return '';
 				}
 				return $cleaned;
@@ -1430,10 +1444,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * Additive beacon field (issue #1311): array of at most
 		 * SLOW_RESOURCES_MAX_COUNT shaped entries. Per-entry the URL must
 		 * pass the same-origin `is_safe_lcp_url()` gate, the type must be
-		 * allowlisted, and the duration is clamped to
-		 * 0–SLOW_RESOURCE_MAX_DURATION_MS via `clamp_metric_value()`.
-		 * Malformed entries are dropped; an empty result omits the key.
-		 * Lazily booted: callers only invoke this when the field is present.
+		 * allowlisted, the duration is clamped inline to
+		 * 0–SLOW_RESOURCE_MAX_DURATION_MS (mirroring
+		 * `clamp_metric_value()` semantics), and entries at/below
+		 * SLOW_RESOURCE_MIN_DURATION_MS are dropped (mirroring the
+		 * client-side threshold so quiet-page fallback assets never
+		 * surface as preload suggestions). Malformed entries are
+		 * dropped; an empty result omits the key. Lazily booted:
+		 * callers only invoke this when the field is present.
 		 * Never fatal.
 		 *
 		 * @since NEXT
@@ -1472,7 +1490,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 						continue;
 					}
 					$duration = max( 0.0, min( (float) self::SLOW_RESOURCE_MAX_DURATION_MS, $duration ) );
-					$clean[]  = array(
+					// Slow floor (mirrors the client-side
+					// RUM_SLOW_RESOURCE_THRESHOLD_MS): entries at/below the
+					// threshold are not slow and must not reach the AI
+					// suggestions.
+					if ( $duration <= (float) self::SLOW_RESOURCE_MIN_DURATION_MS ) {
+						continue;
+					}
+					$clean[] = array(
 						'url'      => $url,
 						'type'     => $type,
 						'duration' => $duration,
@@ -1636,8 +1661,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				if ( '' === $url ) {
 					return false;
 				}
-				$lower = strtolower( ltrim( $url ) );
-				if ( str_starts_with( $lower, 'data:' ) || str_starts_with( $lower, 'blob:' ) || str_starts_with( $lower, 'javascript:' ) || str_starts_with( $lower, 'vbscript:' ) || str_starts_with( $lower, 'mailto:' ) ) {
+				// Scheme-like values can never be same-origin. Reuses the
+				// shared helper so the denylist cannot drift from the
+				// fail-open variant; protocol-relative (`//host/…`) and
+				// absolute (`scheme://…`) URLs are exempted here because
+				// their host is proven below (the helper flags any
+				// colon-before-slash value, including `https:`).
+				if ( 0 !== strpos( ltrim( $url ), '//' ) && false === strpos( $url, '://' ) && self::is_scheme_like_url( $url ) ) {
 					return false;
 				}
 				// Root-relative and bare relative paths are same-origin by
@@ -1913,6 +1943,46 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		}
 
 		/**
+		 * Evict lowest-count/oldest entries from a bounded per-path map.
+		 *
+		 * Single shared implementation behind the `lcpUrls`,
+		 * `lcpSelectors` and `slowResources` eviction loops of
+		 * {@see flush_queue()} so a policy fix can never miss one map.
+		 * Fail-open: never fatal.
+		 *
+		 * @since NEXT
+		 * @param array $map Bounded map to evict from (by ref).
+		 * @param int   $max Maximum entries retained.
+		 * @return void
+		 */
+		private static function evict_lowest_n( array &$map, int $max ): void {
+			try {
+				$count = count( $map );
+				while ( $count > $max ) {
+					$evict_key = null;
+					$evict_n   = null;
+					$evict_ts  = null;
+					foreach ( $map as $key => $entry ) {
+						$entry_n  = isset( $entry['n'] ) ? (int) $entry['n'] : 0;
+						$entry_ts = isset( $entry['lastSeen'] ) ? (int) $entry['lastSeen'] : 0;
+						if ( null === $evict_key || $entry_n < $evict_n || ( $entry_n === $evict_n && $entry_ts < $evict_ts ) ) {
+							$evict_key = $key;
+							$evict_n   = $entry_n;
+							$evict_ts  = $entry_ts;
+						}
+					}
+					if ( null === $evict_key ) {
+						break;
+					}
+					unset( $map[ $evict_key ] );
+					--$count;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
+
+		/**
 		 * Validate one queued sample into a merge-ready shape.
 		 *
 		 * Single Sample validator shared by the flush path: re-validates the
@@ -2098,14 +2168,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					$all = array();
 				}
 
-				$ranges = array(
-					'ttfb' => array( 0, 60000 ),
-					'fcp'  => array( 0, 60000 ),
-					'lcp'  => array( 0, 60000 ),
-					'inp'  => array( 0, 60000 ),
-					'cls'  => array( 0, 1 ),
-				);
-
 				foreach ( $queue as $sample ) {
 					// Hardened (issue #1181): the queue transient is
 					// attacker-writable, so every queued field is
@@ -2181,24 +2243,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 								);
 							}
 							$lcp_urls_count = count( $bucket['lcpUrls'] );
-							while ( $lcp_urls_count > self::MAX_LCP_URLS_PER_PATH ) {
-								$evict_key = null;
-								$evict_n   = null;
-								$evict_ts  = null;
-								foreach ( $bucket['lcpUrls'] as $key => $entry ) {
-									$entry_n  = isset( $entry['n'] ) ? (int) $entry['n'] : 0;
-									$entry_ts = isset( $entry['lastSeen'] ) ? (int) $entry['lastSeen'] : 0;
-									if ( null === $evict_key || $entry_n < $evict_n || ( $entry_n === $evict_n && $entry_ts < $evict_ts ) ) {
-										$evict_key = $key;
-										$evict_n   = $entry_n;
-										$evict_ts  = $entry_ts;
-									}
-								}
-								if ( null === $evict_key ) {
-									break;
-								}
-								unset( $bucket['lcpUrls'][ $evict_key ] );
-								--$lcp_urls_count;
+							if ( $lcp_urls_count > self::MAX_LCP_URLS_PER_PATH ) {
+								self::evict_lowest_n( $bucket['lcpUrls'], self::MAX_LCP_URLS_PER_PATH );
 							}
 						}
 					}
@@ -2223,24 +2269,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 								);
 							}
 							$selector_count = count( $bucket['lcpSelectors'] );
-							while ( $selector_count > self::MAX_LCP_SELECTORS_PER_PATH ) {
-								$evict_key = null;
-								$evict_n   = null;
-								$evict_ts  = null;
-								foreach ( $bucket['lcpSelectors'] as $key => $entry ) {
-									$entry_n  = isset( $entry['n'] ) ? (int) $entry['n'] : 0;
-									$entry_ts = isset( $entry['lastSeen'] ) ? (int) $entry['lastSeen'] : 0;
-									if ( null === $evict_key || $entry_n < $evict_n || ( $entry_n === $evict_n && $entry_ts < $evict_ts ) ) {
-										$evict_key = $key;
-										$evict_n   = $entry_n;
-										$evict_ts  = $entry_ts;
-									}
-								}
-								if ( null === $evict_key ) {
-									break;
-								}
-								unset( $bucket['lcpSelectors'][ $evict_key ] );
-								--$selector_count;
+							if ( $selector_count > self::MAX_LCP_SELECTORS_PER_PATH ) {
+								self::evict_lowest_n( $bucket['lcpSelectors'], self::MAX_LCP_SELECTORS_PER_PATH );
 							}
 						}
 					}
@@ -2287,24 +2317,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 								}
 							}
 							$slow_count = count( $bucket['slowResources'] );
-							while ( $slow_count > self::MAX_SLOW_RESOURCES_PER_PATH ) {
-								$evict_key = null;
-								$evict_n   = null;
-								$evict_ts  = null;
-								foreach ( $bucket['slowResources'] as $key => $entry ) {
-									$entry_n  = isset( $entry['n'] ) ? (int) $entry['n'] : 0;
-									$entry_ts = isset( $entry['lastSeen'] ) ? (int) $entry['lastSeen'] : 0;
-									if ( null === $evict_key || $entry_n < $evict_n || ( $entry_n === $evict_n && $entry_ts < $evict_ts ) ) {
-										$evict_key = $key;
-										$evict_n   = $entry_n;
-										$evict_ts  = $entry_ts;
-									}
-								}
-								if ( null === $evict_key ) {
-									break;
-								}
-								unset( $bucket['slowResources'][ $evict_key ] );
-								--$slow_count;
+							if ( $slow_count > self::MAX_SLOW_RESOURCES_PER_PATH ) {
+								self::evict_lowest_n( $bucket['slowResources'], self::MAX_SLOW_RESOURCES_PER_PATH );
 							}
 						}
 					}
@@ -2389,6 +2403,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		}
 
 		/**
+		 * Parse the current request URI path (length-capped, '/' fallback).
+		 *
+		 * Single shared home for the `$_SERVER['REQUEST_URI']` parsing
+		 * fallback used by {@see get_field_lcp_url()} and
+		 * {@see get_top_lcp_selector()} so the two read paths cannot
+		 * drift apart. Fail-open: any failure returns '/'.
+		 *
+		 * @since NEXT
+		 * @return string Current request path.
+		 */
+		private static function parse_request_uri_path(): string {
+			try {
+				$raw_path = isset( $_SERVER['REQUEST_URI'] ) ? wp_parse_url( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ), PHP_URL_PATH ) : '/';
+				return is_string( $raw_path ) && '' !== $raw_path ? substr( $raw_path, 0, 512 ) : '/';
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return '/';
+			}
+		}
+
+		/**
 		 * Get the field-measured LCP URL for a page path.
 		 *
 		 * Returns the most-observed LCP element URL for the path only when it
@@ -2406,8 +2441,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		public static function get_field_lcp_url( ?string $path = null ): ?array {
 			try {
 				if ( null === $path ) {
-					$raw_path = isset( $_SERVER['REQUEST_URI'] ) ? wp_parse_url( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ), PHP_URL_PATH ) : '/';
-					$path     = is_string( $raw_path ) && '' !== $raw_path ? substr( $raw_path, 0, 512 ) : '/';
+					$path = self::parse_request_uri_path();
 				}
 				if ( '' === $path ) {
 					return null;
@@ -2452,10 +2486,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					$cached_seen = (int) ( $cached_top['lastSeen'] ?? 0 );
 					if ( $cached_n >= $min && $cached_seen > 0 && ( time() - $cached_seen ) <= self::FIELD_LCP_STALE_TTL ) {
 						// Emission-path origin re-check (issue #1180): cached
-						// entries may predate the intake guard. A cross-origin
-						// entry falls through to the aggregate scan instead of
-						// being served.
-						if ( is_string( $cached_top['url'] ) && self::is_same_origin_url( $cached_top['url'] ) ) {
+						// entries may predate the intake guard. The strict
+						// variant applies here: a preload `<link>` must
+						// never be emitted on an unverifiable verdict. A
+						// cross-origin entry falls through to the aggregate
+						// scan instead of being served.
+						if ( is_string( $cached_top['url'] ) && self::is_same_origin_url_strict( $cached_top['url'] ) ) {
 							self::$field_lcp_result_memo[ $memo_key ] = $cached_top;
 							return $cached_top;
 						}
@@ -2551,9 +2587,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				unset( $top['_raw_n'] );
 				// Emission-path origin re-check (issue #1180): aggregate rows
 				// written before the intake guard shipped may hold a
-				// cross-origin URL. Reject it so only same-origin heroes are
-				// ever preloaded.
-				if ( ! self::is_same_origin_url( $top['url'] ) ) {
+				// cross-origin URL. The strict variant applies here: a
+				// preload `<link>` must never be emitted on an
+				// unverifiable verdict. Reject it so only positively
+				// proven same-origin heroes are ever preloaded.
+				if ( ! self::is_same_origin_url_strict( $top['url'] ) ) {
 					self::$field_lcp_result_memo[ $memo_key ] = null;
 					return null;
 				}
@@ -2601,7 +2639,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					$path = self::resolve_current_path();
 				}
 				$field = self::get_field_lcp_url( $path );
-				if ( is_array( $field ) && ! empty( $field['url'] ) && is_string( $field['url'] ) && self::is_same_origin_url( $field['url'] ) ) {
+				if ( is_array( $field ) && ! empty( $field['url'] ) && is_string( $field['url'] ) && self::is_same_origin_url_strict( $field['url'] ) ) {
 					return $field;
 				}
 			} catch ( \Throwable $e ) {
@@ -2609,7 +2647,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			}
 			try {
 				$fallback = self::get_stored_pagespeed_lcp_url( $path );
-				if ( '' !== $fallback && self::is_same_origin_url( $fallback ) ) {
+				if ( '' !== $fallback && self::is_same_origin_url_strict( $fallback ) ) {
 					return array(
 						'url'      => $fallback,
 						'n'        => 0,
@@ -2643,8 +2681,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				if ( null === $path ) {
 					$path = self::resolve_current_path();
 					if ( null === $path ) {
-						$raw_path = ( function_exists( 'wp_parse_url' ) && isset( $_SERVER['REQUEST_URI'] ) ) ? wp_parse_url( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ), PHP_URL_PATH ) : '/';
-						$path     = is_string( $raw_path ) && '' !== $raw_path ? substr( $raw_path, 0, 512 ) : '/';
+						$path = self::parse_request_uri_path();
 					}
 				}
 				if ( '' === $path ) {
@@ -2736,7 +2773,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * maps stored by {@see flush_queue()}. Aggregates by normalized URL
 		 * across all days/paths, ranks by total observed count then average
 		 * duration, and returns at most `$limit` entries with same-origin
-		 * URLs only. Fail-open: any failure returns an empty array, never
+		 * URLs only. Stored rows are re-validated with the intake gate
+		 * (`is_safe_lcp_url()`, not just the fail-open origin check) and
+		 * the type allowlist so legacy/tampered rows can never flow to AI
+		 * suggestions; rows whose `lastSeen` is older than
+		 * FIELD_LCP_STALE_TTL are skipped so removed resources stop
+		 * outranking current ones (mirroring the selector freshness
+		 * gate). Fail-open: any failure returns an empty array, never
 		 * fatal. No new option or transient names.
 		 *
 		 * @since NEXT
@@ -2750,6 +2793,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				if ( ! is_array( $all ) || empty( $all ) ) {
 					return array();
 				}
+				$now    = time();
 				$merged = array();
 				foreach ( $all as $day_bucket ) {
 					if ( ! is_array( $day_bucket ) ) {
@@ -2767,8 +2811,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 							if ( ! is_array( $entry ) || empty( $entry['url'] ) || ! is_string( $entry['url'] ) ) {
 								continue;
 							}
-							if ( ! self::is_same_origin_url( $entry['url'] ) ) {
+							// Re-validate with the intake gate: legacy rows
+							// may carry markup-bearing same-origin values
+							// that the fail-open origin check alone passes.
+							$read_url = trim( substr( $entry['url'], 0, self::SLOW_RESOURCE_URL_MAX_LENGTH ) );
+							if ( '' === $read_url || ! self::is_safe_lcp_url( $read_url ) ) {
 								continue;
+							}
+							// Re-allowlist the type: tampered/legacy values
+							// must not flow verbatim to admin copy.
+							$read_type = self::normalize_slow_resource_type( $entry['type'] ?? null );
+							if ( '' === $read_type ) {
+								$read_type = 'img';
 							}
 							$norm    = ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'normalize_url' ) )
 								? \PerformanceOptimise\Inc\Util::normalize_url( $entry['url'] )
@@ -2777,7 +2831,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 							if ( ! isset( $merged[ $map_key ] ) ) {
 								$merged[ $map_key ] = array(
 									'url'           => $entry['url'],
-									'type'          => isset( $entry['type'] ) && is_string( $entry['type'] ) ? $entry['type'] : 'img',
+									'type'          => $read_type,
 									'n'             => 0,
 									'totalDuration' => 0.0,
 									'maxDuration'   => 0.0,
@@ -2790,10 +2844,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 							$merged[ $map_key ]['maxDuration']    = max( (float) $merged[ $map_key ]['maxDuration'], (float) ( $entry['maxDuration'] ?? 0.0 ) );
 							$merged[ $map_key ]['lastSeen']       = max( (int) $merged[ $map_key ]['lastSeen'], isset( $entry['lastSeen'] ) ? (int) $entry['lastSeen'] : 0 );
 							if ( $entry_n >= ( $merged[ $map_key ]['_raw_n'] ?? 0 ) ) {
-								$merged[ $map_key ]['url'] = $entry['url'];
-								if ( isset( $entry['type'] ) && is_string( $entry['type'] ) ) {
-									$merged[ $map_key ]['type'] = $entry['type'];
-								}
+								$merged[ $map_key ]['url']    = $entry['url'];
+								$merged[ $map_key ]['type']   = $read_type;
 								$merged[ $map_key ]['_raw_n'] = $entry_n;
 							}
 						}
@@ -2805,6 +2857,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				$rows = array();
 				foreach ( $merged as $row ) {
 					unset( $row['_raw_n'] );
+					// Freshness gate (mirrors the selector read path):
+					// removed resources stop outranking current ones well
+					// before the 14-day retention eviction.
+					$row_seen = isset( $row['lastSeen'] ) ? (int) $row['lastSeen'] : 0;
+					if ( $row_seen <= 0 || ( $now - $row_seen ) > self::FIELD_LCP_STALE_TTL ) {
+						continue;
+					}
 					$row['avgDuration'] = $row['n'] > 0 ? (float) $row['totalDuration'] / (int) $row['n'] : 0.0;
 					unset( $row['totalDuration'] );
 					$rows[] = $row;

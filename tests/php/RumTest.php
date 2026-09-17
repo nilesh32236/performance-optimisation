@@ -499,6 +499,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_get_field_lcp_url_gates_on_sample_count(): void {
 		$this->install_stubs();
+		$this->stub_attribution_environment();
 		$this->options['wppo_settings'] = array(
 			'performance_audit'  => array( 'rum_enabled' => true ),
 			'image_optimisation' => array( 'fieldLcpMinSamples' => 20 ),
@@ -570,6 +571,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_get_field_lcp_url_prefers_ai_adaptive_min_samples(): void {
 		$this->install_stubs();
+		$this->stub_attribution_environment();
 		$this->options['wppo_settings'] = array(
 			'performance_audit'  => array( 'rum_enabled' => true ),
 			'image_optimisation' => array( 'fieldLcpMinSamples' => 20 ),
@@ -1615,7 +1617,8 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	 * Test that malicious selectors are dropped while numerics are kept.
 	 *
 	 * Markup, child combinators (`>`, rejected server-side), double quotes
-	 * and `javascript:` must never reach the aggregate.
+	 * and `javascript:`/`vbscript:`/`data:` schemes must never reach the
+	 * aggregate.
 	 *
 	 * @since NEXT
 	 */
@@ -1628,7 +1631,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 		Util::clear_settings_cache();
 		$_SERVER['REMOTE_ADDR'] = '203.0.113.5';
 
-		foreach ( array( '<script>alert(1)</script>', 'div > img', 'img[src="hero.jpg"]', 'javascript:alert(1)' ) as $selector ) {
+		foreach ( array( '<script>alert(1)</script>', 'div > img', 'img[src="hero.jpg"]', 'javascript:alert', 'vbscript:msgbox', 'imgdata:data:x' ) as $selector ) {
 			$result = RUM::collect(
 				array(
 					'token'       => $this->valid_token( '/attr' ),
@@ -1642,7 +1645,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 
 		$data  = RUM::get_data();
 		$today = gmdate( 'Y-m-d' );
-		$this->assertSame( 4, $data[ $today ]['/attr']['lcp']['n'] );
+		$this->assertSame( 6, $data[ $today ]['/attr']['lcp']['n'] );
 		$this->assertArrayNotHasKey( 'lcpSelectors', $data[ $today ]['/attr'] );
 	}
 
@@ -1703,6 +1706,101 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 'script', $row['type'] );
 		$this->assertSame( 60000.0, $row['totalDuration'] );
 		$this->assertSame( 60000.0, $row['maxDuration'] );
+	}
+
+	/**
+	 * Test that the legacy snake_case slow_resources key is aggregated (issue #1311).
+	 *
+	 * The camelCase `slowResources` key is preferred, but a beacon carrying
+	 * only the snake_case alias must still aggregate instead of dropping
+	 * the audit.
+	 *
+	 * @since NEXT
+	 */
+	public function test_collect_aggregates_snake_case_slow_resources_alias(): void {
+		$this->install_stubs();
+		$this->stub_attribution_environment();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		Util::clear_settings_cache();
+		$_SERVER['REMOTE_ADDR'] = '203.0.113.5';
+
+		$result = RUM::collect(
+			array(
+				'token'          => $this->valid_token( '/attr' ),
+				'path'           => '/attr/',
+				'lcp'            => 1800,
+				'slow_resources' => array(
+					array(
+						'name'          => 'https://example.com/app.js',
+						'initiatorType' => 'script',
+						'duration'      => 900,
+					),
+				),
+			)
+		);
+
+		$this->assertTrue( $result['ok'] );
+		$data  = RUM::get_data();
+		$today = gmdate( 'Y-m-d' );
+		$this->assertArrayHasKey( 'slowResources', $data[ $today ]['/attr'] );
+		$this->assertCount( 1, $data[ $today ]['/attr']['slowResources'] );
+		$row = reset( $data[ $today ]['/attr']['slowResources'] );
+		$this->assertSame( 'https://example.com/app.js', $row['url'] );
+		$this->assertSame( 'script', $row['type'] );
+	}
+
+	/**
+	 * Test that sub-threshold slow-resource entries are dropped at intake.
+	 *
+	 * Entries at/below SLOW_RESOURCE_MIN_DURATION_MS (mirroring the
+	 * client-side threshold) must never reach the aggregate, so
+	 * quiet-page fallback assets cannot surface as preload suggestions.
+	 *
+	 * @since NEXT
+	 */
+	public function test_collect_drops_subthreshold_slow_resources(): void {
+		$this->install_stubs();
+		$this->stub_attribution_environment();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		Util::clear_settings_cache();
+		$_SERVER['REMOTE_ADDR'] = '203.0.113.5';
+
+		$result = RUM::collect(
+			array(
+				'token'         => $this->valid_token( '/attr' ),
+				'path'          => '/attr/',
+				'lcp'           => 1800,
+				'slowResources' => array(
+					array(
+						'name'          => 'https://example.com/fast.js',
+						'initiatorType' => 'script',
+						'duration'      => 50,
+					),
+					array(
+						'name'          => 'https://example.com/borderline.js',
+						'initiatorType' => 'script',
+						'duration'      => 300,
+					),
+					array(
+						'name'          => 'https://example.com/slow.js',
+						'initiatorType' => 'script',
+						'duration'      => 301,
+					),
+				),
+			)
+		);
+
+		$this->assertTrue( $result['ok'] );
+		$data  = RUM::get_data();
+		$today = gmdate( 'Y-m-d' );
+		$slow  = $data[ $today ]['/attr']['slowResources'];
+		$this->assertCount( 1, $slow );
+		$row = reset( $slow );
+		$this->assertSame( 'https://example.com/slow.js', $row['url'] );
 	}
 
 	/**
@@ -1853,5 +1951,51 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 		$limited = RUM::get_top_slow_resources( 1 );
 		$this->assertCount( 1, $limited );
 		$this->assertSame( 'https://example.com/slow.js', $limited[0]['url'] );
+	}
+
+	/**
+	 * Test that stale slow-resource rows are skipped by the read path.
+	 *
+	 * Rows whose `lastSeen` is older than the 24h window must not
+	 * outrank current resources while waiting for retention eviction.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_top_slow_resources_skips_stale_rows(): void {
+		$this->install_stubs();
+		$this->stub_attribution_environment();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		Util::clear_settings_cache();
+		$today                        = gmdate( 'Y-m-d' );
+		$this->options[ RUM::OPTION ] = array(
+			$today => array(
+				'/a' => array(
+					'slowResources' => array(
+						'example.com/old.js' => array(
+							'url'           => 'https://example.com/old.js',
+							'type'          => 'script',
+							'n'             => 99,
+							'totalDuration' => 99000.0,
+							'maxDuration'   => 1000.0,
+							'lastSeen'      => time() - ( 2 * DAY_IN_SECONDS ),
+						),
+						'example.com/new.js' => array(
+							'url'           => 'https://example.com/new.js',
+							'type'          => 'script',
+							'n'             => 2,
+							'totalDuration' => 2000.0,
+							'maxDuration'   => 1100.0,
+							'lastSeen'      => time(),
+						),
+					),
+				),
+			),
+		);
+
+		$rows = RUM::get_top_slow_resources( 3 );
+		$this->assertCount( 1, $rows );
+		$this->assertSame( 'https://example.com/new.js', $rows[0]['url'] );
 	}
 }

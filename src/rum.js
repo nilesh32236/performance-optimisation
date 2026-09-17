@@ -342,13 +342,16 @@ export const collectSlowResources = () => {
 		if ( ! shaped.length ) {
 			return [];
 		}
-		shaped.sort( ( a, b ) => b.duration - a.duration );
+		// Filter by the slow threshold first, then sort only the
+		// candidates (cheaper on resource-heavy pages than sorting N
+		// rows to keep <=5).
 		let candidates = shaped.filter(
 			( item ) => item.duration > RUM_SLOW_RESOURCE_THRESHOLD_MS
 		);
 		if ( ! candidates.length ) {
 			candidates = shaped.slice( 0, 3 );
 		}
+		candidates.sort( ( a, b ) => b.duration - a.duration );
 		candidates = candidates.slice( 0, RUM_MAX_SLOW_RESOURCES );
 		// Payload budget: keep JSON under ~1.5KB, drop fastest-first (keep slowest) on overflow.
 		let encoded = '';
@@ -421,6 +424,9 @@ export const sanitizeRumValues = ( raw ) => {
 	// LCP element selector attribution (issue #1311): compact
 	// `tag#id`/`.class` selector, <=256 chars, strict charset. Omitted
 	// when absent so the p75-only path is unchanged.
+	// NOTE: the {1,256} length gate mirrors RUM_MAX_LCP_SELECTOR_LENGTH
+	// above (and RUM::LCP_SELECTOR_MAX_LENGTH server-side) — update all
+	// three together when bumping the cap.
 	if (
 		typeof raw.lcpSelector === 'string' &&
 		raw.lcpSelector &&
@@ -430,7 +436,9 @@ export const sanitizeRumValues = ( raw ) => {
 		raw.lcpSelector.indexOf( '>' ) === -1 &&
 		raw.lcpSelector.indexOf( '"' ) === -1 &&
 		raw.lcpSelector.indexOf( '`' ) === -1 &&
-		raw.lcpSelector.toLowerCase().indexOf( 'javascript:' ) === -1
+		raw.lcpSelector.toLowerCase().indexOf( 'javascript:' ) === -1 &&
+		raw.lcpSelector.toLowerCase().indexOf( 'vbscript:' ) === -1 &&
+		raw.lcpSelector.toLowerCase().indexOf( 'data:' ) === -1
 	) {
 		clean.lcpSelector = raw.lcpSelector.slice(
 			0,

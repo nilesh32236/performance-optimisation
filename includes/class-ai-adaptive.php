@@ -702,6 +702,47 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 		}
 
 		/**
+		 * Whether a persisted attribution candidate is still fresh.
+		 *
+		 * The model is refreshed by learn() at most once per minute, so a
+		 * suggestion rendered from a stored `attributed_lcp` /
+		 * `slow_resources` entry re-validates its `lastSeen` against the
+		 * shared 24h staleness window (RUM::FIELD_LCP_STALE_TTL) instead
+		 * of letting a stale hero persist until the next learn run.
+		 * Entries without a timestamp (models persisted before the field
+		 * shipped) fail open so legacy models keep emitting. Never throws.
+		 *
+		 * @since NEXT
+		 * @param mixed $entry Model attribution entry.
+		 * @return bool True when fresh or untimestamped.
+		 */
+		private static function is_fresh_attribution( $entry ): bool {
+			try {
+				if ( ! is_array( $entry ) ) {
+					return false;
+				}
+				if ( ! isset( $entry['lastSeen'] ) ) {
+					return true;
+				}
+				$seen = (int) $entry['lastSeen'];
+				if ( $seen <= 0 ) {
+					return false;
+				}
+				$ttl = 86400;
+				if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) && defined( 'PerformanceOptimise\Inc\RUM::FIELD_LCP_STALE_TTL' ) ) {
+					$ttl = (int) RUM::FIELD_LCP_STALE_TTL;
+				}
+				if ( $ttl < 0 ) {
+					$ttl = 86400;
+				}
+				return ( time() - $seen ) <= $ttl;
+			} catch ( \Throwable $e ) {
+				unset( $e );
+				return false;
+			}
+		}
+
+		/**
 		 * Build a segment descriptor from a RUM segment row fail-open.
 		 *
 		 * Always returns path/device/template/connection keys so suggestion
@@ -1315,6 +1356,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 								'n'           => isset( $row['n'] ) ? (int) $row['n'] : 0,
 								'avgDuration' => isset( $row['avgDuration'] ) ? (float) $row['avgDuration'] : 0.0,
 								'maxDuration' => isset( $row['maxDuration'] ) ? (float) $row['maxDuration'] : 0.0,
+								'lastSeen'    => isset( $row['lastSeen'] ) ? (int) $row['lastSeen'] : 0,
 							);
 						}
 					}
@@ -2261,12 +2303,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			// read-only preload/speculation candidates naming the exact hero
 			// element and the slowest sub-resources. Fail-open: missing keys
 			// (models persisted before attribution shipped) or lookup errors
-			// emit nothing. Suggestions only — never auto-applied.
+			// emit nothing. Stored entries are re-checked for 24h freshness
+			// here so a stale hero/resource does not persist as a
+			// suggestion until the next learn run. Suggestions only —
+			// never auto-applied.
 			try {
 				$attributed = $model['attributed_lcp'] ?? null;
 				// Models persisted before attribution shipped simply emit no
 				// suggestions for missing keys (fail open).
-				if ( is_array( $attributed ) && isset( $attributed['selector'] ) && is_string( $attributed['selector'] ) && '' !== $attributed['selector'] ) {
+				if ( is_array( $attributed ) && isset( $attributed['selector'] ) && is_string( $attributed['selector'] ) && '' !== $attributed['selector'] && self::is_fresh_attribution( $attributed ) ) {
 					$attr_path     = isset( $attributed['path'] ) && is_string( $attributed['path'] ) ? $attributed['path'] : '';
 					$attr_selector = $attributed['selector'];
 					/* translators: %1$s LCP selector, %2$s page path. */
@@ -2289,7 +2334,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				$slow_list = $model['slow_resources'] ?? array();
 				if ( is_array( $slow_list ) && ! empty( $slow_list ) ) {
 					$slow_first = $slow_list[0];
-					if ( is_array( $slow_first ) && isset( $slow_first['url'] ) && is_string( $slow_first['url'] ) && '' !== $slow_first['url'] ) {
+					if ( is_array( $slow_first ) && isset( $slow_first['url'] ) && is_string( $slow_first['url'] ) && '' !== $slow_first['url'] && self::is_fresh_attribution( $slow_first ) ) {
 						$slow_type = isset( $slow_first['type'] ) && is_string( $slow_first['type'] ) ? $slow_first['type'] : 'resource';
 						/* translators: %1$s resource type, %2$s resource URL. */
 						$slow_value = sprintf( __( '%1$s · %2$s', 'performance-optimisation' ), $slow_type, $slow_first['url'] );
