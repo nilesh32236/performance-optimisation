@@ -410,6 +410,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				return false;
 			}
 
+			// Audit #1411: sniff-gate at the sink — never readImage() a file
+			// whose magic bytes do not declare an allowed bitmap MIME.
+			$sniffed = function_exists( 'wp_get_image_mime' ) ? wp_get_image_mime( $source_image ) : '';
+			if ( ! is_string( $sniffed ) || ! self::is_allowed_source_mime( $sniffed ) ) {
+				return false;
+			}
+
 			if ( ! extension_loaded( 'imagick' ) || ! class_exists( 'Imagick' ) ) {
 				return false;
 			}
@@ -775,6 +782,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				return false;
 			}
 			return self::is_safe_delete_path( $path );
+		}
+
+		/**
+		 * Channels-aware pre-decode pixel-budget check against the PHP memory limit.
+		 *
+		 * Estimates `width * height * channels` bytes (1 byte per channel)
+		 * and refuses when it exceeds half the PHP `memory_limit`, leaving
+		 * headroom for the GD bitmap plus encoder overhead. Falls back to the
+		 * `wppo_max_source_pixels` budget when the limit is unlimited or
+		 * unknown. Fail-open direction: oversize returns true (caller skips
+		 * the decode and serves the original), never fatal.
+		 *
+		 * @since 2.0.0
+		 *
+		 * @param int $width    Source width in pixels.
+		 * @param int $height   Source height in pixels.
+		 * @param int $channels Channel count (clamped to 1-4, default 4).
+		 * @return bool True when the image exceeds the budget and must be skipped.
+		 */
+		/**
+		 * Whether a detected source MIME may reach an image decoder (audit #1411).
+		 *
+		 * Defense-in-depth before Imagick::readImage(): getimagesize() magic-byte
+		 * parsing already rejects non-images, but an explicit allowlist ensures a
+		 * polyglot accepted by a lenient parser can never reach a delegate-based
+		 * decoder (PostScript/SVG/MVG RCE class). Fail-closed: unknown mimes skip.
+		 *
+		 * @since NEXT
+		 * @param string $mime Detected MIME (e.g. from getimagesize()).
+		 * @return bool True when the MIME is a decodable bitmap type.
+		 */
+		public static function is_allowed_source_mime( string $mime ): bool {
+			return in_array( strtolower( trim( $mime ) ), array( 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif' ), true );
 		}
 
 		/**
@@ -1610,6 +1650,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 			if ( empty( $image_info ) ) {
 				$this->update_conversion_status( $source_image, 'failed', $format );
+				return false;
+			}
+
+			// Audit #1411: explicit MIME allowlist before any decoder — a
+			// polyglot that slips past header parsing never reaches Imagick.
+			$detected_mime = isset( $image_info['mime'] ) && is_string( $image_info['mime'] ) ? $image_info['mime'] : '';
+			if ( ! self::is_allowed_source_mime( $detected_mime ) ) {
+				$this->update_conversion_status( $source_image, 'skipped', $format );
 				return false;
 			}
 

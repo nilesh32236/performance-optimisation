@@ -127,6 +127,20 @@ class AvifNegotiationTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Source MIME allowlist: bitmap types pass, delegates/polyglots fail closed (audit #1411).
+	 *
+	 * @since NEXT
+	 */
+	public function test_is_allowed_source_mime_allowlist(): void {
+		foreach ( array( 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif', 'IMAGE/PNG ' ) as $ok ) {
+			$this->assertTrue( Img_Converter::is_allowed_source_mime( $ok ), $ok );
+		}
+		foreach ( array( '', 'image/svg+xml', 'application/postscript', 'text/html', 'image/bmp', 'image/tiff' ) as $bad ) {
+			$this->assertFalse( Img_Converter::is_allowed_source_mime( $bad ), $bad );
+		}
+	}
+
+	/**
 	 * Imagick AVIF encoder must fail open on bad inputs (never fatal).
 	 *
 	 * @since NEXT
